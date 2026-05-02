@@ -22,6 +22,7 @@ from autoloop.runtime.loader import (
 )
 from autoloop.runtime.runner import RunnerOptions, run_workflow_package
 from autoloop.core.primitives import Outcome
+from tests.runtime.workflow_contract_helpers import invoke_python_step
 
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
@@ -391,8 +392,9 @@ def test_task_to_workflow_strategy_bootstrap_reads_typed_ctx_params(monkeypatch,
         workflow_params={},
     )
 
-    next_state, event = workflow_pkg.TaskToWorkflowStrategy.on_bootstrap(
-        workflow_pkg.TaskToWorkflowStrategy.State(),
+    next_state, event = invoke_python_step(
+        workflow_pkg.TaskToWorkflowStrategy,
+        "bootstrap",
         ctx,
     )
 
@@ -1422,7 +1424,7 @@ def test_task_to_workflow_strategy_publish_strategy_rejects_summary_without_buil
     )
 
     with pytest.raises(ValueError, match="builder baseline"):
-        workflow_pkg.TaskToWorkflowStrategy.on_publish_strategy(state, ctx)
+        invoke_python_step(workflow_pkg.TaskToWorkflowStrategy, "publish_strategy", ctx)
 
 
 def test_task_to_workflow_strategy_publish_strategy_rejects_summary_missing_typed_required_field(
@@ -1481,7 +1483,7 @@ def test_task_to_workflow_strategy_publish_strategy_rejects_summary_missing_type
     )
 
     with pytest.raises(ValidationError, match="comparison_candidates"):
-        workflow_pkg.TaskToWorkflowStrategy.on_publish_strategy(state, ctx)
+        invoke_python_step(workflow_pkg.TaskToWorkflowStrategy, "publish_strategy", ctx)
 
 
 def test_task_to_workflow_strategy_publish_strategy_rejects_compose_summary_with_only_one_workflow(
@@ -1514,7 +1516,7 @@ def test_task_to_workflow_strategy_publish_strategy_rejects_compose_summary_with
     )
 
     with pytest.raises(ValueError, match="at least two workflows for compose"):
-        workflow_pkg.TaskToWorkflowStrategy.on_publish_strategy(state, ctx)
+        invoke_python_step(workflow_pkg.TaskToWorkflowStrategy, "publish_strategy", ctx)
 
 
 @pytest.mark.parametrize(
@@ -1629,7 +1631,7 @@ def test_task_to_workflow_strategy_publish_strategy_rejects_non_concrete_adapt_h
     )
 
     with pytest.raises(ValueError, match=match):
-        workflow_pkg.TaskToWorkflowStrategy.on_publish_strategy(state, ctx)
+        invoke_python_step(workflow_pkg.TaskToWorkflowStrategy, "publish_strategy", ctx)
 
 
 def _make_publish_strategy_test_context(

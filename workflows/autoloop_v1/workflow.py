@@ -19,11 +19,16 @@ class Phase(BaseModel):
     dir_key: str
 
 
-def _after_plan(ctx, outcome: Outcome):
+def _after_plan(ctx):
+    outcome = ctx.outcome
+    assert outcome is not None
     if outcome.tag not in {"plan_ready", "needs_replan"}:
         return None
     phases = _load_phase_plan(ctx.artifacts.phase_plan.read_text())
-    return ctx.state.model_copy(update={"phases": phases, "phase_index": -1, "phase": None})
+    ctx.state.phases = phases
+    ctx.state.phase_index = -1
+    ctx.state.phase = None
+    return None
 
 
 class AutoloopV1(Workflow):
@@ -78,13 +83,14 @@ class AutoloopV1(Workflow):
         name="activate_next_phase",
         routes={"phase_selected": "implement", "workflow_complete": FINISH},
     )
-    def activate_next_phase(state: State, ctx):
-        next_index = state.phase_index + 1
-        if next_index >= len(state.phases):
+    def activate_next_phase(ctx):
+        next_index = ctx.state.phase_index + 1
+        if next_index >= len(ctx.state.phases):
             return "workflow_complete"
-        phase = state.phases[next_index]
+        phase = ctx.state.phases[next_index]
         ctx.open_session("phase_session", scope=phase.id)
-        ctx.state = state.model_copy(update={"phase_index": next_index, "phase": phase})
+        ctx.state.phase_index = next_index
+        ctx.state.phase = phase
         return "phase_selected"
 
     entry = plan

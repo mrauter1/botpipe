@@ -44,33 +44,31 @@ _AUTHORITATIVE_PACKAGE_ARTIFACTS = frozenset(
 )
 
 
-def _after_frame_adaptation_request(ctx, outcome: Outcome):
+def _after_frame_adaptation_request(ctx):
+    outcome = ctx.outcome
+    assert outcome is not None
     payload = outcome.payload
     selected_workflow_name = payload.get("selected_workflow_name")
-    return ctx.state.model_copy(
-        update={
-            "framing_status": outcome.tag,
-            "selected_workflow_name": (
-                selected_workflow_name if isinstance(selected_workflow_name, str) else ctx.state.selected_workflow_name
-            ),
-        }
-    )
+    ctx.state.framing_status = outcome.tag
+    if isinstance(selected_workflow_name, str):
+        ctx.state.selected_workflow_name = selected_workflow_name
+    return None
 
 
-def _after_analyze_adaptation_surface(ctx, outcome: Outcome):
+def _after_analyze_adaptation_surface(ctx):
+    outcome = ctx.outcome
+    assert outcome is not None
     payload = outcome.payload
     selected_workflow_name = payload.get("selected_workflow_name")
-    return ctx.state.model_copy(
-        update={
-            "analysis_status": outcome.tag,
-            "selected_workflow_name": (
-                selected_workflow_name if isinstance(selected_workflow_name, str) else ctx.state.selected_workflow_name
-            ),
-        }
-    )
+    ctx.state.analysis_status = outcome.tag
+    if isinstance(selected_workflow_name, str):
+        ctx.state.selected_workflow_name = selected_workflow_name
+    return None
 
 
-def _after_package_adapted_execution_plan(ctx, outcome: Outcome):
+def _after_package_adapted_execution_plan(ctx):
+    outcome = ctx.outcome
+    assert outcome is not None
     payload = outcome.payload
     selected_workflow_name = payload.get("selected_workflow_name")
     proposed_parameter_keys = require_string_list(
@@ -80,15 +78,11 @@ def _after_package_adapted_execution_plan(ctx, outcome: Outcome):
         dedupe=True,
         coerce=True,
     )
-    return ctx.state.model_copy(
-        update={
-            "packaging_status": outcome.tag,
-            "selected_workflow_name": (
-                selected_workflow_name if isinstance(selected_workflow_name, str) else ctx.state.selected_workflow_name
-            ),
-            "proposed_parameter_keys": proposed_parameter_keys,
-        }
-    )
+    ctx.state.packaging_status = outcome.tag
+    if isinstance(selected_workflow_name, str):
+        ctx.state.selected_workflow_name = selected_workflow_name
+    ctx.state.proposed_parameter_keys = proposed_parameter_keys
+    return None
 
 
 class CandidateWorkflowToAdaptedExecutionPlan(Workflow):
@@ -197,9 +191,9 @@ class CandidateWorkflowToAdaptedExecutionPlan(Workflow):
         writes=[invocation_contract],
         routes={"inputs_prepared": "capture_selected_workflow_contract"},
     )
-    def bootstrap(state: State, ctx):
+    def bootstrap(ctx):
         params = ctx.params
-        next_state = state.model_copy(
+        next_state = ctx.state.model_copy(
             update={
                 "selected_workflow_reference": params.selected_workflow,
                 "selected_workflow_name": None,
@@ -236,15 +230,13 @@ class CandidateWorkflowToAdaptedExecutionPlan(Workflow):
         writes=[selected_workflow_capability],
         routes={"selected_workflow_contract_captured": "frame_adaptation_request"},
     )
-    def capture_selected_workflow_contract(state: State, ctx):
-        capture = capture_selected_workflow(ctx, state.selected_workflow_reference)
-        snapshot_path = write_selected_workflow_capability_snapshot(ctx, state.selected_workflow_reference)
+    def capture_selected_workflow_contract(ctx):
+        capture = capture_selected_workflow(ctx, ctx.state.selected_workflow_reference)
+        snapshot_path = write_selected_workflow_capability_snapshot(ctx, ctx.state.selected_workflow_reference)
         if not snapshot_path.exists():
             raise FileNotFoundError(f"selected workflow capability snapshot was not written at {snapshot_path}")
-        return (
-            state.model_copy(update={"selected_workflow_name": capture.selected_workflow_name}),
-            Event("selected_workflow_contract_captured"),
-        )
+        ctx.state.selected_workflow_name = capture.selected_workflow_name
+        return Event("selected_workflow_contract_captured")
 
 
     @python_step(
@@ -261,7 +253,7 @@ class CandidateWorkflowToAdaptedExecutionPlan(Workflow):
         writes=[validated_workflow_parameters, adapted_execution_plan_receipt],
         routes={"adapted_execution_plan_published": FINISH},
     )
-    def publish_adapted_execution_plan(state: State, ctx):
+    def publish_adapted_execution_plan(ctx):
         workflow_folder = ctx.workflow_folder
         required_paths = require_existing_artifact_paths(
             {
@@ -278,7 +270,7 @@ class CandidateWorkflowToAdaptedExecutionPlan(Workflow):
         capability_snapshot = read_json_object(required_paths["selected_workflow_capability"])
         snapshot_selected_workflow_name, selected_capability = validate_selected_workflow_capability_snapshot(
             capability_snapshot,
-            expected_selected_workflow_name=state.selected_workflow_name,
+            expected_selected_workflow_name=ctx.state.selected_workflow_name,
             expected_label="workflow state",
         )
 
@@ -286,7 +278,7 @@ class CandidateWorkflowToAdaptedExecutionPlan(Workflow):
 
         validated_path = write_validated_workflow_parameters(
             ctx,
-            state.selected_workflow_reference or snapshot_selected_workflow_name,
+            ctx.state.selected_workflow_reference or snapshot_selected_workflow_name,
             proposed_parameters,
         )
         validated_payload = VALIDATED_WORKFLOW_PARAMETERS_ARTIFACT.read(validated_path)
@@ -338,7 +330,7 @@ class CandidateWorkflowToAdaptedExecutionPlan(Workflow):
             raise ValueError(
                 "adapted_execution_summary.json proposed_parameter_keys must match validated_workflow_parameters.json"
             )
-        if state.proposed_parameter_keys and sorted(proposed_parameter_keys) != sorted(state.proposed_parameter_keys):
+        if ctx.state.proposed_parameter_keys and sorted(proposed_parameter_keys) != sorted(ctx.state.proposed_parameter_keys):
             raise ValueError("adapted_execution_summary.json proposed_parameter_keys must match workflow state")
 
         expected_downstream_artifacts = require_string_list(
@@ -372,10 +364,10 @@ class CandidateWorkflowToAdaptedExecutionPlan(Workflow):
             "adapted_execution_plan_receipt.json",
             {
                 "workflow_name": ctx.workflow_name,
-                "task_title": state.task_title,
-                "sponsor_role": state.sponsor_role,
-                "desired_outcome": state.desired_outcome,
-                "selected_workflow_reference": state.selected_workflow_reference,
+                "task_title": ctx.state.task_title,
+                "sponsor_role": ctx.state.sponsor_role,
+                "desired_outcome": ctx.state.desired_outcome,
+                "selected_workflow_reference": ctx.state.selected_workflow_reference,
                 "selected_workflow_name": summary_selected_workflow_name,
                 "selected_workflow_entry_step": summary_entry_step,
                 "expected_downstream_artifacts": expected_downstream_artifacts,
@@ -393,15 +385,9 @@ class CandidateWorkflowToAdaptedExecutionPlan(Workflow):
                 "published": True,
             },
         )
-        return (
-            state.model_copy(
-                update={
-                    "selected_workflow_name": summary_selected_workflow_name,
-                    "proposed_parameter_keys": proposed_parameter_keys,
-                    "published": True,
-                }
-            ),
-            Event("adapted_execution_plan_published"),
-        )
+        ctx.state.selected_workflow_name = summary_selected_workflow_name
+        ctx.state.proposed_parameter_keys = proposed_parameter_keys
+        ctx.state.published = True
+        return Event("adapted_execution_plan_published")
 
     entry = bootstrap

@@ -76,7 +76,6 @@ FRAME_TASK_ROUTE_CONTRACTS = {
         "build_candidate_workflow_set",
         summary="The task trigger, sponsor, desired outcome, and strategy-selection criteria are explicit enough to compare portfolio options without hidden assumptions.",
         required_writes=("task_strategy_brief", "workflow_selection_criteria"),
-        handoff="Locks the task framing so workflow comparison can proceed against an explicit problem and acceptance boundary.",
     ),
     "needs_rework": Route.to(
         SELF,
@@ -116,7 +115,6 @@ PACKAGE_STRATEGY_ROUTE_CONTRACTS = {
         "publish_strategy",
         summary="The terminal strategy package, machine-readable summary, and next-action artifact all exist and make the selected route explicit without triggering downstream execution.",
         required_writes=("workflow_strategy_package", "strategy_summary", "strategy_next_action"),
-        handoff="Advances the front-door workflow to deterministic publication of the strategy package and receipt.",
     ),
     "needs_rework": Route.to(
         SELF,

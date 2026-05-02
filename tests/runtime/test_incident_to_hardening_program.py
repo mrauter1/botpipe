@@ -20,6 +20,7 @@ from autoloop.runtime.loader import (
     resolve_workflow_reference,
 )
 from autoloop.runtime.runner import RunnerOptions, run_workflow_package
+from tests.runtime.workflow_contract_helpers import invoke_python_step
 from autoloop.core.primitives import Outcome
 
 
@@ -388,8 +389,9 @@ def test_incident_hardening_bootstrap_reads_typed_ctx_params(monkeypatch, tmp_pa
         },
     )
 
-    next_state, event = workflow_pkg.IncidentToHardeningProgram.on_bootstrap(
-        workflow_pkg.IncidentToHardeningProgram.State(),
+    next_state, event = invoke_python_step(
+        workflow_pkg.IncidentToHardeningProgram,
+        "bootstrap",
         ctx,
     )
 
@@ -840,9 +842,7 @@ def test_incident_hardening_package_runs_and_emits_terminal_receipt(tmp_path: Pa
         "prepare_hardening_program.stakeholder_communications_draft",
         "prepare_hardening_program.incident_resolution_package",
     ]
-    assert provider.calls[7].routes["hardening_program_ready"].handoff == (
-        "Advances the incident workflow to deterministic publication of the terminal receipt."
-    )
+    assert provider.calls[7].routes["hardening_program_ready"].handoff is None
     assert (run_dir / "run.json").exists()
 
 
@@ -953,7 +953,7 @@ def test_incident_hardening_publish_rejects_invalid_summary_fields(
     )
 
     with pytest.raises(ValueError, match=match):
-        workflow_pkg.IncidentToHardeningProgram.on_publish_incident_package(state, ctx)
+        invoke_python_step(workflow_pkg.IncidentToHardeningProgram, "publish_incident_package", ctx)
 
     assert not (workflow_folder / "incident_receipt.json").exists()
 

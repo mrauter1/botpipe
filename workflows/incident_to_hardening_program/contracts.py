@@ -130,7 +130,6 @@ PREPARE_HARDENING_PROGRAM_ROUTE_CONTRACTS = {
             "stakeholder_communications_draft",
             "incident_resolution_package",
         ),
-        handoff="Advances the incident workflow to deterministic publication of the terminal receipt.",
     ),
     "needs_rework": Route.to(
         SELF,

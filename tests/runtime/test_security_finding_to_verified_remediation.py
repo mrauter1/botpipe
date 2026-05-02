@@ -21,6 +21,7 @@ from autoloop.runtime.loader import (
 )
 from autoloop.runtime.runner import RunnerOptions, run_workflow_package
 from autoloop.core.primitives import Event, Outcome
+from tests.runtime.workflow_contract_helpers import invoke_python_step
 
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
@@ -390,8 +391,9 @@ def test_security_remediation_bootstrap_reads_typed_ctx_params(monkeypatch, tmp_
         },
     )
 
-    next_state, event = workflow_pkg.SecurityFindingToVerifiedRemediation.on_bootstrap(
-        workflow_pkg.SecurityFindingToVerifiedRemediation.State(),
+    next_state, event = invoke_python_step(
+        workflow_pkg.SecurityFindingToVerifiedRemediation,
+        "bootstrap",
         ctx,
     )
 
@@ -615,14 +617,15 @@ def test_security_remediation_package_propagates_child_question_without_adopting
 
     assert result.terminal == "AWAIT_INPUT"
     assert parent_meta["status"] == "awaiting_input"
-    assert parent_meta["pending_question"] == "Which production environment should bound the blast radius?"
+    assert parent_meta["pending_input"]["question"] == "Which production environment should bound the blast radius?"
     assert child_meta["status"] == "awaiting_input"
-    assert child_meta["pending_question"] == "Which production environment should bound the blast radius?"
+    assert child_meta["pending_input"]["question"] == "Which production environment should bound the blast radius?"
     assert not (workflow_dir / "finding_scope_brief.md").exists()
     assert not (workflow_dir / "security_evidence_pack.md").exists()
     assert child_records[0]["workflow_name"] == "investigation_request_to_evidence_pack"
     assert child_records[0]["status"] == "awaiting_input"
     assert child_records[0]["last_event"] == {
+        "handoff": None,
         "tag": "question",
         "reason": "",
         "question": "Which production environment should bound the blast radius?",
@@ -826,7 +829,11 @@ def test_security_remediation_compose_step_blocks_not_ready_child_and_keeps_depl
         workflow_invoker=_invoke_child,
     )
 
-    next_state, event = workflow_pkg.SecurityFindingToVerifiedRemediation.on_compose_evidence_pack(state, ctx)
+    next_state, event = invoke_python_step(
+        workflow_pkg.SecurityFindingToVerifiedRemediation,
+        "compose_evidence_pack",
+        ctx,
+    )
 
     assert child_invocation == {
         "workflow": "investigation_request_to_evidence_pack",
@@ -925,7 +932,7 @@ def test_security_remediation_publish_rejects_missing_selected_remediation(tmp_p
     )
 
     with pytest.raises(ValueError, match="selected_remediation"):
-        workflow_pkg.SecurityFindingToVerifiedRemediation.on_publish_remediation(state, ctx)
+        invoke_python_step(workflow_pkg.SecurityFindingToVerifiedRemediation, "publish_remediation", ctx)
 
     assert not (workflow_folder / "remediation_receipt.json").exists()
 

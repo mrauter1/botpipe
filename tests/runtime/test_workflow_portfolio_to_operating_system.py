@@ -22,6 +22,7 @@ from autoloop.runtime.loader import (
 )
 from autoloop.runtime.runner import RunnerOptions, run_workflow_package
 from autoloop.core.primitives import Outcome
+from tests.runtime.workflow_contract_helpers import invoke_python_step
 
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
@@ -434,8 +435,9 @@ def test_workflow_portfolio_to_operating_system_bootstrap_reads_typed_ctx_params
         workflow_params={},
     )
 
-    next_state, event = workflow_pkg.WorkflowPortfolioToOperatingSystem.on_bootstrap(
-        workflow_pkg.WorkflowPortfolioToOperatingSystem.State(),
+    next_state, event = invoke_python_step(
+        workflow_pkg.WorkflowPortfolioToOperatingSystem,
+        "bootstrap",
         ctx,
     )
 
@@ -698,7 +700,8 @@ def test_workflow_portfolio_to_operating_system_runs_and_publishes_terminal_gove
         {
             "created_at": "2026-04-24T08:00:00+00:00",
             "error": None,
-            "pending_question": "Should strategy adapt or compose next?",
+            "finalization": None,
+            "pending_input": {"question": "Should strategy adapt or compose next?"},
             "request_excerpt": "Decide whether this initiative should reuse or create workflows.",
             "request_file": str(seeded_paths["strategy_paused"] / "request.md"),
             "run_folder": str(seeded_paths["strategy_paused"]),
@@ -711,7 +714,8 @@ def test_workflow_portfolio_to_operating_system_runs_and_publishes_terminal_gove
         {
             "created_at": "2026-04-23T08:00:00+00:00",
             "error": "candidate package drift",
-            "pending_question": None,
+            "finalization": None,
+            "pending_input": None,
             "request_excerpt": "Re-evaluate the routing package after a failed governance review.",
             "request_file": str(seeded_paths["strategy_failed"] / "request.md"),
             "run_folder": str(seeded_paths["strategy_failed"]),
@@ -745,7 +749,8 @@ def test_workflow_portfolio_to_operating_system_runs_and_publishes_terminal_gove
         {
             "created_at": "2026-04-24T07:30:00+00:00",
             "error": None,
-            "pending_question": None,
+            "finalization": None,
+            "pending_input": None,
             "request_excerpt": "Publish workflow failure pressure for the release governance loop.",
             "request_file": str(seeded_paths["diagnostics_success"] / "request.md"),
             "run_folder": str(seeded_paths["diagnostics_success"]),
@@ -887,7 +892,7 @@ def test_workflow_portfolio_to_operating_system_publish_rejects_missing_scoped_e
     (ctx.workflow_folder / missing_filename).unlink()
 
     with pytest.raises(FileNotFoundError, match="missing required publication artifact"):
-        workflow_pkg.WorkflowPortfolioToOperatingSystem.on_publish_portfolio_operating_system(state, ctx)
+        invoke_python_step(workflow_pkg.WorkflowPortfolioToOperatingSystem, "publish_portfolio_operating_system", ctx)
 
 
 def test_workflow_portfolio_to_operating_system_publish_rejects_unknown_focus_workflow_reference(
@@ -915,7 +920,7 @@ def test_workflow_portfolio_to_operating_system_publish_rejects_unknown_focus_wo
     )
 
     with pytest.raises(ValueError, match="unknown focus-workflow references"):
-        workflow_pkg.WorkflowPortfolioToOperatingSystem.on_publish_portfolio_operating_system(state, ctx)
+        invoke_python_step(workflow_pkg.WorkflowPortfolioToOperatingSystem, "publish_portfolio_operating_system", ctx)
 
 
 def test_workflow_portfolio_to_operating_system_publish_rejects_summary_drift(
@@ -934,7 +939,7 @@ def test_workflow_portfolio_to_operating_system_publish_rejects_summary_drift(
     )
 
     with pytest.raises(ValueError, match="must not drift from lifecycle_recommendations"):
-        workflow_pkg.WorkflowPortfolioToOperatingSystem.on_publish_portfolio_operating_system(state, ctx)
+        invoke_python_step(workflow_pkg.WorkflowPortfolioToOperatingSystem, "publish_portfolio_operating_system", ctx)
 
 
 def test_workflow_portfolio_to_operating_system_publish_rejects_missing_typed_summary_field(
@@ -949,7 +954,7 @@ def test_workflow_portfolio_to_operating_system_publish_rejects_missing_typed_su
     summary_path.write_text(json.dumps(payload, indent=2, sort_keys=True) + "\n", encoding="utf-8")
 
     with pytest.raises(ValidationError, match="governance_posture_counts"):
-        workflow_pkg.WorkflowPortfolioToOperatingSystem.on_publish_portfolio_operating_system(state, ctx)
+        invoke_python_step(workflow_pkg.WorkflowPortfolioToOperatingSystem, "publish_portfolio_operating_system", ctx)
 
 
 def test_workflow_portfolio_to_operating_system_publish_rejects_invalid_lifecycle_posture(
@@ -981,7 +986,7 @@ def test_workflow_portfolio_to_operating_system_publish_rejects_invalid_lifecycl
     )
 
     with pytest.raises(ValueError, match="legal lifecycle_posture"):
-        workflow_pkg.WorkflowPortfolioToOperatingSystem.on_publish_portfolio_operating_system(state, ctx)
+        invoke_python_step(workflow_pkg.WorkflowPortfolioToOperatingSystem, "publish_portfolio_operating_system", ctx)
 
 
 @pytest.mark.parametrize(
@@ -1021,7 +1026,7 @@ def test_workflow_portfolio_to_operating_system_publish_rejects_hidden_downstrea
     )
 
     with pytest.raises(ValueError, match="portfolio_next_actions.md must not imply hidden downstream execution"):
-        workflow_pkg.WorkflowPortfolioToOperatingSystem.on_publish_portfolio_operating_system(state, ctx)
+        invoke_python_step(workflow_pkg.WorkflowPortfolioToOperatingSystem, "publish_portfolio_operating_system", ctx)
 
 
 def test_workflow_portfolio_to_operating_system_publish_rejects_hidden_downstream_execution_in_summary_next_action(
@@ -1040,7 +1045,7 @@ def test_workflow_portfolio_to_operating_system_publish_rejects_hidden_downstrea
         ValueError,
         match="portfolio_operating_summary.json next_action must not imply hidden downstream execution",
     ):
-        workflow_pkg.WorkflowPortfolioToOperatingSystem.on_publish_portfolio_operating_system(state, ctx)
+        invoke_python_step(workflow_pkg.WorkflowPortfolioToOperatingSystem, "publish_portfolio_operating_system", ctx)
 
 
 def test_workflow_portfolio_to_operating_system_publish_allows_explicit_negative_guardrails(
@@ -1061,7 +1066,11 @@ def test_workflow_portfolio_to_operating_system_publish_allows_explicit_negative
         ),
     )
 
-    next_state, event = workflow_pkg.WorkflowPortfolioToOperatingSystem.on_publish_portfolio_operating_system(state, ctx)
+    next_state, event = invoke_python_step(
+        workflow_pkg.WorkflowPortfolioToOperatingSystem,
+        "publish_portfolio_operating_system",
+        ctx,
+    )
 
     assert event.tag == "portfolio_operating_system_published"
     assert next_state.published is True

@@ -61,44 +61,38 @@ _AUTHORITATIVE_EVALUATION_ARTIFACTS = frozenset(
 )
 
 
-def _after_frame_decomposition_request(ctx, outcome: Outcome):
+def _after_frame_decomposition_request(ctx):
+    outcome = ctx.outcome
+    assert outcome is not None
     payload = outcome.payload
     selected_workflow_name = payload.get("selected_workflow_name")
-    return ctx.state.model_copy(
-        update={
-            "framing_status": outcome.tag,
-            "selected_workflow_name": (
-                selected_workflow_name if isinstance(selected_workflow_name, str) else ctx.state.selected_workflow_name
-            ),
-        }
-    )
+    ctx.state.framing_status = outcome.tag
+    if isinstance(selected_workflow_name, str):
+        ctx.state.selected_workflow_name = selected_workflow_name
+    return None
 
 
-def _after_design_decomposition_plan(ctx, outcome: Outcome):
+def _after_design_decomposition_plan(ctx):
+    outcome = ctx.outcome
+    assert outcome is not None
     payload = outcome.payload
     selected_workflow_name = payload.get("selected_workflow_name")
-    return ctx.state.model_copy(
-        update={
-            "planning_status": outcome.tag,
-            "selected_workflow_name": (
-                selected_workflow_name if isinstance(selected_workflow_name, str) else ctx.state.selected_workflow_name
-            ),
-        }
-    )
+    ctx.state.planning_status = outcome.tag
+    if isinstance(selected_workflow_name, str):
+        ctx.state.selected_workflow_name = selected_workflow_name
+    return None
 
 
-def _after_implement_candidate_decomposition(ctx, outcome: Outcome):
+def _after_implement_candidate_decomposition(ctx):
+    outcome = ctx.outcome
+    assert outcome is not None
     payload = outcome.payload
     selected_workflow_name = payload.get("selected_workflow_name")
     if outcome.tag == "needs_replan":
-        return ctx.state.model_copy(
-            update={
-                "build_status": outcome.tag,
-                "selected_workflow_name": (
-                    selected_workflow_name if isinstance(selected_workflow_name, str) else ctx.state.selected_workflow_name
-                ),
-            }
-        )
+        ctx.state.build_status = outcome.tag
+        if isinstance(selected_workflow_name, str):
+            ctx.state.selected_workflow_name = selected_workflow_name
+        return None
 
     candidate_manifest = _write_candidate_decomposition_manifest(
         ctx.artifacts.candidate_decomposition_manifest.path.parent,
@@ -144,20 +138,18 @@ def _after_implement_candidate_decomposition(ctx, outcome: Outcome):
         raise ValueError(
             "build verifier payload building_block_names must match candidate_decomposition_manifest.json"
         )
-    return ctx.state.model_copy(
-        update={
-            "build_status": outcome.tag,
-            "selected_workflow_name": (
-                selected_workflow_name if isinstance(selected_workflow_name, str) else ctx.state.selected_workflow_name
-            ),
-            "candidate_file_count": actual_candidate_file_count,
-            "candidate_changed_paths": actual_changed_relative_paths,
-            "candidate_building_block_names": actual_building_block_names,
-        }
-    )
+    ctx.state.build_status = outcome.tag
+    if isinstance(selected_workflow_name, str):
+        ctx.state.selected_workflow_name = selected_workflow_name
+    ctx.state.candidate_file_count = actual_candidate_file_count
+    ctx.state.candidate_changed_paths = actual_changed_relative_paths
+    ctx.state.candidate_building_block_names = actual_building_block_names
+    return None
 
 
-def _after_evaluate_candidate_decomposition(ctx, outcome: Outcome):
+def _after_evaluate_candidate_decomposition(ctx):
+    outcome = ctx.outcome
+    assert outcome is not None
     payload = outcome.payload
     selected_workflow_name = payload.get("selected_workflow_name")
     candidate_file_count = _require_positive_int(
@@ -183,18 +175,14 @@ def _after_evaluate_candidate_decomposition(ctx, outcome: Outcome):
         raise ValueError("evaluation verifier payload candidate_file_count must match workflow state")
     if ctx.state.candidate_building_block_names and sorted(building_block_names) != ctx.state.candidate_building_block_names:
         raise ValueError("evaluation verifier payload building_block_names must match workflow state")
-    return ctx.state.model_copy(
-        update={
-            "evaluation_status": outcome.tag,
-            "selected_workflow_name": (
-                selected_workflow_name if isinstance(selected_workflow_name, str) else ctx.state.selected_workflow_name
-            ),
-            "candidate_file_count": candidate_file_count,
-            "candidate_building_block_names": sorted(building_block_names),
-            "evaluation_authoritative_artifacts": authoritative_artifacts,
-            "evaluation_next_action": next_action,
-        }
-    )
+    ctx.state.evaluation_status = outcome.tag
+    if isinstance(selected_workflow_name, str):
+        ctx.state.selected_workflow_name = selected_workflow_name
+    ctx.state.candidate_file_count = candidate_file_count
+    ctx.state.candidate_building_block_names = sorted(building_block_names)
+    ctx.state.evaluation_authoritative_artifacts = authoritative_artifacts
+    ctx.state.evaluation_next_action = next_action
+    return None
 
 
 class _CaptureBlockedError(RuntimeError):
@@ -371,10 +359,9 @@ class WorkflowPackageToComposableBuildingBlocks(Workflow):
         writes=[invocation_contract],
         routes={"inputs_prepared": "capture_decomposition_context"},
     )
-    def bootstrap(state: State, ctx):
+    def bootstrap(ctx):
         params = ctx.params
-
-        next_state = state.model_copy(
+        next_state = ctx.state.model_copy(
             update={
                 "selected_workflow_reference": params.selected_workflow,
                 "selected_workflow_name": None,
@@ -428,17 +415,17 @@ class WorkflowPackageToComposableBuildingBlocks(Workflow):
             "blocked": AWAIT_INPUT,
         },
     )
-    def capture_decomposition_context(state: State, ctx):
-        capture = capture_selected_workflow(ctx, state.selected_workflow_reference)
+    def capture_decomposition_context(ctx):
+        capture = capture_selected_workflow(ctx, ctx.state.selected_workflow_reference)
         repo_root = capture.repo_root
         try:
-            surface_path = write_selected_workflow_decomposition_surface(ctx, state.selected_workflow_reference)
+            surface_path = write_selected_workflow_decomposition_surface(ctx, ctx.state.selected_workflow_reference)
             if not surface_path.exists():
                 raise FileNotFoundError(
                     f"selected workflow decomposition surface was not written at {surface_path}"
                 )
             surface_snapshot = _read_json(surface_path)
-            _require_text(state.selected_workflow_reference, "selected_workflow_reference must stay non-empty")
+            _require_text(ctx.state.selected_workflow_reference, "selected_workflow_reference must stay non-empty")
             validate_selected_workflow_decomposition_surface_snapshot(
                 surface_snapshot,
                 expected_selected_workflow_name=capture.selected_workflow_name,
@@ -451,13 +438,11 @@ class WorkflowPackageToComposableBuildingBlocks(Workflow):
                 selected_workflow_name=capture.selected_workflow_name,
                 boundary=boundary,
             )
-            _capture_decomposition_evidence(ctx, repo_root=repo_root, requested_paths=state.evidence_paths)
+            _capture_decomposition_evidence(ctx, repo_root=repo_root, requested_paths=ctx.state.evidence_paths)
         except _CaptureBlockedError as exc:
             return Event("blocked", reason=str(exc))
-        return (
-            state.model_copy(update={"selected_workflow_name": capture.selected_workflow_name}),
-            Event("decomposition_context_captured"),
-        )
+        ctx.state.selected_workflow_name = capture.selected_workflow_name
+        return Event("decomposition_context_captured")
 
     @python_step(
         name="publish_candidate_decomposition",
@@ -475,7 +460,7 @@ class WorkflowPackageToComposableBuildingBlocks(Workflow):
         writes=[workflow_decomposition_receipt],
         routes={"candidate_decomposition_published": FINISH},
     )
-    def publish_candidate_decomposition(state: State, ctx):
+    def publish_candidate_decomposition(ctx):
         workflow_folder = ctx.workflow_folder
         required_paths = {
             "selected_workflow_decomposition_surface": workflow_folder / "selected_workflow_decomposition_surface.json",
@@ -516,10 +501,10 @@ class WorkflowPackageToComposableBuildingBlocks(Workflow):
         _require_non_empty_text_file(required_paths["promotion_record"], "promotion_record.md must be non-empty")
         _require_non_empty_text_file(required_paths["rollback_plan"], "rollback_plan.md must be non-empty")
 
-        _require_text(state.selected_workflow_reference, "selected_workflow_reference must stay non-empty")
+        _require_text(ctx.state.selected_workflow_reference, "selected_workflow_reference must stay non-empty")
         selected_workflow_name, _, _, _ = validate_selected_workflow_decomposition_surface_snapshot(
             decomposition_surface_snapshot,
-            expected_selected_workflow_name=state.selected_workflow_name,
+            expected_selected_workflow_name=ctx.state.selected_workflow_name,
             expected_label="workflow state",
         )
 
@@ -537,7 +522,7 @@ class WorkflowPackageToComposableBuildingBlocks(Workflow):
             repo_root=repo_root,
             selected_workflow_name=selected_workflow_name,
             boundary=boundary,
-            max_candidate_building_blocks=state.max_candidate_building_blocks,
+            max_candidate_building_blocks=ctx.state.max_candidate_building_blocks,
         )
         _validate_candidate_decomposition_manifest(
             candidate_manifest,
@@ -559,17 +544,17 @@ class WorkflowPackageToComposableBuildingBlocks(Workflow):
             candidate_manifest.get("building_block_names"),
             "candidate_decomposition_manifest.json must define non-empty building_block_names",
         )
-        if state.candidate_file_count and candidate_file_count != state.candidate_file_count:
+        if ctx.state.candidate_file_count and candidate_file_count != ctx.state.candidate_file_count:
             raise ValueError("candidate_decomposition_manifest.json file_count must match workflow state")
-        if state.candidate_changed_paths and candidate_changed_paths != state.candidate_changed_paths:
+        if ctx.state.candidate_changed_paths and candidate_changed_paths != ctx.state.candidate_changed_paths:
             raise ValueError("candidate_decomposition_manifest.json changed_relative_paths must match workflow state")
-        if state.candidate_building_block_names and candidate_building_block_names != state.candidate_building_block_names:
+        if ctx.state.candidate_building_block_names and candidate_building_block_names != ctx.state.candidate_building_block_names:
             raise ValueError("candidate_decomposition_manifest.json building_block_names must match workflow state")
-        if not _AUTHORITATIVE_EVALUATION_ARTIFACTS.issubset(state.evaluation_authoritative_artifacts):
+        if not _AUTHORITATIVE_EVALUATION_ARTIFACTS.issubset(ctx.state.evaluation_authoritative_artifacts):
             raise ValueError(
                 "workflow state authoritative evaluation artifacts must include decomposition_verification_report, composition_migration_guide, promotion_record, and rollback_plan"
             )
-        if state.evaluation_next_action is None:
+        if ctx.state.evaluation_next_action is None:
             raise ValueError("workflow state must define evaluation_next_action before publication")
 
         overlay_validation = _validate_candidate_overlay(
@@ -577,7 +562,7 @@ class WorkflowPackageToComposableBuildingBlocks(Workflow):
             selected_workflow_name=selected_workflow_name,
             building_block_names=candidate_building_block_names,
             candidate_manifest=candidate_manifest,
-            target_test_command=state.target_test_command,
+            target_test_command=ctx.state.target_test_command,
         )
 
         write_publication_receipt(
@@ -585,13 +570,13 @@ class WorkflowPackageToComposableBuildingBlocks(Workflow):
             "workflow_decomposition_receipt.json",
             {
                 "workflow_name": ctx.workflow_name,
-                "task_title": state.task_title,
-                "sponsor_role": state.sponsor_role,
-                "desired_outcome": state.desired_outcome,
-                "selected_workflow_reference": state.selected_workflow_reference,
+                "task_title": ctx.state.task_title,
+                "sponsor_role": ctx.state.sponsor_role,
+                "desired_outcome": ctx.state.desired_outcome,
+                "selected_workflow_reference": ctx.state.selected_workflow_reference,
                 "selected_workflow_name": selected_workflow_name,
-                "target_test_command": state.target_test_command,
-                "max_candidate_building_blocks": state.max_candidate_building_blocks,
+                "target_test_command": ctx.state.target_test_command,
+                "max_candidate_building_blocks": ctx.state.max_candidate_building_blocks,
                 "candidate_file_count": candidate_file_count,
                 "changed_relative_paths": candidate_changed_paths,
                 "building_block_names": candidate_building_block_names,
@@ -618,12 +603,13 @@ class WorkflowPackageToComposableBuildingBlocks(Workflow):
                 "composition_migration_guide": str(required_paths["composition_migration_guide"]),
                 "promotion_record": str(required_paths["promotion_record"]),
                 "rollback_plan": str(required_paths["rollback_plan"]),
-                "next_action": state.evaluation_next_action,
+                "next_action": ctx.state.evaluation_next_action,
                 "overlay_validation": overlay_validation,
                 "published": True,
             },
         )
-        ctx.state = state.model_copy(update={"selected_workflow_name": selected_workflow_name, "published": True})
+        ctx.state.selected_workflow_name = selected_workflow_name
+        ctx.state.published = True
         return "candidate_decomposition_published"
 
     entry = bootstrap

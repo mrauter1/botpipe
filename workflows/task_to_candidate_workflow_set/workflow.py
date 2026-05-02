@@ -38,43 +38,39 @@ _AUTHORITATIVE_PACKAGE_ARTIFACTS = frozenset(
 )
 
 
-def _after_frame_candidate_request(ctx, outcome: Outcome):
-    return ctx.state.model_copy(update={"framing_status": outcome.tag})
+def _after_frame_candidate_request(ctx):
+    outcome = ctx.outcome
+    assert outcome is not None
+    ctx.state.framing_status = outcome.tag
+    return None
 
 
-def _after_analyze_candidate_workflows(ctx, outcome: Outcome):
+def _after_analyze_candidate_workflows(ctx):
+    outcome = ctx.outcome
+    assert outcome is not None
     payload = outcome.payload
     portfolio_posture = payload.get("portfolio_posture")
-    return ctx.state.model_copy(
-        update={
-            "analysis_status": outcome.tag,
-            "portfolio_posture": (
-                portfolio_posture
-                if isinstance(portfolio_posture, str) and portfolio_posture in _PORTFOLIO_POSTURES
-                else ctx.state.portfolio_posture
-            ),
-        }
-    )
+    ctx.state.analysis_status = outcome.tag
+    if isinstance(portfolio_posture, str) and portfolio_posture in _PORTFOLIO_POSTURES:
+        ctx.state.portfolio_posture = portfolio_posture
+    return None
 
 
-def _after_package_candidate_workflow_set(ctx, outcome: Outcome):
+def _after_package_candidate_workflow_set(ctx):
+    outcome = ctx.outcome
+    assert outcome is not None
     payload = outcome.payload
     portfolio_posture = payload.get("portfolio_posture")
     recommended = normalize_unique_strings(
         payload.get("recommended_candidate_workflows"),
         allow_scalar=True,
     )
-    return ctx.state.model_copy(
-        update={
-            "packaging_status": outcome.tag,
-            "portfolio_posture": (
-                portfolio_posture
-                if isinstance(portfolio_posture, str) and portfolio_posture in _PORTFOLIO_POSTURES
-                else ctx.state.portfolio_posture
-            ),
-            "recommended_candidate_workflows": recommended or ctx.state.recommended_candidate_workflows,
-        }
-    )
+    ctx.state.packaging_status = outcome.tag
+    if isinstance(portfolio_posture, str) and portfolio_posture in _PORTFOLIO_POSTURES:
+        ctx.state.portfolio_posture = portfolio_posture
+    if recommended:
+        ctx.state.recommended_candidate_workflows = recommended
+    return None
 
 
 class TaskToCandidateWorkflowSet(Workflow):
@@ -123,9 +119,9 @@ class TaskToCandidateWorkflowSet(Workflow):
         writes=[invocation_contract],
         routes={"inputs_prepared": "capture_workflow_capabilities"},
     )
-    def bootstrap(state: State, ctx):
+    def bootstrap(ctx):
         params = ctx.params
-        next_state = state.model_copy(
+        next_state = ctx.state.model_copy(
             update={
                 "task_title": params.task_title,
                 "sponsor_role": params.sponsor_role,
@@ -160,7 +156,7 @@ class TaskToCandidateWorkflowSet(Workflow):
         writes=[workflow_capability_snapshot],
         routes={"workflow_capabilities_captured": "frame_candidate_request"},
     )
-    def capture_workflow_capabilities(state: State, ctx):
+    def capture_workflow_capabilities(ctx):
         snapshot_path = write_workflow_capability_snapshot(ctx)
         if not snapshot_path.exists():
             raise FileNotFoundError(f"workflow capability snapshot was not written at {snapshot_path}")
@@ -240,7 +236,7 @@ class TaskToCandidateWorkflowSet(Workflow):
         writes=[candidate_workflow_set_receipt],
         routes={"candidate_workflow_set_published": FINISH},
     )
-    def publish_candidate_workflow_set(state: State, ctx):
+    def publish_candidate_workflow_set(ctx):
         workflow_folder = ctx.workflow_folder
         required_paths = {
             "workflow_capability_snapshot": workflow_folder / "workflow_capability_snapshot.json",
@@ -354,9 +350,9 @@ class TaskToCandidateWorkflowSet(Workflow):
                 "candidate_workflow_set_summary.json must confirm ready_for_strategy_selection=true"
             )
 
-        if state.portfolio_posture is not None and portfolio_posture != state.portfolio_posture:
+        if ctx.state.portfolio_posture is not None and portfolio_posture != ctx.state.portfolio_posture:
             raise ValueError("candidate_workflow_set_summary.json portfolio_posture must match workflow state")
-        if state.recommended_candidate_workflows and recommended_candidate_workflows != state.recommended_candidate_workflows:
+        if ctx.state.recommended_candidate_workflows and recommended_candidate_workflows != ctx.state.recommended_candidate_workflows:
             raise ValueError(
                 "candidate_workflow_set_summary.json recommended_candidate_workflows must match workflow state"
             )
@@ -366,9 +362,9 @@ class TaskToCandidateWorkflowSet(Workflow):
             "candidate_workflow_set_receipt.json",
             {
                 "workflow_name": ctx.workflow_name,
-                "task_title": state.task_title,
-                "sponsor_role": state.sponsor_role,
-                "desired_outcome": state.desired_outcome,
+                "task_title": ctx.state.task_title,
+                "sponsor_role": ctx.state.sponsor_role,
+                "desired_outcome": ctx.state.desired_outcome,
                 "comparison_candidates": comparison_candidates,
                 "ranked_candidates": ranked_candidates,
                 "recommended_candidate_workflows": recommended_candidate_workflows,
@@ -386,13 +382,10 @@ class TaskToCandidateWorkflowSet(Workflow):
                 "published": True,
             },
         )
-        return state.model_copy(
-            update={
-                "portfolio_posture": portfolio_posture,
-                "recommended_candidate_workflows": recommended_candidate_workflows,
-                "published": True,
-            }
-        ), Event("candidate_workflow_set_published")
+        ctx.state.portfolio_posture = portfolio_posture
+        ctx.state.recommended_candidate_workflows = recommended_candidate_workflows
+        ctx.state.published = True
+        return Event("candidate_workflow_set_published")
 
 
 def _require_portfolio_posture(value, error_message: str) -> str:

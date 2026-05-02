@@ -37,48 +37,45 @@ _ADAPTATION_BUILDING_BLOCK = "candidate_workflow_to_adapted_execution_plan"
 _PORTFOLIO_POSTURES = frozenset({"direct_fit", "compose_needed", "adapt_needed", "material_gap"})
 
 
-def _after_frame_task(ctx, outcome: Outcome):
-    return ctx.state.model_copy(update={"framing_status": outcome.tag})
+def _after_frame_task(ctx):
+    outcome = ctx.outcome
+    assert outcome is not None
+    ctx.state.framing_status = outcome.tag
+    return None
 
 
-def _after_select_strategy(ctx, outcome: Outcome):
+def _after_select_strategy(ctx):
+    outcome = ctx.outcome
+    assert outcome is not None
     payload = outcome.payload
     selected_strategy = payload.get("selected_strategy")
     recommended_workflows = normalize_unique_strings(
         payload.get("recommended_workflows"),
         allow_scalar=True,
     )
-    return ctx.state.model_copy(
-        update={
-            "selection_status": outcome.tag,
-            "selected_strategy": (
-                selected_strategy
-                if isinstance(selected_strategy, str) and selected_strategy in _STRATEGY_ROUTES
-                else ctx.state.selected_strategy
-            ),
-            "recommended_workflows": recommended_workflows or ctx.state.recommended_workflows,
-        }
-    )
+    ctx.state.selection_status = outcome.tag
+    if isinstance(selected_strategy, str) and selected_strategy in _STRATEGY_ROUTES:
+        ctx.state.selected_strategy = selected_strategy
+    if recommended_workflows:
+        ctx.state.recommended_workflows = recommended_workflows
+    return None
 
 
-def _after_package_strategy(ctx, outcome: Outcome):
+def _after_package_strategy(ctx):
+    outcome = ctx.outcome
+    assert outcome is not None
     payload = outcome.payload
     selected_strategy = payload.get("selected_strategy")
     recommended_workflows = normalize_unique_strings(
         payload.get("recommended_workflows"),
         allow_scalar=True,
     )
-    return ctx.state.model_copy(
-        update={
-            "packaging_status": outcome.tag,
-            "selected_strategy": (
-                selected_strategy
-                if isinstance(selected_strategy, str) and selected_strategy in _STRATEGY_ROUTES
-                else ctx.state.selected_strategy
-            ),
-            "recommended_workflows": recommended_workflows or ctx.state.recommended_workflows,
-        }
-    )
+    ctx.state.packaging_status = outcome.tag
+    if isinstance(selected_strategy, str) and selected_strategy in _STRATEGY_ROUTES:
+        ctx.state.selected_strategy = selected_strategy
+    if recommended_workflows:
+        ctx.state.recommended_workflows = recommended_workflows
+    return None
 
 
 class TaskToWorkflowStrategy(Workflow):
@@ -195,9 +192,9 @@ class TaskToWorkflowStrategy(Workflow):
         writes=[invocation_contract],
         routes={"inputs_prepared": "capture_workflow_portfolio"},
     )
-    def bootstrap(state: State, ctx):
+    def bootstrap(ctx):
         params = ctx.params
-        next_state = state.model_copy(
+        next_state = ctx.state.model_copy(
             update={
                 "task_title": params.task_title,
                 "sponsor_role": params.sponsor_role,
@@ -232,7 +229,7 @@ class TaskToWorkflowStrategy(Workflow):
         writes=[workflow_portfolio_snapshot],
         routes={"portfolio_snapshotted": "frame_task"},
     )
-    def capture_workflow_portfolio(state: State, ctx):
+    def capture_workflow_portfolio(ctx):
         snapshot_path = write_workflow_portfolio_snapshot(ctx)
         if not snapshot_path.exists():
             raise FileNotFoundError(f"workflow portfolio snapshot was not written at {snapshot_path}")
@@ -261,17 +258,17 @@ class TaskToWorkflowStrategy(Workflow):
         ],
         routes={"candidate_workflow_set_built": "select_strategy"},
     )
-    def build_candidate_workflow_set(state: State, ctx):
+    def build_candidate_workflow_set(ctx):
         child_result = run_child_workflow(
             ctx,
             "task_to_candidate_workflow_set",
             message=_read_request_text(ctx),
             parameters={
-                "task_title": state.task_title,
-                "sponsor_role": state.sponsor_role,
-                "desired_outcome": state.desired_outcome,
-                "constraints": state.constraints,
-                "evidence_expectations": state.evidence_expectations,
+                "task_title": ctx.state.task_title,
+                "sponsor_role": ctx.state.sponsor_role,
+                "desired_outcome": ctx.state.desired_outcome,
+                "constraints": ctx.state.constraints,
+                "evidence_expectations": ctx.state.evidence_expectations,
             },
         )
         child_last_event = None if child_result.last_event is None else child_result.last_event.tag
@@ -324,7 +321,7 @@ class TaskToWorkflowStrategy(Workflow):
         writes=[strategy_receipt],
         routes={"strategy_published": FINISH},
     )
-    def publish_strategy(state: State, ctx):
+    def publish_strategy(ctx):
         workflow_folder = ctx.workflow_folder
         required_paths = {
             "workflow_portfolio_snapshot": workflow_folder / "workflow_portfolio_snapshot.json",
@@ -472,9 +469,9 @@ class TaskToWorkflowStrategy(Workflow):
                 "candidate_workflow_set_summary.json must confirm ready_for_strategy_selection=true"
             )
 
-        if state.selected_strategy is not None and selected_strategy != state.selected_strategy:
+        if ctx.state.selected_strategy is not None and selected_strategy != ctx.state.selected_strategy:
             raise ValueError("strategy_summary.json selected_strategy must match workflow state")
-        if state.recommended_workflows and recommended_workflows != state.recommended_workflows:
+        if ctx.state.recommended_workflows and recommended_workflows != ctx.state.recommended_workflows:
             raise ValueError("strategy_summary.json recommended_workflows must match workflow state")
 
         write_publication_receipt(
@@ -482,9 +479,9 @@ class TaskToWorkflowStrategy(Workflow):
             "strategy_receipt.json",
             {
                 "workflow_name": ctx.workflow_name,
-                "task_title": state.task_title,
-                "sponsor_role": state.sponsor_role,
-                "desired_outcome": state.desired_outcome,
+                "task_title": ctx.state.task_title,
+                "sponsor_role": ctx.state.sponsor_role,
+                "desired_outcome": ctx.state.desired_outcome,
                 "selected_strategy": selected_strategy,
                 "recommended_workflows": recommended_workflows,
                 "comparison_candidates": comparison_candidates,
@@ -499,13 +496,10 @@ class TaskToWorkflowStrategy(Workflow):
                 "published": True,
             },
         )
-        return state.model_copy(
-            update={
-                "selected_strategy": selected_strategy,
-                "recommended_workflows": recommended_workflows,
-                "published": True,
-            }
-        ), Event("strategy_published")
+        ctx.state.selected_strategy = selected_strategy
+        ctx.state.recommended_workflows = recommended_workflows
+        ctx.state.published = True
+        return Event("strategy_published")
 
     entry = bootstrap
 

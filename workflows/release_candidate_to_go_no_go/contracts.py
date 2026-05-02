@@ -119,7 +119,6 @@ PREPARE_DECISION_PACKAGE_ROUTE_CONTRACTS = {
         "publish_decision",
         summary="The final release decision package and stakeholder communication draft are complete and aligned to the assessment.",
         required_writes=("release_decision_package", "release_communications_draft"),
-        handoff="Advances the release workflow to deterministic publication of the terminal receipt.",
     ),
     "needs_rework": Route.to(
         SELF,

@@ -24,6 +24,7 @@ from autoloop.runtime.runner import RunnerOptions, run_workflow_package
 from autoloop_optimizer.adaptation import write_selected_workflow_capability_snapshot
 from autoloop_optimizer.diagnostics import write_selected_workflow_run_history_snapshot
 from autoloop.core.primitives import Outcome
+from tests.runtime.workflow_contract_helpers import invoke_python_step
 
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
@@ -423,8 +424,9 @@ def test_workflow_run_history_to_failure_modes_bootstrap_reads_typed_ctx_params(
         workflow_params={},
     )
 
-    next_state, event = workflow_pkg.WorkflowRunHistoryToFailureModes.on_bootstrap(
-        workflow_pkg.WorkflowRunHistoryToFailureModes.State(),
+    next_state, event = invoke_python_step(
+        workflow_pkg.WorkflowRunHistoryToFailureModes,
+        "bootstrap",
         ctx,
     )
 
@@ -1255,7 +1257,7 @@ def test_workflow_run_history_to_failure_modes_publish_rejects_empty_filtered_hi
     )
 
     with pytest.raises(ValueError, match="selected_workflow_run_history.json must contain at least one filtered run"):
-        workflow_pkg.WorkflowRunHistoryToFailureModes.on_publish_failure_mode_package(state, ctx)
+        invoke_python_step(workflow_pkg.WorkflowRunHistoryToFailureModes, "publish_failure_mode_package", ctx)
 
 
 def test_workflow_run_history_to_failure_modes_publish_rejects_selected_workflow_mismatch(
@@ -1272,7 +1274,7 @@ def test_workflow_run_history_to_failure_modes_publish_rejects_selected_workflow
         ValueError,
         match="selected_workflow_run_history.json selected_workflow_name must match selected_workflow_capability.json",
     ):
-        workflow_pkg.WorkflowRunHistoryToFailureModes.on_publish_failure_mode_package(state, ctx)
+        invoke_python_step(workflow_pkg.WorkflowRunHistoryToFailureModes, "publish_failure_mode_package", ctx)
 
 
 def test_workflow_run_history_to_failure_modes_publish_rejects_missing_diagnostic_artifact(
@@ -1283,7 +1285,7 @@ def test_workflow_run_history_to_failure_modes_publish_rejects_missing_diagnosti
     (ctx.workflow_folder / "failure_mode_map.md").unlink()
 
     with pytest.raises(FileNotFoundError, match="failure_mode_map.md"):
-        workflow_pkg.WorkflowRunHistoryToFailureModes.on_publish_failure_mode_package(state, ctx)
+        invoke_python_step(workflow_pkg.WorkflowRunHistoryToFailureModes, "publish_failure_mode_package", ctx)
 
 
 def test_workflow_run_history_to_failure_modes_publish_rejects_hidden_downstream_execution_boundary(
@@ -1300,7 +1302,7 @@ def test_workflow_run_history_to_failure_modes_publish_rejects_hidden_downstream
         ValueError,
         match="improvement_opportunities.json publication_boundary must be diagnostic_publication_only",
     ):
-        workflow_pkg.WorkflowRunHistoryToFailureModes.on_publish_failure_mode_package(state, ctx)
+        invoke_python_step(workflow_pkg.WorkflowRunHistoryToFailureModes, "publish_failure_mode_package", ctx)
 
 
 def test_workflow_run_history_to_failure_modes_publish_rejects_incomplete_authoritative_artifacts(
@@ -1325,7 +1327,7 @@ def test_workflow_run_history_to_failure_modes_publish_rejects_incomplete_author
         ValueError,
         match="improvement_opportunities.json authoritative_artifacts must include",
     ):
-        workflow_pkg.WorkflowRunHistoryToFailureModes.on_publish_failure_mode_package(state, ctx)
+        invoke_python_step(workflow_pkg.WorkflowRunHistoryToFailureModes, "publish_failure_mode_package", ctx)
 
 
 def test_workflow_run_history_to_failure_modes_publish_rejects_hidden_downstream_execution_text(
@@ -1351,7 +1353,7 @@ def test_workflow_run_history_to_failure_modes_publish_rejects_hidden_downstream
         ValueError,
         match="diagnostic_next_actions.md must not imply hidden downstream execution",
     ):
-        workflow_pkg.WorkflowRunHistoryToFailureModes.on_publish_failure_mode_package(state, ctx)
+        invoke_python_step(workflow_pkg.WorkflowRunHistoryToFailureModes, "publish_failure_mode_package", ctx)
 
 
 def _produce_frame_scope(request) -> str:
@@ -1616,7 +1618,11 @@ def test_workflow_run_history_capture_step_normalizes_alias_and_preserves_filter
         },
     )
 
-    next_state, event = workflow_pkg.WorkflowRunHistoryToFailureModes.on_capture_run_history_context(state, ctx)
+    next_state, event = invoke_python_step(
+        workflow_pkg.WorkflowRunHistoryToFailureModes,
+        "capture_run_history_context",
+        ctx,
+    )
 
     capability_snapshot = json.loads((workflow_folder / "selected_workflow_capability.json").read_text(encoding="utf-8"))
     history_snapshot = json.loads((workflow_folder / "selected_workflow_run_history.json").read_text(encoding="utf-8"))

@@ -22,6 +22,7 @@ from autoloop.runtime.loader import (
 )
 from autoloop.runtime.runner import RunnerOptions, run_workflow_package
 from autoloop.core.primitives import Outcome
+from tests.runtime.workflow_contract_helpers import invoke_python_step
 
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
@@ -429,7 +430,7 @@ def test_company_operation_to_recursive_improvement_cycle_normalizes_repeatable_
         "max_runs_per_workflow": 4,
         "max_tasks": 12,
         "sponsor_role": "Workflow Platform",
-        "statuses": ["awaiting_input", "success"],
+        "statuses": ["success", "awaiting_input"],
         "task_title": "Company recursive-improvement review",
     }
 
@@ -499,8 +500,9 @@ def test_company_operation_to_recursive_improvement_cycle_bootstrap_reads_typed_
         workflow_params={},
     )
 
-    next_state, event = workflow_pkg.CompanyOperationToRecursiveImprovementCycle.on_bootstrap(
-        workflow_pkg.CompanyOperationToRecursiveImprovementCycle.State(),
+    next_state, event = invoke_python_step(
+        workflow_pkg.CompanyOperationToRecursiveImprovementCycle,
+        "bootstrap",
         ctx,
     )
 
@@ -894,7 +896,7 @@ def test_company_operation_to_recursive_improvement_cycle_publish_rejects_missin
     (ctx.workflow_folder / missing_filename).unlink()
 
     with pytest.raises(FileNotFoundError, match="missing required publication artifact"):
-        workflow_pkg.CompanyOperationToRecursiveImprovementCycle.on_publish_recursive_improvement_cycle(state, ctx)
+        invoke_python_step(workflow_pkg.CompanyOperationToRecursiveImprovementCycle, "publish_recursive_improvement_cycle", ctx)
 
 
 def test_company_operation_to_recursive_improvement_cycle_publish_rejects_unknown_focus_task_reference(
@@ -908,7 +910,7 @@ def test_company_operation_to_recursive_improvement_cycle_publish_rejects_unknow
     )
 
     with pytest.raises(ValueError, match="unknown focus-task references"):
-        workflow_pkg.CompanyOperationToRecursiveImprovementCycle.on_publish_recursive_improvement_cycle(state, ctx)
+        invoke_python_step(workflow_pkg.CompanyOperationToRecursiveImprovementCycle, "publish_recursive_improvement_cycle", ctx)
 
 
 def test_company_operation_to_recursive_improvement_cycle_publish_rejects_unknown_focus_workflow_reference(
@@ -927,7 +929,7 @@ def test_company_operation_to_recursive_improvement_cycle_publish_rejects_unknow
     )
 
     with pytest.raises(ValueError, match="unknown focus-workflow references"):
-        workflow_pkg.CompanyOperationToRecursiveImprovementCycle.on_publish_recursive_improvement_cycle(state, ctx)
+        invoke_python_step(workflow_pkg.CompanyOperationToRecursiveImprovementCycle, "publish_recursive_improvement_cycle", ctx)
 
 
 def test_company_operation_to_recursive_improvement_cycle_publish_rejects_summary_drift(
@@ -950,7 +952,7 @@ def test_company_operation_to_recursive_improvement_cycle_publish_rejects_summar
     )
 
     with pytest.raises(ValueError, match="must not drift from recursive_improvement_candidates.json"):
-        workflow_pkg.CompanyOperationToRecursiveImprovementCycle.on_publish_recursive_improvement_cycle(state, ctx)
+        invoke_python_step(workflow_pkg.CompanyOperationToRecursiveImprovementCycle, "publish_recursive_improvement_cycle", ctx)
 
 
 def test_company_operation_to_recursive_improvement_cycle_publish_rejects_missing_typed_summary_field(
@@ -965,7 +967,7 @@ def test_company_operation_to_recursive_improvement_cycle_publish_rejects_missin
     summary_path.write_text(json.dumps(payload, indent=2, sort_keys=True) + "\n", encoding="utf-8")
 
     with pytest.raises(ValidationError, match="priority_category_counts"):
-        workflow_pkg.CompanyOperationToRecursiveImprovementCycle.on_publish_recursive_improvement_cycle(state, ctx)
+        invoke_python_step(workflow_pkg.CompanyOperationToRecursiveImprovementCycle, "publish_recursive_improvement_cycle", ctx)
 
 
 def test_company_operation_to_recursive_improvement_cycle_publish_rejects_invalid_priority_category(
@@ -985,7 +987,7 @@ def test_company_operation_to_recursive_improvement_cycle_publish_rejects_invali
     )
 
     with pytest.raises(ValueError, match="legal priority categories"):
-        workflow_pkg.CompanyOperationToRecursiveImprovementCycle.on_publish_recursive_improvement_cycle(state, ctx)
+        invoke_python_step(workflow_pkg.CompanyOperationToRecursiveImprovementCycle, "publish_recursive_improvement_cycle", ctx)
 
 
 @pytest.mark.parametrize(
@@ -1020,7 +1022,7 @@ def test_company_operation_to_recursive_improvement_cycle_publish_rejects_hidden
     )
 
     with pytest.raises(ValueError, match="recursive_improvement_next_actions.md must not imply hidden downstream execution"):
-        workflow_pkg.CompanyOperationToRecursiveImprovementCycle.on_publish_recursive_improvement_cycle(state, ctx)
+        invoke_python_step(workflow_pkg.CompanyOperationToRecursiveImprovementCycle, "publish_recursive_improvement_cycle", ctx)
 
 
 def test_company_operation_to_recursive_improvement_cycle_publish_rejects_hidden_downstream_execution_in_summary_next_action(
@@ -1039,7 +1041,7 @@ def test_company_operation_to_recursive_improvement_cycle_publish_rejects_hidden
         ValueError,
         match="recursive_improvement_summary.json next_action must not imply hidden downstream execution",
     ):
-        workflow_pkg.CompanyOperationToRecursiveImprovementCycle.on_publish_recursive_improvement_cycle(state, ctx)
+        invoke_python_step(workflow_pkg.CompanyOperationToRecursiveImprovementCycle, "publish_recursive_improvement_cycle", ctx)
 
 
 def _produce_company_frame(request) -> str:

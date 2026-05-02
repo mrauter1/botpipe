@@ -573,7 +573,6 @@ MINE_FAILURES_ROUTE_CONTRACTS = {
         "route_optimize_tokens",
         summary="The ranked targets did not yield concrete failure scenarios, so the workflow should skip directly to token analysis.",
         required_writes=("workflow_failure_scenarios",),
-        handoff="Skips producer-side candidate generation without fabricating failure scenarios.",
     ),
     "needs_rework": Route.to(
         SELF,
@@ -609,13 +608,11 @@ OPTIMIZE_VERIFIER_RUBRIC_ROUTE_CONTRACTS = {
         "route_optimize_tokens",
         summary="Acceptance-function candidates are ready for downstream token analysis.",
         required_writes=("verifier_rubric_optimization_candidates",),
-        handoff="Advances to token analysis while keeping verifier, rubric, and route-metadata changes merged on one surface.",
     ),
     "verifier_rubric_pass_not_applicable": Route.to(
         "route_optimize_tokens",
         summary="The evidence does not justify acceptance-function changes, so the workflow should continue without forcing verifier or rubric edits.",
         required_writes=("verifier_rubric_optimization_candidates",),
-        handoff="Preserves the rule that verifier/rubric changes must be evidence-backed rather than pass-rate chasing.",
     ),
     "needs_rework": Route.to(
         SELF,
@@ -630,13 +627,11 @@ OPTIMIZE_TOKENS_ROUTE_CONTRACTS = {
         "route_adversarial_cases",
         summary="Token-compression candidates are ready and classified by risk for downstream adversarial analysis.",
         required_writes=("token_optimization_candidates",),
-        handoff="Advances to adversarial-case generation after explicitly classifying safe versus risky compression ideas.",
     ),
     "token_pass_not_applicable": Route.to(
         "route_adversarial_cases",
         summary="Token optimization is disabled or not justified by the current evidence, so the workflow should continue without compression claims.",
         required_writes=("token_optimization_candidates",),
-        handoff="Skips token compression without silently changing semantics or inventing savings.",
     ),
     "needs_rework": Route.to(
         SELF,
@@ -651,13 +646,11 @@ ADVERSARIAL_CASES_ROUTE_CONTRACTS = {
         "route_workflow_level",
         summary="Adversarial case candidates are ready for workflow-level analysis and later eval-suite consideration.",
         required_writes=("adversarial_case_candidates",),
-        handoff="Advances to workflow-level analysis without materializing the cases into an eval suite automatically.",
     ),
     "adversarial_generation_skipped": Route.to(
         "route_workflow_level",
         summary="Adversarial generation is disabled, so the workflow should continue directly to workflow-level analysis.",
         required_writes=("adversarial_case_candidates",),
-        handoff="Keeps the skip explicit rather than implying that adversarial work happened.",
     ),
     "needs_rework": Route.to(
         SELF,
@@ -693,7 +686,6 @@ PACKAGE_ROUTE_CONTRACTS = {
         "publish_optimization_packet",
         summary="The optimization packet and scorecard are aligned and ready for deterministic publication checks and receipt writing.",
         required_writes=("workflow_optimization_scorecard", "workflow_optimization_packet"),
-        handoff="Advances to deterministic publication checks, refinement-evidence writing, and receipt publication without mutating the selected workflow.",
     ),
     "needs_rework": Route.to(
         SELF,

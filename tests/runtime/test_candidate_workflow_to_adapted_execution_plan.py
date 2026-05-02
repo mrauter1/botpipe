@@ -24,6 +24,7 @@ from autoloop.runtime.loader import (
 from autoloop.runtime.runner import RunnerOptions, run_workflow_package
 from autoloop_optimizer.adaptation import write_selected_workflow_capability_snapshot
 from autoloop.core.primitives import Outcome
+from tests.runtime.workflow_contract_helpers import invoke_after_verifier_hook, invoke_python_step
 
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
@@ -397,8 +398,9 @@ def test_candidate_workflow_to_adapted_execution_plan_bootstrap_reads_typed_ctx_
         workflow_params={},
     )
 
-    next_state, event = workflow_pkg.CandidateWorkflowToAdaptedExecutionPlan.on_bootstrap(
-        workflow_pkg.CandidateWorkflowToAdaptedExecutionPlan.State(),
+    next_state, event = invoke_python_step(
+        workflow_pkg.CandidateWorkflowToAdaptedExecutionPlan,
+        "bootstrap",
         ctx,
     )
 
@@ -846,6 +848,7 @@ def test_candidate_workflow_to_adapted_execution_plan_package_runs_and_publishes
 
 
 def test_candidate_workflow_to_adapted_execution_plan_package_needs_rework_payload_updates_state(
+    tmp_path: Path,
     monkeypatch,
 ) -> None:
     monkeypatch.syspath_prepend(str(REPO_ROOT))
@@ -858,10 +861,28 @@ def test_candidate_workflow_to_adapted_execution_plan_package_needs_rework_paylo
         selected_workflow_name="security_finding_to_verified_remediation",
         task_title="Admin impersonation privilege escalation response",
     )
+    task_folder = tmp_path / ".autoloop" / "tasks" / "adapted-execution-task"
+    workflow_folder = task_folder / "wf_candidate_workflow_to_adapted_execution_plan"
+    run_folder = workflow_folder / "runs" / "run-1"
+    run_folder.mkdir(parents=True, exist_ok=True)
+    ctx = Context(
+        task_id="adapted-execution-task",
+        run_id="run-1",
+        workflow_name="candidate_workflow_to_adapted_execution_plan",
+        task_folder=task_folder,
+        workflow_folder=workflow_folder,
+        run_folder=run_folder,
+        package_folder=REPO_ROOT / "workflows" / "candidate_workflow_to_adapted_execution_plan",
+        state=state,
+        session_store=InMemorySessionStore(),
+        workflow_params={},
+    )
 
-    next_state = workflow_pkg.CandidateWorkflowToAdaptedExecutionPlan.on_package_adapted_execution_plan(
-        state,
-        Outcome(
+    next_state, _ = invoke_after_verifier_hook(
+        workflow_pkg.CandidateWorkflowToAdaptedExecutionPlan,
+        "package_adapted_execution_plan",
+        ctx,
+        outcome=Outcome(
             raw_output="package needs local repair\n",
             tag="needs_rework",
             payload={
@@ -891,7 +912,6 @@ def test_candidate_workflow_to_adapted_execution_plan_package_needs_rework_paylo
                 "ready_for_execution": False,
             },
         ),
-        None,
     )
 
     assert next_state.packaging_status == "needs_rework"
@@ -967,7 +987,7 @@ def test_candidate_workflow_to_adapted_execution_plan_publish_rejects_invalid_se
     )
 
     with pytest.raises(WorkflowDiscoveryError, match="unknown workflow"):
-        workflow_pkg.CandidateWorkflowToAdaptedExecutionPlan.on_publish_adapted_execution_plan(state, ctx)
+        invoke_python_step(workflow_pkg.CandidateWorkflowToAdaptedExecutionPlan, "publish_adapted_execution_plan", ctx)
 
 
 def test_candidate_workflow_to_adapted_execution_plan_publish_rejects_summary_missing_typed_required_field(
@@ -987,7 +1007,7 @@ def test_candidate_workflow_to_adapted_execution_plan_publish_rejects_summary_mi
     )
 
     with pytest.raises(ValidationError, match="selected_workflow_entry_step"):
-        workflow_pkg.CandidateWorkflowToAdaptedExecutionPlan.on_publish_adapted_execution_plan(state, ctx)
+        invoke_python_step(workflow_pkg.CandidateWorkflowToAdaptedExecutionPlan, "publish_adapted_execution_plan", ctx)
 
 
 def test_candidate_workflow_to_adapted_execution_plan_publish_rejects_invalid_proposed_parameter_payload(
@@ -1004,7 +1024,7 @@ def test_candidate_workflow_to_adapted_execution_plan_publish_rejects_invalid_pr
     )
 
     with pytest.raises(WorkflowParameterError, match="finding_source"):
-        workflow_pkg.CandidateWorkflowToAdaptedExecutionPlan.on_publish_adapted_execution_plan(state, ctx)
+        invoke_python_step(workflow_pkg.CandidateWorkflowToAdaptedExecutionPlan, "publish_adapted_execution_plan", ctx)
 
 
 def test_candidate_workflow_to_adapted_execution_plan_publish_rejects_missing_authoritative_artifact_declaration(
@@ -1024,7 +1044,7 @@ def test_candidate_workflow_to_adapted_execution_plan_publish_rejects_missing_au
     )
 
     with pytest.raises(ValueError, match="authoritative_artifacts must include"):
-        workflow_pkg.CandidateWorkflowToAdaptedExecutionPlan.on_publish_adapted_execution_plan(state, ctx)
+        invoke_python_step(workflow_pkg.CandidateWorkflowToAdaptedExecutionPlan, "publish_adapted_execution_plan", ctx)
 
 
 def test_candidate_workflow_to_adapted_execution_plan_publish_rejects_summary_drift_from_validated_parameters(
@@ -1038,7 +1058,7 @@ def test_candidate_workflow_to_adapted_execution_plan_publish_rejects_summary_dr
     )
 
     with pytest.raises(ValueError, match="proposed_parameter_keys must match validated_workflow_parameters.json"):
-        workflow_pkg.CandidateWorkflowToAdaptedExecutionPlan.on_publish_adapted_execution_plan(state, ctx)
+        invoke_python_step(workflow_pkg.CandidateWorkflowToAdaptedExecutionPlan, "publish_adapted_execution_plan", ctx)
 
 
 def test_candidate_workflow_to_adapted_execution_plan_publish_rejects_summary_selected_workflow_mismatch(
@@ -1055,7 +1075,7 @@ def test_candidate_workflow_to_adapted_execution_plan_publish_rejects_summary_se
         ValueError,
         match="adapted_execution_summary.json selected_workflow_name must match selected_workflow_capability.json",
     ):
-        workflow_pkg.CandidateWorkflowToAdaptedExecutionPlan.on_publish_adapted_execution_plan(state, ctx)
+        invoke_python_step(workflow_pkg.CandidateWorkflowToAdaptedExecutionPlan, "publish_adapted_execution_plan", ctx)
 
 
 def test_candidate_workflow_capture_step_normalizes_alias_without_revalidating_snapshot(
@@ -1097,8 +1117,9 @@ def test_candidate_workflow_capture_step_normalizes_alias_without_revalidating_s
         workflow_params={"selected_workflow": "security-remediation", "task_title": state.task_title},
     )
 
-    next_state, event = workflow_pkg.CandidateWorkflowToAdaptedExecutionPlan.on_capture_selected_workflow_contract(
-        state,
+    next_state, event = invoke_python_step(
+        workflow_pkg.CandidateWorkflowToAdaptedExecutionPlan,
+        "capture_selected_workflow_contract",
         ctx,
     )
 

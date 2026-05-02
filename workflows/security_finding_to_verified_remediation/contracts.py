@@ -68,7 +68,6 @@ ASSESS_SECURITY_FINDING_ROUTE_CONTRACTS = {
     "needs_replan": Route.to(
         "compose_evidence_pack",
         summary="The evidence boundary, affected surface, or remediation framing changed materially and the evidence-pack stage must be revisited.",
-        handoff="Routes back to evidence-pack composition because the current security-assessment boundary is no longer authoritative.",
     ),
 }
 
@@ -113,7 +112,6 @@ PREPARE_CLOSURE_PACKAGE_ROUTE_CONTRACTS = {
             "stakeholder_communication_draft",
             "closure_evidence_requirements",
         ),
-        handoff="Advances the workflow to deterministic publication of the closure-ready remediation receipt.",
     ),
     "needs_rework": Route.to(
         SELF,

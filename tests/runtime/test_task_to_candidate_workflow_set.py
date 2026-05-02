@@ -21,6 +21,7 @@ from autoloop.runtime.loader import (
     resolve_workflow_reference,
 )
 from autoloop.runtime.runner import RunnerOptions, run_workflow_package
+from tests.runtime.workflow_contract_helpers import invoke_python_step
 from autoloop.core.primitives import Outcome
 
 
@@ -356,8 +357,9 @@ def test_task_to_candidate_workflow_set_bootstrap_reads_typed_ctx_params(monkeyp
         workflow_params={},
     )
 
-    next_state, event = workflow_pkg.TaskToCandidateWorkflowSet.on_bootstrap(
-        workflow_pkg.TaskToCandidateWorkflowSet.State(),
+    next_state, event = invoke_python_step(
+        workflow_pkg.TaskToCandidateWorkflowSet,
+        "bootstrap",
         ctx,
     )
 
@@ -774,7 +776,7 @@ def test_task_to_candidate_workflow_set_publish_rejects_summary_without_builder_
     )
 
     with pytest.raises(ValueError, match="builder baseline"):
-        workflow_pkg.TaskToCandidateWorkflowSet.on_publish_candidate_workflow_set(state, ctx)
+        invoke_python_step(workflow_pkg.TaskToCandidateWorkflowSet, "publish_candidate_workflow_set", ctx)
 
 
 def test_task_to_candidate_workflow_set_publish_rejects_summary_missing_typed_required_field(
@@ -812,7 +814,7 @@ def test_task_to_candidate_workflow_set_publish_rejects_summary_missing_typed_re
     )
 
     with pytest.raises(ValidationError, match="ranked_candidates"):
-        workflow_pkg.TaskToCandidateWorkflowSet.on_publish_candidate_workflow_set(state, ctx)
+        invoke_python_step(workflow_pkg.TaskToCandidateWorkflowSet, "publish_candidate_workflow_set", ctx)
 
 
 def test_task_to_candidate_workflow_set_publish_rejects_compose_posture_with_only_one_recommended_workflow(
@@ -850,7 +852,7 @@ def test_task_to_candidate_workflow_set_publish_rejects_compose_posture_with_onl
     )
 
     with pytest.raises(ValueError, match="at least two workflows when portfolio_posture is compose_needed"):
-        workflow_pkg.TaskToCandidateWorkflowSet.on_publish_candidate_workflow_set(state, ctx)
+        invoke_python_step(workflow_pkg.TaskToCandidateWorkflowSet, "publish_candidate_workflow_set", ctx)
 
 
 def test_task_to_candidate_workflow_set_publish_rejects_summary_without_strategy_ready_signal(
@@ -886,7 +888,7 @@ def test_task_to_candidate_workflow_set_publish_rejects_summary_without_strategy
     )
 
     with pytest.raises(ValueError, match="ready_for_strategy_selection=true"):
-        workflow_pkg.TaskToCandidateWorkflowSet.on_publish_candidate_workflow_set(state, ctx)
+        invoke_python_step(workflow_pkg.TaskToCandidateWorkflowSet, "publish_candidate_workflow_set", ctx)
 
 
 def _make_publish_candidate_workflow_set_test_context(

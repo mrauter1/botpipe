@@ -80,44 +80,38 @@ _ALLOWED_OPTIMIZATION_EVIDENCE_KINDS = frozenset(
 )
 
 
-def _after_frame_refinement_request(ctx, outcome: Outcome):
+def _after_frame_refinement_request(ctx):
+    outcome = ctx.outcome
+    assert outcome is not None
     payload = outcome.payload
     selected_workflow_name = payload.get("selected_workflow_name")
-    return ctx.state.model_copy(
-        update={
-            "framing_status": outcome.tag,
-            "selected_workflow_name": (
-                selected_workflow_name if isinstance(selected_workflow_name, str) else ctx.state.selected_workflow_name
-            ),
-        }
-    )
+    ctx.state.framing_status = outcome.tag
+    if isinstance(selected_workflow_name, str):
+        ctx.state.selected_workflow_name = selected_workflow_name
+    return None
 
 
-def _after_design_refinement_plan(ctx, outcome: Outcome):
+def _after_design_refinement_plan(ctx):
+    outcome = ctx.outcome
+    assert outcome is not None
     payload = outcome.payload
     selected_workflow_name = payload.get("selected_workflow_name")
-    return ctx.state.model_copy(
-        update={
-            "planning_status": outcome.tag,
-            "selected_workflow_name": (
-                selected_workflow_name if isinstance(selected_workflow_name, str) else ctx.state.selected_workflow_name
-            ),
-        }
-    )
+    ctx.state.planning_status = outcome.tag
+    if isinstance(selected_workflow_name, str):
+        ctx.state.selected_workflow_name = selected_workflow_name
+    return None
 
 
-def _after_implement_refined_workflow(ctx, outcome: Outcome):
+def _after_implement_refined_workflow(ctx):
+    outcome = ctx.outcome
+    assert outcome is not None
     payload = outcome.payload
     selected_workflow_name = payload.get("selected_workflow_name")
     if outcome.tag == "needs_replan":
-        return ctx.state.model_copy(
-            update={
-                "build_status": outcome.tag,
-                "selected_workflow_name": (
-                    selected_workflow_name if isinstance(selected_workflow_name, str) else ctx.state.selected_workflow_name
-                ),
-            }
-        )
+        ctx.state.build_status = outcome.tag
+        if isinstance(selected_workflow_name, str):
+            ctx.state.selected_workflow_name = selected_workflow_name
+        return None
 
     candidate_manifest = _write_candidate_workflow_manifest(
         ctx.artifacts.candidate_workflow_manifest.path.parent,
@@ -145,19 +139,17 @@ def _after_implement_refined_workflow(ctx, outcome: Outcome):
         raise ValueError("build verifier payload candidate_file_count must match candidate_workflow_manifest.json")
     if payload_changed_relative_paths != actual_changed_relative_paths:
         raise ValueError("build verifier payload changed_relative_paths must match candidate_workflow_manifest.json")
-    return ctx.state.model_copy(
-        update={
-            "build_status": outcome.tag,
-            "selected_workflow_name": (
-                selected_workflow_name if isinstance(selected_workflow_name, str) else ctx.state.selected_workflow_name
-            ),
-            "candidate_file_count": actual_candidate_file_count,
-            "candidate_changed_paths": actual_changed_relative_paths,
-        }
-    )
+    ctx.state.build_status = outcome.tag
+    if isinstance(selected_workflow_name, str):
+        ctx.state.selected_workflow_name = selected_workflow_name
+    ctx.state.candidate_file_count = actual_candidate_file_count
+    ctx.state.candidate_changed_paths = actual_changed_relative_paths
+    return None
 
 
-def _after_evaluate_refined_workflow(ctx, outcome: Outcome):
+def _after_evaluate_refined_workflow(ctx):
+    outcome = ctx.outcome
+    assert outcome is not None
     payload = outcome.payload
     selected_workflow_name = payload.get("selected_workflow_name")
     candidate_file_count = _require_positive_int(
@@ -177,17 +169,13 @@ def _after_evaluate_refined_workflow(ctx, outcome: Outcome):
         raise ValueError("workflow_refinement_evaluated requires ready_for_publication=true")
     if ctx.state.candidate_file_count and candidate_file_count != ctx.state.candidate_file_count:
         raise ValueError("evaluation verifier payload candidate_file_count must match workflow state")
-    return ctx.state.model_copy(
-        update={
-            "evaluation_status": outcome.tag,
-            "selected_workflow_name": (
-                selected_workflow_name if isinstance(selected_workflow_name, str) else ctx.state.selected_workflow_name
-            ),
-            "candidate_file_count": candidate_file_count,
-            "evaluation_authoritative_artifacts": authoritative_artifacts,
-            "evaluation_next_action": next_action,
-        }
-    )
+    ctx.state.evaluation_status = outcome.tag
+    if isinstance(selected_workflow_name, str):
+        ctx.state.selected_workflow_name = selected_workflow_name
+    ctx.state.candidate_file_count = candidate_file_count
+    ctx.state.evaluation_authoritative_artifacts = authoritative_artifacts
+    ctx.state.evaluation_next_action = next_action
+    return None
 
 
 class WorkflowAndEvalToRefinedWorkflowPackage(Workflow):
@@ -363,10 +351,9 @@ class WorkflowAndEvalToRefinedWorkflowPackage(Workflow):
         writes=[invocation_contract],
         routes={"inputs_prepared": "capture_refinement_context"},
     )
-    def bootstrap(state: State, ctx):
+    def bootstrap(ctx):
         params = ctx.params
-
-        next_state = state.model_copy(
+        next_state = ctx.state.model_copy(
             update={
                 "selected_workflow_reference": params.selected_workflow,
                 "selected_workflow_name": None,
@@ -425,14 +412,14 @@ class WorkflowAndEvalToRefinedWorkflowPackage(Workflow):
         ],
         routes={"refinement_context_captured": "frame_refinement_request"},
     )
-    def capture_refinement_context(state: State, ctx):
+    def capture_refinement_context(ctx):
         repo_root = _repo_root_from_context(ctx)
-        capability_path = write_selected_workflow_capability_snapshot(ctx, state.selected_workflow_reference)
-        authoring_surface_path = write_selected_workflow_authoring_surface(ctx, state.selected_workflow_reference)
+        capability_path = write_selected_workflow_capability_snapshot(ctx, ctx.state.selected_workflow_reference)
+        authoring_surface_path = write_selected_workflow_authoring_surface(ctx, ctx.state.selected_workflow_reference)
 
         capability_snapshot = _read_json(capability_path)
         authoring_snapshot = _read_json(authoring_surface_path)
-        _require_text(state.selected_workflow_reference, "selected_workflow_reference must stay non-empty")
+        _require_text(ctx.state.selected_workflow_reference, "selected_workflow_reference must stay non-empty")
         selected_workflow_name, _, authoring_surface = validate_selected_workflow_capability_and_authoring_snapshots(
             capability_snapshot,
             authoring_snapshot,
@@ -444,30 +431,27 @@ class WorkflowAndEvalToRefinedWorkflowPackage(Workflow):
             authoring_surface=authoring_surface,
         )
 
-        summary_source = _resolve_input_path(repo_root, state.evaluation_summary_path, "evaluation_summary_path")
-        findings_source = _resolve_input_path(repo_root, state.evaluation_findings_path, "evaluation_findings_path")
+        summary_source = _resolve_input_path(repo_root, ctx.state.evaluation_summary_path, "evaluation_summary_path")
+        findings_source = _resolve_input_path(repo_root, ctx.state.evaluation_findings_path, "evaluation_findings_path")
         summary_payload = _read_json(summary_source)
         _validate_evaluation_summary_selected_workflow(summary_payload, selected_workflow_name)
         write_workflow_json(ctx, "baseline_evaluation_summary.json", summary_payload)
         _write_text(ctx.workflow_folder / "baseline_evaluation_findings.md", findings_source.read_text(encoding="utf-8"))
 
-        if state.failure_modes_path is None:
+        if ctx.state.failure_modes_path is None:
             failure_modes_text = _NO_FAILURE_MODES_SUPPLIED_TEXT
         else:
-            failure_modes_source = _resolve_input_path(repo_root, state.failure_modes_path, "failure_modes_path")
+            failure_modes_source = _resolve_input_path(repo_root, ctx.state.failure_modes_path, "failure_modes_path")
             failure_modes_text = failure_modes_source.read_text(encoding="utf-8")
         _write_text(ctx.workflow_folder / "baseline_failure_modes.md", failure_modes_text)
         _write_refinement_evidence_inputs(
             ctx,
             repo_root=repo_root,
             selected_workflow_name=selected_workflow_name,
-            refinement_evidence_path=state.refinement_evidence_path,
+            refinement_evidence_path=ctx.state.refinement_evidence_path,
         )
-
-        return (
-            state.model_copy(update={"selected_workflow_name": selected_workflow_name}),
-            Event("refinement_context_captured"),
-        )
+        ctx.state.selected_workflow_name = selected_workflow_name
+        return Event("refinement_context_captured")
 
     @python_step(
         name="publish_refined_workflow",
@@ -489,7 +473,7 @@ class WorkflowAndEvalToRefinedWorkflowPackage(Workflow):
         writes=[workflow_refinement_receipt],
         routes={"workflow_refinement_published": FINISH},
     )
-    def publish_refined_workflow(state: State, ctx):
+    def publish_refined_workflow(ctx):
         workflow_folder = ctx.workflow_folder
         required_paths = {
             "selected_workflow_capability": workflow_folder / "selected_workflow_capability.json",
@@ -548,7 +532,7 @@ class WorkflowAndEvalToRefinedWorkflowPackage(Workflow):
             "rollback_plan.md must be non-empty",
         )
 
-        _require_text(state.selected_workflow_reference, "selected_workflow_reference must stay non-empty")
+        _require_text(ctx.state.selected_workflow_reference, "selected_workflow_reference must stay non-empty")
         selected_workflow_name, _, authoring_surface = validate_selected_workflow_capability_and_authoring_snapshots(
             capability_snapshot,
             authoring_snapshot,
@@ -560,7 +544,7 @@ class WorkflowAndEvalToRefinedWorkflowPackage(Workflow):
             "baseline_refinement_evidence.md must be non-empty",
         )
         _validate_evaluation_summary_selected_workflow(baseline_evaluation_summary, selected_workflow_name)
-        if state.selected_workflow_name is not None and state.selected_workflow_name != selected_workflow_name:
+        if ctx.state.selected_workflow_name is not None and ctx.state.selected_workflow_name != selected_workflow_name:
             raise ValueError("selected_workflow snapshots must match workflow state")
         expected_boundary = _authoring_surface_boundary(authoring_surface, repo_root)
 
@@ -585,22 +569,22 @@ class WorkflowAndEvalToRefinedWorkflowPackage(Workflow):
             candidate_manifest.get("changed_relative_paths"),
             "candidate_workflow_manifest.json must define non-empty changed_relative_paths",
         )
-        if state.candidate_file_count and candidate_file_count != state.candidate_file_count:
+        if ctx.state.candidate_file_count and candidate_file_count != ctx.state.candidate_file_count:
             raise ValueError("candidate_workflow_manifest.json file_count must match workflow state")
-        if state.candidate_changed_paths and candidate_changed_paths != state.candidate_changed_paths:
+        if ctx.state.candidate_changed_paths and candidate_changed_paths != ctx.state.candidate_changed_paths:
             raise ValueError("candidate_workflow_manifest.json changed_relative_paths must match workflow state")
-        if not _AUTHORITATIVE_EVALUATION_ARTIFACTS.issubset(state.evaluation_authoritative_artifacts):
+        if not _AUTHORITATIVE_EVALUATION_ARTIFACTS.issubset(ctx.state.evaluation_authoritative_artifacts):
             raise ValueError(
                 "workflow state authoritative evaluation artifacts must include refinement_verification_report, evaluation_delta_report, promotion_record, and rollback_plan"
             )
-        if state.evaluation_next_action is None:
+        if ctx.state.evaluation_next_action is None:
             raise ValueError("workflow state must define evaluation_next_action before publication")
 
         overlay_validation = _validate_candidate_overlay(
             repo_root=repo_root,
             selected_workflow_name=selected_workflow_name,
             candidate_manifest=candidate_manifest,
-            target_test_command=state.target_test_command,
+            target_test_command=ctx.state.target_test_command,
         )
 
         write_publication_receipt(
@@ -608,12 +592,12 @@ class WorkflowAndEvalToRefinedWorkflowPackage(Workflow):
             "workflow_refinement_receipt.json",
             {
                 "workflow_name": ctx.workflow_name,
-                "task_title": state.task_title,
-                "sponsor_role": state.sponsor_role,
-                "desired_outcome": state.desired_outcome,
-                "selected_workflow_reference": state.selected_workflow_reference,
+                "task_title": ctx.state.task_title,
+                "sponsor_role": ctx.state.sponsor_role,
+                "desired_outcome": ctx.state.desired_outcome,
+                "selected_workflow_reference": ctx.state.selected_workflow_reference,
                 "selected_workflow_name": selected_workflow_name,
-                "target_test_command": state.target_test_command,
+                "target_test_command": ctx.state.target_test_command,
                 "candidate_file_count": candidate_file_count,
                 "changed_relative_paths": candidate_changed_paths,
                 "authoritative_artifacts": [
@@ -642,12 +626,13 @@ class WorkflowAndEvalToRefinedWorkflowPackage(Workflow):
                 "evaluation_delta_report": str(required_paths["evaluation_delta_report"]),
                 "promotion_record": str(required_paths["promotion_record"]),
                 "rollback_plan": str(required_paths["rollback_plan"]),
-                "next_action": state.evaluation_next_action,
+                "next_action": ctx.state.evaluation_next_action,
                 "overlay_validation": overlay_validation,
                 "published": True,
             },
         )
-        ctx.state = state.model_copy(update={"selected_workflow_name": selected_workflow_name, "published": True})
+        ctx.state.selected_workflow_name = selected_workflow_name
+        ctx.state.published = True
         return "workflow_refinement_published"
 
     entry = bootstrap

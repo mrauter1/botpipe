@@ -20,6 +20,7 @@ from autoloop.runtime.loader import (
     resolve_workflow_reference,
 )
 from autoloop.runtime.runner import RunnerOptions, run_workflow_package
+from tests.runtime.workflow_contract_helpers import invoke_python_step
 from autoloop.core.primitives import Outcome
 
 
@@ -380,8 +381,9 @@ def test_release_go_no_go_bootstrap_reads_typed_ctx_params(monkeypatch, tmp_path
         },
     )
 
-    next_state, event = workflow_pkg.ReleaseCandidateToGoNoGo.on_bootstrap(
-        workflow_pkg.ReleaseCandidateToGoNoGo.State(),
+    next_state, event = invoke_python_step(
+        workflow_pkg.ReleaseCandidateToGoNoGo,
+        "bootstrap",
         ctx,
     )
 
@@ -750,9 +752,7 @@ def test_release_go_no_go_package_runs_and_emits_terminal_receipt(tmp_path: Path
         "prepare_decision_package.release_decision_package",
         "prepare_decision_package.release_communications_draft",
     ]
-    assert provider.calls[7].routes["decision_package_ready"].handoff == (
-        "Advances the release workflow to deterministic publication of the terminal receipt."
-    )
+    assert provider.calls[7].routes["decision_package_ready"].handoff is None
     assert (run_dir / "run.json").exists()
 
 
@@ -812,7 +812,7 @@ def test_release_go_no_go_publish_decision_rejects_invalid_recommendation(
     )
 
     with pytest.raises(ValueError, match="recommended_decision"):
-        workflow_pkg.ReleaseCandidateToGoNoGo.on_publish_decision(state, ctx)
+        invoke_python_step(workflow_pkg.ReleaseCandidateToGoNoGo, "publish_decision", ctx)
 
     assert not (workflow_folder / "decision_receipt.json").exists()
 

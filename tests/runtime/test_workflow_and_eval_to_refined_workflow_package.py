@@ -23,6 +23,7 @@ from autoloop.runtime.loader import (
 )
 from autoloop.runtime.runner import RunnerOptions, run_workflow_package
 from autoloop.core.primitives import Outcome
+from tests.runtime.workflow_contract_helpers import invoke_python_step
 
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
@@ -518,8 +519,9 @@ def test_workflow_and_eval_to_refined_workflow_package_bootstrap_reads_typed_ctx
         workflow_params={},
     )
 
-    next_state, event = workflow_pkg.WorkflowAndEvalToRefinedWorkflowPackage.on_bootstrap(
-        workflow_pkg.WorkflowAndEvalToRefinedWorkflowPackage.State(),
+    next_state, event = invoke_python_step(
+        workflow_pkg.WorkflowAndEvalToRefinedWorkflowPackage,
+        "bootstrap",
         ctx,
     )
 
@@ -707,8 +709,9 @@ def test_workflow_and_eval_to_refined_workflow_package_publish_rejects_missing_b
     (run.workflow_dir / "baseline_evaluation_findings.md").unlink()
 
     with pytest.raises(FileNotFoundError, match="baseline_evaluation_findings.md"):
-        run.workflow_pkg.WorkflowAndEvalToRefinedWorkflowPackage.on_publish_refined_workflow(
-            run.result.state,
+        invoke_python_step(
+            run.workflow_pkg.WorkflowAndEvalToRefinedWorkflowPackage,
+            "publish_refined_workflow",
             run.publish_context,
         )
 
@@ -769,8 +772,9 @@ def test_workflow_and_eval_to_refined_workflow_package_publish_rejects_evaluatio
         ValueError,
         match="baseline_evaluation_summary.json selected_workflow_name must match selected workflow",
     ):
-        run.workflow_pkg.WorkflowAndEvalToRefinedWorkflowPackage.on_publish_refined_workflow(
-            run.result.state,
+        invoke_python_step(
+            run.workflow_pkg.WorkflowAndEvalToRefinedWorkflowPackage,
+            "publish_refined_workflow",
             run.publish_context,
         )
 
@@ -902,8 +906,9 @@ def test_workflow_and_eval_to_refined_workflow_package_publish_rejects_authoring
         ValueError,
         match="selected_workflow_authoring_surface.json workflow_path must match selected_workflow_capability.json",
     ):
-        run.workflow_pkg.WorkflowAndEvalToRefinedWorkflowPackage.on_publish_refined_workflow(
-            run.result.state,
+        invoke_python_step(
+            run.workflow_pkg.WorkflowAndEvalToRefinedWorkflowPackage,
+            "publish_refined_workflow",
             run.publish_context,
         )
 
@@ -922,8 +927,9 @@ def test_workflow_and_eval_to_refined_workflow_package_publish_rejects_baseline_
         ValueError,
         match="baseline_workflow_manifest.json package_root_relative_path must match the expected workflow boundary",
     ):
-        run.workflow_pkg.WorkflowAndEvalToRefinedWorkflowPackage.on_publish_refined_workflow(
-            run.result.state,
+        invoke_python_step(
+            run.workflow_pkg.WorkflowAndEvalToRefinedWorkflowPackage,
+            "publish_refined_workflow",
             run.publish_context,
         )
 
@@ -942,8 +948,9 @@ def test_workflow_and_eval_to_refined_workflow_package_publish_rejects_candidate
         ValueError,
         match="candidate_workflow_manifest.json baseline_relative_paths must match baseline_workflow_manifest.json",
     ):
-        run.workflow_pkg.WorkflowAndEvalToRefinedWorkflowPackage.on_publish_refined_workflow(
-            run.result.state,
+        invoke_python_step(
+            run.workflow_pkg.WorkflowAndEvalToRefinedWorkflowPackage,
+            "publish_refined_workflow",
             run.publish_context,
         )
 
@@ -962,8 +969,9 @@ def test_workflow_and_eval_to_refined_workflow_package_publish_rejects_candidate
         ValueError,
         match="candidate_workflow_manifest.json package_root_relative_path must match the expected workflow boundary",
     ):
-        run.workflow_pkg.WorkflowAndEvalToRefinedWorkflowPackage.on_publish_refined_workflow(
-            run.result.state,
+        invoke_python_step(
+            run.workflow_pkg.WorkflowAndEvalToRefinedWorkflowPackage,
+            "publish_refined_workflow",
             run.publish_context,
         )
 
@@ -983,8 +991,9 @@ def test_workflow_and_eval_to_refined_workflow_package_publish_rejects_authorita
             f"{re.escape(PROMPT_RELATIVE_PATH)}"
         ),
     ):
-        run.workflow_pkg.WorkflowAndEvalToRefinedWorkflowPackage.on_publish_refined_workflow(
-            run.result.state,
+        invoke_python_step(
+            run.workflow_pkg.WorkflowAndEvalToRefinedWorkflowPackage,
+            "publish_refined_workflow",
             run.publish_context,
         )
 
@@ -1008,8 +1017,9 @@ def test_workflow_and_eval_to_refined_workflow_package_publish_rejects_candidate
         ValueError,
         match="candidate_workflow_manifest.json must stay scoped to the selected workflow boundary",
     ):
-        run.workflow_pkg.WorkflowAndEvalToRefinedWorkflowPackage.on_publish_refined_workflow(
-            run.result.state,
+        invoke_python_step(
+            run.workflow_pkg.WorkflowAndEvalToRefinedWorkflowPackage,
+            "publish_refined_workflow",
             run.publish_context,
         )
 
@@ -1022,8 +1032,10 @@ def test_workflow_and_eval_to_refined_workflow_package_publish_rejects_selected_
     mismatched_state = run.result.state.model_copy(update={"selected_workflow_name": "incident_to_hardening_program"})
 
     with pytest.raises(ValueError, match="selected_workflow snapshots must match workflow state"):
-        run.workflow_pkg.WorkflowAndEvalToRefinedWorkflowPackage.on_publish_refined_workflow(
-            mismatched_state,
+        run.publish_context.state = mismatched_state
+        invoke_python_step(
+            run.workflow_pkg.WorkflowAndEvalToRefinedWorkflowPackage,
+            "publish_refined_workflow",
             run.publish_context,
         )
 

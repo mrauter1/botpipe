@@ -15,7 +15,7 @@ from autoloop.stdlib import (
 )
 from autoloop.stdlib.lifecycle import open_workflow_sessions, write_invocation_contract, write_publication_receipt
 
-from autoloop import Event, FINISH, Outcome, Prompt, Session, Workflow, produce_verify_step, python_step
+from autoloop import AWAIT_INPUT, Event, FINISH, Outcome, Prompt, Session, Workflow, produce_verify_step, python_step
 from autoloop.core import Artifact
 
 from .contracts import (
@@ -28,34 +28,31 @@ from .contracts import (
 )
 
 
-def _after_assess_security_finding(ctx, outcome: Outcome):
+def _after_assess_security_finding(ctx):
+    outcome = ctx.outcome
+    assert outcome is not None
     preferred_option = outcome.payload.get("preferred_remediation_option")
-    return ctx.state.model_copy(
-        update={
-            "assessment_status": outcome.tag,
-            "selected_remediation": (
-                preferred_option if isinstance(preferred_option, str) and preferred_option.strip() else ctx.state.selected_remediation
-            ),
-        }
-    )
+    ctx.state.assessment_status = outcome.tag
+    if isinstance(preferred_option, str) and preferred_option.strip():
+        ctx.state.selected_remediation = preferred_option
+    return None
 
 
-def _after_plan_verified_remediation(ctx, outcome: Outcome):
+def _after_plan_verified_remediation(ctx):
+    outcome = ctx.outcome
+    assert outcome is not None
     selected_remediation = outcome.payload.get("selected_remediation")
-    return ctx.state.model_copy(
-        update={
-            "remediation_status": outcome.tag,
-            "selected_remediation": (
-                selected_remediation
-                if isinstance(selected_remediation, str) and selected_remediation.strip()
-                else ctx.state.selected_remediation
-            ),
-        }
-    )
+    ctx.state.remediation_status = outcome.tag
+    if isinstance(selected_remediation, str) and selected_remediation.strip():
+        ctx.state.selected_remediation = selected_remediation
+    return None
 
 
-def _after_prepare_closure_package(ctx, outcome: Outcome):
-    return ctx.state.model_copy(update={"closure_status": outcome.tag})
+def _after_prepare_closure_package(ctx):
+    outcome = ctx.outcome
+    assert outcome is not None
+    ctx.state.closure_status = outcome.tag
+    return None
 
 
 class SecurityFindingToVerifiedRemediation(Workflow):
@@ -194,9 +191,9 @@ class SecurityFindingToVerifiedRemediation(Workflow):
         writes=[invocation_contract],
         routes={"inputs_prepared": "compose_evidence_pack"},
     )
-    def bootstrap(state: State, ctx):
+    def bootstrap(ctx):
         params = ctx.params
-        next_state = state.model_copy(
+        next_state = ctx.state.model_copy(
             update={
                 "finding_title": params.finding_title,
                 "finding_source": params.finding_source,
@@ -241,34 +238,32 @@ class SecurityFindingToVerifiedRemediation(Workflow):
             security_evidence_gap_register,
             security_evidence_pack_receipt,
         ],
-        routes={"evidence_pack_adopted": "assess_security_finding"},
+        routes={
+            "evidence_pack_adopted": "assess_security_finding",
+            "question": AWAIT_INPUT,
+            "blocked": AWAIT_INPUT,
+        },
     )
-    def compose_evidence_pack(state: State, ctx):
+    def compose_evidence_pack(ctx):
         child = run_child_workflow(
             ctx,
             "investigation_request_to_evidence_pack",
-            message=_child_message(state),
+            message=_child_message(ctx.state),
             parameters={
-                "investigation_title": state.finding_title,
+                "investigation_title": ctx.state.finding_title,
                 "investigation_kind": "security_remediation",
-                "sponsor_role": state.sponsor_role,
-                "evidence_paths": state.evidence_paths,
+                "sponsor_role": ctx.state.sponsor_role,
+                "evidence_paths": ctx.state.evidence_paths,
             },
         )
         if child.last_event is not None and child.last_event.tag == "question":
-            return state.model_copy(
-                update={
-                    "evidence_pack_status": "question",
-                    "evidence_pack_child_run_id": child.run_id,
-                }
-            ), Event("question", reason=child.last_event.reason, question=child.last_event.question)
+            ctx.state.evidence_pack_status = "question"
+            ctx.state.evidence_pack_child_run_id = child.run_id
+            return Event("question", reason=child.last_event.reason, question=child.last_event.question)
         if child.last_event is not None and child.last_event.tag == "blocked":
-            return state.model_copy(
-                update={
-                    "evidence_pack_status": "blocked",
-                    "evidence_pack_child_run_id": child.run_id,
-                }
-            ), Event("blocked", reason=child.last_event.reason, question=child.last_event.question)
+            ctx.state.evidence_pack_status = "blocked"
+            ctx.state.evidence_pack_child_run_id = child.run_id
+            return Event("blocked", reason=child.last_event.reason, question=child.last_event.question)
 
         require_child_workflow_result(
             child,
@@ -291,13 +286,10 @@ class SecurityFindingToVerifiedRemediation(Workflow):
                 "adopted security_evidence_pack_summary.json must define boolean ready_for_downstream_assessment"
             )
         if not ready_for_downstream_assessment:
-            return state.model_copy(
-                update={
-                    "evidence_pack_status": "blocked",
-                    "evidence_pack_child_run_id": child.run_id,
-                    "ready_for_downstream_assessment": False,
-                }
-            ), Event(
+            ctx.state.evidence_pack_status = "blocked"
+            ctx.state.evidence_pack_child_run_id = child.run_id
+            ctx.state.ready_for_downstream_assessment = False
+            return Event(
                 "blocked",
                 reason="Child evidence pack published without downstream-readiness approval.",
             )
@@ -312,13 +304,10 @@ class SecurityFindingToVerifiedRemediation(Workflow):
                 "evidence_pack_receipt": "security_evidence_pack_receipt.json",
             },
         )
-        return state.model_copy(
-            update={
-                "evidence_pack_status": "evidence_pack_adopted",
-                "evidence_pack_child_run_id": child.run_id,
-                "ready_for_downstream_assessment": ready_for_downstream_assessment,
-            }
-        ), Event("evidence_pack_adopted")
+        ctx.state.evidence_pack_status = "evidence_pack_adopted"
+        ctx.state.evidence_pack_child_run_id = child.run_id
+        ctx.state.ready_for_downstream_assessment = ready_for_downstream_assessment
+        return Event("evidence_pack_adopted")
 
     @python_step(
         name="publish_remediation",
@@ -336,7 +325,7 @@ class SecurityFindingToVerifiedRemediation(Workflow):
         writes=[remediation_receipt],
         routes={"remediation_published": FINISH},
     )
-    def publish_remediation(state: State, ctx):
+    def publish_remediation(ctx):
         required_paths = {
             "security_evidence_pack_summary": ctx.workflow_folder / "security_evidence_pack_summary.json",
             "security_evidence_pack_receipt": ctx.workflow_folder / "security_evidence_pack_receipt.json",
@@ -395,15 +384,15 @@ class SecurityFindingToVerifiedRemediation(Workflow):
             "remediation_receipt.json",
             {
                 "workflow_name": ctx.workflow_name,
-                "finding_title": state.finding_title,
-                "finding_source": state.finding_source,
-                "severity": state.severity,
-                "affected_system": state.affected_system,
-                "sponsor_role": state.sponsor_role,
-                "evidence_paths": state.evidence_paths,
-                "deployment_constraints": state.deployment_constraints,
-                "evidence_pack_child_run_id": state.evidence_pack_child_run_id,
-                "ready_for_downstream_assessment": state.ready_for_downstream_assessment,
+                "finding_title": ctx.state.finding_title,
+                "finding_source": ctx.state.finding_source,
+                "severity": ctx.state.severity,
+                "affected_system": ctx.state.affected_system,
+                "sponsor_role": ctx.state.sponsor_role,
+                "evidence_paths": ctx.state.evidence_paths,
+                "deployment_constraints": ctx.state.deployment_constraints,
+                "evidence_pack_child_run_id": ctx.state.evidence_pack_child_run_id,
+                "ready_for_downstream_assessment": ctx.state.ready_for_downstream_assessment,
                 "selected_remediation": selected_remediation,
                 "verification_ready": verification_ready,
                 "rollout_ready": rollout_ready,
@@ -416,12 +405,9 @@ class SecurityFindingToVerifiedRemediation(Workflow):
                 "published": True,
             },
         )
-        return state.model_copy(
-            update={
-                "selected_remediation": selected_remediation,
-                "published": True,
-            }
-        ), Event("remediation_published")
+        ctx.state.selected_remediation = selected_remediation
+        ctx.state.published = True
+        return Event("remediation_published")
 
     entry = bootstrap
 

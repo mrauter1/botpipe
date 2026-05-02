@@ -21,33 +21,37 @@ from .contracts import (
 )
 
 
-def _after_frame_candidate(ctx, outcome: Outcome):
+def _after_frame_candidate(ctx):
+    outcome = ctx.outcome
+    assert outcome is not None
     if outcome.tag != "candidate_selected":
-        return ctx.state
+        return None
     selected_candidate = outcome.payload.get("selected_candidate")
     selected_kind = outcome.payload.get("selected_kind")
-    return ctx.state.model_copy(
-        update={
-            "selected_candidate": (
-                selected_candidate if isinstance(selected_candidate, str) else ctx.state.package_name
-            ),
-            "selected_candidate_kind": (
-                selected_kind if isinstance(selected_kind, str) else ctx.state.workflow_kind
-            ),
-        }
-    )
+    ctx.state.selected_candidate = selected_candidate if isinstance(selected_candidate, str) else ctx.state.package_name
+    ctx.state.selected_candidate_kind = selected_kind if isinstance(selected_kind, str) else ctx.state.workflow_kind
+    return None
 
 
-def _after_design_package(ctx, outcome: Outcome):
-    return ctx.state.model_copy(update={"design_status": outcome.tag})
+def _after_design_package(ctx):
+    outcome = ctx.outcome
+    assert outcome is not None
+    ctx.state.design_status = outcome.tag
+    return None
 
 
-def _after_build_package(ctx, outcome: Outcome):
-    return ctx.state.model_copy(update={"build_status": outcome.tag})
+def _after_build_package(ctx):
+    outcome = ctx.outcome
+    assert outcome is not None
+    ctx.state.build_status = outcome.tag
+    return None
 
 
-def _after_evaluate_package(ctx, outcome: Outcome):
-    return ctx.state.model_copy(update={"evaluation_status": outcome.tag})
+def _after_evaluate_package(ctx):
+    outcome = ctx.outcome
+    assert outcome is not None
+    ctx.state.evaluation_status = outcome.tag
+    return None
 
 
 class WorkflowIdeaToWorkflowPackage(Workflow):
@@ -220,9 +224,9 @@ class WorkflowIdeaToWorkflowPackage(Workflow):
         writes=[invocation_contract],
         routes={"inputs_prepared": "frame_candidate"},
     )
-    def bootstrap(state: State, ctx):
+    def bootstrap(ctx):
         params = ctx.params
-        next_state = state.model_copy(
+        next_state = ctx.state.model_copy(
             update={
                 "package_name": params.package_name,
                 "package_title": params.package_title,
@@ -259,7 +263,7 @@ class WorkflowIdeaToWorkflowPackage(Workflow):
         writes=[publish_receipt],
         routes={"package_published": FINISH},
     )
-    def publish_package(state: State, ctx):
+    def publish_package(ctx):
         promotion_path = ctx.workflow_folder / "promotion_record.md"
         rollback_path = ctx.workflow_folder / "rollback_plan.md"
         if not promotion_path.exists():
@@ -271,14 +275,14 @@ class WorkflowIdeaToWorkflowPackage(Workflow):
             "publish_receipt.json",
             {
                 "workflow_name": ctx.workflow_name,
-                "package_name": state.package_name,
-                "selected_candidate": state.selected_candidate or state.package_name,
+                "package_name": ctx.state.package_name,
+                "selected_candidate": ctx.state.selected_candidate or ctx.state.package_name,
                 "published": True,
                 "promotion_record": str(promotion_path),
                 "rollback_plan": str(rollback_path),
             },
         )
-        ctx.state = state.model_copy(update={"published": True})
+        ctx.state.published = True
         return "package_published"
 
     entry = bootstrap

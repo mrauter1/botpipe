@@ -115,7 +115,6 @@ PACKAGE_CANDIDATE_WORKFLOW_SET_ROUTE_CONTRACTS = {
         "publish_candidate_workflow_set",
         summary="The terminal candidate-workflow-set package, machine-readable summary, and next-action artifact all exist and are ready for downstream strategy selection.",
         required_writes=("candidate_workflow_set", "candidate_workflow_set_summary", "candidate_next_action"),
-        handoff="Advances the building block to deterministic publication of the candidate-workflow-set package and receipt.",
     ),
     "needs_rework": Route.to(
         SELF,

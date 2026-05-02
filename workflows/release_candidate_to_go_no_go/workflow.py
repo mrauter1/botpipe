@@ -25,34 +25,38 @@ from .contracts import (
 )
 
 
-def _after_frame_release(ctx, outcome: Outcome):
-    return ctx.state.model_copy(update={"framing_status": outcome.tag})
+def _after_frame_release(ctx):
+    outcome = ctx.outcome
+    assert outcome is not None
+    ctx.state.framing_status = outcome.tag
+    return None
 
 
-def _after_assemble_evidence_pack(ctx, outcome: Outcome):
-    return ctx.state.model_copy(update={"evidence_status": outcome.tag})
+def _after_assemble_evidence_pack(ctx):
+    outcome = ctx.outcome
+    assert outcome is not None
+    ctx.state.evidence_status = outcome.tag
+    return None
 
 
-def _after_assess_go_no_go(ctx, outcome: Outcome):
+def _after_assess_go_no_go(ctx):
+    outcome = ctx.outcome
+    assert outcome is not None
     recommended_decision = outcome.payload.get("recommended_decision")
-    return ctx.state.model_copy(
-        update={
-            "assessment_status": outcome.tag,
-            "recommended_decision": (
-                recommended_decision if isinstance(recommended_decision, str) else ctx.state.recommended_decision
-            ),
-        }
-    )
+    ctx.state.assessment_status = outcome.tag
+    if isinstance(recommended_decision, str):
+        ctx.state.recommended_decision = recommended_decision
+    return None
 
 
-def _after_prepare_decision_package(ctx, outcome: Outcome):
+def _after_prepare_decision_package(ctx):
+    outcome = ctx.outcome
+    assert outcome is not None
     decision = outcome.payload.get("decision")
-    return ctx.state.model_copy(
-        update={
-            "packaging_status": outcome.tag,
-            "recommended_decision": decision if isinstance(decision, str) else ctx.state.recommended_decision,
-        }
-    )
+    ctx.state.packaging_status = outcome.tag
+    if isinstance(decision, str):
+        ctx.state.recommended_decision = decision
+    return None
 
 
 class ReleaseCandidateToGoNoGo(Workflow):
@@ -182,9 +186,9 @@ class ReleaseCandidateToGoNoGo(Workflow):
         writes=[invocation_contract],
         routes={"inputs_prepared": "frame_release"},
     )
-    def bootstrap(state: State, ctx):
+    def bootstrap(ctx):
         params = ctx.params
-        next_state = state.model_copy(
+        next_state = ctx.state.model_copy(
             update={
                 "release_name": params.release_name,
                 "target_date": params.target_date,
@@ -219,7 +223,7 @@ class ReleaseCandidateToGoNoGo(Workflow):
         writes=[decision_receipt],
         routes={"decision_published": FINISH},
     )
-    def publish_decision(state: State, ctx):
+    def publish_decision(ctx):
         summary_path = ctx.workflow_folder / "decision_summary.json"
         decision_package_path = ctx.workflow_folder / "release_decision_package.md"
         communications_path = ctx.workflow_folder / "release_communications_draft.md"
@@ -239,10 +243,10 @@ class ReleaseCandidateToGoNoGo(Workflow):
             "decision_receipt.json",
             {
                 "workflow_name": ctx.workflow_name,
-                "release_name": state.release_name,
-                "target_date": state.target_date,
-                "deployment_environment": state.deployment_environment,
-                "release_owner": state.release_owner,
+                "release_name": ctx.state.release_name,
+                "target_date": ctx.state.target_date,
+                "deployment_environment": ctx.state.deployment_environment,
+                "release_owner": ctx.state.release_owner,
                 "recommended_decision": recommended_decision,
                 "blocking_issue_count": summary.get("blocking_issue_count"),
                 "decision_summary": str(summary_path),
@@ -251,7 +255,8 @@ class ReleaseCandidateToGoNoGo(Workflow):
                 "published": True,
             },
         )
-        ctx.state = state.model_copy(update={"published": True, "recommended_decision": recommended_decision})
+        ctx.state.published = True
+        ctx.state.recommended_decision = recommended_decision
         return "decision_published"
 
     entry = bootstrap

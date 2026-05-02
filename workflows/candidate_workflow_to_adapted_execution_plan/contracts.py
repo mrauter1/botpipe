@@ -130,7 +130,6 @@ PACKAGE_ADAPTED_EXECUTION_PLAN_ROUTE_CONTRACTS = {
             "adapted_execution_summary",
             "adapted_execution_next_action",
         ),
-        handoff="Advances the building block to deterministic publication of the adapted plan, validated parameters, and receipt.",
     ),
     "needs_rework": Route.to(
         SELF,

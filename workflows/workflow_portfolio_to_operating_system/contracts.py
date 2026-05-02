@@ -138,7 +138,6 @@ PACKAGE_PORTFOLIO_OPERATING_SYSTEM_ROUTE_CONTRACTS = {
             "portfolio_operating_summary",
             "portfolio_next_actions",
         ),
-        handoff="Advances the workflow to deterministic governance publication without hidden downstream execution.",
     ),
     "needs_rework": Route.to(
         SELF,

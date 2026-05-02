@@ -21,6 +21,7 @@ from autoloop.runtime.loader import (
 )
 from autoloop.runtime.runner import RunnerOptions, run_workflow_package
 from autoloop.core.primitives import Outcome
+from tests.runtime.workflow_contract_helpers import invoke_python_step
 
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
@@ -373,8 +374,9 @@ def test_workflow_builder_package_bootstrap_reads_typed_ctx_params(monkeypatch, 
         },
     )
 
-    next_state, event = workflow_pkg.WorkflowIdeaToWorkflowPackage.on_bootstrap(
-        workflow_pkg.WorkflowIdeaToWorkflowPackage.State(),
+    next_state, event = invoke_python_step(
+        workflow_pkg.WorkflowIdeaToWorkflowPackage,
+        "bootstrap",
         ctx,
     )
 
@@ -726,9 +728,9 @@ def _install_repo_workflow_builder_package(root: Path) -> None:
     )
     (root / "core").mkdir(parents=True, exist_ok=True)
     for filename in ("steps.py", "validation.py", "compiler.py", "engine.py"):
-        shutil.copy2(REPO_ROOT / "core" / filename, root / "core" / filename)
+        shutil.copy2(REPO_ROOT / "autoloop" / "core" / filename, root / "core" / filename)
     (root / "runtime").mkdir(parents=True, exist_ok=True)
-    shutil.copy2(REPO_ROOT / "runtime" / "cli.py", root / "runtime" / "cli.py")
+    shutil.copy2(REPO_ROOT / "autoloop" / "runtime" / "cli.py", root / "runtime" / "cli.py")
 
 
 def _write_generated_workflow(request, package_name: str, authoring_shape: str) -> str:

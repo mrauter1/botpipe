@@ -23,6 +23,7 @@ from autoloop.runtime.loader import (
 )
 from autoloop.runtime.runner import RunnerOptions, run_workflow_package
 from autoloop.core.primitives import Outcome
+from tests.runtime.workflow_contract_helpers import invoke_python_step
 
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
@@ -557,8 +558,9 @@ def test_workflow_package_to_composable_building_blocks_bootstrap_reads_typed_ct
         workflow_params={},
     )
 
-    next_state, event = workflow_pkg.WorkflowPackageToComposableBuildingBlocks.on_bootstrap(
-        workflow_pkg.WorkflowPackageToComposableBuildingBlocks.State(),
+    next_state, event = invoke_python_step(
+        workflow_pkg.WorkflowPackageToComposableBuildingBlocks,
+        "bootstrap",
         ctx,
     )
 
@@ -794,8 +796,9 @@ def test_workflow_package_to_composable_building_blocks_publish_rejects_hidden_e
         ValueError,
         match="candidate_building_block_index.json must keep publication_mode candidate_only to prevent hidden execution",
     ):
-        run.workflow_pkg.WorkflowPackageToComposableBuildingBlocks.on_publish_candidate_decomposition(
-            run.result.state,
+        invoke_python_step(
+            run.workflow_pkg.WorkflowPackageToComposableBuildingBlocks,
+            "publish_candidate_decomposition",
             run.publish_context,
         )
 
@@ -814,8 +817,9 @@ def test_workflow_package_to_composable_building_blocks_publish_rejects_identity
         ValueError,
         match="selected_workflow_decomposition_surface.json identity must match selected_workflow_name",
     ):
-        run.workflow_pkg.WorkflowPackageToComposableBuildingBlocks.on_publish_candidate_decomposition(
-            run.result.state,
+        invoke_python_step(
+            run.workflow_pkg.WorkflowPackageToComposableBuildingBlocks,
+            "publish_candidate_decomposition",
             run.publish_context,
         )
 
@@ -835,8 +839,9 @@ def test_workflow_package_to_composable_building_blocks_publish_rejects_authorit
             f"{re.escape(PARENT_PROMPT_RELATIVE_PATH)}"
         ),
     ):
-        run.workflow_pkg.WorkflowPackageToComposableBuildingBlocks.on_publish_candidate_decomposition(
-            run.result.state,
+        invoke_python_step(
+            run.workflow_pkg.WorkflowPackageToComposableBuildingBlocks,
+            "publish_candidate_decomposition",
             run.publish_context,
         )
 
@@ -855,8 +860,9 @@ def test_workflow_package_to_composable_building_blocks_publish_rejects_baseline
         ValueError,
         match="baseline_parent_manifest.json parent_package_root_relative_path must match the expected workflow boundary",
     ):
-        run.workflow_pkg.WorkflowPackageToComposableBuildingBlocks.on_publish_candidate_decomposition(
-            run.result.state,
+        invoke_python_step(
+            run.workflow_pkg.WorkflowPackageToComposableBuildingBlocks,
+            "publish_candidate_decomposition",
             run.publish_context,
         )
 
@@ -883,8 +889,9 @@ def test_workflow_package_to_composable_building_blocks_publish_rejects_candidat
         ValueError,
         match="candidate_decomposition_manifest.json must stay within the allowed repo-relative boundary",
     ):
-        run.workflow_pkg.WorkflowPackageToComposableBuildingBlocks.on_publish_candidate_decomposition(
-            run.result.state,
+        invoke_python_step(
+            run.workflow_pkg.WorkflowPackageToComposableBuildingBlocks,
+            "publish_candidate_decomposition",
             run.publish_context,
         )
 
@@ -903,8 +910,9 @@ def test_workflow_package_to_composable_building_blocks_publish_rejects_candidat
         ValueError,
         match="candidate_decomposition_manifest.json parent_package_root_relative_path must match the expected workflow boundary",
     ):
-        run.workflow_pkg.WorkflowPackageToComposableBuildingBlocks.on_publish_candidate_decomposition(
-            run.result.state,
+        invoke_python_step(
+            run.workflow_pkg.WorkflowPackageToComposableBuildingBlocks,
+            "publish_candidate_decomposition",
             run.publish_context,
         )
 
@@ -922,8 +930,9 @@ def test_workflow_package_to_composable_building_blocks_publish_rejects_unlisted
         ValueError,
         match="candidate_decomposition_manifest.json relative_paths must match candidate_decomposition_surface",
     ):
-        run.workflow_pkg.WorkflowPackageToComposableBuildingBlocks.on_publish_candidate_decomposition(
-            run.result.state,
+        invoke_python_step(
+            run.workflow_pkg.WorkflowPackageToComposableBuildingBlocks,
+            "publish_candidate_decomposition",
             run.publish_context,
         )
 
@@ -957,8 +966,10 @@ def test_workflow_package_to_composable_building_blocks_publish_rejects_missing_
         ValueError,
         match="candidate_decomposition_manifest.json must include every declared building-block doc_relative_path and runtime_test_relative_path",
     ):
-        run.workflow_pkg.WorkflowPackageToComposableBuildingBlocks.on_publish_candidate_decomposition(
-            publish_state,
+        run.publish_context.state = publish_state
+        invoke_python_step(
+            run.workflow_pkg.WorkflowPackageToComposableBuildingBlocks,
+            "publish_candidate_decomposition",
             run.publish_context,
         )
 
@@ -1280,8 +1291,9 @@ def test_workflow_package_to_composable_building_blocks_capture_step_normalizes_
         workflow_params={"selected_workflow": "release-readiness", "task_title": state.task_title},
     )
 
-    next_state, event = workflow_pkg.WorkflowPackageToComposableBuildingBlocks.on_capture_decomposition_context(
-        state,
+    next_state, event = invoke_python_step(
+        workflow_pkg.WorkflowPackageToComposableBuildingBlocks,
+        "capture_decomposition_context",
         ctx,
     )
 

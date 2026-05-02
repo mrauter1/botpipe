@@ -94,28 +94,31 @@ _PACKAGE_EVIDENCE_FILES = {
 }
 
 
-def _after_frame(ctx, outcome: Outcome):
+def _after_frame(ctx):
+    outcome = ctx.outcome
+    assert outcome is not None
     payload = outcome.payload
     selected_workflow_name = payload.get("selected_workflow_name")
-    return ctx.state.model_copy(
-        update={
-            "frame_status": outcome.tag,
-            "selected_workflow_name": (
-                selected_workflow_name if isinstance(selected_workflow_name, str) else ctx.state.selected_workflow_name
-            ),
-            "candidate_run_count": int(payload.get("candidate_run_count") or ctx.state.candidate_run_count),
-            "eligible_run_count": int(payload.get("eligible_run_count") or ctx.state.eligible_run_count),
-            "excluded_run_count": int(payload.get("excluded_run_count") or ctx.state.excluded_run_count),
-            "no_eligible_trace_evidence": outcome.tag == "no_eligible_trace_evidence",
-        }
-    )
+    ctx.state.frame_status = outcome.tag
+    if isinstance(selected_workflow_name, str):
+        ctx.state.selected_workflow_name = selected_workflow_name
+    ctx.state.candidate_run_count = int(payload.get("candidate_run_count") or ctx.state.candidate_run_count)
+    ctx.state.eligible_run_count = int(payload.get("eligible_run_count") or ctx.state.eligible_run_count)
+    ctx.state.excluded_run_count = int(payload.get("excluded_run_count") or ctx.state.excluded_run_count)
+    ctx.state.no_eligible_trace_evidence = outcome.tag == "no_eligible_trace_evidence"
+    return None
 
 
-def _after_rank_targets(ctx, outcome: Outcome):
-    return ctx.state.model_copy(update={"ranking_status": outcome.tag})
+def _after_rank_targets(ctx):
+    outcome = ctx.outcome
+    assert outcome is not None
+    ctx.state.ranking_status = outcome.tag
+    return None
 
 
-def _after_mine_failures(ctx, outcome: Outcome):
+def _after_mine_failures(ctx):
+    outcome = ctx.outcome
+    assert outcome is not None
     selected_workflow_name = _selected_workflow_name_from_state(ctx.state)
     if outcome.tag == "failure_scenarios_mined":
         read_optimization_artifact_payload(
@@ -140,61 +143,80 @@ def _after_mine_failures(ctx, outcome: Outcome):
                 + "\n",
                 encoding="utf-8",
             )
-    return ctx.state.model_copy(update={"failure_status": outcome.tag})
+    ctx.state.failure_status = outcome.tag
+    return None
 
 
-def _after_optimize_producer(ctx, outcome: Outcome):
+def _after_optimize_producer(ctx):
+    outcome = ctx.outcome
+    assert outcome is not None
     finalize_optional_optimization_artifact(
         route=outcome.tag,
         path=ctx.artifacts.producer_prompt_optimization_candidates.path,
         selected_workflow_name=_selected_workflow_name_from_state(ctx.state),
         spec=_PRODUCER_CANDIDATES_SPEC,
     )
-    return ctx.state.model_copy(update={"producer_status": outcome.tag})
+    ctx.state.producer_status = outcome.tag
+    return None
 
 
-def _after_optimize_verifier_rubric(ctx, outcome: Outcome):
+def _after_optimize_verifier_rubric(ctx):
+    outcome = ctx.outcome
+    assert outcome is not None
     finalize_optional_optimization_artifact(
         route=outcome.tag,
         path=ctx.artifacts.verifier_rubric_optimization_candidates.path,
         selected_workflow_name=_selected_workflow_name_from_state(ctx.state),
         spec=_VERIFIER_RUBRIC_CANDIDATES_SPEC,
     )
-    return ctx.state.model_copy(update={"verifier_rubric_status": outcome.tag})
+    ctx.state.verifier_rubric_status = outcome.tag
+    return None
 
 
-def _after_optimize_tokens(ctx, outcome: Outcome):
+def _after_optimize_tokens(ctx):
+    outcome = ctx.outcome
+    assert outcome is not None
     finalize_optional_optimization_artifact(
         route=outcome.tag,
         path=ctx.artifacts.token_optimization_candidates.path,
         selected_workflow_name=_selected_workflow_name_from_state(ctx.state),
         spec=_TOKEN_CANDIDATES_SPEC,
     )
-    return ctx.state.model_copy(update={"token_status": outcome.tag})
+    ctx.state.token_status = outcome.tag
+    return None
 
 
-def _after_adversarial_cases(ctx, outcome: Outcome):
+def _after_adversarial_cases(ctx):
+    outcome = ctx.outcome
+    assert outcome is not None
     finalize_optional_optimization_artifact(
         route=outcome.tag,
         path=ctx.artifacts.adversarial_case_candidates.path,
         selected_workflow_name=_selected_workflow_name_from_state(ctx.state),
         spec=_ADVERSARIAL_CASES_SPEC,
     )
-    return ctx.state.model_copy(update={"adversarial_status": outcome.tag})
+    ctx.state.adversarial_status = outcome.tag
+    return None
 
 
-def _after_workflow_level(ctx, outcome: Outcome):
+def _after_workflow_level(ctx):
+    outcome = ctx.outcome
+    assert outcome is not None
     finalize_optional_optimization_artifact(
         route=outcome.tag,
         path=ctx.artifacts.workflow_level_optimization_candidates.path,
         selected_workflow_name=_selected_workflow_name_from_state(ctx.state),
         spec=_WORKFLOW_LEVEL_CANDIDATES_SPEC,
     )
-    return ctx.state.model_copy(update={"workflow_level_status": outcome.tag})
+    ctx.state.workflow_level_status = outcome.tag
+    return None
 
 
-def _after_package(ctx, outcome: Outcome):
-    return ctx.state.model_copy(update={"packaging_status": outcome.tag})
+def _after_package(ctx):
+    outcome = ctx.outcome
+    assert outcome is not None
+    ctx.state.packaging_status = outcome.tag
+    return None
 
 
 class WorkflowRunTracesToOptimizationCandidates(Workflow):
@@ -503,10 +525,10 @@ class WorkflowRunTracesToOptimizationCandidates(Workflow):
         writes=[invocation_contract],
         routes={"inputs_prepared": "capture_frame_context"},
     )
-    def bootstrap(state: State, ctx):
+    def bootstrap(ctx):
         params = ctx.params
         selected_workflow_name = resolve_selected_workflow_name(ctx.root, params.selected_workflow)
-        next_state = state.model_copy(
+        next_state = ctx.state.model_copy(
             update={
                 "selected_workflow_reference": params.selected_workflow,
                 "selected_workflow_name": selected_workflow_name,
@@ -595,35 +617,30 @@ class WorkflowRunTracesToOptimizationCandidates(Workflow):
         ],
         routes={"frame_context_captured": "frame"},
     )
-    def capture_frame_context(state: State, ctx):
+    def capture_frame_context(ctx):
         frame_capture = capture_optimization_frame_context(
             ctx=ctx,
-            selected_workflow_reference=state.selected_workflow_reference,
-            task_title=state.task_title,
-            run_refs=state.run_refs,
-            run_statuses=state.run_statuses,
-            route_tags=state.route_tags,
-            history_limit=state.history_limit,
-            top_k_steps=state.top_k_steps,
-            optimization_depth=state.optimization_depth,
-            include_adversarial_generation=state.include_adversarial_generation,
-            include_token_optimization=state.include_token_optimization,
-            include_workflow_level_candidates=state.include_workflow_level_candidates,
-            max_failure_scenarios=state.max_failure_scenarios,
-            max_candidates_per_pass=state.max_candidates_per_pass,
-            focus=state.focus,
-            constraints=state.constraints,
+            selected_workflow_reference=ctx.state.selected_workflow_reference,
+            task_title=ctx.state.task_title,
+            run_refs=ctx.state.run_refs,
+            run_statuses=ctx.state.run_statuses,
+            route_tags=ctx.state.route_tags,
+            history_limit=ctx.state.history_limit,
+            top_k_steps=ctx.state.top_k_steps,
+            optimization_depth=ctx.state.optimization_depth,
+            include_adversarial_generation=ctx.state.include_adversarial_generation,
+            include_token_optimization=ctx.state.include_token_optimization,
+            include_workflow_level_candidates=ctx.state.include_workflow_level_candidates,
+            max_failure_scenarios=ctx.state.max_failure_scenarios,
+            max_candidates_per_pass=ctx.state.max_candidates_per_pass,
+            focus=ctx.state.focus,
+            constraints=ctx.state.constraints,
         )
-
-        ctx.state = state.model_copy(
-            update={
-                "selected_workflow_name": frame_capture.selected_workflow_name,
-                "candidate_run_count": frame_capture.candidate_run_count,
-                "eligible_run_count": frame_capture.eligible_run_count,
-                "excluded_run_count": frame_capture.excluded_run_count,
-                "no_eligible_trace_evidence": frame_capture.no_eligible_trace_evidence,
-            }
-        )
+        ctx.state.selected_workflow_name = frame_capture.selected_workflow_name
+        ctx.state.candidate_run_count = frame_capture.candidate_run_count
+        ctx.state.eligible_run_count = frame_capture.eligible_run_count
+        ctx.state.excluded_run_count = frame_capture.excluded_run_count
+        ctx.state.no_eligible_trace_evidence = frame_capture.no_eligible_trace_evidence
         return "frame_context_captured"
 
     @python_step(
@@ -641,16 +658,16 @@ class WorkflowRunTracesToOptimizationCandidates(Workflow):
             ),
         },
     )
-    def route_optimize_tokens(state: State, ctx):
-        if state.include_token_optimization:
+    def route_optimize_tokens(ctx):
+        if ctx.state.include_token_optimization:
             return "token_optimization_enabled"
         finalize_optional_optimization_artifact(
             route="token_pass_not_applicable",
             path=ctx.workflow_folder / _TOKEN_CANDIDATES_SPEC.filename,
-            selected_workflow_name=_selected_workflow_name_from_state(state),
+            selected_workflow_name=_selected_workflow_name_from_state(ctx.state),
             spec=_TOKEN_CANDIDATES_SPEC,
         )
-        ctx.state = state.model_copy(update={"token_status": "token_pass_not_applicable"})
+        ctx.state.token_status = "token_pass_not_applicable"
         return "token_pass_not_applicable"
 
     @python_step(
@@ -668,16 +685,16 @@ class WorkflowRunTracesToOptimizationCandidates(Workflow):
             ),
         },
     )
-    def route_adversarial_cases(state: State, ctx):
-        if state.include_adversarial_generation:
+    def route_adversarial_cases(ctx):
+        if ctx.state.include_adversarial_generation:
             return "adversarial_generation_enabled"
         finalize_optional_optimization_artifact(
             route="adversarial_generation_skipped",
             path=ctx.workflow_folder / _ADVERSARIAL_CASES_SPEC.filename,
-            selected_workflow_name=_selected_workflow_name_from_state(state),
+            selected_workflow_name=_selected_workflow_name_from_state(ctx.state),
             spec=_ADVERSARIAL_CASES_SPEC,
         )
-        ctx.state = state.model_copy(update={"adversarial_status": "adversarial_generation_skipped"})
+        ctx.state.adversarial_status = "adversarial_generation_skipped"
         return "adversarial_generation_skipped"
 
     @python_step(
@@ -695,16 +712,16 @@ class WorkflowRunTracesToOptimizationCandidates(Workflow):
             ),
         },
     )
-    def route_workflow_level(state: State, ctx):
-        if state.include_workflow_level_candidates:
+    def route_workflow_level(ctx):
+        if ctx.state.include_workflow_level_candidates:
             return "workflow_level_enabled"
         finalize_optional_optimization_artifact(
             route="workflow_level_pass_not_applicable",
             path=ctx.workflow_folder / _WORKFLOW_LEVEL_CANDIDATES_SPEC.filename,
-            selected_workflow_name=_selected_workflow_name_from_state(state),
+            selected_workflow_name=_selected_workflow_name_from_state(ctx.state),
             spec=_WORKFLOW_LEVEL_CANDIDATES_SPEC,
         )
-        ctx.state = state.model_copy(update={"workflow_level_status": "workflow_level_pass_not_applicable"})
+        ctx.state.workflow_level_status = "workflow_level_pass_not_applicable"
         return "workflow_level_pass_not_applicable"
 
     @python_step(
@@ -723,7 +740,7 @@ class WorkflowRunTracesToOptimizationCandidates(Workflow):
         writes=[workflow_refinement_evidence, optimization_publication_receipt],
         routes={"optimization_candidates_published": FINISH},
     )
-    def publish_optimization_packet(state: State, ctx):
+    def publish_optimization_packet(ctx):
         workflow_folder = ctx.workflow_folder
         required_paths = require_existing_artifact_paths(
             {
@@ -741,7 +758,7 @@ class WorkflowRunTracesToOptimizationCandidates(Workflow):
         capability_snapshot = read_json_object(required_paths["selected_workflow_capability"])
         selected_workflow_name, _ = validate_selected_workflow_capability_snapshot(
             capability_snapshot,
-            expected_selected_workflow_name=state.selected_workflow_name,
+            expected_selected_workflow_name=ctx.state.selected_workflow_name,
             expected_label="workflow state",
         )
         validate_selected_workflow_authoring_surface_snapshot(
@@ -780,7 +797,7 @@ class WorkflowRunTracesToOptimizationCandidates(Workflow):
             expected_selected_workflow_name=selected_workflow_name,
         )
 
-        if scope_payload.get("optimization_depth") != state.optimization_depth:
+        if scope_payload.get("optimization_depth") != ctx.state.optimization_depth:
             raise ValueError("workflow_optimization_scope.json optimization_depth must match the workflow request")
 
         publication_surface = collect_optimization_publication_surface(
@@ -789,7 +806,7 @@ class WorkflowRunTracesToOptimizationCandidates(Workflow):
             artifact_specs=_CANDIDATE_ARTIFACT_SPECS,
         )
         scorecard_payload = read_json_object(required_paths["workflow_optimization_scorecard"])
-        scorecard_payload["optimization_depth"] = state.optimization_depth
+        scorecard_payload["optimization_depth"] = ctx.state.optimization_depth
         scorecard_payload["ablation_executed"] = False
         scorecard_payload["requires_ablation_before_promotion"] = publication_surface.requires_ablation
         write_workflow_json(ctx, "workflow_optimization_scorecard.json", scorecard_payload)
@@ -809,7 +826,7 @@ class WorkflowRunTracesToOptimizationCandidates(Workflow):
         )
         packet_text = _ensure_packet_optimization_depth_section(
             packet_text,
-            optimization_depth=state.optimization_depth,
+            optimization_depth=ctx.state.optimization_depth,
         )
         required_paths["workflow_optimization_packet"].write_text(packet_text, encoding="utf-8")
         validate_no_hidden_execution_signal(
@@ -832,9 +849,9 @@ class WorkflowRunTracesToOptimizationCandidates(Workflow):
 
         evidence_entries = _optimization_evidence_entries(
             workflow_folder,
-            no_eligible=state.no_eligible_trace_evidence,
-            ranking_status=state.ranking_status,
-            failure_status=state.failure_status,
+            no_eligible=ctx.state.no_eligible_trace_evidence,
+            ranking_status=ctx.state.ranking_status,
+            failure_status=ctx.state.failure_status,
         )
         write_optimization_refinement_evidence(
             ctx=ctx,
@@ -843,10 +860,10 @@ class WorkflowRunTracesToOptimizationCandidates(Workflow):
         )
         receipt_payload = {
             "selected_workflow_name": selected_workflow_name,
-            "evidence_run_count": state.eligible_run_count,
-            "excluded_run_count": state.excluded_run_count,
-            "no_eligible_trace_evidence": state.no_eligible_trace_evidence,
-            "optimization_depth": state.optimization_depth,
+            "evidence_run_count": ctx.state.eligible_run_count,
+            "excluded_run_count": ctx.state.excluded_run_count,
+            "no_eligible_trace_evidence": ctx.state.no_eligible_trace_evidence,
+            "optimization_depth": ctx.state.optimization_depth,
             "publication_boundary": "candidate_only",
             "artifacts": {
                 "workflow_optimization_scorecard": "workflow_optimization_scorecard.json",
@@ -860,7 +877,7 @@ class WorkflowRunTracesToOptimizationCandidates(Workflow):
             "optimization_publication_receipt.json",
             receipt_payload,
         )
-        ctx.state = state.model_copy(update={"published": True})
+        ctx.state.published = True
         return "optimization_candidates_published"
 
     entry = bootstrap

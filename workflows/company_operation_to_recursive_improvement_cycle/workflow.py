@@ -81,7 +81,9 @@ _PACKAGE_SECTION_MARKERS = (
 _PUBLICATION_BOUNDARY = "recursive_improvement_publication_only"
 
 
-def _after_frame_company_operation(ctx, outcome: Outcome):
+def _after_frame_company_operation(ctx):
+    outcome = ctx.outcome
+    assert outcome is not None
     payload = outcome.payload
     focus_task_ids = _require_string_list(
         payload.get("focus_task_ids"),
@@ -95,10 +97,13 @@ def _after_frame_company_operation(ctx, outcome: Outcome):
     )
     if ctx.state.focus_workflows and focus_workflows != ctx.state.focus_workflows:
         raise ValueError("frame verifier payload focus_workflows must match the captured company context")
-    return ctx.state.model_copy(update={"framing_status": outcome.tag})
+    ctx.state.framing_status = outcome.tag
+    return None
 
 
-def _after_analyze_recursive_improvement_pressures(ctx, outcome: Outcome):
+def _after_analyze_recursive_improvement_pressures(ctx):
+    outcome = ctx.outcome
+    assert outcome is not None
     payload = outcome.payload
     focus_task_ids = _require_string_list(
         payload.get("focus_task_ids"),
@@ -121,17 +126,16 @@ def _after_analyze_recursive_improvement_pressures(ctx, outcome: Outcome):
         allowed_candidate_ids=candidate_ids,
         error_prefix="analysis verifier payload",
     )
-    return ctx.state.model_copy(
-        update={
-            "analysis_status": outcome.tag,
-            "candidate_ids": candidate_ids,
-            "priority_item_ids": priority_item_ids,
-            "priority_categories": priority_categories,
-        }
-    )
+    ctx.state.analysis_status = outcome.tag
+    ctx.state.candidate_ids = candidate_ids
+    ctx.state.priority_item_ids = priority_item_ids
+    ctx.state.priority_categories = priority_categories
+    return None
 
 
-def _after_package_recursive_improvement_cycle(ctx, outcome: Outcome):
+def _after_package_recursive_improvement_cycle(ctx):
+    outcome = ctx.outcome
+    assert outcome is not None
     payload = outcome.payload
     focus_task_ids = _require_string_list(
         payload.get("focus_task_ids"),
@@ -167,7 +171,8 @@ def _after_package_recursive_improvement_cycle(ctx, outcome: Outcome):
         raise ValueError(
             "package verifier payload priority_categories must match the analyzed recursive-improvement context"
         )
-    return ctx.state.model_copy(update={"packaging_status": outcome.tag})
+    ctx.state.packaging_status = outcome.tag
+    return None
 
 
 class CompanyOperationToRecursiveImprovementCycle(Workflow):
@@ -295,9 +300,9 @@ class CompanyOperationToRecursiveImprovementCycle(Workflow):
         writes=[invocation_contract],
         routes={"inputs_prepared": "capture_company_operation_context"},
     )
-    def bootstrap(state: State, ctx):
+    def bootstrap(ctx):
         params = ctx.params
-        next_state = state.model_copy(
+        next_state = ctx.state.model_copy(
             update={
                 "task_title": params.task_title,
                 "sponsor_role": params.sponsor_role,
@@ -351,22 +356,22 @@ class CompanyOperationToRecursiveImprovementCycle(Workflow):
         ],
         routes={"company_operation_context_captured": "frame_company_operation"},
     )
-    def capture_company_operation_context(state: State, ctx):
+    def capture_company_operation_context(ctx):
         capability_path = write_workflow_capability_snapshot(ctx)
         health_path = write_workflow_portfolio_health_snapshot(
             ctx,
-            workflows=state.focus_workflow_references or None,
-            statuses=state.statuses or None,
-            max_runs_per_workflow=state.max_runs_per_workflow,
+            workflows=ctx.state.focus_workflow_references or None,
+            statuses=ctx.state.statuses or None,
+            max_runs_per_workflow=ctx.state.max_runs_per_workflow,
         )
         company_path = write_company_operation_snapshot(
             ctx,
-            task_ids=state.focus_task_references or None,
-            workflows=state.focus_workflow_references or None,
-            statuses=state.statuses or None,
-            max_tasks=state.max_tasks,
-            max_runs_per_workflow=state.max_runs_per_workflow,
-            max_messages_per_task=state.max_messages_per_task,
+            task_ids=ctx.state.focus_task_references or None,
+            workflows=ctx.state.focus_workflow_references or None,
+            statuses=ctx.state.statuses or None,
+            max_tasks=ctx.state.max_tasks,
+            max_runs_per_workflow=ctx.state.max_runs_per_workflow,
+            max_messages_per_task=ctx.state.max_messages_per_task,
         )
         for artifact_path in (capability_path, health_path, company_path):
             if not artifact_path.exists():
@@ -383,9 +388,9 @@ class CompanyOperationToRecursiveImprovementCycle(Workflow):
             health_snapshot.get("workflow_portfolio_health"),
             "workflow_portfolio_health_snapshot.json must define workflow_portfolio_health as a JSON object",
         )
-        if health_payload.get("max_runs_per_workflow") != state.max_runs_per_workflow:
+        if health_payload.get("max_runs_per_workflow") != ctx.state.max_runs_per_workflow:
             raise ValueError("workflow_portfolio_health_snapshot.json max_runs_per_workflow must match the invocation contract")
-        expected_statuses = _sorted_unique_strings(state.statuses) or None
+        expected_statuses = _sorted_unique_strings(ctx.state.statuses) or None
         if health_payload.get("statuses") != expected_statuses:
             raise ValueError("workflow_portfolio_health_snapshot.json statuses must match the invocation contract")
         scoped_workflow_names = extract_workflow_names_from_portfolio_health(health_payload)
@@ -393,7 +398,7 @@ class CompanyOperationToRecursiveImprovementCycle(Workflow):
             raise ValueError("workflow_portfolio_health_snapshot.json must contain at least one scoped workflow")
         if health_payload.get("workflow_count") != len(scoped_workflow_names):
             raise ValueError("workflow_portfolio_health_snapshot.json workflow_count must match the scoped workflow entries")
-        if state.focus_workflow_references:
+        if ctx.state.focus_workflow_references:
             selected_workflow_names = _require_string_list(
                 health_payload.get("selected_workflow_names"),
                 "workflow_portfolio_health_snapshot.json must define selected_workflow_names when focus_workflow_references are supplied",
@@ -411,22 +416,22 @@ class CompanyOperationToRecursiveImprovementCycle(Workflow):
             company_snapshot.get("company_operation"),
             "company_operation_snapshot.json must define company_operation as a JSON object",
         )
-        if company_payload.get("max_tasks") != state.max_tasks:
+        if company_payload.get("max_tasks") != ctx.state.max_tasks:
             raise ValueError("company_operation_snapshot.json max_tasks must match the invocation contract")
-        if company_payload.get("max_runs_per_workflow") != state.max_runs_per_workflow:
+        if company_payload.get("max_runs_per_workflow") != ctx.state.max_runs_per_workflow:
             raise ValueError("company_operation_snapshot.json max_runs_per_workflow must match the invocation contract")
-        if company_payload.get("max_messages_per_task") != state.max_messages_per_task:
+        if company_payload.get("max_messages_per_task") != ctx.state.max_messages_per_task:
             raise ValueError("company_operation_snapshot.json max_messages_per_task must match the invocation contract")
         if company_payload.get("statuses") != expected_statuses:
             raise ValueError("company_operation_snapshot.json statuses must match the invocation contract")
-        if state.focus_task_references:
+        if ctx.state.focus_task_references:
             selected_task_ids = _require_string_list(
                 company_payload.get("selected_task_ids"),
                 "company_operation_snapshot.json must define selected_task_ids when focus_task_references are supplied",
             )
-            if selected_task_ids != _sorted_unique_strings(state.focus_task_references):
+            if selected_task_ids != _sorted_unique_strings(ctx.state.focus_task_references):
                 raise ValueError("company_operation_snapshot.json selected_task_ids must match the scoped task references")
-        if state.focus_workflow_references:
+        if ctx.state.focus_workflow_references:
             selected_company_workflow_names = _require_string_list(
                 company_payload.get("selected_workflow_names"),
                 "company_operation_snapshot.json must define selected_workflow_names when focus_workflow_references are supplied",
@@ -441,22 +446,15 @@ class CompanyOperationToRecursiveImprovementCycle(Workflow):
         _validate_company_task_summaries(
             company_tasks,
             allowed_workflows=capability_workflow_names,
-            focus_workflows=scoped_workflow_names if state.focus_workflow_references else None,
+            focus_workflows=scoped_workflow_names if ctx.state.focus_workflow_references else None,
         )
-        if state.focus_task_references:
-            unknown_task_refs = sorted(set(scoped_task_ids) - set(_sorted_unique_strings(state.focus_task_references)))
+        if ctx.state.focus_task_references:
+            unknown_task_refs = sorted(set(scoped_task_ids) - set(_sorted_unique_strings(ctx.state.focus_task_references)))
             if unknown_task_refs:
                 raise ValueError("company_operation_snapshot.json includes unknown focus-task references")
-
-        return (
-            state.model_copy(
-                update={
-                    "scoped_task_ids": scoped_task_ids,
-                    "focus_workflows": scoped_workflow_names,
-                }
-            ),
-            Event("company_operation_context_captured"),
-        )
+        ctx.state.scoped_task_ids = scoped_task_ids
+        ctx.state.focus_workflows = scoped_workflow_names
+        return Event("company_operation_context_captured")
 
     @python_step(
         name="publish_recursive_improvement_cycle",
@@ -474,7 +472,7 @@ class CompanyOperationToRecursiveImprovementCycle(Workflow):
         writes=[recursive_improvement_cycle_receipt],
         routes={"recursive_improvement_cycle_published": FINISH},
     )
-    def publish_recursive_improvement_cycle(state: State, ctx):
+    def publish_recursive_improvement_cycle(ctx):
         workflow_folder = ctx.workflow_folder
         required_paths = require_existing_artifact_paths(
             {
@@ -499,7 +497,7 @@ class CompanyOperationToRecursiveImprovementCycle(Workflow):
             "workflow_portfolio_health_snapshot.json must define workflow_portfolio_health as a JSON object",
         )
         scoped_workflow_names = extract_workflow_names_from_portfolio_health(health_payload)
-        if state.focus_workflows and scoped_workflow_names != state.focus_workflows:
+        if ctx.state.focus_workflows and scoped_workflow_names != ctx.state.focus_workflows:
             raise ValueError(
                 "workflow_portfolio_health_snapshot.json scoped workflow entries must match the captured company context"
             )
@@ -517,12 +515,12 @@ class CompanyOperationToRecursiveImprovementCycle(Workflow):
             "company_operation_snapshot.json must define company_operation.tasks as a JSON array of objects",
         )
         scoped_task_ids = _extract_company_task_ids(company_tasks)
-        if state.scoped_task_ids and scoped_task_ids != state.scoped_task_ids:
+        if ctx.state.scoped_task_ids and scoped_task_ids != ctx.state.scoped_task_ids:
             raise ValueError("company_operation_snapshot.json task entries must match the captured company context")
         _validate_company_task_summaries(
             company_tasks,
             allowed_workflows=capability_workflow_names,
-            focus_workflows=scoped_workflow_names if state.focus_workflows else None,
+            focus_workflows=scoped_workflow_names if ctx.state.focus_workflows else None,
         )
 
         pressure_map_text = read_required_text(
@@ -541,11 +539,11 @@ class CompanyOperationToRecursiveImprovementCycle(Workflow):
             allowed_workflows=scoped_workflow_names,
             allowed_tasks=scoped_task_ids,
         )
-        if state.candidate_ids and candidate_ids != state.candidate_ids:
+        if ctx.state.candidate_ids and candidate_ids != ctx.state.candidate_ids:
             raise ValueError("recursive_improvement_candidates.json candidate_ids must match workflow state")
-        if state.priority_item_ids and candidate_ids != state.priority_item_ids:
+        if ctx.state.priority_item_ids and candidate_ids != ctx.state.priority_item_ids:
             raise ValueError("recursive_improvement_candidates.json candidate order must match the analyzed recursive-improvement context")
-        if state.priority_categories and priority_categories != state.priority_categories:
+        if ctx.state.priority_categories and priority_categories != ctx.state.priority_categories:
             raise ValueError("recursive_improvement_candidates.json priority categories must match workflow state")
         for candidate_id in candidate_ids:
             if candidate_id not in priority_matrix_text:
@@ -661,9 +659,9 @@ class CompanyOperationToRecursiveImprovementCycle(Workflow):
             "recursive_improvement_cycle_receipt.json",
             {
                 "workflow_name": ctx.workflow_name,
-                "task_title": state.task_title,
-                "sponsor_role": state.sponsor_role,
-                "desired_outcome": state.desired_outcome,
+                "task_title": ctx.state.task_title,
+                "sponsor_role": ctx.state.sponsor_role,
+                "desired_outcome": ctx.state.desired_outcome,
                 "focus_task_ids": scoped_task_ids,
                 "focus_workflows": scoped_workflow_names,
                 "candidate_ids": candidate_ids,
@@ -684,19 +682,13 @@ class CompanyOperationToRecursiveImprovementCycle(Workflow):
                 "published": True,
             },
         )
-        return (
-            state.model_copy(
-                update={
-                    "scoped_task_ids": scoped_task_ids,
-                    "focus_workflows": scoped_workflow_names,
-                    "candidate_ids": candidate_ids,
-                    "priority_item_ids": candidate_ids,
-                    "priority_categories": priority_categories,
-                    "published": True,
-                }
-            ),
-            Event("recursive_improvement_cycle_published"),
-        )
+        ctx.state.scoped_task_ids = scoped_task_ids
+        ctx.state.focus_workflows = scoped_workflow_names
+        ctx.state.candidate_ids = candidate_ids
+        ctx.state.priority_item_ids = candidate_ids
+        ctx.state.priority_categories = priority_categories
+        ctx.state.published = True
+        return Event("recursive_improvement_cycle_published")
 
     entry = bootstrap
 

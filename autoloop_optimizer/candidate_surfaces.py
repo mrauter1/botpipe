@@ -664,12 +664,14 @@ def _resolve_overlay_source_root(repo_root: Path) -> Path:
 
 
 def _is_runnable_repo_root(path: Path) -> bool:
+    if not path.is_dir() or not (path / "tests" / "conftest.py").is_file():
+        return False
+    if (path / "__init__.py").is_file() and (path / "core").is_dir() and (path / "runtime").is_dir():
+        return True
     return (
-        path.is_dir()
-        and (path / "__init__.py").is_file()
-        and (path / "core").is_dir()
-        and (path / "runtime").is_dir()
-        and (path / "tests" / "conftest.py").is_file()
+        (path / "autoloop" / "__init__.py").is_file()
+        and (path / "autoloop" / "core").is_dir()
+        and (path / "autoloop" / "runtime").is_dir()
     )
 
 

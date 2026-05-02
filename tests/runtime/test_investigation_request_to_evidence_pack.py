@@ -20,6 +20,7 @@ from autoloop.runtime.loader import (
     resolve_workflow_reference,
 )
 from autoloop.runtime.runner import RunnerOptions, run_workflow_package
+from tests.runtime.workflow_contract_helpers import invoke_python_step
 from autoloop.core.primitives import Outcome
 
 
@@ -350,8 +351,9 @@ def test_investigation_evidence_pack_bootstrap_reads_typed_ctx_params(monkeypatc
         },
     )
 
-    next_state, event = workflow_pkg.InvestigationRequestToEvidencePack.on_bootstrap(
-        workflow_pkg.InvestigationRequestToEvidencePack.State(),
+    next_state, event = invoke_python_step(
+        workflow_pkg.InvestigationRequestToEvidencePack,
+        "bootstrap",
         ctx,
     )
 
@@ -645,7 +647,7 @@ def test_investigation_evidence_pack_publish_rejects_invalid_machine_readable_su
     )
 
     with pytest.raises(ValueError, match=match):
-        workflow_pkg.InvestigationRequestToEvidencePack.on_publish_evidence_pack(state, ctx)
+        invoke_python_step(workflow_pkg.InvestigationRequestToEvidencePack, "publish_evidence_pack", ctx)
 
     assert not (workflow_folder / "evidence_pack_receipt.json").exists()
 

@@ -19,6 +19,7 @@ from autoloop.runtime.config import GitTrackingRuntimeConfig, RuntimeConfig
 from autoloop.runtime.loader import discover_workflow_packages, resolve_workflow_reference
 from autoloop.runtime.runner import RunnerOptions, run_workflow_package
 from autoloop.core.primitives import Outcome
+from tests.runtime.workflow_contract_helpers import invoke_after_verifier_hook, invoke_python_step
 
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
@@ -35,6 +36,27 @@ def _isolate_workflow_modules():
     _clear_workflow_modules()
     yield
     _clear_workflow_modules()
+
+
+def _invoke_optimizer_python_step(workflow_pkg, step_name: str, ctx: Context) -> tuple[object, object]:
+    return invoke_python_step(workflow_pkg.WorkflowRunTracesToOptimizationCandidates, step_name, ctx)
+
+
+def _invoke_optimizer_after_verifier_hook(
+    workflow_pkg,
+    step_name: str,
+    ctx: Context,
+    *,
+    outcome: Outcome,
+    artifacts: object | None = None,
+) -> tuple[object, object]:
+    return invoke_after_verifier_hook(
+        workflow_pkg.WorkflowRunTracesToOptimizationCandidates,
+        step_name,
+        ctx,
+        outcome=outcome,
+        artifacts=artifacts,
+    )
 
 
 def test_workflow_is_registered_and_describable() -> None:
@@ -155,7 +177,7 @@ def test_capture_frame_context_excludes_old_runs_missing_plan1_observability(tmp
     _write_minimal_run_metadata(tmp_path, "release-old", "release_candidate_to_go_no_go", "run-old", "failed")
     params, state, ctx, workflow_pkg = _bootstrap_context(tmp_path, monkeypatch)
 
-    next_state, event = workflow_pkg.WorkflowRunTracesToOptimizationCandidates.on_capture_frame_context(state, ctx)
+    next_state, event = _invoke_optimizer_python_step(workflow_pkg, "capture_frame_context", ctx)
 
     assert event.tag == "frame_context_captured"
     assert next_state.candidate_run_count == 1
@@ -179,7 +201,7 @@ def test_capture_frame_context_normalizes_trace_corpus_from_seeded_runs(tmp_path
     _write_minimal_run_metadata(tmp_path, "release-old", "release_candidate_to_go_no_go", "run-old", "failed")
     params, state, ctx, workflow_pkg = _bootstrap_context(tmp_path, monkeypatch)
 
-    next_state, event = workflow_pkg.WorkflowRunTracesToOptimizationCandidates.on_capture_frame_context(state, ctx)
+    next_state, event = _invoke_optimizer_python_step(workflow_pkg, "capture_frame_context", ctx)
 
     assert event.tag == "frame_context_captured"
     assert next_state.candidate_run_count == 2
@@ -199,7 +221,7 @@ def test_capture_frame_context_keeps_public_trace_filtered_but_internal_trace_co
     _write_upstream_pass_downstream_fail_run(tmp_path, "release-upstream", "release_candidate_to_go_no_go", "run-upstream")
     params, state, ctx, workflow_pkg = _bootstrap_context(tmp_path, monkeypatch, route_tags=["failed"])
 
-    next_state, event = workflow_pkg.WorkflowRunTracesToOptimizationCandidates.on_capture_frame_context(state, ctx)
+    next_state, event = _invoke_optimizer_python_step(workflow_pkg, "capture_frame_context", ctx)
 
     public_corpus = json.loads((ctx.workflow_folder / "workflow_optimization_trace_corpus.json").read_text(encoding="utf-8"))
     internal_corpus = json.loads(
@@ -222,7 +244,7 @@ def test_rank_targets_writes_priority_report(tmp_path: Path, monkeypatch) -> Non
     _write_observable_run(tmp_path, "release-good", "release_candidate_to_go_no_go", "run-good")
     params, state, ctx, workflow_pkg = _bootstrap_context(tmp_path, monkeypatch)
 
-    workflow_pkg.WorkflowRunTracesToOptimizationCandidates.on_capture_frame_context(state, ctx)
+    _invoke_optimizer_python_step(workflow_pkg, "capture_frame_context", ctx)
 
     metrics = json.loads((ctx.workflow_folder / "step_trace_metrics.json").read_text(encoding="utf-8"))
     report = json.loads((ctx.workflow_folder / "step_optimization_priority_report.json").read_text(encoding="utf-8"))
@@ -238,13 +260,11 @@ def test_route_optimize_tokens_skips_when_disabled(tmp_path: Path, monkeypatch) 
     _install_repo_optimizer_package(tmp_path)
     _write_observable_run(tmp_path, "release-good", "release_candidate_to_go_no_go", "run-good")
     params, state, ctx, workflow_pkg = _bootstrap_context(tmp_path, monkeypatch)
-    state, _ = workflow_pkg.WorkflowRunTracesToOptimizationCandidates.on_capture_frame_context(state, ctx)
+    state, _ = _invoke_optimizer_python_step(workflow_pkg, "capture_frame_context", ctx)
     disabled_state = state.model_copy(update={"include_token_optimization": False})
+    ctx.state = disabled_state
 
-    next_state, event = workflow_pkg.WorkflowRunTracesToOptimizationCandidates.on_route_optimize_tokens(
-        disabled_state,
-        ctx,
-    )
+    next_state, event = _invoke_optimizer_python_step(workflow_pkg, "route_optimize_tokens", ctx)
 
     payload = json.loads((ctx.workflow_folder / "token_optimization_candidates.json").read_text(encoding="utf-8"))
     assert event.tag == "token_pass_not_applicable"
@@ -261,13 +281,11 @@ def test_adversarial_cases_can_be_skipped(tmp_path: Path, monkeypatch) -> None:
     _install_repo_optimizer_package(tmp_path)
     _write_observable_run(tmp_path, "release-good", "release_candidate_to_go_no_go", "run-good")
     params, state, ctx, workflow_pkg = _bootstrap_context(tmp_path, monkeypatch)
-    state, _ = workflow_pkg.WorkflowRunTracesToOptimizationCandidates.on_capture_frame_context(state, ctx)
+    state, _ = _invoke_optimizer_python_step(workflow_pkg, "capture_frame_context", ctx)
     disabled_state = state.model_copy(update={"include_adversarial_generation": False})
+    ctx.state = disabled_state
 
-    next_state, event = workflow_pkg.WorkflowRunTracesToOptimizationCandidates.on_route_adversarial_cases(
-        disabled_state,
-        ctx,
-    )
+    next_state, event = _invoke_optimizer_python_step(workflow_pkg, "route_adversarial_cases", ctx)
 
     payload = json.loads((ctx.workflow_folder / "adversarial_case_candidates.json").read_text(encoding="utf-8"))
     assert event.tag == "adversarial_generation_skipped"
@@ -284,13 +302,11 @@ def test_workflow_level_can_be_skipped(tmp_path: Path, monkeypatch) -> None:
     _install_repo_optimizer_package(tmp_path)
     _write_observable_run(tmp_path, "release-good", "release_candidate_to_go_no_go", "run-good")
     params, state, ctx, workflow_pkg = _bootstrap_context(tmp_path, monkeypatch)
-    state, _ = workflow_pkg.WorkflowRunTracesToOptimizationCandidates.on_capture_frame_context(state, ctx)
+    state, _ = _invoke_optimizer_python_step(workflow_pkg, "capture_frame_context", ctx)
     disabled_state = state.model_copy(update={"include_workflow_level_candidates": False})
+    ctx.state = disabled_state
 
-    next_state, event = workflow_pkg.WorkflowRunTracesToOptimizationCandidates.on_route_workflow_level(
-        disabled_state,
-        ctx,
-    )
+    next_state, event = _invoke_optimizer_python_step(workflow_pkg, "route_workflow_level", ctx)
 
     payload = json.loads(
         (ctx.workflow_folder / "workflow_level_optimization_candidates.json").read_text(encoding="utf-8")
@@ -568,16 +584,14 @@ def test_optional_skip_routes_preserve_existing_artifacts_when_present(
     _install_repo_optimizer_package(tmp_path)
     _write_observable_run(tmp_path, "release-good", "release_candidate_to_go_no_go", "run-good")
     params, state, ctx, workflow_pkg = _bootstrap_context(tmp_path, monkeypatch)
-    state, _ = workflow_pkg.WorkflowRunTracesToOptimizationCandidates.on_capture_frame_context(state, ctx)
+    state, _ = _invoke_optimizer_python_step(workflow_pkg, "capture_frame_context", ctx)
     disabled_state = state.model_copy(update={disabled_flag: False})
+    ctx.state = disabled_state
 
     artifact_path = ctx.workflow_folder / artifact_filename
     artifact_path.write_text(json.dumps(existing_payload, indent=2, sort_keys=True) + "\n", encoding="utf-8")
 
-    next_state, event = getattr(workflow_pkg.WorkflowRunTracesToOptimizationCandidates, handler_name)(
-        disabled_state,
-        ctx,
-    )
+    next_state, event = _invoke_optimizer_python_step(workflow_pkg, handler_name.removeprefix("on_"), ctx)
 
     assert event.tag == expected_tag
     assert getattr(next_state, status_field) == expected_tag
@@ -612,14 +626,16 @@ def test_not_applicable_candidate_handlers_preserve_existing_artifacts(
     _install_repo_optimizer_package(tmp_path)
     _write_observable_run(tmp_path, "release-good", "release_candidate_to_go_no_go", "run-good")
     params, state, ctx, workflow_pkg = _bootstrap_context(tmp_path, monkeypatch)
-    state, _ = workflow_pkg.WorkflowRunTracesToOptimizationCandidates.on_capture_frame_context(state, ctx)
+    state, _ = _invoke_optimizer_python_step(workflow_pkg, "capture_frame_context", ctx)
 
     artifact_path = ctx.workflow_folder / artifact_filename
     artifact_path.write_text(json.dumps(existing_payload, indent=2, sort_keys=True) + "\n", encoding="utf-8")
 
-    next_state = getattr(workflow_pkg.WorkflowRunTracesToOptimizationCandidates, handler_name)(
-        state,
-        Outcome(
+    next_state, _ = _invoke_optimizer_after_verifier_hook(
+        workflow_pkg,
+        handler_name.removeprefix("on_"),
+        ctx,
+        outcome=Outcome(
             raw_output="not applicable\n",
             tag=outcome_tag,
             payload={
@@ -630,7 +646,7 @@ def test_not_applicable_candidate_handlers_preserve_existing_artifacts(
                 "case_ids": [],
             },
         ),
-        SimpleNamespace(**{artifact_field: _JsonHandle(artifact_path)}),
+        artifacts=SimpleNamespace(**{artifact_field: _JsonHandle(artifact_path)}),
     )
 
     assert getattr(next_state, status_field) == outcome_tag
@@ -665,14 +681,16 @@ def test_not_applicable_candidate_handlers_write_empty_artifacts_when_missing(
     _install_repo_optimizer_package(tmp_path)
     _write_observable_run(tmp_path, "release-good", "release_candidate_to_go_no_go", "run-good")
     params, state, ctx, workflow_pkg = _bootstrap_context(tmp_path, monkeypatch)
-    state, _ = workflow_pkg.WorkflowRunTracesToOptimizationCandidates.on_capture_frame_context(state, ctx)
+    state, _ = _invoke_optimizer_python_step(workflow_pkg, "capture_frame_context", ctx)
 
     artifact_path = ctx.workflow_folder / artifact_filename
     artifact_path.unlink(missing_ok=True)
 
-    next_state = getattr(workflow_pkg.WorkflowRunTracesToOptimizationCandidates, handler_name)(
-        state,
-        Outcome(
+    next_state, _ = _invoke_optimizer_after_verifier_hook(
+        workflow_pkg,
+        handler_name.removeprefix("on_"),
+        ctx,
+        outcome=Outcome(
             raw_output="not applicable\n",
             tag=outcome_tag,
             payload={
@@ -683,7 +701,7 @@ def test_not_applicable_candidate_handlers_write_empty_artifacts_when_missing(
                 "case_ids": [],
             },
         ),
-        SimpleNamespace(**{artifact_field: _JsonHandle(artifact_path)}),
+        artifacts=SimpleNamespace(**{artifact_field: _JsonHandle(artifact_path)}),
     )
 
     assert getattr(next_state, status_field) == outcome_tag
@@ -695,7 +713,7 @@ def test_failure_scenario_seeds_are_written_separately_from_failure_scenarios(tm
     _install_repo_optimizer_package(tmp_path)
     _write_observable_run(tmp_path, "release-good", "release_candidate_to_go_no_go", "run-good")
     params, state, ctx, workflow_pkg = _bootstrap_context(tmp_path, monkeypatch)
-    state, _ = workflow_pkg.WorkflowRunTracesToOptimizationCandidates.on_capture_frame_context(state, ctx)
+    state, _ = _invoke_optimizer_python_step(workflow_pkg, "capture_frame_context", ctx)
 
     seeds_payload = json.loads((ctx.workflow_folder / "workflow_failure_scenario_seeds.json").read_text(encoding="utf-8"))
     assert seeds_payload["schema"] == "autoloop.workflow_optimization.failure_scenario_seeds/v1"
@@ -723,9 +741,11 @@ def test_failure_scenario_seeds_are_written_separately_from_failure_scenarios(tm
     artifacts = SimpleNamespace(
         workflow_failure_scenarios=_JsonHandle(ctx.workflow_folder / "workflow_failure_scenarios.json"),
     )
-    workflow_pkg.WorkflowRunTracesToOptimizationCandidates.on_mine_failures(
-        state,
-        Outcome(
+    _invoke_optimizer_after_verifier_hook(
+        workflow_pkg,
+        "mine_failures",
+        ctx,
+        outcome=Outcome(
             raw_output="failure scenarios grounded\n",
             tag="failure_scenarios_mined",
             payload={
@@ -735,7 +755,7 @@ def test_failure_scenario_seeds_are_written_separately_from_failure_scenarios(tm
                 "failure_ids": ["assessment_producer_failed_verifier"],
             },
         ),
-        artifacts,
+        artifacts=artifacts,
     )
 
     final_payload = json.loads((ctx.workflow_folder / "workflow_failure_scenarios.json").read_text(encoding="utf-8"))
@@ -748,7 +768,7 @@ def test_mine_failures_preserves_provider_authored_failure_scenarios(tmp_path: P
     _install_repo_optimizer_package(tmp_path)
     _write_observable_run(tmp_path, "release-good", "release_candidate_to_go_no_go", "run-good")
     params, state, ctx, workflow_pkg = _bootstrap_context(tmp_path, monkeypatch)
-    state, _ = workflow_pkg.WorkflowRunTracesToOptimizationCandidates.on_capture_frame_context(state, ctx)
+    state, _ = _invoke_optimizer_python_step(workflow_pkg, "capture_frame_context", ctx)
 
     provider_payload = {
         "schema": "autoloop.workflow_optimization.failure_scenarios/v1",
@@ -768,9 +788,11 @@ def test_mine_failures_preserves_provider_authored_failure_scenarios(tmp_path: P
     final_path = ctx.workflow_folder / "workflow_failure_scenarios.json"
     final_path.write_text(json.dumps(provider_payload, indent=2, sort_keys=True) + "\n", encoding="utf-8")
 
-    next_state = workflow_pkg.WorkflowRunTracesToOptimizationCandidates.on_mine_failures(
-        state,
-        Outcome(
+    next_state, _ = _invoke_optimizer_after_verifier_hook(
+        workflow_pkg,
+        "mine_failures",
+        ctx,
+        outcome=Outcome(
             raw_output="failure scenarios grounded\n",
             tag="failure_scenarios_mined",
             payload={
@@ -780,7 +802,7 @@ def test_mine_failures_preserves_provider_authored_failure_scenarios(tmp_path: P
                 "failure_ids": ["provider-distinctive-001"],
             },
         ),
-        SimpleNamespace(workflow_failure_scenarios=_JsonHandle(final_path)),
+        artifacts=SimpleNamespace(workflow_failure_scenarios=_JsonHandle(final_path)),
     )
 
     seeds_payload = json.loads((ctx.workflow_folder / "workflow_failure_scenario_seeds.json").read_text(encoding="utf-8"))
@@ -798,14 +820,16 @@ def test_mine_failures_writes_empty_artifact_only_for_no_failure_scenarios_when_
     _install_repo_optimizer_package(tmp_path)
     _write_observable_run(tmp_path, "release-good", "release_candidate_to_go_no_go", "run-good")
     params, state, ctx, workflow_pkg = _bootstrap_context(tmp_path, monkeypatch)
-    state, _ = workflow_pkg.WorkflowRunTracesToOptimizationCandidates.on_capture_frame_context(state, ctx)
+    state, _ = _invoke_optimizer_python_step(workflow_pkg, "capture_frame_context", ctx)
 
     final_path = ctx.workflow_folder / "workflow_failure_scenarios.json"
     final_path.unlink(missing_ok=True)
 
-    next_state = workflow_pkg.WorkflowRunTracesToOptimizationCandidates.on_mine_failures(
-        state,
-        Outcome(
+    next_state, _ = _invoke_optimizer_after_verifier_hook(
+        workflow_pkg,
+        "mine_failures",
+        ctx,
+        outcome=Outcome(
             raw_output="no failure scenarios\n",
             tag="no_failure_scenarios",
             payload={
@@ -815,7 +839,7 @@ def test_mine_failures_writes_empty_artifact_only_for_no_failure_scenarios_when_
                 "failure_ids": [],
             },
         ),
-        SimpleNamespace(workflow_failure_scenarios=_JsonHandle(final_path)),
+        artifacts=SimpleNamespace(workflow_failure_scenarios=_JsonHandle(final_path)),
     )
 
     payload = json.loads(final_path.read_text(encoding="utf-8"))
@@ -832,7 +856,7 @@ def test_mine_failures_malformed_artifact_is_not_replaced(tmp_path: Path, monkey
     _install_repo_optimizer_package(tmp_path)
     _write_observable_run(tmp_path, "release-good", "release_candidate_to_go_no_go", "run-good")
     params, state, ctx, workflow_pkg = _bootstrap_context(tmp_path, monkeypatch)
-    state, _ = workflow_pkg.WorkflowRunTracesToOptimizationCandidates.on_capture_frame_context(state, ctx)
+    state, _ = _invoke_optimizer_python_step(workflow_pkg, "capture_frame_context", ctx)
 
     final_path = ctx.workflow_folder / "workflow_failure_scenarios.json"
     final_path.write_text(
@@ -851,9 +875,11 @@ def test_mine_failures_malformed_artifact_is_not_replaced(tmp_path: Path, monkey
 
     original_text = final_path.read_text(encoding="utf-8")
     with pytest.raises(ValueError, match="workflow_failure_scenarios.json selected_workflow must match"):
-        workflow_pkg.WorkflowRunTracesToOptimizationCandidates.on_mine_failures(
-            state,
-            Outcome(
+        _invoke_optimizer_after_verifier_hook(
+            workflow_pkg,
+            "mine_failures",
+            ctx,
+            outcome=Outcome(
                 raw_output="failure scenarios grounded\n",
                 tag="failure_scenarios_mined",
                 payload={
@@ -863,7 +889,7 @@ def test_mine_failures_malformed_artifact_is_not_replaced(tmp_path: Path, monkey
                     "failure_ids": [],
                 },
             ),
-            SimpleNamespace(workflow_failure_scenarios=_JsonHandle(final_path)),
+            artifacts=SimpleNamespace(workflow_failure_scenarios=_JsonHandle(final_path)),
         )
 
     assert final_path.read_text(encoding="utf-8") == original_text
@@ -890,7 +916,7 @@ def test_max_candidates_per_pass_is_prompt_guidance_not_schema_limit(tmp_path: P
         monkeypatch,
         max_candidates_per_pass=1,
     )
-    state, _ = workflow_pkg.WorkflowRunTracesToOptimizationCandidates.on_capture_frame_context(state, ctx)
+    state, _ = _invoke_optimizer_python_step(workflow_pkg, "capture_frame_context", ctx)
 
     payload = {
         "schema": "autoloop.workflow_optimization.producer_candidates/v1",
@@ -928,9 +954,11 @@ def test_max_candidates_per_pass_is_prompt_guidance_not_schema_limit(tmp_path: P
     artifact_path = ctx.workflow_folder / "producer_prompt_optimization_candidates.json"
     artifact_path.write_text(json.dumps(payload, indent=2, sort_keys=True) + "\n", encoding="utf-8")
 
-    next_state = workflow_pkg.WorkflowRunTracesToOptimizationCandidates.on_optimize_producer(
-        state,
-        Outcome(
+    next_state, _ = _invoke_optimizer_after_verifier_hook(
+        workflow_pkg,
+        "optimize_producer",
+        ctx,
+        outcome=Outcome(
             raw_output="producer candidates ready\n",
             tag="producer_candidates_ready",
             payload={
@@ -940,7 +968,7 @@ def test_max_candidates_per_pass_is_prompt_guidance_not_schema_limit(tmp_path: P
                 "candidate_ids": ["producer-assessment-001", "producer-assessment-002"],
             },
         ),
-        SimpleNamespace(producer_prompt_optimization_candidates=_JsonHandle(artifact_path)),
+        artifacts=SimpleNamespace(producer_prompt_optimization_candidates=_JsonHandle(artifact_path)),
     )
 
     scope = json.loads((ctx.workflow_folder / "workflow_optimization_scope.json").read_text(encoding="utf-8"))
@@ -1294,10 +1322,7 @@ def test_bootstrap_rejects_unknown_selected_workflow_before_side_effects(tmp_pat
     )
 
     with pytest.raises(LookupError):
-        workflow_pkg.WorkflowRunTracesToOptimizationCandidates.on_bootstrap(
-            workflow_pkg.WorkflowRunTracesToOptimizationCandidates.State(),
-            ctx,
-        )
+        _invoke_optimizer_python_step(workflow_pkg, "bootstrap", ctx)
 
     assert not (workflow_folder / "invocation_contract.json").exists()
 
@@ -1306,13 +1331,10 @@ def test_package_writes_scorecard_refinement_evidence_packet_and_receipt(tmp_pat
     _install_repo_optimizer_package(tmp_path)
     _write_observable_run(tmp_path, "release-good", "release_candidate_to_go_no_go", "run-good")
     params, state, ctx, workflow_pkg = _bootstrap_context(tmp_path, monkeypatch)
-    state, _ = workflow_pkg.WorkflowRunTracesToOptimizationCandidates.on_capture_frame_context(state, ctx)
+    state, _ = _invoke_optimizer_python_step(workflow_pkg, "capture_frame_context", ctx)
     _write_publishable_package(ctx)
 
-    next_state, event = workflow_pkg.WorkflowRunTracesToOptimizationCandidates.on_publish_optimization_packet(
-        state,
-        ctx,
-    )
+    next_state, event = _invoke_optimizer_python_step(workflow_pkg, "publish_optimization_packet", ctx)
 
     assert event.tag == "optimization_candidates_published"
     assert next_state.published is True
@@ -1332,7 +1354,7 @@ def test_package_fails_if_selected_workflow_source_changed(tmp_path: Path, monke
     _install_repo_optimizer_package(tmp_path)
     _write_observable_run(tmp_path, "release-good", "release_candidate_to_go_no_go", "run-good")
     params, state, ctx, workflow_pkg = _bootstrap_context(tmp_path, monkeypatch)
-    state, _ = workflow_pkg.WorkflowRunTracesToOptimizationCandidates.on_capture_frame_context(state, ctx)
+    state, _ = _invoke_optimizer_python_step(workflow_pkg, "capture_frame_context", ctx)
     _write_publishable_package(ctx)
 
     target_prompt = (
@@ -1341,7 +1363,7 @@ def test_package_fails_if_selected_workflow_source_changed(tmp_path: Path, monke
     target_prompt.write_text(target_prompt.read_text(encoding="utf-8") + "\nMutation.\n", encoding="utf-8")
 
     with pytest.raises(ValueError, match="authoritative selected workflow file changed during optimization publication"):
-        workflow_pkg.WorkflowRunTracesToOptimizationCandidates.on_publish_optimization_packet(state, ctx)
+        _invoke_optimizer_python_step(workflow_pkg, "publish_optimization_packet", ctx)
     del params
 
 
@@ -1363,7 +1385,7 @@ def test_package_rejects_candidate_count_mismatch(tmp_path: Path, monkeypatch) -
     _install_repo_optimizer_package(tmp_path)
     _write_observable_run(tmp_path, "release-good", "release_candidate_to_go_no_go", "run-good")
     params, state, ctx, workflow_pkg = _bootstrap_context(tmp_path, monkeypatch)
-    state, _ = workflow_pkg.WorkflowRunTracesToOptimizationCandidates.on_capture_frame_context(state, ctx)
+    state, _ = _invoke_optimizer_python_step(workflow_pkg, "capture_frame_context", ctx)
     _write_valid_producer_candidates(ctx)
     _write_publishable_package(
         ctx,
@@ -1382,7 +1404,7 @@ def test_package_rejects_candidate_count_mismatch(tmp_path: Path, monkeypatch) -
         ValueError,
         match="workflow_optimization_scorecard.json candidate_counts.producer must match the validated candidate artifact count",
     ):
-        workflow_pkg.WorkflowRunTracesToOptimizationCandidates.on_publish_optimization_packet(state, ctx)
+        _invoke_optimizer_python_step(workflow_pkg, "publish_optimization_packet", ctx)
     del params
 
 
@@ -1390,7 +1412,7 @@ def test_package_rejects_malformed_candidate_artifact(tmp_path: Path, monkeypatc
     _install_repo_optimizer_package(tmp_path)
     _write_observable_run(tmp_path, "release-good", "release_candidate_to_go_no_go", "run-good")
     params, state, ctx, workflow_pkg = _bootstrap_context(tmp_path, monkeypatch)
-    state, _ = workflow_pkg.WorkflowRunTracesToOptimizationCandidates.on_capture_frame_context(state, ctx)
+    state, _ = _invoke_optimizer_python_step(workflow_pkg, "capture_frame_context", ctx)
     _write_publishable_package(ctx)
     (ctx.workflow_folder / "producer_prompt_optimization_candidates.json").write_text(
         json.dumps(
@@ -1418,7 +1440,7 @@ def test_package_rejects_malformed_candidate_artifact(tmp_path: Path, monkeypatc
     )
 
     with pytest.raises(ValidationError):
-        workflow_pkg.WorkflowRunTracesToOptimizationCandidates.on_publish_optimization_packet(state, ctx)
+        _invoke_optimizer_python_step(workflow_pkg, "publish_optimization_packet", ctx)
     del params
 
 
@@ -1726,10 +1748,7 @@ def _bootstrap_context(
         params=typed_params,
         workflow_params={},
     )
-    state, event = workflow_pkg.WorkflowRunTracesToOptimizationCandidates.on_bootstrap(
-        workflow_pkg.WorkflowRunTracesToOptimizationCandidates.State(),
-        ctx,
-    )
+    state, event = _invoke_optimizer_python_step(workflow_pkg, "bootstrap", ctx)
     assert event.tag == "inputs_prepared"
     return typed_params, state, ctx, workflow_pkg
 

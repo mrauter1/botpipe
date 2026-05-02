@@ -1,8 +1,10 @@
 from __future__ import annotations
 
+import importlib
 import inspect
 from pathlib import Path
 import re
+import sys
 
 import pytest
 from pydantic import BaseModel, Field
@@ -18,6 +20,7 @@ from autoloop.core.engine import Engine
 from autoloop.core.errors import WorkflowExecutionError, WorkflowValidationError
 from autoloop.core.providers.fake import ScriptedLLMProvider
 from autoloop.core.stores import InMemoryCheckpointStore, InMemorySessionStore
+from autoloop.runtime.loader import discover_workflow_packages
 
 
 REMOVED_WORKFLOW_STEP = "Workflow" + "Step"
@@ -32,6 +35,15 @@ REMOVED_REVIEW_STEP = "review" + "_" + "step"
 REMOVED_DO_REVIEW_STEP = "do" + "_" + "review" + "_" + "step"
 REMOVED_SYSTEM_STEP_ALIAS = "system" + "_" + "step"
 REMOVED_VERIFIER_WRITES = "review_" + "writes"
+REMOVED_EXPORTED_WORKFLOW_CONTRACT_PATTERNS = {
+    "multi-argument hook": re.compile(r"def\s+_(?:after|before)_[A-Za-z0-9_]*\(\s*ctx\s*,"),
+    "legacy python_step(state, ctx) signature": re.compile(
+        r"def\s+[A-Za-z0-9_]+\(\s*state(?:\s*:\s*State)?\s*,\s*ctx\b"
+    ),
+    "hook return ctx.state.model_copy(...)": re.compile(r"return\s+ctx\.state\.model_copy\("),
+    "hook return state.model_copy(...)": re.compile(r"return\s+state\.model_copy\("),
+    "hook return ctx.state": re.compile(r"return\s+ctx\.state\s*(?:#.*)?$", re.MULTILINE),
+}
 
 
 def _import_from(module_name: str, symbol: str) -> object:
@@ -375,6 +387,10 @@ def test_simple_workflow_rejects_legacy_class_level_handler_methods() -> None:
 def test_exported_public_simple_workflows_no_longer_fail_for_legacy_class_handlers(
     module_name: str, workflow_name: str
 ) -> None:
+    repo_root = Path(__file__).resolve().parents[2]
+    if str(repo_root) not in sys.path:
+        sys.path.insert(0, str(repo_root))
+    importlib.invalidate_caches()
     module = __import__(module_name, fromlist=[workflow_name])
     workflow_cls = getattr(module, workflow_name)
 
@@ -384,6 +400,22 @@ def test_exported_public_simple_workflows_no_longer_fail_for_legacy_class_handle
         message = str(exc)
         assert "simple workflows must declare lifecycle and step behavior on explicit step declarations" not in message
         assert "legacy class-level handlers" not in message
+
+
+def test_discovered_exported_workflow_sources_avoid_removed_public_contract_forms() -> None:
+    repo_root = Path(__file__).resolve().parents[2]
+    violations: list[str] = []
+
+    for package in discover_workflow_packages(repo_root):
+        workflow_path = package.manifest_path.parent / "workflow.py"
+        text = workflow_path.read_text(encoding="utf-8")
+        relative_path = workflow_path.relative_to(repo_root).as_posix()
+        for label, pattern in REMOVED_EXPORTED_WORKFLOW_CONTRACT_PATTERNS.items():
+            for match in pattern.finditer(text):
+                line_number = text.count("\n", 0, match.start()) + 1
+                violations.append(f"{relative_path}:{line_number}: {label}")
+
+    assert violations == []
 
 
 def test_simple_declarations_store_only_canonical_write_fields() -> None:

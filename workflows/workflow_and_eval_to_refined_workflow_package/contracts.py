@@ -120,7 +120,6 @@ EVALUATE_REFINED_WORKFLOW_ROUTE_CONTRACTS = {
             "promotion_record",
             "rollback_plan",
         ),
-        handoff="Advances the workflow to deterministic publication of the candidate refinement receipt after overlay validation.",
     ),
     "needs_rework": Route.to(
         "implement_refined_workflow",

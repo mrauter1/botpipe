@@ -68,17 +68,23 @@ _PACKAGE_SECTION_MARKERS = (
 _PUBLICATION_BOUNDARY = "operating_system_publication_only"
 
 
-def _after_frame_portfolio_governance(ctx, outcome: Outcome):
+def _after_frame_portfolio_governance(ctx):
+    outcome = ctx.outcome
+    assert outcome is not None
     focus_workflows = _require_string_list(
         outcome.payload.get("focus_workflows"),
         "frame verifier payload must define focus_workflows as a non-empty string list",
     )
     if ctx.state.focus_workflows and focus_workflows != ctx.state.focus_workflows:
         raise ValueError("frame verifier payload focus_workflows must match the captured portfolio context")
-    return ctx.state.model_copy(update={"framing_status": outcome.tag, "focus_workflows": focus_workflows})
+    ctx.state.framing_status = outcome.tag
+    ctx.state.focus_workflows = focus_workflows
+    return None
 
 
-def _after_analyze_portfolio_operating_model(ctx, outcome: Outcome):
+def _after_analyze_portfolio_operating_model(ctx):
+    outcome = ctx.outcome
+    assert outcome is not None
     payload = outcome.payload
     focus_workflows = _require_string_list(
         payload.get("focus_workflows"),
@@ -99,18 +105,17 @@ def _after_analyze_portfolio_operating_model(ctx, outcome: Outcome):
         payload.get("change_candidate_ids"),
         "analysis verifier payload must define change_candidate_ids as a non-empty string list",
     )
-    return ctx.state.model_copy(
-        update={
-            "analysis_status": outcome.tag,
-            "focus_workflows": focus_workflows,
-            "analyzed_workflows": analyzed_workflows,
-            "lifecycle_postures": lifecycle_postures,
-            "change_candidate_ids": change_candidate_ids,
-        }
-    )
+    ctx.state.analysis_status = outcome.tag
+    ctx.state.focus_workflows = focus_workflows
+    ctx.state.analyzed_workflows = analyzed_workflows
+    ctx.state.lifecycle_postures = lifecycle_postures
+    ctx.state.change_candidate_ids = change_candidate_ids
+    return None
 
 
-def _after_package_portfolio_operating_system(ctx, outcome: Outcome):
+def _after_package_portfolio_operating_system(ctx):
+    outcome = ctx.outcome
+    assert outcome is not None
     payload = outcome.payload
     focus_workflows = _require_string_list(
         payload.get("focus_workflows"),
@@ -137,15 +142,12 @@ def _after_package_portfolio_operating_system(ctx, outcome: Outcome):
     for workflow_name in priority_workflows:
         if workflow_name not in analyzed_workflows:
             raise ValueError("package verifier payload priority_workflows must be drawn from analyzed_workflows")
-    return ctx.state.model_copy(
-        update={
-            "packaging_status": outcome.tag,
-            "focus_workflows": focus_workflows,
-            "analyzed_workflows": analyzed_workflows,
-            "change_candidate_ids": change_candidate_ids,
-            "priority_workflows": priority_workflows,
-        }
-    )
+    ctx.state.packaging_status = outcome.tag
+    ctx.state.focus_workflows = focus_workflows
+    ctx.state.analyzed_workflows = analyzed_workflows
+    ctx.state.change_candidate_ids = change_candidate_ids
+    ctx.state.priority_workflows = priority_workflows
+    return None
 
 
 class WorkflowPortfolioToOperatingSystem(Workflow):
@@ -200,9 +202,9 @@ class WorkflowPortfolioToOperatingSystem(Workflow):
         writes=[invocation_contract],
         routes={"inputs_prepared": "capture_portfolio_context"},
     )
-    def bootstrap(state: State, ctx):
+    def bootstrap(ctx):
         params = ctx.params
-        next_state = state.model_copy(
+        next_state = ctx.state.model_copy(
             update={
                 "task_title": params.task_title,
                 "sponsor_role": params.sponsor_role,
@@ -244,12 +246,12 @@ class WorkflowPortfolioToOperatingSystem(Workflow):
         writes=[workflow_capability_snapshot, workflow_portfolio_health_snapshot],
         routes={"portfolio_context_captured": "frame_portfolio_governance"},
     )
-    def capture_portfolio_context(state: State, ctx):
+    def capture_portfolio_context(ctx):
         capability_path = write_workflow_capability_snapshot(ctx)
         health_path = write_workflow_portfolio_health_snapshot(
             ctx,
-            workflows=state.focus_workflow_references or None,
-            max_runs_per_workflow=state.max_runs_per_workflow,
+            workflows=ctx.state.focus_workflow_references or None,
+            max_runs_per_workflow=ctx.state.max_runs_per_workflow,
         )
         if not capability_path.exists():
             raise FileNotFoundError(f"workflow capability snapshot was not written at {capability_path}")
@@ -268,10 +270,10 @@ class WorkflowPortfolioToOperatingSystem(Workflow):
             "workflow_portfolio_health_snapshot.json must define workflow_portfolio_health as a JSON object",
         )
         captured_max_runs = health_payload.get("max_runs_per_workflow")
-        if captured_max_runs != state.max_runs_per_workflow:
+        if captured_max_runs != ctx.state.max_runs_per_workflow:
             raise ValueError("workflow_portfolio_health_snapshot.json max_runs_per_workflow must match the invocation contract")
         scoped_workflow_names = extract_workflow_names_from_portfolio_health(health_payload)
-        if state.focus_workflow_references:
+        if ctx.state.focus_workflow_references:
             selected_workflow_names = _require_string_list(
                 health_payload.get("selected_workflow_names"),
                 "workflow_portfolio_health_snapshot.json must define selected_workflow_names when focus_workflow_references are supplied",
@@ -289,10 +291,8 @@ class WorkflowPortfolioToOperatingSystem(Workflow):
         if unknown_workflows:
             raise ValueError("workflow_portfolio_health_snapshot.json includes unknown focus-workflow references")
 
-        return (
-            state.model_copy(update={"focus_workflows": scoped_workflow_names}),
-            Event("portfolio_context_captured"),
-        )
+        ctx.state.focus_workflows = scoped_workflow_names
+        return Event("portfolio_context_captured")
 
     frame_portfolio_governance = produce_verify_step(
         producer_prompt=Prompt.file("prompts/frame_producer.md"),
@@ -372,7 +372,7 @@ class WorkflowPortfolioToOperatingSystem(Workflow):
         writes=[portfolio_operating_system_receipt],
         routes={"portfolio_operating_system_published": FINISH},
     )
-    def publish_portfolio_operating_system(state: State, ctx):
+    def publish_portfolio_operating_system(ctx):
         workflow_folder = ctx.workflow_folder
         required_paths = require_existing_artifact_paths(
             {
@@ -396,7 +396,7 @@ class WorkflowPortfolioToOperatingSystem(Workflow):
             "workflow_portfolio_health_snapshot.json must define workflow_portfolio_health as a JSON object",
         )
         scoped_workflow_names = extract_workflow_names_from_portfolio_health(health_payload)
-        if state.focus_workflows and scoped_workflow_names != state.focus_workflows:
+        if ctx.state.focus_workflows and scoped_workflow_names != ctx.state.focus_workflows:
             raise ValueError(
                 "workflow_portfolio_health_snapshot.json scoped workflow entries must match the captured portfolio context"
             )
@@ -417,7 +417,7 @@ class WorkflowPortfolioToOperatingSystem(Workflow):
         change_candidates_payload = _read_json(required_paths["portfolio_change_candidates"])
         change_candidate_ids = _validate_change_candidates(
             change_candidates_payload,
-            analyzed_workflows=state.analyzed_workflows or scoped_workflow_names,
+            analyzed_workflows=ctx.state.analyzed_workflows or scoped_workflow_names,
         )
 
         summary = PORTFOLIO_OPERATING_SUMMARY_ARTIFACT.read(required_paths["portfolio_operating_summary"])
@@ -431,14 +431,14 @@ class WorkflowPortfolioToOperatingSystem(Workflow):
             summary.analyzed_workflows,
             "portfolio_operating_summary.json must define analyzed_workflows as a non-empty string list",
         )
-        if state.analyzed_workflows and analyzed_workflows != state.analyzed_workflows:
+        if ctx.state.analyzed_workflows and analyzed_workflows != ctx.state.analyzed_workflows:
             raise ValueError("portfolio_operating_summary.json analyzed_workflows must match workflow state")
         lifecycle_postures = _validated_lifecycle_recommendations(
             [entry.model_dump(mode="python") for entry in summary.lifecycle_recommendations],
             allowed_workflows=analyzed_workflows,
             error_prefix="portfolio_operating_summary.json",
         )
-        if state.lifecycle_postures and lifecycle_postures != state.lifecycle_postures:
+        if ctx.state.lifecycle_postures and lifecycle_postures != ctx.state.lifecycle_postures:
             raise ValueError("portfolio_operating_summary.json lifecycle_recommendations must match workflow state")
         governance_posture_counts = _require_count_mapping(
             summary.governance_posture_counts,
@@ -455,13 +455,13 @@ class WorkflowPortfolioToOperatingSystem(Workflow):
         )
         if summary_change_candidate_ids != change_candidate_ids:
             raise ValueError("portfolio_operating_summary.json change_candidate_ids must not drift from portfolio_change_candidates.json")
-        if state.change_candidate_ids and summary_change_candidate_ids != state.change_candidate_ids:
+        if ctx.state.change_candidate_ids and summary_change_candidate_ids != ctx.state.change_candidate_ids:
             raise ValueError("portfolio_operating_summary.json change_candidate_ids must match workflow state")
         priority_workflows = _require_string_list(
             summary.priority_workflows,
             "portfolio_operating_summary.json must define priority_workflows as a non-empty string list",
         )
-        if state.priority_workflows and priority_workflows != state.priority_workflows:
+        if ctx.state.priority_workflows and priority_workflows != ctx.state.priority_workflows:
             raise ValueError("portfolio_operating_summary.json priority_workflows must match workflow state")
         for workflow_name in priority_workflows:
             if workflow_name not in analyzed_workflows:
@@ -525,9 +525,9 @@ class WorkflowPortfolioToOperatingSystem(Workflow):
             "portfolio_operating_system_receipt.json",
             {
                 "workflow_name": ctx.workflow_name,
-                "task_title": state.task_title,
-                "sponsor_role": state.sponsor_role,
-                "desired_outcome": state.desired_outcome,
+                "task_title": ctx.state.task_title,
+                "sponsor_role": ctx.state.sponsor_role,
+                "desired_outcome": ctx.state.desired_outcome,
                 "focus_workflows": scoped_workflow_names,
                 "analyzed_workflows": analyzed_workflows,
                 "lifecycle_postures": lifecycle_postures,
@@ -547,19 +547,13 @@ class WorkflowPortfolioToOperatingSystem(Workflow):
                 "published": True,
             },
         )
-        return (
-            state.model_copy(
-                update={
-                    "focus_workflows": scoped_workflow_names,
-                    "analyzed_workflows": analyzed_workflows,
-                    "lifecycle_postures": lifecycle_postures,
-                    "change_candidate_ids": summary_change_candidate_ids,
-                    "priority_workflows": priority_workflows,
-                    "published": True,
-                }
-            ),
-            Event("portfolio_operating_system_published"),
-        )
+        ctx.state.focus_workflows = scoped_workflow_names
+        ctx.state.analyzed_workflows = analyzed_workflows
+        ctx.state.lifecycle_postures = lifecycle_postures
+        ctx.state.change_candidate_ids = summary_change_candidate_ids
+        ctx.state.priority_workflows = priority_workflows
+        ctx.state.published = True
+        return Event("portfolio_operating_system_published")
 
 
 

@@ -149,7 +149,6 @@ PACKAGE_RECURSIVE_IMPROVEMENT_CYCLE_ROUTE_CONTRACTS = {
             "recursive_improvement_summary",
             "recursive_improvement_next_actions",
         ),
-        handoff="Advances the workflow to deterministic recursive-improvement publication without hidden downstream execution.",
     ),
     "needs_rework": Route.to(
         SELF,

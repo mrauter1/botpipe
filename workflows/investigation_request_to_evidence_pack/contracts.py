@@ -60,7 +60,6 @@ ASSEMBLE_EVIDENCE_PACK_ROUTE_CONTRACTS = {
             "evidence_pack",
             "evidence_pack_summary",
         ),
-        handoff="Promotes the investigation evidence pack to deterministic publication and downstream reuse.",
     ),
     "needs_rework": Route.to(
         SELF,

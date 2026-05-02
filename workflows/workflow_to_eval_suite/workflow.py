@@ -48,20 +48,20 @@ _AUTHORITATIVE_PACKAGE_ARTIFACTS = frozenset(
 _REQUIRED_CASE_KINDS = ("benchmark", "edge", "adversarial")
 
 
-def _after_frame_evaluation_target(ctx, outcome: Outcome):
+def _after_frame_evaluation_target(ctx):
+    outcome = ctx.outcome
+    assert outcome is not None
     payload = outcome.payload
     selected_workflow_name = payload.get("selected_workflow_name")
-    return ctx.state.model_copy(
-        update={
-            "framing_status": outcome.tag,
-            "selected_workflow_name": (
-                selected_workflow_name if isinstance(selected_workflow_name, str) else ctx.state.selected_workflow_name
-            ),
-        }
-    )
+    ctx.state.framing_status = outcome.tag
+    if isinstance(selected_workflow_name, str):
+        ctx.state.selected_workflow_name = selected_workflow_name
+    return None
 
 
-def _after_design_eval_cases(ctx, outcome: Outcome):
+def _after_design_eval_cases(ctx):
+    outcome = ctx.outcome
+    assert outcome is not None
     payload = outcome.payload
     selected_workflow_name = payload.get("selected_workflow_name")
     case_ids = require_string_list(
@@ -80,20 +80,18 @@ def _after_design_eval_cases(ctx, outcome: Outcome):
         dedupe=True,
         coerce=True,
     )
-    return ctx.state.model_copy(
-        update={
-            "design_status": outcome.tag,
-            "selected_workflow_name": (
-                selected_workflow_name if isinstance(selected_workflow_name, str) else ctx.state.selected_workflow_name
-            ),
-            "case_ids": case_ids,
-            "case_kinds": case_kinds,
-            "covered_expected_artifacts": covered_expected_artifacts,
-        }
-    )
+    ctx.state.design_status = outcome.tag
+    if isinstance(selected_workflow_name, str):
+        ctx.state.selected_workflow_name = selected_workflow_name
+    ctx.state.case_ids = case_ids
+    ctx.state.case_kinds = case_kinds
+    ctx.state.covered_expected_artifacts = covered_expected_artifacts
+    return None
 
 
-def _after_package_workflow_eval_suite(ctx, outcome: Outcome):
+def _after_package_workflow_eval_suite(ctx):
+    outcome = ctx.outcome
+    assert outcome is not None
     payload = outcome.payload
     selected_workflow_name = payload.get("selected_workflow_name")
     case_ids = require_string_list(
@@ -112,17 +110,13 @@ def _after_package_workflow_eval_suite(ctx, outcome: Outcome):
         dedupe=True,
         coerce=True,
     )
-    return ctx.state.model_copy(
-        update={
-            "packaging_status": outcome.tag,
-            "selected_workflow_name": (
-                selected_workflow_name if isinstance(selected_workflow_name, str) else ctx.state.selected_workflow_name
-            ),
-            "case_ids": case_ids,
-            "case_kinds": case_kinds,
-            "covered_expected_artifacts": covered_expected_artifacts,
-        }
-    )
+    ctx.state.packaging_status = outcome.tag
+    if isinstance(selected_workflow_name, str):
+        ctx.state.selected_workflow_name = selected_workflow_name
+    ctx.state.case_ids = case_ids
+    ctx.state.case_kinds = case_kinds
+    ctx.state.covered_expected_artifacts = covered_expected_artifacts
+    return None
 
 
 class WorkflowToEvalSuite(Workflow):
@@ -238,9 +232,9 @@ class WorkflowToEvalSuite(Workflow):
         writes=[invocation_contract],
         routes={"inputs_prepared": "capture_selected_workflow_contract"},
     )
-    def bootstrap(state: State, ctx):
+    def bootstrap(ctx):
         params = ctx.params
-        next_state = state.model_copy(
+        next_state = ctx.state.model_copy(
             update={
                 "selected_workflow_reference": params.selected_workflow,
                 "selected_workflow_name": None,
@@ -279,15 +273,13 @@ class WorkflowToEvalSuite(Workflow):
         writes=[selected_workflow_capability],
         routes={"selected_workflow_contract_captured": "frame_evaluation_target"},
     )
-    def capture_selected_workflow_contract(state: State, ctx):
-        capture = capture_selected_workflow(ctx, state.selected_workflow_reference)
-        snapshot_path = write_selected_workflow_capability_snapshot(ctx, state.selected_workflow_reference)
+    def capture_selected_workflow_contract(ctx):
+        capture = capture_selected_workflow(ctx, ctx.state.selected_workflow_reference)
+        snapshot_path = write_selected_workflow_capability_snapshot(ctx, ctx.state.selected_workflow_reference)
         if not snapshot_path.exists():
             raise FileNotFoundError(f"selected workflow capability snapshot was not written at {snapshot_path}")
-        return (
-            state.model_copy(update={"selected_workflow_name": capture.selected_workflow_name}),
-            Event("selected_workflow_contract_captured"),
-        )
+        ctx.state.selected_workflow_name = capture.selected_workflow_name
+        return Event("selected_workflow_contract_captured")
 
     @python_step(
         name="publish_workflow_eval_suite",
@@ -305,7 +297,7 @@ class WorkflowToEvalSuite(Workflow):
         writes=[validated_eval_case_manifest, workflow_eval_suite_receipt],
         routes={"workflow_eval_suite_published": FINISH},
     )
-    def publish_workflow_eval_suite(state: State, ctx):
+    def publish_workflow_eval_suite(ctx):
         workflow_folder = ctx.workflow_folder
         required_paths = require_existing_artifact_paths(
             {
@@ -324,7 +316,7 @@ class WorkflowToEvalSuite(Workflow):
         capability_snapshot = read_json_object(required_paths["selected_workflow_capability"])
         snapshot_selected_workflow_name, selected_capability = validate_selected_workflow_capability_snapshot(
             capability_snapshot,
-            expected_selected_workflow_name=state.selected_workflow_name,
+            expected_selected_workflow_name=ctx.state.selected_workflow_name,
             expected_label="workflow state",
         )
 
@@ -338,7 +330,7 @@ class WorkflowToEvalSuite(Workflow):
         proposed_manifest = read_json_object(required_paths["eval_case_manifest"])
         validated_path = write_validated_eval_case_manifest(
             ctx,
-            state.selected_workflow_reference or snapshot_selected_workflow_name,
+            ctx.state.selected_workflow_reference or snapshot_selected_workflow_name,
             proposed_manifest,
         )
         validated_manifest = VALIDATED_EVAL_CASE_MANIFEST_ARTIFACT.read(validated_path)
@@ -415,7 +407,7 @@ class WorkflowToEvalSuite(Workflow):
         )
         if summary_case_ids != validated_case_ids:
             raise ValueError("workflow_eval_suite_summary.json case_ids must match validated_eval_case_manifest.json")
-        if state.case_ids and summary_case_ids != state.case_ids:
+        if ctx.state.case_ids and summary_case_ids != ctx.state.case_ids:
             raise ValueError("workflow_eval_suite_summary.json case_ids must match workflow state")
 
         summary_case_kinds = _require_case_kinds(
@@ -424,7 +416,7 @@ class WorkflowToEvalSuite(Workflow):
         )
         if summary_case_kinds != validated_case_kinds:
             raise ValueError("workflow_eval_suite_summary.json case_kinds must match validated_eval_case_manifest.json")
-        if state.case_kinds and summary_case_kinds != state.case_kinds:
+        if ctx.state.case_kinds and summary_case_kinds != ctx.state.case_kinds:
             raise ValueError("workflow_eval_suite_summary.json case_kinds must match workflow state")
 
         summary_covered_expected_artifacts = require_string_list(
@@ -437,7 +429,7 @@ class WorkflowToEvalSuite(Workflow):
             raise ValueError(
                 "workflow_eval_suite_summary.json covered_expected_artifacts must match validated_eval_case_manifest.json"
             )
-        if state.covered_expected_artifacts and summary_covered_expected_artifacts != state.covered_expected_artifacts:
+        if ctx.state.covered_expected_artifacts and summary_covered_expected_artifacts != ctx.state.covered_expected_artifacts:
             raise ValueError("workflow_eval_suite_summary.json covered_expected_artifacts must match workflow state")
 
         authoritative_artifacts = require_string_list(
@@ -479,10 +471,10 @@ class WorkflowToEvalSuite(Workflow):
             "workflow_eval_suite_receipt.json",
             {
                 "workflow_name": ctx.workflow_name,
-                "task_title": state.task_title,
-                "sponsor_role": state.sponsor_role,
-                "desired_outcome": state.desired_outcome,
-                "selected_workflow_reference": state.selected_workflow_reference,
+                "task_title": ctx.state.task_title,
+                "sponsor_role": ctx.state.sponsor_role,
+                "desired_outcome": ctx.state.desired_outcome,
+                "selected_workflow_reference": ctx.state.selected_workflow_reference,
                 "selected_workflow_name": summary_selected_workflow_name,
                 "selected_workflow_entry_step": summary_entry_step,
                 "selected_workflow_parameters_supported": summary_parameters_supported,
@@ -505,18 +497,12 @@ class WorkflowToEvalSuite(Workflow):
                 "published": True,
             },
         )
-        return (
-            state.model_copy(
-                update={
-                    "selected_workflow_name": summary_selected_workflow_name,
-                    "case_ids": validated_case_ids,
-                    "case_kinds": validated_case_kinds,
-                    "covered_expected_artifacts": covered_expected_artifacts,
-                    "published": True,
-                }
-            ),
-            Event("workflow_eval_suite_published"),
-        )
+        ctx.state.selected_workflow_name = summary_selected_workflow_name
+        ctx.state.case_ids = validated_case_ids
+        ctx.state.case_kinds = validated_case_kinds
+        ctx.state.covered_expected_artifacts = covered_expected_artifacts
+        ctx.state.published = True
+        return Event("workflow_eval_suite_published")
 
     entry = bootstrap
 

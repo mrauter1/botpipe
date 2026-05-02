@@ -162,7 +162,6 @@ PACKAGE_WORKFLOW_EVAL_SUITE_ROUTE_CONTRACTS = {
             "workflow_eval_suite_summary",
             "workflow_eval_next_action",
         ),
-        handoff="Advances the building block to deterministic publication of the validated eval-case manifest and receipt.",
     ),
     "needs_rework": Route.to(
         SELF,

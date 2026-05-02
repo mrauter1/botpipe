@@ -156,7 +156,6 @@ PACKAGE_IMPROVEMENT_PRESSURE_ROUTE_CONTRACTS = {
         "publish_failure_mode_package",
         summary="The ranked improvement package, machine-readable summary, and next-action artifact are aligned and ready for deterministic diagnostic publication.",
         required_writes=("improvement_opportunities", "improvement_opportunities_summary", "diagnostic_next_actions"),
-        handoff="Advances the building block to deterministic publication of the diagnostic receipt without hidden downstream execution.",
     ),
     "needs_rework": Route.to(
         SELF,

@@ -129,7 +129,6 @@ EVALUATE_PACKAGE_ROUTE_CONTRACTS = {
             "promotion_record",
             "rollback_plan",
         ],
-        handoff= "Allows the publish gate to mark the package ready.",
     ),
     "needs_rework": Route.to(
         "build_package",

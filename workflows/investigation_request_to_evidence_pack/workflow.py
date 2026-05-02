@@ -23,20 +23,21 @@ from .contracts import (
 )
 
 
-def _after_frame_investigation(ctx, outcome: Outcome):
-    return ctx.state.model_copy(update={"framing_status": outcome.tag})
+def _after_frame_investigation(ctx):
+    outcome = ctx.outcome
+    assert outcome is not None
+    ctx.state.framing_status = outcome.tag
+    return None
 
 
-def _after_assemble_evidence_pack(ctx, outcome: Outcome):
+def _after_assemble_evidence_pack(ctx):
+    outcome = ctx.outcome
+    assert outcome is not None
     ready = outcome.payload.get("ready_for_downstream_assessment")
-    return ctx.state.model_copy(
-        update={
-            "evidence_status": outcome.tag,
-            "ready_for_downstream_assessment": (
-                ready if isinstance(ready, bool) else ctx.state.ready_for_downstream_assessment
-            ),
-        }
-    )
+    ctx.state.evidence_status = outcome.tag
+    if isinstance(ready, bool):
+        ctx.state.ready_for_downstream_assessment = ready
+    return None
 
 class InvestigationRequestToEvidencePack(Workflow):
     """Turn an investigation request into a durable evidence pack."""
@@ -81,9 +82,9 @@ class InvestigationRequestToEvidencePack(Workflow):
         writes=[invocation_contract],
         routes={"inputs_prepared": "frame_investigation"},
     )
-    def bootstrap(state: State, ctx):
+    def bootstrap(ctx):
         params = ctx.params
-        next_state = state.model_copy(
+        next_state = ctx.state.model_copy(
             update={
                 "investigation_title": params.investigation_title,
                 "investigation_kind": params.investigation_kind,
@@ -172,7 +173,7 @@ class InvestigationRequestToEvidencePack(Workflow):
         writes=[evidence_pack_receipt],
         routes={"evidence_pack_published": FINISH},
     )
-    def publish_evidence_pack(state: State, ctx):
+    def publish_evidence_pack(ctx):
         workflow_folder = ctx.workflow_folder
         required_paths = {
             "investigation_scope_brief": workflow_folder / "investigation_scope_brief.md",
@@ -195,7 +196,7 @@ class InvestigationRequestToEvidencePack(Workflow):
             error_message="evidence_pack_summary.json must define a non-empty investigation_kind",
             coerce=True,
         )
-        if summary_kind != state.investigation_kind:
+        if summary_kind != ctx.state.investigation_kind:
             raise ValueError("evidence_pack_summary.json investigation_kind must match workflow state")
 
         authoritative_artifacts = require_string_list(
@@ -227,11 +228,11 @@ class InvestigationRequestToEvidencePack(Workflow):
             "evidence_pack_receipt.json",
             {
                 "workflow_name": ctx.workflow_name,
-                "investigation_title": state.investigation_title,
-                "investigation_kind": state.investigation_kind,
-                "sponsor_role": state.sponsor_role,
-                "evidence_paths": state.evidence_paths,
-                "source_constraints": state.source_constraints,
+                "investigation_title": ctx.state.investigation_title,
+                "investigation_kind": ctx.state.investigation_kind,
+                "sponsor_role": ctx.state.sponsor_role,
+                "evidence_paths": ctx.state.evidence_paths,
+                "source_constraints": ctx.state.source_constraints,
                 "ready_for_downstream_assessment": ready_for_downstream_assessment,
                 "source_count": source_count,
                 "finding_count": finding_count,
@@ -242,12 +243,9 @@ class InvestigationRequestToEvidencePack(Workflow):
                 "published": True,
             },
         )
-        return state.model_copy(
-            update={
-                "ready_for_downstream_assessment": ready_for_downstream_assessment,
-                "published": True,
-            }
-        ), Event("evidence_pack_published")
+        ctx.state.ready_for_downstream_assessment = ready_for_downstream_assessment
+        ctx.state.published = True
+        return Event("evidence_pack_published")
 
 
 

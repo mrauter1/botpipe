@@ -143,7 +143,6 @@ EVALUATE_CANDIDATE_DECOMPOSITION_ROUTE_CONTRACTS = {
             "promotion_record",
             "rollback_plan",
         ),
-        handoff="Advances the workflow to deterministic publication of the candidate decomposition receipt after local overlay validation.",
     ),
     "needs_rework": Route.to(
         "implement_candidate_decomposition",

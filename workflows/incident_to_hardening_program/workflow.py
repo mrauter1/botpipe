@@ -26,36 +26,38 @@ from .contracts import (
 )
 
 
-def _after_frame_incident(ctx, outcome: Outcome):
-    return ctx.state.model_copy(update={"framing_status": outcome.tag})
+def _after_frame_incident(ctx):
+    outcome = ctx.outcome
+    assert outcome is not None
+    ctx.state.framing_status = outcome.tag
+    return None
 
 
-def _after_assemble_evidence_pack(ctx, outcome: Outcome):
-    return ctx.state.model_copy(update={"evidence_status": outcome.tag})
+def _after_assemble_evidence_pack(ctx):
+    outcome = ctx.outcome
+    assert outcome is not None
+    ctx.state.evidence_status = outcome.tag
+    return None
 
 
-def _after_rank_cause_hypotheses(ctx, outcome: Outcome):
+def _after_rank_cause_hypotheses(ctx):
+    outcome = ctx.outcome
+    assert outcome is not None
     recommended_posture = outcome.payload.get("recommended_posture")
-    return ctx.state.model_copy(
-        update={
-            "analysis_status": outcome.tag,
-            "recommended_posture": (
-                recommended_posture if isinstance(recommended_posture, str) else ctx.state.recommended_posture
-            ),
-        }
-    )
+    ctx.state.analysis_status = outcome.tag
+    if isinstance(recommended_posture, str):
+        ctx.state.recommended_posture = recommended_posture
+    return None
 
 
-def _after_prepare_hardening_program(ctx, outcome: Outcome):
+def _after_prepare_hardening_program(ctx):
+    outcome = ctx.outcome
+    assert outcome is not None
     recommended_posture = outcome.payload.get("recommended_posture")
-    return ctx.state.model_copy(
-        update={
-            "program_status": outcome.tag,
-            "recommended_posture": (
-                recommended_posture if isinstance(recommended_posture, str) else ctx.state.recommended_posture
-            ),
-        }
-    )
+    ctx.state.program_status = outcome.tag
+    if isinstance(recommended_posture, str):
+        ctx.state.recommended_posture = recommended_posture
+    return None
 
 
 class IncidentToHardeningProgram(Workflow):
@@ -114,9 +116,9 @@ class IncidentToHardeningProgram(Workflow):
         writes=[invocation_contract],
         routes={"inputs_prepared": "frame_incident"},
     )
-    def bootstrap(state: State, ctx):
+    def bootstrap(ctx):
         params = ctx.params
-        next_state = state.model_copy(
+        next_state = ctx.state.model_copy(
             update={
                 "incident_title": params.incident_title,
                 "incident_window": params.incident_window,
@@ -256,7 +258,7 @@ class IncidentToHardeningProgram(Workflow):
         writes=[incident_receipt],
         routes={"incident_package_published": FINISH},
     )
-    def publish_incident_package(state: State, ctx):
+    def publish_incident_package(ctx):
         summary_path = ctx.workflow_folder / "incident_summary.json"
         hardening_program_path = ctx.workflow_folder / "hardening_program.md"
         hardening_backlog_path = ctx.workflow_folder / "hardening_backlog.md"
@@ -295,11 +297,11 @@ class IncidentToHardeningProgram(Workflow):
             "incident_receipt.json",
             {
                 "workflow_name": ctx.workflow_name,
-                "incident_title": state.incident_title,
-                "incident_window": state.incident_window,
-                "affected_system": state.affected_system,
-                "severity": state.severity,
-                "incident_commander": state.incident_commander,
+                "incident_title": ctx.state.incident_title,
+                "incident_window": ctx.state.incident_window,
+                "affected_system": ctx.state.affected_system,
+                "severity": ctx.state.severity,
+                "incident_commander": ctx.state.incident_commander,
                 "recommended_posture": recommended_posture,
                 "primary_hypothesis": primary_hypothesis,
                 "hardening_backlog_items": backlog_items,
@@ -312,8 +314,8 @@ class IncidentToHardeningProgram(Workflow):
                 "published": True,
             },
         )
-        return state.model_copy(
-            update={"published": True, "recommended_posture": recommended_posture}
-        ), Event("incident_package_published")
+        ctx.state.published = True
+        ctx.state.recommended_posture = recommended_posture
+        return Event("incident_package_published")
 
 __all__ = ["IncidentToHardeningProgram"]

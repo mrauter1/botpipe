@@ -62,25 +62,25 @@ _ALLOWED_PRIORITY_LEVELS = frozenset({"P1", "P2", "P3"})
 _PUBLICATION_BOUNDARY = "diagnostic_publication_only"
 
 
-def _after_frame_diagnostic_scope(ctx, outcome: Outcome):
+def _after_frame_diagnostic_scope(ctx):
+    outcome = ctx.outcome
+    assert outcome is not None
     payload = outcome.payload
     selected_workflow_name = payload.get("selected_workflow_name")
     evidence_run_ids = _require_string_list(
         payload.get("evidence_run_ids"),
         "frame verifier payload must define evidence_run_ids as a non-empty string list",
     )
-    return ctx.state.model_copy(
-        update={
-            "framing_status": outcome.tag,
-            "selected_workflow_name": (
-                selected_workflow_name if isinstance(selected_workflow_name, str) else ctx.state.selected_workflow_name
-            ),
-            "evidence_run_ids": evidence_run_ids,
-        }
-    )
+    ctx.state.framing_status = outcome.tag
+    if isinstance(selected_workflow_name, str):
+        ctx.state.selected_workflow_name = selected_workflow_name
+    ctx.state.evidence_run_ids = evidence_run_ids
+    return None
 
 
-def _after_map_failure_modes(ctx, outcome: Outcome):
+def _after_map_failure_modes(ctx):
+    outcome = ctx.outcome
+    assert outcome is not None
     payload = outcome.payload
     selected_workflow_name = payload.get("selected_workflow_name")
     evidence_run_ids = _require_string_list(
@@ -95,20 +95,18 @@ def _after_map_failure_modes(ctx, outcome: Outcome):
         payload.get("recurring_weak_point_ids"),
         "analysis verifier payload must define recurring_weak_point_ids as a non-empty string list",
     )
-    return ctx.state.model_copy(
-        update={
-            "mapping_status": outcome.tag,
-            "selected_workflow_name": (
-                selected_workflow_name if isinstance(selected_workflow_name, str) else ctx.state.selected_workflow_name
-            ),
-            "evidence_run_ids": evidence_run_ids,
-            "failure_mode_ids": failure_mode_ids,
-            "recurring_weak_point_ids": recurring_weak_point_ids,
-        }
-    )
+    ctx.state.mapping_status = outcome.tag
+    if isinstance(selected_workflow_name, str):
+        ctx.state.selected_workflow_name = selected_workflow_name
+    ctx.state.evidence_run_ids = evidence_run_ids
+    ctx.state.failure_mode_ids = failure_mode_ids
+    ctx.state.recurring_weak_point_ids = recurring_weak_point_ids
+    return None
 
 
-def _after_package_improvement_pressure(ctx, outcome: Outcome):
+def _after_package_improvement_pressure(ctx):
+    outcome = ctx.outcome
+    assert outcome is not None
     payload = outcome.payload
     selected_workflow_name = payload.get("selected_workflow_name")
     evidence_run_ids = _require_string_list(
@@ -123,17 +121,13 @@ def _after_package_improvement_pressure(ctx, outcome: Outcome):
         payload.get("ranked_opportunity_ids"),
         "package verifier payload must define ranked_opportunity_ids as a non-empty string list",
     )
-    return ctx.state.model_copy(
-        update={
-            "packaging_status": outcome.tag,
-            "selected_workflow_name": (
-                selected_workflow_name if isinstance(selected_workflow_name, str) else ctx.state.selected_workflow_name
-            ),
-            "evidence_run_ids": evidence_run_ids,
-            "failure_mode_ids": failure_mode_ids,
-            "ranked_opportunity_ids": ranked_opportunity_ids,
-        }
-    )
+    ctx.state.packaging_status = outcome.tag
+    if isinstance(selected_workflow_name, str):
+        ctx.state.selected_workflow_name = selected_workflow_name
+    ctx.state.evidence_run_ids = evidence_run_ids
+    ctx.state.failure_mode_ids = failure_mode_ids
+    ctx.state.ranked_opportunity_ids = ranked_opportunity_ids
+    return None
 
 
 class WorkflowRunHistoryToFailureModes(Workflow):
@@ -244,10 +238,9 @@ class WorkflowRunHistoryToFailureModes(Workflow):
         writes=[invocation_contract],
         routes={"inputs_prepared": "capture_run_history_context"},
     )
-    def bootstrap(state: State, ctx):
+    def bootstrap(ctx):
         params = ctx.params
-
-        next_state = state.model_copy(
+        next_state = ctx.state.model_copy(
             update={
                 "selected_workflow_reference": params.selected_workflow,
                 "selected_workflow_name": None,
@@ -289,14 +282,14 @@ class WorkflowRunHistoryToFailureModes(Workflow):
         writes=[selected_workflow_capability, selected_workflow_run_history],
         routes={"run_history_context_captured": "frame_diagnostic_scope"},
     )
-    def capture_run_history_context(state: State, ctx):
-        capture = capture_selected_workflow(ctx, state.selected_workflow_reference)
-        capability_path = write_selected_workflow_capability_snapshot(ctx, state.selected_workflow_reference)
+    def capture_run_history_context(ctx):
+        capture = capture_selected_workflow(ctx, ctx.state.selected_workflow_reference)
+        capability_path = write_selected_workflow_capability_snapshot(ctx, ctx.state.selected_workflow_reference)
         history_path = write_selected_workflow_run_history_snapshot(
             ctx,
-            state.selected_workflow_reference,
-            statuses=state.statuses or None,
-            max_runs=state.max_runs,
+            ctx.state.selected_workflow_reference,
+            statuses=ctx.state.statuses or None,
+            max_runs=ctx.state.max_runs,
         )
         required_paths = require_existing_artifact_paths(
             {
@@ -317,7 +310,7 @@ class WorkflowRunHistoryToFailureModes(Workflow):
             "selected_workflow_run_history.json must define selected_workflow_run_history as a JSON object",
         )
         captured_statuses = run_history.get("statuses")
-        expected_statuses = state.statuses or None
+        expected_statuses = ctx.state.statuses or None
         if captured_statuses is None:
             if expected_statuses is not None:
                 raise ValueError("selected_workflow_run_history.json statuses must match the invocation contract")
@@ -329,19 +322,12 @@ class WorkflowRunHistoryToFailureModes(Workflow):
             if normalized_statuses != expected_statuses:
                 raise ValueError("selected_workflow_run_history.json statuses must match the invocation contract")
         captured_max_runs = run_history.get("max_runs")
-        if captured_max_runs != state.max_runs:
+        if captured_max_runs != ctx.state.max_runs:
             raise ValueError("selected_workflow_run_history.json max_runs must match the invocation contract")
         evidence_run_ids = _extract_history_run_ids(run_history.get("runs"), allow_empty=True)
-
-        return (
-            state.model_copy(
-                update={
-                    "selected_workflow_name": capture.selected_workflow_name,
-                    "evidence_run_ids": evidence_run_ids,
-                }
-            ),
-            Event("run_history_context_captured"),
-        )
+        ctx.state.selected_workflow_name = capture.selected_workflow_name
+        ctx.state.evidence_run_ids = evidence_run_ids
+        return Event("run_history_context_captured")
 
     @python_step(
         name="publish_failure_mode_package",
@@ -360,7 +346,7 @@ class WorkflowRunHistoryToFailureModes(Workflow):
         writes=[failure_mode_diagnostic_receipt],
         routes={"failure_mode_diagnostics_published": FINISH},
     )
-    def publish_failure_mode_package(state: State, ctx):
+    def publish_failure_mode_package(ctx):
         workflow_folder = ctx.workflow_folder
         required_paths = require_existing_artifact_paths(
             {
@@ -380,7 +366,7 @@ class WorkflowRunHistoryToFailureModes(Workflow):
         capability_snapshot = _read_json(required_paths["selected_workflow_capability"])
         snapshot_selected_workflow_name, _ = validate_selected_workflow_capability_snapshot(
             capability_snapshot,
-            expected_selected_workflow_name=state.selected_workflow_name,
+            expected_selected_workflow_name=ctx.state.selected_workflow_name,
             expected_label="workflow state",
         )
 
@@ -402,10 +388,10 @@ class WorkflowRunHistoryToFailureModes(Workflow):
             raise ValueError("selected_workflow_run_history.json must contain at least one filtered run")
 
         history_max_runs = run_history.get("max_runs")
-        if history_max_runs != state.max_runs:
+        if history_max_runs != ctx.state.max_runs:
             raise ValueError("selected_workflow_run_history.json max_runs must match the invocation contract")
         history_statuses = run_history.get("statuses")
-        expected_statuses = state.statuses or None
+        expected_statuses = ctx.state.statuses or None
         if history_statuses is None:
             if expected_statuses is not None:
                 raise ValueError("selected_workflow_run_history.json statuses must match the invocation contract")
@@ -474,7 +460,7 @@ class WorkflowRunHistoryToFailureModes(Workflow):
             evidence_run_ids,
             error_message="selected_workflow_run_history.json evidence run IDs must be unique",
         )
-        if state.evidence_run_ids and evidence_run_ids != state.evidence_run_ids:
+        if ctx.state.evidence_run_ids and evidence_run_ids != ctx.state.evidence_run_ids:
             raise ValueError("selected_workflow_run_history.json evidence run IDs must match workflow state")
 
         diagnostic_scope_text = read_required_text(
@@ -512,7 +498,7 @@ class WorkflowRunHistoryToFailureModes(Workflow):
             manifest_failure_mode_ids,
             error_message="failure_mode_manifest.json failure_mode_ids must be unique",
         )
-        if state.failure_mode_ids and manifest_failure_mode_ids != state.failure_mode_ids:
+        if ctx.state.failure_mode_ids and manifest_failure_mode_ids != ctx.state.failure_mode_ids:
             raise ValueError("failure_mode_manifest.json failure_mode_ids must match workflow state")
         manifest_recurring_weak_point_ids = _require_string_list(
             manifest.recurring_weak_point_ids,
@@ -522,7 +508,7 @@ class WorkflowRunHistoryToFailureModes(Workflow):
             manifest_recurring_weak_point_ids,
             error_message="failure_mode_manifest.json recurring_weak_point_ids must be unique",
         )
-        if state.recurring_weak_point_ids and manifest_recurring_weak_point_ids != state.recurring_weak_point_ids:
+        if ctx.state.recurring_weak_point_ids and manifest_recurring_weak_point_ids != ctx.state.recurring_weak_point_ids:
             raise ValueError("failure_mode_manifest.json recurring_weak_point_ids must match workflow state")
         manifest_workflow_name = _require_text(
             manifest.workflow_name,
@@ -619,7 +605,7 @@ class WorkflowRunHistoryToFailureModes(Workflow):
             ranked_opportunity_ids,
             error_message="improvement_opportunities.json ranked_opportunity_ids must be unique",
         )
-        if state.ranked_opportunity_ids and ranked_opportunity_ids != state.ranked_opportunity_ids:
+        if ctx.state.ranked_opportunity_ids and ranked_opportunity_ids != ctx.state.ranked_opportunity_ids:
             raise ValueError("improvement_opportunities.json ranked_opportunity_ids must match workflow state")
         opportunities = [entry.model_dump(mode="python") for entry in improvement_summary.opportunities]
         if len(opportunities) != len(ranked_opportunity_ids):
@@ -717,13 +703,13 @@ class WorkflowRunHistoryToFailureModes(Workflow):
             "failure_mode_diagnostic_receipt.json",
             {
                 "workflow_name": ctx.workflow_name,
-                "task_title": state.task_title,
-                "sponsor_role": state.sponsor_role,
-                "desired_outcome": state.desired_outcome,
-                "selected_workflow_reference": state.selected_workflow_reference,
+                "task_title": ctx.state.task_title,
+                "sponsor_role": ctx.state.sponsor_role,
+                "desired_outcome": ctx.state.desired_outcome,
+                "selected_workflow_reference": ctx.state.selected_workflow_reference,
                 "selected_workflow_name": snapshot_selected_workflow_name,
                 "statuses": expected_statuses,
-                "max_runs": state.max_runs,
+                "max_runs": ctx.state.max_runs,
                 "run_count": history_run_count,
                 "evidence_run_ids": evidence_run_ids,
                 "failure_mode_ids": manifest_failure_mode_ids,
@@ -745,19 +731,13 @@ class WorkflowRunHistoryToFailureModes(Workflow):
                 "published": True,
             },
         )
-        return (
-            state.model_copy(
-                update={
-                    "selected_workflow_name": snapshot_selected_workflow_name,
-                    "evidence_run_ids": evidence_run_ids,
-                    "failure_mode_ids": manifest_failure_mode_ids,
-                    "recurring_weak_point_ids": manifest_recurring_weak_point_ids,
-                    "ranked_opportunity_ids": ranked_opportunity_ids,
-                    "published": True,
-                }
-            ),
-            Event("failure_mode_diagnostics_published"),
-        )
+        ctx.state.selected_workflow_name = snapshot_selected_workflow_name
+        ctx.state.evidence_run_ids = evidence_run_ids
+        ctx.state.failure_mode_ids = manifest_failure_mode_ids
+        ctx.state.recurring_weak_point_ids = manifest_recurring_weak_point_ids
+        ctx.state.ranked_opportunity_ids = ranked_opportunity_ids
+        ctx.state.published = True
+        return Event("failure_mode_diagnostics_published")
 
     entry = bootstrap
 
