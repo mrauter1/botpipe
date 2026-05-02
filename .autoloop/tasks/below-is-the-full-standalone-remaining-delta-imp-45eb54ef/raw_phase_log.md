@@ -1391,3 +1391,52 @@ Open issues / next step
 <loop-control>
 {"schema":"docloop.loop_control/v1","kind":"promise","promise":"COMPLETE"}
 </loop-control>
+
+
+---
+run_id=run-20260502T022441Z-8f34cad8 | entry=session_turn | pair=test | phase=producer | cycle=1 | attempt=1 | thread_id=019de8b9-0cec-7491-ae85-95ceca41a272
+---
+provider=codex
+mode=resume
+template=/home/rauter/.local/share/pipx/venvs/autoloop/lib/python3.12/site-packages/autoloop/templates/test_producer.md
+session_id=019de8b9-0cec-7491-ae85-95ceca41a272
+
+
+---
+run_id=run-20260502T022441Z-8f34cad8 | entry=phase_output | pair=test | phase=producer | process=codex-agent | cycle=1 | attempt=1 | thread_id=019de8b9-0cec-7491-ae85-95ceca41a272
+---
+I’m treating this as a coverage-hardening pass on the scoped-state/worklist delta rather than a broad test rewrite. First I’m checking the current phase test artifacts and the existing worklist-helper coverage, then I’ll add any missing edge/failure-path assertions and write the behavior map into the phase strategy artifact.
+
+The main gap in the current coverage is the explicit refresh failure path. I’m adding one focused regression test for “selected item disappears before refresh,” then I’ll map the covered behaviors and preserved invariants into the phase strategy artifact.
+
+The added failure-path test is green in isolation. I’m doing one broader phase-targeted rerun now so the strategy artifact can cite both the new edge coverage and the absence of collateral regressions.
+
+The new failure-path test passed, and the broader phase suite is green at `303 passed`. I’m recording the coverage map now: which behaviors are covered, which invariants are preserved, the new edge/failure path around forced reload, and the small known gaps that remain outside this phase.
+
+Scope considered
+- Phase-local `scoped-state-worklists` only.
+- I focused on worklist-helper coverage, scoped state/runtime assertions already added in the repo, and the phase-owned test artifacts.
+
+What I analyzed
+- Existing scoped-state/worklist tests in [test_primitives_and_stores.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/tests/unit/test_primitives_and_stores.py), [test_simple_surface.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/tests/unit/test_simple_surface.py), [test_validation.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/tests/unit/test_validation.py), [test_engine_contracts.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/tests/contract/test_engine_contracts.py), and [test_runtime_static_graph.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/tests/runtime/test_runtime_static_graph.py).
+- The phase test artifacts in [test_strategy.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/below-is-the-full-standalone-remaining-delta-imp-45eb54ef/runs/run-20260502T022441Z-8f34cad8/artifacts/test/phases/scoped-state-worklists/test_strategy.md) and [feedback.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/below-is-the-full-standalone-remaining-delta-imp-45eb54ef/runs/run-20260502T022441Z-8f34cad8/artifacts/test/phases/scoped-state-worklists/feedback.md).
+
+What I changed
+- Added a new failure-path regression test in [test_primitives_and_stores.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/tests/unit/test_primitives_and_stores.py) to assert that `ctx.current_worklist.refresh()` raises when the backing mutable source drops the selected item after cache population.
+- Updated [test_strategy.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/below-is-the-full-standalone-remaining-delta-imp-45eb54ef/runs/run-20260502T022441Z-8f34cad8/artifacts/test/phases/scoped-state-worklists/test_strategy.md) with an explicit behavior-to-test coverage map, preserved invariants, edge cases, failure paths, flake notes, and known gaps.
+- Appended a concise summary of the added regressions and verification result to [feedback.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/below-is-the-full-standalone-remaining-delta-imp-45eb54ef/runs/run-20260502T022441Z-8f34cad8/artifacts/test/phases/scoped-state-worklists/feedback.md).
+
+Key findings / decisions
+- The added coverage now hits happy-path, edge-case, and failure-path behavior for the mutable-source worklist reload contract:
+  - `refresh()` reloads changed backing data,
+  - `validation_error()` observes removed selected items after forced reload,
+  - `refresh()` fails deterministically when the selected item disappears,
+  - mutable status updates preserve a full cached source snapshot.
+- Validation passed:
+  - `./.venv/bin/pytest -q tests/unit/test_primitives_and_stores.py`
+  - `./.venv/bin/pytest -q tests/unit/test_primitives_and_stores.py tests/unit/test_simple_surface.py tests/unit/test_validation.py tests/contract/test_engine_contracts.py tests/runtime/test_runtime_static_graph.py`
+  - Result: `303 passed`
+
+Open issues / next step
+- No phase-local test blocker remains from the worklist-helper reload path.
+- The next step is test-phase verification/audit against the updated strategy and repository tests.
