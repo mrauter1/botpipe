@@ -2794,3 +2794,84 @@ I marked all test audit criteria complete and appended `TST-000` as a non-blocki
 <loop-control>
 {"schema":"docloop.loop_control/v1","kind":"promise","promise":"COMPLETE"}
 </loop-control>
+
+
+---
+run_id=run-20260502T141345Z-30984601 | entry=session_turn | pair=implement | phase=producer | cycle=1 | attempt=1 | thread_id=019de956-c08b-7b51-982d-34edc684ff72
+---
+provider=codex
+mode=start
+template=/home/rauter/.local/share/pipx/venvs/autoloop/lib/python3.12/site-packages/autoloop/templates/implement_producer.md
+session_id=019de956-c08b-7b51-982d-34edc684ff72
+
+
+---
+run_id=run-20260502T141345Z-30984601 | entry=phase_output | pair=implement | phase=producer | process=codex-agent | cycle=1 | attempt=1 | thread_id=019de956-c08b-7b51-982d-34edc684ff72
+---
+I’m enforcing the repo-level compatibility gate for the migrated exported workflows. First I’m reading the phase artifacts, current parity/strictness tests, and the discovered workflow compile surfaces to see what still tolerates the removed contract.
+
+The package migrations look largely landed already; this phase is likely about the gate itself. I’m checking the current parity and strictness tests, then I’ll run the targeted suite to see what still fails under the repo-level audit.
+
+The fast gate is already mostly green; I’m waiting on the parity/strictness run to finish so I can see whether there’s a remaining assertion gap or a broader suite failure.
+
+The remaining failures are not compile-gate issues. The parity tests still assume a legacy `plan_session.json` sidecar that the current runtime no longer writes, so I’m tracing the new persisted session shape before I adjust the assertions.
+
+The runtime writes session files by session slot now, not the old `*_session.json` aliases. I’m confirming the autoloop_v1 parity conventions so I can update the parity assertions to the canonical filenames rather than papering over the runtime.
+
+I’ve found a deeper mismatch: the test still expects both a placeholder `plan.json` and a separate active `plan_session.json`, but the current parity strategy intentionally uses a single canonical file per slot. I’m reproducing one run directly to see the exact on-disk payloads before I rewrite the assertions.
+
+I’ve narrowed this to stale parity assertions. I’m updating the parity tests to use the workflow-owned canonical session paths and the single-file session payload shape that the current runtime actually persists.
+
+The parity assertions are now aligned to the workflow-owned session-path convention. I’m rerunning the fast gate and then the requested runtime suites to confirm the compatibility gate is actually enforceable end to end.
+
+One parity assertion is still pinned to an older checkpoint shape. I’m checking where the question is recorded now so the resume test validates the actual persisted pause contract rather than an obsolete field.
+
+The question now lives under the normalized `pending_input` checkpoint payload, consistent with the rest of the runtime. I’m switching the parity test to that field and then I’ll run the broader validation set.
+
+The empty decisions file is a real regression, not just a stale assertion. The autoloop_v1 parity extension still looks for the removed checkpoint field `pending_question`, so resume-time clarification logging never fires; I’m fixing that to read the normalized `pending_input.question` shape.
+
+The parity extension now reads the current checkpoint contract with a fallback for older payloads. I’m rerunning the parity tests first to capture the updated persisted outputs, then I’ll finish the requested suite sweep.
+
+The resumed clarification note now persists on the canonical session file, which is the correct equivalent of the old placeholder-plus-active split. I’m updating that last assertion and then running the full gate plus the affected workflow suites.
+
+I’ve finished the parity-surface adjustments. Next run is the actual acceptance gate: the raw contract audit, the compile sweep, and the migrated workflow runtime suites that cover the exported packages called out in the request.
+
+The fast gate is now clean. I’m running the affected exported-workflow runtime suites in one pass so the phase closes with the repo-level audit plus the package-level regressions the request called out.
+
+The package-suite sweep is in flight. I’m keeping it on the critical path now; once it returns I’ll update the phase artifacts and decision ledger with the final validation set and the non-obvious parity-session decisions.
+
+The long suite is past the halfway point without surfacing failures. I’m waiting for the full result, then I’ll write the phase notes and decisions while the exact validation set is still fresh.
+
+Validation is clean. I’m recording the two non-obvious decisions for future turns, then I’ll update the phase notes with the changed files, touched symbols, and the exact command set that passed.
+
+I’ve confirmed the final blast radius: one parity runtime fix and the repo-level parity test surface. I’m writing those as durable decisions now so later turns don’t accidentally revert the canonical session-path or resume-clarification behavior.
+
+The code and test work is done. I’m updating the phase notes with the exact symbols touched, why the autoloop_v1 parity fix was in scope for this gate, and the commands that passed.
+
+Scope considered
+
+Repo-level compatibility gating for exported workflows, focused on the compile sweep, raw contract audit, and parity/runtime validation surfaces. The only code change outside tests was the autoloop-v1 parity extension in [parity.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/workflows/autoloop_v1/parity.py:173), because the gate exposed a real resume-time regression there.
+
+What I analyzed
+
+I checked the phase artifacts and current gate tests, ran the fast gate, and traced the failing parity assertions against the actual persisted session layout and checkpoint shape. I verified that discovered exported workflows already compile cleanly, then traced the remaining failures to stale `plan_session.json` assumptions and an outdated `pending_question` read in autoloop-v1 parity resume logging.
+
+What I changed
+
+I updated [test_workflow_integration_parity.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/tests/runtime/test_workflow_integration_parity.py:156) to assert the canonical workflow-owned session files (`sessions/plan.json`, `sessions/phases/<phase>.json`), to read pause questions from `checkpoint.pending_input.question`, and to validate the current clarification note behavior on the canonical session payload.
+
+I fixed [parity.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/workflows/autoloop_v1/parity.py:173) so resume clarification logging reads `pending_input.question` with a fallback to legacy `pending_question`. That restores clarification entries in `decisions.txt`, `raw_phase_log.md`, and the plan session metadata for resumed autoloop-v1 runs.
+
+Key findings / decisions
+
+The repo-level gate is now enforceable as intended: the discovered exported workflow compile sweep passes with zero failures, and the raw contract audit remains source/signature based rather than relying on compiled wrappers.
+
+Autoloop-v1’s canonical parity surface is a single workflow-owned session file per slot, not duplicate `*_session.json` aliases. Resume clarification persistence was broken only because the parity extension had drifted behind the runtime checkpoint schema.
+
+Validation passed:
+`./.venv/bin/pytest tests/unit/test_simple_surface.py tests/runtime/test_workflow_integration_parity.py -q`
+`./.venv/bin/pytest tests/runtime/test_candidate_workflow_to_adapted_execution_plan.py tests/runtime/test_company_operation_to_recursive_improvement_cycle.py tests/runtime/test_incident_to_hardening_program.py tests/runtime/test_investigation_request_to_evidence_pack.py tests/runtime/test_release_candidate_to_go_no_go.py tests/runtime/test_security_finding_to_verified_remediation.py tests/runtime/test_task_to_candidate_workflow_set.py tests/runtime/test_task_to_workflow_strategy.py tests/runtime/test_workflow_and_eval_to_refined_workflow_package.py tests/runtime/test_workflow_builder_package.py tests/runtime/test_workflow_package_to_composable_building_blocks.py tests/runtime/test_workflow_portfolio_to_operating_system.py tests/runtime/test_workflow_run_history_to_failure_modes.py tests/runtime/test_workflow_run_traces_to_optimization_candidates.py tests/runtime/test_workflow_to_eval_suite.py -q`
+
+Open issues / next step
+
+No blocking issues from this phase. The test runs still emit pre-existing Pydantic warnings in `workflow_run_traces_to_optimization_candidates` about `schema` field shadowing, but they did not affect the gate and I left them unchanged.

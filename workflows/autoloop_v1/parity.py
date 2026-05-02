@@ -172,9 +172,18 @@ class _AutoloopV1ParityRuntime:
 
     def _append_resume_clarification(self, event: StepStart) -> None:
         payload = _load_checkpoint_payload(self.binding.run_folder / "checkpoint.json")
-        pending_question = payload.get("pending_question")
+        pending_question = None
+        pending_input = payload.get("pending_input")
+        if isinstance(pending_input, dict):
+            question = pending_input.get("question")
+            if isinstance(question, str) and question:
+                pending_question = question
+        if pending_question is None:
+            fallback_question = payload.get("pending_question")
+            if isinstance(fallback_question, str) and fallback_question:
+                pending_question = fallback_question
         stage = payload.get("stage")
-        if not isinstance(pending_question, str) or not pending_question:
+        if pending_question is None:
             return
         if not isinstance(stage, str) or not stage:
             return
