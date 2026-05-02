@@ -391,23 +391,23 @@ def test_security_remediation_bootstrap_reads_typed_ctx_params(monkeypatch, tmp_
         },
     )
 
-    next_state, event = invoke_python_step(
+    event = invoke_python_step(
         workflow_pkg.SecurityFindingToVerifiedRemediation,
         "bootstrap",
         ctx,
     )
 
     assert event.tag == "inputs_prepared"
-    assert next_state.finding_title == "Admin impersonation privilege escalation"
-    assert next_state.finding_source == "pentest"
-    assert next_state.severity == "high"
-    assert next_state.affected_system == "delegated admin impersonation"
-    assert next_state.sponsor_role == "Security Engineering"
-    assert next_state.evidence_paths == [
+    assert ctx.state.finding_title == "Admin impersonation privilege escalation"
+    assert ctx.state.finding_source == "pentest"
+    assert ctx.state.severity == "high"
+    assert ctx.state.affected_system == "delegated admin impersonation"
+    assert ctx.state.sponsor_role == "Security Engineering"
+    assert ctx.state.evidence_paths == [
         "pentest/findings/admin-impersonation.md",
         "src/auth/impersonation.py",
     ]
-    assert next_state.deployment_constraints == [
+    assert ctx.state.deployment_constraints == [
         "preserve emergency admin access during rollout",
         "Avoid schema changes in the same patch.",
     ]
@@ -421,8 +421,8 @@ def test_security_remediation_bootstrap_reads_typed_ctx_params(monkeypatch, tmp_
     assert invocation_contract["severity"] == "high"
     assert invocation_contract["affected_system"] == "delegated admin impersonation"
     assert invocation_contract["sponsor_role"] == "Security Engineering"
-    assert invocation_contract["evidence_paths"] == next_state.evidence_paths
-    assert invocation_contract["deployment_constraints"] == next_state.deployment_constraints
+    assert invocation_contract["evidence_paths"] == ctx.state.evidence_paths
+    assert invocation_contract["deployment_constraints"] == ctx.state.deployment_constraints
 
 
 def test_security_remediation_package_runs_and_emits_terminal_receipt(tmp_path: Path) -> None:
@@ -829,7 +829,7 @@ def test_security_remediation_compose_step_blocks_not_ready_child_and_keeps_depl
         workflow_invoker=_invoke_child,
     )
 
-    next_state, event = invoke_python_step(
+    event = invoke_python_step(
         workflow_pkg.SecurityFindingToVerifiedRemediation,
         "compose_evidence_pack",
         ctx,
@@ -853,9 +853,9 @@ def test_security_remediation_compose_step_blocks_not_ready_child_and_keeps_depl
     }
     assert event.tag == "blocked"
     assert event.reason == "Child evidence pack published without downstream-readiness approval."
-    assert next_state.evidence_pack_status == "blocked"
-    assert next_state.evidence_pack_child_run_id == "child-run-1"
-    assert next_state.ready_for_downstream_assessment is False
+    assert ctx.state.evidence_pack_status == "blocked"
+    assert ctx.state.evidence_pack_child_run_id == "child-run-1"
+    assert ctx.state.ready_for_downstream_assessment is False
     assert not (workflow_folder / "finding_scope_brief.md").exists()
     assert not (workflow_folder / "security_evidence_pack.md").exists()
     assert not (workflow_folder / "security_evidence_pack_summary.json").exists()

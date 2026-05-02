@@ -500,33 +500,33 @@ def test_company_operation_to_recursive_improvement_cycle_bootstrap_reads_typed_
         workflow_params={},
     )
 
-    next_state, event = invoke_python_step(
+    event = invoke_python_step(
         workflow_pkg.CompanyOperationToRecursiveImprovementCycle,
         "bootstrap",
         ctx,
     )
 
     assert event.tag == "inputs_prepared"
-    assert next_state.task_title == "Company recursive-improvement review"
-    assert next_state.sponsor_role == "Workflow Platform"
-    assert next_state.desired_outcome is None
-    assert next_state.decision_drivers == [
+    assert ctx.state.task_title == "Company recursive-improvement review"
+    assert ctx.state.sponsor_role == "Workflow Platform"
+    assert ctx.state.desired_outcome is None
+    assert ctx.state.decision_drivers == [
         "prioritize reusable leverage",
         "Keep runtime control narrow and stop at publication.",
     ]
-    assert next_state.constraints == [
+    assert ctx.state.constraints == [
         "do not auto-run downstream workflows",
         "Keep next actions explicit.",
     ]
-    assert next_state.focus_task_references == ["recursive-alpha", "recursive-beta"]
-    assert next_state.focus_workflow_references == [
+    assert ctx.state.focus_task_references == ["recursive-alpha", "recursive-beta"]
+    assert ctx.state.focus_workflow_references == [
         "workflow_portfolio_to_operating_system",
         "workflow_package_to_composable_building_blocks",
     ]
-    assert next_state.statuses == ["success", "awaiting_input"]
-    assert next_state.max_tasks == 12
-    assert next_state.max_runs_per_workflow == 4
-    assert next_state.max_messages_per_task == 3
+    assert ctx.state.statuses == ["success", "awaiting_input"]
+    assert ctx.state.max_tasks == 12
+    assert ctx.state.max_runs_per_workflow == 4
+    assert ctx.state.max_messages_per_task == 3
     assert ctx.get_session("frame_session") is not None
     assert ctx.get_session("analysis_session") is not None
     assert ctx.get_session("package_session") is not None
@@ -535,11 +535,11 @@ def test_company_operation_to_recursive_improvement_cycle_bootstrap_reads_typed_
     assert invocation_contract["task_title"] == "Company recursive-improvement review"
     assert invocation_contract["sponsor_role"] == "Workflow Platform"
     assert invocation_contract["desired_outcome"] is None
-    assert invocation_contract["decision_drivers"] == next_state.decision_drivers
-    assert invocation_contract["constraints"] == next_state.constraints
-    assert invocation_contract["focus_task_references"] == next_state.focus_task_references
-    assert invocation_contract["focus_workflow_references"] == next_state.focus_workflow_references
-    assert invocation_contract["statuses"] == next_state.statuses
+    assert invocation_contract["decision_drivers"] == ctx.state.decision_drivers
+    assert invocation_contract["constraints"] == ctx.state.constraints
+    assert invocation_contract["focus_task_references"] == ctx.state.focus_task_references
+    assert invocation_contract["focus_workflow_references"] == ctx.state.focus_workflow_references
+    assert invocation_contract["statuses"] == ctx.state.statuses
     assert invocation_contract["max_tasks"] == 12
     assert invocation_contract["max_runs_per_workflow"] == 4
     assert invocation_contract["max_messages_per_task"] == 3

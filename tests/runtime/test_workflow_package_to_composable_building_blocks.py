@@ -558,21 +558,21 @@ def test_workflow_package_to_composable_building_blocks_bootstrap_reads_typed_ct
         workflow_params={},
     )
 
-    next_state, event = invoke_python_step(
+    event = invoke_python_step(
         workflow_pkg.WorkflowPackageToComposableBuildingBlocks,
         "bootstrap",
         ctx,
     )
 
     assert event.tag == "inputs_prepared"
-    assert next_state.selected_workflow_reference == "release_candidate_to_go_no_go"
-    assert next_state.task_title == "Release workflow decomposition"
-    assert next_state.evidence_paths == [".autoloop/signals/release_decomposition_pressure.md"]
-    assert next_state.sponsor_role == "Engineering Productivity"
-    assert next_state.desired_outcome is None
-    assert next_state.constraints == ["keep runtime control narrow", "Stop before promotion."]
-    assert next_state.target_test_command == TARGET_TEST_COMMAND
-    assert next_state.max_candidate_building_blocks == 2
+    assert ctx.state.selected_workflow_reference == "release_candidate_to_go_no_go"
+    assert ctx.state.task_title == "Release workflow decomposition"
+    assert ctx.state.evidence_paths == [".autoloop/signals/release_decomposition_pressure.md"]
+    assert ctx.state.sponsor_role == "Engineering Productivity"
+    assert ctx.state.desired_outcome is None
+    assert ctx.state.constraints == ["keep runtime control narrow", "Stop before promotion."]
+    assert ctx.state.target_test_command == TARGET_TEST_COMMAND
+    assert ctx.state.max_candidate_building_blocks == 2
     assert ctx.get_session("frame_session") is not None
     assert ctx.get_session("design_session") is not None
     assert ctx.get_session("build_session") is not None
@@ -583,7 +583,7 @@ def test_workflow_package_to_composable_building_blocks_bootstrap_reads_typed_ct
     assert invocation_contract["task_title"] == "Release workflow decomposition"
     assert invocation_contract["evidence_paths"] == [".autoloop/signals/release_decomposition_pressure.md"]
     assert invocation_contract["desired_outcome"] is None
-    assert invocation_contract["constraints"] == next_state.constraints
+    assert invocation_contract["constraints"] == ctx.state.constraints
     assert invocation_contract["target_test_command"] == TARGET_TEST_COMMAND
     assert invocation_contract["max_candidate_building_blocks"] == 2
 
@@ -1291,7 +1291,7 @@ def test_workflow_package_to_composable_building_blocks_capture_step_normalizes_
         workflow_params={"selected_workflow": "release-readiness", "task_title": state.task_title},
     )
 
-    next_state, event = invoke_python_step(
+    event = invoke_python_step(
         workflow_pkg.WorkflowPackageToComposableBuildingBlocks,
         "capture_decomposition_context",
         ctx,
@@ -1304,7 +1304,7 @@ def test_workflow_package_to_composable_building_blocks_capture_step_normalizes_
     evidence_manifest = json.loads((workflow_dir / "decomposition_evidence_manifest.json").read_text(encoding="utf-8"))
 
     assert event.tag == "decomposition_context_captured"
-    assert next_state.selected_workflow_name == "release_candidate_to_go_no_go"
+    assert ctx.state.selected_workflow_name == "release_candidate_to_go_no_go"
     assert decomposition_surface["selected_workflow_name"] == "release_candidate_to_go_no_go"
     assert baseline_manifest["selected_workflow_name"] == "release_candidate_to_go_no_go"
     assert evidence_manifest["request_fallback_used"] is True

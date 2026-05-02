@@ -398,22 +398,22 @@ def test_candidate_workflow_to_adapted_execution_plan_bootstrap_reads_typed_ctx_
         workflow_params={},
     )
 
-    next_state, event = invoke_python_step(
+    event = invoke_python_step(
         workflow_pkg.CandidateWorkflowToAdaptedExecutionPlan,
         "bootstrap",
         ctx,
     )
 
     assert event.tag == "inputs_prepared"
-    assert next_state.selected_workflow_reference == "security_finding_to_verified_remediation"
-    assert next_state.task_title == "Admin impersonation privilege escalation response"
-    assert next_state.sponsor_role == "Security Engineering"
-    assert next_state.desired_outcome is None
-    assert next_state.constraints == [
+    assert ctx.state.selected_workflow_reference == "security_finding_to_verified_remediation"
+    assert ctx.state.task_title == "Admin impersonation privilege escalation response"
+    assert ctx.state.sponsor_role == "Security Engineering"
+    assert ctx.state.desired_outcome is None
+    assert ctx.state.constraints == [
         "preserve the workflow boundary",
         "Prefer validated workflow parameters over workflow edits.",
     ]
-    assert next_state.evidence_expectations == [
+    assert ctx.state.evidence_expectations == [
         "publish a validated adapted plan",
         "Keep the selected workflow package unchanged.",
     ]
@@ -422,8 +422,8 @@ def test_candidate_workflow_to_adapted_execution_plan_bootstrap_reads_typed_ctx_
     assert invocation_contract["selected_workflow_reference"] == "security_finding_to_verified_remediation"
     assert invocation_contract["task_title"] == "Admin impersonation privilege escalation response"
     assert invocation_contract["desired_outcome"] is None
-    assert invocation_contract["constraints"] == next_state.constraints
-    assert invocation_contract["evidence_expectations"] == next_state.evidence_expectations
+    assert invocation_contract["constraints"] == ctx.state.constraints
+    assert invocation_contract["evidence_expectations"] == ctx.state.evidence_expectations
 
 
 def test_candidate_workflow_to_adapted_execution_plan_package_runs_and_publishes_terminal_adaptation_artifacts(
@@ -878,7 +878,7 @@ def test_candidate_workflow_to_adapted_execution_plan_package_needs_rework_paylo
         workflow_params={},
     )
 
-    next_state, _ = invoke_after_verifier_hook(
+    invoke_after_verifier_hook(
         workflow_pkg.CandidateWorkflowToAdaptedExecutionPlan,
         "package_adapted_execution_plan",
         ctx,
@@ -914,9 +914,9 @@ def test_candidate_workflow_to_adapted_execution_plan_package_needs_rework_paylo
         ),
     )
 
-    assert next_state.packaging_status == "needs_rework"
-    assert next_state.selected_workflow_name == "security_finding_to_verified_remediation"
-    assert next_state.proposed_parameter_keys == [
+    assert ctx.state.packaging_status == "needs_rework"
+    assert ctx.state.selected_workflow_name == "security_finding_to_verified_remediation"
+    assert ctx.state.proposed_parameter_keys == [
         "affected_system",
         "finding_source",
         "finding_title",
@@ -1117,7 +1117,7 @@ def test_candidate_workflow_capture_step_normalizes_alias_without_revalidating_s
         workflow_params={"selected_workflow": "security-remediation", "task_title": state.task_title},
     )
 
-    next_state, event = invoke_python_step(
+    event = invoke_python_step(
         workflow_pkg.CandidateWorkflowToAdaptedExecutionPlan,
         "capture_selected_workflow_contract",
         ctx,
@@ -1126,7 +1126,7 @@ def test_candidate_workflow_capture_step_normalizes_alias_without_revalidating_s
     snapshot = json.loads((workflow_folder / "selected_workflow_capability.json").read_text(encoding="utf-8"))
 
     assert event.tag == "selected_workflow_contract_captured"
-    assert next_state.selected_workflow_name == "security_finding_to_verified_remediation"
+    assert ctx.state.selected_workflow_name == "security_finding_to_verified_remediation"
     assert snapshot["selected_workflow_name"] == "security_finding_to_verified_remediation"
     assert snapshot["selected_workflow_capability"]["workflow_name"] == "security_finding_to_verified_remediation"
 

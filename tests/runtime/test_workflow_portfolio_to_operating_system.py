@@ -435,29 +435,29 @@ def test_workflow_portfolio_to_operating_system_bootstrap_reads_typed_ctx_params
         workflow_params={},
     )
 
-    next_state, event = invoke_python_step(
+    event = invoke_python_step(
         workflow_pkg.WorkflowPortfolioToOperatingSystem,
         "bootstrap",
         ctx,
     )
 
     assert event.tag == "inputs_prepared"
-    assert next_state.task_title == "Workflow portfolio operating-system review"
-    assert next_state.sponsor_role == "Workflow Platform"
-    assert next_state.desired_outcome is None
-    assert next_state.decision_drivers == [
+    assert ctx.state.task_title == "Workflow portfolio operating-system review"
+    assert ctx.state.sponsor_role == "Workflow Platform"
+    assert ctx.state.desired_outcome is None
+    assert ctx.state.decision_drivers == [
         "prioritize recursive leverage",
         "Prefer reusable governance pressure over hidden automation.",
     ]
-    assert next_state.constraints == [
+    assert ctx.state.constraints == [
         "keep runtime control narrow",
         "Stop at governance publication.",
     ]
-    assert next_state.focus_workflow_references == [
+    assert ctx.state.focus_workflow_references == [
         "workflow_idea_to_workflow_package",
         "task_to_workflow_strategy",
     ]
-    assert next_state.max_runs_per_workflow == 12
+    assert ctx.state.max_runs_per_workflow == 12
     assert ctx.get_session("frame_session") is not None
     assert ctx.get_session("analysis_session") is not None
     assert ctx.get_session("package_session") is not None
@@ -466,9 +466,9 @@ def test_workflow_portfolio_to_operating_system_bootstrap_reads_typed_ctx_params
     assert invocation_contract["task_title"] == "Workflow portfolio operating-system review"
     assert invocation_contract["sponsor_role"] == "Workflow Platform"
     assert invocation_contract["desired_outcome"] is None
-    assert invocation_contract["decision_drivers"] == next_state.decision_drivers
-    assert invocation_contract["constraints"] == next_state.constraints
-    assert invocation_contract["focus_workflow_references"] == next_state.focus_workflow_references
+    assert invocation_contract["decision_drivers"] == ctx.state.decision_drivers
+    assert invocation_contract["constraints"] == ctx.state.constraints
+    assert invocation_contract["focus_workflow_references"] == ctx.state.focus_workflow_references
     assert invocation_contract["max_runs_per_workflow"] == 12
 
 
@@ -1066,14 +1066,14 @@ def test_workflow_portfolio_to_operating_system_publish_allows_explicit_negative
         ),
     )
 
-    next_state, event = invoke_python_step(
+    event = invoke_python_step(
         workflow_pkg.WorkflowPortfolioToOperatingSystem,
         "publish_portfolio_operating_system",
         ctx,
     )
 
     assert event.tag == "portfolio_operating_system_published"
-    assert next_state.published is True
+    assert ctx.state.published is True
     assert (ctx.workflow_folder / "portfolio_operating_system_receipt.json").exists()
 
 

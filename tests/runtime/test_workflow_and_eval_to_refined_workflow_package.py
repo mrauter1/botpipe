@@ -519,26 +519,26 @@ def test_workflow_and_eval_to_refined_workflow_package_bootstrap_reads_typed_ctx
         workflow_params={},
     )
 
-    next_state, event = invoke_python_step(
+    event = invoke_python_step(
         workflow_pkg.WorkflowAndEvalToRefinedWorkflowPackage,
         "bootstrap",
         ctx,
     )
 
     assert event.tag == "inputs_prepared"
-    assert next_state.selected_workflow_reference == "release_candidate_to_go_no_go"
-    assert next_state.task_title == "Release workflow refinement"
-    assert next_state.evaluation_summary_path == ".autoloop/evals/summary.json"
-    assert next_state.evaluation_findings_path == ".autoloop/evals/findings.md"
-    assert next_state.failure_modes_path is None
-    assert next_state.refinement_evidence_path is None
-    assert next_state.sponsor_role == "Engineering Productivity"
-    assert next_state.desired_outcome is None
-    assert next_state.constraints == [
+    assert ctx.state.selected_workflow_reference == "release_candidate_to_go_no_go"
+    assert ctx.state.task_title == "Release workflow refinement"
+    assert ctx.state.evaluation_summary_path == ".autoloop/evals/summary.json"
+    assert ctx.state.evaluation_findings_path == ".autoloop/evals/findings.md"
+    assert ctx.state.failure_modes_path is None
+    assert ctx.state.refinement_evidence_path is None
+    assert ctx.state.sponsor_role == "Engineering Productivity"
+    assert ctx.state.desired_outcome is None
+    assert ctx.state.constraints == [
         "keep candidate publication explicit",
         "Do not mutate the authoritative workflow package.",
     ]
-    assert next_state.target_test_command == TARGET_TEST_COMMAND
+    assert ctx.state.target_test_command == TARGET_TEST_COMMAND
     assert ctx.get_session("frame_session") is not None
     assert ctx.get_session("design_session") is not None
     assert ctx.get_session("build_session") is not None
@@ -552,7 +552,7 @@ def test_workflow_and_eval_to_refined_workflow_package_bootstrap_reads_typed_ctx
     assert invocation_contract["failure_modes_path"] is None
     assert invocation_contract["refinement_evidence_path"] is None
     assert invocation_contract["desired_outcome"] is None
-    assert invocation_contract["constraints"] == next_state.constraints
+    assert invocation_contract["constraints"] == ctx.state.constraints
     assert invocation_contract["target_test_command"] == TARGET_TEST_COMMAND
 
 

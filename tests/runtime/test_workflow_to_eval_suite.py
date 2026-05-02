@@ -427,22 +427,22 @@ def test_workflow_to_eval_suite_bootstrap_reads_typed_ctx_params(monkeypatch, tm
         workflow_params={},
     )
 
-    next_state, event = invoke_python_step(
+    event = invoke_python_step(
         workflow_pkg.WorkflowToEvalSuite,
         "bootstrap",
         ctx,
     )
 
     assert event.tag == "inputs_prepared"
-    assert next_state.selected_workflow_reference == "release_candidate_to_go_no_go"
-    assert next_state.task_title == "Release readiness evaluation suite"
-    assert next_state.sponsor_role == "Engineering Productivity"
-    assert next_state.desired_outcome is None
-    assert next_state.constraints == [
+    assert ctx.state.selected_workflow_reference == "release_candidate_to_go_no_go"
+    assert ctx.state.task_title == "Release readiness evaluation suite"
+    assert ctx.state.sponsor_role == "Engineering Productivity"
+    assert ctx.state.desired_outcome is None
+    assert ctx.state.constraints == [
         "keep runtime control narrow",
         "Stop at suite publication.",
     ]
-    assert next_state.evidence_expectations == [
+    assert ctx.state.evidence_expectations == [
         "publish a validated manifest",
         "Cover benchmark, edge, and adversarial pressure.",
     ]
@@ -451,8 +451,8 @@ def test_workflow_to_eval_suite_bootstrap_reads_typed_ctx_params(monkeypatch, tm
     assert invocation_contract["selected_workflow_reference"] == "release_candidate_to_go_no_go"
     assert invocation_contract["task_title"] == "Release readiness evaluation suite"
     assert invocation_contract["desired_outcome"] is None
-    assert invocation_contract["constraints"] == next_state.constraints
-    assert invocation_contract["evidence_expectations"] == next_state.evidence_expectations
+    assert invocation_contract["constraints"] == ctx.state.constraints
+    assert invocation_contract["evidence_expectations"] == ctx.state.evidence_expectations
 
 
 def test_workflow_to_eval_suite_package_runs_and_publishes_terminal_eval_artifacts(
@@ -1009,7 +1009,7 @@ def test_workflow_to_eval_suite_package_needs_rework_payload_updates_state(
         workflow_params={},
     )
 
-    next_state, _ = invoke_after_verifier_hook(
+    invoke_after_verifier_hook(
         workflow_pkg.WorkflowToEvalSuite,
         "package_workflow_eval_suite",
         ctx,
@@ -1048,14 +1048,14 @@ def test_workflow_to_eval_suite_package_needs_rework_payload_updates_state(
         ),
     )
 
-    assert next_state.packaging_status == "needs_rework"
-    assert next_state.selected_workflow_name == "release_candidate_to_go_no_go"
-    assert next_state.case_ids == [
+    assert ctx.state.packaging_status == "needs_rework"
+    assert ctx.state.selected_workflow_name == "release_candidate_to_go_no_go"
+    assert ctx.state.case_ids == [
         "baseline_release_gate",
         "edge_missing_owner",
         "adversarial_rollback_gap",
     ]
-    assert next_state.case_kinds == ["benchmark", "edge", "adversarial"]
+    assert ctx.state.case_kinds == ["benchmark", "edge", "adversarial"]
 
 
 @pytest.mark.parametrize(
@@ -1485,7 +1485,7 @@ def test_workflow_to_eval_suite_capture_step_normalizes_alias_without_revalidati
         workflow_params={"selected_workflow": "release-readiness", "task_title": state.task_title},
     )
 
-    next_state, event = invoke_python_step(
+    event = invoke_python_step(
         workflow_pkg.WorkflowToEvalSuite,
         "capture_selected_workflow_contract",
         ctx,
@@ -1494,7 +1494,7 @@ def test_workflow_to_eval_suite_capture_step_normalizes_alias_without_revalidati
     snapshot = json.loads((workflow_folder / "selected_workflow_capability.json").read_text(encoding="utf-8"))
 
     assert event.tag == "selected_workflow_contract_captured"
-    assert next_state.selected_workflow_name == "release_candidate_to_go_no_go"
+    assert ctx.state.selected_workflow_name == "release_candidate_to_go_no_go"
     assert snapshot["selected_workflow_name"] == "release_candidate_to_go_no_go"
     assert snapshot["selected_workflow_capability"]["workflow_name"] == "release_candidate_to_go_no_go"
 

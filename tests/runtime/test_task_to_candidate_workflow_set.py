@@ -357,21 +357,21 @@ def test_task_to_candidate_workflow_set_bootstrap_reads_typed_ctx_params(monkeyp
         workflow_params={},
     )
 
-    next_state, event = invoke_python_step(
+    event = invoke_python_step(
         workflow_pkg.TaskToCandidateWorkflowSet,
         "bootstrap",
         ctx,
     )
 
     assert event.tag == "inputs_prepared"
-    assert next_state.task_title == "Admin impersonation privilege escalation response"
-    assert next_state.sponsor_role == "Security Engineering"
-    assert next_state.desired_outcome is None
-    assert next_state.constraints == [
+    assert ctx.state.task_title == "Admin impersonation privilege escalation response"
+    assert ctx.state.sponsor_role == "Security Engineering"
+    assert ctx.state.desired_outcome is None
+    assert ctx.state.constraints == [
         "prefer reuse over new authoring",
         "Keep the building block at candidate-set publication.",
     ]
-    assert next_state.evidence_expectations == [
+    assert ctx.state.evidence_expectations == [
         "publish a strategy-ready candidate set",
         "Keep the builder baseline explicit.",
     ]
@@ -380,8 +380,8 @@ def test_task_to_candidate_workflow_set_bootstrap_reads_typed_ctx_params(monkeyp
     assert invocation_contract["task_title"] == "Admin impersonation privilege escalation response"
     assert invocation_contract["sponsor_role"] == "Security Engineering"
     assert invocation_contract["desired_outcome"] is None
-    assert invocation_contract["constraints"] == next_state.constraints
-    assert invocation_contract["evidence_expectations"] == next_state.evidence_expectations
+    assert invocation_contract["constraints"] == ctx.state.constraints
+    assert invocation_contract["evidence_expectations"] == ctx.state.evidence_expectations
 
 
 def test_task_to_candidate_workflow_set_package_runs_and_publishes_terminal_candidate_artifacts(tmp_path: Path) -> None:

@@ -424,20 +424,20 @@ def test_workflow_run_history_to_failure_modes_bootstrap_reads_typed_ctx_params(
         workflow_params={},
     )
 
-    next_state, event = invoke_python_step(
+    event = invoke_python_step(
         workflow_pkg.WorkflowRunHistoryToFailureModes,
         "bootstrap",
         ctx,
     )
 
     assert event.tag == "inputs_prepared"
-    assert next_state.selected_workflow_reference == "release_candidate_to_go_no_go"
-    assert next_state.task_title == "Release workflow failure-mode diagnosis"
-    assert next_state.statuses == ["awaiting_input", "blocked", "failed"]
-    assert next_state.max_runs == 12
-    assert next_state.sponsor_role == "Workflow Platform"
-    assert next_state.desired_outcome is None
-    assert next_state.constraints == [
+    assert ctx.state.selected_workflow_reference == "release_candidate_to_go_no_go"
+    assert ctx.state.task_title == "Release workflow failure-mode diagnosis"
+    assert ctx.state.statuses == ["awaiting_input", "blocked", "failed"]
+    assert ctx.state.max_runs == 12
+    assert ctx.state.sponsor_role == "Workflow Platform"
+    assert ctx.state.desired_outcome is None
+    assert ctx.state.constraints == [
         "keep runtime control narrow",
         "Stop at diagnostic publication.",
     ]
@@ -451,7 +451,7 @@ def test_workflow_run_history_to_failure_modes_bootstrap_reads_typed_ctx_params(
     assert invocation_contract["statuses"] == ["awaiting_input", "blocked", "failed"]
     assert invocation_contract["max_runs"] == 12
     assert invocation_contract["desired_outcome"] is None
-    assert invocation_contract["constraints"] == next_state.constraints
+    assert invocation_contract["constraints"] == ctx.state.constraints
 
 
 def test_workflow_run_history_to_failure_modes_package_runs_and_publishes_terminal_diagnostic_artifacts(
@@ -1618,7 +1618,7 @@ def test_workflow_run_history_capture_step_normalizes_alias_and_preserves_filter
         },
     )
 
-    next_state, event = invoke_python_step(
+    event = invoke_python_step(
         workflow_pkg.WorkflowRunHistoryToFailureModes,
         "capture_run_history_context",
         ctx,
@@ -1632,8 +1632,8 @@ def test_workflow_run_history_capture_step_normalizes_alias_and_preserves_filter
     ]
 
     assert event.tag == "run_history_context_captured"
-    assert next_state.selected_workflow_name == "release_candidate_to_go_no_go"
-    assert next_state.evidence_run_ids == run_ids
+    assert ctx.state.selected_workflow_name == "release_candidate_to_go_no_go"
+    assert ctx.state.evidence_run_ids == run_ids
     assert capability_snapshot["selected_workflow_name"] == "release_candidate_to_go_no_go"
     assert history_snapshot["selected_workflow_name"] == "release_candidate_to_go_no_go"
 

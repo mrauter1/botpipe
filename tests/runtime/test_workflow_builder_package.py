@@ -374,19 +374,19 @@ def test_workflow_builder_package_bootstrap_reads_typed_ctx_params(monkeypatch, 
         },
     )
 
-    next_state, event = invoke_python_step(
+    event = invoke_python_step(
         workflow_pkg.WorkflowIdeaToWorkflowPackage,
         "bootstrap",
         ctx,
     )
 
     assert event.tag == "inputs_prepared"
-    assert next_state.package_name == "release_candidate_to_go_no_go"
-    assert next_state.package_title == "Release Candidate To Go / No-Go"
-    assert next_state.workflow_kind == "end_to_end"
-    assert next_state.authoring_shape == "flow_specs"
-    assert next_state.aliases == ["release-go-no-go", "release-decision"]
-    assert next_state.target_test_command == "pytest -q tests/runtime/test_release_candidate_to_go_no_go.py"
+    assert ctx.state.package_name == "release_candidate_to_go_no_go"
+    assert ctx.state.package_title == "Release Candidate To Go / No-Go"
+    assert ctx.state.workflow_kind == "end_to_end"
+    assert ctx.state.authoring_shape == "flow_specs"
+    assert ctx.state.aliases == ["release-go-no-go", "release-decision"]
+    assert ctx.state.target_test_command == "pytest -q tests/runtime/test_release_candidate_to_go_no_go.py"
     assert ctx.get_session("frame_session") is not None
     assert ctx.get_session("design_session") is not None
     assert ctx.get_session("build_session") is not None
@@ -397,7 +397,7 @@ def test_workflow_builder_package_bootstrap_reads_typed_ctx_params(monkeypatch, 
     assert invocation_contract["package_title"] == "Release Candidate To Go / No-Go"
     assert invocation_contract["workflow_kind"] == "end_to_end"
     assert invocation_contract["authoring_shape"] == "flow_specs"
-    assert invocation_contract["aliases"] == next_state.aliases
+    assert invocation_contract["aliases"] == ctx.state.aliases
     assert invocation_contract["target_test_command"] == "pytest -q tests/runtime/test_release_candidate_to_go_no_go.py"
 
 

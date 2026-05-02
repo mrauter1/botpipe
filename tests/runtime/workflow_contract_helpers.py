@@ -14,12 +14,12 @@ def _normalize_control_result(result: Any) -> Any:
     return result
 
 
-def invoke_python_step(workflow_cls: type[Any], step_name: str, ctx: Context) -> tuple[Any, Any]:
+def invoke_python_step(workflow_cls: type[Any], step_name: str, ctx: Context) -> Any:
     compiled = compile_workflow(workflow_cls)
     handler = compiled.steps[step_name].python_handler
     assert handler is not None
     result = handler(ctx)
-    return ctx.state, _normalize_control_result(result)
+    return _normalize_control_result(result)
 
 
 def invoke_after_verifier_hook(
@@ -31,7 +31,7 @@ def invoke_after_verifier_hook(
     artifacts: Any | None = None,
     route: Mapping[str, Any] | Any | None = None,
     meta: Mapping[str, Any] | Any | None = None,
-) -> tuple[Any, Any]:
+) -> Any:
     compiled = compile_workflow(workflow_cls)
     hook = compiled.steps[step_name].after_verifier_hook
     assert hook is not None
@@ -46,7 +46,7 @@ def invoke_after_verifier_hook(
     ctx._set_meta(meta)
     try:
         result = hook(ctx)
-        return ctx.state, _normalize_control_result(result)
+        return _normalize_control_result(result)
     finally:
         ctx._set_artifacts(original_artifacts)
         ctx._set_route(original_route)

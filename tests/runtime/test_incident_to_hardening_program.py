@@ -389,19 +389,19 @@ def test_incident_hardening_bootstrap_reads_typed_ctx_params(monkeypatch, tmp_pa
         },
     )
 
-    next_state, event = invoke_python_step(
+    event = invoke_python_step(
         workflow_pkg.IncidentToHardeningProgram,
         "bootstrap",
         ctx,
     )
 
     assert event.tag == "inputs_prepared"
-    assert next_state.incident_title == "Payments API 500 spike"
-    assert next_state.incident_window == "2026-04-22 02:11Z to 02:58Z"
-    assert next_state.affected_system == "payments-api"
-    assert next_state.severity == "sev1"
-    assert next_state.incident_commander == "Incident Lead"
-    assert next_state.evidence_paths == [
+    assert ctx.state.incident_title == "Payments API 500 spike"
+    assert ctx.state.incident_window == "2026-04-22 02:11Z to 02:58Z"
+    assert ctx.state.affected_system == "payments-api"
+    assert ctx.state.severity == "sev1"
+    assert ctx.state.incident_commander == "Incident Lead"
+    assert ctx.state.evidence_paths == [
         "incidents/2026-04-22-payments.md",
         "dashboards/payments-api-errors.md",
     ]
@@ -416,7 +416,7 @@ def test_incident_hardening_bootstrap_reads_typed_ctx_params(monkeypatch, tmp_pa
     assert invocation_contract["affected_system"] == "payments-api"
     assert invocation_contract["severity"] == "sev1"
     assert invocation_contract["incident_commander"] == "Incident Lead"
-    assert invocation_contract["evidence_paths"] == next_state.evidence_paths
+    assert invocation_contract["evidence_paths"] == ctx.state.evidence_paths
 
 
 def test_incident_hardening_package_runs_and_emits_terminal_receipt(tmp_path: Path) -> None:

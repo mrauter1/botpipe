@@ -351,21 +351,21 @@ def test_investigation_evidence_pack_bootstrap_reads_typed_ctx_params(monkeypatc
         },
     )
 
-    next_state, event = invoke_python_step(
+    event = invoke_python_step(
         workflow_pkg.InvestigationRequestToEvidencePack,
         "bootstrap",
         ctx,
     )
 
     assert event.tag == "inputs_prepared"
-    assert next_state.investigation_title == "Admin impersonation privilege escalation"
-    assert next_state.investigation_kind == "security_remediation"
-    assert next_state.sponsor_role == "Security Engineering"
-    assert next_state.evidence_paths == [
+    assert ctx.state.investigation_title == "Admin impersonation privilege escalation"
+    assert ctx.state.investigation_kind == "security_remediation"
+    assert ctx.state.sponsor_role == "Security Engineering"
+    assert ctx.state.evidence_paths == [
         "pentest/findings/admin-impersonation.md",
         "src/auth/impersonation.py",
     ]
-    assert next_state.source_constraints == [
+    assert ctx.state.source_constraints == [
         "use repo artifacts only",
         "Treat missing audit evidence as a gap.",
     ]
@@ -376,8 +376,8 @@ def test_investigation_evidence_pack_bootstrap_reads_typed_ctx_params(monkeypatc
     assert invocation_contract["investigation_title"] == "Admin impersonation privilege escalation"
     assert invocation_contract["investigation_kind"] == "security_remediation"
     assert invocation_contract["sponsor_role"] == "Security Engineering"
-    assert invocation_contract["evidence_paths"] == next_state.evidence_paths
-    assert invocation_contract["source_constraints"] == next_state.source_constraints
+    assert invocation_contract["evidence_paths"] == ctx.state.evidence_paths
+    assert invocation_contract["source_constraints"] == ctx.state.source_constraints
 
 
 def test_investigation_evidence_pack_package_runs_and_emits_terminal_receipt(tmp_path: Path) -> None:

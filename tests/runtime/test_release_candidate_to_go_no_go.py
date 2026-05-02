@@ -381,18 +381,18 @@ def test_release_go_no_go_bootstrap_reads_typed_ctx_params(monkeypatch, tmp_path
         },
     )
 
-    next_state, event = invoke_python_step(
+    event = invoke_python_step(
         workflow_pkg.ReleaseCandidateToGoNoGo,
         "bootstrap",
         ctx,
     )
 
     assert event.tag == "inputs_prepared"
-    assert next_state.release_name == "2026.04"
-    assert next_state.target_date == "2026-05-01"
-    assert next_state.deployment_environment == "staging"
-    assert next_state.release_owner == "Release Captain"
-    assert next_state.evidence_paths == [
+    assert ctx.state.release_name == "2026.04"
+    assert ctx.state.target_date == "2026-05-01"
+    assert ctx.state.deployment_environment == "staging"
+    assert ctx.state.release_owner == "Release Captain"
+    assert ctx.state.evidence_paths == [
         "docs/releases/2026.04.md",
         "reports/test-summary-2026.04.md",
     ]
@@ -406,7 +406,7 @@ def test_release_go_no_go_bootstrap_reads_typed_ctx_params(monkeypatch, tmp_path
     assert invocation_contract["target_date"] == "2026-05-01"
     assert invocation_contract["deployment_environment"] == "staging"
     assert invocation_contract["release_owner"] == "Release Captain"
-    assert invocation_contract["evidence_paths"] == next_state.evidence_paths
+    assert invocation_contract["evidence_paths"] == ctx.state.evidence_paths
 
 
 def test_release_go_no_go_package_runs_and_emits_terminal_receipt(tmp_path: Path) -> None:
