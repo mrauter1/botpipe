@@ -261,7 +261,7 @@ def test_runtime_trace_records_hook_route_override_metadata(tmp_path: Path) -> N
         hook_route_redirects=(
             HookRouteRedirect(
                 hook="reroute_to_question",
-                phase="on_route",
+                phase="on_taken",
                 from_route="ready",
                 to_route="question",
             ),
@@ -277,7 +277,7 @@ def test_runtime_trace_records_hook_route_override_metadata(tmp_path: Path) -> N
     assert record["hook_route_redirects"] == [
         {
             "hook": "reroute_to_question",
-            "phase": "on_route",
+            "phase": "on_taken",
             "from_route": "ready",
             "to_route": "question",
         }

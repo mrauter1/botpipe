@@ -156,7 +156,39 @@ Authoring rules:
 - reserve runtime-injected control data for the shared Runtime Step Contract: readable inputs, required inputs, writable artifacts, available routes, route summaries and route `required_writes`, explicit expected output payload requirements, optional route handoff, and optional retry feedback
 - continue using `Outcome.tag` as the route carrier
 - use `needs_rework` when the current work-item boundary still holds and `needs_replan` when the boundary changed materially
-- do not declare provider control schemas on `python_step(...)`; Python steps pick routes by returning `Event(...)`
+- do not declare provider control schemas on `python_step(...)`; Python steps mutate `ctx` directly and return `None`, a route tag, `Event(...)`, `RequestInput(...)`, `Goto(...)`, or `Fail(...)`
+
+## Hook Style And Returns
+
+Public hooks use one signature only:
+
+```python
+def before(ctx):
+    ...
+
+
+def after(ctx):
+    ...
+
+
+def on_taken(ctx):
+    ...
+```
+
+Everything hook code needs is available on `ctx`, including `ctx.state`, `ctx.step_state`, `ctx.item_state`, `ctx.step_item_state`, `ctx.artifacts`, `ctx.outcome`, `ctx.event`, `ctx.route`, `ctx.input_response`, `ctx.meta`, and `ctx.history`.
+
+Supported hook returns:
+
+```python
+None
+"route_tag"
+Event(...)
+RequestInput(...)
+Goto(...)
+Fail(...)
+```
+
+Hooks do not replace workflow state by returning a `BaseModel`. Mutate state through `ctx` and return only route or direct-control values when the hook should change execution.
 
 ## Runtime Controls And Hidden Routes
 
@@ -180,7 +212,7 @@ def on_hidden_escalation(ctx):
     )
 
 
-def after_publish(ctx, event, route):
+def after_publish(ctx):
     if ctx.input_response is None:
         return Goto("draft", reason="Collect approval first.")
     if not ctx.input_response.approved:
@@ -202,8 +234,8 @@ class ApprovalWorkflow(Workflow):
     )
 
     @python_step(name="publish", routes={"done": FINISH}, after=after_publish)
-    def publish(state, ctx):
-        return state, "done"
+    def publish(ctx):
+        return "done"
 ```
 
 Key rules:
@@ -480,9 +512,10 @@ Use `Route.to(...)`, `Route.finish(...)`, `Route.await_input(...)`, and `Route.f
 
 `Worklist` and `WorkItem` let workflows scope a step to the current selected item without introducing hidden looping.
 
-The greenfield public authoring surface stays focused on the simpler static-step path in this phase. Scoped worklist examples remain an advanced compatibility seam until a canonical simple-surface `scope=` declaration is documented.
-
 ```python
+from autoloop import Goto, Prompt, RequestInput, Route, SELF, Worklist, produce_verify_step, step
+
+
 gates = Worklist.from_artifact(
     name="gate",
     artifact=gate_board,
@@ -501,11 +534,46 @@ assess = produce_verify_step(
 
 Worklist helpers exposed on `Context`:
 
-- `ctx.selection(gates)`
-- `ctx.current(gates)`
-- `ctx.item`
+- `ctx.worklist("gate")`
+- `ctx.worklists.gate`
+- `ctx.current_worklist`
 
-The engine does not silently loop a whole worklist. Progression is explicit through effects such as `Advance(gates)`.
+Worklist helpers mutate selection and status only. They never route automatically.
+
+```python
+def complete_and_advance(ctx):
+    ctx.current_worklist.set_current_status("completed")
+    if not ctx.current_worklist.advance():
+        return Goto("finalize")
+    return None
+
+
+review = step(
+    prompt=Prompt.inline("Review the selected gate."),
+    scope=gates,
+    routes={
+        "accepted": Route.to(SELF, on_taken=complete_and_advance),
+        "needs_input": Route.to(
+            SELF,
+            on_taken=lambda ctx: ctx.current_worklist.advance_or(
+                RequestInput("Choose the next gate.", reason="Selection exhausted.")
+            ),
+        ),
+    },
+)
+```
+
+Useful helper methods:
+
+- `ctx.current_worklist.refresh()`
+- `ctx.current_worklist.set_current_status("completed")`
+- `ctx.current_worklist.reset_current_status()`
+- `ctx.current_worklist.advance()`
+- `ctx.current_worklist.advance_or(Goto("finalize"))`
+- `ctx.current_worklist.validate()`
+- `ctx.current_worklist.validation_error()`
+
+The engine does not silently loop a whole worklist. Progression stays explicit in `on_taken` hooks and direct-control returns.
 
 ## Typed Child Workflow Contracts
 
