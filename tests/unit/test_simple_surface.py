@@ -358,6 +358,34 @@ def test_simple_workflow_rejects_legacy_class_level_handler_methods() -> None:
         compile_workflow(LegacyHandlersWorkflow)
 
 
+@pytest.mark.parametrize(
+    ("module_name", "workflow_name"),
+    (
+        ("workflows.company_operation_to_recursive_improvement_cycle", "CompanyOperationToRecursiveImprovementCycle"),
+        ("workflows.incident_to_hardening_program", "IncidentToHardeningProgram"),
+        ("workflows.workflow_and_eval_to_refined_workflow_package", "WorkflowAndEvalToRefinedWorkflowPackage"),
+        ("workflows.workflow_idea_to_workflow_package", "WorkflowIdeaToWorkflowPackage"),
+        ("workflows.workflow_package_to_composable_building_blocks", "WorkflowPackageToComposableBuildingBlocks"),
+        ("workflows.workflow_portfolio_to_operating_system", "WorkflowPortfolioToOperatingSystem"),
+        ("workflows.workflow_run_history_to_failure_modes", "WorkflowRunHistoryToFailureModes"),
+        ("workflows.workflow_run_traces_to_optimization_candidates", "WorkflowRunTracesToOptimizationCandidates"),
+        ("workflows.workflow_to_eval_suite", "WorkflowToEvalSuite"),
+    ),
+)
+def test_exported_public_simple_workflows_no_longer_fail_for_legacy_class_handlers(
+    module_name: str, workflow_name: str
+) -> None:
+    module = __import__(module_name, fromlist=[workflow_name])
+    workflow_cls = getattr(module, workflow_name)
+
+    try:
+        compile_workflow(workflow_cls)
+    except WorkflowValidationError as exc:
+        message = str(exc)
+        assert "simple workflows must declare lifecycle and step behavior on explicit step declarations" not in message
+        assert "legacy class-level handlers" not in message
+
+
 def test_simple_declarations_store_only_canonical_write_fields() -> None:
     step_decl = simple.step("Draft the note.", writes=[simple.Md("note")])
     pair_decl = simple.produce_verify_step(
