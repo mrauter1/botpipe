@@ -1554,3 +1554,64 @@ Open issues / next step
 - Focused validation passed: `./.venv/bin/python -m pytest tests/unit/test_provider_retries.py tests/runtime/test_runtime_tracing.py tests/runtime/test_history.py tests/unit/test_optimization_helpers.py tests/runtime/test_workspace_and_context.py tests/contract/test_engine_contracts.py -q` with `210 passed`.
 - Syntax validation passed with `python3 -m compileall ...`.
 - I did not run the full repository test suite outside this phase-focused surface.
+
+
+---
+run_id=run-20260502T022441Z-8f34cad8 | entry=session_turn | pair=implement | phase=verifier | cycle=1 | attempt=1 | thread_id=019de8df-9d67-77a3-a352-a28558942623
+---
+provider=codex
+mode=resume
+template=/home/rauter/.local/share/pipx/venvs/autoloop/lib/python3.12/site-packages/autoloop/templates/implement_verifier.md
+session_id=019de8df-9d67-77a3-a352-a28558942623
+
+
+---
+run_id=run-20260502T022441Z-8f34cad8 | entry=phase_output | pair=implement | phase=verifier | process=codex-agent | cycle=1 | attempt=1 | thread_id=019de8df-9d67-77a3-a352-a28558942623
+---
+I’m reviewing only the `failure-trace-optimizer-alignment` implementation and its adjacent regression surface. First I’m reading the phase criteria, feedback artifact, implementation notes, and the actual diffs in the runtime, history, and optimizer paths that changed.
+
+Reviewing the implementation against the active phase contract now. I’m checking the actual changed runtime paths for leftover dynamic exception metadata, trace/history shape regressions, and optimizer handling of direct controls before I update the phase artifacts.
+
+I’ve got the main changed modules open. Next I’m checking for any leftover `getattr(exc, ...)` recovery and looking at the concrete trace/history normalization branches that decide provider-vs-hook attribution.
+
+The main control-flow plumbing looks aligned so far. I’m narrowing on two places that tend to hide regressions in this codebase: retry feedback generation and history derivation when a step ends via direct control instead of a finalized route.
+
+I’m not seeing leftover exception-attribute mutation in the scoped runtime paths. The remaining check is whether the new structured fields actually survive into reviewer-owned artifacts cleanly enough to claim the acceptance criteria without over-marking anything.
+
+I’ve checked the code paths against the phase intent; I’m running the same focused validation surface the implementer claimed so I can decide the criteria boxes based on observed behavior, not just static inspection.
+
+The focused test surface passed as claimed, and I’m not finding a material mismatch against the scoped acceptance criteria. I’m updating the verifier artifacts now to mark the phase complete with no review findings.
+
+Scope considered
+
+- Phase-local review for `failure-trace-optimizer-alignment`.
+- Reviewed only request-relevant runtime, trace/history, optimizer, retry, and test surfaces plus the active phase artifacts.
+
+What I analyzed
+
+- Active artifacts: `criteria.md`, `feedback.md`, `implementation_notes.md`, and the current turn’s `decisions.txt` block.
+- Changed runtime paths: `autoloop/core/errors.py`, `engine.py`, `extensions.py`, `history.py`, `operations.py`, `providers/retries.py`, `runtime/tracing.py`, `runtime/runner.py`, `autoloop_optimizer/optimization.py`.
+- Focused tests covering retries, tracing, history, optimizer normalization, workspace/context, and engine contracts.
+
+What I reviewed
+
+- Typed failure-carrier replacement for prior exception metadata mutation and recovery.
+- Failure checkpoint persistence on runtime/provider/hook/control-path errors.
+- Step-finalization metadata propagation for `candidate_route`, `final_route`, `runtime_control`, `pending_input_id`, attempt booleans, and hook attribution.
+- History and optimizer handling for direct controls versus provider-selected routes, including `AWAIT_INPUT` terminal vs `question` route vs `awaiting_input` status.
+- Focused validation run: `210 passed in 1.77s`.
+
+Key findings / decisions
+
+- No blocking findings.
+- `criteria.md` is fully checked.
+- `feedback.md` was updated with `IMP-000` noting no blocking findings and the validation result.
+
+Open issues / next step
+
+- No phase-local blockers remain from this review surface.
+- If a later turn broadens scope, the next sensible follow-up is a wider regression pass beyond the focused validation set.
+
+<loop-control>
+{"schema":"docloop.loop_control/v1","kind":"promise","promise":"COMPLETE"}
+</loop-control>
