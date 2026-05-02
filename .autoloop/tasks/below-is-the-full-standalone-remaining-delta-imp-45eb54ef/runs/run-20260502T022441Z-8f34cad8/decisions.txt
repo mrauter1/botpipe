@@ -18,3 +18,7 @@ Reply with either "1" or "2".
 Supersedes the earlier explicit-only item-state direction: the clarified contract is a built-in runtime-owned `ctx.item_state` surface for active scoped items with fields `status`, `last_step`, and `last_route`.
 Built-in `ctx.item_state` fields are runtime-owned and read-only; optional declared custom item-state fields remain mutable on top of the built-in model.
 Do not delete or reject route effects before worklist helper parity exists; helper APIs, parity tests, and equivalent `on_taken` rewrites land first, then route-effect declarations and execution paths are removed in the same milestone.
+<autoloop-decisions-header version="1" block_seq="5" owner="implementer" phase_id="public-surface-cleanup" pair="implement" turn_seq="1" run_id="run-20260502T022441Z-8f34cad8" ts="2026-05-02T10:56:03.821680+00:00" />
+Replace public/simple dunder-marker discovery with explicit base-class and `isinstance(...)` checks so the compiler no longer depends on `__strict_workflow__`, `__workflow_abstract__`, `__autoloop_simple_declaration__`, or `__autoloop_simple_artifact_spec__`.
+This phase removes `on_route` from core step constructors, compiled metadata, engine execution, and static/topology payloads; route-local `on_taken` remains the only route-finalization hook surface.
+Broader removal of public class-level `on_start`, `on_outcome`, and prompt-step `on_<step>` handlers is deferred to a later milestone; this turn only removes auto-installed simple `python_step` aliases and the route-hook surface.

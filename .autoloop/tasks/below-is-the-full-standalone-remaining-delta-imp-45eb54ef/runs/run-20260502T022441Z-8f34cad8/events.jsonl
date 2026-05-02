@@ -14,3 +14,6 @@
 {"ts": "2026-05-02T10:56:03.730276+00:00", "run_id": "run-20260502T022441Z-8f34cad8", "seq": 14, "event_type": "phase_started", "phase_id": "public-surface-cleanup", "phase_mode": "single"}
 {"ts": "2026-05-02T10:56:03.731155+00:00", "run_id": "run-20260502T022441Z-8f34cad8", "seq": 15, "event_type": "pair_started", "pair": "implement", "phase_id": "public-surface-cleanup"}
 {"ts": "2026-05-02T10:56:03.731231+00:00", "run_id": "run-20260502T022441Z-8f34cad8", "seq": 16, "event_type": "cycle_started", "pair": "implement", "cycle": 1, "attempt": 1, "phase_id": "public-surface-cleanup"}
+{"ts": "2026-05-02T11:08:10.595876+00:00", "run_id": "run-20260502T022441Z-8f34cad8", "seq": 17, "event_type": "phase_finished", "pair": "implement", "phase": "producer", "cycle": 1, "attempt": 1, "empty_output": false, "phase_id": "public-surface-cleanup"}
+{"ts": "2026-05-02T11:10:10.687129+00:00", "run_id": "run-20260502T022441Z-8f34cad8", "seq": 18, "event_type": "phase_finished", "pair": "implement", "phase": "verifier", "cycle": 1, "attempt": 1, "empty_output": false, "phase_id": "public-surface-cleanup"}
+{"ts": "2026-05-02T11:10:12.815113+00:00", "run_id": "run-20260502T022441Z-8f34cad8", "seq": 19, "event_type": "cycle_started", "pair": "implement", "cycle": 2, "attempt": 1, "phase_id": "public-surface-cleanup"}
