@@ -168,3 +168,12 @@ No open verification blockers remain. The plan is ready for implementation again
 <loop-control>
 {"schema":"docloop.loop_control/v1","kind":"promise","promise":"COMPLETE"}
 </loop-control>
+
+
+---
+run_id=run-20260502T141345Z-30984601 | entry=phase_scope_resolved
+---
+phase_mode=single
+phase_ids=migrate-exported-workflow-contracts,migrate-runtime-test-surfaces,enforce-repo-compatibility-gate
+explicit=True
+current_phase_index=0

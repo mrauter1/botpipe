@@ -3,5 +3,32 @@
   "created_at": "2026-05-02T14:13:45.972173+00:00",
   "request_file": "/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/below-is-the-full-standalone-remaining-delta-imp-45eb54ef/runs/run-20260502T141345Z-30984601/request.md",
   "artifacts_dir": "/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/below-is-the-full-standalone-remaining-delta-imp-45eb54ef/runs/run-20260502T141345Z-30984601/artifacts",
-  "provider": "codex"
+  "provider": "codex",
+  "phase_plan_path": "/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/below-is-the-full-standalone-remaining-delta-imp-45eb54ef/runs/run-20260502T141345Z-30984601/artifacts/plan/phase_plan.yaml",
+  "phase_plan_version": 1,
+  "active_phase_selection": {
+    "run_id": "run-20260502T141345Z-30984601",
+    "mode": "single",
+    "phase_ids": [
+      "migrate-exported-workflow-contracts",
+      "migrate-runtime-test-surfaces",
+      "enforce-repo-compatibility-gate"
+    ],
+    "explicit": true,
+    "current_phase_index": 0,
+    "current_phase_id": "migrate-exported-workflow-contracts"
+  },
+  "phase_status": {
+    "migrate-exported-workflow-contracts": "in_progress",
+    "migrate-runtime-test-surfaces": "planned",
+    "enforce-repo-compatibility-gate": "planned"
+  },
+  "phase_history": [
+    {
+      "phase_id": "migrate-exported-workflow-contracts",
+      "run_id": "run-20260502T141345Z-30984601",
+      "status": "in_progress",
+      "ts": "2026-05-02T14:26:18.689166+00:00"
+    }
+  ]
 }
