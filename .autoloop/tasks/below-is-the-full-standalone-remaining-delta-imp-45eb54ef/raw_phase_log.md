@@ -48,3 +48,46 @@ Updated the run-local planning artifacts:
 The plan is decomposed into five ordered phases: public-surface cleanup, hook/control unification, scoped state plus worklist helpers, structured failures with trace/history/optimizer alignment, then docs/tests. I also made the non-spec default explicit for later phases: keep `ctx.item_state` explicit-model only, and make `ctx.step_item_state` the guaranteed scoped built-in surface.
 
 I did repository analysis across the core dependency surfaces before writing the plan, including `autoloop/simple.py`, `autoloop/core/{discovery,compiler,steps,hook_validation,topology,engine,context,worklists,errors,history}.py`, and `autoloop/runtime/{tracing,static_graph,runner}.py`. No test execution was needed for the planning turn.
+
+
+---
+run_id=run-20260502T022441Z-8f34cad8 | entry=session_turn | pair=plan | phase=verifier | cycle=1 | attempt=1 | thread_id=019de680-a002-7b52-879e-fa9bf833fa2a
+---
+provider=codex
+mode=resume
+template=/home/rauter/.local/share/pipx/venvs/autoloop/lib/python3.12/site-packages/autoloop/templates/plan_verifier.md
+session_id=019de680-a002-7b52-879e-fa9bf833fa2a
+
+
+---
+run_id=run-20260502T022441Z-8f34cad8 | entry=phase_output | pair=plan | phase=verifier | process=codex-agent | cycle=1 | attempt=1 | thread_id=019de680-a002-7b52-879e-fa9bf833fa2a
+---
+I’m verifying the plan artifacts against the full spec and the repo surfaces the planner analyzed, then I’ll update criteria and append any blocking or non-blocking findings to the run-local feedback file.
+
+I found a sequencing conflict and a user-intent ambiguity in the current plan. I’m confirming the YAML shape quickly, then I’ll record the blocking findings and set the criteria checkboxes accordingly.
+
+I’ve confirmed `phase_plan.yaml` parses. I’m recording two blocking issues now: the plan deletes route effects before the replacement helper API exists, and it hard-chooses one `ctx.item_state` contract branch without user confirmation even though the request leaves that branch open.
+
+Scope considered
+
+Run-local plan verification for [plan.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/below-is-the-full-standalone-remaining-delta-imp-45eb54ef/runs/run-20260502T022441Z-8f34cad8/artifacts/plan/plan.md), [phase_plan.yaml](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/below-is-the-full-standalone-remaining-delta-imp-45eb54ef/runs/run-20260502T022441Z-8f34cad8/artifacts/plan/phase_plan.yaml), [feedback.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/below-is-the-full-standalone-remaining-delta-imp-45eb54ef/runs/run-20260502T022441Z-8f34cad8/artifacts/plan/feedback.md), [criteria.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/below-is-the-full-standalone-remaining-delta-imp-45eb54ef/runs/run-20260502T022441Z-8f34cad8/artifacts/plan/criteria.md), and [decisions.txt](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/below-is-the-full-standalone-remaining-delta-imp-45eb54ef/runs/run-20260502T022441Z-8f34cad8/decisions.txt) against the immutable request snapshot and raw log.
+
+What I analyzed
+
+I checked the plan narrative against the full remaining-delta spec, with focus on intent fidelity, ordering constraints, explicit behavior breaks, compatibility notes, regression controls, and whether unresolved product-contract choices were silently fixed by the planner. I also validated that `phase_plan.yaml` parses and that its required lists are populated.
+
+What I reviewed
+
+I updated [criteria.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/below-is-the-full-standalone-remaining-delta-imp-45eb54ef/runs/run-20260502T022441Z-8f34cad8/artifacts/plan/criteria.md) and appended two blocking findings to [feedback.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/below-is-the-full-standalone-remaining-delta-imp-45eb54ef/runs/run-20260502T022441Z-8f34cad8/artifacts/plan/feedback.md): `PLAN-001` on route-effect deletion sequencing and `PLAN-002` on the unconfirmed `ctx.item_state` branch choice.
+
+Key findings / decisions
+
+`phase_plan.yaml` is valid YAML and its runtime-owned metadata is intact. The plan is not yet acceptable because it conflicts with the spec in one sequencing requirement and silently resolves one open product-contract branch that should have been clarified or left open.
+
+Open issues / next step
+
+The planner needs to revise the phase order so route effects are deleted only after helper parity exists, and it needs to either request confirmation on the `ctx.item_state` branch or keep both allowed branches open in the plan until clarified.
+
+<loop-control>
+{"schema":"docloop.loop_control/v1","kind":"promise","promise":"INCOMPLETE"}
+</loop-control>
