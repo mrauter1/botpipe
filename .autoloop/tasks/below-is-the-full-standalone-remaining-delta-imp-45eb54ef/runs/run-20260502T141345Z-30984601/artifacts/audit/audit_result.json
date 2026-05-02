@@ -1,1 +1,5 @@
-{}
+{
+  "material_gaps_found": false,
+  "summary": "No material unresolved gaps were found; the exported workflow contract migration and its regression gates are in place.",
+  "revised_request_path": "/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/below-is-the-full-standalone-remaining-delta-imp-45eb54ef/runs/run-20260502T141345Z-30984601/artifacts/audit/revised_request.md"
+}
