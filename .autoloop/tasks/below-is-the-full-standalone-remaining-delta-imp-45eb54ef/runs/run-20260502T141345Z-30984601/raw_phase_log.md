@@ -91,3 +91,80 @@ Revise the plan so later implementation includes explicit raw declaration/source
 <loop-control>
 {"schema":"docloop.loop_control/v1","kind":"promise","promise":"INCOMPLETE"}
 </loop-control>
+
+
+---
+run_id=run-20260502T141345Z-30984601 | entry=session_turn | pair=plan | phase=producer | cycle=2 | attempt=1 | thread_id=019de909-cc6d-7190-a1fd-517775cbc998
+---
+provider=codex
+mode=resume
+template=/home/rauter/.local/share/pipx/venvs/autoloop/lib/python3.12/site-packages/autoloop/templates/plan_producer.md
+session_id=019de909-cc6d-7190-a1fd-517775cbc998
+
+
+---
+run_id=run-20260502T141345Z-30984601 | entry=phase_output | pair=plan | phase=producer | process=codex-agent | cycle=2 | attempt=1 | thread_id=019de909-cc6d-7190-a1fd-517775cbc998
+---
+I’m revising the plan against the verifier’s blockers. The key fix is to stop relying on compiled `python_handler(ctx)` as the only regression surface and instead add raw declaration/source-level contract checks for exported workflows, plus an explicit gate for banned hook state-return patterns.
+
+The verifier gap is specific enough that I don’t need broad repo work. I’m checking whether there’s already an existing strictness or inspection pattern I can reuse in the plan for raw declaration-level checks, so the revision stays local instead of inventing new infrastructure.
+
+I’m updating the plan in the smallest way that closes the verifier’s blockers: keep the behavior phases intact, but add an explicit raw authoring-contract audit for exported workflows and remove the compiled-handler-only recommendation where it would mask forbidden signatures.
+
+The revision is in place. I’m doing one readback pass now to make sure the plan and phase contract both explicitly separate raw authoring-contract audits from behavior tests, because that distinction is what the verifier needed.
+
+Scope considered
+The run-local planning artifacts, verifier feedback, shared decisions history, and the compiler behavior that still normalizes raw two-argument `python_step` handlers.
+
+What I analyzed
+The verifier’s two blocking findings against the previous plan, plus the relevant enforcement detail in `autoloop/core/compiler.py` and the existing strictness/public-surface test patterns already used in the repo.
+
+What I changed
+I revised [plan.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/below-is-the-full-standalone-remaining-delta-imp-45eb54ef/runs/run-20260502T141345Z-30984601/artifacts/plan/plan.md) and [phase_plan.yaml](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/below-is-the-full-standalone-remaining-delta-imp-45eb54ef/runs/run-20260502T141345Z-30984601/artifacts/plan/phase_plan.yaml) so the plan now separates behavior tests from raw contract audits. The revised plan explicitly requires a repo-level declaration/source audit for discovered exported workflows to catch forbidden `python_step(state, ctx)` signatures and banned hook state-return forms, instead of relying only on compiled wrappers. I also appended the cycle-2 change note to [feedback.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/below-is-the-full-standalone-remaining-delta-imp-45eb54ef/runs/run-20260502T141345Z-30984601/artifacts/plan/feedback.md) and recorded the non-obvious guardrails under the new turn header in [decisions.txt](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/below-is-the-full-standalone-remaining-delta-imp-45eb54ef/runs/run-20260502T141345Z-30984601/decisions.txt).
+
+Key findings / decisions
+The plan no longer recommends compiled `python_handler(ctx)` as the sole regression surface. It now treats compiled/declaration callables as behavior-test surfaces only, with separate raw exported-workflow audits as the actual contract gate. That closes the verifier’s two blockers without expanding scope into runtime changes or new infrastructure.
+
+Open issues / next step
+The revised plan is ready for re-verification. The remaining step is the verifier pass to confirm the new raw-contract audit requirements are sufficient and to update `criteria.md` accordingly.
+
+
+---
+run_id=run-20260502T141345Z-30984601 | entry=session_turn | pair=plan | phase=verifier | cycle=2 | attempt=1 | thread_id=019de909-cc6d-7190-a1fd-517775cbc998
+---
+provider=codex
+mode=resume
+template=/home/rauter/.local/share/pipx/venvs/autoloop/lib/python3.12/site-packages/autoloop/templates/plan_verifier.md
+session_id=019de909-cc6d-7190-a1fd-517775cbc998
+
+
+---
+run_id=run-20260502T141345Z-30984601 | entry=phase_output | pair=plan | phase=verifier | process=codex-agent | cycle=2 | attempt=1 | thread_id=019de909-cc6d-7190-a1fd-517775cbc998
+---
+I’m doing the final verification pass now. The revised plan appears to address the two blockers by adding raw declaration/source audits, so I’m validating that against the actual compiler behavior and then I’ll either mark the criteria complete or record any remaining gap.
+
+I don’t see a remaining blocker. The revised plan now maps directly to the user’s acceptance criteria and closes the previous masking risk without introducing new runtime scope. I’m marking the criteria complete and appending a final verifier note for continuity.
+
+I’ve marked the checklist and appended the closure note. I’m making one last check for a local YAML parser only because the verifier contract asks for parseability validation; if nothing is installed, I’ll note that I manually validated the structure instead of pretending otherwise.
+
+Scope considered
+The run-local planning artifacts for the exported workflow contract migration, the verifier-owned checklist, the planner feedback history, and the shared decision ledger for both planning cycles.
+
+What I analyzed
+I reviewed the revised `plan.md` and `phase_plan.yaml` against the immutable request and prior verifier blockers. I also checked the relevant compiler behavior that still normalizes two-argument python-step handlers, and I validated `phase_plan.yaml` with `python3` YAML parsing plus required-list checks.
+
+What I reviewed
+I confirmed the cycle 2 revision now separates behavior tests from raw exported-contract audits, adds explicit declaration/source-level checks for forbidden `python_step(state, ctx)` and hook state-return patterns, preserves the discovered-package compile sweep as a complementary gate, and stays aligned with the later turn-2 decisions in `decisions.txt`. I updated `criteria.md` to all checked and appended a final continuity note to `feedback.md`.
+
+Key findings / decisions
+No remaining blocking findings.
+`PLAN-001` and `PLAN-002` are addressed by the revised raw-contract audit requirement.
+`criteria.md` is now fully checked, which matches the current verification result.
+`phase_plan.yaml` metadata and phase structure are valid and coherent, and the YAML parses successfully.
+
+Open issues / next step
+No open verification blockers remain. The plan is ready for implementation against the revised three-phase contract and validation gates.
+
+<loop-control>
+{"schema":"docloop.loop_control/v1","kind":"promise","promise":"COMPLETE"}
+</loop-control>
