@@ -1813,3 +1813,129 @@ Open issues / next step
 <loop-control>
 {"schema":"docloop.loop_control/v1","kind":"promise","promise":"COMPLETE"}
 </loop-control>
+
+
+---
+run_id=run-20260502T022441Z-8f34cad8 | entry=session_turn | pair=implement | phase=producer | cycle=1 | attempt=1 | thread_id=019de8fa-691b-76b1-9044-1ee3cb84df0d
+---
+provider=codex
+mode=start
+template=/home/rauter/.local/share/pipx/venvs/autoloop/lib/python3.12/site-packages/autoloop/templates/implement_producer.md
+session_id=019de8fa-691b-76b1-9044-1ee3cb84df0d
+
+
+---
+run_id=run-20260502T022441Z-8f34cad8 | entry=phase_output | pair=implement | phase=producer | process=codex-agent | cycle=1 | attempt=1 | thread_id=019de8fa-691b-76b1-9044-1ee3cb84df0d
+---
+I’m treating this as the docs-and-tests phase only. First I’m reading the phase artifacts and the current doc/test surfaces to identify what still reflects the removed hook, route-effect, and legacy result models.
+
+I’ve got the prior decisions and the current phase scope. Next I’m scanning docs and tests for stale references to positional hooks, `AfterStepResult`, `on_route`, route effects, and the old artifact vocabulary so I can limit edits to the actual remaining delta.
+
+The scan shows two kinds of remaining work: actual stale docs/examples, and tests that still assert removed phases or old hook signatures. I’m opening the narrow set of files around those references before I edit anything.
+
+I’ve confirmed the main stale public docs are concentrated in `docs/authoring.md`, and there are still trace/history tests expecting the removed `on_route` phase. I’m checking the doc baseline assertions and then I’ll patch docs plus the affected tests together so the contract stays aligned.
+
+I’ve narrowed the remaining mismatches to a small set of doc examples plus a few tests still naming the removed `on_route` phase. I’m running the focused suites now to confirm exactly which assertions need to move with the public contract.
+
+`pytest` isn’t on the shell `PATH` here. I’m checking the local environment wrapper the repo uses and then I’ll run the same focused suites through that instead of guessing.
+
+The focused docs/unit/runtime suite is still running cleanly so far. The contract-suite filter was malformed, so I’m rerunning that with explicit test names instead of a free-form `-k` expression.
+
+The public docs still have a few real contract mismatches: one `python_step` example still uses the removed `(state, ctx)` form, the worklist section still teaches `Advance(...)`, and two active authoring templates still say `route_required_outputs`. I’m patching those surfaces and tightening the doc tests around the final vocabulary.
+
+I’ve got the edit set. I’m changing the authoring doc to the final `hook(ctx)` and worklist-helper model, updating the recursive templates to `route_required_writes`, and switching the synthetic trace/history tests off the removed `on_route` phase.
+
+The edits are in. I’m validating the exact files I changed first, then I’ll update the phase notes with the scope, preserved invariants, and validation record.
+
+One recursive template still used the removed `route_required_outputs` term. I’m fixing that last template reference and rerunning the same focused validation.
+
+The focused doc/runtime checks are green. I’m doing one broader pass across the contract, unit, runtime static-graph/history/tracing, and optimizer-adjacent suites named in the phase contract so the notes reflect a real end-to-end validation set.
+
+The broader suite is still in flight; the worktree is very dirty outside this phase, so I’m ignoring unrelated deletions and only tracking the doc/template/runtime-test files I touched. Once the test run exits, I’ll write the phase notes and stop.
+
+Validation is complete: the broader phase suite passed. I’m recording the two non-obvious outcomes for later turns, then I’ll update the phase notes with files, checklist mapping, invariants, and the exact test commands I ran.
+
+The phase notes and decision ledger are updated. I’m doing one last sanity read on the touched files so the close-out can stay short and factual.
+
+There’s one small doc cleanup left: the new worklist example should be self-contained rather than relying on implicit imports. I’m fixing that snippet now; no contract change, just readability.
+
+Scope considered
+
+Phase-local `docs-and-tests` only. I limited changes to active docs, recursive authoring templates used as contract guidance, synthetic trace/history expectations, and the phase artifacts (`implementation_notes.md`, `decisions.txt`). I ignored unrelated dirty files in the worktree.
+
+What I analyzed
+
+I read the phase plan, prior decisions, and the active notes/feedback files, then scanned docs/tests for stale references to removed surfaces: multi-arity hooks, `(state, ctx)` `python_step` examples, route effects, `route_required_outputs`, and `on_route` as a live hook phase. I validated the affected contract/unit/runtime/static-graph/history/optimizer-adjacent suites after the edits.
+
+What I changed
+
+`docs/authoring.md` now documents only final `hook(ctx)` usage, final hook return values, direct runtime controls, `python_step(ctx)` returns, and helper-based worklist progression via `ctx.worklist(...)`, `ctx.worklists.<name>`, and `ctx.current_worklist`.
+
+I updated the recursive templates under `recursive_autoloop/run_recursive_autoloop_templates/` to use `route_required_writes` instead of removed `route_required_outputs`, tightened `tests/test_architecture_baseline_docs.py` to guard that vocabulary and the new doc examples, and switched the synthetic phase name in `tests/runtime/test_history.py` and `tests/runtime/test_runtime_tracing.py` from removed `on_route` to `on_taken`.
+
+I also updated the phase `implementation_notes.md` and appended the non-obvious phase decisions to the current turn block in `decisions.txt`.
+
+Key findings / decisions
+
+The remaining phase drift was mostly documentation drift, not runtime behavior. The only non-obvious choice I recorded is that the recursive authoring templates count as active contract guidance for this phase, so they were migrated with the public docs rather than left stale.
+
+Validation passed:
+`./.venv/bin/pytest -q tests/test_architecture_baseline_docs.py`
+`./.venv/bin/pytest -q tests/contract/test_engine_contracts.py tests/unit/test_simple_surface.py tests/unit/test_validation.py tests/unit/test_primitives_and_stores.py tests/unit/test_optimization_helpers.py tests/runtime/test_runtime_static_graph.py tests/runtime/test_history.py tests/runtime/test_runtime_tracing.py`
+
+That broader run passed with `361 passed`; the existing warnings were unrelated Pydantic field-name warnings in workflow contract models.
+
+Open issues / next step
+
+No open phase-local blockers. The worktree remains dirty outside this scope, but nothing in those unrelated changes was pulled into this phase.
+
+
+---
+run_id=run-20260502T022441Z-8f34cad8 | entry=session_turn | pair=implement | phase=verifier | cycle=1 | attempt=1 | thread_id=019de8fa-691b-76b1-9044-1ee3cb84df0d
+---
+provider=codex
+mode=resume
+template=/home/rauter/.local/share/pipx/venvs/autoloop/lib/python3.12/site-packages/autoloop/templates/implement_verifier.md
+session_id=019de8fa-691b-76b1-9044-1ee3cb84df0d
+
+
+---
+run_id=run-20260502T022441Z-8f34cad8 | entry=phase_output | pair=implement | phase=verifier | process=codex-agent | cycle=1 | attempt=1 | thread_id=019de8fa-691b-76b1-9044-1ee3cb84df0d
+---
+I’m reviewing the docs-and-tests phase artifacts first, then I’ll inspect the touched doc/test diffs against the phase contract and update the criteria and feedback files accordingly.
+
+I’ve got the phase notes and the decision ledger. Next I’m checking the actual touched doc/test diffs and spot-scanning for stale removed-surface terms that would violate AC-1 or leave the new coverage too narrow for AC-2.
+
+The doc edits line up with the requested public contract. I’m doing a quick independent verification run of the same phase-relevant suites rather than relying only on the implementation notes, then I’ll mark criteria and record whether any findings remain.
+
+The focused doc/runtime pass is green. The broader contract/unit/runtime/static-graph/optimizer-adjacent suite is still running; once it exits I’ll finalize the review artifacts.
+
+I didn’t find a correctness or contract gap in the phase-local changes. I’m marking the criteria complete and recording that the review finished with no blocking or non-blocking findings.
+
+Scope considered
+
+Phase-local `docs-and-tests` only. I reviewed the touched public docs, recursive authoring templates treated as active guidance by the run decisions, the updated runtime-history/tracing tests, and the phase artifacts under the active review directory.
+
+What I analyzed
+
+I checked the implementation notes against the accepted phase contract and the run-local decisions, then spot-scanned the touched surfaces for stale references to positional hooks, `(state, ctx)` `python_step` examples, `on_route` as a live phase, route effects, and removed route/output vocabulary. I independently reran the same phase-relevant validation suites instead of relying only on the notes.
+
+What I reviewed
+
+The doc changes now present only final `hook(ctx)` usage, final hook return forms, direct controls, and helper-based worklist progression. The synthetic history/tracing expectations were updated from removed `on_route` to route-local `on_taken`, which matches the earlier public-surface cleanup decision. Validation passed on both:
+`./.venv/bin/pytest -q tests/test_architecture_baseline_docs.py tests/runtime/test_history.py tests/runtime/test_runtime_tracing.py`
+and
+`./.venv/bin/pytest -q tests/contract/test_engine_contracts.py tests/unit/test_simple_surface.py tests/unit/test_validation.py tests/unit/test_primitives_and_stores.py tests/unit/test_optimization_helpers.py tests/runtime/test_runtime_static_graph.py tests/runtime/test_history.py tests/runtime/test_runtime_tracing.py`
+with `361 passed` and only pre-existing Pydantic warnings.
+
+Key findings / decisions
+
+No blocking or non-blocking findings. The criteria file is fully checked, and the feedback file records that the review completed without findings.
+
+Open issues / next step
+
+No phase-local issues remain from this review.
+
+<loop-control>
+{"schema":"docloop.loop_control/v1","kind":"promise","promise":"COMPLETE"}
+</loop-control>

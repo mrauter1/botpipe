@@ -1888,3 +1888,54 @@ That broader run passed with `361 passed`; the existing warnings were unrelated 
 Open issues / next step
 
 No open phase-local blockers. The worktree remains dirty outside this scope, but nothing in those unrelated changes was pulled into this phase.
+
+
+---
+run_id=run-20260502T022441Z-8f34cad8 | entry=session_turn | pair=implement | phase=verifier | cycle=1 | attempt=1 | thread_id=019de8fa-691b-76b1-9044-1ee3cb84df0d
+---
+provider=codex
+mode=resume
+template=/home/rauter/.local/share/pipx/venvs/autoloop/lib/python3.12/site-packages/autoloop/templates/implement_verifier.md
+session_id=019de8fa-691b-76b1-9044-1ee3cb84df0d
+
+
+---
+run_id=run-20260502T022441Z-8f34cad8 | entry=phase_output | pair=implement | phase=verifier | process=codex-agent | cycle=1 | attempt=1 | thread_id=019de8fa-691b-76b1-9044-1ee3cb84df0d
+---
+I’m reviewing the docs-and-tests phase artifacts first, then I’ll inspect the touched doc/test diffs against the phase contract and update the criteria and feedback files accordingly.
+
+I’ve got the phase notes and the decision ledger. Next I’m checking the actual touched doc/test diffs and spot-scanning for stale removed-surface terms that would violate AC-1 or leave the new coverage too narrow for AC-2.
+
+The doc edits line up with the requested public contract. I’m doing a quick independent verification run of the same phase-relevant suites rather than relying only on the implementation notes, then I’ll mark criteria and record whether any findings remain.
+
+The focused doc/runtime pass is green. The broader contract/unit/runtime/static-graph/optimizer-adjacent suite is still running; once it exits I’ll finalize the review artifacts.
+
+I didn’t find a correctness or contract gap in the phase-local changes. I’m marking the criteria complete and recording that the review finished with no blocking or non-blocking findings.
+
+Scope considered
+
+Phase-local `docs-and-tests` only. I reviewed the touched public docs, recursive authoring templates treated as active guidance by the run decisions, the updated runtime-history/tracing tests, and the phase artifacts under the active review directory.
+
+What I analyzed
+
+I checked the implementation notes against the accepted phase contract and the run-local decisions, then spot-scanned the touched surfaces for stale references to positional hooks, `(state, ctx)` `python_step` examples, `on_route` as a live phase, route effects, and removed route/output vocabulary. I independently reran the same phase-relevant validation suites instead of relying only on the notes.
+
+What I reviewed
+
+The doc changes now present only final `hook(ctx)` usage, final hook return forms, direct controls, and helper-based worklist progression. The synthetic history/tracing expectations were updated from removed `on_route` to route-local `on_taken`, which matches the earlier public-surface cleanup decision. Validation passed on both:
+`./.venv/bin/pytest -q tests/test_architecture_baseline_docs.py tests/runtime/test_history.py tests/runtime/test_runtime_tracing.py`
+and
+`./.venv/bin/pytest -q tests/contract/test_engine_contracts.py tests/unit/test_simple_surface.py tests/unit/test_validation.py tests/unit/test_primitives_and_stores.py tests/unit/test_optimization_helpers.py tests/runtime/test_runtime_static_graph.py tests/runtime/test_history.py tests/runtime/test_runtime_tracing.py`
+with `361 passed` and only pre-existing Pydantic warnings.
+
+Key findings / decisions
+
+No blocking or non-blocking findings. The criteria file is fully checked, and the feedback file records that the review completed without findings.
+
+Open issues / next step
+
+No phase-local issues remain from this review.
+
+<loop-control>
+{"schema":"docloop.loop_control/v1","kind":"promise","promise":"COMPLETE"}
+</loop-control>
