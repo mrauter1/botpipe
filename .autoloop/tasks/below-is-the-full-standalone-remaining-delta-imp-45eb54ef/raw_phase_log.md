@@ -2201,3 +2201,42 @@ Updated the run-local planning artifacts:
 The plan is now a 3-phase implementation path: migrate the 16 exported `workflow.py` packages to `ctx`-only hooks and `python_step(ctx)`, migrate runtime tests off legacy `WorkflowClass.on_*` helper calls, then enforce the repo-level compile/strictness gate. I also captured the non-obvious constraint that later turns should not add compatibility shims and should treat compiled step hooks/python handlers as the supported direct-test surface.
 
 Validation performed: I confirmed in `.venv` that all 16 discovered exported packages currently fail `compile_workflow(...)`, with the first blocking error in each case being an `after_review` hook arity mismatch against `hook(ctx)`. I did not run the full pytest suite in this planning turn.
+
+
+---
+run_id=run-20260502T141345Z-30984601 | entry=session_turn | pair=plan | phase=verifier | cycle=1 | attempt=1 | thread_id=019de909-cc6d-7190-a1fd-517775cbc998
+---
+provider=codex
+mode=resume
+template=/home/rauter/.local/share/pipx/venvs/autoloop/lib/python3.12/site-packages/autoloop/templates/plan_verifier.md
+session_id=019de909-cc6d-7190-a1fd-517775cbc998
+
+
+---
+run_id=run-20260502T141345Z-30984601 | entry=phase_output | pair=plan | phase=verifier | process=codex-agent | cycle=1 | attempt=1 | thread_id=019de909-cc6d-7190-a1fd-517775cbc998
+---
+I’m verifying the plan against the repo’s actual enforcement points now, especially whether the proposed regression coverage would really catch reintroduced raw `python_step(state, ctx)` handlers and hook state-return replacements. That’s the main place a planning gap would turn into a false green later.
+
+The main issue is now clear: the plan’s proposed direct-test surface would let a reintroduced raw `python_step(state, ctx)` pass unnoticed because the compiler still wraps two-argument handlers. I’m recording that and the missing hook-return regression gate as blocking findings, then I’ll finalize the criteria state and verdict.
+
+Scope considered
+Run-local plan verification for the exported workflow contract migration request, including the authoritative request snapshot, raw log, planner artifacts, and shared decisions.
+
+What I analyzed
+The primary plan in `plan.md`, the ordered phase contract in `phase_plan.yaml`, the current verification checklist state in `criteria.md`, the planner-added decisions, and the relevant runtime/compiler enforcement points in `autoloop/core/compiler.py` and `autoloop/core/engine_collaborators.py`.
+
+What I reviewed
+I confirmed the plan covers the 16 affected exported packages and the repo-level compile sweep. I also checked whether the proposed regression strategy would actually catch the user-required contract removals. The key compiler detail is that `_compile_system_handler(...)` still accepts raw handler arity `1` or `2` and wraps arity-2 handlers into a ctx-only compiled callable, which matters for the proposed test migration.
+
+Key findings / decisions
+I appended two blocking findings to `feedback.md`.
+`PLAN-001` blocks the plan because the proposed switch to `compiled.steps[name].python_handler(ctx)` can hide forbidden raw `python_step(state, ctx)` definitions, so it does not fully protect the requested final public contract.
+`PLAN-002` blocks the plan because it does not add a concrete repo-level regression gate for hook state-replacement returns; compile parity only catches hook arity, and runtime suites will not reliably execute every exported hook.
+`criteria.md` remains fully unchecked, which is accurate given the blocking gaps.
+
+Open issues / next step
+Revise the plan so later implementation includes explicit raw declaration/source-level regression checks for exported `python_step` arity and exported hook return forms, rather than relying only on compiled/runtime execution surfaces. After that, re-run plan verification.
+
+<loop-control>
+{"schema":"docloop.loop_control/v1","kind":"promise","promise":"INCOMPLETE"}
+</loop-control>
