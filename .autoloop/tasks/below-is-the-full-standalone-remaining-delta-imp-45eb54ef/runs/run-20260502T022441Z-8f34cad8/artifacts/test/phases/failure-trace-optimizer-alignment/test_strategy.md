@@ -16,7 +16,7 @@
 - Optimizer normalization of final control vocabulary:
   covered by direct-runtime-control corpus tests and a provider `question` route case that keeps `route="question"` while still deriving `local_outcome="awaiting_input"` from the `AWAIT_INPUT` terminal.
 - Runner/child summary propagation:
-  covered by child-workflow workspace tests asserting paused child runs persist `pending_input` metadata and child `finalization` route/attempt fields.
+  covered by child-workflow workspace tests asserting paused child runs persist `pending_input` metadata and child `finalization` route/attempt attribution without baking omitted fields into the expected contract.
 
 ## Preserved Invariants Checked
 
@@ -31,5 +31,5 @@
 
 ## Known Gaps
 
-- Child summary `finalization` for provider `question` routes currently omits `pending_input_id` and `terminal`; paused-child coverage asserts the emitted route and attempt fields without normalizing absent fields elsewhere.
+- Child summary `finalization` for provider `question` routes currently omits `pending_input_id` and `terminal`; paused-child coverage intentionally leaves those fields unspecified so a later runtime fix can add them without forcing a test rewrite.
 - No new full-suite run in this phase; validation stays focused on the changed runtime and consumer surfaces.

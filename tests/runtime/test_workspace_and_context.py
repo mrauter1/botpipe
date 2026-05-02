@@ -1341,21 +1341,17 @@ def test_context_invoke_workflow_by_name_creates_isolated_child_runs_without_inh
         "question": "Child question?",
         "handoff": None,
     }
-    assert child_records[0]["finalization"] == {
-        "candidate_route": "question",
-        "final_route": "question",
-        "runtime_control": None,
-        "pending_input_id": None,
-        "target_step": None,
-        "terminal": None,
-        "provider_attributable": True,
-        "provider_attempted": True,
-        "producer_attempted": None,
-        "verifier_attempted": None,
-        "source_hook": None,
-        "source_phase": None,
-        "hook_route_redirects": [],
-    }
+    finalization = child_records[0]["finalization"]
+    assert finalization["candidate_route"] == "question"
+    assert finalization["final_route"] == "question"
+    assert finalization["runtime_control"] is None
+    assert finalization["provider_attributable"] is True
+    assert finalization["provider_attempted"] is True
+    assert finalization["producer_attempted"] is None
+    assert finalization["verifier_attempted"] is None
+    assert finalization["source_hook"] is None
+    assert finalization["source_phase"] is None
+    assert finalization["hook_route_redirects"] == []
 
 
 def test_context_invoke_workflow_records_stable_child_metadata_shape_for_fatal_children(tmp_path: Path) -> None:

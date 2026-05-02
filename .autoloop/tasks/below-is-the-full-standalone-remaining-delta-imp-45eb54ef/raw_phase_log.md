@@ -1716,3 +1716,49 @@ Open issues / next step
 <loop-control>
 {"schema":"docloop.loop_control/v1","kind":"promise","promise":"INCOMPLETE"}
 </loop-control>
+
+
+---
+run_id=run-20260502T022441Z-8f34cad8 | entry=session_turn | pair=test | phase=producer | cycle=2 | attempt=1 | thread_id=019de8df-9d67-77a3-a352-a28558942623
+---
+provider=codex
+mode=resume
+template=/home/rauter/.local/share/pipx/venvs/autoloop/lib/python3.12/site-packages/autoloop/templates/test_producer.md
+session_id=019de8df-9d67-77a3-a352-a28558942623
+
+
+---
+run_id=run-20260502T022441Z-8f34cad8 | entry=phase_output | pair=test | phase=producer | process=codex-agent | cycle=2 | attempt=1 | thread_id=019de8df-9d67-77a3-a352-a28558942623
+---
+I’m addressing the audit finding directly: the paused-child test should not codify missing `finalization` fields as intended behavior. I’ll narrow that assertion to the stable, request-relevant fields and update the phase artifacts to reflect the corrected coverage contract.
+
+I’ve confirmed the issue: the test is asserting an omission as if it were contract. I’m changing that to assert only the stable route/attempt fields and updating the strategy/feedback so the remaining limitation is documented as a gap, not normalized as expected behavior.
+
+The assertion shape is fixed. I’m rerunning the touched test slice to make sure the narrowed expectation still passes and that the audit blocker is resolved in practice, not just on paper.
+
+Scope considered
+
+- Phase-local follow-up for `failure-trace-optimizer-alignment` test coverage.
+- Focused only on the audited regression in paused-child finalization expectations, plus the associated phase artifacts.
+
+What I analyzed
+
+- The failing audit point in [tests/runtime/test_workspace_and_context.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/tests/runtime/test_workspace_and_context.py).
+- Current `test_strategy.md` and `feedback.md` entries for this phase.
+- The existing optimizer `question`-route normalization coverage added in the previous cycle.
+
+What I changed
+
+- Narrowed the paused-child `finalization` assertion in [tests/runtime/test_workspace_and_context.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/tests/runtime/test_workspace_and_context.py) so it checks only stable route and attempt-attribution fields, instead of hard-coding omitted `pending_input_id` and `terminal` fields as `None`.
+- Updated [test_strategy.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/below-is-the-full-standalone-remaining-delta-imp-45eb54ef/runs/run-20260502T022441Z-8f34cad8/artifacts/test/phases/failure-trace-optimizer-alignment/test_strategy.md) to state that those omitted fields are intentionally left unspecified by the test.
+- Appended a follow-up note to [feedback.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/below-is-the-full-standalone-remaining-delta-imp-45eb54ef/runs/run-20260502T022441Z-8f34cad8/artifacts/test/phases/failure-trace-optimizer-alignment/feedback.md) describing the corrective change.
+
+Key findings / decisions
+
+- The audit blocker was valid: the prior test normalized an implementation omission into expected behavior.
+- The corrected test still protects the phase-relevant metadata contract without freezing an unconfirmed gap into a permanent expectation.
+
+Open issues / next step
+
+- Focused validation passed: `./.venv/bin/python -m pytest tests/unit/test_optimization_helpers.py tests/runtime/test_workspace_and_context.py -q` with `52 passed in 1.20s`.
+- The remaining documented gap is implementation-side only: if child-run `finalization` later starts carrying `pending_input_id` and `terminal`, the current test will not resist that change.
