@@ -905,3 +905,48 @@ Key findings / decisions
 Open issues / next step
 - Validation completed with `python3 -m py_compile` on the touched core modules and migrated tests, plus a repo sweep for leftover tuple/Event examples.
 - Full runtime test execution is still blocked here because `pytest` and `pydantic` are not installed in this shell.
+
+
+---
+run_id=run-20260502T022441Z-8f34cad8 | entry=session_turn | pair=implement | phase=verifier | cycle=2 | attempt=1 | thread_id=019de885-df79-7b33-a639-f87cf8f67f03
+---
+provider=codex
+mode=resume
+template=/home/rauter/.local/share/pipx/venvs/autoloop/lib/python3.12/site-packages/autoloop/templates/implement_verifier.md
+session_id=019de885-df79-7b33-a639-f87cf8f67f03
+
+
+---
+run_id=run-20260502T022441Z-8f34cad8 | entry=phase_output | pair=implement | phase=verifier | process=codex-agent | cycle=2 | attempt=1 | thread_id=019de885-df79-7b33-a639-f87cf8f67f03
+---
+Reviewing the second implement pass against the three prior blocking findings and the phase acceptance criteria. I’m checking the runtime ownership move first, then I’ll verify the candidate-route attribution and the remaining repo-owned python-step contract surfaces before I update the review artifacts.
+
+The previous blockers look resolved on the code path I checked: the candidate-route distinction is explicit now, the collaborators own real logic, and the repo-owned tuple-return examples are gone apart from the intentional rejection test. I’m updating the review artifacts to mark this pass complete and to record that there are no new findings.
+
+Scope considered
+- Phase-local `hook-control-unification` runtime/compiler changes and the repo-owned python-step tests/templates touched to satisfy `IMP-001` through `IMP-003`.
+- Review artifact edits were limited to the active phase directory.
+
+What I analyzed
+- `autoloop/core/engine_collaborators.py` for actual collaborator ownership of dispatch, hook execution, and route finalization.
+- `autoloop/core/engine.py` for the remaining finalization call sites and `candidate_route` propagation.
+- The migrated repo-owned python-step examples/tests in `tests/contract`, `tests/runtime`, and `tests/unit`.
+
+What I reviewed
+- Whether hook-originated pre-provider routes now preserve `candidate_route=None`.
+- Whether `HookRunner`, `RouteFinalizer`, and `StepDispatcher` are real owners rather than wrappers.
+- Whether repo-owned tuple/state-return examples are gone apart from explicit rejection coverage.
+
+Key findings / decisions
+- No new findings.
+- `IMP-001` is resolved by the explicit `StepFinalizationRequest` / `candidate_route_present` distinction.
+- `IMP-002` is resolved by moving the live hook/finalization/dispatch logic into the collaborator classes and removing the engine-side duplicate path.
+- `IMP-003` is resolved for the repo-owned surface; the only remaining tuple/Event occurrence is the intentional rejection test.
+
+Open issues / next step
+- I marked all criteria complete and appended a cycle-2 resolution note to `feedback.md`.
+- Residual risk is limited to the missing runtime test environment noted by the implementer; I did not identify a remaining blocking correctness or architecture issue in the changed scope.
+
+<loop-control>
+{"schema":"docloop.loop_control/v1","kind":"promise","promise":"COMPLETE"}
+</loop-control>
