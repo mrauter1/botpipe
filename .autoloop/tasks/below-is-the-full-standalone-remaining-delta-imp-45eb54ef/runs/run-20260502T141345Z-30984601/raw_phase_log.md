@@ -863,3 +863,138 @@ No open audit issues for this phase.
 <loop-control>
 {"schema":"docloop.loop_control/v1","kind":"promise","promise":"COMPLETE"}
 </loop-control>
+
+
+---
+run_id=run-20260502T141345Z-30984601 | entry=session_turn | pair=audit | phase=producer | cycle=1 | attempt=1 | thread_id=019de962-2974-7891-8e7a-736313115382
+---
+provider=codex
+mode=start
+template=/home/rauter/.local/share/pipx/venvs/autoloop/lib/python3.12/site-packages/autoloop/templates/audit_producer.md
+session_id=019de962-2974-7891-8e7a-736313115382
+
+
+---
+run_id=run-20260502T141345Z-30984601 | entry=phase_output | pair=audit | phase=producer | process=codex-agent | cycle=1 | attempt=1 | thread_id=019de962-2974-7891-8e7a-736313115382
+---
+Auditing the completed run against the original request and the authoritative run artifacts first. I’ll read the request, clarifications, decisions, and implementation/test artifacts, then compare them to the current workflow packages and tests before writing the audit files.
+
+The run log confirms the intended migration and records a few later implementation decisions that may justify differences. I’m pulling the actual implementation/test artifacts and the current code state now to verify what landed versus what was only planned or discussed.
+
+I’ve confirmed the plan closed its own verifier blockers. Now I’m checking the delivered code and tests directly: static sweeps for the banned authoring patterns, the compile gate, and the migrated test surfaces that used to depend on removed helper forms.
+
+The simple grep already shows a likely residual class of violations: several exported workflows still build `next_state = ctx.state.model_copy(...)`. I’m verifying whether those are returned or assigned back into `ctx.state`, and checking for any remaining raw two-argument handlers or legacy direct-helper tests.
+
+I’ve confirmed the repo added dedicated helper-based compiled-surface tests and a strictness audit in `tests/unit/test_simple_surface.py`. Next I’m reading those exact checks and running the compile/test gates they claim to cover, because the remaining question is whether the delivered implementation actually satisfies them.
+
+The strictness test now explicitly bans `return next_state`, `return ctx.state`, and raw `python_step(state, ctx)` in discovered exported workflow sources. I’m checking whether the current sources are actually clean under those exact patterns and then running the parity and strictness tests in the project venv.
+
+The source-level audit is clean and the discovered-package compile sweep now passes all 16 packages. I’m polling the parity test run to capture whether the runtime gate also finished green, since that determines whether any remaining gap is implementation or just documentation in the run artifacts.
+
+The acceptance gates are green: the raw-source audit reports zero violations, the discovered workflow compile sweep passes all 16 packages, and `tests/unit/test_simple_surface.py tests/runtime/test_workflow_integration_parity.py` passed. I’m doing one last targeted search for lingering test-side direct helper calls and sampling a few migrated workflow files so the audit can state the remaining-risk level accurately.
+
+The migrated sources look structurally correct on spot-check: hooks are `ctx`-only and `python_step` resets now assign back through `ctx.state` instead of returning replacement state. I’m reading the tail of the authoritative phase log now to capture whether any known exclusions or residual failures were recorded during implement/test, so the audit does not overstate completion.
+
+The run log shows a few out-of-scope-adjacent fixes beyond the 16 `workflow.py` files: route handoff cleanup, overlay runnable-root detection, and autoloop-v1 parity session/pending-input normalization. I’m spot-checking those now so the audit can classify them as justified implementation support work rather than unexplained scope drift.
+
+I found the phase-local implement and test artifacts after expanding the artifact search. I’m reading the phase notes and criteria summaries now so the audit can distinguish what was actually claimed, independently verified, and left as a justified ancillary change.
+
+I have enough evidence to write the audit artifacts now. I’m updating the run-local audit files with a no-gap conclusion, while being explicit about the ancillary fixes that were justified by the run decisions and recorded analysis.
+
+The audit files are written. I’m doing a quick readback to make sure the JSON is valid and the criteria file didn’t retain stale unchecked duplicates from the placeholder content.
+
+The main audit files are correct; only `criteria.md` retained the original unchecked placeholders. I’m cleaning that file so the audit artifact is unambiguous before I close the turn.
+
+Scope considered
+
+Original request, authoritative raw log clarifications, `decisions.txt`, plan/implement/test artifacts for this run, the final codebase under `workflows/*`, migrated tests, and the repo-level compile/raw-contract gates.
+
+What I analyzed
+
+- Independent source audit against the removed exported-contract patterns in `tests/unit/test_simple_surface.py`: `0` violations.
+- Independent discovered-package compile sweep: `16` compiled, `0` failures.
+- Independent fast gate rerun: `./.venv/bin/pytest tests/unit/test_simple_surface.py tests/runtime/test_workflow_integration_parity.py` passed with `62 passed`.
+- Run artifacts claiming the broader narrowed acceptance rerun passed with `421 passed, 602 warnings`.
+- Remaining scope-adjacent changes in `autoloop_optimizer/candidate_surfaces.py`, `workflows/autoloop_v1/parity.py`, and parity tests to determine whether they were justified or drift.
+
+What I changed
+
+- Wrote `artifacts/audit/gap_report.md` with evidence-backed intent, implementation, justified differences, and gap classification.
+- Wrote `artifacts/audit/revised_request.md` stating no follow-up implementation is required.
+- Wrote valid `artifacts/audit/audit_result.json` with `"material_gaps_found": false`.
+- Updated `artifacts/audit/criteria.md` and `artifacts/audit/feedback.md` to reflect the completed audit.
+
+Key findings / decisions
+
+- No material unresolved gaps were found against the original request.
+- The requested acceptance criteria are satisfied by the current code and tests: discovered exported workflows compile, the raw removed forms are absent from exported sources, and migrated tests no longer rely on removed direct helper surfaces.
+- The scope-adjacent fixes were justified by recorded analysis and decisions:
+  overlay runnable-root detection was needed to keep publication coverage valid in this repo layout,
+  autoloop-v1 parity updates were needed for the canonical session path and normalized `pending_input.question`,
+  and route `handoff=` metadata had to be removed where compiler-enforced validation now rejects it for downstream `python_step` targets.
+
+Open issues / next step
+
+No follow-up implementation run is required for this request. The verifier should confirm the audit artifacts and final no-gap classification.
+
+<loop-control>
+{"schema":"docloop.loop_control/v1","kind":"promise","promise":"INCOMPLETE"}
+</loop-control>
+
+
+---
+run_id=run-20260502T141345Z-30984601 | entry=session_turn | pair=audit | phase=verifier | cycle=1 | attempt=1 | thread_id=019de962-2974-7891-8e7a-736313115382
+---
+provider=codex
+mode=resume
+template=/home/rauter/.local/share/pipx/venvs/autoloop/lib/python3.12/site-packages/autoloop/templates/audit_verifier.md
+session_id=019de962-2974-7891-8e7a-736313115382
+
+
+---
+run_id=run-20260502T141345Z-30984601 | entry=phase_output | pair=audit | phase=verifier | process=codex-agent | cycle=1 | attempt=1 | thread_id=019de962-2974-7891-8e7a-736313115382
+---
+Verifying the audit artifacts against the request, decisions, current code, and the audit’s own evidence now. I’ll re-read the audit outputs, re-check the critical gates they cite, and then either mark the audit complete or append blocking findings.
+
+The audit artifacts are internally consistent so far. I’m rerunning the same contract checks independently now, plus one direct search for the removed exported forms, to confirm the no-gap conclusion is supported by the current code rather than only by the producer’s write-up.
+
+The independent verification checks match the audit’s core claims so far: compile sweep and raw exported-source audit are both clean. I’m polling the fast pytest gate now; if that also stays green, this looks like a complete audit with no blocking findings.
+
+The audit holds up under independent reruns, so I’m only updating the verifier-owned feedback with a stable-ID clean pass note. Criteria already match the verified state and stay fully checked.
+
+Scope considered
+
+The immutable request, authoritative raw log, `decisions.txt`, the audit artifacts in `artifacts/audit`, the earlier plan/implement/test artifacts relevant to this run, and the final workflow/test code needed to confirm the audit’s no-gap classification.
+
+What I analyzed
+
+- `artifacts/audit/gap_report.md`
+- `artifacts/audit/revised_request.md`
+- `artifacts/audit/audit_result.json`
+- `artifacts/audit/criteria.md`
+- `artifacts/audit/feedback.md`
+- The compile/raw-contract gates and representative migrated workflow/test surfaces cited by the audit
+
+What I reviewed
+
+- Independent discovered-package compile sweep: `COMPILED_COUNT=16`, `FAILURE_COUNT=0`
+- Independent removed-form source audit using the repo’s own exported-workflow patterns: `VIOLATION_COUNT=0`
+- Independent fast gate rerun: `./.venv/bin/pytest -q tests/unit/test_simple_surface.py tests/runtime/test_workflow_integration_parity.py`
+  Result: `62 passed, 28 warnings`
+- The audit’s justification for adjacent changes in `autoloop_optimizer/candidate_surfaces.py`, `workflows/autoloop_v1/parity.py`, and parity tests against the recorded run decisions
+
+Key findings / decisions
+
+- No blocking audit defects found.
+- The audit artifacts are internally consistent: `material_gaps_found` is `false`, `revised_request.md` correctly says no follow-up implementation is required, and `gap_report.md` supports that conclusion with concrete evidence.
+- The criteria file is accurate as fully checked.
+- I appended one verifier-owned stable-ID note to `artifacts/audit/feedback.md`:
+  `AUD-001 | non-blocking | Verified clean audit...`
+
+Open issues / next step
+
+No open audit issues remain. The audit is complete.
+
+<loop-control>
+{"schema":"docloop.loop_control/v1","kind":"promise","promise":"COMPLETE"}
+</loop-control>

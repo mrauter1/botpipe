@@ -49,3 +49,6 @@
 {"ts": "2026-05-02T15:50:17.071078+00:00", "run_id": "run-20260502T141345Z-30984601", "seq": 49, "event_type": "phase_completed", "pair": "test", "phase_id": "enforce-repo-compatibility-gate", "phase_mode": "single"}
 {"ts": "2026-05-02T15:50:17.072801+00:00", "run_id": "run-20260502T141345Z-30984601", "seq": 50, "event_type": "pair_started", "pair": "audit", "phase_id": null}
 {"ts": "2026-05-02T15:50:17.072883+00:00", "run_id": "run-20260502T141345Z-30984601", "seq": 51, "event_type": "cycle_started", "pair": "audit", "cycle": 1, "attempt": 1, "phase_id": null}
+{"ts": "2026-05-02T15:54:44.783884+00:00", "run_id": "run-20260502T141345Z-30984601", "seq": 52, "event_type": "phase_finished", "pair": "audit", "phase": "producer", "cycle": 1, "attempt": 1, "empty_output": false, "phase_id": null}
+{"ts": "2026-05-02T15:55:55.375070+00:00", "run_id": "run-20260502T141345Z-30984601", "seq": 53, "event_type": "phase_finished", "pair": "audit", "phase": "verifier", "cycle": 1, "attempt": 1, "empty_output": false, "phase_id": null}
+{"ts": "2026-05-02T15:55:55.406853+00:00", "run_id": "run-20260502T141345Z-30984601", "seq": 54, "event_type": "pair_completed", "pair": "audit", "cycle": 1, "attempt": 1, "phase_id": null}
