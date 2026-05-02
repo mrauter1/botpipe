@@ -8,16 +8,16 @@ phases:
     status: "planned"
     in_scope:
       - "Remove public `on_route` and internal `on_route_hook` from declarations, compiled metadata, execution, topology, and capability/debug payloads."
-      - "Remove route `effects` from `Route`, `CompiledRoute`, topology validation, and generated artifacts."
       - "Remove public aliases and markers for `outputs`, `review_outputs`, `produces`, auto-installed `on_<step>` handlers, and dunder-based simple declaration discovery."
       - "Restrict the public compiler path to step-local routes and explicit declarations only."
     out_of_scope:
+      - "Deleting or rejecting route effects before helper parity exists."
       - "Changing strict/internal authoring beyond what is required to isolate it from the public path."
       - "Adding compatibility shims or fallback lowering for removed public APIs."
     dependencies: []
     acceptance_criteria:
       - id: "AC-1"
-        text: "Public declarations reject `on_route` and `Route.to(..., effects=...)`, and compiled steps/routes no longer expose `on_route_hook` or route effects."
+        text: "Public declarations reject `on_route`, and compiled steps no longer expose `on_route_hook`."
       - id: "AC-2"
         text: "Capability, topology, and static-graph payloads emit only `writes`, `producer_writes`, and `verifier_writes`."
     deliverables:
@@ -59,15 +59,14 @@ phases:
 
   - phase_id: "scoped-state-worklists"
     title: "Scoped State And Worklists"
-    objective: "Guarantee scoped step-item runtime state and replace route effects with first-class worklist helper APIs."
+    objective: "Guarantee scoped step and item runtime state, add worklist helpers, and then remove route effects after helper parity."
     status: "planned"
     in_scope:
       - "Always expose built-in `ctx.step_item_state` for scoped steps while keeping runtime-owned fields read-only."
-      - "Keep `ctx.item_state` explicit-only through declared worklist `item_state` models."
+      - "Introduce a built-in runtime-owned `ctx.item_state` model for active scoped items with `status`, `last_step`, and `last_route`, while keeping optional custom declared item-state fields mutable."
       - "Add `ctx.worklist(name)`, `ctx.worklists`, `ctx.current_worklist`, and `WorklistRuntimeView` helper methods."
-      - "Checkpoint and trace helper-driven selection/status mutations and delete route-effect execution paths."
+      - "Checkpoint and trace helper-driven selection/status mutations, migrate route-effect behaviors to helpers plus `on_taken`, and delete route-effect declarations and engine execution only after parity tests pass."
     out_of_scope:
-      - "Introducing a new built-in work-item-wide runtime state model."
       - "Implicit helper-driven routing on exhaustion or status changes."
     dependencies:
       - "hook-control-unification"
@@ -75,9 +74,11 @@ phases:
       - id: "AC-1"
         text: "Scoped steps expose `ctx.step_item_state` even without custom declared step-item state."
       - id: "AC-2"
-        text: "Worklist helper methods mutate selection/status, emit runtime events, and checkpoint current runtime state without auto-routing."
+        text: "Active scoped items expose built-in `ctx.item_state` fields `status`, `last_step`, and `last_route`; built-in fields are read-only and optional custom item-state fields remain mutable."
       - id: "AC-3"
-        text: "Route effects are fully removed and equivalent workflows run through `on_taken` hooks plus worklist helpers."
+        text: "Worklist helper methods mutate selection/status, emit runtime events, and checkpoint current runtime state without auto-routing."
+      - id: "AC-4"
+        text: "Route effects are fully removed only after equivalent workflows run through `on_taken` hooks plus worklist helpers."
     deliverables:
       - "Public worklist runtime API."
       - "Scoped state/runtime updates aligned with helper tracing and checkpointing."

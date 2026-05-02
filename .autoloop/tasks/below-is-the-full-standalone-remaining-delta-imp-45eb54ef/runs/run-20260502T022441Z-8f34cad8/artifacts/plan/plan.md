@@ -3,14 +3,14 @@
 ## Contract
 - Implement the pasted remaining-delta spec as written with no compatibility shims, migration aliases, or silent coercions.
 - Keep the public authoring/compiler path derived from step-local routes only; removed public surfaces must fail fast at declaration or validation time.
-- Adopt the minimal item-state rule: `ctx.step_item_state` becomes guaranteed for scoped steps, while `ctx.item_state` remains available only when the worklist declares `item_state=...`.
+- Guarantee `ctx.step_item_state` for scoped steps and add a small built-in runtime-owned `ctx.item_state` model for active scoped items.
+- The built-in `ctx.item_state` contract is `status`, `last_step`, and `last_route`; those fields are runtime-owned and read-only, while custom declared item-state fields remain mutable.
 - Preserve mutated state, step state, scoped state, worklist selection, and sessions on every failure path by checkpointing current runtime data instead of restoring prior snapshots.
 
 ## Milestones
 ### 1. Public Surface And Compiler Cleanup
 Scope:
 - Remove public `on_route` and internal `on_route_hook` from steps, compiler output, engine execution, topology artifacts, capability payloads, docs, and tests.
-- Remove route `effects` from `Route`, `CompiledRoute`, topology validation, and generated artifacts.
 - Remove legacy public/simple surfaces: auto-installed `on_<step>` handlers, class-level public `transitions` / `flow`, class-level outcome middleware on the public path, and old declaration markers based on dunder flags.
 - Rename internal/public payload vocabulary to `writes`, `producer_writes`, and `verifier_writes` only; remove `outputs`, `review_outputs`, and `produces` aliases from declarations, lowering, and debug payloads.
 Primary files:
@@ -25,6 +25,7 @@ Primary files:
 Regression controls:
 - Removed public surfaces fail during construction/validation instead of silently lowering to legacy behavior.
 - Public/simple discovery changes must not weaken strict/internal authoring unless the path is explicitly isolated from the public compiler surface.
+- Route effects stay in place until helper parity exists; deletion and rejection move to the worklist-helper milestone.
 
 ### 2. Hook And Runtime-Control Unification
 Scope:
@@ -50,12 +51,13 @@ Regression controls:
 ### 3. Scoped State And Worklist Runtime Helpers
 Scope:
 - Guarantee `ctx.step_item_state` on every scoped step by always materializing the built-in runtime fields and layering optional custom fields on top.
-- Keep `ctx.item_state` explicit-only; unscoped access or scoped access without declared worklist item state must fail clearly.
+- Add a built-in runtime-owned `ctx.item_state` model for active scoped items with `status`, `last_step`, and `last_route`, and layer optional declared custom item-state fields on top.
 - Add the public worklist runtime surface: `ctx.worklist(name)`, `ctx.worklists.<name>`, `ctx.current_worklist`, and `WorklistRuntimeView`.
-- Replace route effects with helper-driven selection/status mutation and route/on_taken-driven control flow.
+- Replace route effects with helper-driven selection/status mutation and route/on_taken-driven control flow, then delete route-effect declarations and engine execution only after helper parity is covered by tests.
 Interfaces:
 - `WorklistRuntimeView.selection`, `.current`, `.current_id`, `.current_index`, `.item_ids`, `.is_exhausted`
 - `refresh()`, `set_current_status(status)`, `reset_current_status()`, `advance()`, `advance_or(exhausted=...)`, `validate()`, `validation_error()`
+- Built-in `ctx.item_state` fields: `status`, `last_step`, `last_route`
 - Helper mutations emit runtime events and are checkpointed without automatic rollback.
 Primary files:
 - `autoloop/core/context.py`
@@ -115,15 +117,16 @@ Regression controls:
 5. Full docs/example/test pass after milestone 5 to remove stale references and ensure the repo advertises only the final authoring model.
 
 ## Compatibility And Intentional Breaks
-- Removed immediately and without aliases: `on_route`, route `effects`, `AfterStepResult`, multi-arity hooks, hook state returns, python-step tuple/BaseModel returns, `outputs` / `review_outputs` / `produces` vocabulary, auto-installed `on_<step>` handlers, and public class-level legacy flow surfaces.
-- `ctx.item_state` remains explicit-model only; the implementation should not invent a built-in runtime-owned item model unless a later clarification explicitly changes direction.
+- Removed immediately and without aliases: `on_route`, `AfterStepResult`, multi-arity hooks, hook state returns, python-step tuple/BaseModel returns, `outputs` / `review_outputs` / `produces` vocabulary, auto-installed `on_<step>` handlers, and public class-level legacy flow surfaces.
+- Route effects remain temporarily supported only until worklist-helper parity lands; once phase 3 is complete they are removed without compatibility aliases.
+- The clarified scoped item-state contract is now an intentional public change: active scoped items always expose built-in `ctx.item_state` runtime fields `status`, `last_step`, and `last_route`.
 - Public topology/debug payloads, static graph artifacts, and capability inspection must emit only the final vocabulary and hook model in the same turn as the runtime/compiler changes.
 
 ## Risk Register
 - R1: Hook/finalization refactor can regress retry behavior, pending input handling, or built-in route state updates.
   Mitigation: land compile-time/public-surface removals first, then add hook/control tests before removing old normalization branches.
 - R2: Route-effect removal can desynchronize worklist selection, mutable-source persistence, and checkpoint payloads.
-  Mitigation: add `WorklistRuntimeView` first, switch equivalent runtime flows to helpers, then delete route-effect execution paths.
+  Mitigation: add `WorklistRuntimeView` and parity coverage first, switch equivalent runtime flows to helpers, then delete route-effect declarations and execution paths in the same milestone.
 - R3: Failure-model cleanup can break history, tracing, and optimizer consumers that still read dynamic exception metadata.
   Mitigation: update typed error production and all consumers in the same milestone; remove `getattr` readers only after typed fields are wired end-to-end.
 - R4: Public-surface cleanup touches docs, discovery, capability payloads, and tests at once.
