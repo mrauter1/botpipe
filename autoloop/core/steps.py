@@ -109,7 +109,6 @@ class Step:
         retry_policy: ProviderRetryPolicy | None = None,
         before: Any | None = None,
         after: Any | None = None,
-        on_route: Any | None = None,
         state_fields: Mapping[str, object] | None = None,
         item_state: object | None = None,
     ) -> None:
@@ -125,7 +124,6 @@ class Step:
         self.retry_policy = retry_policy
         self.before = before
         self.after = after
-        self.on_route = on_route
         self.state_fields = dict(state_fields or {})
         self.item_state = item_state
         self._order = next(_STEP_COUNTER)
@@ -167,7 +165,6 @@ class ProduceVerifyStep(Step):
         retry_policy: ProviderRetryPolicy | None = None,
         before: Any | None = None,
         after: Any | None = None,
-        on_route: Any | None = None,
         before_do: Any | None = None,
         after_do: Any | None = None,
         before_review: Any | None = None,
@@ -188,7 +185,6 @@ class ProduceVerifyStep(Step):
             retry_policy=retry_policy,
             before=before,
             after=after,
-            on_route=on_route,
             state_fields=state_fields,
             item_state=item_state,
         )
@@ -240,7 +236,6 @@ class PromptStep(Step):
         retry_policy: ProviderRetryPolicy | None = None,
         before: Any | None = None,
         after: Any | None = None,
-        on_route: Any | None = None,
         state_fields: Mapping[str, object] | None = None,
         item_state: object | None = None,
     ) -> None:
@@ -257,7 +252,6 @@ class PromptStep(Step):
             retry_policy=retry_policy,
             before=before,
             after=after,
-            on_route=on_route,
             state_fields=state_fields,
             item_state=item_state,
         )
@@ -285,7 +279,6 @@ class PythonStep(Step):
         retry_policy: ProviderRetryPolicy | None = None,
         before: Any | None = None,
         after: Any | None = None,
-        on_route: Any | None = None,
         state_fields: Mapping[str, object] | None = None,
         item_state: object | None = None,
     ) -> None:
@@ -302,7 +295,6 @@ class PythonStep(Step):
             retry_policy=retry_policy,
             before=before,
             after=after,
-            on_route=on_route,
             state_fields=state_fields,
             item_state=item_state,
         )
@@ -333,7 +325,6 @@ class ChildWorkflowStep(Step):
         retry_policy: ProviderRetryPolicy | None = None,
         before: Any | None = None,
         after: Any | None = None,
-        on_route: Any | None = None,
         state_fields: Mapping[str, object] | None = None,
     ) -> None:
         super().__init__(
@@ -349,7 +340,6 @@ class ChildWorkflowStep(Step):
             retry_policy=retry_policy,
             before=before,
             after=after,
-            on_route=on_route,
             state_fields=state_fields,
         )
         self.workflow = workflow

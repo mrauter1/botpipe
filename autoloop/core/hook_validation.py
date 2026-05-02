@@ -69,8 +69,6 @@ def validate_step_hooks(definition: Any) -> None:
             validate_callable_arity(f"{step.name!r} before hook", step.before, {1, 2})
         if step.after is not None:
             validate_callable_arity(f"{step.name!r} after hook", step.after, {1, 2, 3, 4})
-        if getattr(step, "on_route", None) is not None:
-            validate_callable_arity(f"{step.name!r} on_route hook", step.on_route, {1})
         for route_name, destination in definition.transitions.get(step, {}).items():
             route = normalize_route_spec(destination)
             if route.on_taken is not None:

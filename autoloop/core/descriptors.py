@@ -128,8 +128,12 @@ def materialize_descriptor_defaults(fields: Mapping[str, DescriptorField] | tupl
     return {field.name: field.materialize_default() for field in iterable}
 
 
+def _uses_simple_authoring_model(workflow_cls: type[Any]) -> bool:
+    return any((base.__module__, base.__name__) == ("autoloop.simple", "Workflow") for base in workflow_cls.__mro__)
+
+
 def effective_state_model(workflow_cls: type[Any], *, fallback_model: type[BaseModel]) -> type[BaseModel]:
-    if getattr(workflow_cls, "__strict_workflow__", True) is False:
+    if _uses_simple_authoring_model(workflow_cls):
         base_model = getattr(workflow_cls, "State", None)
         if not isinstance(base_model, type) or not issubclass(base_model, BaseModel):
             return fallback_model
@@ -148,7 +152,7 @@ def effective_state_model(workflow_cls: type[Any], *, fallback_model: type[BaseM
 
 
 def effective_parameters_model(workflow_cls: type[Any]) -> type[BaseModel] | None:
-    if getattr(workflow_cls, "__strict_workflow__", True) is False:
+    if _uses_simple_authoring_model(workflow_cls):
         base_model = getattr(workflow_cls, "Params", None)
         if base_model is None:
             return None

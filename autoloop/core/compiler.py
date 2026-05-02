@@ -66,7 +66,6 @@ class CompiledStep:
     python_handler: SystemHandler | None
     before_hook: Callable[..., Any] | None
     after_hook: Callable[..., Any] | None
-    on_route_hook: Callable[..., Any] | None
     before_producer_hook: Callable[..., Any] | None
     after_producer_hook: Callable[..., Any] | None
     before_verifier_hook: Callable[..., Any] | None
@@ -235,7 +234,6 @@ def _compile_steps(
         step_kind = step.kind
         before_hook = getattr(step, "before", None)
         after_hook = getattr(step, "after", None)
-        on_route_hook = getattr(step, "on_route", None)
         before_producer_hook = getattr(step, "before_do", None)
         after_producer_hook = getattr(step, "after_do", None)
         before_verifier_hook = getattr(step, "before_review", None)
@@ -302,7 +300,6 @@ def _compile_steps(
                 python_handler=None,
                 before_hook=before_hook,
                 after_hook=after_hook,
-                on_route_hook=on_route_hook,
                 before_producer_hook=before_producer_hook,
                 after_producer_hook=after_producer_hook,
                 before_verifier_hook=before_verifier_hook,
@@ -341,7 +338,6 @@ def _compile_steps(
                 python_handler=None,
                 before_hook=before_hook,
                 after_hook=after_hook,
-                on_route_hook=on_route_hook,
                 before_producer_hook=None,
                 after_producer_hook=None,
                 before_verifier_hook=None,
@@ -380,7 +376,6 @@ def _compile_steps(
                 python_handler=_compile_system_handler(step, workflow_cls=definition.workflow_cls),
                 before_hook=before_hook,
                 after_hook=after_hook,
-                on_route_hook=on_route_hook,
                 before_producer_hook=None,
                 after_producer_hook=None,
                 before_verifier_hook=None,
@@ -419,7 +414,6 @@ def _compile_steps(
                 python_handler=None,
                 before_hook=before_hook,
                 after_hook=after_hook,
-                on_route_hook=on_route_hook,
                 before_producer_hook=None,
                 after_producer_hook=None,
                 before_verifier_hook=None,
@@ -742,7 +736,6 @@ def _topology_hash_payload(compiled: CompiledWorkflow) -> dict[str, Any]:
                 "item_state_model": step.step_item_state_model.__name__ if step.step_item_state_model is not None else None,
                 "before_hook": _callable_name(step.before_hook),
                 "after_hook": _callable_name(step.after_hook),
-                "on_route_hook": _callable_name(step.on_route_hook),
                 "before_producer_hook": _callable_name(step.before_producer_hook),
                 "after_producer_hook": _callable_name(step.after_producer_hook),
                 "before_verifier_hook": _callable_name(step.before_verifier_hook),

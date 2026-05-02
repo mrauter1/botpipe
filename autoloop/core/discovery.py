@@ -110,7 +110,7 @@ class WorkflowMeta(type):
 
     def __new__(mcls, name: str, bases: tuple[type[Any], ...], namespace: dict[str, Any]) -> type[Any]:
         cls = super().__new__(mcls, name, bases, namespace)
-        if namespace.get("__workflow_abstract__", False) or name == "Workflow":
+        if cls.__module__ == "autoloop.core" and name == "Workflow":
             return cls
         from .validation import validate_workflow_definition
 
@@ -144,13 +144,12 @@ def get_workflow_definition(workflow_cls: type[Any]) -> WorkflowDefinition:
 
 def describe_workflow_class(workflow_cls: type[Any]) -> WorkflowDefinition:
     _validate_simple_authoring_models(workflow_cls)
-    _install_simple_system_handler_aliases(workflow_cls)
     state_cls = effective_state_model(workflow_cls, fallback_model=_EmptyWorkflowState)
     parameters_cls = effective_parameters_model(workflow_cls)
     entry = getattr(workflow_cls, "entry", None)
     transitions = getattr(workflow_cls, "transitions", None)
     flow = getattr(workflow_cls, "flow", None)
-    if getattr(workflow_cls, "__strict_workflow__", True) is False and (transitions is not None or flow is not None):
+    if _uses_simple_authoring_model(workflow_cls) and (transitions is not None or flow is not None):
         raise WorkflowValidationError(
             "simple workflows must declare topology with step-local routes and optional entry, not transitions or flow"
         )
@@ -209,8 +208,8 @@ def describe_workflow_class(workflow_cls: type[Any]) -> WorkflowDefinition:
                 raise WorkflowValidationError(f"simple step declaration {attr_name!r} must bind a deterministic name")
             if simple_name in steps_by_name:
                 raise WorkflowValidationError(f"duplicate step name {simple_name!r}")
-            simple_outputs = _lower_simple_outputs(value, simple_name)
-            review_outputs = _lower_simple_review_outputs(value, simple_name)
+            simple_writes = _lower_simple_writes(value, simple_name)
+            verifier_writes = _lower_simple_verifier_writes(value, simple_name)
             simple_seeds.append(
                 _SimpleStepSeed(
                     order=attr_order,
@@ -218,9 +217,9 @@ def describe_workflow_class(workflow_cls: type[Any]) -> WorkflowDefinition:
                     declaration=value,
                     name=simple_name,
                     kind=str(getattr(value, "kind", "")),
-                    writes=simple_outputs,
-                    verifier_writes=review_outputs,
-                    output_order=tuple((*simple_outputs.keys(), *review_outputs.keys())),
+                    writes=simple_writes,
+                    verifier_writes=verifier_writes,
+                    output_order=tuple((*simple_writes.keys(), *verifier_writes.keys())),
                 )
             )
             seen_simple_declarations.add(id(value))
@@ -293,7 +292,7 @@ def has_start_hook(definition: WorkflowDefinition) -> bool:
 
 
 def _validate_simple_authoring_models(workflow_cls: type[Any]) -> None:
-    if getattr(workflow_cls, "__strict_workflow__", True):
+    if not _uses_simple_authoring_model(workflow_cls):
         return
     if getattr(workflow_cls, "Parameters", None) is not None:
         raise WorkflowValidationError("Use Params, not Parameters.")
@@ -362,61 +361,49 @@ def _iter_visible_workflow_namespace_items(workflow_cls: type[Any]) -> Sequence[
 
 
 def _is_simple_step_declaration(value: object) -> bool:
-    return bool(getattr(value, "__autoloop_simple_declaration__", False))
+    from autoloop.simple import _NamedDeclaration
 
-
-def _install_simple_system_handler_aliases(workflow_cls: type[Any]) -> None:
-    for _, value in _iter_visible_workflow_namespace_items(workflow_cls):
-        if not _is_simple_step_declaration(value):
-            continue
-        if getattr(value, "kind", None) not in {"python", "system"}:
-            continue
-        step_name = getattr(value, "name", None)
-        raw_handler = getattr(value, "fn", None)
-        if not isinstance(step_name, str) or not step_name or raw_handler is None:
-            continue
-        handler_name = f"on_{step_name}"
-        if handler_name in workflow_cls.__dict__:
-            continue
-        setattr(workflow_cls, handler_name, staticmethod(raw_handler))
+    return isinstance(value, _NamedDeclaration)
 
 
 def _is_simple_artifact_spec(value: object) -> bool:
-    return bool(getattr(value, "__autoloop_simple_artifact_spec__", False))
+    from autoloop.simple import ArtifactSpec
+
+    return isinstance(value, ArtifactSpec)
 
 
 def _is_simple_flow_spec(value: object) -> bool:
     return bool(getattr(value, "__autoloop_simple_flow_spec__", False))
 
 
-def _lower_simple_outputs(declaration: object, step_name: str) -> dict[str, Artifact]:
-    outputs: dict[str, Artifact] = {}
-    for output in tuple(getattr(declaration, "outputs", ()) or ()):
-        artifact = _materialize_simple_output(output, step_name=step_name)
+def _lower_simple_writes(declaration: object, step_name: str) -> dict[str, Artifact]:
+    writes: dict[str, Artifact] = {}
+    for artifact_spec in tuple(getattr(declaration, "writes", ()) or ()):
+        artifact = _materialize_simple_output(artifact_spec, step_name=step_name)
         if artifact.name is None:
             raise WorkflowValidationError(
-                f"simple step {step_name!r} output declarations must define artifact names"
+                f"simple step {step_name!r} write declarations must define artifact names"
             )
-        if artifact.name in outputs:
-            raise WorkflowValidationError(f"simple step {step_name!r} declares duplicate output artifact {artifact.name!r}")
-        outputs[artifact.name] = artifact
-    return outputs
+        if artifact.name in writes:
+            raise WorkflowValidationError(f"simple step {step_name!r} declares duplicate write artifact {artifact.name!r}")
+        writes[artifact.name] = artifact
+    return writes
 
 
-def _lower_simple_review_outputs(declaration: object, step_name: str) -> dict[str, Artifact]:
-    outputs: dict[str, Artifact] = {}
-    for output in tuple(getattr(declaration, "review_outputs", ()) or ()):
-        artifact = _materialize_simple_output(output, step_name=step_name)
+def _lower_simple_verifier_writes(declaration: object, step_name: str) -> dict[str, Artifact]:
+    writes: dict[str, Artifact] = {}
+    for artifact_spec in tuple(getattr(declaration, "verifier_writes", ()) or ()):
+        artifact = _materialize_simple_output(artifact_spec, step_name=step_name)
         if artifact.name is None:
             raise WorkflowValidationError(
-                f"simple step {step_name!r} review output declarations must define artifact names"
+                f"simple step {step_name!r} verifier write declarations must define artifact names"
             )
-        if artifact.name in outputs:
+        if artifact.name in writes:
             raise WorkflowValidationError(
-                f"simple step {step_name!r} declares duplicate review output artifact {artifact.name!r}"
+                f"simple step {step_name!r} declares duplicate verifier write artifact {artifact.name!r}"
             )
-        outputs[artifact.name] = artifact
-    return outputs
+        writes[artifact.name] = artifact
+    return writes
 
 
 def _materialize_simple_output(output: object, *, step_name: str) -> Artifact:
@@ -499,7 +486,6 @@ def _lower_simple_steps(
                 retry_policy=retry_policy,
                 before=getattr(declaration, "before", None),
                 after=getattr(declaration, "after", None),
-                on_route=None,
                 item_state=step_item_state_model,
             )
         elif seed.kind == "operation":
@@ -512,7 +498,6 @@ def _lower_simple_steps(
                 retry_policy=None,
                 before=None,
                 after=None,
-                on_route=None,
             )
         elif seed.kind in {"review", "produce_verify"}:
             step = ProduceVerifyStep(
@@ -531,7 +516,6 @@ def _lower_simple_steps(
                 retry_policy=retry_policy,
                 before=None,
                 after=None,
-                on_route=None,
                 before_do=getattr(declaration, "before_producer", None),
                 after_do=getattr(declaration, "after_producer", None),
                 before_review=getattr(declaration, "before_verifier", None),
@@ -548,7 +532,6 @@ def _lower_simple_steps(
                 retry_policy=retry_policy,
                 before=getattr(declaration, "before", None),
                 after=getattr(declaration, "after", None),
-                on_route=None,
             )
         elif seed.kind == "workflow":
             step = ChildWorkflowStep(
@@ -564,7 +547,6 @@ def _lower_simple_steps(
                 retry_policy=retry_policy,
                 before=getattr(declaration, "before", None),
                 after=getattr(declaration, "after", None),
-                on_route=None,
             )
         else:
             raise WorkflowValidationError(f"unsupported simple step kind {seed.kind!r}")
@@ -1178,6 +1160,10 @@ def _route_signature(destination: object) -> tuple[object, tuple[object, ...], s
 
 def _resolve_worklist_name(worklist: object | str) -> str:
     return worklist if isinstance(worklist, str) else getattr(worklist, "name", None)
+
+
+def _uses_simple_authoring_model(workflow_cls: type[Any]) -> bool:
+    return any((base.__module__, base.__name__) == ("autoloop.simple", "Workflow") for base in workflow_cls.__mro__)
 
 
 __all__ = [

@@ -385,7 +385,6 @@ def _runtime_control_hook_locations(compiled: CompiledWorkflow, step: Any) -> li
         ("after", step.after_hook),
         ("after_producer", step.after_producer_hook),
         ("after_verifier", step.after_verifier_hook),
-        ("on_route", step.on_route_hook),
     ):
         if hook is None:
             continue

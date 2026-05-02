@@ -1618,47 +1618,6 @@ class Engine:
                     final_state,
                     finalized_artifacts,
                     event=final_event,
-                )
-                explicit_event_override = explicit_event_override or route_override
-                context._set_state(final_state)
-                finalized_artifacts = self._resolve_artifacts(context)
-                context._set_artifacts(finalized_artifacts)
-                if route_redirect is not None:
-                    route_redirects.append(replace(route_redirect, redirect_index=len(route_redirects) + 1))
-                    self._ensure_hook_redirect_limit(step, candidate_route=candidate_route, redirects=route_redirects)
-                    continue
-                if direct_control is not None:
-                    scheduled_handoffs = self._schedule_direct_control_handoffs(
-                        pending_handoffs,
-                        control=direct_control,
-                        context=context,
-                        source_step=step.name,
-                    )
-                    return (
-                        final_state,
-                        direct_control.destination,
-                        None,
-                        candidate_route,
-                        None,
-                        direct_control.control,
-                        direct_control.target_step,
-                        direct_control.terminal,
-                        direct_control.pending_input,
-                        direct_control.source_hook,
-                        direct_control.source_phase,
-                        False,
-                        route_redirects[0].from_route if route_redirects else None,
-                        route_redirects[-1].to_route if route_redirects else None,
-                        tuple(route_redirects),
-                        scheduled_handoffs,
-                    )
-                context._set_event(self._event_context_payload(final_event))
-                final_state, final_event, route_override, route_redirect, direct_control = self.hook_runner.run_route(
-                    step,
-                    context,
-                    final_state,
-                    finalized_artifacts,
-                    event=final_event,
                     hook=final_route.on_taken,
                     hook_phase="on_taken",
                 )
@@ -1953,9 +1912,8 @@ class Engine:
         *,
         event: Event,
         hook: Callable[..., Any] | None = None,
-        hook_phase: str = "on_route",
+        hook_phase: str = "on_taken",
     ) -> tuple[BaseModel, Event, bool, HookRouteRedirect | None, _DirectRuntimeControl | None]:
-        hook = step.on_route_hook if hook is None else hook
         if hook is None:
             return state, event, False, None, None
         hook_name = getattr(hook, "__name__", type(hook).__name__)

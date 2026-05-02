@@ -34,8 +34,6 @@ class EmptyParams(BaseModel):
 class Workflow:
     """Simple public authoring surface."""
 
-    __workflow_abstract__ = True
-    __strict_workflow__ = False
     extensions: tuple[object, ...] = ()
     Params = EmptyParams
     State = EmptyState
@@ -44,8 +42,6 @@ class Workflow:
 @dataclass(frozen=True, slots=True)
 class ArtifactSpec:
     """Simple authoring artifact declaration with optional inferred step-local paths."""
-
-    __autoloop_simple_artifact_spec__ = True
 
     name: str
     kind: str
@@ -108,7 +104,6 @@ def Raw(name: str, *, path: str | Path | None = None, required: bool = False) ->
 
 class _NamedDeclaration:
     __slots__ = ("name", "_explicit_name")
-    __autoloop_simple_declaration__ = True
     default_chain_route = "done"
 
     def __init__(self, *, name: str | None = None) -> None:
@@ -120,7 +115,7 @@ class _NamedDeclaration:
             self.name = attr_name
 
     def __getattr__(self, item: str) -> Artifact | ArtifactSpec:
-        for collection_name in ("outputs", "review_outputs"):
+        for collection_name in ("writes", "verifier_writes"):
             try:
                 artifacts = object.__getattribute__(self, collection_name)
             except AttributeError:
@@ -158,8 +153,7 @@ class StepDeclaration(_NamedDeclaration):
         self.prompt = _normalize_simple_prompt(prompt)
         self.reads = tuple(reads)
         self.requires = tuple(requires)
-        self.outputs = _normalize_writes(writes)
-        self.writes = self.outputs
+        self.writes = _normalize_writes(writes)
         self.scope = scope
         self.item_state = item_state
         self.routes = dict(routes or {})
@@ -210,10 +204,8 @@ class ProduceVerifyStepDeclaration(_NamedDeclaration):
         self.requires = tuple(requires)
         self.verifier_reads = tuple(verifier_reads)
         self.verifier_requires = tuple(verifier_requires)
-        self.outputs = _normalize_writes(producer_writes)
-        self.writes = self.outputs
-        self.review_outputs = _normalize_writes(verifier_writes)
-        self.verifier_writes = self.review_outputs
+        self.writes = _normalize_writes(producer_writes)
+        self.verifier_writes = _normalize_writes(verifier_writes)
         self.scope = scope
         self.routes = dict(routes or {})
         self.state = state
@@ -234,14 +226,6 @@ class PythonStepDeclaration(_NamedDeclaration):
 
     kind = "python"
 
-    def __set_name__(self, owner: type[object], attr_name: str) -> None:
-        super().__set_name__(owner, attr_name)
-        if self.name is None:
-            return
-        handler_name = f"on_{self.name}"
-        if handler_name not in owner.__dict__:
-            setattr(owner, handler_name, staticmethod(self.fn))
-
     def __init__(
         self,
         fn: Any,
@@ -259,8 +243,7 @@ class PythonStepDeclaration(_NamedDeclaration):
         self.fn = fn
         self.reads = tuple(reads)
         self.requires = tuple(requires)
-        self.outputs = _normalize_writes(writes)
-        self.writes = self.outputs
+        self.writes = _normalize_writes(writes)
         self.routes = dict(routes or {})
         self.before = before
         self.after = after
@@ -297,8 +280,7 @@ class _WorkflowStepDeclaration(_NamedDeclaration):
         self.input = input
         self.reads = tuple(reads)
         self.requires = tuple(requires)
-        self.outputs = _normalize_writes(writes)
-        self.writes = self.outputs
+        self.writes = _normalize_writes(writes)
         self.routes = dict(routes or {})
         self.before = before
         self.after = after

@@ -309,6 +309,48 @@ def test_legacy_simple_keyword_arguments_fail_fast() -> None:
         simple.python_step(lambda ctx: None, on_route=lambda ctx: None)
 
 
+def test_core_step_constructors_reject_removed_on_route_keyword() -> None:
+    with pytest.raises(TypeError):
+        core_steps.PromptStep(name="ask", producer="ask.md", on_route=lambda ctx: None)
+
+    with pytest.raises(TypeError):
+        core_steps.ProduceVerifyStep(
+            name="review",
+            producer="draft.md",
+            verifier="verify.md",
+            on_route=lambda ctx: None,
+        )
+
+    with pytest.raises(TypeError):
+        core_steps.PythonStep(name="publish", on_route=lambda ctx: None)
+
+
+def test_simple_python_step_does_not_install_legacy_on_step_alias() -> None:
+    class PublicWorkflow(simple.Workflow):
+        @simple.python_step(name="inspect")
+        def inspect(ctx):
+            return None
+
+    assert "on_inspect" not in PublicWorkflow.__dict__
+
+
+def test_simple_declarations_store_only_canonical_write_fields() -> None:
+    step_decl = simple.step("Draft the note.", writes=[simple.Md("note")])
+    pair_decl = simple.produce_verify_step(
+        producer_prompt="Draft.",
+        verifier_prompt="Verify.",
+        producer_writes=[simple.Md("draft")],
+        verifier_writes=[simple.Md("decision")],
+    )
+
+    assert "outputs" not in vars(step_decl)
+    assert "outputs" not in vars(pair_decl)
+    assert "review_outputs" not in vars(pair_decl)
+    assert hasattr(step_decl, "writes")
+    assert hasattr(pair_decl, "writes")
+    assert hasattr(pair_decl, "verifier_writes")
+
+
 def test_simple_workflow_compiles_with_pydantic_state_params_and_produce_verify_step() -> None:
     class ParamsModel(BaseModel):
         max_attempts: int = 3
@@ -356,6 +398,7 @@ def test_simple_workflow_compiles_with_pydantic_state_params_and_produce_verify_
     assert compiled.steps["review"].verifier_prompt is not None
     assert compiled.steps["review"].producer_writes == ("review.draft",)
     assert compiled.steps["review"].verifier_writes == ("review.decision",)
+    assert not hasattr(compiled.steps["review"], "on_route_hook")
     assert compiled.steps["prepare"].step_state_fields == ("visits", "last_route", "last_reason")
     assert set(compiled.steps["review"].step_state_fields) == {
         "visits",

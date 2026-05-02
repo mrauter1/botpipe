@@ -22,9 +22,6 @@ if TYPE_CHECKING:
 
 class Workflow(metaclass=WorkflowMeta):
     """Workflow authoring base class."""
-
-    __workflow_abstract__ = True
-    __strict_workflow__ = True
     extensions: tuple["WorkflowExtension", ...] = ()
 __all__ = [
     "Advance",
