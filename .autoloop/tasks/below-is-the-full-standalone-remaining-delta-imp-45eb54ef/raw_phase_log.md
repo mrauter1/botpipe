@@ -1440,3 +1440,48 @@ Key findings / decisions
 Open issues / next step
 - No phase-local test blocker remains from the worklist-helper reload path.
 - The next step is test-phase verification/audit against the updated strategy and repository tests.
+
+
+---
+run_id=run-20260502T022441Z-8f34cad8 | entry=session_turn | pair=test | phase=verifier | cycle=1 | attempt=1 | thread_id=019de8b9-0cec-7491-ae85-95ceca41a272
+---
+provider=codex
+mode=resume
+template=/home/rauter/.local/share/pipx/venvs/autoloop/lib/python3.12/site-packages/autoloop/templates/test_verifier.md
+session_id=019de8b9-0cec-7491-ae85-95ceca41a272
+
+
+---
+run_id=run-20260502T022441Z-8f34cad8 | entry=phase_output | pair=test | phase=verifier | process=codex-agent | cycle=1 | attempt=1 | thread_id=019de8b9-0cec-7491-ae85-95ceca41a272
+---
+I’m auditing the scoped-state/worklist test delta now. I’ll verify that the strategy matches the actual repository tests, check that the new helper regressions cover the changed runtime semantics without normalizing any unconfirmed behavior breaks, and then I’ll update the audit artifacts directly.
+
+The coverage looks adequate for the changed behavior: the new helper semantics now have happy-path, edge, and failure-path coverage, and the strategy artifact matches the actual test surfaces in the repo. I’m clearing the audit criteria and appending a short no-findings note to the feedback artifact.
+
+Scope considered
+- Phase-local `scoped-state-worklists` test artifacts and the request-relevant repository tests only.
+- I audited the new worklist-helper regressions, the existing scoped item/step state coverage, and the phase strategy/feedback artifacts.
+
+What I analyzed
+- The strategy artifact in `artifacts/test/phases/scoped-state-worklists/test_strategy.md`.
+- The added and adjacent tests in `tests/unit/test_primitives_and_stores.py`, plus the referenced scoped-state coverage in `tests/unit/test_simple_surface.py`, `tests/unit/test_validation.py`, `tests/contract/test_engine_contracts.py`, and `tests/runtime/test_runtime_static_graph.py`.
+- The phase feedback artifact and the run-local decisions relevant to scoped item state, helper semantics, and route-effect removal.
+
+What I reviewed
+- Happy-path helper coverage: `advance`, `advance_or`, runtime event emission, mutable-source refresh reload, and cached full-source preservation after status updates.
+- Failure/edge coverage: missing selected item on `validation_error()` and explicit `refresh()` failure when the backing source drops the selected item.
+- Reliability: all new tests use in-memory sources, direct source mutation, and no timing/network assumptions.
+- Behavioral intent: the expectations match the confirmed contract for built-in scoped state, helper-only mutation semantics, and route-effect removal with no inferred compatibility shims.
+
+Key findings / decisions
+- No blocking or non-blocking audit findings.
+- The strategy artifact accurately maps the repository tests to AC-1 through AC-4 and calls out the remaining out-of-phase gaps without masking them.
+- The added regressions would catch the specific stale-cache regression that prompted the implementer rework, along with its adjacent failure path.
+
+Open issues / next step
+- No phase-local test audit blocker remains for `scoped-state-worklists`.
+- Test-phase artifacts are ready to advance.
+
+<loop-control>
+{"schema":"docloop.loop_control/v1","kind":"promise","promise":"COMPLETE"}
+</loop-control>
