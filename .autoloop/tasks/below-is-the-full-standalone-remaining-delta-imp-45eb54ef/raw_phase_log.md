@@ -293,3 +293,62 @@ Key findings / decisions
 Open issues / next step
 
 The remaining public-surface cleanup gap is the broader simple-workflow class-method path (`on_start`, `on_outcome`, prompt-step `on_<step>`). That should be handled in a follow-up milestone together with the larger hook/runtime-control cleanup, not mixed into this already-landed route-hook break.
+
+
+---
+run_id=run-20260502T022441Z-8f34cad8 | entry=session_turn | pair=implement | phase=verifier | cycle=1 | attempt=1 | thread_id=019de854-cad3-74d0-a960-3effc949e32b
+---
+provider=codex
+mode=resume
+template=/home/rauter/.local/share/pipx/venvs/autoloop/lib/python3.12/site-packages/autoloop/templates/implement_verifier.md
+session_id=019de854-cad3-74d0-a960-3effc949e32b
+
+
+---
+run_id=run-20260502T022441Z-8f34cad8 | entry=phase_output | pair=implement | phase=verifier | process=codex-agent | cycle=1 | attempt=1 | thread_id=019de854-cad3-74d0-a960-3effc949e32b
+---
+I’m reviewing the phase output against the acceptance criteria and the remaining repo-wide regression surface. I’m checking two things now: whether the public compiler path still admits legacy class methods, and whether stale `on_route` tests remain that would break the suite after this change.
+
+The public compiler gap is real: simple prompt-step class handlers are still active. I’m confirming whether `on_start` and `on_outcome` are also still accepted on the public path, since that would directly contradict the phase scope and the recorded deferral.
+
+I have two likely blockers. I’m verifying the regression one directly by running a representative legacy `on_route` contract test against the new constructor surface, so the feedback is tied to an observed failure rather than just a code search.
+
+I have the two main blockers. I’m doing one last sweep for additional stale `on_route` consumers outside the contract test file so the feedback points to the real regression surface, not just one representative failure.
+
+Scope considered
+
+Phase-local review of the public-surface cleanup only: removed `on_route` / `on_route_hook`, canonical `writes` vocabulary, simple discovery changes, and the public compiler-path restriction. I checked the touched implementation plus adjacent regression surfaces in tests and the remaining public compiler hooks.
+
+What I analyzed
+
+- The diffs in `autoloop/simple.py`, `autoloop/core/{__init__,descriptors,steps,discovery,hook_validation,compiler,engine}.py`, `autoloop/runtime/static_graph.py`, and `tests/unit/test_simple_surface.py`.
+- The authoritative phase contract, implementation notes, and run decisions.
+- Repo-wide references to `on_route`, `on_route_hook`, and public class-level handler surfaces.
+- Targeted validation behavior in the project venv to confirm whether legacy public hooks still compile and whether representative legacy tests now fail.
+
+What I reviewed
+
+- Verified that core step constructors now reject `on_route=...` and compiled steps no longer expose `on_route_hook`.
+- Verified that simple declarations no longer store `outputs` / `review_outputs`.
+- Reproduced that simple public workflows still accept legacy class methods:
+  `on_<step>` still compiles into `compiled.steps["ask"].outcome_handler`
+  `on_start` still sets `compiled.has_start_hook`
+  `on_outcome` still sets `compiled.middleware`
+- Reproduced a concrete suite regression:
+  `./.venv/bin/python -m pytest tests/contract/test_engine_contracts.py -q -k on_route_hook_invalid_arity_fails_validation`
+  fails with `TypeError` because legacy contract tests still construct `PromptStep(..., on_route=...)`.
+
+Key findings / decisions
+
+- `IMP-001` blocking: the public compiler path still admits legacy class-level `on_<step>`, `on_start`, and `on_outcome` methods for `autoloop.simple.Workflow`, so the phase did not actually restrict public authoring to explicit declarations only.
+- `IMP-002` blocking: the repo still contains legacy `on_route` contract tests that now fail against the removed constructor surface, leaving the regression surface unswept.
+- I left the criteria checkboxes unchecked because the blocking findings mean correctness, safety, compatibility, and maintainability are not yet fully satisfied for this phase.
+
+Open issues / next step
+
+- Remove legacy class-method handling from the simple/public compiler path in one centralized gate.
+- Rewrite or replace the remaining `on_route` contract tests with fail-fast removal coverage or `on_taken` equivalents, then rerun the relevant contract slice.
+
+<loop-control>
+{"schema":"docloop.loop_control/v1","kind":"promise","promise":"INCOMPLETE"}
+</loop-control>
