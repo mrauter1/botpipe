@@ -1,4 +1,93 @@
 version: 1
 task_id: framework-authoring-flexibility-change-spec-goal-2ee572cd
 request_snapshot_ref: /home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/framework-authoring-flexibility-change-spec-goal-2ee572cd/runs/run-20260503T223034Z-bda92fa2/request.md
-phases: []
+phases:
+  - phase_id: "restore-runtime-contracts"
+    title: "Restore Runtime Contracts"
+    objective: "Repair payload placeholder rendering and restore the intended route/artifact contract behavior without weakening shipped validation."
+    status: "planned"
+    in_scope:
+      - "Fix runtime rendering for {item.payload.<path>} and worklist current-item payload placeholders."
+      - "Restore stable available_routes ordering across engine/provider/runtime contract surfaces."
+      - "Update stale contract fixtures that now violate the dual-role artifact ownership rule."
+    out_of_scope:
+      - "Reopen already-accepted framework-authoring-flexibility feature areas."
+      - "Remove or weaken the dual-role artifact ownership diagnostic."
+    dependencies: []
+    acceptance_criteria:
+      - id: "AC-1"
+        text: "Late-bound prompt rendering succeeds for existing item/worklist payload paths and preserves placeholder-specific missing-path WorkflowExecutionError messages."
+      - id: "AC-2"
+        text: "available_routes and provider-visible route order are deterministic and match the authored-step then global then runtime-control contract."
+      - id: "AC-3"
+        text: "Contract tests no longer fail because stale fixtures declare the same artifact as both workflow-level and step-produced."
+    deliverables:
+      - "Runtime placeholder resolution update with unchanged missing-path error wording."
+      - "Route-ordering fix and any required contract documentation clarification."
+      - "Updated contract regressions aligned with the shipped artifact ownership rule."
+    risks:
+      - "Touching route ordering can affect compiler payloads, provider calls, static graph output, and CLI inspection views."
+      - "Payload-resolution fixes can accidentally change non-payload placeholder behavior if the traversal logic is widened too far."
+    rollback:
+      - "Back out payload-root traversal changes independently from route-order work if unrelated placeholder regressions appear."
+      - "Revert route-order computation without altering route visibility policy if downstream consumers drift."
+  - phase_id: "repair-full-auto-runner-plumbing"
+    title: "Repair Full Auto Plumbing"
+    objective: "Make the full_auto runtime config and runner path execute in the supported test environment, including legacy plain-string prompt specs on the prompt-registry path."
+    status: "planned"
+    in_scope:
+      - "Make the typed runtime config file path used by tests load without optional PyYAML."
+      - "Normalize compiled string prompts on the runner prompt-registry path."
+      - "Reconfirm that full_auto hides the default question route from provider-visible routes at run time."
+    out_of_scope:
+      - "Change provider selection precedence or the public runtime config schema."
+      - "Introduce a broad new config format or dependency surface."
+    dependencies:
+      - "restore-runtime-contracts"
+    acceptance_criteria:
+      - id: "AC-1"
+        text: "The full_auto config regression passes in the supported venv without requiring PyYAML."
+      - id: "AC-2"
+        text: "run_workflow_package(...) handles core-style compiled prompts represented as plain strings without AttributeError on prompt registry setup."
+      - id: "AC-3"
+        text: "The full-auto runner regression test passes with provider-visible routes limited to the intended contract."
+    deliverables:
+      - "A narrow runtime config loading fix that preserves parse_runtime_config validation and merge precedence."
+      - "Runner prompt-registry handling that accepts both Prompt objects and plain-string PromptSpec values."
+      - "Passing targeted runtime tests for full_auto config and runner behavior."
+    risks:
+      - "A fallback config parser can silently widen accepted syntax if it is not kept narrow."
+      - "Runner prompt normalization can diverge from engine prompt resolution if the two paths are patched inconsistently."
+    rollback:
+      - "Remove fallback config loading if it accepts unsupported constructs and keep the typed validation path intact."
+      - "Revert runner-only prompt normalization if it changes resolved prompt roots beyond string-prompt compatibility."
+  - phase_id: "align-runtime-fixtures-and-revalidate"
+    title: "Align Fixtures And Revalidate"
+    objective: "Update temporary runtime workflow fixtures to the canonical ctx-only python_step surface and finish with the audited regression slice green."
+    status: "planned"
+    in_scope:
+      - "Rewrite temporary workflow package handlers in tests/runtime/test_workspace_and_context.py from python_step(state, ctx) to python_step(ctx)."
+      - "Keep build_output(state, ctx) fixtures unchanged while preserving child-run metadata and typed-output assertions."
+      - "Run the targeted workspace tests and the full audited regression slice."
+    out_of_scope:
+      - "Restore legacy two-argument python_step compatibility in production runtime code."
+      - "Change child-workflow metadata contracts beyond what existing assertions already require."
+    dependencies:
+      - "restore-runtime-contracts"
+      - "repair-full-auto-runner-plumbing"
+    acceptance_criteria:
+      - id: "AC-1"
+        text: "Temporary workflow packages in tests/runtime/test_workspace_and_context.py compile under the canonical ctx-only python_step contract."
+      - id: "AC-2"
+        text: "Child workflow invocation, artifact adoption, resume, and typed child-output assertions still pass after fixture updates."
+      - id: "AC-3"
+        text: "The full audited regression slice from the request passes green."
+    deliverables:
+      - "Updated workspace/context test fixtures that use ctx-only python_step handlers."
+      - "Passing targeted workspace regressions and a green audited regression slice."
+    risks:
+      - "Fixture rewrites can accidentally change test semantics instead of only aligning authoring shape."
+      - "Late integration can hide cross-surface regressions until the final audited slice."
+    rollback:
+      - "Revert individual fixture rewrites if a failure comes from changed test semantics rather than runtime behavior."
+      - "Use targeted reruns to isolate the first regressing slice before undoing broader changes."
