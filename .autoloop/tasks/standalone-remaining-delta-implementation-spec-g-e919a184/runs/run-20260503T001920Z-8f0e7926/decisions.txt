@@ -2,3 +2,8 @@
 Use the existing collaborator split in autoloop/core/engine_collaborators.py and existing worklist helper/context surfaces as the baseline; complete their ownership rather than adding a parallel abstraction layer.
 Switch resume from hard-fail-on-topology-hash-mismatch to saved-contract-first warning-by-default behavior, with strict mismatch failure remaining opt-in.
 Treat legacy paused/pause vocabulary as removable from active runtime logic; any backward compatibility for persisted data must live behind explicit schema-aware migration or fail clearly, not as scattered aliases.
+<autoloop-decisions-header version="1" block_seq="2" owner="planner" phase_id="task-global" pair="plan" turn_seq="2" run_id="run-20260503T001920Z-8f0e7926" ts="2026-05-03T00:26:18.284412+00:00" />
+Keep the built-in work-item runtime model always available for scoped steps through ctx.item_state, with runtime-owned status/last_step/last_route fields optionally extended by custom worklist item-state fields.
+Public Context is an author-safe hook surface only; underscore mutators and cache/selection/session orchestration helpers are internal runtime seams and should not remain part of the public hook contract.
+Provider-visible route/read/write/retry/handoff assembly should move into ProviderContractBuilder, while requires stays the hard runtime precondition and missing non-required reads render as unavailable context rather than empty-string substitution.
+Final planning scope includes explicit extension failure policy, production import boundaries, optimizer read-only boundary updates, and documenting autoloop.core as internal/power-user instead of the default public surface.

@@ -86,3 +86,64 @@ The plan needs a revision that explicitly covers the omitted spec sections and r
 <loop-control>
 {"schema":"docloop.loop_control/v1","kind":"promise","promise":"INCOMPLETE"}
 </loop-control>
+
+
+---
+run_id=run-20260503T001920Z-8f0e7926 | entry=session_turn | pair=plan | phase=producer | cycle=2 | attempt=1 | thread_id=019deb34-3bcc-78d0-b0df-386f56add1e6
+---
+provider=codex
+mode=resume
+template=/home/rauter/.local/share/pipx/venvs/autoloop/lib/python3.12/site-packages/autoloop/templates/plan_producer.md
+session_id=019deb34-3bcc-78d0-b0df-386f56add1e6
+
+
+---
+run_id=run-20260503T001920Z-8f0e7926 | entry=phase_output | pair=plan | phase=producer | process=codex-agent | cycle=2 | attempt=1 | thread_id=019deb34-3bcc-78d0-b0df-386f56add1e6
+---
+I’m revising the plan against the verifier’s blocking findings now. First I’m checking the feedback, current decisions block, and the specific runtime areas behind context mutators, item-state behavior, prompt/contract assembly, extension policies, and import boundaries so the plan closes the gaps instead of adding vague promises.
+
+I’ve got the concrete fixes to apply: fold the context split into phase 1, make the item-state choice explicit, move prompt/reference plus provider-contract assembly into phase 2, and reserve the final phase for extension/import/optimizer/core boundary enforcement. After that I’ll re-read the artifacts against the four blocking findings.
+
+The revisions are in. I’m checking them directly against the verifier’s four IDs now and making sure the new scope lands in both the narrative plan and the machine-readable phase criteria, not just one of them.
+
+Updated the planning artifacts to close the verifier’s four blocking gaps.
+
+[plan.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/standalone-remaining-delta-implementation-spec-g-e919a184/runs/run-20260503T001920Z-8f0e7926/artifacts/plan/plan.md) now explicitly covers the public-vs-internal `Context` split, chooses the built-in scoped `ctx.item_state` model, adds prompt/reference semantics plus `ProviderContractBuilder`, and folds extension/import/optimizer/`autoloop.core` boundaries into the final phase. [phase_plan.yaml](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/standalone-remaining-delta-implementation-spec-g-e919a184/runs/run-20260503T001920Z-8f0e7926/artifacts/plan/phase_plan.yaml) was updated in parallel so those items have explicit in-scope bullets and acceptance criteria, and the YAML still parses with valid runtime-owned metadata.
+
+I also appended the revision note to [feedback.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/standalone-remaining-delta-implementation-spec-g-e919a184/runs/run-20260503T001920Z-8f0e7926/artifacts/plan/feedback.md) and recorded the non-obvious planning decisions in the current block of [decisions.txt](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/standalone-remaining-delta-implementation-spec-g-e919a184/runs/run-20260503T001920Z-8f0e7926/decisions.txt). I left `criteria.md` untouched because it is verifier-owned.
+
+
+---
+run_id=run-20260503T001920Z-8f0e7926 | entry=session_turn | pair=plan | phase=verifier | cycle=2 | attempt=1 | thread_id=019deb34-3bcc-78d0-b0df-386f56add1e6
+---
+provider=codex
+mode=resume
+template=/home/rauter/.local/share/pipx/venvs/autoloop/lib/python3.12/site-packages/autoloop/templates/plan_verifier.md
+session_id=019deb34-3bcc-78d0-b0df-386f56add1e6
+
+
+---
+run_id=run-20260503T001920Z-8f0e7926 | entry=phase_output | pair=plan | phase=verifier | process=codex-agent | cycle=2 | attempt=1 | thread_id=019deb34-3bcc-78d0-b0df-386f56add1e6
+---
+The revised plan now covers the previously missing contract sections. I’m flipping the verifier criteria to match that pass state and appending a closure note so the feedback history shows that the earlier blocking findings were rechecked and cleared.
+
+Scope considered
+Run-local planning artifacts for this request: `plan.md`, `phase_plan.yaml`, `feedback.md`, `criteria.md`, and `decisions.txt`, plus the immutable request snapshot and raw log to confirm there were no later intent overrides.
+
+What I analyzed
+I re-audited the revised plan against the earlier blocking findings and the full request contract, with focus on intent fidelity, compatibility/break handling, context architecture, item-state semantics, reads/requires/prompt-contract behavior, provider contract ownership, extension/import/optimizer boundaries, and rollback/validation coverage. I also revalidated that `phase_plan.yaml` parses and preserves runtime-owned metadata.
+
+What I reviewed
+`plan.md` now explicitly covers the public-vs-internal `Context` split, the chosen built-in scoped `ctx.item_state` model, prompt/reference validation semantics, `ProviderContractBuilder`, extension failure policy, package/import boundaries, optimizer read-only boundaries, and the `autoloop.core` documentation boundary. `phase_plan.yaml` mirrors those additions with concrete scope and acceptance criteria. `decisions.txt` is aligned with the revised plan. `criteria.md` was updated to fully checked because the remaining blockers were resolved.
+
+Key findings / decisions
+No remaining blocking findings.
+`feedback.md` was appended with `PLAN-005 [non-blocking]` to record that `PLAN-001` through `PLAN-004` were rechecked and found addressed.
+`phase_plan.yaml` remains parseable and coherent with four ordered phases and valid dependencies.
+
+Open issues / next step
+The plan verification pass is complete. The next turn can proceed from these artifacts without additional planning corrections.
+
+<loop-control>
+{"schema":"docloop.loop_control/v1","kind":"promise","promise":"COMPLETE"}
+</loop-control>
