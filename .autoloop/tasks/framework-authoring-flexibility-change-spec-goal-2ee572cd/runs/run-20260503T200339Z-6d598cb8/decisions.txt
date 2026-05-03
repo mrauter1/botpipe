@@ -1,0 +1,7 @@
+<autoloop-decisions-header version="1" block_seq="1" owner="planner" phase_id="task-global" pair="plan" turn_seq="1" run_id="run-20260503T200339Z-6d598cb8" ts="2026-05-03T20:03:39.694299+00:00" />
+Treat workflow runtime `full_auto` as an engine interaction-policy setting distinct from provider transport auto flags such as Codex CLI `--full-auto`.
+Preserve `CompiledStep.available_routes` as the full execution-legal route set and add separate metadata for authored, runtime-control, and provider-visible route views instead of overloading provider visibility alone.
+Keep existing `control_routes=False` semantics as “no injected question route” while removing all legacy default `blocked` and `failed` injection.
+Keep `Route.to(..., effects=...)` unsupported; add typed worklist progression through additive helper constructors or `on_taken` lowering so current validation/tests that reject the generic kwarg stay valid.
+Lazy worklist restore and checkpointing must stay sparse: restore only snapshotted selections and never initialize unrelated worklists during run start, resume, or snapshot save.
+Implement `validation_step` by lowering to existing Python-step execution rather than adding a new step kind or broad authoring DSL.
