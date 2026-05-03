@@ -6,3 +6,21 @@
 - Phase Directory Key: public-contract-cleanup
 - Phase Title: Public Contract Cleanup
 - Scope: phase-local producer artifact
+- Behaviors covered:
+  - `Context` public hook surface hides runtime-only mutators and cache/selection setters while internal helpers still work through `context_runtime(ctx)`.
+  - Public validation rejects removed authoring forms: `on_route`, route effects, legacy pair-step keywords, workflow-level `on_start` / `on_outcome`, class-level `on_<step>`, and multi-argument hook / `python_step` handlers.
+  - Public positive paths keep the final model working: explicit step-local hooks, explicit `PythonStep(..., handler=...)`, final pair-step hook keywords, and route-local `on_taken`.
+  - `event_on_outcome_tags(...)` follows the final `hook(ctx)` shape and reads `ctx.outcome` instead of the removed `(state, outcome)` helper contract.
+  - Maintained contract/docs regression slice no longer depends on removed public authoring surfaces.
+- Preserved invariants checked:
+  - Negative tests still reject legacy handler names even when steps are literally named `start` or `outcome`.
+  - Strictness scans keep runtime fixtures/docs free of legacy public tokens.
+  - Contract coverage still exercises session opening, runtime controls, and pair-step behavior after migrating to explicit hooks.
+- Edge and failure paths:
+  - Invalid legacy keywords fail at construction/validation time.
+  - Multi-argument hook signatures fail validation rather than being normalized.
+  - Outcome helper returns `None` when no requested tag matches.
+- Validation run:
+  - `./.venv/bin/pytest tests/contract/test_engine_contracts.py tests/unit/test_validation.py tests/unit/test_simple_surface.py tests/unit/test_primitives_and_stores.py tests/unit/test_stdlib_and_extensions.py::test_control_helpers_merge_routes_and_build_outcome_passthrough tests/unit/test_stdlib_and_extensions.py::test_control_helper_event_on_outcome_tags_exposes_single_ctx_hook_signature tests/strictness/test_no_compat.py -q`
+- Known gaps:
+  - Resume/cache behavior, direct-control history normalization, and broader runtime telemetry refactors remain out of this phase scope.
