@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import importlib
+import inspect
 import json
 import subprocess
 import sys
@@ -64,6 +65,17 @@ class _UnusedProvider:
 
 def _provider_factory(**_: object) -> _UnusedProvider:
     return _UnusedProvider()
+
+
+def _assert_bootstrap_scaffold_contract(source: str) -> None:
+    assert 'from autoloop import Event, FINISH, Workflow, python_step' in source
+    assert '@python_step(name="bootstrap", routes={"ready": FINISH})' in source
+    assert "def bootstrap(ctx):" in source
+    assert 'ctx.state = ctx.state.model_copy(update={"ready": True})' in source
+    assert 'return Event("ready")' in source
+    assert "def _bootstrap(" not in source
+    assert "python_step(_bootstrap" not in source
+    assert "state, ctx" not in source
 
 
 def _git(root: Path, *args: str) -> str:
@@ -137,8 +149,8 @@ class {class_name}(Workflow):
         ready: bool = False
 
     @python_step(name="bootstrap", routes={{"ready": FINISH}})
-    def bootstrap(state: State, ctx):
-        ctx.state = state.model_copy(update={{"ready": True}})
+    def bootstrap(ctx):
+        ctx.state = ctx.state.model_copy(update={{"ready": True}})
         return Event("ready")
 """.strip()
     (package_dir / "workflow.py").write_text(workflow_source + "\n", encoding="utf-8")
@@ -181,7 +193,7 @@ class {class_name}(Workflow):
         answered: bool = False
 
     @python_step(name="ask", routes={{"question": AWAIT_INPUT, "answered": FINISH}})
-    def ask(state: State, ctx):
+    def ask(ctx):
         payload = {{
             "answer": ctx.answer,
             "workflow_name": ctx.workflow_name,
@@ -190,7 +202,7 @@ class {class_name}(Workflow):
         (ctx.run_folder / "result.json").write_text(json.dumps(payload), encoding="utf-8")
         if ctx.answer is None:
             return Event("question", question="What value?")
-        ctx.state = state.model_copy(update={{"answered": True}})
+        ctx.state = ctx.state.model_copy(update={{"answered": True}})
         return Event("answered")
 """.strip()
 
@@ -975,6 +987,14 @@ def test_cli_init_workflow_scaffolds_supported_shapes_and_rejects_duplicates(
     for relative_path in expected_relpaths:
         assert (tmp_path / relative_path).exists()
 
+    source_path = (
+        tmp_path / "workflows" / "child_workflow.py"
+        if shape == "single"
+        else tmp_path / "workflows" / "child_workflow" / "flow.py"
+    )
+    source = source_path.read_text(encoding="utf-8")
+    _assert_bootstrap_scaffold_contract(source)
+
     if shape == "package":
         assert (tmp_path / "workflows" / "child_workflow" / "prompts" / "README.md").exists()
         assert (tmp_path / "workflows" / "child_workflow" / "assets" / ".gitkeep").exists()
@@ -989,6 +1009,10 @@ def test_cli_init_workflow_scaffolds_supported_shapes_and_rejects_duplicates(
 
     compiled = compile_workflow(resolve_workflow_reference(tmp_path, "child_workflow").workflow_cls)
     assert compiled.workflow_name == "child_workflow"
+    assert compiled.entry_step_name == "bootstrap"
+    assert compiled.steps["bootstrap"].available_routes == ("ready", "failed")
+    assert compiled.route("bootstrap", "ready").target == "FINISH"
+    assert tuple(inspect.signature(compiled.steps["bootstrap"].python_handler).parameters) == ("ctx",)
 
     duplicate_exit = cli.main(["init", "workflow", "child_workflow", "--shape", shape, "--root", str(tmp_path)])
     duplicate = capsys.readouterr()
@@ -1004,8 +1028,10 @@ def test_cli_init_workflow_defaults_to_flow_specs_shape(tmp_path: Path, capsys) 
     assert exit_code == 0
     payload = json.loads(captured.out)
     assert payload["shape"] == "flow-specs"
-    assert (tmp_path / "workflows" / "child_workflow" / "flow.py").exists()
+    flow_path = tmp_path / "workflows" / "child_workflow" / "flow.py"
+    assert flow_path.exists()
     assert (tmp_path / "workflows" / "child_workflow" / "specs.py").exists()
+    _assert_bootstrap_scaffold_contract(flow_path.read_text(encoding="utf-8"))
 
 
 def test_recursive_wrapper_targets_the_global_cli_contract() -> None:
