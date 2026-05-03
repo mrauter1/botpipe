@@ -1102,3 +1102,63 @@ Open issues / next step
 - No blocker remains inside this phase-local slice.
 - Resume/source-topology mismatch behavior still hard-fails in the existing path and remains for a later compiler/resume phase.
 - Validation run: `python3 -m compileall autoloop autoloop_optimizer tests`, plus targeted `pytest` coverage for engine contracts, history, static graph, optimizer helpers, and workspace status normalization; all selected tests passed.
+
+
+---
+run_id=run-20260503T001920Z-8f0e7926 | entry=session_turn | pair=implement | phase=verifier | cycle=1 | attempt=1 | thread_id=019deb8f-cd18-7a82-ae07-835e2444b0ff
+---
+provider=codex
+mode=resume
+template=/home/rauter/.local/share/pipx/venvs/autoloop/lib/python3.12/site-packages/autoloop/templates/implement_verifier.md
+session_id=019deb8f-cd18-7a82-ae07-835e2444b0ff
+
+
+---
+run_id=run-20260503T001920Z-8f0e7926 | entry=phase_output | pair=implement | phase=verifier | process=codex-agent | cycle=1 | attempt=1 | thread_id=019deb8f-cd18-7a82-ae07-835e2444b0ff
+---
+I’m reviewing the runtime-correctness-and-telemetry slice now. I’ll inspect the changed runtime paths and the phase artifacts first, then I’ll update the criteria and feedback with any blocking or non-blocking findings.
+
+`git diff` on the scoped pathset came back empty, so I’m reading the current file contents directly and checking the targeted status list instead. The repo is dirty in other areas, so I’m keeping the review constrained to the phase files and the runtime/test paths named in the implementation notes.
+
+I’ve reached the point where the review depends on edge semantics rather than surface diffs. I’m checking the status helper call sites and the history/runtime-control paths now, because that’s where this slice is most likely to hide a regression.
+
+I’ve narrowed the remaining review to consistency checks: whether the new status module actually became the single source for this phase’s consumers, and whether any phase-local failure path still drops attribution or state. After that I can close the criteria decisively.
+
+I’m running a narrow verification pass on the highest-risk paths from this slice: hook-selected pre-provider finalization, preserved session bindings on invalid runtime control, and the static-graph/history telemetry assertions that were added.
+
+The targeted tests passed, and I didn’t find a phase-local correctness or safety defect in the reviewed paths. I’m marking the criteria complete and recording that this review produced no actionable findings.
+
+Scope considered
+
+- Phase-local review of the runtime-correctness-and-telemetry slice only.
+- I limited the audit to the runtime/status/history/static-graph/optimizer paths and the phase artifacts referenced by the implementation notes.
+
+What I analyzed
+
+- The active phase contract, implementation notes, criteria, feedback seed, and run decisions ledger.
+- The current contents of `autoloop/core/statuses.py`, `autoloop/core/engine.py`, `autoloop/core/engine_collaborators.py`, `autoloop/core/history.py`, `autoloop/runtime/runner.py`, `autoloop/runtime/static_graph.py`, `autoloop/runtime/workspace.py`, `autoloop_optimizer/optimization.py`, and the targeted tests.
+
+What I reviewed
+
+- Centralized status and terminal classification wiring.
+- Hook-selected route/control attribution through finalization and history.
+- Static-graph runtime-control hook reporting for pre-provider hooks.
+- Failure checkpoint preservation coverage for mutated session bindings.
+- Targeted verification:
+  - `./.venv/bin/pytest tests/contract/test_engine_contracts.py -k 'before_hook_route_short_circuits_without_provider_and_preserves_candidate_route_none or invalid_goto_after_session_mutation_preserves_checkpoint_session_bindings'`
+  - `./.venv/bin/pytest tests/runtime/test_history.py -k 'preserves_hook_selected_route_source_for_pre_step_short_circuit or runtime_control_terminal_for_status_and_route_metadata'`
+  - `./.venv/bin/pytest tests/runtime/test_runtime_static_graph.py -k 'topology_artifacts_include_state_surfaces_runtime_control_hook_locations_and_compile_report_details'`
+
+Key findings / decisions
+
+- No blocking findings in the reviewed phase scope.
+- I updated `criteria.md` to all checked and appended a `non-blocking` `IMP-000` note in `feedback.md` documenting the clean review result.
+
+Open issues / next step
+
+- No phase-local blocker remains from this review.
+- The runtime-correctness-and-telemetry verifier artifact set is complete.
+
+<loop-control>
+{"schema":"docloop.loop_control/v1","kind":"promise","promise":"COMPLETE"}
+</loop-control>
