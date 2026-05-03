@@ -5,9 +5,8 @@ from __future__ import annotations
 import inspect
 from typing import Any
 
-from .discovery import _uses_simple_authoring_model, has_start_hook
+from .discovery import _uses_simple_authoring_model
 from .errors import WorkflowValidationError
-from .lowering import outcome_middleware_name
 from .routes import normalize_route_spec
 from .steps import ProduceVerifyStep, PythonStep
 
@@ -32,41 +31,28 @@ def validate_handlers(definition: Any) -> None:
             "simple workflows must declare lifecycle and step behavior on explicit step declarations; "
             f"remove legacy class-level handlers: {ordered_handler_names}"
         )
+    for handler_name in handler_names:
+        if handler_name == "on_start":
+            raise WorkflowValidationError(
+                "legacy workflow-level on_start handlers are no longer supported; use explicit step hooks instead"
+            )
+        if handler_name == "on_outcome":
+            raise WorkflowValidationError(
+                "legacy workflow-level on_outcome handlers are no longer supported; use explicit step hooks instead"
+            )
+        step_name = handler_name[3:]
+        if step_name in definition.steps_by_name:
+            raise WorkflowValidationError(
+                f"legacy class-level step handler {handler_name!r} is no longer supported; "
+                "declare behavior on the step itself"
+            )
+        raise WorkflowValidationError(f"orphan handler {handler_name!r} does not match any step")
 
     for step in definition.steps:
-        handler_name = f"on_{step.name}"
-        raw_handler = getattr(definition.workflow_cls, handler_name, None)
         if isinstance(step, PythonStep):
-            active_handler = step.handler if step.handler is not None else raw_handler
-            if active_handler is None:
-                raise WorkflowValidationError(f"python_step {step.name!r} is missing handler {handler_name!r}")
-            validate_callable_arity(handler_name, active_handler, {1, 2})
-            continue
-        if raw_handler is not None:
-            validate_callable_arity(handler_name, raw_handler, {3})
-
-    active_middleware = outcome_middleware_name(definition)
-    raw_middleware = getattr(definition.workflow_cls, active_middleware, None) if active_middleware else None
-    if raw_middleware is not None:
-        validate_callable_arity(active_middleware, raw_middleware, {2})
-
-    if has_start_hook(definition):
-        raw_start = getattr(definition.workflow_cls, "on_start", None)
-        if raw_start is not None:
-            validate_callable_arity("on_start", raw_start, {2})
-
-    reserved_handler_names: set[str] = set()
-    if has_start_hook(definition):
-        reserved_handler_names.add("on_start")
-    if active_middleware is not None:
-        reserved_handler_names.add(active_middleware)
-
-    for handler_name in handler_names:
-        if handler_name in reserved_handler_names:
-            continue
-        step_name = handler_name[3:]
-        if step_name not in definition.steps_by_name:
-            raise WorkflowValidationError(f"orphan handler {handler_name!r} does not match any step")
+            if step.handler is None:
+                raise WorkflowValidationError(f"python_step {step.name!r} is missing handler")
+            validate_callable_arity(f"python_step {step.name!r} handler", step.handler, {1})
 
 
 def validate_step_hooks(definition: Any) -> None:

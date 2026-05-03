@@ -17,7 +17,7 @@ from pydantic import BaseModel, TypeAdapter
 
 from .artifacts import Artifact, ArtifactHandle, ResolvedArtifacts, resolve_artifact_template
 from .compiler import CompiledRoute, CompiledStep, CompiledWorkflow, compile_workflow
-from .context import Context
+from .context import Context, context_runtime
 from .engine_collaborators import (
     ArtifactGuard,
     CheckpointManager,
@@ -304,11 +304,9 @@ class Engine:
                     values=values,
                 )
                 selections = self.state_runtime.initialize_worklist_selections(context)
-                context._runtime.set_selections(selections)
+                context_runtime(context).set_selections(selections)
                 if self.compiled.default_session_open:
                     context.open_session(self.compiled.default_session_name)
-                if self.compiled.has_start_hook:
-                    workflow_instance.on_start(context)
                 state = context.state
                 current_step_name = self.compiled.entry_step_name
                 current_answer = None
@@ -347,7 +345,8 @@ class Engine:
                 current_item_key = self._current_item_state_key(context, step)
                 step_state_store = self._ensure_step_state_store(step_states, step)
                 self._increment_step_runtime_state(step_state_store)
-                context._runtime.set_step_state_store(step_state_store)
+                runtime = context_runtime(context)
+                runtime.set_step_state_store(step_state_store)
                 item_state_store = self._ensure_item_state_store(item_states, step, item_key=current_item_key)
                 step_item_state_store = self._ensure_step_item_state_store(
                     step_item_states,
@@ -355,12 +354,12 @@ class Engine:
                     item_key=current_item_key,
                 )
                 if item_state_store is not None:
-                    context._runtime.set_item_state_store(item_state_store)
+                    runtime.set_item_state_store(item_state_store)
                 if step_item_state_store is not None:
                     self._increment_step_runtime_state(step_item_state_store)
-                    context._runtime.set_step_item_state_store(step_item_state_store)
+                    runtime.set_step_item_state_store(step_item_state_store)
                 self._update_item_runtime_state_on_entry(step, context, getattr(context, "_item_state", None))
-                context._runtime.set_worklist_selection_sync(
+                runtime.set_worklist_selection_sync(
                     lambda worklist_name, *, _context=context, _step=step, _item_states=item_states, _step_item_states=step_item_states: self._sync_context_scoped_state_after_worklist_selection_change(
                         _context,
                         _step,
@@ -369,8 +368,8 @@ class Engine:
                         worklist_name=worklist_name,
                     )
                 )
-                context._runtime.set_values(values)
-                context._runtime.set_meta(
+                runtime.set_values(values)
+                runtime.set_meta(
                     {
                         "step": {
                             "name": step.name,
@@ -739,7 +738,8 @@ class Engine:
         max_attempts = step.retry_policy.max_attempts
         for attempt in range(1, max_attempts + 1):
             artifacts = self._resolve_artifacts(context)
-            context._runtime.set_artifacts(artifacts)
+            runtime = context_runtime(context)
+            runtime.set_artifacts(artifacts)
             try:
                 before_result = self.hook_runner.run_before(
                     step,
@@ -750,7 +750,7 @@ class Engine:
                     hook_phase="before_producer",
                 )
                 state = before_result.state
-                context._runtime.set_state(state)
+                runtime.set_state(state)
                 if before_result.result.control is not None:
                     direct_control = self._normalize_direct_runtime_control(
                         step=step,
@@ -922,13 +922,8 @@ class Engine:
                         finalization.hook_route_redirects,
                     )
                 assert outcome is not None
-                event = self._apply_outcome(step, context, artifacts, state, outcome)
-                next_state = (
-                    state
-                    if event is not None
-                    else self._normalize_state(state, self._apply_outcome_handler(step, state, outcome, artifacts))
-                )
-                final_event = event or Event(outcome.tag, reason=outcome.reason, question=outcome.question)
+                next_state = state
+                final_event = Event(outcome.tag, reason=outcome.reason, question=outcome.question)
                 artifacts = self._resolve_artifacts(context)
                 finalization = self.route_finalizer.finalize(
                     StepFinalizationRequest(
@@ -1025,13 +1020,8 @@ class Engine:
                     consumed_pending_handoffs=remaining_pending_handoffs,
                     restorable_pending_handoffs=pending_handoffs,
                 )
-                event = self._apply_outcome(step, context, artifacts, state, outcome)
-                next_state = (
-                    state
-                    if event is not None
-                    else self._normalize_state(state, self._apply_outcome_handler(step, state, outcome, artifacts))
-                )
-                final_event = event or Event(outcome.tag, reason=outcome.reason, question=outcome.question)
+                next_state = state
+                final_event = Event(outcome.tag, reason=outcome.reason, question=outcome.question)
                 artifacts = self._resolve_artifacts(context)
                 finalization = self.route_finalizer.finalize(
                     StepFinalizationRequest(
@@ -1255,7 +1245,8 @@ class Engine:
             hook_phase="after_producer",
         )
         next_state = after_producer_result.state
-        context._runtime.set_state(next_state)
+        runtime = context_runtime(context)
+        runtime.set_state(next_state)
         if after_producer_result.result.control is not None:
             direct_control = self._normalize_direct_runtime_control(
                 step=step,
@@ -1290,7 +1281,7 @@ class Engine:
 
         try:
             review_artifacts = self._resolve_artifacts(context)
-            context._runtime.set_artifacts(review_artifacts)
+            runtime.set_artifacts(review_artifacts)
             self._ensure_named_artifacts_exist(step.verifier_requires, review_artifacts, step_name=step.name)
             before_verifier_result = self.hook_runner.run_before(
                 step,
@@ -1301,7 +1292,7 @@ class Engine:
                 hook_phase="before_verifier",
             )
             review_state = before_verifier_result.state
-            context._runtime.set_state(review_state)
+            runtime.set_state(review_state)
             if before_verifier_result.result.control is not None:
                 direct_control = self._normalize_direct_runtime_control(
                     step=step,
@@ -1486,43 +1477,6 @@ class Engine:
         )
         self._append_logs(step, artifacts, response.outcome.raw_output)
         return response.outcome, response.session or session, StepProviderUsage(llm=response.usage)
-
-    def _apply_outcome(
-        self,
-        step: CompiledStep,
-        context: Context,
-        artifacts: ResolvedArtifacts,
-        state: BaseModel,
-        outcome: Outcome,
-    ) -> Event | None:
-        if self.compiled.middleware is None:
-            return None
-        event = self.compiled.middleware(state, outcome)
-        if event is not None and not isinstance(event, Event):
-            raise ProviderExecutionError("middleware must return Event or None")
-        if event is not None:
-            try:
-                self._validate_event(step, event, provider_attributable=True, error_cls=ProviderExecutionError)
-            except WorkflowExecutionError as exc:
-                annotated = self._annotate_execution_error(exc, checkpoint_state=state)
-                if annotated is exc:
-                    raise
-                raise annotated from exc
-        return event
-
-    def _apply_outcome_handler(
-        self,
-        step: CompiledStep,
-        state: BaseModel,
-        outcome: Outcome,
-        artifacts: ResolvedArtifacts,
-    ) -> BaseModel:
-        if step.outcome_handler is None:
-            return state
-        next_state = step.outcome_handler(state, outcome, artifacts)
-        if not isinstance(next_state, BaseModel):
-            raise WorkflowExecutionError(f"handler for step {step.name!r} must return a pydantic model")
-        return next_state
 
     def _normalize_direct_runtime_control(
         self,
@@ -1748,7 +1702,7 @@ class Engine:
     def _restore_hook_context(self, context: Context, snapshot: _HookSnapshot) -> None:
         self.session_store.restore(snapshot.session)
         if snapshot.state is not None:
-            context._runtime.set_state(self._clone_state(snapshot.state))
+            context_runtime(context).set_state(self._clone_state(snapshot.state))
         self._restore_model_or_dict(getattr(context, "_step_state", None), snapshot.step_state)
         self._restore_model_or_dict(getattr(context, "_item_state", None), snapshot.item_state)
         self._restore_model_or_dict(getattr(context, "_step_item_state", None), snapshot.step_item_state)
@@ -3427,8 +3381,9 @@ class Engine:
         item_key = self._current_item_state_key(context, step)
         item_state_store = self._ensure_item_state_store(item_states, step, item_key=item_key)
         step_item_state_store = self._ensure_step_item_state_store(step_item_states, step, item_key=item_key)
-        context._runtime.set_item_state_store(item_state_store)
-        context._runtime.set_step_item_state_store(step_item_state_store)
+        runtime = context_runtime(context)
+        runtime.set_item_state_store(item_state_store)
+        runtime.set_step_item_state_store(step_item_state_store)
         self._update_item_runtime_state_on_entry(step, context, item_state_store)
 
     def _emit_runtime_event(self, event_type: str, **payload: Any) -> None:

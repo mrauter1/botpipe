@@ -13,12 +13,12 @@ from pydantic import BaseModel
 
 from .artifacts import CompiledArtifact
 from .context import Context
-from .discovery import WorkflowDefinition, _uses_simple_authoring_model, get_workflow_definition, has_start_hook
+from .discovery import WorkflowDefinition, get_workflow_definition
 from .extensions import WorkflowExtension
 from .errors import RoutingError, WorkflowCompilationError
 from .inventory import ArtifactInventoryRecord, collect_artifact_inventory, public_artifact_inventory, resolve_artifact_reference, resolve_optional_read_reference
-from .lowering import compile_expected_output_contract, normalize_step_route_metadata, outcome_middleware_name, step_available_route_tags
-from .primitives import Event, FAIL, FINISH, GLOBAL, Outcome
+from .lowering import compile_expected_output_contract, normalize_step_route_metadata, step_available_route_tags
+from .primitives import FAIL, FINISH, GLOBAL
 from .prompts import PromptSpec
 from .providers.retries import ProviderRetryPolicy
 from .route_required_writes import route_required_write_payload
@@ -29,9 +29,7 @@ from .steps import PromptStep, ProduceVerifyStep, Session, Step, PythonStep, Chi
 from .validation import PayloadValidator
 from .worklists import Worklist
 
-OutcomeHandler = Callable[[BaseModel, Outcome, Any], BaseModel]
 SystemHandler = Callable[[Context], Any]
-MiddlewareHandler = Callable[[BaseModel, Outcome], Event | None]
 
 
 @dataclass(frozen=True, slots=True)
@@ -61,7 +59,6 @@ class CompiledStep:
     verifier_writes: tuple[str, ...]
     verifier_session_name: str | None
     expected_output_validator: PayloadValidator | None
-    outcome_handler: OutcomeHandler | None
     python_handler: SystemHandler | None
     before_hook: Callable[..., Any] | None
     after_hook: Callable[..., Any] | None
@@ -112,10 +109,8 @@ class CompiledWorkflow:
     artifacts: dict[str, CompiledArtifact]
     artifacts_by_qualified_name: dict[str, CompiledArtifact]
     extensions: tuple[WorkflowExtension, ...]
-    has_start_hook: bool
     source_hash: str | None
     topology_hash: str
-    middleware: MiddlewareHandler | None = None
 
     def artifact_items(self, *, authoritative: bool = False) -> tuple[tuple[str, CompiledArtifact], ...]:
         """Return compiled artifact entries.
@@ -173,10 +168,8 @@ def compile_workflow(workflow_cls: type[Any]) -> CompiledWorkflow:
         artifacts=_compile_public_artifacts(inventory),
         artifacts_by_qualified_name=_compile_artifacts_by_qualified_name(inventory),
         extensions=definition.extensions,
-        has_start_hook=has_start_hook(definition),
         source_hash=_workflow_source_hash(workflow_cls),
         topology_hash="",
-        middleware=_compile_middleware(definition),
     )
     compiled = _with_topology_hash(compiled)
     workflow_cls.__compiled_workflow__ = compiled
@@ -294,7 +287,6 @@ def _compile_steps(
                     else None
                 ),
                 expected_output_validator=expected_output_validator,
-                outcome_handler=_compile_outcome_handler(definition.workflow_cls, step.name),
                 python_handler=None,
                 before_hook=before_hook,
                 after_hook=after_hook,
@@ -332,7 +324,6 @@ def _compile_steps(
                 verifier_writes=(),
                 verifier_session_name=None,
                 expected_output_validator=expected_output_validator,
-                outcome_handler=_compile_outcome_handler(definition.workflow_cls, step.name),
                 python_handler=None,
                 before_hook=before_hook,
                 after_hook=after_hook,
@@ -370,8 +361,7 @@ def _compile_steps(
                 verifier_writes=(),
                 verifier_session_name=None,
                 expected_output_validator=None,
-                outcome_handler=None,
-                python_handler=_compile_system_handler(step, workflow_cls=definition.workflow_cls),
+                python_handler=_compile_system_handler(step),
                 before_hook=before_hook,
                 after_hook=after_hook,
                 before_producer_hook=None,
@@ -408,7 +398,6 @@ def _compile_steps(
                 verifier_writes=(),
                 verifier_session_name=None,
                 expected_output_validator=None,
-                outcome_handler=None,
                 python_handler=None,
                 before_hook=before_hook,
                 after_hook=after_hook,
@@ -424,19 +413,6 @@ def _compile_steps(
         else:
             raise WorkflowCompilationError(f"unsupported step type {type(step)!r}")
     return compiled_steps
-
-
-def _compile_outcome_handler(workflow_cls: type[Any], step_name: str) -> OutcomeHandler | None:
-    if _uses_simple_authoring_model(workflow_cls):
-        return None
-    raw_handler = getattr(workflow_cls, f"on_{step_name}", None)
-    if raw_handler is None:
-        return None
-    if _callable_arity(raw_handler) != 3:
-        raise WorkflowCompilationError(
-            f"handler for step {step_name!r} must accept exactly 3 positional arguments"
-        )
-    return raw_handler
 
 
 def _compile_optional_model(workflow_cls: type[Any], attribute: str) -> type[BaseModel] | None:
@@ -480,40 +456,22 @@ def _compiled_session_copy(name: str, session: Session | None) -> Session:
     return compiled
 
 
-def _compile_system_handler(step: PythonStep, *, workflow_cls: type[Any]) -> SystemHandler:
+def _compile_system_handler(step: PythonStep) -> SystemHandler:
     raw_handler = step.handler
     step_name = step.name
-    if raw_handler is None and not _uses_simple_authoring_model(workflow_cls):
-        raw_handler = getattr(workflow_cls, f"on_{step_name}", None)
     if raw_handler is None:
         raise WorkflowCompilationError(f"python_step {step_name!r} is missing a handler")
 
     arity = _callable_arity(raw_handler)
-    if arity not in {1, 2}:
+    if arity != 1:
         raise WorkflowCompilationError(
-            f"handler for python_step {step_name!r} must accept exactly 1 or 2 positional arguments"
+            f"handler for python_step {step_name!r} must accept exactly 1 positional argument"
         )
 
     def handler(ctx: Context) -> Any:
-        if arity == 1:
-            result = raw_handler(ctx)
-        else:
-            result = raw_handler(ctx.state, ctx)
-        return result
+        return raw_handler(ctx)
 
     return handler
-
-
-def _compile_middleware(definition: WorkflowDefinition) -> MiddlewareHandler | None:
-    handler_name = outcome_middleware_name(definition)
-    if handler_name is None:
-        return None
-    raw = getattr(definition.workflow_cls, handler_name, None)
-    if raw is None:
-        return None
-    if _callable_arity(raw) != 2:
-        raise WorkflowCompilationError("middleware must accept exactly two positional arguments")
-    return raw
 
 
 def _compile_routes(definition: WorkflowDefinition) -> dict[str, dict[str, CompiledRoute]]:
@@ -796,10 +754,8 @@ def _with_topology_hash(compiled: CompiledWorkflow) -> CompiledWorkflow:
         artifacts=compiled.artifacts,
         artifacts_by_qualified_name=compiled.artifacts_by_qualified_name,
         extensions=compiled.extensions,
-        has_start_hook=compiled.has_start_hook,
         source_hash=compiled.source_hash,
         topology_hash=topology_hash,
-        middleware=compiled.middleware,
     )
 
 

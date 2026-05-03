@@ -1152,22 +1152,18 @@ def test_runtime_built_in_step_state_is_available_on_core_steps(tmp_path) -> Non
     class CoreRuntimeWorkflow(core.Workflow):
         State = WorkflowState
 
-        inspect = core_steps.PythonStep(name="inspect")
-        entry = inspect
-        transitions = {inspect: {"done": core.AWAIT_INPUT}}
-
         @staticmethod
-        def on_inspect(state: WorkflowState, ctx: Context):
+        def inspect_handler(ctx: Context):
             assert ctx.step_state.visits == 1
             assert ctx.step_state.last_route is None
             assert ctx.step_state.last_reason is None
-            ctx.state = state.model_copy(
-                update={
-                    "seen_visits": ctx.step_state.visits,
-                    "seen_last_route": ctx.step_state.last_route,
-                }
-            )
+            ctx.state.seen_visits = ctx.step_state.visits
+            ctx.state.seen_last_route = ctx.step_state.last_route
             return simple.Event("done", reason="inspected")
+
+        inspect = core_steps.PythonStep(name="inspect", handler=inspect_handler)
+        entry = inspect
+        transitions = {inspect: {"done": core.AWAIT_INPUT}}
 
     task_folder = tmp_path / "task"
     run_folder = tmp_path / "run"

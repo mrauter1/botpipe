@@ -5,7 +5,7 @@ from typing import Any
 
 from autoloop import Event, Outcome
 from autoloop.core.compiler import compile_workflow
-from autoloop.core.context import Context
+from autoloop.core.context import Context, context_runtime
 
 
 def _normalize_control_result(result: Any) -> Any:
@@ -39,16 +39,17 @@ def invoke_after_verifier_hook(
     original_route = ctx.route
     original_outcome = ctx.outcome
     original_meta = ctx.meta
+    runtime = context_runtime(ctx)
     if artifacts is not None:
-        ctx._runtime.set_artifacts(artifacts)
-    ctx._runtime.set_route(route)
-    ctx._runtime.set_outcome(outcome)
-    ctx._runtime.set_meta(meta)
+        runtime.set_artifacts(artifacts)
+    runtime.set_route(route)
+    runtime.set_outcome(outcome)
+    runtime.set_meta(meta)
     try:
         result = hook(ctx)
         return _normalize_control_result(result)
     finally:
-        ctx._runtime.set_artifacts(original_artifacts)
-        ctx._runtime.set_route(original_route)
-        ctx._runtime.set_outcome(original_outcome)
-        ctx._runtime.set_meta(original_meta)
+        runtime.set_artifacts(original_artifacts)
+        runtime.set_route(original_route)
+        runtime.set_outcome(original_outcome)
+        runtime.set_meta(original_meta)

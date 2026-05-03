@@ -272,3 +272,67 @@ The implementation should stay in this phase until those two scope gaps are clos
 <loop-control>
 {"schema":"docloop.loop_control/v1","kind":"promise","promise":"INCOMPLETE"}
 </loop-control>
+
+
+---
+run_id=run-20260503T001920Z-8f0e7926 | entry=session_turn | pair=implement | phase=producer | cycle=2 | attempt=1 | thread_id=019deb3e-9a64-77a2-8675-175dfad2340d
+---
+provider=codex
+mode=resume
+template=/home/rauter/.local/share/pipx/venvs/autoloop/lib/python3.12/site-packages/autoloop/templates/implement_producer.md
+session_id=019deb3e-9a64-77a2-8675-175dfad2340d
+
+
+---
+run_id=run-20260503T001920Z-8f0e7926 | entry=phase_output | pair=implement | phase=producer | process=codex-agent | cycle=2 | attempt=1 | thread_id=019deb3e-9a64-77a2-8675-175dfad2340d
+---
+I’m addressing the two blocking review findings in this phase only: remove the hook-visible runtime backdoor from `Context`, and finish removing the legacy class-handler/state-return compiler path that still survives in core discovery/validation/compiler code.
+
+I’m addressing the two blocking review findings now: removing the remaining public runtime backdoor on `Context`, and cutting the legacy class-handler/state-return path that still bypasses the final `hook(ctx)` contract.
+
+I’ve confirmed the reviewer’s scope: the remaining gap is not a test artifact, it’s still real code in the public compiler/runtime path. Next I’m tracing the exact call sites so the fix stays local instead of widening into an unnecessary refactor.
+
+The public `Context` fix is straightforward; the bigger blast radius is the old class-level handler path because the contract tests still exercise it heavily. I’m checking whether that path exists anywhere outside tests before I remove it and tighten the affected coverage.
+
+I’ve confirmed the legacy path is still wired all the way through compile and engine execution, not just validation. I’m moving to edits now: first removing `ctx._runtime` from the public object, then deleting the old `on_start` / `on_outcome` / `on_<step>` compilation path and tightening the affected tests.
+
+I’m editing the runtime seam first. The goal is to keep the current internal ownership but stop storing that service on `ctx` itself, so hook authors no longer get a callable backdoor to runtime mutation.
+
+I’ve moved the runtime helper off the public object; now I’m removing the old handler path from the compiler so the runtime can’t silently keep honoring `on_start`, `on_outcome`, or `on_<step>` even if validation misses something.
+
+I’ve finished the code-path removals. I’m checking the touched files for syntax and local consistency now before I run the focused test slice that covers the two reviewer findings.
+
+The code is structurally where it needs to be. The only issue from the sanity pass was environmental: this repo doesn’t have `python` on PATH, so I’m rerunning the compile check through the project venv and then the focused pytest slice.
+
+The first test run found a real integration issue: importing `context_runtime` from `worklists.py` at module load created a context/store/worklist cycle. I’m fixing that by moving the runtime lookup behind a local helper so the public import graph stays unchanged.
+
+The focused regression slice is green. The remaining run is the strictness scan, which is the right backstop here because it catches repo-visible compatibility surfaces that aren’t exercised by the narrow execution tests.
+
+I’ve got the reviewer’s two blockers closed in code and covered by focused tests. I’m updating the phase ledger and notes now so the next verifier turn doesn’t have to reconstruct the non-obvious contract decisions from the diff.
+
+Scope considered
+
+Phase-local `public-contract-cleanup` only: the remaining verifier findings on public `Context` safety and the legacy class-handler/state-return compiler path, plus the minimum fixture/test updates needed to keep this slice coherent.
+
+What I analyzed
+
+I traced the reviewer findings through [autoloop/core/context.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/autoloop/core/context.py:220), [autoloop/core/worklists.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/autoloop/core/worklists.py:24), [autoloop/core/compiler.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/autoloop/core/compiler.py:35), [autoloop/core/hook_validation.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/autoloop/core/hook_validation.py:26), [autoloop/core/discovery.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/autoloop/core/discovery.py:287), [autoloop/core/lowering.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/autoloop/core/lowering.py:20), and the engine/collaborator call sites that still relied on those legacy surfaces.
+
+What I changed
+
+`Context` no longer stores the runtime mutator service on the public hook object. The internal helper now lives behind the module-level `context_runtime(ctx)` lookup in [autoloop/core/context.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/autoloop/core/context.py:685), and engine/worklist internals were rewired to use that seam in [autoloop/core/worklists.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/autoloop/core/worklists.py:227), [autoloop/core/engine.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/autoloop/core/engine.py:307), [autoloop/core/engine_collaborators.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/autoloop/core/engine_collaborators.py:94), and [tests/runtime/workflow_contract_helpers.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/tests/runtime/workflow_contract_helpers.py:42).
+
+The legacy workflow class-handler path is removed from compilation and validation. `CompiledStep` / `CompiledWorkflow` no longer carry `outcome_handler`, `has_start_hook`, or `middleware`, `python_step` requires an explicit one-arg handler, and the compiler no longer falls back to `on_<step>` in [autoloop/core/compiler.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/autoloop/core/compiler.py:35) and [autoloop/core/compiler.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/autoloop/core/compiler.py:459). Validation now hard-rejects `on_start`, `on_outcome`, and class-level `on_<step>` authoring in [autoloop/core/hook_validation.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/autoloop/core/hook_validation.py:26), with the old discovery/lowering helpers reduced to no-op legacy stubs in [autoloop/core/discovery.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/autoloop/core/discovery.py:287) and [autoloop/core/lowering.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/autoloop/core/lowering.py:20). I also updated the public-facing fixture/tests to the final model in [tests/unit/test_primitives_and_stores.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/tests/unit/test_primitives_and_stores.py:68), [tests/unit/test_simple_surface.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/tests/unit/test_simple_surface.py:1152), [tests/unit/test_validation.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/tests/unit/test_validation.py:1327), and [tests/fixtures/toy_runtime_workflow.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/tests/fixtures/toy_runtime_workflow.py:1).
+
+Key findings / decisions
+
+The non-obvious implementation choice was to keep `_ContextRuntime` as the internal ownership point but move lookup out of `ctx` entirely, which satisfies AC-3 without adding a second runtime abstraction. I also made the class-handler break explicit and immediate: legacy `on_start`, `on_outcome`, and `on_<step>` now fail validation instead of being silently ignored or partially compiled.
+
+Validation passed with:
+- `./.venv/bin/python -m py_compile autoloop/core/context.py autoloop/core/worklists.py autoloop/core/compiler.py autoloop/core/hook_validation.py autoloop/core/discovery.py autoloop/core/lowering.py autoloop/core/engine.py autoloop/core/engine_collaborators.py tests/runtime/workflow_contract_helpers.py tests/unit/test_primitives_and_stores.py tests/unit/test_simple_surface.py tests/unit/test_validation.py tests/fixtures/toy_runtime_workflow.py`
+- `./.venv/bin/pytest tests/unit/test_primitives_and_stores.py::test_public_context_hides_runtime_mutators tests/unit/test_primitives_and_stores.py::test_worklist_runtime_view_updates_selection_emits_events_and_returns_exhaustion_control tests/unit/test_simple_surface.py::test_simple_workflow_rejects_legacy_class_level_handler_methods tests/unit/test_simple_surface.py::test_runtime_built_in_step_state_is_available_on_core_steps tests/unit/test_validation.py::test_validation_accepts_direct_system_step_handler_without_on_step_method tests/unit/test_validation.py::test_validation_rejects_legacy_on_start_handler_even_when_step_is_named_start tests/unit/test_validation.py::test_validation_rejects_legacy_on_outcome_handler_even_when_step_is_named_outcome tests/unit/test_validation.py::test_validation_rejects_legacy_class_level_step_handler_methods tests/unit/test_validation.py::test_validation_rejects_legacy_pair_handler_methods tests/unit/test_validation.py::test_validation_rejects_multi_argument_python_step_handler tests/unit/test_validation.py::test_validation_does_not_infer_after_hook_routes_from_source tests/unit/test_validation.py::test_validation_rejects_multi_argument_after_hook_signature tests/unit/test_validation.py::test_validation_does_not_infer_after_producer_redirects_from_source tests/unit/test_validation.py::test_validation_rejects_multi_argument_after_producer_hook_signature tests/unit/test_validation.py::test_validation_rejects_static_on_start_signature -q`
+- `./.venv/bin/pytest tests/strictness/test_no_compat.py -q`
+
+Open issues / next step
+
+No blocker remains for the two verifier findings. The only follow-on is broader cleanup of older historical contract coverage that still describes removed class-handler authoring outside this phase’s focused regression slice.

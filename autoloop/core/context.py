@@ -8,6 +8,7 @@ from pathlib import Path
 import inspect
 from typing import TYPE_CHECKING, Any, Callable, Generic, TypeVar
 from uuid import uuid4
+from weakref import WeakKeyDictionary
 
 from pydantic import BaseModel, ConfigDict
 
@@ -28,6 +29,7 @@ if TYPE_CHECKING:
 
 
 OutputT = TypeVar("OutputT")
+_CONTEXT_RUNTIMES: "WeakKeyDictionary[Context, _ContextRuntime]" = WeakKeyDictionary()
 
 
 @dataclass(frozen=True, slots=True)
@@ -235,7 +237,7 @@ class Context:
         self._execution_source_hook: str | None = None
         self._execution_source_phase: str | None = None
         self._execution_hook_invocation_id: str | None = None
-        self._runtime = _ContextRuntime(self)
+        _CONTEXT_RUNTIMES[self] = _ContextRuntime(self)
 
     @property
     def state(self) -> BaseModel:
@@ -678,6 +680,13 @@ class _ContextRuntime:
     def cache_worklist_items(self, worklist_name: str, items: tuple[Any, ...]) -> tuple[Any, ...]:
         self._context._worklist_items_cache[worklist_name] = items
         return items
+
+
+def context_runtime(context: Context) -> _ContextRuntime:
+    try:
+        return _CONTEXT_RUNTIMES[context]
+    except KeyError as exc:  # pragma: no cover - only reachable for malformed synthetic contexts
+        raise WorkflowExecutionError("runtime helpers are unavailable on this context") from exc
 
 
 def _runtime_visits(state: BaseModel | dict[str, Any] | None) -> int | None:
