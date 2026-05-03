@@ -1,4 +1,35 @@
 version: 1
 task_id: standalone-remaining-delta-implementation-spec-g-e919a184
 request_snapshot_ref: /home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/standalone-remaining-delta-implementation-spec-g-e919a184/runs/run-20260503T025931Z-b2553e76/request.md
-phases: []
+phases:
+  - phase_id: "public-authoring-surface-cleanup"
+    title: "Public Authoring Surface Cleanup"
+    objective: "Align cleanup docs, init scaffolds, and scaffold validation with the finalized autoloop-only python_step contract."
+    status: "planned"
+    in_scope:
+      - "Remove the remaining autoloop.simple guidance from cleanup.md while preserving the autoloop-only wording required by the baseline docs tests."
+      - "Update autoloop/runtime/cli.py scaffold emitters for single, flow-specs, and package workflows so generated bootstrap steps use the one-argument python_step handler contract and compile under the current validator."
+      - "Strengthen tests/runtime/test_package_cli.py so init-workflow coverage validates the final scaffold contract directly and rerun the requested focused pytest targets."
+    out_of_scope:
+      - "Changing supported workflow shapes, package metadata layout, or init command JSON payloads."
+      - "Broader documentation rewrites outside cleanup.md."
+      - "Any runtime contract expansion beyond matching the already-finalized validator and hook model."
+    dependencies: []
+    acceptance_criteria:
+      - id: "AC-1"
+        text: "cleanup.md documents only the autoloop public authoring surface and contains no autoloop.simple guidance."
+      - id: "AC-2"
+        text: "All generated starter workflows declare a finalized python_step bootstrap handler with a single ctx argument, step-local routes, and no legacy python_step(_bootstrap, ...) or (state, ctx) scaffold pattern."
+      - id: "AC-3"
+        text: "The init-workflow tests assert both file creation and the final scaffold contract directly, and the requested pytest targets pass."
+    deliverables:
+      - "Updated cleanup.md wording aligned to the final autoloop-only authoring surface."
+      - "Revised CLI scaffold templates for single, flow-specs, and package workflow shapes."
+      - "Extended CLI scaffold tests and recorded focused validation runs."
+    risks:
+      - "cleanup.md can regress the baseline docs test if required autoloop-only phrases are removed while deleting autoloop.simple references."
+      - "The single-file and package-backed scaffolds share intent but not file paths, so one shape can drift if the starter source is not updated consistently."
+      - "Test coverage can stay too shallow if it keeps compiling generated workflows without asserting the final emitted source contract."
+    rollback:
+      - "Revert scaffold-source and matching test updates together if any supported shape stops compiling under the current validator."
+      - "Restore cleanup.md from the prior wording only if the replacement autoloop-only wording fails the baseline docs expectations."
