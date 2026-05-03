@@ -189,6 +189,25 @@ def test_resolve_runtime_config_reads_full_auto_runtime_policy(
     assert resolved.runtime.full_auto is True
 
 
+def test_resolve_runtime_config_reads_valid_nested_runtime_policy_without_pyyaml(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    config_root = tmp_path / "repo"
+    config_root.mkdir()
+    (config_root / "autoloop.yaml").write_text(
+        "runtime:\n  full_auto: true\n  tracing:\n    include_state_snapshots: false\n",
+        encoding="utf-8",
+    )
+    monkeypatch.setattr(runtime_config, "user_config_dir", lambda: tmp_path / "missing-user-config")
+    monkeypatch.setattr(runtime_config, "yaml", None)
+
+    resolved = resolve_runtime_config(config_root, _runtime_args())
+
+    assert resolved.runtime.full_auto is True
+    assert resolved.runtime.tracing.include_state_snapshots is False
+
+
 def test_load_runtime_config_file_without_pyyaml_rejects_indented_child_under_scalar(
     tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,
