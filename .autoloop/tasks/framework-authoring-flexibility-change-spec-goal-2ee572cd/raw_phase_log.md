@@ -2110,3 +2110,41 @@ The artifacts are written. I’m doing a quick consistency pass on the edited pl
 Updated the planner artifacts in [plan.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/framework-authoring-flexibility-change-spec-goal-2ee572cd/runs/run-20260503T223034Z-bda92fa2/artifacts/plan/plan.md), [phase_plan.yaml](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/framework-authoring-flexibility-change-spec-goal-2ee572cd/runs/run-20260503T223034Z-bda92fa2/artifacts/plan/phase_plan.yaml), [feedback.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/framework-authoring-flexibility-change-spec-goal-2ee572cd/runs/run-20260503T223034Z-bda92fa2/artifacts/plan/feedback.md), and [decisions.txt](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/framework-authoring-flexibility-change-spec-goal-2ee572cd/runs/run-20260503T223034Z-bda92fa2/decisions.txt). The plan is now a concrete 3-phase implementation path covering runtime contract restoration, `full_auto` runner/config plumbing, and workspace fixture alignment plus final revalidation.
 
 I also ran the audited regression slice to anchor the plan to the actual red set. It currently fails in 12 places, which line up with the requested gaps: payload placeholder traversal, route ordering, stale dual-role artifact fixtures, no-PyYAML config loading, string-prompt handling in the runner, and legacy `python_step(state, ctx)` temp fixtures in `tests/runtime/test_workspace_and_context.py`.
+
+
+---
+run_id=run-20260503T223034Z-bda92fa2 | entry=session_turn | pair=plan | phase=verifier | cycle=1 | attempt=1 | thread_id=019deff7-0119-7660-a9bf-814557ea0373
+---
+provider=codex
+mode=resume
+template=/home/rauter/.local/share/pipx/venvs/autoloop/lib/python3.12/site-packages/autoloop/templates/plan_verifier.md
+session_id=019deff7-0119-7660-a9bf-814557ea0373
+
+
+---
+run_id=run-20260503T223034Z-bda92fa2 | entry=phase_output | pair=plan | phase=verifier | process=codex-agent | cycle=1 | attempt=1 | thread_id=019deff7-0119-7660-a9bf-814557ea0373
+---
+I’m auditing the written planning artifacts against the request, the shared decisions, and the current failure set before I update the verifier checklist and feedback.
+
+I found one material planning gap: the plan chose stable provider-route ordering as contractual, but still leaves the required repository documentation update optional. I’m marking the checklist accordingly and appending a blocking finding with the minimal correction.
+
+Scope considered
+The request snapshot, raw-log clarification history, shared decisions, and the active planning artifacts for this run-local plan turn.
+
+What I analyzed
+I checked the requested acceptance gaps against the produced `plan.md` and `phase_plan.yaml`, with emphasis on payload placeholder behavior, route/artifact contract handling, `full_auto` runner/config coverage, runtime fixture signature direction, and the required audited regression rerun.
+
+What I reviewed
+I reviewed [plan.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/framework-authoring-flexibility-change-spec-goal-2ee572cd/runs/run-20260503T223034Z-bda92fa2/artifacts/plan/plan.md), [phase_plan.yaml](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/framework-authoring-flexibility-change-spec-goal-2ee572cd/runs/run-20260503T223034Z-bda92fa2/artifacts/plan/phase_plan.yaml), [feedback.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/framework-authoring-flexibility-change-spec-goal-2ee572cd/runs/run-20260503T223034Z-bda92fa2/artifacts/plan/feedback.md), [criteria.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/framework-authoring-flexibility-change-spec-goal-2ee572cd/runs/run-20260503T223034Z-bda92fa2/artifacts/plan/criteria.md), and [decisions.txt](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/framework-authoring-flexibility-change-spec-goal-2ee572cd/runs/run-20260503T223034Z-bda92fa2/decisions.txt). I updated `criteria.md` and appended a stable-ID finding to `feedback.md`.
+
+Key findings / decisions
+One blocking finding remains: `PLAN-001`.
+The plan chose stable route ordering as a contractual behavior, but still leaves the required repository documentation update optional. That conflicts with the request’s explicit branch: if ordering is intended to be stable, restore it in code and document it.
+I marked `Intent Fidelity`, `Completeness`, and `Feasibility / Compatibility` unchecked, and left `Behavioral Safety` and `Technical Debt` checked.
+
+Open issues / next step
+The planner should revise Phase 1 so the repository doc update is mandatory, not conditional, and should name the concrete doc file(s) that must be updated for the stable route-order contract. After that change, this plan can be re-verified.
+
+<loop-control>
+{"schema":"docloop.loop_control/v1","kind":"promise","promise":"INCOMPLETE"}
+</loop-control>
