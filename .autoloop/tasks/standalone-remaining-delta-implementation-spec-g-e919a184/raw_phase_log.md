@@ -1759,3 +1759,58 @@ Open issues / next step
 <loop-control>
 {"schema":"docloop.loop_control/v1","kind":"promise","promise":"INCOMPLETE"}
 </loop-control>
+
+
+---
+run_id=run-20260503T001920Z-8f0e7926 | entry=session_turn | pair=audit | phase=verifier | cycle=1 | attempt=1 | thread_id=019debc2-168b-7e72-bea5-0624a2fe0baf
+---
+provider=codex
+mode=resume
+template=/home/rauter/.local/share/pipx/venvs/autoloop/lib/python3.12/site-packages/autoloop/templates/audit_verifier.md
+session_id=019debc2-168b-7e72-bea5-0624a2fe0baf
+
+
+---
+run_id=run-20260503T001920Z-8f0e7926 | entry=phase_output | pair=audit | phase=verifier | process=codex-agent | cycle=1 | attempt=1 | thread_id=019debc2-168b-7e72-bea5-0624a2fe0baf
+---
+I’m verifying the audit artifacts against the request ledger, run decisions, current tree, and the two live regressions the producer cited. Then I’ll update only the audit criteria/feedback files with the verification result.
+
+The audit artifacts look coherent on read. I’m re-running the two cited test slices myself so the verifier result is grounded in live evidence, not just the producer’s summary.
+
+The live verification matches the audit: the two cited regressions are real, the JSON is accurate, and the revised request is direct enough to drive the next run. I’m appending a concise verifier note in the audit feedback and leaving the criteria fully checked.
+
+Scope considered
+
+- The immutable request, authoritative raw log clarifications, `decisions.txt`, the audit artifacts, and the current code/tests needed to verify the two reported material gaps.
+- I only edited the run-local audit artifacts under `artifacts/audit`.
+
+What I analyzed
+
+- Re-read `gap_report.md`, `revised_request.md`, `audit_result.json`, `criteria.md`, and `feedback.md`.
+- Cross-checked the audit against the recorded decisions that removed legacy public hook/class-handler forms and required final public docs/examples.
+- Re-ran the two cited live verification slices:
+  - `./.venv/bin/pytest -q tests/test_architecture_baseline_docs.py`
+  - `./.venv/bin/pytest -q tests/runtime/test_package_cli.py -k 'init_workflow_scaffolds_supported_shapes_and_rejects_duplicates or init_workflow_defaults_to_flow_specs_shape'`
+- Validated `audit_result.json` with `python3 -m json.tool`.
+
+What I reviewed
+
+- `cleanup.md` still contains `autoloop.simple`, matching the audit’s first reported gap and the failing docs-baseline tests.
+- `autoloop/runtime/cli.py` still scaffolds `def _bootstrap(state, ctx):`, matching the audit’s second reported gap and the failing package-CLI scaffold tests.
+- `revised_request.md` is a direct next-run implementation request for those unresolved gaps, which is required because `audit_result.json` sets `material_gaps_found` to `true`.
+- `criteria.md` was already correctly fully checked for a complete audit.
+
+Key findings / decisions
+
+- No blocking audit-quality findings.
+- Appended `AUD-001` as `non-blocking` to `artifacts/audit/feedback.md`, recording that the audit is accurate and internally consistent.
+- The audit correctly reports material gaps without misclassifying them, and the machine-readable result is accurate.
+
+Open issues / next step
+
+- No open verifier-side issues remain.
+- The next run should implement the two reported fixes: update `cleanup.md` to the final `autoloop` surface and repair CLI workflow scaffolds plus their regression coverage.
+
+<loop-control>
+{"schema":"docloop.loop_control/v1","kind":"promise","promise":"COMPLETE"}
+</loop-control>

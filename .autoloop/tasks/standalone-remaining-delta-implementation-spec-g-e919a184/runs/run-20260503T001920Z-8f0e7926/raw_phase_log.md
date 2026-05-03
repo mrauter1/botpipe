@@ -1692,3 +1692,125 @@ Open issues / next step
 <loop-control>
 {"schema":"docloop.loop_control/v1","kind":"promise","promise":"COMPLETE"}
 </loop-control>
+
+
+---
+run_id=run-20260503T001920Z-8f0e7926 | entry=session_turn | pair=audit | phase=producer | cycle=1 | attempt=1 | thread_id=019debc2-168b-7e72-bea5-0624a2fe0baf
+---
+provider=codex
+mode=start
+template=/home/rauter/.local/share/pipx/venvs/autoloop/lib/python3.12/site-packages/autoloop/templates/audit_producer.md
+session_id=019debc2-168b-7e72-bea5-0624a2fe0baf
+
+
+---
+run_id=run-20260503T001920Z-8f0e7926 | entry=phase_output | pair=audit | phase=producer | process=codex-agent | cycle=1 | attempt=1 | thread_id=019debc2-168b-7e72-bea5-0624a2fe0baf
+---
+I’m auditing the final run state against the original request and the authoritative run artifacts first, then I’ll compare that against the current codebase and tests before writing the audit outputs.
+
+I have the request, run ledger, and decisions history. Next I’m reading the phase implementation and test artifacts alongside the current audit outputs so I can separate resolved work from real remaining gaps.
+
+The phase artifacts are consistent with the run narrative. I’m checking the code and the tail of the raw ledger now for anything that the artifacts still claim as done but the tree does not actually satisfy.
+
+I’ve identified one likely real gap already from the run’s own test audit: `cleanup.md` still teaches the removed public surface. I’m verifying that and doing a quick repo scan for any comparable production-side leftovers before I write the audit files.
+
+I found a second candidate gap in production code, not just docs: the workflow package generator may still scaffold legacy `def _bootstrap(state, ctx):` hooks. I’m opening that path now because it would directly violate the final public hook contract if still active.
+
+I have two concrete unresolved gaps now with direct evidence: `cleanup.md` still teaches `autoloop.simple`, and `autoloop/runtime/cli.py` still generates legacy `python_step` handlers with `(state, ctx)`. I’m checking whether the scaffold path has any existing coverage or whether it’s currently untested drift.
+
+The CLI scaffold drift appears untested in the current run. I’m confirming that from the package CLI tests so I can classify it as both an implementation gap and a missing regression case, not just a stray string.
+
+The scaffold path is worse than a stale string if the existing CLI test still expects it to compile. I’m running the package-CLI scaffold test directly to see whether this path is currently broken in the live tree or just un-audited drift.
+
+I have enough evidence to write the audit artifacts now. I’m updating only the run-local audit files with the two material remaining gaps and a focused next-run request.
+
+The audit files are written. I’m doing a quick validation pass on the JSON and the rendered markdown contents, then I’ll return the required run summary with the canonical loop-control block.
+
+Scope considered
+
+- The immutable request, `raw_phase_log.md`, `decisions.txt`, plan/implement/test artifacts for all four phases, the current codebase, and targeted live tests.
+- I treated only run-local audit files as writable and left repo code, tests, and earlier artifacts unchanged.
+
+What I analyzed
+
+- The run artifacts already showed one unresolved docs gap in `cleanup.md`, so I verified that against the live tree and reran `./.venv/bin/pytest -q tests/test_architecture_baseline_docs.py`.
+- I also scanned the remaining public authoring entrypoints and found `autoloop/runtime/cli.py` still scaffolding legacy `def _bootstrap(state, ctx):` handlers, then confirmed the live regression with `./.venv/bin/pytest -q tests/runtime/test_package_cli.py -k 'init_workflow_scaffolds_supported_shapes_and_rejects_duplicates or init_workflow_defaults_to_flow_specs_shape'`.
+
+What I changed
+
+- Wrote the audit outputs in:
+  - `.autoloop/tasks/standalone-remaining-delta-implementation-spec-g-e919a184/runs/run-20260503T001920Z-8f0e7926/artifacts/audit/gap_report.md`
+  - `.autoloop/tasks/standalone-remaining-delta-implementation-spec-g-e919a184/runs/run-20260503T001920Z-8f0e7926/artifacts/audit/revised_request.md`
+  - `.autoloop/tasks/standalone-remaining-delta-implementation-spec-g-e919a184/runs/run-20260503T001920Z-8f0e7926/artifacts/audit/audit_result.json`
+  - `.autoloop/tasks/standalone-remaining-delta-implementation-spec-g-e919a184/runs/run-20260503T001920Z-8f0e7926/artifacts/audit/criteria.md`
+- Validated `audit_result.json` with `python3 -m json.tool`.
+
+Key findings / decisions
+
+- Material gap 1: `cleanup.md` still documents `autoloop.simple`, and the strengthened docs baseline suite still fails on that file.
+- Material gap 2: `autoloop init workflow` still generates legacy two-argument `python_step` handlers in `autoloop/runtime/cli.py`, and the scaffold-focused package CLI tests now fail because the generated workflows do not compile under the current one-argument validator.
+- The revised next-run request is narrowly scoped to those two remaining gaps plus the necessary package-CLI regression coverage.
+- `audit_result.json` is set to `"material_gaps_found": true`.
+
+Open issues / next step
+
+- The next run should update `cleanup.md` to the final `autoloop` public surface, fix all workflow scaffold shapes in `autoloop/runtime/cli.py` to emit valid one-argument `python_step` handlers, and rerun the docs-baseline and package-CLI scaffold tests.
+
+<loop-control>
+{"schema":"docloop.loop_control/v1","kind":"promise","promise":"INCOMPLETE"}
+</loop-control>
+
+
+---
+run_id=run-20260503T001920Z-8f0e7926 | entry=session_turn | pair=audit | phase=verifier | cycle=1 | attempt=1 | thread_id=019debc2-168b-7e72-bea5-0624a2fe0baf
+---
+provider=codex
+mode=resume
+template=/home/rauter/.local/share/pipx/venvs/autoloop/lib/python3.12/site-packages/autoloop/templates/audit_verifier.md
+session_id=019debc2-168b-7e72-bea5-0624a2fe0baf
+
+
+---
+run_id=run-20260503T001920Z-8f0e7926 | entry=phase_output | pair=audit | phase=verifier | process=codex-agent | cycle=1 | attempt=1 | thread_id=019debc2-168b-7e72-bea5-0624a2fe0baf
+---
+I’m verifying the audit artifacts against the request ledger, run decisions, current tree, and the two live regressions the producer cited. Then I’ll update only the audit criteria/feedback files with the verification result.
+
+The audit artifacts look coherent on read. I’m re-running the two cited test slices myself so the verifier result is grounded in live evidence, not just the producer’s summary.
+
+The live verification matches the audit: the two cited regressions are real, the JSON is accurate, and the revised request is direct enough to drive the next run. I’m appending a concise verifier note in the audit feedback and leaving the criteria fully checked.
+
+Scope considered
+
+- The immutable request, authoritative raw log clarifications, `decisions.txt`, the audit artifacts, and the current code/tests needed to verify the two reported material gaps.
+- I only edited the run-local audit artifacts under `artifacts/audit`.
+
+What I analyzed
+
+- Re-read `gap_report.md`, `revised_request.md`, `audit_result.json`, `criteria.md`, and `feedback.md`.
+- Cross-checked the audit against the recorded decisions that removed legacy public hook/class-handler forms and required final public docs/examples.
+- Re-ran the two cited live verification slices:
+  - `./.venv/bin/pytest -q tests/test_architecture_baseline_docs.py`
+  - `./.venv/bin/pytest -q tests/runtime/test_package_cli.py -k 'init_workflow_scaffolds_supported_shapes_and_rejects_duplicates or init_workflow_defaults_to_flow_specs_shape'`
+- Validated `audit_result.json` with `python3 -m json.tool`.
+
+What I reviewed
+
+- `cleanup.md` still contains `autoloop.simple`, matching the audit’s first reported gap and the failing docs-baseline tests.
+- `autoloop/runtime/cli.py` still scaffolds `def _bootstrap(state, ctx):`, matching the audit’s second reported gap and the failing package-CLI scaffold tests.
+- `revised_request.md` is a direct next-run implementation request for those unresolved gaps, which is required because `audit_result.json` sets `material_gaps_found` to `true`.
+- `criteria.md` was already correctly fully checked for a complete audit.
+
+Key findings / decisions
+
+- No blocking audit-quality findings.
+- Appended `AUD-001` as `non-blocking` to `artifacts/audit/feedback.md`, recording that the audit is accurate and internally consistent.
+- The audit correctly reports material gaps without misclassifying them, and the machine-readable result is accurate.
+
+Open issues / next step
+
+- No open verifier-side issues remain.
+- The next run should implement the two reported fixes: update `cleanup.md` to the final `autoloop` surface and repair CLI workflow scaffolds plus their regression coverage.
+
+<loop-control>
+{"schema":"docloop.loop_control/v1","kind":"promise","promise":"COMPLETE"}
+</loop-control>
