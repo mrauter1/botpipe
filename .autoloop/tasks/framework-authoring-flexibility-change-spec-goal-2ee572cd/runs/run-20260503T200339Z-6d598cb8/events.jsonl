@@ -23,3 +23,7 @@
 {"ts": "2026-05-03T20:43:37.872992+00:00", "run_id": "run-20260503T200339Z-6d598cb8", "seq": 23, "event_type": "phase_finished", "pair": "test", "phase": "producer", "cycle": 1, "attempt": 1, "empty_output": false, "phase_id": "route-interaction-policy"}
 {"ts": "2026-05-03T20:44:29.955453+00:00", "run_id": "run-20260503T200339Z-6d598cb8", "seq": 24, "event_type": "phase_finished", "pair": "test", "phase": "verifier", "cycle": 1, "attempt": 1, "empty_output": false, "phase_id": "route-interaction-policy"}
 {"ts": "2026-05-03T20:44:30.001694+00:00", "run_id": "run-20260503T200339Z-6d598cb8", "seq": 25, "event_type": "pair_completed", "pair": "test", "cycle": 1, "attempt": 1, "phase_id": "route-interaction-policy"}
+{"ts": "2026-05-03T20:44:30.088066+00:00", "run_id": "run-20260503T200339Z-6d598cb8", "seq": 26, "event_type": "phase_completed", "pair": "test", "phase_id": "route-interaction-policy", "phase_mode": "single"}
+{"ts": "2026-05-03T20:44:30.091214+00:00", "run_id": "run-20260503T200339Z-6d598cb8", "seq": 27, "event_type": "phase_started", "phase_id": "lazy-worklists-and-sessions", "phase_mode": "single"}
+{"ts": "2026-05-03T20:44:30.093732+00:00", "run_id": "run-20260503T200339Z-6d598cb8", "seq": 28, "event_type": "pair_started", "pair": "implement", "phase_id": "lazy-worklists-and-sessions"}
+{"ts": "2026-05-03T20:44:30.093888+00:00", "run_id": "run-20260503T200339Z-6d598cb8", "seq": 29, "event_type": "cycle_started", "pair": "implement", "cycle": 1, "attempt": 1, "phase_id": "lazy-worklists-and-sessions"}
