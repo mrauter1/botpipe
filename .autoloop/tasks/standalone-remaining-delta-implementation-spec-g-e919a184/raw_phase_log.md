@@ -1393,3 +1393,59 @@ Open issues / next step
 
 - No blocker remains in this phase slice.
 - `tests/runtime/test_optional_extensions.py` is currently a new untracked file in this worktree rather than a tracked edit; I left it as part of the phase output and did not touch unrelated worktree state.
+
+
+---
+run_id=run-20260503T001920Z-8f0e7926 | entry=session_turn | pair=implement | phase=verifier | cycle=1 | attempt=1 | thread_id=019deba6-cda9-71f3-bbcd-6f0024a29a6a
+---
+provider=codex
+mode=resume
+template=/home/rauter/.local/share/pipx/venvs/autoloop/lib/python3.12/site-packages/autoloop/templates/implement_verifier.md
+session_id=019deba6-cda9-71f3-bbcd-6f0024a29a6a
+
+
+---
+run_id=run-20260503T001920Z-8f0e7926 | entry=phase_output | pair=implement | phase=verifier | process=codex-agent | cycle=1 | attempt=1 | thread_id=019deba6-cda9-71f3-bbcd-6f0024a29a6a
+---
+I’m reviewing the phase-scoped implementation diff against the acceptance criteria and the run decisions first. Then I’ll update the reviewer artifacts only: `criteria.md` and `feedback.md`.
+
+I’ve checked the reviewer artifacts and the decisions ledger. Now I’m reading the highest-risk implementation paths directly: compiler cache keying, resume mismatch handling, schema validation/migration, and fatal extension propagation.
+
+The highest-risk code paths look internally consistent so far. I’m doing one more scan for author-facing doc regressions and leftover legacy surface mentions, since AC-2 is partly documentation cleanup rather than runtime behavior.
+
+I found one likely acceptance gap on the docs side and I’m checking one more runtime edge before I write findings: the `run.json` topology fallback path may be bypassing the same schema validation enforced for `topology.json`. If that’s true, it’s a real AC-2 consistency miss, not just style.
+
+I found two blocking issues: one runtime consistency gap in the schema-validation fallback path, and one explicit docs/examples miss against the requested final public surface and vocabulary. I’m recording those in `feedback.md` and leaving the acceptance boxes unchecked accordingly.
+
+Scope considered
+
+- Phase `compiler-resume-schema-docs` only: compiler cache, resume mismatch handling, schema-reader behavior, extension failure policy, import boundaries, and public docs/examples tied to this phase.
+- I excluded unrelated dirty files outside the phase scope.
+
+What I analyzed
+
+- Decision ledger and phase contract.
+- Changed runtime paths in `autoloop/core/compiler.py`, `autoloop/core/schema_registry.py`, `autoloop/runtime/runner.py`, `autoloop/runtime/config.py`, `autoloop/runtime/tracing.py`, `autoloop/runtime/git_tracking.py`, `autoloop/runtime/inspection.py`, and related readers.
+- Public docs in `docs/authoring.md`, `docs/architecture.md`, and maintained workflow docs under `docs/workflows/`.
+
+What I reviewed
+
+- Whether resume now warns by default and only hard-fails in strict mode.
+- Whether persisted schema validation is consistent across all active reader paths, including resume fallbacks.
+- Whether public docs/examples were fully moved to the final `autoloop` surface and final vocabulary.
+- Whether the implementation aligns with the run decisions for explicit migration-or-fail readers and final documentation boundaries.
+
+Key findings / decisions
+
+- Recorded `IMP-001` as `blocking` in `feedback.md`: `run.json["topology"]` fallback in `autoloop/runtime/runner.py` bypasses the new schema-validation/migration contract.
+- Recorded `IMP-002` as `blocking` in `feedback.md`: public docs still expose `autoloop.simple` as the authoring surface and several maintained workflow docs still use legacy `system step` terminology.
+- Left the criteria checkboxes unchecked because AC-2 / AC-3 are not fully satisfied with those blocking issues outstanding.
+
+Open issues / next step
+
+- Fix `IMP-001` by validating/migrating the embedded topology fallback with the same `WORKFLOW_TOPOLOGY_SCHEMA` path used for `topology.json`.
+- Fix `IMP-002` by updating public authoring examples to `from autoloop import ...` and replacing remaining user-facing `system step` wording with `python_step`, then rerun the relevant doc/boundary checks.
+
+<loop-control>
+{"schema":"docloop.loop_control/v1","kind":"promise","promise":"INCOMPLETE"}
+</loop-control>
