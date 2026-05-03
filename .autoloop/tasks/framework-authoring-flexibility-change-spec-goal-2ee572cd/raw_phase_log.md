@@ -2148,3 +2148,26 @@ The planner should revise Phase 1 so the repository doc update is mandatory, not
 <loop-control>
 {"schema":"docloop.loop_control/v1","kind":"promise","promise":"INCOMPLETE"}
 </loop-control>
+
+
+---
+run_id=run-20260503T223034Z-bda92fa2 | entry=session_turn | pair=plan | phase=producer | cycle=2 | attempt=1 | thread_id=019deff7-0119-7660-a9bf-814557ea0373
+---
+provider=codex
+mode=resume
+template=/home/rauter/.local/share/pipx/venvs/autoloop/lib/python3.12/site-packages/autoloop/templates/plan_producer.md
+session_id=019deff7-0119-7660-a9bf-814557ea0373
+
+
+---
+run_id=run-20260503T223034Z-bda92fa2 | entry=phase_output | pair=plan | phase=producer | process=codex-agent | cycle=2 | attempt=1 | thread_id=019deff7-0119-7660-a9bf-814557ea0373
+---
+I’m incorporating the verifier’s blocking feedback by tightening the Phase 1 contract so the route-order documentation update is mandatory, not optional, and then I’ll align the machine-readable phase file and decision log with that correction.
+
+The verifier’s issue is narrow and concrete. I’m making the route-order documentation update explicit in the narrative plan, the phase contract, and the new decision block so later turns cannot treat it as optional.
+
+The correction is in place. I’m doing a quick pass on the edited artifacts to confirm the doc update is now mandatory everywhere the verifier flagged, and that the new decision landed under the current turn header only.
+
+Updated [plan.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/framework-authoring-flexibility-change-spec-goal-2ee572cd/runs/run-20260503T223034Z-bda92fa2/artifacts/plan/plan.md) and [phase_plan.yaml](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/framework-authoring-flexibility-change-spec-goal-2ee572cd/runs/run-20260503T223034Z-bda92fa2/artifacts/plan/phase_plan.yaml) so the stable route-order documentation update is now mandatory, not conditional. Phase 1 explicitly targets `docs/authoring.md`, the narrative plan now requires that file to describe the restored `available_routes` ordering, and the machine-readable phase contract includes that doc update in scope, deliverables, and acceptance criteria.
+
+I also appended the follow-up note in [feedback.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/framework-authoring-flexibility-change-spec-goal-2ee572cd/runs/run-20260503T223034Z-bda92fa2/artifacts/plan/feedback.md) and recorded the tightened direction under the current turn header in [decisions.txt](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/framework-authoring-flexibility-change-spec-goal-2ee572cd/runs/run-20260503T223034Z-bda92fa2/decisions.txt).

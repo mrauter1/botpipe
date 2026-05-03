@@ -20,13 +20,14 @@ Implementation targets:
 - `autoloop/core/artifacts.py`
 - `autoloop/core/lowering.py` and any dependent compile/inspection surfaces
 - `tests/contract/test_engine_contracts.py`
-- `docs/authoring.md` if route ordering needs an explicit contract sentence
+- `docs/authoring.md` to document the stable route-order contract
 
 Plan:
 
 - Fix payload placeholder traversal so `{item.payload.<path>}` resolves against the item payload mapping instead of the enclosing item object.
 - Preserve the same runtime semantics for `{worklist.<name>.current.payload.<path>}` and keep missing-path failures placeholder-specific.
 - Restore stable route ordering as a contract: authored step-local routes first, authored global routes next, runtime-injected control routes last. Keep `provider_visible_routes_*` as filtered views that preserve that order.
+- Update `docs/authoring.md` so the public `available_routes` contract explicitly states that stable ordering.
 - Keep the new dual-role artifact ownership validation intact. Update stale regression fixtures that still declare the same artifact as both workflow-level and step-produced.
 
 Acceptance notes:
@@ -34,6 +35,7 @@ Acceptance notes:
 - Successful payload lookups must render inline prompt text at runtime.
 - Missing payload paths must still raise `WorkflowExecutionError` messages that include the original placeholder and missing path.
 - `available_routes` ordering must be deterministic across engine, runtime graph/CLI payloads, and provider calls.
+- `docs/authoring.md` must explicitly describe the stable `available_routes` ordering that Phase 1 restores.
 - No rollback of the artifact ownership diagnostic unless authoritative clarification later requires it.
 
 ### 2. Finish `full_auto` runner/config plumbing

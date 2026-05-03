@@ -9,6 +9,7 @@ phases:
     in_scope:
       - "Fix runtime rendering for {item.payload.<path>} and worklist current-item payload placeholders."
       - "Restore stable available_routes ordering across engine/provider/runtime contract surfaces."
+      - "Update docs/authoring.md to document the stable available_routes ordering contract."
       - "Update stale contract fixtures that now violate the dual-role artifact ownership rule."
     out_of_scope:
       - "Reopen already-accepted framework-authoring-flexibility feature areas."
@@ -20,10 +21,12 @@ phases:
       - id: "AC-2"
         text: "available_routes and provider-visible route order are deterministic and match the authored-step then global then runtime-control contract."
       - id: "AC-3"
+        text: "docs/authoring.md explicitly documents the stable available_routes ordering restored by this phase."
+      - id: "AC-4"
         text: "Contract tests no longer fail because stale fixtures declare the same artifact as both workflow-level and step-produced."
     deliverables:
       - "Runtime placeholder resolution update with unchanged missing-path error wording."
-      - "Route-ordering fix and any required contract documentation clarification."
+      - "Route-ordering fix plus an explicit docs/authoring.md update for the stable available_routes contract."
       - "Updated contract regressions aligned with the shipped artifact ownership rule."
     risks:
       - "Touching route ordering can affect compiler payloads, provider calls, static graph output, and CLI inspection views."
