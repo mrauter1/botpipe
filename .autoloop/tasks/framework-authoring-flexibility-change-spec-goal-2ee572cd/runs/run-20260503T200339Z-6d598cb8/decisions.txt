@@ -8,3 +8,6 @@ Implement `validation_step` by lowering to existing Python-step execution rather
 <autoloop-decisions-header version="1" block_seq="2" owner="planner" phase_id="task-global" pair="plan" turn_seq="2" run_id="run-20260503T200339Z-6d598cb8" ts="2026-05-03T20:13:27.207696+00:00" />
 `ControlRoutes` must be one canonical authoring seam: core step classes accept it directly, simple helpers lower to the same object, and legacy simple booleans are normalized at the declaration edge.
 `Effects.then`, `Effects.advance`, `Effects.complete_and_advance`, and `Effects.refresh` are required public helpers alongside `Route.*` lowerings; hooks and Python steps must be able to return them directly.
+<autoloop-decisions-header version="1" block_seq="3" owner="implementer" phase_id="route-interaction-policy" pair="implement" turn_seq="1" run_id="run-20260503T200339Z-6d598cb8" ts="2026-05-03T20:17:00.828018+00:00" />
+Provider-facing `question` visibility is now policy-gated through `ControlRoutes.question`; authored or injected `question` routes are hidden in full-auto unless the step opts into `question=\"always\"`.
+Provider contracts now treat `CompiledStep.provider_visible_routes_interactive/full_auto` as the authoritative route view instead of inferring provider visibility from flat `available_routes` or route-name conventions.

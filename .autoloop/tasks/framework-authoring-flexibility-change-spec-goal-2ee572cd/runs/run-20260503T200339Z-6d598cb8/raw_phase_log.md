@@ -178,3 +178,158 @@ phase_mode=single
 phase_ids=route-interaction-policy,lazy-worklists-and-sessions,effects-and-validation-helper,diagnostics-and-late-bound-prompts,inspection-docs-and-regression
 explicit=True
 current_phase_index=0
+
+
+---
+run_id=run-20260503T200339Z-6d598cb8 | entry=session_turn | pair=implement | phase=producer | cycle=1 | attempt=1 | thread_id=019def7c-b7c9-7220-8f38-99702bfcf9d2
+---
+provider=codex
+mode=start
+template=/home/rauter/.local/share/pipx/venvs/autoloop/lib/python3.12/site-packages/autoloop/templates/implement_producer.md
+session_id=019def7c-b7c9-7220-8f38-99702bfcf9d2
+
+
+---
+run_id=run-20260503T200339Z-6d598cb8 | entry=phase_output | pair=implement | phase=producer | process=codex-agent | cycle=1 | attempt=1 | thread_id=019def7c-b7c9-7220-8f38-99702bfcf9d2
+---
+I’m implementing the `route-interaction-policy` phase only: replacing default route injection with policy-aware `question` exposure, removing hidden `blocked`/`failed` semantics, and wiring full-auto through the engine and runner. I’ll read the active phase artifacts and inspect the route/compiler/provider code paths before editing.
+
+I’ve confirmed the phase scope and the planner’s constraints. Next I’m tracing the current route injection, compiled step metadata, and full-auto plumbing so I can rebase them without pulling later-phase work into scope.
+
+The main seams are where I expected: `discovery.py` still injects `question/blocked/failed`, `engine.py` still enforces hidden reason rules for `blocked/failed`, and provider rendering/retry text still teaches those legacy semantics. I’m reading the step, compiler, and runner structures now to make one consistent control-route model instead of patching each site ad hoc.
+
+I’ve got the core shape now: simple declarations carry a boolean-only `control_routes`, compiled steps only expose one flat `available_routes` view, and provider contracts filter solely by `provider_visible`. I’m checking engine initialization and a few representative tests next so the change lands with one compiled-source-of-truth and minimal snapshot churn.
+
+I’ve identified the likely blast radius: `steps`, `discovery`, `compiler`, `engine`, `engine_collaborators`, provider prompt/retry text, runner/config, exports, and the route-inspection payloads. I’m checking the compiled route serialization now so the new policy-aware views are derived from compiled metadata rather than reimplemented separately in runtime and inspection code.
+
+I’m narrowing the implementation to the current phase’s real contract: policy object, canonical `ControlRoutes`, route compilation/runtime visibility, hidden `blocked`/`failed` semantics removal, and enough compiled metadata to keep provider/runtime views consistent. I’m reading the simple-to-core lowering path now so legacy `control_routes=False` is normalized once at declaration time instead of branching all through execution.
+
+Plan for this phase:
+1. Add `ControlRoutes` and `RuntimeInteractionPolicy`, then normalize simple/core declarations through that seam.
+2. Split authored/runtime-control/provider-visible route views in discovery/compiler and wire engine/provider contracts to the policy.
+3. Remove hidden `blocked`/`failed` payload semantics from validation/rendering/retry text, then update direct-engine, runner/config, and route-contract tests.
+
+I’m starting the code edits at the declaration seam first. This change normalizes route-control intent once on step declarations, which keeps the later compiler and engine edits smaller and avoids duplicating policy logic across simple and core surfaces.
+
+The declaration seam is in place. I’m moving to the compiled metadata now: the goal is to keep `available_routes` as the legal execution set while adding explicit authored/runtime-control/provider-visible views that the engine and inspection layers can share.
+
+I’ve moved the policy object into the engine and switched provider-visible route selection to use compiled policy-aware metadata instead of raw `provider_visible` flags. Next I’m removing the hard-coded `blocked`/`failed` payload rules and then I’ll wire runner/config full-auto into the new policy.
+
+I’m in the regression pass now. The runtime behavior changes are in place, so I’m updating the contract tests around provider-visible routes, explicit `failed`/`blocked` semantics, and full-auto policy to match the new contract instead of preserving the old blanket defaults.
+
+I found one more policy leak while updating the tests: the engine was still recording hidden full-auto routes in illegal-route failure details even though the provider never saw them. I’m tightening that now so retry context and diagnostics match the actual provider contract.
+
+The code changes are in place for the current phase. I’m running the focused route-policy and runtime-config test set now to catch any mismatches in compiled metadata, provider contracts, and full-auto plumbing before I touch the phase notes.
+
+`pytest` is not on PATH in this environment. I’m switching to `python -m pytest` so I can still validate the phase without changing scope.
+
+The environment has Python but not `pytest`. I’m switching to executable smoke checks: first a compile pass, then a small direct-engine and runtime-config script that exercises the exact phase behaviors we changed.
+
+The source compiles cleanly, but executable smoke tests are blocked by missing runtime dependencies in this shell: `pydantic` is not installed here. I’m doing one final static pass on the touched call sites and then I’ll write the phase notes with the exact validation limitations called out.
+
+I found one edge case in the compiled metadata itself: global authored routes were getting conservative policy fields because they don’t have a step instance at compile time. I’m tightening that so non-question global routes keep stable visibility metadata, while `question` stays policy-gated.
+
+I’m writing the phase artifacts now. I’m recording the two implementation choices that would be easy to drift on in later turns: `question` visibility is policy-gated through `ControlRoutes`, and provider contracts now treat the compiled step route-view tuples as authoritative instead of inferring visibility from route names.
+
+Scope considered
+
+- Phase-local `route-interaction-policy` work only.
+- In scope: `ControlRoutes`, `RuntimeInteractionPolicy`, route injection/compilation/provider visibility, engine validation changes, runner `full_auto` plumbing, and matching tests/artifacts.
+- Out of scope: lazy worklists, session continuity, effects, validation-step helper, docs, and broader inspection payload expansion.
+
+What I analyzed
+
+- Route injection and simple lowering in `autoloop/core/discovery.py` and `autoloop/simple.py`.
+- Core step declarations in `autoloop/core/steps.py`.
+- Compiled route/step metadata and topology hashing in `autoloop/core/compiler.py` and `autoloop/core/lowering.py`.
+- Provider contract construction in `autoloop/core/engine_collaborators.py`.
+- Runtime event/outcome validation in `autoloop/core/engine.py`.
+- Provider prompt/retry guidance in `autoloop/core/providers/rendering.py` and `autoloop/core/providers/retries.py`.
+- Runner/config plumbing in `autoloop/runtime/config.py` and `autoloop/runtime/runner.py`.
+- Regression surfaces in the route-contract/unit/runtime tests that assumed injected `blocked`/`failed`.
+
+What I changed
+
+- Added `ControlRoutes(question="auto" | "always" | "never")` plus shared normalization.
+- Added `RuntimeInteractionPolicy(allow_provider_questions: bool = True)` and `Engine(..., interaction_policy=...)`.
+- Normalized simple `control_routes` booleans into `ControlRoutes` at the declaration edge and added the same seam to core step classes.
+- Replaced legacy reserved-route injection with question-only control-route injection. Default `blocked` and default `failed` are no longer injected anywhere.
+- Added compiled route-view metadata:
+  - `CompiledStep.authored_routes`
+  - `CompiledStep.runtime_control_routes`
+  - `CompiledStep.provider_visible_routes_interactive`
+  - `CompiledStep.provider_visible_routes_full_auto`
+- Switched provider contracts to use the compiled provider-visible route views instead of inferring from flat `available_routes`.
+- Removed hard-coded `blocked`/`failed` non-empty-reason validation for provider outcomes and system events.
+- Removed provider prompt/retry instructions that taught special `blocked`/`failed` reason semantics.
+- Added `runtime.full_auto` config plumbing and mapped it to `RuntimeInteractionPolicy(allow_provider_questions=not full_auto)`.
+- Updated phase tests to the new route contract and recorded implementation notes/decisions.
+
+Key findings / decisions
+
+- `CompiledStep.available_routes` stays as the full execution-legal set; provider visibility is now a separate compiled view.
+- `question` visibility is policy-gated. In full-auto, default `question` is hidden; `ControlRoutes(question="always")` is the opt-in escape hatch.
+- Explicit authored `blocked` and `failed` remain ordinary authored routes and no longer carry hidden reason requirements.
+- Provider illegal-route failure context now records the actual provider-visible legal routes, not the broader execution-legal set.
+
+Open issues / next step
+
+- Validation was limited to `python3 -m compileall autoloop tests`, which succeeded.
+- I could not run `pytest` or executable smoke tests in this shell because `pytest` and `pydantic` are not installed here.
+- The later-phase inspection/static-graph payload expansion was not implemented; the compiled metadata needed for that follow-up is now in place.
+
+
+---
+run_id=run-20260503T200339Z-6d598cb8 | entry=session_turn | pair=implement | phase=verifier | cycle=1 | attempt=1 | thread_id=019def7c-b7c9-7220-8f38-99702bfcf9d2
+---
+provider=codex
+mode=resume
+template=/home/rauter/.local/share/pipx/venvs/autoloop/lib/python3.12/site-packages/autoloop/templates/implement_verifier.md
+session_id=019def7c-b7c9-7220-8f38-99702bfcf9d2
+
+
+---
+run_id=run-20260503T200339Z-6d598cb8 | entry=phase_output | pair=implement | phase=verifier | process=codex-agent | cycle=1 | attempt=1 | thread_id=019def7c-b7c9-7220-8f38-99702bfcf9d2
+---
+I’m reviewing the phase artifacts and the changed route-policy code path now. I’ll verify the phase against the acceptance criteria first, then write only the findings that materially block correctness or contract fidelity.
+
+I’ve isolated one blocking issue and one smaller follow-on. The blocking problem is in the updated regression expectations, not the core route logic: some contract tests now hide an explicitly authored `failed` route, which contradicts the requested contract and would let a future regression slip through.
+
+Scope considered
+
+- Phase-local `route-interaction-policy` changes only.
+- Reviewed the changed compiler/discovery/engine/provider/runtime-config plumbing and the updated route-contract tests.
+- Ignored unrelated dirty repo state outside the active phase artifact directory.
+
+What I analyzed
+
+- `autoloop/core/steps.py`, `autoloop/simple.py`, `autoloop/core/discovery.py`, `autoloop/core/lowering.py`, `autoloop/core/compiler.py`
+- `autoloop/core/engine.py`, `autoloop/core/engine_collaborators.py`
+- `autoloop/core/providers/models.py`, `rendering.py`, `retries.py`
+- `autoloop/runtime/config.py`, `autoloop/runtime/runner.py`
+- Updated tests in `tests/contract`, `tests/unit`, and `tests/runtime`
+- Active phase artifacts: `criteria.md`, `feedback.md`, `implementation_notes.md`, and `decisions.txt`
+
+What I reviewed
+
+- Whether default `blocked`/`failed` injection was removed while explicit authored `blocked`/`failed` stayed legal.
+- Whether `question` exposure is policy-aware and wired through engine plus runner `full_auto`.
+- Whether simple/core authoring now shares one `ControlRoutes` seam.
+- Whether the updated tests still assert the intended authored-route contract rather than the removed default-route behavior.
+- Whether the new compiled route-view metadata is internally coherent enough for later inspection/static-graph work.
+
+Key findings / decisions
+
+- Added findings to `feedback.md`.
+- Updated `criteria.md` checkboxes to reflect one blocking issue and one non-blocking debt item.
+- Blocking: some updated provider-contract tests now hide an explicitly authored `failed` route declared via `GLOBAL: {"failed": FAIL}`, which contradicts the requested contract and weakens required regression coverage.
+- Non-blocking: question-visibility policy is duplicated in two compiler helpers, which risks drift when the later inspection/static-graph phase starts consuming the new metadata.
+
+Open issues / next step
+
+- Fix `IMP-001` by restoring test expectations for explicitly authored `failed` routes while keeping only default-injected `failed` removed.
+- Then clean up `IMP-002` or consciously defer it if the next phase will consume and centralize the same visibility logic.
+
+<loop-control>
+{"schema":"docloop.loop_control/v1","kind":"promise","promise":"INCOMPLETE"}
+</loop-control>
