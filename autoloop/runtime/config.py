@@ -73,6 +73,7 @@ class TracingRuntimeConfig:
 @dataclass(frozen=True, slots=True)
 class RuntimeConfig:
     max_steps: int = DEFAULT_MAX_STEPS
+    full_auto: bool = False
     replay_mismatch_behavior: Literal["warn", "fail"] = "warn"
     resume_topology_mismatch_behavior: Literal["warn", "fail"] = "warn"
     git_tracking: GitTrackingRuntimeConfig = field(default_factory=GitTrackingRuntimeConfig)
@@ -125,6 +126,7 @@ class TracingRuntimeConfigOverride:
 @dataclass(frozen=True, slots=True)
 class RuntimeConfigOverride:
     max_steps: int | None = None
+    full_auto: bool | None = None
     replay_mismatch_behavior: Literal["warn", "fail"] | None = None
     resume_topology_mismatch_behavior: Literal["warn", "fail"] | None = None
     git_tracking: GitTrackingRuntimeConfigOverride = field(default_factory=GitTrackingRuntimeConfigOverride)
@@ -184,7 +186,7 @@ def parse_runtime_config(payload: object, source: Path) -> RuntimeConfigLayer:
         source,
         "runtime",
         runtime_payload,
-        {"max_steps", "replay_mismatch_behavior", "resume_topology_mismatch_behavior", "git_tracking", "tracing"},
+        {"max_steps", "full_auto", "replay_mismatch_behavior", "resume_topology_mismatch_behavior", "git_tracking", "tracing"},
     )
 
     codex_payload = provider_payload.get("codex")
@@ -236,6 +238,7 @@ def parse_runtime_config(payload: object, source: Path) -> RuntimeConfigLayer:
     )
     runtime = RuntimeConfigOverride(
         max_steps=_optional_positive_int(runtime_payload.get("max_steps"), "runtime.max_steps", source),
+        full_auto=_optional_bool(runtime_payload.get("full_auto"), "runtime.full_auto", source),
         replay_mismatch_behavior=_optional_replay_mismatch_behavior(
             runtime_payload.get("replay_mismatch_behavior"),
             "runtime.replay_mismatch_behavior",
@@ -368,6 +371,7 @@ def _merge_runtime_config(
     args: argparse.Namespace,
 ) -> RuntimeConfig:
     max_steps = DEFAULT_MAX_STEPS
+    full_auto = False
     replay_mismatch_behavior: Literal["warn", "fail"] = "warn"
     resume_topology_mismatch_behavior: Literal["warn", "fail"] = "warn"
     git_tracking_enabled = True
@@ -381,6 +385,8 @@ def _merge_runtime_config(
     for layer in layers:
         if layer.max_steps is not None:
             max_steps = layer.max_steps
+        if layer.full_auto is not None:
+            full_auto = layer.full_auto
         if layer.replay_mismatch_behavior is not None:
             replay_mismatch_behavior = layer.replay_mismatch_behavior
         if layer.resume_topology_mismatch_behavior is not None:
@@ -426,6 +432,7 @@ def _merge_runtime_config(
 
     return RuntimeConfig(
         max_steps=max_steps,
+        full_auto=full_auto,
         replay_mismatch_behavior=replay_mismatch_behavior,
         resume_topology_mismatch_behavior=resume_topology_mismatch_behavior,
         git_tracking=GitTrackingRuntimeConfig(

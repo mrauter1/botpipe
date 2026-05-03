@@ -31,6 +31,20 @@ def step_available_route_tags(definition: Any, step: Step) -> tuple[str, ...]:
     return tuple(dict.fromkeys((*step_routes.keys(), *global_routes.keys())))
 
 
+def step_authored_route_tags(definition: Any, step: Step) -> tuple[str, ...]:
+    """Return the ordered authored route tags for a step."""
+
+    step_routes = definition.authored_transitions.get(step, {})
+    global_routes = definition.authored_transitions.get(definition.global_route_sentinel, {})
+    return tuple(dict.fromkeys((*step_routes.keys(), *global_routes.keys())))
+
+
+def step_runtime_control_route_tags(definition: Any, step: Step) -> tuple[str, ...]:
+    """Return the ordered runtime-control route tags for a step."""
+
+    return tuple(definition.runtime_control_routes_by_step.get(step.name, ()))
+
+
 def normalize_step_route_metadata(
     definition: Any,
     step: Step,
@@ -184,5 +198,7 @@ __all__ = [
     "compile_expected_output_contract",
     "normalize_step_route_metadata",
     "outcome_middleware_name",
+    "step_authored_route_tags",
     "step_available_route_tags",
+    "step_runtime_control_route_tags",
 ]

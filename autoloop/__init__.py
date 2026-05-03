@@ -2,6 +2,7 @@
 
 from .simple import (
     AWAIT_INPUT,
+    ControlRoutes,
     Continuity,
     Event,
     FAIL,
@@ -28,6 +29,7 @@ __all__ = [
     "workflow_step",
     "llm",
     "classify",
+    "ControlRoutes",
     "Prompt",
     "Md",
     "Json",

@@ -175,6 +175,20 @@ def test_resolve_provider_backend_returns_rendered_claude_provider(
     assert isinstance(provider._transport, ClaudeTransport)
 
 
+def test_resolve_runtime_config_reads_full_auto_runtime_policy(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    config_root = tmp_path / "repo"
+    config_root.mkdir()
+    (config_root / "autoloop.yaml").write_text("runtime:\n  full_auto: true\n", encoding="utf-8")
+    monkeypatch.setattr(runtime_config, "user_config_dir", lambda: tmp_path / "missing-user-config")
+
+    resolved = resolve_runtime_config(config_root, _runtime_args())
+
+    assert resolved.runtime.full_auto is True
+
+
 def test_runtime_provider_package_reexports_compatibility_names() -> None:
     assert runtime_providers.CodexProvider is CodexProvider
     assert runtime_providers.ClaudeProvider is ClaudeProvider

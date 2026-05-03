@@ -44,16 +44,6 @@ def _retry_error(
             "The selected route 'question' has an invalid payload: question route requires a non-empty question field.",
         ),
         (
-            _retry_error(
-                "invalid_payload",
-                failure_context={
-                    "route": "failed",
-                    "error": "failed route requires a non-empty reason field",
-                },
-            ),
-            "The selected route 'failed' has an invalid payload: failed route requires a non-empty reason field.",
-        ),
-        (
             _retry_error("missing_required_output_artifact", artifact_name="review.report"),
             "The selected route is missing required output artifact 'review.report'.",
         ),
@@ -80,7 +70,7 @@ def test_build_retry_feedback_formats_specialized_retry_messages(error: Exceptio
     assert "Action required:" in feedback
     assert "- Use only an allowed route." in feedback
     assert "- If selecting `question`, include a non-empty top-level `question`." in feedback
-    assert "- If selecting `blocked` or `failed`, include a concise non-empty `reason`." in feedback
+    assert "- If selecting `blocked` or `failed`, include a concise non-empty `reason`." not in feedback
     assert "- Write all artifacts required by the selected route." in feedback
 
 

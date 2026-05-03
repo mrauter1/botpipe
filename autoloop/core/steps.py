@@ -6,7 +6,7 @@ from copy import deepcopy
 from dataclasses import dataclass
 from itertools import count
 from pathlib import Path
-from typing import TYPE_CHECKING, Any, Mapping, Sequence
+from typing import TYPE_CHECKING, Any, Literal, Mapping, Sequence
 
 from .primitives import Event
 from .prompts import PromptSpec
@@ -21,6 +21,33 @@ if TYPE_CHECKING:
 
 _STEP_COUNTER = count()
 _SESSION_COUNTER = count()
+
+
+@dataclass(frozen=True, slots=True)
+class ControlRoutes:
+    """Declarative runtime control-route policy for a step."""
+
+    question: Literal["auto", "always", "never"] = "auto"
+
+
+_DEFAULT_PROVIDER_CONTROL_ROUTES = ControlRoutes(question="auto")
+_DEFAULT_NON_PROVIDER_CONTROL_ROUTES = ControlRoutes(question="never")
+
+
+def normalize_control_routes(
+    control_routes: ControlRoutes | bool | None,
+    *,
+    default: ControlRoutes,
+) -> ControlRoutes:
+    """Normalize step control-route declarations across authoring surfaces."""
+
+    if control_routes is None:
+        return default
+    if isinstance(control_routes, ControlRoutes):
+        return control_routes
+    if isinstance(control_routes, bool):
+        return default if control_routes else ControlRoutes(question="never")
+    raise TypeError("control_routes must be a ControlRoutes instance, boolean, or None")
 
 
 def _normalize_route_metadata(
@@ -81,6 +108,7 @@ class Step:
     """Base step declaration."""
 
     kind = "step"
+    default_control_routes = _DEFAULT_NON_PROVIDER_CONTROL_ROUTES
 
     def __init__(
         self,
@@ -99,6 +127,7 @@ class Step:
         after: Any | None = None,
         state_fields: Mapping[str, object] | None = None,
         item_state: object | None = None,
+        control_routes: ControlRoutes | bool | None = None,
     ) -> None:
         self.name = name
         self.session = session
@@ -114,6 +143,7 @@ class Step:
         self.after = after
         self.state_fields = dict(state_fields or {})
         self.item_state = item_state
+        self.control_routes = normalize_control_routes(control_routes, default=self.default_control_routes)
         self._order = next(_STEP_COUNTER)
         for artifact_name, artifact in self.writes.items():
             artifact.bind_name(artifact_name)
@@ -132,6 +162,7 @@ class ProduceVerifyStep(Step):
     """Producer/verifier step."""
 
     kind = "pair"
+    default_control_routes = _DEFAULT_PROVIDER_CONTROL_ROUTES
 
     def __init__(
         self,
@@ -159,6 +190,7 @@ class ProduceVerifyStep(Step):
         after_verifier: Any | None = None,
         state_fields: Mapping[str, object] | None = None,
         item_state: object | None = None,
+        control_routes: ControlRoutes | bool | None = None,
     ) -> None:
         super().__init__(
             name=name,
@@ -175,6 +207,7 @@ class ProduceVerifyStep(Step):
             after=after,
             state_fields=state_fields,
             item_state=item_state,
+            control_routes=control_routes,
         )
         self.producer = producer
         self.verifier = verifier
@@ -207,6 +240,7 @@ class PromptStep(Step):
     """Single provider turn."""
 
     kind = "llm"
+    default_control_routes = _DEFAULT_PROVIDER_CONTROL_ROUTES
 
     def __init__(
         self,
@@ -226,6 +260,7 @@ class PromptStep(Step):
         after: Any | None = None,
         state_fields: Mapping[str, object] | None = None,
         item_state: object | None = None,
+        control_routes: ControlRoutes | bool | None = None,
     ) -> None:
         super().__init__(
             name=name,
@@ -242,6 +277,7 @@ class PromptStep(Step):
             after=after,
             state_fields=state_fields,
             item_state=item_state,
+            control_routes=control_routes,
         )
         self.producer = producer
         self.retry_policy = retry_policy or ProviderRetryPolicy()
@@ -269,6 +305,7 @@ class PythonStep(Step):
         after: Any | None = None,
         state_fields: Mapping[str, object] | None = None,
         item_state: object | None = None,
+        control_routes: ControlRoutes | bool | None = None,
     ) -> None:
         super().__init__(
             name=name,
@@ -285,6 +322,7 @@ class PythonStep(Step):
             after=after,
             state_fields=state_fields,
             item_state=item_state,
+            control_routes=control_routes,
         )
         self.handler = handler
 
@@ -314,6 +352,7 @@ class ChildWorkflowStep(Step):
         before: Any | None = None,
         after: Any | None = None,
         state_fields: Mapping[str, object] | None = None,
+        control_routes: ControlRoutes | bool | None = None,
     ) -> None:
         super().__init__(
             name=name,
@@ -329,6 +368,7 @@ class ChildWorkflowStep(Step):
             before=before,
             after=after,
             state_fields=state_fields,
+            control_routes=control_routes,
         )
         self.workflow = workflow
         self.message = message

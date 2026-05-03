@@ -15,7 +15,7 @@ from autoloop.core.prompts import Prompt
 from autoloop.core.routes import Route
 from autoloop.core.sessions import Continuity
 from autoloop.core.step_state import StateVar
-from autoloop.core.steps import Session
+from autoloop.core.steps import ControlRoutes, Session, normalize_control_routes
 from autoloop.core.worklists import Worklist
 
 
@@ -147,7 +147,7 @@ class StepDeclaration(_NamedDeclaration):
         control_schema: Any | None = None,
         retry: Any | None = None,
         session: Any | None = None,
-        control_routes: bool = True,
+        control_routes: ControlRoutes | bool = True,
     ) -> None:
         super().__init__(name=name)
         self.prompt = _normalize_simple_prompt(prompt)
@@ -162,7 +162,10 @@ class StepDeclaration(_NamedDeclaration):
         self.control_schema = control_schema
         self.retry = retry
         self.session = session
-        self.control_routes = control_routes
+        self.control_routes = normalize_control_routes(
+            control_routes,
+            default=ControlRoutes(question="auto"),
+        )
 
 
 class ProduceVerifyStepDeclaration(_NamedDeclaration):
@@ -195,7 +198,7 @@ class ProduceVerifyStepDeclaration(_NamedDeclaration):
         retry: Any | None = None,
         session: Any | None = None,
         verifier_session: Any | None = None,
-        control_routes: bool = True,
+        control_routes: ControlRoutes | bool = True,
     ) -> None:
         super().__init__(name=name)
         self.producer_prompt = _normalize_simple_prompt(producer_prompt)
@@ -218,7 +221,10 @@ class ProduceVerifyStepDeclaration(_NamedDeclaration):
         self.retry = retry
         self.session = session
         self.verifier_session = verifier_session
-        self.control_routes = control_routes
+        self.control_routes = normalize_control_routes(
+            control_routes,
+            default=ControlRoutes(question="auto"),
+        )
 
 
 class PythonStepDeclaration(_NamedDeclaration):
@@ -237,7 +243,7 @@ class PythonStepDeclaration(_NamedDeclaration):
         routes: RouteMapping | None = None,
         before: Any | None = None,
         after: Any | None = None,
-        control_routes: bool = True,
+        control_routes: ControlRoutes | bool = True,
     ) -> None:
         super().__init__(name=name)
         self.fn = fn
@@ -247,7 +253,10 @@ class PythonStepDeclaration(_NamedDeclaration):
         self.routes = dict(routes or {})
         self.before = before
         self.after = after
-        self.control_routes = control_routes
+        self.control_routes = normalize_control_routes(
+            control_routes,
+            default=ControlRoutes(question="never"),
+        )
 
 
 class _WorkflowStepDeclaration(_NamedDeclaration):
@@ -270,7 +279,7 @@ class _WorkflowStepDeclaration(_NamedDeclaration):
         routes: RouteMapping | None = None,
         before: Any | None = None,
         after: Any | None = None,
-        control_routes: bool = True,
+        control_routes: ControlRoutes | bool = True,
     ) -> None:
         super().__init__(name=name)
         self.workflow = workflow
@@ -284,7 +293,10 @@ class _WorkflowStepDeclaration(_NamedDeclaration):
         self.routes = dict(routes or {})
         self.before = before
         self.after = after
-        self.control_routes = control_routes
+        self.control_routes = normalize_control_routes(
+            control_routes,
+            default=ControlRoutes(question="never"),
+        )
 
 
 class OperationStepDeclaration(_NamedDeclaration):
@@ -312,7 +324,7 @@ class OperationStepDeclaration(_NamedDeclaration):
         self.reads = tuple(reads)
         self.requires = tuple(requires)
         self.retry = retry
-        self.control_routes = False
+        self.control_routes = ControlRoutes(question="never")
 
     def build_handler(self) -> Any:
         step_name = self.name or "<operation>"
@@ -347,7 +359,7 @@ def step(
     control_schema: Any | None = None,
     retry: Any | None = None,
     session: Any | None = None,
-    control_routes: bool = True,
+    control_routes: ControlRoutes | bool = True,
 ) -> StepDeclaration:
     return StepDeclaration(
         prompt,
@@ -390,7 +402,7 @@ def produce_verify_step(
     retry: Any | None = None,
     session: Any | None = None,
     verifier_session: Any | None = None,
-    control_routes: bool = True,
+    control_routes: ControlRoutes | bool = True,
 ) -> ProduceVerifyStepDeclaration:
     return ProduceVerifyStepDeclaration(
         producer_prompt,
@@ -428,7 +440,7 @@ def python_step(
     routes: RouteMapping | None = None,
     before: Any | None = None,
     after: Any | None = None,
-    control_routes: bool = True,
+    control_routes: ControlRoutes | bool = True,
 ) -> PythonStepDeclaration | Any:
     if fn is None:
         def decorator(inner: Any) -> PythonStepDeclaration:
@@ -472,7 +484,7 @@ def workflow_step(
     routes: RouteMapping | None = None,
     before: Any | None = None,
     after: Any | None = None,
-    control_routes: bool = True,
+    control_routes: ControlRoutes | bool = True,
 ) -> _WorkflowStepDeclaration:
     return _WorkflowStepDeclaration(
         workflow,

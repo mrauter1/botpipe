@@ -18,6 +18,7 @@ from autoloop.core.engine import Engine, RunResult, StepFinalizationRecord
 from autoloop.core.errors import WorkflowExecutionError
 from autoloop.core.mappings import normalize_mapping
 from autoloop.core.primitives import AWAIT_INPUT, FINISH
+from autoloop.core.providers.models import RuntimeInteractionPolicy
 from autoloop.core.providers.protocols import LLMProvider
 from autoloop.core.schema_registry import RUN_METADATA_SCHEMA, WORKFLOW_TOPOLOGY_SCHEMA, migrate_schemaless_payload, validate_persisted_schema
 from autoloop.core.statuses import terminal_to_run_status
@@ -266,6 +267,9 @@ def _execute_compiled_workflow(
         checkpoint_store=prepared.checkpoint_store,
         prompt_registry=prepared.prompt_registry,
         operation_replay_mismatch_behavior=options.runtime_config.replay_mismatch_behavior,
+        interaction_policy=RuntimeInteractionPolicy(
+            allow_provider_questions=not options.runtime_config.full_auto,
+        ),
         runtime_extension_factories=(
             lambda binding: runtime_observability,
         ),

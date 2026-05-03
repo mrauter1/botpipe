@@ -9,9 +9,10 @@ from .context import Context
 from .providers.retries import ProviderRetryPolicy
 from .primitives import AWAIT_INPUT, FAIL, FINISH, GLOBAL, Goto, RequestInput, SELF, Fail
 from .prompts import Prompt
+from .providers.models import RuntimeInteractionPolicy
 from .routes import Route
 from .sessions import Continuity
-from .steps import Session
+from .steps import ControlRoutes, Session
 from .validation import WorkflowMeta
 from .worklists import Selector, WorkItem, Worklist
 
@@ -27,6 +28,7 @@ __all__ = [
     "Artifact",
     "Continuity",
     "Context",
+    "ControlRoutes",
     "FAIL",
     "Fail",
     "FINISH",
@@ -35,6 +37,7 @@ __all__ = [
     "Prompt",
     "ProviderRetryPolicy",
     "RequestInput",
+    "RuntimeInteractionPolicy",
     "Route",
     "Selector",
     "SELF",

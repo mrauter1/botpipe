@@ -178,7 +178,7 @@ def test_render_provider_turn_renders_markdown_contract_without_raw_output() -> 
     assert '"reason": "<short reason>"' in turn.prompt_text
     assert '"payload": {}' in turn.prompt_text
     assert "If the selected route is `question`" in turn.prompt_text
-    assert "If the selected route is `blocked` or `failed`" in turn.prompt_text
+    assert "If the selected route is `blocked` or `failed`" not in turn.prompt_text
     assert "#### Payload schema" in turn.prompt_text
     assert "previous_decision" in turn.prompt_text
     assert "workspace path; missing at runtime" in turn.prompt_text

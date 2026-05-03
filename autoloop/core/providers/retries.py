@@ -49,7 +49,6 @@ def build_retry_feedback(
             "- Repair the issue using the current Runtime Step Contract.",
             "- Use only an allowed route.",
             "- If selecting `question`, include a non-empty top-level `question`.",
-            "- If selecting `blocked` or `failed`, include a concise non-empty `reason`.",
             "- Write all artifacts required by the selected route.",
         )
     )

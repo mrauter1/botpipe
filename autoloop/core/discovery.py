@@ -69,7 +69,9 @@ class WorkflowDefinition:
     workflow_artifacts: dict[str, Artifact]
     workflow_log_artifacts: tuple[Artifact, ...]
     extensions: tuple[Any, ...]
+    authored_transitions: dict[Step | str, dict[str, Any]]
     transitions: dict[Step | str, dict[str, Any]]
+    runtime_control_routes_by_step: dict[str, tuple[str, ...]]
 
     @property
     def global_route_sentinel(self) -> str:
@@ -248,9 +250,14 @@ def describe_workflow_class(workflow_cls: type[Any]) -> WorkflowDefinition:
         entry = _lower_simple_entry(entry, {})
         transitions = _lower_simple_transition_table(transitions, {})
 
+    authored_transitions: dict[Step | str, dict[str, Any]] = {}
+    runtime_control_routes_by_step: dict[str, tuple[str, ...]] = {}
     if isinstance(transitions, dict):
-        transitions = _resolve_named_transition_targets(transitions, steps_by_name)
-        transitions = _inject_reserved_routes(transitions, tuple(steps))
+        authored_transitions = _resolve_named_transition_targets(transitions, steps_by_name)
+        transitions, runtime_control_routes_by_step = _inject_control_routes(
+            authored_transitions,
+            tuple(steps),
+        )
 
     entry = _resolve_named_entry(entry, steps_by_name)
     ordered_steps = tuple(sorted(steps, key=lambda step: step_order.get(id(step), step._order)))
@@ -280,7 +287,9 @@ def describe_workflow_class(workflow_cls: type[Any]) -> WorkflowDefinition:
         workflow_artifacts=workflow_artifacts,
         workflow_log_artifacts=workflow_log_artifacts,
         extensions=extensions,
+        authored_transitions=authored_transitions,
         transitions=transitions,
+        runtime_control_routes_by_step=runtime_control_routes_by_step,
     )
 
 
@@ -484,6 +493,7 @@ def _lower_simple_steps(
                 before=getattr(declaration, "before", None),
                 after=getattr(declaration, "after", None),
                 item_state=step_item_state_model,
+                control_routes=getattr(declaration, "control_routes", None),
             )
         elif seed.kind == "operation":
             step = PythonStep(
@@ -495,6 +505,7 @@ def _lower_simple_steps(
                 retry_policy=None,
                 before=None,
                 after=None,
+                control_routes=getattr(declaration, "control_routes", None),
             )
         elif seed.kind in {"review", "produce_verify"}:
             step = ProduceVerifyStep(
@@ -518,6 +529,7 @@ def _lower_simple_steps(
                 before_verifier=getattr(declaration, "before_verifier", None),
                 after_verifier=getattr(declaration, "after_verifier", None),
                 item_state=step_item_state_model,
+                control_routes=getattr(declaration, "control_routes", None),
             )
         elif seed.kind in {"system", "python"}:
             step = PythonStep(
@@ -529,6 +541,7 @@ def _lower_simple_steps(
                 retry_policy=retry_policy,
                 before=getattr(declaration, "before", None),
                 after=getattr(declaration, "after", None),
+                control_routes=getattr(declaration, "control_routes", None),
             )
         elif seed.kind == "workflow":
             step = ChildWorkflowStep(
@@ -544,6 +557,7 @@ def _lower_simple_steps(
                 retry_policy=retry_policy,
                 before=getattr(declaration, "before", None),
                 after=getattr(declaration, "after", None),
+                control_routes=getattr(declaration, "control_routes", None),
             )
         else:
             raise WorkflowValidationError(f"unsupported simple step kind {seed.kind!r}")
@@ -1117,27 +1131,22 @@ def _merge_transition_tables(base: Mapping[Step | str, Mapping[str, object]], ex
     return merged
 
 
-def _inject_reserved_routes(transitions: Mapping[Step | str, Mapping[str, object]], steps: Sequence[Step]) -> dict[Step | str, dict[str, object]]:
+def _inject_control_routes(
+    transitions: Mapping[Step | str, Mapping[str, object]],
+    steps: Sequence[Step],
+) -> tuple[dict[Step | str, dict[str, object]], dict[str, tuple[str, ...]]]:
     injected: dict[Step | str, dict[str, object]] = {source: dict(route_map) for source, route_map in transitions.items()}
+    runtime_control_routes_by_step: dict[str, tuple[str, ...]] = {}
+    global_routes = transitions.get(GLOBAL, {})
     for step in steps:
-        declaration = getattr(step, "simple_declaration", None)
         step_routes = injected.setdefault(step, {})
-        control_routes = True if declaration is None else getattr(declaration, "control_routes", True)
-        if isinstance(step, ProduceVerifyStep):
-            if control_routes:
-                step_routes.setdefault("question", AWAIT_INPUT)
-                step_routes.setdefault("blocked", AWAIT_INPUT)
-                step_routes.setdefault("failed", FAIL)
-            continue
-        if isinstance(step, PromptStep):
-            if control_routes:
-                step_routes.setdefault("question", AWAIT_INPUT)
-                step_routes.setdefault("blocked", AWAIT_INPUT)
-                step_routes.setdefault("failed", FAIL)
-            continue
-        if isinstance(step, (PythonStep, ChildWorkflowStep)) and control_routes:
-            step_routes.setdefault("failed", FAIL)
-    return injected
+        runtime_routes: list[str] = []
+        question_mode = getattr(getattr(step, "control_routes", None), "question", "never")
+        if question_mode != "never" and "question" not in step_routes and "question" not in global_routes:
+            step_routes["question"] = AWAIT_INPUT
+            runtime_routes.append("question")
+        runtime_control_routes_by_step[step.name] = tuple(runtime_routes)
+    return injected, runtime_control_routes_by_step
 
 
 def _route_signature(destination: object) -> tuple[object, str | None, tuple[str, ...], str | None, object | None]:

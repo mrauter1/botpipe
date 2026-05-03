@@ -56,6 +56,7 @@ from .prompts import Prompt, PromptRegistry, ResolvedPrompt
 from .providers.models import (
     LLMRequest,
     ProducerRequest,
+    RuntimeInteractionPolicy,
     StepProviderUsage,
     VerifierRequest,
 )
@@ -146,6 +147,7 @@ class Engine:
         checkpoint_store: CheckpointStore,
         prompt_registry: PromptRegistry | None = None,
         operation_replay_mismatch_behavior: Literal["warn", "fail"] = "warn",
+        interaction_policy: RuntimeInteractionPolicy | None = None,
         runtime_extension_factories: Sequence[Callable[[RunBinding], BoundWorkflowExtension]] = (),
         hook_event_sink: Callable[[str, Mapping[str, Any]], None] | None = None,
         runtime_event_sink: Callable[[str, Mapping[str, Any]], None] | None = None,
@@ -156,6 +158,7 @@ class Engine:
         self.checkpoint_store = checkpoint_store
         self.prompt_registry = prompt_registry
         self.operation_replay_mismatch_behavior = operation_replay_mismatch_behavior
+        self.interaction_policy = interaction_policy or RuntimeInteractionPolicy()
         self.runtime_extension_factories = tuple(runtime_extension_factories)
         self.hook_event_sink = hook_event_sink
         self.runtime_event_sink = runtime_event_sink
@@ -1809,7 +1812,7 @@ class Engine:
                     step_name=step.name,
                     candidate_route=outcome.tag,
                     provider_attributable=True,
-                    details={"step": step.name, "route": outcome.tag, "legal_routes": list(step.available_routes)},
+                    details={"step": step.name, "route": outcome.tag, "legal_routes": list(provider_available_routes)},
                 ),
                 retry_kind="illegal_route",
             )
@@ -1826,23 +1829,6 @@ class Engine:
                         "step": step.name,
                         "route": outcome.tag,
                         "error": "question route requires a non-empty question field",
-                    },
-                ),
-                retry_kind="invalid_payload",
-            )
-        if outcome.tag in {"blocked", "failed"} and not outcome.reason.strip():
-            raise ProviderExecutionError(
-                f"provider returned {outcome.tag!r} route without a non-empty reason for step {step.name!r}"
-                ,
-                failure_context=FailureContext(
-                    kind="invalid_payload",
-                    step_name=step.name,
-                    candidate_route=outcome.tag,
-                    provider_attributable=True,
-                    details={
-                        "step": step.name,
-                        "route": outcome.tag,
-                        "error": f"{outcome.tag} route requires a non-empty reason field",
                     },
                 ),
                 retry_kind="invalid_payload",
@@ -1915,27 +1901,6 @@ class Engine:
                     retry_kind="invalid_payload",
                 )
             raise error_cls(message)
-        if event.tag in {"blocked", "failed"} and not event.reason.strip():
-            message = f"step {step.name!r} produced {event.tag!r} route without a non-empty reason"
-            if provider_attributable:
-                raise ProviderExecutionError(
-                    message,
-                    failure_context=FailureContext(
-                        kind="invalid_payload",
-                        step_name=step.name,
-                        candidate_route=event.tag,
-                        provider_attributable=True,
-                        details={
-                            "step": step.name,
-                            "route": event.tag,
-                            "error": f"{event.tag} route requires a non-empty reason field",
-                            "provider_attributable": True,
-                        },
-                    ),
-                    retry_kind="invalid_payload",
-                )
-            raise error_cls(message)
-
     def _resolve_workspace_read_path(self, raw_path: str, *, context: Context) -> Path:
         candidate = Path(raw_path)
         if candidate.is_absolute():

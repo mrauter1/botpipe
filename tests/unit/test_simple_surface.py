@@ -535,17 +535,21 @@ def test_simple_workflow_injects_canonical_default_routes_by_step_kind() -> None
 
     compiled = compile_workflow(RouteMatrixWorkflow)
 
-    assert set(compiled.routes["start"]) == {"done", "question", "blocked", "failed"}
+    assert set(compiled.routes["start"]) == {"done", "question"}
     assert compiled.routes["start"]["done"].target == "review"
-    assert set(compiled.routes["review"]) == {"accepted", "needs_rework", "question", "blocked", "failed"}
+    assert set(compiled.routes["review"]) == {"accepted", "needs_rework", "question"}
     assert compiled.routes["review"]["accepted"].target == "decide"
     assert compiled.routes["review"]["needs_rework"].target == "review"
-    assert set(compiled.routes["decide"]) == {"done", "failed"}
+    assert set(compiled.routes["decide"]) == {"done"}
     assert compiled.routes["decide"]["done"].target == "child"
-    assert set(compiled.routes["child"]) == {"done", "failed"}
+    assert set(compiled.routes["child"]) == {"done"}
     assert compiled.routes["child"]["done"].target == "verdict"
     assert set(compiled.routes["verdict"]) == {"done"}
     assert compiled.routes["verdict"]["done"].target == "FINISH"
+    assert compiled.steps["start"].runtime_control_routes == ("question",)
+    assert compiled.steps["review"].runtime_control_routes == ("question",)
+    assert compiled.steps["decide"].runtime_control_routes == ()
+    assert compiled.steps["child"].runtime_control_routes == ()
 
 
 def test_simple_workflow_respects_control_routes_false_and_custom_semantic_routes() -> None:

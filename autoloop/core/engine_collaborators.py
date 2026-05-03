@@ -300,21 +300,14 @@ class ProviderContractBuilder:
                 required_writes=tuple(compiled_route.required_writes or ()),
                 explicit_required_writes=explicit_route_required_writes(compiled_route),
                 handoff=compiled_route.handoff,
-                provider_visible=compiled_route.provider_visible,
+                provider_visible=True,
             )
         return routes
 
     def available_routes(self, step: "CompiledStep") -> tuple[str, ...]:
-        visible_routes: list[str] = []
-        for route_name in step.available_routes:
-            compiled_route = (
-                self._engine.compiled.routes.get(step.name, {}).get(route_name)
-                or self._engine.compiled.global_routes.get(route_name)
-            )
-            if compiled_route is None or not compiled_route.provider_visible:
-                continue
-            visible_routes.append(route_name)
-        return tuple(visible_routes)
+        if self._engine.interaction_policy.allow_provider_questions:
+            return step.provider_visible_routes_interactive
+        return step.provider_visible_routes_full_auto
 
 
 class StepDispatcher:

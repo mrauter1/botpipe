@@ -64,6 +64,11 @@ class ProviderRoute:
 
 
 @dataclass(frozen=True, slots=True)
+class RuntimeInteractionPolicy:
+    allow_provider_questions: bool = True
+
+
+@dataclass(frozen=True, slots=True)
 class ProviderTurnContext:
     step_name: str
     turn_kind: Literal["producer", "verifier", "step", "operation"]

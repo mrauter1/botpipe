@@ -269,7 +269,6 @@ def _render_control_response(schema: Mapping[str, Any] | None) -> str:
         "```",
         payload_rule,
         "If the selected route is `question`, include a non-empty top-level `question` string.",
-        "If the selected route is `blocked` or `failed`, provide a concise non-empty `reason`.",
         "",
         "#### Payload schema",
         _render_expected_output_schema(schema),
