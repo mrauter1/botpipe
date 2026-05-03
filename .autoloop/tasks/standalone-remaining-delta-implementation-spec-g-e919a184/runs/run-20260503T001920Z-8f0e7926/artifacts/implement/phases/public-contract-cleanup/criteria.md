@@ -15,4 +15,4 @@ Check these boxes (`- [x]`) only when true.
 - [ ] **Technical Debt / Simplicity**: Changes avoid unnecessary indirection, duplicated logic, scattered ownership, over-engineering, and unrelated refactors.
 - [ ] **Maintainability / Validation**: Diffs are cohesive, follow repository conventions, and are supported by appropriate validation, documentation, or notes where needed.
 
-Review status: blocking findings remain in `feedback.md`, so no criteria box is currently satisfied end-to-end for this phase.
+Review status: blocking findings remain in `feedback.md` (including remaining doc and maintained-contract-suite gaps), so no criteria box is currently satisfied end-to-end for this phase.

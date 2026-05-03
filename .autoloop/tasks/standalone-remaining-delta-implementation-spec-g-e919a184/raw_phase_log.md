@@ -336,3 +336,53 @@ Validation passed with:
 Open issues / next step
 
 No blocker remains for the two verifier findings. The only follow-on is broader cleanup of older historical contract coverage that still describes removed class-handler authoring outside this phase’s focused regression slice.
+
+
+---
+run_id=run-20260503T001920Z-8f0e7926 | entry=session_turn | pair=implement | phase=verifier | cycle=2 | attempt=1 | thread_id=019deb3e-9a64-77a2-8675-175dfad2340d
+---
+provider=codex
+mode=resume
+template=/home/rauter/.local/share/pipx/venvs/autoloop/lib/python3.12/site-packages/autoloop/templates/implement_verifier.md
+session_id=019deb3e-9a64-77a2-8675-175dfad2340d
+
+
+---
+run_id=run-20260503T001920Z-8f0e7926 | entry=phase_output | pair=implement | phase=verifier | process=codex-agent | cycle=2 | attempt=1 | thread_id=019deb3e-9a64-77a2-8675-175dfad2340d
+---
+I’m reviewing the implementation against the two prior blockers and the phase acceptance criteria first, then I’ll update the review artifacts to reflect what actually remains.
+
+I’ve confirmed the prior findings were addressed in the touched files. I’m doing one more pass on adjacent surfaces now: exported compiler metadata, remaining legacy handler discovery, and the strictness/documentation guardrails that back AC-2.
+
+I found two adjacent surfaces worth checking before I close this out: a docs page that still mentions `on_start`, and the older contract suite that still appears to encode removed class-handler authoring. I’m validating both so the review artifact reflects whether this phase is actually done end-to-end.
+
+The two remaining issues are both end-to-end phase-completion gaps rather than code-path bugs in the new implementation: a public docs artifact still teaches `on_start`, and the maintained contract suite still fails because it wasn’t migrated off the removed class-handler surface. I’m recording both in the reviewer artifact now.
+
+Scope considered
+
+Phase-local `public-contract-cleanup` only. I reviewed the new `Context` runtime seam, the removed class-handler compiler path, the maintained docs surfaced by the phase, and the contract/strictness coverage that is supposed to prove the intentional public break end-to-end.
+
+What I analyzed
+
+I inspected the touched runtime/compiler files and the active review artifacts, then checked adjacent public surfaces with repo-wide searches for `on_start`, `on_outcome`, `on_<step>`, and `ctx._runtime`. I also ran focused verification:
+- `./.venv/bin/pytest tests/unit/test_primitives_and_stores.py::test_public_context_hides_runtime_mutators tests/unit/test_validation.py::test_validation_rejects_legacy_on_start_handler_even_when_step_is_named_start tests/unit/test_validation.py::test_validation_rejects_legacy_on_outcome_handler_even_when_step_is_named_outcome tests/unit/test_validation.py::test_validation_rejects_legacy_class_level_step_handler_methods tests/unit/test_validation.py::test_validation_accepts_direct_system_step_handler_without_on_step_method tests/strictness/test_no_compat.py -q`
+- `./.venv/bin/pytest tests/contract/test_engine_contracts.py::test_on_start_opens_sessions_before_execution -q`
+- `./.venv/bin/pytest tests/contract/test_engine_contracts.py::test_system_step_contract_bypasses_middleware -q`
+
+What I reviewed
+
+I updated [criteria.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/standalone-remaining-delta-implementation-spec-g-e919a184/runs/run-20260503T001920Z-8f0e7926/artifacts/implement/phases/public-contract-cleanup/criteria.md) to keep every box unchecked, and I appended two new blocking findings to [feedback.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/standalone-remaining-delta-implementation-spec-g-e919a184/runs/run-20260503T001920Z-8f0e7926/artifacts/implement/phases/public-contract-cleanup/feedback.md).
+
+Key findings / decisions
+
+- `IMP-003` `blocking`: AC-2 is still unmet because [docs/workflows/workflow_idea_to_workflow_package.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/docs/workflows/workflow_idea_to_workflow_package.md:68) still teaches “mutate state implicitly in `on_start`”, which directly contradicts the final public hook model.
+- `IMP-004` `blocking`: the maintained contract suite still depends on the removed class-handler surface. Both [test_on_start_opens_sessions_before_execution](/home/rauter/autoloop_v3_bkp/autoloop_v3/tests/contract/test_engine_contracts.py:1759) and [test_system_step_contract_bypasses_middleware](/home/rauter/autoloop_v3_bkp/autoloop_v3/tests/contract/test_engine_contracts.py:1717) fail immediately because they still define `on_start`, `on_outcome`, and `on_<step>` handlers.
+- The original blocker fixes themselves look real: `ctx._runtime` is no longer exposed on public `Context`, and the compiler/validation path no longer accepts the removed class-handler forms.
+
+Open issues / next step
+
+This phase should stay open until the remaining maintained docs and maintained contract coverage are migrated to the final explicit-hook / explicit-`python_step` model. After those are updated, rerun the relevant contract slice and then re-evaluate the criteria.
+
+<loop-control>
+{"schema":"docloop.loop_control/v1","kind":"promise","promise":"INCOMPLETE"}
+</loop-control>
