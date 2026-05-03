@@ -74,3 +74,6 @@
 {"ts": "2026-05-03T02:53:04.060930+00:00", "run_id": "run-20260503T001920Z-8f0e7926", "seq": 74, "event_type": "phase_finished", "pair": "test", "phase": "producer", "cycle": 1, "attempt": 1, "empty_output": false, "phase_id": "compiler-resume-schema-docs"}
 {"ts": "2026-05-03T02:54:17.922942+00:00", "run_id": "run-20260503T001920Z-8f0e7926", "seq": 75, "event_type": "phase_finished", "pair": "test", "phase": "verifier", "cycle": 1, "attempt": 1, "empty_output": false, "phase_id": "compiler-resume-schema-docs"}
 {"ts": "2026-05-03T02:54:17.962370+00:00", "run_id": "run-20260503T001920Z-8f0e7926", "seq": 76, "event_type": "pair_completed", "pair": "test", "cycle": 1, "attempt": 1, "phase_id": "compiler-resume-schema-docs"}
+{"ts": "2026-05-03T02:54:18.050552+00:00", "run_id": "run-20260503T001920Z-8f0e7926", "seq": 77, "event_type": "phase_completed", "pair": "test", "phase_id": "compiler-resume-schema-docs", "phase_mode": "single"}
+{"ts": "2026-05-03T02:54:18.052366+00:00", "run_id": "run-20260503T001920Z-8f0e7926", "seq": 78, "event_type": "pair_started", "pair": "audit", "phase_id": null}
+{"ts": "2026-05-03T02:54:18.052448+00:00", "run_id": "run-20260503T001920Z-8f0e7926", "seq": 79, "event_type": "cycle_started", "pair": "audit", "cycle": 1, "attempt": 1, "phase_id": null}

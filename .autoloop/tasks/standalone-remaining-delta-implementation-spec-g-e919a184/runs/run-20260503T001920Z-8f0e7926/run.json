@@ -16,14 +16,14 @@
       "compiler-resume-schema-docs"
     ],
     "explicit": true,
-    "current_phase_index": 3,
-    "current_phase_id": "compiler-resume-schema-docs"
+    "current_phase_index": 4,
+    "current_phase_id": null
   },
   "phase_status": {
     "public-contract-cleanup": "completed",
     "execution-normalization": "completed",
     "runtime-correctness-and-telemetry": "completed",
-    "compiler-resume-schema-docs": "in_progress"
+    "compiler-resume-schema-docs": "completed"
   },
   "phase_history": [
     {
@@ -70,6 +70,13 @@
       "run_id": "run-20260503T001920Z-8f0e7926",
       "status": "in_progress",
       "ts": "2026-05-03T02:24:30.031029+00:00"
+    },
+    {
+      "phase_id": "compiler-resume-schema-docs",
+      "run_id": "run-20260503T001920Z-8f0e7926",
+      "status": "completed",
+      "ts": "2026-05-03T02:54:18.049852+00:00",
+      "pair": "test"
     }
   ]
 }
