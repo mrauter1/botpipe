@@ -473,3 +473,54 @@ That run completed with `306 passed`; the only output left was existing Pydantic
 Open issues / next step
 
 No open blocker remains in this phase slice. The next step is verifier re-check against the updated criteria and feedback artifacts.
+
+
+---
+run_id=run-20260503T001920Z-8f0e7926 | entry=session_turn | pair=implement | phase=verifier | cycle=3 | attempt=1 | thread_id=019deb3e-9a64-77a2-8675-175dfad2340d
+---
+provider=codex
+mode=resume
+template=/home/rauter/.local/share/pipx/venvs/autoloop/lib/python3.12/site-packages/autoloop/templates/implement_verifier.md
+session_id=019deb3e-9a64-77a2-8675-175dfad2340d
+
+
+---
+run_id=run-20260503T001920Z-8f0e7926 | entry=phase_output | pair=implement | phase=verifier | process=codex-agent | cycle=3 | attempt=1 | thread_id=019deb3e-9a64-77a2-8675-175dfad2340d
+---
+I’m reviewing the phase-local public-contract cleanup against the remaining verifier concerns and the current diff. First I’m checking the active review artifacts and the changed doc/test/runtime surfaces, then I’ll rerun the maintained verification slice the producer cited.
+
+The old blocking findings are still recorded in the artifact, so I’m verifying whether the underlying repo state is actually fixed before I touch the reviewer-owned files. I’m running the maintained contract/validation/public-surface slice and checking for lingering legacy public tokens in the changed docs and helpers.
+
+The regression slice is still running; the token search already looks better, but I want to distinguish true public-surface leaks from negative tests that intentionally assert rejection before I clear the criteria. After the test run finishes I’m spot-checking the few remaining matches in strictness/simple-surface coverage.
+
+The maintained slice is green. I’m updating the review artifacts now: all acceptance criteria can be checked, and I’m appending a re-review note to close out the earlier blocking findings instead of leaving the artifact frozen in the previous incomplete state.
+
+Scope considered
+
+Phase-local `public-contract-cleanup` only. I reviewed the updated public hook/context contract, the doc and stdlib-helper cleanup, and the maintained contract/validation coverage that was previously still tied to removed class-level handler authoring.
+
+What I analyzed
+
+I inspected the touched runtime/compiler/docs/test surfaces, especially [autoloop/stdlib/control.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/autoloop/stdlib/control.py:1), [docs/authoring.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/docs/authoring.md:24), [docs/workflows/workflow_idea_to_workflow_package.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/docs/workflows/workflow_idea_to_workflow_package.md:65), [tests/contract/test_engine_contracts.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/tests/contract/test_engine_contracts.py:1), and [tests/unit/test_validation.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/tests/unit/test_validation.py:1). I also checked for lingering public-surface leaks such as `ctx._runtime`, legacy pair-step keywords, and public `on_start` / `on_outcome` authoring guidance.
+
+What I reviewed
+
+I updated [criteria.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/standalone-remaining-delta-implementation-spec-g-e919a184/runs/run-20260503T001920Z-8f0e7926/artifacts/implement/phases/public-contract-cleanup/criteria.md) to mark all criteria satisfied, and I appended a re-review note to [feedback.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/standalone-remaining-delta-implementation-spec-g-e919a184/runs/run-20260503T001920Z-8f0e7926/artifacts/implement/phases/public-contract-cleanup/feedback.md) closing out the earlier blockers.
+
+I verified the maintained slice with:
+- `./.venv/bin/pytest tests/contract/test_engine_contracts.py tests/unit/test_validation.py tests/unit/test_simple_surface.py tests/unit/test_primitives_and_stores.py tests/unit/test_stdlib_and_extensions.py::test_control_helpers_merge_routes_and_build_outcome_passthrough tests/strictness/test_no_compat.py -q`
+- `./.venv/bin/python -m py_compile autoloop/stdlib/control.py tests/contract/test_engine_contracts.py tests/unit/test_validation.py tests/unit/test_primitives_and_stores.py tests/unit/test_stdlib_and_extensions.py`
+
+That regression pass completed with `306 passed`. The only remaining output was existing warning-only Pydantic field-shadow warnings in `workflow_run_traces_to_optimization_candidates`, which are outside this phase scope and not introduced here.
+
+Key findings / decisions
+
+No blocking findings remain. The prior blockers around `ctx._runtime`, legacy class-handler compilation/validation, stale public docs, and the maintained contract suite are resolved in the current repo state.
+
+Open issues / next step
+
+No open issue in this phase slice.
+
+<loop-control>
+{"schema":"docloop.loop_control/v1","kind":"promise","promise":"COMPLETE"}
+</loop-control>

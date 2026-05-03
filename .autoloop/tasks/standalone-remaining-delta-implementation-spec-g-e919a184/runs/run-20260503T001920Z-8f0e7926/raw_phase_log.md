@@ -386,3 +386,141 @@ This phase should stay open until the remaining maintained docs and maintained c
 <loop-control>
 {"schema":"docloop.loop_control/v1","kind":"promise","promise":"INCOMPLETE"}
 </loop-control>
+
+
+---
+run_id=run-20260503T001920Z-8f0e7926 | entry=session_turn | pair=implement | phase=producer | cycle=3 | attempt=1 | thread_id=019deb3e-9a64-77a2-8675-175dfad2340d
+---
+provider=codex
+mode=resume
+template=/home/rauter/.local/share/pipx/venvs/autoloop/lib/python3.12/site-packages/autoloop/templates/implement_producer.md
+session_id=019deb3e-9a64-77a2-8675-175dfad2340d
+
+
+---
+run_id=run-20260503T001920Z-8f0e7926 | entry=phase_output | pair=implement | phase=producer | process=codex-agent | cycle=3 | attempt=1 | thread_id=019deb3e-9a64-77a2-8675-175dfad2340d
+---
+I’m taking the remaining review scope literally: one maintained docs artifact still teaches `on_start`, and the contract suite still encodes the removed class-handler model. I’m measuring how broad that second gap is before I touch the tests so I can either migrate it cleanly or narrow it intentionally without leaving half-converted coverage behind.
+
+I’m addressing the remaining verifier findings in the phase-owned slice: the stale public docs and the maintained contract tests that still encode removed class-handler authoring. First I’m checking the exact failing doc/test surfaces and how wide the contract-test migration needs to be before editing.
+
+The contract-test file still has a wide legacy surface, so I’m narrowing to the failing maintained cases and any adjacent public docs that would still teach removed APIs. If the old pattern is repeated mechanically, I’ll convert only the active maintained coverage rather than refactor the whole file.
+
+I need the actual failure surface before editing the contract suite. If the file only has two active breaks, I’ll patch narrowly; if the class-handler pattern is pervasive and executable, I’ll migrate the maintained file in one pass so we don’t leave the phase with obvious latent failures.
+
+The contract suite break is much broader than the two verifier spot checks: the whole maintained file still authors workflows in the removed style. I’m inspecting its recurring patterns now so I can convert it mechanically and keep the change localized instead of hand-editing a hundred bespoke cases.
+
+Most of the contract file is still the same removed pattern, but it looks repetitive enough to convert without a test-logic rewrite. I’m inspecting the workflow-level `on_outcome` cases separately because those need an explicit step-hook replacement, not just a signature rewrite.
+
+The docs surface is a little wider than the verifier’s single example. I found `docs/authoring.md` and a stdlib helper that still talk in `on_<step>` / `on_outcome` terms, so I’m checking whether that helper is public and needs to be brought to the final `hook(ctx)` contract too.
+
+I’ve got a workable migration strategy for the maintained contract file: strip legacy class handlers out of the workflow classes, lift them into test-local `hook(ctx)` functions, and reattach them to the step objects or entry hook in the final explicit model. I’m applying that mechanically now so we can then clean up the remaining doc/helper surface and rerun the contract slice.
+
+I’ve finished the broad contract-test migration and I’m now cleaning up the remaining public-facing stragglers the reviewer surfaced indirectly: the stale docs, the stdlib helper that still returns an old `on_outcome` signature, and the one contract test helper that still pokes a private context mutator.
+
+The mechanical migration is in place. I’m running the maintained contract file end-to-end now, because the earlier verifier finding turned out to be repo-wide within that file, and a narrow smoke run would miss the next cleanup pass.
+
+The next failure cluster is more specific: `PythonStep` validation happens during class creation, so post-class handler attachment is too late. I’m moving those migrated handlers into the `PythonStep(...)` declarations themselves and then I’ll clean up the few remaining simple-workflow `@python_step` functions that still use the removed two-arg form.
+
+The migration exposed a formatting edge case in one multiline `PythonStep(...)` declaration. I’m fixing that specific insertion pattern and then rerunning the contract file; the remaining work is now on cleanup rather than discovering new scope.
+
+The remaining failures are concentrated now: pair-step legacy handlers were attached to the wrong lifecycle phase, a few tests still use removed `before_do` / `after_do` pair-step keywords, and some generated no-op hook wrappers are now polluting hook-name assertions. I’m correcting those three mechanics together rather than chasing each failing test one by one.
+
+The last five failures are semantic cleanup, not migration mechanics. Two tests still expect raw exceptions instead of structured workflow failures, one still uses the removed `before_review` alias, and two “provider handler should not run” guards are now wired into the final after-hook surface even though the step never reaches that phase. I’m fixing those expectations and removing the obsolete guards.
+
+The last contract failure is just the updated failure classification for an invalid after-hook route. I’m inspecting the checkpoint payload once so I can align the assertion with the final semantics rather than guess at the new shape.
+
+The remaining contract assertion is patched to the final hook-failure semantics. I’m running the full maintained contract file again, plus the public-surface/unit slices that were already part of this phase, so the verifier gets one coherent pass instead of a stack of piecemeal reruns.
+
+The focused phase slices are green, but a broader run of `tests/unit/test_validation.py` exposed a second stale maintained file with the same legacy class-handler authoring pattern. I’m checking whether that file is small enough for the same mechanical cleanup, because leaving it as-is would hand the verifier an obvious follow-up blocker.
+
+The remaining broad maintenance work is isolated to `tests/unit/test_validation.py`. It’s the same legacy pattern but on a smaller file, so I’m applying the same migration there selectively to the tests that are supposed to validate other behaviors, while leaving the explicit legacy-rejection cases alone.
+
+The remaining `test_validation.py` failures are all the same shape inside negative cases: each test still carries one legacy step handler just to reach a different validation path. I’m converting only the step-matching handlers there and leaving the intentionally orphaned aliases in place, so those tests can keep asserting the real error they were written for.
+
+The broad validation file is green now as well. I’m finishing with one combined regression pass across the maintained contract/validation/public-surface slices, then I’ll update the phase notes and ledger with the final scope actually covered.
+
+I’ve finished the code changes and the broad regression pass. I’m updating the phase ledger and notes now to reflect the actual blast radius: this turn ended up migrating the maintained contract and validation suites as well as the doc/helper surface, so the artifact record needs to say that plainly.
+
+Scope considered
+
+Phase-local `public-contract-cleanup` only. I stayed on the remaining verifier gaps: stale public docs, the public stdlib helper that still exposed the old `(state, outcome)` shape, and the maintained contract/validation tests that still authored workflows with removed class-level handlers.
+
+What I analyzed
+
+I traced the remaining breakage through [docs/workflows/workflow_idea_to_workflow_package.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/docs/workflows/workflow_idea_to_workflow_package.md:65), [docs/authoring.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/docs/authoring.md:24), [autoloop/stdlib/control.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/autoloop/stdlib/control.py:38), [tests/contract/test_engine_contracts.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/tests/contract/test_engine_contracts.py:1), and [tests/unit/test_validation.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/tests/unit/test_validation.py:1). I also checked the active feedback artifact and the phase plan, then ran the maintained contract/validation slices end to end to find every remaining legacy-authoring dependency instead of only patching the two originally reported test nodes.
+
+What I changed
+
+I updated the public docs to describe only the final explicit hook surface, and changed `event_on_outcome_tags(...)` in [autoloop/stdlib/control.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/autoloop/stdlib/control.py:44) to return a `hook(ctx)` callable that reads `ctx.outcome`. Its unit coverage was updated in [tests/unit/test_stdlib_and_extensions.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/tests/unit/test_stdlib_and_extensions.py:233).
+
+I migrated the maintained contract and validation suites away from class-level `on_start` / `on_outcome` / `on_<step>` authoring. In [tests/contract/test_engine_contracts.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/tests/contract/test_engine_contracts.py:1) and [tests/unit/test_validation.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/tests/unit/test_validation.py:1), the old handlers are now expressed as explicit step-local hooks or `PythonStep(..., handler=...)`, pair-step legacy keywords were rewritten to `before_producer` / `after_producer` / `before_verifier`, and the negative tests that still validate orphan-handler failures now keep only the intentionally orphaned alias methods. I also replaced the one remaining private worklist mutation in the contract suite with the public worklist helper surface.
+
+I updated the phase artifacts as required: [implementation_notes.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/standalone-remaining-delta-implementation-spec-g-e919a184/runs/run-20260503T001920Z-8f0e7926/artifacts/implement/phases/public-contract-cleanup/implementation_notes.md) now reflects the expanded maintained-test/doc scope, and [decisions.txt](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/standalone-remaining-delta-implementation-spec-g-e919a184/runs/run-20260503T001920Z-8f0e7926/decisions.txt) has the non-obvious migration notes appended under this turn’s header.
+
+Key findings / decisions
+
+The main implementation choice was to migrate maintained tests to the final public model instead of adding any compatibility shim. That kept the runtime/compiler contract strict and moved the burden onto docs and tests, which is what this phase asked for.
+
+I also treated pair-step legacy handlers as verifier-phase hooks, not generic `after` hooks, because attaching them to `after` made them run against producer output as well. That was the only non-trivial semantic correction needed in the test migration.
+
+Validation passed with:
+- `./.venv/bin/python -m py_compile autoloop/stdlib/control.py tests/contract/test_engine_contracts.py tests/unit/test_validation.py tests/unit/test_primitives_and_stores.py tests/unit/test_stdlib_and_extensions.py`
+- `./.venv/bin/pytest tests/contract/test_engine_contracts.py tests/unit/test_validation.py tests/unit/test_simple_surface.py tests/unit/test_primitives_and_stores.py tests/unit/test_stdlib_and_extensions.py::test_control_helpers_merge_routes_and_build_outcome_passthrough tests/strictness/test_no_compat.py -q`
+
+That run completed with `306 passed`; the only output left was existing Pydantic `schema` field-shadow warnings from `workflow_run_traces_to_optimization_candidates` contracts.
+
+Open issues / next step
+
+No open blocker remains in this phase slice. The next step is verifier re-check against the updated criteria and feedback artifacts.
+
+
+---
+run_id=run-20260503T001920Z-8f0e7926 | entry=session_turn | pair=implement | phase=verifier | cycle=3 | attempt=1 | thread_id=019deb3e-9a64-77a2-8675-175dfad2340d
+---
+provider=codex
+mode=resume
+template=/home/rauter/.local/share/pipx/venvs/autoloop/lib/python3.12/site-packages/autoloop/templates/implement_verifier.md
+session_id=019deb3e-9a64-77a2-8675-175dfad2340d
+
+
+---
+run_id=run-20260503T001920Z-8f0e7926 | entry=phase_output | pair=implement | phase=verifier | process=codex-agent | cycle=3 | attempt=1 | thread_id=019deb3e-9a64-77a2-8675-175dfad2340d
+---
+I’m reviewing the phase-local public-contract cleanup against the remaining verifier concerns and the current diff. First I’m checking the active review artifacts and the changed doc/test/runtime surfaces, then I’ll rerun the maintained verification slice the producer cited.
+
+The old blocking findings are still recorded in the artifact, so I’m verifying whether the underlying repo state is actually fixed before I touch the reviewer-owned files. I’m running the maintained contract/validation/public-surface slice and checking for lingering legacy public tokens in the changed docs and helpers.
+
+The regression slice is still running; the token search already looks better, but I want to distinguish true public-surface leaks from negative tests that intentionally assert rejection before I clear the criteria. After the test run finishes I’m spot-checking the few remaining matches in strictness/simple-surface coverage.
+
+The maintained slice is green. I’m updating the review artifacts now: all acceptance criteria can be checked, and I’m appending a re-review note to close out the earlier blocking findings instead of leaving the artifact frozen in the previous incomplete state.
+
+Scope considered
+
+Phase-local `public-contract-cleanup` only. I reviewed the updated public hook/context contract, the doc and stdlib-helper cleanup, and the maintained contract/validation coverage that was previously still tied to removed class-level handler authoring.
+
+What I analyzed
+
+I inspected the touched runtime/compiler/docs/test surfaces, especially [autoloop/stdlib/control.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/autoloop/stdlib/control.py:1), [docs/authoring.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/docs/authoring.md:24), [docs/workflows/workflow_idea_to_workflow_package.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/docs/workflows/workflow_idea_to_workflow_package.md:65), [tests/contract/test_engine_contracts.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/tests/contract/test_engine_contracts.py:1), and [tests/unit/test_validation.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/tests/unit/test_validation.py:1). I also checked for lingering public-surface leaks such as `ctx._runtime`, legacy pair-step keywords, and public `on_start` / `on_outcome` authoring guidance.
+
+What I reviewed
+
+I updated [criteria.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/standalone-remaining-delta-implementation-spec-g-e919a184/runs/run-20260503T001920Z-8f0e7926/artifacts/implement/phases/public-contract-cleanup/criteria.md) to mark all criteria satisfied, and I appended a re-review note to [feedback.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/standalone-remaining-delta-implementation-spec-g-e919a184/runs/run-20260503T001920Z-8f0e7926/artifacts/implement/phases/public-contract-cleanup/feedback.md) closing out the earlier blockers.
+
+I verified the maintained slice with:
+- `./.venv/bin/pytest tests/contract/test_engine_contracts.py tests/unit/test_validation.py tests/unit/test_simple_surface.py tests/unit/test_primitives_and_stores.py tests/unit/test_stdlib_and_extensions.py::test_control_helpers_merge_routes_and_build_outcome_passthrough tests/strictness/test_no_compat.py -q`
+- `./.venv/bin/python -m py_compile autoloop/stdlib/control.py tests/contract/test_engine_contracts.py tests/unit/test_validation.py tests/unit/test_primitives_and_stores.py tests/unit/test_stdlib_and_extensions.py`
+
+That regression pass completed with `306 passed`. The only remaining output was existing warning-only Pydantic field-shadow warnings in `workflow_run_traces_to_optimization_candidates`, which are outside this phase scope and not introduced here.
+
+Key findings / decisions
+
+No blocking findings remain. The prior blockers around `ctx._runtime`, legacy class-handler compilation/validation, stale public docs, and the maintained contract suite are resolved in the current repo state.
+
+Open issues / next step
+
+No open issue in this phase slice.
+
+<loop-control>
+{"schema":"docloop.loop_control/v1","kind":"promise","promise":"COMPLETE"}
+</loop-control>
