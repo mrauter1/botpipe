@@ -1,0 +1,4 @@
+<autoloop-decisions-header version="1" block_seq="1" owner="planner" phase_id="task-global" pair="plan" turn_seq="1" run_id="run-20260503T001920Z-8f0e7926" ts="2026-05-03T00:19:21.060271+00:00" />
+Use the existing collaborator split in autoloop/core/engine_collaborators.py and existing worklist helper/context surfaces as the baseline; complete their ownership rather than adding a parallel abstraction layer.
+Switch resume from hard-fail-on-topology-hash-mismatch to saved-contract-first warning-by-default behavior, with strict mismatch failure remaining opt-in.
+Treat legacy paused/pause vocabulary as removable from active runtime logic; any backward compatibility for persisted data must live behind explicit schema-aware migration or fail clearly, not as scattered aliases.
