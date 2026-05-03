@@ -8,3 +8,4 @@
 - Scope: phase-local authoritative verifier artifact
 
 - Added focused regression coverage for pair-step `before_producer` / `after_producer` short-circuit attribution and for workspace-level `blocked` run-status persistence and filtering.
+- `TST-000` `non-blocking`: No actionable audit findings in the reviewed phase scope. Confirmed deterministic coverage for pair-step short-circuit attribution and blocked-status public filtering with focused pytest passes.

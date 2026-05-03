@@ -1224,3 +1224,58 @@ Open issues / next step
 - Validation run:
   - `./.venv/bin/pytest tests/contract/test_engine_contracts.py -k 'before_producer_route_short_circuits_without_provider_and_preserves_candidate_route_none or after_producer_goto_short_circuits_verifier or after_producer_request_input_checkpoints_pending_input_before_verifier'`
   - `./.venv/bin/pytest tests/runtime/test_workspace_and_context.py -k 'run_metadata_keeps_blocked_status_distinct_from_awaiting_input or list_run_records_normalizes_legacy_paused_status_for_public_filters'`
+
+
+---
+run_id=run-20260503T001920Z-8f0e7926 | entry=session_turn | pair=test | phase=verifier | cycle=1 | attempt=1 | thread_id=019deb8f-cd18-7a82-ae07-835e2444b0ff
+---
+provider=codex
+mode=resume
+template=/home/rauter/.local/share/pipx/venvs/autoloop/lib/python3.12/site-packages/autoloop/templates/test_verifier.md
+session_id=019deb8f-cd18-7a82-ae07-835e2444b0ff
+
+
+---
+run_id=run-20260503T001920Z-8f0e7926 | entry=phase_output | pair=test | phase=verifier | process=codex-agent | cycle=1 | attempt=1 | thread_id=019deb8f-cd18-7a82-ae07-835e2444b0ff
+---
+I’m auditing the new phase-local test coverage now. I’ll inspect the updated tests and the test-strategy claims first, then I’ll mark the audit criteria and record any findings with blocking status if needed.
+
+I’m validating one specific intent risk before I mark the audit complete: the new workspace test now enforces `blocked` as a distinct public run status. I need to confirm whether that is already an established behavior in this repo or whether the test is normalizing an unconfirmed vocabulary change.
+
+The new test expectations look aligned with existing runtime vocabulary. I’m running the focused suites once myself so the audit can mark reliability and regression protection based on an observed pass, not just source inspection.
+
+The targeted tests passed in audit. I didn’t find a phase-local coverage or reliability defect, so I’m marking the audit criteria complete and recording a no-findings audit note.
+
+Scope considered
+
+- Phase-local audit of the runtime-correctness-and-telemetry test slice only.
+- I reviewed the updated contract/workspace tests plus the active test strategy and feedback artifacts.
+
+What I analyzed
+
+- The phase contract, `test_strategy.md`, `feedback.md`, and the run-local decisions ledger.
+- The updated coverage in `tests/contract/test_engine_contracts.py` and `tests/runtime/test_workspace_and_context.py`, with adjacent checks against existing runtime/history/status expectations elsewhere in the suite.
+
+What I reviewed
+
+- Pair-step short-circuit attribution coverage for `before_producer` and `after_producer`.
+- Public blocked-status persistence and `list_run_records(...)` filtering behavior.
+- The test strategy’s claim that scoped-state and worklist-helper coverage can rely on already-existing suites.
+- Targeted verification:
+  - `./.venv/bin/pytest tests/contract/test_engine_contracts.py -k 'before_producer_route_short_circuits_without_provider_and_preserves_candidate_route_none or after_producer_goto_short_circuits_verifier or after_producer_request_input_checkpoints_pending_input_before_verifier'`
+  - `./.venv/bin/pytest tests/runtime/test_workspace_and_context.py -k 'run_metadata_keeps_blocked_status_distinct_from_awaiting_input or list_run_records_normalizes_legacy_paused_status_for_public_filters'`
+
+Key findings / decisions
+
+- No blocking findings in the reviewed phase scope.
+- The new blocked-status test is aligned with existing established runtime vocabulary in this repo, not a newly normalized behavior break.
+- I updated `criteria.md` to all checked and appended a `non-blocking` `TST-000` audit note to `feedback.md`.
+
+Open issues / next step
+
+- No phase-local blocker remains from the test audit.
+- The runtime-correctness-and-telemetry test artifacts are audit-complete.
+
+<loop-control>
+{"schema":"docloop.loop_control/v1","kind":"promise","promise":"COMPLETE"}
+</loop-control>
