@@ -852,3 +852,57 @@ Open issues / next step
 <loop-control>
 {"schema":"docloop.loop_control/v1","kind":"promise","promise":"COMPLETE"}
 </loop-control>
+
+
+---
+run_id=run-20260503T200339Z-6d598cb8 | entry=session_turn | pair=test | phase=verifier | cycle=2 | attempt=1 | thread_id=019def95-e28b-7972-a91c-cbe140043634
+---
+provider=codex
+mode=resume
+template=/home/rauter/.local/share/pipx/venvs/autoloop/lib/python3.12/site-packages/autoloop/templates/test_verifier.md
+session_id=019def95-e28b-7972-a91c-cbe140043634
+
+
+---
+run_id=run-20260503T200339Z-6d598cb8 | entry=phase_output | pair=test | phase=verifier | process=codex-agent | cycle=2 | attempt=1 | thread_id=019def95-e28b-7972-a91c-cbe140043634
+---
+I’m re-auditing the lazy-worklist test slice after the cycle-2 fix. First I’m reading the updated strategy, feedback, and new explicit-event contract test to verify whether the prior blocking coverage gap is now actually closed.
+
+The prior gap is closed: there is now an engine-level explicit-use event assertion, and the targeted contract test passes. I’m marking the audit criteria complete and appending a short resolution note so the feedback log no longer reads like an active blocker.
+
+Scope considered
+
+- Phase-local lazy worklist/session test audit only.
+- Re-reviewed the updated contract test, the active strategy artifact, and the audit feedback trail after the cycle-2 test-author fix.
+
+What I analyzed
+
+- The new engine-level explicit-use regression in `tests/contract/test_engine_contracts.py`.
+- The AC-2 coverage map in [test_strategy.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/framework-authoring-flexibility-change-spec-goal-2ee572cd/runs/run-20260503T200339Z-6d598cb8/artifacts/test/phases/lazy-worklists-and-sessions/test_strategy.md).
+- Whether the prior blocking finding still applied once explicit non-scoped access was exercised under `runtime_event_sink`.
+
+What I reviewed
+
+- `test_non_scoped_explicit_worklist_access_emits_resolution_event_for_only_requested_worklist` now asserts:
+  - explicit non-scoped `ctx.selection("gate")`,
+  - one-worklist-only materialization,
+  - `worklist_selection_resolved` emission,
+  - correct event payload shape for step and current item.
+- The targeted validation run for that contract test passed.
+- The audit artifacts now accurately reflect the updated coverage picture.
+
+Key findings / decisions
+
+- No remaining blocking findings.
+- The prior `TST-001` gap is resolved by the new engine-level explicit-use event test.
+- Updated [criteria.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/framework-authoring-flexibility-change-spec-goal-2ee572cd/runs/run-20260503T200339Z-6d598cb8/artifacts/test/phases/lazy-worklists-and-sessions/criteria.md) to fully checked.
+- Appended a resolution note to [feedback.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/framework-authoring-flexibility-change-spec-goal-2ee572cd/runs/run-20260503T200339Z-6d598cb8/artifacts/test/phases/lazy-worklists-and-sessions/feedback.md).
+
+Open issues / next step
+
+- No audit blocker remains for this phase slice.
+- The strategy’s remaining `refresh()` note is a declared known gap, not a blocker for the accepted phase contract.
+
+<loop-control>
+{"schema":"docloop.loop_control/v1","kind":"promise","promise":"COMPLETE"}
+</loop-control>
