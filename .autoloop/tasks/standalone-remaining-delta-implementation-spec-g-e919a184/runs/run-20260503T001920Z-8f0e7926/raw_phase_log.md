@@ -524,3 +524,106 @@ No open issue in this phase slice.
 <loop-control>
 {"schema":"docloop.loop_control/v1","kind":"promise","promise":"COMPLETE"}
 </loop-control>
+
+
+---
+run_id=run-20260503T001920Z-8f0e7926 | entry=session_turn | pair=test | phase=producer | cycle=1 | attempt=1 | thread_id=019deb3e-9a64-77a2-8675-175dfad2340d
+---
+provider=codex
+mode=resume
+template=/home/rauter/.local/share/pipx/venvs/autoloop/lib/python3.12/site-packages/autoloop/templates/test_producer.md
+session_id=019deb3e-9a64-77a2-8675-175dfad2340d
+
+
+---
+run_id=run-20260503T001920Z-8f0e7926 | entry=phase_output | pair=test | phase=producer | process=codex-agent | cycle=1 | attempt=1 | thread_id=019deb3e-9a64-77a2-8675-175dfad2340d
+---
+I’m treating this as a test-coverage pass over the completed public-contract cleanup. First I’m checking the phase test artifacts and the maintained tests that were already migrated, then I’ll decide whether any additional regression tests are still missing before I update the strategy and feedback artifacts.
+
+I’m checking the current test coverage against the final public contract to decide whether this phase needs a new repo test or just artifact updates. First step is to verify the existing migrated tests actually cover the remaining regression surfaces instead of assuming they do.
+
+The existing migrated suite is broad, but there’s one cheap regression check still worth encoding: the public stdlib helper should advertise the exact `hook(ctx)` shape, not just behave that way at runtime. I’m adding that focused test and then I’ll update the phase test artifacts with the explicit coverage map.
+
+I have the phase plan and current decision ledger in view. I’m making one narrow repo test change plus the required artifact updates so this phase records explicit coverage instead of relying on implement-phase notes.
+
+The code change is in place. I’m running the narrow public-contract slice now to confirm the new signature test and to keep the artifact notes tied to an actual green run rather than an unexecuted plan.
+
+The suite is still running; I’m waiting for the full result so I can report the final pass count and any warnings accurately.
+
+The slice is green. I’m making one last artifact touch so the test-phase record matches the actual final pass count from this run.
+
+Scope considered
+
+Phase-local `public-contract-cleanup` only: the final public hook contract, the migrated validation/contract coverage, and the test-phase artifacts that need an explicit behavior-to-test map.
+
+What I analyzed
+
+I checked the already-migrated tests around the remaining public-surface risk points, especially [tests/unit/test_stdlib_and_extensions.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/tests/unit/test_stdlib_and_extensions.py:235), [tests/unit/test_validation.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/tests/unit/test_validation.py:1418), [tests/unit/test_simple_surface.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/tests/unit/test_simple_surface.py:313), and [tests/contract/test_engine_contracts.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/tests/contract/test_engine_contracts.py:1810). I also reviewed the phase plan and the current test artifacts to make sure the phase record matched the repo state.
+
+What I changed
+
+I added one focused regression test in [tests/unit/test_stdlib_and_extensions.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/tests/unit/test_stdlib_and_extensions.py:256) asserting that `event_on_outcome_tags(...)` exposes the exact single-argument `hook(ctx)` signature.
+
+I filled in the test coverage map in [test_strategy.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/standalone-remaining-delta-implementation-spec-g-e919a184/runs/run-20260503T001920Z-8f0e7926/artifacts/test/phases/public-contract-cleanup/test_strategy.md:1), appended the test-phase summary in [feedback.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/standalone-remaining-delta-implementation-spec-g-e919a184/runs/run-20260503T001920Z-8f0e7926/artifacts/test/phases/public-contract-cleanup/feedback.md:10), and recorded the non-obvious test-scope decision in [decisions.txt](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/standalone-remaining-delta-implementation-spec-g-e919a184/runs/run-20260503T001920Z-8f0e7926/decisions.txt:16).
+
+Key findings / decisions
+
+The maintained suite already covered the larger contract break end to end, so I kept the repo delta small and added only the missing signature-level regression check for the stdlib helper instead of duplicating the same public-contract assertions across more files.
+
+Validation run:
+`./.venv/bin/pytest tests/contract/test_engine_contracts.py tests/unit/test_validation.py tests/unit/test_simple_surface.py tests/unit/test_primitives_and_stores.py tests/unit/test_stdlib_and_extensions.py::test_control_helpers_merge_routes_and_build_outcome_passthrough tests/unit/test_stdlib_and_extensions.py::test_control_helper_event_on_outcome_tags_exposes_single_ctx_hook_signature tests/strictness/test_no_compat.py -q`
+Result: `307 passed, 14 warnings`. The warnings are the existing Pydantic `schema` field-shadow warnings outside this phase scope.
+
+Open issues / next step
+
+No blocker in this test-phase slice. The remaining warning-only noise is unchanged and out of scope for `public-contract-cleanup`.
+
+
+---
+run_id=run-20260503T001920Z-8f0e7926 | entry=session_turn | pair=test | phase=verifier | cycle=1 | attempt=1 | thread_id=019deb3e-9a64-77a2-8675-175dfad2340d
+---
+provider=codex
+mode=resume
+template=/home/rauter/.local/share/pipx/venvs/autoloop/lib/python3.12/site-packages/autoloop/templates/test_verifier.md
+session_id=019deb3e-9a64-77a2-8675-175dfad2340d
+
+
+---
+run_id=run-20260503T001920Z-8f0e7926 | entry=phase_output | pair=test | phase=verifier | process=codex-agent | cycle=1 | attempt=1 | thread_id=019deb3e-9a64-77a2-8675-175dfad2340d
+---
+I’m auditing the test-phase output against the phase contract and the repo changes that landed earlier. First I’m checking the test strategy and the specific tests it claims to cover so I can decide whether any regression gaps remain before touching the audit artifacts.
+
+I have the stated strategy and the decision log. Next I’m spot-checking the specific tests it cites and rerunning the claimed slice so the audit can be based on repo evidence rather than the producer summary alone.
+
+The claimed regression slice is running cleanly so far. I’m waiting for the full result and warnings so the audit artifact can record the actual observed outcome.
+
+The audit slice is green and the cited tests are real. I’m updating the audit artifacts now: all criteria will be marked satisfied, and I’ll append a no-findings verification note with the exact rerun result.
+
+Scope considered
+
+Phase-local `public-contract-cleanup` only. I audited the added test work, the claimed coverage map, and the maintained regression slice for the final public hook/context contract.
+
+What I analyzed
+
+I reviewed the active strategy and decision ledger, then spot-checked the cited tests in [tests/unit/test_stdlib_and_extensions.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/tests/unit/test_stdlib_and_extensions.py:235), [tests/unit/test_primitives_and_stores.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/tests/unit/test_primitives_and_stores.py:68), [tests/unit/test_validation.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/tests/unit/test_validation.py:1418), and [tests/strictness/test_no_compat.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/tests/strictness/test_no_compat.py:110). I also reran the exact public-contract slice claimed in the strategy.
+
+What I reviewed
+
+I updated [criteria.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/standalone-remaining-delta-implementation-spec-g-e919a184/runs/run-20260503T001920Z-8f0e7926/artifacts/test/phases/public-contract-cleanup/criteria.md:12) to mark all audit criteria satisfied, and I appended the audit result to [feedback.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/standalone-remaining-delta-implementation-spec-g-e919a184/runs/run-20260503T001920Z-8f0e7926/artifacts/test/phases/public-contract-cleanup/feedback.md:16).
+
+I re-verified:
+`./.venv/bin/pytest tests/contract/test_engine_contracts.py tests/unit/test_validation.py tests/unit/test_simple_surface.py tests/unit/test_primitives_and_stores.py tests/unit/test_stdlib_and_extensions.py::test_control_helpers_merge_routes_and_build_outcome_passthrough tests/unit/test_stdlib_and_extensions.py::test_control_helper_event_on_outcome_tags_exposes_single_ctx_hook_signature tests/strictness/test_no_compat.py -q`
+
+Result: `307 passed, 14 warnings`.
+
+Key findings / decisions
+
+No blocking or non-blocking findings. The tests cover the changed public contract, preserve the important rejection cases for removed authoring surfaces, and the added stdlib helper signature assertion closes the main remaining gap at this phase boundary.
+
+Open issues / next step
+
+No open issue in this audit slice. The warning-only Pydantic field-shadow output is unchanged and outside this phase scope.
+
+<loop-control>
+{"schema":"docloop.loop_control/v1","kind":"promise","promise":"COMPLETE"}
+</loop-control>

@@ -23,3 +23,6 @@
 {"ts": "2026-05-03T01:24:47.562209+00:00", "run_id": "run-20260503T001920Z-8f0e7926", "seq": 23, "event_type": "phase_deferred", "pair": "implement", "phase_mode": "single", "phase_id": "public-contract-cleanup", "reason": "awaiting enabled test pair completion"}
 {"ts": "2026-05-03T01:24:47.565153+00:00", "run_id": "run-20260503T001920Z-8f0e7926", "seq": 24, "event_type": "pair_started", "pair": "test", "phase_id": "public-contract-cleanup"}
 {"ts": "2026-05-03T01:24:47.565420+00:00", "run_id": "run-20260503T001920Z-8f0e7926", "seq": 25, "event_type": "cycle_started", "pair": "test", "cycle": 1, "attempt": 1, "phase_id": "public-contract-cleanup"}
+{"ts": "2026-05-03T01:28:23.008544+00:00", "run_id": "run-20260503T001920Z-8f0e7926", "seq": 26, "event_type": "phase_finished", "pair": "test", "phase": "producer", "cycle": 1, "attempt": 1, "empty_output": false, "phase_id": "public-contract-cleanup"}
+{"ts": "2026-05-03T01:29:37.966757+00:00", "run_id": "run-20260503T001920Z-8f0e7926", "seq": 27, "event_type": "phase_finished", "pair": "test", "phase": "verifier", "cycle": 1, "attempt": 1, "empty_output": false, "phase_id": "public-contract-cleanup"}
+{"ts": "2026-05-03T01:29:38.013271+00:00", "run_id": "run-20260503T001920Z-8f0e7926", "seq": 28, "event_type": "pair_completed", "pair": "test", "cycle": 1, "attempt": 1, "phase_id": "public-contract-cleanup"}
