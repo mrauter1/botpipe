@@ -277,3 +277,59 @@ Open issues / next step
 - Validation was limited to `python3 -m compileall autoloop tests`, which succeeded.
 - I could not run `pytest` or executable smoke tests in this shell because `pytest` and `pydantic` are not installed here.
 - The later-phase inspection/static-graph payload expansion was not implemented; the compiled metadata needed for that follow-up is now in place.
+
+
+---
+run_id=run-20260503T200339Z-6d598cb8 | entry=session_turn | pair=implement | phase=verifier | cycle=1 | attempt=1 | thread_id=019def7c-b7c9-7220-8f38-99702bfcf9d2
+---
+provider=codex
+mode=resume
+template=/home/rauter/.local/share/pipx/venvs/autoloop/lib/python3.12/site-packages/autoloop/templates/implement_verifier.md
+session_id=019def7c-b7c9-7220-8f38-99702bfcf9d2
+
+
+---
+run_id=run-20260503T200339Z-6d598cb8 | entry=phase_output | pair=implement | phase=verifier | process=codex-agent | cycle=1 | attempt=1 | thread_id=019def7c-b7c9-7220-8f38-99702bfcf9d2
+---
+I’m reviewing the phase artifacts and the changed route-policy code path now. I’ll verify the phase against the acceptance criteria first, then write only the findings that materially block correctness or contract fidelity.
+
+I’ve isolated one blocking issue and one smaller follow-on. The blocking problem is in the updated regression expectations, not the core route logic: some contract tests now hide an explicitly authored `failed` route, which contradicts the requested contract and would let a future regression slip through.
+
+Scope considered
+
+- Phase-local `route-interaction-policy` changes only.
+- Reviewed the changed compiler/discovery/engine/provider/runtime-config plumbing and the updated route-contract tests.
+- Ignored unrelated dirty repo state outside the active phase artifact directory.
+
+What I analyzed
+
+- `autoloop/core/steps.py`, `autoloop/simple.py`, `autoloop/core/discovery.py`, `autoloop/core/lowering.py`, `autoloop/core/compiler.py`
+- `autoloop/core/engine.py`, `autoloop/core/engine_collaborators.py`
+- `autoloop/core/providers/models.py`, `rendering.py`, `retries.py`
+- `autoloop/runtime/config.py`, `autoloop/runtime/runner.py`
+- Updated tests in `tests/contract`, `tests/unit`, and `tests/runtime`
+- Active phase artifacts: `criteria.md`, `feedback.md`, `implementation_notes.md`, and `decisions.txt`
+
+What I reviewed
+
+- Whether default `blocked`/`failed` injection was removed while explicit authored `blocked`/`failed` stayed legal.
+- Whether `question` exposure is policy-aware and wired through engine plus runner `full_auto`.
+- Whether simple/core authoring now shares one `ControlRoutes` seam.
+- Whether the updated tests still assert the intended authored-route contract rather than the removed default-route behavior.
+- Whether the new compiled route-view metadata is internally coherent enough for later inspection/static-graph work.
+
+Key findings / decisions
+
+- Added findings to `feedback.md`.
+- Updated `criteria.md` checkboxes to reflect one blocking issue and one non-blocking debt item.
+- Blocking: some updated provider-contract tests now hide an explicitly authored `failed` route declared via `GLOBAL: {"failed": FAIL}`, which contradicts the requested contract and weakens required regression coverage.
+- Non-blocking: question-visibility policy is duplicated in two compiler helpers, which risks drift when the later inspection/static-graph phase starts consuming the new metadata.
+
+Open issues / next step
+
+- Fix `IMP-001` by restoring test expectations for explicitly authored `failed` routes while keeping only default-injected `failed` removed.
+- Then clean up `IMP-002` or consciously defer it if the next phase will consume and centralize the same visibility logic.
+
+<loop-control>
+{"schema":"docloop.loop_control/v1","kind":"promise","promise":"INCOMPLETE"}
+</loop-control>
