@@ -5,3 +5,6 @@ Keep existing `control_routes=False` semantics as â€œno injected question routeâ
 Keep `Route.to(..., effects=...)` unsupported; add typed worklist progression through additive helper constructors or `on_taken` lowering so current validation/tests that reject the generic kwarg stay valid.
 Lazy worklist restore and checkpointing must stay sparse: restore only snapshotted selections and never initialize unrelated worklists during run start, resume, or snapshot save.
 Implement `validation_step` by lowering to existing Python-step execution rather than adding a new step kind or broad authoring DSL.
+<autoloop-decisions-header version="1" block_seq="2" owner="planner" phase_id="task-global" pair="plan" turn_seq="2" run_id="run-20260503T200339Z-6d598cb8" ts="2026-05-03T20:13:27.207696+00:00" />
+`ControlRoutes` must be one canonical authoring seam: core step classes accept it directly, simple helpers lower to the same object, and legacy simple booleans are normalized at the declaration edge.
+`Effects.then`, `Effects.advance`, `Effects.complete_and_advance`, and `Effects.refresh` are required public helpers alongside `Route.*` lowerings; hooks and Python steps must be able to return them directly.
