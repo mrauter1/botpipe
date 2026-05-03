@@ -1787,3 +1787,50 @@ Validation run:
 Open issues / next step
 
 No open issues from this phase on my side. The next step is a verifier re-review of the updated inspection text artifacts and docs wording.
+
+
+---
+run_id=run-20260503T200339Z-6d598cb8 | entry=session_turn | pair=implement | phase=verifier | cycle=2 | attempt=1 | thread_id=019defd0-6015-76a3-b92f-f999f62d0d87
+---
+provider=codex
+mode=resume
+template=/home/rauter/.local/share/pipx/venvs/autoloop/lib/python3.12/site-packages/autoloop/templates/implement_verifier.md
+session_id=019defd0-6015-76a3-b92f-f999f62d0d87
+
+
+---
+run_id=run-20260503T200339Z-6d598cb8 | entry=phase_output | pair=implement | phase=verifier | process=codex-agent | cycle=2 | attempt=1 | thread_id=019defd0-6015-76a3-b92f-f999f62d0d87
+---
+I’m doing the verifier re-pass on the two previously blocked areas only: the updated text inspection artifacts and the artifact-ownership docs wording. If those now line up with the phase contract and the regression evidence, I’ll close out the review artifacts.
+
+The reviewer-blocked surfaces now line up with the phase contract and the implementation notes show the rerun evidence. I’m closing the review artifacts by marking the criteria complete and appending a short re-review resolution note so the earlier blocking entries aren’t left dangling.
+
+Scope considered
+
+Phase-local `inspection-docs-and-regression` only. I re-reviewed the two previously blocked areas: the text static-graph artifacts and the artifact-ownership docs wording, plus the updated regression evidence in the implementation notes.
+
+What I analyzed
+
+I checked the updated renderer paths in [static_graph.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/autoloop/runtime/static_graph.py), the artifact-ownership section in [authoring.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/docs/authoring.md), and the refreshed validation record in [implementation_notes.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/framework-authoring-flexibility-change-spec-goal-2ee572cd/runs/run-20260503T200339Z-6d598cb8/artifacts/implement/phases/inspection-docs-and-regression/implementation_notes.md). I also verified that the focused static-graph assertions were added to [test_runtime_static_graph.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/tests/runtime/test_runtime_static_graph.py).
+
+What I reviewed
+
+I updated the active reviewer artifacts:
+- [criteria.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/framework-authoring-flexibility-change-spec-goal-2ee572cd/runs/run-20260503T200339Z-6d598cb8/artifacts/implement/phases/inspection-docs-and-regression/criteria.md)
+- [feedback.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/framework-authoring-flexibility-change-spec-goal-2ee572cd/runs/run-20260503T200339Z-6d598cb8/artifacts/implement/phases/inspection-docs-and-regression/feedback.md)
+
+Key findings / decisions
+
+`IMP-001` is resolved: route table, Mermaid, and compile report outputs now distinguish route class and policy-specific visibility, and the regression suite covers those text surfaces.
+
+`IMP-002` is resolved: the authoring docs now describe the shipped managed/shared artifact role and show the actual authoring seam.
+
+No remaining findings. The recorded validation sweep in the implementation notes shows the requested phase slice passing at `229 passed`.
+
+Open issues / next step
+
+No open issues from this review pass.
+
+<loop-control>
+{"schema":"docloop.loop_control/v1","kind":"promise","promise":"COMPLETE"}
+</loop-control>
