@@ -1638,3 +1638,57 @@ Open issues / next step
 
 - The remaining phase-local gap is not in the tests; it is the outdated public-surface wording in [cleanup.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/cleanup.md).
 - Next step is implementation follow-up to bring `cleanup.md` onto the final `autoloop` surface so the updated docs baseline suite passes.
+
+
+---
+run_id=run-20260503T001920Z-8f0e7926 | entry=session_turn | pair=test | phase=verifier | cycle=1 | attempt=1 | thread_id=019deba6-cda9-71f3-bbcd-6f0024a29a6a
+---
+provider=codex
+mode=resume
+template=/home/rauter/.local/share/pipx/venvs/autoloop/lib/python3.12/site-packages/autoloop/templates/test_verifier.md
+session_id=019deba6-cda9-71f3-bbcd-6f0024a29a6a
+
+
+---
+run_id=run-20260503T001920Z-8f0e7926 | entry=phase_output | pair=test | phase=verifier | process=codex-agent | cycle=1 | attempt=1 | thread_id=019deba6-cda9-71f3-bbcd-6f0024a29a6a
+---
+I’m auditing the new test coverage and the stated strategy against the phase scope. First I’m checking the test artifacts and the exact tests that were added or tightened, then I’ll decide whether any coverage or reliability gap remains.
+
+The updated tests are coherent so far. I’m checking one more thing before I close this out: whether the new docs-baseline assertions are scoped consistently with the repo’s existing “active docs” contract, and whether the fixture wording change is actually exercised by a stable test path.
+
+I’ve confirmed the new assertions are consistent with the repo’s existing active-docs contract, and the fixture wording change is exercised by a stable path. I’m marking the audit criteria complete and appending a concise audit note that the current failing docs-baseline assertions are catching a real implementation gap rather than reflecting a test-quality problem.
+
+Scope considered
+
+- Phase `compiler-resume-schema-docs` test additions only.
+- The updated docs-baseline suite in [tests/test_architecture_baseline_docs.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/tests/test_architecture_baseline_docs.py).
+- The fixture wording update in [tests/runtime/test_workflow_package_to_composable_building_blocks.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/tests/runtime/test_workflow_package_to_composable_building_blocks.py).
+- The phase test artifacts [criteria.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/standalone-remaining-delta-implementation-spec-g-e919a184/runs/run-20260503T001920Z-8f0e7926/artifacts/test/phases/compiler-resume-schema-docs/criteria.md), [feedback.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/standalone-remaining-delta-implementation-spec-g-e919a184/runs/run-20260503T001920Z-8f0e7926/artifacts/test/phases/compiler-resume-schema-docs/feedback.md), and [test_strategy.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/standalone-remaining-delta-implementation-spec-g-e919a184/runs/run-20260503T001920Z-8f0e7926/artifacts/test/phases/compiler-resume-schema-docs/test_strategy.md).
+
+What I analyzed
+
+- Whether the new tests cover the changed runtime fallback/schema behavior and the docs boundary cleanup requested by the phase.
+- Whether the failing docs-baseline assertions reflect a test defect or a real remaining implementation gap.
+- Whether the updated fixture wording is actually exercised by stable tests.
+
+What I reviewed
+
+- The docs-baseline assertions now require the final `autoloop` public surface and forbid `autoloop.simple` / `system step` in the maintained docs set.
+- The working-tree note `cleanup.md` is already part of the repo’s existing active-docs contract, so extending the baseline suite to catch drift there is consistent rather than scope creep.
+- The workflow-building-block fixture now emits `python_step` wording and its related test slice passes stably.
+- The new runtime resume tests remain deterministic and materially improve regression protection for embedded-topology fallback behavior.
+
+Key findings / decisions
+
+- No blocking test-quality issues found.
+- Appended `TST-001` as `non-blocking`: the current docs-baseline failures correctly expose implementation drift in `cleanup.md`, not a problem with the tests.
+- Marked all audit criteria complete.
+
+Open issues / next step
+
+- No open test-audit issues remain.
+- Remaining work is implementation-side cleanup of [cleanup.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/cleanup.md) so the strengthened docs-baseline suite passes.
+
+<loop-control>
+{"schema":"docloop.loop_control/v1","kind":"promise","promise":"COMPLETE"}
+</loop-control>
