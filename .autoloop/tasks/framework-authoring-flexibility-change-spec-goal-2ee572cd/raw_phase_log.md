@@ -1143,3 +1143,55 @@ Open issues / next step
 <loop-control>
 {"schema":"docloop.loop_control/v1","kind":"promise","promise":"COMPLETE"}
 </loop-control>
+
+
+---
+run_id=run-20260503T200339Z-6d598cb8 | entry=session_turn | pair=test | phase=producer | cycle=1 | attempt=1 | thread_id=019defa6-43e0-7382-9832-e4dd63010e96
+---
+provider=codex
+mode=resume
+template=/home/rauter/.local/share/pipx/venvs/autoloop/lib/python3.12/site-packages/autoloop/templates/test_producer.md
+session_id=019defa6-43e0-7382-9832-e4dd63010e96
+
+
+---
+run_id=run-20260503T200339Z-6d598cb8 | entry=phase_output | pair=test | phase=producer | process=codex-agent | cycle=1 | attempt=1 | thread_id=019defa6-43e0-7382-9832-e4dd63010e96
+---
+I’m reviewing the phase-local test scope against the implemented behavior first. I’ll check what coverage already landed for effects and validation helpers, then I’ll add only the missing regression tests plus the required test artifacts.
+
+This phase is test-only for the new effects and validation helper behavior. I’m checking the existing coverage against the phase contract first, then I’ll add only the missing regression tests and update the test-phase artifacts.
+
+The contract coverage is mostly already in place from the implement pass. I’m adding one focused regression around the remaining helper-lowering surface, then I’ll document the exact behavior map in the test artifacts.
+
+I’ve isolated the remaining uncovered helper surface to `Effects.then`, `Route.refresh`, and `Route.complete_current`. I’m adding a small unit test for those shapes now, then I’ll run the focused test slice and write the phase test artifacts.
+
+The added unit slice passed. I’m updating the test-phase artifacts with the explicit coverage map and the exact test additions so later turns don’t have to reconstruct the phase coverage from the code.
+
+Scope considered
+
+- Phase-local test work for `effects-and-validation-helper` only.
+- I limited repo edits to one focused unit regression test plus the required test-phase artifacts.
+
+What I analyzed
+
+- Existing phase coverage in [test_engine_contracts.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/tests/contract/test_engine_contracts.py) for effect execution, refresh/status/advance behavior, and `validation_step` success/failure paths.
+- Existing public-surface coverage in [test_simple_surface.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/tests/unit/test_simple_surface.py).
+- The phase artifact stubs in [test_strategy.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/framework-authoring-flexibility-change-spec-goal-2ee572cd/runs/run-20260503T200339Z-6d598cb8/artifacts/test/phases/effects-and-validation-helper/test_strategy.md) and [feedback.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/framework-authoring-flexibility-change-spec-goal-2ee572cd/runs/run-20260503T200339Z-6d598cb8/artifacts/test/phases/effects-and-validation-helper/feedback.md).
+
+What I changed
+
+- Added `test_effect_helpers_and_additional_route_helpers_lower_to_effects` in [test_simple_surface.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/tests/unit/test_simple_surface.py) to cover `Effects.then`, `Route.refresh`, and `Route.complete_current`.
+- Filled in [test_strategy.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/framework-authoring-flexibility-change-spec-goal-2ee572cd/runs/run-20260503T200339Z-6d598cb8/artifacts/test/phases/effects-and-validation-helper/test_strategy.md) with an explicit acceptance-criteria-to-test map, preserved invariants, failure paths, stabilization notes, and known gaps.
+- Appended a concise test-additions summary and validation command result to [feedback.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/framework-authoring-flexibility-change-spec-goal-2ee572cd/runs/run-20260503T200339Z-6d598cb8/artifacts/test/phases/effects-and-validation-helper/feedback.md).
+
+Key findings / decisions
+
+- Most contract coverage for this phase already existed from the implementation pass; the remaining obvious gap was helper-lowering coverage beyond `Route.advance`.
+- Focused validation passed:
+  - `./.venv/bin/python -m pytest -q tests/unit/test_simple_surface.py -k "effect_helpers_and_additional_route_helpers_lower_to_effects or effect_exports_and_route_helpers_are_public or validation_result_helpers_render_expected_shape"` → `3 passed`
+  - `./.venv/bin/python -m pytest -q tests/contract/test_engine_contracts.py -k "after_hook_effects_complete_and_advance_persist_status_and_exhaust or python_step_effect_refresh_reloads_worklist_source or effect_without_active_worklist_fails_clearly or validation_step_valid_routes_to_default_done_and_emits_runtime_event or validation_step_invalid_writes_feedback_and_routes_repair or validation_step_exception_uses_failed_route_when_configured"` → `6 passed`
+
+Open issues / next step
+
+- No blocking test gap remains within this phase scope.
+- The next step is the test-phase verifier pass against the updated repo tests and test artifacts.

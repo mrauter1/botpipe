@@ -106,6 +106,26 @@ def test_effect_exports_and_route_helpers_are_public() -> None:
     assert returned.worklists[0].set_current_status == "completed"
 
 
+def test_effect_helpers_and_additional_route_helpers_lower_to_effects() -> None:
+    then_effect = simple.Effects.then("next")
+    refresh_route = simple.Route.refresh(simple.FINISH, worklist="items")
+    complete_route = simple.Route.complete_current(simple.FINISH, worklist="items")
+
+    assert then_effect.event == "next"
+
+    assert refresh_route.on_taken is not None
+    refresh_effect = refresh_route.on_taken(object())
+    assert isinstance(refresh_effect, simple.Effects)
+    assert refresh_effect.worklists == (simple.WorklistEffect(worklist="items", refresh=True),)
+
+    assert complete_route.on_taken is not None
+    complete_effect = complete_route.on_taken(object())
+    assert isinstance(complete_effect, simple.Effects)
+    assert complete_effect.worklists == (
+        simple.WorklistEffect(worklist="items", set_current_status="completed"),
+    )
+
+
 def test_validation_result_helpers_render_expected_shape() -> None:
     valid = simple.ValidationResult.valid()
     invalid = simple.ValidationResult.invalid(
