@@ -24,7 +24,7 @@ from .mappings import normalize_mapping
 from .prompts import Prompt, PromptRegistry, ResolvedPrompt, resolve_prompt_reference
 from .providers.models import OperationRequest
 from .providers.protocols import LLMProvider
-from .schema_registry import OPERATION_REPLAY_SCHEMA, validate_persisted_schema
+from .schema_registry import OPERATION_REPLAY_SCHEMA, migrate_schemaless_payload, validate_persisted_schema
 from .sessions import DEFAULT_SESSION_NAME
 from .stores.protocols import SessionBinding
 
@@ -718,7 +718,12 @@ def _load_replay_store(path: Path | None) -> dict[str, Any]:
     payload = json.loads(path.read_text(encoding="utf-8"))
     if not isinstance(payload, dict):
         return {"schema": OPERATION_REPLAY_SCHEMA, "records": {}, "attempts": []}
-    validate_persisted_schema(payload, expected=OPERATION_REPLAY_SCHEMA, artifact_name=str(path))
+    validate_persisted_schema(
+        payload,
+        expected=OPERATION_REPLAY_SCHEMA,
+        artifact_name=str(path),
+        legacy_migrator=lambda value: migrate_schemaless_payload(value, expected=OPERATION_REPLAY_SCHEMA),
+    )
     records = payload.get("records")
     attempts = payload.get("attempts")
     return {

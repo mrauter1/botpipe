@@ -139,7 +139,7 @@ class RuntimeGitTracker:
         return self._run_dir
 
     def _handle_prepare_error(self, message: str) -> dict[str, object]:
-        if self._config.failure_mode == "ignore":
+        if self._config.failure_policy == "record_and_continue":
             self._repo = None
             self._prepared_payload = self._disabled_payload(error=message)
             return dict(self._prepared_payload)
@@ -250,7 +250,7 @@ class RuntimeGitTracker:
             return self._handle_runtime_error(exc)
 
     def _handle_runtime_error(self, exc: Exception):
-        if self._config.failure_mode == "ignore":
+        if self._config.failure_policy == "record_and_continue":
             message = f"git tracking disabled after runtime error: {exc}"
             self._repo = None
             self._prepared_payload = self._disabled_payload(error=message)

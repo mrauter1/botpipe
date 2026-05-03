@@ -7,11 +7,13 @@ from pathlib import Path
 
 import pytest
 
+from autoloop.core.compiler import compile_workflow
 from autoloop.core.providers.fake import ScriptedLLMProvider
-from autoloop.core.schema_registry import CHILD_RUN_SUMMARY_SCHEMA
+from autoloop.core.schema_registry import CHILD_RUN_SUMMARY_SCHEMA, RUN_METADATA_SCHEMA, WORKFLOW_TOPOLOGY_SCHEMA
 from autoloop.runtime.config import GitTrackingRuntimeConfig, RuntimeConfig
 from autoloop.core.errors import WorkflowExecutionError
 from autoloop.runtime.loader import WorkflowParameterError
+from autoloop.runtime.loader import resolve_workflow_reference
 from autoloop.runtime.inspection import (
     list_runs as inspection_list_runs,
     load_run_history as inspection_load_run_history,
@@ -254,7 +256,26 @@ def test_runtime_inspection_loaders_filter_status_and_require_disambiguation(tmp
         )
 
 
-def test_resume_fails_when_saved_topology_hash_differs(tmp_path: Path) -> None:
+def test_runtime_inspection_loaders_migrate_schema_less_run_metadata_and_topology(tmp_path: Path) -> None:
+    run_dir = tmp_path / ".autoloop" / "tasks" / "task-1" / "wf_demo" / "runs" / "run-1"
+    run_dir.mkdir(parents=True)
+    (run_dir / "run.json").write_text(
+        json.dumps({"workflow_name": "demo", "run_id": "run-1"}, indent=2) + "\n",
+        encoding="utf-8",
+    )
+    (run_dir / "topology.json").write_text(
+        json.dumps({"workflow_name": "demo", "entry": "ask", "topology_hash": "hash"}, indent=2) + "\n",
+        encoding="utf-8",
+    )
+
+    metadata = inspection_load_run_metadata(run_dir)
+    topology = inspection_load_run_topology(run_dir)
+
+    assert metadata["schema"] == RUN_METADATA_SCHEMA
+    assert topology["schema"] == WORKFLOW_TOPOLOGY_SCHEMA
+
+
+def test_resume_warns_and_continues_when_saved_topology_hash_differs(tmp_path: Path) -> None:
     _write_pause_resume_workflow_package(tmp_path, "resume_topology_demo", "ResumeTopologyWorkflow")
     provider = ScriptedLLMProvider(
         llm_turns=[
@@ -272,22 +293,122 @@ def test_resume_fails_when_saved_topology_hash_differs(tmp_path: Path) -> None:
     run_dir = next(
         (tmp_path / ".autoloop" / "tasks" / "task-topology-resume" / "wf_resume_topology_demo" / "runs").iterdir()
     )
-    run_meta_file = run_dir / "run.json"
-    run_meta = json.loads(run_meta_file.read_text(encoding="utf-8"))
-    run_meta["topology"]["topology_hash"] = "mismatched-topology"
-    run_meta_file.write_text(json.dumps(run_meta, indent=2, ensure_ascii=False) + "\n", encoding="utf-8")
+    workflow_file = tmp_path / "workflows" / "resume_topology_demo" / "workflow.py"
+    workflow_file.write_text(
+        """
+from __future__ import annotations
+
+from pydantic import BaseModel
+
+from autoloop import AWAIT_INPUT, FINISH, Prompt, Raw, Workflow, python_step, step
+
+
+class ResumeTopologyWorkflow(Workflow):
+    name = "resume_topology_demo"
+
+    class State(BaseModel):
+        answer: str | None = None
+
+    context_dump = Raw("context_dump", path="{run_folder}/context.json")
+    ask = step(
+        prompt=Prompt.file("prompts/ask.md"),
+        writes=[context_dump],
+        routes={"answered": FINISH, "question": AWAIT_INPUT},
+    )
+
+    @python_step(name="archive", routes={"done": FINISH})
+    def archive(ctx):
+        return "done"
+""".strip()
+        + "\n",
+        encoding="utf-8",
+    )
+    _clear_workflow_modules()
 
     assert paused.terminal == "AWAIT_INPUT"
-    with pytest.raises(WorkflowExecutionError, match="different compiled topology"):
+    resumed = run_workflow_package(
+        "resume_topology_demo",
+        provider=provider,
+        options=_runner_options(
+            tmp_path,
+            task_id="task-topology-resume",
+            run_id=run_dir.name,
+            resume=True,
+            answer="42",
+        ),
+    )
+
+    run_meta = json.loads((run_dir / "run.json").read_text(encoding="utf-8"))
+    assert resumed.terminal == "FINISH"
+    assert run_meta["warnings"][-1]["event_type"] == "runtime_resume_topology_mismatch"
+    assert "saved_topology" in run_meta["warnings"][-1]["message"]
+
+
+def test_resume_topology_mismatch_can_fail_in_strict_mode(tmp_path: Path) -> None:
+    _write_pause_resume_workflow_package(tmp_path, "resume_topology_strict_demo", "ResumeTopologyStrictWorkflow")
+    provider = ScriptedLLMProvider(
+        llm_turns=[
+            Outcome(raw_output="Need answer", tag="question", question="What value?"),
+            Outcome(raw_output="Answered", tag="answered", payload={"answer": "42"}),
+        ]
+    )
+
+    paused = run_workflow_package(
+        "resume_topology_strict_demo",
+        provider=provider,
+        options=_runner_options(tmp_path, task_id="task-topology-strict", message="Pause first"),
+    )
+
+    run_dir = next(
+        (tmp_path / ".autoloop" / "tasks" / "task-topology-strict" / "wf_resume_topology_strict_demo" / "runs").iterdir()
+    )
+    workflow_file = tmp_path / "workflows" / "resume_topology_strict_demo" / "workflow.py"
+    workflow_file.write_text(
+        """
+from __future__ import annotations
+
+from pydantic import BaseModel
+
+from autoloop import AWAIT_INPUT, FINISH, Prompt, Raw, Workflow, python_step, step
+
+
+class ResumeTopologyStrictWorkflow(Workflow):
+    name = "resume_topology_strict_demo"
+
+    class State(BaseModel):
+        answer: str | None = None
+
+    context_dump = Raw("context_dump", path="{run_folder}/context.json")
+    ask = step(
+        prompt=Prompt.file("prompts/ask.md"),
+        writes=[context_dump],
+        routes={"answered": FINISH, "question": AWAIT_INPUT},
+    )
+
+    @python_step(name="archive", routes={"done": FINISH})
+    def archive(ctx):
+        return "done"
+""".strip()
+        + "\n",
+        encoding="utf-8",
+    )
+    _clear_workflow_modules()
+
+    assert paused.terminal == "AWAIT_INPUT"
+    with pytest.raises(WorkflowExecutionError, match="saved-contract mismatch"):
         run_workflow_package(
-            "resume_topology_demo",
+            "resume_topology_strict_demo",
             provider=provider,
             options=_runner_options(
                 tmp_path,
-                task_id="task-topology-resume",
+                task_id="task-topology-strict",
                 run_id=run_dir.name,
                 resume=True,
                 answer="42",
+                runtime_config=RuntimeConfig(
+                    git_tracking=GitTrackingRuntimeConfig(enabled=False),
+                    resume_topology_mismatch_behavior="fail",
+                ),
             ),
         )
 
@@ -1613,7 +1734,7 @@ from __future__ import annotations
 
 from pydantic import BaseModel
 
-from autoloop import Event, FINISH, Workflow, python_step
+from autoloop import FINISH, Workflow, python_step
 
 
 class {class_name}(Workflow):
@@ -1623,14 +1744,60 @@ class {class_name}(Workflow):
         done: bool = False
 
     @python_step(name="start", routes={{"done": FINISH}})
-    def start(state: State, ctx):
-        ctx.state = state.model_copy(update={{"done": True}})
-        return Event("done")
+    def start(ctx):
+        ctx.state = ctx.state.model_copy(update={{"done": True}})
+        return "done"
 """.strip()
         + "\n",
         encoding="utf-8",
     )
     return package_dir / "workflow.py"
+
+
+def test_compile_workflow_recompiles_when_source_changes(tmp_path: Path) -> None:
+    _write_system_workflow_package(tmp_path, "compile_cache_demo", "CompileCacheWorkflow")
+
+    first_resolved = resolve_workflow_reference(tmp_path, "compile_cache_demo")
+    first = compile_workflow(first_resolved.workflow_cls)
+
+    workflow_file = tmp_path / "workflows" / "compile_cache_demo" / "workflow.py"
+    workflow_file.write_text(
+        """
+from __future__ import annotations
+
+from pydantic import BaseModel
+
+from autoloop import FINISH, Workflow, python_step
+
+
+class CompileCacheWorkflow(Workflow):
+    name = "compile_cache_demo"
+
+    class State(BaseModel):
+        done: bool = False
+        archived: bool = False
+
+    @python_step(name="start", routes={"done": FINISH})
+    def start(ctx):
+        ctx.state = ctx.state.model_copy(update={"done": True})
+        return "done"
+
+    @python_step(name="archive", routes={"done": FINISH})
+    def archive(ctx):
+        ctx.state = ctx.state.model_copy(update={"archived": True})
+        return "done"
+""".strip()
+        + "\n",
+        encoding="utf-8",
+    )
+    _clear_workflow_modules()
+
+    second_resolved = resolve_workflow_reference(tmp_path, "compile_cache_demo")
+    second = compile_workflow(second_resolved.workflow_cls)
+
+    assert first is not second
+    assert first.source_hash != second.source_hash
+    assert first.topology_hash != second.topology_hash
 
 
 def _write_llm_workflow_package(root: Path, workflow_name: str, class_name: str) -> Path:

@@ -4,12 +4,14 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Protocol
+from typing import Literal, Protocol
 
 from pydantic import BaseModel
 
 from .primitives import Event, Outcome
 from .providers.models import StepProviderUsage
+
+ExtensionFailurePolicy = Literal["propagate", "record_and_continue"]
 
 
 @dataclass(frozen=True, slots=True)
@@ -121,6 +123,7 @@ class WorkflowExtension(Protocol):
 
 __all__ = [
     "BoundWorkflowExtension",
+    "ExtensionFailurePolicy",
     "HookRouteRedirect",
     "RunBinding",
     "StepFinish",

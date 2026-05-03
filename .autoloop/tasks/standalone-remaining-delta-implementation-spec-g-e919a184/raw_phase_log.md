@@ -1279,3 +1279,117 @@ Open issues / next step
 <loop-control>
 {"schema":"docloop.loop_control/v1","kind":"promise","promise":"COMPLETE"}
 </loop-control>
+
+
+---
+run_id=run-20260503T001920Z-8f0e7926 | entry=session_turn | pair=implement | phase=producer | cycle=1 | attempt=1 | thread_id=019deba6-cda9-71f3-bbcd-6f0024a29a6a
+---
+provider=codex
+mode=start
+template=/home/rauter/.local/share/pipx/venvs/autoloop/lib/python3.12/site-packages/autoloop/templates/implement_producer.md
+session_id=019deba6-cda9-71f3-bbcd-6f0024a29a6a
+
+
+---
+run_id=run-20260503T001920Z-8f0e7926 | entry=phase_output | pair=implement | phase=producer | process=codex-agent | cycle=1 | attempt=1 | thread_id=019deba6-cda9-71f3-bbcd-6f0024a29a6a
+---
+I’m implementing the `compiler-resume-schema-docs` phase. First I’m reading the phase artifacts and the current compiler/resume/schema/documentation code paths to pin the exact delta before editing.
+
+The phase artifacts don’t add extra reviewer text beyond the scope header, so I’m pivoting straight to the live code surfaces: compiler cache, resume loading, schema readers, extension handling, import boundaries, and author docs/examples.
+
+I have the likely hotspots. Next I’m reading the specific implementations and the existing tests around resume and extension behavior so the edits stay inside the phase scope and don’t cut across earlier runtime changes.
+
+The current code still hard-fails resume on topology mismatch in both the runner and engine, and schema validation still accepts schema-less payloads as a generic fallback. I’m now reading the config and extension/tracing seams to wire the explicit failure policy without cutting across unrelated runtime behavior.
+
+I’ve narrowed the remaining implementation to four concrete deltas: explicit compile cache, resume mismatch policy, schema-aware readers, and extension failure policy. I’m scanning the remaining JSON writers/readers now so I don’t miss one-off persisted artifacts while changing the schema contract.
+
+Plan for this phase:
+
+1. Compiler and resume
+- Replace class-attached compiled-workflow caching with an explicit module cache.
+- Switch resume mismatch handling to saved-topology warning-by-default, with opt-in strict failure and a clear unresolved-step failure path.
+
+2. Schema and extension policy
+- Make schema validation strict by default and move legacy schema-less acceptance behind explicit reader migration hooks.
+- Replace extension `raise` / `ignore` handling with explicit `propagate` / `record_and_continue` policy semantics in runtime config and observability code.
+
+3. Boundaries and docs
+- Tighten the strictness scan around production imports and internal-module wording.
+- Update architecture/authoring docs to remove stale route-effect wording and document the final public surface only.
+
+4. Validation
+- Update the focused runtime/config/docs tests for cache behavior, resume mismatch warnings, schema migration, and extension policies.
+- Run the targeted suites that cover this phase slice.
+
+I’ve got enough context to edit safely. I’m changing the runtime/config/compiler surfaces next, then I’ll update the focused tests and phase notes together so the behavior and the recorded decisions stay aligned.
+
+I’m editing the compiler and resume path first because they set the runtime contract for the rest of this phase. After that I’ll tighten schema handling and extension policy on top of the new resume behavior.
+
+I’ve finished the runtime-side code changes and I’m moving the tests onto the new contract now. This includes converting the old hard-fail resume assertion into warning-by-default coverage and updating the extension-policy tests to the explicit `propagate` / `record_and_continue` vocabulary.
+
+The code edits are in. I’m running syntax checks and the phase-targeted test slices now: compiler/resume, schema readers, tracing/git policy, and the runtime config expectations.
+
+`pytest` isn’t on PATH here, so I’m rerunning the same slices through `python3 -m pytest`. Syntax compilation already passed on the edited files.
+
+The environment has no installed `pytest` module either. I’m checking for the project’s virtualenv or test runner path so I can still execute the targeted suites instead of stopping at syntax-only validation.
+
+I’ve implemented the phase-scoped changes and I’m validating the remaining integration surfaces now. First I’m checking for import/test fallout around the resume policy and new extension-failure vocabulary, then I’ll update the phase notes and decision ledger.
+
+The remaining risk is integration fallout rather than missing feature work. I found one obvious import gap in the resume path, and I’m patching that before running the targeted runtime suites from the repo virtualenv.
+
+One targeted extension-policy test is failing, and it’s a contract mismatch rather than a runtime crash. I’m inspecting the fatal-tracing path now to decide whether the code should preserve the wrapped workflow failure differently or whether the test expectation needs to match the new structured failure behavior.
+
+The failing assertion is narrower than the new policy. The runtime is preserving the original workflow failure, but in this path the original failure is the existing `WorkflowExecutionError` wrapper around `"workflow boom"`, not the raw provider `RuntimeError`; I’m checking whether any code path should unwrap that further before I decide between a code tweak and a test correction.
+
+The extension-failure behavior itself looks correct: the fatal tracing error is propagating, and the original workflow failure is still preserved as the cause. I’m tightening the test to that contract instead of the older raw-exception expectation, then I’ll do a quick repo scan for leftover old vocabulary and finish the phase notes.
+
+The test fix needed one missing import, not a runtime change. I’m adding that, rerunning the focused suite, then I’ll do the final boundary scans and artifact updates.
+
+The focused suites are green now. I’m doing a narrower code-only scan for leftover `failure_mode` config references and banned top-level imports, because the broad grep mostly picked up unrelated workflow names and docs titles.
+
+The code-only scans came back clean for the two boundary checks I cared about: no remaining top-level production imports like `from core ...`, and no stale `failure_mode` config references in code. I’m doing one last read of the phase plan/notes files so I can record the exact checklist mapping and the two non-obvious decisions that future turns need.
+
+I have enough signal to close the phase. I’m recording the two non-obvious implementation decisions in the run ledger and writing the phase notes with checklist mapping, preserved invariants, intended behavior changes, and validation evidence.
+
+I introduced tracked `__pycache__` diffs while doing the syntax pass, and those are not part of the phase output. I’m restoring only those generated bytecode files so the final diff stays on the authored source, docs, tests, and phase artifacts.
+
+The scoped diff is clean now. One last check showed `tests/runtime/test_optional_extensions.py` is currently an untracked file in this worktree rather than a tracked edit, so I’m treating it as a phase-local addition and not trying to force it into some existing tracked path.
+
+Scope considered
+
+- Phase `compiler-resume-schema-docs` only: compiler cache, resume mismatch behavior, persisted schema validation/migration, extension failure policy, public docs/import boundaries, and matching runtime tests.
+- I ignored unrelated dirty/deleted files elsewhere in the worktree.
+
+What I analyzed
+
+- Compiler/resume paths in `autoloop/core/compiler.py`, `autoloop/core/engine.py`, and `autoloop/runtime/runner.py`.
+- Persisted artifact readers in `autoloop/core/schema_registry.py`, `autoloop/core/history.py`, `autoloop/core/operations.py`, `autoloop/runtime/inspection.py`, `autoloop/runtime/workspace.py`, and `autoloop/runtime/stores/filesystem.py`.
+- Extension failure handling in `autoloop/runtime/config.py`, `autoloop/runtime/tracing.py`, `autoloop/runtime/git_tracking.py`, and `autoloop/extensions/git/runtime.py`.
+- Author-facing docs and the targeted runtime tests for resume, config defaults, tracing, git tracking, and fatal extension behavior.
+
+What I changed
+
+- Replaced class-attached compiled-workflow caching with an explicit compiler cache keyed by workflow/source-definition fingerprint, and added a regression test proving recompilation after source changes.
+- Changed resume mismatch handling to load saved topology metadata, warn-and-continue by default, and hard-fail only when `RuntimeConfig.resume_topology_mismatch_behavior="fail"`; engine resume now only validates that the checkpoint step still exists.
+- Tightened persisted schema validation so schema-less payloads are accepted only through explicit reader-local migration hooks; unknown or missing schemas otherwise fail clearly.
+- Replaced runtime extension `failure_mode` with `failure_policy` using `propagate` and `record_and_continue`, updated tracing/git behavior, and aligned docs/tests to the final policy names.
+- Updated docs to keep `autoloop` as the public authoring surface and describe `autoloop.core` as internal/power-user.
+- Updated the phase `implementation_notes.md` and appended the non-obvious decisions under the current turn header in `decisions.txt`.
+
+Key findings / decisions
+
+- Resume mismatch policy belongs in the runner, not the engine. The engine should validate executable continuation only; saved-contract comparison and warn/fail policy are runtime concerns.
+- Legacy schema compatibility is now explicit per reader instead of being an ambient fallback.
+- Critical fatal observability failures still propagate, but the preserved original workflow failure in that path is the wrapped `WorkflowExecutionError`, so the fatal extension test now asserts that contract.
+- Validation performed:
+  - `python3 -m py_compile ...` on all touched source/test files.
+  - `.venv/bin/pytest -q tests/runtime/test_workspace_and_context.py -k 'resume_topology or compile_workflow_recompiles or migrate_schema_less'`
+  - `.venv/bin/pytest -q tests/runtime/test_runtime_tracing.py -k 'record_and_continue'`
+  - `.venv/bin/pytest -q tests/runtime/test_runtime_git_tracking.py -k 'record_and_continue'`
+  - `.venv/bin/pytest -q tests/runtime/test_provider_backends.py -k 'resolve_runtime_config_defaults_enable_git_tracking_and_tracing or resolve_runtime_config_merges_runtime_file_overrides_and_preserves_defaults'`
+  - `.venv/bin/pytest -q tests/runtime/test_optional_extensions.py -k 'propagate_policy'`
+
+Open issues / next step
+
+- No blocker remains in this phase slice.
+- `tests/runtime/test_optional_extensions.py` is currently a new untracked file in this worktree rather than a tracked edit; I left it as part of the phase output and did not touch unrelated worktree state.

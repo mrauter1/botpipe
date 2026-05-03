@@ -10,7 +10,13 @@ import json
 from pathlib import Path
 from typing import Any
 
-from .schema_registry import CHECKPOINT_SCHEMA, RUNTIME_EVENT_SCHEMA, RUNTIME_TRACE_SCHEMA, validate_persisted_schema
+from .schema_registry import (
+    CHECKPOINT_SCHEMA,
+    RUNTIME_EVENT_SCHEMA,
+    RUNTIME_TRACE_SCHEMA,
+    migrate_schemaless_payload,
+    validate_persisted_schema,
+)
 from .statuses import finalization_to_step_status, route_to_step_status
 
 
@@ -512,9 +518,19 @@ class HistoryReader:
                     continue
                 if isinstance(value, dict):
                     if path == self._trace_file:
-                        validate_persisted_schema(value, expected=RUNTIME_TRACE_SCHEMA, artifact_name=str(path))
+                        validate_persisted_schema(
+                            value,
+                            expected=RUNTIME_TRACE_SCHEMA,
+                            artifact_name=str(path),
+                            legacy_migrator=lambda payload: migrate_schemaless_payload(payload, expected=RUNTIME_TRACE_SCHEMA),
+                        )
                     elif path == self._events_file:
-                        validate_persisted_schema(value, expected=RUNTIME_EVENT_SCHEMA, artifact_name=str(path))
+                        validate_persisted_schema(
+                            value,
+                            expected=RUNTIME_EVENT_SCHEMA,
+                            artifact_name=str(path),
+                            legacy_migrator=lambda payload: migrate_schemaless_payload(payload, expected=RUNTIME_EVENT_SCHEMA),
+                        )
                     payloads.append(value)
             records = tuple(payloads)
         self._jsonl_cache[path] = (signature, records)
@@ -534,7 +550,12 @@ class HistoryReader:
                 value = None
             payload = value if isinstance(value, dict) else None
             if payload is not None and path == self._checkpoint_file:
-                validate_persisted_schema(payload, expected=CHECKPOINT_SCHEMA, artifact_name=str(path))
+                validate_persisted_schema(
+                    payload,
+                    expected=CHECKPOINT_SCHEMA,
+                    artifact_name=str(path),
+                    legacy_migrator=lambda value: migrate_schemaless_payload(value, expected=CHECKPOINT_SCHEMA),
+                )
         self._object_cache[path] = (signature, payload)
         return payload
 

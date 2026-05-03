@@ -439,11 +439,12 @@ def test_resolve_runtime_config_defaults_enable_git_tracking_and_tracing(tmp_pat
     assert resolved.runtime.max_steps == 100
     assert resolved.runtime.git_tracking.enabled is True
     assert resolved.runtime.git_tracking.commit_policy == "step"
-    assert resolved.runtime.git_tracking.failure_mode == "raise"
+    assert resolved.runtime.git_tracking.failure_policy == "propagate"
     assert resolved.runtime.tracing.enabled is True
     assert resolved.runtime.tracing.path == "trace.jsonl"
-    assert resolved.runtime.tracing.failure_mode == "raise"
+    assert resolved.runtime.tracing.failure_policy == "propagate"
     assert resolved.runtime.tracing.include_state_snapshots is True
+    assert resolved.runtime.resume_topology_mismatch_behavior == "warn"
 
 
 def test_parse_runtime_config_rejects_invalid_git_commit_policy(tmp_path: Path) -> None:
@@ -519,7 +520,7 @@ def test_resolve_runtime_config_merges_runtime_file_overrides_and_preserves_defa
     payloads = {
         global_config_path: {
             "runtime": {
-                "git_tracking": {"failure_mode": "ignore"},
+                "git_tracking": {"failure_policy": "record_and_continue"},
                 "tracing": {"path": "custom-trace.jsonl"},
             }
         },
@@ -538,10 +539,10 @@ def test_resolve_runtime_config_merges_runtime_file_overrides_and_preserves_defa
     assert resolved.runtime.max_steps == 100
     assert resolved.runtime.git_tracking.enabled is True
     assert resolved.runtime.git_tracking.commit_policy == "run"
-    assert resolved.runtime.git_tracking.failure_mode == "ignore"
+    assert resolved.runtime.git_tracking.failure_policy == "record_and_continue"
     assert resolved.runtime.tracing.enabled is True
     assert resolved.runtime.tracing.path == "custom-trace.jsonl"
-    assert resolved.runtime.tracing.failure_mode == "raise"
+    assert resolved.runtime.tracing.failure_policy == "propagate"
     assert resolved.runtime.tracing.include_state_snapshots is False
 
 

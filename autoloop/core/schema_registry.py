@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from collections.abc import Mapping
+from collections.abc import Callable, MutableMapping
 from typing import Any
 
 RUN_METADATA_SCHEMA = "autoloop.run_metadata/v1"
@@ -31,32 +31,51 @@ WORKFLOW_OPTIMIZATION_SCOPE_SCHEMA = "autoloop.workflow_optimization.scope/v1"
 
 
 def validate_persisted_schema(
-    payload: Mapping[str, Any],
+    payload: MutableMapping[str, Any],
     *,
     expected: str,
     artifact_name: str,
-) -> str | None:
+    legacy_migrator: Callable[[MutableMapping[str, Any]], MutableMapping[str, Any]] | None = None,
+) -> str:
     """Validate a persisted payload schema.
 
-    Older runtime payloads may omit ``schema`` entirely; readers accept that as the
-    legacy format for this cutover. Explicit but unknown schema ids fail loudly.
+    Readers are strict by default. Schema-less legacy payloads are accepted only when
+    the caller provides an explicit migrator for that artifact family.
     """
 
     schema = payload.get("schema")
     if schema is None:
-        return None
+        if legacy_migrator is None:
+            raise ValueError(
+                f"{artifact_name} is missing schema {expected!r}; migrate the persisted payload before reading it"
+            )
+        migrated = legacy_migrator(payload)
+        payload.clear()
+        payload.update(migrated)
+        schema = payload.get("schema")
     if not isinstance(schema, str) or not schema:
         raise ValueError(f"{artifact_name} must define a non-empty schema string when present")
     if schema != expected:
         raise ValueError(
-            f"{artifact_name} uses unsupported schema {schema!r}; expected {expected!r} or a legacy payload without schema"
+            f"{artifact_name} uses unsupported schema {schema!r}; expected {expected!r}"
         )
     return schema
+
+
+def migrate_schemaless_payload(
+    payload: MutableMapping[str, Any],
+    *,
+    expected: str,
+) -> MutableMapping[str, Any]:
+    migrated = dict(payload)
+    migrated["schema"] = expected
+    return migrated
 
 __all__ = [
     "CHECKPOINT_SCHEMA",
     "CHILD_RUN_SUMMARY_SCHEMA",
     "GIT_TRACKING_SCHEMA",
+    "migrate_schemaless_payload",
     "OPERATION_REPLAY_SCHEMA",
     "RUN_METADATA_SCHEMA",
     "RUNTIME_EVENT_SCHEMA",

@@ -7,6 +7,8 @@ from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any, Literal, cast
 
+from autoloop.core.extensions import ExtensionFailurePolicy
+
 try:
     import yaml
 except ImportError:  # pragma: no cover - optional dependency
@@ -21,8 +23,9 @@ DEFAULT_CLAUDE_PERMISSION_STRATEGY = "inherit"
 SUPPORTED_CLAUDE_PERMISSION_STRATEGIES = frozenset({"inherit", "allow_core_tools", "bypass"})
 DEFAULT_MAX_STEPS = 100
 SUPPORTED_GIT_COMMIT_POLICIES = frozenset({"off", "run", "step"})
-SUPPORTED_FAILURE_MODES = frozenset({"raise", "ignore"})
+SUPPORTED_EXTENSION_FAILURE_POLICIES = frozenset({"propagate", "record_and_continue"})
 SUPPORTED_REPLAY_MISMATCH_BEHAVIORS = frozenset({"warn", "fail"})
+SUPPORTED_RESUME_TOPOLOGY_MISMATCH_BEHAVIORS = frozenset({"warn", "fail"})
 
 
 class ConfigError(ValueError):
@@ -30,7 +33,6 @@ class ConfigError(ValueError):
 
 
 GitCommitPolicy = Literal["off", "run", "step"]
-FailureMode = Literal["raise", "ignore"]
 
 
 @dataclass(frozen=True, slots=True)
@@ -57,14 +59,14 @@ class ProviderConfig:
 class GitTrackingRuntimeConfig:
     enabled: bool = True
     commit_policy: GitCommitPolicy = "step"
-    failure_mode: FailureMode = "raise"
+    failure_policy: ExtensionFailurePolicy = "propagate"
 
 
 @dataclass(frozen=True, slots=True)
 class TracingRuntimeConfig:
     enabled: bool = True
     path: str = "trace.jsonl"
-    failure_mode: FailureMode = "raise"
+    failure_policy: ExtensionFailurePolicy = "propagate"
     include_state_snapshots: bool = True
 
 
@@ -72,6 +74,7 @@ class TracingRuntimeConfig:
 class RuntimeConfig:
     max_steps: int = DEFAULT_MAX_STEPS
     replay_mismatch_behavior: Literal["warn", "fail"] = "warn"
+    resume_topology_mismatch_behavior: Literal["warn", "fail"] = "warn"
     git_tracking: GitTrackingRuntimeConfig = field(default_factory=GitTrackingRuntimeConfig)
     tracing: TracingRuntimeConfig = field(default_factory=TracingRuntimeConfig)
 
@@ -108,14 +111,14 @@ class ProviderConfigOverride:
 class GitTrackingRuntimeConfigOverride:
     enabled: bool | None = None
     commit_policy: GitCommitPolicy | None = None
-    failure_mode: FailureMode | None = None
+    failure_policy: ExtensionFailurePolicy | None = None
 
 
 @dataclass(frozen=True, slots=True)
 class TracingRuntimeConfigOverride:
     enabled: bool | None = None
     path: str | None = None
-    failure_mode: FailureMode | None = None
+    failure_policy: ExtensionFailurePolicy | None = None
     include_state_snapshots: bool | None = None
 
 
@@ -123,6 +126,7 @@ class TracingRuntimeConfigOverride:
 class RuntimeConfigOverride:
     max_steps: int | None = None
     replay_mismatch_behavior: Literal["warn", "fail"] | None = None
+    resume_topology_mismatch_behavior: Literal["warn", "fail"] | None = None
     git_tracking: GitTrackingRuntimeConfigOverride = field(default_factory=GitTrackingRuntimeConfigOverride)
     tracing: TracingRuntimeConfigOverride = field(default_factory=TracingRuntimeConfigOverride)
 
@@ -180,7 +184,7 @@ def parse_runtime_config(payload: object, source: Path) -> RuntimeConfigLayer:
         source,
         "runtime",
         runtime_payload,
-        {"max_steps", "replay_mismatch_behavior", "git_tracking", "tracing"},
+        {"max_steps", "replay_mismatch_behavior", "resume_topology_mismatch_behavior", "git_tracking", "tracing"},
     )
 
     codex_payload = provider_payload.get("codex")
@@ -204,12 +208,12 @@ def parse_runtime_config(payload: object, source: Path) -> RuntimeConfigLayer:
     if not isinstance(tracing_payload, dict):
         raise ConfigError(f"{source}: runtime.tracing must be a mapping when provided.")
 
-    _reject_unknown_keys(source, "runtime.git_tracking", git_tracking_payload, {"enabled", "commit_policy", "failure_mode"})
+    _reject_unknown_keys(source, "runtime.git_tracking", git_tracking_payload, {"enabled", "commit_policy", "failure_policy"})
     _reject_unknown_keys(
         source,
         "runtime.tracing",
         tracing_payload,
-        {"enabled", "path", "failure_mode", "include_state_snapshots"},
+        {"enabled", "path", "failure_policy", "include_state_snapshots"},
     )
 
     provider = ProviderConfigOverride(
@@ -237,6 +241,11 @@ def parse_runtime_config(payload: object, source: Path) -> RuntimeConfigLayer:
             "runtime.replay_mismatch_behavior",
             source,
         ),
+        resume_topology_mismatch_behavior=_optional_resume_topology_mismatch_behavior(
+            runtime_payload.get("resume_topology_mismatch_behavior"),
+            "runtime.resume_topology_mismatch_behavior",
+            source,
+        ),
         git_tracking=GitTrackingRuntimeConfigOverride(
             enabled=_optional_bool(git_tracking_payload.get("enabled"), "runtime.git_tracking.enabled", source),
             commit_policy=_optional_git_commit_policy(
@@ -244,18 +253,18 @@ def parse_runtime_config(payload: object, source: Path) -> RuntimeConfigLayer:
                 "runtime.git_tracking.commit_policy",
                 source,
             ),
-            failure_mode=_optional_failure_mode(
-                git_tracking_payload.get("failure_mode"),
-                "runtime.git_tracking.failure_mode",
+            failure_policy=_optional_extension_failure_policy(
+                git_tracking_payload.get("failure_policy"),
+                "runtime.git_tracking.failure_policy",
                 source,
             ),
         ),
         tracing=TracingRuntimeConfigOverride(
             enabled=_optional_bool(tracing_payload.get("enabled"), "runtime.tracing.enabled", source),
             path=_optional_string(tracing_payload.get("path"), "runtime.tracing.path", source),
-            failure_mode=_optional_failure_mode(
-                tracing_payload.get("failure_mode"),
-                "runtime.tracing.failure_mode",
+            failure_policy=_optional_extension_failure_policy(
+                tracing_payload.get("failure_policy"),
+                "runtime.tracing.failure_policy",
                 source,
             ),
             include_state_snapshots=_optional_bool(
@@ -360,12 +369,13 @@ def _merge_runtime_config(
 ) -> RuntimeConfig:
     max_steps = DEFAULT_MAX_STEPS
     replay_mismatch_behavior: Literal["warn", "fail"] = "warn"
+    resume_topology_mismatch_behavior: Literal["warn", "fail"] = "warn"
     git_tracking_enabled = True
     git_tracking_commit_policy: GitCommitPolicy = "step"
-    git_tracking_failure_mode: FailureMode = "raise"
+    git_tracking_failure_policy: ExtensionFailurePolicy = "propagate"
     tracing_enabled = True
     tracing_path = "trace.jsonl"
-    tracing_failure_mode: FailureMode = "raise"
+    tracing_failure_policy: ExtensionFailurePolicy = "propagate"
     tracing_include_state_snapshots = True
 
     for layer in layers:
@@ -373,18 +383,20 @@ def _merge_runtime_config(
             max_steps = layer.max_steps
         if layer.replay_mismatch_behavior is not None:
             replay_mismatch_behavior = layer.replay_mismatch_behavior
+        if layer.resume_topology_mismatch_behavior is not None:
+            resume_topology_mismatch_behavior = layer.resume_topology_mismatch_behavior
         if layer.git_tracking.enabled is not None:
             git_tracking_enabled = layer.git_tracking.enabled
         if layer.git_tracking.commit_policy is not None:
             git_tracking_commit_policy = layer.git_tracking.commit_policy
-        if layer.git_tracking.failure_mode is not None:
-            git_tracking_failure_mode = layer.git_tracking.failure_mode
+        if layer.git_tracking.failure_policy is not None:
+            git_tracking_failure_policy = layer.git_tracking.failure_policy
         if layer.tracing.enabled is not None:
             tracing_enabled = layer.tracing.enabled
         if layer.tracing.path is not None:
             tracing_path = layer.tracing.path
-        if layer.tracing.failure_mode is not None:
-            tracing_failure_mode = layer.tracing.failure_mode
+        if layer.tracing.failure_policy is not None:
+            tracing_failure_policy = layer.tracing.failure_policy
         if layer.tracing.include_state_snapshots is not None:
             tracing_include_state_snapshots = layer.tracing.include_state_snapshots
 
@@ -415,15 +427,16 @@ def _merge_runtime_config(
     return RuntimeConfig(
         max_steps=max_steps,
         replay_mismatch_behavior=replay_mismatch_behavior,
+        resume_topology_mismatch_behavior=resume_topology_mismatch_behavior,
         git_tracking=GitTrackingRuntimeConfig(
             enabled=git_tracking_enabled,
             commit_policy=git_tracking_commit_policy,
-            failure_mode=git_tracking_failure_mode,
+            failure_policy=git_tracking_failure_policy,
         ),
         tracing=TracingRuntimeConfig(
             enabled=tracing_enabled,
             path=tracing_path,
-            failure_mode=tracing_failure_mode,
+            failure_policy=tracing_failure_policy,
             include_state_snapshots=tracing_include_state_snapshots,
         ),
     )
@@ -545,13 +558,34 @@ def _optional_git_commit_policy(raw_value: object, label: str, source: Path) -> 
     return cast(GitCommitPolicy, value)
 
 
-def _optional_failure_mode(raw_value: object, label: str, source: Path) -> FailureMode | None:
+def _optional_extension_failure_policy(
+    raw_value: object,
+    label: str,
+    source: Path,
+) -> ExtensionFailurePolicy | None:
     value = _optional_string(raw_value, label, source)
     if value is None:
         return None
-    if value not in SUPPORTED_FAILURE_MODES:
-        raise ConfigError(f"{source}: {label} must be one of: {', '.join(sorted(SUPPORTED_FAILURE_MODES))}.")
-    return cast(FailureMode, value)
+    if value not in SUPPORTED_EXTENSION_FAILURE_POLICIES:
+        raise ConfigError(
+            f"{source}: {label} must be one of: {', '.join(sorted(SUPPORTED_EXTENSION_FAILURE_POLICIES))}."
+        )
+    return cast(ExtensionFailurePolicy, value)
+
+
+def _optional_resume_topology_mismatch_behavior(
+    raw_value: object,
+    label: str,
+    source: Path,
+) -> Literal["warn", "fail"] | None:
+    value = _optional_string(raw_value, label, source)
+    if value is None:
+        return None
+    if value not in SUPPORTED_RESUME_TOPOLOGY_MISMATCH_BEHAVIORS:
+        raise ConfigError(
+            f"{source}: {label} must be one of: {', '.join(sorted(SUPPORTED_RESUME_TOPOLOGY_MISMATCH_BEHAVIORS))}."
+        )
+    return cast(Literal["warn", "fail"], value)
 
 
 def _optional_replay_mismatch_behavior(

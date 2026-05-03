@@ -391,7 +391,10 @@ def test_runtime_trace_disabled_still_persists_static_step_graph(tmp_path: Path)
     assert payload["workflow_name"] == "demo"
 
 
-def test_runtime_trace_failure_mode_ignore_swallows_initialization_errors(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+def test_runtime_trace_failure_policy_record_and_continue_swallows_initialization_errors(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
     run_dir = _run_dir(tmp_path)
     monkeypatch.setattr(
         "autoloop.runtime.tracing.write_static_step_graph_payload",
@@ -403,7 +406,7 @@ def test_runtime_trace_failure_mode_ignore_swallows_initialization_errors(tmp_pa
         workflow_name="demo",
         task_id="task-1",
         run_id=run_dir.name,
-        config=TracingRuntimeConfig(failure_mode="ignore"),
+        config=TracingRuntimeConfig(failure_policy="record_and_continue"),
         static_step_graph={"schema": WORKFLOW_STATIC_STEP_GRAPH_SCHEMA},
     )
     run_meta = json.loads((run_dir / "run.json").read_text(encoding="utf-8"))
@@ -413,12 +416,12 @@ def test_runtime_trace_failure_mode_ignore_swallows_initialization_errors(tmp_pa
     assert "graph write failed" in run_meta["warnings"][-1]["message"]
 
 
-def test_runtime_trace_failure_mode_ignore_swallows_step_write_errors(
+def test_runtime_trace_failure_policy_record_and_continue_swallows_step_write_errors(
     tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     run_dir = _run_dir(tmp_path)
-    writer = _writer(run_dir, config=TracingRuntimeConfig(failure_mode="ignore"))
+    writer = _writer(run_dir, config=TracingRuntimeConfig(failure_policy="record_and_continue"))
     monkeypatch.setattr(
         writer,
         "_write",

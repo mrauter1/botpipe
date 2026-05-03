@@ -7,7 +7,7 @@ from dataclasses import dataclass, field, replace
 from datetime import datetime, timezone
 from pathlib import Path
 from types import SimpleNamespace
-from typing import Any, Callable
+from typing import Any, Callable, Literal
 
 from pydantic import BaseModel, ValidationError
 
@@ -19,7 +19,7 @@ from autoloop.core.errors import WorkflowExecutionError
 from autoloop.core.mappings import normalize_mapping
 from autoloop.core.primitives import AWAIT_INPUT, FINISH
 from autoloop.core.providers.protocols import LLMProvider
-from autoloop.core.schema_registry import RUN_METADATA_SCHEMA, validate_persisted_schema
+from autoloop.core.schema_registry import RUN_METADATA_SCHEMA, WORKFLOW_TOPOLOGY_SCHEMA, migrate_schemaless_payload, validate_persisted_schema
 from autoloop.core.statuses import terminal_to_run_status
 from autoloop.extensions.session_paths import extract_session_path_strategy
 from .config import ConfigError, DEFAULT_MAX_STEPS, RuntimeConfig
@@ -207,7 +207,19 @@ def _execute_compiled_workflow(
         finalization=None,
     )
     if options.resume:
-        _assert_resume_topology_match(prepared.run_workspace, prepared.compiled)
+        resume_warning = _resume_topology_mismatch_warning(
+            prepared.run_workspace,
+            prepared.compiled,
+            behavior=options.runtime_config.resume_topology_mismatch_behavior,
+        )
+        if resume_warning is not None:
+            append_run_warning(prepared.run_workspace.run_dir, resume_warning)
+            prepared.logger.emit(
+                resume_warning["event_type"],
+                workflow=prepared.compiled.workflow_name,
+                task_id=prepared.task_workspace.task_id,
+                message=resume_warning["message"],
+            )
     trace_writer = RuntimeTraceWriter(
         run_dir=prepared.run_workspace.run_dir,
         workflow_name=prepared.compiled.workflow_name,
@@ -627,22 +639,57 @@ def validate_resume_state(run_dir: Path) -> None:
         )
 
 
-def _assert_resume_topology_match(run_workspace: RunWorkspace, compiled: CompiledWorkflow) -> None:
-    if not run_workspace.run_meta_file.is_file():
-        return
-    payload = _load_run_metadata_payload(run_workspace.run_meta_file)
-    topology = payload.get("topology")
-    if not isinstance(topology, dict):
-        return
-    saved_hash = topology.get("topology_hash")
-    if not isinstance(saved_hash, str) or not saved_hash:
-        return
-    if saved_hash == compiled.topology_hash:
-        return
-    raise WorkflowExecutionError(
-        "resume requested with a different compiled topology: "
-        f"saved={saved_hash!r} current={compiled.topology_hash!r}"
+def _resume_topology_mismatch_warning(
+    run_workspace: RunWorkspace,
+    compiled: CompiledWorkflow,
+    *,
+    behavior: Literal["warn", "fail"],
+) -> dict[str, str] | None:
+    saved_topology = _load_saved_run_topology_payload(run_workspace)
+    if saved_topology is None:
+        return None
+    saved_source_hash = saved_topology.get("source_hash")
+    saved_topology_hash = saved_topology.get("topology_hash")
+    source_mismatch = isinstance(saved_source_hash, str) and bool(saved_source_hash) and saved_source_hash != compiled.source_hash
+    topology_mismatch = (
+        isinstance(saved_topology_hash, str)
+        and bool(saved_topology_hash)
+        and saved_topology_hash != compiled.topology_hash
     )
+    if not source_mismatch and not topology_mismatch:
+        return None
+    message = (
+        "resume is continuing with the current compiled workflow despite a saved-contract mismatch: "
+        f"saved_source={saved_source_hash!r} current_source={compiled.source_hash!r} "
+        f"saved_topology={saved_topology_hash!r} current_topology={compiled.topology_hash!r}"
+    )
+    if behavior == "fail":
+        raise WorkflowExecutionError(message)
+    return {
+        "event_type": "runtime_resume_topology_mismatch",
+        "message": message,
+    }
+
+
+def _load_saved_run_topology_payload(run_workspace: RunWorkspace) -> dict[str, Any] | None:
+    topology_file = run_workspace.run_dir / TOPOLOGY_FILENAME
+    if topology_file.is_file():
+        payload = json.loads(topology_file.read_text(encoding="utf-8"))
+        if not isinstance(payload, dict):
+            raise WorkflowExecutionError(f"{topology_file} must contain a JSON object")
+        validate_persisted_schema(
+            payload,
+            expected=WORKFLOW_TOPOLOGY_SCHEMA,
+            artifact_name=str(topology_file),
+            legacy_migrator=lambda value: migrate_schemaless_payload(value, expected=WORKFLOW_TOPOLOGY_SCHEMA),
+        )
+        return payload
+    if run_workspace.run_meta_file.is_file():
+        payload = _load_run_metadata_payload(run_workspace.run_meta_file)
+        topology = payload.get("topology")
+        if isinstance(topology, dict):
+            return topology
+    return None
 
 
 def _run_topology_metadata(run_workspace: RunWorkspace, compiled: CompiledWorkflow) -> dict[str, Any]:
@@ -844,7 +891,12 @@ def _load_run_metadata_payload(path: Path) -> dict[str, Any]:
     payload = json.loads(path.read_text(encoding="utf-8"))
     if not isinstance(payload, dict):
         raise WorkflowExecutionError(f"{path} must contain a JSON object")
-    validate_persisted_schema(payload, expected=RUN_METADATA_SCHEMA, artifact_name=str(path))
+    validate_persisted_schema(
+        payload,
+        expected=RUN_METADATA_SCHEMA,
+        artifact_name=str(path),
+        legacy_migrator=lambda value: migrate_schemaless_payload(value, expected=RUN_METADATA_SCHEMA),
+    )
     return payload
 
 

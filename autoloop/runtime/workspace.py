@@ -13,7 +13,12 @@ from typing import Any, Callable, Mapping
 from uuid import uuid4
 
 from autoloop.core.mappings import normalize_mapping
-from autoloop.core.schema_registry import CHILD_RUN_SUMMARY_SCHEMA, RUN_METADATA_SCHEMA, validate_persisted_schema
+from autoloop.core.schema_registry import (
+    CHILD_RUN_SUMMARY_SCHEMA,
+    RUN_METADATA_SCHEMA,
+    migrate_schemaless_payload,
+    validate_persisted_schema,
+)
 from autoloop.core.statuses import normalize_run_status
 
 
@@ -1208,7 +1213,12 @@ def _load_json(path: Path, *, default: dict[str, Any]) -> dict[str, Any]:
             payload = json.loads(path.read_text(encoding="utf-8"))
             if isinstance(payload, dict):
                 if path.name == "run.json":
-                    validate_persisted_schema(payload, expected=RUN_METADATA_SCHEMA, artifact_name=str(path))
+                    validate_persisted_schema(
+                        payload,
+                        expected=RUN_METADATA_SCHEMA,
+                        artifact_name=str(path),
+                        legacy_migrator=lambda value: migrate_schemaless_payload(value, expected=RUN_METADATA_SCHEMA),
+                    )
                 return payload
         except (json.JSONDecodeError, OSError):
             pass

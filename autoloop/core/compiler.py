@@ -31,6 +31,8 @@ from .worklists import Worklist
 
 SystemHandler = Callable[[Context], Any]
 
+_COMPILED_WORKFLOW_CACHE: dict[tuple[str, str, str], "CompiledWorkflow"] = {}
+
 
 @dataclass(frozen=True, slots=True)
 class CompiledStep:
@@ -142,10 +144,16 @@ class CompiledWorkflow:
 def compile_workflow(workflow_cls: type[Any]) -> CompiledWorkflow:
     """Compile a validated workflow class."""
 
-    cached = getattr(workflow_cls, "__compiled_workflow__", None)
-    if isinstance(cached, CompiledWorkflow):
-        return cached
     definition = get_workflow_definition(workflow_cls)
+    source_hash = _workflow_source_hash(workflow_cls)
+    cache_key = _workflow_compile_cache_key(
+        workflow_cls,
+        definition=definition,
+        source_hash=source_hash,
+    )
+    cached = _COMPILED_WORKFLOW_CACHE.get(cache_key)
+    if cached is not None:
+        return cached
     inventory = collect_artifact_inventory(definition)
     compiled = CompiledWorkflow(
         workflow_cls=workflow_cls,
@@ -168,11 +176,11 @@ def compile_workflow(workflow_cls: type[Any]) -> CompiledWorkflow:
         artifacts=_compile_public_artifacts(inventory),
         artifacts_by_qualified_name=_compile_artifacts_by_qualified_name(inventory),
         extensions=definition.extensions,
-        source_hash=_workflow_source_hash(workflow_cls),
+        source_hash=source_hash,
         topology_hash="",
     )
     compiled = _with_topology_hash(compiled)
-    workflow_cls.__compiled_workflow__ = compiled
+    _COMPILED_WORKFLOW_CACHE[cache_key] = compiled
     return compiled
 
 
@@ -635,6 +643,99 @@ def _workflow_source_hash(workflow_cls: type[Any]) -> str | None:
     if not path.is_file():
         return None
     return hashlib.sha256(path.read_bytes()).hexdigest()
+
+
+def _workflow_compile_cache_key(
+    workflow_cls: type[Any],
+    *,
+    definition: WorkflowDefinition,
+    source_hash: str | None,
+) -> tuple[str, str, str]:
+    payload = {
+        "module": workflow_cls.__module__,
+        "qualname": workflow_cls.__qualname__,
+        "source_hash": source_hash,
+        "workflow_name": definition.workflow_name,
+        "entry_step_name": definition.entry.name,
+        "default_session_name": definition.default_session_name,
+        "state_fields": sorted(getattr(definition.state_cls, "model_fields", {}).keys()),
+        "parameter_fields": sorted(getattr(definition.parameters_cls, "model_fields", {}).keys())
+        if definition.parameters_cls is not None
+        else [],
+        "steps": [
+            {
+                "name": step.name,
+                "type": type(step).__name__,
+                "kind": getattr(step, "kind", None),
+                "scope_name": _cache_scope_name(getattr(step, "scope", None)),
+                "session_name": _cache_session_name(getattr(step, "session", None)),
+                "verifier_session_name": _cache_session_name(getattr(step, "verifier_session", None)),
+                "before_hook": _callable_name(getattr(step, "before", None)),
+                "after_hook": _callable_name(getattr(step, "after", None)),
+                "before_producer_hook": _callable_name(getattr(step, "before_producer", None)),
+                "after_producer_hook": _callable_name(getattr(step, "after_producer", None)),
+                "before_verifier_hook": _callable_name(getattr(step, "before_verifier", None)),
+                "after_verifier_hook": _callable_name(getattr(step, "after_verifier", None)),
+            }
+            for step in definition.steps
+        ],
+        "transitions": _workflow_definition_transition_payload(definition),
+        "worklists": {
+            name: {
+                "item_state_model": worklist.runtime_item_state_model.__name__,
+                "item_state_fields": sorted(worklist.runtime_item_state_model.model_fields.keys()),
+            }
+            for name, worklist in definition.worklists_by_name.items()
+        },
+    }
+    fingerprint = hashlib.sha256(
+        json.dumps(
+            payload,
+            sort_keys=True,
+            separators=(",", ":"),
+            default=_topology_json_value,
+        ).encode("utf-8")
+    ).hexdigest()
+    return (
+        workflow_cls.__module__,
+        workflow_cls.__qualname__,
+        fingerprint,
+    )
+
+
+def _workflow_definition_transition_payload(definition: WorkflowDefinition) -> dict[str, dict[str, dict[str, Any]]]:
+    payload: dict[str, dict[str, dict[str, Any]]] = {}
+    for source, routes in definition.transitions.items():
+        source_name = source if isinstance(source, str) else source.name
+        payload[source_name] = {}
+        for tag, destination in routes.items():
+            route = normalize_route_spec(destination)
+            target = route.target
+            if hasattr(target, "name"):
+                target = getattr(target, "name")
+            payload[source_name][tag] = {
+                "target": target,
+                "summary": route.summary,
+                "required_writes": list(route.required_writes or ()),
+                "handoff": route.handoff,
+                "on_taken": _callable_name(route.on_taken),
+                "provider_visible": route.provider_visible,
+            }
+    return payload
+
+
+def _cache_scope_name(scope: object | None) -> str | None:
+    if scope is None:
+        return None
+    if isinstance(scope, str):
+        return scope
+    name = getattr(scope, "name", None)
+    return name if isinstance(name, str) and name else None
+
+
+def _cache_session_name(session: object | None) -> str | None:
+    name = getattr(session, "name", None)
+    return name if isinstance(name, str) and name else None
 
 
 def _topology_hash_payload(compiled: CompiledWorkflow) -> dict[str, Any]:

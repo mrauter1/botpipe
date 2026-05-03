@@ -70,7 +70,7 @@ class BoundGitTracking:
             self._handle_error(exc)
 
     def _handle_error(self, exc: Exception) -> None:
-        if self._config.failure_mode == "ignore":
+        if self._config.failure_policy == "record_and_continue":
             return
         raise exc
 

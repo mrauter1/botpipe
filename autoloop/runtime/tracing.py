@@ -350,7 +350,7 @@ class RuntimeTraceWriter:
             self._handle_failure(exc)
 
     def _handle_failure(self, exc: Exception) -> None:
-        if self._config.failure_mode == "ignore":
+        if self._config.failure_policy == "record_and_continue":
             try:
                 append_run_warning(
                     self._run_dir,

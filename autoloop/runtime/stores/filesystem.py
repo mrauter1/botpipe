@@ -12,7 +12,7 @@ from typing import Any
 from pydantic import BaseModel
 
 from autoloop.core.mappings import normalize_mapping
-from autoloop.core.schema_registry import CHECKPOINT_SCHEMA, validate_persisted_schema
+from autoloop.core.schema_registry import CHECKPOINT_SCHEMA, migrate_schemaless_payload, validate_persisted_schema
 from autoloop.core.sessions import SessionKey, canonical_session_slot_name
 from autoloop.core.stores import SessionStore
 from autoloop.core.stores.session_store import InMemorySessionBackend, SessionBackend
@@ -230,7 +230,12 @@ class FilesystemCheckpointStore:
         payload = json.loads(self.path.read_text(encoding="utf-8"))
         if not isinstance(payload, dict):
             return None
-        validate_persisted_schema(payload, expected=CHECKPOINT_SCHEMA, artifact_name=str(self.path))
+        validate_persisted_schema(
+            payload,
+            expected=CHECKPOINT_SCHEMA,
+            artifact_name=str(self.path),
+            legacy_migrator=lambda value: migrate_schemaless_payload(value, expected=CHECKPOINT_SCHEMA),
+        )
         session_payload = payload.get("session_bindings") or {}
         bindings = tuple(
             _binding_from_payload(item)

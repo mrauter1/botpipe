@@ -23,7 +23,7 @@ Public workflow code imports from `autoloop.simple` or `autoloop`.
 
 Legacy aliases are intentionally removed from the active public contract; workflow authoring stays on the canonical `autoloop.simple` / `autoloop` surface.
 
-`core/*` remains the internal kernel for strict runtime code and tests. It is not a second public authoring API.
+`autoloop.core` remains the internal and power-user kernel surface for strict runtime code and tests. It is not the default public authoring API.
 
 ## Workflow Surfaces
 
@@ -72,7 +72,7 @@ Shallow workflow discovery stays import-free and scans:
 
 Deep inspection and execution may import and compile workflow modules. That richer seam reports compiled step contracts, parameters, prompt paths, support-file paths, and source metadata without widening `workflow.toml`.
 
-Route/effect declarations are ordinary Python objects, not a string DSL. Dict transition shorthand still works, but richer contracts use `Route.to(...)` and explicit effect objects in workflow code.
+Route declarations are ordinary Python objects, not a string DSL. Dict transition shorthand still works, but richer public contracts use step-local `routes={...}` plus `Route.to(...)`.
 
 ## CLI Contract
 

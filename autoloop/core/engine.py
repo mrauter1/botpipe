@@ -221,10 +221,10 @@ class Engine:
         last_transition: StepFinalizationRecord | None = None
         try:
             if resume:
-                self._assert_resume_topology_compatible(run_folder)
                 checkpoint = self.checkpoint_store.load()
                 if checkpoint is None:
                     raise WorkflowExecutionError("resume requested but no checkpoint is available")
+                self._validate_resume_checkpoint_target(checkpoint)
                 self.session_runtime.restore(normalize_session_snapshot(checkpoint.session_bindings, run_id=run_id))
                 state = checkpoint.state
                 values = deepcopy(checkpoint.values or {})
@@ -2767,26 +2767,14 @@ class Engine:
             package_folder=package_folder,
         )
 
-    def _assert_resume_topology_compatible(self, run_folder: Path) -> None:
-        run_meta_file = run_folder / "run.json"
-        if not run_meta_file.is_file():
-            return
-        try:
-            payload = json.loads(run_meta_file.read_text(encoding="utf-8"))
-        except json.JSONDecodeError:
-            return
-        topology = payload.get("topology")
-        if not isinstance(topology, Mapping):
-            return
-        saved_hash = topology.get("topology_hash")
-        if not isinstance(saved_hash, str) or not saved_hash:
-            return
-        if saved_hash == self.compiled.topology_hash:
-            return
-        raise WorkflowExecutionError(
-            "resume requested with a different compiled topology: "
-            f"saved={saved_hash!r} current={self.compiled.topology_hash!r}"
-        )
+    def _validate_resume_checkpoint_target(self, checkpoint: Checkpoint) -> None:
+        stage = checkpoint.stage
+        if not isinstance(stage, str) or not stage:
+            raise WorkflowExecutionError("resume checkpoint does not declare the step to continue")
+        if stage not in self.compiled.steps:
+            raise WorkflowExecutionError(
+                f"resume checkpoint refers to step {stage!r}, but the current workflow does not declare that step"
+            )
 
     def _current_item_state_key(self, context: Context, step: CompiledStep) -> str | None:
         if step.scope_name is None:

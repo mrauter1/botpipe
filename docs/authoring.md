@@ -12,7 +12,7 @@ from autoloop.simple import Json, Md, Text, Raw, step, produce_verify_step, work
 ```
 
 Use `from autoloop.simple import ...` or `from autoloop import ...` in public workflow code and examples.
-`core/*` remains the internal kernel surface for strict runtime code and tests; it is not the public authoring API.
+`autoloop.core` remains the internal and power-user kernel surface for strict runtime code and tests; it is not the default public authoring API.
 Legacy aliases are intentionally removed from the public authoring surface; use the canonical workflow, route, prompt, and artifact names consistently.
 
 Greenfield authoring defaults:
@@ -286,7 +286,7 @@ Runtime tracing is enabled by default.
 
 Runtime git tracking is runtime-owned and enabled by default when the repository is clean.
 
-Workflow authors do not declare `GitTracking` or `Tracing`; runtime observability is configured only through `autoloop.runtime.config`.
+Workflow authors do not declare `GitTracking` or `Tracing`; runtime observability is configured through typed runtime config files and CLI controls.
 
 Runtime-owned observability writes `trace.jsonl`, `git_tracking.jsonl`, `static_step_graph.json`, and runtime-owned `raw/` outputs under the run folder.
 

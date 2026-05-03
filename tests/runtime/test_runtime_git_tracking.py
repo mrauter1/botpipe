@@ -86,7 +86,7 @@ def test_git_tracking_enabled_requires_clean_repo_before_run_workspace_creation(
     assert not _run_dir(tmp_path).exists()
 
 
-def test_git_tracking_dirty_repo_failure_mode_ignore_disables_tracking_for_run(tmp_path: Path) -> None:
+def test_git_tracking_dirty_repo_failure_policy_record_and_continue_disables_tracking_for_run(tmp_path: Path) -> None:
     _init_repo(tmp_path)
     (tmp_path / "dirty.txt").write_text("dirty\n", encoding="utf-8")
     tracker = RuntimeGitTracker(
@@ -95,7 +95,7 @@ def test_git_tracking_dirty_repo_failure_mode_ignore_disables_tracking_for_run(t
         workflow_name="demo",
         task_id="task-1",
         run_id="run-1",
-        config=GitTrackingRuntimeConfig(failure_mode="ignore"),
+        config=GitTrackingRuntimeConfig(failure_policy="record_and_continue"),
     )
 
     payload = tracker.prepare_before_workspace_creation()
@@ -226,7 +226,9 @@ def test_git_tracking_commit_all_tracks_untracked_files(tmp_path: Path) -> None:
     assert ".autoloop/tasks/task-1/wf_demo/runs/run-1/untracked.txt" in committed_files
 
 
-def test_git_tracking_runtime_failure_mode_ignore_disables_tracking_after_commit_error(tmp_path: Path) -> None:
+def test_git_tracking_runtime_failure_policy_record_and_continue_disables_tracking_after_commit_error(
+    tmp_path: Path,
+) -> None:
     _init_repo(tmp_path)
     tracker = RuntimeGitTracker(
         root=tmp_path,
@@ -234,7 +236,7 @@ def test_git_tracking_runtime_failure_mode_ignore_disables_tracking_after_commit
         workflow_name="demo",
         task_id="task-1",
         run_id="run-1",
-        config=GitTrackingRuntimeConfig(commit_policy="run", failure_mode="ignore"),
+        config=GitTrackingRuntimeConfig(commit_policy="run", failure_policy="record_and_continue"),
     )
     tracker.prepare_before_workspace_creation()
     run_dir = _run_dir(tmp_path)
