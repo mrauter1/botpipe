@@ -26,9 +26,9 @@ def outcome_middleware_name(definition: Any) -> str | None:
 def step_available_route_tags(definition: Any, step: Step) -> tuple[str, ...]:
     """Return the ordered legal route tags for a step."""
 
-    step_routes = definition.transitions.get(step, {})
-    global_routes = definition.transitions.get(definition.global_route_sentinel, {})
-    return tuple(dict.fromkeys((*step_routes.keys(), *global_routes.keys())))
+    authored = step_authored_route_tags(definition, step)
+    runtime_control = step_runtime_control_route_tags(definition, step)
+    return tuple(dict.fromkeys((*authored, *runtime_control)))
 
 
 def step_authored_route_tags(definition: Any, step: Step) -> tuple[str, ...]:

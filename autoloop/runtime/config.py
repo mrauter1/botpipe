@@ -157,11 +157,92 @@ def discover_config_file(directory: Path) -> Path | None:
 
 def load_runtime_config_file(path: Path) -> object:
     if yaml is None:
-        raise ConfigError(f"{path} cannot be loaded without PyYAML installed.")
+        try:
+            return _load_narrow_yaml_mapping(path)
+        except ConfigError:
+            raise
+        except Exception as exc:  # pragma: no cover - defensive
+            raise ConfigError(f"{path} could not be parsed as YAML: {exc}") from exc
     try:
         return yaml.safe_load(path.read_text(encoding="utf-8"))
     except Exception as exc:  # pragma: no cover - parser-specific details
         raise ConfigError(f"{path} could not be parsed as YAML: {exc}") from exc
+
+
+def _load_narrow_yaml_mapping(path: Path) -> object:
+    lines = path.read_text(encoding="utf-8").splitlines()
+    root: dict[str, object] = {}
+    stack: list[tuple[int, dict[str, object]]] = [(-1, root)]
+
+    for line_number, raw_line in enumerate(lines, start=1):
+        content = _strip_yaml_comment(raw_line)
+        if not content.strip():
+            continue
+        if "\t" in raw_line:
+            raise ConfigError(f"{path}:{line_number}: tabs are not supported in YAML indentation.")
+        indent = len(content) - len(content.lstrip(" "))
+        if indent % 2 != 0:
+            raise ConfigError(f"{path}:{line_number}: indentation must use multiples of 2 spaces.")
+
+        stripped = content.strip()
+        if stripped.startswith(("-", "?", "[", "{", "|", ">")):
+            raise ConfigError(f"{path}:{line_number}: unsupported YAML construct in runtime config.")
+        if ":" not in stripped:
+            raise ConfigError(f"{path}:{line_number}: expected 'key: value' mapping entry.")
+
+        key, raw_value = stripped.split(":", 1)
+        key = key.strip()
+        if not key:
+            raise ConfigError(f"{path}:{line_number}: mapping keys must be non-empty.")
+        raw_value = raw_value.strip()
+
+        while indent <= stack[-1][0]:
+            stack.pop()
+        parent = stack[-1][1]
+
+        if raw_value == "":
+            next_mapping: dict[str, object] = {}
+            parent[key] = next_mapping
+            stack.append((indent, next_mapping))
+            continue
+
+        parent[key] = _parse_narrow_yaml_scalar(raw_value, path=path, line_number=line_number)
+
+    return root
+
+
+def _strip_yaml_comment(line: str) -> str:
+    in_single = False
+    in_double = False
+    for index, char in enumerate(line):
+        if char == "'" and not in_double:
+            in_single = not in_single
+            continue
+        if char == '"' and not in_single:
+            in_double = not in_double
+            continue
+        if char == "#" and not in_single and not in_double:
+            return line[:index]
+    return line
+
+
+def _parse_narrow_yaml_scalar(raw_value: str, *, path: Path, line_number: int) -> object:
+    lowered = raw_value.lower()
+    if lowered == "true":
+        return True
+    if lowered == "false":
+        return False
+    if lowered in {"null", "~"}:
+        return None
+    if raw_value.startswith(("'", '"')):
+        if len(raw_value) < 2 or raw_value[-1] != raw_value[0]:
+            raise ConfigError(f"{path}:{line_number}: unterminated quoted string.")
+        return raw_value[1:-1]
+    if raw_value.lstrip("-").isdigit():
+        return int(raw_value)
+    if any(token in raw_value for token in ("[", "]", "{", "}")):
+        raise ConfigError(f"{path}:{line_number}: unsupported YAML construct in runtime config.")
+    return raw_value
 
 
 def parse_runtime_config(payload: object, source: Path) -> RuntimeConfigLayer:

@@ -142,7 +142,7 @@ review = step(
 Runtime behavior:
 
 - `control_schema` defines the JSON-schema-like contract for `Outcome.payload`
-- `available_routes` is derived mechanically from the declared step-local routes plus authored global routes plus any internal runtime-control routes
+- `available_routes` is derived mechanically in a stable order: authored step-local routes first, authored global routes next, and internal runtime-control routes last
 - step-local `Route.to(...)` metadata carries optional per-route summary, handoff, and selected-route output metadata for legal routes only
 - `required_writes` is the normalized selected-route output obligation map derived from explicit `Route(...)` metadata or inferred empty tuples
 - route metadata is authored on `Route(...)` when the workflow needs to override inferred summaries or declare route-specific `required_writes`

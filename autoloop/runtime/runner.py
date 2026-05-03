@@ -453,7 +453,12 @@ def _prompt_registry_roots(
 
     for step in compiled.steps.values():
         for prompt in (step.producer_prompt, step.verifier_prompt):
-            if prompt is None or prompt.source == "inline":
+            if prompt is None:
+                continue
+            if isinstance(prompt, str):
+                roots.append((workflow_parent / prompt).resolve().parent)
+                continue
+            if prompt.source == "inline":
                 continue
             roots.append((workflow_parent / prompt.path).resolve().parent)
 

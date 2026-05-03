@@ -521,7 +521,7 @@ def _resolve_work_item_path(
         return item
     field_name, *rest = parts
     if field_name == "payload":
-        payload = getattr(item, "payload", None)
+        payload = _work_item_payload_root(item)
         if not rest:
             return payload
         return _resolve_runtime_path(
@@ -532,7 +532,7 @@ def _resolve_work_item_path(
             payload_path=[],
         )
     if field_name in {"id", "title", "status", "dir_key"}:
-        value = getattr(item, field_name, None)
+        value = _work_item_field(item, field_name)
         if not rest:
             return value
         return _resolve_runtime_path(
@@ -546,6 +546,22 @@ def _resolve_work_item_path(
     raise WorkflowExecutionError(
         f"{placeholder_label} {{{expression}}} references unsupported work item field {field_name!r}{worklist_suffix}"
     )
+
+
+def _work_item_field(item: Any, field_name: str) -> Any:
+    if isinstance(item, Mapping):
+        return item.get(field_name)
+    return getattr(item, field_name, None)
+
+
+def _work_item_payload_root(item: Any) -> Any:
+    payload = _work_item_field(item, "payload")
+    if not isinstance(payload, Mapping):
+        return payload
+    envelope_fields = {"id", "title", "status", "dir_key"}
+    if "payload" in payload and envelope_fields.intersection(payload.keys()):
+        return payload["payload"]
+    return payload
 
 
 def _resolve_runtime_path(

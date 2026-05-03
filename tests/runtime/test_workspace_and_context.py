@@ -2090,7 +2090,7 @@ class ParentClassWorkflow(Workflow):
     main = Session()
 
     @python_step(name="launch", routes={"done": FINISH})
-    def launch(state: State, ctx):
+    def launch(ctx):
         ctx.open_session("main")
         result = ctx.invoke_workflow(ChildWorkflow, message="Run child from class", parameters={"mode": "strict"})
         payload = {
@@ -2106,7 +2106,7 @@ class ParentClassWorkflow(Workflow):
         }
         (ctx.run_folder / "summary.json").write_text(json.dumps(payload), encoding="utf-8")
 
-        ctx.state = state.model_copy(update={"finished": True})
+        ctx.state = ctx.state.model_copy(update={"finished": True})
         return Event("done")
 """.strip()
         + "\n",
@@ -2144,7 +2144,7 @@ class ParentCompositionHelperWorkflow(Workflow):
         finished: bool = False
 
     @python_step(name="launch", routes={"done": FINISH})
-    def launch(state: State, ctx):
+    def launch(ctx):
         child = run_child_workflow(
             ctx,
             "child_success",
@@ -2175,7 +2175,7 @@ class ParentCompositionHelperWorkflow(Workflow):
         }
         (ctx.run_folder / "summary.json").write_text(json.dumps(payload), encoding="utf-8")
 
-        ctx.state = state.model_copy(update={"finished": True})
+        ctx.state = ctx.state.model_copy(update={"finished": True})
         return Event("done")
 """.strip()
         + "\n",
@@ -2261,7 +2261,7 @@ class ParentNameWorkflow(Workflow):
         finished: bool = False
 
     @python_step(name="wait", routes={"question": AWAIT_INPUT, "done": FINISH})
-    def wait(state: State, ctx):
+    def wait(ctx):
         if ctx.answer is None:
             return Event("question", question="Parent question?")
         result = ctx.invoke_workflow("child_pause", message="Run child by name", parameters={"mode": "strict"})
@@ -2275,7 +2275,7 @@ class ParentNameWorkflow(Workflow):
         }
         (ctx.run_folder / "summary.json").write_text(json.dumps(payload), encoding="utf-8")
 
-        ctx.state = state.model_copy(update={"finished": True})
+        ctx.state = ctx.state.model_copy(update={"finished": True})
         return Event("done")
 """.strip()
         + "\n",
@@ -2310,7 +2310,7 @@ class ChildFailingWorkflow(Workflow):
         note: str = ""
 
     @python_step(name="explode", routes={"done": FINISH})
-    def explode(state: State, ctx):
+    def explode(ctx):
         raise RuntimeError("child boom")
 """.strip()
         + "\n",
@@ -2374,7 +2374,7 @@ class ChildTypedWorkflow(Workflow):
     child_dump = Raw("child_dump", path="{{run_folder}}/typed-child.json")
 
     @python_step(name="plan", writes=[child_dump], routes={{"done": FINISH}})
-    def plan(state: State, ctx):
+    def plan(ctx):
         payload = {{
             "topic": ctx.input.topic,
             "urgency": ctx.input.urgency,
@@ -2382,7 +2382,7 @@ class ChildTypedWorkflow(Workflow):
         }}
         (ctx.run_folder / "typed-child.json").write_text(json.dumps(payload), encoding="utf-8")
 
-        ctx.state = state.model_copy(update={{"topic": ctx.input.topic, "mode": ctx.params.mode}})
+        ctx.state = ctx.state.model_copy(update={{"topic": ctx.input.topic, "mode": ctx.params.mode}})
         return Event("done")
 
     @staticmethod
@@ -2424,7 +2424,7 @@ class ParentTypedInvokerWorkflow(Workflow):
         finished: bool = False
 
     @python_step(name="launch", routes={{"done": FINISH}})
-    def launch(state: State, ctx):
+    def launch(ctx):
         child = ctx.invoke_workflow(
             ChildTypedWorkflow,
             message="Run typed child",
@@ -2442,7 +2442,7 @@ class ParentTypedInvokerWorkflow(Workflow):
         }}
         (ctx.run_folder / "summary.json").write_text(json.dumps(payload), encoding="utf-8")
 
-        ctx.state = state.model_copy(update={{"finished": True}})
+        ctx.state = ctx.state.model_copy(update={{"finished": True}})
         return Event("done")
 """.strip()
         + "\n",
@@ -2477,7 +2477,7 @@ class ParentFailingWorkflow(Workflow):
         note: str = ""
 
     @python_step(name="launch", routes={"done": FINISH})
-    def launch(state: State, ctx):
+    def launch(ctx):
         ctx.invoke_workflow("child_failing", message="Run child fatal")
         return Event("done")
 """.strip()
