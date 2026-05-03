@@ -6,3 +6,21 @@
 - Phase Directory Key: align-runtime-fixtures-and-revalidate
 - Phase Title: Align Fixtures And Revalidate
 - Scope: phase-local producer artifact
+- Behaviors covered:
+  - AC-1: `test_temporary_workspace_workflow_packages_keep_ctx_only_python_step_handlers` inspects the generated temporary workflow package sources and fails if any phase-local `@python_step` fixture reverts to `python_step(state, ctx)`.
+  - AC-2: Existing child-workflow runtime tests continue to cover child invocation, artifact adoption, pause/resume metadata, typed child output success, and typed child output validation failures.
+  - AC-3: The audited regression slice remains the final end-to-end proof for workspace fixtures plus adjacent runtime contracts.
+- Preserved invariants checked:
+  - `build_output(state, ctx)` stays as the allowed two-argument fixture surface for typed child output builders.
+  - Parent/child metadata assertions, artifact aliases, and typed-output availability/error semantics remain unchanged.
+- Edge cases / failure paths:
+  - Invalid typed child output still records validation failures without changing child-run metadata shape.
+  - The source-contract test isolates fixture authoring drift even if runtime compatibility later broadens or narrows.
+- Flake controls:
+  - Source inspection uses local temporary files only; no timing, network, or ordering dependence.
+  - Runtime validation stays on deterministic fake-provider workspace tests and the audited local pytest slice.
+- Known gaps:
+  - No separate meta-test was added for prompt-only fixture packages because they do not exercise the `python_step` signature contract targeted by this phase.
+- Validation:
+  - `./.venv/bin/python -m pytest -q tests/runtime/test_workspace_and_context.py`
+  - `./.venv/bin/python -m pytest -q tests/runtime/test_runtime_static_graph.py tests/runtime/test_package_cli.py tests/test_architecture_baseline_docs.py tests/unit/test_validation.py tests/unit/test_stdlib_and_extensions.py tests/contract/test_canonical_runtime_contracts.py tests/contract/test_engine_contracts.py tests/unit/test_simple_surface.py tests/unit/test_primitives_and_stores.py tests/unit/test_provider_boundary_core.py tests/unit/test_provider_retries.py tests/runtime/test_provider_backends.py tests/runtime/test_workspace_and_context.py`

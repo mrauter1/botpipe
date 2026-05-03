@@ -1726,6 +1726,36 @@ def test_context_invoke_workflow_records_typed_child_output_validation_failures(
     assert "typed output validation failed" in child_records[0]["metadata"]["typed_output"]["validation_error"]
 
 
+def test_temporary_workspace_workflow_packages_keep_ctx_only_python_step_handlers(tmp_path: Path) -> None:
+    _write_parent_class_invoker_workflow_package(tmp_path)
+    _write_parent_composition_helper_workflow_package(tmp_path)
+    _write_parent_name_invoker_workflow_package(tmp_path)
+    _write_child_failing_workflow_package(tmp_path)
+    _write_child_typed_workflow_package(tmp_path, package_name="child_typed_ctx_contract")
+    _write_parent_typed_invoker_workflow_package(
+        tmp_path,
+        package_name="parent_typed_ctx_contract",
+        child_package_name="child_typed_ctx_contract",
+    )
+
+    expected_signatures = {
+        "parent_class": "def launch(ctx):",
+        "parent_composed": "def launch(ctx):",
+        "parent_name": "def wait(ctx):",
+        "child_failing": "def explode(ctx):",
+        "child_typed_ctx_contract": "def plan(ctx):",
+        "parent_typed_ctx_contract": "def launch(ctx):",
+    }
+
+    for package_name, signature in expected_signatures.items():
+        source = (tmp_path / "workflows" / package_name / "workflow.py").read_text(encoding="utf-8")
+        assert signature in source
+        assert "(state, ctx)" not in source
+
+    typed_child_source = (tmp_path / "workflows" / "child_typed_ctx_contract" / "workflow.py").read_text(encoding="utf-8")
+    assert "def build_output(state: State, ctx):" in typed_child_source
+
+
 def _write_run_summary_record(
     root: Path,
     *,
