@@ -1683,3 +1683,56 @@ Validation run:
 Open issues / next step
 
 No open issues from this phase. The working tree does contain unrelated pre-existing changes outside this phase’s scope; I did not touch or normalize those.
+
+
+---
+run_id=run-20260503T200339Z-6d598cb8 | entry=session_turn | pair=implement | phase=verifier | cycle=1 | attempt=1 | thread_id=019defd0-6015-76a3-b92f-f999f62d0d87
+---
+provider=codex
+mode=resume
+template=/home/rauter/.local/share/pipx/venvs/autoloop/lib/python3.12/site-packages/autoloop/templates/implement_verifier.md
+session_id=019defd0-6015-76a3-b92f-f999f62d0d87
+
+
+---
+run_id=run-20260503T200339Z-6d598cb8 | entry=phase_output | pair=implement | phase=verifier | process=codex-agent | cycle=1 | attempt=1 | thread_id=019defd0-6015-76a3-b92f-f999f62d0d87
+---
+I’m reviewing the inspection/docs/regression changes now, starting with the active review artifacts and the code paths that feed inspection/static-graph payloads so I can validate the behavior against the phase contract.
+
+The review artifacts are still empty, so I’m validating the implementation from the live files rather than relying on prior reviewer notes. Next I’m checking the concrete payload builders, docs text, and the managed-artifact compatibility change for unintended scope creep or regressions.
+
+I found one documentation inconsistency already: the docs still say “unless and until an explicit managed-artifact role is introduced,” but this implementation introduced and uses that role. I’m checking whether there’s a matching payload-model inconsistency on the inspection side before I write up findings.
+
+I’ve moved past the payload builders and I’m checking the remaining inspection artifacts now. The phase contract explicitly called out route tables and compile reports too, so I’m verifying whether those text surfaces were updated or whether the change only hit the JSON/CLI paths.
+
+I found a material implementation gap: the JSON and CLI inspection paths were updated, but the route-table and compile-report static artifacts still flatten routes and don’t distinguish runtime-control vs authored or policy-specific provider visibility. I’m recording that plus the artifact-ownership doc inconsistency in the review artifacts now.
+
+Scope considered
+
+Phase `inspection-docs-and-regression` only. I reviewed the changed inspection/static-graph payload builders, CLI inspection output, documentation updates, the managed-artifact compatibility change, and the targeted regression evidence recorded in the implementation notes.
+
+What I analyzed
+
+I checked [autoloop/core/workflow_capabilities.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/autoloop/core/workflow_capabilities.py), [autoloop/runtime/static_graph.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/autoloop/runtime/static_graph.py), [autoloop/runtime/cli.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/autoloop/runtime/cli.py), [autoloop/core/artifacts.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/autoloop/core/artifacts.py), [autoloop/core/inventory.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/autoloop/core/inventory.py), [docs/authoring.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/docs/authoring.md), and [docs/architecture.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/docs/architecture.md). I also cross-checked the compiler/lowering route metadata path and the implementation notes’ reported validation sweep.
+
+What I reviewed
+
+I updated the active verifier artifacts:
+- [criteria.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/framework-authoring-flexibility-change-spec-goal-2ee572cd/runs/run-20260503T200339Z-6d598cb8/artifacts/implement/phases/inspection-docs-and-regression/criteria.md)
+- [feedback.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/framework-authoring-flexibility-change-spec-goal-2ee572cd/runs/run-20260503T200339Z-6d598cb8/artifacts/implement/phases/inspection-docs-and-regression/feedback.md)
+
+Key findings / decisions
+
+I recorded two blocking findings.
+
+`IMP-001`: the JSON payloads and CLI were updated, but the text static-graph artifacts in [static_graph.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/autoloop/runtime/static_graph.py) still use the old flat route model. `route_table.md`, `topology.mmd`, and `compile_report.md` do not distinguish authored vs runtime-control routes or interactive vs full-auto provider visibility, so AC-1 is not fully satisfied.
+
+`IMP-002`: the artifact-ownership docs in [authoring.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/docs/authoring.md:621) are internally contradictory. The implementation introduced and used an explicit managed-artifact role, but the docs still say that role has not yet been introduced. That means AC-2 is not fully satisfied.
+
+Open issues / next step
+
+Address the two blocking findings, then rerun the same regression sweep plus any artifact-generation coverage for the text static-graph outputs.
+
+<loop-control>
+{"schema":"docloop.loop_control/v1","kind":"promise","promise":"INCOMPLETE"}
+</loop-control>
