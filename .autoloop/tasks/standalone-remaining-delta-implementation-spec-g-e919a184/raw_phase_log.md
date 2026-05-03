@@ -892,3 +892,48 @@ Open issues / next step
 - Runtime execution could not be completed in this shell because `pytest` is unavailable as both `pytest` and `python3 -m pytest`.
 - Next step is to run the focused contract slice in a provisioned test environment:
   `tests/contract/test_engine_contracts.py -k "missing_workspace_reads_visible or before_verifier_request_input_short_circuits"`
+
+
+---
+run_id=run-20260503T001920Z-8f0e7926 | entry=session_turn | pair=test | phase=verifier | cycle=1 | attempt=1 | thread_id=019deb74-92cc-7a71-ac0a-0fa403070084
+---
+provider=codex
+mode=resume
+template=/home/rauter/.local/share/pipx/venvs/autoloop/lib/python3.12/site-packages/autoloop/templates/test_verifier.md
+session_id=019deb74-92cc-7a71-ac0a-0fa403070084
+
+
+---
+run_id=run-20260503T001920Z-8f0e7926 | entry=phase_output | pair=test | phase=verifier | process=codex-agent | cycle=1 | attempt=1 | thread_id=019deb74-92cc-7a71-ac0a-0fa403070084
+---
+I’m auditing the added execution-normalization tests against the phase contract and the changed runtime seams now. I’ll verify whether the new coverage actually closes the material regression gaps, then update only the phase audit artifacts.
+
+I’ve confirmed the two new tests are present. I’m checking whether the suite still leaves any material phase-specific gap around `before_verifier` invalid-control failure coverage or the provider-contract seam, since those are the likely remaining regression surfaces.
+
+I found one material coverage gap that the new tests still leave open: the phase contract specifically calls for invalid control failure coverage across `before` / `before_producer` / `before_verifier`, but the suite still has no invalid `before_verifier` control test. I’m recording that as a blocking audit finding and updating the criteria accordingly.
+
+Scope considered
+- Phase-local test additions in [tests/contract/test_engine_contracts.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/tests/contract/test_engine_contracts.py).
+- Phase audit artifacts [criteria.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/standalone-remaining-delta-implementation-spec-g-e919a184/runs/run-20260503T001920Z-8f0e7926/artifacts/test/phases/execution-normalization/criteria.md), [feedback.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/standalone-remaining-delta-implementation-spec-g-e919a184/runs/run-20260503T001920Z-8f0e7926/artifacts/test/phases/execution-normalization/feedback.md), and [test_strategy.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/standalone-remaining-delta-implementation-spec-g-e919a184/runs/run-20260503T001920Z-8f0e7926/artifacts/test/phases/execution-normalization/test_strategy.md).
+
+What I analyzed
+- The new contract tests for missing implicit reads and `before_verifier` `RequestInput` short-circuiting.
+- Existing surrounding coverage for `before`, `before_producer`, `before_verifier`, invalid payload validation, and pair-step control flow.
+- The phase deliverable requiring contract tests for short-circuit behavior and invalid control failures across `before` / `before_producer` / `before_verifier`.
+
+What I reviewed
+- Updated [criteria.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/standalone-remaining-delta-implementation-spec-g-e919a184/runs/run-20260503T001920Z-8f0e7926/artifacts/test/phases/execution-normalization/criteria.md) to reflect one remaining blocking gap.
+- Appended `TST-001` to [feedback.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/standalone-remaining-delta-implementation-spec-g-e919a184/runs/run-20260503T001920Z-8f0e7926/artifacts/test/phases/execution-normalization/feedback.md).
+
+Key findings / decisions
+- `TST-001` blocking: the suite still lacks an invalid `before_verifier` direct-control test, so the phase-independent validation guarantee is not fully protected at the lifecycle seam changed in this phase.
+- The newly added tests themselves are deterministic and aligned with intent.
+- I did not find evidence that the new expectations encode an unintended behavior change.
+
+Open issues / next step
+- Add one focused invalid-`before_verifier` control test, preferably for `RequestInput("")` or `Goto("missing_step")`, and assert producer-ran/verifier-skipped failure semantics plus checkpoint attribution.
+- Re-audit once that gap is covered.
+
+<loop-control>
+{"schema":"docloop.loop_control/v1","kind":"promise","promise":"INCOMPLETE"}
+</loop-control>
