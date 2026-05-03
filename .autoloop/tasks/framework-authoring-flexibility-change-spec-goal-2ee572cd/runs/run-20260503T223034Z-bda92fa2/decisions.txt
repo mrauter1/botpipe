@@ -4,3 +4,5 @@ Treat route ordering as contractual: authored step-local routes first, authored 
 Fix payload placeholder traversal without changing the current placeholder-specific WorkflowExecutionError wording for missing payload paths.
 Keep `python_step(ctx)` as the canonical handler surface for temporary runtime workflow packages in tests; do not restore legacy `python_step(state, ctx)` compatibility in this follow-up.
 Keep the public typed runtime config schema and precedence unchanged while making the test-environment config file path executable without optional PyYAML.
+<autoloop-decisions-header version="1" block_seq="2" owner="planner" phase_id="task-global" pair="plan" turn_seq="2" run_id="run-20260503T223034Z-bda92fa2" ts="2026-05-03T22:38:16.581786+00:00" />
+Because route ordering is treated as contractual in this follow-up, updating `docs/authoring.md` is mandatory in Phase 1 and not an optional documentation cleanup.
