@@ -76,9 +76,9 @@ Selection rationale:
 
 - Alternatives considered:
 - make evidence-pack composition a provider-owned step
-- make evidence-pack composition a deterministic system step with explicit child `question` / `blocked` propagation
+- make evidence-pack composition a deterministic `python_step` with explicit child `question` / `blocked` propagation
 - hide child invocation inside a generic runtime-owned composition primitive
-- Selected: deterministic system step with explicit propagation
+- Selected: deterministic `python_step` with explicit propagation
 - Why: child invocation, success validation, and artifact adoption are mechanical authoring logic, while the actual security analysis belongs in provider-owned pair steps.
 
 ### 3. Publication authority strategy

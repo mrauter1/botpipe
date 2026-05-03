@@ -123,7 +123,7 @@ Turn a workflow idea into a concrete Autoloop workflow package with prompts, doc
 - `workflow author` / `package verifier`
 - `package builder` / `build verifier`
 - `evaluator` / `release verifier`
-- deterministic `bootstrap` and `publish_package` system steps
+- deterministic `bootstrap` and `publish_package` `python_step`s
 
 ### Control flow
 

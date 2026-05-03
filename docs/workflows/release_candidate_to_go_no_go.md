@@ -67,7 +67,7 @@ Params:
 - Alternatives considered:
 - stop at the last pair step
 - hide terminal metadata in runtime-only state
-- add a deterministic `publish_decision` system step
+- add a deterministic `publish_decision` `python_step`
 - Selected: deterministic `publish_decision`
 - Why: the workflow needs an inspectable terminal receipt without expanding runtime behavior.
 
@@ -123,7 +123,7 @@ Turn a release candidate into a durable go/no-go package that captures scope, ev
 - `evidence assembler` / `evidence verifier`
 - `readiness assessor` / `decision verifier`
 - `decision packager` / `package verifier`
-- deterministic `bootstrap` and `publish_decision` system steps
+- deterministic `bootstrap` and `publish_decision` `python_step`s
 
 ### Control flow
 

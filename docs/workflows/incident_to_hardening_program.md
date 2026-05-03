@@ -69,7 +69,7 @@ Params:
 - Alternatives considered:
 - stop at the last pair step
 - hide terminal metadata in runtime-only state
-- add a deterministic `publish_incident_package` system step
+- add a deterministic `publish_incident_package` `python_step`
 - Selected: deterministic `publish_incident_package`
 - Why: the workflow needs an inspectable terminal receipt without expanding runtime behavior.
 
@@ -125,7 +125,7 @@ Turn a concrete incident into a durable hardening program and response package t
 - `evidence assembler` / `evidence verifier`
 - `incident analyst` / `analysis verifier`
 - `hardening planner` / `package verifier`
-- deterministic `bootstrap` and `publish_incident_package` system steps
+- deterministic `bootstrap` and `publish_incident_package` `python_step`s
 
 ### Control flow
 

@@ -145,7 +145,7 @@ Turn an investigation request into a durable evidence pack that another workflow
 
 - `investigation strategist` / `investigation critic`
 - `evidence assembler` / `evidence verifier`
-- deterministic `bootstrap` and `publish_evidence_pack` system steps
+- deterministic `bootstrap` and `publish_evidence_pack` `python_step`s
 
 ### Control flow
 

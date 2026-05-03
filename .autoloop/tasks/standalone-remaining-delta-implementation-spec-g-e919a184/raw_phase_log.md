@@ -1449,3 +1449,71 @@ Open issues / next step
 <loop-control>
 {"schema":"docloop.loop_control/v1","kind":"promise","promise":"INCOMPLETE"}
 </loop-control>
+
+
+---
+run_id=run-20260503T001920Z-8f0e7926 | entry=session_turn | pair=implement | phase=producer | cycle=2 | attempt=1 | thread_id=019deba6-cda9-71f3-bbcd-6f0024a29a6a
+---
+provider=codex
+mode=resume
+template=/home/rauter/.local/share/pipx/venvs/autoloop/lib/python3.12/site-packages/autoloop/templates/implement_producer.md
+session_id=019deba6-cda9-71f3-bbcd-6f0024a29a6a
+
+
+---
+run_id=run-20260503T001920Z-8f0e7926 | entry=phase_output | pair=implement | phase=producer | process=codex-agent | cycle=2 | attempt=1 | thread_id=019deba6-cda9-71f3-bbcd-6f0024a29a6a
+---
+I’m addressing the two reviewer findings directly: the resume topology fallback needs the same schema gate as `topology.json`, and the public docs still expose legacy authoring surface/vocabulary. I’m reading the affected paths and then patching only the scoped runtime/docs files plus the phase notes if needed.
+
+I found the core runtime issue: the embedded `run.json["topology"]` payload is still schema-less and bypasses the same validation path as `topology.json`. I’m fixing that centrally in the runner and adding coverage for the fallback case, then I’ll scrub the remaining public `autoloop.simple` and `system step` wording.
+
+I’m making two contained edits now. First is the runner fallback so both saved-topology sources go through one schema-validation path; second is the public docs scrub so examples and wording are aligned with the final authoring model rather than the old `autoloop.simple` / `system step` language.
+
+The runtime fix and docs scrub are in place. I’m re-scanning for any remaining public `autoloop.simple` or `system step` references in the maintained docs, then I’ll run the focused runtime tests and refresh the implementation notes with the reviewer-driven delta.
+
+The remaining gap is coverage quality, not implementation shape. I’m tightening the positive resume test so it exercises the legacy schema-less embedded-topology fallback as well, then I’ll rerun the focused runtime checks and update the phase notes.
+
+I’ve cleared the targeted runtime and docs regressions. I’m updating the phase notes now so the artifact reflects the reviewer-driven delta: embedded topology schema handling, the extra resume coverage, and the public docs surface/vocabulary cleanup.
+
+I’ve finished the scoped fixes and validation. I’m doing one last status pass on the touched files to make sure the phase notes match the actual diff and that I didn’t drift into unrelated files.
+
+Scope considered
+
+- Reviewer findings `IMP-001` and `IMP-002` only.
+- Runtime resume topology fallback in [autoloop/runtime/runner.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/autoloop/runtime/runner.py) and the public docs/examples called out in feedback.
+- Phase notes in [implementation_notes.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/standalone-remaining-delta-implementation-spec-g-e919a184/runs/run-20260503T001920Z-8f0e7926/artifacts/implement/phases/compiler-resume-schema-docs/implementation_notes.md).
+
+What I analyzed
+
+- The saved-topology load path for `topology.json` versus embedded `run.json["topology"]`.
+- Existing topology schema registration and migration helpers to keep the fix centralized.
+- Public docs for remaining `autoloop.simple` and `system step` wording.
+
+What I changed
+
+- Centralized saved-topology fallback validation in `autoloop/runtime/runner.py` with `_validate_saved_run_topology_payload(...)`, and now both `topology.json` and embedded `run.json["topology"]` go through the same `WORKFLOW_TOPOLOGY_SCHEMA` validation plus explicit legacy migration hook.
+- Added `"schema": WORKFLOW_TOPOLOGY_SCHEMA` to embedded run-metadata topology snapshots so new runs persist the same contract they later resume from.
+- Tightened runtime coverage in [tests/runtime/test_workspace_and_context.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/tests/runtime/test_workspace_and_context.py): the warn-and-continue test now exercises the schema-less embedded-topology fallback, and a new test rejects unsupported embedded topology schemas when `topology.json` is missing.
+- Updated public docs to use `from autoloop import ...` and removed remaining public `system step` wording in:
+  - [docs/architecture.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/docs/architecture.md)
+  - [docs/authoring.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/docs/authoring.md)
+  - [security_finding_to_verified_remediation.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/docs/workflows/security_finding_to_verified_remediation.md)
+  - [incident_to_hardening_program.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/docs/workflows/incident_to_hardening_program.md)
+  - [investigation_request_to_evidence_pack.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/docs/workflows/investigation_request_to_evidence_pack.md)
+  - [release_candidate_to_go_no_go.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/docs/workflows/release_candidate_to_go_no_go.md)
+  - [workflow_idea_to_workflow_package.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/docs/workflows/workflow_idea_to_workflow_package.md)
+- Refreshed the phase notes artifact with the reviewer-driven delta and extra validation.
+
+Key findings / decisions
+
+- I did not append to `decisions.txt`; the fixes were straightforward follow-through on existing phase decisions.
+- Validation run:
+  - `python3 -m py_compile autoloop/runtime/runner.py tests/runtime/test_workspace_and_context.py`
+  - `.venv/bin/pytest -q tests/runtime/test_workspace_and_context.py -k 'migrate_schema_less or resume_warns_and_continues_when_saved_topology_hash_differs or resume_rejects_unsupported_embedded_topology_schema_when_topology_file_is_missing or resume_topology_mismatch_can_fail_in_strict_mode'`
+  - `rg -n 'autoloop\.simple|system step|system steps' docs docs/workflows --glob '*.md'`
+- The focused pytest slice passed: `4 passed`.
+
+Open issues / next step
+
+- No known phase-local blocker remains from the two reviewer findings.
+- Next step is verifier rerun against the updated runtime fallback and docs surfaces.

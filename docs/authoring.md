@@ -2,22 +2,22 @@
 
 ## Simple Surface
 
-`autoloop.simple` is the active public authoring surface.
+`autoloop` is the active public authoring surface.
 
 Use:
 
 ```python
-from autoloop.simple import Workflow, Prompt, Route, FINISH
-from autoloop.simple import Json, Md, Text, Raw, step, produce_verify_step, workflow_step, python_step
+from autoloop import Workflow, Prompt, Route, FINISH
+from autoloop import Json, Md, Text, Raw, step, produce_verify_step, workflow_step, python_step
 ```
 
-Use `from autoloop.simple import ...` or `from autoloop import ...` in public workflow code and examples.
+Use `from autoloop import ...` in public workflow code and examples.
 `autoloop.core` remains the internal and power-user kernel surface for strict runtime code and tests; it is not the default public authoring API.
 Legacy aliases are intentionally removed from the public authoring surface; use the canonical workflow, route, prompt, and artifact names consistently.
 
 Greenfield authoring defaults:
 
-- `State` is optional on `autoloop.simple.Workflow`.
+- `State` is optional on `autoloop.Workflow`.
 - prompt files are optional; inline prompts are first-class.
 - `Prompt.inline(...)`, `Prompt.file(...)`, and `Prompt.ref(...)` are the canonical prompt forms.
 - `reads` are optional context and do not fail when missing.
@@ -118,7 +118,7 @@ Provider-backed simple steps may declare structured control contracts directly o
 ```python
 from pydantic import BaseModel
 
-from autoloop.simple import FINISH, Md, Prompt, Route, step
+from autoloop import FINISH, Md, Prompt, Route, step
 
 
 class ReviewPayload(BaseModel):
@@ -413,7 +413,7 @@ report = Artifact("{workflow_folder}/report.md")
 Step-local artifacts can now be declared inline:
 
 ```python
-from autoloop.simple import FINISH, Json, Md, Prompt, Route, produce_verify_step
+from autoloop import FINISH, Json, Md, Prompt, Route, produce_verify_step
 
 
 class Summary(BaseModel):
@@ -603,7 +603,7 @@ from autoloop.stdlib import (
 
 Use it only as authoring support inside explicit workflow hooks such as `before(ctx)`, `after(ctx)`, or `Route.to(..., on_taken=...)`.
 
-- these helpers do not create hidden runtime sequencing or automatic system steps
+- these helpers do not create hidden runtime sequencing or automatic `python_step` execution
 - they only operate on the workflow-owned `ctx` surface and `ctx.workflow_folder`
 - they do not broaden the shared runtime step contract or move provider-facing prompt rendering into authoring helpers
 - publication-artifact validation and any workflow-specific receipt semantics still belong in workflow code
@@ -1065,7 +1065,7 @@ Composition helper boundary:
 - `run_child_workflow(...)` is a thin authoring wrapper over `ctx.invoke_workflow(...)`
 - `require_child_workflow_result(...)` validates the expected child status, terminal route, and required artifacts before parent-local adoption
 - `adopt_child_artifacts(...)` copies explicitly named child artifacts into `ctx.workflow_folder`
-- these helpers do not create hidden runtime sequencing, automatic system steps, or new child-run metadata
+- these helpers do not create hidden runtime sequencing, automatic `python_step` execution, or new child-run metadata
 - they do not broaden the shared runtime step contract or move provider-facing prompt rendering into authoring helpers
 - parent workflows still own explicit `question` and `blocked` routing for child runs; the validation helper does not propagate or translate those routes automatically
 - parent workflows still own which child artifacts are adopted, where they land, and whether overwriting those parent-local files is acceptable

@@ -12,16 +12,16 @@ The internal workflow kernel lives under:
 - `extensions/`
 
 The public authoring contract does not point workflow authors at internal modules.
-Public workflow code imports from `autoloop.simple` or `autoloop`.
+Public workflow code imports from `autoloop`.
 
-`autoloop.simple` is the active public authoring surface:
+`autoloop` is the active public authoring surface:
 
 - `Workflow`
 - `step`, `produce_verify_step`, `workflow_step`, `python_step`
 - `Json`, `Md`, `Text`, `Raw`
 - `Prompt`, `Route`, `FINISH`, `SELF`
 
-Legacy aliases are intentionally removed from the active public contract; workflow authoring stays on the canonical `autoloop.simple` / `autoloop` surface.
+Legacy aliases are intentionally removed from the active public contract; workflow authoring stays on the canonical `autoloop` surface.
 
 `autoloop.core` remains the internal and power-user kernel surface for strict runtime code and tests. It is not the default public authoring API.
 

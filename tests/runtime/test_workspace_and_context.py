@@ -293,6 +293,13 @@ def test_resume_warns_and_continues_when_saved_topology_hash_differs(tmp_path: P
     run_dir = next(
         (tmp_path / ".autoloop" / "tasks" / "task-topology-resume" / "wf_resume_topology_demo" / "runs").iterdir()
     )
+    (run_dir / "topology.json").unlink()
+    run_meta_file = run_dir / "run.json"
+    run_meta = json.loads(run_meta_file.read_text(encoding="utf-8"))
+    embedded_topology = dict(run_meta["topology"])
+    embedded_topology.pop("schema", None)
+    run_meta["topology"] = embedded_topology
+    run_meta_file.write_text(json.dumps(run_meta, indent=2, ensure_ascii=False) + "\n", encoding="utf-8")
     workflow_file = tmp_path / "workflows" / "resume_topology_demo" / "workflow.py"
     workflow_file.write_text(
         """
@@ -342,6 +349,47 @@ class ResumeTopologyWorkflow(Workflow):
     assert resumed.terminal == "FINISH"
     assert run_meta["warnings"][-1]["event_type"] == "runtime_resume_topology_mismatch"
     assert "saved_topology" in run_meta["warnings"][-1]["message"]
+
+
+def test_resume_rejects_unsupported_embedded_topology_schema_when_topology_file_is_missing(tmp_path: Path) -> None:
+    _write_pause_resume_workflow_package(tmp_path, "resume_topology_schema_demo", "ResumeTopologySchemaWorkflow")
+    provider = ScriptedLLMProvider(
+        llm_turns=[
+            Outcome(raw_output="Need answer", tag="question", question="What value?"),
+            Outcome(raw_output="Answered", tag="answered", payload={"answer": "42"}),
+        ]
+    )
+
+    paused = run_workflow_package(
+        "resume_topology_schema_demo",
+        provider=provider,
+        options=_runner_options(tmp_path, task_id="task-topology-schema", message="Pause first"),
+    )
+
+    run_dir = next(
+        (tmp_path / ".autoloop" / "tasks" / "task-topology-schema" / "wf_resume_topology_schema_demo" / "runs").iterdir()
+    )
+    (run_dir / "topology.json").unlink()
+    run_meta_file = run_dir / "run.json"
+    run_meta = json.loads(run_meta_file.read_text(encoding="utf-8"))
+    embedded_topology = dict(run_meta["topology"])
+    embedded_topology["schema"] = "autoloop.workflow_topology/v999"
+    run_meta["topology"] = embedded_topology
+    run_meta_file.write_text(json.dumps(run_meta, indent=2, ensure_ascii=False) + "\n", encoding="utf-8")
+
+    assert paused.terminal == "AWAIT_INPUT"
+    with pytest.raises(ValueError, match="unsupported schema"):
+        run_workflow_package(
+            "resume_topology_schema_demo",
+            provider=provider,
+            options=_runner_options(
+                tmp_path,
+                task_id="task-topology-schema",
+                run_id=run_dir.name,
+                resume=True,
+                answer="42",
+            ),
+        )
 
 
 def test_resume_topology_mismatch_can_fail_in_strict_mode(tmp_path: Path) -> None:

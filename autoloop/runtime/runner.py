@@ -677,23 +677,35 @@ def _load_saved_run_topology_payload(run_workspace: RunWorkspace) -> dict[str, A
         payload = json.loads(topology_file.read_text(encoding="utf-8"))
         if not isinstance(payload, dict):
             raise WorkflowExecutionError(f"{topology_file} must contain a JSON object")
-        validate_persisted_schema(
-            payload,
-            expected=WORKFLOW_TOPOLOGY_SCHEMA,
-            artifact_name=str(topology_file),
-            legacy_migrator=lambda value: migrate_schemaless_payload(value, expected=WORKFLOW_TOPOLOGY_SCHEMA),
-        )
-        return payload
+        return _validate_saved_run_topology_payload(payload, artifact_name=str(topology_file))
     if run_workspace.run_meta_file.is_file():
         payload = _load_run_metadata_payload(run_workspace.run_meta_file)
         topology = payload.get("topology")
         if isinstance(topology, dict):
-            return topology
+            return _validate_saved_run_topology_payload(
+                topology,
+                artifact_name=f"{run_workspace.run_meta_file}:topology",
+            )
     return None
+
+
+def _validate_saved_run_topology_payload(
+    payload: dict[str, Any],
+    *,
+    artifact_name: str,
+) -> dict[str, Any]:
+    validate_persisted_schema(
+        payload,
+        expected=WORKFLOW_TOPOLOGY_SCHEMA,
+        artifact_name=artifact_name,
+        legacy_migrator=lambda value: migrate_schemaless_payload(value, expected=WORKFLOW_TOPOLOGY_SCHEMA),
+    )
+    return payload
 
 
 def _run_topology_metadata(run_workspace: RunWorkspace, compiled: CompiledWorkflow) -> dict[str, Any]:
     return {
+        "schema": WORKFLOW_TOPOLOGY_SCHEMA,
         "workflow_name": compiled.workflow_name,
         "entry": compiled.entry_step_name,
         "source_hash": compiled.source_hash,
