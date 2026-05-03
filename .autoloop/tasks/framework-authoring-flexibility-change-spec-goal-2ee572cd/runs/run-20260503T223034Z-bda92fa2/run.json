@@ -15,12 +15,12 @@
       "align-runtime-fixtures-and-revalidate"
     ],
     "explicit": true,
-    "current_phase_index": 0,
-    "current_phase_id": "restore-runtime-contracts"
+    "current_phase_index": 1,
+    "current_phase_id": "repair-full-auto-runner-plumbing"
   },
   "phase_status": {
-    "restore-runtime-contracts": "in_progress",
-    "repair-full-auto-runner-plumbing": "planned",
+    "restore-runtime-contracts": "completed",
+    "repair-full-auto-runner-plumbing": "in_progress",
     "align-runtime-fixtures-and-revalidate": "planned"
   },
   "phase_history": [
@@ -29,6 +29,19 @@
       "run_id": "run-20260503T223034Z-bda92fa2",
       "status": "in_progress",
       "ts": "2026-05-03T22:40:28.574490+00:00"
+    },
+    {
+      "phase_id": "restore-runtime-contracts",
+      "run_id": "run-20260503T223034Z-bda92fa2",
+      "status": "completed",
+      "ts": "2026-05-03T22:58:10.485592+00:00",
+      "pair": "test"
+    },
+    {
+      "phase_id": "repair-full-auto-runner-plumbing",
+      "run_id": "run-20260503T223034Z-bda92fa2",
+      "status": "in_progress",
+      "ts": "2026-05-03T22:58:10.488372+00:00"
     }
   ]
 }

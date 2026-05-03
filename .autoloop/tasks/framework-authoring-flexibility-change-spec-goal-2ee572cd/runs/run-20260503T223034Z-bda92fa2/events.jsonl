@@ -26,3 +26,7 @@
 {"ts": "2026-05-03T22:57:19.767161+00:00", "run_id": "run-20260503T223034Z-bda92fa2", "seq": 26, "event_type": "phase_finished", "pair": "test", "phase": "producer", "cycle": 2, "attempt": 1, "empty_output": false, "phase_id": "restore-runtime-contracts"}
 {"ts": "2026-05-03T22:58:10.346059+00:00", "run_id": "run-20260503T223034Z-bda92fa2", "seq": 27, "event_type": "phase_finished", "pair": "test", "phase": "verifier", "cycle": 2, "attempt": 1, "empty_output": false, "phase_id": "restore-runtime-contracts"}
 {"ts": "2026-05-03T22:58:10.399256+00:00", "run_id": "run-20260503T223034Z-bda92fa2", "seq": 28, "event_type": "pair_completed", "pair": "test", "cycle": 2, "attempt": 1, "phase_id": "restore-runtime-contracts"}
+{"ts": "2026-05-03T22:58:10.486176+00:00", "run_id": "run-20260503T223034Z-bda92fa2", "seq": 29, "event_type": "phase_completed", "pair": "test", "phase_id": "restore-runtime-contracts", "phase_mode": "single"}
+{"ts": "2026-05-03T22:58:10.489839+00:00", "run_id": "run-20260503T223034Z-bda92fa2", "seq": 30, "event_type": "phase_started", "phase_id": "repair-full-auto-runner-plumbing", "phase_mode": "single"}
+{"ts": "2026-05-03T22:58:10.491399+00:00", "run_id": "run-20260503T223034Z-bda92fa2", "seq": 31, "event_type": "pair_started", "pair": "implement", "phase_id": "repair-full-auto-runner-plumbing"}
+{"ts": "2026-05-03T22:58:10.491536+00:00", "run_id": "run-20260503T223034Z-bda92fa2", "seq": 32, "event_type": "cycle_started", "pair": "implement", "cycle": 1, "attempt": 1, "phase_id": "repair-full-auto-runner-plumbing"}
