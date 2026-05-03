@@ -13,6 +13,11 @@
 - Added contract coverage for missing undeclared workspace reads staying visible to providers as `readable_artifacts` with `declared_artifact=False` and `exists=False`.
 - Validation performed: `python3 -m py_compile tests/contract/test_engine_contracts.py`. Runtime `pytest` execution was not possible in this shell because `pytest` is not installed.
 
+## Cycle 2
+
+- Added `before_verifier` invalid-`Goto` failure coverage, asserting producer-ran/verifier-skipped behavior plus preserved mutated state and `runtime_control_validation` checkpoint metadata sourced from `before_verifier`.
+- Validation performed: `python3 -m py_compile tests/contract/test_engine_contracts.py`. Runtime `pytest` execution is still blocked in this shell because `pytest` is not installed.
+
 ## Findings
 
 ### TST-001 — blocking
