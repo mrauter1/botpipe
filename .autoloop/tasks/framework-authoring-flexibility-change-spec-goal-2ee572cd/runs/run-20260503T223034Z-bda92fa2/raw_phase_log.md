@@ -715,3 +715,111 @@ Open issues / next step
 <loop-control>
 {"schema":"docloop.loop_control/v1","kind":"promise","promise":"COMPLETE"}
 </loop-control>
+
+
+---
+run_id=run-20260503T223034Z-bda92fa2 | entry=session_turn | pair=test | phase=producer | cycle=1 | attempt=1 | thread_id=019df010-4447-7c72-80e9-fa5e7d6ab42a
+---
+provider=codex
+mode=resume
+template=/home/rauter/.local/share/pipx/venvs/autoloop/lib/python3.12/site-packages/autoloop/templates/test_producer.md
+session_id=019df010-4447-7c72-80e9-fa5e7d6ab42a
+
+
+---
+run_id=run-20260503T223034Z-bda92fa2 | entry=phase_output | pair=test | phase=producer | process=codex-agent | cycle=1 | attempt=1 | thread_id=019df010-4447-7c72-80e9-fa5e7d6ab42a
+---
+I’m handling this as a narrow test follow-up. First I’m reading the active test artifacts and the existing prompt-registry/runtime-config tests so I can add only the coverage that is still implicit rather than already pinned directly.
+
+I found the remaining test gap: AC-2 was only indirectly covered by the runner behavior and a generic prompt-registry resolution test. I’m adding a direct unit test for plain-string prompt specs on the runner root-collection path, then I’ll refresh the phase test artifacts.
+
+The new AC-2 unit coverage is green with the targeted runtime tests. I’m running the full audited slice once more so the phase test artifacts reflect the final repository state, not just the focused subset.
+
+The full slice is still green after the new unit coverage. I’m writing the phase test artifacts now with an explicit AC-to-test map and a short summary of the repository test changes.
+
+Scope considered
+
+- Phase-local test scope for `repair-full-auto-runner-plumbing`.
+- Request-relevant behavior only: no-PyYAML runtime config loading, plain-string prompt specs on the runner prompt path, and `full_auto` provider-visible route filtering.
+
+What I analyzed
+
+- Existing AC-1 coverage in [tests/runtime/test_provider_backends.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/tests/runtime/test_provider_backends.py:178).
+- Existing AC-3 coverage in [tests/runtime/test_workspace_and_context.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/tests/runtime/test_workspace_and_context.py:114).
+- The runner prompt-root helper in `autoloop/runtime/runner.py` and adjacent prompt-root tests in [tests/unit/test_primitives_and_stores.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/tests/unit/test_primitives_and_stores.py:92).
+- The active test artifacts and run decisions.
+
+What I changed
+
+- Added direct AC-2 coverage in [tests/unit/test_primitives_and_stores.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/tests/unit/test_primitives_and_stores.py:111) for plain-string producer/verifier prompt specs on `_prompt_registry_roots(...)`.
+- Updated the phase coverage map in [test_strategy.md](</home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/framework-authoring-flexibility-change-spec-goal-2ee572cd/runs/run-20260503T223034Z-bda92fa2/artifacts/test/phases/repair-full-auto-runner-plumbing/test_strategy.md:1>).
+- Appended the test summary in [feedback.md](</home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/framework-authoring-flexibility-change-spec-goal-2ee572cd/runs/run-20260503T223034Z-bda92fa2/artifacts/test/phases/repair-full-auto-runner-plumbing/feedback.md:1>).
+
+Key findings / decisions
+
+- AC-1 and AC-3 were already directly covered; the missing explicit regression pin was AC-2.
+- Focused validation passed: `7 passed`.
+- Final audited slice passed after the new test: `574 passed, 14 warnings`.
+- The 14 warnings are the same existing Pydantic `schema` shadowing warnings, not new flake sources from this phase.
+
+Open issues / next step
+
+- No open test-authoring issues remain for this phase.
+
+
+---
+run_id=run-20260503T223034Z-bda92fa2 | entry=session_turn | pair=test | phase=verifier | cycle=1 | attempt=1 | thread_id=019df010-4447-7c72-80e9-fa5e7d6ab42a
+---
+provider=codex
+mode=resume
+template=/home/rauter/.local/share/pipx/venvs/autoloop/lib/python3.12/site-packages/autoloop/templates/test_verifier.md
+session_id=019df010-4447-7c72-80e9-fa5e7d6ab42a
+
+
+---
+run_id=run-20260503T223034Z-bda92fa2 | entry=phase_output | pair=test | phase=verifier | process=codex-agent | cycle=1 | attempt=1 | thread_id=019df010-4447-7c72-80e9-fa5e7d6ab42a
+---
+I’m auditing the new phase-local test coverage against the acceptance criteria and the run decisions first. Then I’ll update the audit artifacts with either blocking coverage gaps or a clean pass.
+
+The new unit test closes a real gap, but I want to verify the claimed end-to-end coverage for AC-2 rather than assume the slice exercises it. I’m running the focused phase tests and then checking the audited slice result.
+
+The focused phase tests and the full audited slice both passed in my audit run. I’m doing one last pass over the new unit coverage against the decisions ledger, then I’ll mark the audit artifacts complete if there isn’t a real coverage hole.
+
+The coverage lines up with the accepted contract: AC-1 has both happy and failure-path tests, AC-2 is now pinned both directly and via runner execution, and AC-3 remains covered end-to-end. I’m updating the audit artifacts with a clean result.
+
+Scope considered
+
+- Phase-local test audit scope for `repair-full-auto-runner-plumbing`.
+- Request-relevant coverage only: no-PyYAML config loading, plain-string prompt specs on the runner prompt path, and `full_auto` provider-visible route filtering.
+
+What I analyzed
+
+- The accepted phase contract and run-local decisions in `decisions.txt`.
+- The active [test_strategy.md](</home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/framework-authoring-flexibility-change-spec-goal-2ee572cd/runs/run-20260503T223034Z-bda92fa2/artifacts/test/phases/repair-full-auto-runner-plumbing/test_strategy.md:1>).
+- The new unit coverage in [tests/unit/test_primitives_and_stores.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/tests/unit/test_primitives_and_stores.py:111).
+- Existing end-to-end runtime coverage in [tests/runtime/test_provider_backends.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/tests/runtime/test_provider_backends.py:178) and [tests/runtime/test_workspace_and_context.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/tests/runtime/test_workspace_and_context.py:114).
+
+What I reviewed
+
+- Verified AC-1 has both happy-path and malformed-indentation failure-path coverage.
+- Verified AC-2 is now covered directly at the helper seam and indirectly through `run_workflow_package(...)` with string prompt specs.
+- Verified AC-3 remains covered end-to-end for `full_auto`.
+- Re-ran audit evidence:
+  - focused phase tests: `7 passed`
+  - full audited slice: `574 passed, 14 warnings`
+
+Key findings / decisions
+
+- No blocking findings.
+- No non-blocking findings.
+- Updated [criteria.md](</home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/framework-authoring-flexibility-change-spec-goal-2ee572cd/runs/run-20260503T223034Z-bda92fa2/artifacts/test/phases/repair-full-auto-runner-plumbing/criteria.md:1>) to fully checked.
+- Appended the clean audit result and evidence to [feedback.md](</home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/framework-authoring-flexibility-change-spec-goal-2ee572cd/runs/run-20260503T223034Z-bda92fa2/artifacts/test/phases/repair-full-auto-runner-plumbing/feedback.md:1>).
+
+Open issues / next step
+
+- No phase-local test audit issues remain.
+- The 14 warnings are the same pre-existing Pydantic `schema` shadowing warnings and are outside this phase’s test coverage scope.
+
+<loop-control>
+{"schema":"docloop.loop_control/v1","kind":"promise","promise":"COMPLETE"}
+</loop-control>
