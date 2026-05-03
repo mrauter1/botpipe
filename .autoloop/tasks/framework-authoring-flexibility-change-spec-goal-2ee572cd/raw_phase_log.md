@@ -2608,3 +2608,55 @@ Open issues / next step
 
 - No remaining test-authoring gap is open for AC-1 payload placeholder coverage.
 - The next step is still an implementation follow-up in `autoloop/runtime/config.py` so the no-PyYAML fallback accepts valid nested sibling mappings under `runtime`, after which the focused provider-backend test should be rerun.
+
+
+---
+run_id=run-20260503T223034Z-bda92fa2 | entry=session_turn | pair=test | phase=verifier | cycle=2 | attempt=1 | thread_id=019df000-103d-7bf0-af28-b61fa57b2009
+---
+provider=codex
+mode=resume
+template=/home/rauter/.local/share/pipx/venvs/autoloop/lib/python3.12/site-packages/autoloop/templates/test_verifier.md
+session_id=019df000-103d-7bf0-af28-b61fa57b2009
+
+
+---
+run_id=run-20260503T223034Z-bda92fa2 | entry=phase_output | pair=test | phase=verifier | process=codex-agent | cycle=2 | attempt=1 | thread_id=019df000-103d-7bf0-af28-b61fa57b2009
+---
+I’m rechecking the updated payload-placeholder coverage and the phase test artifacts against the audit findings, then I’ll reconcile the audit status for the final pass.
+
+The payload-placeholder coverage gap is closed and the focused contract tests pass. The remaining red test is an implementation issue already preserved by the suite, not a test-audit defect, so I’m marking the test phase complete and reconciling the audit artifacts.
+
+Scope considered
+
+- Active test-phase scope only: the added payload-placeholder regressions, the no-PyYAML fallback tests, and the phase test artifacts that describe their coverage.
+
+What I analyzed
+
+- `tests/contract/test_engine_contracts.py` around the scoped payload-placeholder contract tests
+- `tests/runtime/test_provider_backends.py` around the no-PyYAML fallback coverage
+- The updated `test_strategy.md` and `feedback.md`
+- The focused contract test run for the newly added worklist-current missing-path regression
+
+What I reviewed
+
+- Whether `{worklist.<name>.current.payload.<path>}` now has direct happy-path and failure-path assertions
+- Whether the coverage map and preserved-invariant notes accurately reflect the added tests
+- Whether any remaining failing test represents a test-quality issue versus an intentional implementation-gap detector
+- Whether the added tests remain deterministic and low-flake
+
+Key findings / decisions
+
+- `TST-001` is resolved. The suite now directly pins both:
+  - `{item.payload.<path>}` happy/failure behavior
+  - `{worklist.<name>.current.payload.<path>}` happy/failure behavior
+- Focused payload-placeholder tests pass: `3 passed`.
+- The remaining no-PyYAML nested-config happy-path failure is a valid implementation-gap detector already documented in the strategy; it is not a test-audit defect.
+
+Open issues / next step
+
+- No blocking test-audit findings remain in phase scope.
+- The next follow-up belongs to implementation: make the no-PyYAML fallback accept valid nested sibling mappings under `runtime`, then rerun the provider-backend focus set.
+
+<loop-control>
+{"schema":"docloop.loop_control/v1","kind":"promise","promise":"COMPLETE"}
+</loop-control>
