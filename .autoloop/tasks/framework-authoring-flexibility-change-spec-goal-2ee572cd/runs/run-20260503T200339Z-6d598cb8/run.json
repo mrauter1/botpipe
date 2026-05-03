@@ -17,13 +17,13 @@
       "inspection-docs-and-regression"
     ],
     "explicit": true,
-    "current_phase_index": 1,
-    "current_phase_id": "lazy-worklists-and-sessions"
+    "current_phase_index": 2,
+    "current_phase_id": "effects-and-validation-helper"
   },
   "phase_status": {
     "route-interaction-policy": "completed",
-    "lazy-worklists-and-sessions": "in_progress",
-    "effects-and-validation-helper": "planned",
+    "lazy-worklists-and-sessions": "completed",
+    "effects-and-validation-helper": "in_progress",
     "diagnostics-and-late-bound-prompts": "planned",
     "inspection-docs-and-regression": "planned"
   },
@@ -46,6 +46,19 @@
       "run_id": "run-20260503T200339Z-6d598cb8",
       "status": "in_progress",
       "ts": "2026-05-03T20:44:30.090392+00:00"
+    },
+    {
+      "phase_id": "lazy-worklists-and-sessions",
+      "run_id": "run-20260503T200339Z-6d598cb8",
+      "status": "completed",
+      "ts": "2026-05-03T21:02:23.621411+00:00",
+      "pair": "test"
+    },
+    {
+      "phase_id": "effects-and-validation-helper",
+      "run_id": "run-20260503T200339Z-6d598cb8",
+      "status": "in_progress",
+      "ts": "2026-05-03T21:02:23.623483+00:00"
     }
   ]
 }

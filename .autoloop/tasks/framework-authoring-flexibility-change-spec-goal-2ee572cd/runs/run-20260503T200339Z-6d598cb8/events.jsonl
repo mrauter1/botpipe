@@ -39,3 +39,7 @@
 {"ts": "2026-05-03T21:01:28.001701+00:00", "run_id": "run-20260503T200339Z-6d598cb8", "seq": 39, "event_type": "phase_finished", "pair": "test", "phase": "producer", "cycle": 2, "attempt": 1, "empty_output": false, "phase_id": "lazy-worklists-and-sessions"}
 {"ts": "2026-05-03T21:02:23.487958+00:00", "run_id": "run-20260503T200339Z-6d598cb8", "seq": 40, "event_type": "phase_finished", "pair": "test", "phase": "verifier", "cycle": 2, "attempt": 1, "empty_output": false, "phase_id": "lazy-worklists-and-sessions"}
 {"ts": "2026-05-03T21:02:23.527515+00:00", "run_id": "run-20260503T200339Z-6d598cb8", "seq": 41, "event_type": "pair_completed", "pair": "test", "cycle": 2, "attempt": 1, "phase_id": "lazy-worklists-and-sessions"}
+{"ts": "2026-05-03T21:02:23.622161+00:00", "run_id": "run-20260503T200339Z-6d598cb8", "seq": 42, "event_type": "phase_completed", "pair": "test", "phase_id": "lazy-worklists-and-sessions", "phase_mode": "single"}
+{"ts": "2026-05-03T21:02:23.624353+00:00", "run_id": "run-20260503T200339Z-6d598cb8", "seq": 43, "event_type": "phase_started", "phase_id": "effects-and-validation-helper", "phase_mode": "single"}
+{"ts": "2026-05-03T21:02:23.625971+00:00", "run_id": "run-20260503T200339Z-6d598cb8", "seq": 44, "event_type": "pair_started", "pair": "implement", "phase_id": "effects-and-validation-helper"}
+{"ts": "2026-05-03T21:02:23.626108+00:00", "run_id": "run-20260503T200339Z-6d598cb8", "seq": 45, "event_type": "cycle_started", "pair": "implement", "cycle": 1, "attempt": 1, "phase_id": "effects-and-validation-helper"}

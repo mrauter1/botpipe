@@ -1,0 +1,8 @@
+# Implementation Notes
+
+- Task ID: framework-authoring-flexibility-change-spec-goal-2ee572cd
+- Pair: implement
+- Phase ID: effects-and-validation-helper
+- Phase Directory Key: effects-and-validation-helper
+- Phase Title: Effects And Validation Helper
+- Scope: phase-local producer artifact
