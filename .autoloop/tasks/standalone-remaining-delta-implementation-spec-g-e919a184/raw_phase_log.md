@@ -1517,3 +1517,55 @@ Open issues / next step
 
 - No known phase-local blocker remains from the two reviewer findings.
 - Next step is verifier rerun against the updated runtime fallback and docs surfaces.
+
+
+---
+run_id=run-20260503T001920Z-8f0e7926 | entry=session_turn | pair=implement | phase=verifier | cycle=2 | attempt=1 | thread_id=019deba6-cda9-71f3-bbcd-6f0024a29a6a
+---
+provider=codex
+mode=resume
+template=/home/rauter/.local/share/pipx/venvs/autoloop/lib/python3.12/site-packages/autoloop/templates/implement_verifier.md
+session_id=019deba6-cda9-71f3-bbcd-6f0024a29a6a
+
+
+---
+run_id=run-20260503T001920Z-8f0e7926 | entry=phase_output | pair=implement | phase=verifier | process=codex-agent | cycle=2 | attempt=1 | thread_id=019deba6-cda9-71f3-bbcd-6f0024a29a6a
+---
+I’m verifying just the reviewer-reported surfaces that changed in cycle 2: the embedded-topology fallback path and the public docs vocabulary/import cleanup. Then I’ll mark the criteria and append any new findings only if something material remains.
+
+The previously blocking issues appear resolved: the fallback topology path now shares the same schema gate, and the public docs scan is clean for the legacy terms/import surface I flagged. I’m marking the criteria complete and adding a short cycle-2 verification note to the feedback artifact rather than inventing a fake “finding.”
+
+Scope considered
+
+- Cycle 2 fixes for the two previously blocking review items only.
+- Runtime saved-topology fallback behavior in `autoloop/runtime/runner.py`.
+- Public docs/examples and vocabulary cleanup in `docs/architecture.md`, `docs/authoring.md`, and the maintained workflow docs called out in feedback.
+
+What I analyzed
+
+- The updated `_load_saved_run_topology_payload(...)` and shared `_validate_saved_run_topology_payload(...)` path.
+- Embedded `run.json["topology"]` persistence and fallback validation behavior.
+- The focused runtime coverage added in `tests/runtime/test_workspace_and_context.py`.
+- Public docs scans for remaining `autoloop.simple` and `system step` references.
+
+What I reviewed
+
+- `IMP-001`: verified the embedded-topology fallback now uses the same schema validation/migration contract as `topology.json`.
+- `IMP-002`: verified the public docs now point authors at `autoloop` and no longer use the legacy `system step` term in the previously flagged files.
+- The implementation notes reflect the cycle-2 delta and validation performed.
+
+Key findings / decisions
+
+- No new findings.
+- Previously reported `IMP-001` and `IMP-002` are resolved in the current diff.
+- Criteria updated to fully checked.
+- Feedback updated with a cycle-2 resolution note.
+
+Open issues / next step
+
+- No open phase-local issues remain from this review.
+- This phase is ready to close from the verifier side.
+
+<loop-control>
+{"schema":"docloop.loop_control/v1","kind":"promise","promise":"COMPLETE"}
+</loop-control>
