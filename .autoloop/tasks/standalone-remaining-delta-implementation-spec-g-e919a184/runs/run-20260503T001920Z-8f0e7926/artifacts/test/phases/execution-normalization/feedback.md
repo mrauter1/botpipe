@@ -26,3 +26,8 @@ Affected behavior/tests: `tests/contract/test_engine_contracts.py`, especially t
 The new tests add the happy-path `before_verifier` direct-control case, but there is still no test for an invalid `before_verifier` control payload or target. That leaves the phase-independent validation guarantee under-covered for the exact lifecycle seam that changed in this phase. A regression where `before_verifier` accidentally skips validation for `RequestInput("")`, `Fail("")`, or `Goto("missing_step")`, or records the wrong failure attribution/checkpoint source after the producer turn, would still pass this suite.
 
 Minimal correction direction: add one focused contract test for an invalid `before_verifier` direct control, preferably an empty-question `RequestInput` or missing-step `Goto`, and assert that producer ran, verifier did not, the run fails clearly, and checkpoint/failure metadata preserve the mutated current state with `source_phase="before_verifier"`.
+
+## Re-review Cycle 2
+
+- Rechecked `TST-001` against `test_before_verifier_invalid_goto_preserves_state_and_failure_context`; the previously missing invalid `before_verifier` direct-control failure path is now covered.
+- No active blocking or non-blocking audit findings remain in this review pass.
