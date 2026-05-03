@@ -621,7 +621,17 @@ Workflow-level artifacts and step-produced artifacts are different roles:
 
 - workflow-level artifacts are inputs or managed external artifacts
 - step `writes` are produced artifacts
-- do not declare the same artifact in both roles unless and until an explicit managed-artifact role is introduced
+- do not declare the same artifact in both roles unless the workflow intentionally uses the explicit managed/shared-artifact role
+
+When a workflow intentionally declares one artifact at workflow scope and also rewrites it from steps, mark that artifact explicitly as managed on the power-user surface:
+
+```python
+from autoloop.core import Artifact
+
+shared_brief = Artifact("{workflow_folder}/shared_brief.md", role="managed")
+```
+
+`Artifact.managed(...)` is equivalent when the default `text` kind fits. Keep ordinary public authoring on `autoloop`, but use the managed role explicitly when shared workflow-owned artifacts are intentional rather than accidental.
 
 ## Typed Child Workflow Contracts
 

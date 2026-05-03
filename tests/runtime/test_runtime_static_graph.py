@@ -174,8 +174,8 @@ def test_topology_payload_and_route_table_preserve_explicit_vs_effective_require
     write_topology_artifacts(tmp_path, compiled)
     route_table = (tmp_path / ROUTE_TABLE_FILENAME).read_text(encoding="utf-8")
 
-    assert "| publish | done | FINISH | true | inherit | publish.report |" in route_table
-    assert "| publish | skip | FINISH | true | none (explicit) | - |" in route_table
+    assert "| publish | done | authored | FINISH | true | true | inherit | publish.report |" in route_table
+    assert "| publish | skip | authored | FINISH | true | true | none (explicit) | - |" in route_table
 
 
 def test_topology_payload_marks_hidden_routes_and_mermaid_route_table_keep_them(tmp_path: Path) -> None:
@@ -200,8 +200,8 @@ def test_topology_payload_marks_hidden_routes_and_mermaid_route_table_keep_them(
     route_table = (tmp_path / ROUTE_TABLE_FILENAME).read_text(encoding="utf-8")
     mermaid = (tmp_path / "topology.mmd").read_text(encoding="utf-8")
 
-    assert "| publish | human_escalation | FINISH | false | inherit | - |" in route_table
-    assert "publish -- human_escalation [hidden] --> FINISH" in mermaid
+    assert "| publish | human_escalation | authored | FINISH | false | false | inherit | - |" in route_table
+    assert "publish -- human_escalation [authored, hidden] --> FINISH" in mermaid
 
 
 def test_topology_artifacts_include_state_surfaces_runtime_control_hook_locations_and_compile_report_details(
@@ -268,9 +268,31 @@ def test_topology_artifacts_include_state_surfaces_runtime_control_hook_location
     route_table = (tmp_path / ROUTE_TABLE_FILENAME).read_text(encoding="utf-8")
 
     assert "- terminals: `FINISH`, `AWAIT_INPUT`, `FAIL`" in compile_report
+    assert "## Step Route Views" in compile_report
+    assert (
+        "- `review`: authored=`done`, `human_escalation`; runtime_control=`question`; "
+        "provider_visible_interactive=`done`, `question`; provider_visible_full_auto=`done`"
+    ) in compile_report
     assert "## Runtime-Control Hook Locations" in compile_report
     assert "`review`: before:before_review, after:after_review, on_taken:human_escalation" in compile_report
-    assert "| review | human_escalation | FINISH | false | inherit | - | - | on_hidden_taken |" in route_table
+    assert "| review | human_escalation | authored | FINISH | false | false | inherit | - | - | on_hidden_taken |" in route_table
+
+
+def test_route_table_mermaid_and_compile_report_distinguish_runtime_control_routes(tmp_path: Path) -> None:
+    compiled = compile_workflow(_StaticGraphWorkflow)
+
+    write_topology_artifacts(tmp_path, compiled)
+    route_table = (tmp_path / ROUTE_TABLE_FILENAME).read_text(encoding="utf-8")
+    mermaid = (tmp_path / "topology.mmd").read_text(encoding="utf-8")
+    compile_report = (tmp_path / "compile_report.md").read_text(encoding="utf-8")
+
+    assert "| assessment | question | runtime-control | AWAIT_INPUT | true | false | inherit | - | - | - |" in route_table
+    assert "assessment -- question [runtime-control, interactive-only] --> AWAIT_INPUT" in mermaid
+    assert (
+        "- `assessment`: authored=`assessment_ready`; runtime_control=`question`; "
+        "provider_visible_interactive=`assessment_ready`, `question`; "
+        "provider_visible_full_auto=`assessment_ready`"
+    ) in compile_report
 
 
 def test_topology_payload_omits_unbound_effective_set_for_inherited_global_routes() -> None:
@@ -354,7 +376,7 @@ def test_route_table_and_compile_report_include_hidden_global_routes(tmp_path: P
     route_table = (tmp_path / ROUTE_TABLE_FILENAME).read_text(encoding="utf-8")
     compile_report = (tmp_path / "compile_report.md").read_text(encoding="utf-8")
 
-    assert "| GLOBAL | blocked | AWAIT_INPUT | false | inherit | - | - | - |" in route_table
+    assert "| GLOBAL | blocked | authored | AWAIT_INPUT | false | false | inherit | - | - | - |" in route_table
     assert "- hidden routes: `1`" in compile_report
 
 

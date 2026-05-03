@@ -485,39 +485,35 @@ def _route_table_text(compiled: CompiledWorkflow) -> str:
     lines = [
         "# Route Table",
         "",
-        "| Step | Route | Target | Provider Visible | Explicit Required Writes | Effective Required Writes | Handoff | On Taken |",
-        "| --- | --- | --- | --- | --- | --- | --- | --- |",
+        "| Step | Route | Kind | Target | Interactive Visible | Full Auto Visible | Explicit Required Writes | Effective Required Writes | Handoff | On Taken |",
+        "| --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |",
     ]
     for step_name, routes in compiled.routes.items():
         for route_tag, route in routes.items():
-            payload = route_required_write_payload(
+            route_view = _route_view_payload(
                 compiled,
                 step_name=step_name,
                 route_tag=route_tag,
                 route=route,
             )
-            explicit = payload["explicit_required_writes"]
-            explicit_text = "inherit" if explicit is None else ", ".join(explicit) if explicit else "none (explicit)"
-            effective = payload["effective_required_writes"]
-            effective_text = ", ".join(effective) if effective else "-"
             lines.append(
-                f"| {step_name} | {route_tag} | {route.target} | {str(route.provider_visible).lower()} | "
-                f"{explicit_text} | {effective_text} | {route.handoff or '-'} | {_callable_name(route.on_taken) or '-'} |"
+                f"| {step_name} | {route_tag} | {route_view['kind']} | {route.target} | "
+                f"{str(route.provider_visible_interactive).lower()} | {str(route.provider_visible_full_auto).lower()} | "
+                f"{route_view['explicit_required_writes_text']} | {route_view['effective_required_writes_text']} | "
+                f"{route.handoff or '-'} | {_callable_name(route.on_taken) or '-'} |"
             )
     for route_tag, route in compiled.global_routes.items():
-        payload = route_required_write_payload(
+        route_view = _route_view_payload(
             compiled,
             step_name=None,
             route_tag=route_tag,
             route=route,
         )
-        explicit = payload["explicit_required_writes"]
-        explicit_text = "inherit" if explicit is None else ", ".join(explicit) if explicit else "none (explicit)"
-        effective = payload["effective_required_writes"]
-        effective_text = ", ".join(effective) if effective else "-"
         lines.append(
-            f"| GLOBAL | {route_tag} | {route.target} | {str(route.provider_visible).lower()} | "
-            f"{explicit_text} | {effective_text} | {route.handoff or '-'} | {_callable_name(route.on_taken) or '-'} |"
+            f"| GLOBAL | {route_tag} | {route_view['kind']} | {route.target} | "
+            f"{str(route.provider_visible_interactive).lower()} | {str(route.provider_visible_full_auto).lower()} | "
+            f"{route_view['explicit_required_writes_text']} | {route_view['effective_required_writes_text']} | "
+            f"{route.handoff or '-'} | {_callable_name(route.on_taken) or '-'} |"
         )
     return "\n".join(lines)
 
@@ -527,12 +523,12 @@ def _topology_mermaid(compiled: CompiledWorkflow) -> str:
     for step_name, routes in compiled.routes.items():
         for route_tag, route in routes.items():
             hook = f" / {_callable_name(route.on_taken)}" if route.on_taken is not None else ""
-            visibility = " [hidden]" if not route.provider_visible else ""
+            visibility = f" [{_mermaid_route_labels(route)}]"
             lines.append(
                 f"    {step_name} -- {route_tag}{hook}{visibility} --> {route.target}"
             )
     for route_tag, route in compiled.global_routes.items():
-        visibility = " [hidden]" if not route.provider_visible else ""
+        visibility = f" [{_mermaid_route_labels(route)}]"
         lines.append(f"    GLOBAL -- {route_tag}{visibility} --> {route.target}")
     return "\n".join(lines)
 
@@ -572,9 +568,59 @@ def _compile_report_text(compiled: CompiledWorkflow) -> str:
             f"- sessions: `{len(compiled.sessions)}`",
             f"- worklists: `{len(compiled.worklists)}`",
             "",
+            "## Step Route Views",
+            *(
+                _step_route_view_line(step)
+                for step in compiled.steps.values()
+            ),
+            "",
             "## Runtime-Control Hook Locations",
             *(runtime_control_hooks or ("- none",)),
         )
+    )
+
+
+def _route_view_payload(
+    compiled: CompiledWorkflow,
+    *,
+    step_name: str | None,
+    route_tag: str,
+    route: CompiledRoute,
+) -> dict[str, Any]:
+    payload = route_required_write_payload(
+        compiled,
+        step_name=step_name,
+        route_tag=route_tag,
+        route=route,
+    )
+    explicit = payload["explicit_required_writes"]
+    effective = payload["effective_required_writes"]
+    return {
+        "kind": "runtime-control" if route.is_runtime_control else "authored",
+        "explicit_required_writes_text": "inherit" if explicit is None else ", ".join(explicit) if explicit else "none (explicit)",
+        "effective_required_writes_text": ", ".join(effective) if effective else "-",
+    }
+
+
+def _mermaid_route_labels(route: CompiledRoute) -> str:
+    labels = ["runtime-control" if route.is_runtime_control else "authored"]
+    if route.provider_visible_interactive and route.provider_visible_full_auto:
+        labels.append("interactive+full-auto")
+    elif route.provider_visible_interactive:
+        labels.append("interactive-only")
+    else:
+        labels.append("hidden")
+    return ", ".join(labels)
+
+
+def _step_route_view_line(step) -> str:
+    authored = ", ".join(f"`{route}`" for route in step.authored_routes) or "none"
+    runtime_control = ", ".join(f"`{route}`" for route in step.runtime_control_routes) or "none"
+    interactive = ", ".join(f"`{route}`" for route in step.provider_visible_routes_interactive) or "none"
+    full_auto = ", ".join(f"`{route}`" for route in step.provider_visible_routes_full_auto) or "none"
+    return (
+        f"- `{step.name}`: authored={authored}; runtime_control={runtime_control}; "
+        f"provider_visible_interactive={interactive}; provider_visible_full_auto={full_auto}"
     )
 
 

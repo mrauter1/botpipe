@@ -1736,3 +1736,54 @@ Address the two blocking findings, then rerun the same regression sweep plus any
 <loop-control>
 {"schema":"docloop.loop_control/v1","kind":"promise","promise":"INCOMPLETE"}
 </loop-control>
+
+
+---
+run_id=run-20260503T200339Z-6d598cb8 | entry=session_turn | pair=implement | phase=producer | cycle=2 | attempt=1 | thread_id=019defd0-6015-76a3-b92f-f999f62d0d87
+---
+provider=codex
+mode=resume
+template=/home/rauter/.local/share/pipx/venvs/autoloop/lib/python3.12/site-packages/autoloop/templates/implement_producer.md
+session_id=019defd0-6015-76a3-b92f-f999f62d0d87
+
+
+---
+run_id=run-20260503T200339Z-6d598cb8 | entry=phase_output | pair=implement | phase=producer | process=codex-agent | cycle=2 | attempt=1 | thread_id=019defd0-6015-76a3-b92f-f999f62d0d87
+---
+I’m addressing the two reviewer findings directly: first the remaining text static-graph artifacts in `static_graph.py`, then the artifact-ownership docs wording so it matches the now-shipped managed role. After that I’ll add regression coverage for those text outputs and rerun the phase suite.
+
+I have the concrete fix shape now. I’m updating the text artifact renderers to consume the same route metadata model as the JSON surfaces, then I’ll adjust the static-graph tests to lock in the new authored/runtime-control/policy-visible rendering.
+
+I’ve updated the renderer and the docs wording. I’m tightening the regression suite now so the text artifacts are covered alongside the JSON/CLI surfaces and this doesn’t drift again.
+
+The renderer/doc changes are holding in the focused checks. I’m rerunning the broader phase regression slice with the repo virtualenv interpreter now, including the suites that previously passed, to make sure the new text-surface assertions didn’t shake anything loose.
+
+The broader regression slice is clean. I’m updating the run ledger with the one new non-obvious centralization decision and refreshing the implementation notes so they reflect the reviewer-driven text-surface fix and the final `229 passed` validation result.
+
+Scope considered
+
+The same phase-local `inspection-docs-and-regression` scope only. I addressed the two reviewer findings in the remaining text inspection artifacts and artifact-ownership docs, then reran the requested regression slice.
+
+What I analyzed
+
+I reviewed [feedback.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/framework-authoring-flexibility-change-spec-goal-2ee572cd/runs/run-20260503T200339Z-6d598cb8/artifacts/implement/phases/inspection-docs-and-regression/feedback.md), then traced the text static-graph surfaces in [static_graph.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/autoloop/runtime/static_graph.py) and the artifact-ownership wording in [authoring.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/docs/authoring.md). I also checked the existing static-graph tests in [test_runtime_static_graph.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/tests/runtime/test_runtime_static_graph.py) to extend coverage instead of adding a parallel test seam.
+
+What I changed
+
+I updated the text inspection artifacts in [static_graph.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/autoloop/runtime/static_graph.py) so `route_table.md`, `topology.mmd`, and `compile_report.md` now render route kind (`authored` vs `runtime-control`) plus interactive/full-auto provider visibility from the same compiled metadata already used by the JSON surfaces.
+
+I fixed the artifact-ownership docs in [authoring.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/docs/authoring.md) so they now describe the shipped managed/shared artifact role and show the actual authoring seam used for it.
+
+I updated [test_runtime_static_graph.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/tests/runtime/test_runtime_static_graph.py) to lock in the richer route-table, Mermaid, and compile-report output, and refreshed [implementation_notes.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/framework-authoring-flexibility-change-spec-goal-2ee572cd/runs/run-20260503T200339Z-6d598cb8/artifacts/implement/phases/inspection-docs-and-regression/implementation_notes.md) plus the current turn block in [decisions.txt](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/framework-authoring-flexibility-change-spec-goal-2ee572cd/runs/run-20260503T200339Z-6d598cb8/decisions.txt).
+
+Key findings / decisions
+
+The non-obvious follow-up decision was to reuse the compiled route metadata model for the text inspection artifacts too, rather than hand-encoding a second route-view interpretation. That keeps JSON, CLI, route-table, Mermaid, and compile-report outputs aligned on route class and policy visibility.
+
+Validation run:
+- `.venv/bin/python -m pytest -q tests/runtime/test_runtime_static_graph.py tests/runtime/test_package_cli.py tests/test_architecture_baseline_docs.py tests/unit/test_validation.py tests/unit/test_stdlib_and_extensions.py tests/contract/test_canonical_runtime_contracts.py`
+- Result: `229 passed`
+
+Open issues / next step
+
+No open issues from this phase on my side. The next step is a verifier re-review of the updated inspection text artifacts and docs wording.
