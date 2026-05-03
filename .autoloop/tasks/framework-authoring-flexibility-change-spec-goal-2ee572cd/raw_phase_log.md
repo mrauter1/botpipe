@@ -2294,3 +2294,53 @@ Open issues / next step
 - No blocking issues in scope. The audited slice passed:
   `569 passed, 14 warnings in 5.32s`
 - The remaining warnings are pre-existing Pydantic field-name warnings in `workflows/workflow_run_traces_to_optimization_candidates/contracts.py`; I did not change that area.
+
+
+---
+run_id=run-20260503T223034Z-bda92fa2 | entry=session_turn | pair=implement | phase=verifier | cycle=1 | attempt=1 | thread_id=019df000-103d-7bf0-af28-b61fa57b2009
+---
+provider=codex
+mode=resume
+template=/home/rauter/.local/share/pipx/venvs/autoloop/lib/python3.12/site-packages/autoloop/templates/implement_verifier.md
+session_id=019df000-103d-7bf0-af28-b61fa57b2009
+
+
+---
+run_id=run-20260503T223034Z-bda92fa2 | entry=phase_output | pair=implement | phase=verifier | process=codex-agent | cycle=1 | attempt=1 | thread_id=019df000-103d-7bf0-af28-b61fa57b2009
+---
+I’m reviewing the implementation diff against the active phase contract and the recorded decisions, then I’ll update the phase criteria and feedback artifacts with any prioritized findings.
+
+I have the recorded decisions and the validation trail. I’m drilling into the modified runtime paths now to look for edge-case regressions that the audited slice might not cover, especially in the narrow YAML fallback and the payload-root heuristic.
+
+I found one parser edge case worth validating: the no-PyYAML fallback may accept an indented child line under a scalar parent and silently reattach it at the root instead of failing. I’m reproducing that directly before I write the review artifacts.
+
+The YAML fallback issue is confirmed: in no-PyYAML mode it accepts invalid indentation under scalar parents and silently changes the config shape instead of raising `ConfigError`. I’m marking the review incomplete on that basis and updating the phase artifacts now.
+
+Scope considered
+
+- Active phase scope only: payload placeholder restoration, route-order contract restoration, docs update, stale contract fixtures, and the `full_auto` runner/config acceptance path insofar as it intersects the reviewed implementation.
+
+What I analyzed
+
+- Modified runtime code in `autoloop/core/artifacts.py`, `autoloop/core/lowering.py`, `autoloop/runtime/config.py`, and `autoloop/runtime/runner.py`
+- Modified docs and test surfaces in `docs/authoring.md`, `tests/runtime/test_workspace_and_context.py`, plus the request-relevant contract/unit test files used in the audited slice
+- The recorded implementation decisions and validation notes in the active phase artifacts
+
+What I reviewed
+
+- The payload-path fix and route-ordering change against AC-1 through AC-4
+- The no-PyYAML runtime-config fallback for drift against the recorded “fail fast on unsupported constructs” decision
+- The stated validation coverage versus edge cases that the audited slice does not exercise
+
+Key findings / decisions
+
+- `IMP-001` `blocking` in `autoloop/runtime/config.py::_load_narrow_yaml_mapping`: the no-PyYAML fallback accepts malformed indentation under scalar parents and silently reparents the nested key instead of raising `ConfigError`. I reproduced both `runtime: true` followed by indented `full_auto: false` and an over-indented `provider.model` case; both are accepted with a different meaning than valid YAML. That is a material correctness and compatibility drift on the exact runtime-config path this follow-up needed to stabilize.
+- I updated the phase review artifacts accordingly: `criteria.md` remains incomplete, and `feedback.md` now contains the blocking finding with fix direction.
+
+Open issues / next step
+
+- Fix `IMP-001` by making indentation increases legal only immediately after an empty-value mapping entry in `_load_narrow_yaml_mapping(...)`, then rerun the audited slice and re-review.
+
+<loop-control>
+{"schema":"docloop.loop_control/v1","kind":"promise","promise":"INCOMPLETE"}
+</loop-control>
