@@ -55,3 +55,6 @@
 {"ts": "2026-05-03T23:12:21.868151+00:00", "run_id": "run-20260503T223034Z-bda92fa2", "seq": 55, "event_type": "phase_completed", "pair": "test", "phase_id": "align-runtime-fixtures-and-revalidate", "phase_mode": "single"}
 {"ts": "2026-05-03T23:12:21.870861+00:00", "run_id": "run-20260503T223034Z-bda92fa2", "seq": 56, "event_type": "pair_started", "pair": "audit", "phase_id": null}
 {"ts": "2026-05-03T23:12:21.871051+00:00", "run_id": "run-20260503T223034Z-bda92fa2", "seq": 57, "event_type": "cycle_started", "pair": "audit", "cycle": 1, "attempt": 1, "phase_id": null}
+{"ts": "2026-05-03T23:15:50.073598+00:00", "run_id": "run-20260503T223034Z-bda92fa2", "seq": 58, "event_type": "phase_finished", "pair": "audit", "phase": "producer", "cycle": 1, "attempt": 1, "empty_output": false, "phase_id": null}
+{"ts": "2026-05-03T23:17:11.878300+00:00", "run_id": "run-20260503T223034Z-bda92fa2", "seq": 59, "event_type": "phase_finished", "pair": "audit", "phase": "verifier", "cycle": 1, "attempt": 1, "empty_output": false, "phase_id": null}
+{"ts": "2026-05-03T23:17:11.918876+00:00", "run_id": "run-20260503T223034Z-bda92fa2", "seq": 60, "event_type": "pair_completed", "pair": "audit", "cycle": 1, "attempt": 1, "phase_id": null}
