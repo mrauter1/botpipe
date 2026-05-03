@@ -9,6 +9,8 @@ from typing import Any, Mapping, Sequence
 from pydantic import BaseModel
 
 from autoloop.core import Artifact
+from autoloop.core.context import context_runtime
+from autoloop.core.effects import Effects, WorklistEffect
 from autoloop.core.operations import OperationStepSpec, classify_call, execute_step_operation, llm_call
 from autoloop.core.primitives import AWAIT_INPUT, Event, FAIL, FINISH, Goto, Outcome, RequestInput, SELF, Fail
 from autoloop.core.prompts import Prompt
@@ -16,6 +18,7 @@ from autoloop.core.routes import Route
 from autoloop.core.sessions import Continuity
 from autoloop.core.step_state import StateVar
 from autoloop.core.steps import ControlRoutes, Session, normalize_control_routes
+from autoloop.core.validation_helpers import ValidationResult, render_validation_feedback
 from autoloop.core.worklists import Worklist
 
 
@@ -470,6 +473,82 @@ def python_step(
     )
 
 
+def validation_step(
+    fn: Any | None = None,
+    *,
+    name: str | None = None,
+    feedback: Artifact | ArtifactSpec,
+    success: str = "done",
+    repair: str = "repair",
+    failed: object | None = None,
+    reads: Sequence[ArtifactInput] = (),
+    requires: Sequence[ArtifactInput] = (),
+    writes: Sequence[Artifact | ArtifactSpec] = (),
+    routes: RouteMapping | None = None,
+    before: Any | None = None,
+    after: Any | None = None,
+    control_routes: ControlRoutes | bool = True,
+) -> PythonStepDeclaration | Any:
+    combined_writes = tuple(dict.fromkeys((*writes, feedback)))
+    implicit_routes = {"failed": failed} if failed is not None else {}
+
+    def decorator(inner: Any) -> PythonStepDeclaration:
+        step_name = name or getattr(inner, "__name__", "validation")
+
+        def handler(ctx):
+            try:
+                result = inner(ctx)
+            except Exception as exc:
+                if failed is None:
+                    raise
+                return Event("failed", reason=f"{type(exc).__name__}: {exc}")
+            if not isinstance(result, ValidationResult):
+                raise TypeError(f"validation_step {step_name!r} must return ValidationResult")
+            runtime = context_runtime(ctx)
+            if result.ok:
+                runtime.emit_runtime_event(
+                    "validation_step_passed",
+                    feedback_artifact=None,
+                    message=None,
+                    details=[],
+                )
+                return Event(success)
+            if ctx.artifacts is None:
+                raise RuntimeError("validation_step requires runtime artifact handles")
+            feedback_name = _artifact_reference_name(feedback)
+            feedback_handle = getattr(ctx.artifacts, feedback_name)
+            feedback_handle.write_text(render_validation_feedback(result))
+            runtime.emit_runtime_event(
+                "validation_step_failed_repairable",
+                feedback_artifact=str(feedback_handle.path),
+                message=result.message,
+                details=list(result.details),
+            )
+            return Event(
+                repair,
+                reason=result.message,
+                handoff=f"Review feedback artifact: {feedback_handle.path}",
+            )
+
+        declaration = PythonStepDeclaration(
+            handler,
+            name=name,
+            reads=reads,
+            requires=requires,
+            writes=combined_writes,
+            routes=routes,
+            before=before,
+            after=after,
+            control_routes=control_routes,
+        )
+        setattr(declaration, "implicit_routes", dict(implicit_routes))
+        return declaration
+
+    if fn is None:
+        return decorator
+    return decorator(fn)
+
+
 def workflow_step(
     workflow: object,
     *,
@@ -507,6 +586,13 @@ def _normalize_writes(
     writes: Sequence[Artifact | ArtifactSpec],
 ) -> tuple[Artifact | ArtifactSpec, ...]:
     return tuple(writes)
+
+
+def _artifact_reference_name(reference: Artifact | ArtifactSpec) -> str:
+    name = getattr(reference, "name", None)
+    if not isinstance(name, str) or not name.strip():
+        raise ValueError("validation_step feedback artifacts must have a stable name")
+    return name.strip()
 
 
 def _normalize_simple_prompt(prompt: PromptInput) -> Prompt:
@@ -638,6 +724,7 @@ classify = ClassifyOperation()
 __all__ = [
     "AWAIT_INPUT",
     "Continuity",
+    "Effects",
     "Event",
     "FAIL",
     "Fail",
@@ -655,7 +742,9 @@ __all__ = [
     "Session",
     "StateVar",
     "Text",
+    "ValidationResult",
     "Workflow",
+    "WorklistEffect",
     "Worklist",
     "ClassifyOperation",
     "classify",
@@ -663,5 +752,6 @@ __all__ = [
     "produce_verify_step",
     "python_step",
     "step",
+    "validation_step",
     "workflow_step",
 ]

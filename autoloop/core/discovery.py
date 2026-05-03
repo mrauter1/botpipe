@@ -974,9 +974,18 @@ def _lower_simple_declared_routes(simple_step_map: Mapping[object, Step]) -> dic
     lowered: dict[Step | str, dict[str, object]] = {}
     for declaration, step in simple_step_map.items():
         raw_routes = getattr(declaration, "routes", None)
-        if not isinstance(raw_routes, dict) or not raw_routes:
+        implicit_routes = getattr(declaration, "implicit_routes", None)
+        merged_routes: dict[str, object] = {}
+        if isinstance(raw_routes, dict):
+            merged_routes.update(raw_routes)
+        if isinstance(implicit_routes, dict):
+            merged_routes.update(implicit_routes)
+        if not merged_routes:
             continue
-        lowered[step] = {route_name: _lower_simple_destination(destination, simple_step_map) for route_name, destination in raw_routes.items()}
+        lowered[step] = {
+            route_name: _lower_simple_destination(destination, simple_step_map)
+            for route_name, destination in merged_routes.items()
+        }
     return lowered
 
 

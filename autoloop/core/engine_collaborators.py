@@ -12,6 +12,7 @@ from pydantic import BaseModel
 from .artifacts import ResolvedArtifacts
 from .compiler import CompiledRoute
 from .context import context_runtime
+from .effects import Effects
 from .errors import FailureContext, WorkflowExecutionError
 from .extensions import HookRouteRedirect
 from .operations import OperationRuntime, bind_operation_runtime, provider_configuration
@@ -890,6 +891,24 @@ class HookRunner:
             raise WorkflowExecutionError(
                 f"{hook_phase} hook for step {step.name!r} returned unsupported value {type(result)!r}"
             )
+        if isinstance(result, Effects):
+            override = self._apply_effects(
+                step,
+                context=context,
+                effects=result,
+                hook_phase=hook_phase,
+            )
+            if override is None:
+                return HookExecutionResult(state=state)
+            return self.normalize_result(
+                step,
+                state=state,
+                context=context,
+                current_event=current_event,
+                result=override,
+                hook_phase=hook_phase,
+                hook_name=hook_name,
+            )
         if isinstance(result, str):
             override_event = self._engine._validate_hook_event_override(
                 step,
@@ -943,6 +962,70 @@ class HookRunner:
                 control=normalized.control,
             )
         raise WorkflowExecutionError(f"{hook_phase} hook for step {step.name!r} returned unsupported value {type(result)!r}")
+
+    def _apply_effects(
+        self,
+        step: "CompiledStep",
+        *,
+        context: "Context",
+        effects: Effects,
+        hook_phase: str,
+    ) -> Any:
+        exhausted_override: Any = None
+        for effect in effects.worklists:
+            if effect.refresh:
+                self._worklist_view_for_effect(
+                    step,
+                    context=context,
+                    worklist_name=effect.worklist,
+                    hook_phase=hook_phase,
+                ).refresh()
+        for effect in effects.worklists:
+            if effect.set_current_status is not None:
+                self._worklist_view_for_effect(
+                    step,
+                    context=context,
+                    worklist_name=effect.worklist,
+                    hook_phase=hook_phase,
+                ).set_current_status(effect.set_current_status)
+            elif effect.reset_current_status:
+                self._worklist_view_for_effect(
+                    step,
+                    context=context,
+                    worklist_name=effect.worklist,
+                    hook_phase=hook_phase,
+                ).reset_current_status()
+        for effect in effects.worklists:
+            if not effect.advance:
+                continue
+            exhausted = self._worklist_view_for_effect(
+                step,
+                context=context,
+                worklist_name=effect.worklist,
+                hook_phase=hook_phase,
+            ).advance_or(effect.exhausted)
+            if exhausted is not None and exhausted_override is None:
+                exhausted_override = exhausted
+        if effects.event is not None:
+            return effects.event
+        return exhausted_override
+
+    def _worklist_view_for_effect(
+        self,
+        step: "CompiledStep",
+        *,
+        context: "Context",
+        worklist_name: str | None,
+        hook_phase: str,
+    ):
+        if worklist_name is None:
+            try:
+                return context.current_worklist
+            except WorkflowExecutionError as exc:
+                raise WorkflowExecutionError(
+                    f"{hook_phase} hook for step {step.name!r} returned a worklist effect without an active worklist"
+                ) from exc
+        return context.worklist(worklist_name)
 
     def run_route(
         self,

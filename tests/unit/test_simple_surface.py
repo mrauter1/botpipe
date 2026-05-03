@@ -60,9 +60,12 @@ def test_autoloop_root_exports_only_the_canonical_public_surface() -> None:
         "step",
         "produce_verify_step",
         "python_step",
+        "validation_step",
         "workflow_step",
         "llm",
         "classify",
+        "ControlRoutes",
+        "Effects",
         "Prompt",
         "Md",
         "Json",
@@ -72,7 +75,9 @@ def test_autoloop_root_exports_only_the_canonical_public_surface() -> None:
         "Session",
         "Continuity",
         "Worklist",
+        "WorklistEffect",
         "StateVar",
+        "ValidationResult",
         "Event",
         "Outcome",
         "RequestInput",
@@ -88,6 +93,31 @@ def test_autoloop_root_exports_only_the_canonical_public_surface() -> None:
         assert _import_from("autoloop", symbol) is getattr(autoloop, symbol)
 
     assert autoloop.StateVar is simple.StateVar
+
+
+def test_effect_exports_and_route_helpers_are_public() -> None:
+    route = simple.Route.advance(simple.FINISH, status="completed", exhausted="done")
+    assert isinstance(simple.Effects.advance(exhausted="done"), simple.Effects)
+    assert isinstance(simple.WorklistEffect(set_current_status="completed"), simple.WorklistEffect)
+    assert route.on_taken is not None
+    returned = route.on_taken(object())
+    assert isinstance(returned, simple.Effects)
+    assert returned.worklists[0].advance is True
+    assert returned.worklists[0].set_current_status == "completed"
+
+
+def test_validation_result_helpers_render_expected_shape() -> None:
+    valid = simple.ValidationResult.valid()
+    invalid = simple.ValidationResult.invalid(
+        "Fix the draft.",
+        details=("Add references.", "Resolve TODOs."),
+    )
+
+    assert valid.ok is True
+    assert valid.message is None
+    assert invalid.ok is False
+    assert invalid.message == "Fix the draft."
+    assert invalid.details == ("Add references.", "Resolve TODOs.")
 
 
 def test_removed_root_public_symbols_fail_to_import() -> None:

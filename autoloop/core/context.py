@@ -726,6 +726,33 @@ class _ContextRuntime:
             payload["hook_invocation_id"] = self._context._execution_hook_invocation_id
         self._context._runtime_event_sink("worklist_selection_resolved", payload)
 
+    def emit_runtime_event(self, event_type: str, **payload: Any) -> None:
+        if self._context._runtime_event_sink is None:
+            return
+        event_payload = dict(payload)
+        if "step_name" not in event_payload:
+            event_payload["step_name"] = self._context._step_name
+        visit = _runtime_visits(self._context._step_item_state or self._context._step_state)
+        if isinstance(visit, int) and "visit" not in event_payload:
+            event_payload["visit"] = visit
+        if self._context._active_worklist is not None and "scope" not in event_payload:
+            event_payload["scope"] = self._context._active_worklist
+        step_execution_id = _step_execution_id(
+            step_name=self._context._step_name,
+            visit=visit,
+            scope_name=self._context._active_worklist,
+            item_id=event_payload.get("item_id"),
+        )
+        if step_execution_id is not None and "step_execution_id" not in event_payload:
+            event_payload["step_execution_id"] = step_execution_id
+        if self._context._execution_source_hook is not None and "source_hook" not in event_payload:
+            event_payload["source_hook"] = self._context._execution_source_hook
+        if self._context._execution_source_phase is not None and "source_phase" not in event_payload:
+            event_payload["source_phase"] = self._context._execution_source_phase
+        if self._context._execution_hook_invocation_id is not None and "hook_invocation_id" not in event_payload:
+            event_payload["hook_invocation_id"] = self._context._execution_hook_invocation_id
+        self._context._runtime_event_sink(event_type, event_payload)
+
     def get_cached_worklist_items(self, worklist_name: str) -> tuple[Any, ...] | None:
         return self._context._worklist_items_cache.get(worklist_name)
 

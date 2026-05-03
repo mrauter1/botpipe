@@ -5,6 +5,7 @@ from __future__ import annotations
 from dataclasses import dataclass
 from typing import Iterable
 
+from .effects import Effects, WorklistEffect
 from .primitives import AWAIT_INPUT, FAIL, FINISH
 
 
@@ -123,6 +124,85 @@ class Route:
             on_taken=on_taken,
             provider_visible=provider_visible,
         )
+
+    @staticmethod
+    def advance(
+        target: object,
+        *,
+        worklist: str | None = None,
+        status: str | None = None,
+        exhausted: str | object | None = None,
+        summary: str | None = None,
+        required_writes: Iterable[str] | None = None,
+        handoff: str | None = None,
+        provider_visible: bool = True,
+    ) -> "Route":
+        effect = Effects(
+            worklists=(
+                WorklistEffect(
+                    worklist=worklist,
+                    set_current_status=status,
+                    advance=True,
+                    exhausted=exhausted,
+                ),
+            ),
+        )
+        return Route.to(
+            target,
+            summary=summary,
+            required_writes=required_writes,
+            handoff=handoff,
+            on_taken=_route_effect_hook(effect),
+            provider_visible=provider_visible,
+        )
+
+    @staticmethod
+    def refresh(
+        target: object,
+        *,
+        worklist: str | None,
+        summary: str | None = None,
+        required_writes: Iterable[str] | None = None,
+        handoff: str | None = None,
+        provider_visible: bool = True,
+    ) -> "Route":
+        return Route.to(
+            target,
+            summary=summary,
+            required_writes=required_writes,
+            handoff=handoff,
+            on_taken=_route_effect_hook(Effects.refresh(worklist)),
+            provider_visible=provider_visible,
+        )
+
+    @staticmethod
+    def complete_current(
+        target: object,
+        *,
+        worklist: str | None = None,
+        summary: str | None = None,
+        required_writes: Iterable[str] | None = None,
+        handoff: str | None = None,
+        provider_visible: bool = True,
+    ) -> "Route":
+        return Route.to(
+            target,
+            summary=summary,
+            required_writes=required_writes,
+            handoff=handoff,
+            on_taken=_route_effect_hook(
+                Effects(worklists=(WorklistEffect(worklist=worklist, set_current_status="completed"),))
+            ),
+            provider_visible=provider_visible,
+        )
+
+
+def _route_effect_hook(effects: Effects):
+    def on_taken(_ctx):
+        return effects
+
+    on_taken.__name__ = "route_effect"
+    return on_taken
 
 
 def normalize_route_spec(destination: object) -> Route:
