@@ -1442,7 +1442,7 @@ def _write_candidate_decomposition_surface(request) -> str:
         encoding="utf-8",
     )
     (building_block_root / "prompts" / "README.md").write_text(
-        "# Release Decision Evidence Pack Prompts\n\nThis candidate building block currently uses a deterministic system step and ships no provider prompts yet.\n",
+        "# Release Decision Evidence Pack Prompts\n\nThis candidate building block currently uses a deterministic `python_step` and ships no provider prompts yet.\n",
         encoding="utf-8",
     )
     (building_block_root / "assets" / f"{BUILDING_BLOCK_NAME}_checklist.md").write_text(

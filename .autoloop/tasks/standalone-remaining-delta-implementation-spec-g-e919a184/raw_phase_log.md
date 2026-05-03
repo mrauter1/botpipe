@@ -1569,3 +1569,72 @@ Open issues / next step
 <loop-control>
 {"schema":"docloop.loop_control/v1","kind":"promise","promise":"COMPLETE"}
 </loop-control>
+
+
+---
+run_id=run-20260503T001920Z-8f0e7926 | entry=session_turn | pair=test | phase=producer | cycle=1 | attempt=1 | thread_id=019deba6-cda9-71f3-bbcd-6f0024a29a6a
+---
+provider=codex
+mode=resume
+template=/home/rauter/.local/share/pipx/venvs/autoloop/lib/python3.12/site-packages/autoloop/templates/test_producer.md
+session_id=019deba6-cda9-71f3-bbcd-6f0024a29a6a
+
+
+---
+run_id=run-20260503T001920Z-8f0e7926 | entry=phase_output | pair=test | phase=producer | process=codex-agent | cycle=1 | attempt=1 | thread_id=019deba6-cda9-71f3-bbcd-6f0024a29a6a
+---
+I’m checking the existing phase coverage before adding anything new. The likely gaps are around docs/boundary regressions and the specific resume fallback contract, since the implementation already added several runtime tests in `test_workspace_and_context.py`.
+
+The implementation side already covered the runtime fallback with focused tests. The remaining test drift is in the docs baseline suite: it still encodes the old `autoloop.simple` and `system step` expectations, so I’m updating those assertions to the final public surface instead of adding a parallel one-off doc scan test.
+
+I found a real remaining regression surface in the docs baseline suite itself: it still encodes the old public surface in `cleanup.md` expectations and a generated prompt README fixture still writes `system step`. I’m updating those tests to the final contract so they’ll catch the remaining drift instead of masking it.
+
+The baseline doc tests need to follow the actual final wording, not the older simple-surface phrasing. I’m switching them to assert `autoloop`-only imports and `python_step` wording, while keeping the broader doc-surface invariants intact.
+
+I’m making the baseline docs tests assert the final public surface explicitly, and I’m updating the one workflow-doc fixture that still wrote old `system step` language so future generated fixtures don’t reintroduce it.
+
+The updated tests are meant to prove the final public-surface contract, even if that exposes remaining drift outside the files the implementer touched. I’m running the focused docs baseline suite and the adjusted workflow-doc fixture test now to see whether the repo actually satisfies the requested public surface end to end.
+
+The docs baseline tests did exactly what they should: they exposed one remaining repo-level drift in `cleanup.md`, which still advertises `autoloop.simple`. I’m rerunning the workflow-building-block test with a valid selector and then I’ll record the coverage map plus the fact that the new docs test intentionally fails on that remaining public-surface gap.
+
+The generated workflow-building-block slice is fine; the meaningful failure is the docs baseline one. I’m polling that last test command and then I’ll write the test strategy/feedback artifacts with the exact coverage and the current known gap in `cleanup.md`.
+
+I have the test outcome signal now. The new phase coverage is good, and it surfaced one remaining repo-level gap cleanly: `cleanup.md` still documents `autoloop.simple`. I’m recording that in the test strategy and feedback so the auditor sees both the added coverage and the current failing surface.
+
+Scope considered
+
+- Phase `compiler-resume-schema-docs` only.
+- Changed runtime resume/schema behavior already covered in `tests/runtime/test_workspace_and_context.py`.
+- Remaining test-phase gaps around public docs/import vocabulary and generated fixture text.
+
+What I analyzed
+
+- Existing phase runtime tests for compiler cache, resume mismatch warn/fail behavior, and schema migration.
+- The baseline docs suite in [tests/test_architecture_baseline_docs.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/tests/test_architecture_baseline_docs.py), which still encoded `autoloop.simple` expectations.
+- The generated prompt README fixture in [tests/runtime/test_workflow_package_to_composable_building_blocks.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/tests/runtime/test_workflow_package_to_composable_building_blocks.py), which still wrote `system step`.
+
+What I changed
+
+- Updated [tests/test_architecture_baseline_docs.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/tests/test_architecture_baseline_docs.py) to assert the final public surface:
+  - `autoloop` import examples only
+  - no `autoloop.simple`
+  - no `system step` / `system steps` in maintained docs or `cleanup.md`
+- Updated [tests/runtime/test_workflow_package_to_composable_building_blocks.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/tests/runtime/test_workflow_package_to_composable_building_blocks.py) so its generated prompt README uses `python_step` vocabulary instead of `system step`.
+- Updated [test_strategy.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/standalone-remaining-delta-implementation-spec-g-e919a184/runs/run-20260503T001920Z-8f0e7926/artifacts/test/phases/compiler-resume-schema-docs/test_strategy.md) with the behavior-to-coverage map, edge cases, failure paths, stabilization, and known gaps.
+- Appended a concise summary to [feedback.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/standalone-remaining-delta-implementation-spec-g-e919a184/runs/run-20260503T001920Z-8f0e7926/artifacts/test/phases/compiler-resume-schema-docs/feedback.md).
+
+Key findings / decisions
+
+- Validation run:
+  - `python3 -m py_compile tests/test_architecture_baseline_docs.py tests/runtime/test_workflow_package_to_composable_building_blocks.py`
+  - `.venv/bin/pytest -q tests/test_architecture_baseline_docs.py`
+  - `.venv/bin/pytest -q tests/runtime/test_workflow_package_to_composable_building_blocks.py -k 'building_block'`
+- Result:
+  - `tests/runtime/test_workflow_package_to_composable_building_blocks.py -k 'building_block'`: `28 passed`
+  - `tests/test_architecture_baseline_docs.py`: `2 failed, 9 passed`
+- The two failing docs-baseline assertions are intentional regression catchers and point to a real remaining implementation gap: [cleanup.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/cleanup.md) still documents `autoloop.simple`.
+
+Open issues / next step
+
+- The remaining phase-local gap is not in the tests; it is the outdated public-surface wording in [cleanup.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/cleanup.md).
+- Next step is implementation follow-up to bring `cleanup.md` onto the final `autoloop` surface so the updated docs baseline suite passes.
