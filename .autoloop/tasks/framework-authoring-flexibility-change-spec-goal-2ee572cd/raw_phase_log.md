@@ -1249,3 +1249,50 @@ Open issues / next step
 <loop-control>
 {"schema":"docloop.loop_control/v1","kind":"promise","promise":"INCOMPLETE"}
 </loop-control>
+
+
+---
+run_id=run-20260503T200339Z-6d598cb8 | entry=session_turn | pair=test | phase=producer | cycle=2 | attempt=1 | thread_id=019defa6-43e0-7382-9832-e4dd63010e96
+---
+provider=codex
+mode=resume
+template=/home/rauter/.local/share/pipx/venvs/autoloop/lib/python3.12/site-packages/autoloop/templates/test_producer.md
+session_id=019defa6-43e0-7382-9832-e4dd63010e96
+
+
+---
+run_id=run-20260503T200339Z-6d598cb8 | entry=phase_output | pair=test | phase=producer | process=codex-agent | cycle=2 | attempt=1 | thread_id=019defa6-43e0-7382-9832-e4dd63010e96
+---
+The only open test gap is runtime coverage for `Effects.then(...)` with no worklist mutations. I’m adding a minimal engine-level regression for that event-only path, then I’ll refresh the phase test artifacts to reflect the resolved gap.
+
+I’ve got the exact insertion point. I’m adding a minimal two-step workflow that returns `Effects.then("next")` from a Python step so the event-only normalization path is exercised through the engine, not just by object construction.
+
+The new runtime regression passed. I’m updating the phase artifacts so the coverage map explicitly includes the `Effects.then(...)` engine path and the auditor can recheck against the resolved gap.
+
+Scope considered
+
+- Phase-local test follow-up for `effects-and-validation-helper` only.
+- I limited changes to one missing runtime regression test plus the required test-phase artifact updates.
+
+What I analyzed
+
+- The auditor finding `TST-001` in [feedback.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/framework-authoring-flexibility-change-spec-goal-2ee572cd/runs/run-20260503T200339Z-6d598cb8/artifacts/test/phases/effects-and-validation-helper/feedback.md).
+- Existing effect contract coverage around [test_engine_contracts.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/tests/contract/test_engine_contracts.py).
+- The current coverage map in [test_strategy.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/framework-authoring-flexibility-change-spec-goal-2ee572cd/runs/run-20260503T200339Z-6d598cb8/artifacts/test/phases/effects-and-validation-helper/test_strategy.md).
+
+What I changed
+
+- Added `test_python_step_effect_then_routes_without_worklist_mutation` to [test_engine_contracts.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/tests/contract/test_engine_contracts.py). It runs a two-step workflow where the first Python step returns `Effects.then("next")` and asserts the engine follows the transition with no worklist effects involved.
+- Updated [test_strategy.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/framework-authoring-flexibility-change-spec-goal-2ee572cd/runs/run-20260503T200339Z-6d598cb8/artifacts/test/phases/effects-and-validation-helper/test_strategy.md) so AC-4 explicitly includes the event-only `Effects.then(...)` runtime path.
+- Appended a follow-up entry to [feedback.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/framework-authoring-flexibility-change-spec-goal-2ee572cd/runs/run-20260503T200339Z-6d598cb8/artifacts/test/phases/effects-and-validation-helper/feedback.md) summarizing the added test and focused validation run.
+
+Key findings / decisions
+
+- The missing gap was specifically runtime coverage for `Effects.then(...)` with no worklist mutations; the new test closes that without broadening scope.
+- Focused validation passed:
+  - `./.venv/bin/python -m pytest -q tests/contract/test_engine_contracts.py -k "python_step_effect_then_routes_without_worklist_mutation or after_hook_effects_complete_and_advance_persist_status_and_exhaust or python_step_effect_refresh_reloads_worklist_source or effect_without_active_worklist_fails_clearly or validation_step_valid_routes_to_default_done_and_emits_runtime_event or validation_step_invalid_writes_feedback_and_routes_repair or validation_step_exception_uses_failed_route_when_configured"` → `7 passed`
+
+Open issues / next step
+
+- No remaining test-author blocker is visible in this phase scope.
+- Next step is the test-phase verifier rerun against the updated coverage and artifacts.

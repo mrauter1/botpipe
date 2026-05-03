@@ -17,6 +17,7 @@
   - AC-3 validator exception behavior:
     - `tests/contract/test_engine_contracts.py::test_validation_step_exception_uses_failed_route_when_configured`
   - AC-4 public helper surface and route-helper lowering:
+    - `tests/contract/test_engine_contracts.py::test_python_step_effect_then_routes_without_worklist_mutation`
     - `tests/unit/test_simple_surface.py::test_effect_exports_and_route_helpers_are_public`
     - `tests/unit/test_simple_surface.py::test_effect_helpers_and_additional_route_helpers_lower_to_effects`
     - `tests/unit/test_simple_surface.py::test_validation_result_helpers_render_expected_shape`
@@ -25,6 +26,7 @@
   - Route helper hooks remain callable and deterministic.
   - Validation feedback artifact path is stable and is emitted on both repairable failure and successful validation runtime events.
 - Edge cases / failure paths covered:
+  - Event-only `Effects.then(...)` return with no worklist mutations.
   - No active worklist when an effect targets the current selection.
   - Worklist refresh after source mutation.
   - Validator exception routed through explicit `failed=FAIL`.
