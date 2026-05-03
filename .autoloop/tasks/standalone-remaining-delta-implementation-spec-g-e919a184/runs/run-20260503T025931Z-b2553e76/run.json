@@ -13,11 +13,11 @@
       "public-authoring-surface-cleanup"
     ],
     "explicit": true,
-    "current_phase_index": 0,
-    "current_phase_id": "public-authoring-surface-cleanup"
+    "current_phase_index": 1,
+    "current_phase_id": null
   },
   "phase_status": {
-    "public-authoring-surface-cleanup": "in_progress"
+    "public-authoring-surface-cleanup": "completed"
   },
   "phase_history": [
     {
@@ -25,6 +25,13 @@
       "run_id": "run-20260503T025931Z-b2553e76",
       "status": "in_progress",
       "ts": "2026-05-03T03:04:32.916136+00:00"
+    },
+    {
+      "phase_id": "public-authoring-surface-cleanup",
+      "run_id": "run-20260503T025931Z-b2553e76",
+      "status": "completed",
+      "ts": "2026-05-03T03:12:20.952212+00:00",
+      "pair": "test"
     }
   ]
 }
