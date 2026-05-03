@@ -441,3 +441,62 @@ Open issues / next step
 <loop-control>
 {"schema":"docloop.loop_control/v1","kind":"promise","promise":"COMPLETE"}
 </loop-control>
+
+
+---
+run_id=run-20260503T200339Z-6d598cb8 | entry=session_turn | pair=test | phase=producer | cycle=1 | attempt=1 | thread_id=019def7c-b7c9-7220-8f38-99702bfcf9d2
+---
+provider=codex
+mode=resume
+template=/home/rauter/.local/share/pipx/venvs/autoloop/lib/python3.12/site-packages/autoloop/templates/test_producer.md
+session_id=019def7c-b7c9-7220-8f38-99702bfcf9d2
+
+
+---
+run_id=run-20260503T200339Z-6d598cb8 | entry=phase_output | pair=test | phase=producer | process=codex-agent | cycle=1 | attempt=1 | thread_id=019def7c-b7c9-7220-8f38-99702bfcf9d2
+---
+I’m checking the current route-policy test coverage against the phase acceptance criteria, then I’ll add only the missing regression cases and update the phase test artifacts with an explicit coverage map.
+
+I’ve got the current test artifact state. Next I’m reading the existing targeted test files to avoid duplicating coverage and to see which acceptance-criteria edges still need explicit regression tests.
+
+I found one meaningful gap: we have engine-level full-auto coverage, but not a runner-level regression test proving `runtime.full_auto` actually hides `question` when the workflow is launched through `run_workflow_package`. I’m adding that plus a core `ControlRoutes` compilation test so both authoring seams are explicitly covered.
+
+I’m editing the targeted tests now: one compiler-level test for the core `ControlRoutes` seam and one runtime test that exercises the runner’s `full_auto -> interaction_policy` plumbing end-to-end.
+
+The new tests are in place. I’m recording the coverage map and the end-to-end runner-plumbing rationale in the phase artifacts so later turns don’t lose why these cases were chosen.
+
+Scope considered
+
+- Phase-local `route-interaction-policy` test work only.
+- I focused on missing regression coverage for the new route-policy behavior and runner plumbing, then updated the phase test artifacts.
+- I did not edit auditor-owned [criteria.md](</home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/framework-authoring-flexibility-change-spec-goal-2ee572cd/runs/run-20260503T200339Z-6d598cb8/artifacts/test/phases/route-interaction-policy/criteria.md>).
+
+What I analyzed
+
+- Existing route-policy coverage in [tests/contract/test_engine_contracts.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/tests/contract/test_engine_contracts.py), [tests/unit/test_simple_surface.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/tests/unit/test_simple_surface.py), [tests/unit/test_provider_boundary_core.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/tests/unit/test_provider_boundary_core.py), [tests/unit/test_provider_retries.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/tests/unit/test_provider_retries.py), and [tests/runtime/test_workspace_and_context.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/tests/runtime/test_workspace_and_context.py).
+- Runner plumbing in [autoloop/runtime/runner.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/autoloop/runtime/runner.py) and runtime config handling in [autoloop/runtime/config.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/autoloop/runtime/config.py).
+- The run-local decision ledger in [decisions.txt](</home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/framework-authoring-flexibility-change-spec-goal-2ee572cd/runs/run-20260503T200339Z-6d598cb8/decisions.txt>).
+
+What I changed
+
+- Added [tests/unit/test_validation.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/tests/unit/test_validation.py) coverage for the core `ControlRoutes` seam:
+  - default provider-facing `question` is interactive-only
+  - `ControlRoutes(question="always")` stays visible in full-auto
+  - `control_routes=False` suppresses injected `question`
+  - Python and child-workflow steps do not receive default injected control routes
+- Added [tests/runtime/test_workspace_and_context.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/tests/runtime/test_workspace_and_context.py) coverage proving `run_workflow_package(...)` maps `RuntimeConfig(full_auto=True)` into provider-visible routes with no default `question`.
+- Updated [test_strategy.md](</home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/framework-authoring-flexibility-change-spec-goal-2ee572cd/runs/run-20260503T200339Z-6d598cb8/artifacts/test/phases/route-interaction-policy/test_strategy.md>) with an explicit behavior-to-test coverage map, preserved invariants, edge cases, flake notes, and known gaps.
+- Appended a concise summary to [feedback.md](</home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/framework-authoring-flexibility-change-spec-goal-2ee572cd/runs/run-20260503T200339Z-6d598cb8/artifacts/test/phases/route-interaction-policy/feedback.md>).
+- Appended one test-scope decision under the current header in [decisions.txt](</home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/framework-authoring-flexibility-change-spec-goal-2ee572cd/runs/run-20260503T200339Z-6d598cb8/decisions.txt>).
+
+Key findings / decisions
+
+- The main remaining regression risk was runner plumbing, not engine behavior. Direct `Engine` coverage already existed, so I added an end-to-end runner test to catch drift between `runtime.full_auto` and `Engine.interaction_policy`.
+- The simple surface already covered `control_routes=False`; the new core test now locks the same contract at the core step-class seam, which is the phase’s other explicit acceptance requirement.
+- I kept the added coverage deterministic and filesystem-local only.
+
+Open issues / next step
+
+- `python3 -m compileall tests/unit/test_validation.py tests/runtime/test_workspace_and_context.py` succeeded.
+- I could not run `pytest` in this shell because `pytest` and runtime dependency `pydantic` are unavailable here.
+- The next step is auditor review of the new tests and the updated phase test artifacts.

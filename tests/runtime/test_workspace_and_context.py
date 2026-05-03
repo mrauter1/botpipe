@@ -6,10 +6,14 @@ import sys
 from pathlib import Path
 
 import pytest
+from pydantic import BaseModel
 
 from autoloop.core.compiler import compile_workflow
+from autoloop.core import FINISH, Workflow
 from autoloop.core.providers.fake import ScriptedLLMProvider
+from autoloop.core.providers.retries import ProviderRetryPolicy
 from autoloop.core.schema_registry import CHILD_RUN_SUMMARY_SCHEMA, RUN_METADATA_SCHEMA, WORKFLOW_TOPOLOGY_SCHEMA
+from autoloop.core.steps import PromptStep
 from autoloop.runtime.config import GitTrackingRuntimeConfig, RuntimeConfig
 from autoloop.core.errors import WorkflowExecutionError
 from autoloop.runtime.loader import WorkflowParameterError
@@ -105,6 +109,35 @@ def test_run_creates_task_workflow_run_layout_and_immutable_request_snapshots(tm
     assert (first_run_dir / "request.md").read_text(encoding="utf-8") == "First message\n"
     assert (second_run_dir / "request.md").read_text(encoding="utf-8") == "Second message\n"
     assert workflow_meta["last_run_id"] == second_run_dir.name
+
+
+def test_runner_full_auto_hides_default_question_route_from_provider_contract(tmp_path: Path) -> None:
+    class FullAutoRunnerWorkflow(Workflow):
+        class State(BaseModel):
+            pass
+
+        ask = PromptStep(name="ask", producer="ask.md", retry_policy=ProviderRetryPolicy(max_attempts=1))
+        entry = ask
+        transitions = {ask: {"done": FINISH}}
+
+    provider = ScriptedLLMProvider(llm_turns=[Outcome(raw_output="ok", tag="done")])
+    result = run_workflow_package(
+        FullAutoRunnerWorkflow,
+        provider=provider,
+        options=_runner_options(
+            tmp_path,
+            task_id="full-auto-runner-task",
+            message="Run in full auto.",
+            runtime_config=RuntimeConfig(
+                full_auto=True,
+                git_tracking=GitTrackingRuntimeConfig(enabled=False),
+            ),
+        ),
+    )
+
+    assert result.terminal == FINISH
+    assert len(provider.calls) == 1
+    assert provider.calls[0].available_routes == ("done",)
 
 
 def test_runtime_context_and_prompt_resolution_use_workflow_scope_and_package_root(tmp_path: Path) -> None:
