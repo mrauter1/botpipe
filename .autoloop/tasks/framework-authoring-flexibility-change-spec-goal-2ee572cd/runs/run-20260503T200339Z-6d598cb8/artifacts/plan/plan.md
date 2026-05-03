@@ -10,6 +10,7 @@
 ## Code Seams Confirmed
 
 - Route injection and simple-surface prompt validation live in `autoloop/core/discovery.py`.
+- Core step declarations live in `autoloop/core/steps.py`; the current control-route seam exists only on simple declarations in `autoloop/simple.py`.
 - Execution-legal route sets are compiled in `autoloop/core/compiler.py` and consumed widely through `CompiledStep.available_routes`.
 - Provider-visible route construction is centralized in `autoloop/core/engine_collaborators.py::ProviderContractBuilder`; payload validation and retry feedback live in `autoloop/core/engine.py`, `autoloop/core/providers/rendering.py`, and `autoloop/core/providers/retries.py`.
 - Worklist startup/restore logic is currently eager in `autoloop/core/engine.py`; scoped-step dispatch is in `autoloop/core/engine_collaborators.py::StepDispatcher`; runtime access is in `autoloop/core/context.py`, `autoloop/core/worklists.py`, and `autoloop/core/artifacts.py`.
@@ -23,6 +24,7 @@
 ### Phase 1: Route Policy Rebase
 
 - Add a small runtime interaction policy object and plumb it through `Engine` plus runner/config.
+- Put `ControlRoutes(question="auto" | "always" | "never")` on one canonical declaration path: core step classes accept it directly, simple helpers lower to the same object, and legacy simple `control_routes: bool` values are normalized at the declaration edge.
 - Rebase reserved-route injection to `question`-only runtime control, with provider visibility gated by interaction policy.
 - Remove hard-coded `blocked`/`failed` payload semantics from event/outcome validation, provider retry feedback, and provider prompt rendering.
 - Keep `question` as the only reserved runtime route with a built-in non-empty-question requirement.
@@ -31,10 +33,14 @@
 Primary files:
 
 - `autoloop/core/providers/models.py` or adjacent runtime-policy module
+- `autoloop/core/steps.py`
 - `autoloop/core/engine.py`
 - `autoloop/core/engine_collaborators.py`
 - `autoloop/core/discovery.py`
 - `autoloop/core/compiler.py`
+- `autoloop/simple.py`
+- `autoloop/core/__init__.py`
+- `autoloop/__init__.py`
 - `autoloop/core/providers/rendering.py`
 - `autoloop/core/providers/retries.py`
 - `autoloop/runtime/runner.py`
@@ -43,6 +49,7 @@ Primary files:
 Phase acceptance:
 
 - Interactive provider-facing steps expose default `question`; full-auto runs do not.
+- Core and simple authoring surfaces normalize through the same `ControlRoutes` contract, and existing simple `control_routes=False` continues to mean “no injected question route.”
 - No provider request exposes default `blocked` or default `failed`.
 - Python and child-workflow steps stop receiving default `failed`.
 - Explicit authored `blocked`/`failed` routes still compile and execute without hidden reason requirements.
@@ -76,6 +83,7 @@ Phase acceptance:
 ### Phase 3: Typed Worklist Effects And Repairable Validation Helper
 
 - Add a narrow `autoloop/core/effects.py` surface with `WorklistEffect` and `Effects`.
+- Add the requested `Effects.then(...)`, `Effects.advance(...)`, `Effects.complete_and_advance(...)`, and `Effects.refresh(...)` convenience constructors and make route helpers lower through the same effect objects.
 - Extend `HookRunner.normalize_result(...)` and Python-step result normalization to accept `Effects`; execute refresh, status, advance, and exhausted routing through existing worklist runtime APIs/events.
 - Keep route effects additive via helper constructors (`Route.advance(...)`, `Route.refresh(...)`, `Route.complete_current(...)`) or equivalent `on_taken` lowering; do not broaden `Route.to(...)` with a generic `effects=` kwarg.
 - Add `ValidationResult` plus `validation_step` as a helper that lowers to existing Python-step machinery, writes deterministic feedback artifacts, and emits dedicated runtime events.
@@ -93,6 +101,7 @@ Primary files:
 Phase acceptance:
 
 - Hooks and Python steps can express refresh/status/advance/exhausted behavior without imperative glue boilerplate.
+- Direct hook and Python-step returns can use the public `Effects.*` convenience constructors, and `Route.*` helpers lower to the same effect path.
 - Effects remain checkpoint-safe because they only mutate normal runtime state via current worklist APIs.
 - `validation_step` routes valid results to success, invalid results to repair with feedback/handoff, and exceptions to explicit failed behavior or runtime error when no failed route exists.
 - No new broad step DSL or new core step kind is introduced.
@@ -154,10 +163,10 @@ Phase acceptance:
 
 ### Authoring
 
-- Add `ControlRoutes(question="auto" | "always" | "never")` for step-level runtime-control intent.
+- Add `ControlRoutes(question="auto" | "always" | "never")` as a public declaration object accepted by core step classes and by simple helpers through the same normalization path.
 - Preserve existing `control_routes=False` semantics by mapping it to “no injected question route”; do not preserve legacy `blocked`/`failed` injection.
 - Add `Context.ensure_selection(...)`.
-- Add `Effects`, `WorklistEffect`, `Route.advance(...)`, `Route.refresh(...)`, `Route.complete_current(...)`, `ValidationResult`, and `validation_step`.
+- Add `Effects`, `WorklistEffect`, `Effects.then(...)`, `Effects.advance(...)`, `Effects.complete_and_advance(...)`, `Effects.refresh(...)`, `Route.advance(...)`, `Route.refresh(...)`, `Route.complete_current(...)`, `ValidationResult`, and `validation_step`.
 
 ### Internal / Compiled
 
@@ -180,6 +189,7 @@ Phase acceptance:
 - Do not widen prompt placeholder relaxation beyond the namespaces named in the request.
 - Do not materialize all worklists during compile, run start, resume, checkpoint save, or unrelated error reporting.
 - Route validation must continue to reject illegal routes and invalid structured payloads; only the hard-coded `blocked`/`failed` reason rule is removed.
+- Normalize `ControlRoutes` once at the declaration/compilation edge so core and simple authoring do not drift into separate runtime-control models.
 - Effects must reuse existing worklist mutation/event paths instead of introducing a second state mutation mechanism.
 - `validation_step` must lower to existing Python-step execution rather than adding a new step abstraction.
 - Keep `Route.to(..., effects=...)` unsupported; existing tests currently reject that kwarg and the request does not require loosening it.
@@ -190,6 +200,7 @@ Phase acceptance:
 - Lazy worklists: cover compile/start/resume/snapshot behavior in engine contract tests plus low-level context/worklist unit tests.
 - Work-item continuity: add session-key tests around scoped and non-scoped resolution in engine contracts and session unit tests.
 - Effects and validation helper: add unit/contract coverage for hook normalization, route helper lowering, checkpoint safety, feedback artifact writing, and exception paths.
+- Effects and validation helper: cover direct `Effects.*` constructor returns from hooks/Python steps in addition to route-helper lowering.
 - Ownership and prompt context: add validation tests for same-identity dual-role artifacts, ambiguous-name diagnostics, scoped vs non-scoped placeholders, and runtime placeholder failures.
 - Inspection/docs: update static graph, workflow capability, CLI inspection, and doc baseline tests to the new route model.
 

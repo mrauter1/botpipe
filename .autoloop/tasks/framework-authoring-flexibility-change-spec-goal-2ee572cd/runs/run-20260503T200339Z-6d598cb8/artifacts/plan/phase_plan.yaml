@@ -9,6 +9,7 @@ phases:
     in_scope:
       - "Add RuntimeInteractionPolicy and Engine plumbing."
       - "Add runner/runtime full_auto plumbing that maps to provider-question visibility."
+      - "Add one canonical ControlRoutes declaration seam across core step classes and simple helpers, with legacy simple booleans normalized at the declaration edge."
       - "Rework discovery/compiler/provider-contract code so only question remains a default runtime control route."
       - "Remove hard-coded blocked/failed reason validation from provider and non-provider event validation."
       - "Update provider prompt rendering and retry feedback to match the new route contract."
@@ -24,8 +25,11 @@ phases:
         text: "No provider request exposes default blocked or default failed, and Python/child-workflow steps no longer receive default failed."
       - id: "AC-3"
         text: "Explicit authored blocked and failed routes remain legal without hidden reason requirements unless schema enforces them."
+      - id: "AC-4"
+        text: "Core and simple authoring surfaces compile through the same ControlRoutes contract, and existing simple control_routes=False still means no injected question route."
     deliverables:
       - "Policy-aware route plumbing across discovery, compiler, engine, provider contracts, and runner/config."
+      - "A single ControlRoutes declaration strategy spanning core step classes, simple lowering, and public exports."
       - "Updated provider route and retry/rendering tests for the new contract."
     risks:
       - "Route-view drift between execution-legal routes and provider-visible routes."
@@ -72,8 +76,9 @@ phases:
     status: "planned"
     in_scope:
       - "Add WorklistEffect and Effects."
+      - "Add the public Effects.then, Effects.advance, Effects.complete_and_advance, and Effects.refresh convenience constructors."
       - "Teach hook and Python-step result normalization to execute effects in deterministic order."
-      - "Add additive Route helper constructors for common worklist progression patterns."
+      - "Add additive Route helper constructors for common worklist progression patterns and lower them through the same Effects path."
       - "Add ValidationResult and validation_step, lowered through existing Python-step machinery."
       - "Emit runtime events for validation pass and repairable validation failure."
     out_of_scope:
@@ -89,8 +94,10 @@ phases:
         text: "Validation helpers route valid results to success and invalid results to repair after deterministically writing feedback artifacts."
       - id: "AC-3"
         text: "Exceptions in validation helpers follow explicit failed-route behavior or raise normally when no failed route exists."
+      - id: "AC-4"
+        text: "Direct hook and Python-step returns can use Effects.then, Effects.advance, Effects.complete_and_advance, and Effects.refresh, and Route helpers lower through the same effect objects."
     deliverables:
-      - "New effects module plus route helper lowering and hook normalization support."
+      - "New effects module with public Effects convenience constructors plus route-helper lowering and hook normalization support."
       - "Public validation helper exports and tests for repair loops and feedback artifacts."
     risks:
       - "A second state-mutation path could diverge from existing worklist runtime events."

@@ -94,3 +94,26 @@ Open issues / next step
 <loop-control>
 {"schema":"docloop.loop_control/v1","kind":"promise","promise":"INCOMPLETE"}
 </loop-control>
+
+
+---
+run_id=run-20260503T200339Z-6d598cb8 | entry=session_turn | pair=plan | phase=producer | cycle=2 | attempt=1 | thread_id=019def70-80d8-7f60-baff-3ed403b2f9ec
+---
+provider=codex
+mode=resume
+template=/home/rauter/.local/share/pipx/venvs/autoloop/lib/python3.12/site-packages/autoloop/templates/plan_producer.md
+session_id=019def70-80d8-7f60-baff-3ed403b2f9ec
+
+
+---
+run_id=run-20260503T200339Z-6d598cb8 | entry=phase_output | pair=plan | phase=producer | process=codex-agent | cycle=2 | attempt=1 | thread_id=019def70-80d8-7f60-baff-3ed403b2f9ec
+---
+I’m revising the plan around the verifier’s two blocking gaps rather than reshaping the whole artifact set. The fixes are narrow: make `ControlRoutes` land on one canonical authoring path across core and simple steps, and explicitly add the requested `Effects.*` convenience constructors with direct hook/Python coverage.
+
+I’ve confirmed the run now has a fresh planner decision header, so I can record the narrowed decisions cleanly under this turn instead of mutating the previous block. I’m patching the plan and phase YAML together so the narrative plan and machine-readable phases stay aligned.
+
+The revision is written. I’m checking that the narrative plan, phase YAML, feedback history, and this turn’s decision block all reflect the same two fixes so the verifier can clear them without ambiguity.
+
+Revised [plan.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/framework-authoring-flexibility-change-spec-goal-2ee572cd/runs/run-20260503T200339Z-6d598cb8/artifacts/plan/plan.md) and [phase_plan.yaml](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/framework-authoring-flexibility-change-spec-goal-2ee572cd/runs/run-20260503T200339Z-6d598cb8/artifacts/plan/phase_plan.yaml) to close the verifier’s two blocking gaps. The route-policy phase now explicitly makes `ControlRoutes` one canonical seam across core step classes and simple helpers, with legacy simple booleans normalized at the declaration edge. The effects phase now explicitly includes `Effects.then(...)`, `Effects.advance(...)`, `Effects.complete_and_advance(...)`, and `Effects.refresh(...)`, plus direct hook/Python-step coverage and route-helper lowering through the same effect objects.
+
+Also appended the rationale to [feedback.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/framework-authoring-flexibility-change-spec-goal-2ee572cd/runs/run-20260503T200339Z-6d598cb8/artifacts/plan/feedback.md) and recorded the non-obvious constraints under the current turn header in [decisions.txt](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/framework-authoring-flexibility-change-spec-goal-2ee572cd/runs/run-20260503T200339Z-6d598cb8/decisions.txt). `phase_plan.yaml` still parses successfully with `python3`/PyYAML.
