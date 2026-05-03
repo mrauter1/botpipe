@@ -15,7 +15,7 @@ from uuid import uuid4
 
 from pydantic import BaseModel, TypeAdapter
 
-from .artifacts import Artifact, ArtifactHandle, ResolvedArtifacts, resolve_artifact_template
+from .artifacts import Artifact, ArtifactHandle, ResolvedArtifacts, render_runtime_template, resolve_artifact_template
 from .compiler import CompiledRoute, CompiledStep, CompiledWorkflow, compile_workflow
 from .context import Context, context_runtime
 from .engine_collaborators import (
@@ -994,7 +994,7 @@ class Engine:
         consumed_pending_handoffs: tuple[PendingHandoff, ...],
         restorable_pending_handoffs: tuple[PendingHandoff, ...],
     ) -> PairProviderResult:
-        producer_prompt = self._resolve_prompt(step.producer_prompt)
+        producer_prompt = self._resolve_prompt(step.producer_prompt, context=context)
         self._emit_provider_attempt_event(
             "provider_attempt_started",
             step=step,
@@ -1139,7 +1139,7 @@ class Engine:
                     source_hook=getattr(step.before_verifier_hook, "__name__", type(step.before_verifier_hook).__name__),
                     source_phase="before_verifier",
                 )
-            verifier_prompt = self._resolve_prompt(step.verifier_prompt)
+            verifier_prompt = self._resolve_prompt(step.verifier_prompt, context=context)
             verifier_session = self._resolve_pair_review_session(
                 step,
                 context,
@@ -1236,7 +1236,7 @@ class Engine:
         consumed_pending_handoffs: tuple[PendingHandoff, ...],
         restorable_pending_handoffs: tuple[PendingHandoff, ...],
     ) -> ProviderExecResult:
-        prompt = self._resolve_prompt(step.producer_prompt)
+        prompt = self._resolve_prompt(step.producer_prompt, context=context)
         self._emit_provider_attempt_event(
             "provider_attempt_started",
             step=step,
@@ -1787,20 +1787,35 @@ class Engine:
             f"artifact={handle.name!r} qualified={qualified_name!r} path={str(handle.path)!r}; {details}"
         )
 
-    def _resolve_prompt(self, prompt: str | Prompt | None) -> ResolvedPrompt:
+    def _resolve_prompt(self, prompt: str | Prompt | None, *, context: Context) -> ResolvedPrompt:
         if prompt is None:
             raise WorkflowExecutionError("missing prompt specification")
         if self.prompt_registry is not None:
-            return self.prompt_registry.resolve(prompt)
-        if isinstance(prompt, Prompt):
+            resolved = self.prompt_registry.resolve(prompt)
+        elif isinstance(prompt, Prompt):
             if prompt.source == "inline":
-                return ResolvedPrompt(path=prompt.path, text=prompt.text, source="inline")
-            if prompt.path is not None:
+                resolved = ResolvedPrompt(path=prompt.path, text=prompt.text, source="inline")
+            elif prompt.path is not None:
                 candidate = Path(prompt.path)
                 if candidate.is_absolute() and candidate.exists():
-                    return ResolvedPrompt(path=str(candidate), text=candidate.read_text(encoding="utf-8"), source=prompt.source)
-            return ResolvedPrompt(path=prompt.path, text=None, source=prompt.source)
-        return ResolvedPrompt(path=prompt, text=None, source="registry")
+                    resolved = ResolvedPrompt(path=str(candidate), text=candidate.read_text(encoding="utf-8"), source=prompt.source)
+                else:
+                    resolved = ResolvedPrompt(path=prompt.path, text=None, source=prompt.source)
+            else:
+                resolved = ResolvedPrompt(path=prompt.path, text=None, source=prompt.source)
+        else:
+            resolved = ResolvedPrompt(path=prompt, text=None, source="registry")
+        if resolved.text is None:
+            return resolved
+        return replace(
+            resolved,
+            text=render_runtime_template(
+                resolved.text,
+                context,
+                placeholder_label="prompt placeholder",
+                replace_roots=frozenset({"item", "worklist"}),
+            ),
+        )
 
     def _validate_outcome(self, step: CompiledStep, outcome: Outcome) -> None:
         if not isinstance(outcome, Outcome):

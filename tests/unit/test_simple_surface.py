@@ -784,6 +784,69 @@ def test_simple_workflow_accepts_scoped_item_state_prompt_placeholders() -> None
     assert compiled.worklists["gate"].item_state_model is ItemState
 
 
+def test_simple_workflow_accepts_scoped_runtime_item_prompt_placeholders() -> None:
+    class RuntimeItemPromptWorkflow(simple.Workflow):
+        gates = simple.Worklist.from_items(
+            "gate",
+            items=({"id": "alpha", "title": "Alpha", "payload": {"foo": "bar"}},),
+        )
+        start = simple.step(
+            prompt=simple.Prompt.inline("Inspect {item.id}, {item.dir_key}, and {item.payload.foo}."),
+            scope=gates,
+        )
+
+    compiled = compile_workflow(RuntimeItemPromptWorkflow)
+
+    assert "start" in compiled.steps
+
+
+def test_simple_workflow_rejects_runtime_item_prompt_placeholders_without_scope() -> None:
+    class BadRuntimeItemPromptWorkflow(simple.Workflow):
+        start = simple.step(
+            prompt=simple.Prompt.inline("Inspect {item.id}."),
+        )
+
+    with pytest.raises(
+        WorkflowValidationError,
+        match="requires scope=... on the same step",
+    ):
+        compile_workflow(BadRuntimeItemPromptWorkflow)
+
+
+def test_simple_workflow_accepts_late_bound_worklist_prompt_placeholders() -> None:
+    class WorklistPromptWorkflow(simple.Workflow):
+        gates = simple.Worklist.from_items(
+            "gate",
+            items=({"id": "alpha", "title": "Alpha"},),
+        )
+        start = simple.step(
+            prompt=simple.Prompt.inline(
+                "Inspect {worklist.gate.current.id}, {worklist.gate.item_ids}, and {worklist.gate.is_exhausted}."
+            ),
+        )
+
+    compiled = compile_workflow(WorklistPromptWorkflow)
+
+    assert "gate" in compiled.worklists
+
+
+def test_simple_workflow_rejects_unknown_worklist_prompt_placeholders() -> None:
+    class BadWorklistPromptWorkflow(simple.Workflow):
+        gates = simple.Worklist.from_items(
+            "gate",
+            items=({"id": "alpha", "title": "Alpha"},),
+        )
+        start = simple.step(
+            prompt=simple.Prompt.inline("Inspect {worklist.missing.current.id}."),
+        )
+
+    with pytest.raises(
+        WorkflowValidationError,
+        match="references unknown worklist 'missing'",
+    ):
+        compile_workflow(BadWorklistPromptWorkflow)
+
+
 def test_simple_workflow_rejects_unknown_scoped_item_state_prompt_fields() -> None:
     class ItemState(BaseModel):
         severity: str = "medium"

@@ -226,13 +226,30 @@ def resolve_artifact_template(template: str | Artifact, context: Context) -> Pat
         return candidate
     if "{" not in raw_template and "}" not in raw_template and artifact is not None and artifact.owner_step is not None:
         return context.workflow_folder / artifact.owner_step / raw_template
+    rendered = render_runtime_template(raw_template, context, placeholder_label="artifact template placeholder")
+    return Path(rendered)
+
+
+def render_runtime_template(
+    template: str,
+    context: Context,
+    *,
+    placeholder_label: str,
+    replace_roots: frozenset[str] | None = None,
+) -> str:
+    """Render supported runtime placeholders inside free-form text."""
 
     def replace(match: re.Match[str]) -> str:
-        value = _resolve_placeholder(match.group(1), context)
+        expression = match.group(1).strip()
+        if not expression:
+            return match.group(0) if replace_roots is not None else ""
+        root_name = expression.split(".", 1)[0]
+        if replace_roots is not None and root_name not in replace_roots:
+            return match.group(0)
+        value = _resolve_placeholder(expression, context, placeholder_label=placeholder_label)
         return "" if value is None else str(value)
 
-    rendered = _PLACEHOLDER_RE.sub(replace, raw_template)
-    return Path(rendered)
+    return _PLACEHOLDER_RE.sub(replace, template)
 
 
 def validate_artifact_declaration(artifact: Artifact) -> tuple[str, ...]:
@@ -346,12 +363,11 @@ def _load_jsonschema_validator_cls() -> type[Any]:
     return Draft202012Validator
 
 
-def _resolve_placeholder(expression: str, context: Context) -> Any:
+def _resolve_placeholder(expression: str, context: Context, *, placeholder_label: str) -> Any:
     parts = expression.split(".")
     if not parts:
         return ""
     root_name = parts[0]
-    requires_active_item = root_name in {"item", "worklist"}
     current: Any
     if root_name == "task_id":
         current = context.task_id
@@ -370,21 +386,21 @@ def _resolve_placeholder(expression: str, context: Context) -> Any:
     elif root_name == "state":
         current = context.state
     elif root_name == "item":
-        current = context.item
-        if current is None:
-            raise WorkflowExecutionError(
-                f"artifact template placeholder {{{expression}}} requires an active scoped work item"
-            )
+        return _resolve_item_placeholder(
+            expression,
+            context,
+            placeholder_label=placeholder_label,
+        )
     elif root_name == "worklist":
-        current = _WorklistPlaceholderRoot(context)
+        return _resolve_worklist_placeholder(
+            expression,
+            context,
+            placeholder_label=placeholder_label,
+        )
     else:
         return ""
     for part in parts[1:]:
         if current is None:
-            if requires_active_item:
-                raise WorkflowExecutionError(
-                    f"artifact template placeholder {{{expression}}} requires an active work item"
-                )
             return ""
         if isinstance(current, Mapping):
             current = current.get(part, "")
@@ -393,9 +409,166 @@ def _resolve_placeholder(expression: str, context: Context) -> Any:
     return "" if current is None else current
 
 
-class _WorklistPlaceholderRoot:
-    def __init__(self, context: Context) -> None:
-        self._context = context
+def _resolve_item_placeholder(
+    expression: str,
+    context: Context,
+    *,
+    placeholder_label: str,
+) -> Any:
+    active_worklist = getattr(context, "_active_worklist", None)
+    try:
+        current = context.item
+    except WorkflowExecutionError as exc:
+        if isinstance(active_worklist, str) and active_worklist:
+            raise WorkflowExecutionError(
+                f"{placeholder_label} {{{expression}}} could not load active worklist {active_worklist!r}: {exc}"
+            ) from exc
+        raise WorkflowExecutionError(
+            f"{placeholder_label} {{{expression}}} could not resolve an active scoped work item: {exc}"
+        ) from exc
+    if current is None:
+        raise WorkflowExecutionError(
+            f"{placeholder_label} {{{expression}}} requires an active scoped work item"
+        )
+    return _resolve_work_item_path(
+        current,
+        expression=expression,
+        parts=expression.split(".")[1:],
+        placeholder_label=placeholder_label,
+        worklist_name=active_worklist if isinstance(active_worklist, str) else None,
+    )
 
-    def __getattr__(self, item: str) -> Any:
-        return self._context.selection(item)
+
+def _resolve_worklist_placeholder(
+    expression: str,
+    context: Context,
+    *,
+    placeholder_label: str,
+) -> Any:
+    parts = expression.split(".")
+    if len(parts) < 2 or not parts[1]:
+        raise WorkflowExecutionError(
+            f"{placeholder_label} {{{expression}}} must specify a declared worklist name"
+        )
+    worklist_name = parts[1]
+    try:
+        selection = context.ensure_selection(worklist_name)
+    except WorkflowExecutionError as exc:
+        raise WorkflowExecutionError(
+            f"{placeholder_label} {{{expression}}} could not load worklist {worklist_name!r}: {exc}"
+        ) from exc
+    remaining = parts[2:]
+    if not remaining:
+        return selection
+    field_name, *rest = remaining
+    if field_name == "current":
+        current = selection.current
+        if current is None:
+            raise WorkflowExecutionError(
+                f"{placeholder_label} {{{expression}}} requires a current item on worklist {worklist_name!r}"
+            )
+        return _resolve_work_item_path(
+            current,
+            expression=expression,
+            parts=rest,
+            placeholder_label=placeholder_label,
+            worklist_name=worklist_name,
+        )
+    if field_name == "item_ids":
+        return tuple(item.id for item in selection.items)
+    if field_name == "current_index":
+        return selection.current_index
+    if field_name == "is_exhausted":
+        return selection.current is None
+    return _resolve_runtime_path(
+        selection,
+        expression=expression,
+        parts=remaining,
+        placeholder_label=placeholder_label,
+        payload_path=None,
+    )
+
+
+def _resolve_work_item_path(
+    item: Any,
+    *,
+    expression: str,
+    parts: list[str],
+    placeholder_label: str,
+    worklist_name: str | None,
+) -> Any:
+    if not parts:
+        return item
+    field_name, *rest = parts
+    if field_name == "payload":
+        payload = getattr(item, "payload", None)
+        if not rest:
+            return payload
+        return _resolve_runtime_path(
+            payload,
+            expression=expression,
+            parts=rest,
+            placeholder_label=placeholder_label,
+            payload_path=[],
+        )
+    if field_name in {"id", "title", "status", "dir_key"}:
+        value = getattr(item, field_name, None)
+        if not rest:
+            return value
+        return _resolve_runtime_path(
+            value,
+            expression=expression,
+            parts=rest,
+            placeholder_label=placeholder_label,
+            payload_path=None,
+        )
+    worklist_suffix = f" on worklist {worklist_name!r}" if worklist_name else ""
+    raise WorkflowExecutionError(
+        f"{placeholder_label} {{{expression}}} references unsupported work item field {field_name!r}{worklist_suffix}"
+    )
+
+
+def _resolve_runtime_path(
+    current: Any,
+    *,
+    expression: str,
+    parts: list[str],
+    placeholder_label: str,
+    payload_path: list[str] | None,
+) -> Any:
+    value = current
+    traversed = list(payload_path or [])
+    for part in parts:
+        if value is None:
+            if payload_path is not None:
+                missing_path = ".".join((*traversed, part))
+                raise WorkflowExecutionError(
+                    f"{placeholder_label} {{{expression}}} references missing payload path {missing_path!r}"
+                )
+            raise WorkflowExecutionError(
+                f"{placeholder_label} {{{expression}}} requires an available runtime value before {part!r}"
+            )
+        try:
+            value = _lookup_runtime_value(value, part)
+        except (AttributeError, KeyError, TypeError) as exc:
+            if payload_path is not None:
+                missing_path = ".".join((*traversed, part))
+                raise WorkflowExecutionError(
+                    f"{placeholder_label} {{{expression}}} references missing payload path {missing_path!r}"
+                ) from exc
+            raise WorkflowExecutionError(
+                f"{placeholder_label} {{{expression}}} references unknown runtime field {part!r}"
+            ) from exc
+        if payload_path is not None:
+            traversed.append(part)
+    return value
+
+
+def _lookup_runtime_value(current: Any, part: str) -> Any:
+    if isinstance(current, Mapping):
+        if part not in current:
+            raise KeyError(part)
+        return current[part]
+    if not hasattr(current, part):
+        raise AttributeError(part)
+    return getattr(current, part)

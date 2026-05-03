@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from contextlib import contextmanager
 from contextvars import ContextVar, Token
-from dataclasses import asdict, dataclass, field
+from dataclasses import asdict, dataclass, field, replace
 import hashlib
 import inspect
 import json
@@ -20,6 +20,7 @@ from .errors import (
     WorkflowExecutionError,
     exception_failure_context_payload,
 )
+from .artifacts import render_runtime_template
 from .mappings import normalize_mapping
 from .prompts import Prompt, PromptRegistry, ResolvedPrompt, resolve_prompt_reference
 from .providers.models import OperationRequest
@@ -507,18 +508,30 @@ def _resolve_prompt(prompt: Prompt | str, *, runtime: OperationRuntime) -> Resol
     prompt = _normalize_operation_prompt(prompt)
     registry = runtime.prompt_registry
     if registry is not None:
-        return registry.resolve(prompt)
-    if prompt.source == "inline":
-        return ResolvedPrompt(
+        resolved = registry.resolve(prompt)
+    elif prompt.source == "inline":
+        resolved = ResolvedPrompt(
             path=prompt.path,
             text=prompt.text,
             source="inline",
             reference_values={"source": "inline", "inline": True},
         )
-    search_roots: tuple[Path, ...] = ()
-    if runtime.context is not None:
-        search_roots = (runtime.context.package_folder, runtime.context.workflow_folder)
-    return resolve_prompt_reference(prompt.path, source=prompt.source, search_roots=search_roots)
+    else:
+        search_roots: tuple[Path, ...] = ()
+        if runtime.context is not None:
+            search_roots = (runtime.context.package_folder, runtime.context.workflow_folder)
+        resolved = resolve_prompt_reference(prompt.path, source=prompt.source, search_roots=search_roots)
+    if runtime.context is None or resolved.text is None:
+        return resolved
+    return replace(
+        resolved,
+        text=render_runtime_template(
+            resolved.text,
+            runtime.context,
+            placeholder_label="prompt placeholder",
+            replace_roots=frozenset({"item", "worklist"}),
+        ),
+    )
 
 
 def _normalize_operation_prompt(prompt: Prompt | str) -> Prompt:

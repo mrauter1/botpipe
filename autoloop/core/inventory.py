@@ -103,6 +103,8 @@ def collect_artifact_inventory(definition: Any) -> dict[str, ArtifactInventoryRe
             record["workflow_level"] = True
         if producer_step is not None and producer_step not in record["producer_steps"]:
             record["producer_steps"].append(producer_step)
+        if record["workflow_level"] and record["producer_steps"]:
+            _raise_dual_role_artifact_error(record)
 
     for attr_name, artifact in definition.workflow_artifacts.items():
         register(artifact, fallback_name=attr_name, workflow_level=True)
@@ -131,6 +133,19 @@ def collect_artifact_inventory(definition: Any) -> dict[str, ArtifactInventoryRe
         )
         for record in records_by_identity.values()
     }
+
+
+def _raise_dual_role_artifact_error(record: dict[str, Any]) -> None:
+    producer_steps = tuple(record["producer_steps"])
+    producers = ", ".join(repr(step_name) for step_name in producer_steps) or "<none>"
+    raise WorkflowValidationError(
+        f"artifact {record['name']!r} (qualified name {record['qualified_name']!r}) is declared both as a "
+        f"workflow-level artifact and as a produced step artifact; workflow-level declaration: workflow class "
+        f"attribute {record['name']!r}; producer step names: {producers}. Recommended fix: For external/input "
+        f"artifacts: keep as workflow class attribute and remove from step writes. For produced artifacts: keep as "
+        f"step writes only and do not assign as workflow class attribute. For managed artifacts: use the explicit "
+        f"managed-artifact role once implemented."
+    )
 
 
 def public_artifact_inventory(inventory: dict[str, ArtifactInventoryRecord]) -> dict[str, ArtifactInventoryRecord]:

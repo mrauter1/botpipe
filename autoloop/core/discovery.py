@@ -813,13 +813,18 @@ def _validate_simple_prompt_reference(
             )
         return None
     if root == "item":
-        if second != "state" or not rest:
-            raise WorkflowValidationError(
-                f"simple step {step_name!r} prompt placeholder {{{reference}}} must use item.state.<field>"
-            )
         if scope_name is None:
             raise WorkflowValidationError(
                 f"simple step {step_name!r} prompt placeholder {{{reference}}} requires scope=... on the same step"
+            )
+        if second in {"id", "title", "status", "dir_key"} and not rest:
+            return None
+        if second == "payload":
+            return None
+        if second != "state" or not rest:
+            raise WorkflowValidationError(
+                f"simple step {step_name!r} prompt placeholder {{{reference}}} must use item.id, item.title, "
+                "item.status, item.dir_key, item.payload, item.payload.<path>, or item.state.<field>"
             )
         field_name = rest[0]
         available_fields = worklist_item_state_fields.get(scope_name, frozenset())
@@ -832,6 +837,38 @@ def _validate_simple_prompt_reference(
                 f"simple step {step_name!r} prompt placeholder {{{reference}}} references unknown item state field {field_name!r} on worklist {scope_name!r}"
             )
         return None
+    if root == "worklist":
+        worklist_name = second
+        if worklist_name not in worklist_item_state_fields:
+            raise WorkflowValidationError(
+                f"simple step {step_name!r} prompt placeholder {{{reference}}} references unknown worklist {worklist_name!r}"
+            )
+        if not rest:
+            raise WorkflowValidationError(
+                f"simple step {step_name!r} prompt placeholder {{{reference}}} must qualify a worklist runtime field"
+            )
+        worklist_field, *worklist_rest = rest
+        if worklist_field == "current":
+            if not worklist_rest:
+                raise WorkflowValidationError(
+                    f"simple step {step_name!r} prompt placeholder {{{reference}}} must qualify a current work item field"
+                )
+            current_field, *current_rest = worklist_rest
+            if current_field in {"id", "title", "status", "dir_key"} and not current_rest:
+                return None
+            if current_field == "payload":
+                return None
+            raise WorkflowValidationError(
+                f"simple step {step_name!r} prompt placeholder {{{reference}}} must use "
+                "worklist.<name>.current.id, .title, .status, .dir_key, .payload, or .payload.<path>"
+            )
+        if worklist_field in {"item_ids", "current_index", "is_exhausted"} and not worklist_rest:
+            return None
+        raise WorkflowValidationError(
+            f"simple step {step_name!r} prompt placeholder {{{reference}}} must use "
+            "worklist.<name>.current..., worklist.<name>.item_ids, worklist.<name>.current_index, "
+            "or worklist.<name>.is_exhausted"
+        )
     if root in {"artifacts", "step"} and not rest:
         return _validate_simple_prompt_reference(
             second,
