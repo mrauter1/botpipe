@@ -722,6 +722,41 @@ def test_list_run_records_normalizes_legacy_paused_status_for_public_filters(tmp
     assert records[0].paused is True
 
 
+def test_run_metadata_keeps_blocked_status_distinct_from_awaiting_input(tmp_path: Path) -> None:
+    _write_blocked_route_workflow_package(tmp_path, "blocked_demo", "BlockedWorkflow")
+
+    result = run_workflow_package(
+        "blocked_demo",
+        provider=ScriptedLLMProvider(
+            llm_turns=[Outcome(raw_output="Dependency missing", tag="blocked", reason="Waiting on external approval.")]
+        ),
+        options=_runner_options(tmp_path, task_id="blocked-task", message="Check dependency status"),
+    )
+
+    run_dir = next((tmp_path / ".autoloop" / "tasks" / "blocked-task" / "wf_blocked_demo" / "runs").iterdir())
+    run_meta = json.loads((run_dir / "run.json").read_text(encoding="utf-8"))
+    blocked_records = list_run_records(
+        tmp_path,
+        workflow_name="blocked_demo",
+        task_id="blocked-task",
+        status="blocked",
+    )
+    awaiting_records = list_run_records(
+        tmp_path,
+        workflow_name="blocked_demo",
+        task_id="blocked-task",
+        status="awaiting_input",
+    )
+
+    assert result.terminal == "AWAIT_INPUT"
+    assert run_meta["status"] == "blocked"
+    assert [record.run_id for record in blocked_records] == [run_dir.name]
+    assert blocked_records[0].status == "blocked"
+    assert blocked_records[0].normalized_status == "blocked"
+    assert blocked_records[0].awaiting_input is False
+    assert awaiting_records == ()
+
+
 def test_run_record_projects_legacy_pending_question_as_pending_input(tmp_path: Path) -> None:
     _write_run_summary_record(
         tmp_path,
@@ -1686,6 +1721,43 @@ class {class_name}(Workflow):
         prompt=Prompt.file("prompts/ask.md"),
         writes=[context_dump],
         routes={{"answered": FINISH, "question": AWAIT_INPUT}},
+    )
+""".strip()
+        + "\n",
+        encoding="utf-8",
+    )
+    return package_dir / "workflow.py"
+
+
+def _write_blocked_route_workflow_package(root: Path, workflow_name: str, class_name: str) -> Path:
+    package_dir = root / "workflows" / workflow_name
+    package_dir.mkdir(parents=True, exist_ok=True)
+    (root / "workflows" / "__init__.py").write_text("__all__ = []\n", encoding="utf-8")
+    (package_dir / "__init__.py").write_text(
+        f"from .workflow import {class_name}\n__all__ = ['{class_name}']\n",
+        encoding="utf-8",
+    )
+    (package_dir / "workflow.toml").write_text(f'name = "{workflow_name}"\n', encoding="utf-8")
+    (package_dir / "prompts").mkdir(exist_ok=True)
+    (package_dir / "prompts" / "ask.md").write_text("package prompt\n", encoding="utf-8")
+    (package_dir / "workflow.py").write_text(
+        f"""
+from __future__ import annotations
+
+from pydantic import BaseModel
+
+from autoloop import AWAIT_INPUT, Prompt, Workflow, step
+
+
+class {class_name}(Workflow):
+    name = "{workflow_name}"
+
+    class State(BaseModel):
+        pass
+
+    ask = step(
+        prompt=Prompt.file("prompts/ask.md"),
+        routes={{"blocked": AWAIT_INPUT}},
     )
 """.strip()
         + "\n",

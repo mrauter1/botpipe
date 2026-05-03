@@ -1162,3 +1162,65 @@ Open issues / next step
 <loop-control>
 {"schema":"docloop.loop_control/v1","kind":"promise","promise":"COMPLETE"}
 </loop-control>
+
+
+---
+run_id=run-20260503T001920Z-8f0e7926 | entry=session_turn | pair=test | phase=producer | cycle=1 | attempt=1 | thread_id=019deb8f-cd18-7a82-ae07-835e2444b0ff
+---
+provider=codex
+mode=resume
+template=/home/rauter/.local/share/pipx/venvs/autoloop/lib/python3.12/site-packages/autoloop/templates/test_producer.md
+session_id=019deb8f-cd18-7a82-ae07-835e2444b0ff
+
+
+---
+run_id=run-20260503T001920Z-8f0e7926 | entry=phase_output | pair=test | phase=producer | process=codex-agent | cycle=1 | attempt=1 | thread_id=019deb8f-cd18-7a82-ae07-835e2444b0ff
+---
+I’m checking the phase test artifacts and the current runtime coverage first. Then I’ll fill the most important remaining regression gaps with small deterministic tests and document the coverage map.
+
+I found a few narrow coverage gaps rather than broad missing areas: pair-step short-circuit attribution is only partially asserted, and the centralized blocked-vs-awaiting-input run-status mapping doesn’t have an explicit regression test. I’m adding those instead of spreading changes across unrelated suites.
+
+I’ve chosen two focused additions: strengthen the pair-step short-circuit assertions where the new attribution fields matter, and add one workspace-level blocked-status regression test so the new shared status logic is exercised through the public runtime path.
+
+I’ve made the focused test additions. I’m running only the affected tests now to validate both the new pair-step assertions and the blocked-status workspace path before I close the phase artifacts.
+
+One of the new contract assertions failed. I’m inspecting that failure first, because it will tell me whether the test is too strict or whether there’s a real mismatch in the after-producer attribution path.
+
+The failing assertion was on the final run transition, which is the `publish` step after the `Goto`, not the `pair` step that actually exercised the short-circuit. I’m tightening that test by asserting against the `pair` step’s `step_finished` trace record instead.
+
+The low-level engine path in this contract suite doesn’t emit a persisted trace file by default. I’m switching that assertion to a small runtime extension recorder, which keeps the test deterministic and scoped to the engine contract.
+
+The blocked-status path is working; the failure is just the collection type from `list_run_records`, which returns a tuple here. I’m tightening that assertion and rerunning the targeted workspace checks.
+
+The new tests are passing. I’m making one small documentation refinement in the test strategy to record the stabilization approach, since these checks rely on local package generation and scripted providers rather than any external timing or I/O variability.
+
+Scope considered
+
+- Phase-local runtime-correctness-and-telemetry test coverage only.
+- I stayed within the changed runtime/status/history/workspace behavior and the active test artifacts.
+
+What I analyzed
+
+- The phase contract, `test_strategy.md`, `feedback.md`, and the runtime decisions ledger.
+- Existing coverage in `tests/contract/test_engine_contracts.py`, `tests/runtime/test_workspace_and_context.py`, `tests/runtime/test_history.py`, `tests/runtime/test_runtime_static_graph.py`, and adjacent optimizer/worklist tests.
+
+What I changed
+
+- Strengthened pair-step short-circuit coverage in [tests/contract/test_engine_contracts.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/tests/contract/test_engine_contracts.py) by asserting:
+  - `before_producer` route short-circuits preserve `source_hook` / `source_phase`
+  - `after_producer` `Goto` short-circuits record `runtime_control`, target step, provider-attempt flags, and hook attribution
+  - `after_producer` `RequestInput` preserves pending-input identity and producer-only attribution
+- Added a workspace-level blocked-status regression test in [tests/runtime/test_workspace_and_context.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/tests/runtime/test_workspace_and_context.py) to prove `blocked` remains distinct from generic `awaiting_input` in `run.json` and `list_run_records(...)`.
+- Updated [test_strategy.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/standalone-remaining-delta-implementation-spec-g-e919a184/runs/run-20260503T001920Z-8f0e7926/artifacts/test/phases/runtime-correctness-and-telemetry/test_strategy.md), [feedback.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/standalone-remaining-delta-implementation-spec-g-e919a184/runs/run-20260503T001920Z-8f0e7926/artifacts/test/phases/runtime-correctness-and-telemetry/feedback.md), and appended one scoped note under the current test-author header in [decisions.txt](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/standalone-remaining-delta-implementation-spec-g-e919a184/runs/run-20260503T001920Z-8f0e7926/decisions.txt).
+
+Key findings / decisions
+
+- The biggest remaining regression risk was pair-step short-circuit attribution, because the final run transition can move past the short-circuited step. I covered that with a small runtime extension recorder instead of relying on the final run result.
+- For workspace/inspection behavior, the highest-signal missing check was `blocked` status persistence through the public run-record path, so I added one deterministic package-level regression test rather than duplicating broader history suites.
+
+Open issues / next step
+
+- No phase-local blocker remains from the added test coverage.
+- Validation run:
+  - `./.venv/bin/pytest tests/contract/test_engine_contracts.py -k 'before_producer_route_short_circuits_without_provider_and_preserves_candidate_route_none or after_producer_goto_short_circuits_verifier or after_producer_request_input_checkpoints_pending_input_before_verifier'`
+  - `./.venv/bin/pytest tests/runtime/test_workspace_and_context.py -k 'run_metadata_keeps_blocked_status_distinct_from_awaiting_input or list_run_records_normalizes_legacy_paused_status_for_public_filters'`
