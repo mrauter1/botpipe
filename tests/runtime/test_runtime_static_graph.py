@@ -29,12 +29,11 @@ class _StaticGraphWorkflow(Workflow):
     name = "static_graph_demo"
 
     request = Artifact.text("{task_folder}/request.txt", name="request")
-    note = Artifact.text("{run_folder}/note.txt", name="note")
     assessment = produce_verify_step(
         producer_prompt=Prompt.file("prompts/assessment_producer.md"),
         verifier_prompt=Prompt.file("prompts/assessment_verifier.md"),
         requires=[request],
-        producer_writes=[note],
+        producer_writes=[Artifact.text("{run_folder}/note.txt", name="note")],
         control_schema=_AssessmentPayload,
         routes={"assessment_ready": Route.to("finish", summary="assessment completed")},
     )
@@ -73,6 +72,10 @@ def test_static_step_graph_includes_step_kind_prompts_routes_and_artifact_names(
     assert assessment["writes"] == ["assessment.note"]
     assert assessment["log_artifacts"] == []
     assert "assessment_ready" in assessment["available_routes"]
+    assert assessment["authored_routes"] == ["assessment_ready"]
+    assert assessment["runtime_control_routes"] == ["question"]
+    assert assessment["provider_visible_routes_interactive"] == ["assessment_ready", "question"]
+    assert assessment["provider_visible_routes_full_auto"] == ["assessment_ready"]
     assert finish["kind"] == "python"
     assert finish["prompt"] is None
     assert finish["producer_prompt"] is None
@@ -88,6 +91,9 @@ def test_static_step_graph_includes_route_metadata_and_schema_presence(tmp_path:
 
     assert assessment["routes"]["assessment_ready"]["summary"] == "assessment completed"
     assert assessment["routes"]["assessment_ready"]["required_writes"] == []
+    assert assessment["routes"]["question"]["is_runtime_control"] is True
+    assert assessment["routes"]["question"]["provider_visible_interactive"] is True
+    assert assessment["routes"]["question"]["provider_visible_full_auto"] is False
     assert assessment["has_expected_output_schema"] is True
     assert payload["terminals"] == ["FINISH", "AWAIT_INPUT", "FAIL"]
     assert assessment["runtime_control_hook_locations"] == []
@@ -134,6 +140,7 @@ def test_topology_payload_exposes_canonical_writes_and_required_writes() -> None
     assert assessment["writes"] == ["assessment.note"]
     assert assessment["routes"][0]["required_writes"] == []
     assert assessment["routes"][0]["provider_visible"] is True
+    assert any(route["tag"] == "question" and route["is_runtime_control"] for route in assessment["routes"])
     assert finish["routes"][0]["target"] == "FINISH"
     assert payload["source_hash"] == compiled.source_hash
     assert payload["topology_hash"] == compiled.topology_hash
@@ -283,10 +290,6 @@ def test_topology_payload_omits_unbound_effective_set_for_inherited_global_route
             GLOBAL: {"failed": FAIL},
         }
 
-        @staticmethod
-        def on_ask(state, outcome, artifacts):
-            return state
-
     compiled = compile_workflow(GlobalRouteWorkflow)
 
     payload = workflow_topology_payload(compiled)
@@ -316,10 +319,6 @@ def test_topology_payload_keeps_explicit_global_route_required_writes_concrete()
             GLOBAL: {"failed": Route.to(FAIL, required_writes=("report",))},
         }
 
-        @staticmethod
-        def on_ask(state, outcome, artifacts):
-            return state
-
     compiled = compile_workflow(ExplicitGlobalRouteWorkflow)
 
     payload = workflow_topology_payload(compiled)
@@ -344,10 +343,6 @@ def test_route_table_and_compile_report_include_hidden_global_routes(tmp_path: P
             ask: {"done": FINISH},
             GLOBAL: {"blocked": Route.to(AWAIT_INPUT, provider_visible=False)},
         }
-
-        @staticmethod
-        def on_ask(state, outcome, artifacts):
-            return state
 
     compiled = compile_workflow(HiddenGlobalRouteWorkflow)
 

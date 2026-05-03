@@ -142,13 +142,21 @@ review = step(
 Runtime behavior:
 
 - `control_schema` defines the JSON-schema-like contract for `Outcome.payload`
-- `available_routes` is derived mechanically from the declared step-local routes plus reserved routes
+- `available_routes` is derived mechanically from the declared step-local routes plus authored global routes plus any internal runtime-control routes
 - step-local `Route.to(...)` metadata carries optional per-route summary, handoff, and selected-route output metadata for legal routes only
 - `required_writes` is the normalized selected-route output obligation map derived from explicit `Route(...)` metadata or inferred empty tuples
 - route metadata is authored on `Route(...)` when the workflow needs to override inferred summaries or declare route-specific `required_writes`
 - author workflows with step-local `routes={...}`; `transitions` is not part of the canonical authoring surface
 - `retry_policy` controls provider-attributable retries and defaults to `ProviderRetryPolicy(max_attempts=3)` on provider-backed steps
 - the rendered Runtime Step Contract can also include resolved-target route handoff text and retry feedback when the engine supplies them
+
+## Static And Runtime Validation
+
+Static validation stays strict about workflow topology, declared names, route legality, declared worklists, artifact-reference ambiguity, callback existence, and schema shape.
+
+Runtime validation owns worklist contents, generated boards, runtime-created prompt context, item-scoped artifact paths, provider failures, and semantic validation steps that depend on data created during the run.
+
+That split is intentional: the framework should reject typos and invalid static contracts early without forcing authors to pre-create runtime data just to compile or start a run.
 
 Authoring rules:
 
@@ -508,6 +516,14 @@ Use `Route.to(...)`, `Route.finish(...)`, `Route.await_input(...)`, and `Route.f
 
 `Handoff(...)` adds source-step-to-target-step text that the runtime delivers only to the resolved provider-mediated target step. Dynamic handoff text may also be returned through `Event(tag="needs_rework", handoff="...")`. Handoffs are text-only and the current Runtime Step Contract remains authoritative.
 
+Default provider-control policy is narrow:
+
+- `question` is the only default runtime control route
+- the default `question` route is provider-visible only when the engine is not running full-auto
+- `blocked` and `failed` are never injected by default
+- explicit application routes named `blocked` or `failed` remain legal ordinary routes
+- provider transport failures, malformed output, illegal routes, and missing or invalid required artifacts stay runtime-owned failures rather than provider-selected `failed` outcomes
+
 ## Worklists And Scoped Steps
 
 `Worklist` and `WorkItem` let workflows scope a step to the current selected item without introducing hidden looping.
@@ -537,6 +553,10 @@ Worklist helpers exposed on `Context`:
 - `ctx.worklist("gate")`
 - `ctx.worklists.gate`
 - `ctx.current_worklist`
+- `ctx.selection("gate")`
+- `ctx.ensure_selection("gate")`
+
+Declared worklists are lazy. The framework validates the static worklist contract at compile time, but it does not require the backing source artifact or generated board to exist until the run first touches that worklist through a scoped step, prompt placeholder, session continuity, or explicit worklist access.
 
 Worklist helpers mutate selection and status only. They never route automatically.
 
@@ -574,6 +594,34 @@ Useful helper methods:
 - `ctx.current_worklist.validation_error()`
 
 The engine does not silently loop a whole worklist. Progression stays explicit in `on_taken` hooks and direct-control returns.
+
+When a common worklist transition is deterministic, use typed effects instead of repeating imperative hook glue:
+
+```python
+from autoloop import Effects, Route
+
+
+review = step(
+    prompt=Prompt.inline("Review the selected gate."),
+    scope=gates,
+    routes={
+        "accepted": Route.complete_current(SELF),
+        "done": Route.advance("finalize", exhausted="finalize"),
+    },
+)
+
+
+def after_review(ctx):
+    return Effects.complete_and_advance(exhausted="finalize")
+```
+
+`Effects.then(...)`, `Effects.advance(...)`, `Effects.complete_and_advance(...)`, and `Effects.refresh(...)` reuse the normal worklist runtime APIs, so status changes, refreshes, advancement, runtime events, and checkpointing all stay on the same execution path.
+
+Workflow-level artifacts and step-produced artifacts are different roles:
+
+- workflow-level artifacts are inputs or managed external artifacts
+- step `writes` are produced artifacts
+- do not declare the same artifact in both roles unless and until an explicit managed-artifact role is introduced
 
 ## Typed Child Workflow Contracts
 
@@ -679,6 +727,29 @@ Validation helper boundary:
 - keep workflow-specific publication assertions, domain allow-lists, and artifact-family invariants in workflow code
 - keep package section requirements, scoped-task extraction, unknown-reference checks, state-drift assertions, and receipt shaping in workflow code
 - the helpers only validate explicit workflow-local inputs and artifacts; they do not add runtime-owned routing, publication policy, or hidden execution
+
+For repairable semantic validation, prefer `validation_step(...)` plus `ValidationResult` over one-off `try/except` plumbing inside ad hoc `python_step(...)` handlers.
+
+```python
+from autoloop import FINISH, Md, ValidationResult, validation_step
+
+
+feedback = Md("manifest_feedback")
+
+
+@validation_step(
+    name="validate_manifest",
+    feedback=feedback,
+    success=FINISH,
+    repair="repair",
+)
+def validate_manifest(ctx) -> ValidationResult:
+    if ctx.artifacts.manifest.path.exists():
+        return ValidationResult.valid()
+    return ValidationResult.invalid("Manifest is missing.", details=("Create manifest.json.",))
+```
+
+The helper lowers to a normal Python step, writes a deterministic feedback artifact on repairable failure, emits runtime validation events, and keeps `success`, `repair`, and optional `failed` routing explicit in workflow code.
 
 For workflow `Params` models, reuse the shared Pydantic validator factories instead of copying the same `field_validator(...)` bodies into every `params.py`.
 

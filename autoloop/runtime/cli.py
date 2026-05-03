@@ -256,14 +256,18 @@ def _handle_workflows_show(args: argparse.Namespace, *, provider_factory: Callab
             "steps": [
                 {
                     "available_routes": list(step.available_routes),
+                    "authored_routes": list(step.authored_routes),
                     "has_expected_output_schema": step.expected_output_schema is not None,
                     "kind": step.kind,
                     "log_artifacts": list(step.log_artifacts),
                     "name": step.name,
+                    "provider_visible_routes_full_auto": list(step.provider_visible_routes_full_auto),
+                    "provider_visible_routes_interactive": list(step.provider_visible_routes_interactive),
                     "producer_prompt": step.producer_prompt,
                     "writes": list(step.writes),
                     "reads": list(step.reads),
                     "requires": list(step.requires),
+                    "runtime_control_routes": list(step.runtime_control_routes),
                     "routes": {
                         route_name: {
                             "target": route.target,
@@ -272,6 +276,9 @@ def _handle_workflows_show(args: argparse.Namespace, *, provider_factory: Callab
                             "handoff": route.handoff,
                             "on_taken": route.on_taken,
                             "provider_visible": route.provider_visible,
+                            "provider_visible_interactive": route.provider_visible_interactive,
+                            "provider_visible_full_auto": route.provider_visible_full_auto,
+                            "is_runtime_control": route.is_runtime_control,
                         }
                         for route_name, route in step.routes.items()
                     },

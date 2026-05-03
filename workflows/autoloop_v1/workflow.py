@@ -45,9 +45,9 @@ class AutoloopV1(Workflow):
     phase_session = Session()
 
     request = Artifact("{run_folder}/request.md")
-    phase_plan = Artifact("{task_folder}/plan/phase_plan.yaml")
-    impl_notes = Artifact("{task_folder}/implement/phases/{state.phase.dir_key}/implementation_notes.md")
-    test_strat = Artifact("{task_folder}/test/phases/{state.phase.dir_key}/test_strategy.md")
+    phase_plan = Artifact("{task_folder}/plan/phase_plan.yaml", role="managed")
+    impl_notes = Artifact("{task_folder}/implement/phases/{state.phase.dir_key}/implementation_notes.md", role="managed")
+    test_strat = Artifact("{task_folder}/test/phases/{state.phase.dir_key}/test_strategy.md", role="managed")
 
     plan = produce_verify_step(
         producer_prompt=Prompt.file("prompts/plan_producer.md"),

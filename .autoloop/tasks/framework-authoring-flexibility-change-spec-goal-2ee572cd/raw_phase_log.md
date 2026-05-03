@@ -1602,3 +1602,84 @@ Open issues / next step
 <loop-control>
 {"schema":"docloop.loop_control/v1","kind":"promise","promise":"COMPLETE"}
 </loop-control>
+
+
+---
+run_id=run-20260503T200339Z-6d598cb8 | entry=session_turn | pair=implement | phase=producer | cycle=1 | attempt=1 | thread_id=019defd0-6015-76a3-b92f-f999f62d0d87
+---
+provider=codex
+mode=start
+template=/home/rauter/.local/share/pipx/venvs/autoloop/lib/python3.12/site-packages/autoloop/templates/implement_producer.md
+session_id=019defd0-6015-76a3-b92f-f999f62d0d87
+
+
+---
+run_id=run-20260503T200339Z-6d598cb8 | entry=phase_output | pair=implement | phase=producer | process=codex-agent | cycle=1 | attempt=1 | thread_id=019defd0-6015-76a3-b92f-f999f62d0d87
+---
+I’m treating this turn as the inspection/docs/regression sweep. First I’m reading the phase artifacts and the current inspection/static-graph surfaces so I can scope the required code and test updates precisely.
+
+The earlier phases have already landed the runtime changes, so this pass is about read models, docs, and whatever regressions those changes exposed. I’m checking the current worktree and the inspection-related modules before I edit anything.
+
+I’ve confirmed the runtime-facing compile objects already carry the new route views. Next I’m tracing where the inspection payloads still flatten everything back to `available_routes`, because that is the main place the old assumptions can survive.
+
+I’ve found two categories of stale assumptions: inspection payloads still only expose `available_routes`, and a few regression tests still expect default Python-step `failed` injection. I’m running the narrow suites now to get an exact failure list before patching.
+
+Inspection work is narrowing down to three concrete edits: add the new route-view fields to capability/static-graph payloads, refresh docs that still describe blanket reserved routes, and update stale regression fixtures that still rely on old `failed` injection or dual-role produced artifacts.
+
+I’ve got enough context to edit now. I’m updating the inspection read models first so static graph, capability inspection, and CLI all expose the same route split instead of re-deriving older flat route lists.
+
+I’m moving on to the regressions now. Most of the failing tests are stale fixtures rather than runtime bugs: they still declare produced artifacts as workflow-level attributes or expect blanket `failed` injection that the earlier phases intentionally removed.
+
+The core inspection/docs tests are green now. I’m running the broader capability and contract regressions next because the payload shape changes can ripple into selected-workflow snapshots and provider contract tests.
+
+The broader regression pass turned up two more buckets: stale test baselines for the new route views, and existing workflow packages that now trip the new artifact-ownership diagnostic. I’m inspecting the shared workflow authoring pattern before I touch those packages so I can fix it once instead of chasing each workflow individually.
+
+I’m taking the smaller-risk route for the repo workflows: add the explicit managed-artifact escape hatch the original spec allowed, then mark the intentionally shared workflow-owned outputs that are both published on the workflow surface and produced by steps. That avoids a large authoring refactor while keeping the diagnostic for unmarked cases.
+
+I’ve narrowed the remaining work to two snapshot-style test failures in `test_stdlib_and_extensions.py`. I’m inspecting the actual emitted payloads now so I can update only the stale expectations rather than changing runtime behavior further.
+
+The shell here doesn’t expose `python` on `PATH`; I’m rerunning those failures with the repo’s virtualenv interpreter so I can diff the actual snapshots.
+
+I’ve confirmed both remaining failures are stale expected payloads, not new runtime regressions. I’m extracting the exact emitted JSON for those helpers so I can patch the snapshots precisely.
+
+The test module isn’t importable as a package from `/tmp`, so I’m loading it by file path and reusing its fixture helpers directly. That should give me the exact JSON without depending on pytest’s truncated diff.
+
+I’ve got the exact emitted snapshots. The remaining drift is limited to test expectations: the decomposition payload now includes route `target`/`on_taken` metadata and dropped `route_required_writes`, and the portfolio health snapshot now uses structured `pending_input`/`finalization` fields instead of flat `pending_question`.
+
+I’m patching the stale assertions in smaller chunks. The earlier combined patch failed on context matching because these two snapshot blocks are far apart in the file.
+
+The contract suite is clean, and the larger stdlib regression file is still running. I’m waiting on that full pass now before I update the phase notes and decision ledger.
+
+The last stale expectations are fixed. I’m doing one consolidated regression sweep across the touched runtime, contract, unit, and docs suites to make sure the inspection/documentation changes are consistent end to end.
+
+I’m in the closeout pass now: recording the one non-obvious compatibility decision in the run ledger and updating the phase implementation notes with the actual files, symbols, scope justification, and validation sweep.
+
+Scope considered
+
+Phase `inspection-docs-and-regression` only. I stayed on the requested inspection/static-graph surfaces, docs, regression updates, and the minimal compatibility work needed to keep existing catalog workflows compiling under the new artifact-ownership diagnostic.
+
+What I analyzed
+
+I traced the inspection/read-model path through [workflow_capabilities.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/autoloop/core/workflow_capabilities.py), [static_graph.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/autoloop/runtime/static_graph.py), and [cli.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/autoloop/runtime/cli.py), then checked the doc surfaces in [authoring.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/docs/authoring.md) and [architecture.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/docs/architecture.md). I also followed the ownership diagnostic seam in [artifacts.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/autoloop/core/artifacts.py) and [inventory.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/autoloop/core/inventory.py), then refreshed the relevant runtime/unit/contract/doc tests.
+
+What I changed
+
+Inspection payloads now distinguish authored routes, runtime control routes, and provider-visible routes for interactive vs full-auto mode across capability payloads, static graph output, and CLI workflow inspection. Route payloads also now carry `is_runtime_control` plus policy-specific visibility flags.
+
+The docs now describe the shipped contract: static vs runtime validation boundaries, question-only default provider control routing, lazy worklists, typed effects, `validation_step`, and artifact ownership rules.
+
+To keep existing catalog workflows compatible with the stricter dual-role artifact diagnostic, I added the explicit managed-artifact role in [artifacts.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/autoloop/core/artifacts.py) and exempted only that role in [inventory.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/autoloop/core/inventory.py). I then marked the intentional shared-output workflows accordingly and updated the stale test expectations, especially in [test_stdlib_and_extensions.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/tests/unit/test_stdlib_and_extensions.py).
+
+Key findings / decisions
+
+The remaining regression failures were expectation drift, not runtime bugs: one decomposition snapshot needed the richer route metadata, and one portfolio-health snapshot had moved from flat `pending_question` to structured `pending_input`/`finalization`.
+
+I recorded the non-obvious compatibility decision in [decisions.txt](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/framework-authoring-flexibility-change-spec-goal-2ee572cd/runs/run-20260503T200339Z-6d598cb8/decisions.txt) and updated [implementation_notes.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/framework-authoring-flexibility-change-spec-goal-2ee572cd/runs/run-20260503T200339Z-6d598cb8/artifacts/implement/phases/inspection-docs-and-regression/implementation_notes.md).
+
+Validation run:
+- `.venv/bin/python -m pytest -q tests/runtime/test_runtime_static_graph.py tests/runtime/test_package_cli.py tests/test_architecture_baseline_docs.py tests/unit/test_validation.py tests/unit/test_stdlib_and_extensions.py tests/contract/test_canonical_runtime_contracts.py`
+- Result: `228 passed`
+
+Open issues / next step
+
+No open issues from this phase. The working tree does contain unrelated pre-existing changes outside this phase’s scope; I did not touch or normalize those.

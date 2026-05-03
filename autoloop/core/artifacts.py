@@ -13,6 +13,7 @@ from pydantic import BaseModel, ValidationError
 from .errors import WorkflowExecutionError
 
 ArtifactKind = Literal["text", "markdown", "json", "raw"]
+ArtifactRole = Literal["managed"]
 if TYPE_CHECKING:
     from .context import Context
     from .steps import Step
@@ -27,6 +28,7 @@ class Artifact:
         "kind",
         "schema",
         "required",
+        "role",
         "owner",
         "owner_step",
         "qualified_name",
@@ -40,6 +42,7 @@ class Artifact:
         kind: ArtifactKind = "text",
         schema: type[BaseModel] | dict[str, object] | None = None,
         required: bool = False,
+        role: ArtifactRole | None = None,
         owner: Step | None = None,
         owner_step: str | None = None,
         qualified_name: str | None = None,
@@ -49,6 +52,7 @@ class Artifact:
         self.kind = kind
         self.schema = schema
         self.required = required
+        self.role = role
         self.owner = owner
         self.owner_step = owner_step
         self.qualified_name = qualified_name
@@ -60,8 +64,9 @@ class Artifact:
         *,
         required: bool = False,
         name: str | None = None,
+        role: ArtifactRole | None = None,
     ) -> Artifact:
-        return cls(path, name=name, kind="text", required=required)
+        return cls(path, name=name, kind="text", required=required, role=role)
 
     @classmethod
     def md(
@@ -70,8 +75,9 @@ class Artifact:
         *,
         required: bool = False,
         name: str | None = None,
+        role: ArtifactRole | None = None,
     ) -> Artifact:
-        return cls(path, name=name, kind="markdown", required=required)
+        return cls(path, name=name, kind="markdown", required=required, role=role)
 
     @classmethod
     def json(
@@ -81,8 +87,9 @@ class Artifact:
         schema: type[BaseModel] | dict[str, object] | None = None,
         required: bool = False,
         name: str | None = None,
+        role: ArtifactRole | None = None,
     ) -> Artifact:
-        return cls(path, name=name, kind="json", schema=schema, required=required)
+        return cls(path, name=name, kind="json", schema=schema, required=required, role=role)
 
     @classmethod
     def raw(
@@ -91,8 +98,21 @@ class Artifact:
         *,
         required: bool = False,
         name: str | None = None,
+        role: ArtifactRole | None = None,
     ) -> Artifact:
-        return cls(path, name=name, kind="raw", required=required)
+        return cls(path, name=name, kind="raw", required=required, role=role)
+
+    @classmethod
+    def managed(
+        cls,
+        path: str,
+        *,
+        kind: ArtifactKind = "text",
+        schema: type[BaseModel] | dict[str, object] | None = None,
+        required: bool = False,
+        name: str | None = None,
+    ) -> Artifact:
+        return cls(path, name=name, kind=kind, schema=schema, required=required, role="managed")
 
     def bind_name(self, name: str) -> None:
         if self.name is None:

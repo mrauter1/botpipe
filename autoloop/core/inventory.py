@@ -103,7 +103,11 @@ def collect_artifact_inventory(definition: Any) -> dict[str, ArtifactInventoryRe
             record["workflow_level"] = True
         if producer_step is not None and producer_step not in record["producer_steps"]:
             record["producer_steps"].append(producer_step)
-        if record["workflow_level"] and record["producer_steps"]:
+        if (
+            record["workflow_level"]
+            and record["producer_steps"]
+            and getattr(record["artifact"], "role", None) != "managed"
+        ):
             _raise_dual_role_artifact_error(record)
 
     for attr_name, artifact in definition.workflow_artifacts.items():

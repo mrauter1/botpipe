@@ -74,6 +74,12 @@ Deep inspection and execution may import and compile workflow modules. That rich
 
 Route declarations are ordinary Python objects, not a string DSL. Dict transition shorthand still works, but richer public contracts use step-local `routes={...}` plus `Route.to(...)`.
 
+Validation is intentionally split across compile time and runtime. Compile time owns workflow topology, declared names, route legality, declared worklists, artifact-reference ambiguity, callback existence, and schema shape. Runtime owns worklist contents, generated boards, runtime-created prompt context, item-scoped artifact paths, provider failures, and semantic validation that depends on data created during the run.
+
+Provider control routing is intentionally narrow. `question` is the only default runtime control route, and it is provider-visible only when the engine interaction policy allows provider questions. `blocked` and `failed` are never injected by default; if a workflow authors those names explicitly they remain ordinary application routes, while transport and validation failures stay runtime-owned.
+
+Worklists are lazy runtime resources. The compiler validates the declared worklist contract, but the engine does not require the backing source to exist at workflow start. Selection materialization happens when the run first touches the worklist through scoped execution, prompt rendering, session continuity, or explicit context access.
+
 ## CLI Contract
 
 The public executable name is `autoloop`.

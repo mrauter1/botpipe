@@ -80,7 +80,9 @@ def _assert_bootstrap_scaffold_contract(source: str) -> None:
 
 def _assert_compiled_bootstrap_contract(compiled) -> None:
     assert compiled.entry_step_name == "bootstrap"
-    assert compiled.steps["bootstrap"].available_routes == ("ready", "failed")
+    assert compiled.steps["bootstrap"].available_routes == ("ready",)
+    assert compiled.steps["bootstrap"].authored_routes == ("ready",)
+    assert compiled.steps["bootstrap"].runtime_control_routes == ()
     assert compiled.route("bootstrap", "ready").target == "FINISH"
     assert tuple(inspect.signature(compiled.steps["bootstrap"].python_handler).parameters) == ("ctx",)
 
@@ -280,13 +282,45 @@ class Params(BaseModel):
         "steps": {
             "bootstrap": {
                 "ready": "FINISH",
-                "failed": "FAIL",
             }
         },
     }
     assert payload["parameters"] == [
         {"default": "strict", "name": "mode", "repeated": False, "required": False, "type": "str"},
         {"default": [], "name": "reviewers", "repeated": True, "required": False, "type": "list[str]"},
+    ]
+    assert payload["steps"] == [
+        {
+            "available_routes": ["ready"],
+            "authored_routes": ["ready"],
+            "has_expected_output_schema": False,
+            "kind": "python",
+            "log_artifacts": [],
+            "name": "bootstrap",
+            "producer_prompt": None,
+            "provider_visible_routes_full_auto": [],
+            "provider_visible_routes_interactive": [],
+            "reads": [],
+            "requires": [],
+            "routes": {
+                "ready": {
+                    "target": "FINISH",
+                    "summary": "Routes from 'bootstrap' to 'FINISH'.",
+                    "required_writes": [],
+                    "handoff": None,
+                    "on_taken": None,
+                    "provider_visible": True,
+                    "provider_visible_interactive": False,
+                    "provider_visible_full_auto": False,
+                    "is_runtime_control": False,
+                }
+            },
+            "runtime_control_routes": [],
+            "session_name": None,
+            "typed_output_schema": None,
+            "verifier_prompt": None,
+            "writes": [],
+        }
     ]
 
 
