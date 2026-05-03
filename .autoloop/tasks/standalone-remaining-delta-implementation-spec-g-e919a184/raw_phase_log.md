@@ -2067,3 +2067,48 @@ Validation passed:
 Open issues / next step
 
 No open issues in the scoped test phase. The changed behavior and the default-path regression risk are both covered by deterministic focused tests.
+
+
+---
+run_id=run-20260503T025931Z-b2553e76 | entry=session_turn | pair=test | phase=verifier | cycle=1 | attempt=1 | thread_id=019debcb-7826-7a23-a492-9f39a36361cd
+---
+provider=codex
+mode=resume
+template=/home/rauter/.local/share/pipx/venvs/autoloop/lib/python3.12/site-packages/autoloop/templates/test_verifier.md
+session_id=019debcb-7826-7a23-a492-9f39a36361cd
+
+
+---
+run_id=run-20260503T025931Z-b2553e76 | entry=phase_output | pair=test | phase=verifier | process=codex-agent | cycle=1 | attempt=1 | thread_id=019debcb-7826-7a23-a492-9f39a36361cd
+---
+I’m auditing the scoped test changes and the test strategy against the phase acceptance criteria. First I’m reading the audit artifacts, the updated CLI test coverage, and the decision ledger, then I’ll rerun the focused pytest targets from the auditor side before I mark the criteria.
+
+The focused coverage is aligned with the decision ledger and the requested pytest targets are green from the auditor side. I’m updating the audit artifacts now: all criteria checked and a final findings entry recording the clean audit result.
+
+Scope considered
+
+Phase-local test audit only: [tests/runtime/test_package_cli.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/tests/runtime/test_package_cli.py), [tests/test_architecture_baseline_docs.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/tests/test_architecture_baseline_docs.py), the run-local [decisions.txt](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/standalone-remaining-delta-implementation-spec-g-e919a184/runs/run-20260503T025931Z-b2553e76/decisions.txt), and the active audit artifacts [criteria.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/standalone-remaining-delta-implementation-spec-g-e919a184/runs/run-20260503T025931Z-b2553e76/artifacts/test/phases/public-authoring-surface-cleanup/criteria.md), [feedback.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/standalone-remaining-delta-implementation-spec-g-e919a184/runs/run-20260503T025931Z-b2553e76/artifacts/test/phases/public-authoring-surface-cleanup/feedback.md), and [test_strategy.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/standalone-remaining-delta-implementation-spec-g-e919a184/runs/run-20260503T025931Z-b2553e76/artifacts/test/phases/public-authoring-surface-cleanup/test_strategy.md).
+
+What I analyzed
+
+I checked the updated test strategy against the accepted phase contract and the turn-local decisions, then inspected the scaffold assertions added in `tests/runtime/test_package_cli.py` to confirm coverage of source contract, compiled bootstrap contract, supported shapes, duplicate rejection, and the implicit default `flow-specs` path. I also reran the two requested focused pytest targets from the auditor side.
+
+What I reviewed
+
+I verified that the tests now explicitly enforce the finalized decorator-based `python_step` contract and reject the legacy `_bootstrap(state, ctx)` / `python_step(_bootstrap, ...)` patterns. I also verified the compiled bootstrap assertions for both the explicit-shape parameterized test and the default-shape test, and confirmed the baseline-doc coverage still guards the `cleanup.md` autoloop-only wording.
+
+Key findings / decisions
+
+No actionable audit findings in scope. The changed tests provide appropriate regression protection for the requested behavior, include relevant failure paths and edge cases, and remain deterministic. I updated [criteria.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/standalone-remaining-delta-implementation-spec-g-e919a184/runs/run-20260503T025931Z-b2553e76/artifacts/test/phases/public-authoring-surface-cleanup/criteria.md) with all boxes checked and appended the clean audit result to [feedback.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/standalone-remaining-delta-implementation-spec-g-e919a184/runs/run-20260503T025931Z-b2553e76/artifacts/test/phases/public-authoring-surface-cleanup/feedback.md).
+
+Validation passed:
+- `./.venv/bin/pytest -q tests/test_architecture_baseline_docs.py`
+- `./.venv/bin/pytest -q tests/runtime/test_package_cli.py -k 'init_workflow_scaffolds_supported_shapes_and_rejects_duplicates or init_workflow_defaults_to_flow_specs_shape'`
+
+Open issues / next step
+
+No open issues from this audit pass.
+
+<loop-control>
+{"schema":"docloop.loop_control/v1","kind":"promise","promise":"COMPLETE"}
+</loop-control>
