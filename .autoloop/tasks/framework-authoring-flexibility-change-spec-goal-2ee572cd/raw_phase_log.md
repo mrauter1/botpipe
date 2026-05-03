@@ -2719,3 +2719,66 @@ Open issues / next step
 
 - No open phase-local failures remain.
 - The 14 warnings are existing Pydantic `schema`-field shadowing warnings in workflow contract models; they were not introduced by this change.
+
+
+---
+run_id=run-20260503T223034Z-bda92fa2 | entry=session_turn | pair=implement | phase=verifier | cycle=1 | attempt=1 | thread_id=019df010-4447-7c72-80e9-fa5e7d6ab42a
+---
+provider=codex
+mode=resume
+template=/home/rauter/.local/share/pipx/venvs/autoloop/lib/python3.12/site-packages/autoloop/templates/implement_verifier.md
+session_id=019df010-4447-7c72-80e9-fa5e7d6ab42a
+
+
+---
+run_id=run-20260503T223034Z-bda92fa2 | entry=phase_output | pair=implement | phase=verifier | process=codex-agent | cycle=1 | attempt=1 | thread_id=019df010-4447-7c72-80e9-fa5e7d6ab42a
+---
+I’m auditing the phase-local changes against the acceptance criteria and the run decisions first. Then I’ll update the review artifacts with either blocking findings or a clean pass.
+
+The source diff is narrow. I’m checking the actual parser behavior on the changed indentation logic and the existing runner prompt path now, because AC-2 is a claimed non-change and needs explicit verification rather than trust.
+
+I’ve confirmed the runner already has explicit `str` handling in `_prompt_registry_roots()`. I’m rerunning the relevant tests myself now so the review criteria are based on observed behavior, not just the implementation notes.
+
+The targeted tests passed. I’m finishing with the full audited slice to make sure the phase-local fix doesn’t hide a broader regression elsewhere in the accepted validation set.
+
+The audited slice is green and I don’t have a blocking defect to send back. I’m updating the verifier artifacts now with a clean review result and explicit evidence for the accepted phase criteria.
+
+Scope considered
+
+- Phase-local verifier scope for `repair-full-auto-runner-plumbing`.
+- Request-relevant implementation diff in `autoloop/runtime/config.py`.
+- Adjacent acceptance surfaces for runner prompt-registry handling and `full_auto` provider-visible routes.
+- Active review artifacts only for writes.
+
+What I analyzed
+
+- The accepted phase contract and run-local decisions in `decisions.txt`.
+- The implementation notes for claimed scope and validation.
+- The changed narrow YAML fallback in `autoloop/runtime/config.py`.
+- The existing runner prompt-registry handling in `autoloop/runtime/runner.py`.
+- Relevant tests covering no-PyYAML config loading, plain-string prompt handling, and `full_auto` route visibility.
+
+What I reviewed
+
+- Confirmed the config fix is narrow and preserves the typed validation path and config precedence.
+- Confirmed `_prompt_registry_roots()` already accepts plain-string prompt specs, so AC-2 is satisfied without a new runner diff.
+- Re-ran targeted evidence:
+  - `./.venv/bin/python -m pytest -q tests/runtime/test_provider_backends.py tests/runtime/test_workspace_and_context.py tests/unit/test_primitives_and_stores.py -k 'full_auto or prompt_registry or pyyaml or nested_runtime_policy or load_runtime_config_file_without_pyyaml'`
+- Re-ran the required audited regression slice:
+  - `573 passed, 14 warnings`
+
+Key findings / decisions
+
+- No blocking findings.
+- No non-blocking findings.
+- Updated `criteria.md` to fully checked.
+- Updated `feedback.md` with a clean review result and validation evidence.
+
+Open issues / next step
+
+- No phase-local review issues remain.
+- The observed warnings are pre-existing Pydantic `schema` shadowing warnings outside this phase’s change scope.
+
+<loop-control>
+{"schema":"docloop.loop_control/v1","kind":"promise","promise":"COMPLETE"}
+</loop-control>

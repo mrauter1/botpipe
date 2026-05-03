@@ -593,3 +593,125 @@ Open issues / next step
 <loop-control>
 {"schema":"docloop.loop_control/v1","kind":"promise","promise":"COMPLETE"}
 </loop-control>
+
+
+---
+run_id=run-20260503T223034Z-bda92fa2 | entry=session_turn | pair=implement | phase=producer | cycle=1 | attempt=1 | thread_id=019df010-4447-7c72-80e9-fa5e7d6ab42a
+---
+provider=codex
+mode=start
+template=/home/rauter/.local/share/pipx/venvs/autoloop/lib/python3.12/site-packages/autoloop/templates/implement_producer.md
+session_id=019df010-4447-7c72-80e9-fa5e7d6ab42a
+
+
+---
+run_id=run-20260503T223034Z-bda92fa2 | entry=phase_output | pair=implement | phase=producer | process=codex-agent | cycle=1 | attempt=1 | thread_id=019df010-4447-7c72-80e9-fa5e7d6ab42a
+---
+I’m working the `repair-full-auto-runner-plumbing` phase. First I’m reading the phase artifacts and the runner/config code paths the request names so I can make the smallest change set that gets the targeted regressions green.
+
+The phase artifacts are mostly scaffolding, so I’m moving into the runtime config and runner implementations plus the specific regressions they drive. Next I’m reading the current loader, runner, and the full-auto tests to see which parts are still mismatched with the accepted contract.
+
+I have enough context to narrow this phase. The likely changes are in `autoloop/runtime/runner.py` and possibly a small test fixture adjustment if the runner still assumes prompt objects or if the package tests are still using the legacy handler shape.
+
+I’ve confirmed the prompt registry already accepts plain string `PromptSpec` values in isolation. The next step is to run the targeted full-auto slice so I can catch the remaining failure in the actual runner path instead of guessing at it.
+
+I found the concrete bug: the no-PyYAML fallback treats a sibling key inside an already-open mapping as an illegal indentation increase. I’m patching only that parser logic so the supported mapping/scalar config shape works without widening the accepted YAML surface.
+
+The config fallback fix is in and the targeted runtime-config tests are green. I’m running the audited regression slice now to verify this phase didn’t regress the already-restored runtime contracts and to see whether anything else in the acceptance set is still open.
+
+The full slice is still running. So far it’s progressing cleanly through the early files; I’m waiting for the full result before I touch notes or the run ledger.
+
+The audited slice is green, so this phase ended up narrower than expected: the remaining acceptance gap was the fallback config loader, not the runner prompt path. I’m updating the phase notes and the turn’s decision ledger to record that I left the already-working runner behavior unchanged.
+
+I noticed the test run dirtied a tracked `__pycache__` file. I’m restoring that generated artifact so the phase leaves only the intended source and run-artifact changes behind.
+
+Scope considered
+
+- Phase-local `repair-full-auto-runner-plumbing` work: no-PyYAML runtime config loading, `full_auto` runner behavior, prompt-registry compatibility, and audited regression validation.
+
+What I analyzed
+
+- The fallback config loader in [config.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/autoloop/runtime/config.py:172).
+- The runner prompt-registry path in `autoloop/runtime/runner.py` and the related full-auto tests in `tests/runtime/test_provider_backends.py` and `tests/runtime/test_workspace_and_context.py`.
+- The full audited regression slice from the request.
+
+What I changed
+
+- Fixed [_load_narrow_yaml_mapping(...) in config.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/autoloop/runtime/config.py:172) so the narrow no-PyYAML parser tracks expected entry indentation per open mapping level. This allows valid sibling keys inside nested mappings like `runtime.full_auto` plus `runtime.tracing`, while still rejecting over-indented children under scalar entries with `ConfigError`.
+- Updated the phase notes in [implementation_notes.md](</home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/framework-authoring-flexibility-change-spec-goal-2ee572cd/runs/run-20260503T223034Z-bda92fa2/artifacts/implement/phases/repair-full-auto-runner-plumbing/implementation_notes.md:1>) and appended the non-obvious turn decisions in [decisions.txt](</home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/framework-authoring-flexibility-change-spec-goal-2ee572cd/runs/run-20260503T223034Z-bda92fa2/decisions.txt:16>).
+
+Key findings / decisions
+
+- No `autoloop/runtime/runner.py` change was needed in this turn; the prompt-registry path already handled plain-string compiled prompt specs correctly.
+- `full_auto` still hides the default provider-visible `question` route at runtime.
+- Validation passed:
+  - targeted config/full-auto tests passed
+  - audited slice passed: `573 passed, 14 warnings`
+
+Open issues / next step
+
+- No open phase-local failures remain.
+- The 14 warnings are existing Pydantic `schema`-field shadowing warnings in workflow contract models; they were not introduced by this change.
+
+
+---
+run_id=run-20260503T223034Z-bda92fa2 | entry=session_turn | pair=implement | phase=verifier | cycle=1 | attempt=1 | thread_id=019df010-4447-7c72-80e9-fa5e7d6ab42a
+---
+provider=codex
+mode=resume
+template=/home/rauter/.local/share/pipx/venvs/autoloop/lib/python3.12/site-packages/autoloop/templates/implement_verifier.md
+session_id=019df010-4447-7c72-80e9-fa5e7d6ab42a
+
+
+---
+run_id=run-20260503T223034Z-bda92fa2 | entry=phase_output | pair=implement | phase=verifier | process=codex-agent | cycle=1 | attempt=1 | thread_id=019df010-4447-7c72-80e9-fa5e7d6ab42a
+---
+I’m auditing the phase-local changes against the acceptance criteria and the run decisions first. Then I’ll update the review artifacts with either blocking findings or a clean pass.
+
+The source diff is narrow. I’m checking the actual parser behavior on the changed indentation logic and the existing runner prompt path now, because AC-2 is a claimed non-change and needs explicit verification rather than trust.
+
+I’ve confirmed the runner already has explicit `str` handling in `_prompt_registry_roots()`. I’m rerunning the relevant tests myself now so the review criteria are based on observed behavior, not just the implementation notes.
+
+The targeted tests passed. I’m finishing with the full audited slice to make sure the phase-local fix doesn’t hide a broader regression elsewhere in the accepted validation set.
+
+The audited slice is green and I don’t have a blocking defect to send back. I’m updating the verifier artifacts now with a clean review result and explicit evidence for the accepted phase criteria.
+
+Scope considered
+
+- Phase-local verifier scope for `repair-full-auto-runner-plumbing`.
+- Request-relevant implementation diff in `autoloop/runtime/config.py`.
+- Adjacent acceptance surfaces for runner prompt-registry handling and `full_auto` provider-visible routes.
+- Active review artifacts only for writes.
+
+What I analyzed
+
+- The accepted phase contract and run-local decisions in `decisions.txt`.
+- The implementation notes for claimed scope and validation.
+- The changed narrow YAML fallback in `autoloop/runtime/config.py`.
+- The existing runner prompt-registry handling in `autoloop/runtime/runner.py`.
+- Relevant tests covering no-PyYAML config loading, plain-string prompt handling, and `full_auto` route visibility.
+
+What I reviewed
+
+- Confirmed the config fix is narrow and preserves the typed validation path and config precedence.
+- Confirmed `_prompt_registry_roots()` already accepts plain-string prompt specs, so AC-2 is satisfied without a new runner diff.
+- Re-ran targeted evidence:
+  - `./.venv/bin/python -m pytest -q tests/runtime/test_provider_backends.py tests/runtime/test_workspace_and_context.py tests/unit/test_primitives_and_stores.py -k 'full_auto or prompt_registry or pyyaml or nested_runtime_policy or load_runtime_config_file_without_pyyaml'`
+- Re-ran the required audited regression slice:
+  - `573 passed, 14 warnings`
+
+Key findings / decisions
+
+- No blocking findings.
+- No non-blocking findings.
+- Updated `criteria.md` to fully checked.
+- Updated `feedback.md` with a clean review result and validation evidence.
+
+Open issues / next step
+
+- No phase-local review issues remain.
+- The observed warnings are pre-existing Pydantic `schema` shadowing warnings outside this phase’s change scope.
+
+<loop-control>
+{"schema":"docloop.loop_control/v1","kind":"promise","promise":"COMPLETE"}
+</loop-control>
