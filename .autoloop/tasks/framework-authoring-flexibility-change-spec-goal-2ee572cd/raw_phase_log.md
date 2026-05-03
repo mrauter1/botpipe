@@ -3070,3 +3070,69 @@ No phase-local test audit issues remain. The only residual output was the unchan
 <loop-control>
 {"schema":"docloop.loop_control/v1","kind":"promise","promise":"COMPLETE"}
 </loop-control>
+
+
+---
+run_id=run-20260503T223034Z-bda92fa2 | entry=session_turn | pair=audit | phase=producer | cycle=1 | attempt=1 | thread_id=019df01d-421f-7802-a65c-a7e0576e0d8a
+---
+provider=codex
+mode=start
+template=/home/rauter/.local/share/pipx/venvs/autoloop/lib/python3.12/site-packages/autoloop/templates/audit_producer.md
+session_id=019df01d-421f-7802-a65c-a7e0576e0d8a
+
+
+---
+run_id=run-20260503T223034Z-bda92fa2 | entry=phase_output | pair=audit | phase=producer | process=codex-agent | cycle=1 | attempt=1 | thread_id=019df01d-421f-7802-a65c-a7e0576e0d8a
+---
+I’m auditing the completed run against the original request, clarifications, artifacts, and final codebase. First I’m reading the authoritative request/ledger files and the current audit artifacts, then I’ll verify the implemented behavior and regression status before writing the run-local audit outputs.
+
+I’ve confirmed the authoritative log already records a late implementation correction in the no-PyYAML fallback, so I’m checking the final state rather than relying on the earlier incomplete verifier note. Next I’m reading the existing audit artifacts, implementation/test artifacts, and the live code/test surfaces to decide whether any material gap still remains.
+
+I’ve got the phase history and decisions. Now I’m checking the live implementation and direct regression tests for the four requested areas, and I’m going to rerun the exact audited slice so the audit result is based on the repository’s final state rather than on phase summaries alone.
+
+I’ve validated the main code paths and the direct regression tests. I’m running the exact audited pytest slice now; that result will decide whether the revised request says “no follow-up needed” or captures a concrete remaining gap.
+
+The audited slice is in flight. While it runs, I’m cross-checking the request against the final behavior to make sure the audit report distinguishes true unresolved gaps from things that were explicitly re-scoped or already closed in later implementation/test turns.
+
+The final state is clear: the exact audited slice passed `575 passed, 14 warnings`, and the remaining warnings are outside the requested scope. I’m writing the audit artifacts now with a no-follow-up conclusion unless the repository changes again after this audit point.
+
+The audit artifacts are written. I’m doing one last readback to make sure the markdown sections match the required headings and the JSON payload is valid before I close with the required loop-control block.
+
+The markdown is correct. The JSON readback failed only because bare `python` is not on this shell path, so I’m re-validating it with the project interpreter and then I’ll close.
+
+Scope considered
+
+- The immutable request, `raw_phase_log.md`, `decisions.txt`, run-local plan/implement/test artifacts, the final code/test surfaces for the four requested acceptance areas, and the exact audited regression slice.
+
+What I analyzed
+
+- Payload placeholder handling in `autoloop/core/artifacts.py` and its contract coverage in `tests/contract/test_engine_contracts.py`.
+- Route-order and artifact-ownership contract behavior in `autoloop/core/lowering.py`, `docs/authoring.md`, `tests/contract/test_engine_contracts.py`, and `tests/unit/test_validation.py`.
+- `full_auto` config/runner acceptance in `autoloop/runtime/config.py`, `autoloop/runtime/runner.py`, `tests/runtime/test_provider_backends.py`, and `tests/unit/test_primitives_and_stores.py`.
+- Temporary workflow-package fixture signatures in `tests/runtime/test_workspace_and_context.py`.
+- The exact audited pytest slice from the request, which passed as `575 passed, 14 warnings in 5.36s`.
+
+What I changed
+
+- Wrote [gap_report.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/framework-authoring-flexibility-change-spec-goal-2ee572cd/runs/run-20260503T223034Z-bda92fa2/artifacts/audit/gap_report.md).
+- Wrote [revised_request.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/framework-authoring-flexibility-change-spec-goal-2ee572cd/runs/run-20260503T223034Z-bda92fa2/artifacts/audit/revised_request.md).
+- Wrote [audit_result.json](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/framework-authoring-flexibility-change-spec-goal-2ee572cd/runs/run-20260503T223034Z-bda92fa2/artifacts/audit/audit_result.json) with `material_gaps_found: false`.
+
+Key findings / decisions
+
+- No material unresolved gaps remain against the request and authoritative decisions.
+- The late-bound payload placeholder behavior is restored and directly covered for both `{item.payload.<path>}` and `{worklist.<name>.current.payload.<path>}`, including missing-path failure wording.
+- Stable route ordering is restored as a contractual behavior and documented.
+- The no-PyYAML runtime-config path works for the supported nested mapping/scalar shapes and still rejects malformed indentation.
+- Plain-string compiled prompt specs on the runner prompt-registry path are satisfied in final state and now directly pinned by tests.
+- `tests/runtime/test_workspace_and_context.py` is already aligned to canonical `python_step(ctx)` temporary package handlers, with a guard test preventing regression.
+- The remaining 14 warnings are pre-existing Pydantic `schema`-field warnings outside this request’s scope.
+
+Open issues / next step
+
+- No follow-up implementation run is required for this request.
+- The producer result remains `INCOMPLETE` by protocol; verifier controls pair completion.
+
+<loop-control>
+{"schema":"docloop.loop_control/v1","kind":"promise","promise":"INCOMPLETE"}
+</loop-control>
