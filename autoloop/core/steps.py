@@ -140,7 +140,7 @@ class ProduceVerifyStep(Step):
         producer: PromptSpec,
         verifier: PromptSpec,
         session: Session | None = None,
-        review_session: Session | None = None,
+        verifier_session: Session | None = None,
         scope: "Worklist | str | None" = None,
         reads: Sequence[Artifact] | None = None,
         requires: Sequence[Artifact] | None = None,
@@ -153,10 +153,10 @@ class ProduceVerifyStep(Step):
         retry_policy: ProviderRetryPolicy | None = None,
         before: Any | None = None,
         after: Any | None = None,
-        before_do: Any | None = None,
-        after_do: Any | None = None,
-        before_review: Any | None = None,
-        after_review: Any | None = None,
+        before_producer: Any | None = None,
+        after_producer: Any | None = None,
+        before_verifier: Any | None = None,
+        after_verifier: Any | None = None,
         state_fields: Mapping[str, object] | None = None,
         item_state: object | None = None,
     ) -> None:
@@ -178,15 +178,15 @@ class ProduceVerifyStep(Step):
         )
         self.producer = producer
         self.verifier = verifier
-        self.review_session = review_session
+        self.verifier_session = verifier_session
         self.verifier_requires = tuple(verifier_requires or ())
         self.producer_writes = tuple(dict(producer_writes or {}).keys())
         self.verifier_writes = tuple(dict(verifier_writes or {}).keys())
         self.retry_policy = retry_policy or ProviderRetryPolicy()
-        self.before_do = before_do if before_do is not None else before
-        self.after_do = after_do
-        self.before_review = before_review
-        self.after_review = after_review if after_review is not None else after
+        self.before_producer = before_producer if before_producer is not None else before
+        self.after_producer = after_producer
+        self.before_verifier = before_verifier
+        self.after_verifier = after_verifier if after_verifier is not None else after
 
 
 def _merge_pair_artifacts(
@@ -248,7 +248,7 @@ class PromptStep(Step):
 
 
 class PythonStep(Step):
-    """Pure system handler step."""
+    """Pure python-step handler."""
 
     kind = "system"
 

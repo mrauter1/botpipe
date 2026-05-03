@@ -339,6 +339,24 @@ def test_core_step_constructors_reject_removed_on_route_keyword() -> None:
         core_steps.PythonStep(name="publish", on_route=lambda ctx: None)
 
 
+def test_core_pair_step_constructor_rejects_removed_legacy_hook_keywords() -> None:
+    with pytest.raises(TypeError):
+        core_steps.ProduceVerifyStep(
+            name="review",
+            producer="draft.md",
+            verifier="verify.md",
+            before_do=lambda ctx: None,
+        )
+
+    with pytest.raises(TypeError):
+        core_steps.ProduceVerifyStep(
+            name="review",
+            producer="draft.md",
+            verifier="verify.md",
+            review_session=core_steps.Session.run(),
+        )
+
+
 def test_simple_python_step_does_not_install_legacy_on_step_alias() -> None:
     class PublicWorkflow(simple.Workflow):
         @simple.python_step(name="inspect")

@@ -39,7 +39,7 @@ def validate_handlers(definition: Any) -> None:
         if isinstance(step, PythonStep):
             active_handler = step.handler if step.handler is not None else raw_handler
             if active_handler is None:
-                raise WorkflowValidationError(f"system step {step.name!r} is missing handler {handler_name!r}")
+                raise WorkflowValidationError(f"python_step {step.name!r} is missing handler {handler_name!r}")
             validate_callable_arity(handler_name, active_handler, {1, 2})
             continue
         if raw_handler is not None:
@@ -80,14 +80,14 @@ def validate_step_hooks(definition: Any) -> None:
             if route.on_taken is not None:
                 validate_callable_arity(f"{step.name!r} route {route_name!r} on_taken hook", route.on_taken, {1})
         if isinstance(step, ProduceVerifyStep):
-            if getattr(step, "before_do", None) is not None:
-                validate_callable_arity(f"{step.name!r} before_do hook", step.before_do, {1})
-            if getattr(step, "after_do", None) is not None:
-                validate_callable_arity(f"{step.name!r} after_do hook", step.after_do, {1})
-            if getattr(step, "before_review", None) is not None:
-                validate_callable_arity(f"{step.name!r} before_review hook", step.before_review, {1})
-            if getattr(step, "after_review", None) is not None:
-                validate_callable_arity(f"{step.name!r} after_review hook", step.after_review, {1})
+            if getattr(step, "before_producer", None) is not None:
+                validate_callable_arity(f"{step.name!r} before_producer hook", step.before_producer, {1})
+            if getattr(step, "after_producer", None) is not None:
+                validate_callable_arity(f"{step.name!r} after_producer hook", step.after_producer, {1})
+            if getattr(step, "before_verifier", None) is not None:
+                validate_callable_arity(f"{step.name!r} before_verifier hook", step.before_verifier, {1})
+            if getattr(step, "after_verifier", None) is not None:
+                validate_callable_arity(f"{step.name!r} after_verifier hook", step.after_verifier, {1})
 
 
 __all__ = [

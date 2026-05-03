@@ -221,7 +221,7 @@ class Worklist(Generic[T]):
         *,
         force_reload: bool = False,
     ) -> tuple[WorkItem[T], ...]:
-        cached = None if force_reload else ctx._get_cached_worklist_items(self.name)
+        cached = None if force_reload else ctx._runtime.get_cached_worklist_items(self.name)
         if cached is not None:
             return cached
         items = tuple(self.source.load(ctx))
@@ -234,7 +234,7 @@ class Worklist(Generic[T]):
             raise WorkflowExecutionError(
                 f"worklist {self.name!r} contains duplicate item id(s): {duplicates}"
             )
-        return ctx._cache_worklist_items(self.name, items)
+        return ctx._runtime.cache_worklist_items(self.name, items)
 
     def initial_selection(self, ctx: "Context") -> Selection[T]:
         items = self.load_items(ctx)
@@ -312,7 +312,7 @@ class Worklist(Generic[T]):
             self.reload_items(ctx)
             return updated_selection
         cached_items = self.load_items(ctx)
-        ctx._cache_worklist_items(self.name, _replace_items_by_id(cached_items, updated_selection.items))
+        ctx._runtime.cache_worklist_items(self.name, _replace_items_by_id(cached_items, updated_selection.items))
         return updated_selection
 
     def validate_items(self, ctx: "Context", items: Sequence[WorkItem[T]]) -> str | None:
@@ -393,9 +393,9 @@ class WorklistRuntimeView(Generic[T]):
     def refresh(self) -> Selection[T]:
         previous = self.selection
         updated = self._worklist.refresh_selection(self._context, previous)
-        self._context._set_selection(self._worklist, updated)
-        self._context._sync_scoped_state_after_worklist_selection_change(self._worklist)
-        self._context._emit_worklist_runtime_event(
+        self._context._runtime.set_selection(self._worklist, updated)
+        self._context._runtime.sync_scoped_state_after_worklist_selection_change(self._worklist)
+        self._context._runtime.emit_worklist_runtime_event(
             "worklist_refreshed",
             worklist_name=self._worklist.name,
             previous_selection=previous,
@@ -406,9 +406,9 @@ class WorklistRuntimeView(Generic[T]):
     def set_current_status(self, status: str | None) -> Selection[T]:
         previous = self.selection
         updated = self._worklist.set_current_status(self._context, previous, status)
-        self._context._set_selection(self._worklist, updated)
-        self._context._sync_scoped_state_after_worklist_selection_change(self._worklist)
-        self._context._emit_worklist_runtime_event(
+        self._context._runtime.set_selection(self._worklist, updated)
+        self._context._runtime.sync_scoped_state_after_worklist_selection_change(self._worklist)
+        self._context._runtime.emit_worklist_runtime_event(
             "worklist_status_set",
             worklist_name=self._worklist.name,
             previous_selection=previous,
@@ -419,9 +419,9 @@ class WorklistRuntimeView(Generic[T]):
     def reset_current_status(self) -> Selection[T]:
         previous = self.selection
         updated = self._worklist.set_current_status(self._context, previous, None)
-        self._context._set_selection(self._worklist, updated)
-        self._context._sync_scoped_state_after_worklist_selection_change(self._worklist)
-        self._context._emit_worklist_runtime_event(
+        self._context._runtime.set_selection(self._worklist, updated)
+        self._context._runtime.sync_scoped_state_after_worklist_selection_change(self._worklist)
+        self._context._runtime.emit_worklist_runtime_event(
             "worklist_status_reset",
             worklist_name=self._worklist.name,
             previous_selection=previous,
@@ -432,16 +432,16 @@ class WorklistRuntimeView(Generic[T]):
     def advance(self) -> bool:
         previous = self.selection
         updated = previous.advance()
-        self._context._set_selection(self._worklist, updated)
-        self._context._sync_scoped_state_after_worklist_selection_change(self._worklist)
-        self._context._emit_worklist_runtime_event(
+        self._context._runtime.set_selection(self._worklist, updated)
+        self._context._runtime.sync_scoped_state_after_worklist_selection_change(self._worklist)
+        self._context._runtime.emit_worklist_runtime_event(
             "worklist_advanced",
             worklist_name=self._worklist.name,
             previous_selection=previous,
             new_selection=updated,
         )
         if updated.current is None:
-            self._context._emit_worklist_runtime_event(
+            self._context._runtime.emit_worklist_runtime_event(
                 "worklist_exhausted",
                 worklist_name=self._worklist.name,
                 previous_selection=previous,

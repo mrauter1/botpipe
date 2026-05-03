@@ -41,9 +41,9 @@ def validate_sessions(definition: Any) -> None:
     for step in definition.steps:
         if step.session is not None and id(step.session) not in declared_sessions:
             raise WorkflowValidationError(f"step {step.name!r} references an undeclared session slot")
-        if isinstance(step, ProduceVerifyStep) and step.review_session is not None and id(step.review_session) not in declared_sessions:
+        if isinstance(step, ProduceVerifyStep) and step.verifier_session is not None and id(step.verifier_session) not in declared_sessions:
             raise WorkflowValidationError(
-                f"step {step.name!r} references an undeclared review session slot"
+                f"step {step.name!r} references an undeclared verifier session slot"
             )
 
 
@@ -55,7 +55,7 @@ def validate_worklists(definition: Any) -> None:
         if step.scope is None:
             continue
         if isinstance(step, PythonStep):
-            raise WorkflowValidationError(f"system step {step.name!r} cannot declare scope")
+            raise WorkflowValidationError(f"python_step {step.name!r} cannot declare scope")
         scope_name = _resolve_worklist_name(step.scope)
         if scope_name not in declared_worklists:
             raise WorkflowValidationError(

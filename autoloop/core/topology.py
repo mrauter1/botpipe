@@ -112,11 +112,11 @@ def validate_control_contracts(definition: Any, inventory: dict[str, ArtifactInv
         if isinstance(step, (PythonStep, ChildWorkflowStep)):
             if step.expected_output_schema is not None:
                 raise WorkflowValidationError(
-                    f"{step.kind} step {step.name!r} cannot declare expected_output_schema"
+                    f"{_control_contract_step_label(step)} {step.name!r} cannot declare expected_output_schema"
                 )
             if step.retry_policy is not None:
                 raise WorkflowValidationError(
-                    f"{step.kind} steps do not call a provider and cannot declare provider retry policy."
+                    f"{_control_contract_step_label(step, plural=True)} do not call a provider and cannot declare provider retry policy."
                 )
             if isinstance(step, ChildWorkflowStep):
                 _validate_workflow_step_reference(step, definition)
@@ -187,6 +187,14 @@ def _validate_route_handoff_destination(definition: Any, *, route: Route, tag: s
 
 def _valid_route_destinations(definition: Any) -> set[str]:
     return {definition.finish_terminal, definition.await_input_terminal, definition.fail_terminal}
+
+
+def _control_contract_step_label(step: Step, *, plural: bool = False) -> str:
+    if isinstance(step, PythonStep):
+        return "python_steps" if plural else "python_step"
+    if isinstance(step, ChildWorkflowStep):
+        return "workflow steps" if plural else "workflow step"
+    return f"{step.kind} steps" if plural else f"{step.kind} step"
 
 
 __all__ = [

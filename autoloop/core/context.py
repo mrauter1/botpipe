@@ -235,6 +235,7 @@ class Context:
         self._execution_source_hook: str | None = None
         self._execution_source_phase: str | None = None
         self._execution_hook_invocation_id: str | None = None
+        self._runtime = _ContextRuntime(self)
 
     @property
     def state(self) -> BaseModel:
@@ -242,7 +243,7 @@ class Context:
 
     @state.setter
     def state(self, value: BaseModel) -> None:
-        self._set_state(value)
+        self._state = value
 
     @property
     def answer(self) -> str | None:
@@ -466,117 +467,6 @@ class Context:
             return definition.continuity
         return Continuity.run()
 
-    def _set_state(self, state: BaseModel) -> None:
-        self._state = state
-
-    def _set_answer(self, answer: str | None) -> None:
-        self._answer = answer
-
-    def _set_input_response(self, input_response: Any | None) -> None:
-        self._input_response = input_response
-
-    def _set_artifacts(self, artifacts: "ResolvedArtifacts | None") -> None:
-        self._artifacts = artifacts
-
-    def _set_values(self, values: Mapping[str, Any] | None) -> None:
-        self._values = values if isinstance(values, dict) else normalize_mapping(values)
-
-    def _set_route(self, route: Mapping[str, Any] | Any | None) -> None:
-        self._route = route
-
-    def _set_outcome(self, outcome: Mapping[str, Any] | Any | None) -> None:
-        self._outcome = outcome
-
-    def _set_event(self, event: Mapping[str, Any] | Any | None) -> None:
-        self._event = event
-
-    def _set_meta(self, meta: Mapping[str, Any] | Any | None) -> None:
-        self._meta = meta
-
-    def _set_step_state_store(self, state: BaseModel | dict[str, Any]) -> None:
-        self._step_state = state
-
-    def _set_item_state_store(self, state: BaseModel | dict[str, Any] | None) -> None:
-        self._item_state = state
-
-    def _set_step_item_state_store(self, state: BaseModel | dict[str, Any] | None) -> None:
-        self._step_item_state = state
-
-    def _set_selection(self, worklist: "Worklist[Any] | str", selection: "Selection[Any]") -> None:
-        self._selections[self._worklist_name(worklist)] = selection
-
-    def _set_active_worklist(self, worklist: "Worklist[Any] | str | None") -> None:
-        self._active_worklist = None if worklist is None else self._worklist_name(worklist)
-
-    def _set_selections(self, selections: dict[str, "Selection[Any]"]) -> None:
-        self._selections = selections
-
-    def _set_worklist_selection_sync(self, callback: Callable[[str], None] | None) -> None:
-        self._worklist_selection_sync = callback
-
-    def _set_execution_source(
-        self,
-        *,
-        hook_name: str | None,
-        phase: str | None,
-        invocation_id: str | None,
-    ) -> None:
-        self._execution_source_hook = hook_name
-        self._execution_source_phase = phase
-        self._execution_hook_invocation_id = invocation_id
-
-    def _sync_scoped_state_after_worklist_selection_change(self, worklist: "Worklist[Any] | str") -> None:
-        if self._worklist_selection_sync is None:
-            return
-        self._worklist_selection_sync(self._worklist_name(worklist))
-
-    def _emit_worklist_runtime_event(
-        self,
-        event_type: str,
-        *,
-        worklist_name: str,
-        previous_selection: "Selection[Any]",
-        new_selection: "Selection[Any]",
-    ) -> None:
-        if self._runtime_event_sink is None:
-            return
-        previous_current = previous_selection.current
-        new_current = new_selection.current
-        previous_status = None if previous_current is None else previous_current.status
-        new_status = None if new_current is None else new_current.status
-        payload: dict[str, Any] = {
-            "step_name": self._step_name,
-            "worklist_name": worklist_name,
-            "previous_current_item_id": None if previous_current is None else previous_current.id,
-            "new_current_item_id": None if new_current is None else new_current.id,
-            "previous_status": previous_status,
-            "new_status": new_status,
-        }
-        visit = _runtime_visits(self._step_item_state or self._step_state)
-        if isinstance(visit, int):
-            payload["visit"] = visit
-        if self._active_worklist is not None:
-            payload["scope"] = self._active_worklist
-        if new_current is not None:
-            payload["item_id"] = new_current.id
-        elif previous_current is not None:
-            payload["item_id"] = previous_current.id
-        step_execution_id = _step_execution_id(
-            step_name=self._step_name,
-            visit=visit,
-            scope_name=self._active_worklist,
-            item_id=None if new_current is None else new_current.id,
-        )
-        if step_execution_id is not None:
-            payload["step_execution_id"] = step_execution_id
-        if self._execution_source_hook is not None:
-            payload["source_hook"] = self._execution_source_hook
-        if self._execution_source_phase is not None:
-            payload["source_phase"] = self._execution_source_phase
-        if self._execution_hook_invocation_id is not None:
-            payload["hook_invocation_id"] = self._execution_hook_invocation_id
-        self._runtime_event_sink(event_type, payload)
-
     def invoke_workflow(
         self,
         workflow: str | type[Any],
@@ -613,13 +503,6 @@ class Context:
             parameters=invocation_parameters,
             input=payload_input,
         )
-
-    def _get_cached_worklist_items(self, worklist_name: str) -> tuple[Any, ...] | None:
-        return self._worklist_items_cache.get(worklist_name)
-
-    def _cache_worklist_items(self, worklist_name: str, items: tuple[Any, ...]) -> tuple[Any, ...]:
-        self._worklist_items_cache[worklist_name] = items
-        return items
 
     def _worklist_name(self, worklist: "Worklist[Any] | str") -> str:
         if isinstance(worklist, str):
@@ -672,6 +555,129 @@ class _WorklistNamespace:
             return self._context.worklist(item)
         except WorkflowExecutionError as exc:
             raise AttributeError(f"unknown worklist {item!r}") from exc
+
+
+class _ContextRuntime:
+    def __init__(self, context: Context) -> None:
+        self._context = context
+
+    def set_state(self, state: BaseModel) -> None:
+        self._context._state = state
+
+    def set_answer(self, answer: str | None) -> None:
+        self._context._answer = answer
+
+    def set_input_response(self, input_response: Any | None) -> None:
+        self._context._input_response = input_response
+
+    def set_artifacts(self, artifacts: "ResolvedArtifacts | None") -> None:
+        self._context._artifacts = artifacts
+
+    def set_values(self, values: Mapping[str, Any] | None) -> None:
+        self._context._values = values if isinstance(values, dict) else normalize_mapping(values)
+
+    def set_route(self, route: Mapping[str, Any] | Any | None) -> None:
+        self._context._route = route
+
+    def set_outcome(self, outcome: Mapping[str, Any] | Any | None) -> None:
+        self._context._outcome = outcome
+
+    def set_event(self, event: Mapping[str, Any] | Any | None) -> None:
+        self._context._event = event
+
+    def set_meta(self, meta: Mapping[str, Any] | Any | None) -> None:
+        self._context._meta = meta
+
+    def set_step_state_store(self, state: BaseModel | dict[str, Any]) -> None:
+        self._context._step_state = state
+
+    def set_item_state_store(self, state: BaseModel | dict[str, Any] | None) -> None:
+        self._context._item_state = state
+
+    def set_step_item_state_store(self, state: BaseModel | dict[str, Any] | None) -> None:
+        self._context._step_item_state = state
+
+    def set_selection(self, worklist: "Worklist[Any] | str", selection: "Selection[Any]") -> None:
+        self._context._selections[self._context._worklist_name(worklist)] = selection
+
+    def set_active_worklist(self, worklist: "Worklist[Any] | str | None") -> None:
+        self._context._active_worklist = None if worklist is None else self._context._worklist_name(worklist)
+
+    def set_selections(self, selections: dict[str, "Selection[Any]"]) -> None:
+        self._context._selections = selections
+
+    def set_worklist_selection_sync(self, callback: Callable[[str], None] | None) -> None:
+        self._context._worklist_selection_sync = callback
+
+    def set_execution_source(
+        self,
+        *,
+        hook_name: str | None,
+        phase: str | None,
+        invocation_id: str | None,
+    ) -> None:
+        self._context._execution_source_hook = hook_name
+        self._context._execution_source_phase = phase
+        self._context._execution_hook_invocation_id = invocation_id
+
+    def sync_scoped_state_after_worklist_selection_change(self, worklist: "Worklist[Any] | str") -> None:
+        if self._context._worklist_selection_sync is None:
+            return
+        self._context._worklist_selection_sync(self._context._worklist_name(worklist))
+
+    def emit_worklist_runtime_event(
+        self,
+        event_type: str,
+        *,
+        worklist_name: str,
+        previous_selection: "Selection[Any]",
+        new_selection: "Selection[Any]",
+    ) -> None:
+        if self._context._runtime_event_sink is None:
+            return
+        previous_current = previous_selection.current
+        new_current = new_selection.current
+        previous_status = None if previous_current is None else previous_current.status
+        new_status = None if new_current is None else new_current.status
+        payload: dict[str, Any] = {
+            "step_name": self._context._step_name,
+            "worklist_name": worklist_name,
+            "previous_current_item_id": None if previous_current is None else previous_current.id,
+            "new_current_item_id": None if new_current is None else new_current.id,
+            "previous_status": previous_status,
+            "new_status": new_status,
+        }
+        visit = _runtime_visits(self._context._step_item_state or self._context._step_state)
+        if isinstance(visit, int):
+            payload["visit"] = visit
+        if self._context._active_worklist is not None:
+            payload["scope"] = self._context._active_worklist
+        if new_current is not None:
+            payload["item_id"] = new_current.id
+        elif previous_current is not None:
+            payload["item_id"] = previous_current.id
+        step_execution_id = _step_execution_id(
+            step_name=self._context._step_name,
+            visit=visit,
+            scope_name=self._context._active_worklist,
+            item_id=None if new_current is None else new_current.id,
+        )
+        if step_execution_id is not None:
+            payload["step_execution_id"] = step_execution_id
+        if self._context._execution_source_hook is not None:
+            payload["source_hook"] = self._context._execution_source_hook
+        if self._context._execution_source_phase is not None:
+            payload["source_phase"] = self._context._execution_source_phase
+        if self._context._execution_hook_invocation_id is not None:
+            payload["hook_invocation_id"] = self._context._execution_hook_invocation_id
+        self._context._runtime_event_sink(event_type, payload)
+
+    def get_cached_worklist_items(self, worklist_name: str) -> tuple[Any, ...] | None:
+        return self._context._worklist_items_cache.get(worklist_name)
+
+    def cache_worklist_items(self, worklist_name: str, items: tuple[Any, ...]) -> tuple[Any, ...]:
+        self._context._worklist_items_cache[worklist_name] = items
+        return items
 
 
 def _runtime_visits(state: BaseModel | dict[str, Any] | None) -> int | None:

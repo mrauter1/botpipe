@@ -40,15 +40,15 @@ def invoke_after_verifier_hook(
     original_outcome = ctx.outcome
     original_meta = ctx.meta
     if artifacts is not None:
-        ctx._set_artifacts(artifacts)
-    ctx._set_route(route)
-    ctx._set_outcome(outcome)
-    ctx._set_meta(meta)
+        ctx._runtime.set_artifacts(artifacts)
+    ctx._runtime.set_route(route)
+    ctx._runtime.set_outcome(outcome)
+    ctx._runtime.set_meta(meta)
     try:
         result = hook(ctx)
         return _normalize_control_result(result)
     finally:
-        ctx._set_artifacts(original_artifacts)
-        ctx._set_route(original_route)
-        ctx._set_outcome(original_outcome)
-        ctx._set_meta(original_meta)
+        ctx._runtime.set_artifacts(original_artifacts)
+        ctx._runtime.set_route(original_route)
+        ctx._runtime.set_outcome(original_outcome)
+        ctx._runtime.set_meta(original_meta)

@@ -304,7 +304,7 @@ class Engine:
                     values=values,
                 )
                 selections = self.state_runtime.initialize_worklist_selections(context)
-                context._set_selections(selections)
+                context._runtime.set_selections(selections)
                 if self.compiled.default_session_open:
                     context.open_session(self.compiled.default_session_name)
                 if self.compiled.has_start_hook:
@@ -347,7 +347,7 @@ class Engine:
                 current_item_key = self._current_item_state_key(context, step)
                 step_state_store = self._ensure_step_state_store(step_states, step)
                 self._increment_step_runtime_state(step_state_store)
-                context._set_step_state_store(step_state_store)
+                context._runtime.set_step_state_store(step_state_store)
                 item_state_store = self._ensure_item_state_store(item_states, step, item_key=current_item_key)
                 step_item_state_store = self._ensure_step_item_state_store(
                     step_item_states,
@@ -355,12 +355,12 @@ class Engine:
                     item_key=current_item_key,
                 )
                 if item_state_store is not None:
-                    context._set_item_state_store(item_state_store)
+                    context._runtime.set_item_state_store(item_state_store)
                 if step_item_state_store is not None:
                     self._increment_step_runtime_state(step_item_state_store)
-                    context._set_step_item_state_store(step_item_state_store)
+                    context._runtime.set_step_item_state_store(step_item_state_store)
                 self._update_item_runtime_state_on_entry(step, context, getattr(context, "_item_state", None))
-                context._set_worklist_selection_sync(
+                context._runtime.set_worklist_selection_sync(
                     lambda worklist_name, *, _context=context, _step=step, _item_states=item_states, _step_item_states=step_item_states: self._sync_context_scoped_state_after_worklist_selection_change(
                         _context,
                         _step,
@@ -369,8 +369,8 @@ class Engine:
                         worklist_name=worklist_name,
                     )
                 )
-                context._set_values(values)
-                context._set_meta(
+                context._runtime.set_values(values)
+                context._runtime.set_meta(
                     {
                         "step": {
                             "name": step.name,
@@ -739,7 +739,7 @@ class Engine:
         max_attempts = step.retry_policy.max_attempts
         for attempt in range(1, max_attempts + 1):
             artifacts = self._resolve_artifacts(context)
-            context._set_artifacts(artifacts)
+            context._runtime.set_artifacts(artifacts)
             try:
                 before_result = self.hook_runner.run_before(
                     step,
@@ -750,7 +750,7 @@ class Engine:
                     hook_phase="before_producer",
                 )
                 state = before_result.state
-                context._set_state(state)
+                context._runtime.set_state(state)
                 if before_result.result.control is not None:
                     direct_control = self._normalize_direct_runtime_control(
                         step=step,
@@ -1255,7 +1255,7 @@ class Engine:
             hook_phase="after_producer",
         )
         next_state = after_producer_result.state
-        context._set_state(next_state)
+        context._runtime.set_state(next_state)
         if after_producer_result.result.control is not None:
             direct_control = self._normalize_direct_runtime_control(
                 step=step,
@@ -1290,7 +1290,7 @@ class Engine:
 
         try:
             review_artifacts = self._resolve_artifacts(context)
-            context._set_artifacts(review_artifacts)
+            context._runtime.set_artifacts(review_artifacts)
             self._ensure_named_artifacts_exist(step.verifier_requires, review_artifacts, step_name=step.name)
             before_verifier_result = self.hook_runner.run_before(
                 step,
@@ -1301,7 +1301,7 @@ class Engine:
                 hook_phase="before_verifier",
             )
             review_state = before_verifier_result.state
-            context._set_state(review_state)
+            context._runtime.set_state(review_state)
             if before_verifier_result.result.control is not None:
                 direct_control = self._normalize_direct_runtime_control(
                     step=step,
@@ -1748,7 +1748,7 @@ class Engine:
     def _restore_hook_context(self, context: Context, snapshot: _HookSnapshot) -> None:
         self.session_store.restore(snapshot.session)
         if snapshot.state is not None:
-            context._set_state(self._clone_state(snapshot.state))
+            context._runtime.set_state(self._clone_state(snapshot.state))
         self._restore_model_or_dict(getattr(context, "_step_state", None), snapshot.step_state)
         self._restore_model_or_dict(getattr(context, "_item_state", None), snapshot.item_state)
         self._restore_model_or_dict(getattr(context, "_step_item_state", None), snapshot.step_item_state)
@@ -3427,8 +3427,8 @@ class Engine:
         item_key = self._current_item_state_key(context, step)
         item_state_store = self._ensure_item_state_store(item_states, step, item_key=item_key)
         step_item_state_store = self._ensure_step_item_state_store(step_item_states, step, item_key=item_key)
-        context._set_item_state_store(item_state_store)
-        context._set_step_item_state_store(step_item_state_store)
+        context._runtime.set_item_state_store(item_state_store)
+        context._runtime.set_step_item_state_store(step_item_state_store)
         self._update_item_runtime_state_on_entry(step, context, item_state_store)
 
     def _emit_runtime_event(self, event_type: str, **payload: Any) -> None:

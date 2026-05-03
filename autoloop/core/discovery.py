@@ -469,8 +469,8 @@ def _lower_simple_steps(
         session = getattr(declaration, "session", None)
         if session is not None and not isinstance(session, Session):
             raise WorkflowValidationError(f"simple step {seed.name!r} session must be declared with workflow.Session")
-        review_session = getattr(declaration, "verifier_session", None)
-        if review_session is not None and not isinstance(review_session, Session):
+        verifier_session = getattr(declaration, "verifier_session", None)
+        if verifier_session is not None and not isinstance(verifier_session, Session):
             raise WorkflowValidationError(
                 f"simple step {seed.name!r} verifier_session must be declared with workflow.Session"
             )
@@ -506,7 +506,7 @@ def _lower_simple_steps(
                 producer=getattr(declaration, "producer_prompt"),
                 verifier=getattr(declaration, "verifier_prompt"),
                 session=session,
-                review_session=review_session,
+                verifier_session=verifier_session,
                 scope=getattr(declaration, "scope", None),
                 reads=reads,
                 requires=requires,
@@ -517,10 +517,10 @@ def _lower_simple_steps(
                 retry_policy=retry_policy,
                 before=None,
                 after=None,
-                before_do=getattr(declaration, "before_producer", None),
-                after_do=getattr(declaration, "after_producer", None),
-                before_review=getattr(declaration, "before_verifier", None),
-                after_review=getattr(declaration, "after_verifier", None),
+                before_producer=getattr(declaration, "before_producer", None),
+                after_producer=getattr(declaration, "after_producer", None),
+                before_verifier=getattr(declaration, "before_verifier", None),
+                after_verifier=getattr(declaration, "after_verifier", None),
                 item_state=step_item_state_model,
             )
         elif seed.kind in {"system", "python"}:

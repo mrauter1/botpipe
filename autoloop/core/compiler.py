@@ -232,10 +232,10 @@ def _compile_steps(
         step_kind = step.kind
         before_hook = getattr(step, "before", None)
         after_hook = getattr(step, "after", None)
-        before_producer_hook = getattr(step, "before_do", None)
-        after_producer_hook = getattr(step, "after_do", None)
-        before_verifier_hook = getattr(step, "before_review", None)
-        after_verifier_hook = getattr(step, "after_review", None)
+        before_producer_hook = getattr(step, "before_producer", None)
+        after_producer_hook = getattr(step, "after_producer", None)
+        before_verifier_hook = getattr(step, "before_verifier", None)
+        after_verifier_hook = getattr(step, "after_verifier", None)
         step_kind = _compiled_step_kind(step)
         step_state_model = getattr(step, "state_model", None)
         if step_state_model is None:
@@ -289,8 +289,8 @@ def _compile_steps(
                 verifier_requires=verifier_requires,
                 verifier_writes=verifier_writes or writes,
                 verifier_session_name=(
-                    step.review_session.name
-                    if getattr(step, "review_session", None) is not None
+                    step.verifier_session.name
+                    if getattr(step, "verifier_session", None) is not None
                     else None
                 ),
                 expected_output_validator=expected_output_validator,
@@ -486,12 +486,12 @@ def _compile_system_handler(step: PythonStep, *, workflow_cls: type[Any]) -> Sys
     if raw_handler is None and not _uses_simple_authoring_model(workflow_cls):
         raw_handler = getattr(workflow_cls, f"on_{step_name}", None)
     if raw_handler is None:
-        raise WorkflowCompilationError(f"system step {step_name!r} is missing a handler")
+        raise WorkflowCompilationError(f"python_step {step_name!r} is missing a handler")
 
     arity = _callable_arity(raw_handler)
     if arity not in {1, 2}:
         raise WorkflowCompilationError(
-            f"handler for system step {step_name!r} must accept exactly 1 or 2 positional arguments"
+            f"handler for python_step {step_name!r} must accept exactly 1 or 2 positional arguments"
         )
 
     def handler(ctx: Context) -> Any:
