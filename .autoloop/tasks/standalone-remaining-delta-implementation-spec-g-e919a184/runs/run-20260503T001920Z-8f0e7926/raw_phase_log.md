@@ -627,3 +627,121 @@ No open issue in this audit slice. The warning-only Pydantic field-shadow output
 <loop-control>
 {"schema":"docloop.loop_control/v1","kind":"promise","promise":"COMPLETE"}
 </loop-control>
+
+
+---
+run_id=run-20260503T001920Z-8f0e7926 | entry=session_turn | pair=implement | phase=producer | cycle=1 | attempt=1 | thread_id=019deb74-92cc-7a71-ac0a-0fa403070084
+---
+provider=codex
+mode=start
+template=/home/rauter/.local/share/pipx/venvs/autoloop/lib/python3.12/site-packages/autoloop/templates/implement_producer.md
+session_id=019deb74-92cc-7a71-ac0a-0fa403070084
+
+
+---
+run_id=run-20260503T001920Z-8f0e7926 | entry=phase_output | pair=implement | phase=producer | process=codex-agent | cycle=1 | attempt=1 | thread_id=019deb74-92cc-7a71-ac0a-0fa403070084
+---
+I’m treating the phase contract as the scope: execution normalization in the engine/runtime path, plus the active feedback and plan artifacts. I’m starting by reading the phase notes, plan, and the current execution plumbing so I can map the requested behavior to the existing code before editing.
+
+The phase artifacts are mostly scaffolding, so I’m moving into the runtime code now. I’ve confirmed there’s already partial dataclass/collaborator work in `engine_collaborators.py`; next I’m tracing how `engine.py` still depends on tuple/state-heavy paths and where provider contract assembly is still inline.
+
+I’ve confirmed the core gaps: `engine_collaborators.py` exists, but `StepDispatcher` and the engine loop still exchange large positional tuples, and provider request assembly is still entirely inline in `engine.py`. I’m drilling into the engine constructor and tests next so I can replace those seams without breaking the existing step-loop and provider contract behavior.
+
+The contract tests already cover most of the short-circuit behavior, which is useful: I can refactor the plumbing without inventing new semantics. The remaining technical debt is structural, not behavioral, so I’m now converting the active execution path to dataclasses and moving provider contract assembly behind one collaborator-owned entrypoint.
+
+Plan for this slice:
+
+1. Replace the active execution-path tuples with dataclasses in `engine_collaborators.py` and `engine.py`.
+2. Add a provider-contract collaborator so `Engine` stops assembling provider-visible route/read/write/retry/handoff payloads inline.
+3. Update the step loop and provider helpers to consume the dataclasses without changing runtime semantics.
+4. Add focused contract coverage for the new collaborator-owned contract surface and any direct-control edge that the refactor could destabilize.
+5. Update the phase `implementation_notes.md` and the current turn block in `decisions.txt` once the code and validation are complete.
+
+I’ve got the edit boundary now: `autoloop/core/engine_collaborators.py`, `autoloop/core/engine.py`, and a small set of contract tests. The code change is structural rather than semantic, so I’m keeping the existing runtime behavior and event/failure payloads intact while swapping the execution plumbing underneath.
+
+The provider-contract tests already assert route/read/write payloads at the external boundary. I only need one additional assertion around the builder seam if the refactor changes where those payloads come from, not a new semantic test matrix.
+
+I’m editing the runtime now. The main code change is introducing the execution-result dataclasses and the provider-contract builder in the existing collaborator module, then rewiring `engine.py` to consume them so the behavior stays the same but the tuple plumbing disappears.
+
+I found one concrete regression risk while refactoring: successful `after_producer` and `before_verifier` state mutations were being carried through the verifier turn but could be lost before finalization. I’m adding a contract test for that exact path while wiring the new dataclass result through `context.state` so the mutation persists.
+
+The refactor is in place, and I’ve added a regression test for pair-hook state persistence. The first validation attempt hit an environment issue rather than a code issue: this shell doesn’t have `python`/`pytest` on PATH, so I’m switching to `python3 -m py_compile` and `python3 -m pytest`.
+
+The files compile cleanly under `python3`. Full test execution is still blocked by the local environment because `pytest` is not installed in the interpreter on PATH, so I’m checking whether the repo has a project-local venv or runner I can use before I stop at syntax-only validation.
+
+`pytest` isn’t available in this interpreter, so I’m using direct `python3` smoke checks instead of stopping at static compilation. I’m running one script for the pair-hook persistence path and one for provider-contract payload shape, which covers the refactor’s two highest-risk behavior seams.
+
+The local interpreter is missing project dependencies too, not just `pytest`, so dynamic runtime checks aren’t possible in this shell. I’m doing one more static pass on the touched modules and then documenting validation as compile-only plus manual codepath review.
+
+The code diff is consistent with the intended scope: tuple return paths are replaced in the active execution loop, provider contract assembly is collaborator-owned, and the pair-step state path now finalizes from the current context state instead of the pre-hook snapshot. I’m finishing the phase notes and the turn-local decisions block now so the next turn has the non-obvious constraints captured.
+
+Scope considered
+- Phase-local execution-normalization work in [autoloop/core/engine.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/autoloop/core/engine.py), [autoloop/core/engine_collaborators.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/autoloop/core/engine_collaborators.py), and [tests/contract/test_engine_contracts.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/tests/contract/test_engine_contracts.py).
+- Phase notes and ledger updates in [implementation_notes.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/standalone-remaining-delta-implementation-spec-g-e919a184/runs/run-20260503T001920Z-8f0e7926/artifacts/implement/phases/execution-normalization/implementation_notes.md) and [decisions.txt](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/standalone-remaining-delta-implementation-spec-g-e919a184/runs/run-20260503T001920Z-8f0e7926/decisions.txt).
+
+What I analyzed
+- The active engine loop, step dispatcher, route finalizer, pair-step execution, and inline provider-contract assembly.
+- Existing contract coverage for `before`, `before_producer`, `before_verifier`, `after_producer`, `on_taken`, and provider payload assertions.
+- A concrete state-loss risk in successful `after_producer` / `before_verifier` flows.
+
+What I changed
+- Replaced the active long tuple step-result plumbing with dataclasses: `StepExecutionResult`, `RouteFinalizationResult`, `PairProviderResult`, and `ProviderExecResult`.
+- Added `ProviderContractBuilder` and routed producer/verifier/llm request assembly through it instead of building provider-visible route/read/write/retry/handoff payloads inline in `Engine`.
+- Reworked `Engine.run` and `StepDispatcher.execute` to consume `StepExecutionResult` objects instead of positional unpacking.
+- Fixed pair-step finalization to use `context.state` after producer/before-verifier hooks, so successful hook mutations persist into finalization.
+- Added a regression test covering persisted state mutations across `after_producer` and `before_verifier`.
+
+Key findings / decisions
+- The collaborator split already existed; finishing that seam was lower risk than introducing another abstraction layer.
+- The pre-existing pair-step path could overwrite successful hook state mutations by finalizing from the earlier `state` snapshot; the new path finalizes from the current runtime state.
+- Provider contract semantics were preserved; the change is ownership and normalization, not a behavior rewrite.
+
+Open issues / next step
+- Static validation passed with `python3 -m py_compile autoloop/core/engine.py autoloop/core/engine_collaborators.py tests/contract/test_engine_contracts.py`.
+- Runtime test execution was blocked in this shell because the available `python3` environment does not have project dependencies such as `pydantic` or `pytest`.
+- Next step is to run the relevant contract/runtime test slice in a provisioned environment and confirm no behavioral regressions outside the compile pass.
+
+
+---
+run_id=run-20260503T001920Z-8f0e7926 | entry=session_turn | pair=implement | phase=verifier | cycle=1 | attempt=1 | thread_id=019deb74-92cc-7a71-ac0a-0fa403070084
+---
+provider=codex
+mode=resume
+template=/home/rauter/.local/share/pipx/venvs/autoloop/lib/python3.12/site-packages/autoloop/templates/implement_verifier.md
+session_id=019deb74-92cc-7a71-ac0a-0fa403070084
+
+
+---
+run_id=run-20260503T001920Z-8f0e7926 | entry=phase_output | pair=implement | phase=verifier | process=codex-agent | cycle=1 | attempt=1 | thread_id=019deb74-92cc-7a71-ac0a-0fa403070084
+---
+I’ve narrowed the review to two substantive gaps rather than broad style comments. The implementation is structurally improved, but there are still active tuple-based normalization paths in the hook and llm-provider execution flow, which means this phase is not fully at the requested dataclass-based end state.
+
+I’m writing the review artifacts now with two blocking findings. Both are intent-fidelity issues rather than speculative cleanup: the hook normalization path and the llm-provider execution path still rely on tuples, so the requested dataclass-only execution normalization is not finished yet.
+
+Scope considered
+- Changed execution-normalization code in `autoloop/core/engine.py` and `autoloop/core/engine_collaborators.py`.
+- The added regression test in `tests/contract/test_engine_contracts.py`.
+- Review artifacts in `criteria.md` and `feedback.md`.
+
+What I analyzed
+- Active step-dispatch, hook normalization, route finalization, and llm/pair provider execution paths.
+- Whether the implementation reaches the phase end state requested by AC-1 through AC-3, not just a partial refactor.
+- The implementation notes and decisions ledger for scope alignment.
+
+What I reviewed
+- Updated [criteria.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/standalone-remaining-delta-implementation-spec-g-e919a184/runs/run-20260503T001920Z-8f0e7926/artifacts/implement/phases/execution-normalization/criteria.md) and left the boxes unchecked because blocking findings remain.
+- Appended blocking findings to [feedback.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/standalone-remaining-delta-implementation-spec-g-e919a184/runs/run-20260503T001920Z-8f0e7926/artifacts/implement/phases/execution-normalization/feedback.md) as `IMP-001` and `IMP-002`.
+
+Key findings / decisions
+- `IMP-001` blocking: hook normalization is still tuple-based in `HookRunner.normalize_result`, so the requested single dataclass-based hook normalization model is not finished.
+- `IMP-002` blocking: the llm provider path still returns and unpacks a positional tuple in `Engine._run_llm_step`, so provider execution plumbing is only partially migrated to dataclasses.
+- The pair-step state-preservation fix looks directionally correct, but the phase cannot be marked complete while those two active tuple paths remain.
+
+Open issues / next step
+- Finish the hook normalization seam so `normalize_result()` returns one dataclass consumed directly by all hook and python-step callers.
+- Replace the `_run_llm_step()` tuple with a dataclass-backed result aligned with the new provider execution model.
+- Re-run review after those two paths are normalized.
+
+<loop-control>
+{"schema":"docloop.loop_control/v1","kind":"promise","promise":"INCOMPLETE"}
+</loop-control>
