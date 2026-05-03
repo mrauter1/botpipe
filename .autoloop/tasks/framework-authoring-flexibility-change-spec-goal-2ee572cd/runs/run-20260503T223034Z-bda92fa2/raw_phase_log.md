@@ -142,3 +142,12 @@ The plan is complete for this turn. The next step is implementation against the 
 <loop-control>
 {"schema":"docloop.loop_control/v1","kind":"promise","promise":"COMPLETE"}
 </loop-control>
+
+
+---
+run_id=run-20260503T223034Z-bda92fa2 | entry=phase_scope_resolved
+---
+phase_mode=single
+phase_ids=restore-runtime-contracts,repair-full-auto-runner-plumbing,align-runtime-fixtures-and-revalidate
+explicit=True
+current_phase_index=0
