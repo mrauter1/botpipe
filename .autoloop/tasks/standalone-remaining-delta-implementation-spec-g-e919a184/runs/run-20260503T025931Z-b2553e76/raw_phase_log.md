@@ -297,3 +297,118 @@ No open issues from this audit pass.
 <loop-control>
 {"schema":"docloop.loop_control/v1","kind":"promise","promise":"COMPLETE"}
 </loop-control>
+
+
+---
+run_id=run-20260503T025931Z-b2553e76 | entry=session_turn | pair=audit | phase=producer | cycle=1 | attempt=1 | thread_id=019debd2-9c58-7ca2-916d-e921119fa965
+---
+provider=codex
+mode=start
+template=/home/rauter/.local/share/pipx/venvs/autoloop/lib/python3.12/site-packages/autoloop/templates/audit_producer.md
+session_id=019debd2-9c58-7ca2-916d-e921119fa965
+
+
+---
+run_id=run-20260503T025931Z-b2553e76 | entry=phase_output | pair=audit | phase=producer | process=codex-agent | cycle=1 | attempt=1 | thread_id=019debd2-9c58-7ca2-916d-e921119fa965
+---
+I’m auditing this run against the authoritative request, raw log, decisions, artifacts, and the final code/test state. I’ll gather the run-local evidence first, then write the audit artifacts under the allowed `artifacts/audit` directory only.
+
+I’ve confirmed the run history and the decisions ledger. Next I’m checking the final repository state and the phase artifacts directly, because the audit turns on whether the implemented files and tests actually match the recorded contract rather than just the summaries.
+
+The remaining question is whether the repository itself proves the request is satisfied. I’m reading the changed files and the run-local phase evidence now, then I’ll rerun the requested pytest targets from the audit turn so the conclusion is based on current state rather than prior phase narration.
+
+I have enough context to conclude on substance once the current test state is confirmed. I’m running the two requested pytest commands from this audit turn now, then I’ll write the gap report and revised request based on the results.
+
+The requested validations are green in the current workspace. I’m doing one last evidence pass with line references in the final files, then I’ll write the audit artifacts and close with the required loop-control block.
+
+I’m writing the audit artifacts now. The conclusion is that the requested cleanup landed fully and the current workspace proves it, so the follow-up request will state that no additional implementation run is required.
+
+The audit artifacts are written. I’m doing a quick readback and JSON check now to make sure the files are clean and the machine-readable result matches the narrative conclusion.
+
+I found one artifact hygiene issue: `criteria.md` still has the original unchecked lines alongside the checked ones, and the system Python shim isn’t available here. I’m cleaning the criteria file and validating `audit_result.json` with the repo virtualenv interpreter.
+
+I’m normalizing `criteria.md` fully. Everything else is consistent, and `audit_result.json` parses cleanly under the repo virtualenv.
+
+Scope considered
+
+The immutable request, authoritative raw phase log, `decisions.txt`, run-local plan/implement/test artifacts, and the final repository state in `cleanup.md`, `autoloop/runtime/cli.py`, `tests/runtime/test_package_cli.py`, and `tests/test_architecture_baseline_docs.py`.
+
+What I analyzed
+
+I compared the requested outcomes against the final code and tests, checked the run-local decisions for any scope-changing clarification, and reran the two requested validations in the current workspace:
+- `./.venv/bin/pytest -q tests/test_architecture_baseline_docs.py` -> `11 passed`
+- `./.venv/bin/pytest -q tests/runtime/test_package_cli.py -k 'init_workflow_scaffolds_supported_shapes_and_rejects_duplicates or init_workflow_defaults_to_flow_specs_shape'` -> `4 passed, 17 deselected`
+
+What I changed
+
+I wrote the audit artifacts under `.autoloop/.../artifacts/audit/` only:
+- `gap_report.md`
+- `revised_request.md`
+- `audit_result.json`
+- `criteria.md`
+- `feedback.md`
+
+Key findings / decisions
+
+No material unresolved gaps remain. The final codebase matches the request:
+- `cleanup.md` now documents only the `autoloop` public authoring surface and does not contain `autoloop.simple`.
+- `autoloop/runtime/cli.py` scaffolds all supported shapes with the finalized one-argument decorator-based `python_step` bootstrap contract.
+- `tests/runtime/test_package_cli.py` now checks the scaffold contract directly, including compiled bootstrap behavior.
+- The only noteworthy difference is additive: the default-shape scaffold test now also asserts the compiled bootstrap contract, which strengthens coverage without changing requested behavior.
+
+Open issues / next step
+
+No follow-up implementation is required. `audit_result.json` records `material_gaps_found: false`, and `revised_request.md` states that no next-run implementation request is needed.
+
+<loop-control>
+{"schema":"docloop.loop_control/v1","kind":"promise","promise":"INCOMPLETE"}
+</loop-control>
+
+
+---
+run_id=run-20260503T025931Z-b2553e76 | entry=session_turn | pair=audit | phase=verifier | cycle=1 | attempt=1 | thread_id=019debd2-9c58-7ca2-916d-e921119fa965
+---
+provider=codex
+mode=resume
+template=/home/rauter/.local/share/pipx/venvs/autoloop/lib/python3.12/site-packages/autoloop/templates/audit_verifier.md
+session_id=019debd2-9c58-7ca2-916d-e921119fa965
+
+
+---
+run_id=run-20260503T025931Z-b2553e76 | entry=phase_output | pair=audit | phase=verifier | process=codex-agent | cycle=1 | attempt=1 | thread_id=019debd2-9c58-7ca2-916d-e921119fa965
+---
+I’m verifying the audit artifacts against the immutable request, the decisions ledger, and the final code/test state. I’ll read the authored audit files first, then sanity-check the evidence they cite before updating the verifier-owned audit files only.
+
+The audit narrative is internally consistent so far. I’m checking the final code/test evidence directly now, including a fresh rerun of the named pytest commands, so the verifier conclusion is grounded in current state rather than the producer summary alone.
+
+The current code, tests, and audit artifacts line up. I’m recording the verifier result in `feedback.md` now; there are no blocking findings, so the audit can close as `COMPLETE`.
+
+Scope considered
+
+The immutable request, authoritative raw log and decisions ledger, the audit artifacts in `.autoloop/.../artifacts/audit/`, and the final repository evidence in `cleanup.md`, `autoloop/runtime/cli.py`, `tests/runtime/test_package_cli.py`, and `tests/test_architecture_baseline_docs.py`.
+
+What I analyzed
+
+I verified the audit’s gap classification against the actual code and tests, checked that `audit_result.json` and `revised_request.md` agree on whether follow-up work is needed, and reran the two named pytest commands in the current workspace.
+
+What I reviewed
+
+I reviewed `gap_report.md`, `revised_request.md`, `audit_result.json`, `criteria.md`, `feedback.md`, and `decisions.txt`. I confirmed the final code and tests support the audit’s conclusion:
+- `cleanup.md` is autoloop-only and does not retain `autoloop.simple`
+- `autoloop/runtime/cli.py` emits the finalized one-argument decorator-based bootstrap scaffold for supported shapes
+- `tests/runtime/test_package_cli.py` asserts both emitted scaffold source and compiled bootstrap contract
+- The requested validations pass:
+  - `./.venv/bin/pytest -q tests/test_architecture_baseline_docs.py`
+  - `./.venv/bin/pytest -q tests/runtime/test_package_cli.py -k 'init_workflow_scaffolds_supported_shapes_and_rejects_duplicates or init_workflow_defaults_to_flow_specs_shape'`
+
+Key findings / decisions
+
+No blocking findings. The audit artifacts are internally consistent, evidence-backed, and correctly conclude that no material unresolved gaps remain. `criteria.md` is accurate with all boxes checked, and `feedback.md` now includes verifier entry `AUD-001` labeled `non-blocking`.
+
+Open issues / next step
+
+No open verifier issues. The audit can close as complete.
+
+<loop-control>
+{"schema":"docloop.loop_control/v1","kind":"promise","promise":"COMPLETE"}
+</loop-control>

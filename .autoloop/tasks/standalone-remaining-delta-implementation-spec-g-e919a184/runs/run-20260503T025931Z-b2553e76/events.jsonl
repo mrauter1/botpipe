@@ -20,3 +20,6 @@
 {"ts": "2026-05-03T03:12:20.952750+00:00", "run_id": "run-20260503T025931Z-b2553e76", "seq": 20, "event_type": "phase_completed", "pair": "test", "phase_id": "public-authoring-surface-cleanup", "phase_mode": "single"}
 {"ts": "2026-05-03T03:12:20.956207+00:00", "run_id": "run-20260503T025931Z-b2553e76", "seq": 21, "event_type": "pair_started", "pair": "audit", "phase_id": null}
 {"ts": "2026-05-03T03:12:20.956424+00:00", "run_id": "run-20260503T025931Z-b2553e76", "seq": 22, "event_type": "cycle_started", "pair": "audit", "cycle": 1, "attempt": 1, "phase_id": null}
+{"ts": "2026-05-03T03:15:41.505005+00:00", "run_id": "run-20260503T025931Z-b2553e76", "seq": 23, "event_type": "phase_finished", "pair": "audit", "phase": "producer", "cycle": 1, "attempt": 1, "empty_output": false, "phase_id": null}
+{"ts": "2026-05-03T03:16:35.627408+00:00", "run_id": "run-20260503T025931Z-b2553e76", "seq": 24, "event_type": "phase_finished", "pair": "audit", "phase": "verifier", "cycle": 1, "attempt": 1, "empty_output": false, "phase_id": null}
+{"ts": "2026-05-03T03:16:35.660515+00:00", "run_id": "run-20260503T025931Z-b2553e76", "seq": 25, "event_type": "pair_completed", "pair": "audit", "cycle": 1, "attempt": 1, "phase_id": null}
