@@ -823,3 +823,93 @@ Open issues / next step
 <loop-control>
 {"schema":"docloop.loop_control/v1","kind":"promise","promise":"COMPLETE"}
 </loop-control>
+
+
+---
+run_id=run-20260503T223034Z-bda92fa2 | entry=session_turn | pair=implement | phase=producer | cycle=1 | attempt=1 | thread_id=019df017-fd97-7691-87ef-cf5b40ab68d9
+---
+provider=codex
+mode=start
+template=/home/rauter/.local/share/pipx/venvs/autoloop/lib/python3.12/site-packages/autoloop/templates/implement_producer.md
+session_id=019df017-fd97-7691-87ef-cf5b40ab68d9
+
+
+---
+run_id=run-20260503T223034Z-bda92fa2 | entry=phase_output | pair=implement | phase=producer | process=codex-agent | cycle=1 | attempt=1 | thread_id=019df017-fd97-7691-87ef-cf5b40ab68d9
+---
+I’m aligning this phase to the workspace/context fixtures and then revalidating the audited slice. I’ll read the active feedback, plan, decisions, and the failing test file first so the edits stay inside the approved scope.
+
+The earlier phases already recorded the runtime decisions, so I’m narrowing to the temporary workflow package sources inside `test_workspace_and_context.py`. Next I’m locating the legacy `python_step(state, ctx)` fixtures and verifying whether any adjacent helper contracts changed.
+
+I’ve isolated the child-workflow fixture writers; the likely blast radius is just the embedded package source strings. I’m reading those helpers now so I can change signatures without disturbing metadata assertions or output-builder behavior.
+
+The embedded workflow packages already look mostly `ctx`-only, so I’m checking the actual failing surface before forcing edits. If the failures come from stale fixtures elsewhere in the file or from notes/docs drift, I’ll keep the change set smaller.
+
+`test_workspace_and_context.py` is already green as-is, which means this phase may be revalidation-only unless the audited slice exposes a remaining contract mismatch. I’m running the exact requested regression slice now and will only edit if a concrete failure remains.
+
+The audited slice is green end to end, so there’s no remaining acceptance failure to fix in this phase. I’m recording that the workspace fixtures were already aligned and updating the phase notes/decision ledger to reflect a validation-only closeout.
+
+I’m making two non-code edits now: one ledger entry so later turns don’t reopen already-green fixture work, and one phase note update documenting that this phase closed by verification rather than further code churn.
+
+Scope considered
+
+Phase-local scope only: `tests/runtime/test_workspace_and_context.py`, the active phase artifacts, and the exact audited pytest slice from the request.
+
+What I analyzed
+
+I checked the active plan, feedback, and decision ledger, then inspected the temporary workflow-package writers in `tests/runtime/test_workspace_and_context.py`. I also ran `./.venv/bin/python -m pytest -q tests/runtime/test_workspace_and_context.py` and the full audited slice from the request.
+
+What I changed
+
+No production or test code changes were needed in this phase. The workspace/context fixtures were already on the canonical `python_step(ctx)` surface, so I only updated the phase records in [implementation_notes.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/framework-authoring-flexibility-change-spec-goal-2ee572cd/runs/run-20260503T223034Z-bda92fa2/artifacts/implement/phases/align-runtime-fixtures-and-revalidate/implementation_notes.md) and [decisions.txt](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/framework-authoring-flexibility-change-spec-goal-2ee572cd/runs/run-20260503T223034Z-bda92fa2/decisions.txt).
+
+Key findings / decisions
+
+`tests/runtime/test_workspace_and_context.py` already satisfied the phase acceptance intent, so forcing a fixture rewrite would have been no-op churn. The full audited regression slice passed green: `574 passed, 14 warnings in 5.28s`. The warnings were existing Pydantic field-name warnings in `tests/unit/test_simple_surface.py`, not failures.
+
+Open issues / next step
+
+No acceptance gaps remain in this phase. The requested audited slice is green, and this phase closed as validation-only.
+
+
+---
+run_id=run-20260503T223034Z-bda92fa2 | entry=session_turn | pair=implement | phase=verifier | cycle=1 | attempt=1 | thread_id=019df017-fd97-7691-87ef-cf5b40ab68d9
+---
+provider=codex
+mode=resume
+template=/home/rauter/.local/share/pipx/venvs/autoloop/lib/python3.12/site-packages/autoloop/templates/implement_verifier.md
+session_id=019df017-fd97-7691-87ef-cf5b40ab68d9
+
+
+---
+run_id=run-20260503T223034Z-bda92fa2 | entry=phase_output | pair=implement | phase=verifier | process=codex-agent | cycle=1 | attempt=1 | thread_id=019df017-fd97-7691-87ef-cf5b40ab68d9
+---
+I’m reviewing the phase-local implementation against the active criteria, starting with the criteria/feedback artifacts, the recorded notes, and the current workspace test file to verify whether the claimed validation-only closeout is justified.
+
+The implementation notes claim a validation-only closeout, so I’m independently rerunning the phase-local workspace test and the full audited slice before I decide whether the criteria can be marked complete.
+
+The phase-local verification is clean: the workspace fixtures are already `ctx`-only where expected, `build_output(state, ctx)` remains the only two-arg fixture surface, and both the targeted test and audited slice pass independently. I’m updating the review artifacts now with a clean review result.
+
+Scope considered
+
+Phase-local review scope only: the active review artifacts, the implementation notes, the decision ledger, and `tests/runtime/test_workspace_and_context.py` plus the exact audited pytest slice from the request.
+
+What I analyzed
+
+I checked the accepted phase contract against the recorded implementation notes and the prior run decisions, then inspected the workspace/context fixture file for any remaining legacy `python_step(state, ctx)` handlers outside the allowed `build_output(state, ctx)` surface.
+
+What I reviewed
+
+I independently reran `./.venv/bin/python -m pytest -q tests/runtime/test_workspace_and_context.py` and the full audited regression slice from the request. Both passed; the full slice completed at `574 passed, 14 warnings`.
+
+Key findings / decisions
+
+No blocking findings. The phase-local implementation is valid as a validation-only closeout because the temporary workflow fixtures were already aligned to `python_step(ctx)`, `build_output(state, ctx)` remained unchanged as intended, and the required regression coverage is green. I updated `criteria.md` to all checked and appended a non-blocking clean-review note to `feedback.md`.
+
+Open issues / next step
+
+No phase-local review issues remain. This review can close as complete.
+
+<loop-control>
+{"schema":"docloop.loop_control/v1","kind":"promise","promise":"COMPLETE"}
+</loop-control>
