@@ -913,3 +913,93 @@ No phase-local review issues remain. This review can close as complete.
 <loop-control>
 {"schema":"docloop.loop_control/v1","kind":"promise","promise":"COMPLETE"}
 </loop-control>
+
+
+---
+run_id=run-20260503T223034Z-bda92fa2 | entry=session_turn | pair=test | phase=producer | cycle=1 | attempt=1 | thread_id=019df017-fd97-7691-87ef-cf5b40ab68d9
+---
+provider=codex
+mode=resume
+template=/home/rauter/.local/share/pipx/venvs/autoloop/lib/python3.12/site-packages/autoloop/templates/test_producer.md
+session_id=019df017-fd97-7691-87ef-cf5b40ab68d9
+
+
+---
+run_id=run-20260503T223034Z-bda92fa2 | entry=phase_output | pair=test | phase=producer | process=codex-agent | cycle=1 | attempt=1 | thread_id=019df017-fd97-7691-87ef-cf5b40ab68d9
+---
+I’m treating this as a test-coverage audit first: I need to confirm whether the current workspace tests already pin the ctx-only fixture contract strongly enough, or whether a small meta-regression test is warranted. After that I’ll update the phase test artifacts with the exact coverage map.
+
+The current file already exercises runtime behavior, but it doesn’t explicitly pin the fixture source contract itself. I’m adding one narrow regression test that inspects the generated temporary workflow sources so a future reintroduction of `python_step(state, ctx)` in these phase-local fixtures fails immediately, even if runtime compatibility drifts.
+
+I’ve got a minimal test change: one source-contract regression test in `test_workspace_and_context.py`, plus the required test-phase artifacts. It keeps the blast radius local and turns the phase intent into an explicit failure if these temporary packages ever drift back to legacy two-arg handlers.
+
+The new test is in place. I’m rerunning the workspace file and then the full audited slice to make sure the meta-contract assertion doesn’t disturb the existing runtime coverage.
+
+Scope considered
+
+Phase-local scope only: `tests/runtime/test_workspace_and_context.py`, the active test artifacts, the run decision ledger, and the exact audited pytest slice from the request.
+
+What I analyzed
+
+I inspected the temporary workflow-package writers in `tests/runtime/test_workspace_and_context.py` to see whether the phase-local fixtures already used the canonical `python_step(ctx)` contract and where `build_output(state, ctx)` remained intentionally preserved. I also reviewed the test-phase artifacts so the coverage map matched the actual regression surface.
+
+What I changed
+
+I added `test_temporary_workspace_workflow_packages_keep_ctx_only_python_step_handlers` to [tests/runtime/test_workspace_and_context.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/tests/runtime/test_workspace_and_context.py). It writes the relevant temporary workflow packages and asserts that phase-local `@python_step` handlers emit `def ...(ctx):`, while the typed child fixture still retains `build_output(state: State, ctx)` as the allowed two-argument surface.
+
+I also updated [test_strategy.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/framework-authoring-flexibility-change-spec-goal-2ee572cd/runs/run-20260503T223034Z-bda92fa2/artifacts/test/phases/align-runtime-fixtures-and-revalidate/test_strategy.md) with an explicit behavior-to-coverage map and appended a concise summary to [feedback.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/framework-authoring-flexibility-change-spec-goal-2ee572cd/runs/run-20260503T223034Z-bda92fa2/artifacts/test/phases/align-runtime-fixtures-and-revalidate/feedback.md).
+
+Key findings / decisions
+
+The existing runtime tests already covered child invocation, adoption, resume, and typed-output behavior; the missing phase-local guard was a direct assertion on the generated fixture source contract itself. The new meta-regression test closes that gap without depending on runtime compatibility behavior.
+
+Validation passed:
+`./.venv/bin/python -m pytest -q tests/runtime/test_workspace_and_context.py` -> `30 passed`
+`./.venv/bin/python -m pytest -q ...` audited slice -> `575 passed, 14 warnings`
+
+Open issues / next step
+
+No phase-local test gaps remain. The only residual output was the pre-existing Pydantic `schema` field-name warnings from `tests/unit/test_simple_surface.py`; they were unchanged by this work.
+
+
+---
+run_id=run-20260503T223034Z-bda92fa2 | entry=session_turn | pair=test | phase=verifier | cycle=1 | attempt=1 | thread_id=019df017-fd97-7691-87ef-cf5b40ab68d9
+---
+provider=codex
+mode=resume
+template=/home/rauter/.local/share/pipx/venvs/autoloop/lib/python3.12/site-packages/autoloop/templates/test_verifier.md
+session_id=019df017-fd97-7691-87ef-cf5b40ab68d9
+
+
+---
+run_id=run-20260503T223034Z-bda92fa2 | entry=phase_output | pair=test | phase=verifier | process=codex-agent | cycle=1 | attempt=1 | thread_id=019df017-fd97-7691-87ef-cf5b40ab68d9
+---
+I’m auditing the phase-local test delta against the active criteria, starting with the changed workspace test, the updated strategy/feedback artifacts, and the latest run decisions before I decide whether the new coverage is sufficient.
+
+The new source-contract test looks appropriately narrow, but I still need to verify that it doesn’t mask or weaken the existing runtime assertions. I’m rerunning the workspace file and the full audited slice before marking the audit complete.
+
+The audit is clean. The added meta-test strengthens the phase-local fixture contract without weakening the existing runtime assertions, and the full audited slice still passes, so I’m closing the audit artifacts as complete.
+
+Scope considered
+
+Phase-local audit scope only: the changed test in `tests/runtime/test_workspace_and_context.py`, the active test strategy and feedback artifacts, and the exact audited pytest slice from the request.
+
+What I analyzed
+
+I reviewed the run decisions to confirm the intended contract: phase-local temporary workflow packages should stay on `python_step(ctx)`, while `build_output(state, ctx)` remains preserved. I then inspected the new source-contract test and the surrounding child-workflow runtime assertions to make sure the new coverage matched that intent.
+
+What I reviewed
+
+I independently reran `./.venv/bin/python -m pytest -q tests/runtime/test_workspace_and_context.py` and the full audited regression slice from the request. Both passed; the workspace file finished at `30 passed` and the audited slice at `575 passed, 14 warnings`.
+
+Key findings / decisions
+
+No blocking findings. The new meta-regression test improves phase-local coverage by pinning the generated fixture source contract directly, while the pre-existing runtime tests continue to cover child invocation, artifact adoption, resume behavior, and typed-output success/failure paths. I updated `criteria.md` to all checked and appended a non-blocking clean-audit note to `feedback.md`.
+
+Open issues / next step
+
+No phase-local test audit issues remain. The only residual output was the unchanged Pydantic `schema` field-name warnings from `tests/unit/test_simple_surface.py`.
+
+<loop-control>
+{"schema":"docloop.loop_control/v1","kind":"promise","promise":"COMPLETE"}
+</loop-control>
