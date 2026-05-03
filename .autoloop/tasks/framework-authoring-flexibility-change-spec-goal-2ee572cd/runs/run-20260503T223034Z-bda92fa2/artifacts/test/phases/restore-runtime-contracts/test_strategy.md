@@ -14,6 +14,7 @@
   - Covers `{item.payload.foo}` and `{worklist.gate.current.payload.foo}` rendering from the same scoped item.
 - AC-1 payload placeholder failure path:
   - `tests/contract/test_engine_contracts.py::test_prompt_runtime_reports_missing_payload_path_with_placeholder_context`
+  - `tests/contract/test_engine_contracts.py::test_prompt_runtime_reports_missing_worklist_current_payload_path_with_placeholder_context`
   - Preserves placeholder-specific missing-path `WorkflowExecutionError` wording.
 - AC-2 stable route ordering:
   - Existing route-order assertions remain in `tests/contract/test_engine_contracts.py` and `tests/unit/test_validation.py`.
@@ -30,6 +31,7 @@
 
 - `worklist.<name>.current.payload.<path>` keeps the same late-bound semantics as `item.payload.<path>`.
 - Missing payload-path failures stay placeholder-specific instead of degrading to generic lookup errors.
+- `{item.payload.<path>}` and `{worklist.<name>.current.payload.<path>}` now each have direct failure-path assertions, so worklist-current placeholder regressions cannot hide behind the item-scoped path.
 - The no-PyYAML fallback must reject malformed indentation without narrowing the supported mapping/scalar config surface.
 
 ## Edge Cases / Failure Paths
@@ -37,6 +39,7 @@
 - Malformed nested keys under scalar parents
 - Over-indented sibling mappings
 - Scoped prompt rendering from mapping-backed worklist item envelopes
+- Missing nested payload paths on both item-scoped and worklist-current placeholder forms
 
 ## Flake Risk / Stabilization
 
