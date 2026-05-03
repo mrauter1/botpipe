@@ -15,6 +15,7 @@
 
 - AC-2 `First scoped or explicit use materializes only the referenced worklist and emits a resolution event`
   - Scoped path: `test_artifact_backed_worklist_materializes_after_runtime_creates_source`
+  - Explicit engine event path: `test_non_scoped_explicit_worklist_access_emits_resolution_event_for_only_requested_worklist`
   - Explicit context path: `test_context_ensure_selection_lazily_materializes_missing_worklist`
   - Explicit one-of-many path: `test_context_ensure_selection_only_materializes_requested_worklist`
   - Artifact placeholder path: `test_artifact_template_resolution_lazily_materializes_worklist_placeholders`

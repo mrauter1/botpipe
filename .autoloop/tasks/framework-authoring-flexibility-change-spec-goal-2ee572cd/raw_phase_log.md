@@ -794,3 +794,61 @@ Open issues / next step
 <loop-control>
 {"schema":"docloop.loop_control/v1","kind":"promise","promise":"INCOMPLETE"}
 </loop-control>
+
+
+---
+run_id=run-20260503T200339Z-6d598cb8 | entry=session_turn | pair=test | phase=producer | cycle=2 | attempt=1 | thread_id=019def95-e28b-7972-a91c-cbe140043634
+---
+provider=codex
+mode=resume
+template=/home/rauter/.local/share/pipx/venvs/autoloop/lib/python3.12/site-packages/autoloop/templates/test_producer.md
+session_id=019def95-e28b-7972-a91c-cbe140043634
+
+
+---
+run_id=run-20260503T200339Z-6d598cb8 | entry=phase_output | pair=test | phase=producer | process=codex-agent | cycle=2 | attempt=1 | thread_id=019def95-e28b-7972-a91c-cbe140043634
+---
+I’m closing the audit gap from the last cycle: add an engine-level explicit-use regression that asserts `worklist_selection_resolved` on non-scoped first access, then update the phase test artifacts to reflect that the AC-2 explicit-event path is now covered.
+
+The missing piece is a contract-layer test, not more unit machinery. I’m adding a non-scoped `PythonStep` case that triggers `ctx.selection(...)` under `runtime_event_sink` so the suite exercises the same engine event path the audit called out.
+
+The explicit-event contract test passed. I’m updating the strategy and feedback artifacts now so the audit trail reflects that AC-2’s non-scoped event path is covered at the engine layer, not just in unit helpers.
+
+Scope considered
+
+- Phase-local lazy worklist/session test coverage only.
+- Focused on the audit gap from cycle 1: AC-2 explicit non-scoped first use must emit `worklist_selection_resolved`, not just materialize lazily.
+- Updated the repo test suite plus the active phase test artifacts.
+
+What I analyzed
+
+- The auditor finding in [feedback.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/framework-authoring-flexibility-change-spec-goal-2ee572cd/runs/run-20260503T200339Z-6d598cb8/artifacts/test/phases/lazy-worklists-and-sessions/feedback.md).
+- Existing contract coverage in [tests/contract/test_engine_contracts.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/tests/contract/test_engine_contracts.py) to find the right engine-layer seam.
+- The current [test_strategy.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/framework-authoring-flexibility-change-spec-goal-2ee572cd/runs/run-20260503T200339Z-6d598cb8/artifacts/test/phases/lazy-worklists-and-sessions/test_strategy.md) coverage map so I could update it without drifting from the phase contract.
+
+What I changed
+
+- Added `test_non_scoped_explicit_worklist_access_emits_resolution_event_for_only_requested_worklist` to [tests/contract/test_engine_contracts.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/tests/contract/test_engine_contracts.py).
+- The new test exercises a non-scoped `PythonStep` calling `ctx.selection("gate")` under `runtime_event_sink` and asserts:
+  - only the requested worklist materializes,
+  - `worklist_selection_resolved` is emitted,
+  - the emitted payload identifies the correct step and current item.
+- Updated `test_strategy.md` to list this as the explicit engine event path for AC-2.
+- Appended a concise cycle-2 summary to `feedback.md`.
+
+Key findings / decisions
+
+- The correct fix was a contract test, not another unit test, because the missing assertion concerned engine-owned runtime-event emission.
+- The new test stays deterministic: no network, no timing, and only in-process runtime event capture.
+- Validation run:
+  - `python3 -m py_compile tests/contract/test_engine_contracts.py`
+  - `./.venv/bin/python -m pytest tests/contract/test_engine_contracts.py -k 'non_scoped_explicit_worklist_access_emits_resolution_event_for_only_requested_worklist or artifact_backed_worklist_materializes_after_runtime_creates_source or missing_artifact_backed_worklist_fails_at_first_scoped_use or resume_restores_materialized_worklists_and_lazily_materializes_unused_ones'`
+
+Open issues / next step
+
+- No blocker remains from the prior test audit finding.
+- The remaining known gap in the strategy is unchanged: lazy-first-use plus `ctx.worklist(...).refresh()` is still covered indirectly rather than by a new phase-specific contract test.
+
+<loop-control>
+{"schema":"docloop.loop_control/v1","kind":"promise","promise":"COMPLETE"}
+</loop-control>
