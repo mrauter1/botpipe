@@ -1940,3 +1940,129 @@ No open issues from the test audit pass.
 <loop-control>
 {"schema":"docloop.loop_control/v1","kind":"promise","promise":"COMPLETE"}
 </loop-control>
+
+
+---
+run_id=run-20260503T200339Z-6d598cb8 | entry=session_turn | pair=audit | phase=producer | cycle=1 | attempt=1 | thread_id=019deff0-e48d-7741-9183-e4c87a081dc0
+---
+provider=codex
+mode=start
+template=/home/rauter/.local/share/pipx/venvs/autoloop/lib/python3.12/site-packages/autoloop/templates/audit_producer.md
+session_id=019deff0-e48d-7741-9183-e4c87a081dc0
+
+
+---
+run_id=run-20260503T200339Z-6d598cb8 | entry=phase_output | pair=audit | phase=producer | process=codex-agent | cycle=1 | attempt=1 | thread_id=019deff0-e48d-7741-9183-e4c87a081dc0
+---
+I’m auditing the completed run against the original request, clarifications, decisions, code, and tests. First I’m reading the authoritative run artifacts and locating the implementation and test changes that actually landed.
+
+I’ve got the run ledger and phase trail. Next I’m cross-checking the actual code and tests that changed so the audit is grounded in what the repository ended up doing, not just what earlier phases claimed.
+
+I’ve confirmed the first two implementation phases and their claimed validation. I’m reading the later phase notes and the test artifacts now to see what was intentionally deferred, what was actually verified, and whether any verifier left unresolved concerns.
+
+I’m checking the shipped seams directly now. The main question is whether the code actually satisfies the full request, or whether the phase artifacts overstate coverage in one of the later features.
+
+The earlier test artifacts include real `pytest` runs from `.venv`, so I’m re-running the changed regression slice in this workspace instead of relying on notes alone. That will tell me whether the repository still matches the claimed end state at audit time.
+
+The regression slice is running. While that finishes, I’m mapping the request’s minimum coverage points against the concrete test names in the repo so I can distinguish a real product gap from a missing or weak regression guard.
+
+The regression rerun found real residual breakage, not just stale notes. I’m drilling into the failing clusters now to separate “tests need updating to the new contract” from actual implementation defects introduced by this change.
+
+I’ve got enough evidence to write the audit artifacts. The key result is that most requested features are implemented, but the repository is not at acceptance: the audit rerun found one direct spec bug and several unresolved regression/test-contract mismatches.
+
+I’m writing the audit report, revised next-run request, and result JSON now. The report will distinguish the implemented request surface from the remaining acceptance blockers and the few differences that were explicitly justified by recorded decisions.
+
+The audit artifacts are written. I’m doing a quick readback now to ensure the report, revised request, and JSON are internally consistent and match the rerun evidence before I close with the required loop-control block.
+
+Scope considered
+
+- Original request snapshot, raw phase log, decisions ledger, run-local plan/implement/test artifacts, and the landed code/tests/docs in `autoloop/`, `tests/`, `docs/`, and `workflows/`.
+- Audit scope stayed run-local; I only edited files under `.autoloop/tasks/framework-authoring-flexibility-change-spec-goal-2ee572cd/runs/run-20260503T200339Z-6d598cb8/artifacts/audit`.
+
+What I analyzed
+
+- Compared the requested behaviors against the shipped seams for route policy, lazy worklists/sessions, typed effects, validation helpers, artifact ownership, late-bound prompt rendering, inspection/static graph, and runner/config plumbing.
+- Re-ran the changed regression slice:
+  - `./.venv/bin/python -m pytest -q tests/runtime/test_runtime_static_graph.py tests/runtime/test_package_cli.py tests/test_architecture_baseline_docs.py tests/unit/test_validation.py tests/unit/test_stdlib_and_extensions.py tests/contract/test_canonical_runtime_contracts.py tests/contract/test_engine_contracts.py tests/unit/test_simple_surface.py tests/unit/test_primitives_and_stores.py tests/unit/test_provider_boundary_core.py tests/unit/test_provider_retries.py tests/runtime/test_provider_backends.py tests/runtime/test_workspace_and_context.py`
+  - Result: `557 passed`, `12 failed`.
+
+What I changed
+
+- Wrote the audit artifacts:
+  - `.autoloop/tasks/framework-authoring-flexibility-change-spec-goal-2ee572cd/runs/run-20260503T200339Z-6d598cb8/artifacts/audit/gap_report.md`
+  - `.autoloop/tasks/framework-authoring-flexibility-change-spec-goal-2ee572cd/runs/run-20260503T200339Z-6d598cb8/artifacts/audit/revised_request.md`
+  - `.autoloop/tasks/framework-authoring-flexibility-change-spec-goal-2ee572cd/runs/run-20260503T200339Z-6d598cb8/artifacts/audit/audit_result.json`
+
+Key findings / decisions
+
+- The main requested framework changes largely landed: `ControlRoutes`, `RuntimeInteractionPolicy`, lazy worklist materialization, work-item continuity, typed `Effects`, `validation_step`, artifact ownership diagnostics, late-bound prompt validation, richer inspection payloads, and docs updates are present.
+- Material gaps remain:
+  - Direct spec bug: runtime rendering for `{item.payload.<path>}` is broken; `tests/contract/test_engine_contracts.py::test_prompt_runtime_lazily_renders_item_and_worklist_placeholders` fails.
+  - Acceptance gap: some tests were not rebased to the new ownership/route-policy contract, including a dual-role artifact contract test and provider-route-order expectations.
+  - Runner/config regression path is not green: the audited `full_auto` coverage still fails in `tests/runtime/test_provider_backends.py` and `tests/runtime/test_workspace_and_context.py`.
+  - Additional red fixture tests remain in `tests/runtime/test_workspace_and_context.py` because temporary workflow packages still use legacy `python_step(state, ctx)` handlers.
+- Justified differences:
+  - Adding `Artifact.managed(...)` is justified by the recorded decisions and is consistent with the request.
+  - Runtime interpolation staying narrow to `item.*` and `worklist.*` is also justified by the recorded decisions.
+
+Open issues / next step
+
+- Follow-up implementation is required. The revised next-run request focuses on:
+  - fixing late-bound payload placeholder rendering,
+  - reconciling remaining stale contract tests vs intended route ordering,
+  - making the `full_auto` runner/config path actually pass,
+  - and rebasing or explicitly restoring compatibility for the remaining legacy runtime test fixtures.
+
+<loop-control>
+{"schema":"docloop.loop_control/v1","kind":"promise","promise":"INCOMPLETE"}
+</loop-control>
+
+
+---
+run_id=run-20260503T200339Z-6d598cb8 | entry=session_turn | pair=audit | phase=verifier | cycle=1 | attempt=1 | thread_id=019deff0-e48d-7741-9183-e4c87a081dc0
+---
+provider=codex
+mode=resume
+template=/home/rauter/.local/share/pipx/venvs/autoloop/lib/python3.12/site-packages/autoloop/templates/audit_verifier.md
+session_id=019deff0-e48d-7741-9183-e4c87a081dc0
+
+
+---
+run_id=run-20260503T200339Z-6d598cb8 | entry=phase_output | pair=audit | phase=verifier | process=codex-agent | cycle=1 | attempt=1 | thread_id=019deff0-e48d-7741-9183-e4c87a081dc0
+---
+I’m verifying the audit artifacts against the request, decisions, and the landed code/tests. First I’m reading the audit files and criteria so I can check whether the producer’s gap classification and follow-up request are actually supported.
+
+The audit artifacts are internally consistent with the rerun evidence. I’m marking the criteria complete and appending a verifier note that no blocking or non-blocking audit-quality issues were found.
+
+Scope considered
+
+- The immutable request snapshot, authoritative raw log, decisions ledger, and the audit artifacts under `.autoloop/tasks/framework-authoring-flexibility-change-spec-goal-2ee572cd/runs/run-20260503T200339Z-6d598cb8/artifacts/audit`.
+- The final code/tests/docs only to the extent needed to verify the audit’s classifications and next-run request.
+
+What I analyzed
+
+- Whether `gap_report.md` accurately distinguishes implemented behavior, justified differences, and unresolved material gaps.
+- Whether `revised_request.md` is a direct next-run request that matches the unresolved gaps.
+- Whether `audit_result.json` matches the report.
+- Whether the reported failing-test evidence is consistent with the final codebase and the rerun summary.
+
+What I reviewed
+
+- `gap_report.md`, `revised_request.md`, `audit_result.json`, `criteria.md`, and `feedback.md`.
+- The cited request sections, decisions in `decisions.txt`, and the referenced code/tests around prompt rendering, route policy, artifact ownership, runner/config plumbing, and runtime fixture failures.
+
+Key findings / decisions
+
+- No blocking or non-blocking audit-quality findings.
+- The audit is evidence-backed and its material-gap classification is supported by the final code/tests.
+- The revised request is actionable and properly focused on the remaining direct bug plus the unresolved regression/test-contract cleanup.
+- `criteria.md` is now fully checked, and `feedback.md` records that this verification pass found no audit-quality issues.
+
+Open issues / next step
+
+- No verifier-side corrections are required.
+- The next implementation run should use `revised_request.md` as written to close the remaining material gaps.
+
+<loop-control>
+{"schema":"docloop.loop_control/v1","kind":"promise","promise":"COMPLETE"}
+</loop-control>
