@@ -6,3 +6,5 @@
 - Phase Directory Key: inspection-docs-and-regression
 - Phase Title: Inspection, Docs, And Regression Sweep
 - Scope: phase-local authoritative verifier artifact
+
+- Added doc-baseline coverage in `tests/test_architecture_baseline_docs.py` for the shipped route-policy, lazy-runtime, typed-effects, and explicit managed-artifact-role wording, and revalidated the phase regression slice at `230 passed`.
