@@ -485,30 +485,17 @@ def _provider_visible_route_tags(
         route = compiled_routes.get(step.name, {}).get(route_tag) or compiled_global_routes.get(route_tag)
         if route is None:
             continue
-        if policy == "interactive" and _compiled_step_route_visible(step, route_tag=route_tag, route=route, policy=policy):
-            visible.append(route_tag)
-        if policy == "full_auto" and _compiled_step_route_visible(step, route_tag=route_tag, route=route, policy=policy):
+        if _compiled_route_visible_for_policy(route, policy=policy):
             visible.append(route_tag)
     return tuple(visible)
 
 
-def _compiled_step_route_visible(
-    step: Step,
-    *,
-    route_tag: str,
-    route: CompiledRoute,
-    policy: str,
-) -> bool:
-    if not route.provider_visible:
-        return False
-    if not isinstance(step, (PromptStep, ProduceVerifyStep)):
-        return False
-    if route_tag != "question":
-        return True
-    question_mode = getattr(getattr(step, "control_routes", None), "question", "never")
-    if question_mode == "always":
-        return True
-    return policy == "interactive"
+def _compiled_route_visible_for_policy(route: CompiledRoute, *, policy: str) -> bool:
+    if policy == "interactive":
+        return route.provider_visible_interactive
+    if policy == "full_auto":
+        return route.provider_visible_full_auto
+    raise WorkflowCompilationError(f"unsupported provider-visibility policy {policy!r}")
 
 
 def _compile_optional_model(workflow_cls: type[Any], attribute: str) -> type[BaseModel] | None:

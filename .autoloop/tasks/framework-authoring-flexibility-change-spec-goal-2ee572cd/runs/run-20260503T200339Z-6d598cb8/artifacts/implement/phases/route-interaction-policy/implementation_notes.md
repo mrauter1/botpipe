@@ -46,6 +46,7 @@
 - `CompiledRoute.provider_visible_interactive`
 - `CompiledRoute.provider_visible_full_auto`
 - `CompiledRoute.is_runtime_control`
+- `_compiled_route_visible_for_policy()`
 - `Engine(..., interaction_policy=...)`
 - `ProviderContractBuilder.available_routes()`
 
@@ -65,6 +66,7 @@
 
 - `CompiledStep.available_routes` remains the full execution-legal route set.
 - Explicit authored `blocked`/`failed` routes remain legal and keep existing status/terminal behavior.
+- Explicit authored global `failed` remains provider-visible when declared with `provider_visible=True`.
 - Runtime provider failures still flow through retry/failure context; no provider `failed` shim was added back.
 - Existing simple `control_routes=False` still means no injected question route.
 
@@ -89,9 +91,10 @@
 ## Validation performed
 
 - `python3 -m compileall autoloop tests` succeeded.
+- `python3 -m compileall autoloop/core/compiler.py tests/contract/test_engine_contracts.py` succeeded after the reviewer follow-up fix.
 - Executable smoke tests could not run in this shell because `pytest` and runtime dependency `pydantic` are not installed.
 
 ## Deduplication / centralization
 
-- Route-visibility policy is centralized in compiled route/step metadata plus `ProviderContractBuilder`, instead of re-deriving visibility ad hoc in provider-facing paths.
+- Route-visibility policy is centralized in compiled route metadata plus `ProviderContractBuilder`; `CompiledStep.provider_visible_routes_*` now derives from `CompiledRoute.provider_visible_*` instead of re-deriving question rules in a second compiler helper.
 - Simple and core authoring now share the same `ControlRoutes` normalization path.

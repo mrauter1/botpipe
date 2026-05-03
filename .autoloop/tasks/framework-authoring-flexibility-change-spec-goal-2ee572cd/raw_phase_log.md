@@ -333,3 +333,60 @@ Open issues / next step
 <loop-control>
 {"schema":"docloop.loop_control/v1","kind":"promise","promise":"INCOMPLETE"}
 </loop-control>
+
+
+---
+run_id=run-20260503T200339Z-6d598cb8 | entry=session_turn | pair=implement | phase=producer | cycle=2 | attempt=1 | thread_id=019def7c-b7c9-7220-8f38-99702bfcf9d2
+---
+provider=codex
+mode=resume
+template=/home/rauter/.local/share/pipx/venvs/autoloop/lib/python3.12/site-packages/autoloop/templates/implement_producer.md
+session_id=019def7c-b7c9-7220-8f38-99702bfcf9d2
+
+
+---
+run_id=run-20260503T200339Z-6d598cb8 | entry=phase_output | pair=implement | phase=producer | process=codex-agent | cycle=2 | attempt=1 | thread_id=019def7c-b7c9-7220-8f38-99702bfcf9d2
+---
+I’m addressing the reviewer findings in-phase: first I’ll fix the incorrect explicit-`failed` test expectations, then I’ll collapse the duplicated question-visibility logic in the compiler so the compiled route fields and compiled step route views come from one policy calculation.
+
+I’m addressing the reviewer’s blocking route-contract regression first, then I’ll remove the compiler policy duplication behind provider-visible routes so the phase closes with one authoritative visibility path.
+
+I’ve confirmed the reviewer’s test regression is real. I’m patching those expectations and collapsing the duplicated question-visibility logic into one compiler helper before I touch the notes artifact.
+
+The regression is isolated to the provider-contract snapshots, not the runtime route builder itself. I’m making the smallest fix that restores explicit `failed` visibility and leaves the new default-route behavior intact.
+
+I’m editing two files now: the contract snapshots to restore explicit `failed`, and the compiler helper path so both step-level and route-level provider visibility derive from the same compiled flags.
+
+The main behavior fix is in place. I’m updating the run notes and decision ledger with the centralization choice, then I’ll do a quick syntax pass on the touched files.
+
+Scope considered
+
+- Phase-local `route-interaction-policy` follow-up only.
+- I limited changes to the reviewer’s blocking regression, the related compiler deduplication, and the required phase artifacts.
+- I did not touch reviewer-owned [criteria.md](</home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/framework-authoring-flexibility-change-spec-goal-2ee572cd/runs/run-20260503T200339Z-6d598cb8/artifacts/implement/phases/route-interaction-policy/criteria.md>).
+
+What I analyzed
+
+- The blocking review note in [feedback.md](</home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/framework-authoring-flexibility-change-spec-goal-2ee572cd/runs/run-20260503T200339Z-6d598cb8/artifacts/implement/phases/route-interaction-policy/feedback.md>).
+- Provider-contract expectations in [tests/contract/test_engine_contracts.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/tests/contract/test_engine_contracts.py).
+- Provider-visibility compilation paths in [autoloop/core/compiler.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/autoloop/core/compiler.py).
+- The active notes and decision ledger in [implementation_notes.md](</home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/framework-authoring-flexibility-change-spec-goal-2ee572cd/runs/run-20260503T200339Z-6d598cb8/artifacts/implement/phases/route-interaction-policy/implementation_notes.md>) and [decisions.txt](</home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/framework-authoring-flexibility-change-spec-goal-2ee572cd/runs/run-20260503T200339Z-6d598cb8/decisions.txt>).
+
+What I changed
+
+- Restored explicit authored `failed` as provider-visible in the contract snapshots in [tests/contract/test_engine_contracts.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/tests/contract/test_engine_contracts.py).
+- Removed the duplicated step-level question-visibility helper in [autoloop/core/compiler.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/autoloop/core/compiler.py) and made `CompiledStep.provider_visible_routes_*` derive from each `CompiledRoute`’s compiled interactive/full-auto flags.
+- Updated [implementation_notes.md](</home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/framework-authoring-flexibility-change-spec-goal-2ee572cd/runs/run-20260503T200339Z-6d598cb8/artifacts/implement/phases/route-interaction-policy/implementation_notes.md>) with the reviewer follow-up fix and the new centralization detail.
+- Appended one implementation decision under the current turn header in [decisions.txt](</home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/framework-authoring-flexibility-change-spec-goal-2ee572cd/runs/run-20260503T200339Z-6d598cb8/decisions.txt>).
+
+Key findings / decisions
+
+- The reviewer’s blocking finding was valid: the runtime behavior supported explicit `failed`, but two provider-contract tests had been updated to hide it incorrectly.
+- Provider-visible route snapshots now follow one authoritative compiler path: route-level compiled visibility flags feed both route metadata and step-level provider-visible route tuples.
+- This keeps the phase behavior unchanged while removing the drift risk called out in the non-blocking review note.
+
+Open issues / next step
+
+- `python3 -m compileall autoloop/core/compiler.py tests/contract/test_engine_contracts.py` succeeded.
+- I still could not run `pytest` in this shell because `pytest` and runtime dependency `pydantic` are unavailable here.
+- The next step is reviewer re-verification against `IMP-001` and `IMP-002`.
