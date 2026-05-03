@@ -1,4 +1,105 @@
 version: 1
 task_id: standalone-remaining-delta-implementation-spec-g-e919a184
 request_snapshot_ref: /home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/standalone-remaining-delta-implementation-spec-g-e919a184/runs/run-20260503T001920Z-8f0e7926/request.md
-phases: []
+phases:
+  - phase_id: "public-contract-cleanup"
+    title: "Public Contract Cleanup"
+    objective: "Remove legacy public authoring surfaces and align declarations, validation, and compiled metadata with the final hook and route model."
+    status: "planned"
+    in_scope:
+      - "Remove legacy public hook signatures, state-return paths, AfterStepResult exposure, on_route, and route effects."
+      - "Rename discovery/compiler/public-step metadata to final producer/verifier/python_step vocabulary."
+      - "Tighten hook validation to exact hook(ctx) and valid slot checks only."
+    out_of_scope:
+      - "Saved-run resume behavior changes."
+      - "Provider retry/status telemetry refactors outside hook/result normalization."
+    dependencies: []
+    acceptance_criteria:
+      - id: "AC-1"
+        text: "Public declarations, compiled metadata, and validation no longer accept removed hook/route-effect/on_route/state-return forms."
+      - id: "AC-2"
+        text: "Simple/public authoring docs and strictness tests only describe the final hook(ctx) and Route.to(..., on_taken=...) model."
+    deliverables:
+      - "Updated public declaration and validation modules with removed legacy keywords and aliases."
+      - "Updated strictness/simple-surface tests covering the intentional public contract breaks."
+    risks:
+      - "Legacy non-simple call sites may still depend on removed discovery/compiler aliases."
+    rollback:
+      - "Revert declaration/validation/compiler surface changes as one slice if downstream workflows fail broadly."
+  - phase_id: "execution-normalization"
+    title: "Execution Normalization"
+    objective: "Unify hook and python_step result handling, replace positional tuple execution plumbing with dataclasses, and make direct-control validation phase-independent."
+    status: "planned"
+    in_scope:
+      - "Introduce or finish HookExecutionResult, StepExecutionResult, RouteFinalizationResult, PairProviderResult, and ProviderExecResult."
+      - "Allow before/before_producer/before_verifier hooks to short-circuit with route tags, Event, RequestInput, Goto, or Fail."
+      - "Run on_taken redirect chaining and direct-control handling through the same normalized path."
+    out_of_scope:
+      - "Compiler cache and saved-topology resume policy changes."
+      - "Schema registry expansion beyond execution artifacts touched by this refactor."
+    dependencies:
+      - "public-contract-cleanup"
+    acceptance_criteria:
+      - id: "AC-1"
+        text: "No active step-dispatch/finalization/provider path depends on long positional tuples for step outcomes."
+      - id: "AC-2"
+        text: "Hook and python_step direct controls validate and short-circuit consistently regardless of lifecycle phase."
+    deliverables:
+      - "Dataclass-based execution result plumbing across dispatcher, route finalizer, and provider execution paths."
+      - "Contract tests for before/before_producer/before_verifier short-circuit behavior and invalid control failures."
+    risks:
+      - "Mixed tuple/dataclass call sites can break provider retry or finalization flows if migrated partially."
+    rollback:
+      - "Revert execution-plumbing changes as one slice rather than keeping mixed result shapes."
+  - phase_id: "runtime-correctness-and-telemetry"
+    title: "Runtime Correctness And Telemetry"
+    objective: "Make failure checkpoints, built-in scoped state, worklist helper behavior, and trace/history/status derivation match the final runtime semantics."
+    status: "planned"
+    in_scope:
+      - "Preserve current mutated state/session/worklist selections on failure without rollback restoration."
+      - "Keep route built-ins truthful and ensure direct controls do not update last_route."
+      - "Centralize terminal/status classification and update trace/history/inspection/workspace consumers."
+      - "Ensure route-effect-equivalent worklist flows use helpers plus on_taken only."
+    out_of_scope:
+      - "Compiler cache implementation details unrelated to runtime state handling."
+      - "Public docs cleanup not needed to validate runtime semantics."
+    dependencies:
+      - "execution-normalization"
+    acceptance_criteria:
+      - id: "AC-1"
+        text: "Failure checkpoints and trace/history records preserve the latest mutated scoped/global state and session bindings."
+      - id: "AC-2"
+        text: "History and inspection distinguish provider-selected routes, hook-selected routes, direct controls, and no-provider attempts using centralized status logic."
+    deliverables:
+      - "Updated runtime state/finalization logic for scoped item state, built-in counters, and worklist checkpoint persistence."
+      - "Updated trace/history/workspace tests for direct controls, worklist helper events, and no-provider-attempt executions."
+    risks:
+      - "Status centralization can regress inspection filters or optimizer telemetry if old aliases remain scattered."
+    rollback:
+      - "Revert status/trace/history changes as one slice if downstream telemetry consumers diverge."
+  - phase_id: "compiler-resume-schema-docs"
+    title: "Compiler Resume Schema And Docs"
+    objective: "Finish explicit compiler caching, saved-contract resume behavior, schema registration/migration, and final author-facing documentation."
+    status: "planned"
+    in_scope:
+      - "Replace class-attached compiled-workflow caching with explicit source/topology-fingerprint caching."
+      - "Change resume to load saved contracts/topology, warn on mismatch by default, and fail only in strict mode or unresolved executable cases."
+      - "Register remaining persisted schemas and confine old-schema compatibility to explicit migration-or-fail readers."
+      - "Update docs/examples/imports to the final autoloop public surface and vocabulary."
+    out_of_scope:
+      - "New optimizer features beyond boundary-safe consumption of updated runtime artifacts."
+      - "Speculative extension-framework redesign."
+    dependencies:
+      - "runtime-correctness-and-telemetry"
+    acceptance_criteria:
+      - id: "AC-1"
+        text: "New runs recompile when workflow source changes, and resume defaults to warning-plus-continue on topology mismatch when continuation is still executable."
+      - id: "AC-2"
+        text: "Persisted artifact readers validate schema ids consistently and author-facing docs/examples document only the final hook/control/worklist model."
+    deliverables:
+      - "Explicit compiler cache and resume-policy updates with contract/runtime coverage."
+      - "Updated docs, strictness scans, and schema-aware reader paths."
+    risks:
+      - "Resume semantics changes can surprise existing operators if warnings are not surfaced clearly."
+    rollback:
+      - "Revert compiler/resume/doc/schema changes together if saved-run continuation becomes unreliable."
