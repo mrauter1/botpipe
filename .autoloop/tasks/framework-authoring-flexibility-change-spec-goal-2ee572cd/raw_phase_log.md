@@ -1094,3 +1094,52 @@ Open issues / next step
 
 - No implementer-side blocker remains for this phase.
 - Next step is verifier rerun so `criteria.md` and `feedback.md` can be cleared against `IMP-001`.
+
+
+---
+run_id=run-20260503T200339Z-6d598cb8 | entry=session_turn | pair=implement | phase=verifier | cycle=2 | attempt=1 | thread_id=019defa6-43e0-7382-9832-e4dd63010e96
+---
+provider=codex
+mode=resume
+template=/home/rauter/.local/share/pipx/venvs/autoloop/lib/python3.12/site-packages/autoloop/templates/implement_verifier.md
+session_id=019defa6-43e0-7382-9832-e4dd63010e96
+
+
+---
+run_id=run-20260503T200339Z-6d598cb8 | entry=phase_output | pair=implement | phase=verifier | process=codex-agent | cycle=2 | attempt=1 | thread_id=019defa6-43e0-7382-9832-e4dd63010e96
+---
+I’m reviewing only the follow-up fix for `IMP-001` and the surrounding validation-helper path. First I’m checking the updated implementation and the current review artifacts before deciding whether any blocking issues remain.
+
+The fix satisfies the only blocking gap I had. I’m clearing the criteria and recording a short recheck note in the review artifact so the phase history shows why this rerun is now complete.
+
+Scope considered
+
+- Follow-up verifier pass on the phase-local `effects-and-validation-helper` scope only.
+- I rechecked the `validation_step` runtime-event payload fix and the matching contract expectation.
+
+What I analyzed
+
+- Updated `validation_step` handler logic in `autoloop/simple.py`.
+- Updated pass-event assertion in `tests/contract/test_engine_contracts.py`.
+- The existing review artifacts and implementation notes for phase consistency.
+
+What I reviewed
+
+- Whether `validation_step_passed` now carries the declared feedback artifact path, matching the phase contract.
+- Whether the earlier blocking finding `IMP-001` still reproduced in the updated code path.
+- Whether any adjacent regression risk was introduced by moving feedback-handle resolution before the `result.ok` branch.
+
+Key findings / decisions
+
+- No blocking findings remain.
+- `IMP-001` is resolved: both validation runtime events now emit the concrete feedback artifact path.
+- I updated `criteria.md` to fully checked and appended a recheck note to `feedback.md`.
+
+Open issues / next step
+
+- No open review issues in this phase.
+- Phase review can be treated as complete.
+
+<loop-control>
+{"schema":"docloop.loop_control/v1","kind":"promise","promise":"COMPLETE"}
+</loop-control>

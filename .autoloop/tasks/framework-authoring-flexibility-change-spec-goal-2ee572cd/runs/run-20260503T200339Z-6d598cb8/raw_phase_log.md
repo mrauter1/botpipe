@@ -1044,3 +1044,102 @@ Open issues / next step
 <loop-control>
 {"schema":"docloop.loop_control/v1","kind":"promise","promise":"INCOMPLETE"}
 </loop-control>
+
+
+---
+run_id=run-20260503T200339Z-6d598cb8 | entry=session_turn | pair=implement | phase=producer | cycle=2 | attempt=1 | thread_id=019defa6-43e0-7382-9832-e4dd63010e96
+---
+provider=codex
+mode=resume
+template=/home/rauter/.local/share/pipx/venvs/autoloop/lib/python3.12/site-packages/autoloop/templates/implement_producer.md
+session_id=019defa6-43e0-7382-9832-e4dd63010e96
+
+
+---
+run_id=run-20260503T200339Z-6d598cb8 | entry=phase_output | pair=implement | phase=producer | process=codex-agent | cycle=2 | attempt=1 | thread_id=019defa6-43e0-7382-9832-e4dd63010e96
+---
+I’m addressing the verifier’s `IMP-001` finding only. First I’m re-reading the validation helper path and the review artifact so I can patch the event payload without widening the phase scope.
+
+I’ve confirmed the issue is localized to one branch in `validation_step` plus its expectation in the contract test. I’m patching that now and then rerunning the targeted validation slice.
+
+The fix is in. I’m rerunning the validation-helper contract slice and the nearby simple-surface tests to make sure the payload change doesn’t regress the rest of the phase behavior.
+
+I’ve cleared the blocking finding. I’m updating the phase notes to remove the stale `feedback_artifact=None` assumption and to record the follow-up validation commands I actually reran after the fix.
+
+Scope considered
+
+- Only the verifier-raised `IMP-001` gap inside the phase-local `validation_step` runtime-event payload.
+- I kept the fix to [simple.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/autoloop/simple.py) and the corresponding contract expectation in [test_engine_contracts.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/tests/contract/test_engine_contracts.py).
+
+What I analyzed
+
+- The failing branch in `validation_step` that emitted `validation_step_passed` with `feedback_artifact=None`.
+- The contract test that had been updated to expect `None` for the pass event payload.
+- The implementation notes entry that still documented the stale `feedback_artifact=None` assumption.
+
+What I changed
+
+- Resolved the feedback artifact handle before the `result.ok` branch and now emit the concrete artifact path on both `validation_step_passed` and `validation_step_failed_repairable`.
+- Updated the validation contract test to assert the concrete feedback artifact path on pass.
+- Updated the phase implementation notes to remove the stale assumption and record the follow-up validation commands.
+
+Key findings / decisions
+
+- No new architectural decision was needed; this was a direct intent-fidelity fix for the existing helper.
+- Validation rerun:
+  - `./.venv/bin/python -m pytest -q tests/contract/test_engine_contracts.py -k "validation_step_valid_routes_to_default_done_and_emits_runtime_event or validation_step_invalid_writes_feedback_and_routes_repair or validation_step_exception_uses_failed_route_when_configured"`
+  - `./.venv/bin/python -m pytest -q tests/unit/test_simple_surface.py -k "autoloop_root_exports_only_the_canonical_public_surface or validation_result_helpers_render_expected_shape or effect_exports_and_route_helpers_are_public"`
+
+Open issues / next step
+
+- No implementer-side blocker remains for this phase.
+- Next step is verifier rerun so `criteria.md` and `feedback.md` can be cleared against `IMP-001`.
+
+
+---
+run_id=run-20260503T200339Z-6d598cb8 | entry=session_turn | pair=implement | phase=verifier | cycle=2 | attempt=1 | thread_id=019defa6-43e0-7382-9832-e4dd63010e96
+---
+provider=codex
+mode=resume
+template=/home/rauter/.local/share/pipx/venvs/autoloop/lib/python3.12/site-packages/autoloop/templates/implement_verifier.md
+session_id=019defa6-43e0-7382-9832-e4dd63010e96
+
+
+---
+run_id=run-20260503T200339Z-6d598cb8 | entry=phase_output | pair=implement | phase=verifier | process=codex-agent | cycle=2 | attempt=1 | thread_id=019defa6-43e0-7382-9832-e4dd63010e96
+---
+I’m reviewing only the follow-up fix for `IMP-001` and the surrounding validation-helper path. First I’m checking the updated implementation and the current review artifacts before deciding whether any blocking issues remain.
+
+The fix satisfies the only blocking gap I had. I’m clearing the criteria and recording a short recheck note in the review artifact so the phase history shows why this rerun is now complete.
+
+Scope considered
+
+- Follow-up verifier pass on the phase-local `effects-and-validation-helper` scope only.
+- I rechecked the `validation_step` runtime-event payload fix and the matching contract expectation.
+
+What I analyzed
+
+- Updated `validation_step` handler logic in `autoloop/simple.py`.
+- Updated pass-event assertion in `tests/contract/test_engine_contracts.py`.
+- The existing review artifacts and implementation notes for phase consistency.
+
+What I reviewed
+
+- Whether `validation_step_passed` now carries the declared feedback artifact path, matching the phase contract.
+- Whether the earlier blocking finding `IMP-001` still reproduced in the updated code path.
+- Whether any adjacent regression risk was introduced by moving feedback-handle resolution before the `result.ok` branch.
+
+Key findings / decisions
+
+- No blocking findings remain.
+- `IMP-001` is resolved: both validation runtime events now emit the concrete feedback artifact path.
+- I updated `criteria.md` to fully checked and appended a recheck note to `feedback.md`.
+
+Open issues / next step
+
+- No open review issues in this phase.
+- Phase review can be treated as complete.
+
+<loop-control>
+{"schema":"docloop.loop_control/v1","kind":"promise","promise":"COMPLETE"}
+</loop-control>
