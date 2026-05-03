@@ -231,3 +231,44 @@ Validation passed with `./.venv/bin/pytest tests/unit/test_simple_surface.py tes
 Open issues / next step
 
 No blocker in this slice. The remaining larger contract cleanup is the full removal of legacy strict-core class-handler/state-return paths and the broader engine/runtime normalization work, which I left untouched in this phase.
+
+
+---
+run_id=run-20260503T001920Z-8f0e7926 | entry=session_turn | pair=implement | phase=verifier | cycle=1 | attempt=1 | thread_id=019deb3e-9a64-77a2-8675-175dfad2340d
+---
+provider=codex
+mode=resume
+template=/home/rauter/.local/share/pipx/venvs/autoloop/lib/python3.12/site-packages/autoloop/templates/implement_verifier.md
+session_id=019deb3e-9a64-77a2-8675-175dfad2340d
+
+
+---
+run_id=run-20260503T001920Z-8f0e7926 | entry=phase_output | pair=implement | phase=verifier | process=codex-agent | cycle=1 | attempt=1 | thread_id=019deb3e-9a64-77a2-8675-175dfad2340d
+---
+I’m reviewing the phase-local implementation against the public-contract scope first. I’m checking the changed core/context/compiler paths for intent gaps, then I’ll update the criteria and feedback artifacts with concrete findings.
+
+I’ve confirmed two material scope gaps rather than incidental bugs: the public hook object still carries an internal backdoor, and the legacy class-handler/state-return path is still compiled. I’m recording those as blocking findings and marking the criteria accordingly.
+
+Scope considered
+
+Phase-local `public-contract-cleanup` only. I reviewed the changed context/runtime split, pair-step public keyword rename, compiler/validation paths that still own hook semantics, and the phase artifacts `criteria.md`, `feedback.md`, and `implementation_notes.md`.
+
+What I analyzed
+
+I inspected [autoloop/core/context.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/autoloop/core/context.py:162), [autoloop/core/compiler.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/autoloop/core/compiler.py:429), [autoloop/core/hook_validation.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/autoloop/core/hook_validation.py:24), [autoloop/core/lowering.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/autoloop/core/lowering.py:16), and [autoloop/core/discovery.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/autoloop/core/discovery.py:291) against the phase contract and run decisions. I also checked the review artifacts and the implementation notes for any deliberate scope narrowing.
+
+What I reviewed
+
+I updated [criteria.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/standalone-remaining-delta-implementation-spec-g-e919a184/runs/run-20260503T001920Z-8f0e7926/artifacts/implement/phases/public-contract-cleanup/criteria.md) to keep all boxes unchecked, and I appended blocking findings to [feedback.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/standalone-remaining-delta-implementation-spec-g-e919a184/runs/run-20260503T001920Z-8f0e7926/artifacts/implement/phases/public-contract-cleanup/feedback.md).
+
+Key findings / decisions
+
+Two blocking issues remain. First, the public hook object still exposes `ctx._runtime`, which preserves access to runtime-owned mutators and cache/selection setters through a new backdoor rather than removing them from the author-facing contract. Second, the legacy class-handler/state-return path is still compiled and validated through `on_<step>`, `on_outcome`, `on_start`, and 2-arg `PythonStep` handlers, so the phase does not actually enforce the final `hook(ctx)`-only model or remove state-return behavior end-to-end.
+
+Open issues / next step
+
+The implementation should stay in this phase until those two scope gaps are closed. After that, rerun the focused unit/strictness coverage and re-evaluate the criteria.
+
+<loop-control>
+{"schema":"docloop.loop_control/v1","kind":"promise","promise":"INCOMPLETE"}
+</loop-control>
