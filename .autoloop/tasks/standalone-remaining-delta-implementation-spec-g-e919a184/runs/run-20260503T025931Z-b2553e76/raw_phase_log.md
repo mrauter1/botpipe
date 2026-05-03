@@ -92,3 +92,12 @@ No open verification blockers. The next step is implementation against the appro
 <loop-control>
 {"schema":"docloop.loop_control/v1","kind":"promise","promise":"COMPLETE"}
 </loop-control>
+
+
+---
+run_id=run-20260503T025931Z-b2553e76 | entry=phase_scope_resolved
+---
+phase_mode=single
+phase_ids=public-authoring-surface-cleanup
+explicit=True
+current_phase_index=0
