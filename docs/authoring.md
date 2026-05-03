@@ -24,7 +24,7 @@ Greenfield authoring defaults:
 - `requires` are hard input preconditions.
 - `writes` is the canonical output surface.
 - artifact schemas validate files and stay distinct from provider `control_schema`.
-- `python_step(fn)` does not require an `on_<step>` handler.
+- `python_step(...)` carries its handler explicitly on the step declaration.
 - `workflow_step(...)` lowers to a dedicated child-workflow runtime step.
 - step-local `routes={...}` are the canonical public topology surface.
 - there is no `autoloop eject` or workflow source-expansion command.
@@ -601,7 +601,7 @@ from autoloop.stdlib import (
 )
 ```
 
-Use it only as authoring support inside explicit workflow hooks such as `on_bootstrap(...)` or `on_publish_* (...)`.
+Use it only as authoring support inside explicit workflow hooks such as `before(ctx)`, `after(ctx)`, or `Route.to(..., on_taken=...)`.
 
 - these helpers do not create hidden runtime sequencing or automatic system steps
 - they only operate on the workflow-owned `ctx` surface and `ctx.workflow_folder`

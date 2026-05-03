@@ -65,7 +65,7 @@ Params:
 
 - Alternatives considered:
 - read workflow parameters from `run.json` in every step
-- mutate state implicitly in `on_start`
+- use an explicit `before(ctx)` hook on the first step
 - use a deterministic bootstrap step that writes an invocation artifact and seeds workflow state
 - Selected: deterministic bootstrap step
 - Why: it creates an authoritative run-local input artifact, opens sessions mechanically, and gives later artifact templates stable `state.package_name` access without hidden runtime behavior.

@@ -5,7 +5,7 @@ from __future__ import annotations
 from collections.abc import Mapping
 from typing import Any, Callable
 
-from autoloop.core.primitives import AWAIT_INPUT, Event, GLOBAL, Outcome
+from autoloop.core.primitives import AWAIT_INPUT, Event, GLOBAL
 
 
 RouteMap = Mapping[str, Any]
@@ -41,14 +41,14 @@ def await_input_on_outcome_tags(*tags: str) -> dict[str, str]:
     return {tag: AWAIT_INPUT for tag in tags}
 
 
-def event_on_outcome_tags(*tags: str) -> Callable[[object, Outcome], Event | None]:
-    """Build a strict `on_outcome` handler for passthrough control tags."""
+def event_on_outcome_tags(*tags: str) -> Callable[[Any], Event | None]:
+    """Build an explicit `hook(ctx)` passthrough for selected outcome tags."""
 
     selected = frozenset(tags)
 
-    def handler(state: object, outcome: Outcome) -> Event | None:
-        if outcome.tag not in selected:
+    def handler(ctx: Any) -> Event | None:
+        if ctx.outcome.tag not in selected:
             return None
-        return Event(outcome.tag, reason=outcome.reason, question=outcome.question)
+        return Event(ctx.outcome.tag, reason=ctx.outcome.reason, question=ctx.outcome.question)
 
     return handler
