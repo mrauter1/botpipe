@@ -683,3 +683,114 @@ Open issues / next step
 <loop-control>
 {"schema":"docloop.loop_control/v1","kind":"promise","promise":"COMPLETE"}
 </loop-control>
+
+
+---
+run_id=run-20260503T200339Z-6d598cb8 | entry=session_turn | pair=test | phase=producer | cycle=1 | attempt=1 | thread_id=019def95-e28b-7972-a91c-cbe140043634
+---
+provider=codex
+mode=resume
+template=/home/rauter/.local/share/pipx/venvs/autoloop/lib/python3.12/site-packages/autoloop/templates/test_producer.md
+session_id=019def95-e28b-7972-a91c-cbe140043634
+
+
+---
+run_id=run-20260503T200339Z-6d598cb8 | entry=phase_output | pair=test | phase=producer | process=codex-agent | cycle=1 | attempt=1 | thread_id=019def95-e28b-7972-a91c-cbe140043634
+---
+I’m auditing the lazy worklist/session coverage before touching test artifacts. First I’m reading the active test-phase artifacts and the current runtime/contract tests to see whether the implemented behavior already has the required happy-path, edge-case, and failure-path coverage.
+
+I found one real coverage gap worth closing: the changed code promises lazy selection through explicit context/artifact-template access, but the current tests only prove the scoped-step path. I’m adding unit coverage for explicit one-worklist materialization and lazy artifact-template rendering now.
+
+The added tests stay phase-scoped and close the explicit-access gap without broadening the suite. I’m running just the new and adjacent unit coverage now to make sure the lazy placeholder and selective-materialization paths behave deterministically.
+
+The new unit slice passed. I’m recording the coverage map now, including the explicit-access gap I closed and the stabilization note that all added tests are pure in-process filesystem/context tests with no timing or network dependency.
+
+Scope considered
+
+- Phase-local lazy worklists and work-item sessions only.
+- Test scope covered changed runtime paths plus request-relevant explicit-access seams: scoped dispatch, sparse resume, direct `Context.ensure_selection(...)`, artifact-template placeholder resolution, and `Continuity.work_item(...)`.
+
+What I analyzed
+
+- Existing contract coverage already added in [tests/contract/test_engine_contracts.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/tests/contract/test_engine_contracts.py) for unused worklists, runtime-created artifact-backed worklists, sparse resume, and work-item session continuity.
+- Existing unit coverage in [tests/unit/test_primitives_and_stores.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/tests/unit/test_primitives_and_stores.py) for context/worklist helpers and placeholder rendering.
+- The active run-local decisions and the phase test artifacts.
+
+What I changed
+
+- Added unit coverage in [tests/unit/test_primitives_and_stores.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/tests/unit/test_primitives_and_stores.py) for:
+  - explicit lazy materialization of only the requested worklist,
+  - lazy artifact-template placeholder resolution with no preloaded selection.
+- Updated [test_strategy.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/framework-authoring-flexibility-change-spec-goal-2ee572cd/runs/run-20260503T200339Z-6d598cb8/artifacts/test/phases/lazy-worklists-and-sessions/test_strategy.md) with an explicit behavior-to-test coverage map, invariants, failure paths, stabilization notes, and known gaps.
+- Appended a concise summary to [feedback.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/framework-authoring-flexibility-change-spec-goal-2ee572cd/runs/run-20260503T200339Z-6d598cb8/artifacts/test/phases/lazy-worklists-and-sessions/feedback.md).
+- Appended one test-scoping decision to the current turn block in `decisions.txt`.
+
+Key findings / decisions
+
+- The main remaining gap was non-dispatch first-use coverage: the scoped-step tests proved lazy materialization through `StepDispatcher`, but they did not prove direct context access or artifact placeholder rendering with an initially empty selection map.
+- I kept the added tests unit-level and deterministic because they only need to validate resolver invocation and placeholder behavior; engine-level resume/session behavior was already covered in the contract layer.
+- Validation run:
+  - `python3 -m py_compile tests/unit/test_primitives_and_stores.py`
+  - `./.venv/bin/python -m pytest tests/unit/test_primitives_and_stores.py -k 'context_ensure_selection_lazily_materializes_missing_worklist or context_ensure_selection_only_materializes_requested_worklist or artifact_template_resolution_supports_worklist_placeholders or artifact_template_resolution_lazily_materializes_worklist_placeholders'`
+
+Open issues / next step
+
+- No blocker in this phase slice.
+- The only recorded gap is that lazy-first-use plus `ctx.worklist(...).refresh()` is still covered indirectly by existing refresh tests rather than by a new phase-specific contract test.
+
+<loop-control>
+{"schema":"docloop.loop_control/v1","kind":"promise","promise":"COMPLETE"}
+</loop-control>
+
+
+---
+run_id=run-20260503T200339Z-6d598cb8 | entry=session_turn | pair=test | phase=verifier | cycle=1 | attempt=1 | thread_id=019def95-e28b-7972-a91c-cbe140043634
+---
+provider=codex
+mode=resume
+template=/home/rauter/.local/share/pipx/venvs/autoloop/lib/python3.12/site-packages/autoloop/templates/test_verifier.md
+session_id=019def95-e28b-7972-a91c-cbe140043634
+
+
+---
+run_id=run-20260503T200339Z-6d598cb8 | entry=phase_output | pair=test | phase=verifier | process=codex-agent | cycle=1 | attempt=1 | thread_id=019def95-e28b-7972-a91c-cbe140043634
+---
+I’m auditing the lazy-worklist test additions against the phase contract and the current strategy artifact. First I’m reading the active audit artifacts and the exact new test coverage so I can judge whether the changed behavior and preserved invariants are actually protected.
+
+I found one gap I need to verify before marking this complete: the strategy claims AC-2 is covered for explicit worklist use, but the only event assertion I’ve seen is on the scoped-dispatch path. I’m checking the broader suite now for any engine-level explicit-use test that actually asserts `worklist_selection_resolved` on non-scoped access.
+
+The suite does miss one contract-level requirement materially: explicit first-use coverage proves lazy materialization, but not the required runtime event emission. I’m recording that as a blocking audit finding and leaving only the criteria that remain fully supported checked.
+
+Scope considered
+
+- Phase-local lazy worklist/session test coverage only.
+- Audited the active strategy artifact plus the changed tests in `tests/contract/test_engine_contracts.py` and `tests/unit/test_primitives_and_stores.py`.
+- Cross-checked coverage expectations against the phase contract and the run-local decisions ledger.
+
+What I analyzed
+
+- AC-1 coverage for no eager loading on missing artifact-backed worklists.
+- AC-2 coverage for both scoped and explicit first-use materialization, including the required runtime resolution event.
+- AC-3 coverage for stable work-item session keys, resume reuse, and no-current-item failure behavior.
+- The split between engine-level contract tests and unit-level direct-context tests.
+
+What I reviewed
+
+- The added contract tests for deferred source creation, sparse resume, and work-item continuity.
+- The added unit tests for direct `Context.ensure_selection(...)` and lazy artifact-template placeholder access.
+- The updated [test_strategy.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/framework-authoring-flexibility-change-spec-goal-2ee572cd/runs/run-20260503T200339Z-6d598cb8/artifacts/test/phases/lazy-worklists-and-sessions/test_strategy.md) and [feedback.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/framework-authoring-flexibility-change-spec-goal-2ee572cd/runs/run-20260503T200339Z-6d598cb8/artifacts/test/phases/lazy-worklists-and-sessions/feedback.md).
+
+Key findings / decisions
+
+- `TST-001` blocking: the suite does not verify `worklist_selection_resolved` for explicit non-scoped first use, only for the scoped-dispatch path. That leaves AC-2 partially unprotected.
+- Updated [criteria.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/framework-authoring-flexibility-change-spec-goal-2ee572cd/runs/run-20260503T200339Z-6d598cb8/artifacts/test/phases/lazy-worklists-and-sessions/criteria.md) to leave `Coverage Quality` and `Regression Protection` unchecked and marked the rest accurately.
+- Appended the blocking audit finding with correction direction to [feedback.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/framework-authoring-flexibility-change-spec-goal-2ee572cd/runs/run-20260503T200339Z-6d598cb8/artifacts/test/phases/lazy-worklists-and-sessions/feedback.md).
+
+Open issues / next step
+
+- Add one engine-level test that performs explicit worklist access from a non-scoped step under `runtime_event_sink`, then assert both selective materialization and `worklist_selection_resolved` emission.
+- After that gap is closed, this phase’s test coverage should be in position to pass audit.
+
+<loop-control>
+{"schema":"docloop.loop_control/v1","kind":"promise","promise":"INCOMPLETE"}
+</loop-control>
