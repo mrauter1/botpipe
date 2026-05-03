@@ -45,7 +45,6 @@
 ## Assumptions
 
 - `validation_step` remains a simple-surface authoring helper; external/simple transition ownership still decides success and repair destinations.
-- Validation success should emit a runtime event even when no feedback artifact is written; the payload uses `feedback_artifact=None`.
 
 ## Preserved Invariants
 
@@ -57,7 +56,7 @@
 
 - Hooks and Python steps may now return `Effects` directly.
 - Common worklist progression can be authored with `Route.advance(...)`, `Route.refresh(...)`, and `Route.complete_current(...)`.
-- `validation_step` provides deterministic repair-loop feedback writing and standardized pass/fail-repair runtime events.
+- `validation_step` provides deterministic repair-loop feedback writing and standardized pass/fail-repair runtime events, with the declared feedback artifact path emitted on both pass and repairable-failure events.
 
 ## Known Non-Changes
 
@@ -78,6 +77,8 @@
 - `./.venv/bin/python -m pytest -q tests/unit/test_simple_surface.py`
 - `./.venv/bin/python -m pytest -q tests/unit/test_primitives_and_stores.py -k "worklist or selection"`
 - `./.venv/bin/python -m pytest -q tests/contract/test_engine_contracts.py -k "scoped_step_advances_worklist_items_and_uses_item_placeholders or on_taken_goto_handoff_reaches_target_provider_step or on_taken_fail_preserves_mutated_state_and_emits_runtime_control or after_hook_re_resolves_artifact_paths_before_on_taken or route_handoff_is_scoped_to_the_active_worklist_item"`
+- `./.venv/bin/python -m pytest -q tests/contract/test_engine_contracts.py -k "validation_step_valid_routes_to_default_done_and_emits_runtime_event or validation_step_invalid_writes_feedback_and_routes_repair or validation_step_exception_uses_failed_route_when_configured"`
+- `./.venv/bin/python -m pytest -q tests/unit/test_simple_surface.py -k "autoloop_root_exports_only_the_canonical_public_surface or validation_result_helpers_render_expected_shape or effect_exports_and_route_helpers_are_public"`
 
 ## Deduplication / Centralization Decisions
 

@@ -505,18 +505,18 @@ def validation_step(
             if not isinstance(result, ValidationResult):
                 raise TypeError(f"validation_step {step_name!r} must return ValidationResult")
             runtime = context_runtime(ctx)
-            if result.ok:
-                runtime.emit_runtime_event(
-                    "validation_step_passed",
-                    feedback_artifact=None,
-                    message=None,
-                    details=[],
-                )
-                return Event(success)
             if ctx.artifacts is None:
                 raise RuntimeError("validation_step requires runtime artifact handles")
             feedback_name = _artifact_reference_name(feedback)
             feedback_handle = getattr(ctx.artifacts, feedback_name)
+            if result.ok:
+                runtime.emit_runtime_event(
+                    "validation_step_passed",
+                    feedback_artifact=str(feedback_handle.path),
+                    message=None,
+                    details=[],
+                )
+                return Event(success)
             feedback_handle.write_text(render_validation_feedback(result))
             runtime.emit_runtime_event(
                 "validation_step_failed_repairable",
