@@ -43,3 +43,46 @@ Updated the run-local planning artifacts:
 - [feedback.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/standalone-remaining-delta-implementation-spec-g-e919a184/runs/run-20260503T001920Z-8f0e7926/artifacts/plan/feedback.md) and [decisions.txt](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/standalone-remaining-delta-implementation-spec-g-e919a184/runs/run-20260503T001920Z-8f0e7926/decisions.txt) were appended with the planning rationale that should survive later turns.
 
 Key direction: finish the existing collaborator/worklist/failure foundations instead of rebuilding them, front-load public contract cleanup and execution normalization, then land runtime correctness and resume/cache/schema/doc work as separate later slices. No tests were run because this turn only authored planning artifacts.
+
+
+---
+run_id=run-20260503T001920Z-8f0e7926 | entry=session_turn | pair=plan | phase=verifier | cycle=1 | attempt=1 | thread_id=019deb34-3bcc-78d0-b0df-386f56add1e6
+---
+provider=codex
+mode=resume
+template=/home/rauter/.local/share/pipx/venvs/autoloop/lib/python3.12/site-packages/autoloop/templates/plan_verifier.md
+session_id=019deb34-3bcc-78d0-b0df-386f56add1e6
+
+
+---
+run_id=run-20260503T001920Z-8f0e7926 | entry=phase_output | pair=plan | phase=verifier | process=codex-agent | cycle=1 | attempt=1 | thread_id=019deb34-3bcc-78d0-b0df-386f56add1e6
+---
+I’m verifying the plan against the request as a contract audit now, not just a structure review. I’m checking for omitted explicit requirements, compatibility/migration gaps, and whether the phase plan can actually guide implementation without silent scope drift.
+
+The raw log has no later intent clarifications, so the request snapshot still governs. I’m now reducing the audit to concrete gaps between that spec and the authored plan so the feedback is stable and actionable for the next planning pass.
+
+I’ve narrowed the audit to four blocking omissions. They’re all intent-fidelity problems rather than formatting issues: the plan is structured, but it does not yet cover several explicit spec sections that materially affect runtime behavior and boundary safety.
+
+Scope considered
+Run-local planning artifacts for this request: `plan.md`, `phase_plan.yaml`, `feedback.md`, `criteria.md`, `decisions.txt`, plus the immutable request snapshot and raw log for clarification drift.
+
+What I analyzed
+Compared the authored plan against the full request contract, with emphasis on explicit intent coverage, intentional-break safety, compatibility/migration planning, and whether the machine-readable phase split can drive implementation without ambiguity. I also checked that `phase_plan.yaml` is parseable and that required lists are populated.
+
+What I reviewed
+`plan.md` is structured and phases are coherent. `phase_plan.yaml` parses successfully and keeps runtime-owned metadata intact. The producer’s decisions are internally consistent. The blocking issues are omissions: several explicit spec sections are not represented in the plan or phase acceptance criteria.
+
+Key findings / decisions
+Four blocking findings were appended to `feedback.md`:
+`PLAN-001` missing context-architecture/public-ctx safety coverage.
+`PLAN-002` missing explicit `ctx.item_state` contract choice.
+`PLAN-003` missing reads/requires/prompt-reference semantics and `ProviderContractBuilder` coverage.
+`PLAN-004` missing extension failure policy, import/optimizer boundary, and `autoloop.core` boundary coverage.
+`criteria.md` remains fully unchecked because intent fidelity, behavioral safety, completeness, technical-debt control, and compatibility coverage are not yet satisfied.
+
+Open issues / next step
+The plan needs a revision that explicitly covers the omitted spec sections and reflects them in both `plan.md` and `phase_plan.yaml` acceptance criteria before this planning turn can be marked complete.
+
+<loop-control>
+{"schema":"docloop.loop_control/v1","kind":"promise","promise":"INCOMPLETE"}
+</loop-control>
