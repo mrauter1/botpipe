@@ -172,8 +172,7 @@ def load_runtime_config_file(path: Path) -> object:
 def _load_narrow_yaml_mapping(path: Path) -> object:
     lines = path.read_text(encoding="utf-8").splitlines()
     root: dict[str, object] = {}
-    stack: list[tuple[int, dict[str, object]]] = [(-1, root)]
-    pending_child_indent_from: int | None = None
+    stack: list[tuple[int, dict[str, object]]] = [(0, root)]
 
     for line_number, raw_line in enumerate(lines, start=1):
         content = _strip_yaml_comment(raw_line)
@@ -184,14 +183,15 @@ def _load_narrow_yaml_mapping(path: Path) -> object:
         indent = len(content) - len(content.lstrip(" "))
         if indent % 2 != 0:
             raise ConfigError(f"{path}:{line_number}: indentation must use multiples of 2 spaces.")
-        if stack[-1][0] == -1:
-            if indent != 0:
+
+        while indent < stack[-1][0]:
+            stack.pop()
+        if indent != stack[-1][0]:
+            if len(stack) == 1:
                 raise ConfigError(f"{path}:{line_number}: top-level entries must not be indented.")
-        elif indent > stack[-1][0]:
-            if pending_child_indent_from != stack[-1][0] or indent != stack[-1][0] + 2:
-                raise ConfigError(
-                    f"{path}:{line_number}: indentation increase is only allowed after a mapping key with no scalar value."
-                )
+            raise ConfigError(
+                f"{path}:{line_number}: indentation increase is only allowed after a mapping key with no scalar value."
+            )
 
         stripped = content.strip()
         if stripped.startswith(("-", "?", "[", "{", "|", ">")):
@@ -204,20 +204,15 @@ def _load_narrow_yaml_mapping(path: Path) -> object:
         if not key:
             raise ConfigError(f"{path}:{line_number}: mapping keys must be non-empty.")
         raw_value = raw_value.strip()
-
-        while indent <= stack[-1][0]:
-            stack.pop()
         parent = stack[-1][1]
 
         if raw_value == "":
             next_mapping: dict[str, object] = {}
             parent[key] = next_mapping
-            stack.append((indent, next_mapping))
-            pending_child_indent_from = indent
+            stack.append((indent + 2, next_mapping))
             continue
 
         parent[key] = _parse_narrow_yaml_scalar(raw_value, path=path, line_number=line_number)
-        pending_child_indent_from = None
 
     return root
 
