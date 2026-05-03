@@ -6,3 +6,18 @@
 - Phase Directory Key: align-runtime-fixtures-and-revalidate
 - Phase Title: Align Fixtures And Revalidate
 - Scope: phase-local producer artifact
+- Files changed: `.autoloop/.../decisions.txt`; `.autoloop/.../align-runtime-fixtures-and-revalidate/implementation_notes.md`
+- Symbols touched: none in production or test code; phase closed through validation
+- Checklist mapping:
+  - Validate temporary workspace/context workflow fixtures against the canonical `python_step(ctx)` contract: completed by inspection of `tests/runtime/test_workspace_and_context.py`
+  - Re-run targeted workspace regressions: `tests/runtime/test_workspace_and_context.py` passed
+  - Re-run audited regression slice from the request: passed
+- Assumptions: prior phases already landed the runtime, contract, route-order, and config fixes referenced by the request
+- Preserved invariants: no production behavior changes; no test fixture contract changes; `build_output(state, ctx)` remained untouched
+- Intended behavior changes: none in this phase
+- Known non-changes: did not rewrite workspace fixtures, because the file already used ctx-only `python_step` handlers for the temporary workflow packages under test
+- Expected side effects: later turns can treat the phase-local acceptance gap as closed unless a new clarification reopens scope
+- Validation performed:
+  - `./.venv/bin/python -m pytest -q tests/runtime/test_workspace_and_context.py`
+  - `./.venv/bin/python -m pytest -q tests/runtime/test_runtime_static_graph.py tests/runtime/test_package_cli.py tests/test_architecture_baseline_docs.py tests/unit/test_validation.py tests/unit/test_stdlib_and_extensions.py tests/contract/test_canonical_runtime_contracts.py tests/contract/test_engine_contracts.py tests/unit/test_simple_surface.py tests/unit/test_primitives_and_stores.py tests/unit/test_provider_boundary_core.py tests/unit/test_provider_retries.py tests/runtime/test_provider_backends.py tests/runtime/test_workspace_and_context.py`
+- Deduplication / centralization decisions: none; avoided no-op fixture churn because the canonical surface was already present
