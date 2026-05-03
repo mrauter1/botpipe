@@ -708,11 +708,11 @@ class Engine:
                 )
                 state = before_result.state
                 runtime.set_state(state)
-                if before_result.result.control is not None:
+                if before_result.control is not None:
                     direct_control = self._normalize_direct_runtime_control(
                         step=step,
                         context=context,
-                        control=before_result.result.control,
+                        control=before_result.control,
                         hook_name=getattr(step.before_producer_hook, "__name__", type(step.before_producer_hook).__name__),
                         hook_phase="before_producer",
                     )
@@ -728,16 +728,16 @@ class Engine:
                         control=direct_control,
                         pending_handoffs=scheduled_handoffs,
                     )
-                if before_result.result.event is not None:
+                if before_result.event is not None:
                     finalization = self.route_finalizer.finalize(
                         StepFinalizationRequest(
                             step=step,
                             context=context,
                             state=state,
                             artifacts=self._resolve_artifacts(context),
-                            candidate_event=before_result.result.event,
+                            candidate_event=before_result.event,
                             candidate_route_present=False,
-                            after_subject=before_result.result.event,
+                            after_subject=before_result.event,
                             pending_handoffs=remaining_pending_handoffs,
                             error_cls=WorkflowExecutionError,
                             provider_attributable=False,
@@ -864,7 +864,7 @@ class Engine:
         for attempt in range(1, max_attempts + 1):
             artifacts = self._resolve_artifacts(context)
             try:
-                outcome, resolved_session, provider_usage = self._run_llm_step(
+                llm_result = self._run_llm_step(
                     step,
                     context,
                     artifacts,
@@ -876,6 +876,8 @@ class Engine:
                     consumed_pending_handoffs=remaining_pending_handoffs,
                     restorable_pending_handoffs=pending_handoffs,
                 )
+                outcome = llm_result.outcome
+                assert outcome is not None
                 next_state = state
                 final_event = Event(outcome.tag, reason=outcome.reason, question=outcome.question)
                 artifacts = self._resolve_artifacts(context)
@@ -894,13 +896,13 @@ class Engine:
                         provider_attributable=True,
                     )
                 )
-                self._persist_session(resolved_session)
+                self._persist_session(llm_result.session)
                 return self._step_result_from_route_finalization(
                     step=step,
                     route_finalization=finalization,
                     outcome=outcome,
-                    producer_raw_output=outcome.raw_output,
-                    provider_usage=provider_usage,
+                    producer_raw_output=llm_result.text,
+                    provider_usage=StepProviderUsage(llm=llm_result.usage),
                 )
             except Exception as exc:
                 next_feedback, annotated_exc = self._next_retry_feedback(step, exc, attempt=attempt)
@@ -1040,11 +1042,11 @@ class Engine:
         next_state = after_producer_result.state
         runtime = context_runtime(context)
         runtime.set_state(next_state)
-        if after_producer_result.result.control is not None:
+        if after_producer_result.control is not None:
             direct_control = self._normalize_direct_runtime_control(
                 step=step,
                 context=context,
-                control=after_producer_result.result.control,
+                control=after_producer_result.control,
                 hook_name=getattr(step.after_producer_hook, "__name__", type(step.after_producer_hook).__name__),
                 hook_phase="after_producer",
             )
@@ -1058,7 +1060,7 @@ class Engine:
                 state=next_state,
                 direct_control=direct_control,
             )
-        if after_producer_result.result.event is not None:
+        if after_producer_result.event is not None:
             return PairProviderResult(
                 producer_raw_output=producer_exec.text,
                 verifier_raw_output=None,
@@ -1067,7 +1069,7 @@ class Engine:
                 verifier_session=None,
                 usage=StepProviderUsage(producer=producer_exec.usage),
                 state=next_state,
-                short_circuit_event=after_producer_result.result.event,
+                short_circuit_event=after_producer_result.event,
             )
 
         try:
@@ -1084,36 +1086,34 @@ class Engine:
             )
             review_state = before_verifier_result.state
             runtime.set_state(review_state)
-            if before_verifier_result.result.control is not None:
+            if before_verifier_result.control is not None:
                 direct_control = self._normalize_direct_runtime_control(
                     step=step,
                     context=context,
-                    control=before_verifier_result.result.control,
+                    control=before_verifier_result.control,
                     hook_name=getattr(step.before_verifier_hook, "__name__", type(step.before_verifier_hook).__name__),
                     hook_phase="before_verifier",
                 )
-                return (
-                    producer_response.raw_output,
-                    None,
-                    None,
-                    producer_response.session or session,
-                    None,
-                    StepProviderUsage(producer=producer_response.usage),
-                    review_state,
-                    direct_control,
-                    None,
+                return PairProviderResult(
+                    producer_raw_output=producer_exec.text,
+                    verifier_raw_output=None,
+                    outcome=None,
+                    producer_session=producer_exec.session or session,
+                    verifier_session=None,
+                    usage=StepProviderUsage(producer=producer_exec.usage),
+                    state=review_state,
+                    direct_control=direct_control,
                 )
-            if before_verifier_result.result.event is not None:
-                return (
-                    producer_response.raw_output,
-                    None,
-                    None,
-                    producer_response.session or session,
-                    None,
-                    StepProviderUsage(producer=producer_response.usage),
-                    review_state,
-                    None,
-                    before_verifier_result.result.event,
+            if before_verifier_result.event is not None:
+                return PairProviderResult(
+                    producer_raw_output=producer_exec.text,
+                    verifier_raw_output=None,
+                    outcome=None,
+                    producer_session=producer_exec.session or session,
+                    verifier_session=None,
+                    usage=StepProviderUsage(producer=producer_exec.usage),
+                    state=review_state,
+                    short_circuit_event=before_verifier_result.event,
                 )
             verifier_prompt = self._resolve_prompt(step.verifier_prompt)
             verifier_session = self._resolve_pair_review_session(
@@ -1211,7 +1211,7 @@ class Engine:
         route_handoff: str | None,
         consumed_pending_handoffs: tuple[PendingHandoff, ...],
         restorable_pending_handoffs: tuple[PendingHandoff, ...],
-    ) -> tuple[Outcome, SessionBinding | None, StepProviderUsage]:
+    ) -> ProviderExecResult:
         prompt = self._resolve_prompt(step.producer_prompt)
         self._emit_provider_attempt_event(
             "provider_attempt_started",
@@ -1270,7 +1270,14 @@ class Engine:
             token_usage=provider_exec.usage,
         )
         self._append_logs(step, artifacts, provider_exec.text)
-        return response.outcome, provider_exec.session or session, StepProviderUsage(llm=provider_exec.usage)
+        resolved_session = provider_exec.session or session
+        resolved_session_id = getattr(resolved_session, "session_id", None)
+        return replace(
+            provider_exec,
+            session=resolved_session,
+            session_id=resolved_session_id if isinstance(resolved_session_id, str) else None,
+            outcome=response.outcome,
+        )
 
     def _normalize_direct_runtime_control(
         self,

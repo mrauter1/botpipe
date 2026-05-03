@@ -15,7 +15,7 @@ from .context import context_runtime
 from .errors import FailureContext, WorkflowExecutionError
 from .extensions import HookRouteRedirect
 from .operations import OperationRuntime, bind_operation_runtime, provider_configuration
-from .primitives import Event, Fail, Goto, RequestInput
+from .primitives import Event, Fail, Goto, Outcome, RequestInput
 from .providers.models import ProviderArtifactRef, ProviderReadableRef, ProviderRoute, StepProviderUsage, TokenUsage
 from .route_required_writes import effective_route_required_writes_map, explicit_route_required_writes
 from .stores.protocols import PendingHandoff, PendingInput
@@ -40,7 +40,8 @@ class HookResult:
 @dataclass(frozen=True, slots=True)
 class HookExecutionResult:
     state: BaseModel
-    result: HookResult = HookResult()
+    event: Event | None = None
+    control: RequestInput | Goto | Fail | None = None
     explicit_event_override: bool = False
     redirect: HookRouteRedirect | None = None
 
@@ -117,6 +118,7 @@ class ProviderExecResult:
     provider_metadata: dict[str, object]
     usage: TokenUsage | None = None
     session: "SessionBinding | None" = None
+    outcome: Outcome | None = None
 
 
 class ProviderContractBuilder:
@@ -337,12 +339,12 @@ class StepDispatcher:
         state = before_result.state
         runtime.set_state(state)
         runtime.set_artifacts(self._engine._resolve_artifacts(context))
-        if before_result.result.control is not None:
+        if before_result.control is not None:
             _, remaining_pending_handoffs = self._engine._matching_pending_handoffs(step, context, pending_handoffs)
             direct_control = self._engine._normalize_direct_runtime_control(
                 step=step,
                 context=context,
-                control=before_result.result.control,
+                control=before_result.control,
                 hook_name=getattr(step.before_hook, "__name__", type(step.before_hook).__name__),
                 hook_phase="before",
             )
@@ -358,7 +360,7 @@ class StepDispatcher:
                 control=direct_control,
                 pending_handoffs=scheduled_handoffs,
             )
-        if before_result.result.event is not None:
+        if before_result.event is not None:
             _, remaining_pending_handoffs = self._engine._matching_pending_handoffs(step, context, pending_handoffs)
             finalization = self._engine.route_finalizer.finalize(
                 StepFinalizationRequest(
@@ -366,9 +368,9 @@ class StepDispatcher:
                     context=context,
                     state=state,
                     artifacts=self._engine._resolve_artifacts(context),
-                    candidate_event=before_result.result.event,
+                    candidate_event=before_result.event,
                     candidate_route_present=False,
-                    after_subject=before_result.result.event,
+                    after_subject=before_result.event,
                     pending_handoffs=remaining_pending_handoffs,
                     error_cls=WorkflowExecutionError,
                     provider_attributable=False,
@@ -403,8 +405,9 @@ class StepDispatcher:
             finally:
                 runtime.set_execution_source(hook_name=None, phase=None, invocation_id=None)
             try:
-                hook_result, _, _ = self._engine.hook_runner.normalize_result(
+                hook_result = self._engine.hook_runner.normalize_result(
                     step,
+                    state=next_state,
                     context=context,
                     current_event=None,
                     result=result,
@@ -519,7 +522,7 @@ class RouteFinalizer:
             hook_phase=request.after_hook_phase,
         )
         final_state = after_result.state
-        final_event = after_result.result.event or candidate_event
+        final_event = after_result.event or candidate_event
         explicit_event_override = after_result.explicit_event_override
         after_redirect = after_result.redirect
         runtime = context_runtime(context)
@@ -531,11 +534,11 @@ class RouteFinalizer:
             route_redirects.append(replace(after_redirect, redirect_index=len(route_redirects) + 1))
             self._engine._ensure_hook_redirect_limit(step, candidate_route=candidate_route, redirects=route_redirects)
 
-        if after_result.result.control is not None:
+        if after_result.control is not None:
             direct_control = self._engine._normalize_direct_runtime_control(
                 step=step,
                 context=context,
-                control=after_result.result.control,
+                control=after_result.control,
                 hook_name=getattr(request.after_hook or step.after_hook, "__name__", type(request.after_hook or step.after_hook).__name__),
                 hook_phase=request.after_hook_phase,
             )
@@ -588,8 +591,8 @@ class RouteFinalizer:
                     hook_phase="on_taken",
                 )
                 final_state = route_result.state
-                if route_result.result.event is not None:
-                    final_event = route_result.result.event
+                if route_result.event is not None:
+                    final_event = route_result.event
                 explicit_event_override = explicit_event_override or route_result.explicit_event_override
                 runtime.set_state(final_state)
                 route_redirect = route_result.redirect
@@ -597,11 +600,11 @@ class RouteFinalizer:
                     route_redirects.append(replace(route_redirect, redirect_index=len(route_redirects) + 1))
                     self._engine._ensure_hook_redirect_limit(step, candidate_route=candidate_route, redirects=route_redirects)
                     continue
-                if route_result.result.control is not None:
+                if route_result.control is not None:
                     direct_control = self._engine._normalize_direct_runtime_control(
                         step=step,
                         context=context,
-                        control=route_result.result.control,
+                        control=route_result.control,
                         hook_name=getattr(final_route.on_taken, "__name__", type(final_route.on_taken).__name__),
                         hook_phase="on_taken",
                     )
@@ -720,8 +723,9 @@ class HookRunner:
             finally:
                 runtime.set_execution_source(hook_name=None, phase=None, invocation_id=None)
             next_state = context.state
-            hook_result, explicit_event_override, redirect_record = self.normalize_result(
+            hook_result = self.normalize_result(
                 step,
+                state=next_state,
                 context=context,
                 current_event=None,
                 result=result,
@@ -736,12 +740,7 @@ class HookRunner:
                 phase=hook_phase,
                 route=hook_result.event.tag if hook_result.event is not None else None,
             )
-            return HookExecutionResult(
-                state=next_state,
-                result=hook_result,
-                explicit_event_override=explicit_event_override,
-                redirect=redirect_record,
-            )
+            return hook_result
         except Exception as exc:
             self._engine._emit_hook_event(
                 "hook_failed",
@@ -820,8 +819,9 @@ class HookRunner:
             finally:
                 runtime.set_execution_source(hook_name=None, phase=None, invocation_id=None)
             next_state = context.state
-            hook_result, explicit_override, redirect_record = self.normalize_result(
+            hook_result = self.normalize_result(
                 step,
+                state=next_state,
                 context=context,
                 current_event=candidate_event,
                 result=result,
@@ -836,12 +836,7 @@ class HookRunner:
                 phase=hook_phase,
                 route=hook_result.event.tag if hook_result.event is not None else None if candidate_event is None else candidate_event.tag,
             )
-            return HookExecutionResult(
-                state=next_state,
-                result=hook_result,
-                explicit_event_override=explicit_override,
-                redirect=redirect_record,
-            )
+            return hook_result
         except Exception as exc:
             self._engine._emit_hook_event(
                 "hook_failed",
@@ -872,15 +867,16 @@ class HookRunner:
         self,
         step: "CompiledStep",
         *,
+        state: BaseModel,
         context: "Context",
         current_event: Event | None,
         result: Any,
         hook_phase: str,
         hook_name: str,
-    ) -> tuple[HookResult, bool, HookRouteRedirect | None]:
+    ) -> HookExecutionResult:
         next_event = current_event
         if result is None:
-            return HookResult(), False, None
+            return HookExecutionResult(state=state)
         if isinstance(result, BaseModel):
             raise WorkflowExecutionError(
                 f"{hook_phase} hook for step {step.name!r} returned unsupported value {type(result)!r}"
@@ -905,7 +901,13 @@ class HookRunner:
                     previous_event=next_event,
                     next_event=override_event,
                 )
-            return HookResult(event=override_event), True, redirect_record
+            normalized = HookResult(event=override_event)
+            return HookExecutionResult(
+                state=state,
+                event=normalized.event,
+                explicit_event_override=True,
+                redirect=redirect_record,
+            )
         if isinstance(result, Event):
             override_event = self._engine._validate_hook_event_override(step, result)
             redirect_record = None
@@ -918,9 +920,19 @@ class HookRunner:
                     previous_event=next_event,
                     next_event=override_event,
                 )
-            return HookResult(event=override_event), True, redirect_record
+            normalized = HookResult(event=override_event)
+            return HookExecutionResult(
+                state=state,
+                event=normalized.event,
+                explicit_event_override=True,
+                redirect=redirect_record,
+            )
         if isinstance(result, (RequestInput, Goto, Fail)):
-            return HookResult(control=result), False, None
+            normalized = HookResult(control=result)
+            return HookExecutionResult(
+                state=state,
+                control=normalized.control,
+            )
         raise WorkflowExecutionError(f"{hook_phase} hook for step {step.name!r} returned unsupported value {type(result)!r}")
 
     def run_route(
@@ -970,8 +982,9 @@ class HookRunner:
             finally:
                 runtime.set_execution_source(hook_name=None, phase=None, invocation_id=None)
             next_state = context.state
-            hook_result, explicit_override, redirect_record = self.normalize_result(
+            hook_result = self.normalize_result(
                 step,
+                state=next_state,
                 context=context,
                 current_event=event,
                 result=result,
@@ -986,12 +999,7 @@ class HookRunner:
                 phase=hook_phase,
                 route=hook_result.event.tag if hook_result.event is not None else event.tag,
             )
-            return HookExecutionResult(
-                state=next_state,
-                result=hook_result,
-                explicit_event_override=explicit_override,
-                redirect=redirect_record,
-            )
+            return hook_result
         except Exception as exc:
             self._engine._emit_hook_event(
                 "hook_failed",

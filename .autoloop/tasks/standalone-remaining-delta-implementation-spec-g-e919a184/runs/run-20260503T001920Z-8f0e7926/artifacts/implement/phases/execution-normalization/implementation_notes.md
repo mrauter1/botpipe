@@ -13,6 +13,8 @@
 - `tests/contract/test_engine_contracts.py`
 
 ## Symbols touched
+- `HookExecutionResult`
+- `HookRunner.normalize_result`
 - `StepExecutionResult`
 - `RouteFinalizationResult`
 - `PairProviderResult`
@@ -28,7 +30,7 @@
 - `RouteFinalizer.finalize`
 
 ## Checklist mapping
-- Milestone 2 / AC-1: replaced active step-dispatch and finalization tuple plumbing with `StepExecutionResult`, `RouteFinalizationResult`, and `PairProviderResult`.
+- Milestone 2 / AC-1: replaced active step-dispatch, hook-normalization, finalization, and provider tuple plumbing with `HookExecutionResult`, `StepExecutionResult`, `RouteFinalizationResult`, `PairProviderResult`, and `ProviderExecResult`.
 - Milestone 2 / AC-2: preserved direct-control normalization across `before`, `before_producer`, `before_verifier`, and `on_taken` while routing all execution exits through the same dataclass-backed result path.
 - Milestone 2 / AC-3: moved provider-visible contract assembly into `ProviderContractBuilder` and updated producer/verifier/llm requests to consume it.
 
@@ -44,18 +46,21 @@
 - Successful `after_producer` and `before_verifier` state mutations now survive through verifier success and final route finalization instead of being overwritten by the earlier state snapshot.
 
 ## Known non-changes
-- Hook normalization shape and route-finalizer semantics were not broadened beyond this phase slice.
+- Route-finalizer semantics were not broadened beyond this phase slice.
 - Resume/cache/schema work remains deferred to later phases.
 
 ## Expected side effects
 - `Engine.run` now consumes one step-result object instead of unpacking positional tuples.
+- Hook callers now consume `HookExecutionResult` directly instead of unpacking a normalization tuple.
 - Provider request contract assembly is centralized in one collaborator-owned seam for later extraction/hardening work.
 
 ## Validation performed
 - `python3 -m py_compile autoloop/core/engine.py autoloop/core/engine_collaborators.py tests/contract/test_engine_contracts.py`
 - Added contract regression `test_pair_hooks_before_verifier_preserve_state_mutations_on_success`.
+- Source scan confirmed no remaining `.result.event` / `.result.control` callers and no tuple return signature for `_run_llm_step`.
 - Dynamic execution validation was blocked in this shell because the available `python3` environment lacks project dependencies such as `pydantic` and `pytest`.
 
 ## Deduplication / centralization
 - Centralized step-transition construction in `Engine._build_step_finalization_record`, `_step_result_from_direct_control`, and `_step_result_from_route_finalization`.
+- Centralized hook normalization on `HookExecutionResult` so `normalize_result`, hook runners, and python-step dispatch share one return object instead of a positional tuple plus wrapper.
 - Centralized provider contract assembly in `ProviderContractBuilder` instead of three inline request-construction branches in `Engine`.

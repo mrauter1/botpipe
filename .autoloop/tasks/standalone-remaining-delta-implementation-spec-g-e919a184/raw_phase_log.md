@@ -745,3 +745,51 @@ Open issues / next step
 <loop-control>
 {"schema":"docloop.loop_control/v1","kind":"promise","promise":"INCOMPLETE"}
 </loop-control>
+
+
+---
+run_id=run-20260503T001920Z-8f0e7926 | entry=session_turn | pair=implement | phase=producer | cycle=2 | attempt=1 | thread_id=019deb74-92cc-7a71-ac0a-0fa403070084
+---
+provider=codex
+mode=resume
+template=/home/rauter/.local/share/pipx/venvs/autoloop/lib/python3.12/site-packages/autoloop/templates/implement_producer.md
+session_id=019deb74-92cc-7a71-ac0a-0fa403070084
+
+
+---
+run_id=run-20260503T001920Z-8f0e7926 | entry=phase_output | pair=implement | phase=producer | process=codex-agent | cycle=2 | attempt=1 | thread_id=019deb74-92cc-7a71-ac0a-0fa403070084
+---
+I’m taking the verifier findings as the active scope: finish the remaining tuple-based hook normalization and the llm provider result path without widening the phase. I’m re-reading the feedback against the current runtime code first so the follow-up change stays surgical and consistent with the existing collaborator split.
+
+I’ve got the fix boundary: one structural change in `HookRunner` and one in `_run_llm_step`, with the rest being call-site updates. I’m editing those seams directly instead of layering another wrapper around them, because the review findings are about unfinished normalization, not missing functionality.
+
+The two blocking seams are patched now: hook normalization returns one object end-to-end, and the llm path no longer returns a positional tuple. I’m doing a compile pass plus a targeted source scan next, then I’ll fold the reviewer resolution into the notes and decisions ledger.
+
+I’ve resolved the reviewer’s two blockers in code, and the compile pass still succeeds. I’m recording the non-obvious follow-up decisions in the current turn’s ledger block and tightening the implementation notes so the next review can focus on behavior rather than reconstruction.
+
+The reviewer blockers are resolved in code and the notes are updated. I’m doing one final static pass for any leftover tuple-shaped hook or llm-provider signatures, then I’ll close with the phase summary and leave runtime testing explicitly marked as blocked by the local environment.
+
+Scope considered
+- Phase-local execution-normalization follow-up in [autoloop/core/engine.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/autoloop/core/engine.py) and [autoloop/core/engine_collaborators.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/autoloop/core/engine_collaborators.py).
+- Reviewer findings in [feedback.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/standalone-remaining-delta-implementation-spec-g-e919a184/runs/run-20260503T001920Z-8f0e7926/artifacts/implement/phases/execution-normalization/feedback.md).
+- Phase notes and decision ledger updates in [implementation_notes.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/standalone-remaining-delta-implementation-spec-g-e919a184/runs/run-20260503T001920Z-8f0e7926/artifacts/implement/phases/execution-normalization/implementation_notes.md) and [decisions.txt](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/standalone-remaining-delta-implementation-spec-g-e919a184/runs/run-20260503T001920Z-8f0e7926/decisions.txt).
+
+What I analyzed
+- The remaining tuple-based seams called out by `IMP-001` and `IMP-002`.
+- Hook normalization flow across `before` / `after` / `on_taken` / python-step dispatch.
+- The plain llm execution path to ensure it matches the dataclass-based provider result model used elsewhere.
+
+What I changed
+- Finished hook normalization so `HookRunner.normalize_result()` returns `HookExecutionResult` directly, and all callers now read `event` / `control` from that object instead of unpacking a tuple-plus-wrapper pattern.
+- Removed the remaining positional tuple from the llm provider path by making `_run_llm_step()` return `ProviderExecResult` with resolved session and outcome attached.
+- Updated the affected runtime call sites and refreshed the phase notes plus the current implementation decision block.
+
+Key findings / decisions
+- The reviewer’s two blockers were structural, so I fixed the seams directly rather than adding another wrapper layer.
+- `HookExecutionResult` is now the single active hook normalization object used by hook runners and python-step dispatch.
+- `ProviderExecResult` now carries the llm path’s resolved session and outcome so the last active llm tuple is gone.
+
+Open issues / next step
+- Static validation passed with `python3 -m py_compile autoloop/core/engine.py autoloop/core/engine_collaborators.py tests/contract/test_engine_contracts.py`.
+- A source scan found no remaining `.result.event` / `.result.control` call sites and no tuple return signature on `_run_llm_step`.
+- Runtime test execution is still blocked in this shell because the available `python3` environment lacks project dependencies such as `pydantic` and `pytest`.
