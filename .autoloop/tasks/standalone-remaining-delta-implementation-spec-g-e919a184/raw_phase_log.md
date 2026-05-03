@@ -1977,3 +1977,48 @@ Validation passed:
 Open issues / next step
 
 No open issues from the scoped phase. The requested changes are implemented and the focused validation is green.
+
+
+---
+run_id=run-20260503T025931Z-b2553e76 | entry=session_turn | pair=implement | phase=verifier | cycle=1 | attempt=1 | thread_id=019debcb-7826-7a23-a492-9f39a36361cd
+---
+provider=codex
+mode=resume
+template=/home/rauter/.local/share/pipx/venvs/autoloop/lib/python3.12/site-packages/autoloop/templates/implement_verifier.md
+session_id=019debcb-7826-7a23-a492-9f39a36361cd
+
+
+---
+run_id=run-20260503T025931Z-b2553e76 | entry=phase_output | pair=implement | phase=verifier | process=codex-agent | cycle=1 | attempt=1 | thread_id=019debcb-7826-7a23-a492-9f39a36361cd
+---
+I’m reviewing the scoped implementation diff and the phase artifacts now. First I’m reading the criteria, feedback file, decision ledger, and the touched source/test files so I can verify each acceptance criterion against the actual changes.
+
+The diff is small enough that I can verify the contract directly instead of relying on summaries. I’m checking the current file contents and rerunning the two requested pytest targets from the reviewer side before I mark the criteria.
+
+The requested validations are green and the inspected contract matches the plan and decision ledger. I’m updating the reviewer artifacts now: all criteria checked, and a final feedback entry recording that this review found no actionable issues in scope.
+
+Scope considered
+
+Phase-local review only: [cleanup.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/cleanup.md), [autoloop/runtime/cli.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/autoloop/runtime/cli.py), [tests/runtime/test_package_cli.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/tests/runtime/test_package_cli.py), the decision ledger, and the active review artifacts [criteria.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/standalone-remaining-delta-implementation-spec-g-e919a184/runs/run-20260503T025931Z-b2553e76/artifacts/implement/phases/public-authoring-surface-cleanup/criteria.md) and [feedback.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/standalone-remaining-delta-implementation-spec-g-e919a184/runs/run-20260503T025931Z-b2553e76/artifacts/implement/phases/public-authoring-surface-cleanup/feedback.md).
+
+What I analyzed
+
+I checked the accepted plan and [decisions.txt](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/standalone-remaining-delta-implementation-spec-g-e919a184/runs/run-20260503T025931Z-b2553e76/decisions.txt), verified the updated cleanup wording against the baseline-doc intent, inspected the scaffold emitters for all supported shapes, and reviewed the strengthened CLI tests for direct source-contract and compiled-contract coverage.
+
+What I reviewed
+
+I confirmed `cleanup.md` no longer contains `autoloop.simple` guidance and still preserves the required autoloop-only phrases. I confirmed the scaffold emitters now generate decorator-based `@python_step(..., routes=...)` bootstrap handlers with a single `ctx` argument and no legacy `_bootstrap(state, ctx)` or `python_step(_bootstrap, ...)` pattern. I also reran:
+- `./.venv/bin/pytest -q tests/test_architecture_baseline_docs.py`
+- `./.venv/bin/pytest -q tests/runtime/test_package_cli.py -k 'init_workflow_scaffolds_supported_shapes_and_rejects_duplicates or init_workflow_defaults_to_flow_specs_shape'`
+
+Key findings / decisions
+
+No actionable review findings in scope. The implementation matches AC-1 through AC-3, follows the run-local decision ledger, and the requested focused validations passed. I updated the review artifacts accordingly: all criteria are checked in [criteria.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/standalone-remaining-delta-implementation-spec-g-e919a184/runs/run-20260503T025931Z-b2553e76/artifacts/implement/phases/public-authoring-surface-cleanup/criteria.md), and [feedback.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/standalone-remaining-delta-implementation-spec-g-e919a184/runs/run-20260503T025931Z-b2553e76/artifacts/implement/phases/public-authoring-surface-cleanup/feedback.md) records the clean review result.
+
+Open issues / next step
+
+No open issues from this review pass.
+
+<loop-control>
+{"schema":"docloop.loop_control/v1","kind":"promise","promise":"COMPLETE"}
+</loop-control>

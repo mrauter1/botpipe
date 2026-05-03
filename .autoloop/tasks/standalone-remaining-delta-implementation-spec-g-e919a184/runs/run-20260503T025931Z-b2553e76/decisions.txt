@@ -1,3 +1,5 @@
 <autoloop-decisions-header version="1" block_seq="1" owner="planner" phase_id="task-global" pair="plan" turn_seq="1" run_id="run-20260503T025931Z-b2553e76" ts="2026-05-03T02:59:32.175448+00:00" />
 Treat this remaining delta as one implementation slice: preserve current workflow shapes and init payloads, and only update emitted starter source to the finalized one-argument `python_step` contract.
 `cleanup.md` must keep the autoloop-only phrases enforced by the baseline docs tests while removing all remaining `autoloop.simple` guidance.
+<autoloop-decisions-header version="1" block_seq="2" owner="implementer" phase_id="public-authoring-surface-cleanup" pair="implement" turn_seq="1" run_id="run-20260503T025931Z-b2553e76" ts="2026-05-03T03:04:33.024537+00:00" />
+Keep init-workflow starter scaffolds on the decorator-based `@python_step(..., routes=...)` form with a single `ctx` parameter and `ctx.state` mutation across `single`, `flow-specs`, and `package`; the package CLI tests now assert that source contract directly and verify the compiled bootstrap signature/routes.
