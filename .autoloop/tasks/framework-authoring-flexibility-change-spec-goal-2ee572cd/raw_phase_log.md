@@ -1296,3 +1296,55 @@ Open issues / next step
 
 - No remaining test-author blocker is visible in this phase scope.
 - Next step is the test-phase verifier rerun against the updated coverage and artifacts.
+
+
+---
+run_id=run-20260503T200339Z-6d598cb8 | entry=session_turn | pair=test | phase=verifier | cycle=2 | attempt=1 | thread_id=019defa6-43e0-7382-9832-e4dd63010e96
+---
+provider=codex
+mode=resume
+template=/home/rauter/.local/share/pipx/venvs/autoloop/lib/python3.12/site-packages/autoloop/templates/test_verifier.md
+session_id=019defa6-43e0-7382-9832-e4dd63010e96
+
+
+---
+run_id=run-20260503T200339Z-6d598cb8 | entry=phase_output | pair=test | phase=verifier | process=codex-agent | cycle=2 | attempt=1 | thread_id=019defa6-43e0-7382-9832-e4dd63010e96
+---
+I’m rechecking the resolved `Effects.then(...)` gap against the phase contract and the updated artifacts, then I’ll either clear the audit criteria or record any remaining risk.
+
+The event-only `Effects.then(...)` path is now exercised through the engine and the focused contract slice passes. I’m clearing the audit criteria and recording the recheck result in the phase feedback artifact.
+
+Scope considered
+
+- Phase-local re-audit of the `effects-and-validation-helper` tests and test artifacts only.
+- I rechecked the prior `TST-001` gap, the updated coverage map, and the focused contract slice that exercises the new `Effects.then(...)` runtime path.
+
+What I analyzed
+
+- [criteria.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/framework-authoring-flexibility-change-spec-goal-2ee572cd/runs/run-20260503T200339Z-6d598cb8/artifacts/test/phases/effects-and-validation-helper/criteria.md)
+- [test_strategy.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/framework-authoring-flexibility-change-spec-goal-2ee572cd/runs/run-20260503T200339Z-6d598cb8/artifacts/test/phases/effects-and-validation-helper/test_strategy.md)
+- [feedback.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/framework-authoring-flexibility-change-spec-goal-2ee572cd/runs/run-20260503T200339Z-6d598cb8/artifacts/test/phases/effects-and-validation-helper/feedback.md)
+- The focused contract coverage in [test_engine_contracts.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/tests/contract/test_engine_contracts.py), including `test_python_step_effect_then_routes_without_worklist_mutation`
+
+What I reviewed
+
+- Whether AC-4 now includes engine-level coverage for direct `Effects.then(...)` returns with no worklist mutation.
+- Whether the updated suite now covers the changed effect surface at the appropriate level without adding flaky assumptions.
+- Whether any blocking regression-detection or intent-fidelity gap remains in this phase scope.
+
+Key findings / decisions
+
+- No blocking findings remain.
+- `TST-001` is resolved: the new contract test exercises the event-only `Effects.then(...)` runtime path through shared normalization, which was the only material gap from the previous audit.
+- I updated [criteria.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/framework-authoring-flexibility-change-spec-goal-2ee572cd/runs/run-20260503T200339Z-6d598cb8/artifacts/test/phases/effects-and-validation-helper/criteria.md) to fully checked and appended a recheck note to [feedback.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/framework-authoring-flexibility-change-spec-goal-2ee572cd/runs/run-20260503T200339Z-6d598cb8/artifacts/test/phases/effects-and-validation-helper/feedback.md).
+- Recheck validation run:
+  - `./.venv/bin/python -m pytest -q tests/contract/test_engine_contracts.py -k "python_step_effect_then_routes_without_worklist_mutation or after_hook_effects_complete_and_advance_persist_status_and_exhaust or python_step_effect_refresh_reloads_worklist_source or effect_without_active_worklist_fails_clearly or validation_step_valid_routes_to_default_done_and_emits_runtime_event or validation_step_invalid_writes_feedback_and_routes_repair or validation_step_exception_uses_failed_route_when_configured"` → `7 passed`
+
+Open issues / next step
+
+- No open audit issue remains in this phase.
+- The phase can be treated as test-complete.
+
+<loop-control>
+{"schema":"docloop.loop_control/v1","kind":"promise","promise":"COMPLETE"}
+</loop-control>
