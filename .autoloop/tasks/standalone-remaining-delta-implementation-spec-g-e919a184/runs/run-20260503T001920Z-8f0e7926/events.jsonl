@@ -26,3 +26,7 @@
 {"ts": "2026-05-03T01:28:23.008544+00:00", "run_id": "run-20260503T001920Z-8f0e7926", "seq": 26, "event_type": "phase_finished", "pair": "test", "phase": "producer", "cycle": 1, "attempt": 1, "empty_output": false, "phase_id": "public-contract-cleanup"}
 {"ts": "2026-05-03T01:29:37.966757+00:00", "run_id": "run-20260503T001920Z-8f0e7926", "seq": 27, "event_type": "phase_finished", "pair": "test", "phase": "verifier", "cycle": 1, "attempt": 1, "empty_output": false, "phase_id": "public-contract-cleanup"}
 {"ts": "2026-05-03T01:29:38.013271+00:00", "run_id": "run-20260503T001920Z-8f0e7926", "seq": 28, "event_type": "pair_completed", "pair": "test", "cycle": 1, "attempt": 1, "phase_id": "public-contract-cleanup"}
+{"ts": "2026-05-03T01:29:38.106945+00:00", "run_id": "run-20260503T001920Z-8f0e7926", "seq": 29, "event_type": "phase_completed", "pair": "test", "phase_id": "public-contract-cleanup", "phase_mode": "single"}
+{"ts": "2026-05-03T01:29:38.109516+00:00", "run_id": "run-20260503T001920Z-8f0e7926", "seq": 30, "event_type": "phase_started", "phase_id": "execution-normalization", "phase_mode": "single"}
+{"ts": "2026-05-03T01:29:38.111580+00:00", "run_id": "run-20260503T001920Z-8f0e7926", "seq": 31, "event_type": "pair_started", "pair": "implement", "phase_id": "execution-normalization"}
+{"ts": "2026-05-03T01:29:38.111762+00:00", "run_id": "run-20260503T001920Z-8f0e7926", "seq": 32, "event_type": "cycle_started", "pair": "implement", "cycle": 1, "attempt": 1, "phase_id": "execution-normalization"}
