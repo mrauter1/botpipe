@@ -147,3 +147,12 @@ The plan verification pass is complete. The next turn can proceed from these art
 <loop-control>
 {"schema":"docloop.loop_control/v1","kind":"promise","promise":"COMPLETE"}
 </loop-control>
+
+
+---
+run_id=run-20260503T001920Z-8f0e7926 | entry=phase_scope_resolved
+---
+phase_mode=single
+phase_ids=public-contract-cleanup,execution-normalization,runtime-correctness-and-telemetry,compiler-resume-schema-docs
+explicit=True
+current_phase_index=0
