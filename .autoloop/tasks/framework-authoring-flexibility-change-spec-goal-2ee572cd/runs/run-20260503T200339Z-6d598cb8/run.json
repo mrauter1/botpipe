@@ -3,5 +3,36 @@
   "created_at": "2026-05-03T20:03:39.516521+00:00",
   "request_file": "/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/framework-authoring-flexibility-change-spec-goal-2ee572cd/runs/run-20260503T200339Z-6d598cb8/request.md",
   "artifacts_dir": "/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/framework-authoring-flexibility-change-spec-goal-2ee572cd/runs/run-20260503T200339Z-6d598cb8/artifacts",
-  "provider": "codex"
+  "provider": "codex",
+  "phase_plan_path": "/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/framework-authoring-flexibility-change-spec-goal-2ee572cd/runs/run-20260503T200339Z-6d598cb8/artifacts/plan/phase_plan.yaml",
+  "phase_plan_version": 1,
+  "active_phase_selection": {
+    "run_id": "run-20260503T200339Z-6d598cb8",
+    "mode": "single",
+    "phase_ids": [
+      "route-interaction-policy",
+      "lazy-worklists-and-sessions",
+      "effects-and-validation-helper",
+      "diagnostics-and-late-bound-prompts",
+      "inspection-docs-and-regression"
+    ],
+    "explicit": true,
+    "current_phase_index": 0,
+    "current_phase_id": "route-interaction-policy"
+  },
+  "phase_status": {
+    "route-interaction-policy": "in_progress",
+    "lazy-worklists-and-sessions": "planned",
+    "effects-and-validation-helper": "planned",
+    "diagnostics-and-late-bound-prompts": "planned",
+    "inspection-docs-and-regression": "planned"
+  },
+  "phase_history": [
+    {
+      "phase_id": "route-interaction-policy",
+      "run_id": "run-20260503T200339Z-6d598cb8",
+      "status": "in_progress",
+      "ts": "2026-05-03T20:17:00.731835+00:00"
+    }
+  ]
 }
