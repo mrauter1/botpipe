@@ -78,6 +78,13 @@ def _assert_bootstrap_scaffold_contract(source: str) -> None:
     assert "state, ctx" not in source
 
 
+def _assert_compiled_bootstrap_contract(compiled) -> None:
+    assert compiled.entry_step_name == "bootstrap"
+    assert compiled.steps["bootstrap"].available_routes == ("ready", "failed")
+    assert compiled.route("bootstrap", "ready").target == "FINISH"
+    assert tuple(inspect.signature(compiled.steps["bootstrap"].python_handler).parameters) == ("ctx",)
+
+
 def _git(root: Path, *args: str) -> str:
     completed = subprocess.run(
         ["git", "-C", str(root), *args],
@@ -1009,10 +1016,7 @@ def test_cli_init_workflow_scaffolds_supported_shapes_and_rejects_duplicates(
 
     compiled = compile_workflow(resolve_workflow_reference(tmp_path, "child_workflow").workflow_cls)
     assert compiled.workflow_name == "child_workflow"
-    assert compiled.entry_step_name == "bootstrap"
-    assert compiled.steps["bootstrap"].available_routes == ("ready", "failed")
-    assert compiled.route("bootstrap", "ready").target == "FINISH"
-    assert tuple(inspect.signature(compiled.steps["bootstrap"].python_handler).parameters) == ("ctx",)
+    _assert_compiled_bootstrap_contract(compiled)
 
     duplicate_exit = cli.main(["init", "workflow", "child_workflow", "--shape", shape, "--root", str(tmp_path)])
     duplicate = capsys.readouterr()
@@ -1032,6 +1036,10 @@ def test_cli_init_workflow_defaults_to_flow_specs_shape(tmp_path: Path, capsys) 
     assert flow_path.exists()
     assert (tmp_path / "workflows" / "child_workflow" / "specs.py").exists()
     _assert_bootstrap_scaffold_contract(flow_path.read_text(encoding="utf-8"))
+
+    compiled = compile_workflow(resolve_workflow_reference(tmp_path, "child_workflow").workflow_cls)
+    assert compiled.workflow_name == "child_workflow"
+    _assert_compiled_bootstrap_contract(compiled)
 
 
 def test_recursive_wrapper_targets_the_global_cli_contract() -> None:

@@ -2022,3 +2022,48 @@ No open issues from this review pass.
 <loop-control>
 {"schema":"docloop.loop_control/v1","kind":"promise","promise":"COMPLETE"}
 </loop-control>
+
+
+---
+run_id=run-20260503T025931Z-b2553e76 | entry=session_turn | pair=test | phase=producer | cycle=1 | attempt=1 | thread_id=019debcb-7826-7a23-a492-9f39a36361cd
+---
+provider=codex
+mode=resume
+template=/home/rauter/.local/share/pipx/venvs/autoloop/lib/python3.12/site-packages/autoloop/templates/test_producer.md
+session_id=019debcb-7826-7a23-a492-9f39a36361cd
+
+
+---
+run_id=run-20260503T025931Z-b2553e76 | entry=phase_output | pair=test | phase=producer | process=codex-agent | cycle=1 | attempt=1 | thread_id=019debcb-7826-7a23-a492-9f39a36361cd
+---
+I’m focusing on the changed scaffold coverage rather than broad test churn. First I’m reading the active test artifacts and the current CLI scaffold tests to see whether there’s any remaining gap between the implemented contract and the regression coverage.
+
+I found one remaining coverage gap worth closing: the default-shape test checks emitted source but not the compiled bootstrap contract, so a future regression in the default path could hide behind the parameterized shape test. I’m tightening that by centralizing the compiled bootstrap assertions and reusing them in both places, then I’ll update the test-phase artifacts and rerun the focused targets.
+
+The test file and phase artifacts are updated. I’m rerunning the requested focused targets plus a quick readback of the strategy/feedback artifacts to make sure the coverage map and validation record match the actual assertions now in the repo.
+
+Scope considered
+
+Phase-local test work for the public authoring surface cleanup: [tests/runtime/test_package_cli.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/tests/runtime/test_package_cli.py) plus the active test artifacts [test_strategy.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/standalone-remaining-delta-implementation-spec-g-e919a184/runs/run-20260503T025931Z-b2553e76/artifacts/test/phases/public-authoring-surface-cleanup/test_strategy.md), [feedback.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/standalone-remaining-delta-implementation-spec-g-e919a184/runs/run-20260503T025931Z-b2553e76/artifacts/test/phases/public-authoring-surface-cleanup/feedback.md), and the turn-local test header in [decisions.txt](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/standalone-remaining-delta-implementation-spec-g-e919a184/runs/run-20260503T025931Z-b2553e76/decisions.txt).
+
+What I analyzed
+
+I reviewed the accepted phase contract, the implementer’s scaffold changes, and the existing init-workflow tests to see whether the final `python_step` contract was covered for all supported shapes and for the default implicit `flow-specs` path. I also checked the active test artifacts so the behavior-to-coverage map would match the actual assertions in the repo.
+
+What I changed
+
+In [tests/runtime/test_package_cli.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/tests/runtime/test_package_cli.py), I added `_assert_compiled_bootstrap_contract(...)`, reused it in the parameterized supported-shapes test, and extended `test_cli_init_workflow_defaults_to_flow_specs_shape` so the default-shape path now validates the compiled bootstrap contract directly in addition to emitted source and file creation.
+
+I updated [test_strategy.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/standalone-remaining-delta-implementation-spec-g-e919a184/runs/run-20260503T025931Z-b2553e76/artifacts/test/phases/public-authoring-surface-cleanup/test_strategy.md) with an explicit behavior-to-coverage map, preserved invariants, edge cases, failure paths, flake controls, and known gaps. I also appended a concise summary to [feedback.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/standalone-remaining-delta-implementation-spec-g-e919a184/runs/run-20260503T025931Z-b2553e76/artifacts/test/phases/public-authoring-surface-cleanup/feedback.md), and recorded the non-obvious default-shape coverage decision under the active test-author header in [decisions.txt](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/standalone-remaining-delta-implementation-spec-g-e919a184/runs/run-20260503T025931Z-b2553e76/decisions.txt).
+
+Key findings / decisions
+
+The main remaining regression gap was the implicit default-shape path: it previously checked the emitted `flow.py` source but did not independently prove that the generated default scaffold still resolved and compiled to the finalized bootstrap contract. That gap is now closed.
+
+Validation passed:
+- `./.venv/bin/pytest -q tests/test_architecture_baseline_docs.py`
+- `./.venv/bin/pytest -q tests/runtime/test_package_cli.py -k 'init_workflow_scaffolds_supported_shapes_and_rejects_duplicates or init_workflow_defaults_to_flow_specs_shape'`
+
+Open issues / next step
+
+No open issues in the scoped test phase. The changed behavior and the default-path regression risk are both covered by deterministic focused tests.
