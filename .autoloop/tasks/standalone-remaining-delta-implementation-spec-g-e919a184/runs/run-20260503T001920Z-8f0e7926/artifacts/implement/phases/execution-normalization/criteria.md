@@ -7,6 +7,8 @@
 - Phase Title: Execution Normalization
 - Scope: phase-local authoritative verifier artifact
 
+Reviewer status: blocking findings remain in `feedback.md`; boxes stay unchecked until the tuple-based hook and llm-provider paths are fully normalized.
+
 Check these boxes (`- [x]`) only when true.
 
 - [ ] **Correctness / Intent Fidelity**: Changes satisfy the accepted plan and confirmed user intent, and implement the requested behavior correctly.

@@ -700,3 +700,48 @@ Open issues / next step
 - Static validation passed with `python3 -m py_compile autoloop/core/engine.py autoloop/core/engine_collaborators.py tests/contract/test_engine_contracts.py`.
 - Runtime test execution was blocked in this shell because the available `python3` environment does not have project dependencies such as `pydantic` or `pytest`.
 - Next step is to run the relevant contract/runtime test slice in a provisioned environment and confirm no behavioral regressions outside the compile pass.
+
+
+---
+run_id=run-20260503T001920Z-8f0e7926 | entry=session_turn | pair=implement | phase=verifier | cycle=1 | attempt=1 | thread_id=019deb74-92cc-7a71-ac0a-0fa403070084
+---
+provider=codex
+mode=resume
+template=/home/rauter/.local/share/pipx/venvs/autoloop/lib/python3.12/site-packages/autoloop/templates/implement_verifier.md
+session_id=019deb74-92cc-7a71-ac0a-0fa403070084
+
+
+---
+run_id=run-20260503T001920Z-8f0e7926 | entry=phase_output | pair=implement | phase=verifier | process=codex-agent | cycle=1 | attempt=1 | thread_id=019deb74-92cc-7a71-ac0a-0fa403070084
+---
+I’ve narrowed the review to two substantive gaps rather than broad style comments. The implementation is structurally improved, but there are still active tuple-based normalization paths in the hook and llm-provider execution flow, which means this phase is not fully at the requested dataclass-based end state.
+
+I’m writing the review artifacts now with two blocking findings. Both are intent-fidelity issues rather than speculative cleanup: the hook normalization path and the llm-provider execution path still rely on tuples, so the requested dataclass-only execution normalization is not finished yet.
+
+Scope considered
+- Changed execution-normalization code in `autoloop/core/engine.py` and `autoloop/core/engine_collaborators.py`.
+- The added regression test in `tests/contract/test_engine_contracts.py`.
+- Review artifacts in `criteria.md` and `feedback.md`.
+
+What I analyzed
+- Active step-dispatch, hook normalization, route finalization, and llm/pair provider execution paths.
+- Whether the implementation reaches the phase end state requested by AC-1 through AC-3, not just a partial refactor.
+- The implementation notes and decisions ledger for scope alignment.
+
+What I reviewed
+- Updated [criteria.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/standalone-remaining-delta-implementation-spec-g-e919a184/runs/run-20260503T001920Z-8f0e7926/artifacts/implement/phases/execution-normalization/criteria.md) and left the boxes unchecked because blocking findings remain.
+- Appended blocking findings to [feedback.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/standalone-remaining-delta-implementation-spec-g-e919a184/runs/run-20260503T001920Z-8f0e7926/artifacts/implement/phases/execution-normalization/feedback.md) as `IMP-001` and `IMP-002`.
+
+Key findings / decisions
+- `IMP-001` blocking: hook normalization is still tuple-based in `HookRunner.normalize_result`, so the requested single dataclass-based hook normalization model is not finished.
+- `IMP-002` blocking: the llm provider path still returns and unpacks a positional tuple in `Engine._run_llm_step`, so provider execution plumbing is only partially migrated to dataclasses.
+- The pair-step state-preservation fix looks directionally correct, but the phase cannot be marked complete while those two active tuple paths remain.
+
+Open issues / next step
+- Finish the hook normalization seam so `normalize_result()` returns one dataclass consumed directly by all hook and python-step callers.
+- Replace the `_run_llm_step()` tuple with a dataclass-backed result aligned with the new provider execution model.
+- Re-run review after those two paths are normalized.
+
+<loop-control>
+{"schema":"docloop.loop_control/v1","kind":"promise","promise":"INCOMPLETE"}
+</loop-control>
