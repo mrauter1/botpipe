@@ -2505,3 +2505,51 @@ Open issues / next step
   - `tests/contract/test_engine_contracts.py -k "lazily_renders_item_and_worklist_placeholders"`: `1 passed`
   - `tests/runtime/test_provider_backends.py -k "reads_valid_nested_runtime_policy_without_pyyaml or without_pyyaml_rejects or full_auto_runtime_policy"`: `1 failed, 3 passed`
 - Next step is an implementation follow-up in `autoloop/runtime/config.py` so the no-PyYAML fallback accepts valid nested sibling mappings inside an already-open mapping, then rerun the focused provider-backend tests.
+
+
+---
+run_id=run-20260503T223034Z-bda92fa2 | entry=session_turn | pair=test | phase=verifier | cycle=1 | attempt=1 | thread_id=019df000-103d-7bf0-af28-b61fa57b2009
+---
+provider=codex
+mode=resume
+template=/home/rauter/.local/share/pipx/venvs/autoloop/lib/python3.12/site-packages/autoloop/templates/test_verifier.md
+session_id=019df000-103d-7bf0-af28-b61fa57b2009
+
+
+---
+run_id=run-20260503T223034Z-bda92fa2 | entry=phase_output | pair=test | phase=verifier | process=codex-agent | cycle=1 | attempt=1 | thread_id=019df000-103d-7bf0-af28-b61fa57b2009
+---
+I’m checking the phase test artifacts and the new coverage against the specific acceptance behaviors, especially whether both payload-placeholder forms have direct happy-path and failure-path protection.
+
+The main test-quality issue is coverage depth, not reliability: the suite now pins the happy path for `worklist.<name>.current.payload.*`, but it still doesn’t directly assert that the same placeholder form preserves the required missing-path error wording. I’m marking that as a blocking gap in the audit artifacts.
+
+Scope considered
+
+- Active test-phase scope only: the added payload-placeholder and no-PyYAML fallback tests, plus the phase test artifacts that describe their coverage.
+
+What I analyzed
+
+- `tests/contract/test_engine_contracts.py` around the scoped prompt placeholder regressions
+- `tests/runtime/test_provider_backends.py` around the no-PyYAML fallback coverage
+- The phase `test_strategy.md` and `feedback.md`
+- The run-local decisions that explicitly require both payload placeholder forms to keep their semantics and placeholder-specific missing-path errors
+
+What I reviewed
+
+- Whether the new tests cover both changed placeholder forms at happy-path and failure-path levels
+- Whether the no-PyYAML fallback tests preserve intended behavior rather than normalizing a regression
+- Whether the coverage map accurately reflects what is and is not directly asserted
+- Whether the added tests are deterministic and low-flake
+
+Key findings / decisions
+
+- `TST-001` `blocking`: the suite still lacks a direct failure-path regression for `{worklist.<name>.current.payload.<path>}` when a current item exists but the nested payload path is missing. The current tests cover `item.payload.foo` missing-path wording and a separate “missing current item” case, but not the explicit worklist-current payload-path missing case required by the request.
+- I updated the audit artifacts accordingly: reliability and behavioral-intent checks are satisfied, but coverage/regression/failure-path criteria remain incomplete until that direct regression test is added.
+
+Open issues / next step
+
+- Add one direct contract test that asserts `prompt placeholder {worklist.gate.current.payload.foo} references missing payload path 'foo'` for a worklist with a current item and an empty payload mapping, then re-audit.
+
+<loop-control>
+{"schema":"docloop.loop_control/v1","kind":"promise","promise":"INCOMPLETE"}
+</loop-control>
