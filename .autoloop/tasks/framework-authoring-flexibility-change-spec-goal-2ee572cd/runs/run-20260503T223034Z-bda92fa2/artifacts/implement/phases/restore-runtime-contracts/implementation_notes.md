@@ -14,6 +14,7 @@
 - `autoloop/runtime/config.py`
 - `autoloop/runtime/runner.py`
 - `docs/authoring.md`
+- `tests/runtime/test_provider_backends.py`
 - `tests/runtime/test_workspace_and_context.py`
 - `tests/contract/test_engine_contracts.py`
 - `tests/unit/test_validation.py`
@@ -31,6 +32,7 @@
 - Milestone 1 / AC-2 / AC-3: restored stable `available_routes` ordering and documented the authored-step, authored-global, runtime-control contract in `docs/authoring.md`.
 - Milestone 1 / AC-4: aligned the stale pair-step contract fixture with the shipped dual-role artifact ownership rule instead of weakening validation.
 - Milestone 2: made the file-backed runtime config path executable without PyYAML and let runner prompt-registry root discovery accept string-backed compiled prompts.
+- Reviewer feedback `IMP-001`: tightened the no-PyYAML fallback so malformed indentation under scalar parents fails with `ConfigError` instead of being silently reparented.
 - Milestone 3: rewrote temporary workflow-package fixtures in `tests/runtime/test_workspace_and_context.py` to canonical `python_step(ctx)` handlers while leaving `build_output(state, ctx)` unchanged.
 
 ## Assumptions
@@ -50,6 +52,7 @@
 - `available_routes` now deterministically order authored step-local routes first, authored global routes next, runtime-control routes last.
 - Runner prompt-registry path discovery now tolerates compiled prompt references that are still plain strings.
 - YAML runtime config files can load in no-PyYAML environments only for the existing mapping/scalar config subset.
+- The no-PyYAML fallback now rejects indentation increases unless the immediately preceding entry opened a child mapping.
 
 ## Known Non-Changes
 
@@ -66,6 +69,7 @@
 
 - `./.venv/bin/python -m pytest -q tests/contract/test_engine_contracts.py -k "payload or control_contracts or pair_step_contract_logs_raw_output"`
 - `./.venv/bin/python -m pytest -q tests/runtime/test_provider_backends.py -k "full_auto_runtime_policy"`
+- `./.venv/bin/python -m pytest -q tests/runtime/test_provider_backends.py -k "full_auto_runtime_policy or without_pyyaml_rejects"`
 - `./.venv/bin/python -m pytest -q tests/runtime/test_workspace_and_context.py -k "full_auto or invoke_workflow"`
 - `./.venv/bin/python -m pytest -q tests/unit/test_validation.py -k "compilation_exposes_step_control_contracts"`
 - `./.venv/bin/python -m pytest -q tests/runtime/test_runtime_static_graph.py tests/runtime/test_package_cli.py tests/test_architecture_baseline_docs.py tests/unit/test_validation.py tests/unit/test_stdlib_and_extensions.py tests/contract/test_canonical_runtime_contracts.py tests/contract/test_engine_contracts.py tests/unit/test_simple_surface.py tests/unit/test_primitives_and_stores.py tests/unit/test_provider_boundary_core.py tests/unit/test_provider_retries.py tests/runtime/test_provider_backends.py tests/runtime/test_workspace_and_context.py`

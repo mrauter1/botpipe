@@ -189,6 +189,30 @@ def test_resolve_runtime_config_reads_full_auto_runtime_policy(
     assert resolved.runtime.full_auto is True
 
 
+def test_load_runtime_config_file_without_pyyaml_rejects_indented_child_under_scalar(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    config_path = tmp_path / "autoloop.yaml"
+    config_path.write_text("runtime: true\n  full_auto: false\n", encoding="utf-8")
+    monkeypatch.setattr(runtime_config, "yaml", None)
+
+    with pytest.raises(ConfigError, match="top-level entries must not be indented"):
+        runtime_config.load_runtime_config_file(config_path)
+
+
+def test_load_runtime_config_file_without_pyyaml_rejects_overindented_sibling_mapping(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    config_path = tmp_path / "autoloop.yaml"
+    config_path.write_text("provider:\n  name: codex\n    model: gpt-5\n", encoding="utf-8")
+    monkeypatch.setattr(runtime_config, "yaml", None)
+
+    with pytest.raises(ConfigError, match="indentation increase is only allowed"):
+        runtime_config.load_runtime_config_file(config_path)
+
+
 def test_runtime_provider_package_reexports_compatibility_names() -> None:
     assert runtime_providers.CodexProvider is CodexProvider
     assert runtime_providers.ClaudeProvider is ClaudeProvider

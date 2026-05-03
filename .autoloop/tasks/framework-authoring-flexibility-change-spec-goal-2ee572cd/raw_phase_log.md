@@ -2344,3 +2344,59 @@ Open issues / next step
 <loop-control>
 {"schema":"docloop.loop_control/v1","kind":"promise","promise":"INCOMPLETE"}
 </loop-control>
+
+
+---
+run_id=run-20260503T223034Z-bda92fa2 | entry=session_turn | pair=implement | phase=producer | cycle=2 | attempt=1 | thread_id=019df000-103d-7bf0-af28-b61fa57b2009
+---
+provider=codex
+mode=resume
+template=/home/rauter/.local/share/pipx/venvs/autoloop/lib/python3.12/site-packages/autoloop/templates/implement_producer.md
+session_id=019df000-103d-7bf0-af28-b61fa57b2009
+
+
+---
+run_id=run-20260503T223034Z-bda92fa2 | entry=phase_output | pair=implement | phase=producer | process=codex-agent | cycle=2 | attempt=1 | thread_id=019df000-103d-7bf0-af28-b61fa57b2009
+---
+The reviewer finding is valid. I’m patching the no-PyYAML loader so indentation can only deepen immediately after an empty-value mapping entry, then I’ll lock it with focused config tests and rerun the audited slice.
+
+I’ve got the exact failure mode and a small fix. I’m making the parser reject any indentation increase that does not immediately follow an empty-value mapping entry, then I’ll add regression tests for both malformed shapes the reviewer called out.
+
+The parser fix and two focused regressions are in. I’m rerunning the config tests first, then the full audited slice to make sure the stricter fallback doesn’t break any supported config shape.
+
+The fix is behaving correctly; the first malformed shape now fails one line earlier with a top-level-indentation error because the scalar parent never opened a child mapping. I’m tightening the regression test to that actual failure mode and rerunning.
+
+The focused config regressions are green again. I’m waiting on the audited slice now, then I’ll update the run notes and record the parser constraint that closes the reviewer finding.
+
+The reviewer finding is closed in code and the audited slice is back to green. I’m updating the notes and decisions now so later turns preserve the stricter indentation rule in the no-PyYAML fallback.
+
+Scope considered
+
+- Active phase scope only, plus the reviewer’s `IMP-001` finding on the no-PyYAML runtime-config fallback.
+
+What I analyzed
+
+- The reviewer feedback in the active phase artifact
+- `autoloop/runtime/config.py` fallback parsing behavior for malformed indentation
+- `tests/runtime/test_provider_backends.py` as the narrow regression surface for the config loader
+- The audited regression slice to confirm no collateral drift
+
+What I changed
+
+- Tightened `_load_narrow_yaml_mapping(...)` so indentation can increase only immediately after an empty-value mapping entry.
+- Malformed nested keys under scalar parents now raise `ConfigError` instead of being silently reparented at the wrong level.
+- Added focused regressions in `tests/runtime/test_provider_backends.py` for both malformed shapes called out in review.
+- Updated `implementation_notes.md` and the current turn’s `decisions.txt` block to record the stricter fallback constraint.
+
+Key findings / decisions
+
+- The reviewer finding was valid: the original fallback could reinterpret invalid YAML with a different config shape in no-PyYAML environments.
+- The fix stays localized in the fallback loader and does not widen the accepted config surface.
+- Validation is green again:
+  - focused: `3 passed`
+  - audited slice: `571 passed, 14 warnings`
+
+Open issues / next step
+
+- No blocking issues remain in this phase scope.
+- The 14 warnings are the same pre-existing Pydantic `schema` field warnings in `workflows/workflow_run_traces_to_optimization_candidates/contracts.py`; this turn did not touch that area.

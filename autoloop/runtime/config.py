@@ -173,6 +173,7 @@ def _load_narrow_yaml_mapping(path: Path) -> object:
     lines = path.read_text(encoding="utf-8").splitlines()
     root: dict[str, object] = {}
     stack: list[tuple[int, dict[str, object]]] = [(-1, root)]
+    pending_child_indent_from: int | None = None
 
     for line_number, raw_line in enumerate(lines, start=1):
         content = _strip_yaml_comment(raw_line)
@@ -183,6 +184,14 @@ def _load_narrow_yaml_mapping(path: Path) -> object:
         indent = len(content) - len(content.lstrip(" "))
         if indent % 2 != 0:
             raise ConfigError(f"{path}:{line_number}: indentation must use multiples of 2 spaces.")
+        if stack[-1][0] == -1:
+            if indent != 0:
+                raise ConfigError(f"{path}:{line_number}: top-level entries must not be indented.")
+        elif indent > stack[-1][0]:
+            if pending_child_indent_from != stack[-1][0] or indent != stack[-1][0] + 2:
+                raise ConfigError(
+                    f"{path}:{line_number}: indentation increase is only allowed after a mapping key with no scalar value."
+                )
 
         stripped = content.strip()
         if stripped.startswith(("-", "?", "[", "{", "|", ">")):
@@ -204,9 +213,11 @@ def _load_narrow_yaml_mapping(path: Path) -> object:
             next_mapping: dict[str, object] = {}
             parent[key] = next_mapping
             stack.append((indent, next_mapping))
+            pending_child_indent_from = indent
             continue
 
         parent[key] = _parse_narrow_yaml_scalar(raw_value, path=path, line_number=line_number)
+        pending_child_indent_from = None
 
     return root
 
