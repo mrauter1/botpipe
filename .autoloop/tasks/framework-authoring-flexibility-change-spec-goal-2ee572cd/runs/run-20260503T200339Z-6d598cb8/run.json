@@ -17,15 +17,15 @@
       "inspection-docs-and-regression"
     ],
     "explicit": true,
-    "current_phase_index": 4,
-    "current_phase_id": "inspection-docs-and-regression"
+    "current_phase_index": 5,
+    "current_phase_id": null
   },
   "phase_status": {
     "route-interaction-policy": "completed",
     "lazy-worklists-and-sessions": "completed",
     "effects-and-validation-helper": "completed",
     "diagnostics-and-late-bound-prompts": "completed",
-    "inspection-docs-and-regression": "in_progress"
+    "inspection-docs-and-regression": "completed"
   },
   "phase_history": [
     {
@@ -85,6 +85,13 @@
       "run_id": "run-20260503T200339Z-6d598cb8",
       "status": "in_progress",
       "ts": "2026-05-03T21:48:23.269123+00:00"
+    },
+    {
+      "phase_id": "inspection-docs-and-regression",
+      "run_id": "run-20260503T200339Z-6d598cb8",
+      "status": "completed",
+      "ts": "2026-05-03T22:23:54.402794+00:00",
+      "pair": "test"
     }
   ]
 }
