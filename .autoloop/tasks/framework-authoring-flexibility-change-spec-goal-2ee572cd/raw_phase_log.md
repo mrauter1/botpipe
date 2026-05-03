@@ -553,3 +553,82 @@ Open issues / next step
 <loop-control>
 {"schema":"docloop.loop_control/v1","kind":"promise","promise":"COMPLETE"}
 </loop-control>
+
+
+---
+run_id=run-20260503T200339Z-6d598cb8 | entry=session_turn | pair=implement | phase=producer | cycle=1 | attempt=1 | thread_id=019def95-e28b-7972-a91c-cbe140043634
+---
+provider=codex
+mode=start
+template=/home/rauter/.local/share/pipx/venvs/autoloop/lib/python3.12/site-packages/autoloop/templates/implement_producer.md
+session_id=019def95-e28b-7972-a91c-cbe140043634
+
+
+---
+run_id=run-20260503T200339Z-6d598cb8 | entry=phase_output | pair=implement | phase=producer | process=codex-agent | cycle=1 | attempt=1 | thread_id=019def95-e28b-7972-a91c-cbe140043634
+---
+I’m implementing the phase-scoped lazy worklist and session continuity changes. First I’m reading the active phase artifacts and the current runtime paths that own worklist initialization, context selection, step dispatch, artifact templating, and session key derivation.
+
+The phase artifacts are minimal; the main signal is the global plan and the prior route-policy decisions. I’m locating the current lazy-selection seams now so the change stays inside the runtime/compiler paths already identified, without dragging unrelated files into scope.
+
+I found the main runtime seams: eager initialization in `engine.py`, read paths in `context.py` and `worklists.py`, scoped dispatch in `engine_collaborators.py`, artifact placeholder reads in `artifacts.py`, and work-item session binding in `engine.py` plus `sessions.py`/`operations.py`. Next I’m reading those implementations and the closest contract tests before patching.
+
+There’s one important regression surface here: the engine computes scoped item state before dispatch, which currently happens before any scoped selection is materialized. I’m checking that path now because lazy selection needs to move that lookup behind an explicit ensure step or the new behavior will fail before the step body runs.
+
+I have the patch shape now. I’m editing the runtime first: `Context` gets a lazy selection seam, the engine stops eager worklist initialization, scoped steps ensure selections before scoped state/session/artifact resolution, and work-item continuity errors are normalized into runtime execution errors.
+
+The engine-side lazy path is in place. I’m verifying the order now because selection materialization has to happen after step visit state exists, but before item-state derivation, artifact resolution, and session continuity.
+
+The ordering is mostly right. I found one redundant step-state assignment and I still need to add coverage before trusting it, especially around pause/resume with sparse checkpoints and work-item session reuse.
+
+I’m adding focused regressions now. They’re chosen to prove the required behavior changes, not just the happy path: no eager load on missing artifact-backed worklists, first-use materialization with a runtime event, sparse checkpoint/resume, and work-item session key behavior.
+
+The edits are in. I’m running the smallest regression slice that exercises the new seams directly: unit context/worklist helpers plus the new engine-contract cases for deferred artifact worklists, sparse resume, and work-item sessions.
+
+The code compiles, but this shell doesn’t have `pytest` on `python3`. I’m checking the repo’s test runner environment now instead of guessing, then I’ll rerun the same slice there.
+
+The targeted regression slice is clean so far. I’m polling the contract run to capture the final exit state, then I’ll update the phase notes and decision ledger with only the non-obvious implementation details that matter for later turns.
+
+I want one more pass over adjacent behavior before closing: existing unit coverage around artifact placeholder resolution and mutable worklist views, plus a direct existing scoped-worklist contract that predates these changes.
+
+I’ve finished the code and regression pass. The remaining work is bookkeeping: capture the few non-obvious decisions in the run ledger and map the edits back to the phase checklist in `implementation_notes.md` so later turns don’t drift.
+
+Scope considered
+
+- Phase-local lazy worklist and work-item session continuity only.
+- Runtime paths touched: [autoloop/core/context.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/autoloop/core/context.py), [autoloop/core/engine.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/autoloop/core/engine.py), [autoloop/core/engine_collaborators.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/autoloop/core/engine_collaborators.py).
+- Regression coverage added in [tests/contract/test_engine_contracts.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/tests/contract/test_engine_contracts.py) and [tests/unit/test_primitives_and_stores.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/tests/unit/test_primitives_and_stores.py).
+
+What I analyzed
+
+- Eager worklist startup and restore in `Engine.run(...)` and `Engine._restore_worklist_selections(...)`.
+- Runtime read paths that currently assume selections already exist: `Context.selection/current/item`, scoped dispatch, artifact placeholder resolution, and session key derivation.
+- Existing scoped-worklist resume behavior and adjacent worklist runtime tests to avoid regressing refresh/advance/state-sync paths.
+
+What I changed
+
+- Added lazy selection materialization through `Context.ensure_selection(...)` and an engine-owned selection resolver callback, so `selection/current/item` can resolve first use without preloading every worklist.
+- Removed eager fresh-run initialization and made restore sparse: only checkpointed selections are restored; missing ones stay lazy.
+- Forced scoped worklists to resolve before scoped item-state/session/artifact work, and emitted `worklist_selection_resolved` on first materialization.
+- Normalized work-item continuity failures into `WorkflowExecutionError`, while preserving stable `<worklist>:<dir_key|id>` keys through the existing continuity logic.
+- Added regressions for:
+  - unused artifact-backed worklists staying unloaded,
+  - runtime-created artifact-backed worklists loading on first scoped use,
+  - sparse checkpoint/resume with later lazy materialization,
+  - work-item session reuse across resume using `dir_key`,
+  - non-scoped work-item continuity failing clearly when no current item exists.
+
+Key findings / decisions
+
+- The critical ordering point was step setup: selection resolution now happens after step visit state is attached, but before item-state derivation. That keeps scoped runtime state correct and gives selection-resolution events visit metadata.
+- I kept lazy loading centralized in engine state runtime instead of duplicating “load if missing” logic across context, artifacts, and sessions.
+- Validation run:
+  - `python3 -m py_compile ...` for touched runtime/tests
+  - `./.venv/bin/python -m pytest tests/unit/test_primitives_and_stores.py ...`
+  - `./.venv/bin/python -m pytest tests/contract/test_engine_contracts.py ...`
+  - All targeted runs passed.
+
+Open issues / next step
+
+- No blocker in this phase slice.
+- Out-of-phase items from the broader spec remain untouched: typed effects, validation helper, artifact ownership diagnostics, prompt late-binding relaxation, inspection/static-graph updates, and docs.

@@ -326,6 +326,8 @@ class StepDispatcher:
         runtime = context_runtime(context)
         runtime.set_state(state)
         runtime.set_active_worklist(step.scope_name)
+        if step.scope_name is not None:
+            context.ensure_selection(step.scope_name)
         initial_artifacts = self._engine._resolve_artifacts(context)
         runtime.set_artifacts(initial_artifacts)
         self._engine._ensure_required_artifacts(step, initial_artifacts)
@@ -1050,15 +1052,19 @@ class StateRuntime:
     def __init__(self, engine: "Engine") -> None:
         self._engine = engine
 
-    def initialize_worklist_selections(self, context: "Context") -> dict[str, "Selection[Any]"]:
-        return self._engine._initialize_worklist_selections(context)
-
     def restore_worklist_selections(
         self,
         context: "Context",
         snapshots: "Mapping[str, SelectionSnapshot]",
     ) -> dict[str, "Selection[Any]"]:
         return self._engine._restore_worklist_selections(context, snapshots)
+
+    def ensure_worklist_selection(
+        self,
+        context: "Context",
+        worklist_name: str,
+    ) -> "Selection[Any]":
+        return self._engine._ensure_worklist_selection(context, worklist_name)
 
 
 class SessionRuntime:

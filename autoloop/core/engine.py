@@ -307,8 +307,13 @@ class Engine:
                     default_session_name=self.compiled.default_session_name,
                     values=values,
                 )
-                selections = self.state_runtime.initialize_worklist_selections(context)
-                context_runtime(context).set_selections(selections)
+                runtime = context_runtime(context)
+                runtime.set_worklist_selection_resolver(
+                    lambda worklist_name, *, _context=context: self.state_runtime.ensure_worklist_selection(
+                        _context,
+                        worklist_name,
+                    )
+                )
                 if self.compiled.default_session_open:
                     context.open_session(self.compiled.default_session_name)
                 state = context.state
@@ -346,11 +351,19 @@ class Engine:
                     values=values,
                     runtime_event_sink=self.runtime_event_sink,
                 )
-                current_item_key = self._current_item_state_key(context, step)
+                runtime = context_runtime(context)
+                runtime.set_worklist_selection_resolver(
+                    lambda worklist_name, *, _context=context: self.state_runtime.ensure_worklist_selection(
+                        _context,
+                        worklist_name,
+                    )
+                )
                 step_state_store = self._ensure_step_state_store(step_states, step)
                 self._increment_step_runtime_state(step_state_store)
-                runtime = context_runtime(context)
                 runtime.set_step_state_store(step_state_store)
+                if step.scope_name is not None:
+                    context.ensure_selection(step.scope_name)
+                current_item_key = self._current_item_state_key(context, step)
                 item_state_store = self._ensure_item_state_store(item_states, step, item_key=current_item_key)
                 step_item_state_store = self._ensure_step_item_state_store(
                     step_item_states,
@@ -1950,24 +1963,42 @@ class Engine:
             return "JSONSchema"
         return type(artifact.schema).__name__
 
-    def _initialize_worklist_selections(self, context: Context) -> dict[str, Selection[Any]]:
-        selections: dict[str, Selection[Any]] = {}
-        for name, worklist in self.compiled.worklists.items():
-            selections[name] = worklist.initial_selection(context)
-        return selections
-
     def _restore_worklist_selections(
         self,
         context: Context,
         snapshots: Mapping[str, SelectionSnapshot],
     ) -> dict[str, Selection[Any]]:
-        selections = self._initialize_worklist_selections(context)
-        for name, worklist in self.compiled.worklists.items():
-            snapshot = snapshots.get(name)
-            if snapshot is None:
+        selections: dict[str, Selection[Any]] = {}
+        for name, snapshot in snapshots.items():
+            worklist = self.compiled.worklists.get(name)
+            if worklist is None:
                 continue
             selections[name] = worklist.restore_selection(context, snapshot)
         return selections
+
+    def _ensure_worklist_selection(
+        self,
+        context: Context,
+        worklist_name: str,
+    ) -> Selection[Any]:
+        existing = getattr(context, "_selections", {}).get(worklist_name)
+        if existing is not None:
+            return existing
+        worklist = self.compiled.worklists.get(worklist_name)
+        if worklist is None:
+            raise WorkflowExecutionError(f"unknown worklist {worklist_name!r}")
+        source_type = self._worklist_source_type(worklist)
+        try:
+            selection = worklist.initial_selection(context)
+        except WorkflowExecutionError as exc:
+            raise WorkflowExecutionError(
+                f"worklist {worklist_name!r} could not resolve selection from {source_type} source: {exc}"
+            ) from exc
+        runtime = context_runtime(context)
+        runtime.set_selection(worklist_name, selection)
+        runtime.sync_scoped_state_after_worklist_selection_change(worklist_name)
+        runtime.emit_worklist_selection_resolved(worklist_name=worklist_name, selection=selection)
+        return selection
 
     def _save_checkpoint(
         self,
@@ -2016,6 +2047,20 @@ class Engine:
                 continue
             snapshots[name] = worklist.snapshot_selection(selection)
         return snapshots or None
+
+    @staticmethod
+    def _worklist_source_type(worklist: Any) -> str:
+        source = getattr(worklist, "source", None)
+        if source is None:
+            return "unknown"
+        if getattr(source, "artifact_backed", False):
+            return "artifact"
+        param_name = getattr(source, "param_name", None)
+        if isinstance(param_name, str) and param_name:
+            return "parameter"
+        if type(source).__name__ == "_StaticWorklistSource":
+            return "static"
+        return type(source).__name__
 
     def _build_workflow_output(
         self,

@@ -234,6 +234,7 @@ class Context:
         self._worklist_items_cache: dict[str, tuple[Any, ...]] = {}
         self._runtime_event_sink = runtime_event_sink
         self._worklist_selection_sync: Callable[[str], None] | None = None
+        self._worklist_selection_resolver: Callable[[str], "Selection[Any]"] | None = None
         self._execution_source_hook: str | None = None
         self._execution_source_phase: str | None = None
         self._execution_hook_invocation_id: str | None = None
@@ -359,12 +360,17 @@ class Context:
     def session(self) -> SessionBinding | None:
         return self.get_session(self._default_session_name)
 
-    def selection(self, worklist: "Worklist[Any] | str") -> "Selection[Any]":
+    def ensure_selection(self, worklist: "Worklist[Any] | str") -> "Selection[Any]":
         worklist_name = self._worklist_name(worklist)
-        try:
-            return self._selections[worklist_name]
-        except KeyError as exc:
-            raise WorkflowExecutionError(f"unknown worklist selection {worklist_name!r}") from exc
+        selection = self._selections.get(worklist_name)
+        if selection is not None:
+            return selection
+        if self._worklist_selection_resolver is None:
+            raise WorkflowExecutionError(f"unknown worklist selection {worklist_name!r}")
+        return self._worklist_selection_resolver(worklist_name)
+
+    def selection(self, worklist: "Worklist[Any] | str") -> "Selection[Any]":
+        return self.ensure_selection(worklist)
 
     def current(self, worklist: "Worklist[Any] | str") -> "WorkItem[Any] | None":
         return self.selection(worklist).current
@@ -373,8 +379,7 @@ class Context:
     def item(self) -> "WorkItem[Any] | None":
         if self._active_worklist is None:
             return None
-        selection = self._selections.get(self._active_worklist)
-        return None if selection is None else selection.current
+        return self.ensure_selection(self._active_worklist).current
 
     def open_session(
         self,
@@ -429,7 +434,10 @@ class Context:
             active_key = self._session_store.snapshot().active_keys_by_slot.get(slot)
             if is_run_key_bound_to_slot(active_key, slot=slot):
                 return active_key
-        return derive_session_key(slot, resolved_continuity, self)
+        try:
+            return derive_session_key(slot, resolved_continuity, self)
+        except ValueError as exc:
+            raise WorkflowExecutionError(str(exc)) from exc
 
     def reset_global_session(self) -> SessionBinding:
         key = SessionKey(slot=self._default_session_name, domain="fresh", value=uuid4().hex)
@@ -611,6 +619,12 @@ class _ContextRuntime:
     def set_worklist_selection_sync(self, callback: Callable[[str], None] | None) -> None:
         self._context._worklist_selection_sync = callback
 
+    def set_worklist_selection_resolver(
+        self,
+        callback: Callable[[str], "Selection[Any]"] | None,
+    ) -> None:
+        self._context._worklist_selection_resolver = callback
+
     def set_execution_source(
         self,
         *,
@@ -673,6 +687,44 @@ class _ContextRuntime:
         if self._context._execution_hook_invocation_id is not None:
             payload["hook_invocation_id"] = self._context._execution_hook_invocation_id
         self._context._runtime_event_sink(event_type, payload)
+
+    def emit_worklist_selection_resolved(
+        self,
+        *,
+        worklist_name: str,
+        selection: "Selection[Any]",
+    ) -> None:
+        if self._context._runtime_event_sink is None:
+            return
+        current = selection.current
+        payload: dict[str, Any] = {
+            "step_name": self._context._step_name,
+            "worklist_name": worklist_name,
+            "selection_mode": selection.mode,
+            "selection_explicit": selection.explicit,
+            "item_ids": [item.id for item in selection.items],
+            "current_item_id": None if current is None else current.id,
+        }
+        visit = _runtime_visits(self._context._step_item_state or self._context._step_state)
+        if isinstance(visit, int):
+            payload["visit"] = visit
+        if self._context._active_worklist is not None:
+            payload["scope"] = self._context._active_worklist
+        step_execution_id = _step_execution_id(
+            step_name=self._context._step_name,
+            visit=visit,
+            scope_name=self._context._active_worklist,
+            item_id=None if current is None else current.id,
+        )
+        if step_execution_id is not None:
+            payload["step_execution_id"] = step_execution_id
+        if self._context._execution_source_hook is not None:
+            payload["source_hook"] = self._context._execution_source_hook
+        if self._context._execution_source_phase is not None:
+            payload["source_phase"] = self._context._execution_source_phase
+        if self._context._execution_hook_invocation_id is not None:
+            payload["hook_invocation_id"] = self._context._execution_hook_invocation_id
+        self._context._runtime_event_sink("worklist_selection_resolved", payload)
 
     def get_cached_worklist_items(self, worklist_name: str) -> tuple[Any, ...] | None:
         return self._context._worklist_items_cache.get(worklist_name)
