@@ -793,3 +793,51 @@ Open issues / next step
 - Static validation passed with `python3 -m py_compile autoloop/core/engine.py autoloop/core/engine_collaborators.py tests/contract/test_engine_contracts.py`.
 - A source scan found no remaining `.result.event` / `.result.control` call sites and no tuple return signature on `_run_llm_step`.
 - Runtime test execution is still blocked in this shell because the available `python3` environment lacks project dependencies such as `pydantic` and `pytest`.
+
+
+---
+run_id=run-20260503T001920Z-8f0e7926 | entry=session_turn | pair=implement | phase=verifier | cycle=2 | attempt=1 | thread_id=019deb74-92cc-7a71-ac0a-0fa403070084
+---
+provider=codex
+mode=resume
+template=/home/rauter/.local/share/pipx/venvs/autoloop/lib/python3.12/site-packages/autoloop/templates/implement_verifier.md
+session_id=019deb74-92cc-7a71-ac0a-0fa403070084
+
+
+---
+run_id=run-20260503T001920Z-8f0e7926 | entry=phase_output | pair=implement | phase=verifier | process=codex-agent | cycle=2 | attempt=1 | thread_id=019deb74-92cc-7a71-ac0a-0fa403070084
+---
+I’m re-reviewing only the reviewer-raised seams and their adjacent execution paths: hook normalization and the plain llm provider flow. I’m verifying that the active runtime no longer depends on the tuple shapes I flagged last round before I touch the review artifacts.
+
+Reviewing the updated execution-normalization changes now. I’m rechecking the two prior blockers against the current source and then I’ll update only the phase review artifacts.
+
+The prior tuple seams are gone in the current source. I’m checking a couple of adjacent call sites and then I’ll update the reviewer artifacts to reflect the re-review outcome.
+
+The updated hook and llm paths compile cleanly and no longer match the old tuple signatures. I’m recording the re-review result in `criteria.md` and `feedback.md` now.
+
+Scope considered
+- Updated execution-normalization implementation in [autoloop/core/engine.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/autoloop/core/engine.py) and [autoloop/core/engine_collaborators.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/autoloop/core/engine_collaborators.py).
+- Phase review artifacts [criteria.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/standalone-remaining-delta-implementation-spec-g-e919a184/runs/run-20260503T001920Z-8f0e7926/artifacts/implement/phases/execution-normalization/criteria.md) and [feedback.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/standalone-remaining-delta-implementation-spec-g-e919a184/runs/run-20260503T001920Z-8f0e7926/artifacts/implement/phases/execution-normalization/feedback.md).
+
+What I analyzed
+- The prior blocking seams in `HookRunner.normalize_result` and `Engine._run_llm_step`.
+- Adjacent call sites that consume hook normalization and llm provider results.
+- Static validation via `python3 -m py_compile ...` and a source scan for the old tuple-based patterns.
+
+What I reviewed
+- Updated [criteria.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/standalone-remaining-delta-implementation-spec-g-e919a184/runs/run-20260503T001920Z-8f0e7926/artifacts/implement/phases/execution-normalization/criteria.md) to mark all review criteria satisfied.
+- Appended a second-pass review note to [feedback.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/standalone-remaining-delta-implementation-spec-g-e919a184/runs/run-20260503T001920Z-8f0e7926/artifacts/implement/phases/execution-normalization/feedback.md) documenting that `IMP-001` and `IMP-002` were rechecked and resolved.
+
+Key findings / decisions
+- No active blocking findings remain in this review pass.
+- `HookRunner.normalize_result` now returns a single `HookExecutionResult` object that callers consume directly.
+- `Engine._run_llm_step` now returns `ProviderExecResult`, removing the remaining active llm tuple contract.
+- The updated files compile cleanly, and the scanned old tuple signatures/call patterns are absent.
+
+Open issues / next step
+- Full runtime test execution was not performed in this shell; earlier implementation notes already documented missing local dependencies for `pytest`/`pydantic`.
+- From a code-review standpoint, the phase acceptance criteria are met and this review pass is complete.
+
+<loop-control>
+{"schema":"docloop.loop_control/v1","kind":"promise","promise":"COMPLETE"}
+</loop-control>

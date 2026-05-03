@@ -22,3 +22,9 @@ File/symbol: `autoloop/core/engine.py:1201-1260`, `Engine._run_llm_step`
 The llm-provider execution path still returns a positional tuple `(Outcome, SessionBinding | None, StepProviderUsage)`, and `_execute_llm_step()` still depends on unpacking it. That means the provider execution plumbing is only partially migrated: pair execution uses `PairProviderResult`, but the plain llm step path still violates the requested dataclass-based normalization across active provider execution paths. This leaves AC-1 / the provider-side part of the deliverable unmet.
 
 Minimal fix direction: replace the `_run_llm_step()` tuple with a dataclass-backed result, ideally alongside the new `ProviderExecResult` seam or a small llm-provider result object in the same collaborator layer, so both pair and llm provider paths follow the same non-positional execution contract.
+
+## Review Pass 2
+
+- Rechecked `IMP-001` against `HookExecutionResult` / `HookRunner.normalize_result`; the hook normalization path now returns and consumes a single dataclass-backed object instead of positional tuple results.
+- Rechecked `IMP-002` against `Engine._run_llm_step`; the llm provider path now returns `ProviderExecResult` and the tuple-based unpacking path is gone.
+- No new blocking or non-blocking findings in this review pass.
