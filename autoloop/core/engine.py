@@ -72,7 +72,7 @@ from .stores.protocols import (
     SessionStore,
     normalize_session_snapshot,
 )
-from .step_state import DEFAULT_REPLAN_ROUTE_TAGS, DEFAULT_REWORK_ROUTE_TAGS
+from .statuses import route_is_replan, route_is_rework
 from .steps import ChildWorkflowStep
 from .worklists import Selection, SelectionSnapshot
 
@@ -742,6 +742,8 @@ class Engine:
                             error_cls=WorkflowExecutionError,
                             provider_attributable=False,
                             after_hook=None,
+                            source_hook=getattr(step.before_producer_hook, "__name__", type(step.before_producer_hook).__name__),
+                            source_phase="before_producer",
                         )
                     )
                     return self._step_result_from_route_finalization(
@@ -799,6 +801,8 @@ class Engine:
                             error_cls=WorkflowExecutionError,
                             provider_attributable=False,
                             after_hook=None,
+                            source_hook=pair_result.source_hook,
+                            source_phase=pair_result.source_phase,
                         )
                     )
                     return self._step_result_from_route_finalization(
@@ -1070,6 +1074,8 @@ class Engine:
                 usage=StepProviderUsage(producer=producer_exec.usage),
                 state=next_state,
                 short_circuit_event=after_producer_result.event,
+                source_hook=getattr(step.after_producer_hook, "__name__", type(step.after_producer_hook).__name__),
+                source_phase="after_producer",
             )
 
         try:
@@ -1114,6 +1120,8 @@ class Engine:
                     usage=StepProviderUsage(producer=producer_exec.usage),
                     state=review_state,
                     short_circuit_event=before_verifier_result.event,
+                    source_hook=getattr(step.before_verifier_hook, "__name__", type(step.before_verifier_hook).__name__),
+                    source_phase="before_verifier",
                 )
             verifier_prompt = self._resolve_prompt(step.verifier_prompt)
             verifier_session = self._resolve_pair_review_session(
@@ -2822,18 +2830,18 @@ class Engine:
             step_state.last_route = final_event.tag
             step_state.last_reason = final_event.reason
             if step.kind == "produce_verify":
-                if final_event.tag in DEFAULT_REWORK_ROUTE_TAGS:
+                if route_is_rework(final_event.tag):
                     step_state.rework_count = getattr(step_state, "rework_count", 0) + 1
-                if final_event.tag in DEFAULT_REPLAN_ROUTE_TAGS:
+                if route_is_replan(final_event.tag):
                     step_state.replan_count = getattr(step_state, "replan_count", 0) + 1
             return
         step_state["last_route"] = final_event.tag
         step_state["last_reason"] = final_event.reason
         if step.kind == "produce_verify":
-            if final_event.tag in DEFAULT_REWORK_ROUTE_TAGS:
+            if route_is_rework(final_event.tag):
                 current_rework = step_state.get("rework_count", 0)
                 step_state["rework_count"] = current_rework + 1 if isinstance(current_rework, int) else 1
-            if final_event.tag in DEFAULT_REPLAN_ROUTE_TAGS:
+            if route_is_replan(final_event.tag):
                 current_replan = step_state.get("replan_count", 0)
                 step_state["replan_count"] = current_replan + 1 if isinstance(current_replan, int) else 1
 

@@ -14,6 +14,7 @@ from uuid import uuid4
 
 from autoloop.core.mappings import normalize_mapping
 from autoloop.core.schema_registry import CHILD_RUN_SUMMARY_SCHEMA, RUN_METADATA_SCHEMA, validate_persisted_schema
+from autoloop.core.statuses import normalize_run_status
 
 
 STATE_DIRNAME = ".autoloop"
@@ -1154,12 +1155,6 @@ def _normalize_summary_names(values: str | Iterable[str] | None, *, field_name: 
     if not normalized:
         raise ValueError(f"{field_name} must contain at least one non-empty string when provided")
     return tuple(normalized)
-
-
-def normalize_run_status(value: str | None) -> str | None:
-    if value == "paused":
-        return "awaiting_input"
-    return value
 
 
 def _normalize_summary_statuses(values: str | Iterable[str] | None) -> tuple[str, ...] | None:

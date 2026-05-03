@@ -61,6 +61,8 @@ class StepFinalizationRequest:
     candidate_route_present: bool = False
     after_hook: Callable[..., Any] | None = None
     after_hook_phase: str = "after"
+    source_hook: str | None = None
+    source_phase: str | None = None
 
 
 @dataclass(frozen=True, slots=True)
@@ -109,6 +111,8 @@ class PairProviderResult:
     direct_control: object | None = None
     short_circuit_event: Event | None = None
     state: BaseModel | None = None
+    source_hook: str | None = None
+    source_phase: str | None = None
 
 
 @dataclass(frozen=True, slots=True)
@@ -374,6 +378,8 @@ class StepDispatcher:
                     pending_handoffs=remaining_pending_handoffs,
                     error_cls=WorkflowExecutionError,
                     provider_attributable=False,
+                    source_hook=getattr(step.before_hook, "__name__", type(step.before_hook).__name__),
+                    source_phase="before",
                 )
             )
             return self._engine._step_result_from_route_finalization(
@@ -469,6 +475,8 @@ class StepDispatcher:
                     pending_handoffs=remaining_pending_handoffs,
                     error_cls=WorkflowExecutionError,
                     provider_attributable=False,
+                    source_hook=handler_name,
+                    source_phase="python_step",
                 )
             )
             return self._engine._step_result_from_route_finalization(
@@ -530,9 +538,13 @@ class RouteFinalizer:
         finalized_artifacts = self._engine._resolve_artifacts(context)
         runtime.set_artifacts(finalized_artifacts)
         route_redirects: list[HookRouteRedirect] = []
+        final_source_hook = request.source_hook
+        final_source_phase = request.source_phase
         if after_redirect is not None:
             route_redirects.append(replace(after_redirect, redirect_index=len(route_redirects) + 1))
             self._engine._ensure_hook_redirect_limit(step, candidate_route=candidate_route, redirects=route_redirects)
+            final_source_hook = after_redirect.hook
+            final_source_phase = after_redirect.phase
 
         if after_result.control is not None:
             direct_control = self._engine._normalize_direct_runtime_control(
@@ -599,6 +611,8 @@ class RouteFinalizer:
                 if route_redirect is not None:
                     route_redirects.append(replace(route_redirect, redirect_index=len(route_redirects) + 1))
                     self._engine._ensure_hook_redirect_limit(step, candidate_route=candidate_route, redirects=route_redirects)
+                    final_source_hook = route_redirect.hook
+                    final_source_phase = route_redirect.phase
                     continue
                 if route_result.control is not None:
                     direct_control = self._engine._normalize_direct_runtime_control(
@@ -667,8 +681,8 @@ class RouteFinalizer:
             target_step=None,
             terminal=None,
             pending_input=None,
-            source_hook=None,
-            source_phase=None,
+            source_hook=final_source_hook,
+            source_phase=final_source_phase,
             provider_attributable=final_provider_attributable,
             hook_route_override_from=route_redirects[0].from_route if route_redirects else None,
             hook_route_override_to=route_redirects[-1].to_route if route_redirects else None,

@@ -20,6 +20,7 @@ from autoloop.core.mappings import normalize_mapping
 from autoloop.core.primitives import AWAIT_INPUT, FINISH
 from autoloop.core.providers.protocols import LLMProvider
 from autoloop.core.schema_registry import RUN_METADATA_SCHEMA, validate_persisted_schema
+from autoloop.core.statuses import terminal_to_run_status
 from autoloop.extensions.session_paths import extract_session_path_strategy
 from .config import ConfigError, DEFAULT_MAX_STEPS, RuntimeConfig
 from .events import EventLogger
@@ -1058,12 +1059,7 @@ def _last_transition_payload(transition: StepFinalizationRecord | None) -> dict[
 
 
 def _run_status(terminal: str, last_event=None) -> str:
-    if last_event is not None and getattr(last_event, "tag", None) == "blocked":
-        return "blocked"
-    if terminal == FINISH:
-        return "success"
-    if terminal == AWAIT_INPUT:
-        return "awaiting_input"
-    if terminal == "FAIL":
-        return "failed"
-    return terminal.lower()
+    return terminal_to_run_status(
+        terminal,
+        final_route=getattr(last_event, "tag", None) if last_event is not None else None,
+    ) or terminal.lower()

@@ -203,6 +203,9 @@ def test_topology_artifacts_include_state_surfaces_runtime_control_hook_location
     class WorkItemState(BaseModel):
         severity: str = "medium"
 
+    def before_review(ctx):
+        return None
+
     def after_review(ctx):
         return None
 
@@ -219,6 +222,7 @@ def test_topology_artifacts_include_state_surfaces_runtime_control_hook_location
             prompt=Prompt.inline("Review the selected gate."),
             scope=gates,
             item_state={"attempts": StateVar(0)},
+            before=before_review,
             after=after_review,
             routes={
                 "done": FINISH,
@@ -247,6 +251,7 @@ def test_topology_artifacts_include_state_surfaces_runtime_control_hook_location
         "custom_fields": ["attempts"],
     }
     assert review_topology["runtime_control_hook_locations"] == [
+        {"hook": "before", "callable": "before_review"},
         {"hook": "after", "callable": "after_review"},
         {"hook": "on_taken", "callable": "on_hidden_taken", "route": "human_escalation", "source_step": "review"},
     ]
@@ -257,7 +262,7 @@ def test_topology_artifacts_include_state_surfaces_runtime_control_hook_location
 
     assert "- terminals: `FINISH`, `AWAIT_INPUT`, `FAIL`" in compile_report
     assert "## Runtime-Control Hook Locations" in compile_report
-    assert "`review`: after:after_review, on_taken:human_escalation" in compile_report
+    assert "`review`: before:before_review, after:after_review, on_taken:human_escalation" in compile_report
     assert "| review | human_escalation | FINISH | false | inherit | - | - | on_hidden_taken |" in route_table
 
 

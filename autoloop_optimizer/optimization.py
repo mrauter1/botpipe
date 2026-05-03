@@ -26,6 +26,7 @@ from autoloop.core.schema_registry import (
     WORKFLOW_REFINEMENT_EVIDENCE_SCHEMA,
     validate_persisted_schema,
 )
+from autoloop.core.statuses import route_is_input_request, route_is_replan, route_is_rework, runtime_control_to_terminal
 from autoloop.runtime.inspection import (
     inspect_workflow_reference,
     list_run_records,
@@ -815,7 +816,7 @@ def extract_failure_scenario_seeds(
         route = _optional_text(observation.get("route")) or "unknown"
         total_tokens = int(_require_mapping_or_empty(observation.get("usage")).get("total_tokens") or 0)
         reasons: list[str] = []
-        if route in {"needs_rework", "needs_replan", "blocked", "failed"}:
+        if route_is_rework(route) or route_is_replan(route) or route in {"blocked", "failed"}:
             reasons.append(f"route:{route}")
         if route in {"runtime_control:request_input", "runtime_control:fail"}:
             reasons.append(route)
@@ -991,7 +992,7 @@ def finalize_optional_optimization_artifact(
 ) -> None:
     """Finalize one optional optimization artifact for accepted or skipped routes."""
 
-    if route in {"needs_rework", "failed", "question", "blocked"}:
+    if route_is_rework(route) or route in {"failed", "blocked"} or route_is_input_request(route):
         return
     if route.endswith("_not_applicable") or route == "adversarial_generation_skipped":
         if path.is_file():
@@ -1217,16 +1218,16 @@ def _extract_route_tag(record: Mapping[str, Any]) -> str:
 
 def _local_outcome_from_record(record: Mapping[str, Any], *, route: str) -> str:
     runtime_control = _optional_text(record.get("runtime_control"))
-    terminal = _optional_text(record.get("terminal"))
-    if runtime_control == "request_input" or terminal == "AWAIT_INPUT":
+    terminal = _optional_text(record.get("terminal")) or runtime_control_to_terminal(runtime_control)
+    if terminal == "AWAIT_INPUT":
         return "awaiting_input"
     if runtime_control == "goto":
         return "runtime_control_goto"
-    if runtime_control == "fail" or terminal == "FAIL":
+    if terminal == "FAIL":
         return "failed"
-    if route == "needs_rework":
+    if route_is_rework(route):
         return "rejected_by_verifier"
-    if route == "needs_replan":
+    if route_is_replan(route):
         return "requires_replan"
     if route == "blocked":
         return "blocked"
@@ -1239,7 +1240,7 @@ def _downstream_outcome(next_records: Sequence[Mapping[str, Any]], terminal: Any
     terminal_value = _optional_text(terminal)
     for record in next_records:
         route = _extract_route_tag(record)
-        if route in {"needs_rework", "needs_replan", "blocked", "failed"}:
+        if route_is_rework(route) or route_is_replan(route) or route in {"blocked", "failed"}:
             return f"next_step_{route}"
         if route == "runtime_control:request_input":
             return "next_step_request_input"

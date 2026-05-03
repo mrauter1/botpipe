@@ -377,6 +377,65 @@ def test_context_history_marks_goto_runtime_control_as_completed(tmp_path: Path)
     )
 
 
+def test_context_history_preserves_hook_selected_route_source_for_pre_step_short_circuit(tmp_path: Path) -> None:
+    ctx, run_folder = _context(tmp_path)
+    _write_jsonl(
+        run_folder / "trace.jsonl",
+        [
+            {
+                "schema": RUNTIME_TRACE_SCHEMA,
+                "event_type": "step_started",
+                "timestamp": "2026-04-30T11:12:00+00:00",
+                "step_name": "triage",
+                "visit": 1,
+                "step_execution_id": "triage:1",
+            },
+            {
+                "schema": RUNTIME_TRACE_SCHEMA,
+                "event_type": "step_finished",
+                "timestamp": "2026-04-30T11:12:01+00:00",
+                "step_name": "triage",
+                "visit": 1,
+                "step_execution_id": "triage:1",
+                "candidate_route": None,
+                "final_route": "done",
+                "provider_attributable": False,
+                "provider_attempted": False,
+                "source_hook": "before_ask",
+                "source_phase": "before",
+            },
+        ],
+    )
+    _write_jsonl(run_folder / "events.jsonl", [])
+
+    route_records = ctx.history.routes(step="triage")
+
+    assert route_records == (
+        {
+            "event_type": "step_finished",
+            "step_name": "triage",
+            "scope": None,
+            "item_id": None,
+            "candidate_route": None,
+            "final_route": "done",
+            "runtime_control": None,
+            "pending_input_id": None,
+            "target_step": None,
+            "terminal": None,
+            "provider_attributable": False,
+            "provider_attempted": False,
+            "producer_attempted": None,
+            "verifier_attempted": None,
+            "source_hook": "before_ask",
+            "source_phase": "before",
+            "visit": 1,
+            "step_execution_id": "triage:1",
+            "timestamp": "2026-04-30T11:12:01+00:00",
+            "hook_route_redirects": (),
+        },
+    )
+
+
 def test_context_history_marks_fail_runtime_control_as_failed(tmp_path: Path) -> None:
     ctx, run_folder = _context(tmp_path)
     _write_jsonl(

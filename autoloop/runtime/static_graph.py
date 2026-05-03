@@ -386,6 +386,9 @@ def _step_item_state_surface_payload(step: Any) -> dict[str, Any] | None:
 def _runtime_control_hook_locations(compiled: CompiledWorkflow, step: Any) -> list[dict[str, Any]]:
     locations: list[dict[str, Any]] = []
     for hook_phase, hook in (
+        ("before", step.before_hook),
+        ("before_producer", step.before_producer_hook),
+        ("before_verifier", step.before_verifier_hook),
         ("after", step.after_hook),
         ("after_producer", step.after_producer_hook),
         ("after_verifier", step.after_verifier_hook),

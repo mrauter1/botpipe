@@ -10,8 +10,8 @@ import json
 from pathlib import Path
 from typing import Any
 
-from .primitives import AWAIT_INPUT, FAIL
 from .schema_registry import CHECKPOINT_SCHEMA, RUNTIME_EVENT_SCHEMA, RUNTIME_TRACE_SCHEMA, validate_persisted_schema
+from .statuses import finalization_to_step_status, route_to_step_status
 
 
 DEFAULT_ACCEPTED_ROUTE_TAGS = frozenset({"done", "accepted", "approved"})
@@ -19,7 +19,6 @@ _STATUS_PRIORITY = {
     "failed": 5,
     "running": 4,
     "awaiting_input": 3,
-    "paused": 3,
     "completed": 2,
     "pending": 1,
 }
@@ -400,7 +399,7 @@ class HistoryReader:
         acc.last_finished_at = timestamp or acc.last_finished_at
         if final_route in success_routes:
             acc.accepted_once = True
-        acc.last_status = _status_from_step_finished(
+        acc.last_status = finalization_to_step_status(
             final_route=final_route,
             runtime_control=runtime_control,
             terminal=terminal,
@@ -569,7 +568,7 @@ def _finalize_telemetry(
     elif acc.finished_count and acc.latest_route in success_routes:
         status = "completed"
     elif acc.finished_count and acc.latest_route is not None:
-        status = _status_from_route(acc.latest_route, completed=True)
+        status = route_to_step_status(acc.latest_route, completed=True)
     elif acc.started_count:
         status = "running"
     elif acc.errors:
@@ -757,35 +756,6 @@ def _duration_seconds(started_at: str, finished_at: str) -> float | None:
     except ValueError:
         return None
     return max((finished - started).total_seconds(), 0.0)
-
-
-def _status_from_route(route: str | None, *, completed: bool) -> str:
-    if route is None:
-        return "completed" if completed else "pending"
-    if route in DEFAULT_ACCEPTED_ROUTE_TAGS:
-        return "completed"
-    if route == "question":
-        return "awaiting_input"
-    if route in {"blocked"}:
-        return "awaiting_input"
-    if route in {"failed"}:
-        return "failed"
-    return route if completed else "running"
-
-
-def _status_from_step_finished(
-    *,
-    final_route: str | None,
-    runtime_control: str | None,
-    terminal: str | None,
-) -> str:
-    if terminal == AWAIT_INPUT:
-        return "awaiting_input"
-    if terminal == FAIL:
-        return "failed"
-    if runtime_control == "goto":
-        return "completed"
-    return _status_from_route(final_route, completed=True)
 
 
 def _merge_timestamp_bounds(target: dict[str, Any], payload: Any) -> None:
