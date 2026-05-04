@@ -53,3 +53,41 @@ Key planning calls:
 - no compatibility shim for implicit `{workspace}/workflows` discovery
 - package workflows must move to and import from `autoloop.workflows.*`
 - runtime root inference and built-in `package_folder`-relative repo asset paths need explicit adjustment during relocation to avoid regressions
+
+
+---
+run_id=run-20260504T192206Z-d3f7e940 | entry=session_turn | pair=plan | phase=verifier | cycle=1 | attempt=1 | thread_id=019df470-ce5a-78b3-bba0-018dc713aa41
+---
+provider=codex
+mode=resume
+template=/home/rauter/.local/share/pipx/venvs/autoloop/lib/python3.12/site-packages/autoloop/templates/plan_verifier.md
+session_id=019df470-ce5a-78b3-bba0-018dc713aa41
+
+
+---
+run_id=run-20260504T192206Z-d3f7e940 | entry=phase_output | pair=plan | phase=verifier | process=codex-agent | cycle=1 | attempt=1 | thread_id=019df470-ce5a-78b3-bba0-018dc713aa41
+---
+I’m auditing the generated plan against the request contract now, with the main focus on missing behavior requirements and migration safety. I’ll verify the markdown plan, phase decomposition, and criteria/feedback consistency before deciding whether it’s shippable.
+
+The first validation pass found the phase YAML content is readable by inspection, but the shell image here doesn’t expose `python`; I’m retrying the parse check with `python3` and tightening the review against missing request points now.
+
+I found two material coverage gaps: the plan never makes the manifest-loader contract explicit, and it never pins down the special explicit-path semantics for `.toml` references and out-of-root workflows. I’m recording those as blocking findings and updating the criteria checklist accordingly.
+
+Scope considered
+Planning artifacts for this run, the immutable request snapshot, and the shared decisions log. I limited repo inspection to workflow discovery, loading, CLI, metadata, packaging, and related tests/docs to assess whether the plan covered the requested behavior safely.
+
+What I analyzed
+I compared [plan.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/objective-implement-workflow-installation-and-di-c328695f/runs/run-20260504T192206Z-d3f7e940/artifacts/plan/plan.md) and [phase_plan.yaml](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/objective-implement-workflow-installation-and-di-c328695f/runs/run-20260504T192206Z-d3f7e940/artifacts/plan/phase_plan.yaml) against the request’s required interfaces, explicit-path rules, manifest behavior, runtime metadata, CLI contract, packaging, and tests. I also checked the phase YAML for parseability and non-empty required lists.
+
+What I reviewed
+I updated [criteria.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/objective-implement-workflow-installation-and-di-c328695f/runs/run-20260504T192206Z-d3f7e940/artifacts/plan/criteria.md) to reflect the current state and appended prioritized findings to [feedback.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/objective-implement-workflow-installation-and-di-c328695f/runs/run-20260504T192206Z-d3f7e940/artifacts/plan/feedback.md). The decisions log is consistent with the plan direction and did not require a separate conflict finding.
+
+Key findings / decisions
+Two blocking gaps remain. `PLAN-001` covers missing explicit manifest-loader requirements: the plan does not pin down `workflow.toml` `module`/`class` handling, fallback order, or exact-one-class validation. `PLAN-002` covers under-specified explicit path semantics: `.toml` references and out-of-root origin metadata normalization are not concretely planned. I also logged `PLAN-003` as non-blocking to tighten CLI JSON field coverage.
+
+Open issues / next step
+The plan is not ready for execution as-is. It should be revised to add explicit scope, acceptance criteria, and tests for the manifest loading contract and explicit path resolution/origin metadata rules, then re-verified.
+
+<loop-control>
+{"schema":"docloop.loop_control/v1","kind":"promise","promise":"INCOMPLETE"}
+</loop-control>
