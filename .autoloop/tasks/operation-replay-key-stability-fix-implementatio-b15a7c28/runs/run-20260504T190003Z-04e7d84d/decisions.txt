@@ -1,3 +1,5 @@
 <autoloop-decisions-header version="1" block_seq="1" owner="planner" phase_id="task-global" pair="plan" turn_seq="1" run_id="run-20260504T190003Z-04e7d84d" ts="2026-05-04T19:00:04.009552+00:00" />
 Treat pre-v2 operation replay records as disposable caches: migration preserves only list-shaped attempts history and must drop all legacy records.
 Callsite must remain in the operation fingerprint and stored record for mismatch signaling, but must stay out of both the occurrence counter key and the replay key.
+<autoloop-decisions-header version="1" block_seq="2" owner="implementer" phase_id="align-operation-replay-keying" pair="implement" turn_seq="1" run_id="run-20260504T190003Z-04e7d84d" ts="2026-05-04T19:04:18.685693+00:00" />
+Scoped source files already matched the approved v2 replay-key design on entry, so this turn made no code changes and was limited to verification plus phase-artifact updates.
