@@ -13,11 +13,11 @@
       "prove-framework-authoring-flexibility-regression-slice"
     ],
     "explicit": true,
-    "current_phase_index": 0,
-    "current_phase_id": "prove-framework-authoring-flexibility-regression-slice"
+    "current_phase_index": 1,
+    "current_phase_id": null
   },
   "phase_status": {
-    "prove-framework-authoring-flexibility-regression-slice": "in_progress"
+    "prove-framework-authoring-flexibility-regression-slice": "completed"
   },
   "phase_history": [
     {
@@ -25,6 +25,13 @@
       "run_id": "run-20260504T121827Z-ab703ce9",
       "status": "in_progress",
       "ts": "2026-05-04T12:23:18.863157+00:00"
+    },
+    {
+      "phase_id": "prove-framework-authoring-flexibility-regression-slice",
+      "run_id": "run-20260504T121827Z-ab703ce9",
+      "status": "completed",
+      "ts": "2026-05-04T12:29:51.463471+00:00",
+      "pair": "test"
     }
   ]
 }
