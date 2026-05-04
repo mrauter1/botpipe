@@ -1,1 +1,2 @@
 # Plan ↔ Plan Verifier Feedback
+- 2026-05-04: Replaced the empty plan with a single implementation phase covering the requested schema bump, replay-key and occurrence-counter narrowing, and the clarified `_load_replay_store()` pre-validation discard path for explicit v1 replay stores because the shared validator only migrates schemaless payloads.
