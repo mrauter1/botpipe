@@ -50,6 +50,7 @@ def _write_workspace_flow(
     workflow_id: str,
     *,
     workflow_name: str | None = None,
+    aliases: tuple[str, ...] = (),
     source: str | None = None,
     manifest: bool = False,
 ) -> Path:
@@ -57,12 +58,14 @@ def _write_workspace_flow(
     package_dir.mkdir(parents=True, exist_ok=True)
     if manifest:
         workflow_name = workflow_name or workflow_id
+        aliases_source = ", ".join(f'"{alias}"' for alias in aliases)
         (package_dir / "workflow.toml").write_text(
             "\n".join(
                 (
                     f'name = "{workflow_name}"',
                     f'title = "{workflow_name.replace("_", " ").title()}"',
                     'description = "workspace workflow"',
+                    f"aliases = [{aliases_source}]",
                 )
             )
             + "\n",
@@ -314,6 +317,58 @@ class DemoWorkflow(Workflow):
     assert resolved.reference.source_path == package_dir / "flow.py"
     assert resolved.reference.source_root == _workspace_catalog_root(tmp_path)
     assert resolved.reference.workflow_name == "demo"
+
+
+def test_manifest_aliases_resolve_from_workspace_catalog_root_only(tmp_path: Path) -> None:
+    explicit_package_dir = tmp_path / "workflows" / "release_review"
+    explicit_package_dir.mkdir(parents=True, exist_ok=True)
+    explicit_package_dir.joinpath("flow.py").write_text(
+        """
+from __future__ import annotations
+
+from autoloop import Workflow, python_step
+
+
+class ReleaseReview(Workflow):
+    name = "release_review"
+
+    @python_step(name="start")
+    def start(ctx):
+        return None
+""".strip()
+        + "\n",
+        encoding="utf-8",
+    )
+
+    with pytest.raises(WorkflowDiscoveryError, match="unknown workflow 'review-release'"):
+        resolve_workflow_reference(tmp_path, "review-release")
+
+    catalog_package_dir = _write_workspace_flow(
+        tmp_path,
+        "release_review",
+        workflow_name="release_review",
+        aliases=("review-release",),
+        manifest=True,
+        source="""
+from __future__ import annotations
+
+from autoloop import Workflow, python_step
+
+
+class ReleaseReview(Workflow):
+    name = "release_review"
+
+    @python_step(name="start")
+    def start(ctx):
+        return None
+""".strip(),
+    )
+
+    resolved = resolve_workflow_reference(tmp_path, "review-release")
+
+    assert resolved.reference.source_path == catalog_package_dir / "flow.py"
+    assert resolved.reference.source_root == _workspace_catalog_root(tmp_path)
+    assert resolved.reference.workflow_name == "release_review"
 
 
 def test_simple_declaration_workflow_is_discoverable_by_path_module_name_and_capability_inspection(tmp_path: Path) -> None:
