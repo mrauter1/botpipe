@@ -309,3 +309,46 @@ Validation I could perform here remains limited to syntax: `python3 -m py_compil
 Open issues / next step
 
 The remaining open item is environment-backed validation. The next step is for the verifier to rerun the Milestone A contract/runtime review against the updated restore/refresh coverage and confirm that `IMP-001` is cleared.
+
+
+---
+run_id=run-20260504T112330Z-32d8eec3 | entry=session_turn | pair=implement | phase=verifier | cycle=2 | attempt=1 | thread_id=019df2c3-200f-73f2-9d49-64451ced9529
+---
+provider=codex
+mode=resume
+template=/home/rauter/.local/share/pipx/venvs/autoloop/lib/python3.12/site-packages/autoloop/templates/implement_verifier.md
+session_id=019df2c3-200f-73f2-9d49-64451ced9529
+
+
+---
+run_id=run-20260504T112330Z-32d8eec3 | entry=phase_output | pair=implement | phase=verifier | process=codex-agent | cycle=2 | attempt=1 | thread_id=019df2c3-200f-73f2-9d49-64451ced9529
+---
+The reviewer finding’s fix is in the right place now: `ensure()` is shared by load, reload, restore, and refresh, while the engine still keeps first-use phase separation. I’m doing one last pass over the exact code and test deltas, then I’ll update the review artifacts for a complete verdict.
+
+I don’t see any remaining blocking issues in the addressed scope. The only residual caveat is still the environment-level inability to execute the targeted suites here, so I’m marking the code review complete and leaving that as a non-blocking note.
+
+Scope considered
+
+Milestone A implementation changes only, with focus on the reviewer-raised restore/refresh regression risk, the shared worklist loading path, the added contract-test coverage, and the active review artifacts.
+
+What I analyzed
+
+I re-audited the addressed runtime paths in `Worklist.load_items()/reload_items()`, `restore_selection(...)`, `refresh_selection(...)`, and `Engine._ensure_worklist_selection(...)`, then checked the new resume/refresh regression tests and the updated implementation notes/decisions for consistency with AC-1 through AC-4.
+
+What I reviewed
+
+I updated [criteria.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/framework-authoring-flexibility-change-specifica-7e827c69/runs/run-20260504T112330Z-32d8eec3/artifacts/implement/phases/milestone-a-runtime-route-policy-and-lazy-scoped-runtime/criteria.md:1) to all checked and appended the cycle-2 review note to [feedback.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/framework-authoring-flexibility-change-specifica-7e827c69/runs/run-20260504T112330Z-32d8eec3/artifacts/implement/phases/milestone-a-runtime-route-policy-and-lazy-scoped-runtime/feedback.md:1).
+
+Key findings / decisions
+
+The blocking issue is resolved. Source `ensure()` now sits on the shared worklist load path, so first use, resume restore, and refresh all honor source-policy semantics, while the engine still preserves explicit ensure/load phase reporting for first-use error shaping.
+
+No new blocking findings remain in the reviewed scope. The only residual note is unchanged from the prior pass: this environment still does not provide `pytest` or the installed runtime dependencies needed to execute the targeted suites here.
+
+Open issues / next step
+
+No code-level blocker remains for this phase. The next practical step is an external environment rerun of the targeted Milestone A contract/runtime suites to clear the standing non-blocking validation caveat.
+
+<loop-control>
+{"schema":"docloop.loop_control/v1","kind":"promise","promise":"COMPLETE"}
+</loop-control>
