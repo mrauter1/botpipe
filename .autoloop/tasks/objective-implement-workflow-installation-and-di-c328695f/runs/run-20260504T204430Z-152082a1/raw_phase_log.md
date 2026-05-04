@@ -168,3 +168,12 @@ No open verification issues remain in the plan artifacts. The planning pair is r
 <loop-control>
 {"schema":"docloop.loop_control/v1","kind":"promise","promise":"COMPLETE"}
 </loop-control>
+
+
+---
+run_id=run-20260504T204430Z-152082a1 | entry=phase_scope_resolved
+---
+phase_mode=single
+phase_ids=close-validation-gaps
+explicit=True
+current_phase_index=0

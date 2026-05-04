@@ -7,3 +7,7 @@
 {"ts": "2026-05-04T20:49:20.673031+00:00", "run_id": "run-20260504T204430Z-152082a1", "seq": 7, "event_type": "phase_finished", "pair": "plan", "phase": "producer", "cycle": 2, "attempt": 1, "empty_output": false, "phase_id": null}
 {"ts": "2026-05-04T20:50:03.867394+00:00", "run_id": "run-20260504T204430Z-152082a1", "seq": 8, "event_type": "phase_finished", "pair": "plan", "phase": "verifier", "cycle": 2, "attempt": 1, "empty_output": false, "phase_id": null}
 {"ts": "2026-05-04T20:50:03.926372+00:00", "run_id": "run-20260504T204430Z-152082a1", "seq": 9, "event_type": "pair_completed", "pair": "plan", "cycle": 2, "attempt": 1, "phase_id": null}
+{"ts": "2026-05-04T20:50:04.019018+00:00", "run_id": "run-20260504T204430Z-152082a1", "seq": 10, "event_type": "phase_scope_resolved", "phase_mode": "single", "phase_ids": ["close-validation-gaps"], "explicit": true, "current_phase_index": 0}
+{"ts": "2026-05-04T20:50:04.020747+00:00", "run_id": "run-20260504T204430Z-152082a1", "seq": 11, "event_type": "phase_started", "phase_id": "close-validation-gaps", "phase_mode": "single"}
+{"ts": "2026-05-04T20:50:04.021653+00:00", "run_id": "run-20260504T204430Z-152082a1", "seq": 12, "event_type": "pair_started", "pair": "implement", "phase_id": "close-validation-gaps"}
+{"ts": "2026-05-04T20:50:04.021745+00:00", "run_id": "run-20260504T204430Z-152082a1", "seq": 13, "event_type": "cycle_started", "pair": "implement", "cycle": 1, "attempt": 1, "phase_id": "close-validation-gaps"}
