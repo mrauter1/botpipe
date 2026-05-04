@@ -746,7 +746,7 @@ def _load_replay_store(path: Path | None) -> dict[str, Any]:
     payload = json.loads(path.read_text(encoding="utf-8"))
     if not isinstance(payload, dict):
         return {"schema": OPERATION_REPLAY_SCHEMA, "records": {}, "attempts": []}
-    if payload.get("schema") != OPERATION_REPLAY_SCHEMA:
+    if payload.get("schema") == "autoloop.operation_replay/v1":
         payload = _migrate_operation_replay_store(payload)
     validate_persisted_schema(
         payload,

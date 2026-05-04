@@ -193,3 +193,59 @@ Open issues / next step
 <loop-control>
 {"schema":"docloop.loop_control/v1","kind":"promise","promise":"INCOMPLETE"}
 </loop-control>
+
+
+---
+run_id=run-20260504T190003Z-04e7d84d | entry=session_turn | pair=implement | phase=producer | cycle=2 | attempt=1 | thread_id=019df460-83b2-71e2-bab8-7a89d8645941
+---
+provider=codex
+mode=resume
+template=/home/rauter/.local/share/pipx/venvs/autoloop/lib/python3.12/site-packages/autoloop/templates/implement_producer.md
+session_id=019df460-83b2-71e2-bab8-7a89d8645941
+
+
+---
+run_id=run-20260504T190003Z-04e7d84d | entry=phase_output | pair=implement | phase=producer | process=codex-agent | cycle=2 | attempt=1 | thread_id=019df460-83b2-71e2-bab8-7a89d8645941
+---
+I’m addressing the reviewer’s only blocking issue now. The fix is local to `_load_replay_store`: keep destructive migration for explicit `v1` only, let schemaless payloads flow through `validate_persisted_schema(...)`, and stop silently discarding unknown future schemas.
+
+I’m applying a minimal source patch in `autoloop/core/operations.py` now: only the replay-store load path changes, and the goal is to preserve the existing v1/schemaless migration behavior while restoring strict failure for unknown schemas.
+
+The source change is in. I’m validating the three relevant schema cases directly now: schemaless should migrate, explicit `v1` should migrate, and unknown schema like `v3` should fail instead of being silently dropped.
+
+The runtime checks now match the intended contract: schemaless and `v1` migrate, `v3` fails, and the focused replay tests still pass. I’m recording that narrowed migration rule in the run artifacts next so later turns don’t drift back to the over-broad behavior.
+
+I’ve got the final artifact update scoped: one decision line under the new turn header and a concise rewrite of the implementation notes so they reflect the actual source patch, the preserved invariants, and the exact validation evidence.
+
+The fix and artifact updates are complete. I’m doing a final readback of the touched source section and the notes so the closeout references the actual landed behavior, not the earlier verification-only state.
+
+Scope considered
+
+- Fixed the reviewer’s scoped finding in [operations.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/autoloop/core/operations.py:743) and updated the required phase artifacts only.
+- Re-checked [schema_registry.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/autoloop/core/schema_registry.py:13) for the `v2` schema invariant.
+
+What I analyzed
+
+- Reviewed the reviewer finding in [feedback.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/operation-replay-key-stability-fix-implementatio-b15a7c28/runs/run-20260504T190003Z-04e7d84d/artifacts/implement/phases/align-operation-replay-keying/feedback.md:1).
+- Inspected `_load_replay_store`, `validate_persisted_schema`, and the replay schema constant.
+- Revalidated helper call-site scope and replay behavior with direct runtime checks plus the focused pytest slice.
+
+What I changed
+
+- Narrowed `_load_replay_store` in [operations.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/autoloop/core/operations.py:749) so only explicit `autoloop.operation_replay/v1` payloads are pre-migrated.
+- Left schemaless payloads to `validate_persisted_schema(..., legacy_migrator=...)`, and unknown schemas now fail validation instead of being silently discarded.
+- Updated [implementation_notes.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/operation-replay-key-stability-fix-implementatio-b15a7c28/runs/run-20260504T190003Z-04e7d84d/artifacts/implement/phases/align-operation-replay-keying/implementation_notes.md:1) and [decisions.txt](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/operation-replay-key-stability-fix-implementatio-b15a7c28/runs/run-20260504T190003Z-04e7d84d/decisions.txt:1).
+
+Key findings / decisions
+
+- The reviewer’s concern was valid: the previous branch migrated every non-`v2` schema.
+- The landed behavior now matches the accepted contract:
+  - schemaless payloads migrate to empty `v2` with preserved list-shaped `attempts`
+  - explicit `v1` payloads migrate the same way
+  - explicit `v3` payloads raise `ValueError`
+- Focused validation passed with `'../autoloop_v3 (Cópia)/.venv/bin/python' -m pytest tests/contract/test_engine_contracts.py -k operation_replay`: `3 passed, 163 deselected`.
+
+Open issues / next step
+
+- No known open implementation issue remains in the scoped code.
+- The next step is reviewer re-check so [criteria.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/operation-replay-key-stability-fix-implementatio-b15a7c28/runs/run-20260504T190003Z-04e7d84d/artifacts/implement/phases/align-operation-replay-keying/criteria.md:1) can be updated against the narrowed migration behavior.

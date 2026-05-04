@@ -8,13 +8,16 @@
 - Scope: phase-local producer artifact
 
 ## Files changed
-- Phase artifacts only:
+- Repository source:
+  - `autoloop/core/operations.py`
+- Phase artifacts:
   - `.../decisions.txt`
   - `.../artifacts/implement/phases/align-operation-replay-keying/implementation_notes.md`
-- No source-file edits were required in `autoloop/core/schema_registry.py` or `autoloop/core/operations.py`.
+- No source edit was required in `autoloop/core/schema_registry.py`.
 
 ## Symbols touched
-- None in repository source.
+- Edited in repository source:
+  - `_load_replay_store`
 - Verified by inspection:
   - `OPERATION_REPLAY_SCHEMA`
   - `_run_operation`
@@ -22,20 +25,19 @@
   - `_operation_replay_key`
   - `_operation_fingerprint`
   - `_migrate_operation_replay_store`
-  - `_load_replay_store`
 
 ## Checklist mapping
 - Replay schema version: confirmed `autoloop.operation_replay/v2`.
 - Occurrence counter contract: confirmed `_next_occurrence(runtime, operation_kind)` excludes `callsite`.
 - Replay key contract: confirmed `_operation_replay_key(runtime, operation_kind, occurrence)` excludes `callsite`.
 - Fingerprint contract: confirmed `_run_operation` still computes `callsite_id` and passes it to `_operation_fingerprint`.
-- Legacy replay migration: confirmed named `_migrate_operation_replay_store` drops `records` and preserves list-shaped `attempts`.
+- Legacy replay migration: narrowed `_load_replay_store` so only schemaless or explicit `v1` payloads are migrated through `_migrate_operation_replay_store`, which drops `records` and preserves list-shaped `attempts`.
 - Helper call-site scope: confirmed repo grep finds `_next_occurrence(...)` and `_operation_replay_key(...)` call sites only in `_run_operation`.
 - Validation: focused replay contract tests passed.
 
 ## Assumptions
-- The accepted plan's verification-first note is authoritative: source was allowed to remain unchanged when already aligned with the requested behavior.
 - Using the sibling repo virtualenv interpreter was acceptable because this checkout lacks local `pytest` and `python -m pytest`, while the tests executed against the current workspace root.
+- The reviewer-owned finding correctly narrowed the remaining in-scope fix to `_load_replay_store` without requiring broader replay semantics changes or test-file edits.
 
 ## Preserved invariants
 - `callsite` remains part of the operation fingerprint payload.
@@ -44,21 +46,28 @@
 - No legacy compatibility layer was added for pre-v2 replay records.
 
 ## Intended behavior changes
-- None introduced in this turn; requested replay-key behavior was already present in source on entry.
+- Unsupported future replay schemas now remain hard validation failures instead of being silently discarded.
 
 ## Known non-changes
-- No edits outside phase artifacts.
+- `autoloop/core/schema_registry.py` remained unchanged at `autoloop.operation_replay/v2`.
+- No edits outside `autoloop/core/operations.py` and the required phase artifacts.
 - No additional replay-stability mechanisms were introduced.
 
 ## Expected side effects
-- None beyond artifact updates documenting verification results.
+- Explicit `v1` and schemaless replay stores continue to reset cached `records` while preserving list-shaped `attempts`.
+- Unsupported replay schema versions now raise a `ValueError` during load instead of being converted to empty v2 payloads.
 
 ## Validation performed
 - Inspected `autoloop/core/schema_registry.py` and `autoloop/core/operations.py` for the approved invariants.
 - Ran repo-wide grep to confirm helper usage is limited to `_run_operation` in source code.
+- Exercised `_load_replay_store` directly for schemaless, explicit `v1`, and explicit `v3` payloads.
 - Ran:
   - `'../autoloop_v3 (Cópia)/.venv/bin/python' -m pytest tests/contract/test_engine_contracts.py -k operation_replay`
-- Result: `3 passed, 163 deselected`.
+- Results:
+  - Schemaless payload migrated to empty v2 store with preserved `attempts`.
+  - Explicit `v1` payload migrated to empty v2 store with preserved `attempts`.
+  - Explicit `v3` payload raised `ValueError` for unsupported schema.
+  - Focused pytest slice: `3 passed, 163 deselected`.
 
 ## Deduplication or centralization decisions
-- None; no source changes were necessary.
+- Kept the fix local to `_load_replay_store` so schemaless migration remains centralized in `validate_persisted_schema(...)` and explicit `v1` handling stays as a narrow compatibility bridge.
