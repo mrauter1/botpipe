@@ -24,6 +24,7 @@
 - `update_workflow_metadata`
 - `_workflow_origin_payload`
 - `_serialize_path`
+- `_serialize_origin_path`
 - `_assert_workflow_identity_consistency`
 - `build_arg_parser`
 - `_handle_workflows_list`
@@ -35,11 +36,11 @@
 - Milestone 2 / runtime, import, CLI, and metadata integration:
   runtime origin metadata now carries `source_root_kind`, `source_root`, `package_name`, `package_module`, and `workflow_module`.
 - Milestone 2 / CLI:
-  `--root` help text, `workflows list`, `workflows show`, `--all`, and `init workflow` were updated to the `.autoloop/workflows` contract.
+  `--root` help text, `workflows list`, `workflows show`, `--all`, and `init workflow` were updated to the `.autoloop/workflows` contract while preserving the existing `manifest_present` list field.
 - Milestone 2 / explicit-path metadata:
-  out-of-root origin paths now serialize absolutely instead of via brittle relative `..` segments.
+  out-of-root workflow-origin paths now serialize absolutely instead of via brittle relative `..` segments, without changing generic runtime path serialization.
 - Milestone 2 / tests:
-  added focused CLI/runtime metadata coverage in `tests/runtime/test_runtime_cli_metadata_integration.py`.
+  added focused CLI/runtime metadata coverage in `tests/runtime/test_runtime_cli_metadata_integration.py`, including package-source module metadata.
 
 ## Assumptions
 - Existing relative task/workflow/run folder metadata remains acceptable for in-workspace runtime state in this phase.
@@ -62,14 +63,16 @@
 - Large legacy runtime tests that still assume repo-root `workflows/` were not rewritten in this phase.
 
 ## Expected Side Effects
-- Package-installed workflow roots outside the workspace now persist as absolute metadata paths rather than relative escape paths.
-- Existing consumers of CLI `workflows list` JSON will now see `package_folder`, `source_root_kind`, `shadowed`, and `shadowed_by` fields instead of the old `manifest_present` flag.
+- Nested workflow-origin metadata now persists package-installed and explicit external workflow roots as absolute paths rather than relative escape paths.
+- Existing consumers of CLI `workflows list` JSON keep `manifest_present` and also see `package_folder`, `source_root_kind`, `shadowed`, and `shadowed_by`.
 
 ## Validation Performed
 - `python3 -m py_compile autoloop/runtime/loader.py autoloop/runtime/workspace.py autoloop/runtime/runner.py autoloop/runtime/cli.py autoloop/core/context.py tests/runtime/test_runtime_cli_metadata_integration.py`
+- `python3 -m py_compile autoloop/runtime/cli.py autoloop/runtime/workspace.py tests/runtime/test_runtime_cli_metadata_integration.py`
 - Attempted `python3 -m pytest -q tests/runtime/test_workflow_catalog_roots.py`, but `pytest` is not installed in this environment.
 - Attempted direct Python smoke execution, but runtime dependencies are incomplete here (`pydantic` missing).
 
 ## Deduplication / Centralization
 - Workflow-origin persistence is centralized through the expanded `_workflow_origin_payload`.
+- Absolute out-of-root normalization is centralized in `_serialize_origin_path` so generic runtime metadata serialization keeps its prior relative-path behavior.
 - CLI shadowed-entry lookup is centralized through `_catalog_entry_for_resolved_reference` for show output.

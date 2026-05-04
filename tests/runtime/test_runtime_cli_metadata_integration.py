@@ -215,6 +215,43 @@ class ExplicitDemo(Workflow):
     assert payload["package_name"] == "explicit_demo"
     assert payload["package_module"] is None
     assert payload["workflow_module"] is None
+    assert payload["package_folder"] == str(external_dir)
+    assert payload["source_path"] == str(external_dir / "flow.py")
+    assert payload["manifest_path"] == str(external_dir / "workflow.toml")
+    run_meta = json.loads((run_dir / "run.json").read_text(encoding="utf-8"))
+    assert run_meta["package_folder"] == "external/explicit_demo"
+
+
+def test_package_run_metadata_records_package_modules(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    package_root = _configure_package_root(monkeypatch, tmp_path)
+    package_dir = _write_package_workflow(package_root, "package_demo")
+
+    resolved = resolve_workflow_reference(tmp_path, "package_demo")
+    assert resolved.source_root_kind == "package"
+    assert resolved.package_module == "autoloop.workflows.package_demo"
+    assert resolved.workflow_module == "autoloop.workflows.package_demo.flow"
+
+    result = run_workflow_package(
+        "package_demo",
+        provider=ScriptedLLMProvider(),
+        options=RunnerOptions(
+            root=tmp_path,
+            task_id="task-package-demo",
+            message="Run package demo",
+            runtime_config=RuntimeConfig(git_tracking=GitTrackingRuntimeConfig(enabled=False)),
+        ),
+    )
+
+    assert result.terminal == "FINISH"
+    run_dir = next((tmp_path / ".autoloop" / "tasks" / "task-package-demo" / "wf_package_demo" / "runs").iterdir())
+    payload = json.loads((run_dir / "run.json").read_text(encoding="utf-8"))["workflow"]
+
+    assert payload["source_root_kind"] == "package"
+    assert payload["package_folder"] == str(package_dir)
+    assert payload["package_name"] == "package_demo"
+    assert payload["package_module"] == "autoloop.workflows.package_demo"
+    assert payload["workflow_module"] == "autoloop.workflows.package_demo.flow"
+    assert payload["source_root"] == str(package_root)
 
 
 def test_cli_workflows_list_show_and_all_emit_shadow_and_source_metadata(
@@ -235,6 +272,7 @@ def test_cli_workflows_list_show_and_all_emit_shadow_and_source_metadata(
             "aliases": ["shared"],
             "authoring_shape": "manifest_package",
             "description": "workspace workflow",
+            "manifest_present": True,
             "name": "shared_demo",
             "package_folder": str(workspace_dir),
             "shadowed": False,

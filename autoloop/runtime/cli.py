@@ -198,6 +198,7 @@ def _handle_workflows_list(args: argparse.Namespace, *, provider_factory: Callab
                 "aliases": list(entry.aliases),
                 "authoring_shape": entry.authoring_shape,
                 "description": entry.description,
+                "manifest_present": entry.manifest_path is not None,
                 "name": entry.workflow_name,
                 "package_folder": str(entry.package_dir),
                 "source_path": str(entry.source_path),

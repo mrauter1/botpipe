@@ -1115,11 +1115,11 @@ def _workflow_origin_payload(
         "authoring_shape": authoring_shape,
         "module_name": module_name,
         "class_name": class_name,
-        "source_path": None if source_path is None else _serialize_path(root, source_path),
-        "manifest_path": None if manifest_path is None else _serialize_path(root, manifest_path),
-        "package_folder": _serialize_path(root, package_folder),
+        "source_path": None if source_path is None else _serialize_origin_path(root, source_path),
+        "manifest_path": None if manifest_path is None else _serialize_origin_path(root, manifest_path),
+        "package_folder": _serialize_origin_path(root, package_folder),
         "source_root_kind": source_root_kind,
-        "source_root": None if source_root is None else _serialize_path(root, source_root),
+        "source_root": None if source_root is None else _serialize_origin_path(root, source_root),
         "package_name": package_name,
         "package_module": package_module,
         "workflow_module": workflow_module,
@@ -1286,6 +1286,10 @@ def _write_json(path: Path, payload: dict[str, Any]) -> None:
 
 
 def _serialize_path(root: Path, path: Path) -> str:
+    return str(repo_relative_path(root, path))
+
+
+def _serialize_origin_path(root: Path, path: Path) -> str:
     resolved_root = root.resolve()
     resolved_path = path.resolve()
     try:
