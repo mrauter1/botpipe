@@ -175,3 +175,12 @@ No blocking verifier issues remain. The plan artifact set is ready for the next 
 <loop-control>
 {"schema":"docloop.loop_control/v1","kind":"promise","promise":"COMPLETE"}
 </loop-control>
+
+
+---
+run_id=run-20260504T151346Z-4f933dd3 | entry=phase_scope_resolved
+---
+phase_mode=single
+phase_ids=route-and-artifact-contracts,lazy-worklist-runtime,public-surface-polish
+explicit=True
+current_phase_index=0
