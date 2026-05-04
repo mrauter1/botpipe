@@ -82,3 +82,66 @@ The producer plan should be revised so the shared baseline explicitly asserts th
 <loop-control>
 {"schema":"docloop.loop_control/v1","kind":"promise","promise":"INCOMPLETE"}
 </loop-control>
+
+
+---
+run_id=run-20260504T163613Z-cf62c11b | entry=session_turn | pair=plan | phase=producer | cycle=2 | attempt=1 | thread_id=019df3d8-f1f8-7b12-a390-012ab6ab3571
+---
+provider=codex
+mode=resume
+template=/home/rauter/.local/share/pipx/venvs/autoloop/lib/python3.12/site-packages/autoloop/templates/plan_producer.md
+session_id=019df3d8-f1f8-7b12-a390-012ab6ab3571
+
+
+---
+run_id=run-20260504T163613Z-cf62c11b | entry=phase_output | pair=plan | phase=producer | process=codex-agent | cycle=2 | attempt=1 | thread_id=019df3d8-f1f8-7b12-a390-012ab6ab3571
+---
+I’m revising the plan against the verifier’s blocking feedback, focusing on the central regression guard so it positively enforces the shipped route model instead of only banning retired wording. Then I’ll update the run-local plan artifacts and append only turn-relevant decisions.
+
+I’ve narrowed the revision to the verifier’s exact gap. I’m tightening the plan so the central guard owns both sides of the contract: retired wording must disappear, and the positive question-only / authored-blocked-failed wording must be present in the route-guidance prompt bodies.
+
+The verifier’s gap is addressed in the plan artifacts. I’m doing a quick contract check on the revised wording and YAML before I close out.
+
+Revised the plan artifacts to close the verifier’s blocking gap.
+
+[plan.md](</home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/below-is-the-revised-standalone-correction-spec-91e19feb/runs/run-20260504T163613Z-cf62c11b/artifacts/plan/plan.md>) now makes the central guard positive as well as negative: route-guidance prompt bodies must carry stable markers that `question` is the only default runtime control route and that authored `blocked` / `failed` are ordinary application routes, and the shared baseline must assert those markers directly. [phase_plan.yaml](</home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/below-is-the-revised-standalone-correction-spec-91e19feb/runs/run-20260504T163613Z-cf62c11b/artifacts/plan/phase_plan.yaml>) was updated to mirror that in scope and acceptance criteria, especially `AC-2` and `AC-4`.
+
+I also appended the plan revision note to [feedback.md](</home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/below-is-the-revised-standalone-correction-spec-91e19feb/runs/run-20260504T163613Z-cf62c11b/artifacts/plan/feedback.md>) and recorded the non-obvious constraint in the current turn’s block of [decisions.txt](</home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/below-is-the-revised-standalone-correction-spec-91e19feb/runs/run-20260504T163613Z-cf62c11b/decisions.txt>). I left verifier-owned [criteria.md](</home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/below-is-the-revised-standalone-correction-spec-91e19feb/runs/run-20260504T163613Z-cf62c11b/artifacts/plan/criteria.md>) untouched.
+
+
+---
+run_id=run-20260504T163613Z-cf62c11b | entry=session_turn | pair=plan | phase=verifier | cycle=2 | attempt=1 | thread_id=019df3d8-f1f8-7b12-a390-012ab6ab3571
+---
+provider=codex
+mode=resume
+template=/home/rauter/.local/share/pipx/venvs/autoloop/lib/python3.12/site-packages/autoloop/templates/plan_verifier.md
+session_id=019df3d8-f1f8-7b12-a390-012ab6ab3571
+
+
+---
+run_id=run-20260504T163613Z-cf62c11b | entry=phase_output | pair=plan | phase=verifier | process=codex-agent | cycle=2 | attempt=1 | thread_id=019df3d8-f1f8-7b12-a390-012ab6ab3571
+---
+I’m re-verifying only the changed plan sections and the gating artifacts. If the positive route-model guard now fully closes the intent gap, I’ll mark the criteria green and record that the blocking finding is resolved.
+
+The revised plan now covers the positive and negative route-wording contract centrally, and the machine-readable phase contract matches it. I’m marking the criteria complete and recording that the prior blocking finding is resolved with no new findings.
+
+Scope considered
+Run-local planning artifacts for the workflow prompt-body route-wording task: `plan.md`, `phase_plan.yaml`, `criteria.md`, `feedback.md`, and read-only `decisions.txt`, plus the changed verification focus around the shared prompt-body regression guard.
+
+What I analyzed
+The revised plan narrative, the single-phase machine-readable contract, the verifier feedback history, the shared decisions ledger, and the updated positive/negative route-model guard language. I also revalidated that `phase_plan.yaml` is parseable and that runtime-owned metadata remains unchanged.
+
+What I reviewed
+The plan now requires central coverage to enforce both sides of the intended contract: retired reserved-route wording must fail, and updated route-guidance prompt bodies must contain positive markers for `question` as the only default runtime control route and for authored `blocked` / `failed` as ordinary application routes. The phase acceptance criteria, validation steps, risks, rollback, and decisions ledger all align with that revision.
+
+Key findings / decisions
+No remaining findings.
+`criteria.md` was updated so all verification checkboxes are now checked.
+`feedback.md` was appended to record that `PLAN-001` is addressed and that no new findings remain.
+
+Open issues / next step
+No open verification issues remain. The planning artifacts are ready for the next loop stage.
+
+<loop-control>
+{"schema":"docloop.loop_control/v1","kind":"promise","promise":"COMPLETE"}
+</loop-control>
