@@ -1,4 +1,73 @@
 version: 1
 task_id: framework-authoring-flexibility-change-specifica-7e827c69
 request_snapshot_ref: /home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/framework-authoring-flexibility-change-specifica-7e827c69/runs/run-20260504T112330Z-32d8eec3/request.md
-phases: []
+phases:
+  - phase_id: "milestone-a-runtime-route-policy-and-lazy-scoped-runtime"
+    title: "Milestone A Runtime Semantics"
+    objective: "Finalize policy-aware provider routing, explicit child-route mapping, and lazy worklist/session behavior without weakening runtime-owned failure handling."
+    status: "planned"
+    in_scope:
+      - "Consolidate provider-visible route policy around RuntimeInteractionPolicy and ControlRoutes."
+      - "Remove any remaining default blocked/failed assumptions from runtime/provider contracts."
+      - "Make child workflow blocked/failed mapping explicit and error clearly when undeclared."
+      - "Preserve and harden lazy worklist materialization, lazy work-item session binding, and checkpoint/resume compatibility."
+      - "Update inspection/static-graph/CLI payloads and tests to reflect authored versus runtime-control routes under interactive and full-auto policy."
+    out_of_scope:
+      - "Workflow package authoring changes."
+      - "New public DSLs or broad helper abstractions."
+      - "General docs polish beyond changed runtime contract outputs."
+    dependencies: []
+    acceptance_criteria:
+      - id: "AC-1"
+        text: "Provider-facing requests expose authored provider-visible routes plus policy-allowed question only, with no default blocked or failed."
+      - id: "AC-2"
+        text: "Child workflow FAIL or await-without-question only map to failed or blocked when the parent step declares those routes; otherwise runtime errors name the missing mapping."
+      - id: "AC-3"
+        text: "Fresh runs and resumes keep worklists lazy, checkpoint only materialized selections, and preserve work-item session continuity across resume."
+      - id: "AC-4"
+        text: "Static graph, topology, and workflow capability outputs match the new route-policy contract and targeted contract/runtime tests pass."
+    deliverables:
+      - "Runtime/engine/compiler updates for route policy, child mapping, lazy selection/session handling, and checkpoint compatibility."
+      - "Inspection/static-graph/CLI payload updates and aligned contract/runtime tests."
+    risks:
+      - "Compiler/runtime/inspection route visibility drift can leave provider contracts inconsistent."
+      - "Lazy selection changes can regress pause/resume or scoped item state synchronization."
+      - "Child workflow mapping changes can break existing tests that relied on implicit blocked/failed."
+    rollback:
+      - "Revert Milestone A patch set if provider available_routes, pause/resume, or session continuity regress."
+      - "Restore prior child-mapping behavior only as part of a full rollback, not as a partial hotfix."
+  - phase_id: "milestone-b-authoring-ergonomics-and-validation-polish"
+    title: "Milestone B Authoring Ergonomics"
+    objective: "Align existing helper APIs and prompt/artifact validation behavior with the requested authoring flexibility while keeping the framework surface narrow."
+    status: "planned"
+    in_scope:
+      - "Extend existing Effects and WorklistEffect behavior instead of introducing a second effects API."
+      - "Align existing ValidationResult and validation_step helper behavior with repairable validation requirements."
+      - "Relax prompt placeholder validation only for late-bound scoped item/worklist runtime facts while preserving typo protection."
+      - "Tighten artifact ownership diagnostics and related test coverage where current behavior is incomplete."
+      - "Update affected inspection assertions and helper tests for the final authoring contract."
+    out_of_scope:
+      - "Broad documentation rewrites."
+      - "General workflow refactors outside the framework/runtime packages."
+      - "A new schema or effects subsystem."
+    dependencies:
+      - "milestone-a-runtime-route-policy-and-lazy-scoped-runtime"
+    acceptance_criteria:
+      - id: "AC-1"
+        text: "Hooks and python steps can express the requested narrow worklist mutations through the existing effect surface with deterministic runtime ordering and checkpoint coverage."
+      - id: "AC-2"
+        text: "ValidationResult and validation_step provide repairable validation routing, feedback writing, and optional failed-route behavior without duplicating structured validation logic."
+      - id: "AC-3"
+        text: "Scoped prompt placeholders support late-bound item/worklist runtime facts at compile time and fail clearly at runtime when the current item or payload path is missing."
+      - id: "AC-4"
+        text: "Artifact ownership ambiguity remains a compile-time failure with actionable diagnostics, and the aligned helper/inspection tests pass."
+    deliverables:
+      - "Helper-layer updates for effects, validation_step, prompt validation, and artifact ownership diagnostics."
+      - "Expanded contract/unit/runtime tests covering the final authoring flexibility behavior."
+    risks:
+      - "Prompt validation changes can accidentally hide author typos if compile-time checks are relaxed too far."
+      - "Helper-surface changes can introduce API churn if they replace existing names instead of extending them."
+      - "Effect ordering changes can regress worklist state mutation semantics."
+    rollback:
+      - "Revert Milestone B independently if authoring helpers regress while keeping Milestone A runtime semantics intact."
+      - "Prefer additive compatibility shims over helper API renames if follow-up fixes are needed."
