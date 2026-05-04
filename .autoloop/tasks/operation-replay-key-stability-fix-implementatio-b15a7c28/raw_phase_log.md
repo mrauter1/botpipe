@@ -141,3 +141,55 @@ Key findings / decisions
 Open issues / next step
 
 - No open implementation issue remains in the scoped code. The only notable constraint is environmental: this checkout has no local `pytest`, so validation used the sibling repo virtualenv interpreter against the current workspace.
+
+
+---
+run_id=run-20260504T190003Z-04e7d84d | entry=session_turn | pair=implement | phase=verifier | cycle=1 | attempt=1 | thread_id=019df460-83b2-71e2-bab8-7a89d8645941
+---
+provider=codex
+mode=resume
+template=/home/rauter/.local/share/pipx/venvs/autoloop/lib/python3.12/site-packages/autoloop/templates/implement_verifier.md
+session_id=019df460-83b2-71e2-bab8-7a89d8645941
+
+
+---
+run_id=run-20260504T190003Z-04e7d84d | entry=phase_output | pair=implement | phase=verifier | process=codex-agent | cycle=1 | attempt=1 | thread_id=019df460-83b2-71e2-bab8-7a89d8645941
+---
+I’m auditing the scoped replay-key implementation against the phase contract now, starting with the review artifacts and the relevant source paths so I can update criteria and findings from direct verification rather than from the implementation notes alone.
+
+The implementer claims a verification-only turn, so I’m checking the source directly and reproducing the narrow validation surface. If that holds, the review will be about whether the documented no-op was legitimate, not about missed edits.
+
+I found one potentially material edge case in `_load_replay_store`: it appears to discard any non-`v2` schema, not just schemaless or `v1` payloads. I’m reproducing that behavior directly and re-running the focused test slice before I decide whether it’s a blocking divergence from the accepted contract.
+
+I have a concrete blocking divergence now. The focused contract tests pass, but `_load_replay_store` still over-migrates unsupported schema versions, which broadens behavior beyond the accepted v1/schemaless-only migration rule and can silently discard future replay stores.
+
+The review artifacts are updated. I’m doing one last readback of the criteria and finding text so the completion state and the blocking rationale are aligned before I close with the loop-control contract.
+
+Scope considered
+
+- Reviewed the scoped replay-key implementation in [schema_registry.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/autoloop/core/schema_registry.py:13) and [operations.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/autoloop/core/operations.py:214), plus the active phase artifacts only.
+
+What I analyzed
+
+- Re-checked the source invariants for `OPERATION_REPLAY_SCHEMA`, `_run_operation`, `_operation_replay_key`, `_next_occurrence`, `_operation_fingerprint`, `_migrate_operation_replay_store`, and `_load_replay_store`.
+- Reproduced the schema-migration behavior directly with a temporary `operation_replay.json`.
+- Re-ran focused coverage with `'../autoloop_v3 (Cópia)/.venv/bin/python' -m pytest tests/contract/test_engine_contracts.py -k operation_replay` and saw `3 passed, 163 deselected`.
+
+What I reviewed
+
+- Updated [criteria.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/operation-replay-key-stability-fix-implementatio-b15a7c28/runs/run-20260504T190003Z-04e7d84d/artifacts/implement/phases/align-operation-replay-keying/criteria.md:1) to reflect that the phase is not yet acceptable.
+- Appended one blocking finding to [feedback.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/operation-replay-key-stability-fix-implementatio-b15a7c28/runs/run-20260504T190003Z-04e7d84d/artifacts/implement/phases/align-operation-replay-keying/feedback.md:1).
+
+Key findings / decisions
+
+- Blocking: [_load_replay_store()`](/home/rauter/autoloop_v3_bkp/autoloop_v3/autoloop/core/operations.py:743) currently migrates every non-`v2` schema to an empty `v2` store before validation. That exceeds the accepted contract, which only permits destructive migration for schemaless or explicit `v1` payloads.
+- Concrete reproduced failure: a payload with schema `autoloop.operation_replay/v3` is silently converted to `{'schema': 'autoloop.operation_replay/v2', 'records': {}, 'attempts': [...]}` instead of raising an unsupported-schema error.
+- The minimal fix is to narrow the pre-validation migration branch to schemaless or `v1` only and let `validate_persisted_schema()` reject any other schema string.
+
+Open issues / next step
+
+- The phase remains blocked on `IMP-001`. After that migration gate is narrowed, this review should be rerun and the focused replay contract tests can remain the same baseline.
+
+<loop-control>
+{"schema":"docloop.loop_control/v1","kind":"promise","promise":"INCOMPLETE"}
+</loop-control>
