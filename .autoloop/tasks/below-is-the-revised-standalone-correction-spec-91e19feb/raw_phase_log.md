@@ -47,3 +47,50 @@ The artifact writes are done. I’m just checking the final file state one more 
 Updated the planning artifacts in [plan.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/below-is-the-revised-standalone-correction-spec-91e19feb/runs/run-20260504T151346Z-4f933dd3/artifacts/plan/plan.md), [phase_plan.yaml](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/below-is-the-revised-standalone-correction-spec-91e19feb/runs/run-20260504T151346Z-4f933dd3/artifacts/plan/phase_plan.yaml), [feedback.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/below-is-the-revised-standalone-correction-spec-91e19feb/runs/run-20260504T151346Z-4f933dd3/artifacts/plan/feedback.md), and [decisions.txt](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/below-is-the-revised-standalone-correction-spec-91e19feb/runs/run-20260504T151346Z-4f933dd3/decisions.txt). The plan splits the work into: `Phase 1` route/artifact contract fixes, `Phase 2` strict lazy worklist and session semantics, and `Phase 3` deferred public-surface/docs cleanup.
 
 The plan is grounded in the current codebase: `question` policy gating and explicit child `blocked`/`failed` mapping are already partly implemented, while dual-role artifact rejection, rendered `reason` strictness, and eager worklist restore are the main Milestone A gaps. No tests were run because this was a planner turn only.
+
+
+---
+run_id=run-20260504T151346Z-4f933dd3 | entry=session_turn | pair=plan | phase=verifier | cycle=1 | attempt=1 | thread_id=019df38d-79f8-75e0-9233-c039ac728555
+---
+provider=codex
+mode=resume
+template=/home/rauter/.local/share/pipx/venvs/autoloop/lib/python3.12/site-packages/autoloop/templates/plan_verifier.md
+session_id=019df38d-79f8-75e0-9233-c039ac728555
+
+
+---
+run_id=run-20260504T151346Z-4f933dd3 | entry=phase_output | pair=plan | phase=verifier | process=codex-agent | cycle=1 | attempt=1 | thread_id=019df38d-79f8-75e0-9233-c039ac728555
+---
+I’m verifying the planning artifacts against the request, the current codebase findings, and the decision log. First I’m reading the verifier checklist and the authored plan artifacts so I can mark criteria accurately and append only the findings that materially affect implementation safety.
+
+I’ve identified two blocking gaps and one follow-up note. I’m updating the verifier checklist to reflect that the plan is not yet safe to approve, then I’ll append the findings with concrete correction directions.
+
+Scope considered
+
+Run-local plan artifacts, authoritative request snapshot, raw phase log, shared decisions, and the code paths the plan relies on for route policy, child-workflow mapping, and worklist source behavior.
+
+What I analyzed
+
+The request requirements around artifact dual-role handling, canonical artifact naming, provider route visibility, child workflow `blocked` / `failed` mapping, lazy worklist restore, and the new missing-source policy. I also checked the current implementation hotspots in `autoloop/core/inventory.py`, `autoloop/core/engine.py`, and `autoloop/core/worklists.py` to verify whether the plan’s assumptions matched reality.
+
+What I reviewed
+
+`plan.md`, `phase_plan.yaml`, `feedback.md`, `criteria.md`, `decisions.txt`, and the authoritative raw log. `phase_plan.yaml` is structurally coherent and the runtime-owned metadata is intact.
+
+Key findings / decisions
+
+I updated `feedback.md` with two blocking findings and one non-blocking follow-up.
+
+`PLAN-001` blocking: the plan does not explicitly preserve or regression-test the requested child-workflow `blocked` / `failed` mapping behavior, even though Phase 1 route-policy edits can regress `Engine._map_workflow_step_result(...)`.
+
+`PLAN-002` blocking: the plan introduces the required `missing="error" | "scaffold"` source policy but does not define the concrete public API surface or ownership boundary for it, so the implementation is not yet interface-complete.
+
+`criteria.md` remains fully unchecked because intent fidelity, behavioral safety, completeness, technical-debt control, and compatibility are not yet satisfied with those blocking gaps.
+
+Open issues / next step
+
+The planner should revise Phase 1 to explicitly include child-workflow mapping preservation and acceptance coverage, and revise Phase 2 to define exactly where the missing-source policy lives and how restore / ensure / load paths consume it. After that, rerun plan verification.
+
+<loop-control>
+{"schema":"docloop.loop_control/v1","kind":"promise","promise":"INCOMPLETE"}
+</loop-control>
