@@ -220,3 +220,47 @@ Validation I could perform here was limited to syntax: `python3 -m py_compile` p
 Open issues / next step
 
 The next step is an environment-backed test pass once dependencies are available, starting with `tests/contract/test_engine_contracts.py` for the updated child-mapping and lazy-worklist cases, then the adjacent runtime inspection/static-graph suites for regression confirmation.
+
+
+---
+run_id=run-20260504T112330Z-32d8eec3 | entry=session_turn | pair=implement | phase=verifier | cycle=1 | attempt=1 | thread_id=019df2c3-200f-73f2-9d49-64451ced9529
+---
+provider=codex
+mode=resume
+template=/home/rauter/.local/share/pipx/venvs/autoloop/lib/python3.12/site-packages/autoloop/templates/implement_verifier.md
+session_id=019df2c3-200f-73f2-9d49-64451ced9529
+
+
+---
+run_id=run-20260504T112330Z-32d8eec3 | entry=phase_output | pair=implement | phase=verifier | process=codex-agent | cycle=1 | attempt=1 | thread_id=019df2c3-200f-73f2-9d49-64451ced9529
+---
+I’m reviewing only the Milestone A implementation and its review artifacts. I’ll read the criteria and feedback files first, then audit the touched runtime paths and tests for regressions against the accepted phase contract.
+
+I found one area that needs closer scrutiny before I can mark this complete: the new phased worklist resolution only calls `ensure()` from `Engine._ensure_worklist_selection`, but resume/restore and refresh paths still reload sources directly. I’m checking those adjacent paths now to confirm whether that creates a real source-policy regression.
+
+I confirmed the core regression risk: the new `ensure()` semantics are not centralized, so restore and refresh still bypass source policy and can hard-fail scaffold-capable sources. I’m recording that as a blocking finding and updating the criteria accordingly.
+
+Scope considered
+
+Milestone A runtime-semantics changes only: the touched runtime files, the added contract-test coverage, the active implementation notes, and the phase-local criteria/feedback artifacts.
+
+What I analyzed
+
+I reviewed the engine’s child-workflow mapping path, the new phased worklist materialization flow, the surrounding `Worklist` restore/refresh helpers, the work-item session continuity change, and the updated contract tests against AC-1 through AC-4 and the run-local decisions.
+
+What I reviewed
+
+I updated [criteria.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/framework-authoring-flexibility-change-specifica-7e827c69/runs/run-20260504T112330Z-32d8eec3/artifacts/implement/phases/milestone-a-runtime-route-policy-and-lazy-scoped-runtime/criteria.md:1) and appended findings to [feedback.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/framework-authoring-flexibility-change-specifica-7e827c69/runs/run-20260504T112330Z-32d8eec3/artifacts/implement/phases/milestone-a-runtime-route-policy-and-lazy-scoped-runtime/feedback.md:1).
+
+Key findings / decisions
+
+- `IMP-001` `blocking`: the new source-policy `ensure()` behavior is only applied in `Engine._ensure_worklist_selection(...)`. Resume restore and refresh still go through `Worklist.load_items()` / `reload_items()` without any ensure step, so scaffold-capable sources can still fail on resume or refresh if backing data is absent. That violates AC-3’s source-policy-driven lazy-worklist contract.
+- `IMP-002` `non-blocking`: the required Milestone A contract/runtime suites were not executed in this environment; only syntax compilation was performed.
+
+Open issues / next step
+
+Centralize worklist `ensure()` into the shared load/reload/restore path so fresh materialization, restore, and refresh all honor source capabilities consistently, then rerun the targeted Milestone A contract/runtime suites once dependencies are available.
+
+<loop-control>
+{"schema":"docloop.loop_control/v1","kind":"promise","promise":"INCOMPLETE"}
+</loop-control>
