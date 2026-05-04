@@ -1600,3 +1600,39 @@ The plan now matches the shipped contract more tightly: implicit discovery stays
 
 Open issues / next step  
 The plan artifacts are ready for re-verification.
+
+
+---
+run_id=run-20260504T204430Z-152082a1 | entry=session_turn | pair=plan | phase=verifier | cycle=2 | attempt=1 | thread_id=019df4bc-4168-7aa2-b244-31aaceb1e785
+---
+provider=codex
+mode=resume
+template=/home/rauter/.local/share/pipx/venvs/autoloop/lib/python3.12/site-packages/autoloop/templates/plan_verifier.md
+session_id=019df4bc-4168-7aa2-b244-31aaceb1e785
+
+
+---
+run_id=run-20260504T204430Z-152082a1 | entry=phase_output | pair=plan | phase=verifier | process=codex-agent | cycle=2 | attempt=1 | thread_id=019df4bc-4168-7aa2-b244-31aaceb1e785
+---
+I’ve re-checked the narrowed plan against the verifier’s earlier concern and the request. The module-reference drift is gone, so I’m updating the gate checklist to a complete state and recording that closure in feedback history.
+
+I’ve marked the plan complete and recorded the closure of the earlier blocking item. I’m doing one last readback to ensure the criteria and feedback match a `COMPLETE` outcome exactly.
+
+Scope considered  
+The immutable request, the updated [plan.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/objective-implement-workflow-installation-and-di-c328695f/runs/run-20260504T204430Z-152082a1/artifacts/plan/plan.md), [phase_plan.yaml](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/objective-implement-workflow-installation-and-di-c328695f/runs/run-20260504T204430Z-152082a1/artifacts/plan/phase_plan.yaml), [criteria.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/objective-implement-workflow-installation-and-di-c328695f/runs/run-20260504T204430Z-152082a1/artifacts/plan/criteria.md), [feedback.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/objective-implement-workflow-installation-and-di-c328695f/runs/run-20260504T204430Z-152082a1/artifacts/plan/feedback.md), and the shared [decisions.txt](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/objective-implement-workflow-installation-and-di-c328695f/runs/run-20260504T204430Z-152082a1/decisions.txt) ledger.
+
+What I analyzed  
+I re-checked the prior blocking concern against the revised plan language, especially the treatment of `{workspace}/workflows/` and the `_autoloop_workspace_workflows.<hash>...` namespace. I also verified that the single-phase decomposition still cleanly covers the requested test realignment, packaging-smoke fix, and named validation slice.
+
+What I reviewed  
+I updated `criteria.md` so all five gates are checked, and I appended a closure entry to `feedback.md` recording that `PLAN-001` is resolved. The machine-readable phase contract remains parseable and coherent, with runtime-owned metadata unchanged.
+
+Key findings / decisions  
+No blocking findings remain. The plan now explicitly constrains `{workspace}/workflows/` coverage to explicit filesystem-path references only, removes workspace `workflows.*` module-reference expectations from scope, preserves the narrowed discovery contract, and keeps the wheel-smoke fix scoped to test self-sufficiency rather than runtime behavior changes.
+
+Open issues / next step  
+No open verification issues remain in the plan artifacts. The planning pair is ready to hand off for implementation against the current contract.
+
+<loop-control>
+{"schema":"docloop.loop_control/v1","kind":"promise","promise":"COMPLETE"}
+</loop-control>
