@@ -1,4 +1,39 @@
 version: 1
 task_id: framework-authoring-flexibility-change-specifica-7e827c69
 request_snapshot_ref: /home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/framework-authoring-flexibility-change-specifica-7e827c69/runs/run-20260504T121827Z-ab703ce9/request.md
-phases: []
+phases:
+  - phase_id: "prove-framework-authoring-flexibility-regression-slice"
+    title: "Run, Repair, and Record Acceptance Slice"
+    objective: "Use the repository venv to run the targeted authoring-flexibility regression suites, fix only failures exposed by that slice, update the managed-artifact ambiguity diagnostic wording, and capture exact passing evidence in run artifacts."
+    status: "planned"
+    in_scope:
+      - "Run the requested pytest suites through ./.venv/bin/python -m pytest -q."
+      - "Include tests/runtime/test_runtime_static_graph.py as the affected runtime/static-graph suite for provider-visible route metadata."
+      - "Make minimal code or test fixes required for the targeted slice to pass."
+      - "Update autoloop/core/inventory.py so the ambiguity recommendation references Artifact.managed(...) and role=\"managed\"."
+      - "Record exact commands executed and observed passing results in run-local implementation artifacts."
+    out_of_scope:
+      - "Broad refactors across runtime, compiler, or provider subsystems."
+      - "Workflow-package changes or alternate environment bootstrap workflows."
+      - "Unrelated suite expansion beyond directly affected route-metadata regressions."
+    dependencies: []
+    acceptance_criteria:
+      - id: "AC-1"
+        text: "The targeted slice passes in the repository environment, covering tests/contract/test_engine_contracts.py, tests/unit/test_simple_surface.py, tests/unit/test_primitives_and_stores.py, tests/unit/test_validation.py, and tests/runtime/test_runtime_static_graph.py unless a directly affected additional suite is explicitly justified."
+      - id: "AC-2"
+        text: "Any fixes remain local to the revealed failure surface and preserve current route-visibility, required-write, and artifact-ownership semantics."
+      - id: "AC-3"
+        text: "The ownership ambiguity diagnostic in autoloop/core/inventory.py recommends the existing managed-artifact surface instead of describing it as unimplemented future work."
+      - id: "AC-4"
+        text: "Run artifacts contain the exact commands executed and the observed passing result lines supporting the acceptance claim."
+    deliverables:
+      - "Narrow code/test updates needed for the targeted regression slice."
+      - "Updated managed-artifact ambiguity wording in autoloop/core/inventory.py."
+      - "Run-local implementation evidence listing exact pytest commands and passing outcomes."
+    risks:
+      - "Unexpected dependency drift inside the repo venv could block the first execution and require minimal in-venv repair."
+      - "Large target suites may expose pre-existing unrelated failures; scope must stay limited to directly relevant regressions."
+      - "Message assertion updates can accidentally mask semantic regressions if not constrained to wording-only behavior."
+    rollback:
+      - "Revert only the narrow repair if route-visibility or required-write behavior changes outside the targeted acceptance slice."
+      - "Discard any non-essential environment adjustment that is not required to run the repository venv-based slice."
