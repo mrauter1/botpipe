@@ -1606,3 +1606,58 @@ Key findings / decisions
 Open issues / next step
 
 - No open test-author issues remain within this phase scope.
+
+
+---
+run_id=run-20260504T163613Z-cf62c11b | entry=session_turn | pair=test | phase=verifier | cycle=1 | attempt=1 | thread_id=019df3e1-7db9-7150-ac0b-aa1c60526b51
+---
+provider=codex
+mode=resume
+template=/home/rauter/.local/share/pipx/venvs/autoloop/lib/python3.12/site-packages/autoloop/templates/test_verifier.md
+session_id=019df3e1-7db9-7150-ac0b-aa1c60526b51
+
+
+---
+run_id=run-20260504T163613Z-cf62c11b | entry=phase_output | pair=test | phase=verifier | process=codex-agent | cycle=1 | attempt=1 | thread_id=019df3e1-7db9-7150-ac0b-aa1c60526b51
+---
+I’m auditing the new test coverage and the phase test artifacts against AC-1 through AC-4, with particular attention to whether the new regression test materially improves protection without baking in unconfirmed behavior. Then I’ll update only the test audit artifacts.
+
+The coverage map and the new self-contained regression look coherent on inspection. I’m rerunning the baseline and the broadened runtime suite set from the auditor side now so the audit artifacts reflect independently verified coverage, not just the producer notes.
+
+The independent reruns are green: baseline `1 passed`, eval-suite file `30 passed`, broader runtime suite set `183 passed`. I’m marking the audit criteria complete and appending a concise audit-result note so the phase artifacts show there were no remaining coverage or reliability gaps.
+
+Scope considered
+
+- The new test coverage added for phase `align-prompt-route-wording`, especially [tests/runtime/test_workflow_to_eval_suite.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/tests/runtime/test_workflow_to_eval_suite.py:1124) and the shared prompt-body baseline.
+- The phase test artifacts [test_strategy.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/below-is-the-revised-standalone-correction-spec-91e19feb/runs/run-20260504T163613Z-cf62c11b/artifacts/test/phases/align-prompt-route-wording/test_strategy.md:1), [criteria.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/below-is-the-revised-standalone-correction-spec-91e19feb/runs/run-20260504T163613Z-cf62c11b/artifacts/test/phases/align-prompt-route-wording/criteria.md:1), and [feedback.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/below-is-the-revised-standalone-correction-spec-91e19feb/runs/run-20260504T163613Z-cf62c11b/artifacts/test/phases/align-prompt-route-wording/feedback.md:1).
+- The run-local decisions ledger entry about helper-driven compile-cache isolation.
+
+What I analyzed
+
+- Whether the test strategy maps AC-1 through AC-4 to concrete coverage.
+- Whether the new eval-suite regression test actually protects the previously observed cache-order failure mode.
+- Whether the updated test expectations still align with the shipped route model and do not normalize any unconfirmed behavior break.
+
+What I reviewed
+
+- The self-contained cache-order regression in `test_invoke_python_step_recompiles_after_workflow_module_monkeypatch`.
+- The shared prompt-body baseline coverage for retired wording and required positive markers.
+- Independent auditor-side execution of:
+  - `tests/test_architecture_baseline_docs.py::test_workflow_prompt_bodies_use_question_only_runtime_control_wording` → `1 passed`
+  - `tests/runtime/test_workflow_to_eval_suite.py -q` → `30 passed`
+  - `tests/runtime/test_company_operation_to_recursive_improvement_cycle.py tests/runtime/test_workflow_portfolio_to_operating_system.py tests/runtime/test_workflow_run_history_to_failure_modes.py tests/runtime/test_workflow_and_eval_to_refined_workflow_package.py tests/runtime/test_workflow_package_to_composable_building_blocks.py tests/runtime/test_workflow_to_eval_suite.py tests/runtime/test_release_candidate_to_go_no_go.py -q` → `183 passed`
+
+Key findings / decisions
+
+- No blocking audit findings remain.
+- The new regression test is appropriately scoped: it seeds the compile cache before monkeypatching and fails deterministically if helper-driven invocation stops recompiling fresh workflow handlers.
+- The phase test strategy now documents the intended coverage, preserved invariants, failure paths, and the stabilization approach for the order-dependent helper seam.
+- I marked all audit criteria complete and appended a concise no-findings audit note to `feedback.md`.
+
+Open issues / next step
+
+- No open test-audit issues remain within this phase scope.
+
+<loop-control>
+{"schema":"docloop.loop_control/v1","kind":"promise","promise":"COMPLETE"}
+</loop-control>
