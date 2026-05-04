@@ -2,102 +2,163 @@ version: 1
 task_id: objective-implement-workflow-installation-and-di-c328695f
 request_snapshot_ref: /home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/objective-implement-workflow-installation-and-di-c328695f/runs/run-20260504T192206Z-d3f7e940/request.md
 phases:
-  - phase_id: "catalog-root-refactor"
-    title: "Refactor Workflow Search Roots And Catalog"
-    objective: "Replace repo-root workflow discovery with the two canonical roots and establish precedence, collision, and shadowing semantics in one catalog API."
-    status: "planned"
-    in_scope:
-      - "Add WorkflowSearchRoot helpers for workspace and package workflow roots."
-      - "Expand workflow catalog entry metadata with source-root, precedence, import, support-file, and shadowing fields."
-      - "Define and validate manifest-backed workflow metadata semantics, including optional module and class fields plus default module fallback order."
-      - "Implement effective catalog discovery, same-tier duplicate detection, cross-tier shadowing, and explicit searched-root error reporting."
-      - "Keep explicit filesystem path resolution separate from bare name and alias catalog resolution, including .py and .toml path classification."
-    out_of_scope:
-      - "Relocating built-in workflow packages into autoloop/workflows."
-      - "CLI scaffold/help text updates."
-      - "Wheel packaging and documentation rewrites."
-    dependencies: []
-    acceptance_criteria:
-      - id: "AC-1"
-        text: "discover_workflow_catalog(workspace_root) scans only autoloop/workflows and {workspace}/.autoloop/workflows, returns the effective catalog by default, and reports shadowed package entries only when include_shadowed=True."
-      - id: "AC-2"
-        text: "Bare-name and alias resolution obey workspace-name, workspace-alias, package-name, package-alias order, reject same-tier collisions with concrete conflicting paths, and never implicitly probe {workspace}/workflows."
-      - id: "AC-3"
-        text: "Workspace directory and single-file workflows plus package directory workflows all produce validated catalog entries with the exact requested source_root_kind values."
-      - id: "AC-4"
-        text: "Manifest-backed discovery and validation explicitly cover workflow.toml module and class fields, default flow.py then workflow.py fallback, and path-specific errors when class discovery finds zero or multiple workflow classes."
-    deliverables:
-      - "Catalog/root abstraction updates in discovery and resolution modules."
-      - "Focused tests for roots, precedence, duplicate handling, and reference resolution."
-    risks:
-      - "Current discovery callers assume a single workflows root and may need coordinated signature or payload updates."
-      - "Alias collision validation is broader than the current implementation and can expose previously latent conflicts."
-    rollback:
-      - "Revert catalog/root changes as one slice if effective-vs-shadowed semantics destabilize runtime callers."
-      - "Keep explicit-path tests separate so catalog rollback does not mask path-resolution regressions."
-  - phase_id: "runtime-cli-metadata-integration"
-    title: "Integrate Runtime Loading, CLI, And Metadata"
-    objective: "Make runtime loading, capability inspection, CLI output, and persisted workflow origin metadata honor the new catalog semantics and source kinds."
-    status: "planned"
-    in_scope:
-      - "Update package workflow loading to import only via autoloop.workflows.* and workspace loading to use isolated filesystem module namespaces."
-      - "Route manifest-backed references, including explicit .toml paths, through the manifest loader and route non-manifest Python references through the Python source loader."
-      - "Generalize runtime metadata, workflow workspace state, and context root inference to store and consume source_root_kind, source_root, package_name, package_module, and workflow_module."
-      - "Normalize explicit-path origin metadata for workflows outside the canonical roots to workspace source kind with null package_module and workflow_module unless a more precise source kind exists."
-      - "Remove repo-root workflows assumptions from cache invalidation, pycache cleanup, capability inspection, and CLI list/show/init behavior."
-      - "Update scaffold output to {workspace}/.autoloop/workflows/<workflow_id>/ with workflow.toml, flow.py, prompts/, and assets/, and make list/show JSON fields explicit."
-    out_of_scope:
-      - "Moving existing built-in workflow source trees."
-      - "Broad documentation rewrite beyond CLI-facing behavior needed for testable command output."
-      - "Final wheel build/install verification."
-    dependencies:
-      - "catalog-root-refactor"
-    acceptance_criteria:
-      - id: "AC-1"
-        text: "ResolvedWorkflow and persisted workflow/run metadata expose the requested source-root and module fields for both workspace and package sources without copying workflow sources into runtime state."
-      - id: "AC-2"
-        text: "Workspace-local relative imports work without adding .autoloop to sys.path, package-installed workflows import successfully through autoloop.workflows.<workflow_id>, and explicit .toml and .py references load through the correct manifest or Python loader path."
-      - id: "AC-3"
-        text: "autoloop workflows list, workflows show, and init workflow emit the requested paths, source_root_kind values, package/source/module metadata, and shadowed metadata, and CLI help no longer describes {workspace}/workflows as a discovery root."
-      - id: "AC-4"
-        text: "Explicit-path workflows outside the canonical roots keep normal origin metadata while defaulting to source_root_kind workspace and null package_module/workflow_module unless a more precise source kind is available."
-    deliverables:
-      - "Runtime loader, workspace metadata, capability inspection, context, and CLI integration changes."
-      - "Tests covering workspace import isolation, metadata payloads, and CLI JSON/help/scaffold behavior."
-    risks:
-      - "Context root inference currently depends on package_folder depth and can break repo-relative artifacts after the import-path migration."
-      - "Module cache handling is easy to over-broaden; package imports must not evict autoloop.* indiscriminately."
-    rollback:
-      - "Revert CLI and metadata serialization separately from catalog discovery if command output changes are correct but persisted metadata is unstable."
-      - "Keep isolated workspace namespace generation behind local helpers so it can be reverted without undoing catalog semantics."
-  - phase_id: "builtins-packaging-docs-verification"
-    title: "Relocate Built-Ins, Package Assets, And Close Verification"
-    objective: "Ship built-in workflows from autoloop/workflows, update packaging and docs, and prove empty-workspace discovery from an installed wheel."
-    status: "planned"
-    in_scope:
-      - "Add autoloop/workflows/__init__.py and relocate built-in workflows under autoloop/workflows/<workflow_id>/ with package __init__ exports and __all__."
-      - "Fix built-in workflow asset or repo-document references that depend on the old top-level workflows directory depth."
-      - "Add project.scripts, setuptools package discovery and package-data configuration, and MANIFEST.in entries for workflow assets."
-      - "Update architecture/authoring/workflow docs and add packaging smoke tests for build, install, help, list, and asset access."
-    out_of_scope:
-      - "Legacy compatibility for implicit bare-name discovery from {workspace}/workflows."
-      - "Additional workflow source kinds or packaging aliases beyond workspace and package."
-      - "Behavior changes unrelated to workflow installation and discovery."
-    dependencies:
-      - "runtime-cli-metadata-integration"
-    acceptance_criteria:
-      - id: "AC-1"
-        text: "Built-in workflows are importable as autoloop.workflows.<workflow_id>, package workflow export validation passes, and effective catalog discovery works in an empty workspace."
-      - id: "AC-2"
-        text: "python -m build followed by clean installation provides a working global autoloop command, package workflow listing, and access to packaged workflow.toml, prompts, and assets."
-      - id: "AC-3"
-        text: "Documentation consistently states package workflows live under autoloop/workflows, workspace workflows live under {workspace}/.autoloop/workflows, workspace precedence overrides package names and aliases, and {workspace}/workflows is not a discovery root."
-    deliverables:
-      - "Relocated built-in workflow packages under autoloop/workflows."
-      - "Packaging metadata, documentation updates, and end-to-end packaging tests."
-    risks:
-      - "Built-in workflows and tests currently hardcode top-level workflows paths, so relocation touches a wide surface."
-      - "Editable source runs may hide missing package-data or asset-inclusion defects unless wheel validation is enforced."
-    rollback:
-      - "Revert built-in package relocation together with packaging metadata if installed-wheel discovery fails."
-      - "Retain the new discovery semantics while backing out only doc or packaging changes if code behavior is correct."
+- phase_id: catalog-root-refactor
+  title: Refactor Workflow Search Roots And Catalog
+  objective: Replace repo-root workflow discovery with the two canonical roots and
+    establish precedence, collision, and shadowing semantics in one catalog API.
+  status: planned
+  in_scope:
+  - Add WorkflowSearchRoot helpers for workspace and package workflow roots.
+  - Expand workflow catalog entry metadata with source-root, precedence, import, support-file,
+    and shadowing fields.
+  - Define and validate manifest-backed workflow metadata semantics, including optional
+    module and class fields plus default module fallback order.
+  - Implement effective catalog discovery, same-tier duplicate detection, cross-tier
+    shadowing, and explicit searched-root error reporting.
+  - Keep explicit filesystem path resolution separate from bare name and alias catalog
+    resolution, including .py and .toml path classification.
+  out_of_scope:
+  - Relocating built-in workflow packages into autoloop/workflows.
+  - CLI scaffold/help text updates.
+  - Wheel packaging and documentation rewrites.
+  dependencies: []
+  acceptance_criteria:
+  - id: AC-1
+    text: discover_workflow_catalog(workspace_root) scans only autoloop/workflows
+      and {workspace}/.autoloop/workflows, returns the effective catalog by default,
+      and reports shadowed package entries only when include_shadowed=True.
+  - id: AC-2
+    text: Bare-name and alias resolution obey workspace-name, workspace-alias, package-name,
+      package-alias order, reject same-tier collisions with concrete conflicting paths,
+      and never implicitly probe {workspace}/workflows.
+  - id: AC-3
+    text: Workspace directory and single-file workflows plus package directory workflows
+      all produce validated catalog entries with the exact requested source_root_kind
+      values.
+  - id: AC-4
+    text: Manifest-backed discovery and validation explicitly cover workflow.toml
+      module and class fields, default flow.py then workflow.py fallback, and path-specific
+      errors when class discovery finds zero or multiple workflow classes.
+  deliverables:
+  - Catalog/root abstraction updates in discovery and resolution modules.
+  - Focused tests for roots, precedence, duplicate handling, and reference resolution.
+  risks:
+  - Current discovery callers assume a single workflows root and may need coordinated
+    signature or payload updates.
+  - Alias collision validation is broader than the current implementation and can
+    expose previously latent conflicts.
+  rollback:
+  - Revert catalog/root changes as one slice if effective-vs-shadowed semantics destabilize
+    runtime callers.
+  - Keep explicit-path tests separate so catalog rollback does not mask path-resolution
+    regressions.
+- phase_id: runtime-cli-metadata-integration
+  title: Integrate Runtime Loading, CLI, And Metadata
+  objective: Make runtime loading, capability inspection, CLI output, and persisted
+    workflow origin metadata honor the new catalog semantics and source kinds.
+  status: planned
+  in_scope:
+  - Update package workflow loading to import only via autoloop.workflows.* and workspace
+    loading to use isolated filesystem module namespaces.
+  - Route manifest-backed references, including explicit .toml paths, through the
+    manifest loader and route non-manifest Python references through the Python source
+    loader.
+  - Generalize runtime metadata, workflow workspace state, and context root inference
+    to store and consume source_root_kind, source_root, package_name, package_module,
+    and workflow_module.
+  - Normalize explicit-path origin metadata for workflows outside the canonical roots
+    to workspace source kind with null package_module and workflow_module unless a
+    more precise source kind exists.
+  - Remove repo-root workflows assumptions from cache invalidation, pycache cleanup,
+    capability inspection, and CLI list/show/init behavior.
+  - Update scaffold output to {workspace}/.autoloop/workflows/<workflow_id>/ with
+    workflow.toml, flow.py, prompts/, and assets/, and make list/show JSON fields
+    explicit.
+  out_of_scope:
+  - Moving existing built-in workflow source trees.
+  - Broad documentation rewrite beyond CLI-facing behavior needed for testable command
+    output.
+  - Final wheel build/install verification.
+  dependencies:
+  - catalog-root-refactor
+  acceptance_criteria:
+  - id: AC-1
+    text: ResolvedWorkflow and persisted workflow/run metadata expose the requested
+      source-root and module fields for both workspace and package sources without
+      copying workflow sources into runtime state.
+  - id: AC-2
+    text: Workspace-local relative imports work without adding .autoloop to sys.path,
+      package-installed workflows import successfully through autoloop.workflows.<workflow_id>,
+      and explicit .toml and .py references load through the correct manifest or Python
+      loader path.
+  - id: AC-3
+    text: autoloop workflows list, workflows show, and init workflow emit the requested
+      paths, source_root_kind values, package/source/module metadata, and shadowed
+      metadata, and CLI help no longer describes {workspace}/workflows as a discovery
+      root.
+  - id: AC-4
+    text: Explicit-path workflows outside the canonical roots keep normal origin metadata
+      while defaulting to source_root_kind workspace and null package_module/workflow_module
+      unless a more precise source kind is available.
+  deliverables:
+  - Runtime loader, workspace metadata, capability inspection, context, and CLI integration
+    changes.
+  - Tests covering workspace import isolation, metadata payloads, and CLI JSON/help/scaffold
+    behavior.
+  risks:
+  - Context root inference currently depends on package_folder depth and can break
+    repo-relative artifacts after the import-path migration.
+  - Module cache handling is easy to over-broaden; package imports must not evict
+    autoloop.* indiscriminately.
+  rollback:
+  - Revert CLI and metadata serialization separately from catalog discovery if command
+    output changes are correct but persisted metadata is unstable.
+  - Keep isolated workspace namespace generation behind local helpers so it can be
+    reverted without undoing catalog semantics.
+- phase_id: builtins-packaging-docs-verification
+  title: Relocate Built-Ins, Package Assets, And Close Verification
+  objective: Ship built-in workflows from autoloop/workflows, update packaging and
+    docs, and prove empty-workspace discovery from an installed wheel.
+  status: planned
+  in_scope:
+  - Add autoloop/workflows/__init__.py and relocate built-in workflows under autoloop/workflows/<workflow_id>/
+    with package __init__ exports and __all__.
+  - Fix built-in workflow asset or repo-document references that depend on the old
+    top-level workflows directory depth.
+  - Add project.scripts, setuptools package discovery and package-data configuration,
+    and MANIFEST.in entries for workflow assets.
+  - Update architecture/authoring/workflow docs and add packaging smoke tests for
+    build, install, help, list, and asset access.
+  out_of_scope:
+  - Legacy compatibility for implicit bare-name discovery from {workspace}/workflows.
+  - Additional workflow source kinds or packaging aliases beyond workspace and package.
+  - Behavior changes unrelated to workflow installation and discovery.
+  dependencies:
+  - runtime-cli-metadata-integration
+  acceptance_criteria:
+  - id: AC-1
+    text: Built-in workflows are importable as autoloop.workflows.<workflow_id>, package
+      workflow export validation passes, and effective catalog discovery works in
+      an empty workspace.
+  - id: AC-2
+    text: python -m build followed by clean installation provides a working global
+      autoloop command, package workflow listing, and access to packaged workflow.toml,
+      prompts, and assets.
+  - id: AC-3
+    text: Documentation consistently states package workflows live under autoloop/workflows,
+      workspace workflows live under {workspace}/.autoloop/workflows, workspace precedence
+      overrides package names and aliases, and {workspace}/workflows is not a discovery
+      root.
+  deliverables:
+  - Relocated built-in workflow packages under autoloop/workflows.
+  - Packaging metadata, documentation updates, and end-to-end packaging tests.
+  risks:
+  - Built-in workflows and tests currently hardcode top-level workflows paths, so
+    relocation touches a wide surface.
+  - Editable source runs may hide missing package-data or asset-inclusion defects
+    unless wheel validation is enforced.
+  rollback:
+  - Revert built-in package relocation together with packaging metadata if installed-wheel
+    discovery fails.
+  - Retain the new discovery semantics while backing out only doc or packaging changes
+    if code behavior is correct.

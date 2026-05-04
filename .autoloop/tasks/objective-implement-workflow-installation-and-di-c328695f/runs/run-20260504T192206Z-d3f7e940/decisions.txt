@@ -2,3 +2,6 @@
 Package-installed workflows must be relocated and imported only as autoloop.workflows.* rather than preserved through a top-level workflows compatibility namespace.
 Implicit bare-name discovery from {workspace}/workflows is intentionally removed; only explicit filesystem path references may still target arbitrary readable paths there.
 Context root inference and built-in package_folder-relative repo asset references must be updated as part of the migration because moving built-ins under autoloop/workflows changes package depth and would otherwise break source-in-place execution.
+<autoloop-decisions-header version="1" block_seq="2" owner="planner" phase_id="task-global" pair="plan" turn_seq="2" run_id="run-20260504T192206Z-d3f7e940" ts="2026-05-04T19:26:43.802259+00:00" />
+Manifest-backed workflow loading is part of the implementation contract, not an optional refinement: workflow.toml module/class fields, flow.py then workflow.py fallback, and exact-one-workflow-class validation must be explicitly planned and tested.
+Explicit filesystem references include path-separator, .py, and .toml forms; out-of-root explicit-path workflows must still emit normalized origin metadata with source_root_kind workspace and null package_module/workflow_module unless a more precise source kind is available.

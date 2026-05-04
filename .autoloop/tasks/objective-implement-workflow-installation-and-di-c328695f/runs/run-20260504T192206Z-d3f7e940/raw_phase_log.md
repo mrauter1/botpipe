@@ -91,3 +91,68 @@ The plan is not ready for execution as-is. It should be revised to add explicit 
 <loop-control>
 {"schema":"docloop.loop_control/v1","kind":"promise","promise":"INCOMPLETE"}
 </loop-control>
+
+
+---
+run_id=run-20260504T192206Z-d3f7e940 | entry=session_turn | pair=plan | phase=producer | cycle=2 | attempt=1 | thread_id=019df470-ce5a-78b3-bba0-018dc713aa41
+---
+provider=codex
+mode=resume
+template=/home/rauter/.local/share/pipx/venvs/autoloop/lib/python3.12/site-packages/autoloop/templates/plan_producer.md
+session_id=019df470-ce5a-78b3-bba0-018dc713aa41
+
+
+---
+run_id=run-20260504T192206Z-d3f7e940 | entry=phase_output | pair=plan | phase=producer | process=codex-agent | cycle=2 | attempt=1 | thread_id=019df470-ce5a-78b3-bba0-018dc713aa41
+---
+I’m revising the plan against the verifier’s blocking findings. First I’m checking the current decision-log header for this turn and then I’ll tighten the plan around manifest-backed loading and explicit path semantics so the next verification pass has concrete acceptance criteria instead of implied intent.
+
+I’ve narrowed the fix to the verifier’s actual gaps: I’m not restructuring the plan, just making the manifest-backed loading contract, explicit `.toml`/out-of-root path behavior, and exact CLI JSON surface explicit in the narrative and phase criteria.
+
+I’ve updated the plan structure. Next I’m recording the scope correction in feedback and pinning the non-obvious constraints into the new decisions block so later turns don’t drift back to the earlier under-specified manifest/path behavior.
+
+Revised the plan artifacts to address the verifier’s blocking findings.
+
+[plan.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/objective-implement-workflow-installation-and-di-c328695f/runs/run-20260504T192206Z-d3f7e940/artifacts/plan/plan.md) now explicitly covers:
+- manifest-backed loading semantics for `workflow.toml` `module` and `class`
+- default `flow.py` then `workflow.py` fallback
+- exact-one-workflow-class validation and path-specific errors
+- explicit `.py` and `.toml` path classification and bypass behavior
+- normalized origin metadata for explicit paths outside the canonical roots
+- exact CLI JSON field coverage as a public contract
+
+[phase_plan.yaml](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/objective-implement-workflow-installation-and-di-c328695f/runs/run-20260504T192206Z-d3f7e940/artifacts/plan/phase_plan.yaml) was tightened to add those requirements directly into phase scope and acceptance criteria, especially in phases 1 and 2. I also appended a revision note to [feedback.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/objective-implement-workflow-installation-and-di-c328695f/runs/run-20260504T192206Z-d3f7e940/artifacts/plan/feedback.md) and recorded the non-obvious constraints under the new turn header in [decisions.txt](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/objective-implement-workflow-installation-and-di-c328695f/runs/run-20260504T192206Z-d3f7e940/decisions.txt). I did not modify verifier-owned [criteria.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/objective-implement-workflow-installation-and-di-c328695f/runs/run-20260504T192206Z-d3f7e940/artifacts/plan/criteria.md).
+
+
+---
+run_id=run-20260504T192206Z-d3f7e940 | entry=session_turn | pair=plan | phase=verifier | cycle=2 | attempt=1 | thread_id=019df470-ce5a-78b3-bba0-018dc713aa41
+---
+provider=codex
+mode=resume
+template=/home/rauter/.local/share/pipx/venvs/autoloop/lib/python3.12/site-packages/autoloop/templates/plan_verifier.md
+session_id=019df470-ce5a-78b3-bba0-018dc713aa41
+
+
+---
+run_id=run-20260504T192206Z-d3f7e940 | entry=phase_output | pair=plan | phase=verifier | process=codex-agent | cycle=2 | attempt=1 | thread_id=019df470-ce5a-78b3-bba0-018dc713aa41
+---
+I’ve re-checked the revised artifacts against the verifier concerns and the request contract. I’m updating the criteria to reflect a clean pass and adding a closure note to the feedback history so the prior blocking findings are visibly resolved.
+
+Scope considered
+The revised planning artifacts for this run, the immutable request snapshot, the current decisions log, and the verifier feedback history. I focused on the previously flagged manifest-loading and explicit-path gaps, then re-checked the broader plan for remaining intent, compatibility, and regression issues.
+
+What I analyzed
+I compared the updated [plan.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/objective-implement-workflow-installation-and-di-c328695f/runs/run-20260504T192206Z-d3f7e940/artifacts/plan/plan.md) and [phase_plan.yaml](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/objective-implement-workflow-installation-and-di-c328695f/runs/run-20260504T192206Z-d3f7e940/artifacts/plan/phase_plan.yaml) against the request’s workflow-root contract, manifest semantics, explicit `.py` and `.toml` path behavior, runtime origin metadata, CLI JSON contract, packaging, tests, and intentional behavior changes. I also re-validated YAML parseability and required non-empty lists.
+
+What I reviewed
+I updated [criteria.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/objective-implement-workflow-installation-and-di-c328695f/runs/run-20260504T192206Z-d3f7e940/artifacts/plan/criteria.md) to all checked, appended a closure note to [feedback.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/objective-implement-workflow-installation-and-di-c328695f/runs/run-20260504T192206Z-d3f7e940/artifacts/plan/feedback.md), and confirmed the plan remains aligned with [decisions.txt](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/objective-implement-workflow-installation-and-di-c328695f/runs/run-20260504T192206Z-d3f7e940/decisions.txt).
+
+Key findings / decisions
+No new blocking or non-blocking findings remain. The prior gaps are now explicitly covered: manifest-backed `module` and `class` behavior, `flow.py` then `workflow.py` fallback, exact-one-class validation, explicit `.py` and `.toml` path handling, out-of-root origin metadata normalization, and exact CLI JSON contract coverage. The phase plan is parseable, dependency ordering is coherent, and the runtime-owned metadata keys remain intact.
+
+Open issues / next step
+No open verification issues remain for the plan artifacts. The planning set is ready for implementation use.
+
+<loop-control>
+{"schema":"docloop.loop_control/v1","kind":"promise","promise":"COMPLETE"}
+</loop-control>
