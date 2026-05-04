@@ -153,7 +153,7 @@ def load_workflow_package_contract(root: str | Path, entry: WorkflowCatalogEntry
     """Load the main workflow class, parameters model, and compiled workflow for one catalog entry."""
 
     root_path = Path(root).resolve()
-    if entry.workflow_module is None or entry.package_module is None:
+    if entry.source_root_kind != "package" or entry.workflow_module is None or entry.package_module is None:
         resolved = _resolve_reference(root_path, str(entry.source_path))
         compiled = compile_workflow(resolved.workflow_cls)
         return WorkflowLoadedPackage(
@@ -163,7 +163,7 @@ def load_workflow_package_contract(root: str | Path, entry: WorkflowCatalogEntry
         )
 
     workflow_module = _import_discovered_module(entry.workflow_module, root_path)
-    workflow_cls = locate_workflow_class(workflow_module)
+    workflow_cls = locate_workflow_class(workflow_module, class_name=entry.manifest_class)
     compiled = compile_workflow(workflow_cls)
     if compiled.workflow_name != entry.workflow_name:
         raise WorkflowCapabilityInspectionError(
@@ -528,7 +528,7 @@ def selected_workflow_decomposition_surface_payload(
 
 
 def _inspect_catalog_entry(root_path: Path, entry: WorkflowCatalogEntry) -> WorkflowCapabilityEntry:
-    if entry.manifest_path is not None and entry.workflow_module is not None and entry.package_module is not None:
+    if entry.source_root_kind == "package" and entry.workflow_module is not None and entry.package_module is not None:
         from autoloop.runtime.loader import ResolvedWorkflow, WorkflowReference
 
         loaded = load_workflow_package_contract(root_path, entry)
@@ -545,6 +545,8 @@ def _inspect_catalog_entry(root_path: Path, entry: WorkflowCatalogEntry) -> Work
             package_dir=entry.package_dir,
             manifest_path=entry.manifest_path,
             authoring_shape=entry.authoring_shape,
+            source_root_kind=entry.source_root_kind,
+            source_root=entry.source_root,
             package_name=entry.package_name,
             package_module=entry.package_module,
             workflow_module=entry.workflow_module,
@@ -919,33 +921,30 @@ def _validate_package_exports(
 
 def _import_discovered_module(module_name: str, root_path: Path) -> ModuleType:
     importlib.invalidate_caches()
-    _evict_stale_workflow_modules(root_path / "workflows")
+    _evict_stale_workflow_modules(module_name)
     with _repo_root_on_syspath(root_path):
         return importlib.import_module(module_name)
 
 
-def _evict_stale_workflow_modules(workflows_root: Path) -> None:
-    resolved_root = workflows_root.resolve()
+def _evict_stale_workflow_modules(module_name: str) -> None:
+    if not module_name.startswith("autoloop.workflows."):
+        return
     for name, module in tuple(sys.modules.items()):
-        if name != "workflows" and not name.startswith("workflows."):
+        if name != "autoloop.workflows" and not name.startswith("autoloop.workflows."):
             continue
-        if _module_within_workflows_root(module, resolved_root):
+        if _module_within_package_namespace(module):
             continue
         for cached_name in tuple(sys.modules):
-            if cached_name == "workflows" or cached_name.startswith("workflows."):
+            if cached_name == "autoloop.workflows" or cached_name.startswith("autoloop.workflows."):
                 sys.modules.pop(cached_name, None)
         return
 
 
-def _module_within_workflows_root(module: ModuleType, workflows_root: Path) -> bool:
+def _module_within_package_namespace(module: ModuleType) -> bool:
     origin = _module_origin_path(module)
     if origin is None:
         return True
-    try:
-        origin.relative_to(workflows_root)
-    except ValueError:
-        return False
-    return True
+    return "autoloop/workflows" in origin.as_posix()
 
 
 def _module_origin_path(module: ModuleType) -> Path | None:

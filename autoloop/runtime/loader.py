@@ -38,7 +38,10 @@ from autoloop.core.workflow_catalog import (
     WorkflowCatalogDiscoveryError,
     WorkflowCatalogEntry,
     WorkflowCatalogManifestError,
+    WorkflowSourceKind,
     discover_workflow_catalog as _discover_workflow_catalog,
+    read_workflow_manifest,
+    workflow_search_roots,
 )
 
 
@@ -66,9 +69,12 @@ class WorkflowPackage:
     package_dir: Path
     manifest_path: Path
     source_path: Path
+    source_root_kind: WorkflowSourceKind
+    source_root: Path
     authoring_shape: Literal["single_file", "flow_package", "workflow_package", "manifest_package", "unknown"]
-    package_module: str
-    workflow_module: str
+    package_module: str | None
+    workflow_module: str | None
+    manifest_class: str | None = None
 
 
 @dataclass(frozen=True, slots=True)
@@ -87,6 +93,8 @@ class WorkflowReference:
     package_dir: Path
     manifest_path: Path | None
     authoring_shape: Literal["single_file", "flow_package", "workflow_package", "manifest_package", "unknown"]
+    source_root_kind: WorkflowSourceKind = "workspace"
+    source_root: Path | None = None
     package_name: str | None = None
     package_module: str | None = None
     workflow_module: str | None = None
@@ -101,11 +109,15 @@ class ResolvedWorkflow:
     parameters_cls: type[Any] | None
 
 
-def discover_workflow_catalog(root: str | Path) -> tuple[WorkflowCatalogEntry, ...]:
+def discover_workflow_catalog(
+    root: str | Path,
+    *,
+    include_shadowed: bool = False,
+) -> tuple[WorkflowCatalogEntry, ...]:
     """Discover pure workflow catalog metadata while preserving runtime error types."""
 
     try:
-        return _discover_workflow_catalog(root)
+        return _discover_workflow_catalog(root, include_shadowed=include_shadowed)
     except WorkflowCatalogManifestError as exc:
         raise WorkflowManifestError(str(exc)) from exc
     except WorkflowCatalogDiscoveryError as exc:
@@ -113,7 +125,7 @@ def discover_workflow_catalog(root: str | Path) -> tuple[WorkflowCatalogEntry, .
 
 
 def discover_workflow_packages(root: str | Path) -> tuple[WorkflowPackage, ...]:
-    """Discover workflow packages under ``<root>/workflows`` from metadata-only manifests."""
+    """Discover manifest-backed workflows from the effective catalog."""
 
     return tuple(
         WorkflowPackage(
@@ -125,31 +137,26 @@ def discover_workflow_packages(root: str | Path) -> tuple[WorkflowPackage, ...]:
             package_dir=entry.package_dir,
             manifest_path=entry.manifest_path,
             source_path=entry.source_path,
+            source_root_kind=entry.source_root_kind,
+            source_root=entry.source_root,
             authoring_shape=entry.authoring_shape,
             package_module=entry.package_module,
             workflow_module=entry.workflow_module,
+            manifest_class=entry.manifest_class,
         )
         for entry in discover_workflow_catalog(root)
-        if entry.manifest_path is not None and entry.package_module is not None and entry.workflow_module is not None
+        if entry.manifest_path is not None
     )
 
 
 def resolve_workflow_package(root: str | Path, reference: str) -> WorkflowPackage:
-    """Resolve a manifest-backed workflow by canonical name first, then alias."""
+    """Resolve a manifest-backed workflow by the catalog's precedence rules."""
 
-    packages = discover_workflow_packages(root)
-    by_name = {package.workflow_name: package for package in packages}
-    package = by_name.get(reference)
-    if package is not None:
-        return package
-
-    alias_matches = [package for package in packages if reference in package.aliases]
-    if not alias_matches:
+    root_path = Path(root).resolve()
+    entry = _resolve_catalog_entry_by_reference(root_path, reference, require_manifest=True)
+    if entry is None:
         raise WorkflowDiscoveryError(f"unknown workflow {reference!r}")
-    if len(alias_matches) > 1:
-        matches = ", ".join(sorted(package.workflow_name for package in alias_matches))
-        raise WorkflowDiscoveryError(f"workflow alias {reference!r} is ambiguous: {matches}")
-    return alias_matches[0]
+    return _workflow_package_from_entry(entry)
 
 
 def resolve_workflow_reference(root: str | Path, reference: str | type[Any]) -> ResolvedWorkflow:
@@ -289,31 +296,16 @@ def _resolve_named_reference(
     workflow_reference: str,
     requested_class_name: str | None,
 ) -> ResolvedWorkflow:
-    package = _resolve_manifest_package_or_none(root_path, workflow_reference)
-    if package is not None:
-        return _load_manifest_package_reference(
-            root_path,
-            package,
-            original=original_reference,
-            requested_class_name=requested_class_name,
+    entry = _resolve_catalog_entry_by_reference(root_path, workflow_reference)
+    if entry is None:
+        searched_roots = ", ".join(str(search_root.path) for search_root in workflow_search_roots(root_path))
+        raise WorkflowDiscoveryError(
+            f"unknown workflow {workflow_reference!r} for workspace root {root_path}; searched roots: {searched_roots}"
         )
-
-    workflows_root = root_path / "workflows"
-    candidate_paths = [
-        workflows_root / workflow_reference / "flow.py",
-        workflows_root / workflow_reference / "workflow.py",
-        workflows_root / f"{workflow_reference}.py",
-    ]
-    existing = [path for path in candidate_paths if path.is_file()]
-    if not existing:
-        raise WorkflowDiscoveryError(f"unknown workflow {workflow_reference!r}")
-    if len(existing) > 1:
-        matches = ", ".join(str(path) for path in existing)
-        raise WorkflowDiscoveryError(f"workflow reference {workflow_reference!r} is ambiguous across: {matches}")
-    return _resolve_python_path(
+    return _resolve_catalog_entry_reference(
         root_path,
+        entry,
         original=original_reference,
-        source=existing[0],
         requested_class_name=requested_class_name,
         kind="catalog_name",
     )
@@ -328,16 +320,29 @@ def _resolve_path_reference(
     path = _resolve_reference_path(root_path, raw_path_reference)
     if not path.exists():
         raise FileNotFoundError(f"workflow path {path} does not exist")
+    catalog_entry = _catalog_entry_for_explicit_path(root_path, path)
+    if catalog_entry is not None:
+        kind: Literal["python_file", "workflow_directory"] = "workflow_directory" if path.is_dir() else "python_file"
+        return _resolve_catalog_entry_reference(
+            root_path,
+            catalog_entry,
+            original=original_reference,
+            requested_class_name=requested_class_name,
+            kind=kind,
+        )
     if path.is_dir():
         return _resolve_directory_reference(root_path, original_reference, path, requested_class_name)
+    if path.suffix == ".toml":
+        return _resolve_manifest_path_reference(root_path, original_reference, path, requested_class_name)
     if path.suffix != ".py":
-        raise WorkflowDiscoveryError(f"workflow path {path} must be a Python file or directory")
+        raise WorkflowDiscoveryError(f"workflow path {path} must be a Python file, workflow.toml, or directory")
     return _resolve_python_path(
         root_path,
         original=original_reference,
         source=path,
         requested_class_name=requested_class_name,
         kind="python_file",
+        source_root_kind="workspace",
     )
 
 
@@ -347,6 +352,9 @@ def _resolve_directory_reference(
     directory: Path,
     requested_class_name: str | None,
 ) -> ResolvedWorkflow:
+    manifest_path = directory / "workflow.toml"
+    if manifest_path.is_file():
+        return _resolve_manifest_path_reference(root_path, original_reference, manifest_path, requested_class_name)
     preferred = directory / "flow.py"
     workflow_py_path = directory / "workflow.py"
     if preferred.is_file():
@@ -356,6 +364,7 @@ def _resolve_directory_reference(
             source=preferred,
             requested_class_name=requested_class_name,
             kind="workflow_directory",
+            source_root_kind="workspace",
         )
     if workflow_py_path.is_file():
         return _resolve_python_path(
@@ -364,6 +373,7 @@ def _resolve_directory_reference(
             source=workflow_py_path,
             requested_class_name=requested_class_name,
             kind="workflow_directory",
+            source_root_kind="workspace",
         )
     raise WorkflowDiscoveryError(f"workflow directory {directory} must contain flow.py or workflow.py")
 
@@ -400,6 +410,8 @@ def _resolve_module_reference(
         aliases=(),
         title=None,
         description=None,
+        source_root_kind=_source_root_kind_for_module(module_name),
+        source_root=_classify_source_root(root_path, source_path),
         package_name=_package_name_from_module_name(module_name),
         package_module=_package_module_name(module_name),
         workflow_module=module_name,
@@ -455,6 +467,8 @@ def _resolve_imported_class_reference(root_path: Path, workflow_cls: type[Any]) 
         aliases=(),
         title=None,
         description=None,
+        source_root_kind=_classify_source_root_kind(root_path, source_path, module_name=workflow_cls.__module__),
+        source_root=_classify_source_root(root_path, source_path),
         package_name=_package_name_from_source(root_path, source_path),
         package_module=_package_module_name(workflow_cls.__module__),
         workflow_module=workflow_cls.__module__,
@@ -469,11 +483,17 @@ def _resolve_python_path(
     source: Path,
     requested_class_name: str | None,
     kind: Literal["catalog_name", "python_file", "workflow_directory"],
+    source_root_kind: WorkflowSourceKind,
+    source_root: Path | None = None,
+    package_module_name: str | None = None,
+    workflow_module_name: str | None = None,
+    title: str | None = None,
+    description: str | None = None,
+    aliases: tuple[str, ...] = (),
 ) -> ResolvedWorkflow:
     module = _load_isolated_python_module(source)
     workflow_cls = _locate_workflow_class(module, class_name=requested_class_name)
     manifest_path = _adjacent_manifest_path(source)
-    package_module_name = _package_module_name_for_source(root_path, source)
     _apply_manifest_name_override(workflow_cls, manifest_path)
     parameters_cls = _resolve_parameters_cls(
         root_path,
@@ -491,12 +511,14 @@ def _resolve_python_path(
         package_dir=_package_dir_for_source(source),
         manifest_path=manifest_path,
         authoring_shape=_authoring_shape_for_source(source),
-        aliases=(),
-        title=None,
-        description=None,
+        aliases=aliases,
+        title=title,
+        description=description,
+        source_root_kind=source_root_kind,
+        source_root=source_root,
         package_name=_package_name_from_source(root_path, source),
         package_module=package_module_name,
-        workflow_module=None,
+        workflow_module=workflow_module_name,
     )
     return ResolvedWorkflow(reference=reference, workflow_cls=workflow_cls, parameters_cls=parameters_cls)
 
@@ -508,52 +530,14 @@ def _load_manifest_package_reference(
     original: str,
     requested_class_name: str | None,
 ) -> ResolvedWorkflow:
-    entry = WorkflowCatalogEntry(
-        package_name=package.package_name,
-        workflow_name=package.workflow_name,
-        title=package.title,
-        description=package.description,
-        aliases=package.aliases,
-        package_dir=package.package_dir,
-        manifest_path=package.manifest_path,
-        workflow_path=package.source_path,
-        params_path=package.package_dir / "params.py" if (package.package_dir / "params.py").is_file() else None,
-        doc_path=None,
-        authoring_shape=package.authoring_shape,
-        source_path=package.source_path,
-        flow_path=package.source_path if package.source_path.name == "flow.py" else None,
-        workflow_py_path=package.source_path if package.source_path.name == "workflow.py" else None,
-        package_init_path=package.package_dir / "__init__.py" if (package.package_dir / "__init__.py").is_file() else None,
-        package_module=package.package_module,
-        workflow_module=package.workflow_module,
-    )
-    try:
-        loaded = load_workflow_package_contract(root_path, entry)
-    except WorkflowCapabilityInspectionError as exc:
-        raise WorkflowDiscoveryError(str(exc)) from exc
-    if requested_class_name is not None and loaded.workflow_cls.__name__ != requested_class_name:
-        raise WorkflowDiscoveryError(
-            f"workflow reference {original!r} resolved to {loaded.workflow_cls.__name__!r}; "
-            f"class {requested_class_name!r} was not found"
-        )
-    reference = WorkflowReference(
+    entry = _catalog_entry_for_manifest_package(root_path, package)
+    return _resolve_catalog_entry_reference(
+        root_path,
+        entry,
         original=original,
+        requested_class_name=requested_class_name,
         kind="catalog_name",
-        workflow_name=package.workflow_name,
-        title=package.title,
-        description=package.description,
-        aliases=package.aliases,
-        class_name=loaded.workflow_cls.__name__,
-        module_name=loaded.workflow_cls.__module__,
-        source_path=package.source_path,
-        package_dir=package.package_dir,
-        manifest_path=package.manifest_path,
-        authoring_shape=package.authoring_shape,
-        package_name=package.package_name,
-        package_module=package.package_module,
-        workflow_module=package.workflow_module,
     )
-    return ResolvedWorkflow(reference=reference, workflow_cls=loaded.workflow_cls, parameters_cls=loaded.parameters_cls)
 
 
 def _resolve_parameters_cls(
@@ -641,6 +625,8 @@ def _build_reference(
     aliases: tuple[str, ...],
     title: str | None,
     description: str | None,
+    source_root_kind: WorkflowSourceKind,
+    source_root: Path | None,
     package_name: str | None,
     package_module: str | None,
     workflow_module: str | None,
@@ -659,6 +645,8 @@ def _build_reference(
         package_dir=package_dir.resolve(),
         manifest_path=None if manifest_path is None else manifest_path.resolve(),
         authoring_shape=authoring_shape,
+        source_root_kind=source_root_kind,
+        source_root=None if source_root is None else source_root.resolve(),
         package_name=package_name,
         package_module=package_module,
         workflow_module=workflow_module,
@@ -787,7 +775,7 @@ def _split_reference_class(reference: str) -> tuple[str, str | None]:
 
 
 def _is_path_reference(reference: str) -> bool:
-    if reference.endswith(".py"):
+    if reference.endswith((".py", ".toml")):
         return True
     if Path(reference).is_absolute():
         return True
@@ -803,24 +791,214 @@ def _resolve_reference_path(root_path: Path, reference: str) -> Path:
     return path.resolve()
 
 
-def _resolve_manifest_package_or_none(root_path: Path, reference: str) -> WorkflowPackage | None:
-    packages = discover_workflow_packages(root_path)
-    by_name = {package.workflow_name: package for package in packages}
-    package = by_name.get(reference)
-    if package is not None:
-        return package
-    alias_matches = [package for package in packages if reference in package.aliases]
-    if not alias_matches:
-        return None
-    if len(alias_matches) > 1:
-        matches = ", ".join(sorted(package.workflow_name for package in alias_matches))
-        raise WorkflowDiscoveryError(f"workflow alias {reference!r} is ambiguous: {matches}")
-    return alias_matches[0]
+def _resolve_catalog_entry_by_reference(
+    root_path: Path,
+    reference: str,
+    *,
+    require_manifest: bool = False,
+) -> WorkflowCatalogEntry | None:
+    key = reference.strip()
+    if not key:
+        raise WorkflowDiscoveryError("workflow reference must be a non-empty string")
+    catalog = discover_workflow_catalog(root_path)
+    for source_root_kind in ("workspace", "package"):
+        for entry in catalog:
+            if entry.source_root_kind != source_root_kind:
+                continue
+            if require_manifest and entry.manifest_path is None:
+                continue
+            if entry.workflow_name == key:
+                return entry
+        for entry in catalog:
+            if entry.source_root_kind != source_root_kind:
+                continue
+            if require_manifest and entry.manifest_path is None:
+                continue
+            if key in entry.aliases:
+                return entry
+    return None
+
+
+def _catalog_entry_for_explicit_path(root_path: Path, path: Path) -> WorkflowCatalogEntry | None:
+    resolved = path.resolve()
+    for entry in discover_workflow_catalog(root_path, include_shadowed=True):
+        if resolved.is_dir() and entry.package_dir.resolve() == resolved:
+            return entry
+        if entry.manifest_path is not None and entry.manifest_path.resolve() == resolved:
+            return entry
+        if entry.source_path.resolve() == resolved:
+            return entry
+    return None
+
+
+def _workflow_package_from_entry(entry: WorkflowCatalogEntry) -> WorkflowPackage:
+    if entry.manifest_path is None:
+        raise WorkflowDiscoveryError(f"workflow {entry.workflow_name!r} is not manifest-backed")
+    return WorkflowPackage(
+        package_name=entry.package_name,
+        workflow_name=entry.workflow_name,
+        title=entry.title,
+        description=entry.description,
+        aliases=entry.aliases,
+        package_dir=entry.package_dir,
+        manifest_path=entry.manifest_path,
+        source_path=entry.source_path,
+        source_root_kind=entry.source_root_kind,
+        source_root=entry.source_root,
+        authoring_shape=entry.authoring_shape,
+        package_module=entry.package_module,
+        workflow_module=entry.workflow_module,
+        manifest_class=entry.manifest_class,
+    )
+
+
+def _catalog_entry_for_manifest_package(root_path: Path, package: WorkflowPackage) -> WorkflowCatalogEntry:
+    for entry in discover_workflow_catalog(root_path, include_shadowed=True):
+        if entry.manifest_path is not None and entry.manifest_path.resolve() == package.manifest_path.resolve():
+            return entry
+    manifest = read_workflow_manifest(package.manifest_path)
+    return WorkflowCatalogEntry(
+        workflow_name=package.workflow_name,
+        title=package.title or manifest.get("title", package.workflow_name.replace("_", " ").title()),
+        description=package.description or manifest.get("description", ""),
+        aliases=package.aliases,
+        package_name=package.package_name,
+        package_dir=package.package_dir.resolve(),
+        manifest_path=package.manifest_path.resolve(),
+        source_path=package.source_path.resolve(),
+        source_root_kind=package.source_root_kind,
+        source_root=package.source_root.resolve(),
+        import_prefix="autoloop.workflows" if package.source_root_kind == "package" else None,
+        precedence=100 if package.source_root_kind == "workspace" else 10,
+        package_module=package.package_module,
+        workflow_module=package.workflow_module,
+        authoring_shape=package.authoring_shape,
+        prompts_dir=(package.package_dir / "prompts").resolve() if (package.package_dir / "prompts").is_dir() else None,
+        assets_dir=(package.package_dir / "assets").resolve() if (package.package_dir / "assets").is_dir() else None,
+        docs_path=(package.package_dir / "docs.md").resolve() if (package.package_dir / "docs.md").is_file() else None,
+        params_path=(package.package_dir / "params.py").resolve() if (package.package_dir / "params.py").is_file() else None,
+        specs_path=(package.package_dir / "specs.py").resolve() if (package.package_dir / "specs.py").is_file() else None,
+        contracts_path=(package.package_dir / "contracts.py").resolve()
+        if (package.package_dir / "contracts.py").is_file()
+        else None,
+        tests_dir=(package.package_dir / "tests").resolve() if (package.package_dir / "tests").is_dir() else None,
+        manifest_module=manifest.get("module"),
+        manifest_class=package.manifest_class or manifest.get("class"),
+        workflow_path=package.source_path.resolve(),
+        doc_path=(package.package_dir / "docs.md").resolve() if (package.package_dir / "docs.md").is_file() else None,
+        flow_path=package.source_path.resolve() if package.source_path.name == "flow.py" else None,
+        workflow_py_path=package.source_path.resolve() if package.source_path.name == "workflow.py" else None,
+        package_init_path=(package.package_dir / "__init__.py").resolve() if (package.package_dir / "__init__.py").is_file() else None,
+    )
+
+
+def _resolve_catalog_entry_reference(
+    root_path: Path,
+    entry: WorkflowCatalogEntry,
+    *,
+    original: str,
+    requested_class_name: str | None,
+    kind: Literal["catalog_name", "python_file", "workflow_directory"],
+) -> ResolvedWorkflow:
+    manifest_class_name = entry.manifest_class
+    if requested_class_name is not None and manifest_class_name is not None and requested_class_name != manifest_class_name:
+        raise WorkflowDiscoveryError(
+            f"workflow reference {original!r} requested class {requested_class_name!r}, "
+            f"but manifest {entry.manifest_path} declares {manifest_class_name!r}"
+        )
+    target_class_name = manifest_class_name or requested_class_name
+    if entry.source_root_kind == "package" and entry.package_module is not None and entry.workflow_module is not None:
+        try:
+            loaded = load_workflow_package_contract(root_path, entry)
+        except WorkflowCapabilityInspectionError as exc:
+            raise WorkflowDiscoveryError(str(exc)) from exc
+        if target_class_name is not None and loaded.workflow_cls.__name__ != target_class_name:
+            raise WorkflowDiscoveryError(
+                f"workflow reference {original!r} resolved to {loaded.workflow_cls.__name__!r}; "
+                f"class {target_class_name!r} was not found"
+            )
+        reference = WorkflowReference(
+            original=original,
+            kind=kind,
+            workflow_name=entry.workflow_name,
+            title=entry.title,
+            description=entry.description,
+            aliases=entry.aliases,
+            class_name=loaded.workflow_cls.__name__,
+            module_name=loaded.workflow_cls.__module__,
+            source_path=entry.source_path,
+            package_dir=entry.package_dir,
+            manifest_path=entry.manifest_path,
+            authoring_shape=entry.authoring_shape,
+            source_root_kind=entry.source_root_kind,
+            source_root=entry.source_root,
+            package_name=entry.package_name,
+            package_module=entry.package_module,
+            workflow_module=entry.workflow_module,
+        )
+        return ResolvedWorkflow(reference=reference, workflow_cls=loaded.workflow_cls, parameters_cls=loaded.parameters_cls)
+    return _resolve_python_path(
+        root_path,
+        original=original,
+        source=entry.source_path,
+        requested_class_name=target_class_name,
+        kind=kind,
+        source_root_kind=entry.source_root_kind,
+        source_root=entry.source_root,
+        package_module_name=None,
+        workflow_module_name=None,
+        title=entry.title,
+        description=entry.description,
+        aliases=entry.aliases,
+    )
+
+
+def _resolve_manifest_path_reference(
+    root_path: Path,
+    original_reference: str,
+    manifest_path: Path,
+    requested_class_name: str | None,
+) -> ResolvedWorkflow:
+    manifest = read_workflow_manifest(manifest_path)
+    source_path = _manifest_source_path(manifest_path, manifest)
+    manifest_class_name = manifest.get("class")
+    if requested_class_name is not None and manifest_class_name is not None and requested_class_name != manifest_class_name:
+        raise WorkflowDiscoveryError(
+            f"workflow reference {original_reference!r} requested class {requested_class_name!r}, "
+            f"but manifest {manifest_path} declares {manifest_class_name!r}"
+        )
+    return _resolve_python_path(
+        root_path,
+        original=original_reference,
+        source=source_path,
+        requested_class_name=manifest_class_name or requested_class_name,
+        kind="python_file",
+        source_root_kind=_classify_source_root_kind(root_path, source_path),
+        source_root=_classify_source_root(root_path, source_path),
+        title=manifest.get("title"),
+        description=manifest.get("description"),
+        aliases=tuple(manifest.get("aliases", ())),
+    )
+
+
+def _manifest_source_path(manifest_path: Path, manifest: Mapping[str, Any]) -> Path:
+    module_name = manifest.get("module")
+    package_dir = manifest_path.parent.resolve()
+    if module_name is not None:
+        candidate = package_dir / Path(str(module_name).replace(".", "/")).with_suffix(".py")
+        if not candidate.is_file():
+            raise WorkflowDiscoveryError(f"workflow manifest {manifest_path} references missing module source {candidate}")
+        return candidate.resolve()
+    preferred = package_dir / "flow.py"
+    if preferred.is_file():
+        return preferred.resolve()
+    workflow_py_path = package_dir / "workflow.py"
+    if workflow_py_path.is_file():
+        return workflow_py_path.resolve()
+    raise WorkflowDiscoveryError(f"workflow manifest {manifest_path} requires flow.py or workflow.py in {package_dir}")
 
 
 def _package_dir_for_source(source_path: Path) -> Path:
-    if source_path.name in {"flow.py", "workflow.py", "__init__.py"}:
-        return source_path.parent
     return source_path.parent
 
 
@@ -865,43 +1043,126 @@ def _package_name_from_module_name(module_name: str) -> str | None:
 
 
 def _package_name_from_source(root_path: Path, source_path: Path) -> str | None:
-    try:
-        relative = source_path.resolve().relative_to((root_path / "workflows").resolve())
-    except ValueError:
-        return None
-    if len(relative.parts) >= 2 and relative.name in {"flow.py", "workflow.py"}:
-        return relative.parts[0]
-    if len(relative.parts) == 1 and relative.suffix == ".py":
-        return relative.stem
+    resolved = source_path.resolve()
+    for search_root in workflow_search_roots(root_path):
+        try:
+            relative = resolved.relative_to(search_root.path.resolve())
+        except ValueError:
+            continue
+        if len(relative.parts) >= 2 and resolved.name in {"flow.py", "workflow.py", "__init__.py"}:
+            return relative.parts[0]
+        if len(relative.parts) == 1 and resolved.suffix == ".py":
+            return relative.stem
+    if resolved.name in {"flow.py", "workflow.py", "__init__.py"}:
+        return resolved.parent.name
+    return resolved.stem
+ 
+
+def _source_root_kind_for_module(module_name: str) -> WorkflowSourceKind:
+    return "package" if module_name.startswith("autoloop.workflows.") else "workspace"
+
+
+def _classify_source_root_kind(root_path: Path, source_path: Path, *, module_name: str | None = None) -> WorkflowSourceKind:
+    if module_name is not None and module_name.startswith("autoloop.workflows."):
+        return "package"
+    resolved = source_path.resolve()
+    for search_root in workflow_search_roots(root_path):
+        try:
+            resolved.relative_to(search_root.path.resolve())
+        except ValueError:
+            continue
+        return search_root.kind
+    return "workspace"
+
+
+def _classify_source_root(root_path: Path, source_path: Path) -> Path | None:
+    resolved = source_path.resolve()
+    for search_root in workflow_search_roots(root_path):
+        try:
+            resolved.relative_to(search_root.path.resolve())
+        except ValueError:
+            continue
+        return search_root.path.resolve()
     return None
-
-
-def _package_module_name_for_source(root_path: Path, source_path: Path) -> str | None:
-    source_path = source_path.resolve()
-    if source_path.name not in {"flow.py", "workflow.py", "__init__.py"}:
-        return None
-    try:
-        relative_parent = source_path.parent.relative_to(root_path.resolve())
-    except ValueError:
-        return None
-    if not relative_parent.parts:
-        return None
-
-    current = root_path.resolve()
-    for part in relative_parent.parts:
-        current = current / part
-        if not (current / "__init__.py").is_file():
-            return None
-    return ".".join(relative_parent.parts)
 
 
 def _should_treat_as_package_module(source_path: Path) -> bool:
     return source_path.name in {"flow.py", "workflow.py", "__init__.py"}
 
 
+def _load_isolated_python_module(source_path: Path) -> ModuleType:
+    source_path = source_path.resolve()
+    if _should_treat_as_package_module(source_path):
+        package_module_name, module_name = _isolated_package_module_name(source_path)
+        _evict_isolated_namespace(package_module_name)
+        _ensure_namespace_package("_autoloop_workspace_workflows", ())
+        _ensure_namespace_package(".".join(package_module_name.split(".")[:2]), ())
+        _ensure_namespace_package(package_module_name, (str(source_path.parent),))
+        if source_path.name == "__init__.py":
+            spec = importlib.util.spec_from_file_location(
+                module_name,
+                source_path,
+                submodule_search_locations=[str(source_path.parent)],
+            )
+        else:
+            spec = importlib.util.spec_from_file_location(module_name, source_path)
+    else:
+        module_name = _isolated_module_name(source_path)
+        _evict_isolated_namespace(module_name)
+        spec = importlib.util.spec_from_file_location(module_name, source_path)
+    if spec is None or spec.loader is None:
+        raise WorkflowDiscoveryError(f"could not load workflow module from {source_path}")
+    module = importlib.util.module_from_spec(spec)
+    sys.modules[module_name] = module
+    with _no_bytecode_writes():
+        spec.loader.exec_module(module)
+    return module
+
+
+def _import_repo_module(module_name: str, root_path: Path) -> ModuleType:
+    importlib.invalidate_caches()
+    with _repo_root_on_syspath(root_path):
+        with _no_bytecode_writes():
+            return importlib.import_module(module_name)
+
+
+def _isolated_package_module_name(source_path: Path) -> tuple[str, str]:
+    workflow_id = _sanitize_identifier(source_path.parent.name or source_path.stem)
+    package_digest = sha1(str(source_path.parent.resolve()).encode("utf-8")).hexdigest()[:12]
+    package_module = f"_autoloop_workspace_workflows.{package_digest}.{workflow_id}"
+    if source_path.name == "__init__.py":
+        return package_module, package_module
+    return package_module, f"{package_module}.{source_path.stem}"
+
+
 def _isolated_module_name(source_path: Path) -> str:
-    digest = sha1(str(source_path.resolve()).encode("utf-8")).hexdigest()[:16]
-    return f"_autoloop_dynamic_{digest}"
+    workflow_id = _sanitize_identifier(source_path.stem)
+    digest = sha1(str(source_path.resolve()).encode("utf-8")).hexdigest()[:12]
+    return f"_autoloop_workspace_workflows.{digest}.{workflow_id}"
+
+
+def _sanitize_identifier(value: str) -> str:
+    cleaned = "".join(char if char.isalnum() else "_" for char in value.strip())
+    cleaned = cleaned.strip("_")
+    return cleaned or "workflow"
+
+
+def _ensure_namespace_package(name: str, search_locations: Sequence[str]) -> None:
+    if name in sys.modules:
+        module = sys.modules[name]
+        if search_locations:
+            module.__dict__["__path__"] = list(search_locations)
+        return
+    module = ModuleType(name)
+    module.__package__ = name
+    module.__path__ = list(search_locations)
+    sys.modules[name] = module
+
+
+def _evict_isolated_namespace(prefix: str) -> None:
+    for cached_name in tuple(sys.modules):
+        if cached_name == prefix or cached_name.startswith(f"{prefix}."):
+            sys.modules.pop(cached_name, None)
 
 
 def _module_file(module: ModuleType) -> Path | None:
@@ -953,10 +1214,10 @@ def _no_bytecode_writes():
 
 
 def _cleanup_workflow_pycache(root_path: Path) -> None:
-    workflows_root = root_path / "workflows"
-    if not workflows_root.is_dir():
+    workspace_root = root_path / ".autoloop" / "workflows"
+    if not workspace_root.is_dir():
         return
-    for pycache_dir in sorted(workflows_root.rglob("__pycache__"), reverse=True):
+    for pycache_dir in sorted(workspace_root.rglob("__pycache__"), reverse=True):
         if not pycache_dir.is_dir():
             continue
         for candidate in pycache_dir.iterdir():
