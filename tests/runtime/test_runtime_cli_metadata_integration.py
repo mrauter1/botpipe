@@ -363,6 +363,29 @@ def test_cli_workflows_list_show_and_all_emit_shadow_and_source_metadata(
     assert payload["shadowed_by"] is None
 
 
+def test_cli_workflows_show_emits_package_source_metadata(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    capsys,
+) -> None:
+    package_root = _configure_package_root(monkeypatch, tmp_path)
+    package_dir = _write_package_workflow(package_root, "package_show")
+
+    exit_code = cli.main(["workflows", "show", "package_show", "--root", str(tmp_path)])
+    payload = json.loads(capsys.readouterr().out)
+
+    assert exit_code == 0
+    assert payload["name"] == "package_show"
+    assert payload["source_root_kind"] == "package"
+    assert payload["source_root"] == str(package_root)
+    assert payload["package_folder"] == str(package_dir)
+    assert payload["package_name"] == "package_show"
+    assert payload["package_module"] == "autoloop.workflows.package_show"
+    assert payload["workflow_module"] == "autoloop.workflows.package_show.flow"
+    assert payload["shadowed"] is False
+    assert payload["shadowed_by"] is None
+
+
 def test_cli_init_workflow_scaffolds_under_dot_autoloop_workflows(tmp_path: Path, capsys) -> None:
     exit_code = cli.main(["init", "workflow", "demo", "--root", str(tmp_path)])
     payload = json.loads(capsys.readouterr().out)

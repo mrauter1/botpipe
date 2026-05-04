@@ -13,7 +13,7 @@
 - AC-2 loader routing and imports:
   explicit manifest path coverage exercises `.toml` loading; explicit single-file path coverage exercises `.py` loading; package workflow coverage asserts `autoloop.workflows.<workflow_id>` and `.flow` module metadata on resolved and persisted package runs.
 - AC-3 CLI contract:
-  `workflows list` asserts additive JSON fields including `manifest_present`, `source_root_kind`, and shadow metadata; `workflows show` asserts source/module fields; `init workflow` asserts scaffold location under `.autoloop/workflows`; `workflows list --help` asserts the package-vs-`.autoloop/workflows/` root description.
+  `workflows list` asserts additive JSON fields including `manifest_present`, `source_root_kind`, and shadow metadata; `workflows show` asserts source/module fields for both workspace and package workflows; `init workflow` asserts scaffold location under `.autoloop/workflows`; `workflows list --help` asserts the package-vs-`.autoloop/workflows/` root description.
 - AC-4 explicit-path normalization:
   in-workspace explicit manifest paths remain workspace-relative in nested workflow-origin metadata; out-of-workspace explicit `.py` paths serialize absolute workflow-origin paths while keeping `source_root_kind="workspace"` and null package/workflow modules.
 
