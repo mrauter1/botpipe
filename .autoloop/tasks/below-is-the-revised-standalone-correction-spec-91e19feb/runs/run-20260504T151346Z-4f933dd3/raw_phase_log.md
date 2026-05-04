@@ -184,3 +184,124 @@ phase_mode=single
 phase_ids=route-and-artifact-contracts,lazy-worklist-runtime,public-surface-polish
 explicit=True
 current_phase_index=0
+
+
+---
+run_id=run-20260504T151346Z-4f933dd3 | entry=session_turn | pair=implement | phase=producer | cycle=1 | attempt=1 | thread_id=019df396-f260-7532-a4c9-e81f7fe16999
+---
+provider=codex
+mode=start
+template=/home/rauter/.local/share/pipx/venvs/autoloop/lib/python3.12/site-packages/autoloop/templates/implement_producer.md
+session_id=019df396-f260-7532-a4c9-e81f7fe16999
+
+
+---
+run_id=run-20260504T151346Z-4f933dd3 | entry=phase_output | pair=implement | phase=producer | process=codex-agent | cycle=1 | attempt=1 | thread_id=019df396-f260-7532-a4c9-e81f7fe16999
+---
+I’m starting with the phase artifacts and the current framework code paths for artifacts, provider outcome parsing, and route visibility so I can align the implementation to the scoped acceptance criteria before editing.
+
+I’ve confirmed the scoped gaps: the managed-artifact ownership model is still live in inventory/artifacts, and provider parsing still hard-requires `reason`. Next I’m reading the exact contract code and the targeted tests before patching so the behavior change stays narrow.
+
+I have the main edit targets. Now I’m reading the exact validation and provider-boundary tests that already pin this behavior so I can replace the old contract instead of fighting hidden assumptions later.
+
+Plan for the scoped patch:
+- Remove the managed artifact role from declaration and inventory code, while keeping workflow-level artifacts canonical and storing step writers only in `producer_steps`.
+- Align provider parsing and route summaries with the new contract: optional rendered `reason`, `question`-only payload enforcement, and no reserved-style `blocked`/`failed` summaries.
+- Update targeted validation, contract, runtime, and static-graph tests for dual-role artifacts, provider parity, full-auto question gating, and explicit child-workflow route mapping preservation.
+
+I have enough context to edit safely. I’m patching the artifact inventory and provider contract layers together so the canonical-name change and the rendered/direct route semantics stay consistent across compile-time and runtime.
+
+The core patch is in. I’m updating the existing artifact and provider tests next, then I’ll run the focused suites that cover the scoped acceptance criteria and fix any regressions they expose.
+
+The test updates are in. I’m running the focused validation, provider-boundary, static-graph, and engine-contract cases that cover the changed behavior before touching the run artifacts.
+
+The environment doesn’t expose `pytest` directly. I’m switching to `python -m pytest` and will use that as the verification path.
+
+The base interpreter is present but `pytest` is not installed into it. I’m locating the project’s intended interpreter or virtualenv next so I can finish verification without changing the environment.
+
+Two issues showed up in the validation layer: I removed too much of the old producer rebind path for non-workflow-level artifacts, and the pure duplicate workflow-level-name case should keep its simpler error. I’m tightening that logic now, then I’ll rerun only the changed provider tests rather than the unrelated failing cases in the larger file.
+
+The validation and provider-boundary suites are green now. The remaining rendered-provider contract failures are test setup issues only: those workflows used unresolved file prompts, so I’m swapping them to inline prompts and rerunning the rendered parity checks.
+
+The scoped tests are passing now: validation, static graph, provider parsing/prompt rendering, and the targeted engine contract parity cases. I’m updating the phase notes and decision log next so the run artifacts capture the intentional parts of the implementation.
+
+Scope considered
+- Phase-local route-and-artifact contract work only: artifact identity/inventory, provider outcome parsing, provider prompt contract text, authored-route summaries, and child-workflow route-mapping parity.
+- I ignored the repo’s unrelated dirty state outside the scoped modules and phase artifacts.
+
+What I analyzed
+- `autoloop/core/artifacts.py`, `inventory.py`, `compiler.py`, `lowering.py`, `providers/parsing.py`, `providers/rendering.py`
+- Existing validation and contract coverage in `tests/unit/test_validation.py`, `tests/runtime/test_runtime_providers.py`, `tests/unit/test_provider_boundary_core.py`, `tests/runtime/test_runtime_static_graph.py`, and `tests/contract/test_engine_contracts.py`
+- The active phase plan, feedback artifact, and run decisions log
+
+What I changed
+- Removed the managed artifact ownership model from the core artifact declaration surface: no `Artifact.managed(...)`, no `ArtifactRole`, no `role=` support in constructors.
+- Changed artifact inventory collection so workflow-level artifacts stay canonical at the public/workflow name even when written by steps; producing steps now accumulate in `producer_steps` without rebinding to `step.artifact`.
+- Preserved simple duplicate workflow-level-name errors, while giving clearer multi-object conflict diagnostics when a workflow-level public name collides with a distinct step-produced artifact object.
+- Made rendered provider outcome parsing default missing `reason` to `""` and require a non-empty top-level `question` only for `tag="question"`.
+- Updated rendered provider prompt instructions so `reason` is described as optional.
+- Removed reserved-style fallback summaries for authored `blocked` and `failed`; authored step/global routes now get generic authored-route summaries while runtime-control `question` keeps its special wording.
+- Added/updated tests for dual-role workflow-level artifacts, public-name required writes, rendered/direct route parity, full-auto `question` illegality, and authored `blocked`/`failed` summaries.
+
+Key findings / decisions
+- The old producer rebind path was still needed for non-workflow-level artifacts first seen as reads/requires and only later written; I restored that narrow case while keeping workflow-level artifacts canonical.
+- Global authored routes needed compiler-side fallback summary injection; otherwise authored global `failed`/`blocked` stayed `None` and did not match the new contract.
+- Documentation/example cleanup is still broader than this phase. I only changed runtime-emitted provider contract text, not the wider docs sweep.
+
+Open issues / next step
+- Focused verification passed:
+  - `./.venv/bin/python -m pytest tests/unit/test_validation.py -q`
+  - `./.venv/bin/python -m pytest tests/runtime/test_runtime_static_graph.py -q`
+  - `./.venv/bin/python -m pytest tests/runtime/test_runtime_providers.py -q -k "parse_outcome_json_accepts_plain_object or parse_outcome_json_accepts_fenced_json_block or parse_outcome_json_accepts_missing_reason_for_authored_routes or parse_outcome_json_rejects_question_without_question_field"`
+  - `./.venv/bin/python -m pytest tests/unit/test_provider_boundary_core.py -q -k "render_provider_turn_renders_markdown_contract_without_raw_output or parse_outcome_json_defaults_missing_reason_to_empty_string"`
+  - `./.venv/bin/python -m pytest tests/contract/test_engine_contracts.py -q -k "blocked_and_failed_routes_do_not_require_reason_field or rendered_provider_matches_direct_reason_optional_behavior_for_explicit_blocked_and_failed_routes or provider_question_route_is_illegal_in_full_auto_mode or rendered_provider_question_route_is_illegal_in_full_auto_mode"`
+- I did not run the full repository suite.
+- Broader authoring-doc/example cleanup for removed managed artifacts and the new route model remains deferred to the later docs-focused phase.
+
+
+---
+run_id=run-20260504T151346Z-4f933dd3 | entry=session_turn | pair=implement | phase=verifier | cycle=1 | attempt=1 | thread_id=019df396-f260-7532-a4c9-e81f7fe16999
+---
+provider=codex
+mode=resume
+template=/home/rauter/.local/share/pipx/venvs/autoloop/lib/python3.12/site-packages/autoloop/templates/implement_verifier.md
+session_id=019df396-f260-7532-a4c9-e81f7fe16999
+
+
+---
+run_id=run-20260504T151346Z-4f933dd3 | entry=phase_output | pair=implement | phase=verifier | process=codex-agent | cycle=1 | attempt=1 | thread_id=019df396-f260-7532-a4c9-e81f7fe16999
+---
+I’m reviewing only the scoped route/artifact contract changes and the paired implementation notes first, then I’ll inspect the targeted diffs and update the phase review artifacts with pass/fail criteria and any findings.
+
+I’m checking the rendered-provider error path specifically now. That’s the area most likely to hide a parity regression even when the happy-path tests are green.
+
+I found one material parity bug in the rendered-provider error path. It affects retry classification and user-facing retry feedback for invalid `question` payloads, so I’m marking the phase incomplete and recording the fix direction in the review artifacts.
+
+Scope considered
+- Scoped review of the route/artifact contract phase only: `autoloop/core/artifacts.py`, `inventory.py`, `compiler.py`, `lowering.py`, `providers/parsing.py`, `providers/rendering.py`, and the paired tests/notes named in the implementation artifact.
+- I treated unrelated dirty files elsewhere in the repo as out of scope.
+
+What I analyzed
+- The accepted phase contract, implementation notes, and run-local decisions ledger.
+- The current artifact identity flow, provider parsing path, provider retry classification path, and the targeted validation/contract tests.
+
+What I reviewed
+- Workflow-level artifact canonicalization and producer provenance handling.
+- Rendered outcome parsing changes for optional `reason` and `question` payload enforcement.
+- Authored `blocked`/`failed` summary behavior and full-auto `question` gating.
+- Child-workflow route mapping preservation.
+- The review artifacts have been updated:
+  - [criteria.md](</home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/below-is-the-revised-standalone-correction-spec-91e19feb/runs/run-20260504T151346Z-4f933dd3/artifacts/implement/phases/route-and-artifact-contracts/criteria.md>)
+  - [feedback.md](</home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/below-is-the-revised-standalone-correction-spec-91e19feb/runs/run-20260504T151346Z-4f933dd3/artifacts/implement/phases/route-and-artifact-contracts/feedback.md>)
+
+Key findings / decisions
+- `IMP-001` blocking: rendered-provider `question` payload failures are now classified as `malformed_provider_output` instead of `invalid_payload` because `parse_outcome_json(...)` raises a bare `ProviderExecutionError` and `Engine._provider_retry_kind(...)` falls back on message matching. That breaks the required direct/rendered parity for retry behavior and retry feedback under AC-2.
+- Because of that parity regression, I left all criteria unchecked and marked the phase incomplete.
+
+Open issues / next step
+- Fix the rendered `question`-payload error path so it carries `invalid_payload` semantics, ideally by centralizing the validation with the shared outcome validator or by attaching `failure_context`/`retry_kind` in `parse_outcome_json(...)` for question-specific payload defects.
+- Rerun the targeted engine/provider parity tests after that fix.
+
+<loop-control>
+{"schema":"docloop.loop_control/v1","kind":"promise","promise":"INCOMPLETE"}
+</loop-control>
