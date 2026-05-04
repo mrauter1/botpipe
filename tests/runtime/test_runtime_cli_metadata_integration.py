@@ -215,11 +215,66 @@ class ExplicitDemo(Workflow):
     assert payload["package_name"] == "explicit_demo"
     assert payload["package_module"] is None
     assert payload["workflow_module"] is None
-    assert payload["package_folder"] == str(external_dir)
-    assert payload["source_path"] == str(external_dir / "flow.py")
-    assert payload["manifest_path"] == str(external_dir / "workflow.toml")
+    assert payload["package_folder"] == "external/explicit_demo"
+    assert payload["source_path"] == "external/explicit_demo/flow.py"
+    assert payload["manifest_path"] == "external/explicit_demo/workflow.toml"
     run_meta = json.loads((run_dir / "run.json").read_text(encoding="utf-8"))
     assert run_meta["package_folder"] == "external/explicit_demo"
+
+
+def test_explicit_python_file_run_metadata_uses_absolute_origin_outside_workspace_root(tmp_path: Path) -> None:
+    external_dir = tmp_path.parent / f"{tmp_path.name}-outside"
+    external_dir.mkdir(parents=True, exist_ok=True)
+    external_file = external_dir / "single_explicit.py"
+    external_file.write_text(
+        """
+from __future__ import annotations
+
+from autoloop import Event, FINISH, Workflow, python_step
+
+
+class SingleExplicitWorkflow(Workflow):
+    name = "single_explicit"
+
+    @python_step(name="bootstrap", routes={"ready": FINISH})
+    def bootstrap(ctx):
+        return Event("ready")
+""".strip()
+        + "\n",
+        encoding="utf-8",
+    )
+
+    resolved = resolve_workflow_reference(tmp_path, str(external_file))
+    assert resolved.manifest_path is None
+    assert resolved.source_root_kind == "workspace"
+    assert resolved.package_module is None
+    assert resolved.workflow_module is None
+
+    result = run_workflow_package(
+        str(external_file),
+        provider=ScriptedLLMProvider(),
+        options=RunnerOptions(
+            root=tmp_path,
+            task_id="task-single-explicit",
+            message="Run explicit python workflow",
+            runtime_config=RuntimeConfig(git_tracking=GitTrackingRuntimeConfig(enabled=False)),
+        ),
+    )
+
+    assert result.terminal == "FINISH"
+    run_dir = next((tmp_path / ".autoloop" / "tasks" / "task-single-explicit" / "wf_single_explicit" / "runs").iterdir())
+    payload = json.loads((run_dir / "run.json").read_text(encoding="utf-8"))["workflow"]
+
+    assert payload["reference"] == str(external_file)
+    assert payload["authoring_shape"] == "single_file"
+    assert payload["source_root_kind"] == "workspace"
+    assert payload["source_root"] is None
+    assert payload["package_name"] == "single_explicit"
+    assert payload["package_module"] is None
+    assert payload["workflow_module"] is None
+    assert payload["package_folder"] == str(external_dir)
+    assert payload["source_path"] == str(external_file)
+    assert payload["manifest_path"] is None
 
 
 def test_package_run_metadata_records_package_modules(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
@@ -327,3 +382,13 @@ def test_cli_init_workflow_scaffolds_under_dot_autoloop_workflows(tmp_path: Path
     assert resolved.source_root_kind == "workspace"
     assert resolved.package_module is None
     assert resolved.workflow_module is None
+
+
+def test_cli_workflows_list_help_describes_package_and_dot_autoloop_roots(capsys) -> None:
+    with pytest.raises(SystemExit) as excinfo:
+        cli.main(["workflows", "list", "--help"])
+
+    assert excinfo.value.code == 0
+    help_text = capsys.readouterr().out
+    assert "Package workflows are loaded from the installed autoloop package" in help_text
+    assert "workspace workflows are loaded from .autoloop/workflows/." in help_text

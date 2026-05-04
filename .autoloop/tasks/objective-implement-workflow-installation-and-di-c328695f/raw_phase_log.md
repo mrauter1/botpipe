@@ -740,3 +740,49 @@ Open issues / next step
 <loop-control>
 {"schema":"docloop.loop_control/v1","kind":"promise","promise":"COMPLETE"}
 </loop-control>
+
+
+---
+run_id=run-20260504T192206Z-d3f7e940 | entry=session_turn | pair=test | phase=producer | cycle=1 | attempt=1 | thread_id=019df48d-ca11-78b0-bc57-ac1b0b7dcd2d
+---
+provider=codex
+mode=resume
+template=/home/rauter/.local/share/pipx/venvs/autoloop/lib/python3.12/site-packages/autoloop/templates/test_producer.md
+session_id=019df48d-ca11-78b0-bc57-ac1b0b7dcd2d
+
+
+---
+run_id=run-20260504T192206Z-d3f7e940 | entry=phase_output | pair=test | phase=producer | process=codex-agent | cycle=1 | attempt=1 | thread_id=019df48d-ca11-78b0-bc57-ac1b0b7dcd2d
+---
+I’m checking the focused phase tests against the acceptance criteria now. The main gap I want to close is whether this phase-specific suite independently proves the CLI help text and the non-manifest explicit `.py` path behavior, instead of relying on older broader suites.
+
+I found one concrete gap in the focused phase tests: the current explicit-manifest test encodes absolute nested origin paths even though the implementation and phase decisions keep in-workspace explicit paths relative. I’m correcting that and adding a dedicated out-of-workspace explicit `.py` test plus a CLI help assertion.
+
+I’m updating the focused phase suite to encode the intended explicit-path split precisely: relative when the explicit path stays under the workspace root, absolute only when it falls outside that root. That directly protects the serialization contract the implement/review turns settled.
+
+The test updates are in. I’m doing a syntax pass and checking the new assertions against the actual serializer contract so the focused suite doesn’t encode the earlier mistaken absolute-path expectation.
+
+Scope considered
+- Phase-local test coverage for runtime loading, CLI metadata, and workflow-origin serialization only.
+- Updated [tests/runtime/test_runtime_cli_metadata_integration.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/tests/runtime/test_runtime_cli_metadata_integration.py:1), [test_strategy.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/objective-implement-workflow-installation-and-di-c328695f/runs/run-20260504T192206Z-d3f7e940/artifacts/test/phases/runtime-cli-metadata-integration/test_strategy.md:1), [feedback.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/objective-implement-workflow-installation-and-di-c328695f/runs/run-20260504T192206Z-d3f7e940/artifacts/test/phases/runtime-cli-metadata-integration/feedback.md:1), and the current-turn block in [decisions.txt](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/objective-implement-workflow-installation-and-di-c328695f/runs/run-20260504T192206Z-d3f7e940/decisions.txt:22).
+
+What I analyzed
+- The focused phase test file against AC-1 through AC-4.
+- The settled serializer behavior in the implementation and decisions ledger, especially the in-root relative vs out-of-root absolute split for workflow-origin paths.
+- Remaining phase-specific gaps around explicit `.py` references and CLI help text.
+
+What I changed
+- Corrected the explicit manifest test to expect relative nested workflow-origin paths when the explicit workflow still lives under the workspace root.
+- Added a focused explicit `.py` workflow test for a path outside the workspace root, asserting `source_root_kind="workspace"`, null package/workflow modules, `authoring_shape="single_file"`, and absolute origin paths.
+- Added CLI help coverage asserting the package-vs-`.autoloop/workflows/` root description.
+- Wrote a concise behavior-to-test coverage map in `test_strategy.md`.
+- Appended a concise test-additions summary to the phase `feedback.md`.
+
+Key findings / decisions
+- The previous focused test encoded the wrong expectation for in-workspace explicit-path serialization; it would have normalized an unintended regression if left unchanged.
+- I recorded the explicit-path split in `decisions.txt` so later turns do not collapse relative and absolute origin-path expectations into one rule.
+- Validation performed: `python3 -m py_compile tests/runtime/test_runtime_cli_metadata_integration.py`.
+
+Open issues / next step
+- `pytest` is still unavailable in this environment, so I could not execute the focused test file.
+- Next step is to run `tests/runtime/test_runtime_cli_metadata_integration.py` in an environment with project test dependencies installed.
