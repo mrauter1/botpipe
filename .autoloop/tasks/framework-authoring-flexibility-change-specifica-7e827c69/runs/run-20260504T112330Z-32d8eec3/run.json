@@ -14,12 +14,12 @@
       "milestone-b-authoring-ergonomics-and-validation-polish"
     ],
     "explicit": true,
-    "current_phase_index": 1,
-    "current_phase_id": "milestone-b-authoring-ergonomics-and-validation-polish"
+    "current_phase_index": 2,
+    "current_phase_id": null
   },
   "phase_status": {
     "milestone-a-runtime-route-policy-and-lazy-scoped-runtime": "completed",
-    "milestone-b-authoring-ergonomics-and-validation-polish": "in_progress"
+    "milestone-b-authoring-ergonomics-and-validation-polish": "completed"
   },
   "phase_history": [
     {
@@ -40,6 +40,13 @@
       "run_id": "run-20260504T112330Z-32d8eec3",
       "status": "in_progress",
       "ts": "2026-05-04T11:52:59.574013+00:00"
+    },
+    {
+      "phase_id": "milestone-b-authoring-ergonomics-and-validation-polish",
+      "run_id": "run-20260504T112330Z-32d8eec3",
+      "status": "completed",
+      "ts": "2026-05-04T12:11:17.202156+00:00",
+      "pair": "test"
     }
   ]
 }
