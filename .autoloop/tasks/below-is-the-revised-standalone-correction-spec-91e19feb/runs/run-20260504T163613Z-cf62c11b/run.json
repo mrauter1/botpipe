@@ -13,11 +13,11 @@
       "align-prompt-route-wording"
     ],
     "explicit": true,
-    "current_phase_index": 0,
-    "current_phase_id": "align-prompt-route-wording"
+    "current_phase_index": 1,
+    "current_phase_id": null
   },
   "phase_status": {
-    "align-prompt-route-wording": "in_progress"
+    "align-prompt-route-wording": "completed"
   },
   "phase_history": [
     {
@@ -25,6 +25,13 @@
       "run_id": "run-20260504T163613Z-cf62c11b",
       "status": "in_progress",
       "ts": "2026-05-04T16:45:33.873494+00:00"
+    },
+    {
+      "phase_id": "align-prompt-route-wording",
+      "run_id": "run-20260504T163613Z-cf62c11b",
+      "status": "completed",
+      "ts": "2026-05-04T17:18:51.527647+00:00",
+      "pair": "test"
     }
   ]
 }
