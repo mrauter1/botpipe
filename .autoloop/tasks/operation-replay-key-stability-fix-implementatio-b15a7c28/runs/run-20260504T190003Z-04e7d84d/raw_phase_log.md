@@ -413,3 +413,124 @@ Open issues / next step
 <loop-control>
 {"schema":"docloop.loop_control/v1","kind":"promise","promise":"COMPLETE"}
 </loop-control>
+
+
+---
+run_id=run-20260504T190003Z-04e7d84d | entry=session_turn | pair=audit | phase=producer | cycle=1 | attempt=1 | thread_id=019df46a-c12f-7942-9974-0e318ab4c28d
+---
+provider=codex
+mode=start
+template=/home/rauter/.local/share/pipx/venvs/autoloop/lib/python3.12/site-packages/autoloop/templates/audit_producer.md
+session_id=019df46a-c12f-7942-9974-0e318ab4c28d
+
+
+---
+run_id=run-20260504T190003Z-04e7d84d | entry=phase_output | pair=audit | phase=producer | process=codex-agent | cycle=1 | attempt=1 | thread_id=019df46a-c12f-7942-9974-0e318ab4c28d
+---
+I’m auditing the completed run against the original request, clarifications, artifacts, and final codebase. I’ll inspect the authoritative run files first, then compare them to the implementation and write the audit artifacts in the run-local `artifacts/audit` directory only.
+
+I’ve confirmed the run history includes an implementer correction and a test phase. Next I’m checking the final source and the test artifacts directly, because the audit needs to be based on the landed code and actual validation evidence rather than the phase summaries alone.
+
+The source matches the requested replay-key shape. I’m checking the exact regression tests and the current audit placeholders now, then I’ll write the gap report and revised request based on whether any request behavior is still missing or insufficiently evidenced.
+
+I’ve isolated the key question for the audit: whether anything requested is still missing, or whether the only notable differences are justified by the later review and test work. I’m rerunning the focused validation and a direct replay-store schema check now so the audit conclusions are evidence-backed from the current tree.
+
+I’ve reached the write stage. The final code and focused tests satisfy the requested behavior, and the only notable differences are later-justified: a reviewer-driven narrowing of the migration gate and added regression coverage in `tests/contract/test_engine_contracts.py`. I’m writing the audit report now with a no-follow-up conclusion unless a new gap appears while drafting.
+
+The audit artifacts are written. I’m doing a final readback of those three files to confirm the report sections, the no-follow-up request, and the JSON result are internally consistent before I close with the required loop-control block.
+
+Scope considered
+
+- The immutable request in `.autoloop/.../request.md`, the authoritative run ledger in `.autoloop/.../raw_phase_log.md`, the decisions ledger in `.autoloop/.../decisions.txt`, the implement/test artifacts for this run, the final source in `autoloop/core/schema_registry.py` and `autoloop/core/operations.py`, and the replay-related contract tests in `tests/contract/test_engine_contracts.py`.
+
+What I analyzed
+
+- Verified the requested replay-key invariants in the final source:
+  - `OPERATION_REPLAY_SCHEMA` is `autoloop.operation_replay/v2`.
+  - `_run_operation(...)` still computes `callsite_id` and passes it to `_operation_fingerprint(...)`.
+  - `_next_occurrence(...)` and `_operation_replay_key(...)` are callsite-free.
+  - `_migrate_operation_replay_store(...)` is a named module-level migrator.
+  - `_load_replay_store(...)` migrates schemaless and explicit `v1` payloads, but rejects unsupported future schemas.
+- Confirmed helper call-site scope with repo grep.
+- Re-ran focused validation:
+  - `../autoloop_v3 (Cópia)/.venv/bin/python -m pytest tests/contract/test_engine_contracts.py -k operation_replay`
+  - Result: `6 passed, 163 deselected`
+- Re-checked direct replay-store behavior:
+  - schemaless payload migrates
+  - explicit `v1` payload migrates
+  - explicit `v3` payload raises `ValueError`
+
+What I changed
+
+- Wrote [gap_report.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/operation-replay-key-stability-fix-implementatio-b15a7c28/runs/run-20260504T190003Z-04e7d84d/artifacts/audit/gap_report.md).
+- Wrote [revised_request.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/operation-replay-key-stability-fix-implementatio-b15a7c28/runs/run-20260504T190003Z-04e7d84d/artifacts/audit/revised_request.md).
+- Wrote [audit_result.json](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/operation-replay-key-stability-fix-implementatio-b15a7c28/runs/run-20260504T190003Z-04e7d84d/artifacts/audit/audit_result.json).
+
+Key findings / decisions
+
+- No material unresolved gap remains between the original request and the final codebase.
+- The only notable difference from the original two-file implementation scope is added regression coverage in `tests/contract/test_engine_contracts.py`; that is justified by later review analysis and is consistent with user intent.
+- The audit result is `material_gaps_found: false`, and the revised request states that no follow-up implementation is required.
+
+Open issues / next step
+
+- No follow-up implementation run is needed from this audit.
+
+<loop-control>
+{"schema":"docloop.loop_control/v1","kind":"promise","promise":"INCOMPLETE"}
+</loop-control>
+
+
+---
+run_id=run-20260504T190003Z-04e7d84d | entry=session_turn | pair=audit | phase=verifier | cycle=1 | attempt=1 | thread_id=019df46a-c12f-7942-9974-0e318ab4c28d
+---
+provider=codex
+mode=resume
+template=/home/rauter/.local/share/pipx/venvs/autoloop/lib/python3.12/site-packages/autoloop/templates/audit_verifier.md
+session_id=019df46a-c12f-7942-9974-0e318ab4c28d
+
+
+---
+run_id=run-20260504T190003Z-04e7d84d | entry=phase_output | pair=audit | phase=verifier | process=codex-agent | cycle=1 | attempt=1 | thread_id=019df46a-c12f-7942-9974-0e318ab4c28d
+---
+I’m reviewing the audit artifacts against the request, decisions, final code, and tests now. I’ll update the audit checklist first, then append any verification findings to the audit feedback with blocking status based on whether the audit itself is accurate and complete.
+
+The audit artifacts hold up against the final source, decisions, and replay test evidence. I’m marking the audit checklist complete and appending a verifier note that no blocking audit defects were found.
+
+I’ve updated the verifier-owned audit artifacts. I’m doing a quick readback now to make sure the checklist wasn’t accidentally duplicated and the feedback entry is the only new verifier note before I close.
+
+The checklist has duplicate unchecked entries from the first patch, so I’m cleaning that up now. The audit conclusion is unchanged; this is just making the verifier-owned criteria file reflect the final approval state correctly.
+
+The checklist cleanup is done. I’m confirming the final audit verifier artifacts one last time so the completion block reflects the actual checked state and feedback log.
+
+Scope considered
+
+- Verified the audit artifacts in `.autoloop/.../artifacts/audit`, the immutable request, the authoritative raw log, the run decisions ledger, the final scoped source in `autoloop/core/schema_registry.py` and `autoloop/core/operations.py`, and the replay-related contract tests in `tests/contract/test_engine_contracts.py`.
+
+What I analyzed
+
+- Checked that the audit’s no-gap conclusion matches the final code and test state:
+  - `OPERATION_REPLAY_SCHEMA` is `autoloop.operation_replay/v2`.
+  - `_run_operation(...)` still fingerprints with `callsite`, while `_next_occurrence(...)` and `_operation_replay_key(...)` are callsite-free.
+  - `_migrate_operation_replay_store(...)` is named and `_load_replay_store(...)` only migrates schemaless/explicit `v1`, while rejecting unsupported schemas.
+- Confirmed the replay regression evidence cited by the audit, including the focused `pytest -k operation_replay` result and the direct persisted-schema boundary behavior.
+
+What I reviewed
+
+- Updated [criteria.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/operation-replay-key-stability-fix-implementatio-b15a7c28/runs/run-20260504T190003Z-04e7d84d/artifacts/audit/criteria.md:1) so every checkbox is checked.
+- Appended a verifier note to [feedback.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/operation-replay-key-stability-fix-implementatio-b15a7c28/runs/run-20260504T190003Z-04e7d84d/artifacts/audit/feedback.md:1) with stable ID `AUD-000`.
+
+Key findings / decisions
+
+- No blocking audit defects found.
+- `gap_report.md` accurately distinguishes justified differences from unresolved gaps.
+- `revised_request.md` is appropriate for a no-gap outcome.
+- `audit_result.json` is valid and accurately reports `material_gaps_found: false`.
+
+Open issues / next step
+
+- No open audit-verifier issue remains. The audit is complete.
+
+<loop-control>
+{"schema":"docloop.loop_control/v1","kind":"promise","promise":"COMPLETE"}
+</loop-control>
