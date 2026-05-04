@@ -1,0 +1,3 @@
+<autoloop-decisions-header version="1" block_seq="1" owner="planner" phase_id="task-global" pair="plan" turn_seq="1" run_id="run-20260504T204430Z-152082a1" ts="2026-05-04T20:44:30.950517+00:00" />
+Bare-name and alias discovery remain limited to autoloop/workflows and {workspace}/.autoloop/workflows; {workspace}/workflows stays explicit-path-only for this follow-up.
+The wheel packaging smoke follow-up should remove the test’s dependence on an ambient build frontend installation rather than expanding runtime discovery scope or restoring legacy behavior.
