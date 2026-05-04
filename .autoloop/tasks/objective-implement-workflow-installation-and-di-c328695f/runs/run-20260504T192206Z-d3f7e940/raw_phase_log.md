@@ -922,3 +922,225 @@ Open issues / next step
 <loop-control>
 {"schema":"docloop.loop_control/v1","kind":"promise","promise":"COMPLETE"}
 </loop-control>
+
+
+---
+run_id=run-20260504T192206Z-d3f7e940 | entry=session_turn | pair=implement | phase=producer | cycle=1 | attempt=1 | thread_id=019df4a0-001b-79d2-b2a3-e59913c8d3ef
+---
+provider=codex
+mode=start
+template=/home/rauter/.local/share/pipx/venvs/autoloop/lib/python3.12/site-packages/autoloop/templates/implement_producer.md
+session_id=019df4a0-001b-79d2-b2a3-e59913c8d3ef
+
+
+---
+run_id=run-20260504T192206Z-d3f7e940 | entry=phase_output | pair=implement | phase=producer | process=codex-agent | cycle=1 | attempt=1 | thread_id=019df4a0-001b-79d2-b2a3-e59913c8d3ef
+---
+I’m starting with the phase artifacts and the current workflow/package layout so I can scope the built-in relocation, packaging metadata, docs, and verification work against what earlier phases already changed.
+
+The earlier phase artifacts are mostly scaffolding, so I’m reading the live discovery, CLI, packaging, and built-in workflow files next to see what already changed and what still points at the old top-level `workflows/` tree.
+
+I’ve confirmed discovery/CLI already speak in terms of `autoloop.workflows`, but the actual built-ins and packaging metadata still live under the old top-level `workflows/`. I’m inspecting the remaining loader/import paths and the current built-in packages before I move anything.
+
+The biggest regression surface is tests and workflow-owned path literals. I’m narrowing that now: which built-ins hardcode old repo-relative paths, and which tests/docs assume built-ins still import as top-level `workflows.*`.
+
+I’ve isolated the high-volume part: most failures will come from built-in path literals and test imports still naming top-level `workflows.*`. I’m checking the strictness tests and a few representative built-ins now so I can update those in one consistent migration.
+
+I’ve got enough context to start the migration. The edits will fall into four buckets: move built-ins under `autoloop/workflows`, fix built-in package exports and repo-relative artifacts, update packaging/docs, then patch the tests that still reference the retired top-level namespace.
+
+Plan:
+1. Move the built-in workflow packages into `autoloop/workflows/` and update workflow-owned relative artifact paths that changed depth.
+2. Fix packaging metadata and add wheel-install smoke coverage.
+3. Rewrite repo docs and affected tests away from the retired top-level `workflows` namespace, keeping explicit temporary-fixture `workflows/` cases intact.
+4. Run focused verification, then record the phase notes and any non-obvious decisions.
+
+I’m applying the filesystem migration first so the rest of the edits can target the final package layout instead of patching both old and new paths.
+
+The move hit a stray `workflows/__pycache__` directory; I’m checking which packages already moved so I can finish the relocation without trampling anything.
+
+I’ve finished the physical move. The next edits are bulk textual rewrites to the new canonical package path, plus a smaller set of manual fixes where the path semantics actually changed.
+
+The first bulk rewrite command was just a quoting miss. I’m rerunning it with a simpler form before doing the manual patch set.
+
+I’m moving from bulk rewrites to the manual contract fixes now: architecture/authoring docs, the strictness/doc tests, the scaffold expectations, and the few workflow-owned validators/prompts that still describe the old root.
+
+I’m normalizing the module-eviction helpers next so the tests can drop cached built-in packages from `autoloop.workflows.*` as well as temporary fixture packages under bare `workflows.*`.
+
+There are still a few repo-copy assertions using a variable `package_name`; those are all in built-in-package tests, so I’m switching them to the installed-package root as well.
+
+The remaining risky surface is the built-in-package tests that stage temporary package roots. I’m reading one of the earlier phase’s injected-package fixtures before I change those helpers, because the package root now has to be an actual temporary `autoloop/` package, not a bare `workflows/` folder.
+
+I’m applying the manual patch set now: packaging metadata, the two main docs, the strictness/doc assertions, the scaffold test root, and the workflow-owned path validators that can’t be fixed safely with blind replacements.
+
+The first manual patch failed cleanly because a couple of lines had already shifted. I’m re-reading those exact sections and applying the patch in smaller pieces so I don’t clobber earlier replacements.
+
+The scaffold test is aligned now. I’m checking the recursive templates and workflow-authoring doctrine next, because the doc tests will still fail if those generator templates keep teaching the retired `workflows/` root.
+
+I’ve got the core repo files patched. I’m aligning the recursive templates now so the documentation checks and authoring guidance stop reintroducing the retired discovery root.
+
+I’m tightening one remaining CLI test to the current JSON contract now. The `workflows list` payload grew in the earlier phase, and the old assertion still expected the narrower pre-metadata shape.
+
+I’ve finished the relocation and the contract-level file updates. I’m in verification now: checking the remaining old-root references, then running focused tests and a wheel build/install smoke path.
+
+A built-in workflow doc went missing during the sweep. I’m restoring that file from the repository version and reapplying the path migration instead of leaving a silent deletion behind.
+
+I’m running focused verification rather than the whole suite first: the catalog/CLI metadata tests from earlier phases, the doc and strictness checks affected by this migration, and the new packaging smoke path.
+
+`pytest` isn’t on PATH in this environment, so I’m rerunning the same verification through `python -m pytest`.
+
+The shell only exposes `python3` here. I’m switching to that and keeping the same focused test set.
+
+The system Python here doesn’t have `pytest`. I’m checking the available project tooling so I can run the same verification through the repo’s actual test runner instead of guessing.
+
+The base interpreter is too bare for repo verification, so I’m creating an isolated temporary venv with just the test/build dependencies needed for this phase.
+
+The focused test set is running in the temporary venv. There are several failures, so I’m pulling the full traceback and fixing those directly instead of pushing ahead with the wheel smoke step.
+
+I’ve got concrete failures now. I’m fixing the test contract mismatches first, then adding the missing runtime dependency to the package metadata so the installed CLI can actually start in a clean environment.
+
+I’ve patched the observed failures. Rerunning the same focused set now to confirm the metadata, docs, strictness, and wheel-install path all line up together.
+
+The remaining failures are both help-text assertions. The package is fine; the tests were checking the wrong help surface or using case-sensitive wording. I’m narrowing those to the actual CLI outputs.
+
+I’ve tightened the help assertions to the real parser surfaces. Running the focused verification one more time.
+
+The parser wraps that help text across lines, so the exact sentence match is too brittle. I’m reducing both assertions to the stable fragment that actually matters for the contract.
+
+Rerunning the same focused set after loosening those wrapped help-string assertions.
+
+The focused migration set is passing. I’m doing one extra pass on the CLI tests I directly edited so the `.autoloop/workflows` scaffold expectations are covered too.
+
+I’ve completed the initial relocation and packaging pass and the focused migration set is green. I’m running the CLI tests I edited, then I’ll write the phase notes and clean up verification-only artifacts.
+
+The packaging path is correct, but two CLI assertions still reflect pre-installation behavior: one expected parameter discovery from an inline `Params` definition that no longer matches the loader contract, and one still assumes list output only contains workspace entries instead of the effective catalog with package workflows included. I’m tightening those tests against the current package-plus-workspace behavior before I finalize notes.
+
+I’ve narrowed the failures to test drift, not a packaging regression. One assertion needs to align with the explicit `params.py` export contract, and the list assertion needs to assert workspace entries are present while package workflows remain visible in the effective catalog.
+
+I’m checking the runtime resolution directly once, because the empty-parameter payload suggests module-isolation state rather than the wheel move itself. If that’s clean, I’ll keep the fix limited to the expectations that were genuinely invalidated by package discovery.
+
+The empty parameter list exposed a real contract bug, not just test drift: simple-authored workflows inherit `EmptyParams`, which currently masks exported `params.py` models. I’m fixing that at the loader/descriptors layer so package workflows with `params.py` behave as documented instead of papering over it in tests.
+
+I found one genuine loader defect tied to installed workflow packages, so I’m fixing code and tests together rather than just loosening assertions. The change is narrow: default `EmptyParams` should not block exported `params.py` models from being discovered.
+
+The fix is in. I’m rerunning the CLI package tests plus the focused workflow root/metadata/package smoke set to make sure the parameter-model change didn’t widen behavior unexpectedly.
+
+One CLI case is still failing; the broader packaging/doc smoke set is still running but already well past the earlier failure point. I’m pulling the remaining CLI traceback now and will keep the change set local to that contract.
+
+The remaining CLI failure is an old assumption: same-tier name-versus-alias collisions are now supposed to fail, not prefer the canonical name. The other failure is a real doc gap in one recursive template that still omits `.autoloop/workflows/`, so I’m correcting both now.
+
+The last failures were both expectation gaps, and both are patched. I’m rerunning the full package CLI file and the packaging/doc smoke set one more time before I write the phase notes.
+
+The focused packaging/doc set is clean. One CLI assertion is still stale, so I’m pulling that traceback and I’ll stop once the full file is green.
+
+The remaining failure is the same rule from a second angle: duplicate aliases in one source tier now fail during catalog resolution, not at a later “ambiguous alias” step. I’m aligning that last assertion with the duplicate-key contract and then I’ll close out.
+
+The loader fix is behaving as intended now: workspace package parameters resolve from isolated `params.py` and expose real fields. I’m waiting on the last full CLI run, then I’ll update notes, record the non-obvious decisions, and remove the temporary verification environment.
+
+The verification pass is clean: the full CLI file, the focused packaging/doc set, and the wheel-install smoke test are all green. I’m writing the phase notes and shared decisions now, then I’ll drop the temporary venv so only task-relevant changes remain.
+
+I’ve finished code and verification. I’m recording the two decisions that would be easy to regress later, and the phase notes will stay scoped to the actual change surface rather than dumping the whole tree.
+
+I’m cleaning only the verification artifacts I created: the temporary venv and build outputs. I’m leaving the unrelated dirty tree untouched.
+
+The verification artifacts are gone. I’m doing one last status pass on the files this phase intentionally touched so the close-out is grounded in the final workspace state, not the broader dirty tree.
+
+I removed the import caches under `autoloop/workflows` as well. The remaining status for this phase is the actual code/docs/test delta plus the pre-existing unrelated dirt outside the scoped paths.
+
+Scope considered
+
+- Built-in workflow relocation into `autoloop/workflows/`
+- Packaging/install metadata, workflow docs, recursive templates, and phase-scoped verification
+- Adjacent loader behavior needed to keep exported `params.py` models working after the package/workspace split
+
+What I analyzed
+
+- Current workflow discovery/runtime integration from prior phases, especially package-vs-workspace roots and CLI JSON contracts
+- Built-in workflow packages for depth-sensitive repo asset/doc references after relocation
+- Packaging surface in `pyproject.toml` and wheel-install behavior
+- Phase tests and docs that still assumed repo-root `workflows/` or old collision semantics
+
+What I changed
+
+- Moved built-in workflows under `autoloop/workflows/<workflow_id>/`, added the package namespace, and updated imports/docs/tests to use `autoloop.workflows.*`
+- Added packaging/install metadata: `project.scripts`, setuptools package discovery/package-data, `MANIFEST.in`, and the missing `pydantic` runtime dependency
+- Fixed built-in relative references that broke because package depth changed
+- Updated docs/templates to state only `autoloop/workflows/` and `.autoloop/workflows/` are discovery roots, with workspace precedence
+- Added wheel smoke coverage in `tests/runtime/test_wheel_packaging_smoke.py`
+- Fixed one real loader bug in [autoloop/core/descriptors.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/autoloop/core/descriptors.py): simple-workflow `EmptyParams` no longer masks exported `params.py` models
+
+Key findings / decisions
+
+- Editable source runs had been hiding a missing install-time dependency; wheel verification required adding `pydantic` to `pyproject.toml`
+- Same-tier name/alias collisions now correctly fail as duplicate resolution keys, so older CLI expectations had to be updated
+- Phase validation passed:
+  - `tests/runtime/test_package_cli.py`
+  - `tests/runtime/test_workflow_catalog_roots.py tests/runtime/test_runtime_cli_metadata_integration.py tests/test_architecture_baseline_docs.py tests/strictness/test_no_compat.py tests/runtime/test_wheel_packaging_smoke.py`
+- Wheel smoke passed, including `autoloop --help`, empty-workspace package workflow listing, and packaged asset access
+
+Open issues / next step
+
+- No open phase-local issues found
+- I did not run the entire repository test suite; verification was limited to the phase-relevant test surface
+- Unrelated dirty files in the repo were left untouched
+
+
+---
+run_id=run-20260504T192206Z-d3f7e940 | entry=session_turn | pair=implement | phase=verifier | cycle=1 | attempt=1 | thread_id=019df4a0-001b-79d2-b2a3-e59913c8d3ef
+---
+provider=codex
+mode=resume
+template=/home/rauter/.local/share/pipx/venvs/autoloop/lib/python3.12/site-packages/autoloop/templates/implement_verifier.md
+session_id=019df4a0-001b-79d2-b2a3-e59913c8d3ef
+
+
+---
+run_id=run-20260504T192206Z-d3f7e940 | entry=phase_output | pair=implement | phase=verifier | process=codex-agent | cycle=1 | attempt=1 | thread_id=019df4a0-001b-79d2-b2a3-e59913c8d3ef
+---
+I’m auditing the phase-local delta against the acceptance criteria first, then I’ll inspect the highest-risk runtime and packaging edges before I update the review artifacts.
+
+The acceptance criteria file is still untouched, so I’m verifying the actual runtime/package surface now rather than inferring from notes. I’m checking importability, package metadata, old-root stragglers, and whether any built-in paths still assume the old directory depth.
+
+I found at least one documentation straggler in the changed surface: `docs/authoring.md` still tells readers to point at `workflows/` instead of `autoloop/workflows/` in its recursive-guidance section. I’m checking whether that is isolated or part of a broader acceptance-criteria miss before I mark the docs complete.
+
+The stale `workflows/` reference is real, not just a grep false positive. I’m now checking whether the package import/catalog path is otherwise sound so I can decide if this is a docs-only finding or there’s also a runtime acceptance gap.
+
+I can’t re-import the runtime from the base shell because `pydantic` isn’t installed outside the temp venv, but that’s not the packaging contract being reviewed here. The stronger signal is the docs sweep: there are at least two stale or malformed path references in changed markdown, so I’m checking whether they materially violate the requested documentation consistency.
+
+The runtime/package side looks structurally sound from the moved packages and tests, so the review is shifting to acceptance-criteria fidelity. I’m doing one tighter scan for changed docs that still contradict the new package/workspace roots before I write findings.
+
+I have one blocking finding and one documentation-quality follow-up. I’m updating the review artifacts now; the phase is not complete because the changed docs still contradict the requested workflow-root contract.
+
+Scope considered
+
+- Phase-local built-in workflow relocation, packaging metadata, docs/templates, and packaging smoke tests
+- Adjacent loader change in `autoloop/core/descriptors.py` because it affects package/workspace parameter export behavior
+- Review artifacts under the active phase directory only for writes
+
+What I analyzed
+
+- `pyproject.toml`, `MANIFEST.in`, `autoloop/workflows/__init__.py`, and built-in package `__init__.py` exports
+- Changed docs and recursive templates for lingering `workflows/` references after the root migration
+- Phase-local tests, especially wheel packaging smoke and CLI/runtime metadata coverage
+- Implementation notes and run decisions for intent and acceptance-criteria alignment
+
+What I reviewed
+
+- Documentation consistency against AC-3
+- Package-root import/discovery expectations from the changed tests and moved workflow packages
+- Whether the moved built-ins still use corrected repo-relative doc/instruction paths
+- Whether the loader change introduced unnecessary indirection or obvious safety regressions
+
+Key findings / decisions
+
+- Blocking: [docs/authoring.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/docs/authoring.md:1169) still points readers at `workflows/`, which contradicts the requested `autoloop/workflows/` package root and means AC-3 is not fully satisfied.
+- Non-blocking: [docs/workflows/workflow_package_to_composable_building_blocks.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/docs/workflows/workflow_package_to_composable_building_blocks.md:53) contains a malformed path, `docs/autoloop/workflows/...`, from the bulk rewrite.
+- I did not find a separate runtime/package blocking issue in the reviewed scope; the packaging smoke coverage and moved package exports look coherent from the changed artifacts.
+
+Open issues / next step
+
+- Fix the stale `workflows/` reference in `docs/authoring.md` and the malformed workflow-doc citation, then rerun the phase-local docs/package verification.
+- Status for this review pass is `INCOMPLETE` because of the blocking documentation inconsistency.
+
+<loop-control>
+{"schema":"docloop.loop_control/v1","kind":"promise","promise":"INCOMPLETE"}
+</loop-control>
