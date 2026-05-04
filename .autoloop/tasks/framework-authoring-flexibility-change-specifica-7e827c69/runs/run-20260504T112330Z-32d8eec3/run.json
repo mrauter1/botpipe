@@ -14,12 +14,12 @@
       "milestone-b-authoring-ergonomics-and-validation-polish"
     ],
     "explicit": true,
-    "current_phase_index": 0,
-    "current_phase_id": "milestone-a-runtime-route-policy-and-lazy-scoped-runtime"
+    "current_phase_index": 1,
+    "current_phase_id": "milestone-b-authoring-ergonomics-and-validation-polish"
   },
   "phase_status": {
-    "milestone-a-runtime-route-policy-and-lazy-scoped-runtime": "in_progress",
-    "milestone-b-authoring-ergonomics-and-validation-polish": "planned"
+    "milestone-a-runtime-route-policy-and-lazy-scoped-runtime": "completed",
+    "milestone-b-authoring-ergonomics-and-validation-polish": "in_progress"
   },
   "phase_history": [
     {
@@ -27,6 +27,19 @@
       "run_id": "run-20260504T112330Z-32d8eec3",
       "status": "in_progress",
       "ts": "2026-05-04T11:32:46.560667+00:00"
+    },
+    {
+      "phase_id": "milestone-a-runtime-route-policy-and-lazy-scoped-runtime",
+      "run_id": "run-20260504T112330Z-32d8eec3",
+      "status": "completed",
+      "ts": "2026-05-04T11:52:59.572175+00:00",
+      "pair": "test"
+    },
+    {
+      "phase_id": "milestone-b-authoring-ergonomics-and-validation-polish",
+      "run_id": "run-20260504T112330Z-32d8eec3",
+      "status": "in_progress",
+      "ts": "2026-05-04T11:52:59.574013+00:00"
     }
   ]
 }
