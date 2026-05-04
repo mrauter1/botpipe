@@ -19,7 +19,8 @@ Keep the common runtime contract wording aligned with the active workflow prompt
 ## Route Surface
 
 - route metadata supplies route summaries and any route-specific required writes.
-- Reserved routes remain available for `question`, `blocked`, and `failed`.
+- `question` is the only default runtime control route, and provider contracts hide it in full-auto mode.
+- If a workflow authors `blocked` or `failed`, treat them as ordinary application routes rather than framework defaults.
 
 ## Verifier Payloads
 

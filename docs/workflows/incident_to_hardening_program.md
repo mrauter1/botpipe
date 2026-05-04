@@ -138,11 +138,9 @@ Turn a concrete incident into a durable hardening program and response package t
 
 ### Route grammar
 
-Reserved routes:
+Runtime control route:
 
-- `question`
-- `blocked`
-- `failed`
+- `question` when provider questions are allowed by the interaction policy
 
 Application routes:
 
@@ -154,6 +152,8 @@ Application routes:
 - `needs_rework`
 - `needs_replan`
 - `incident_package_published`
+
+If this workflow authors `blocked` or `failed`, treat them as ordinary application routes rather than framework defaults.
 
 ### Artifact contract
 
@@ -212,8 +212,8 @@ The package includes explicit step prompts for:
 
 - `needs_rework`: local repair inside the current work-item boundary.
 - `needs_replan`: the incident boundary, evidence plan, or package contract changed materially.
-- `blocked`: required evidence sources or approvals are missing in a way the current step cannot repair locally.
-- `failed`: irreconcilable contradictions make the incident package non-credible.
+- When the workflow explicitly authors `blocked`, use it when required evidence sources or approvals are missing in a way the current step cannot repair locally.
+- When the workflow explicitly authors `failed`, use it when irreconcilable contradictions make the incident package non-credible.
 
 ### Recursive self-improvement policy
 

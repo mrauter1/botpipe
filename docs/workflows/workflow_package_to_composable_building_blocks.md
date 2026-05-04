@@ -151,11 +151,9 @@ Turn one selected workflow package plus explicit decomposition evidence into a c
 
 ### Route grammar
 
-Reserved routes:
+Runtime control route:
 
-- `question`
-- `blocked`
-- `failed`
+- `question` when provider questions are allowed by the interaction policy
 
 Application routes:
 
@@ -168,6 +166,8 @@ Application routes:
 - `candidate_decomposition_published`
 - `needs_rework`
 - `needs_replan`
+
+If this workflow authors `blocked` or `failed`, treat them as ordinary application routes rather than framework defaults.
 
 ### Artifact contract
 
@@ -235,8 +235,8 @@ Payload models used by the package:
 
 - `needs_rework`: local repair inside the same framing, planning, implementation, or evaluation boundary.
 - `needs_replan`: the selected workflow, extracted package set, accepted boundary, or migration posture changed materially enough that earlier work must be revisited.
-- `blocked`: a required input cannot be captured or validated without external intervention, including unreadable evidence paths or missing baseline files needed to preserve the candidate-only boundary.
-- `failed`: irreconcilable contradictions make the current decomposition package non-credible.
+- When the workflow explicitly authors `blocked`, use it when a required input cannot be captured or validated without external intervention, including unreadable evidence paths or missing baseline files needed to preserve the candidate-only boundary.
+- When the workflow explicitly authors `failed`, use it when irreconcilable contradictions make the current decomposition package non-credible.
 
 ## Recursive self-improvement policy
 

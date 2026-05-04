@@ -154,11 +154,9 @@ Turn company work history, task/request evolution, and workflow telemetry into a
 
 ### Route grammar
 
-Reserved routes:
+Runtime control route:
 
-- `question`
-- `blocked`
-- `failed`
+- `question` when provider questions are allowed by the interaction policy
 
 Application routes:
 
@@ -170,6 +168,8 @@ Application routes:
 - `needs_rework`
 - `needs_replan`
 - `recursive_improvement_cycle_published`
+
+If this workflow authors `blocked` or `failed`, treat them as ordinary application routes rather than framework defaults.
 
 ### Artifact contract
 
@@ -219,8 +219,8 @@ Payload models used by the package:
 
 - `needs_rework`: local repair inside the same framing, recursive-improvement analysis, or packaging boundary.
 - `needs_replan`: the scoped task slice, workflow slice, evidence boundary, or recursive-improvement objective changed materially enough that earlier work must be revisited.
-- `blocked`: a missing prerequisite or repository fact prevents a credible recursive-improvement package.
-- `failed`: irreconcilable contradictions make the current package non-credible.
+- When the workflow explicitly authors `blocked`, use it when a missing prerequisite or repository fact prevents a credible recursive-improvement package.
+- When the workflow explicitly authors `failed`, use it when irreconcilable contradictions make the current package non-credible.
 
 ## Recursive self-improvement policy
 

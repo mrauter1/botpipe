@@ -144,11 +144,9 @@ Turn one selected workflow's historical run evidence into a verifier-gated failu
 
 ### Route grammar
 
-Reserved routes:
+Runtime control route:
 
-- `question`
-- `blocked`
-- `failed`
+- `question` when provider questions are allowed by the interaction policy
 
 Application routes:
 
@@ -160,6 +158,8 @@ Application routes:
 - `needs_rework`
 - `needs_replan`
 - `failure_mode_diagnostics_published`
+
+If this workflow authors `blocked` or `failed`, treat them as ordinary application routes rather than framework defaults.
 
 ### Artifact contract
 
@@ -209,8 +209,8 @@ Payload models used by the package:
 
 - `needs_rework`: local repair inside the same framing, mapping, or packaging boundary.
 - `needs_replan`: the selected workflow, filtered history boundary, or diagnostic surface changed materially enough that earlier work must be revisited.
-- `blocked`: a missing prerequisite or repository fact prevents a credible diagnostic package.
-- `failed`: irreconcilable contradictions make the current failure-mode package non-credible.
+- When the workflow explicitly authors `blocked`, use it when a missing prerequisite or repository fact prevents a credible diagnostic package.
+- When the workflow explicitly authors `failed`, use it when irreconcilable contradictions make the current failure-mode package non-credible.
 
 ## Recursive self-improvement policy
 

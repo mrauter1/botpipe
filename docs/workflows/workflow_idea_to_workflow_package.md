@@ -136,11 +136,9 @@ Turn a workflow idea into a concrete Autoloop workflow package with prompts, doc
 
 ### Route grammar
 
-Reserved routes:
+Runtime control route:
 
-- `question`
-- `blocked`
-- `failed`
+- `question` when provider questions are allowed by the interaction policy
 
 Application routes:
 
@@ -152,6 +150,8 @@ Application routes:
 - `needs_rework`
 - `needs_replan`
 - `package_published`
+
+If this workflow authors `blocked` or `failed`, treat them as ordinary application routes rather than framework defaults.
 
 ### Artifact contract
 
@@ -216,8 +216,8 @@ Each prompt names the role, purpose, current work item, required reads, required
 
 - `needs_rework` loops locally on frame, design, or build, or routes evaluation back to build when the accepted design still stands.
 - `needs_replan` returns from design to frame, from build to design, or from evaluation to design when the contract changed materially.
-- `blocked` is for missing prerequisites.
-- `failed` is for irrecoverable contradictions.
+- When the workflow explicitly authors `blocked`, use it when missing prerequisites.
+- When the workflow explicitly authors `failed`, use it when irrecoverable contradictions.
 
 ### Recursive self-improvement policy
 

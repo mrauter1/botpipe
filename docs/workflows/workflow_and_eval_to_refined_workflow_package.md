@@ -149,11 +149,9 @@ Turn one selected workflow plus explicit evaluation evidence into a candidate re
 
 ### Route grammar
 
-Reserved routes:
+Runtime control route:
 
-- `question`
-- `blocked`
-- `failed`
+- `question` when provider questions are allowed by the interaction policy
 
 Application routes:
 
@@ -166,6 +164,8 @@ Application routes:
 - `workflow_refinement_published`
 - `needs_rework`
 - `needs_replan`
+
+If this workflow authors `blocked` or `failed`, treat them as ordinary application routes rather than framework defaults.
 
 ### Artifact contract
 
@@ -219,8 +219,8 @@ Payload models used by the package:
 
 - `needs_rework`: local repair inside the same framing, planning, implementation, or evaluation boundary.
 - `needs_replan`: the selected workflow, accepted refinement boundary, or required artifact graph changed materially enough that earlier work must be revisited.
-- `blocked`: a missing prerequisite or repository fact prevents a credible refinement package.
-- `failed`: irreconcilable contradictions make the current refinement package non-credible.
+- When the workflow explicitly authors `blocked`, use it when a missing prerequisite or repository fact prevents a credible refinement package.
+- When the workflow explicitly authors `failed`, use it when irreconcilable contradictions make the current refinement package non-credible.
 
 ## Recursive self-improvement policy
 

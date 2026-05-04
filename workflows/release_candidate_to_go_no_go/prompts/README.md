@@ -28,11 +28,9 @@
 
 ## Route Surface
 
-Reserved routes:
+Runtime control route:
 
-- `question`
-- `blocked`
-- `failed`
+- `question` when provider questions are allowed by the interaction policy
 
 Application routes:
 
@@ -44,6 +42,8 @@ Application routes:
 - `needs_rework`
 - `needs_replan`
 - `decision_published`
+
+If this workflow authors `blocked` or `failed`, treat them as ordinary application routes rather than framework defaults.
 
 ## Verifier Payloads
 

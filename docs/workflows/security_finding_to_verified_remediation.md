@@ -150,11 +150,9 @@ Turn a security finding into an execution-ready remediation and closure package 
 
 ### Route grammar
 
-Reserved routes:
+Runtime control route:
 
-- `question`
-- `blocked`
-- `failed`
+- `question` when provider questions are allowed by the interaction policy
 
 Application routes:
 
@@ -166,6 +164,8 @@ Application routes:
 - `needs_rework`
 - `needs_replan`
 - `remediation_published`
+
+If this workflow authors `blocked` or `failed`, treat them as ordinary application routes rather than framework defaults.
 
 ### Artifact contract
 
@@ -233,8 +233,8 @@ Step payload models:
 
 - `needs_rework`: local repair inside the current assessment, remediation-planning, or closure-packaging boundary.
 - `needs_replan`: the evidence boundary, fix strategy, or acceptance surface changed materially enough that the workflow must move back to an earlier step.
-- `blocked`: required evidence, repository prerequisites, or deployment constraints prevent safe progress inside the current step.
-- `failed`: irreconcilable contradictions make the finding or remediation package non-credible.
+- When the workflow explicitly authors `blocked`, use it when required evidence, repository prerequisites, or deployment constraints prevent safe progress inside the current step.
+- When the workflow explicitly authors `failed`, use it when irreconcilable contradictions make the finding or remediation package non-credible.
 
 ## Recursive self-improvement policy
 

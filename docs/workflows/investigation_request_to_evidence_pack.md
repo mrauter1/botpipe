@@ -156,11 +156,9 @@ Turn an investigation request into a durable evidence pack that another workflow
 
 ### Route grammar
 
-Reserved routes:
+Runtime control route:
 
-- `question`
-- `blocked`
-- `failed`
+- `question` when provider questions are allowed by the interaction policy
 
 Application routes:
 
@@ -170,6 +168,8 @@ Application routes:
 - `needs_rework`
 - `needs_replan`
 - `evidence_pack_published`
+
+If this workflow authors `blocked` or `failed`, treat them as ordinary application routes rather than framework defaults.
 
 ### Artifact contract
 
@@ -227,8 +227,8 @@ Each prompt names the role, purpose, current work item, required reads, required
 
 - `needs_rework`: local repair inside the current framing or evidence-pack boundary.
 - `needs_replan`: the investigation boundary, consumer need, or evidence plan changed materially.
-- `blocked`: required evidence sources or repository prerequisites are missing in a way the current step cannot repair locally.
-- `failed`: irreconcilable contradictions make the evidence package non-credible.
+- When the workflow explicitly authors `blocked`, use it when required evidence sources or repository prerequisites are missing in a way the current step cannot repair locally.
+- When the workflow explicitly authors `failed`, use it when irreconcilable contradictions make the evidence package non-credible.
 
 ### Recursive self-improvement policy
 

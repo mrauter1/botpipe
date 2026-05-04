@@ -1,4 +1,4 @@
-"""Typed runtime effects for deterministic worklist operations."""
+"""Typed hook-control effects for deterministic worklist operations."""
 
 from __future__ import annotations
 

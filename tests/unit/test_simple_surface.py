@@ -152,6 +152,38 @@ def test_effect_helpers_and_additional_route_helpers_lower_to_effects() -> None:
     )
 
 
+def test_effect_bundle_accepts_runtime_controls_as_event_overrides() -> None:
+    request_effect = simple.Effects(event=simple.RequestInput("Need approval?"))
+    goto_effect = simple.Effects(event=simple.Goto("publish", reason="Workflow policy redirected the run."))
+    fail_effect = simple.Effects(event=simple.Fail("Stop the workflow."))
+
+    assert simple.Effects.then("next") == simple.Effects(event="next")
+    assert isinstance(request_effect.event, simple.RequestInput)
+    assert request_effect.event.question == "Need approval?"
+    assert isinstance(goto_effect.event, simple.Goto)
+    assert goto_effect.event.target == "publish"
+    assert isinstance(fail_effect.event, simple.Fail)
+    assert fail_effect.event.reason == "Stop the workflow."
+
+
+def test_validation_step_lowers_to_python_step_with_feedback_write_and_optional_failed_route() -> None:
+    feedback = simple.Md("feedback")
+
+    @simple.validation_step(
+        name="validate_manifest",
+        feedback=feedback,
+        routes={"repair": simple.FINISH},
+        failed=simple.FAIL,
+    )
+    def validate_manifest(_ctx):
+        return simple.ValidationResult.valid()
+
+    assert isinstance(validate_manifest, simple.PythonStepDeclaration)
+    assert validate_manifest.writes == (feedback,)
+    assert validate_manifest.routes == {"repair": simple.FINISH}
+    assert getattr(validate_manifest, "implicit_routes") == {"failed": simple.FAIL}
+
+
 def test_validation_result_helpers_render_expected_shape() -> None:
     valid = simple.ValidationResult.valid()
     invalid = simple.ValidationResult.invalid(

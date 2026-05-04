@@ -65,11 +65,9 @@
 
 ## Route Surface
 
-Reserved routes:
+Runtime control route:
 
-- `question`
-- `blocked`
-- `failed`
+- `question` when provider questions are allowed by the interaction policy
 
 Application routes:
 
@@ -94,6 +92,8 @@ Application routes:
 - `optimization_packet_ready`
 - `needs_rework`
 - `optimization_candidates_published`
+
+If this workflow authors `blocked` or `failed`, treat them as ordinary application routes rather than framework defaults.
 
 ## Verifier Payloads
 

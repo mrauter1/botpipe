@@ -156,11 +156,9 @@ Turn an arbitrary software-work task into an explicit strategy package that choo
 
 ### Route grammar
 
-Reserved routes:
+Runtime control route:
 
-- `question`
-- `blocked`
-- `failed`
+- `question` when provider questions are allowed by the interaction policy
 
 Application routes:
 
@@ -173,6 +171,8 @@ Application routes:
 - `needs_rework`
 - `needs_replan`
 - `strategy_published`
+
+If this workflow authors `blocked` or `failed`, treat them as ordinary application routes rather than framework defaults.
 
 ### Artifact contract
 
@@ -225,8 +225,8 @@ Step payload models:
 
 - `needs_rework`: local repair inside the same framing, selection, or packaging boundary.
 - `needs_replan`: the task framing, candidate set, or selected route changed materially enough that the workflow must move backward.
-- `blocked`: a missing prerequisite or repository fact prevents a credible strategy package.
-- `failed`: irreconcilable contradictions make the current strategy package non-credible.
+- When the workflow explicitly authors `blocked`, use it when a missing prerequisite or repository fact prevents a credible strategy package.
+- When the workflow explicitly authors `failed`, use it when irreconcilable contradictions make the current strategy package non-credible.
 
 ## Recursive self-improvement policy
 

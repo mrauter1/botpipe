@@ -615,23 +615,25 @@ def after_review(ctx):
     return Effects.complete_and_advance(exhausted="finalize")
 ```
 
-`Effects.then(...)`, `Effects.advance(...)`, `Effects.complete_and_advance(...)`, and `Effects.refresh(...)` reuse the normal worklist runtime APIs, so status changes, refreshes, advancement, runtime events, and checkpointing all stay on the same execution path.
+`Effects` is an intentional hook-control API for hooks and `python_step(...)` handlers. It may bundle deterministic worklist mutations plus one optional `event=` override carrying a route tag, `Event(...)`, `RequestInput(...)`, `Goto(...)`, or `Fail(...)`.
 
-Workflow-level artifacts and step-produced artifacts are different roles:
+`Effects.then(...)` is shorthand for `Effects(event=...)`. `Effects.advance(...)`, `Effects.complete_and_advance(...)`, and `Effects.refresh(...)` reuse the normal worklist runtime APIs, so status changes, refreshes, advancement, runtime events, checkpointing, and direct-control finalization all stay on the same execution path.
 
-- workflow-level artifacts are inputs or managed external artifacts
-- step `writes` are produced artifacts
-- do not declare the same artifact in both roles unless the workflow intentionally uses the explicit managed/shared-artifact role
+Workflow-level artifacts and step-produced artifacts are compatible metadata on one artifact identity:
 
-When a workflow intentionally declares one artifact at workflow scope and also rewrites it from steps, mark that artifact explicitly as managed on the power-user surface:
+- workflow-level artifacts stay addressable by their canonical public name
+- step `writes` record provenance in `producer_steps`
+- reuse the same artifact object when one workflow-level artifact is also written by steps
+
+On the power-user surface that still looks like one shared declaration:
 
 ```python
 from autoloop.core import Artifact
 
-shared_brief = Artifact("{workflow_folder}/shared_brief.md", role="managed")
+shared_brief = Artifact("{workflow_folder}/shared_brief.md")
 ```
 
-`Artifact.managed(...)` is equivalent when the default `text` kind fits. Keep ordinary public authoring on `autoloop`, but use the managed role explicitly when shared workflow-owned artifacts are intentional rather than accidental.
+The runtime preserves the canonical workflow/public name for that artifact even when steps write it, so route-required writes, prompts, and provider contracts all refer to the same artifact identity.
 
 ## Typed Child Workflow Contracts
 
@@ -759,7 +761,7 @@ def validate_manifest(ctx) -> ValidationResult:
     return ValidationResult.invalid("Manifest is missing.", details=("Create manifest.json.",))
 ```
 
-The helper lowers to a normal Python step, writes a deterministic feedback artifact on repairable failure, emits runtime validation events, and keeps `success`, `repair`, and optional `failed` routing explicit in workflow code.
+The helper lowers to a normal `python_step(...)`, adds the feedback artifact to `writes`, routes `ValidationResult.invalid(...)` through the explicit `repair` route, emits runtime validation events, and only authors the optional `failed` route when you pass `failed=...`.
 
 For workflow `Params` models, reuse the shared Pydantic validator factories instead of copying the same `field_validator(...)` bodies into every `params.py`.
 
