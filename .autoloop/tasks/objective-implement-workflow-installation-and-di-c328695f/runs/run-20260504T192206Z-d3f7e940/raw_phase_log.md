@@ -1144,3 +1144,101 @@ Open issues / next step
 <loop-control>
 {"schema":"docloop.loop_control/v1","kind":"promise","promise":"INCOMPLETE"}
 </loop-control>
+
+
+---
+run_id=run-20260504T192206Z-d3f7e940 | entry=session_turn | pair=implement | phase=producer | cycle=2 | attempt=1 | thread_id=019df4a0-001b-79d2-b2a3-e59913c8d3ef
+---
+provider=codex
+mode=resume
+template=/home/rauter/.local/share/pipx/venvs/autoloop/lib/python3.12/site-packages/autoloop/templates/implement_producer.md
+session_id=019df4a0-001b-79d2-b2a3-e59913c8d3ef
+
+
+---
+run_id=run-20260504T192206Z-d3f7e940 | entry=phase_output | pair=implement | phase=producer | process=codex-agent | cycle=2 | attempt=1 | thread_id=019df4a0-001b-79d2-b2a3-e59913c8d3ef
+---
+I’m addressing the two review findings directly: the stale `workflows/` reference in `docs/authoring.md` and the malformed workflow-doc citation in the composable-building-blocks workflow doc. After that I’ll run a focused grep on the changed docs and update the phase notes.
+
+I’ve confirmed both reviewer findings are isolated, so I’m making only those two doc edits and then recording a focused validation note instead of reopening broader code paths.
+
+The fixes are in. I’m running a narrow grep on the exact stale patterns the reviewer flagged, then I’ll update the implementation notes with the follow-up validation so the next verifier pass has a clean trail.
+
+The targeted grep is clean: the stale legacy root is gone and the malformed doc path is fixed. I’m adding that follow-up validation to the notes and then I’ll close this producer pass.
+
+Scope considered
+
+- Reviewer-reported documentation findings in `docs/authoring.md` and `docs/workflows/workflow_package_to_composable_building_blocks.md`
+- Phase-local implementation notes update for the follow-up validation record
+
+What I analyzed
+
+- The stale recursive-guidance path in `docs/authoring.md`
+- The malformed workflow-doc citation in `docs/workflows/workflow_package_to_composable_building_blocks.md`
+- The exact reviewer feedback to keep the fix limited to the reported acceptance gap
+
+What I changed
+
+- Replaced the stale `workflows/` reference in [docs/authoring.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/docs/authoring.md:1169) with `autoloop/workflows/` and added `.autoloop/workflows/` in the same guidance list
+- Corrected the malformed `docs/autoloop/workflows/...` citation in [docs/workflows/workflow_package_to_composable_building_blocks.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/docs/workflows/workflow_package_to_composable_building_blocks.md:53)
+- Updated [implementation_notes.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/objective-implement-workflow-installation-and-di-c328695f/runs/run-20260504T192206Z-d3f7e940/artifacts/implement/phases/builtins-packaging-docs-verification/implementation_notes.md) to record the targeted follow-up validation
+
+Key findings / decisions
+
+- No source/runtime behavior needed to change for this pass; the blocker was documentation consistency only
+- Focused validation was a targeted grep over the two reviewer-reported stale patterns, and both are now resolved
+
+Open issues / next step
+
+- No known producer-side issues remain in this review scope
+- Next step is verifier re-review of the updated docs and criteria/feedback artifacts
+
+
+---
+run_id=run-20260504T192206Z-d3f7e940 | entry=session_turn | pair=implement | phase=verifier | cycle=2 | attempt=1 | thread_id=019df4a0-001b-79d2-b2a3-e59913c8d3ef
+---
+provider=codex
+mode=resume
+template=/home/rauter/.local/share/pipx/venvs/autoloop/lib/python3.12/site-packages/autoloop/templates/implement_verifier.md
+session_id=019df4a0-001b-79d2-b2a3-e59913c8d3ef
+
+
+---
+run_id=run-20260504T192206Z-d3f7e940 | entry=phase_output | pair=implement | phase=verifier | process=codex-agent | cycle=2 | attempt=1 | thread_id=019df4a0-001b-79d2-b2a3-e59913c8d3ef
+---
+I’m rechecking only the reviewer-reported documentation gap and the touched review artifacts. If the stale references are actually gone and no new scope issues appear, I’ll close the criteria and mark the phase complete.
+
+The reported docs are fixed in place, and I’m not finding a new scoped regression from the follow-up. I’m closing the reviewer criteria now and recording that the prior findings were verified resolved in this pass.
+
+Scope considered
+
+- Reviewer follow-up on the two phase-local documentation findings in `docs/authoring.md` and `docs/workflows/workflow_package_to_composable_building_blocks.md`
+- Reviewer-owned artifacts in the active phase directory: `criteria.md` and `feedback.md`
+
+What I analyzed
+
+- The previously flagged stale recursive-guidance path in `docs/authoring.md`
+- The malformed workflow-doc citation in `docs/workflows/workflow_package_to_composable_building_blocks.md`
+- The updated implementation notes entry for the focused follow-up validation
+
+What I reviewed
+
+- Whether the `docs/authoring.md` guidance now points at `autoloop/workflows/` and `.autoloop/workflows/` instead of the removed legacy root
+- Whether the malformed `docs/autoloop/workflows/...` reference was corrected to the real `docs/workflows/...` path
+- Whether any new scoped issue appeared in the follow-up delta
+
+Key findings / decisions
+
+- IMP-001 is resolved: the recursive/workflow-reference guidance now points at `autoloop/workflows/` and `.autoloop/workflows/`
+- IMP-002 is resolved: the composable-building-blocks workflow doc now cites `docs/workflows/workflow_idea_to_workflow_package.md`
+- No additional findings were identified in this scoped follow-up review
+- I updated `criteria.md` to fully checked and appended a follow-up resolution note to `feedback.md`
+
+Open issues / next step
+
+- No open issues remain in this review scope
+- Phase review status is `COMPLETE`
+
+<loop-control>
+{"schema":"docloop.loop_control/v1","kind":"promise","promise":"COMPLETE"}
+</loop-control>
