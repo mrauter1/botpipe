@@ -359,3 +359,57 @@ Open issues / next step
 
 - No blocking test issue remains in the scoped phase.
 - The only declared gap is that I did not add a full workflow-resume scenario from an on-disk `v1` replay store, because the loader boundary is already isolated deterministically by the new helper-level tests.
+
+
+---
+run_id=run-20260504T190003Z-04e7d84d | entry=session_turn | pair=test | phase=verifier | cycle=1 | attempt=1 | thread_id=019df460-83b2-71e2-bab8-7a89d8645941
+---
+provider=codex
+mode=resume
+template=/home/rauter/.local/share/pipx/venvs/autoloop/lib/python3.12/site-packages/autoloop/templates/test_verifier.md
+session_id=019df460-83b2-71e2-bab8-7a89d8645941
+
+
+---
+run_id=run-20260504T190003Z-04e7d84d | entry=phase_output | pair=test | phase=verifier | process=codex-agent | cycle=1 | attempt=1 | thread_id=019df460-83b2-71e2-bab8-7a89d8645941
+---
+I’m auditing the new replay-store regression tests now, starting with the active test artifacts and the exact assertions added in the contract suite so the approval state reflects the current coverage rather than the author summary alone.
+
+The strategy and decisions are aligned with the intent. I’m reading the exact new assertions and rerunning the focused slice myself so the audit can explicitly clear coverage quality, failure-path depth, and flake risk from current evidence.
+
+The new tests cover the material boundary cleanly and the focused slice is stable. I’m marking the audit criteria complete and appending a concise audit note that no additional coverage or reliability gaps were found in scope.
+
+The audit artifacts are updated. I’m doing one last readback so the checked criteria, the no-finding audit note, and the final completion state are all consistent before I close.
+
+Scope considered
+
+- Audited the replay-key test additions in [test_engine_contracts.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/tests/contract/test_engine_contracts.py:8204), plus the active test artifacts [test_strategy.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/operation-replay-key-stability-fix-implementatio-b15a7c28/runs/run-20260504T190003Z-04e7d84d/artifacts/test/phases/align-operation-replay-keying/test_strategy.md:1) and [feedback.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/operation-replay-key-stability-fix-implementatio-b15a7c28/runs/run-20260504T190003Z-04e7d84d/artifacts/test/phases/align-operation-replay-keying/feedback.md:1).
+
+What I analyzed
+
+- Re-checked the existing workflow-level replay mismatch tests and the new helper-level replay-store schema tests.
+- Verified the decisions ledger requirement that only schemaless and explicit `v1` payloads migrate, while unsupported schemas fail.
+- Re-ran the focused replay slice with `'../autoloop_v3 (Cópia)/.venv/bin/python' -m pytest tests/contract/test_engine_contracts.py -k operation_replay`.
+
+What I reviewed
+
+- Confirmed the new tests cover the missing regression surface:
+  - schemaless migration
+  - explicit `v1` migration
+  - unsupported `v3` rejection
+- Updated [criteria.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/operation-replay-key-stability-fix-implementatio-b15a7c28/runs/run-20260504T190003Z-04e7d84d/artifacts/test/phases/align-operation-replay-keying/criteria.md:1) to all checked.
+- Appended a concise audit note to [feedback.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/operation-replay-key-stability-fix-implementatio-b15a7c28/runs/run-20260504T190003Z-04e7d84d/artifacts/test/phases/align-operation-replay-keying/feedback.md:10).
+
+Key findings / decisions
+
+- No blocking audit findings.
+- The helper-level assertions are the right level for the persisted-schema boundary because the existing engine-level replay tests already cover fingerprint mismatch warn/fail behavior.
+- The focused replay slice passed reproducibly: `6 passed, 163 deselected`.
+
+Open issues / next step
+
+- No open scoped test-audit issue remains. The phase is ready to close.
+
+<loop-control>
+{"schema":"docloop.loop_control/v1","kind":"promise","promise":"COMPLETE"}
+</loop-control>

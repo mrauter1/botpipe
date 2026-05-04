@@ -5,3 +5,5 @@ Callsite must remain in the operation fingerprint and stored record for mismatch
 Scoped source files already matched the approved v2 replay-key design on entry, so this turn made no code changes and was limited to verification plus phase-artifact updates.
 <autoloop-decisions-header version="1" block_seq="3" owner="implementer" phase_id="align-operation-replay-keying" pair="implement" turn_seq="2" run_id="run-20260504T190003Z-04e7d84d" ts="2026-05-04T19:08:51.114860+00:00" />
 Only schemaless or explicit `autoloop.operation_replay/v1` payloads may be destructively migrated in `_load_replay_store`; any other schema string must still fail validation as unsupported.
+<autoloop-decisions-header version="1" block_seq="4" owner="test_author" phase_id="align-operation-replay-keying" pair="test" turn_seq="1" run_id="run-20260504T190003Z-04e7d84d" ts="2026-05-04T19:12:20.567176+00:00" />
+Replay-store schema boundary coverage is exercised directly through `_load_replay_store` because the existing engine-level replay tests do not reach unsupported persisted-schema rejection paths.
