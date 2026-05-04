@@ -8,3 +8,67 @@ workspace=/home/rauter/autoloop_v3_bkp/autoloop_v3
 pairs=plan,implement,test,audit
 request_file=/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/operation-replay-key-stability-fix-implementatio-543f850c/runs/run-20260504T184803Z-4d34c481/request.md
 session_mode=persistent
+
+
+---
+run_id=run-20260504T184803Z-4d34c481 | entry=session_turn | pair=plan | phase=producer | cycle=1 | attempt=1 | thread_id=019df451-a680-7600-a38d-25b3d5d021d6
+---
+provider=codex
+mode=start
+template=/home/rauter/.local/share/pipx/venvs/autoloop/lib/python3.12/site-packages/autoloop/templates/plan_producer.md
+session_id=019df451-a680-7600-a38d-25b3d5d021d6
+
+
+---
+run_id=run-20260504T184803Z-4d34c481 | entry=phase_output | pair=plan | phase=producer | process=codex-agent | cycle=1 | attempt=1 | thread_id=019df451-a680-7600-a38d-25b3d5d021d6
+---
+Reviewing the authoritative request and the current replay implementation first, then I’ll update the run-local planning artifacts to match the existing spec without widening scope.
+
+The implementation surface is as narrow as the request claims: schema versioning plus replay key/counter behavior in `operations.py`. I’m checking the exact helper definitions and existing migration path before writing the plan artifacts.
+
+I confirmed there are no code call sites beyond `_run_operation`; the only extra matches are in a spec-style `replay.md`. I’m checking the existing `_load_replay_store` behavior now so the plan can call out the exact migration replacement and its compatibility impact.
+
+The request is internally consistent, and there are no later clarification entries in the raw log. I’m pulling one existing planning artifact example to keep the output shape aligned with the repository’s conventions before I write the files.
+
+Scope considered
+- Authoritative request snapshot, authoritative raw log, `autoloop/core/operations.py`, `autoloop/core/schema_registry.py`, and the run-local planning artifacts.
+
+What I analyzed
+- Verified the current `_run_operation`, `_next_occurrence`, `_operation_replay_key`, and `_load_replay_store` flow in [operations.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/autoloop/core/operations.py:209).
+- Verified `OPERATION_REPLAY_SCHEMA` and `validate_persisted_schema()` semantics in [schema_registry.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/autoloop/core/schema_registry.py:12).
+- Confirmed the only code call sites for `_next_occurrence` and `_operation_replay_key` are inside `_run_operation`; the other matches are in `replay.md`, not runtime code.
+
+What I changed
+- No files changed. The current spec has one migration hole that needs confirmation before I can safely write the plan artifacts.
+
+Key findings / decisions
+- The replay-key and occurrence-counter changes are otherwise narrow and implementation-ready.
+- The requested `_load_replay_store` migration snippet does not actually migrate existing v1 replay stores under the current validator behavior.
+
+Open issues / next step
+- Need confirmation on the v1 migration approach before updating `plan.md`, `phase_plan.yaml`, `feedback.md`, and `decisions.txt`.
+
+<loop-control>
+{"schema":"docloop.loop_control/v1","kind":"question","question":"WARNING: the spec's `_load_replay_store` change is not sufficient to migrate existing v1 replay stores as written. `validate_persisted_schema()` only calls `legacy_migrator` when `schema` is missing; when `schema` is `\"autoloop.operation_replay/v1\"` it raises immediately, so simply swapping the lambda for `_migrate_operation_replay_store` will still reject v1 files.\n\n1. Should I plan the implementation to handle v1 replay stores explicitly inside `_load_replay_store` by detecting any non-v2 payload and replacing it with `_migrate_operation_replay_store(payload)` before validation, while still keeping the schema bump and named migrator in the two requested files only? Answer YES or NO.","best_supposition":"YES — keep scope to `operations.py` and treat any non-v2 replay payload as discard-and-preserve-attempts before validation, because that is the smallest change that actually migrates v1 stores."}
+</loop-control>
+
+
+---
+run_id=run-20260504T184803Z-4d34c481 | entry=clarification | pair=plan | phase=producer | cycle=1 | attempt=1 | source=auto
+---
+Question:
+WARNING: the spec's `_load_replay_store` change is not sufficient to migrate existing v1 replay stores as written. `validate_persisted_schema()` only calls `legacy_migrator` when `schema` is missing; when `schema` is `"autoloop.operation_replay/v1"` it raises immediately, so simply swapping the lambda for `_migrate_operation_replay_store` will still reject v1 files.
+
+1. Should I plan the implementation to handle v1 replay stores explicitly inside `_load_replay_store` by detecting any non-v2 payload and replacing it with `_migrate_operation_replay_store(payload)` before validation, while still keeping the schema bump and named migrator in the two requested files only? Answer YES or NO.
+Best supposition: YES — keep scope to `operations.py` and treat any non-v2 replay payload as discard-and-preserve-attempts before validation, because that is the smallest change that actually migrates v1 stores.
+
+Answer:
+I’m checking the current schema validation and replay-store loading path in the repo to answer against actual code, then I’ll reconcile that with the spec snapshot and raw log.
+
+The validator behavior matches the warning: a named migrator alone won’t touch explicit `v1` payloads. I’m reading the exact `_load_replay_store` implementation to confirm the narrowest safe place for the fallback.
+
+YES.
+
+Repository context supports that answer. In `autoloop/core/schema_registry.py`, `validate_persisted_schema()` only invokes `legacy_migrator` when `payload.get("schema") is None`; if the file explicitly says `"autoloop.operation_replay/v1"`, it raises on `schema != expected`. In `autoloop/core/operations.py`, `_load_replay_store()` currently validates immediately after parsing, so replacing only the lambda with `_migrate_operation_replay_store` would still reject existing v1 replay stores.
+
+Safest explicit assumption: keep scope to the two requested files, but make `_load_replay_store()` detect any payload whose schema is not `OPERATION_REPLAY_SCHEMA` and replace it with `_migrate_operation_replay_store(payload)` before calling `validate_persisted_schema()`. That preserves the spec’s intent: discard incompatible v1 `records`, preserve list-shaped `attempts`, and avoid widening the change into the shared validator.
