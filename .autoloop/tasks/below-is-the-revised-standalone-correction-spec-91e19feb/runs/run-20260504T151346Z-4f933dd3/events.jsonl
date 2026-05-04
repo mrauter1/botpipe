@@ -33,3 +33,6 @@
 {"ts": "2026-05-04T16:06:33.170870+00:00", "run_id": "run-20260504T151346Z-4f933dd3", "seq": 33, "event_type": "phase_deferred", "pair": "implement", "phase_mode": "single", "phase_id": "lazy-worklist-runtime", "reason": "awaiting enabled test pair completion"}
 {"ts": "2026-05-04T16:06:33.173547+00:00", "run_id": "run-20260504T151346Z-4f933dd3", "seq": 34, "event_type": "pair_started", "pair": "test", "phase_id": "lazy-worklist-runtime"}
 {"ts": "2026-05-04T16:06:33.173698+00:00", "run_id": "run-20260504T151346Z-4f933dd3", "seq": 35, "event_type": "cycle_started", "pair": "test", "cycle": 1, "attempt": 1, "phase_id": "lazy-worklist-runtime"}
+{"ts": "2026-05-04T16:09:23.995619+00:00", "run_id": "run-20260504T151346Z-4f933dd3", "seq": 36, "event_type": "phase_finished", "pair": "test", "phase": "producer", "cycle": 1, "attempt": 1, "empty_output": false, "phase_id": "lazy-worklist-runtime"}
+{"ts": "2026-05-04T16:10:35.547372+00:00", "run_id": "run-20260504T151346Z-4f933dd3", "seq": 37, "event_type": "phase_finished", "pair": "test", "phase": "verifier", "cycle": 1, "attempt": 1, "empty_output": false, "phase_id": "lazy-worklist-runtime"}
+{"ts": "2026-05-04T16:10:35.585945+00:00", "run_id": "run-20260504T151346Z-4f933dd3", "seq": 38, "event_type": "pair_completed", "pair": "test", "cycle": 1, "attempt": 1, "phase_id": "lazy-worklist-runtime"}

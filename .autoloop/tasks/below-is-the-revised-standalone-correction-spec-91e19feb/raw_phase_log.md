@@ -704,3 +704,54 @@ Open issues / next step
 
 - No blocking test gaps remain within the active phase scope.
 - I did not update the auditor-owned [criteria.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/below-is-the-revised-standalone-correction-spec-91e19feb/runs/run-20260504T151346Z-4f933dd3/artifacts/test/phases/lazy-worklist-runtime/criteria.md).
+
+
+---
+run_id=run-20260504T151346Z-4f933dd3 | entry=session_turn | pair=test | phase=verifier | cycle=1 | attempt=1 | thread_id=019df3ac-00a2-7a82-baae-1d81bebffdf5
+---
+provider=codex
+mode=resume
+template=/home/rauter/.local/share/pipx/venvs/autoloop/lib/python3.12/site-packages/autoloop/templates/test_verifier.md
+session_id=019df3ac-00a2-7a82-baae-1d81bebffdf5
+
+
+---
+run_id=run-20260504T151346Z-4f933dd3 | entry=phase_output | pair=test | phase=verifier | process=codex-agent | cycle=1 | attempt=1 | thread_id=019df3ac-00a2-7a82-baae-1d81bebffdf5
+---
+I’m auditing the added lazy-worklist tests against the phase acceptance criteria and the existing regression surface first, then I’ll update only the phase-local audit artifacts.
+
+I’ve confirmed the new tests are scoped and deterministic. I’m checking the legacy-null resume test directly and re-running the targeted contract slice before I finalize the audit artifacts.
+
+The targeted contract suite passed, and the added tests cover the remaining resume/materialization edges without introducing flaky setup. I’m marking the audit artifacts accordingly.
+
+Scope considered
+
+- Active `lazy-worklist-runtime` test phase only: added contract tests, the phase-local `test_strategy.md`, and the phase-local audit artifacts.
+- Request-relevant adjacent coverage only where needed to confirm AC-1 through AC-6 and the strict-lazy restore decision in `decisions.txt`.
+
+What I analyzed
+
+- The updated [tests/contract/test_engine_contracts.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/tests/contract/test_engine_contracts.py), especially the new `ctx.current(...)` lazy-materialization test and the legacy `null` checkpoint-selection resume test.
+- The phase-local [test_strategy.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/below-is-the-revised-standalone-correction-spec-91e19feb/runs/run-20260504T151346Z-4f933dd3/artifacts/test/phases/lazy-worklist-runtime/test_strategy.md), [criteria.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/below-is-the-revised-standalone-correction-spec-91e19feb/runs/run-20260504T151346Z-4f933dd3/artifacts/test/phases/lazy-worklist-runtime/criteria.md), [feedback.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/below-is-the-revised-standalone-correction-spec-91e19feb/runs/run-20260504T151346Z-4f933dd3/artifacts/test/phases/lazy-worklist-runtime/feedback.md), and the relevant `decisions.txt` entries.
+- Direct validation with `./.venv/bin/python -m pytest tests/contract/test_engine_contracts.py -q`.
+
+What I reviewed
+
+- Coverage quality: the added tests now explicitly pin both first-use `ctx.current(...)` materialization and the legacy persisted `null` resume edge case that the phase contract called out.
+- Regression protection: the tests would fail if lazy worklist resolution starts materializing sibling worklists, or if resume starts treating legacy `null` selection payloads as eager-load work.
+- Reliability: setup is filesystem-local, deterministic, and free of timing or ordering assumptions; the direct `pytest` run passed with `162 passed`.
+
+Key findings / decisions
+
+- No blocking audit findings.
+- No non-blocking audit findings.
+- Updated the phase-local audit artifacts accordingly: all criteria boxes are checked in [criteria.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/below-is-the-revised-standalone-correction-spec-91e19feb/runs/run-20260504T151346Z-4f933dd3/artifacts/test/phases/lazy-worklist-runtime/criteria.md) and the clean audit result is recorded in [feedback.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/below-is-the-revised-standalone-correction-spec-91e19feb/runs/run-20260504T151346Z-4f933dd3/artifacts/test/phases/lazy-worklist-runtime/feedback.md).
+
+Open issues / next step
+
+- No phase-blocking test gaps remain in `lazy-worklist-runtime`.
+- The remaining static-graph assertions referenced by the strategy were already covered in existing tests and did not require additional audit action this turn.
+
+<loop-control>
+{"schema":"docloop.loop_control/v1","kind":"promise","promise":"COMPLETE"}
+</loop-control>
