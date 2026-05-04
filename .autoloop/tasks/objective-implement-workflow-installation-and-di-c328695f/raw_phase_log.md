@@ -1528,3 +1528,41 @@ The remaining test gap is primarily expectation drift in `test_workflow_referenc
 
 **Open issues / next step**  
 The next step is implementation against this plan, then rerun the five named suites in the standard project validation environment. I could not run pytest in this shell because `python3` here does not have `pytest` installed, so there is no local pass/fail evidence from this container.
+
+
+---
+run_id=run-20260504T204430Z-152082a1 | entry=session_turn | pair=plan | phase=verifier | cycle=1 | attempt=1 | thread_id=019df4bc-4168-7aa2-b244-31aaceb1e785
+---
+provider=codex
+mode=resume
+template=/home/rauter/.local/share/pipx/venvs/autoloop/lib/python3.12/site-packages/autoloop/templates/plan_verifier.md
+session_id=019df4bc-4168-7aa2-b244-31aaceb1e785
+
+
+---
+run_id=run-20260504T204430Z-152082a1 | entry=phase_output | pair=plan | phase=verifier | process=codex-agent | cycle=1 | attempt=1 | thread_id=019df4bc-4168-7aa2-b244-31aaceb1e785
+---
+I’m auditing the plan against the exact request language and the current discovery tests now. The main check is whether the artifacts preserve the narrowed workflow contract without silently keeping legacy `workflows.*` coverage alive.
+
+I found one material contract drift between the request and the plan artifacts. I’m updating the criteria and feedback now so the next turn has a precise correction target.
+
+I’ve recorded the blocking finding and updated the gate checklist. I’m doing a quick readback so the final loop status matches the artifact state exactly.
+
+Scope considered  
+The immutable request snapshot, the run-local decisions ledger, the generated [plan.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/objective-implement-workflow-installation-and-di-c328695f/runs/run-20260504T204430Z-152082a1/artifacts/plan/plan.md), [phase_plan.yaml](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/objective-implement-workflow-installation-and-di-c328695f/runs/run-20260504T204430Z-152082a1/artifacts/plan/phase_plan.yaml), [criteria.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/objective-implement-workflow-installation-and-di-c328695f/runs/run-20260504T204430Z-152082a1/artifacts/plan/criteria.md), and [feedback.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/objective-implement-workflow-installation-and-di-c328695f/runs/run-20260504T204430Z-152082a1/artifacts/plan/feedback.md).
+
+What I analyzed  
+I checked the request’s three follow-up constraints against the plan narrative and machine-readable phase contract, with emphasis on the narrowed workflow discovery contract for `{workspace}/workflows/`. I also cross-checked the wording against the existing `tests/runtime/test_workflow_reference_resolution.py` coverage shape described in the plan.
+
+What I reviewed  
+The artifacts are structurally valid and concise, and the single-phase decomposition is appropriate for this scope. I updated `criteria.md` and appended a stable finding to `feedback.md`.
+
+Key findings / decisions  
+One blocking issue remains: the plan still allows `{workspace}/workflows/` coverage through explicit Python-module references, but the request narrows that root to explicit filesystem-path references only. That is recorded as `PLAN-001` in `feedback.md`. Because of that drift, `Intent Fidelity`, `Behavioral Safety`, `Completeness`, and `Feasibility / Compatibility` remain unchecked; only `Technical Debt` is checked.
+
+Open issues / next step  
+Revise both `plan.md` and `phase_plan.yaml` so `{workspace}/workflows/` is path-only, explicitly remove or relocate any remaining workspace `workflows.*` module-reference expectations, then re-run plan verification.
+
+<loop-control>
+{"schema":"docloop.loop_control/v1","kind":"promise","promise":"INCOMPLETE"}
+</loop-control>
