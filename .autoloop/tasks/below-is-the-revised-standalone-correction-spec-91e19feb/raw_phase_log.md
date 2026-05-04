@@ -1732,3 +1732,66 @@ Open issues / next step
 <loop-control>
 {"schema":"docloop.loop_control/v1","kind":"promise","promise":"INCOMPLETE"}
 </loop-control>
+
+
+---
+run_id=run-20260504T163613Z-cf62c11b | entry=session_turn | pair=audit | phase=verifier | cycle=1 | attempt=1 | thread_id=019df3ff-f8bc-73b1-b20d-26b36caab2ba
+---
+provider=codex
+mode=resume
+template=/home/rauter/.local/share/pipx/venvs/autoloop/lib/python3.12/site-packages/autoloop/templates/audit_verifier.md
+session_id=019df3ff-f8bc-73b1-b20d-26b36caab2ba
+
+
+---
+run_id=run-20260504T163613Z-cf62c11b | entry=phase_output | pair=audit | phase=verifier | process=codex-agent | cycle=1 | attempt=1 | thread_id=019df3ff-f8bc-73b1-b20d-26b36caab2ba
+---
+I’m verifying the audit artifacts against the original request, decisions, and final repo evidence, then I’ll update only the audit `criteria.md` and `feedback.md` files with the review result.
+
+I have the audit outputs. Next I’m checking them against the decisions ledger and spot-verifying the repo evidence they rely on, especially the “no material gaps” conclusion and the justified helper/test-only scope expansion.
+
+The audit’s main claims line up with the decision trail so far. I’m doing one last reviewer-side rerun of the full runtime suite set the report cites, because that is the only place a hidden material gap would still contradict the “no follow-up” conclusion.
+
+The audit holds up under reviewer-side reruns, so I’m marking the audit criteria complete and adding a concise verification note to the audit feedback artifact.
+
+The audit review artifacts are updated. I’m doing a quick readback of `criteria.md` and `feedback.md` so the final status is grounded in the exact written result.
+
+Scope considered
+
+- Audit artifacts in `.autoloop/.../artifacts/audit`.
+- Original request, raw-log clarifications, and read-only `decisions.txt`.
+- Final repo evidence for prompt bodies, shared baseline coverage, and the cited runtime suite set.
+
+What I analyzed
+
+- `gap_report.md`, `revised_request.md`, and `audit_result.json`.
+- The decision trail covering the prompt-body baseline scope and the later test-only compiler-cache helper justification.
+- Reviewer-side repo checks:
+  - prompt-body retired-wording scan
+  - `tests/test_architecture_baseline_docs.py::test_workflow_prompt_bodies_use_question_only_runtime_control_wording`
+  - the cited runtime suite set plus `tests/runtime/test_release_candidate_to_go_no_go.py`
+
+What I reviewed
+
+- `criteria.md` and `feedback.md` for the audit phase.
+- The audit’s classification that no material unresolved gaps remain.
+- The audit’s claim that the helper/test expansion was justified by later analysis rather than silent scope drift.
+
+Key findings / decisions
+
+- No blocking audit findings.
+- The audit artifacts are accurate and complete:
+  - prompt-body scan still shows `116` non-README prompt bodies and `0` retired-wording matches
+  - baseline guard rerun passed (`1 passed`)
+  - reviewer-side rerun of the representative runtime suite set plus the helper-seam dependency passed (`183 passed`)
+- `criteria.md` was updated with all checkboxes checked.
+- `feedback.md` now contains `AUD-001` as a non-blocking verification note confirming no audit defects.
+
+Open issues / next step
+
+- No open audit issues remain.
+- The audit phase is complete.
+
+<loop-control>
+{"schema":"docloop.loop_control/v1","kind":"promise","promise":"COMPLETE"}
+</loop-control>
