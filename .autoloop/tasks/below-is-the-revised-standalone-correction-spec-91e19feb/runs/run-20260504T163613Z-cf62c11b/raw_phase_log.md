@@ -306,3 +306,135 @@ Open issues / next step
 <loop-control>
 {"schema":"docloop.loop_control/v1","kind":"promise","promise":"INCOMPLETE"}
 </loop-control>
+
+
+---
+run_id=run-20260504T163613Z-cf62c11b | entry=session_turn | pair=implement | phase=producer | cycle=2 | attempt=1 | thread_id=019df3e1-7db9-7150-ac0b-aa1c60526b51
+---
+provider=codex
+mode=resume
+template=/home/rauter/.local/share/pipx/venvs/autoloop/lib/python3.12/site-packages/autoloop/templates/implement_producer.md
+session_id=019df3e1-7db9-7150-ac0b-aa1c60526b51
+
+
+---
+run_id=run-20260504T163613Z-cf62c11b | entry=phase_output | pair=implement | phase=producer | process=codex-agent | cycle=2 | attempt=1 | thread_id=019df3e1-7db9-7150-ac0b-aa1c60526b51
+---
+The reviewer’s blocker is actionable: the full runtime suites are still asserting an older route contract, not just older prompt wording. I’m mapping those failing expectations now so I can align the six suites to the shipped runtime model without touching engine behavior.
+
+I’m checking the actual compiled workflow contracts now so I can update the failing assertions to the runtime’s real route and required-write surfaces instead of patching them by guesswork.
+
+The compile/runtime contract drift is consistent so far: `question` is the only default control route, and required-write names are unscoped in the compiled/provider-facing metadata. I’m checking the remaining publish-validation failures at the contract/model layer now so I can update those tests coherently instead of whack-a-mole patching them.
+
+The remaining failures look mechanical and contract-aligned: the tests are still expecting framework-injected `blocked`/`failed` routes and step-qualified required-write names. I’m rewriting those expectations across the affected runtime suites, including the transitive `release_candidate_to_go_no_go` suite that the refinement/decomposition overlays execute.
+
+The stale expectations are updated. I’m re-running the full-file validation now, including `test_release_candidate_to_go_no_go.py`, because two of the named suites execute that test file through overlay validation.
+
+There are still a small number of full-suite failures, but the broad stale route-set breakage has dropped sharply. I’m pulling the exact remaining failures so I can finish this without widening into runtime behavior changes.
+
+The remaining compile-time failures are the same contract drift on step `requires`: those surfaces are unscoped now, just like `required_writes`. I’m normalizing those final expectation blocks next, then I’ll recheck whether the lone eval-manifest test still fails under full-file execution.
+
+The eval-manifest test is the only non-mechanical holdout now. I’m reproducing that publish path in a one-off script so I can see whether the monkeypatch is actually taking effect or whether the current shipped helper rewrites the manifest before validation.
+
+I’m verifying the remaining AC-3 failure in the eval-suite runtime file and checking whether a cached compiled workflow is bypassing the monkeypatch. After that I’ll patch the narrowest test seam, rerun the affected suites, and update the phase notes.
+
+The remaining failure looks isolated to one publish-step test that passes alone and fails in-file, which is a strong sign of compile-time handler caching. I’m checking the workflow compiler and the helper path that invokes compiled steps before I patch the test.
+
+I confirmed the core issue: the workflow compiler caches compiled handlers by source hash and step metadata, not by the current monkeypatched function object. That means the later test can silently reuse a stale `publish_workflow_eval_suite` handler inside the same file, so I’m fixing cache isolation at the test seam rather than changing runtime behavior.
+
+I found a narrower central seam than editing more suite files: the shared runtime helper recompiles the workflow for Python-step invocations, so that’s the right place to flush test-only compile cache after monkeypatches. I’m patching that helper and then rerunning the eval-suite file plus the six AC-3 suites.
+
+The repo doesn’t have a local test venv available here, so I’m creating a temporary one for verification and rerunning the affected runtime files there. The code change is isolated to the test helper; this step is only to confirm the suite behavior matches the fix.
+
+The helper patch is in place and the full-file runs are executing in the temp venv now. I’ve already cleared the previously flaky portion of `test_workflow_to_eval_suite.py`; waiting on the broader multi-file run to confirm AC-3 end to end.
+
+The broad verification run is green: the six AC-3 suites plus the transitive release-candidate suite all passed together. I’m updating the phase notes and run-local decisions ledger to record the test-helper cache isolation fix that made the full-file runtime suites deterministic.
+
+I’ve confirmed the runtime suites that define AC-3. I’m doing one last baseline pass on the shared prompt-body guard so the central coverage added for AC-4 is also freshly verified in the same environment.
+
+Scope considered
+
+- Reviewer finding `IMP-001` in the active phase feedback.
+- The six runtime prompt-package suites named by AC-3, plus the transitive `tests/runtime/test_release_candidate_to_go_no_go.py` dependency.
+- Shared helper code used by those runtime step-invocation tests.
+- Phase-local notes in [implementation_notes.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/below-is-the-revised-standalone-correction-spec-91e19feb/runs/run-20260504T163613Z-cf62c11b/artifacts/implement/phases/align-prompt-route-wording/implementation_notes.md:1) and the run ledger in [decisions.txt](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/below-is-the-revised-standalone-correction-spec-91e19feb/runs/run-20260504T163613Z-cf62c11b/decisions.txt:1).
+
+What I analyzed
+
+- The remaining full-file failure in [tests/runtime/test_workflow_to_eval_suite.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/tests/runtime/test_workflow_to_eval_suite.py:1145).
+- Workflow compiler caching in [autoloop/core/compiler.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/autoloop/core/compiler.py:40) and the helper seam in [tests/runtime/workflow_contract_helpers.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/tests/runtime/workflow_contract_helpers.py:1).
+- The stale runtime assertions that still expected framework-default `blocked` / `failed` routes and step-qualified artifact names in the affected runtime suites.
+
+What I changed
+
+- Kept the earlier prompt-wording and runtime assertion updates in place across the six AC-3 suites and the transitive release-candidate suite so their expectations match the shipped route model and unscoped artifact names.
+- Fixed the remaining order-sensitive runtime failure by updating [tests/runtime/workflow_contract_helpers.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/tests/runtime/workflow_contract_helpers.py:1) to clear the workflow compiler cache before helper-driven step compilation, so monkeypatched workflow module handlers are actually observed during full-file pytest runs.
+- Updated [implementation_notes.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/below-is-the-revised-standalone-correction-spec-91e19feb/runs/run-20260504T163613Z-cf62c11b/artifacts/implement/phases/align-prompt-route-wording/implementation_notes.md:1) and appended the non-obvious cache-isolation decision under the current header in [decisions.txt](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/below-is-the-revised-standalone-correction-spec-91e19feb/runs/run-20260504T163613Z-cf62c11b/decisions.txt:9).
+
+Key findings / decisions
+
+- The last failing eval-suite test was not a product or workflow-contract mismatch; it was a test-order issue caused by compiled handlers being reused after monkeypatching.
+- The narrowest safe fix was test-helper cache isolation, not a production compiler change.
+- Validation passed:
+  - `/tmp/autoloop-prompt-route-verify-sF91JR/bin/python -m pytest tests/runtime/test_workflow_to_eval_suite.py -q` → `29 passed`
+  - `/tmp/autoloop-prompt-route-verify-sF91JR/bin/python -m pytest tests/runtime/test_company_operation_to_recursive_improvement_cycle.py tests/runtime/test_workflow_portfolio_to_operating_system.py tests/runtime/test_workflow_run_history_to_failure_modes.py tests/runtime/test_workflow_and_eval_to_refined_workflow_package.py tests/runtime/test_workflow_package_to_composable_building_blocks.py tests/runtime/test_workflow_to_eval_suite.py tests/runtime/test_release_candidate_to_go_no_go.py -q` → `182 passed`
+  - `/tmp/autoloop-prompt-route-verify-sF91JR/bin/python -m pytest tests/test_architecture_baseline_docs.py::test_workflow_prompt_bodies_use_question_only_runtime_control_wording -q` → `1 passed`
+
+Open issues / next step
+
+- No open issues remain within this phase scope. AC-3 and the shared AC-4 baseline coverage are now validated together with the prompt-wording updates.
+
+
+---
+run_id=run-20260504T163613Z-cf62c11b | entry=session_turn | pair=implement | phase=verifier | cycle=2 | attempt=1 | thread_id=019df3e1-7db9-7150-ac0b-aa1c60526b51
+---
+provider=codex
+mode=resume
+template=/home/rauter/.local/share/pipx/venvs/autoloop/lib/python3.12/site-packages/autoloop/templates/implement_verifier.md
+session_id=019df3e1-7db9-7150-ac0b-aa1c60526b51
+
+
+---
+run_id=run-20260504T163613Z-cf62c11b | entry=phase_output | pair=implement | phase=verifier | process=codex-agent | cycle=2 | attempt=1 | thread_id=019df3e1-7db9-7150-ac0b-aa1c60526b51
+---
+I’m reviewing the producer follow-up against the phase contract, with focus on the prior blocking finding and whether AC-3/AC-4 are now evidenced by the updated tests and helper seam. Then I’ll update the review artifacts only.
+
+I’ve confirmed the artifact notes and the helper change. I’m rerunning the two key verification seams directly from the reviewer side now: the shared prompt-body baseline and the full AC-3 runtime-suite set.
+
+The re-run is green on the reviewer side as well. I’m updating the criteria to reflect completion and appending a resolution note for `IMP-001` so the artifact history stays coherent without inventing a fake new finding.
+
+Scope considered
+
+- The changed prompt-route wording scope for `workflows/*/prompts/*.md`, the shared baseline in `tests/test_architecture_baseline_docs.py`, and the runtime prompt-package suites named by AC-3.
+- The follow-up helper change in `tests/runtime/workflow_contract_helpers.py`.
+- Active review artifacts: `criteria.md`, `feedback.md`, `implementation_notes.md`, and the run-local `decisions.txt`.
+
+What I analyzed
+
+- The prior blocking finding `IMP-001` and the producer’s claimed fix.
+- The helper seam that compiles workflow handlers during runtime step-invocation tests.
+- The implementation notes and decision entry describing test-only compile-cache isolation.
+- The acceptance-criterion evidence for AC-3 and AC-4.
+
+What I reviewed
+
+- `tests/runtime/workflow_contract_helpers.py` to confirm the cache-clearing change is confined to test helpers and does not alter production runtime behavior.
+- The updated runtime suite expectations that now align with the shipped route model.
+- Reviewer-side execution of:
+  - `tests/test_architecture_baseline_docs.py::test_workflow_prompt_bodies_use_question_only_runtime_control_wording` → `1 passed`
+  - `tests/runtime/test_company_operation_to_recursive_improvement_cycle.py tests/runtime/test_workflow_portfolio_to_operating_system.py tests/runtime/test_workflow_run_history_to_failure_modes.py tests/runtime/test_workflow_and_eval_to_refined_workflow_package.py tests/runtime/test_workflow_package_to_composable_building_blocks.py tests/runtime/test_workflow_to_eval_suite.py tests/runtime/test_release_candidate_to_go_no_go.py -q` → `182 passed`
+
+Key findings / decisions
+
+- No blocking findings remain.
+- `IMP-001` is resolved: the full AC-3 runtime suite set now passes under reviewer-side execution.
+- The helper-based compile-cache isolation is appropriately centralized in test code and matches the run-local decision entry.
+- I updated `criteria.md` so all boxes are checked and appended a resolution note to `feedback.md`.
+
+Open issues / next step
+
+- No open issues remain within this phase scope.
+
+<loop-control>
+{"schema":"docloop.loop_control/v1","kind":"promise","promise":"COMPLETE"}
+</loop-control>

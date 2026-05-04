@@ -10,3 +10,7 @@
 ## Findings
 
 - IMP-001 | blocking | `tests/runtime/test_company_operation_to_recursive_improvement_cycle.py::test_company_operation_to_recursive_improvement_cycle_compiles_with_explicit_control_contracts` and the other five runtime suites named in AC-3 still fail under full-suite execution, so the phase does not satisfy the requirement that the updated runtime prompt-package suites "pass". Independent verification with `python -m pytest` against the six full files still fails immediately, for example at [tests/runtime/test_company_operation_to_recursive_improvement_cycle.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/tests/runtime/test_company_operation_to_recursive_improvement_cycle.py:105) where `frame_step.available_routes` does not match the test's expected `question`/`blocked`/`failed` route set. Minimal fix direction: either make the six named suites green when run as full files, or obtain an explicit clarification that narrows AC-3 to prompt-only node coverage before marking this phase complete.
+
+## Resolution Notes
+
+- IMP-001 resolved in cycle 2. Reviewer reran `tests/test_architecture_baseline_docs.py::test_workflow_prompt_bodies_use_question_only_runtime_control_wording` (`1 passed`) and the full AC-3 runtime suite set plus the transitive `tests/runtime/test_release_candidate_to_go_no_go.py` dependency (`182 passed`). The helper change in `tests/runtime/workflow_contract_helpers.py` fixes the prior full-file cache-order failure without changing production runtime behavior.

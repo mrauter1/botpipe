@@ -1494,3 +1494,58 @@ Key findings / decisions
 Open issues / next step
 
 - No open issues remain within this phase scope. AC-3 and the shared AC-4 baseline coverage are now validated together with the prompt-wording updates.
+
+
+---
+run_id=run-20260504T163613Z-cf62c11b | entry=session_turn | pair=implement | phase=verifier | cycle=2 | attempt=1 | thread_id=019df3e1-7db9-7150-ac0b-aa1c60526b51
+---
+provider=codex
+mode=resume
+template=/home/rauter/.local/share/pipx/venvs/autoloop/lib/python3.12/site-packages/autoloop/templates/implement_verifier.md
+session_id=019df3e1-7db9-7150-ac0b-aa1c60526b51
+
+
+---
+run_id=run-20260504T163613Z-cf62c11b | entry=phase_output | pair=implement | phase=verifier | process=codex-agent | cycle=2 | attempt=1 | thread_id=019df3e1-7db9-7150-ac0b-aa1c60526b51
+---
+I’m reviewing the producer follow-up against the phase contract, with focus on the prior blocking finding and whether AC-3/AC-4 are now evidenced by the updated tests and helper seam. Then I’ll update the review artifacts only.
+
+I’ve confirmed the artifact notes and the helper change. I’m rerunning the two key verification seams directly from the reviewer side now: the shared prompt-body baseline and the full AC-3 runtime-suite set.
+
+The re-run is green on the reviewer side as well. I’m updating the criteria to reflect completion and appending a resolution note for `IMP-001` so the artifact history stays coherent without inventing a fake new finding.
+
+Scope considered
+
+- The changed prompt-route wording scope for `workflows/*/prompts/*.md`, the shared baseline in `tests/test_architecture_baseline_docs.py`, and the runtime prompt-package suites named by AC-3.
+- The follow-up helper change in `tests/runtime/workflow_contract_helpers.py`.
+- Active review artifacts: `criteria.md`, `feedback.md`, `implementation_notes.md`, and the run-local `decisions.txt`.
+
+What I analyzed
+
+- The prior blocking finding `IMP-001` and the producer’s claimed fix.
+- The helper seam that compiles workflow handlers during runtime step-invocation tests.
+- The implementation notes and decision entry describing test-only compile-cache isolation.
+- The acceptance-criterion evidence for AC-3 and AC-4.
+
+What I reviewed
+
+- `tests/runtime/workflow_contract_helpers.py` to confirm the cache-clearing change is confined to test helpers and does not alter production runtime behavior.
+- The updated runtime suite expectations that now align with the shipped route model.
+- Reviewer-side execution of:
+  - `tests/test_architecture_baseline_docs.py::test_workflow_prompt_bodies_use_question_only_runtime_control_wording` → `1 passed`
+  - `tests/runtime/test_company_operation_to_recursive_improvement_cycle.py tests/runtime/test_workflow_portfolio_to_operating_system.py tests/runtime/test_workflow_run_history_to_failure_modes.py tests/runtime/test_workflow_and_eval_to_refined_workflow_package.py tests/runtime/test_workflow_package_to_composable_building_blocks.py tests/runtime/test_workflow_to_eval_suite.py tests/runtime/test_release_candidate_to_go_no_go.py -q` → `182 passed`
+
+Key findings / decisions
+
+- No blocking findings remain.
+- `IMP-001` is resolved: the full AC-3 runtime suite set now passes under reviewer-side execution.
+- The helper-based compile-cache isolation is appropriately centralized in test code and matches the run-local decision entry.
+- I updated `criteria.md` so all boxes are checked and appended a resolution note to `feedback.md`.
+
+Open issues / next step
+
+- No open issues remain within this phase scope.
+
+<loop-control>
+{"schema":"docloop.loop_control/v1","kind":"promise","promise":"COMPLETE"}
+</loop-control>
