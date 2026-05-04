@@ -786,3 +786,50 @@ Key findings / decisions
 Open issues / next step
 - `pytest` is still unavailable in this environment, so I could not execute the focused test file.
 - Next step is to run `tests/runtime/test_runtime_cli_metadata_integration.py` in an environment with project test dependencies installed.
+
+
+---
+run_id=run-20260504T192206Z-d3f7e940 | entry=session_turn | pair=test | phase=verifier | cycle=1 | attempt=1 | thread_id=019df48d-ca11-78b0-bc57-ac1b0b7dcd2d
+---
+provider=codex
+mode=resume
+template=/home/rauter/.local/share/pipx/venvs/autoloop/lib/python3.12/site-packages/autoloop/templates/test_verifier.md
+session_id=019df48d-ca11-78b0-bc57-ac1b0b7dcd2d
+
+
+---
+run_id=run-20260504T192206Z-d3f7e940 | entry=phase_output | pair=test | phase=verifier | process=codex-agent | cycle=1 | attempt=1 | thread_id=019df48d-ca11-78b0-bc57-ac1b0b7dcd2d
+---
+I’m auditing the focused tests against the phase acceptance criteria and the decisions ledger, especially whether the new suite independently covers workspace relative-import behavior and the explicit-path serialization split.
+
+I found one likely coverage hole in the focused phase tests: `workflows show` is only asserted for a workspace workflow, even though the CLI’s package-source JSON fields are a distinct contract surface in this phase. I’m confirming whether broader repo tests already cover that exact CLI path before I write the audit artifact.
+
+I’m recording one blocking coverage gap: the focused suite still doesn’t exercise `autoloop workflows show` for a package-installed workflow, even though package-source show metadata is a separate CLI contract in this phase.
+
+Scope considered
+- Phase-local audit of the focused runtime/CLI metadata tests and the active test artifacts only.
+- Reviewed [tests/runtime/test_runtime_cli_metadata_integration.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/tests/runtime/test_runtime_cli_metadata_integration.py:1), [test_strategy.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/objective-implement-workflow-installation-and-di-c328695f/runs/run-20260504T192206Z-d3f7e940/artifacts/test/phases/runtime-cli-metadata-integration/test_strategy.md:1), and the run-local decisions relevant to origin-path serialization.
+
+What I analyzed
+- The focused suite against AC-1 through AC-4.
+- Whether the tests follow the decisions ledger’s split between in-workspace relative origin paths and out-of-workspace absolute origin paths.
+- Whether CLI coverage exercises both workflow source kinds on the changed JSON contracts.
+
+What I reviewed
+- The corrected explicit-manifest expectations now align with the settled serializer behavior.
+- The new explicit `.py` test adds the missing out-of-workspace absolute-origin case.
+- The CLI help test is stable and appropriately scoped.
+- The focused suite still only covers `workflows show` for a workspace workflow, not a package-installed workflow.
+
+Key findings / decisions
+- I added one blocking finding, `TST-001`, to the phase feedback artifact.
+- `criteria.md` remains incomplete because package-source `workflows show` JSON is still untested in this focused suite.
+- Reliability and behavioral-intent criteria are checked; the remaining gap is coverage/regression depth, not flakiness or wrong expectations.
+
+Open issues / next step
+- Add a focused package-root `cli.main(["workflows", "show", ...])` assertion that checks package-source `source_root_kind`, `source_root`, `package_folder`, `package_module`, and `workflow_module`.
+- Update the strategy wording so its `workflows show` claim matches the actual workspace/package split once that test exists.
+
+<loop-control>
+{"schema":"docloop.loop_control/v1","kind":"promise","promise":"INCOMPLETE"}
+</loop-control>
