@@ -303,3 +303,59 @@ Open issues / next step
 <loop-control>
 {"schema":"docloop.loop_control/v1","kind":"promise","promise":"COMPLETE"}
 </loop-control>
+
+
+---
+run_id=run-20260504T190003Z-04e7d84d | entry=session_turn | pair=test | phase=producer | cycle=1 | attempt=1 | thread_id=019df460-83b2-71e2-bab8-7a89d8645941
+---
+provider=codex
+mode=resume
+template=/home/rauter/.local/share/pipx/venvs/autoloop/lib/python3.12/site-packages/autoloop/templates/test_producer.md
+session_id=019df460-83b2-71e2-bab8-7a89d8645941
+
+
+---
+run_id=run-20260504T190003Z-04e7d84d | entry=phase_output | pair=test | phase=producer | process=codex-agent | cycle=1 | attempt=1 | thread_id=019df460-83b2-71e2-bab8-7a89d8645941
+---
+I’m adding regression coverage for the narrowed replay-store migration path now, starting with the existing operation replay contract tests and the active test artifacts so the new assertions stay aligned with the accepted behavior.
+
+The existing contract file already covers replay mismatch warn/fail behavior, but it doesn’t yet lock down the replay-store migration boundary. I’m reading the local test pattern around those replay tests and then I’ll add the missing `schemaless` / `v1` / unsupported-schema assertions in the same file.
+
+I’ve got the missing regression surface isolated: the test file needs direct coverage for replay-store schema migration boundaries, not more workflow-level fingerprint cases. I’m patching that into the existing contract suite now and leaving the rest of the replay tests untouched.
+
+The new contract tests are in place. I’m running the focused replay slice now so I can update the test artifacts with actual pass/fail evidence and the precise behavior-to-test map.
+
+The focused slice picked up the two new tests, so the coverage shape is right. I’m waiting for the final pytest result now, then I’ll update the strategy and feedback artifacts with the exact behaviors covered and any remaining gap.
+
+The replay contract slice passed with the new coverage included. I’m recording the coverage map now: one decision note for why the migration boundary is tested directly, a concise test-strategy matrix, and a short feedback entry summarizing the additions and the passing run.
+
+The test-phase artifacts are updated. I’m pulling the final line references for the two new regression tests and the strategy note so the closeout points to the exact coverage that was added.
+
+Scope considered
+
+- Added regression coverage only in [test_engine_contracts.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/tests/contract/test_engine_contracts.py:8218) and updated the active test artifacts [test_strategy.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/operation-replay-key-stability-fix-implementatio-b15a7c28/runs/run-20260504T190003Z-04e7d84d/artifacts/test/phases/align-operation-replay-keying/test_strategy.md:1) and [feedback.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/operation-replay-key-stability-fix-implementatio-b15a7c28/runs/run-20260504T190003Z-04e7d84d/artifacts/test/phases/align-operation-replay-keying/feedback.md:1).
+
+What I analyzed
+
+- Reviewed the existing replay mismatch contract tests and the narrowed `_load_replay_store` behavior.
+- Confirmed the missing regression surface was the persisted-schema boundary: schemaless, explicit `v1`, and unsupported future schemas.
+
+What I changed
+
+- Added `test_operation_replay_store_migrates_only_schemaless_and_v1_payloads` and `test_operation_replay_store_rejects_unsupported_schema_versions` in [test_engine_contracts.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/tests/contract/test_engine_contracts.py:8218).
+- Updated [test_strategy.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/operation-replay-key-stability-fix-implementatio-b15a7c28/runs/run-20260504T190003Z-04e7d84d/artifacts/test/phases/align-operation-replay-keying/test_strategy.md:10) with a behavior-to-test coverage map and noted the remaining gap.
+- Appended a concise test summary to [feedback.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/operation-replay-key-stability-fix-implementatio-b15a7c28/runs/run-20260504T190003Z-04e7d84d/artifacts/test/phases/align-operation-replay-keying/feedback.md:10).
+
+Key findings / decisions
+
+- The new tests directly lock down the reviewer-identified boundary:
+  - schemaless payloads migrate to empty `v2` stores with preserved `attempts`
+  - explicit `v1` payloads do the same
+  - explicit `v3` payloads raise `ValueError`
+- Focused validation passed with `'../autoloop_v3 (Cópia)/.venv/bin/python' -m pytest tests/contract/test_engine_contracts.py -k operation_replay`: `6 passed, 163 deselected`.
+- I recorded the non-obvious test choice in `decisions.txt`: this boundary is covered directly through `_load_replay_store` because the existing engine-level replay tests do not exercise unsupported persisted-schema rejection.
+
+Open issues / next step
+
+- No blocking test issue remains in the scoped phase.
+- The only declared gap is that I did not add a full workflow-resume scenario from an on-disk `v1` replay store, because the loader boundary is already isolated deterministically by the new helper-level tests.
