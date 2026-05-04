@@ -21,7 +21,7 @@
 
 - AC-3 late-bound prompt/runtime diagnostics:
   `tests/contract/test_engine_contracts.py`
-  Covers prompt runtime failures for missing payload paths, missing current items, and missing worklist sources with step/worklist-aware error text.
+  Covers both `PromptStep` and operation-path prompt runtime failures for missing payload paths, plus missing current items and missing worklist sources, with step/worklist-aware error text.
   `tests/unit/test_primitives_and_stores.py`
   Covers artifact-template runtime payload-path failures with worklist-aware diagnostics while preserving artifact-template labeling behavior.
 
@@ -38,6 +38,7 @@
 ## Edge cases and failure paths
 
 - Direct effect return without an explicit worklist on an active scoped route hook.
+- Operation prompt rendering invoked from a scoped hook, so duplicated prompt-rendering logic in `autoloop/core/operations.py` is covered separately from `PromptStep` prompt rendering.
 - Missing prompt payload subpaths on both `item.*` and `worklist.<name>.current.*` paths.
 - Distinct artifact objects sharing a public name across workflow-level and produced ownership.
 
