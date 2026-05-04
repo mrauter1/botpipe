@@ -8,8 +8,9 @@ phases:
     status: "planned"
     in_scope:
       - "Replace retired reserved-route wording in affected non-README workflow prompt bodies."
+      - "Standardize positive `question` and authored-`blocked` / authored-`failed` route-model markers in affected route-guidance prompt bodies."
       - "Update runtime prompt-package tests that currently assert retired reserved-route phrases."
-      - "Add shared baseline coverage that scans prompt bodies directly."
+      - "Add shared baseline coverage that scans prompt bodies directly and asserts the positive route-model markers."
     out_of_scope:
       - "Runtime engine behavior changes."
       - "Workflow graph or route topology changes."
@@ -19,15 +20,15 @@ phases:
       - id: "AC-1"
         text: "No non-README workflow prompt body under workflows/*/prompts/*.md contains `Reserved routes` or a reserved/default route set of `question`, `blocked`, and `failed`."
       - id: "AC-2"
-        text: "Updated prompt bodies frame `question` as the only default runtime control route and authored `blocked`/`failed` as ordinary application routes."
+        text: "Updated route-guidance prompt bodies contain positive markers stating that `question` is the only default runtime control route and that authored `blocked`/`failed` are ordinary application routes."
       - id: "AC-3"
         text: "The runtime prompt-package suites with retired wording assertions are updated to the shipped wording and pass."
       - id: "AC-4"
-        text: "Shared baseline coverage fails if prompt bodies reintroduce the retired reserved-route wording, independent of workflow docs and prompt README checks."
+        text: "Shared baseline coverage scans prompt bodies directly and fails both if retired reserved-route wording reappears and if the positive route-model markers are missing from updated route-guidance prompt bodies."
     deliverables:
       - "Updated workflow prompt bodies with shipped route-model wording."
       - "Updated runtime prompt-package assertions for the affected suites."
-      - "Shared baseline prompt-body regression test coverage."
+      - "Shared baseline prompt-body regression test coverage for both forbidden retired wording and required positive route-model markers."
     risks:
       - "Large prompt-only edit count can introduce inconsistent phrasing if not normalized."
       - "An overly strict shared baseline could create brittle false failures."
