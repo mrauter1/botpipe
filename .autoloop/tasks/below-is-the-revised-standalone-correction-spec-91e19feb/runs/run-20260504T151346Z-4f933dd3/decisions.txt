@@ -10,3 +10,5 @@ Keep the legacy simple "duplicate artifact name" validation for pure workflow-le
 Inject generic fallback summaries for authored global routes at compile time so authored blocked/failed remain ordinary route names while runtime-control question keeps its special await-input wording.
 Make rendered provider JSON enforce the non-empty top-level question field during parsing and default missing reason to the empty string so rendered outcomes match direct Outcome semantics for authored routes.
 Rendered provider question-payload parse failures must carry `invalid_payload` failure context and retry metadata, not fall back to the malformed-provider-output bucket, so rendered retry feedback matches the direct Outcome validation path.
+<autoloop-decisions-header version="1" block_seq="4" owner="test_author" phase_id="route-and-artifact-contracts" pair="test" turn_seq="1" run_id="run-20260504T151346Z-4f933dd3" ts="2026-05-04T15:42:27.841526+00:00" />
+Add rendered-provider retry-exhaustion coverage for invalid `question` payloads so parity is pinned not only for retry-and-recover but also for final checkpoint failure_context classification.

@@ -461,3 +461,53 @@ Open issues / next step
   - `./.venv/bin/python -m pytest tests/runtime/test_runtime_providers.py -q -k "parse_outcome_json_rejects_question_without_question_field"`
 - I did not run the full repository suite.
 - The next step is test-phase audit/review against the updated phase artifacts and the new rendered exhaustion regression test.
+
+
+---
+run_id=run-20260504T151346Z-4f933dd3 | entry=session_turn | pair=test | phase=verifier | cycle=1 | attempt=1 | thread_id=019df396-f260-7532-a4c9-e81f7fe16999
+---
+provider=codex
+mode=resume
+template=/home/rauter/.local/share/pipx/venvs/autoloop/lib/python3.12/site-packages/autoloop/templates/test_verifier.md
+session_id=019df396-f260-7532-a4c9-e81f7fe16999
+
+
+---
+run_id=run-20260504T151346Z-4f933dd3 | entry=phase_output | pair=test | phase=verifier | process=codex-agent | cycle=1 | attempt=1 | thread_id=019df396-f260-7532-a4c9-e81f7fe16999
+---
+I’m reviewing the added test coverage against the accepted route/artifact contract, starting with the new rendered-provider parity cases and the phase-local test artifacts before I mark criteria.
+
+I’m validating the one place the strategy leans on preserved coverage rather than a new test: child-workflow route mapping. If that surface is still explicitly covered, the phase can close cleanly.
+
+The preserved child-workflow mapping assertions are still present, and the narrow rendered-provider slice passes. I’m marking the phase artifacts accordingly unless I find a material gap while writing the audit note.
+
+Scope considered
+- Phase-local test audit for `route-and-artifact-contracts`, centered on rendered/direct provider parity, artifact identity regression coverage, and preserved child-workflow mapping assertions.
+- I limited edits to the active audit artifacts: [criteria.md](</home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/below-is-the-revised-standalone-correction-spec-91e19feb/runs/run-20260504T151346Z-4f933dd3/artifacts/test/phases/route-and-artifact-contracts/criteria.md>) and [feedback.md](</home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/below-is-the-revised-standalone-correction-spec-91e19feb/runs/run-20260504T151346Z-4f933dd3/artifacts/test/phases/route-and-artifact-contracts/feedback.md>).
+
+What I analyzed
+- The active [test_strategy.md](</home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/below-is-the-revised-standalone-correction-spec-91e19feb/runs/run-20260504T151346Z-4f933dd3/artifacts/test/phases/route-and-artifact-contracts/test_strategy.md>)
+- The new and adjacent contract tests in [tests/contract/test_engine_contracts.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/tests/contract/test_engine_contracts.py)
+- Parser-level parity coverage in [tests/runtime/test_runtime_providers.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/tests/runtime/test_runtime_providers.py)
+- The run-local intent/coverage ledger in [decisions.txt](</home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/below-is-the-revised-standalone-correction-spec-91e19feb/runs/run-20260504T151346Z-4f933dd3/decisions.txt>)
+
+What I reviewed
+- The new rendered-provider retry-exhaustion test for invalid `question` payloads
+- Whether AC-1 through AC-5 are mapped to concrete tests rather than hand-waved in the strategy
+- Whether preserved child-workflow failed/blocked/question mapping coverage still exists explicitly
+- Focused verification:
+  - `./.venv/bin/python -m pytest tests/contract/test_engine_contracts.py -q -k "rendered_provider_invalid_question_retry_exhaustion_marks_failure_context or provider_invalid_question_retry_exhaustion_marks_failure_context or rendered_provider_question_route_is_illegal_in_full_auto_mode or rendered_provider_invalid_question_retries_and_recovers"`
+
+Key findings / decisions
+- No blocking audit findings.
+- The added rendered exhaustion test closes the material parity gap that previously existed after retry exhaustion, not just after retry-and-recover.
+- The strategy’s reliance on preserved child-workflow mapping coverage is justified; the explicit failure/block/question mapping tests are still present in `tests/contract/test_engine_contracts.py`.
+- I marked all criteria complete and appended `TST-000` as a non-blocking “no findings” audit record.
+
+Open issues / next step
+- No scoped test-audit issues remain for this phase.
+- The phase-local test audit can close as complete.
+
+<loop-control>
+{"schema":"docloop.loop_control/v1","kind":"promise","promise":"COMPLETE"}
+</loop-control>

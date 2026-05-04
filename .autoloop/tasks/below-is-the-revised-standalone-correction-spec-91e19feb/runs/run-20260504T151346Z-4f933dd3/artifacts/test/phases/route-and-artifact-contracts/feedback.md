@@ -15,3 +15,7 @@
   `.venv/bin/python -m pytest tests/contract/test_engine_contracts.py -q -k "provider_invalid_question_retry_exhaustion_marks_failure_context or rendered_provider_invalid_question_retry_exhaustion_marks_failure_context or rendered_provider_invalid_question_retries_and_recovers or provider_invalid_question_retries_and_recovers"`
   and
   `.venv/bin/python -m pytest tests/runtime/test_runtime_providers.py -q -k "parse_outcome_json_rejects_question_without_question_field"`
+
+## Audit findings
+
+- `TST-000` | `non-blocking` | No scoped audit findings. The added rendered-provider exhaustion test closes the prior parity hole, the strategy maps coverage to AC-1 through AC-5, and the focused provider/contract slice passed without introducing flake-prone setup.
