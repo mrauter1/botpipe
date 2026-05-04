@@ -50,6 +50,8 @@ Finalize provider-visible route semantics and lazy scoped runtime behavior so ru
 
 3. Lazy worklist materialization and scoped sequencing verification
 - Keep fresh-run selections empty and resume restoration snapshot-driven only.
+- Make first-use worklist resolution explicit and source-policy-driven: `ensure`/scaffold-capable sources may create backing data at first use, required external inputs may fail at first use, and the runtime must not collapse these cases into a blanket "missing source always fails" rule.
+- Treat `ensure_worklist_selection(...)` as the authoritative first-use pipeline: resolve declared worklist, run source `ensure`/scaffold behavior as supported, load items, validate payloads, apply selector, persist the materialized selection, and emit the selection-resolved runtime event.
 - Tighten `ensure_worklist_selection(...)` error shaping so failures identify worklist, source type/path when available, failure phase, and underlying error without loading unrelated worklists.
 - Confirm all scope-sensitive entry points stay behind `ensure_selection(...)`: scoped step entry, `ctx.selection/current/item`, artifact template resolution, prompt rendering, and work-item session derivation.
 - Keep checkpointing materialized selections only; maintain compatibility for missing/null `worklist_selections`.
@@ -68,6 +70,7 @@ Finalize provider-visible route semantics and lazy scoped runtime behavior so ru
 
 - Intentional break: default provider-visible `blocked` and `failed` go away everywhere; tests and generated inspection artifacts must be updated to the new contract.
 - Compatibility to preserve: old checkpoints with absent or `null` `worklist_selections` must still resume as an empty lazy map.
+- Compatibility to preserve: lazy worklist materialization must keep existing board/source semantics, including source-owned `ensure`/scaffold behavior for missing backing data rather than forcing a new global failure policy.
 - Compatibility to preserve: runtime/provider failure handling, retry behavior, artifact validation, and typed output validation remain runtime-owned and unchanged in principle.
 
 ### Validation
@@ -79,6 +82,8 @@ Finalize provider-visible route semantics and lazy scoped runtime behavior so ru
   - explicit `blocked`/`failed` with no hidden reason requirement
   - child workflow undeclared mapped-route failures
   - lazy worklist restore/materialization/session continuity
+  - missing source with scaffold/ensure support vs required external input failure at first use
+  - first-use `worklist_selection_resolved` observability and payload content
   - static-graph and inspection parity
 
 ## Milestone B: Authoring Ergonomics And Validation/Inspection Polish
@@ -145,6 +150,7 @@ Finish the authoring-facing flexibility work by aligning existing helper APIs wi
 
 - Keep one source of truth for provider visibility: compiled route metadata plus runtime interaction policy. Do not duplicate full-auto checks elsewhere.
 - Keep one source of truth for worklist materialization: `Context.ensure_selection(...)` delegating to engine state runtime.
+- Keep worklist source semantics source-owned: missing backing data may scaffold or fail depending on source capabilities, and `ensure_worklist_selection(...)` should be the only place that encodes that first-use pipeline.
 - Keep child workflow mapping explicit; do not silently synthesize undeclared domain routes.
 - Keep prompt validation split cleanly: compile-time typo detection in discovery, runtime value/path resolution in artifact/prompt rendering.
 - Prefer additive tests in existing contract suites over new bespoke harnesses.
@@ -155,6 +161,8 @@ Finish the authoring-facing flexibility work by aligning existing helper APIs wi
   Mitigation: update all route-visibility payload producers together and assert parity in static-graph/inspection tests.
 - Resume/session regressions from lazy worklist/session resolution.
   Mitigation: preserve snapshot format, add resume tests for missing/null selections, and keep work-item key derivation deterministic.
+- Lazy worklist changes accidentally flattening source-specific `ensure`/scaffold behavior into unconditional missing-source failures.
+  Mitigation: make source-policy-driven first-use behavior explicit in Milestone A scope and acceptance criteria, and test scaffoldable vs required-input sources separately.
 - Prompt validation loosened too far and silently hiding author typos.
   Mitigation: only relax runtime item/worklist payload subpaths; keep namespace, worklist-name, state-field, and syntax checks strict.
 - Existing analytics/reporting fixtures still mention `blocked`/`failed` as domain routes.

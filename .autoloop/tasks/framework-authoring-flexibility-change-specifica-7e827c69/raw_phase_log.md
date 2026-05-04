@@ -88,3 +88,28 @@ The producer plan needs one revision focused on Milestone A lazy worklist semant
 <loop-control>
 {"schema":"docloop.loop_control/v1","kind":"promise","promise":"INCOMPLETE"}
 </loop-control>
+
+
+---
+run_id=run-20260504T112330Z-32d8eec3 | entry=session_turn | pair=plan | phase=producer | cycle=2 | attempt=1 | thread_id=019df2ba-a5b7-73f2-9c34-3a74f1a76aa5
+---
+provider=codex
+mode=resume
+template=/home/rauter/.local/share/pipx/venvs/autoloop/lib/python3.12/site-packages/autoloop/templates/plan_producer.md
+session_id=019df2ba-a5b7-73f2-9c34-3a74f1a76aa5
+
+
+---
+run_id=run-20260504T112330Z-32d8eec3 | entry=phase_output | pair=plan | phase=producer | process=codex-agent | cycle=2 | attempt=1 | thread_id=019df2ba-a5b7-73f2-9c34-3a74f1a76aa5
+---
+I’m revising the plan narrowly around the verifier’s gap rather than broadening scope. The change is to make lazy worklist first-use semantics explicit: `ensure`/scaffold-capable sources may create backing data, required external inputs may fail at first use, and lazy materialization must stay observable through the selection-resolved runtime event.
+
+The first patch failed on file boundaries, not on substance. I’m reapplying the changes in smaller chunks so the plan, phase YAML, feedback history, and decisions ledger all move together without touching verifier-owned criteria.
+
+The decisions file now has a fresh header for this turn, so I can record the non-obvious lazy-worklist constraint in the correct block instead of mutating the previous turn’s history. I’m applying the artifact updates again in smaller, file-scoped patches.
+
+The revisions are in. I’m doing one last consistency pass to make sure the narrative plan, phase acceptance criteria, feedback history, and the new turn-local decision line all say the same thing about lazy worklist first-use behavior and observability.
+
+Updated [plan.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/framework-authoring-flexibility-change-specifica-7e827c69/runs/run-20260504T112330Z-32d8eec3/artifacts/plan/plan.md), [phase_plan.yaml](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/framework-authoring-flexibility-change-specifica-7e827c69/runs/run-20260504T112330Z-32d8eec3/artifacts/plan/phase_plan.yaml), [feedback.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/framework-authoring-flexibility-change-specifica-7e827c69/runs/run-20260504T112330Z-32d8eec3/artifacts/plan/feedback.md), and the current-turn block in [decisions.txt](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/framework-authoring-flexibility-change-specifica-7e827c69/runs/run-20260504T112330Z-32d8eec3/decisions.txt).
+
+The Milestone A plan now explicitly preserves source-policy-driven lazy worklist first-use semantics: `ensure`/scaffold-capable sources may create backing data, required external inputs may fail at first use, `ensure_worklist_selection(...)` is named as the `ensure/load/validate/select` pipeline, and first-use `worklist_selection_resolved` observability is now part of scope, acceptance, and validation.

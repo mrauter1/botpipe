@@ -10,7 +10,7 @@ phases:
       - "Consolidate provider-visible route policy around RuntimeInteractionPolicy and ControlRoutes."
       - "Remove any remaining default blocked/failed assumptions from runtime/provider contracts."
       - "Make child workflow blocked/failed mapping explicit and error clearly when undeclared."
-      - "Preserve and harden lazy worklist materialization, lazy work-item session binding, and checkpoint/resume compatibility."
+      - "Preserve and harden lazy worklist materialization, including source-policy-driven ensure/scaffold-or-fail behavior at first use, lazy work-item session binding, and checkpoint/resume compatibility."
       - "Update inspection/static-graph/CLI payloads and tests to reflect authored versus runtime-control routes under interactive and full-auto policy."
     out_of_scope:
       - "Workflow package authoring changes."
@@ -23,15 +23,16 @@ phases:
       - id: "AC-2"
         text: "Child workflow FAIL or await-without-question only map to failed or blocked when the parent step declares those routes; otherwise runtime errors name the missing mapping."
       - id: "AC-3"
-        text: "Fresh runs and resumes keep worklists lazy, checkpoint only materialized selections, and preserve work-item session continuity across resume."
+        text: "Fresh runs and resumes keep worklists lazy, checkpoint only materialized selections, preserve work-item session continuity across resume, and resolve missing worklist sources according to source capabilities rather than a blanket failure rule."
       - id: "AC-4"
-        text: "Static graph, topology, and workflow capability outputs match the new route-policy contract and targeted contract/runtime tests pass."
+        text: "Static graph, topology, workflow capability outputs, and first-use worklist-selection observability match the new route-policy and lazy-selection contracts, and targeted contract/runtime tests pass."
     deliverables:
       - "Runtime/engine/compiler updates for route policy, child mapping, lazy selection/session handling, and checkpoint compatibility."
       - "Inspection/static-graph/CLI payload updates and aligned contract/runtime tests."
     risks:
       - "Compiler/runtime/inspection route visibility drift can leave provider contracts inconsistent."
       - "Lazy selection changes can regress pause/resume or scoped item state synchronization."
+      - "Lazy selection changes can accidentally convert scaffoldable missing sources into unconditional runtime failures."
       - "Child workflow mapping changes can break existing tests that relied on implicit blocked/failed."
     rollback:
       - "Revert Milestone A patch set if provider available_routes, pause/resume, or session continuity regress."
