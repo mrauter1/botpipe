@@ -1715,3 +1715,50 @@ Updated the phase-scoped validation gaps for workflow discovery and wheel packag
 **Open issues / next step**
 
 None in this phase scope. The requested suites are green and the phase artifacts are updated.
+
+
+---
+run_id=run-20260504T204430Z-152082a1 | entry=session_turn | pair=implement | phase=verifier | cycle=1 | attempt=1 | thread_id=019df4c1-56f4-7221-b0f6-9fb03e69c98b
+---
+provider=codex
+mode=resume
+template=/home/rauter/.local/share/pipx/venvs/autoloop/lib/python3.12/site-packages/autoloop/templates/implement_verifier.md
+session_id=019df4c1-56f4-7221-b0f6-9fb03e69c98b
+
+
+---
+run_id=run-20260504T204430Z-152082a1 | entry=phase_output | pair=implement | phase=verifier | process=codex-agent | cycle=1 | attempt=1 | thread_id=019df4c1-56f4-7221-b0f6-9fb03e69c98b
+---
+I’m reviewing the implementation against the phase contract and acceptance criteria. First I’m reading the active review artifacts and the concrete diffs in the two touched tests so I can mark criteria and record any findings precisely.
+
+I’m checking for two specific review risks before I mark the phase complete: whether alias coverage was accidentally dropped from the migrated test file, and whether any `workflows.*` workspace-module expectation is still lurking after the refactor.
+
+I don’t see any alias assertions left in the touched reference-resolution file. I’m checking whether alias discovery is still covered elsewhere in the runtime slice before deciding whether that’s a real validation gap or just a relocation.
+
+The surrounding runtime suite still covers alias behavior and root precedence, so the lack of alias assertions in the touched file is not by itself a gap. I’m doing one independent validation pass on the required five-suite slice before I mark criteria and close the review.
+
+The independent validation pass is clean. I’m marking the criteria complete and recording that there were no review findings in scope, then I’ll close with a `COMPLETE` loop-control block.
+
+Scope considered
+
+Active phase artifacts, the two changed tests, the implementation notes, the decisions ledger, adjacent runtime catalog/metadata tests for alias and root-precedence coverage, and an independent rerun of the required five-suite validation slice.
+
+What I analyzed
+
+The updated [test_workflow_reference_resolution.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/tests/runtime/test_workflow_reference_resolution.py) for root-selection and namespace assertions, [test_wheel_packaging_smoke.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/tests/runtime/test_wheel_packaging_smoke.py) for the wheel-build path, and related runtime tests to confirm alias behavior and search-root precedence still have coverage outside the touched file.
+
+What I reviewed
+
+The implementation matches the accepted contract: bare-name discovery in the touched reference-resolution test now points at `.autoloop/workflows`, explicit `{workspace}/workflows` coverage is path-only, workspace-path imports assert `_autoloop_workspace_workflows.<hash>...`, and the wheel smoke no longer depends on an ambient `build` module. I updated [criteria.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/objective-implement-workflow-installation-and-di-c328695f/runs/run-20260504T204430Z-152082a1/artifacts/implement/phases/close-validation-gaps/criteria.md) to checked and recorded the no-findings review result in [feedback.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/objective-implement-workflow-installation-and-di-c328695f/runs/run-20260504T204430Z-152082a1/artifacts/implement/phases/close-validation-gaps/feedback.md).
+
+Key findings / decisions
+
+No blocking or non-blocking findings in scoped changes. Independent validation passed with `.venv_phase/bin/python -m pytest -q tests/runtime/test_workflow_reference_resolution.py tests/runtime/test_workflow_catalog_roots.py tests/runtime/test_runtime_cli_metadata_integration.py tests/runtime/test_package_cli.py tests/runtime/test_wheel_packaging_smoke.py` and reported `59 passed`.
+
+Open issues / next step
+
+No open review issues in this phase scope.
+
+<loop-control>
+{"schema":"docloop.loop_control/v1","kind":"promise","promise":"COMPLETE"}
+</loop-control>

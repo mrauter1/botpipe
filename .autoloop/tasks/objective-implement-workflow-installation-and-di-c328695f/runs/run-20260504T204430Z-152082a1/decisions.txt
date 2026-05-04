@@ -3,3 +3,6 @@ Bare-name and alias discovery remain limited to autoloop/workflows and {workspac
 The wheel packaging smoke follow-up should remove the test’s dependence on an ambient build frontend installation rather than expanding runtime discovery scope or restoring legacy behavior.
 <autoloop-decisions-header version="1" block_seq="2" owner="planner" phase_id="task-global" pair="plan" turn_seq="2" run_id="run-20260504T204430Z-152082a1" ts="2026-05-04T20:48:22.034470+00:00" />
 Superseding the prior wording, {workspace}/workflows coverage in this follow-up is filesystem-path-only; workspace workflows.* module-reference expectations should be removed or relocated to package or .autoloop roots.
+<autoloop-decisions-header version="1" block_seq="3" owner="implementer" phase_id="close-validation-gaps" pair="implement" turn_seq="1" run_id="run-20260504T204430Z-152082a1" ts="2026-05-04T20:50:04.116273+00:00" />
+Reference-resolution tests now split implicit discovery fixtures under {workspace}/.autoloop/workflows from explicit-path fixtures under {workspace}/workflows so bare-name coverage cannot silently depend on legacy workspace roots.
+Wheel smoke now builds with `python -m pip wheel --no-deps --wheel-dir <dist> .`, relying on pip's isolated PEP 517 build environment instead of an ambient `build` module or locally installed setuptools in the validation interpreter.

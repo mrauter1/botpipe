@@ -177,3 +177,120 @@ phase_mode=single
 phase_ids=close-validation-gaps
 explicit=True
 current_phase_index=0
+
+
+---
+run_id=run-20260504T204430Z-152082a1 | entry=session_turn | pair=implement | phase=producer | cycle=1 | attempt=1 | thread_id=019df4c1-56f4-7221-b0f6-9fb03e69c98b
+---
+provider=codex
+mode=start
+template=/home/rauter/.local/share/pipx/venvs/autoloop/lib/python3.12/site-packages/autoloop/templates/implement_producer.md
+session_id=019df4c1-56f4-7221-b0f6-9fb03e69c98b
+
+
+---
+run_id=run-20260504T204430Z-152082a1 | entry=phase_output | pair=implement | phase=producer | process=codex-agent | cycle=1 | attempt=1 | thread_id=019df4c1-56f4-7221-b0f6-9fb03e69c98b
+---
+I’m aligning the remaining workflow discovery and wheel smoke validation gaps. First I’m reading the active phase artifacts and the affected tests to confirm the exact contract before editing.
+
+I’ve got the plan and the two main failing surfaces. Next I’m tracing the current loader namespace and the specific tests that still encode the old `{workspace}/workflows` discovery assumptions.
+
+The loader already emits the hashed `_autoloop_workspace_workflows.<digest>...` namespace, and the metadata tests are already aligned with `.autoloop/workflows`. I’m narrowing the changes to the remaining reference-resolution cases plus the wheel smoke’s build path.
+
+The first pass confirms the wheel smoke is failing for the expected reason, and this shell doesn’t have `pytest` on `PATH`. I’m locating the repo’s normal validation interpreter so I can rerun the requested slice in the same environment instead of improvising a different runner.
+
+I found the repo’s validation interpreter at `.venv_phase/bin/python` and started the two most relevant tests there. The current failures are in the reference-resolution expectations, which is consistent with the migration scope.
+
+I have the concrete failures now: six stale assertions in `test_workflow_reference_resolution.py` and the missing `build` frontend in the wheel smoke. I’m rewriting only those stale cases to match the shipped roots, then I’ll swap the wheel build step to a frontend that the baseline interpreter already has.
+
+I’ve narrowed the edit set. I’m patching the reference-resolution tests so hidden `.autoloop/workflows` covers bare-name discovery, `workflows/` stays explicit-path-only, and workspace-isolated imports assert the hashed namespace the loader actually emits.
+
+The first patch was too broad for this file’s current contents. I’m applying the changes in smaller hunks so I don’t disturb unrelated assertions in a dirty tree.
+
+The test edits are in place. I’m checking for any remaining stale `workflows.*` expectations and then rerunning the reference-resolution and wheel smoke tests in `.venv_phase` before expanding to the full required slice.
+
+The rerun flushed out the remaining edge cases: a couple of assertions need to match the loader’s exact shapes, and `pip wheel` only works here if I let pip create its isolated build env. I’m tightening those assertions now and then rerunning the same slice.
+
+The stale reference expectations are gone on grep, and the targeted rerun is now clean so far. I’m waiting on the wheel smoke to finish end-to-end, then I’ll run the full five-suite validation slice.
+
+The focused slice passed: `test_workflow_reference_resolution.py` and `test_wheel_packaging_smoke.py` are green together. I’m running the full required validation set now to confirm there’s no regression across the adjacent runtime and packaging tests.
+
+The validation slice is fully green now. I’m recording the implementation notes and the couple of non-obvious decisions so the later phases inherit the exact contract I used.
+
+**Scope considered**
+
+Updated the phase-scoped validation gaps for workflow discovery and wheel packaging in [tests/runtime/test_workflow_reference_resolution.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/tests/runtime/test_workflow_reference_resolution.py) and [tests/runtime/test_wheel_packaging_smoke.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/tests/runtime/test_wheel_packaging_smoke.py), plus the required phase artifacts in [implementation_notes.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/objective-implement-workflow-installation-and-di-c328695f/runs/run-20260504T204430Z-152082a1/artifacts/implement/phases/close-validation-gaps/implementation_notes.md) and [decisions.txt](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/objective-implement-workflow-installation-and-di-c328695f/runs/run-20260504T204430Z-152082a1/decisions.txt).
+
+**What I analyzed**
+
+- The active plan, feedback, decisions ledger, and current implementation notes.
+- The runtime loader’s isolated namespace behavior in [autoloop/runtime/loader.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/autoloop/runtime/loader.py).
+- The adjacent runtime/package tests to confirm the shipped discovery contract and avoid widening scope.
+
+**What I changed**
+
+- Split reference-resolution fixtures so bare-name discovery now comes only from `{workspace}/.autoloop/workflows`, while `{workspace}/workflows` is exercised only through explicit path references.
+- Removed stale `workflows.*` workspace module-reference expectations and updated isolated import assertions to `_autoloop_workspace_workflows.<hash>...`.
+- Replaced the wheel smoke’s `python -m build` step with `python -m pip wheel --no-deps --wheel-dir <dist> .`, which works in the validation environment without an ambient `build` install.
+
+**Key findings / decisions**
+
+- Explicit workspace-path loads are already using the hashed `_autoloop_workspace_workflows` namespace; the failing tests were behind the implementation.
+- `pip wheel` needed build isolation enabled here because the validation interpreter does not have `setuptools` installed locally.
+- Validation passed for the full requested slice: `59 passed` across
+  `test_workflow_reference_resolution.py`,
+  `test_workflow_catalog_roots.py`,
+  `test_runtime_cli_metadata_integration.py`,
+  `test_package_cli.py`,
+  `test_wheel_packaging_smoke.py`.
+
+**Open issues / next step**
+
+None in this phase scope. The requested suites are green and the phase artifacts are updated.
+
+
+---
+run_id=run-20260504T204430Z-152082a1 | entry=session_turn | pair=implement | phase=verifier | cycle=1 | attempt=1 | thread_id=019df4c1-56f4-7221-b0f6-9fb03e69c98b
+---
+provider=codex
+mode=resume
+template=/home/rauter/.local/share/pipx/venvs/autoloop/lib/python3.12/site-packages/autoloop/templates/implement_verifier.md
+session_id=019df4c1-56f4-7221-b0f6-9fb03e69c98b
+
+
+---
+run_id=run-20260504T204430Z-152082a1 | entry=phase_output | pair=implement | phase=verifier | process=codex-agent | cycle=1 | attempt=1 | thread_id=019df4c1-56f4-7221-b0f6-9fb03e69c98b
+---
+I’m reviewing the implementation against the phase contract and acceptance criteria. First I’m reading the active review artifacts and the concrete diffs in the two touched tests so I can mark criteria and record any findings precisely.
+
+I’m checking for two specific review risks before I mark the phase complete: whether alias coverage was accidentally dropped from the migrated test file, and whether any `workflows.*` workspace-module expectation is still lurking after the refactor.
+
+I don’t see any alias assertions left in the touched reference-resolution file. I’m checking whether alias discovery is still covered elsewhere in the runtime slice before deciding whether that’s a real validation gap or just a relocation.
+
+The surrounding runtime suite still covers alias behavior and root precedence, so the lack of alias assertions in the touched file is not by itself a gap. I’m doing one independent validation pass on the required five-suite slice before I mark criteria and close the review.
+
+The independent validation pass is clean. I’m marking the criteria complete and recording that there were no review findings in scope, then I’ll close with a `COMPLETE` loop-control block.
+
+Scope considered
+
+Active phase artifacts, the two changed tests, the implementation notes, the decisions ledger, adjacent runtime catalog/metadata tests for alias and root-precedence coverage, and an independent rerun of the required five-suite validation slice.
+
+What I analyzed
+
+The updated [test_workflow_reference_resolution.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/tests/runtime/test_workflow_reference_resolution.py) for root-selection and namespace assertions, [test_wheel_packaging_smoke.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/tests/runtime/test_wheel_packaging_smoke.py) for the wheel-build path, and related runtime tests to confirm alias behavior and search-root precedence still have coverage outside the touched file.
+
+What I reviewed
+
+The implementation matches the accepted contract: bare-name discovery in the touched reference-resolution test now points at `.autoloop/workflows`, explicit `{workspace}/workflows` coverage is path-only, workspace-path imports assert `_autoloop_workspace_workflows.<hash>...`, and the wheel smoke no longer depends on an ambient `build` module. I updated [criteria.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/objective-implement-workflow-installation-and-di-c328695f/runs/run-20260504T204430Z-152082a1/artifacts/implement/phases/close-validation-gaps/criteria.md) to checked and recorded the no-findings review result in [feedback.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/objective-implement-workflow-installation-and-di-c328695f/runs/run-20260504T204430Z-152082a1/artifacts/implement/phases/close-validation-gaps/feedback.md).
+
+Key findings / decisions
+
+No blocking or non-blocking findings in scoped changes. Independent validation passed with `.venv_phase/bin/python -m pytest -q tests/runtime/test_workflow_reference_resolution.py tests/runtime/test_workflow_catalog_roots.py tests/runtime/test_runtime_cli_metadata_integration.py tests/runtime/test_package_cli.py tests/runtime/test_wheel_packaging_smoke.py` and reported `59 passed`.
+
+Open issues / next step
+
+No open review issues in this phase scope.
+
+<loop-control>
+{"schema":"docloop.loop_control/v1","kind":"promise","promise":"COMPLETE"}
+</loop-control>
