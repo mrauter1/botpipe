@@ -26,6 +26,7 @@
 - `discover_workflow_packages`
 - `resolve_workflow_package`
 - `resolve_workflow_reference`
+- `_resolve_imported_class_reference`
 - `_resolve_named_reference`
 - `_resolve_path_reference`
 - `_resolve_catalog_entry_reference`
@@ -37,7 +38,7 @@
 - Plan milestone 1 / AC-1: implemented canonical workspace/package roots, missing-root tolerance, non-directory root errors, effective catalog assembly, and optional shadowed entry reporting.
 - Plan milestone 1 / AC-2: bare-name resolution now uses the catalog only; unknown bare references report workspace root plus searched roots; explicit `.py` and `.toml` paths bypass catalog precedence.
 - Plan milestone 1 / AC-3: workspace directory workflows, workspace single-file workflows, and package directory workflows emit exact `source_root_kind` values with package import metadata only for package roots.
-- Plan milestone 1 / AC-4: manifest parsing now validates `module` and `class`; manifest-backed explicit and catalog resolution covers `flow.py` then `workflow.py` fallback and class-selection failures.
+- Plan milestone 1 / AC-4: manifest parsing now validates required `name`/`title`/`description` plus optional `module` and `class`; manifest-backed explicit and catalog resolution covers `flow.py` then `workflow.py` fallback, class-selection failures, and shadow-safe imported package-class resolution.
 - Deferred by phase contract: built-in workflow relocation, CLI help/scaffold/list/show updates, runtime metadata persistence expansion, and packaging/wheel verification.
 
 ## Assumptions
@@ -48,6 +49,7 @@
 - Explicit filesystem path references remain supported.
 - Workspace workflow loading still avoids adding `.autoloop` to `sys.path`.
 - Package workflow loading continues to use normal Python imports when package metadata is available.
+- Explicit imported package-class references still bypass workspace shadowing by resolving through their concrete package source files.
 
 ## Intended behavior changes
 - Bare workflow discovery now scans only `{workspace}/.autoloop/workflows` and `autoloop/workflows`.
@@ -65,8 +67,9 @@
 
 ## Validation performed
 - `.venv_phase/bin/python -m py_compile autoloop/core/workflow_catalog.py autoloop/runtime/loader.py autoloop/core/workflow_capabilities.py autoloop/workflows/__init__.py tests/runtime/test_workflow_catalog_roots.py`
-- `.venv_phase/bin/python -m pytest tests/runtime/test_workflow_catalog_roots.py -q`
+- `.venv_phase/bin/python -m pytest tests/runtime/test_workflow_catalog_roots.py -q` (`14 passed`)
 - `.venv_phase/bin/python - <<'PY' ... discover_workflow_catalog(Path('.').resolve()) ... PY`
+- `.venv_phase/bin/python - <<'PY' ... read_workflow_manifest('name-only workflow.toml') raises WorkflowCatalogManifestError ... resolve_workflow_reference(root, PackageWorkflow) returns source_root_kind='package' under workspace shadowing ... PY`
 
 ## Deduplication / centralization
 - Centralized authoritative root enumeration and precedence in `discover_workflow_catalog(...)`.

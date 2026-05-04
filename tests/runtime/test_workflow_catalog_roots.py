@@ -9,7 +9,9 @@ import pytest
 import autoloop
 from autoloop.core.workflow_catalog import (
     WorkflowCatalogDiscoveryError,
+    WorkflowCatalogManifestError,
     discover_workflow_catalog,
+    read_workflow_manifest,
     workflow_search_roots,
 )
 from autoloop.runtime.loader import WorkflowDiscoveryError, resolve_workflow_reference
@@ -196,6 +198,14 @@ def test_discover_workflow_catalog_returns_workspace_and_package_source_kinds(
     assert entries["single_demo"].authoring_shape == "single_file"
 
 
+def test_manifest_requires_title_and_description_even_without_aliases(tmp_path: Path) -> None:
+    manifest_path = tmp_path / "workflow.toml"
+    manifest_path.write_text('name = "demo"\n', encoding="utf-8")
+
+    with pytest.raises(WorkflowCatalogManifestError, match="must define non-empty title, description"):
+        read_workflow_manifest(manifest_path)
+
+
 @pytest.mark.parametrize(
     ("package_name", "package_aliases", "workspace_name", "workspace_aliases", "reference"),
     (
@@ -233,6 +243,25 @@ def test_workspace_catalog_keys_shadow_package_catalog_keys(
     assert len(shadowed) == 1
     assert shadowed[0].source_root_kind == "package"
     assert shadowed[0].shadowed_by == workspace_name
+
+
+def test_imported_package_class_resolves_shadowed_package_entry(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    package_root = _configure_package_root(monkeypatch, tmp_path)
+    package_dir = _write_package_flow(package_root, "package_demo", workflow_name="shared")
+    _write_workspace_flow(tmp_path, "local_demo", workflow_name="shared", manifest=True)
+
+    from autoloop.workflows.package_demo.flow import PackageWorkflow
+
+    resolved = resolve_workflow_reference(tmp_path, PackageWorkflow)
+
+    assert resolved.workflow_cls is PackageWorkflow
+    assert resolved.reference.source_root_kind == "package"
+    assert resolved.reference.package_dir == package_dir
+    assert resolved.reference.source_path == package_dir / "flow.py"
+    assert resolved.reference.workflow_module == "autoloop.workflows.package_demo.flow"
 
 
 def test_same_tier_resolution_key_collisions_fail_with_paths(

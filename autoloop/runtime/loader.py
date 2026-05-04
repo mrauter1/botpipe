@@ -423,23 +423,25 @@ def _resolve_imported_class_reference(root_path: Path, workflow_cls: type[Any]) 
     module = sys.modules.get(workflow_cls.__module__)
     source_path = Path(inspect.getfile(workflow_cls)).resolve()
     manifest_path = _adjacent_manifest_path(source_path)
-    if manifest_path is not None and source_path.name in {"flow.py", "workflow.py"}:
-        package_name = source_path.parent.name
-        try:
-            package = resolve_workflow_package(root_path, package_name)
-        except WorkflowDiscoveryError:
-            package = None
-        if package is not None:
-            resolved = _load_manifest_package_reference(
+    module_name = workflow_cls.__module__
+    if (
+        manifest_path is not None
+        and source_path.name in {"flow.py", "workflow.py"}
+        and _source_root_kind_for_module(module_name) == "package"
+    ):
+        entry = _catalog_entry_for_explicit_path(root_path, source_path)
+        if entry is not None and entry.manifest_path is not None and entry.source_root_kind == "package":
+            resolved = _resolve_catalog_entry_reference(
                 root_path,
-                package,
-                original=f"{workflow_cls.__module__}.{workflow_cls.__name__}",
+                entry,
+                original=f"{module_name}.{workflow_cls.__name__}",
                 requested_class_name=workflow_cls.__name__,
+                kind="catalog_name",
             )
             if resolved.workflow_cls is not workflow_cls:
                 raise WorkflowDiscoveryError(
-                    f"workflow class {workflow_cls.__module__}.{workflow_cls.__name__} is not the main workflow export "
-                    f"for package {package.package_name!r}"
+                    f"workflow class {module_name}.{workflow_cls.__name__} is not the main workflow export "
+                    f"for package {entry.package_name!r}"
                 )
             return resolved
 

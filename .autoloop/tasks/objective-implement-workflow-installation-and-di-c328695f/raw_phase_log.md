@@ -304,3 +304,67 @@ The implementation should not be accepted yet. The next step is to fix the two b
 <loop-control>
 {"schema":"docloop.loop_control/v1","kind":"promise","promise":"INCOMPLETE"}
 </loop-control>
+
+
+---
+run_id=run-20260504T192206Z-d3f7e940 | entry=session_turn | pair=implement | phase=producer | cycle=2 | attempt=1 | thread_id=019df477-80fb-7890-8bef-7c9700065afc
+---
+provider=codex
+mode=resume
+template=/home/rauter/.local/share/pipx/venvs/autoloop/lib/python3.12/site-packages/autoloop/templates/implement_producer.md
+session_id=019df477-80fb-7890-8bef-7c9700065afc
+
+
+---
+run_id=run-20260504T192206Z-d3f7e940 | entry=phase_output | pair=implement | phase=producer | process=codex-agent | cycle=2 | attempt=1 | thread_id=019df477-80fb-7890-8bef-7c9700065afc
+---
+I’m fixing the two blocking review findings in the catalog and loader paths, then I’ll extend the focused phase tests to cover both regressions before revalidating.
+
+I have the exact failure points. I’m checking the phase plan and current notes now so the fix stays scoped and the post-edit documentation matches the requested checklist mapping.
+
+Plan:
+1. Fix manifest parsing so required fields are validated even when `aliases` is omitted.
+2. Fix imported package-class reconciliation to match shadowed package entries by concrete metadata instead of effective-catalog bare-name lookup.
+3. Add focused regression tests for both cases and rerun the phase validation set.
+
+I’ve narrowed the loader fix to the imported-package-class path only. That avoids changing workspace imported-class behavior and keeps the patch local to the shadowing regression the reviewer reproduced.
+
+I’m making the code edits now: one parser fix, one loader fix, then the two regression tests that would have caught these failures.
+
+The fixes are in. I’m running the focused phase validation now so I can catch any regression in the loader path before updating the notes and decisions artifacts.
+
+The focused tests are green. I’m recording the non-obvious resolution detail in the run ledger and tightening the implementation notes so the next phase doesn’t regress the explicit-import behavior again.
+
+I’m doing one last alignment pass on the validation record. The notes still mention the wider compile sweep from the prior iteration, so I’m rerunning that exact command before I finalize.
+
+The focused test suite already covers the shadowing case, but my ad hoc repro harness was using the wrong import order for the injected package root. I’m rerunning that custom check cleanly so the validation notes stay consistent with the actual runtime path.
+
+The implementation and artifact updates are in place. I’m doing a final diff read on the touched code paths now, then I’ll close with the exact phase summary and current validation status.
+
+The code is clean, but the validation commands refreshed tracked `__pycache__` artifacts. I’m restoring those generated binaries to their checked-in state so the phase diff stays limited to the actual implementation files.
+
+Scope considered
+
+Phase-local fixes for the two blocking review findings in `catalog-root-refactor`: manifest validation in [autoloop/core/workflow_catalog.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/autoloop/core/workflow_catalog.py), imported package-class resolution in [autoloop/runtime/loader.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/autoloop/runtime/loader.py), focused regression coverage in [tests/runtime/test_workflow_catalog_roots.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/tests/runtime/test_workflow_catalog_roots.py), and the required phase artifacts in [implementation_notes.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/objective-implement-workflow-installation-and-di-c328695f/runs/run-20260504T192206Z-d3f7e940/artifacts/implement/phases/catalog-root-refactor/implementation_notes.md) and [decisions.txt](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/objective-implement-workflow-installation-and-di-c328695f/runs/run-20260504T192206Z-d3f7e940/decisions.txt).
+
+What I analyzed
+
+I reviewed the verifier findings in [feedback.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/objective-implement-workflow-installation-and-di-c328695f/runs/run-20260504T192206Z-d3f7e940/artifacts/implement/phases/catalog-root-refactor/feedback.md), traced `read_workflow_manifest()` and `_resolve_imported_class_reference()`, checked the phase plan/notes/decisions artifacts, and reproduced both failures before patching them.
+
+What I changed
+
+I removed the early return in `read_workflow_manifest()` so required `name`/`title`/`description` validation always runs, even when `aliases` is omitted. I changed `_resolve_imported_class_reference()` to reconcile imported package classes through the concrete catalog entry for their source file, using the include-shadowed catalog path instead of bare-name resolution, so explicit package imports remain stable under workspace shadowing.
+
+I added two focused tests: one for manifests that omit required fields without aliases, and one for resolving an imported package class when a workspace workflow shadows the same bare name. I also updated the implementation notes and appended the non-obvious resolution details under the current turn header in `decisions.txt`.
+
+Key findings / decisions
+
+The safe fix for the shadowing regression was to match package imports by concrete `source_path`, not by `package_name`, because bare-name precedence is the wrong mechanism once the caller already holds an explicit imported class. I kept that behavior scoped to package imports so workspace imported-class behavior did not widen in this phase.
+
+Open issues / next step
+
+Focused validation is green: `.venv_phase/bin/python -m py_compile autoloop/core/workflow_catalog.py autoloop/runtime/loader.py autoloop/core/workflow_capabilities.py autoloop/workflows/__init__.py tests/runtime/test_workflow_catalog_roots.py` and `.venv_phase/bin/python -m pytest tests/runtime/test_workflow_catalog_roots.py -q` with `14 passed`. The next step is verifier re-review of this phase.
+
+<loop-control>
+{"schema":"docloop.loop_control/v1","kind":"promise","promise":"COMPLETE"}
+</loop-control>

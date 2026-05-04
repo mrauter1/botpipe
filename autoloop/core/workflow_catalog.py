@@ -128,21 +128,25 @@ def read_workflow_manifest(manifest_path: Path) -> dict[str, Any]:
     aliases = payload.get("aliases", ())
     if aliases in (None, ()):
         normalized["aliases"] = ()
-        return normalized
-    if not isinstance(aliases, list):
-        raise WorkflowCatalogManifestError(f"workflow manifest field 'aliases' in {manifest_path} must be a list of strings")
+    else:
+        if not isinstance(aliases, list):
+            raise WorkflowCatalogManifestError(
+                f"workflow manifest field 'aliases' in {manifest_path} must be a list of strings"
+            )
 
-    seen_aliases: set[str] = set()
-    normalized_aliases: list[str] = []
-    for alias in aliases:
-        if not isinstance(alias, str) or not alias.strip():
-            raise WorkflowCatalogManifestError(f"workflow manifest aliases in {manifest_path} must be non-empty strings")
-        alias_text = alias.strip()
-        if alias_text in seen_aliases:
-            raise WorkflowCatalogManifestError(f"workflow manifest {manifest_path} repeats alias {alias_text!r}")
-        seen_aliases.add(alias_text)
-        normalized_aliases.append(alias_text)
-    normalized["aliases"] = tuple(normalized_aliases)
+        seen_aliases: set[str] = set()
+        normalized_aliases: list[str] = []
+        for alias in aliases:
+            if not isinstance(alias, str) or not alias.strip():
+                raise WorkflowCatalogManifestError(
+                    f"workflow manifest aliases in {manifest_path} must be non-empty strings"
+                )
+            alias_text = alias.strip()
+            if alias_text in seen_aliases:
+                raise WorkflowCatalogManifestError(f"workflow manifest {manifest_path} repeats alias {alias_text!r}")
+            seen_aliases.add(alias_text)
+            normalized_aliases.append(alias_text)
+        normalized["aliases"] = tuple(normalized_aliases)
     missing_required = [field for field in ("name", "title", "description") if field not in normalized]
     if missing_required:
         names = ", ".join(missing_required)
