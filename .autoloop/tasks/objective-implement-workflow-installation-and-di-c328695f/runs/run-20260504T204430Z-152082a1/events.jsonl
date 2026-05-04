@@ -14,3 +14,6 @@
 {"ts": "2026-05-04T20:56:35.998049+00:00", "run_id": "run-20260504T204430Z-152082a1", "seq": 14, "event_type": "phase_finished", "pair": "implement", "phase": "producer", "cycle": 1, "attempt": 1, "empty_output": false, "phase_id": "close-validation-gaps"}
 {"ts": "2026-05-04T20:58:18.057764+00:00", "run_id": "run-20260504T204430Z-152082a1", "seq": 15, "event_type": "phase_finished", "pair": "implement", "phase": "verifier", "cycle": 1, "attempt": 1, "empty_output": false, "phase_id": "close-validation-gaps"}
 {"ts": "2026-05-04T20:58:18.165513+00:00", "run_id": "run-20260504T204430Z-152082a1", "seq": 16, "event_type": "pair_completed", "pair": "implement", "cycle": 1, "attempt": 1, "phase_id": "close-validation-gaps"}
+{"ts": "2026-05-04T20:58:18.248268+00:00", "run_id": "run-20260504T204430Z-152082a1", "seq": 17, "event_type": "phase_deferred", "pair": "implement", "phase_mode": "single", "phase_id": "close-validation-gaps", "reason": "awaiting enabled test pair completion"}
+{"ts": "2026-05-04T20:58:18.250501+00:00", "run_id": "run-20260504T204430Z-152082a1", "seq": 18, "event_type": "pair_started", "pair": "test", "phase_id": "close-validation-gaps"}
+{"ts": "2026-05-04T20:58:18.250666+00:00", "run_id": "run-20260504T204430Z-152082a1", "seq": 19, "event_type": "cycle_started", "pair": "test", "cycle": 1, "attempt": 1, "phase_id": "close-validation-gaps"}
