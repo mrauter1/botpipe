@@ -553,3 +553,51 @@ Open issues / next step
 <loop-control>
 {"schema":"docloop.loop_control/v1","kind":"promise","promise":"COMPLETE"}
 </loop-control>
+
+
+---
+run_id=run-20260504T112330Z-32d8eec3 | entry=session_turn | pair=test | phase=producer | cycle=1 | attempt=1 | thread_id=019df2d5-a275-7a80-9230-3da4557a12de
+---
+provider=codex
+mode=resume
+template=/home/rauter/.local/share/pipx/venvs/autoloop/lib/python3.12/site-packages/autoloop/templates/test_producer.md
+session_id=019df2d5-a275-7a80-9230-3da4557a12de
+
+
+---
+run_id=run-20260504T112330Z-32d8eec3 | entry=phase_output | pair=test | phase=producer | process=codex-agent | cycle=1 | attempt=1 | thread_id=019df2d5-a275-7a80-9230-3da4557a12de
+---
+I’m validating the Milestone B test surface against the accepted phase contract and the implementation diff. First I’m reading the active test artifacts plus the newly added coverage so I can extend only the missing high-risk cases.
+
+The current repo changes already cover direct `WorklistEffect` returns from python steps, but the riskiest untested path is the same return coming from a route hook on an active scoped worklist. I’m adding that regression test now, plus a small API assertion for the new no-arg refresh helper.
+
+The additional coverage is in. I’m doing the validation that’s possible here now: syntax-compiling the updated test files and checking the artifact updates, since the environment still doesn’t have the Python test dependencies installed.
+
+Scope considered
+
+- Phase-local Milestone B test scope only: the touched helper/runtime tests, the implementation notes, the run-local decisions ledger, and the active test artifacts.
+
+What I analyzed
+
+- The implementation diff around `WorklistEffect`/`Effects`, route-hook normalization, prompt runtime diagnostics, and artifact ownership ambiguity.
+- Existing Milestone B coverage already added in `tests/unit/test_simple_surface.py`, `tests/contract/test_engine_contracts.py`, and `tests/unit/test_validation.py`.
+- The active `test_strategy.md` and `feedback.md` artifacts.
+
+What I changed
+
+- Extended `tests/unit/test_simple_surface.py` to assert the new no-arg `Effects.refresh()` helper shape.
+- Added a contract regression test in `tests/contract/test_engine_contracts.py` for direct `WorklistEffect` returns from a route `on_taken` hook using the active scoped worklist.
+- Updated `test_strategy.md` with an explicit AC-to-test coverage map, invariants, edge cases, flake controls, and known gaps.
+- Appended a concise summary entry to the phase `feedback.md`.
+- Appended one test-scope decision to `decisions.txt` for the route-hook direct-effect coverage rationale.
+
+Key findings / decisions
+
+- The main uncovered risk after the implementation pass was hook-phase direct `WorklistEffect` normalization; that path now has explicit coverage separate from python-step handler coverage.
+- I kept the added tests deterministic by using temp directories, in-memory stores, and scripted provider outcomes only.
+- I did not add any expectation around the reviewer’s non-blocking managed-artifact wording issue, since that would normalize a known inconsistency instead of testing intended behavior.
+
+Open issues / next step
+
+- `python3 -m compileall` passed for the updated test files.
+- Full execution is still blocked in this environment because `pytest` and `pydantic` are unavailable, so the next step is to run the targeted Milestone B suites in the project’s normal Python environment.

@@ -108,11 +108,13 @@ def test_effect_exports_and_route_helpers_are_public() -> None:
 
 def test_effect_helpers_and_additional_route_helpers_lower_to_effects() -> None:
     then_effect = simple.Effects.then("next")
+    refresh_current_effect = simple.Effects.refresh()
     refresh_route = simple.Route.refresh(simple.FINISH, worklist="items")
     complete_route = simple.Route.complete_current(simple.FINISH, worklist="items")
     complete_and_advance_route = simple.Route.complete_and_advance(simple.FINISH, worklist="items", exhausted="done")
 
     assert then_effect.event == "next"
+    assert refresh_current_effect.worklists == (simple.WorklistEffect(worklist=None, refresh=True),)
     assert simple.WorklistEffect.refresh_current(worklist="items") == simple.WorklistEffect(worklist="items", refresh=True)
     assert simple.WorklistEffect.complete_current(worklist="items") == simple.WorklistEffect(
         worklist="items",
