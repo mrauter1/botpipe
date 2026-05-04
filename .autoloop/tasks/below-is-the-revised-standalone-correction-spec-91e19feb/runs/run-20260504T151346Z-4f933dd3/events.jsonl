@@ -46,3 +46,6 @@
 {"ts": "2026-05-04T16:27:59.295826+00:00", "run_id": "run-20260504T151346Z-4f933dd3", "seq": 46, "event_type": "phase_deferred", "pair": "implement", "phase_mode": "single", "phase_id": "public-surface-polish", "reason": "awaiting enabled test pair completion"}
 {"ts": "2026-05-04T16:27:59.299134+00:00", "run_id": "run-20260504T151346Z-4f933dd3", "seq": 47, "event_type": "pair_started", "pair": "test", "phase_id": "public-surface-polish"}
 {"ts": "2026-05-04T16:27:59.299380+00:00", "run_id": "run-20260504T151346Z-4f933dd3", "seq": 48, "event_type": "cycle_started", "pair": "test", "cycle": 1, "attempt": 1, "phase_id": "public-surface-polish"}
+{"ts": "2026-05-04T16:30:24.802619+00:00", "run_id": "run-20260504T151346Z-4f933dd3", "seq": 49, "event_type": "phase_finished", "pair": "test", "phase": "producer", "cycle": 1, "attempt": 1, "empty_output": false, "phase_id": "public-surface-polish"}
+{"ts": "2026-05-04T16:31:18.759136+00:00", "run_id": "run-20260504T151346Z-4f933dd3", "seq": 50, "event_type": "phase_finished", "pair": "test", "phase": "verifier", "cycle": 1, "attempt": 1, "empty_output": false, "phase_id": "public-surface-polish"}
+{"ts": "2026-05-04T16:31:18.809413+00:00", "run_id": "run-20260504T151346Z-4f933dd3", "seq": 51, "event_type": "pair_completed", "pair": "test", "cycle": 1, "attempt": 1, "phase_id": "public-surface-polish"}

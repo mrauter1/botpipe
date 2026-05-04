@@ -896,3 +896,110 @@ Open issues / next step
 <loop-control>
 {"schema":"docloop.loop_control/v1","kind":"promise","promise":"COMPLETE"}
 </loop-control>
+
+
+---
+run_id=run-20260504T151346Z-4f933dd3 | entry=session_turn | pair=test | phase=producer | cycle=1 | attempt=1 | thread_id=019df3c1-79c3-7de0-a81c-38c9071e3138
+---
+provider=codex
+mode=resume
+template=/home/rauter/.local/share/pipx/venvs/autoloop/lib/python3.12/site-packages/autoloop/templates/test_producer.md
+session_id=019df3c1-79c3-7de0-a81c-38c9071e3138
+
+
+---
+run_id=run-20260504T151346Z-4f933dd3 | entry=phase_output | pair=test | phase=producer | process=codex-agent | cycle=1 | attempt=1 | thread_id=019df3c1-79c3-7de0-a81c-38c9071e3138
+---
+I’m treating this as a coverage-hardening turn for `public-surface-polish`. First I’m reading the active test artifacts and the new test/doc changes so I can identify whether any acceptance-path gaps remain before I add or refine tests.
+
+The current coverage already hits the new `Effects` contract, prompt README wording, and `validation_step` lowering. The main gap I still see is that the workflow package docs under `docs/workflows/*.md` are not explicitly locked against reintroducing “Reserved routes” or managed-artifact authoring, so I’m adding a focused doc-baseline test for that surface and then I’ll update the test artifacts.
+
+I’m making one small but useful addition in the shared doc-baseline suite: a repo-wide assertion over `docs/workflows/*.md` so the workflow-package docs themselves cannot drift back to reserved `blocked`/`failed` wording or managed-artifact authoring without a visible test failure.
+
+The new baseline assertion is in place. I’m recreating a temporary local venv, running the focused public-surface suites, and then I’ll record the behavior-to-test map and the summary in the phase test artifacts.
+
+I’ve got the focused suite green. I’m recording the coverage map and test-summary artifacts now, then I’ll remove the temporary venv and generated cache noise so the phase stays centered on source and test files.
+
+Scope considered
+
+- `public-surface-polish` test scope only: the `Effects` public-surface decision, `validation_step` sugar boundary, and the workflow-doc / prompt-README cleanup for question-only default control routing and removal of managed-artifact authoring guidance.
+
+What I analyzed
+
+- The phase contract, current run-local decisions, and the active test artifacts.
+- Existing focused coverage in [tests/unit/test_simple_surface.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/tests/unit/test_simple_surface.py:155), [tests/contract/test_engine_contracts.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/tests/contract/test_engine_contracts.py:8688), and [tests/test_architecture_baseline_docs.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/tests/test_architecture_baseline_docs.py:152).
+- The remaining gap that workflow package docs under `docs/workflows/*.md` were not explicitly locked against reintroducing `Reserved routes:` or managed-artifact wording.
+
+What I changed
+
+- Added a shared baseline test in [tests/test_architecture_baseline_docs.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/tests/test_architecture_baseline_docs.py:249):
+  - `test_workflow_package_docs_use_question_only_runtime_control_wording`
+  - This asserts every `docs/workflows/*.md` file uses the new question-only runtime-control wording and does not reintroduce `Reserved routes:`, `role="managed"`, or `Artifact.managed(...)`.
+- Updated [test_strategy.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/below-is-the-revised-standalone-correction-spec-91e19feb/runs/run-20260504T151346Z-4f933dd3/artifacts/test/phases/public-surface-polish/test_strategy.md:1) with the behavior-to-test coverage map for AC-1 through AC-3.
+- Appended a concise summary to [feedback.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/below-is-the-revised-standalone-correction-spec-91e19feb/runs/run-20260504T151346Z-4f933dd3/artifacts/test/phases/public-surface-polish/feedback.md:1).
+- Appended one test-scope decision to [decisions.txt](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/below-is-the-revised-standalone-correction-spec-91e19feb/runs/run-20260504T151346Z-4f933dd3/decisions.txt:1) documenting why the shared workflow-doc baseline guard was added.
+
+Key findings / decisions
+
+- The existing focused `Effects` and `validation_step` tests were already solid; the main remaining regression risk was doc drift across `docs/workflows/*.md`.
+- Focused validation passed:
+  - `tests/test_architecture_baseline_docs.py`
+  - `tests/unit/test_simple_surface.py`
+  - `tests/contract/test_engine_contracts.py`
+  - selected with the public-surface-polish-related `-k` filter
+- I used a temporary local `.venv` only to supply `pytest` and `pydantic`, then removed it afterward.
+
+Open issues / next step
+
+- No scoped testing blockers remain for `public-surface-polish`.
+- I did not broaden into full runtime workflow execution suites beyond the focused public-surface paths already relevant to this phase.
+
+
+---
+run_id=run-20260504T151346Z-4f933dd3 | entry=session_turn | pair=test | phase=verifier | cycle=1 | attempt=1 | thread_id=019df3c1-79c3-7de0-a81c-38c9071e3138
+---
+provider=codex
+mode=resume
+template=/home/rauter/.local/share/pipx/venvs/autoloop/lib/python3.12/site-packages/autoloop/templates/test_verifier.md
+session_id=019df3c1-79c3-7de0-a81c-38c9071e3138
+
+
+---
+run_id=run-20260504T151346Z-4f933dd3 | entry=phase_output | pair=test | phase=verifier | process=codex-agent | cycle=1 | attempt=1 | thread_id=019df3c1-79c3-7de0-a81c-38c9071e3138
+---
+I’m auditing the `public-surface-polish` test changes against the phase contract and the recorded test strategy. First I’m reading the active audit artifacts and the exact coverage additions so I can decide whether AC-1 through AC-3 have reliable regression protection or if any gaps remain.
+
+I’ve finished the audit. The added coverage is coherent, deterministic, and aligned with the phase decisions, so I’m marking the test criteria complete and recording that I found no blocking or non-blocking audit findings in the scoped test diff.
+
+Scope considered
+
+- The `public-surface-polish` test scope only: focused coverage for the `Effects` public API decision, `validation_step` lowering/behavior, and the doc / prompt README wording sweep for question-only default control routing and managed-artifact removal.
+
+What I analyzed
+
+- The active phase contract, run-local decisions, the updated [test_strategy.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/below-is-the-revised-standalone-correction-spec-91e19feb/runs/run-20260504T151346Z-4f933dd3/artifacts/test/phases/public-surface-polish/test_strategy.md:1), and the changed focused tests in:
+  - [tests/test_architecture_baseline_docs.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/tests/test_architecture_baseline_docs.py:1)
+  - [tests/unit/test_simple_surface.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/tests/unit/test_simple_surface.py:1)
+  - [tests/contract/test_engine_contracts.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/tests/contract/test_engine_contracts.py:1)
+
+What I reviewed
+
+- AC-1: `Effects` is covered as an intentional hook-control API, including event-precedence and direct-control parity.
+- AC-2: `validation_step` lowering and explicit feedback/failed-route behavior remain covered.
+- AC-3: shared doc baselines now guard both prompt READMEs and `docs/workflows/*.md` against reintroducing reserved-route wording or managed-artifact authoring.
+- Reliability: the tests remain deterministic and filesystem-local; the temporary local venv used for validation is not part of the assertions themselves.
+
+Key findings / decisions
+
+- No blocking findings.
+- No non-blocking findings.
+- I updated [criteria.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/below-is-the-revised-standalone-correction-spec-91e19feb/runs/run-20260504T151346Z-4f933dd3/artifacts/test/phases/public-surface-polish/criteria.md:1) to fully checked and appended the no-findings result to [feedback.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/below-is-the-revised-standalone-correction-spec-91e19feb/runs/run-20260504T151346Z-4f933dd3/artifacts/test/phases/public-surface-polish/feedback.md:1).
+
+Open issues / next step
+
+- No scoped audit blockers remain for the `public-surface-polish` test diff.
+- The broader repo still has unrelated dirty state outside this phase, but nothing in the audited test changes requires follow-up here.
+
+<loop-control>
+{"schema":"docloop.loop_control/v1","kind":"promise","promise":"COMPLETE"}
+</loop-control>
