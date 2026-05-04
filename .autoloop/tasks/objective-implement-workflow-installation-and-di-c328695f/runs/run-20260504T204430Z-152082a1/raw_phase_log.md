@@ -376,3 +376,105 @@ No open test-audit issues in this phase scope.
 <loop-control>
 {"schema":"docloop.loop_control/v1","kind":"promise","promise":"COMPLETE"}
 </loop-control>
+
+
+---
+run_id=run-20260504T204430Z-152082a1 | entry=session_turn | pair=audit | phase=producer | cycle=1 | attempt=1 | thread_id=019df4cb-5b66-7400-bcec-cb05829465bd
+---
+provider=codex
+mode=start
+template=/home/rauter/.local/share/pipx/venvs/autoloop/lib/python3.12/site-packages/autoloop/templates/audit_producer.md
+session_id=019df4cb-5b66-7400-bcec-cb05829465bd
+
+
+---
+run_id=run-20260504T204430Z-152082a1 | entry=phase_output | pair=audit | phase=producer | process=codex-agent | cycle=1 | attempt=1 | thread_id=019df4cb-5b66-7400-bcec-cb05829465bd
+---
+I’m auditing this run against the original request and the recorded clarifications first, then I’ll compare that intent to the final code and test state before writing the audit artifacts.
+
+I’ve got the intent and planning history. Now I’m reading the implementation and test artifacts plus the final affected files so I can decide whether any requested behavior or validation is still missing.
+
+The pair artifacts say the slice is green, but I still need to verify the final file contents against the request directly. I’m reading the touched tests and the loader/catalog code now, then I’ll decide whether any follow-up request is still warranted.
+
+I’ve confirmed the touched tests encode the narrowed roots. I’m checking the later raw-log entries and then doing an independent rerun of the named validation slice, because the audit needs its own evidence rather than just trusting earlier artifacts.
+
+The audit rerun is in flight. Once that completes, I’ll write the gap report and the follow-up request based on the actual final state, not just the pair summaries.
+
+I have the independent green run. I’m doing one last scoped grep for legacy-style bare-name expectations from `workflows/` so the audit conclusion is backed by both execution and static review.
+
+The grep confirms the contract is codified in `workflow_search_roots`, and the affected validation slice no longer treats `workflows/` as a discovery root. I’m reading the last ambiguous cases in the reference-resolution file before I write the audit report.
+
+I have enough context to write the audit artifacts. Before I patch them, I’m pulling exact line references from the final tests and discovery code so the gap report cites concrete evidence instead of summaries.
+
+I’m writing the audit artifacts now. The conclusion is that the follow-up request has been satisfied in scope, so the revised request will state that no additional implementation run is needed.
+
+The audit artifacts are written. I’m doing a quick readback and JSON parse now so the final control block reflects the actual on-disk state cleanly.
+
+Scope considered
+
+The immutable request snapshot, `raw_phase_log.md`, `decisions.txt`, the plan/implement/test artifacts for this run, the final code in `autoloop/core/workflow_catalog.py` and `autoloop/runtime/loader.py`, the touched tests in `tests/runtime/test_workflow_reference_resolution.py` and `tests/runtime/test_wheel_packaging_smoke.py`, and an independent rerun of the named validation slice.
+
+What I analyzed
+
+I checked whether the final tests match the shipped discovery contract: workspace bare-name and alias discovery limited to `.autoloop/workflows`, `{workspace}/workflows` used only by explicit path references, and isolated workspace imports using `_autoloop_workspace_workflows.<hash>...`. I also verified the wheel smoke now avoids `python -m build` and still exercises wheel creation, install, CLI, workflow listing, and packaged assets. Independent validation with `.venv_phase/bin/python -m pytest -q tests/runtime/test_workflow_reference_resolution.py tests/runtime/test_workflow_catalog_roots.py tests/runtime/test_runtime_cli_metadata_integration.py tests/runtime/test_package_cli.py tests/runtime/test_wheel_packaging_smoke.py` passed with `60 passed in 13.53s`.
+
+What I changed
+
+I wrote the audit artifacts under `.autoloop/.../artifacts/audit`: `gap_report.md`, `revised_request.md`, `audit_result.json`, and updated `criteria.md` and `feedback.md`. I did not modify repository source, tests, or non-audit artifacts.
+
+Key findings / decisions
+
+No material unresolved gaps remain in the requested follow-up scope. The final code and tests match the narrowed discovery contract, the wheel smoke is runnable in the standard validation environment via `python -m pip wheel --no-deps --wheel-dir <dist> .`, and the requested validation slice is independently green. `revised_request.md` therefore states that no follow-up implementation run is required, and `audit_result.json` records `"material_gaps_found": false`.
+
+Open issues / next step
+
+No implementation follow-up is required for this request. The audit producer result remains `INCOMPLETE` only because the verifier controls pair completion.
+
+<loop-control>
+{"schema":"docloop.loop_control/v1","kind":"promise","promise":"INCOMPLETE"}
+</loop-control>
+
+
+---
+run_id=run-20260504T204430Z-152082a1 | entry=session_turn | pair=audit | phase=verifier | cycle=1 | attempt=1 | thread_id=019df4cb-5b66-7400-bcec-cb05829465bd
+---
+provider=codex
+mode=resume
+template=/home/rauter/.local/share/pipx/venvs/autoloop/lib/python3.12/site-packages/autoloop/templates/audit_verifier.md
+session_id=019df4cb-5b66-7400-bcec-cb05829465bd
+
+
+---
+run_id=run-20260504T204430Z-152082a1 | entry=phase_output | pair=audit | phase=verifier | process=codex-agent | cycle=1 | attempt=1 | thread_id=019df4cb-5b66-7400-bcec-cb05829465bd
+---
+I’m verifying the audit artifacts against the request ledger and final code/test state first, then I’ll update the audit criteria and feedback based on whether the audit’s gap classification holds up.
+
+The audit report is internally consistent so far. I’m checking the final code/test evidence directly and doing one verifier-owned rerun of the named suite before I decide whether any blocking audit issue remains.
+
+The verifier rerun is still running. If that stays green, I don’t see a basis for a blocking audit finding.
+
+I’ve finished the verifier-owned rerun and the audit conclusion holds. I’m appending the verification result to audit feedback now; the criteria remain fully checked.
+
+Scope considered
+
+The immutable request, authoritative clarifications in `raw_phase_log.md`, `decisions.txt`, the audit artifacts in the active audit directory, the final workflow discovery and loader code, the migrated runtime/package tests, and a verifier-owned rerun of the named validation slice.
+
+What I analyzed
+
+I checked whether the audit correctly classified the final state as complete: `workflow_search_roots()` still limits implicit discovery to package workflows and `{workspace}/.autoloop/workflows`, isolated workspace-path imports still use `_autoloop_workspace_workflows.<hash>...`, `test_workflow_reference_resolution.py` encodes the narrowed contract, and `test_wheel_packaging_smoke.py` now builds via `python -m pip wheel`. I also verified `audit_result.json` and `revised_request.md` are consistent with a no-follow-up conclusion.
+
+What I reviewed
+
+`gap_report.md` is evidence-backed and matches the request plus later explicit decisions. `revised_request.md` is appropriate for `material_gaps_found: false`. `audit_result.json` is valid and accurate. `criteria.md` is correctly fully checked. I appended the verifier result to `feedback.md` with stable ID `AUD-000`.
+
+Key findings / decisions
+
+No blocking or non-blocking audit defects were found. The verifier-owned rerun of `.venv_phase/bin/python -m pytest -q tests/runtime/test_workflow_reference_resolution.py tests/runtime/test_workflow_catalog_roots.py tests/runtime/test_runtime_cli_metadata_integration.py tests/runtime/test_package_cli.py tests/runtime/test_wheel_packaging_smoke.py` passed with `60 passed in 13.68s`, which supports the audit’s conclusion that no material follow-up work remains.
+
+Open issues / next step
+
+No open audit issues remain. The audit artifacts are valid and complete.
+
+<loop-control>
+{"schema":"docloop.loop_control/v1","kind":"promise","promise":"COMPLETE"}
+</loop-control>
