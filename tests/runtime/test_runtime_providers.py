@@ -244,8 +244,13 @@ def test_parse_outcome_json_accepts_missing_reason_for_authored_routes() -> None
 
 
 def test_parse_outcome_json_rejects_question_without_question_field() -> None:
-    with pytest.raises(ProviderExecutionError, match="must contain a non-empty string 'question'"):
+    with pytest.raises(ProviderExecutionError, match="question route without a non-empty question") as exc_info:
         parse_outcome_json('{"tag":"question"}')
+
+    assert exc_info.value.retry_kind == "invalid_payload"
+    assert exc_info.value.failure_context is not None
+    assert exc_info.value.failure_context.kind == "invalid_payload"
+    assert exc_info.value.failure_context.candidate_route == "question"
 
 
 def test_parse_outcome_json_rejects_non_object_payload() -> None:

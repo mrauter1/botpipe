@@ -305,3 +305,56 @@ Open issues / next step
 <loop-control>
 {"schema":"docloop.loop_control/v1","kind":"promise","promise":"INCOMPLETE"}
 </loop-control>
+
+
+---
+run_id=run-20260504T151346Z-4f933dd3 | entry=session_turn | pair=implement | phase=producer | cycle=2 | attempt=1 | thread_id=019df396-f260-7532-a4c9-e81f7fe16999
+---
+provider=codex
+mode=resume
+template=/home/rauter/.local/share/pipx/venvs/autoloop/lib/python3.12/site-packages/autoloop/templates/implement_producer.md
+session_id=019df396-f260-7532-a4c9-e81f7fe16999
+
+
+---
+run_id=run-20260504T151346Z-4f933dd3 | entry=phase_output | pair=implement | phase=producer | process=codex-agent | cycle=2 | attempt=1 | thread_id=019df396-f260-7532-a4c9-e81f7fe16999
+---
+I’m addressing the reviewer’s parity finding in the rendered-provider error path now. I’m checking the parser, engine retry classification, and the existing invalid-payload retry tests so the fix lands in one place and doesn’t fork the behavior again.
+
+I’ve confirmed the reviewer’s point: the rendered `question` parser error currently lands in the malformed-output retry bucket. I’m fixing that at the parser boundary and adding explicit metadata/contract coverage so the parity doesn’t drift again.
+
+I’ve patched the parser metadata and added explicit rendered retry coverage. I’m rerunning the exact parity slice now, including the rendered invalid-question recovery path that was missing before.
+
+The reviewer’s parity case is now passing. I’m updating the run notes and decision log to capture the non-obvious part of the fix: rendered `question` payload failures now carry invalid-payload retry semantics at the parser boundary.
+
+Scope considered
+- Scoped fix for the reviewer’s `IMP-001` parity finding only: rendered-provider question-payload parsing, downstream retry classification behavior, and the affected provider/engine contract tests.
+- I did not change reviewer-owned artifacts outside the allowed notes/decision bookkeeping.
+
+What I analyzed
+- [feedback.md](</home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/below-is-the-revised-standalone-correction-spec-91e19feb/runs/run-20260504T151346Z-4f933dd3/artifacts/implement/phases/route-and-artifact-contracts/feedback.md>)
+- `autoloop/core/providers/parsing.py`
+- `autoloop/core/engine.py::_provider_retry_kind`
+- Existing invalid-payload retry coverage in `tests/contract/test_engine_contracts.py` and provider parsing tests in `tests/runtime/test_runtime_providers.py`
+
+What I changed
+- Updated `parse_outcome_json(...)` so rendered `tag="question"` payload failures raise `ProviderExecutionError` with `FailureContext(kind="invalid_payload", candidate_route="question", ...)` and `retry_kind="invalid_payload"`.
+- Kept malformed JSON/object-shape failures in the malformed-provider-output path; only question-payload defects get the invalid-payload bucket.
+- Strengthened tests:
+  - parser-level metadata coverage for missing-question failures
+  - rendered-provider retry-and-recover parity coverage for invalid `question` payloads
+  - reran the previously targeted artifact/route parity slice to confirm no regressions
+
+Key findings / decisions
+- The right fix was to attach invalid-payload metadata at the parser boundary, not to add another message-matching branch in `Engine._provider_retry_kind(...)`.
+- That keeps rendered-provider `question` payload failures aligned with the direct `Outcome(...)` validation path and avoids further retry-classification drift.
+- I updated `implementation_notes.md` and appended the non-obvious retry-semantics decision under the current implementer header in `decisions.txt`.
+
+Open issues / next step
+- Targeted verification passed:
+  - `./.venv/bin/python -m pytest tests/runtime/test_runtime_providers.py -q -k "parse_outcome_json_rejects_question_without_question_field or parse_outcome_json_accepts_plain_object or parse_outcome_json_accepts_missing_reason_for_authored_routes"`
+  - `./.venv/bin/python -m pytest tests/contract/test_engine_contracts.py -q -k "provider_invalid_question_retries_and_recovers or rendered_provider_invalid_question_retries_and_recovers or blocked_and_failed_routes_do_not_require_reason_field or rendered_provider_matches_direct_reason_optional_behavior_for_explicit_blocked_and_failed_routes or provider_question_route_is_illegal_in_full_auto_mode or rendered_provider_question_route_is_illegal_in_full_auto_mode"`
+  - `./.venv/bin/python -m pytest tests/unit/test_provider_boundary_core.py -q -k "parse_outcome_json_defaults_missing_reason_to_empty_string"`
+  - `./.venv/bin/python -m pytest tests/unit/test_validation.py -q -k "same_identity_workflow_level_artifact_written_by_one_step or same_identity_workflow_level_artifact_written_by_multiple_steps or authored_blocked_and_failed_routes_use_generic_fallback_summaries or validation_contract_compiles_routes_expected_output_and_retry_policy"`
+- I did not rerun the full repository suite.
+- The next step is reviewer revalidation of the updated phase artifacts and parity path.

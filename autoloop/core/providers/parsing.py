@@ -7,7 +7,7 @@ import re
 from copy import deepcopy
 from typing import Any
 
-from ..errors import ProviderExecutionError
+from ..errors import FailureContext, ProviderExecutionError
 from ..primitives import Outcome
 
 
@@ -46,7 +46,7 @@ def parse_outcome_json(text: str) -> Outcome:
 
     reason = _optional_string_field(payload, "reason") or ""
     clarification = _optional_string_field(payload, "clarification")
-    question = _required_string_field(payload, "question") if tag == "question" else _optional_string_field(payload, "question")
+    question = _required_question_field(payload, tag=tag)
 
     return Outcome(
         raw_output=text,
@@ -65,8 +65,32 @@ def _optional_string_field(payload: dict[str, Any], key: str) -> str | None:
     if not isinstance(value, str):
         raise ProviderExecutionError(f"provider outcome JSON field {key!r} must be a string when provided.")
     return value
+
+
 def _required_string_field(payload: dict[str, Any], key: str) -> str:
     value = payload.get(key)
     if not isinstance(value, str) or not value.strip():
         raise ProviderExecutionError(f"provider outcome JSON must contain a non-empty string {key!r}.")
     return value
+
+
+def _required_question_field(payload: dict[str, Any], *, tag: str) -> str | None:
+    if tag != "question":
+        return _optional_string_field(payload, "question")
+    value = payload.get("question")
+    if isinstance(value, str) and value.strip():
+        return value
+    raise ProviderExecutionError(
+        "provider returned question route without a non-empty question",
+        failure_context=FailureContext(
+            kind="invalid_payload",
+            step_name="",
+            candidate_route="question",
+            provider_attributable=True,
+            details={
+                "route": "question",
+                "error": "question route requires a non-empty question field",
+            },
+        ),
+        retry_kind="invalid_payload",
+    )

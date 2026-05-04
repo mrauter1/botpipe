@@ -31,7 +31,7 @@
 
 ## Checklist mapping
 - AC-1: removed managed-role artifact enforcement; workflow-level artifacts now keep canonical public names while step writers append `producer_steps`.
-- AC-2: rendered provider parsing now defaults missing `reason` to `""` and requires top-level `question` only for `tag="question"`; added direct/rendered parity coverage.
+- AC-2: rendered provider parsing now defaults missing `reason` to `""`, requires top-level `question` only for `tag="question"`, and preserves `invalid_payload` retry semantics for rendered question-payload failures; added direct/rendered parity coverage.
 - AC-3: preserved policy-gated `question` visibility; added rendered full-auto illegal-question regression coverage and kept no default `blocked`/`failed`.
 - AC-4: authored `blocked`/`failed` stay legal without hidden reason validation; fallback summaries now treat them as ordinary authored routes.
 - AC-5: preserved explicit child-workflow `failed`/`blocked` mapping behavior; parity coverage was kept in the targeted engine contract slice.
@@ -71,3 +71,4 @@
 ## Deduplication / centralization
 - Kept canonical-name decisions centralized in `collect_artifact_inventory(...)` so compiler, engine, provider contracts, and route-required-write resolution all consume the same artifact identity.
 - Centralized optional-reason and question-only payload handling in `parse_outcome_json(...)` rather than splitting rendered-provider behavior across parser and engine call sites.
+- Kept rendered question-payload failures in the shared invalid-payload retry bucket by attaching failure metadata at parse time instead of teaching `Engine._provider_retry_kind(...)` another message-matching special case.
