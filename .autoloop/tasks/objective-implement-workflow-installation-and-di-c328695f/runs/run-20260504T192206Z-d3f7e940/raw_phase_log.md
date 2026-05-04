@@ -413,3 +413,99 @@ This phase is clear for acceptance. The remaining work belongs to later phases a
 <loop-control>
 {"schema":"docloop.loop_control/v1","kind":"promise","promise":"COMPLETE"}
 </loop-control>
+
+
+---
+run_id=run-20260504T192206Z-d3f7e940 | entry=session_turn | pair=test | phase=producer | cycle=1 | attempt=1 | thread_id=019df477-80fb-7890-8bef-7c9700065afc
+---
+provider=codex
+mode=resume
+template=/home/rauter/.local/share/pipx/venvs/autoloop/lib/python3.12/site-packages/autoloop/templates/test_producer.md
+session_id=019df477-80fb-7890-8bef-7c9700065afc
+
+
+---
+run_id=run-20260504T192206Z-d3f7e940 | entry=phase_output | pair=test | phase=producer | process=codex-agent | cycle=1 | attempt=1 | thread_id=019df477-80fb-7890-8bef-7c9700065afc
+---
+I’m auditing the focused catalog-root test coverage against the phase contract, then I’ll add only the missing regression tests and update the phase test artifacts to match what’s actually covered.
+
+The current focused suite covers the two review regressions, shadowing, collisions, explicit paths, and relative imports. The main contract gap I still see is manifest `module` selection and `workflow.py` fallback, so I’m extending coverage there instead of adding broad new churn.
+
+I’m adding four compact tests: missing roots, non-directory root failure, manifest `module` selection, and `workflow.py` fallback. That closes the remaining contract gaps without widening into later-phase packaging or CLI work.
+
+The added coverage stays inside the focused runtime catalog file. I’m running that suite now to confirm the new root and manifest cases behave the way the phase contract requires.
+
+The focused suite is green with 18 tests now. I’m recording the specific coverage map and the one non-obvious fixture decision so later test/audit turns don’t regress back to relying on out-of-phase built-in relocation.
+
+The test file and phase artifacts are updated. I’m doing a final readback on the strategy and feedback files now so the recorded coverage matches the actual 18-test suite and the notes stay phase-local.
+
+Scope considered
+
+Phase-local test coverage for `catalog-root-refactor` only: the focused runtime catalog suite in [tests/runtime/test_workflow_catalog_roots.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/tests/runtime/test_workflow_catalog_roots.py) plus the required phase artifacts [test_strategy.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/objective-implement-workflow-installation-and-di-c328695f/runs/run-20260504T192206Z-d3f7e940/artifacts/test/phases/catalog-root-refactor/test_strategy.md), [feedback.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/objective-implement-workflow-installation-and-di-c328695f/runs/run-20260504T192206Z-d3f7e940/artifacts/test/phases/catalog-root-refactor/feedback.md), and the current turn block in [decisions.txt](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/objective-implement-workflow-installation-and-di-c328695f/runs/run-20260504T192206Z-d3f7e940/decisions.txt).
+
+What I analyzed
+
+I compared the active phase contract and run decisions against the existing focused suite, then checked which discovery and manifest behaviors were still untested after the implementation/verifier turns. The main uncovered contract areas were missing-vs-invalid roots, manifest `module` selection, and `workflow.py` fallback when `flow.py` is absent.
+
+What I changed
+
+I added four focused tests in `tests/runtime/test_workflow_catalog_roots.py` for missing search roots, non-directory root failure, manifest `module` override selection, and `workflow.py` fallback. I also updated `test_strategy.md` with a behavior-to-test coverage map, preserved invariants, edge/failure paths, stability notes, and known gaps, and appended a concise summary entry to `feedback.md`.
+
+Key findings / decisions
+
+The suite now covers the phase-specific root contract and the remaining manifest-routing semantics without depending on built-in workflow relocation. I kept package-root scenarios on injected temporary `autoloop/workflows` fixtures because built-in relocation and packaging are explicitly deferred to later phases.
+
+Open issues / next step
+
+Focused validation passed with `.venv_phase/bin/python -m pytest tests/runtime/test_workflow_catalog_roots.py -q` showing `18 passed`. Later phases still need separate coverage for CLI/help/json behavior, runtime metadata persistence, built-in workflow relocation, and wheel-packaging/install verification.
+
+<loop-control>
+{"schema":"docloop.loop_control/v1","kind":"promise","promise":"COMPLETE"}
+</loop-control>
+
+
+---
+run_id=run-20260504T192206Z-d3f7e940 | entry=session_turn | pair=test | phase=verifier | cycle=1 | attempt=1 | thread_id=019df477-80fb-7890-8bef-7c9700065afc
+---
+provider=codex
+mode=resume
+template=/home/rauter/.local/share/pipx/venvs/autoloop/lib/python3.12/site-packages/autoloop/templates/test_verifier.md
+session_id=019df477-80fb-7890-8bef-7c9700065afc
+
+
+---
+run_id=run-20260504T192206Z-d3f7e940 | entry=phase_output | pair=test | phase=verifier | process=codex-agent | cycle=1 | attempt=1 | thread_id=019df477-80fb-7890-8bef-7c9700065afc
+---
+I’m auditing the focused catalog-root test suite against the phase contract and the run decisions, then I’ll update the phase audit artifacts to either clear the coverage or carry forward any remaining gaps.
+
+The coverage map lines up with the phase decisions so far. I’m checking the tail of the focused test file and rerunning the suite once myself before I decide whether any meaningful gap remains.
+
+The suite is green, but I’m checking one remaining risk area before I clear it: explicit `.py` path classification is part of the phase contract, and I want to confirm whether that path is already protected elsewhere or still missing from the focused coverage.
+
+I don’t see a material coverage gap in the phase-local suite after the added root and manifest cases. I’m marking the audit complete and appending a short disposition so the artifact records that no further findings were raised.
+
+The audit artifacts are updated. I’m doing a quick readback to make sure the criteria are fully checked and the feedback log records a clean audit disposition without inventing a synthetic finding.
+
+Scope considered
+
+Phase-local audit of the focused `catalog-root-refactor` test work only: [tests/runtime/test_workflow_catalog_roots.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/tests/runtime/test_workflow_catalog_roots.py), the active [test_strategy.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/objective-implement-workflow-installation-and-di-c328695f/runs/run-20260504T192206Z-d3f7e940/artifacts/test/phases/catalog-root-refactor/test_strategy.md), the current [feedback.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/objective-implement-workflow-installation-and-di-c328695f/runs/run-20260504T192206Z-d3f7e940/artifacts/test/phases/catalog-root-refactor/feedback.md), and the run decisions ledger.
+
+What I analyzed
+
+I checked the focused suite against AC-1 through AC-4, reviewed the test strategy coverage map and stability notes, re-read the phase-local decisions about injected package roots and required manifest semantics, and reran the focused test file with `.venv_phase/bin/python -m pytest tests/runtime/test_workflow_catalog_roots.py -q`.
+
+What I reviewed
+
+The suite now covers canonical roots, missing-vs-invalid root handling, workspace/package precedence and shadowing, same-tier collision failure, searched-root error reporting, explicit out-of-root manifest loading, workspace relative imports, explicit imported package-class resolution under shadowing, manifest required fields, manifest `class` selection, manifest `module` selection, `workflow.py` fallback, and ambiguous-class failure. The fixture strategy is deterministic and aligned with the run decision that built-in workflow relocation is out of phase, so the tests do not silently depend on not-yet-migrated package layout.
+
+Key findings / decisions
+
+No additional findings. I updated the audit artifacts to mark the phase `COMPLETE` and appended an audit disposition noting that the focused suite now covers the intended phase-local behaviors without introducing reliance on later-phase packaging work.
+
+Open issues / next step
+
+This test phase is clear. Remaining coverage gaps belong to later phases already identified in the strategy: CLI/help/json behavior, runtime metadata persistence, built-in workflow relocation, and wheel-packaging/install verification.
+
+<loop-control>
+{"schema":"docloop.loop_control/v1","kind":"promise","promise":"COMPLETE"}
+</loop-control>

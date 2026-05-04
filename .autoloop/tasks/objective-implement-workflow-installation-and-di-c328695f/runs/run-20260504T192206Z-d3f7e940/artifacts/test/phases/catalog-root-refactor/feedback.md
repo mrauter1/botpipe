@@ -8,3 +8,5 @@
 - Scope: phase-local authoritative verifier artifact
 
 - Added focused coverage in `tests/runtime/test_workflow_catalog_roots.py` for missing-vs-invalid search roots, manifest `module` selection, `workflow.py` fallback when `flow.py` is absent, and the previously fixed manifest-required-field and shadowed imported-package-class regressions. Validation: `.venv_phase/bin/python -m pytest tests/runtime/test_workflow_catalog_roots.py -q` (`18 passed`).
+
+- Audit disposition — No additional findings. The focused suite now covers the phase-local root contract, precedence/shadowing behavior, explicit out-of-root manifest loading, workspace relative imports, manifest `class`/`module` semantics, `workflow.py` fallback, and representative failure paths without relying on out-of-phase built-in workflow relocation.
