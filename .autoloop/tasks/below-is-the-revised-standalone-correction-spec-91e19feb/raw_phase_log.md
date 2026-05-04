@@ -845,3 +845,54 @@ Open issues / next step
 - No phase-local blockers remain from this change set.
 - Broader runtime/regression suites were not rerun; validation stayed scoped to the public-surface-polish paths.
 - The repo still has unrelated dirty state outside this phase, including the pre-existing deleted workflow doc noted above.
+
+
+---
+run_id=run-20260504T151346Z-4f933dd3 | entry=session_turn | pair=implement | phase=verifier | cycle=1 | attempt=1 | thread_id=019df3c1-79c3-7de0-a81c-38c9071e3138
+---
+provider=codex
+mode=resume
+template=/home/rauter/.local/share/pipx/venvs/autoloop/lib/python3.12/site-packages/autoloop/templates/implement_verifier.md
+session_id=019df3c1-79c3-7de0-a81c-38c9071e3138
+
+
+---
+run_id=run-20260504T151346Z-4f933dd3 | entry=phase_output | pair=implement | phase=verifier | process=codex-agent | cycle=1 | attempt=1 | thread_id=019df3c1-79c3-7de0-a81c-38c9071e3138
+---
+I’m reviewing the `public-surface-polish` diff against the phase criteria and prior decisions. First I’m reading the reviewer artifacts and the exact source/doc/test deltas so I can decide whether AC-1 through AC-3 are actually satisfied or if there are blocking gaps.
+
+I’ve confirmed the decision ledger aligns with the implementation choices. Now I’m checking for any remaining stale public-surface wording or gaps in the new `Effects` / `validation_step` coverage that would block AC-1 through AC-3.
+
+I’ve finished the audit. I’m updating the verifier artifacts now: criteria will be marked complete, and the feedback artifact will note that I found no blocking or non-blocking review findings within the scoped diff.
+
+Scope considered
+
+- The `public-surface-polish` phase only: `Effects` public-surface decision, `validation_step` surface/coverage, and the doc / prompt README sweep for the Milestone A route-artifact-worklist model.
+- I excluded unrelated dirty state, including the pre-existing deleted `docs/workflows/workflow_run_traces_to_optimization_candidates.md`.
+
+What I analyzed
+
+- The accepted phase contract, implementation notes, and run-local decisions.
+- The changed public-surface files: [autoloop/core/effects.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/autoloop/core/effects.py:1), [docs/authoring.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/docs/authoring.md:615), workflow docs / prompt READMEs, and the added or adjusted test coverage in [tests/unit/test_simple_surface.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/tests/unit/test_simple_surface.py:155), [tests/contract/test_engine_contracts.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/tests/contract/test_engine_contracts.py:8688), [tests/test_architecture_baseline_docs.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/tests/test_architecture_baseline_docs.py:152), and the touched runtime doc assertion tests.
+
+What I reviewed
+
+- AC-1: `Effects` is now explicitly documented as a supported hook-control API and backed by precedence / parity coverage.
+- AC-2: `validation_step` still lowers to `python_step`, keeps explicit feedback writes, and has optional failed-route coverage.
+- AC-3: docs and examples no longer teach default `blocked` / `failed`, do not teach `Artifact.managed`, and describe `question` consistently with the current policy.
+- Reported validation from the implementation notes is consistent with the touched scope.
+
+Key findings / decisions
+
+- No blocking findings.
+- No non-blocking findings.
+- I updated [criteria.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/below-is-the-revised-standalone-correction-spec-91e19feb/runs/run-20260504T151346Z-4f933dd3/artifacts/implement/phases/public-surface-polish/criteria.md:1) to fully checked and appended the no-findings result to [feedback.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/below-is-the-revised-standalone-correction-spec-91e19feb/runs/run-20260504T151346Z-4f933dd3/artifacts/implement/phases/public-surface-polish/feedback.md:1).
+
+Open issues / next step
+
+- No scoped review blockers remain for `public-surface-polish`.
+- The broader repo still has unrelated dirty state outside this phase, but nothing in the reviewed diff requires a follow-up before this phase can be accepted.
+
+<loop-control>
+{"schema":"docloop.loop_control/v1","kind":"promise","promise":"COMPLETE"}
+</loop-control>

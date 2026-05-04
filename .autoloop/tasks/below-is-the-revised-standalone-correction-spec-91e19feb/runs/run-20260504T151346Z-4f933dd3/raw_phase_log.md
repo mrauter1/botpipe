@@ -755,3 +755,144 @@ Open issues / next step
 <loop-control>
 {"schema":"docloop.loop_control/v1","kind":"promise","promise":"COMPLETE"}
 </loop-control>
+
+
+---
+run_id=run-20260504T151346Z-4f933dd3 | entry=session_turn | pair=implement | phase=producer | cycle=1 | attempt=1 | thread_id=019df3c1-79c3-7de0-a81c-38c9071e3138
+---
+provider=codex
+mode=start
+template=/home/rauter/.local/share/pipx/venvs/autoloop/lib/python3.12/site-packages/autoloop/templates/implement_producer.md
+session_id=019df3c1-79c3-7de0-a81c-38c9071e3138
+
+
+---
+run_id=run-20260504T151346Z-4f933dd3 | entry=phase_output | pair=implement | phase=producer | process=codex-agent | cycle=1 | attempt=1 | thread_id=019df3c1-79c3-7de0-a81c-38c9071e3138
+---
+I’m working the `public-surface-polish` phase. First I’m reading the phase artifacts and locating the current `Effects`, `validation_step`, and documentation surfaces so I can scope the change set against the accepted plan.
+
+I’ve got the phase plan and the repo is already very dirty outside this task, so I’m keeping scope tight to the active framework package, tests, and docs. Next I’m locating the current public API and doc references for `Effects`, `validation_step`, `Artifact.managed`, and route guidance.
+
+I’ve confirmed the runtime package already reflects part of the route-policy cleanup, while the remaining phase scope is mostly the public helper boundary and docs/examples. I’m reading the concrete `Effects` and `validation_step` implementation plus the existing doc assertions before editing.
+
+The safer boundary here is to keep `Effects` as an intentional public hook-control surface rather than narrowing it midstream. I’m checking the normalization path and existing tests so I can document that contract and add the missing precedence/behavior coverage instead of introducing a larger break.
+
+The runtime already supports `Effects` directly, including worklist mutations plus an optional control/event override. The missing work is mostly contract coverage and docs cleanup, with one likely code tweak in `validation_step` so its failed route isn’t implicitly hardcoded to the `"failed"` tag when callers map it elsewhere.
+
+I’m moving from analysis to edits now. The main changes are: document `Effects` as intentional public hook-control API with parity coverage, refresh `validation_step` docs/tests around explicit repair/failed behavior, and sweep authored workflow docs so `blocked`/`failed` are only described when explicitly authored rather than as defaults.
+
+The workflow docs are the main stale surface: they still label `question`/`blocked`/`failed` as reserved defaults and describe `blocked`/`failed` policy without saying those routes are explicitly authored. I’m sweeping those templates consistently so the examples match the shipped route model instead of silently teaching the old contract.
+
+I’m editing the docs now. First I’m bulk-fixing the repeated workflow route-surface text so it stops teaching `blocked`/`failed` as default framework routes, then I’ll patch the authoring guide and test baselines around `Effects`, dual-role artifacts, and `validation_step`.
+
+The bulk doc sweep and the targeted public-surface patches are in place. I’m verifying the remaining stale phrases now and then I’ll run the focused contract/unit/doc tests against the exact behavior we changed.
+
+The doc text is aligned, but there are two follow-ups before test runs: a wording cleanup in the workflow policy bullets from the bulk replacement, and the runtime doc tests still assert the old “Reserved routes” wording. I’m patching those next so the tests match the corrected docs rather than the retired contract.
+
+The edits are ready for verification. I’m running focused suites now: the simple surface tests, the engine-contract tests around `Effects` and `validation_step`, the doc baseline, and the runtime doc/readme assertions that were explicitly updated.
+
+`pytest` isn’t on the bare PATH here, so I’m switching to the project’s Python entrypoint and rerunning the same focused checks from there.
+
+The repo has no local venv and the system Python is missing `pytest`. I’m checking whether the runtime dependencies are already present under `python3`; if they are, I’ll install only `pytest` into the user environment and keep the validation scoped to this workspace.
+
+The contract coverage found a real issue in the new test harness, not in the runtime: I was asking `_workspace()` to create nested folders without creating the variant parent first. I’m fixing that and rerunning the focused suites, then I’ll run the doc/readme assertions separately.
+
+The remaining failures are in the new comparison test, not the product behavior. I’m isolating the direct-control cases with a small local repro so I can tighten the assertions to the engine’s actual result shape instead of guessing at it.
+
+The remaining mismatch looks like a workflow-definition cache collision across parametrized cases, not a runtime semantics problem: the nested workflow class name was identical in every parameter. I’m making each generated test workflow name unique and rerunning the focused contract suite.
+
+The focused suites are green now. I’m doing a final diff pass, then I’ll update the phase notes and decision ledger with the public-surface choices and the exact validation I ran.
+
+I’m cleaning up test-only workspace noise before I write the phase notes. That means restoring the tracked `.pyc` artifacts I touched during validation and dropping the temporary local venv so the diff stays centered on source, docs, and tests.
+
+I’ve got the final state. Last step is just repository bookkeeping: I’m recording the explicit public-surface decision for `Effects` and the exact scope/validation summary in the phase artifact so the next turn doesn’t drift back into the pre-cleanup contract.
+
+Scope considered
+
+- `public-surface-polish` only: the public `Effects` boundary, `validation_step` surface/coverage, and workflow docs/prompt README wording for route/artifact semantics.
+- I kept out of scope runtime mechanics that were already landed in earlier phases.
+- I left the pre-existing deletion of `docs/workflows/workflow_run_traces_to_optimization_candidates.md` and unrelated dirty/untracked files alone.
+
+What I analyzed
+
+- `autoloop/core/effects.py`, `autoloop/simple.py`, and the engine hook/effect normalization path.
+- Existing contract coverage for worklist effects and `validation_step`.
+- Authoring docs, workflow docs, prompt READMEs, and the runtime/doc baseline tests that still referenced reserved/default `blocked` and `failed` routes or `Artifact.managed(...)`.
+
+What I changed
+
+- Kept `Effects` public and documented it as an intentional hook-control API in [docs/authoring.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/docs/authoring.md:615), including `event=` support for route tags, `Event`, `RequestInput`, `Goto`, and `Fail`.
+- Removed stale managed-artifact authoring guidance from the docs and replaced it with the canonical dual-role artifact explanation.
+- Clarified `validation_step(...)` docs to say it lowers to `python_step(...)`, writes feedback explicitly, and only authors the optional `failed` route when requested.
+- Swept the workflow package docs and prompt READMEs so they now describe `question` as the only default runtime-control route and describe `blocked`/`failed` as explicitly authored application routes.
+- Updated and added coverage in:
+  - [tests/unit/test_simple_surface.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/tests/unit/test_simple_surface.py:155)
+  - [tests/contract/test_engine_contracts.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/tests/contract/test_engine_contracts.py:8400)
+  - [tests/test_architecture_baseline_docs.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/tests/test_architecture_baseline_docs.py:152)
+  - the affected runtime doc/readme assertion tests under `tests/runtime/`.
+
+Key findings / decisions
+
+- I kept `Effects` rather than narrowing it. The safer Milestone A follow-up is to treat it as supported API and pin its behavior with tests.
+- Added effect coverage for deterministic `event` precedence over exhausted worklist routes and parity for `RequestInput`, `Goto`, and `Fail` when returned through `Effects`.
+- Added simple-surface coverage that `validation_step(...)` lowers to a `PythonStepDeclaration` with explicit feedback writes and optional failed-route authoring.
+- Focused validation passed:
+  - simple surface + doc baseline + targeted engine-contract tests
+  - targeted runtime workflow doc/prompt README assertion tests
+
+Open issues / next step
+
+- No phase-local blockers remain from this change set.
+- Broader runtime/regression suites were not rerun; validation stayed scoped to the public-surface-polish paths.
+- The repo still has unrelated dirty state outside this phase, including the pre-existing deleted workflow doc noted above.
+
+
+---
+run_id=run-20260504T151346Z-4f933dd3 | entry=session_turn | pair=implement | phase=verifier | cycle=1 | attempt=1 | thread_id=019df3c1-79c3-7de0-a81c-38c9071e3138
+---
+provider=codex
+mode=resume
+template=/home/rauter/.local/share/pipx/venvs/autoloop/lib/python3.12/site-packages/autoloop/templates/implement_verifier.md
+session_id=019df3c1-79c3-7de0-a81c-38c9071e3138
+
+
+---
+run_id=run-20260504T151346Z-4f933dd3 | entry=phase_output | pair=implement | phase=verifier | process=codex-agent | cycle=1 | attempt=1 | thread_id=019df3c1-79c3-7de0-a81c-38c9071e3138
+---
+I’m reviewing the `public-surface-polish` diff against the phase criteria and prior decisions. First I’m reading the reviewer artifacts and the exact source/doc/test deltas so I can decide whether AC-1 through AC-3 are actually satisfied or if there are blocking gaps.
+
+I’ve confirmed the decision ledger aligns with the implementation choices. Now I’m checking for any remaining stale public-surface wording or gaps in the new `Effects` / `validation_step` coverage that would block AC-1 through AC-3.
+
+I’ve finished the audit. I’m updating the verifier artifacts now: criteria will be marked complete, and the feedback artifact will note that I found no blocking or non-blocking review findings within the scoped diff.
+
+Scope considered
+
+- The `public-surface-polish` phase only: `Effects` public-surface decision, `validation_step` surface/coverage, and the doc / prompt README sweep for the Milestone A route-artifact-worklist model.
+- I excluded unrelated dirty state, including the pre-existing deleted `docs/workflows/workflow_run_traces_to_optimization_candidates.md`.
+
+What I analyzed
+
+- The accepted phase contract, implementation notes, and run-local decisions.
+- The changed public-surface files: [autoloop/core/effects.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/autoloop/core/effects.py:1), [docs/authoring.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/docs/authoring.md:615), workflow docs / prompt READMEs, and the added or adjusted test coverage in [tests/unit/test_simple_surface.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/tests/unit/test_simple_surface.py:155), [tests/contract/test_engine_contracts.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/tests/contract/test_engine_contracts.py:8688), [tests/test_architecture_baseline_docs.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/tests/test_architecture_baseline_docs.py:152), and the touched runtime doc assertion tests.
+
+What I reviewed
+
+- AC-1: `Effects` is now explicitly documented as a supported hook-control API and backed by precedence / parity coverage.
+- AC-2: `validation_step` still lowers to `python_step`, keeps explicit feedback writes, and has optional failed-route coverage.
+- AC-3: docs and examples no longer teach default `blocked` / `failed`, do not teach `Artifact.managed`, and describe `question` consistently with the current policy.
+- Reported validation from the implementation notes is consistent with the touched scope.
+
+Key findings / decisions
+
+- No blocking findings.
+- No non-blocking findings.
+- I updated [criteria.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/below-is-the-revised-standalone-correction-spec-91e19feb/runs/run-20260504T151346Z-4f933dd3/artifacts/implement/phases/public-surface-polish/criteria.md:1) to fully checked and appended the no-findings result to [feedback.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/below-is-the-revised-standalone-correction-spec-91e19feb/runs/run-20260504T151346Z-4f933dd3/artifacts/implement/phases/public-surface-polish/feedback.md:1).
+
+Open issues / next step
+
+- No scoped review blockers remain for `public-surface-polish`.
+- The broader repo still has unrelated dirty state outside this phase, but nothing in the reviewed diff requires a follow-up before this phase can be accepted.
+
+<loop-control>
+{"schema":"docloop.loop_control/v1","kind":"promise","promise":"COMPLETE"}
+</loop-control>
