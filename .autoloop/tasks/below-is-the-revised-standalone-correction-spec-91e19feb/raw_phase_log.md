@@ -1358,3 +1358,62 @@ Open issues / next step
 
 - A broader run of the same six runtime files still reports unrelated pre-existing compile/runtime failures outside this prompt-wording scope; I did not change those behaviors.
 - If you want, the next phase can separately triage that broader runtime drift, but the prompt-wording change itself is implemented and its targeted regression coverage is green.
+
+
+---
+run_id=run-20260504T163613Z-cf62c11b | entry=session_turn | pair=implement | phase=verifier | cycle=1 | attempt=1 | thread_id=019df3e1-7db9-7150-ac0b-aa1c60526b51
+---
+provider=codex
+mode=resume
+template=/home/rauter/.local/share/pipx/venvs/autoloop/lib/python3.12/site-packages/autoloop/templates/implement_verifier.md
+session_id=019df3e1-7db9-7150-ac0b-aa1c60526b51
+
+
+---
+run_id=run-20260504T163613Z-cf62c11b | entry=phase_output | pair=implement | phase=verifier | process=codex-agent | cycle=1 | attempt=1 | thread_id=019df3e1-7db9-7150-ac0b-aa1c60526b51
+---
+I’m auditing the phase-local implementation against the route-wording acceptance criteria, then I’ll mark the criteria and append any blocking or non-blocking findings to the review artifact.
+
+I’ve identified one likely acceptance gap in the implementation notes: the full runtime suites appear to remain red even though AC-3 requires those updated suites to pass. I’m verifying that independently now with an out-of-repo temporary venv so the review stays evidence-based and doesn’t touch source files.
+
+The independent full-suite run is already red, so AC-3 is not met as written. I’m letting it surface a couple concrete failure locations so the review finding can point to exact breakpoints rather than a generic “suite failed” statement.
+
+I’ve confirmed the main acceptance gap independently: the prompt-focused assertions are green, but the full runtime suites named in AC-3 are still red. I’m marking the criteria accordingly and recording that as a blocking review finding.
+
+Scope considered
+
+- Active review artifacts in the phase directory, the implementation notes, and the run-local decisions ledger
+- Changed prompt bodies under `workflows/*/prompts/*.md`
+- Updated runtime prompt-package suites and the new prompt-body baseline in `tests/test_architecture_baseline_docs.py`
+
+What I analyzed
+
+- The accepted phase contract and AC-1 through AC-4
+- The implementation notes claim that only prompt-focused nodes were validated while the full six runtime suites still fail
+- Independent spot validation of the retired wording removal and the new baseline test seam
+- Independent full-suite verification of the six runtime files named in AC-3
+
+What I reviewed
+
+- Prompt-body wording changes and the shared route-model preamble
+- The new prompt-body regression guard in `tests/test_architecture_baseline_docs.py`
+- The six runtime suites whose marker assertions were updated
+- Phase review artifacts: `criteria.md` and `feedback.md`
+
+Key findings / decisions
+
+- I recorded one blocking finding, `IMP-001`, in the phase feedback artifact.
+- AC-3 is not met as written. The prompt-focused assertions are green, but the six runtime prompt-package suites named by the phase contract still fail when run as full files.
+- I independently confirmed one concrete failure at `tests/runtime/test_company_operation_to_recursive_improvement_cycle.py::test_company_operation_to_recursive_improvement_cycle_compiles_with_explicit_control_contracts`, where the suite still expects `blocked` and `failed` in `frame_step.available_routes` and fails before the phase can claim those suites pass.
+- I marked `Behavioral Safety`, `Compatibility / Safety`, and `Technical Debt / Simplicity` as satisfied, and left `Correctness / Intent Fidelity` plus `Maintainability / Validation` unchecked.
+
+Open issues / next step
+
+- The implementation needs either:
+  1. a follow-up fix that makes the six named runtime suites pass under full-file execution, or
+  2. an explicit clarification narrowing AC-3 to prompt-only node coverage.
+- Until one of those happens, this phase should remain incomplete.
+
+<loop-control>
+{"schema":"docloop.loop_control/v1","kind":"promise","promise":"INCOMPLETE"}
+</loop-control>
