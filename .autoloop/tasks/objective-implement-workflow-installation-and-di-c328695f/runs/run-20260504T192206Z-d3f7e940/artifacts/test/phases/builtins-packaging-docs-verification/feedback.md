@@ -9,3 +9,5 @@
 
 - Added `test_authoring_and_workflow_docs_keep_current_workflow_root_references` to `tests/test_architecture_baseline_docs.py` to catch the reviewer-found stale `` `workflows/` `` guidance and malformed `docs/autoloop/workflows/...` citations.
 - Local validation used a deterministic `python3` doc-assertion script because `pytest` is not installed in the base shell.
+
+Audit pass, cycle 1 attempt 1: no blocking or non-blocking test-quality findings in scoped review. The added regression guard is deterministic and closes the reviewer-found documentation coverage gap.

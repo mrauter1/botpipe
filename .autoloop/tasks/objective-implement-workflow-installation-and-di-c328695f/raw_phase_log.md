@@ -1299,3 +1299,54 @@ Open issues / next step
 
 - No new test-scope issues found
 - Full `pytest` execution for this new assertion was not possible in the base shell; next auditor/test-verifier pass can rely on the added test plus the recorded validation constraint
+
+
+---
+run_id=run-20260504T192206Z-d3f7e940 | entry=session_turn | pair=test | phase=verifier | cycle=1 | attempt=1 | thread_id=019df4a0-001b-79d2-b2a3-e59913c8d3ef
+---
+provider=codex
+mode=resume
+template=/home/rauter/.local/share/pipx/venvs/autoloop/lib/python3.12/site-packages/autoloop/templates/test_verifier.md
+session_id=019df4a0-001b-79d2-b2a3-e59913c8d3ef
+
+
+---
+run_id=run-20260504T192206Z-d3f7e940 | entry=phase_output | pair=test | phase=verifier | process=codex-agent | cycle=1 | attempt=1 | thread_id=019df4a0-001b-79d2-b2a3-e59913c8d3ef
+---
+I’m reviewing the added doc-regression test against the phase scope and the existing packaging/runtime coverage. If it closes the reviewer-found gap without weakening the rest of the matrix, I’ll mark the audit complete and note any residual low-risk validation limits.
+
+The new guard is scoped correctly, deterministic, and directly aimed at the reviewer-found regression. I’m closing the audit criteria and adding a short pass note to the feedback file rather than manufacturing a low-value finding.
+
+Scope considered
+
+- The phase-local test delta for builtins-packaging-docs-verification
+- The added doc-regression test in `tests/test_architecture_baseline_docs.py`
+- The test strategy and test feedback artifacts for this phase
+
+What I analyzed
+
+- Existing packaging/runtime coverage already mapped in `test_strategy.md`
+- The new assertion guarding `docs/authoring.md` and malformed `docs/autoloop/workflows/...` citations
+- The local validation approach recorded by the test author
+
+What I reviewed
+
+- Whether the new test directly covers the reviewer-found regression gap
+- Whether the test is deterministic and avoids ordering, timing, or environment flake risk
+- Whether the expectations preserve the requested behavior instead of encoding a regression
+
+Key findings / decisions
+
+- No blocking findings
+- No non-blocking findings
+- The added regression guard is appropriately scoped, deterministic, and would catch the specific documentation regressions that slipped through the earlier matrix
+- I updated the audit criteria to fully checked and appended a pass note to the test feedback artifact
+
+Open issues / next step
+
+- No open issues remain in this audit scope
+- Test audit status is `COMPLETE`
+
+<loop-control>
+{"schema":"docloop.loop_control/v1","kind":"promise","promise":"COMPLETE"}
+</loop-control>

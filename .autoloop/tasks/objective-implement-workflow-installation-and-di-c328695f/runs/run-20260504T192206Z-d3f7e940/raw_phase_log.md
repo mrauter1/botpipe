@@ -1242,3 +1242,111 @@ Open issues / next step
 <loop-control>
 {"schema":"docloop.loop_control/v1","kind":"promise","promise":"COMPLETE"}
 </loop-control>
+
+
+---
+run_id=run-20260504T192206Z-d3f7e940 | entry=session_turn | pair=test | phase=producer | cycle=1 | attempt=1 | thread_id=019df4a0-001b-79d2-b2a3-e59913c8d3ef
+---
+provider=codex
+mode=resume
+template=/home/rauter/.local/share/pipx/venvs/autoloop/lib/python3.12/site-packages/autoloop/templates/test_producer.md
+session_id=019df4a0-001b-79d2-b2a3-e59913c8d3ef
+
+
+---
+run_id=run-20260504T192206Z-d3f7e940 | entry=phase_output | pair=test | phase=producer | process=codex-agent | cycle=1 | attempt=1 | thread_id=019df4a0-001b-79d2-b2a3-e59913c8d3ef
+---
+I’m checking the current phase-local test surface first to see where the reviewer-found doc gap slipped through. If coverage is missing, I’ll add the smallest assertion that would have caught it and then update the test strategy and feedback artifacts.
+
+The existing template assertions would catch the charter miss, but nothing in the doc tests currently protects the `docs/authoring.md` recursive-guidance list or malformed `docs/autoloop/workflows/...` citations. I’m adding one focused doc-regression test for exactly that gap, then I’ll record the coverage map.
+
+I’ve added the missing doc-regression assertion. I’m checking whether the local shell can run the targeted doc test directly; if not, I’ll still document the coverage and the environment limitation explicitly instead of guessing.
+
+`pytest` isn’t available in the base shell, so I’m validating the new doc assertion with a direct `python3` script instead. That keeps the check deterministic without reintroducing a temporary test environment.
+
+The direct doc assertions passed, so the new regression guard is behaving as intended. I’m writing the coverage map and a short auditor-facing summary now, including the fact that local validation used a plain `python3` check because `pytest` is not installed in the base shell.
+
+I’m checking the turn-local decisions header once before I finish. The only thing worth preserving is the validation constraint: `pytest` is unavailable in the base shell, so this pass used a direct `python3` doc assertion instead of silently skipping local validation.
+
+There’s an empty test-author block for this turn, so I’m recording the one non-obvious test constraint there: the regression guard was validated with a plain `python3` doc read because `pytest` is absent in the base environment.
+
+Scope considered
+
+- Phase-local documentation regression coverage for the builtins-packaging-docs-verification slice
+- The reviewer-found gaps in `docs/authoring.md` and `docs/workflows/workflow_package_to_composable_building_blocks.md`
+- Test-phase artifacts: `test_strategy.md` and test `feedback.md`
+
+What I analyzed
+
+- Existing doc coverage in `tests/test_architecture_baseline_docs.py`
+- Recursive/template coverage already present in `tests/runtime/test_package_cli.py`
+- The updated docs to identify the smallest missing regression guard
+
+What I changed
+
+- Added `test_authoring_and_workflow_docs_keep_current_workflow_root_references` to [tests/test_architecture_baseline_docs.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/tests/test_architecture_baseline_docs.py)
+- Updated [test_strategy.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/objective-implement-workflow-installation-and-di-c328695f/runs/run-20260504T192206Z-d3f7e940/artifacts/test/phases/builtins-packaging-docs-verification/test_strategy.md) with a behavior-to-test coverage map, preserved invariants, edge cases, and known gaps
+- Appended a concise summary to [feedback.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/objective-implement-workflow-installation-and-di-c328695f/runs/run-20260504T192206Z-d3f7e940/artifacts/test/phases/builtins-packaging-docs-verification/feedback.md)
+- Recorded the non-obvious validation constraint in `decisions.txt`
+
+Key findings / decisions
+
+- The existing test surface already covered most packaging/runtime behavior; the missing gap was a docs-only regression guard
+- `pytest` is not available in the base shell, so local validation for this pass used a deterministic `python3` doc-assertion script instead of silently skipping verification
+- The new test would catch both the stale `` `workflows/` `` guidance and malformed `docs/autoloop/workflows/...` citations
+
+Open issues / next step
+
+- No new test-scope issues found
+- Full `pytest` execution for this new assertion was not possible in the base shell; next auditor/test-verifier pass can rely on the added test plus the recorded validation constraint
+
+
+---
+run_id=run-20260504T192206Z-d3f7e940 | entry=session_turn | pair=test | phase=verifier | cycle=1 | attempt=1 | thread_id=019df4a0-001b-79d2-b2a3-e59913c8d3ef
+---
+provider=codex
+mode=resume
+template=/home/rauter/.local/share/pipx/venvs/autoloop/lib/python3.12/site-packages/autoloop/templates/test_verifier.md
+session_id=019df4a0-001b-79d2-b2a3-e59913c8d3ef
+
+
+---
+run_id=run-20260504T192206Z-d3f7e940 | entry=phase_output | pair=test | phase=verifier | process=codex-agent | cycle=1 | attempt=1 | thread_id=019df4a0-001b-79d2-b2a3-e59913c8d3ef
+---
+I’m reviewing the added doc-regression test against the phase scope and the existing packaging/runtime coverage. If it closes the reviewer-found gap without weakening the rest of the matrix, I’ll mark the audit complete and note any residual low-risk validation limits.
+
+The new guard is scoped correctly, deterministic, and directly aimed at the reviewer-found regression. I’m closing the audit criteria and adding a short pass note to the feedback file rather than manufacturing a low-value finding.
+
+Scope considered
+
+- The phase-local test delta for builtins-packaging-docs-verification
+- The added doc-regression test in `tests/test_architecture_baseline_docs.py`
+- The test strategy and test feedback artifacts for this phase
+
+What I analyzed
+
+- Existing packaging/runtime coverage already mapped in `test_strategy.md`
+- The new assertion guarding `docs/authoring.md` and malformed `docs/autoloop/workflows/...` citations
+- The local validation approach recorded by the test author
+
+What I reviewed
+
+- Whether the new test directly covers the reviewer-found regression gap
+- Whether the test is deterministic and avoids ordering, timing, or environment flake risk
+- Whether the expectations preserve the requested behavior instead of encoding a regression
+
+Key findings / decisions
+
+- No blocking findings
+- No non-blocking findings
+- The added regression guard is appropriately scoped, deterministic, and would catch the specific documentation regressions that slipped through the earlier matrix
+- I updated the audit criteria to fully checked and appended a pass note to the test feedback artifact
+
+Open issues / next step
+
+- No open issues remain in this audit scope
+- Test audit status is `COMPLETE`
+
+<loop-control>
+{"schema":"docloop.loop_control/v1","kind":"promise","promise":"COMPLETE"}
+</loop-control>
