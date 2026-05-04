@@ -23,3 +23,7 @@
 {"ts": "2026-05-04T19:52:35.415545+00:00", "run_id": "run-20260504T192206Z-d3f7e940", "seq": 23, "event_type": "phase_finished", "pair": "test", "phase": "producer", "cycle": 1, "attempt": 1, "empty_output": false, "phase_id": "catalog-root-refactor"}
 {"ts": "2026-05-04T19:53:45.428326+00:00", "run_id": "run-20260504T192206Z-d3f7e940", "seq": 24, "event_type": "phase_finished", "pair": "test", "phase": "verifier", "cycle": 1, "attempt": 1, "empty_output": false, "phase_id": "catalog-root-refactor"}
 {"ts": "2026-05-04T19:53:45.483393+00:00", "run_id": "run-20260504T192206Z-d3f7e940", "seq": 25, "event_type": "pair_completed", "pair": "test", "cycle": 1, "attempt": 1, "phase_id": "catalog-root-refactor"}
+{"ts": "2026-05-04T19:53:45.575491+00:00", "run_id": "run-20260504T192206Z-d3f7e940", "seq": 26, "event_type": "phase_completed", "pair": "test", "phase_id": "catalog-root-refactor", "phase_mode": "single"}
+{"ts": "2026-05-04T19:53:45.577378+00:00", "run_id": "run-20260504T192206Z-d3f7e940", "seq": 27, "event_type": "phase_started", "phase_id": "runtime-cli-metadata-integration", "phase_mode": "single"}
+{"ts": "2026-05-04T19:53:45.579420+00:00", "run_id": "run-20260504T192206Z-d3f7e940", "seq": 28, "event_type": "pair_started", "pair": "implement", "phase_id": "runtime-cli-metadata-integration"}
+{"ts": "2026-05-04T19:53:45.579537+00:00", "run_id": "run-20260504T192206Z-d3f7e940", "seq": 29, "event_type": "cycle_started", "pair": "implement", "cycle": 1, "attempt": 1, "phase_id": "runtime-cli-metadata-integration"}

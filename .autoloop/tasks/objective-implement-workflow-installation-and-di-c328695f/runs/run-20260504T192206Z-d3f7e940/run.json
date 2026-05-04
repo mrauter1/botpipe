@@ -15,12 +15,12 @@
       "builtins-packaging-docs-verification"
     ],
     "explicit": true,
-    "current_phase_index": 0,
-    "current_phase_id": "catalog-root-refactor"
+    "current_phase_index": 1,
+    "current_phase_id": "runtime-cli-metadata-integration"
   },
   "phase_status": {
-    "catalog-root-refactor": "in_progress",
-    "runtime-cli-metadata-integration": "planned",
+    "catalog-root-refactor": "completed",
+    "runtime-cli-metadata-integration": "in_progress",
     "builtins-packaging-docs-verification": "planned"
   },
   "phase_history": [
@@ -29,6 +29,19 @@
       "run_id": "run-20260504T192206Z-d3f7e940",
       "status": "in_progress",
       "ts": "2026-05-04T19:29:25.164696+00:00"
+    },
+    {
+      "phase_id": "catalog-root-refactor",
+      "run_id": "run-20260504T192206Z-d3f7e940",
+      "status": "completed",
+      "ts": "2026-05-04T19:53:45.575113+00:00",
+      "pair": "test"
+    },
+    {
+      "phase_id": "runtime-cli-metadata-integration",
+      "run_id": "run-20260504T192206Z-d3f7e940",
+      "status": "in_progress",
+      "ts": "2026-05-04T19:53:45.577006+00:00"
     }
   ]
 }
