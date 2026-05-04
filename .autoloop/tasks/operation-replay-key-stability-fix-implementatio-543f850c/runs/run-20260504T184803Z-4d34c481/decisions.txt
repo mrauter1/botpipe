@@ -16,3 +16,6 @@ Safest explicit assumption: keep scope to the two requested files, but make `_lo
 <autoloop-decisions-header version="1" block_seq="3" owner="planner" phase_id="task-global" pair="plan" turn_seq="2" run_id="run-20260504T184803Z-4d34c481" ts="2026-05-04T18:50:16.357654+00:00" />
 Explicit v1 operation replay payloads must be discarded in `_load_replay_store()` before validation because `validate_persisted_schema()` only invokes legacy migration for schemaless payloads.
 The schema bump to v2 is an intentional persisted-data compatibility break for `operation_replay.json`; preserve only list-shaped `attempts` history and drop all v1 `records`.
+<autoloop-decisions-header version="1" block_seq="4" owner="implementer" phase_id="stabilize-operation-replay-keys" pair="implement" turn_seq="1" run_id="run-20260504T184803Z-4d34c481" ts="2026-05-04T18:53:42.613646+00:00" />
+`_load_replay_store()` now discards any replay payload whose schema is absent or not equal to `autoloop.operation_replay/v2` before validation so explicit v1 stores migrate locally without widening shared validator behavior.
+Runtime validation in this environment is limited to static/source checks because both `pytest` and import-time dependencies such as `pydantic` are unavailable on PATH for executable test runs.

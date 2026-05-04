@@ -156,3 +156,70 @@ phase_mode=single
 phase_ids=stabilize-operation-replay-keys
 explicit=True
 current_phase_index=0
+
+
+---
+run_id=run-20260504T184803Z-4d34c481 | entry=session_turn | pair=implement | phase=producer | cycle=1 | attempt=1 | thread_id=019df456-cf40-75c3-a11a-70b22a269cb0
+---
+provider=codex
+mode=start
+template=/home/rauter/.local/share/pipx/venvs/autoloop/lib/python3.12/site-packages/autoloop/templates/implement_producer.md
+session_id=019df456-cf40-75c3-a11a-70b22a269cb0
+
+
+---
+run_id=run-20260504T184803Z-4d34c481 | entry=phase_output | pair=implement | phase=producer | process=codex-agent | cycle=1 | attempt=1 | thread_id=019df456-cf40-75c3-a11a-70b22a269cb0
+---
+I’m checking the current implementation, the phase artifacts, and the two target modules first so the edit stays inside the approved scope and matches the repo’s actual replay-store behavior.
+
+The current code matches the plan finding: replay-key allocation still depends on `callsite`, and `_load_replay_store()` will reject explicit `v1` payloads before any legacy migrator can help. I’m pulling the exact helper bodies and the existing replay contract tests now so I can patch the narrowest surface and verify it.
+
+The regression surface is tight: `_run_operation()` is the only runtime caller for both helpers, and the existing contract tests already cover the fingerprint mismatch path I need to preserve. Next I’m inspecting the replay-store loader and nearby tests so I can add the explicit v1 discard behavior without broadening shared schema validation.
+
+I have enough context to patch this cleanly.
+
+Plan:
+1. Update the schema constant to `v2`.
+2. Narrow `_next_occurrence()` and `_operation_replay_key()` to remove `callsite`, then update `_run_operation()` while preserving `callsite_id` in the fingerprint and stored record.
+3. Add a named replay-store migrator and make `_load_replay_store()` discard any non-`v2` payload before validation, with list-shaped `attempts` preserved.
+4. Update the phase notes and decision ledger, then validate with grep, targeted contract tests, and a direct loader check for explicit `v1` payloads.
+
+The code change is in place. I’m validating the helper signatures, the sole runtime call sites, the preserved fingerprint path, and the explicit `v1` discard behavior before I write the run notes.
+
+The static checks passed. The runtime validation commands failed because this shell image doesn’t expose `pytest` or `python` on PATH, so I’m checking the repo’s actual test runner and Python entrypoint before I rerun the targeted validation.
+
+I’m tightening the migrator docstring to reflect the intended compatibility break explicitly, then I’ll do one direct `python3` validation pass for signatures, occurrence behavior, fingerprint preservation, and v1 discard handling.
+
+The repo environment is missing runtime dependencies too, so import-based validation isn’t available here. I’m switching to source-level verification: compile the edited files for syntax, confirm the requested signatures and loader behavior from the AST/text, and keep the missing test environment explicit in the notes.
+
+The repo-wide grep surfaced the spec document too, so I’m narrowing that check to Python files to confirm there are no additional runtime call sites outside `operations.py`. After that I’ll write the artifact notes and the non-obvious migration decision.
+
+I’m updating the run artifacts now: one ledger note for the local non-`v2` discard path, and concise implementation notes covering scope, invariants, and the validation limits from this environment.
+
+I’ve finished the code and artifact updates. I’m doing one last status pass to make sure the touched files match the intended scope and there aren’t any accidental edits before I close this turn out.
+
+`py_compile` touched tracked `__pycache__` artifacts. I’m restoring only those generated binaries so the final scope stays limited to the requested source files and the required run artifacts.
+
+Scope considered
+
+Changed only the requested source files plus the required phase artifacts: [operations.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/autoloop/core/operations.py), [schema_registry.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/autoloop/core/schema_registry.py), [implementation_notes.md](</home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/operation-replay-key-stability-fix-implementatio-543f850c/runs/run-20260504T184803Z-4d34c481/artifacts/implement/phases/stabilize-operation-replay-keys/implementation_notes.md>), and [decisions.txt](</home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/operation-replay-key-stability-fix-implementatio-543f850c/runs/run-20260504T184803Z-4d34c481/decisions.txt>). I left the unrelated dirty/deleted worktree state alone.
+
+What I analyzed
+
+I checked `_run_operation()`, `_next_occurrence()`, `_operation_replay_key()`, `_operation_fingerprint()`, `_load_replay_store()`, and `validate_persisted_schema()` to confirm the current behavior and the v1 migration gap. I also verified with grep that the only Python call sites for `_next_occurrence()` and `_operation_replay_key()` remain inside `_run_operation()`.
+
+What I changed
+
+In [schema_registry.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/autoloop/core/schema_registry.py), `OPERATION_REPLAY_SCHEMA` now points to `autoloop.operation_replay/v2`.
+
+In [operations.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/autoloop/core/operations.py), I removed `callsite` from `_next_occurrence()` and `_operation_replay_key()`, updated `_run_operation()` to use the narrowed helpers, kept `callsite_id` in `_operation_fingerprint()` and stored replay records, added a named `_migrate_operation_replay_store()` helper, and made `_load_replay_store()` discard any non-`v2` payload before validation while preserving list-shaped `attempts`.
+
+Key findings / decisions
+
+The main non-obvious fix was localizing explicit `v1` handling in `_load_replay_store()`. A named migrator alone was insufficient because `validate_persisted_schema()` only migrates schemaless payloads, not payloads that already declare `autoloop.operation_replay/v1`.
+
+Validation completed with `python3 -m py_compile`, AST/source checks for the requested signatures and preserved fingerprint path, and Python-file grep for helper call-site scope. I could not run the targeted pytest contract tests here because `pytest` is not installed, and import-based checks also fail in this environment because dependencies such as `pydantic` are unavailable.
+
+Open issues / next step
+
+The code change is in place, but executable replay-contract validation still needs to be run in a provisioned environment. Recommended next command there is `python3 -m pytest -q tests/contract/test_engine_contracts.py -k 'operation_replay'`.
