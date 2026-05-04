@@ -1,0 +1,3 @@
+<autoloop-decisions-header version="1" block_seq="1" owner="planner" phase_id="task-global" pair="plan" turn_seq="1" run_id="run-20260504T121827Z-ab703ce9" ts="2026-05-04T12:18:28.349974+00:00" />
+Use the repository-local .venv as the authoritative test environment for this follow-up; record evidence with exact ./.venv/bin/python -m pytest commands rather than assuming ambient tooling.
+Treat tests/runtime/test_runtime_static_graph.py as the required runtime/static-graph regression suite for provider-visible route metadata in addition to the four explicitly requested contract/unit suites.
