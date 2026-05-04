@@ -833,3 +833,92 @@ Open issues / next step
 <loop-control>
 {"schema":"docloop.loop_control/v1","kind":"promise","promise":"INCOMPLETE"}
 </loop-control>
+
+
+---
+run_id=run-20260504T192206Z-d3f7e940 | entry=session_turn | pair=test | phase=producer | cycle=2 | attempt=1 | thread_id=019df48d-ca11-78b0-bc57-ac1b0b7dcd2d
+---
+provider=codex
+mode=resume
+template=/home/rauter/.local/share/pipx/venvs/autoloop/lib/python3.12/site-packages/autoloop/templates/test_producer.md
+session_id=019df48d-ca11-78b0-bc57-ac1b0b7dcd2d
+
+
+---
+run_id=run-20260504T192206Z-d3f7e940 | entry=phase_output | pair=test | phase=producer | process=codex-agent | cycle=2 | attempt=1 | thread_id=019df48d-ca11-78b0-bc57-ac1b0b7dcd2d
+---
+I’m addressing the remaining test-audit finding by adding explicit package-source `workflows show` coverage and tightening the strategy text so it matches the actual workspace/package split in the focused suite.
+
+I’m adding a separate package-only `workflows show` assertion instead of piggybacking on the shadowed workspace case, so the CLI package-source contract is exercised without ambiguity from precedence rules.
+
+The edit itself is straightforward; the previous patch failed only because it tried to touch both repo tests and artifact files in one context block. I’m splitting the changes cleanly now.
+
+I’ve added the missing package-source show assertion. I’m doing a quick syntax pass and checking the updated strategy text so the audit finding is actually closed by the focused suite, not just noted in artifacts.
+
+Scope considered
+- Phase-local test refinement only, focused on the remaining `workflows show` package-source coverage gap.
+- Updated [tests/runtime/test_runtime_cli_metadata_integration.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/tests/runtime/test_runtime_cli_metadata_integration.py:1), [test_strategy.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/objective-implement-workflow-installation-and-di-c328695f/runs/run-20260504T192206Z-d3f7e940/artifacts/test/phases/runtime-cli-metadata-integration/test_strategy.md:1), [feedback.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/objective-implement-workflow-installation-and-di-c328695f/runs/run-20260504T192206Z-d3f7e940/artifacts/test/phases/runtime-cli-metadata-integration/feedback.md:1), and the current-turn block in [decisions.txt](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/objective-implement-workflow-installation-and-di-c328695f/runs/run-20260504T192206Z-d3f7e940/decisions.txt:24).
+
+What I analyzed
+- The auditor’s `TST-001` finding against the focused suite.
+- Existing workspace `workflows show` assertions versus missing package-source CLI JSON coverage.
+- The strategy wording to make sure it matches the actual workspace/package split now covered by tests.
+
+What I changed
+- Added `test_cli_workflows_show_emits_package_source_metadata` to assert package-source CLI show fields:
+  `source_root_kind`, `source_root`, `package_folder`, `package_name`, `package_module`, `workflow_module`, and shadow flags.
+- Updated `test_strategy.md` so AC-3 now explicitly says `workflows show` is covered for both workspace and package workflows.
+- Appended a concise feedback entry describing the added package-only CLI show coverage.
+- Recorded the non-obvious decision that package-source CLI show is a separate contract from runtime resolution/run metadata.
+
+Key findings / decisions
+- The missing package-show assertion is now covered directly on the CLI JSON path, not inferred indirectly through runtime metadata.
+- Validation performed: `python3 -m py_compile tests/runtime/test_runtime_cli_metadata_integration.py`.
+
+Open issues / next step
+- `pytest` remains unavailable in this environment, so I could not execute the focused suite.
+- Next step is test-auditor re-review, then running `tests/runtime/test_runtime_cli_metadata_integration.py` in an environment with project test dependencies installed.
+
+
+---
+run_id=run-20260504T192206Z-d3f7e940 | entry=session_turn | pair=test | phase=verifier | cycle=2 | attempt=1 | thread_id=019df48d-ca11-78b0-bc57-ac1b0b7dcd2d
+---
+provider=codex
+mode=resume
+template=/home/rauter/.local/share/pipx/venvs/autoloop/lib/python3.12/site-packages/autoloop/templates/test_verifier.md
+session_id=019df48d-ca11-78b0-bc57-ac1b0b7dcd2d
+
+
+---
+run_id=run-20260504T192206Z-d3f7e940 | entry=phase_output | pair=test | phase=verifier | process=codex-agent | cycle=2 | attempt=1 | thread_id=019df48d-ca11-78b0-bc57-ac1b0b7dcd2d
+---
+I’m re-checking only the focused phase tests and audit artifacts. The main question is whether the new package-source `workflows show` assertion closes the last CLI contract gap without introducing any new flaky behavior.
+
+The last coverage hole is closed. I’m marking the audit complete and recording that the prior blocking finding is resolved with no new issues on this pass.
+
+Scope considered
+- Phase-local re-audit of the focused runtime/CLI metadata tests and the active audit artifacts only.
+- Rechecked the package-source `workflows show` gap, explicit-path coverage split, and the updated strategy wording.
+
+What I analyzed
+- The updated `tests/runtime/test_runtime_cli_metadata_integration.py` package-show assertion.
+- The audit feedback thread around `TST-001`.
+- The strategy artifact’s AC-3 coverage statement for workspace vs package CLI show behavior.
+
+What I reviewed
+- `test_cli_workflows_show_emits_package_source_metadata` now directly asserts package-source `source_root_kind`, `source_root`, `package_folder`, `package_name`, `package_module`, `workflow_module`, and shadow flags on the CLI JSON path.
+- The strategy now correctly states that `workflows show` is covered for both workspace and package workflows.
+- No new flaky setup or behavioral-intent issues were introduced.
+
+Key findings / decisions
+- `TST-001` is resolved.
+- No new findings in this pass.
+- `criteria.md` is now fully checked as complete.
+
+Open issues / next step
+- No blocking test-audit issues remain.
+- The environment limitation remains the same: this container still lacks `pytest`, so execution coverage was not rerun here.
+
+<loop-control>
+{"schema":"docloop.loop_control/v1","kind":"promise","promise":"COMPLETE"}
+</loop-control>

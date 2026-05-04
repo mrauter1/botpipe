@@ -878,3 +878,47 @@ Key findings / decisions
 Open issues / next step
 - `pytest` remains unavailable in this environment, so I could not execute the focused suite.
 - Next step is test-auditor re-review, then running `tests/runtime/test_runtime_cli_metadata_integration.py` in an environment with project test dependencies installed.
+
+
+---
+run_id=run-20260504T192206Z-d3f7e940 | entry=session_turn | pair=test | phase=verifier | cycle=2 | attempt=1 | thread_id=019df48d-ca11-78b0-bc57-ac1b0b7dcd2d
+---
+provider=codex
+mode=resume
+template=/home/rauter/.local/share/pipx/venvs/autoloop/lib/python3.12/site-packages/autoloop/templates/test_verifier.md
+session_id=019df48d-ca11-78b0-bc57-ac1b0b7dcd2d
+
+
+---
+run_id=run-20260504T192206Z-d3f7e940 | entry=phase_output | pair=test | phase=verifier | process=codex-agent | cycle=2 | attempt=1 | thread_id=019df48d-ca11-78b0-bc57-ac1b0b7dcd2d
+---
+I’m re-checking only the focused phase tests and audit artifacts. The main question is whether the new package-source `workflows show` assertion closes the last CLI contract gap without introducing any new flaky behavior.
+
+The last coverage hole is closed. I’m marking the audit complete and recording that the prior blocking finding is resolved with no new issues on this pass.
+
+Scope considered
+- Phase-local re-audit of the focused runtime/CLI metadata tests and the active audit artifacts only.
+- Rechecked the package-source `workflows show` gap, explicit-path coverage split, and the updated strategy wording.
+
+What I analyzed
+- The updated `tests/runtime/test_runtime_cli_metadata_integration.py` package-show assertion.
+- The audit feedback thread around `TST-001`.
+- The strategy artifact’s AC-3 coverage statement for workspace vs package CLI show behavior.
+
+What I reviewed
+- `test_cli_workflows_show_emits_package_source_metadata` now directly asserts package-source `source_root_kind`, `source_root`, `package_folder`, `package_name`, `package_module`, `workflow_module`, and shadow flags on the CLI JSON path.
+- The strategy now correctly states that `workflows show` is covered for both workspace and package workflows.
+- No new flaky setup or behavioral-intent issues were introduced.
+
+Key findings / decisions
+- `TST-001` is resolved.
+- No new findings in this pass.
+- `criteria.md` is now fully checked as complete.
+
+Open issues / next step
+- No blocking test-audit issues remain.
+- The environment limitation remains the same: this container still lacks `pytest`, so execution coverage was not rerun here.
+
+<loop-control>
+{"schema":"docloop.loop_control/v1","kind":"promise","promise":"COMPLETE"}
+</loop-control>

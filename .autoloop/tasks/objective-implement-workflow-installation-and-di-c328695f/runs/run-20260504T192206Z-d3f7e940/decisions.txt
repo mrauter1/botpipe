@@ -21,3 +21,5 @@ The phase adds a focused runtime/CLI metadata integration test file instead of r
 Absolute path normalization is limited to nested workflow-origin metadata fields; generic runtime path serialization keeps prior relative-path behavior to avoid broad run/task metadata contract changes.
 <autoloop-decisions-header version="1" block_seq="8" owner="test_author" phase_id="runtime-cli-metadata-integration" pair="test" turn_seq="1" run_id="run-20260504T192206Z-d3f7e940" ts="2026-05-04T20:08:59.105758+00:00" />
 Focused runtime metadata tests split explicit-path coverage into in-workspace relative-path assertions and out-of-workspace absolute-path assertions so later changes cannot silently collapse the origin-serialization contract.
+<autoloop-decisions-header version="1" block_seq="9" owner="test_author" phase_id="runtime-cli-metadata-integration" pair="test" turn_seq="2" run_id="run-20260504T192206Z-d3f7e940" ts="2026-05-04T20:11:49.678895+00:00" />
+Focused CLI coverage treats package-source `workflows show` as a separate contract from runtime resolution and run metadata, so later refactors cannot break the show JSON path without tripping phase-local tests.
