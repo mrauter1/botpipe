@@ -1166,4 +1166,4 @@ If a workflow, template, or recursive harness emits Autoloop instructions, keep 
 - `autoloop resume <workflow> <task-id> --root ...`
 - `autoloop answer <workflow> <task-id> --root ... --answer ...`
 - explicit file or module refs are allowed when the operator needs them, but recursive wrappers should keep their stable name-first contract unless they have a reason to pin an origin directly
-- refer readers to `docs/architecture.md`, `docs/authoring.md`, `core/`, `runtime/`, `extensions/`, `stdlib/`, `workflows/`, and `.autoloop_recursive/`
+- refer readers to `docs/architecture.md`, `docs/authoring.md`, `core/`, `runtime/`, `extensions/`, `stdlib/`, `autoloop/workflows/`, `.autoloop/workflows/`, and `.autoloop_recursive/`

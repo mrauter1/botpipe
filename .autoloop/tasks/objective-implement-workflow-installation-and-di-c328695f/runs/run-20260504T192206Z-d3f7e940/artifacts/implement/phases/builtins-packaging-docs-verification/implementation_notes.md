@@ -63,6 +63,7 @@
 - `python -m pytest -q tests/runtime/test_workflow_catalog_roots.py tests/runtime/test_runtime_cli_metadata_integration.py tests/test_architecture_baseline_docs.py tests/strictness/test_no_compat.py tests/runtime/test_wheel_packaging_smoke.py`
 - `python -m build` through `tests/runtime/test_wheel_packaging_smoke.py`
 - Clean venv install smoke via `tests/runtime/test_wheel_packaging_smoke.py`, including `autoloop --help`, empty-workspace listing, and packaged asset access
+- Targeted follow-up grep for the reviewer-reported stale `workflows/` and malformed `docs/autoloop/workflows/...` documentation references
 
 ## Deduplication / Centralization Decisions
 

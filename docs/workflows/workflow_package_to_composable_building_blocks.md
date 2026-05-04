@@ -50,7 +50,7 @@ Params:
 | `workflow_package_to_composable_building_blocks` | Turns explicit portfolio decomposition pressure into reusable extracted building blocks and parent-rewrite guidance | Requires a decomposition-specific authoring seam and careful candidate publication, but it directly fills the next missing recursive layer | Chosen and shipped in cycle 11 |
 | `company_operation_to_recursive_improvement_cycle` | Long-range operating-system workflow across company work history | Premature while the portfolio still lacked the decomposition layer that governance identified as the next missing consumer | Deferred |
 
-The workflow-builder was explicitly reconsidered and not selected because the repository already has a credible baseline in `workflow_idea_to_workflow_package`, `docs/autoloop/workflows/workflow_idea_to_workflow_package.md`, and `tests/runtime/test_workflow_builder_package.py`.
+The workflow-builder was explicitly reconsidered and not selected because the repository already has a credible baseline in `workflow_idea_to_workflow_package`, `docs/workflows/workflow_idea_to_workflow_package.md`, and `tests/runtime/test_workflow_builder_package.py`.
 
 ## Framework improvement candidates considered
 
