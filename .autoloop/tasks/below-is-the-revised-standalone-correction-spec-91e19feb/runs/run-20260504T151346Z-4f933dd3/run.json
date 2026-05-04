@@ -15,12 +15,12 @@
       "public-surface-polish"
     ],
     "explicit": true,
-    "current_phase_index": 0,
-    "current_phase_id": "route-and-artifact-contracts"
+    "current_phase_index": 1,
+    "current_phase_id": "lazy-worklist-runtime"
   },
   "phase_status": {
-    "route-and-artifact-contracts": "in_progress",
-    "lazy-worklist-runtime": "planned",
+    "route-and-artifact-contracts": "completed",
+    "lazy-worklist-runtime": "in_progress",
     "public-surface-polish": "planned"
   },
   "phase_history": [
@@ -29,6 +29,19 @@
       "run_id": "run-20260504T151346Z-4f933dd3",
       "status": "in_progress",
       "ts": "2026-05-04T15:24:08.599468+00:00"
+    },
+    {
+      "phase_id": "route-and-artifact-contracts",
+      "run_id": "run-20260504T151346Z-4f933dd3",
+      "status": "completed",
+      "ts": "2026-05-04T15:47:08.391533+00:00",
+      "pair": "test"
+    },
+    {
+      "phase_id": "lazy-worklist-runtime",
+      "run_id": "run-20260504T151346Z-4f933dd3",
+      "status": "in_progress",
+      "ts": "2026-05-04T15:47:08.395299+00:00"
     }
   ]
 }
