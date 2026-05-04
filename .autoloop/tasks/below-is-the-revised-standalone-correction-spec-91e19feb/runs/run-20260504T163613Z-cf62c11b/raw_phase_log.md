@@ -145,3 +145,12 @@ No open verification issues remain. The planning artifacts are ready for the nex
 <loop-control>
 {"schema":"docloop.loop_control/v1","kind":"promise","promise":"COMPLETE"}
 </loop-control>
+
+
+---
+run_id=run-20260504T163613Z-cf62c11b | entry=phase_scope_resolved
+---
+phase_mode=single
+phase_ids=align-prompt-route-wording
+explicit=True
+current_phase_index=0

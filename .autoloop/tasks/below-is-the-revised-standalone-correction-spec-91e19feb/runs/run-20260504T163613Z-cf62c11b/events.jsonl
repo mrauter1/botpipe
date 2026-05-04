@@ -7,3 +7,7 @@
 {"ts": "2026-05-04T16:44:33.933183+00:00", "run_id": "run-20260504T163613Z-cf62c11b", "seq": 7, "event_type": "phase_finished", "pair": "plan", "phase": "producer", "cycle": 2, "attempt": 1, "empty_output": false, "phase_id": null}
 {"ts": "2026-05-04T16:45:33.727540+00:00", "run_id": "run-20260504T163613Z-cf62c11b", "seq": 8, "event_type": "phase_finished", "pair": "plan", "phase": "verifier", "cycle": 2, "attempt": 1, "empty_output": false, "phase_id": null}
 {"ts": "2026-05-04T16:45:33.782188+00:00", "run_id": "run-20260504T163613Z-cf62c11b", "seq": 9, "event_type": "pair_completed", "pair": "plan", "cycle": 2, "attempt": 1, "phase_id": null}
+{"ts": "2026-05-04T16:45:33.872550+00:00", "run_id": "run-20260504T163613Z-cf62c11b", "seq": 10, "event_type": "phase_scope_resolved", "phase_mode": "single", "phase_ids": ["align-prompt-route-wording"], "explicit": true, "current_phase_index": 0}
+{"ts": "2026-05-04T16:45:33.874098+00:00", "run_id": "run-20260504T163613Z-cf62c11b", "seq": 11, "event_type": "phase_started", "phase_id": "align-prompt-route-wording", "phase_mode": "single"}
+{"ts": "2026-05-04T16:45:33.875243+00:00", "run_id": "run-20260504T163613Z-cf62c11b", "seq": 12, "event_type": "pair_started", "pair": "implement", "phase_id": "align-prompt-route-wording"}
+{"ts": "2026-05-04T16:45:33.875339+00:00", "run_id": "run-20260504T163613Z-cf62c11b", "seq": 13, "event_type": "cycle_started", "pair": "implement", "cycle": 1, "attempt": 1, "phase_id": "align-prompt-route-wording"}
