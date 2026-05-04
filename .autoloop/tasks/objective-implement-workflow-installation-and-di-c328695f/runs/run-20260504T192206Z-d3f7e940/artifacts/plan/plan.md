@@ -20,21 +20,25 @@
 - Expand `WorkflowCatalogEntry` to carry root kind, root path, precedence, import metadata, support-file paths, and shadowing markers exactly as requested.
 - Expand `ResolvedWorkflow` and runtime workflow origin metadata with `source_root_kind`, `source_root`, `package_name`, `package_module`, and `workflow_module`.
 - Implement `discover_workflow_catalog(workspace_root, *, include_shadowed=False)` as the single source of truth for effective catalog assembly, duplicate detection, tier precedence, and shadowed-entry reporting.
-- Keep explicit filesystem path resolution as a separate path that bypasses catalog precedence but still produces normalized origin metadata.
+- Make manifest-backed loading an explicit contract: support `workflow.toml` `module` and `class` fields, default `module` resolution of `flow.py` then `workflow.py`, and exact-one-workflow-class discovery with clear validation errors when `class` is omitted.
+- Keep explicit filesystem path resolution as a separate path that bypasses catalog precedence, treats references ending in `.py` or `.toml` or containing path separators as explicit, and normalizes out-of-root explicit-path metadata to `source_root_kind="workspace"`, `package_module=None`, and `workflow_module=None` unless a more precise source kind is available.
+- Treat CLI JSON as a public contract: `workflows list` and `workflows show` acceptance must enumerate the requested fields rather than rely on implied metadata coverage.
 
 ## Milestones
 ### 1. Discovery And Catalog Refactor
 - Replace single-root catalog scanning with ordered search roots from `workflow_search_roots`.
 - Support three discovery shapes only: package directory, workspace directory, workspace single-file.
+- Validate manifest metadata and resolution inputs early, including optional `module` and `class` fields, non-empty names and aliases, and concrete-path error reporting for invalid manifests and duplicate keys.
 - Enforce same-tier duplicate detection across names and aliases before resolution.
 - Mark cross-tier collisions as workspace-shadowing instead of errors.
-- Preserve explicit path references, but remove bare-name probing against `{workspace}/workflows`.
+- Preserve explicit path references, but remove bare-name probing against `{workspace}/workflows` and keep `.py`/`.toml` path classification outside the catalog lookup path.
 
 ### 2. Runtime, Import, CLI, And Metadata Integration
 - Update runtime resolution to load package workflows by normal import under `autoloop.workflows.*`.
 - Load workspace workflows by deterministic isolated module namespaces that preserve relative imports without adding `.autoloop` to `sys.path`.
+- Route manifest-backed explicit `.toml` and catalog references through the manifest loader, route non-manifest Python references through the Python source loader, and preserve normalized origin metadata for explicit paths outside the canonical roots.
 - Remove repo-root `workflows` assumptions from cache eviction, pycache cleanup, capability inspection, context root inference, and workflow workspace metadata.
-- Update CLI help, `workflows list`, `workflows show`, and `init workflow` scaffold output to reflect package-vs-workspace roots and `--all` shadowed visibility.
+- Update CLI help, `workflows list`, `workflows show`, and `init workflow` scaffold output to reflect package-vs-workspace roots, `--all` shadowed visibility, and the exact requested JSON fields for list/show responses.
 - Persist the new workflow origin payload in workflow/run metadata without copying sources into runtime state.
 
 ### 3. Built-In Workflow Relocation, Packaging, Docs, And Verification
@@ -48,12 +52,13 @@
 - Intentional break: bare workflow names and aliases will no longer discover `{workspace}/workflows/*`; only explicit paths may reference arbitrary filesystem locations there.
 - Intentional narrowing: package-installed workflows are directory packages only; single-file package-installed workflows are not supported.
 - Persisted and API-exposed source-kind values must be exactly `"workspace"` or `"package"`; no mixed terminology remains in returned metadata.
-- Explicit path references remain supported and bypass catalog precedence, including paths outside the two canonical roots.
+- Explicit path references remain supported and bypass catalog precedence, including `.py` and `.toml` references outside the two canonical roots with normalized origin metadata.
 
 ## Regression Controls
 - Update root inference away from `package_folder.parent.name == "workflows"` so package-installed workflows under `autoloop/workflows` still resolve repository root correctly in source checkout usage.
 - Replace broad top-level `workflows` cache assumptions with source-kind-aware invalidation so package imports stay stable and workspace reload only clears the isolated namespace for the addressed workflow.
 - Treat non-directory existing search roots as hard errors with concrete paths, but allow missing roots silently.
+- Keep manifest-backed validation and class-discovery failures path-specific so loader changes cannot silently fall back to the wrong module or ambiguous workflow class.
 - Validate package exports during catalog/capability loading so wheel-installed failures surface as clear errors rather than runtime mis-resolution.
 - Keep runtime metadata source paths pointing at original sources; do not copy workflow packages into `.autoloop/tasks/...`.
 
@@ -64,7 +69,7 @@
 - Same-tier alias/name collision handling is broader than current duplicate-name checks. Control: add focused discovery and resolution tests before changing CLI/runtime callers.
 
 ## Validation Matrix
-- Unit tests for search roots, catalog shapes, precedence, duplicate detection, shadow reporting, and explicit-path bypass.
-- Runtime/import tests for workspace relative imports, package export validation, module namespace isolation, and persisted origin metadata.
-- CLI tests for help text, scaffold target location, effective-vs-all catalog listing, and show/list JSON payloads.
+- Unit tests for search roots, catalog shapes, manifest `module`/`class` semantics, precedence, duplicate detection, shadow reporting, and explicit `.py`/`.toml` path bypass.
+- Runtime/import tests for workspace relative imports, manifest-vs-Python loader routing, package export validation, module namespace isolation, and persisted origin metadata for canonical-root and out-of-root explicit paths.
+- CLI tests for help text, scaffold target location, effective-vs-all catalog listing, and exact show/list JSON payload fields.
 - Packaging tests for wheel build, clean install, global `autoloop` entry point, empty-workspace package discovery, and packaged asset accessibility.
