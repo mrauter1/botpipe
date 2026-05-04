@@ -249,3 +249,57 @@ Open issues / next step
 
 - No known open implementation issue remains in the scoped code.
 - The next step is reviewer re-check so [criteria.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/operation-replay-key-stability-fix-implementatio-b15a7c28/runs/run-20260504T190003Z-04e7d84d/artifacts/implement/phases/align-operation-replay-keying/criteria.md:1) can be updated against the narrowed migration behavior.
+
+
+---
+run_id=run-20260504T190003Z-04e7d84d | entry=session_turn | pair=implement | phase=verifier | cycle=2 | attempt=1 | thread_id=019df460-83b2-71e2-bab8-7a89d8645941
+---
+provider=codex
+mode=resume
+template=/home/rauter/.local/share/pipx/venvs/autoloop/lib/python3.12/site-packages/autoloop/templates/implement_verifier.md
+session_id=019df460-83b2-71e2-bab8-7a89d8645941
+
+
+---
+run_id=run-20260504T190003Z-04e7d84d | entry=phase_output | pair=implement | phase=verifier | process=codex-agent | cycle=2 | attempt=1 | thread_id=019df460-83b2-71e2-bab8-7a89d8645941
+---
+I’m re-reviewing the narrowed replay-store migration path now, starting with the current source and the active artifacts so I can either clear the prior blocking finding or record any remaining gap from direct verification.
+
+The artifact trail is consistent with the intended fix. I’m re-running the narrow behavioral checks myself so the approval state is based on the current source rather than on the implementer’s notes.
+
+The current source matches the accepted contract end to end, including the previously-missed future-schema failure case. I’m flipping the review criteria to approved and appending a final review note that the prior blocking issue has been resolved.
+
+The approval artifacts are updated. I’m doing one last readback so the criteria state, the resolved finding note, and the final completion status all say the same thing.
+
+Scope considered
+
+- Re-reviewed the scoped replay-key implementation in [schema_registry.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/autoloop/core/schema_registry.py:13) and [operations.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/autoloop/core/operations.py:214), plus the active phase artifacts only.
+
+What I analyzed
+
+- Re-checked the source invariants for `_run_operation`, `_operation_fingerprint`, `_operation_replay_key`, `_next_occurrence`, `_migrate_operation_replay_store`, and `_load_replay_store`.
+- Re-ran the direct schema-behavior check for schemaless, `v1`, and `v3` replay payloads.
+- Re-ran the focused replay contract slice with `'../autoloop_v3 (Cópia)/.venv/bin/python' -m pytest tests/contract/test_engine_contracts.py -k operation_replay`.
+
+What I reviewed
+
+- Updated [criteria.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/operation-replay-key-stability-fix-implementatio-b15a7c28/runs/run-20260504T190003Z-04e7d84d/artifacts/implement/phases/align-operation-replay-keying/criteria.md:1) to all checked.
+- Appended a review note to [feedback.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/operation-replay-key-stability-fix-implementatio-b15a7c28/runs/run-20260504T190003Z-04e7d84d/artifacts/implement/phases/align-operation-replay-keying/feedback.md:1) recording that the prior blocking issue is resolved.
+
+Key findings / decisions
+
+- No remaining blocking findings.
+- [operations.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/autoloop/core/operations.py:749) now migrates only explicit `autoloop.operation_replay/v1` payloads before validation.
+- Direct verification confirms:
+  - schemaless payloads migrate to empty `v2` stores with preserved `attempts`
+  - explicit `v1` payloads migrate the same way
+  - explicit `v3` payloads raise `ValueError`
+- Focused replay contract coverage still passes: `3 passed, 163 deselected`.
+
+Open issues / next step
+
+- No open review issue remains in the scoped implementation. The phase is ready to close.
+
+<loop-control>
+{"schema":"docloop.loop_control/v1","kind":"promise","promise":"COMPLETE"}
+</loop-control>
