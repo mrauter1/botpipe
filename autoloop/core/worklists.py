@@ -242,7 +242,14 @@ class Worklist(Generic[T]):
         if callable(ensure):
             ensure(ctx)
 
-    def _load_source_items(self, ctx: "Context") -> tuple[WorkItem[T], ...]:
+    def _load_source_items(
+        self,
+        ctx: "Context",
+        *,
+        ensure: bool = True,
+    ) -> tuple[WorkItem[T], ...]:
+        if ensure:
+            self.ensure_source(ctx)
         return tuple(self.source.load(ctx))
 
     def _validate_loaded_items(self, ctx: "Context", items: Sequence[WorkItem[T]]) -> None:

@@ -264,3 +264,48 @@ Centralize worklist `ensure()` into the shared load/reload/restore path so fresh
 <loop-control>
 {"schema":"docloop.loop_control/v1","kind":"promise","promise":"INCOMPLETE"}
 </loop-control>
+
+
+---
+run_id=run-20260504T112330Z-32d8eec3 | entry=session_turn | pair=implement | phase=producer | cycle=2 | attempt=1 | thread_id=019df2c3-200f-73f2-9d49-64451ced9529
+---
+provider=codex
+mode=resume
+template=/home/rauter/.local/share/pipx/venvs/autoloop/lib/python3.12/site-packages/autoloop/templates/implement_producer.md
+session_id=019df2c3-200f-73f2-9d49-64451ced9529
+
+
+---
+run_id=run-20260504T112330Z-32d8eec3 | entry=phase_output | pair=implement | phase=producer | process=codex-agent | cycle=2 | attempt=1 | thread_id=019df2c3-200f-73f2-9d49-64451ced9529
+---
+I’m addressing the reviewer’s blocking finding only: source `ensure()` has to cover restore and refresh paths, not just first materialization. I’ll trace the shared worklist load/reload helpers, patch that centralization point, and update the phase notes and decision ledger accordingly.
+
+The fix is straightforward: move `ensure()` into the shared worklist load/reload path, but let the engine keep separate ensure-vs-load error phases by opting out when it already did the explicit ensure step. I’m editing that centralization point and adding resume/refresh regression tests for ensure-capable sources.
+
+The code change is in, and I added explicit regression tests for both resume-restore and refresh with ensure-capable sources so the reviewer’s scenario is covered directly. I’m doing a final syntax pass and then I’ll update the notes/decision ledger to reflect the new centralization point.
+
+I spotted one bookkeeping issue in `decisions.txt`: the runtime created a new turn header, so the new turn’s decision needs to live under that header as well. I’m fixing that artifact now without touching earlier entries.
+
+Scope considered
+
+Milestone A reviewer feedback only, specifically `IMP-001` around source-policy-driven lazy worklist behavior on restore and refresh. I kept scope to the shared worklist load path, the engine’s phased first-use path, the affected contract tests, and the phase-local notes/decision artifacts.
+
+What I analyzed
+
+I traced the reviewer’s failing scenario through `Engine._ensure_worklist_selection(...)`, `Worklist.load_items()/reload_items()`, `restore_selection(...)`, and `refresh_selection(...)`. The real gap was that `ensure()` had been introduced only on the engine’s first-materialization branch, while restore and refresh still reloaded sources directly.
+
+What I changed
+
+I centralized source `ensure()` in `Worklist._load_source_items(..., ensure=...)`, so `load_items()`, `reload_items()`, restore, and refresh all honor source-policy semantics on cache misses and forced reloads. To preserve the granular `ensure -> load -> validate -> select` error phases for first-use lazy materialization, the engine now calls `_load_source_items(..., ensure=False)` only after its explicit ensure phase succeeds.
+
+I added regression tests for the reviewer’s scenarios in `tests/contract/test_engine_contracts.py`: one for resume restoring a materialized worklist after the backing data is deleted, and one for `ctx.worklist(...).refresh()` recreating missing backing data via source `ensure()`. I also updated `implementation_notes.md` and appended the turn-local centralization decision under the latest run header in `decisions.txt`.
+
+Key findings / decisions
+
+The centralization point is now the shared worklist load path rather than the engine-only first-use branch. That keeps first materialization, resume restore, and refresh behavior aligned without weakening the engine’s phased runtime error reporting.
+
+Validation I could perform here remains limited to syntax: `python3 -m py_compile autoloop/core/engine.py autoloop/core/worklists.py tests/contract/test_engine_contracts.py` passed. I still could not run `pytest` in this shell because the environment does not provide `pytest` or the installed runtime deps needed for execution.
+
+Open issues / next step
+
+The remaining open item is environment-backed validation. The next step is for the verifier to rerun the Milestone A contract/runtime review against the updated restore/refresh coverage and confirm that `IMP-001` is cleared.

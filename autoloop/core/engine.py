@@ -2015,7 +2015,7 @@ class Engine:
                 error=exc,
             ) from exc
         try:
-            items = worklist._load_source_items(context)
+            items = worklist._load_source_items(context, ensure=False)
         except Exception as exc:
             raise self._worklist_selection_resolution_error(
                 worklist_name=worklist_name,
