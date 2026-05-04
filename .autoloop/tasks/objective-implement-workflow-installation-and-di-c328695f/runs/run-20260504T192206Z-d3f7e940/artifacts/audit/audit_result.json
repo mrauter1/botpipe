@@ -1,1 +1,5 @@
-{}
+{
+  "material_gaps_found": true,
+  "summary": "Workflow-source migration is largely implemented, but stale legacy tests and a non-reproducible wheel smoke check still prevent the run from meeting the requested all-tests-pass finish line.",
+  "revised_request_path": "/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/objective-implement-workflow-installation-and-di-c328695f/runs/run-20260504T192206Z-d3f7e940/artifacts/audit/revised_request.md"
+}

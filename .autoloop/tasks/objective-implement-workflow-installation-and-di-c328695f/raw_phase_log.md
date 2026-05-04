@@ -1350,3 +1350,75 @@ Open issues / next step
 <loop-control>
 {"schema":"docloop.loop_control/v1","kind":"promise","promise":"COMPLETE"}
 </loop-control>
+
+
+---
+run_id=run-20260504T192206Z-d3f7e940 | entry=session_turn | pair=audit | phase=producer | cycle=1 | attempt=1 | thread_id=019df4b8-0d77-7820-a824-67f7b36f5e6f
+---
+provider=codex
+mode=start
+template=/home/rauter/.local/share/pipx/venvs/autoloop/lib/python3.12/site-packages/autoloop/templates/audit_producer.md
+session_id=019df4b8-0d77-7820-a824-67f7b36f5e6f
+
+
+---
+run_id=run-20260504T192206Z-d3f7e940 | entry=phase_output | pair=audit | phase=producer | process=codex-agent | cycle=1 | attempt=1 | thread_id=019df4b8-0d77-7820-a824-67f7b36f5e6f
+---
+I’m auditing the completed run against the original request, the raw clarification log, recorded decisions, and the final code/tests. I’ll read the authoritative artifacts first, then inspect the workflow-discovery implementation and test coverage before writing the audit outputs under the run-local `artifacts/audit` directory.
+
+I’ve got the original contract and the decision ledger. Now I’m checking the final repository state: the later phase outputs in the raw log, the shipped workflow locations, CLI/metadata code, packaging metadata, and the actual test files that claim coverage.
+
+The repo state now shows package workflows under `autoloop/workflows` and no top-level `workflows/` directory. I’m reading the actual implementation surfaces next to verify the requested API, metadata fields, precedence rules, and CLI contracts against the code rather than the phase summaries.
+
+The packaging metadata is mostly aligned at a glance, but I need the rest of the catalog builder and the CLI JSON payloads to verify that the required fields and source-kind values are actually what the request specified.
+
+I’m into the detail pass now. The highest-risk remaining areas are scaffold output, runtime metadata serialization, and whether the package exports and doc/test surfaces actually satisfy the stricter contract instead of only passing the focused regression tests.
+
+I’m checking the actual resolution algorithm now. The most likely hidden intent gap is whether a package workflow name can incorrectly beat a workspace alias, because the request required a strict four-step priority order rather than generic “highest precedence wins.”
+
+I found a likely material mismatch: there are still runtime tests asserting bare-name discovery from `{workspace}/workflows`, which the request explicitly forbids. I’m verifying whether the implementation rejects those cases now, because if it does, the code is closer to intent than the legacy tests are, and that still leaves the “all tests pass” acceptance criterion unmet.
+
+The focused migrated tests are green, but the legacy reference-resolution file is already throwing multiple failures. I’m collecting the exact failing cases now so the audit can separate “implementation meets intent” from “repo no longer satisfies the all-tests-pass acceptance criterion.”
+
+I’ve got two hard signals already: the old reference-resolution suite still fails against the new no-legacy-discovery contract, and the wheel smoke test cannot run `python -m build` in the repo’s validation venv. I’m checking for a few contract areas that may also be under-tested before I write the audit, so the gap report distinguishes missing behavior from missing migration of the test surface.
+
+I’ve got enough to write the audit. The main story is clear: the new workflow-source behavior is largely implemented, but the repo is not actually at the requested finish line because the broader test surface was left partially unmigrated and the wheel smoke test is not runnable in the validation venv.
+
+I’m pulling exact line anchors for the failing legacy expectations and then I’ll write the audit files. That will let the gap report point to concrete stale tests instead of speaking abstractly about “test drift.”
+
+I’m writing the run-local audit artifacts now: a concise gap report, a direct follow-up request focused on the remaining material gaps, and the JSON result marker that points to that follow-up.
+
+The audit files are written. I’m doing one final readback for correctness and then I’ll close with the required summary and loop-control block.
+
+Scope considered
+
+The immutable request, `raw_phase_log.md`, `decisions.txt`, the final workflow discovery/runtime/CLI/packaging code, the migrated workflow tests, and the run-local audit artifacts. I also validated the highest-risk acceptance paths with `.venv_phase`.
+
+What I analyzed
+
+I reviewed `autoloop/core/workflow_catalog.py`, `autoloop/runtime/loader.py`, `autoloop/runtime/cli.py`, `autoloop/runtime/workspace.py`, `pyproject.toml`, `MANIFEST.in`, `autoloop/workflows/*`, and the relevant runtime/doc tests. I ran:
+- `.venv_phase/bin/python -m pytest tests/runtime/test_workflow_reference_resolution.py -q`
+- `.venv_phase/bin/python -m pytest tests/runtime/test_workflow_catalog_roots.py tests/runtime/test_runtime_cli_metadata_integration.py tests/runtime/test_package_cli.py tests/runtime/test_wheel_packaging_smoke.py -q`
+
+What I changed
+
+I wrote the audit outputs:
+- [gap_report.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/objective-implement-workflow-installation-and-di-c328695f/runs/run-20260504T192206Z-d3f7e940/artifacts/audit/gap_report.md)
+- [revised_request.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/objective-implement-workflow-installation-and-di-c328695f/runs/run-20260504T192206Z-d3f7e940/artifacts/audit/revised_request.md)
+- [audit_result.json](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/objective-implement-workflow-installation-and-di-c328695f/runs/run-20260504T192206Z-d3f7e940/artifacts/audit/audit_result.json)
+
+Key findings / decisions
+
+The core migration is largely implemented: canonical roots are `.autoloop/workflows` plus `autoloop/workflows`, package workflows moved under `autoloop.workflows`, workspace precedence is in place, and runtime metadata/CLI surfaces were updated.
+
+Two material gaps remain:
+- `tests/runtime/test_workflow_reference_resolution.py` still encodes removed `{workspace}/workflows` bare-name discovery and the old `_autoloop_dynamic_` module prefix, so it fails against the new contract. The run produced 6 failures there.
+- `tests/runtime/test_wheel_packaging_smoke.py` fails because `python -m build` cannot import `build` in the validation venv, so the requested wheel-build acceptance path is not reproducible there.
+
+Open issues / next step
+
+The follow-up request is to finish migrating the remaining legacy runtime test surface to the new workflow contract and make the wheel smoke test runnable in the standard validation environment, then rerun the affected suites. `audit_result.json` correctly marks `material_gaps_found` as `true`.
+
+<loop-control>
+{"schema":"docloop.loop_control/v1","kind":"promise","promise":"INCOMPLETE"}
+</loop-control>
