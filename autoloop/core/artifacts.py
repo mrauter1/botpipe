@@ -506,6 +506,7 @@ def _resolve_worklist_placeholder(
         parts=remaining,
         placeholder_label=placeholder_label,
         payload_path=None,
+        worklist_name=worklist_name,
     )
 
 
@@ -530,6 +531,7 @@ def _resolve_work_item_path(
             parts=rest,
             placeholder_label=placeholder_label,
             payload_path=[],
+            worklist_name=worklist_name,
         )
     if field_name in {"id", "title", "status", "dir_key"}:
         value = _work_item_field(item, field_name)
@@ -541,6 +543,7 @@ def _resolve_work_item_path(
             parts=rest,
             placeholder_label=placeholder_label,
             payload_path=None,
+            worklist_name=worklist_name,
         )
     worklist_suffix = f" on worklist {worklist_name!r}" if worklist_name else ""
     raise WorkflowExecutionError(
@@ -571,18 +574,20 @@ def _resolve_runtime_path(
     parts: list[str],
     placeholder_label: str,
     payload_path: list[str] | None,
+    worklist_name: str | None = None,
 ) -> Any:
     value = current
     traversed = list(payload_path or [])
+    worklist_suffix = f" on worklist {worklist_name!r}" if worklist_name else ""
     for part in parts:
         if value is None:
             if payload_path is not None:
                 missing_path = ".".join((*traversed, part))
                 raise WorkflowExecutionError(
-                    f"{placeholder_label} {{{expression}}} references missing payload path {missing_path!r}"
+                    f"{placeholder_label} {{{expression}}} references missing payload path {missing_path!r}{worklist_suffix}"
                 )
             raise WorkflowExecutionError(
-                f"{placeholder_label} {{{expression}}} requires an available runtime value before {part!r}"
+                f"{placeholder_label} {{{expression}}} requires an available runtime value before {part!r}{worklist_suffix}"
             )
         try:
             value = _lookup_runtime_value(value, part)
@@ -590,10 +595,10 @@ def _resolve_runtime_path(
             if payload_path is not None:
                 missing_path = ".".join((*traversed, part))
                 raise WorkflowExecutionError(
-                    f"{placeholder_label} {{{expression}}} references missing payload path {missing_path!r}"
+                    f"{placeholder_label} {{{expression}}} references missing payload path {missing_path!r}{worklist_suffix}"
                 ) from exc
             raise WorkflowExecutionError(
-                f"{placeholder_label} {{{expression}}} references unknown runtime field {part!r}"
+                f"{placeholder_label} {{{expression}}} references unknown runtime field {part!r}{worklist_suffix}"
             ) from exc
         if payload_path is not None:
             traversed.append(part)

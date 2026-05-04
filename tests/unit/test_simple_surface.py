@@ -110,8 +110,25 @@ def test_effect_helpers_and_additional_route_helpers_lower_to_effects() -> None:
     then_effect = simple.Effects.then("next")
     refresh_route = simple.Route.refresh(simple.FINISH, worklist="items")
     complete_route = simple.Route.complete_current(simple.FINISH, worklist="items")
+    complete_and_advance_route = simple.Route.complete_and_advance(simple.FINISH, worklist="items", exhausted="done")
 
     assert then_effect.event == "next"
+    assert simple.WorklistEffect.refresh_current(worklist="items") == simple.WorklistEffect(worklist="items", refresh=True)
+    assert simple.WorklistEffect.complete_current(worklist="items") == simple.WorklistEffect(
+        worklist="items",
+        set_current_status="completed",
+    )
+    assert simple.WorklistEffect.advance_current(worklist="items", exhausted="done") == simple.WorklistEffect(
+        worklist="items",
+        advance=True,
+        exhausted="done",
+    )
+    assert simple.WorklistEffect.complete_and_advance(worklist="items", exhausted="done") == simple.WorklistEffect(
+        worklist="items",
+        set_current_status="completed",
+        advance=True,
+        exhausted="done",
+    )
 
     assert refresh_route.on_taken is not None
     refresh_effect = refresh_route.on_taken(object())
@@ -123,6 +140,13 @@ def test_effect_helpers_and_additional_route_helpers_lower_to_effects() -> None:
     assert isinstance(complete_effect, simple.Effects)
     assert complete_effect.worklists == (
         simple.WorklistEffect(worklist="items", set_current_status="completed"),
+    )
+
+    assert complete_and_advance_route.on_taken is not None
+    complete_and_advance_effect = complete_and_advance_route.on_taken(object())
+    assert isinstance(complete_and_advance_effect, simple.Effects)
+    assert complete_and_advance_effect.worklists == (
+        simple.WorklistEffect(worklist="items", set_current_status="completed", advance=True, exhausted="done"),
     )
 
 

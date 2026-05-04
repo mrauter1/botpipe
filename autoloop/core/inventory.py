@@ -69,8 +69,28 @@ def collect_artifact_inventory(definition: Any) -> dict[str, ArtifactInventoryRe
         if workflow_level:
             existing_identity = workflow_level_names_to_identity.get(name)
             if existing_identity is not None and existing_identity != artifact_id:
+                existing_record = records_by_identity.get(existing_identity)
+                if producer_step is not None and existing_record is not None:
+                    _raise_artifact_ownership_ambiguity_error(
+                        artifact_name=name,
+                        workflow_level_record=existing_record,
+                        producer_qualified_name=qualified_name,
+                        producer_steps=(producer_step,),
+                    )
                 raise WorkflowValidationError(f"duplicate artifact name {name!r}")
             workflow_level_names_to_identity[name] = artifact_id
+        elif producer_step is not None:
+            existing_identity = workflow_level_names_to_identity.get(name)
+            if existing_identity is not None and existing_identity != artifact_id:
+                existing_record = records_by_identity.get(existing_identity)
+                if existing_record is not None:
+                    producer_steps = tuple(existing_record.get("producer_steps", ())) + (producer_step,)
+                    _raise_artifact_ownership_ambiguity_error(
+                        artifact_name=name,
+                        workflow_level_record=existing_record,
+                        producer_qualified_name=qualified_name,
+                        producer_steps=producer_steps,
+                    )
         existing_identity = qualified_names_to_identity.get(qualified_name)
         if existing_identity is not None and existing_identity != artifact_id:
             raise WorkflowValidationError(f"duplicate qualified artifact name {qualified_name!r}")
@@ -140,15 +160,30 @@ def collect_artifact_inventory(definition: Any) -> dict[str, ArtifactInventoryRe
 
 
 def _raise_dual_role_artifact_error(record: dict[str, Any]) -> None:
-    producer_steps = tuple(record["producer_steps"])
+    _raise_artifact_ownership_ambiguity_error(
+        artifact_name=record["name"],
+        workflow_level_record=record,
+        producer_qualified_name=record["qualified_name"],
+        producer_steps=tuple(record["producer_steps"]),
+    )
+
+
+def _raise_artifact_ownership_ambiguity_error(
+    *,
+    artifact_name: str,
+    workflow_level_record: dict[str, Any],
+    producer_qualified_name: str,
+    producer_steps: tuple[str, ...],
+) -> None:
+    workflow_qualified_name = workflow_level_record.get("qualified_name", artifact_name)
     producers = ", ".join(repr(step_name) for step_name in producer_steps) or "<none>"
     raise WorkflowValidationError(
-        f"artifact {record['name']!r} (qualified name {record['qualified_name']!r}) is declared both as a "
-        f"workflow-level artifact and as a produced step artifact; workflow-level declaration: workflow class "
-        f"attribute {record['name']!r}; producer step names: {producers}. Recommended fix: For external/input "
-        f"artifacts: keep as workflow class attribute and remove from step writes. For produced artifacts: keep as "
-        f"step writes only and do not assign as workflow class attribute. For managed artifacts: use the explicit "
-        f"managed-artifact role once implemented."
+        f"artifact {artifact_name!r} has ambiguous ownership between the workflow-level declaration and produced "
+        f"step outputs; workflow-level declaration: workflow class attribute {artifact_name!r} "
+        f"(qualified name {workflow_qualified_name!r}); produced artifact qualified name {producer_qualified_name!r}; "
+        f"producer step names: {producers}. Recommended fix: For external/input artifacts: keep as workflow class "
+        f"attribute and remove from step writes. For produced artifacts: keep as step writes only and do not assign "
+        f"as workflow class attribute. For managed artifacts: use the explicit managed-artifact role once implemented."
     )
 
 

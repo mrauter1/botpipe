@@ -523,12 +523,15 @@ def _resolve_prompt(prompt: Prompt | str, *, runtime: OperationRuntime) -> Resol
         resolved = resolve_prompt_reference(prompt.path, source=prompt.source, search_roots=search_roots)
     if runtime.context is None or resolved.text is None:
         return resolved
+    placeholder_label = "prompt placeholder"
+    if runtime.context._step_name:
+        placeholder_label = f"prompt placeholder on step {runtime.context._step_name!r}"
     return replace(
         resolved,
         text=render_runtime_template(
             resolved.text,
             runtime.context,
-            placeholder_label="prompt placeholder",
+            placeholder_label=placeholder_label,
             replace_roots=frozenset({"item", "worklist"}),
         ),
     )

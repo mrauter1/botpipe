@@ -1807,12 +1807,15 @@ class Engine:
             resolved = ResolvedPrompt(path=prompt, text=None, source="registry")
         if resolved.text is None:
             return resolved
+        placeholder_label = "prompt placeholder"
+        if context._step_name:
+            placeholder_label = f"prompt placeholder on step {context._step_name!r}"
         return replace(
             resolved,
             text=render_runtime_template(
                 resolved.text,
                 context,
-                placeholder_label="prompt placeholder",
+                placeholder_label=placeholder_label,
                 replace_roots=frozenset({"item", "worklist"}),
             ),
         )

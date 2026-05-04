@@ -12,7 +12,7 @@ from pydantic import BaseModel
 from .artifacts import ResolvedArtifacts
 from .compiler import CompiledRoute
 from .context import context_runtime
-from .effects import Effects
+from .effects import Effects, WorklistEffect
 from .errors import FailureContext, WorkflowExecutionError
 from .extensions import HookRouteRedirect
 from .operations import OperationRuntime, bind_operation_runtime, provider_configuration
@@ -906,6 +906,16 @@ class HookRunner:
                 context=context,
                 current_event=current_event,
                 result=override,
+                hook_phase=hook_phase,
+                hook_name=hook_name,
+            )
+        if isinstance(result, WorklistEffect):
+            return self.normalize_result(
+                step,
+                state=state,
+                context=context,
+                current_event=current_event,
+                result=Effects(worklists=(result,)),
                 hook_phase=hook_phase,
                 hook_name=hook_name,
             )

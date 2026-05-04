@@ -436,3 +436,66 @@ No audit blocker remains for this phase. The next step is an external environmen
 <loop-control>
 {"schema":"docloop.loop_control/v1","kind":"promise","promise":"COMPLETE"}
 </loop-control>
+
+
+---
+run_id=run-20260504T112330Z-32d8eec3 | entry=session_turn | pair=implement | phase=producer | cycle=1 | attempt=1 | thread_id=019df2d5-a275-7a80-9230-3da4557a12de
+---
+provider=codex
+mode=start
+template=/home/rauter/.local/share/pipx/venvs/autoloop/lib/python3.12/site-packages/autoloop/templates/implement_producer.md
+session_id=019df2d5-a275-7a80-9230-3da4557a12de
+
+
+---
+run_id=run-20260504T112330Z-32d8eec3 | entry=phase_output | pair=implement | phase=producer | process=codex-agent | cycle=1 | attempt=1 | thread_id=019df2d5-a275-7a80-9230-3da4557a12de
+---
+I’m implementing the Milestone B framework changes on top of the completed runtime work. First I’m reading the phase artifacts and the relevant framework modules to pin down the existing effect, validation, prompt, and artifact-ownership behavior before editing.
+
+The phase artifacts confirm this is mostly alignment work against APIs already in-tree, not greenfield design. I’m checking the current implementations and tests now to see which gaps remain in `effects`, `validation_helpers`, prompt validation/runtime rendering, and inventory diagnostics.
+
+The repo is already carrying a large unrelated dirty/deleted tree, so I’m keeping scope tight to the framework files and tests touched by this phase. Next I’m reading the current helper implementations and the existing authoring tests to identify the minimal contract gaps before patching.
+
+I’ve confirmed most of the requested surfaces already exist. The remaining work looks like tightening helper ergonomics and filling coverage gaps rather than inventing new APIs, so I’m focusing the patch on constructor sugar, failed-route flexibility in `validation_step`, clearer prompt/runtime diagnostics, and any missing ownership/error cases.
+
+I’ve reached the point where the remaining gaps are subtle enough that running the focused contract/unit suites is faster than guessing. I’m executing the Milestone B test slice now to see what still breaks against the intended authoring contract.
+
+`pytest` is not on `PATH`, so I’m switching to the repository’s Python entrypoint and inspecting the local test toolchain before rerunning the same focused suites.
+
+I have the concrete gaps now. I’m patching four areas: direct `WorklistEffect` returns and helper sugar, prompt runtime diagnostics with step/worklist context, artifact-ownership ambiguity for workflow-level vs produced public names, and the corresponding tests.
+
+The effect and inventory patches are in. I hit a small context mismatch while updating placeholder diagnostics, so I’m reopening the exact runtime-placeholder blocks and then I’ll finish that patch cleanly.
+
+The code patch is in place. I’m doing the validation I can in this environment now: syntax compilation for the touched runtime/framework modules and a quick import smoke check, since the container doesn’t have `pytest` installed.
+
+The framework changes themselves are done. I’m recording the non-obvious decisions in the run ledger and writing the phase implementation notes now, including what changed, what stayed deliberately unchanged, and the validation limits from this environment.
+
+Scope considered
+
+- Milestone B framework-only scope: [effects.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/autoloop/core/effects.py), [routes.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/autoloop/core/routes.py), [engine_collaborators.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/autoloop/core/engine_collaborators.py), [inventory.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/autoloop/core/inventory.py), [artifacts.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/autoloop/core/artifacts.py), [engine.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/autoloop/core/engine.py), [operations.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/autoloop/core/operations.py), plus the targeted unit/contract tests and the phase notes/decision ledger.
+
+What I analyzed
+
+- The phase plan, implementation notes artifact, and current helper/runtime code paths.
+- Existing effect execution ordering, `validation_step(...)` behavior, prompt placeholder compile/runtime handling, and artifact inventory ownership checks.
+- Current contract coverage in `tests/unit/test_simple_surface.py`, `tests/unit/test_primitives_and_stores.py`, `tests/unit/test_validation.py`, and `tests/contract/test_engine_contracts.py`.
+
+What I changed
+
+- Added narrow `WorklistEffect` constructor helpers and made bare `WorklistEffect` returns valid from hooks/python steps by normalizing them through the existing `Effects` pipeline.
+- Added additive route sugar with `Route.complete_and_advance(...)`.
+- Tightened prompt runtime diagnostics so prompt placeholder failures include the current step, and payload-path/runtime-field errors include the worklist when applicable.
+- Tightened artifact ownership diagnostics so a workflow-level artifact name colliding with a distinct produced artifact now raises an ownership-specific compile-time error instead of a generic duplicate-name error.
+- Updated the targeted tests for the new effect surface and the revised diagnostics.
+
+Key findings / decisions
+
+- The repository already had most of Milestone B implemented; the main gaps were direct `WorklistEffect` returns, additive effect sugar, and clearer ambiguity/runtime diagnostics.
+- I kept effect execution centralized in the existing `Effects` path rather than adding a second mutation pipeline.
+- I did not rewrite `validation_step(...)`; its current repairable-validation behavior already matched the accepted in-tree direction closely enough for this phase.
+
+Open issues / next step
+
+- Syntax validation passed via `python3 -m compileall` on the touched framework modules and touched test files.
+- I could not run `pytest` here because the environment is missing `pytest`, and import-level smoke tests also stop on missing `pydantic`.
+- Next step is to run the targeted Milestone B suites in the project’s real test environment and confirm the updated prompt/error assertions and ownership diagnostics end-to-end.

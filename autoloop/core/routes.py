@@ -190,8 +190,28 @@ class Route:
             summary=summary,
             required_writes=required_writes,
             handoff=handoff,
+            on_taken=_route_effect_hook(Effects(worklists=(WorklistEffect.complete_current(worklist=worklist),))),
+            provider_visible=provider_visible,
+        )
+
+    @staticmethod
+    def complete_and_advance(
+        target: object,
+        *,
+        worklist: str | None = None,
+        exhausted: str | object | None = None,
+        summary: str | None = None,
+        required_writes: Iterable[str] | None = None,
+        handoff: str | None = None,
+        provider_visible: bool = True,
+    ) -> "Route":
+        return Route.to(
+            target,
+            summary=summary,
+            required_writes=required_writes,
+            handoff=handoff,
             on_taken=_route_effect_hook(
-                Effects(worklists=(WorklistEffect(worklist=worklist, set_current_status="completed"),))
+                Effects(worklists=(WorklistEffect.complete_and_advance(worklist=worklist, exhausted=exhausted),))
             ),
             provider_visible=provider_visible,
         )

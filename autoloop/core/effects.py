@@ -55,6 +55,37 @@ class WorklistEffect:
             raise ValueError("set_current_status and reset_current_status cannot both be set")
         _validate_effect_control(self.exhausted, field_name="exhausted")
 
+    @classmethod
+    def refresh_current(cls, *, worklist: str | None = None) -> "WorklistEffect":
+        return cls(worklist=worklist, refresh=True)
+
+    @classmethod
+    def complete_current(cls, *, worklist: str | None = None) -> "WorklistEffect":
+        return cls(worklist=worklist, set_current_status="completed")
+
+    @classmethod
+    def advance_current(
+        cls,
+        *,
+        worklist: str | None = None,
+        exhausted: EffectControl = None,
+    ) -> "WorklistEffect":
+        return cls(worklist=worklist, advance=True, exhausted=exhausted)
+
+    @classmethod
+    def complete_and_advance(
+        cls,
+        *,
+        worklist: str | None = None,
+        exhausted: EffectControl = None,
+    ) -> "WorklistEffect":
+        return cls(
+            worklist=worklist,
+            set_current_status="completed",
+            advance=True,
+            exhausted=exhausted,
+        )
+
 
 @dataclass(frozen=True, slots=True)
 class Effects:
@@ -78,9 +109,7 @@ class Effects:
         worklist: str | None = None,
         exhausted: EffectControl = None,
     ) -> "Effects":
-        return cls(
-            worklists=(WorklistEffect(worklist=worklist, advance=True, exhausted=exhausted),),
-        )
+        return cls(worklists=(WorklistEffect.advance_current(worklist=worklist, exhausted=exhausted),))
 
     @classmethod
     def complete_and_advance(
@@ -89,20 +118,11 @@ class Effects:
         worklist: str | None = None,
         exhausted: EffectControl = None,
     ) -> "Effects":
-        return cls(
-            worklists=(
-                WorklistEffect(
-                    worklist=worklist,
-                    set_current_status="completed",
-                    advance=True,
-                    exhausted=exhausted,
-                ),
-            ),
-        )
+        return cls(worklists=(WorklistEffect.complete_and_advance(worklist=worklist, exhausted=exhausted),))
 
     @classmethod
-    def refresh(cls, worklist: str | None) -> "Effects":
-        return cls(worklists=(WorklistEffect(worklist=worklist, refresh=True),))
+    def refresh(cls, worklist: str | None = None) -> "Effects":
+        return cls(worklists=(WorklistEffect.refresh_current(worklist=worklist),))
 
 
 __all__ = ["Effects", "WorklistEffect"]
