@@ -165,3 +165,58 @@ phase_mode=single
 phase_ids=milestone-a-runtime-route-policy-and-lazy-scoped-runtime,milestone-b-authoring-ergonomics-and-validation-polish
 explicit=True
 current_phase_index=0
+
+
+---
+run_id=run-20260504T112330Z-32d8eec3 | entry=session_turn | pair=implement | phase=producer | cycle=1 | attempt=1 | thread_id=019df2c3-200f-73f2-9d49-64451ced9529
+---
+provider=codex
+mode=start
+template=/home/rauter/.local/share/pipx/venvs/autoloop/lib/python3.12/site-packages/autoloop/templates/implement_producer.md
+session_id=019df2c3-200f-73f2-9d49-64451ced9529
+
+
+---
+run_id=run-20260504T112330Z-32d8eec3 | entry=phase_output | pair=implement | phase=producer | process=codex-agent | cycle=1 | attempt=1 | thread_id=019df2c3-200f-73f2-9d49-64451ced9529
+---
+I’m implementing Milestone A only: route policy, explicit child-route mapping, lazy worklist/session behavior, and aligned inspection/tests. I’ll read the phase artifacts and the relevant engine/discovery/runtime code first so the changes stay inside the approved scope.
+
+The planning artifacts confirm most Milestone A foundations already exist in-tree, so I’m checking where behavior still diverges before I edit anything. Next I’m tracing the route-policy, child-mapping, lazy-selection, session, and inspection code paths together with their tests.
+
+The codebase already carries most of the requested APIs, so the likely work is contract hardening and gap-closing rather than new architecture. I’m reading the exact discovery and engine paths now to isolate the remaining divergence before editing.
+
+I’ve confirmed the broad shape already matches the spec, but two likely gaps stand out: child workflow mapping still synthesizes `blocked`/`failed` unconditionally, and lazy worklist resolution still wraps `initial_selection()` too coarsely to report first-use phases/source policy clearly. I’m drilling into the worklist source implementations and the existing tests for those exact paths now.
+
+I’ve narrowed the likely changes to a small set of runtime contract gaps rather than a broad refactor. I’m running the targeted contract tests for child mapping, lazy worklists, and route visibility now so I can patch exactly what is still off-spec.
+
+`pytest` isn’t on the shell path here, so I’m checking the project’s runner and then I’ll use the available test entrypoint instead of guessing.
+
+I’ve got the concrete patch shape now: keep the existing APIs, tighten child route mapping, make first-use worklist resolution explicitly phased and source-aware, and improve the lazy session/worklist observability messages. I’m editing those focused runtime paths next, then I’ll add the missing contract tests around undeclared child routes and first-use worklist behavior.
+
+I’ve applied the runtime-side changes and I’m doing a quick compatibility pass now. One important detail is making the new source `ensure()` behavior optional so existing custom sources don’t break if they only implement `load/save/validate`.
+
+The runtime code changes are in place and syntactically clean. I’m finishing the phase-local bookkeeping now: recording the non-obvious compatibility decisions and writing concise implementation notes that map the edits back to the checklist and validation I could actually perform in this environment.
+
+Scope considered
+
+Milestone A only: policy-aware provider/runtime routing, explicit child-workflow route mapping, lazy worklist/session behavior, targeted contract tests, and the phase-local notes/decision artifacts. I kept scope to [autoloop/core/engine.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/autoloop/core/engine.py:942), [autoloop/core/worklists.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/autoloop/core/worklists.py:105), [autoloop/core/context.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/autoloop/core/context.py:691), [autoloop/core/sessions.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/autoloop/core/sessions.py:61), and [tests/contract/test_engine_contracts.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/tests/contract/test_engine_contracts.py:4046).
+
+What I analyzed
+
+I traced the current discovery/compiler/runtime path first. The route-policy and inspection/static-graph foundations were already aligned with the requested `question`/`blocked`/`failed` contract, so the remaining gaps were in child-workflow terminal mapping, first-use worklist resolution/error shaping, worklist-selection observability, and the no-current-item work-item session error path.
+
+What I changed
+
+I made child workflow `FAIL` and await-without-question map to `failed` and `blocked` only when the parent step actually declares those routes, with a targeted runtime error naming the step, child terminal, mapped route, declared routes, and the fix. I also changed lazy worklist materialization to run explicit `ensure -> load -> validate -> select` phases, kept `ensure()` optional for compatibility with existing custom sources, and made `worklist_selection_resolved` events include `lazy`, `source`, and `current_index`.
+
+I updated the work-item continuity error to name the session slot, worklist, and step when no current item exists. I added/updated contract tests for undeclared child `failed`/`blocked` mapping, scaffold-on-first-use worklist resolution, additive worklist-selection event payloads, and the new session error wording. I also updated the phase-local [implementation_notes.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/framework-authoring-flexibility-change-specifica-7e827c69/runs/run-20260504T112330Z-32d8eec3/artifacts/implement/phases/milestone-a-runtime-route-policy-and-lazy-scoped-runtime/implementation_notes.md:1) and [decisions.txt](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/framework-authoring-flexibility-change-specifica-7e827c69/runs/run-20260504T112330Z-32d8eec3/decisions.txt:1).
+
+Key findings / decisions
+
+The authored-vs-runtime-control inspection/static-graph split was already present, so I intentionally did not touch those payload producers in this turn. The non-obvious compatibility choice was to make worklist source `ensure()` optional at runtime, so existing custom sources that only implement `load/save/validate` do not break.
+
+Validation I could perform here was limited to syntax: `python3 -m py_compile` passed for the touched code and test files. I could not run `pytest` in this shell because `pytest` is not installed, and direct runtime smoke tests are also blocked by missing installed dependencies such as `pydantic`.
+
+Open issues / next step
+
+The next step is an environment-backed test pass once dependencies are available, starting with `tests/contract/test_engine_contracts.py` for the updated child-mapping and lazy-worklist cases, then the adjacent runtime inspection/static-graph suites for regression confirmation.

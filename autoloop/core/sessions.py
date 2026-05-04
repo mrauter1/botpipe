@@ -91,8 +91,11 @@ def derive_session_key(slot: str, continuity: Continuity, context: "Context") ->
             )
         item = current(continuity.worklist_name)
         if item is None:
+            step_name = getattr(context, "_step_name", None)
+            step_suffix = f" for step {step_name!r}" if isinstance(step_name, str) and step_name else ""
             raise ValueError(
-                f"session slot {slot!r} cannot resolve work_item continuity without an active work item"
+                f"session {slot!r} uses work-item continuity for worklist {continuity.worklist_name!r}, "
+                f"but no current work item is available{step_suffix}."
             )
         item_dir_key = getattr(item, "dir_key", None) or getattr(item, "id", None)
         if not isinstance(item_dir_key, str) or not item_dir_key:

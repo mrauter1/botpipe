@@ -942,7 +942,7 @@ class Engine:
     ) -> StepExecutionResult:
         _, remaining_pending_handoffs = self._matching_pending_handoffs(step, context, pending_handoffs)
         child_result = self.workflow_invoker.run_child_step(step, context)
-        event = self._map_workflow_step_result(child_result)
+        event = self._map_workflow_step_result(step, child_result)
         try:
             self._validate_event(step, event, provider_attributable=False, error_cls=WorkflowExecutionError)
         except WorkflowExecutionError as exc:
@@ -2003,16 +2003,64 @@ class Engine:
         if worklist is None:
             raise WorkflowExecutionError(f"unknown worklist {worklist_name!r}")
         source_type = self._worklist_source_type(worklist)
+        source_path = self._worklist_source_path(worklist, context)
         try:
-            selection = worklist.initial_selection(context)
-        except WorkflowExecutionError as exc:
-            raise WorkflowExecutionError(
-                f"worklist {worklist_name!r} could not resolve selection from {source_type} source: {exc}"
+            worklist.ensure_source(context)
+        except Exception as exc:
+            raise self._worklist_selection_resolution_error(
+                worklist_name=worklist_name,
+                source_type=source_type,
+                source_path=source_path,
+                phase="ensure",
+                error=exc,
+            ) from exc
+        try:
+            items = worklist._load_source_items(context)
+        except Exception as exc:
+            raise self._worklist_selection_resolution_error(
+                worklist_name=worklist_name,
+                source_type=source_type,
+                source_path=source_path,
+                phase="load",
+                error=exc,
+            ) from exc
+        try:
+            worklist._validate_loaded_items(context, items)
+        except Exception as exc:
+            raise self._worklist_selection_resolution_error(
+                worklist_name=worklist_name,
+                source_type=source_type,
+                source_path=source_path,
+                phase="validate",
+                error=exc,
+            ) from exc
+        try:
+            cached_items = worklist._cache_loaded_items(context, items)
+            selection = Selection(
+                worklist_name=worklist.name,
+                mode=worklist._resolve_mode(context),
+                items=worklist._select_items(cached_items, ctx=context),
+                explicit=worklist._has_explicit_selection(context),
+                current_index=0,
+            )
+        except Exception as exc:
+            raise self._worklist_selection_resolution_error(
+                worklist_name=worklist_name,
+                source_type=source_type,
+                source_path=source_path,
+                phase="select",
+                error=exc,
+                selector_details=self._worklist_selector_details(worklist),
             ) from exc
         runtime = context_runtime(context)
         runtime.set_selection(worklist_name, selection)
         runtime.sync_scoped_state_after_worklist_selection_change(worklist_name)
-        runtime.emit_worklist_selection_resolved(worklist_name=worklist_name, selection=selection)
+        runtime.emit_worklist_selection_resolved(
+            worklist_name=worklist_name,
+            selection=selection,
+            lazy=True,
+            source=self._worklist_source_descriptor(worklist, context),
+        )
         return selection
 
     def _save_checkpoint(
@@ -2076,6 +2124,71 @@ class Engine:
         if type(source).__name__ == "_StaticWorklistSource":
             return "static"
         return type(source).__name__
+
+    def _worklist_source_path(self, worklist: Any, context: Context) -> str | None:
+        source = getattr(worklist, "source", None)
+        if source is None:
+            return None
+        if getattr(source, "artifact_backed", False):
+            artifact = getattr(source, "artifact", None)
+            if artifact is None:
+                return None
+            try:
+                return str(resolve_artifact_template(artifact, context))
+            except Exception:
+                template = getattr(artifact, "template", None)
+                return template if isinstance(template, str) and template else None
+        return None
+
+    def _worklist_source_descriptor(self, worklist: Any, context: Context) -> str:
+        source_type = self._worklist_source_type(worklist)
+        source_path = self._worklist_source_path(worklist, context)
+        if source_path is None:
+            return source_type
+        return f"{source_type}:{source_path}"
+
+    @staticmethod
+    def _worklist_selector_details(worklist: Any) -> str | None:
+        selector = getattr(worklist, "selector", None)
+        if selector is None:
+            return None
+        parts: list[str] = []
+        default_mode = getattr(selector, "default_mode", None)
+        allowed_modes = getattr(selector, "allowed_modes", None)
+        item_param = getattr(selector, "item_param", None)
+        mode_param = getattr(selector, "mode_param", None)
+        if isinstance(default_mode, str) and default_mode:
+            parts.append(f"default_mode={default_mode}")
+        if isinstance(allowed_modes, Sequence) and allowed_modes:
+            parts.append("allowed_modes=" + ",".join(str(mode) for mode in allowed_modes))
+        if isinstance(item_param, str) and item_param:
+            parts.append(f"item_param={item_param}")
+        if isinstance(mode_param, str) and mode_param:
+            parts.append(f"mode_param={mode_param}")
+        if not parts:
+            return None
+        return "; ".join(parts)
+
+    @staticmethod
+    def _worklist_selection_resolution_error(
+        *,
+        worklist_name: str,
+        source_type: str,
+        source_path: str | None,
+        phase: str,
+        error: Exception,
+        selector_details: str | None = None,
+    ) -> WorkflowExecutionError:
+        details = [f"phase={phase}"]
+        if source_path is not None:
+            details.append(f"path={source_path}")
+        if selector_details is not None:
+            details.append(f"selector={selector_details}")
+        underlying = str(error).strip() or type(error).__name__
+        return WorkflowExecutionError(
+            f"worklist {worklist_name!r} could not resolve selection from {source_type} source "
+            f"({', '.join(details)}): {underlying}"
+        )
 
     def _build_workflow_output(
         self,
@@ -2683,7 +2796,7 @@ class Engine:
                 lines.append(f"- {name}: {path}")
         return "\n".join(lines) + "\n"
 
-    def _map_workflow_step_result(self, child_result: Any) -> Event:
+    def _map_workflow_step_result(self, step: CompiledStep, child_result: Any) -> Event:
         terminal = getattr(child_result, "terminal", None)
         last_event = getattr(child_result, "last_event", None)
         checkpoint = getattr(child_result, "checkpoint", None)
@@ -2692,6 +2805,11 @@ class Engine:
         if terminal == FINISH:
             return Event("done")
         if terminal == FAIL:
+            self._ensure_child_workflow_route_declared(
+                step,
+                child_terminal=terminal,
+                mapped_route="failed",
+            )
             reason = last_event.reason if isinstance(last_event, Event) and last_event.reason else "Child workflow failed."
             return Event("failed", reason=reason)
         if terminal == AWAIT_INPUT and isinstance(last_event, Event) and last_event.tag == "question":
@@ -2700,6 +2818,11 @@ class Engine:
             reason = last_event.reason if isinstance(last_event, Event) else ""
             return Event("question", reason=reason, question=pending_question)
         if terminal == AWAIT_INPUT:
+            self._ensure_child_workflow_route_declared(
+                step,
+                child_terminal=terminal,
+                mapped_route="blocked",
+            )
             reason = (
                 last_event.reason
                 if isinstance(last_event, Event) and last_event.reason
@@ -2707,6 +2830,22 @@ class Engine:
             )
             return Event("blocked", reason=reason)
         raise WorkflowExecutionError(f"child workflow returned unsupported terminal {terminal!r}")
+
+    @staticmethod
+    def _ensure_child_workflow_route_declared(
+        step: CompiledStep,
+        *,
+        child_terminal: str,
+        mapped_route: str,
+    ) -> None:
+        if mapped_route in step.available_routes:
+            return
+        declared_routes = ", ".join(step.authored_routes) or "<none>"
+        raise WorkflowExecutionError(
+            f"child workflow step {step.name!r} returned terminal {child_terminal!r}, which maps to route "
+            f"{mapped_route!r}, but declared routes are: {declared_routes}. "
+            "Recommended fix: declare the route or change child-result mapping."
+        )
 
     def _clone_outcome(self, outcome: Outcome | None) -> Outcome | None:
         if outcome is None:

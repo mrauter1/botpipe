@@ -105,6 +105,9 @@ class WorklistSource(Protocol[T]):
     mutable: bool
     artifact_backed: bool
 
+    def ensure(self, ctx: "Context") -> None:
+        ...
+
     def load(self, ctx: "Context") -> Sequence[WorkItem[T]]:
         ...
 
@@ -230,7 +233,19 @@ class Worklist(Generic[T]):
         cached = None if force_reload else _context_runtime(ctx).get_cached_worklist_items(self.name)
         if cached is not None:
             return cached
-        items = tuple(self.source.load(ctx))
+        items = self._load_source_items(ctx)
+        self._validate_loaded_items(ctx, items)
+        return self._cache_loaded_items(ctx, items)
+
+    def ensure_source(self, ctx: "Context") -> None:
+        ensure = getattr(self.source, "ensure", None)
+        if callable(ensure):
+            ensure(ctx)
+
+    def _load_source_items(self, ctx: "Context") -> tuple[WorkItem[T], ...]:
+        return tuple(self.source.load(ctx))
+
+    def _validate_loaded_items(self, ctx: "Context", items: Sequence[WorkItem[T]]) -> None:
         validation_error = self.source.validate(ctx, items)
         if validation_error:
             raise WorkflowExecutionError(f"worklist {self.name!r} is invalid: {validation_error}")
@@ -240,6 +255,8 @@ class Worklist(Generic[T]):
             raise WorkflowExecutionError(
                 f"worklist {self.name!r} contains duplicate item id(s): {duplicates}"
             )
+
+    def _cache_loaded_items(self, ctx: "Context", items: tuple[WorkItem[T], ...]) -> tuple[WorkItem[T], ...]:
         return _context_runtime(ctx).cache_worklist_items(self.name, items)
 
     def initial_selection(self, ctx: "Context") -> Selection[T]:
@@ -495,6 +512,9 @@ class _StaticWorklistSource(Generic[T]):
     mutable: bool = False
     artifact_backed: bool = False
 
+    def ensure(self, ctx: "Context") -> None:
+        return None
+
     def load(self, ctx: "Context") -> Sequence[WorkItem[T]]:
         return tuple(_build_work_item(item, item_id=self.item_id, title=self.title, status=self.status) for item in self.items)
 
@@ -513,6 +533,9 @@ class _ParameterWorklistSource:
     status: Callable[[Any], str | None] | str | None
     mutable: bool = False
     artifact_backed: bool = False
+
+    def ensure(self, ctx: "Context") -> None:
+        return None
 
     def load(self, ctx: "Context") -> Sequence[WorkItem[Any]]:
         raw_items = ctx.workflow_params.get(self.param_name)
@@ -545,6 +568,9 @@ class _ArtifactWorklistSource:
     status: str | None = None
     mutable: bool = True
     artifact_backed: bool = True
+
+    def ensure(self, ctx: "Context") -> None:
+        return None
 
     def load(self, ctx: "Context") -> Sequence[WorkItem[Mapping[str, object]]]:
         from .artifacts import ArtifactHandle, resolve_artifact_template

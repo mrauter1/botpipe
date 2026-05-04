@@ -693,6 +693,8 @@ class _ContextRuntime:
         *,
         worklist_name: str,
         selection: "Selection[Any]",
+        lazy: bool = False,
+        source: str | None = None,
     ) -> None:
         if self._context._runtime_event_sink is None:
             return
@@ -703,8 +705,12 @@ class _ContextRuntime:
             "selection_mode": selection.mode,
             "selection_explicit": selection.explicit,
             "item_ids": [item.id for item in selection.items],
+            "current_index": selection.current_index,
             "current_item_id": None if current is None else current.id,
+            "lazy": lazy,
         }
+        if source is not None:
+            payload["source"] = source
         visit = _runtime_visits(self._context._step_item_state or self._context._step_state)
         if isinstance(visit, int):
             payload["visit"] = visit
