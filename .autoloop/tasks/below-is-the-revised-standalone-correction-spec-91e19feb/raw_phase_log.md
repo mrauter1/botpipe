@@ -358,3 +358,52 @@ Open issues / next step
   - `./.venv/bin/python -m pytest tests/unit/test_validation.py -q -k "same_identity_workflow_level_artifact_written_by_one_step or same_identity_workflow_level_artifact_written_by_multiple_steps or authored_blocked_and_failed_routes_use_generic_fallback_summaries or validation_contract_compiles_routes_expected_output_and_retry_policy"`
 - I did not rerun the full repository suite.
 - The next step is reviewer revalidation of the updated phase artifacts and parity path.
+
+
+---
+run_id=run-20260504T151346Z-4f933dd3 | entry=session_turn | pair=implement | phase=verifier | cycle=2 | attempt=1 | thread_id=019df396-f260-7532-a4c9-e81f7fe16999
+---
+provider=codex
+mode=resume
+template=/home/rauter/.local/share/pipx/venvs/autoloop/lib/python3.12/site-packages/autoloop/templates/implement_verifier.md
+session_id=019df396-f260-7532-a4c9-e81f7fe16999
+
+
+---
+run_id=run-20260504T151346Z-4f933dd3 | entry=phase_output | pair=implement | phase=verifier | process=codex-agent | cycle=2 | attempt=1 | thread_id=019df396-f260-7532-a4c9-e81f7fe16999
+---
+I’m rechecking only the reviewer-flagged rendered-provider parity path plus the adjacent artifact/route contract surfaces, then I’ll update the review artifacts to reflect whether the blocking item is cleared.
+
+The rendered-provider parity path now looks aligned: the parser marks invalid `question` payloads as `invalid_payload`, and the rendered retry contract test now exercises the same recovery flow as the direct provider path. I’m closing the review artifacts accordingly.
+
+Scope considered
+- Scoped re-review of the route/artifact core phase with focus on the previously blocking rendered-provider parity defect and the adjacent artifact/route contract surfaces.
+- I limited edits to the reviewer-owned phase artifacts in the active review directory.
+
+What I analyzed
+- The reviewer feedback artifact and current implementation notes.
+- `autoloop/core/providers/parsing.py` and the downstream retry-classification behavior it feeds.
+- The direct and rendered invalid-question retry tests in `tests/contract/test_engine_contracts.py`.
+- The parser-level metadata coverage in `tests/runtime/test_runtime_providers.py`.
+
+What I reviewed
+- Whether rendered `tag="question"` payload failures now carry `invalid_payload` semantics instead of falling into the malformed-provider-output bucket.
+- Whether the rendered retry/recovery path now matches the direct `Outcome(...)` path.
+- Whether the phase review artifacts accurately reflect the current state.
+- I updated:
+  - [criteria.md](</home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/below-is-the-revised-standalone-correction-spec-91e19feb/runs/run-20260504T151346Z-4f933dd3/artifacts/implement/phases/route-and-artifact-contracts/criteria.md>)
+  - [feedback.md](</home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/below-is-the-revised-standalone-correction-spec-91e19feb/runs/run-20260504T151346Z-4f933dd3/artifacts/implement/phases/route-and-artifact-contracts/feedback.md>)
+
+Key findings / decisions
+- The prior blocking item `IMP-001` is resolved.
+- `parse_outcome_json(...)` now raises missing/empty rendered `question` payload failures with `FailureContext(kind="invalid_payload", candidate_route="question", ...)` and `retry_kind="invalid_payload"`.
+- The rendered-provider retry/recovery contract test now exercises the same invalid-payload feedback path as the direct fake-provider path.
+- No new scoped findings were identified in this re-review.
+
+Open issues / next step
+- Focused verification passed for the re-reviewed parity path.
+- No remaining blocking findings in this phase; the route-and-artifact-contracts review can close.
+
+<loop-control>
+{"schema":"docloop.loop_control/v1","kind":"promise","promise":"COMPLETE"}
+</loop-control>
