@@ -183,7 +183,7 @@ def _raise_artifact_ownership_ambiguity_error(
         f"(qualified name {workflow_qualified_name!r}); produced artifact qualified name {producer_qualified_name!r}; "
         f"producer step names: {producers}. Recommended fix: For external/input artifacts: keep as workflow class "
         f"attribute and remove from step writes. For produced artifacts: keep as step writes only and do not assign "
-        f"as workflow class attribute. For managed artifacts: use the explicit managed-artifact role once implemented."
+        f"as workflow class attribute. For managed artifacts: declare them with Artifact.managed(...) or role='managed'."
     )
 
 
