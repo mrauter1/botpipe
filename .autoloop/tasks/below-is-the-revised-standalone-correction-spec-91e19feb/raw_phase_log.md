@@ -407,3 +407,57 @@ Open issues / next step
 <loop-control>
 {"schema":"docloop.loop_control/v1","kind":"promise","promise":"COMPLETE"}
 </loop-control>
+
+
+---
+run_id=run-20260504T151346Z-4f933dd3 | entry=session_turn | pair=test | phase=producer | cycle=1 | attempt=1 | thread_id=019df396-f260-7532-a4c9-e81f7fe16999
+---
+provider=codex
+mode=resume
+template=/home/rauter/.local/share/pipx/venvs/autoloop/lib/python3.12/site-packages/autoloop/templates/test_producer.md
+session_id=019df396-f260-7532-a4c9-e81f7fe16999
+
+
+---
+run_id=run-20260504T151346Z-4f933dd3 | entry=phase_output | pair=test | phase=producer | process=codex-agent | cycle=1 | attempt=1 | thread_id=019df396-f260-7532-a4c9-e81f7fe16999
+---
+I’m checking the current phase test artifacts and the new contract tests first so I can fill any remaining coverage gap without duplicating the implementation work.
+
+I’m checking the remaining parity gap in the route/artifact test surface and will tighten coverage only where the rendered-provider path still looks under-specified.
+
+The direct and rendered retry-and-recover paths are covered. I’m checking whether exhaustion still lacks a rendered counterpart, since that is the exact regression shape the reviewer caught.
+
+I found a real remaining gap worth pinning: exhaustion is asserted for the direct provider path, but not for rendered JSON. I’m adding that rendered failure-path test and then tightening the phase test artifacts around the actual coverage.
+
+The new rendered exhaustion case is in place. I’m running the narrow contract slice now to confirm the failure context stays in the `invalid_payload` bucket all the way through retry exhaustion.
+
+The code-side coverage is done. I’m only updating the phase-local testing artifacts and, if needed, the run ledger with the one non-obvious testing decision so this exact regression doesn’t drift back in a later turn.
+
+Scope considered
+- Phase-local test work for `route-and-artifact-contracts`: rendered/direct provider parity, artifact identity regression coverage, and the required test artifacts.
+- I left the auditor-owned [criteria.md](</home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/below-is-the-revised-standalone-correction-spec-91e19feb/runs/run-20260504T151346Z-4f933dd3/artifacts/test/phases/route-and-artifact-contracts/criteria.md>) unchanged.
+
+What I analyzed
+- [test_strategy.md](</home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/below-is-the-revised-standalone-correction-spec-91e19feb/runs/run-20260504T151346Z-4f933dd3/artifacts/test/phases/route-and-artifact-contracts/test_strategy.md>)
+- [feedback.md](</home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/below-is-the-revised-standalone-correction-spec-91e19feb/runs/run-20260504T151346Z-4f933dd3/artifacts/test/phases/route-and-artifact-contracts/feedback.md>)
+- [tests/contract/test_engine_contracts.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/tests/contract/test_engine_contracts.py)
+- Existing parser parity coverage in `tests/runtime/test_runtime_providers.py`
+- The current run ledger in [decisions.txt](</home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/below-is-the-revised-standalone-correction-spec-91e19feb/runs/run-20260504T151346Z-4f933dd3/decisions.txt>)
+
+What I changed
+- Added `test_rendered_provider_invalid_question_retry_exhaustion_marks_failure_context` in [tests/contract/test_engine_contracts.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/tests/contract/test_engine_contracts.py) to pin rendered-provider retry-exhaustion parity with the direct provider path.
+- Updated [test_strategy.md](</home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/below-is-the-revised-standalone-correction-spec-91e19feb/runs/run-20260504T151346Z-4f933dd3/artifacts/test/phases/route-and-artifact-contracts/test_strategy.md>) with an explicit AC-1 through AC-5 coverage map, preserved invariants, edge cases, flake-risk notes, and known gaps.
+- Appended a concise summary to [feedback.md](</home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/below-is-the-revised-standalone-correction-spec-91e19feb/runs/run-20260504T151346Z-4f933dd3/artifacts/test/phases/route-and-artifact-contracts/feedback.md>).
+- Appended one test-specific drift-prevention note under the existing test-author header in [decisions.txt](</home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/below-is-the-revised-standalone-correction-spec-91e19feb/runs/run-20260504T151346Z-4f933dd3/decisions.txt>).
+
+Key findings / decisions
+- The remaining high-value gap was not retry-and-recover; it was retry exhaustion for rendered `{"tag":"question"}` payload failures.
+- The new test asserts the final checkpoint still records `failure_context["kind"] == "invalid_payload"` and `retry_exhausted == True`, which is the exact regression shape that previously drifted into malformed-provider-output semantics.
+- No broader test churn was needed for this phase.
+
+Open issues / next step
+- Focused verification passed:
+  - `./.venv/bin/python -m pytest tests/contract/test_engine_contracts.py -q -k "provider_invalid_question_retry_exhaustion_marks_failure_context or rendered_provider_invalid_question_retry_exhaustion_marks_failure_context or rendered_provider_invalid_question_retries_and_recovers or provider_invalid_question_retries_and_recovers"`
+  - `./.venv/bin/python -m pytest tests/runtime/test_runtime_providers.py -q -k "parse_outcome_json_rejects_question_without_question_field"`
+- I did not run the full repository suite.
+- The next step is test-phase audit/review against the updated phase artifacts and the new rendered exhaustion regression test.
