@@ -1566,3 +1566,37 @@ Revise both `plan.md` and `phase_plan.yaml` so `{workspace}/workflows/` is path-
 <loop-control>
 {"schema":"docloop.loop_control/v1","kind":"promise","promise":"INCOMPLETE"}
 </loop-control>
+
+
+---
+run_id=run-20260504T204430Z-152082a1 | entry=session_turn | pair=plan | phase=producer | cycle=2 | attempt=1 | thread_id=019df4bc-4168-7aa2-b244-31aaceb1e785
+---
+provider=codex
+mode=resume
+template=/home/rauter/.local/share/pipx/venvs/autoloop/lib/python3.12/site-packages/autoloop/templates/plan_producer.md
+session_id=019df4bc-4168-7aa2-b244-31aaceb1e785
+
+
+---
+run_id=run-20260504T204430Z-152082a1 | entry=phase_output | pair=plan | phase=producer | process=codex-agent | cycle=2 | attempt=1 | thread_id=019df4bc-4168-7aa2-b244-31aaceb1e785
+---
+I’m correcting the plan against the verifier’s blocking finding now. First I’m checking the current artifacts and the latest decisions header so I can tighten the `{workspace}/workflows/` scope without touching verifier-owned state.
+
+I’ve confirmed the verifier’s point against the current test surface: the remaining `workflows.*` references in `test_workflow_reference_resolution.py` are exactly the cases the plan needs to remove or relocate. I’m tightening the plan artifacts to make `{workspace}/workflows/` path-only and to confine `_autoloop_workspace_workflows` assertions to explicit workspace-path loads.
+
+I’ve applied the contract correction. I’m reading back the updated plan and machine-readable phase so the final handoff reflects the exact narrowed scope the verifier asked for.
+
+Scope considered  
+The immutable request, the verifier’s blocking feedback in [feedback.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/objective-implement-workflow-installation-and-di-c328695f/runs/run-20260504T204430Z-152082a1/artifacts/plan/feedback.md), the current [plan.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/objective-implement-workflow-installation-and-di-c328695f/runs/run-20260504T204430Z-152082a1/artifacts/plan/plan.md), [phase_plan.yaml](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/objective-implement-workflow-installation-and-di-c328695f/runs/run-20260504T204430Z-152082a1/artifacts/plan/phase_plan.yaml), and the relevant `tests/runtime/test_workflow_reference_resolution.py` references.
+
+What I analyzed  
+I checked the verifier’s complaint against the request wording and the actual test surface. The remaining workspace `workflows.*` module references were the only material drift: the request allows `{workspace}/workflows/` coverage only through explicit filesystem-path references, while the prior plan still allowed explicit module references.
+
+What I changed  
+I updated [plan.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/objective-implement-workflow-installation-and-di-c328695f/runs/run-20260504T204430Z-152082a1/artifacts/plan/plan.md) and [phase_plan.yaml](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/objective-implement-workflow-installation-and-di-c328695f/runs/run-20260504T204430Z-152082a1/artifacts/plan/phase_plan.yaml) so `{workspace}/workflows/` is now explicitly path-only, and the plan now calls for removing or relocating workspace `workflows.*` module-reference assertions. I also appended a closure note to [feedback.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/objective-implement-workflow-installation-and-di-c328695f/runs/run-20260504T204430Z-152082a1/artifacts/plan/feedback.md) and recorded the superseding constraint under the latest header in [decisions.txt](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/objective-implement-workflow-installation-and-di-c328695f/runs/run-20260504T204430Z-152082a1/decisions.txt).
+
+Key findings / decisions  
+The plan now matches the shipped contract more tightly: implicit discovery stays limited to `autoloop/workflows/` and `{workspace}/.autoloop/workflows/`, `{workspace}/workflows/` is filesystem-path-only, and `_autoloop_workspace_workflows.<hash>...` assertions are scoped to explicit workspace-path loading. The wheel-smoke direction remains unchanged: fix test self-sufficiency without widening runtime behavior.
+
+Open issues / next step  
+The plan artifacts are ready for re-verification.

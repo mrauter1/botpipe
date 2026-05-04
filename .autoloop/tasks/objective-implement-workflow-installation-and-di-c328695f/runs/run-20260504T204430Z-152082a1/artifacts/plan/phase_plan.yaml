@@ -8,7 +8,7 @@ phases:
     status: "planned"
     in_scope:
       - "Update tests/runtime/test_workflow_reference_resolution.py so implicit bare-name and alias coverage only targets autoloop/workflows and {workspace}/.autoloop/workflows."
-      - "Keep {workspace}/workflows coverage only through explicit filesystem-path or explicit module references."
+      - "Keep {workspace}/workflows coverage only through explicit filesystem-path references, and remove or relocate any workspace workflows.* module-reference expectations."
       - "Align workspace-isolated module assertions with the _autoloop_workspace_workflows.<hash> namespace emitted by the loader."
       - "Make tests/runtime/test_wheel_packaging_smoke.py runnable without assuming the validation interpreter already has the build frontend installed."
       - "Re-run the named runtime and packaging suites in the normal project validation environment."
@@ -21,7 +21,7 @@ phases:
       - id: "AC-1"
         text: "No reference-resolution test still expects implicit bare-name or alias discovery from {workspace}/workflows."
       - id: "AC-2"
-        text: "Workspace-isolated import assertions match the loader’s _autoloop_workspace_workflows.<hash> namespace for explicit workspace-path loads."
+        text: "Workspace-isolated import assertions match the loader’s _autoloop_workspace_workflows.<hash> namespace for explicit workspace-path loads, and no workspace workflows.* module-reference expectation remains in scope."
       - id: "AC-3"
         text: "The wheel packaging smoke builds a wheel in the standard validation environment without relying on a globally installed build module, while preserving the existing install and packaged-asset checks."
       - id: "AC-4"
