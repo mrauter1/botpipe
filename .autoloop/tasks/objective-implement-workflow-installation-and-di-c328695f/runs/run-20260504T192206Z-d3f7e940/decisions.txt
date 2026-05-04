@@ -1,0 +1,4 @@
+<autoloop-decisions-header version="1" block_seq="1" owner="planner" phase_id="task-global" pair="plan" turn_seq="1" run_id="run-20260504T192206Z-d3f7e940" ts="2026-05-04T19:22:06.288663+00:00" />
+Package-installed workflows must be relocated and imported only as autoloop.workflows.* rather than preserved through a top-level workflows compatibility namespace.
+Implicit bare-name discovery from {workspace}/workflows is intentionally removed; only explicit filesystem path references may still target arbitrary readable paths there.
+Context root inference and built-in package_folder-relative repo asset references must be updated as part of the migration because moving built-ins under autoloop/workflows changes package depth and would otherwise break source-in-place execution.
