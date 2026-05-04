@@ -595,3 +595,60 @@ Open issues / next step
   - `tests/unit/test_validation.py`
 - Remaining non-blocking warnings are the pre-existing Pydantic `schema` field-name warnings in `workflow_run_traces_to_optimization_candidates/contracts.py`.
 - Docs/examples cleanup for removed managed-artifact wording is still a separate follow-up surface.
+
+
+---
+run_id=run-20260504T151346Z-4f933dd3 | entry=session_turn | pair=implement | phase=verifier | cycle=1 | attempt=1 | thread_id=019df3ac-00a2-7a82-baae-1d81bebffdf5
+---
+provider=codex
+mode=resume
+template=/home/rauter/.local/share/pipx/venvs/autoloop/lib/python3.12/site-packages/autoloop/templates/implement_verifier.md
+session_id=019df3ac-00a2-7a82-baae-1d81bebffdf5
+
+
+---
+run_id=run-20260504T151346Z-4f933dd3 | entry=phase_output | pair=implement | phase=verifier | process=codex-agent | cycle=1 | attempt=1 | thread_id=019df3ac-00a2-7a82-baae-1d81bebffdf5
+---
+I’m auditing the lazy-worklist-runtime implementation against the active phase contract and acceptance criteria first, then I’ll update the phase-local review artifacts only.
+
+I’ve narrowed the review to the changed runtime surfaces and the phase-local artifacts. I’m confirming whether any acceptance gap or regression risk remains before I mark criteria and write findings.
+
+The scoped diff came back clean, so I’m checking whether the implementation is already reflected in the working tree or only documented through notes and prior validation. After that I’ll update the review artifacts based on the actual repo state.
+
+I have the implementer’s notes and the run-local decisions. I’m now checking the live code paths directly so the review is based on repository behavior, not only the notes.
+
+I’ve verified the main lazy-selection and session-continuity code paths directly. I’m running the focused runtime and contract suites that cover the acceptance criteria before I finalize the review artifacts.
+
+The focused suites passed against the live code, and I haven’t found a correctness or regression gap in phase scope. I’m updating the verifier artifacts now to reflect a clean review.
+
+Scope considered
+
+- Active `lazy-worklist-runtime` phase scope only: lazy worklist materialization, artifact-backed missing-source policy, strict-lazy checkpoint restore, work-item session continuity, item/worklist late-bound placeholder resolution, and inspection/static-graph worklist state.
+- Adjacent regression surface justified by the phase notes: public workflow package declarations affected by the earlier `Artifact` API cleanup.
+
+What I analyzed
+
+- Run-local authority artifacts: active criteria, feedback, implementation notes, and the latest `decisions.txt` entries for this run.
+- Live repository behavior in `autoloop/core/worklists.py`, `autoloop/core/context.py`, `autoloop/core/engine.py`, `autoloop/core/artifacts.py`, `autoloop/runtime/static_graph.py`, and targeted tests covering lazy selection, restore, item-state placeholders, and work-item continuity.
+
+What I reviewed
+
+- Strict-lazy restore is implemented by retaining `SelectionSnapshot`s separately and materializing only on first real access through the context selection resolver.
+- Artifact-backed missing-source handling is centralized on `Worklist.from_artifact(..., missing=...)` via `_ArtifactWorklistSource.ensure(...)`, with scaffold behavior limited to first use.
+- `item.state.<field>` runtime resolution now goes through active `ctx.item_state`, and static graph payloads distinguish declared worklists from runtime materialization state.
+- Focused validation passed: `./.venv/bin/python -m pytest tests/contract/test_engine_contracts.py tests/runtime/test_runtime_static_graph.py tests/unit/test_primitives_and_stores.py tests/unit/test_simple_surface.py -q` with `279 passed, 14 warnings`.
+
+Key findings / decisions
+
+- No blocking findings.
+- No non-blocking findings.
+- Updated the phase-local verifier artifacts accordingly: all criteria boxes are checked in [criteria.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/below-is-the-revised-standalone-correction-spec-91e19feb/runs/run-20260504T151346Z-4f933dd3/artifacts/implement/phases/lazy-worklist-runtime/criteria.md) and [feedback.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/below-is-the-revised-standalone-correction-spec-91e19feb/runs/run-20260504T151346Z-4f933dd3/artifacts/implement/phases/lazy-worklist-runtime/feedback.md).
+
+Open issues / next step
+
+- No phase-blocking issues remain for `lazy-worklist-runtime`.
+- The only observed warnings were the pre-existing Pydantic `schema` field-name warnings in `workflows/workflow_run_traces_to_optimization_candidates/contracts.py`; they are outside this phase’s requested change surface.
+
+<loop-control>
+{"schema":"docloop.loop_control/v1","kind":"promise","promise":"COMPLETE"}
+</loop-control>
