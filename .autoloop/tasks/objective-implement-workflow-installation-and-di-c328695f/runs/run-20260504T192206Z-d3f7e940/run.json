@@ -3,5 +3,32 @@
   "created_at": "2026-05-04T19:22:06.113359+00:00",
   "request_file": "/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/objective-implement-workflow-installation-and-di-c328695f/runs/run-20260504T192206Z-d3f7e940/request.md",
   "artifacts_dir": "/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/objective-implement-workflow-installation-and-di-c328695f/runs/run-20260504T192206Z-d3f7e940/artifacts",
-  "provider": "codex"
+  "provider": "codex",
+  "phase_plan_path": "/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/objective-implement-workflow-installation-and-di-c328695f/runs/run-20260504T192206Z-d3f7e940/artifacts/plan/phase_plan.yaml",
+  "phase_plan_version": 1,
+  "active_phase_selection": {
+    "run_id": "run-20260504T192206Z-d3f7e940",
+    "mode": "single",
+    "phase_ids": [
+      "catalog-root-refactor",
+      "runtime-cli-metadata-integration",
+      "builtins-packaging-docs-verification"
+    ],
+    "explicit": true,
+    "current_phase_index": 0,
+    "current_phase_id": "catalog-root-refactor"
+  },
+  "phase_status": {
+    "catalog-root-refactor": "in_progress",
+    "runtime-cli-metadata-integration": "planned",
+    "builtins-packaging-docs-verification": "planned"
+  },
+  "phase_history": [
+    {
+      "phase_id": "catalog-root-refactor",
+      "run_id": "run-20260504T192206Z-d3f7e940",
+      "status": "in_progress",
+      "ts": "2026-05-04T19:29:25.164696+00:00"
+    }
+  ]
 }

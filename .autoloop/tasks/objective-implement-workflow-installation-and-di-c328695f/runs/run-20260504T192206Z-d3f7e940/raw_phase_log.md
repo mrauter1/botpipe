@@ -156,3 +156,12 @@ No open verification issues remain for the plan artifacts. The planning set is r
 <loop-control>
 {"schema":"docloop.loop_control/v1","kind":"promise","promise":"COMPLETE"}
 </loop-control>
+
+
+---
+run_id=run-20260504T192206Z-d3f7e940 | entry=phase_scope_resolved
+---
+phase_mode=single
+phase_ids=catalog-root-refactor,runtime-cli-metadata-integration,builtins-packaging-docs-verification
+explicit=True
+current_phase_index=0
