@@ -11,6 +11,7 @@ phases:
       - "Keep workflow-level artifact names canonical while recording producer_steps provenance for step writers."
       - "Make rendered provider outcome reason optional and keep question as the only built-in route with special payload validation."
       - "Ensure blocked and failed are authored-only routes, including fallback summaries and provider parity coverage."
+      - "Preserve explicit child-workflow failed, blocked, and question mapping behavior while route-policy changes are applied."
     out_of_scope:
       - "Strict lazy worklist restore and source-policy changes."
       - "Final public API narrowing decision for Effects and validation_step."
@@ -24,9 +25,11 @@ phases:
         text: "Interactive contracts expose question while full-auto contracts do not, and neither policy injects default blocked or failed."
       - id: "AC-4"
         text: "Authored blocked and failed routes remain legal ordinary routes without hidden non-empty-reason validation."
+      - id: "AC-5"
+        text: "Child workflow failure and blocked mappings still require explicit authored routes, while child question propagation remains valid when policy allows it."
     deliverables:
       - "Patched artifact, compiler, lowering, engine, and provider parsing modules for the new route and artifact contract."
-      - "Updated unit and contract tests covering artifact identity, provider-route visibility, and direct/rendered parity."
+      - "Updated unit and contract tests covering artifact identity, provider-route visibility, direct/rendered parity, and child-workflow route mapping preservation."
     risks:
       - "Canonical artifact-name changes can regress route-required-write resolution, provider artifact refs, and public artifact aliases if only some call sites are updated."
       - "Removing managed-role APIs is a public surface break and must be accompanied by accurate compile-time errors and doc follow-up."
@@ -39,7 +42,7 @@ phases:
     status: "planned"
     in_scope:
       - "Keep static worklist validation limited to declarations while deferring data load, payload validation, and selection realization to first runtime use."
-      - "Introduce explicit missing-source policy with error-by-default and opt-in scaffold behavior for artifact-backed sources."
+      - "Standardize the missing-source policy on Worklist.from_artifact(..., missing=\"error\" | \"scaffold\") with error-by-default and opt-in scaffold behavior."
       - "Adopt strict lazy restore for checkpointed worklist selections and lazy work-item continuity resolution."
       - "Align runtime prompt and artifact placeholder resolution for item.state and worklist/item late-bound data."
       - "Expose declared-versus-materialized worklist state through inspection and static graph outputs."
@@ -59,8 +62,10 @@ phases:
         text: "Work-item session continuity derives stable keys after resolving the current item and fails clearly when no current item is available."
       - id: "AC-5"
         text: "Inspection and static graph outputs distinguish declared worklists from runtime materialization state without implying eager source validation."
+      - id: "AC-6"
+        text: "Artifact-backed worklists use one centralized missing-source contract through Worklist.from_artifact(..., missing=...), with custom non-artifact WorklistSource.ensure(...) behavior left unchanged."
     deliverables:
-      - "Patched worklist, context, session, engine, and inspection/static-graph modules for strict lazy materialization."
+      - "Patched worklist, context, session, engine, and inspection/static-graph modules for strict lazy materialization and a centralized artifact-backed missing-source API."
       - "Updated runtime and contract tests covering source policy, restore, item-state placeholders, and work-item session continuity."
     risks:
       - "Changing restore semantics can regress resumed item-state behavior or scoped current-item synchronization if snapshot handling is incomplete."

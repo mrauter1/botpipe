@@ -11,6 +11,7 @@
   - fallback route summaries still treat `blocked` and `failed` like reserved controls
   - checkpoint restore eagerly reloads worklist sources through `Engine._restore_worklist_selections()`
   - artifact-backed worklists have no explicit missing-source policy surface
+- Route-policy edits touch existing child-workflow mapping code in `Engine._map_workflow_step_result(...)`, so Phase 1 needs explicit preservation tests for child `failed`, child `blocked`, and child `question` behavior even though the current implementation already largely matches the requested contract.
 - Lazy worklist behavior exists at first access through `Context.ensure_selection()` and scoped-step dispatch, so the plan should preserve that path and tighten restore/session/inspection behavior around it instead of replacing the mechanism.
 
 ## Milestone plan
@@ -35,15 +36,18 @@ Implementation intent:
 - Make rendered provider outcome parsing match direct `Outcome(...)` semantics by defaulting missing `reason` to `""`.
 - Keep `question` as the only built-in route with special payload validation, and keep provider-visible `question` policy-gated through existing interactive/full-auto route sets.
 - Remove reserved-style summary defaults for unauthored `blocked` and `failed`; authored uses of those names should get generic authored-route summaries.
+- Preserve the existing explicit child-workflow mapping rule: child `FAIL -> failed` and child `AWAIT_INPUT without question -> blocked` remain legal only when the parent child-workflow step declares those authored routes, while child `question` continues to propagate through the policy-gated `question` route.
 
 Interface and compatibility notes:
 - Intentional public API break: remove `Artifact.managed(...)`, `ArtifactRole`, and `role=` from public constructors unless another concrete internal use remains after refactor.
 - `CompiledArtifact` and capability/static-graph payloads should continue exposing `workflow_level` and `producer_steps`, but `qualified_name` must remain the canonical public/workflow name for workflow-level artifacts.
 - Existing authored workflows that explicitly declare `blocked` or `failed` must keep working without hidden non-empty `reason` rules.
+- Existing child-workflow steps that rely on implicit `failed` or `blocked` handling remain intentionally unsupported; the runtime error shape for missing authored routes should stay explicit and continue naming the step, child terminal, mapped route, declared routes, and recommended fix.
 
 Regression controls:
 - Add and update tests for same-object workflow-level plus multi-step production, canonical name resolution, route-required-write resolution by public name, and distinct-artifact ambiguity failures.
 - Add direct-versus-rendered provider parity tests for `done`, authored `blocked`/`failed`, valid `question`, invalid `question`, and illegal `question` under full-auto.
+- Keep dedicated regression tests for child workflow mapping: declared child `failed`, missing child `failed`, child `question` propagation, declared child `blocked`, and missing child `blocked`.
 
 ### Phase 2: strict lazy worklist materialization and session continuity
 
@@ -60,14 +64,16 @@ Target modules:
 Implementation intent:
 - Keep declaration-time validation limited to worklist identity, selector declaration, item-state model shape, and scoped-step references.
 - Make source loading, payload validation, and selection creation happen only on first runtime use.
-- Introduce explicit source policy for missing backing data, with artifact-backed sources defaulting to `missing="error"` and optional opt-in scaffold behavior.
+- Introduce explicit source policy on the artifact-backed public authoring surface: add `missing: Literal["error", "scaffold"] = "error"` to `Worklist.from_artifact(...)`, persist it on `_ArtifactWorklistSource`, and make `ensure(...)` create backing data only when that field is `"scaffold"`.
 - Change checkpoint restore to strict lazy restore: restore only snapshots/selection metadata at resume entry and defer source reconcile/load until first access.
 - Make work-item session continuity resolve only after a current item can be obtained from the relevant selection.
 - Make runtime `{item.state.<field>}` rendering and failures agree with compile-time placeholder validation.
 - Distinguish declared-versus-materialized worklists in inspection/static graph outputs without implying eager loading.
+- Keep custom non-artifact `WorklistSource.ensure(...)` behavior unchanged; the new standardized `missing=` contract is only for artifact-backed worklists so the policy is not duplicated across generic sources and engine call sites.
 
 Interface and compatibility notes:
 - Resume semantics intentionally change: old checkpoints with materialized selections should resume without loading sources until the selection is used.
+- Artifact-backed worklists gain one explicit authoring knob, `Worklist.from_artifact(..., missing="error" | "scaffold")`, with `error` as the compatibility-preserving default.
 - Old checkpoints with missing or null worklist selections should restore as an empty lazy selection map.
 - `ctx.selection(...)`, `ctx.current(...)`, scoped-step entry, worklist prompt/artifact placeholders, and work-item session keys become the authoritative materialization triggers.
 
@@ -108,4 +114,5 @@ Compatibility and risk notes:
 
 - Land Phase 1 and Phase 2 with focused unit plus contract coverage before considering Phase 3.
 - Run the provider boundary tests, route/validation unit suite, worklist/session unit suite, and engine contract tests that cover provider routing, worklist lazy materialization, restore, prompt placeholders, child workflow mapping, and validation-step behavior.
+- Public migration for artifact ownership cleanup is direct: replace `Artifact.managed(...)` or `role="managed"` with ordinary artifact constructors plus workflow-level declarations and step writes that share the same artifact object when dual-role provenance is intended; keep this migration note in the implementation change even if the broader docs sweep stays in Phase 3.
 - Roll back by restoring prior artifact naming or eager-restore behavior only if the new tests expose unavoidable compatibility breaks; do not keep hybrid semantics that mix canonical workflow-level names with step-local rebinding or mix lazy declaration with eager resume.

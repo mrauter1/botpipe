@@ -94,3 +94,36 @@ The planner should revise Phase 1 to explicitly include child-workflow mapping p
 <loop-control>
 {"schema":"docloop.loop_control/v1","kind":"promise","promise":"INCOMPLETE"}
 </loop-control>
+
+
+---
+run_id=run-20260504T151346Z-4f933dd3 | entry=session_turn | pair=plan | phase=producer | cycle=2 | attempt=1 | thread_id=019df38d-79f8-75e0-9233-c039ac728555
+---
+provider=codex
+mode=resume
+template=/home/rauter/.local/share/pipx/venvs/autoloop/lib/python3.12/site-packages/autoloop/templates/plan_producer.md
+session_id=019df38d-79f8-75e0-9233-c039ac728555
+
+
+---
+run_id=run-20260504T151346Z-4f933dd3 | entry=phase_output | pair=plan | phase=producer | process=codex-agent | cycle=2 | attempt=1 | thread_id=019df38d-79f8-75e0-9233-c039ac728555
+---
+I’m revising the plan against the verifier findings rather than broadening scope. I’m checking the current plan and the relevant worklist/child-mapping surfaces so I can make the missing-source API and child-route regression coverage explicit without adding unnecessary machinery.
+
+I’ve got the concrete fixes: Phase 1 needs explicit child-workflow mapping preservation, and Phase 2 needs the missing-source policy pinned to a specific authoring surface instead of left abstract. I’m updating both the narrative plan and the machine-readable phases now.
+
+The core revisions are in place. I’m recording the verifier-driven deltas in the feedback log and adding only the two non-obvious decisions that later turns would otherwise be likely to drift on.
+
+I’ve applied the verifier-driven changes. I’m doing one final consistency pass on the updated sections so the next verifier turn sees the child-mapping coverage and the missing-source API definition exactly where it expects them.
+
+Revised the planning artifacts to address the verifier’s blocking points.
+
+`Phase 1` now explicitly preserves and regression-tests child workflow `failed` / `blocked` / `question` mapping, including the missing-route failure cases that route-policy changes could regress. `Phase 2` now defines the missing-source contract concretely on `Worklist.from_artifact(..., missing="error" | "scaffold")`, with `_ArtifactWorklistSource` as the single implementation owner and custom non-artifact `WorklistSource.ensure(...)` behavior left unchanged. I also added a direct migration note for removing `Artifact.managed(...)` / `role="managed"`.
+
+Updated:
+- [plan.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/below-is-the-revised-standalone-correction-spec-91e19feb/runs/run-20260504T151346Z-4f933dd3/artifacts/plan/plan.md)
+- [phase_plan.yaml](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/below-is-the-revised-standalone-correction-spec-91e19feb/runs/run-20260504T151346Z-4f933dd3/artifacts/plan/phase_plan.yaml)
+- [feedback.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/below-is-the-revised-standalone-correction-spec-91e19feb/runs/run-20260504T151346Z-4f933dd3/artifacts/plan/feedback.md)
+- [decisions.txt](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/below-is-the-revised-standalone-correction-spec-91e19feb/runs/run-20260504T151346Z-4f933dd3/decisions.txt)
+
+No tests were run; this was a planning-only revision.
