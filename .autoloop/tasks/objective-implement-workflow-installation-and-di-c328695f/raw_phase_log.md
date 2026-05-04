@@ -585,3 +585,58 @@ I’ve finished the edits and the phase notes. I’m pulling exact line referenc
 - Validation was limited to `python3 -m py_compile` on the touched code and new test file.
 - `pytest` is not installed here, and direct runtime smoke execution is also blocked because `pydantic` is missing from the environment.
 - Next step is to run the new focused tests plus the relevant existing runtime/CLI tests in an environment with project test dependencies installed.
+
+
+---
+run_id=run-20260504T192206Z-d3f7e940 | entry=session_turn | pair=implement | phase=verifier | cycle=1 | attempt=1 | thread_id=019df48d-ca11-78b0-bc57-ac1b0b7dcd2d
+---
+provider=codex
+mode=resume
+template=/home/rauter/.local/share/pipx/venvs/autoloop/lib/python3.12/site-packages/autoloop/templates/implement_verifier.md
+session_id=019df48d-ca11-78b0-bc57-ac1b0b7dcd2d
+
+
+---
+run_id=run-20260504T192206Z-d3f7e940 | entry=phase_output | pair=implement | phase=verifier | process=codex-agent | cycle=1 | attempt=1 | thread_id=019df48d-ca11-78b0-bc57-ac1b0b7dcd2d
+---
+I’m reviewing the phase diff against the acceptance criteria and the implementation notes first, then I’ll mark the criteria file and append any blocking or non-blocking findings to the feedback artifact.
+
+The repo diff itself isn’t showing through `git diff` in this resumed review context, so I’m verifying directly against the touched source and the new test file to find concrete behavioral gaps and regressions.
+
+I found two material issues: one is a direct CLI JSON contract regression, and the other widens persisted-path semantics across unrelated runtime metadata. I’m recording both in the feedback artifact now and leaving the criteria unchecked.
+
+Scope considered
+- Phase-local review of the requested runtime/CLI/metadata integration scope.
+- Changed and request-relevant files: `autoloop/runtime/loader.py`, `autoloop/runtime/workspace.py`, `autoloop/runtime/runner.py`, `autoloop/runtime/cli.py`, `autoloop/core/context.py`, and `tests/runtime/test_runtime_cli_metadata_integration.py`.
+- Review artifacts updated in the active phase directory only; repository source was not modified.
+
+What I analyzed
+- The phase contract, implementation notes, and run-local decisions ledger.
+- Persisted workflow origin metadata flow from resolver to `workflow.json` / `run.json`.
+- CLI `workflows list/show/init` output changes and compatibility impact.
+- Context-root inference and generic runtime path serialization behavior.
+- Focused test coverage added for this phase.
+
+What I reviewed
+- `ResolvedWorkflow` exposure of source/module metadata.
+- `WorkflowWorkspace` propagation and `_workflow_origin_payload`.
+- `_serialize_path` contract impact on non-workflow metadata.
+- `_assert_workflow_identity_consistency` additions.
+- CLI additive vs breaking JSON changes.
+- New focused tests for workspace metadata, explicit manifest normalization, shadowed catalog output, and scaffold target.
+
+Key findings / decisions
+- I appended two blocking findings and one non-blocking finding to the feedback artifact.
+- `criteria.md` remains with unchecked boxes because the implementation is not yet safe to mark complete.
+- The two blocking issues are:
+  - `IMP-001`: `workflows list` removed the existing `manifest_present` JSON field instead of extending the payload additively.
+  - `IMP-002`: `_serialize_path` was broadened globally, changing unrelated persisted runtime path contracts outside the phase’s intended workflow-origin normalization.
+
+Open issues / next step
+- Fix `IMP-001` by restoring `manifest_present` while keeping the new list fields.
+- Fix `IMP-002` by reverting generic `_serialize_path` behavior and introducing a workflow-origin-specific serializer for out-of-root normalization.
+- After that, re-run focused review on CLI JSON compatibility and persisted metadata semantics.
+
+<loop-control>
+{"schema":"docloop.loop_control/v1","kind":"promise","promise":"INCOMPLETE"}
+</loop-control>
