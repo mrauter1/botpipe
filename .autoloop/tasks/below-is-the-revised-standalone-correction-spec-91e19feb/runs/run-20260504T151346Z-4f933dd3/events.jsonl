@@ -52,3 +52,6 @@
 {"ts": "2026-05-04T16:31:18.898641+00:00", "run_id": "run-20260504T151346Z-4f933dd3", "seq": 52, "event_type": "phase_completed", "pair": "test", "phase_id": "public-surface-polish", "phase_mode": "single"}
 {"ts": "2026-05-04T16:31:18.902122+00:00", "run_id": "run-20260504T151346Z-4f933dd3", "seq": 53, "event_type": "pair_started", "pair": "audit", "phase_id": null}
 {"ts": "2026-05-04T16:31:18.902331+00:00", "run_id": "run-20260504T151346Z-4f933dd3", "seq": 54, "event_type": "cycle_started", "pair": "audit", "cycle": 1, "attempt": 1, "phase_id": null}
+{"ts": "2026-05-04T16:35:07.919689+00:00", "run_id": "run-20260504T151346Z-4f933dd3", "seq": 55, "event_type": "phase_finished", "pair": "audit", "phase": "producer", "cycle": 1, "attempt": 1, "empty_output": false, "phase_id": null}
+{"ts": "2026-05-04T16:36:13.464021+00:00", "run_id": "run-20260504T151346Z-4f933dd3", "seq": 56, "event_type": "phase_finished", "pair": "audit", "phase": "verifier", "cycle": 1, "attempt": 1, "empty_output": false, "phase_id": null}
+{"ts": "2026-05-04T16:36:13.498377+00:00", "run_id": "run-20260504T151346Z-4f933dd3", "seq": 57, "event_type": "pair_completed", "pair": "audit", "cycle": 1, "attempt": 1, "phase_id": null}

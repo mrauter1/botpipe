@@ -1067,3 +1067,46 @@ The follow-up should be narrow: update workflow prompt bodies and the tests that
 <loop-control>
 {"schema":"docloop.loop_control/v1","kind":"promise","promise":"INCOMPLETE"}
 </loop-control>
+
+
+---
+run_id=run-20260504T151346Z-4f933dd3 | entry=session_turn | pair=audit | phase=verifier | cycle=1 | attempt=1 | thread_id=019df3d4-7217-7af0-9eac-42750e11ff81
+---
+provider=codex
+mode=resume
+template=/home/rauter/.local/share/pipx/venvs/autoloop/lib/python3.12/site-packages/autoloop/templates/audit_verifier.md
+session_id=019df3d4-7217-7af0-9eac-42750e11ff81
+
+
+---
+run_id=run-20260504T151346Z-4f933dd3 | entry=phase_output | pair=audit | phase=verifier | process=codex-agent | cycle=1 | attempt=1 | thread_id=019df3d4-7217-7af0-9eac-42750e11ff81
+---
+I’m verifying the audit artifacts against the request, decisions, and live repo evidence now. I’ll check whether the reported gap is real and material, whether the revised request is actionable, then I’ll update only the audit criteria and feedback.
+
+The audit artifacts themselves are coherent. I’m verifying the reported repo state directly now: a couple of representative prompt files, the tests that still assert the old wording, and a few runtime modules the audit marked as aligned.
+
+The reported gap is real, the revised request is actionable, and I haven’t found a missed material issue or misclassification in the audit. I’m recording a clean verifier result in the audit feedback now.
+
+Scope considered
+
+The immutable request, authoritative raw log, `decisions.txt`, the audit artifacts in `artifacts/audit`, and the final repository surfaces the audit relied on: representative runtime modules, workflow prompt bodies, and the runtime tests that assert prompt wording.
+
+What I analyzed
+
+`gap_report.md`, `revised_request.md`, `audit_result.json`, `criteria.md`, and `feedback.md`, plus live evidence in `autoloop/core/artifacts.py`, `autoloop/core/providers/parsing.py`, representative prompt files under `workflows/**/prompts/*.md`, and representative runtime prompt-package tests.
+
+What I reviewed
+
+Whether the audit’s reported material gap is real, whether any material unresolved gap was missed, whether justified differences were actually justified by the request/decisions, and whether `revised_request.md` is narrow and directly actionable for the next run when `material_gaps_found` is `true`.
+
+Key findings / decisions
+
+The audit is accurate. The reported gap is real and material: `46` workflow prompt bodies still contain retired `Reserved routes` wording, some still explicitly list `question`, `blocked`, and `failed` as reserved/default routes, and runtime prompt-package tests still assert that stale wording. The revised request is appropriately narrow and `audit_result.json` matches it. I found no blocking verifier findings.
+
+Open issues / next step
+
+I left all audit criteria checked and appended a clean verifier result to `artifacts/audit/feedback.md` as `AUD-000` `non-blocking`. No further audit-artifact correction is needed.
+
+<loop-control>
+{"schema":"docloop.loop_control/v1","kind":"promise","promise":"COMPLETE"}
+</loop-control>
