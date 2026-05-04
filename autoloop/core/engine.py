@@ -211,6 +211,7 @@ class Engine:
         current_answer: str | None = None
         current_input_response: Any | None = None
         selections: dict[str, Selection[Any]] = {}
+        selection_snapshots: dict[str, SelectionSnapshot] = {}
         values: dict[str, Any] = {}
         step_states: dict[str, BaseModel | dict[str, Any]] = {}
         item_states: dict[str, BaseModel | dict[str, Any]] = {}
@@ -248,6 +249,7 @@ class Engine:
                     session_definitions=self.compiled.sessions,
                     worklists=self.compiled.worklists,
                     selections={},
+                    selection_snapshots={},
                     params=params,
                     workflow_params=workflow_params,
                     workflow_input=workflow_input,
@@ -257,7 +259,7 @@ class Engine:
                     default_session_name=self.compiled.default_session_name,
                     values=values,
                 )
-                selections = self.state_runtime.restore_worklist_selections(
+                selection_snapshots = self.state_runtime.restore_worklist_selections(
                     selection_context,
                     checkpoint.worklist_selections or {},
                 )
@@ -275,6 +277,7 @@ class Engine:
                         item_states=item_states,
                         step_item_states=step_item_states,
                         worklist_selections=selections,
+                        worklist_selection_snapshots=selection_snapshots,
                         pending_handoffs=pending_handoffs,
                         pending_input=checkpoint.pending_input,
                         pending_answer=current_answer,
@@ -298,6 +301,7 @@ class Engine:
                     session_definitions=self.compiled.sessions,
                     worklists=self.compiled.worklists,
                     selections=selections,
+                    selection_snapshots=selection_snapshots,
                     params=params,
                     workflow_params=workflow_params,
                     workflow_input=workflow_input,
@@ -339,6 +343,7 @@ class Engine:
                     session_definitions=self.compiled.sessions,
                     worklists=self.compiled.worklists,
                     selections=selections,
+                    selection_snapshots=selection_snapshots,
                     active_worklist=step.scope_name,
                     params=params,
                     workflow_params=workflow_params,
@@ -496,6 +501,7 @@ class Engine:
                         item_states=item_states,
                         step_item_states=step_item_states,
                         worklist_selections=selections,
+                        worklist_selection_snapshots=selection_snapshots,
                         pending_handoffs=self._pending_handoffs_for_exception(exc, pending_handoffs),
                         pending_input=None,
                         pending_answer=current_answer,
@@ -539,6 +545,7 @@ class Engine:
                             item_states=item_states,
                             step_item_states=step_item_states,
                             worklist_selections=selections,
+                            worklist_selection_snapshots=selection_snapshots,
                             pending_handoffs=pending_handoffs,
                             pending_input=None,
                             pending_answer=None,
@@ -560,6 +567,7 @@ class Engine:
                         item_states=item_states,
                         step_item_states=step_item_states,
                         worklist_selections=selections,
+                        worklist_selection_snapshots=selection_snapshots,
                         pending_handoffs=pending_handoffs,
                         pending_input=pending_input,
                         pending_answer=None,
@@ -601,6 +609,7 @@ class Engine:
                         item_states=item_states,
                         step_item_states=step_item_states,
                         worklist_selections=selections,
+                        worklist_selection_snapshots=selection_snapshots,
                         pending_handoffs=pending_handoffs,
                         pending_input=None,
                         pending_answer=None,
@@ -642,6 +651,7 @@ class Engine:
                         item_states=item_states,
                         step_item_states=step_item_states,
                         worklist_selections=selections,
+                        worklist_selection_snapshots=selection_snapshots,
                         pending_handoffs=pending_handoffs,
                         pending_input=None,
                         pending_answer=None,
@@ -1985,14 +1995,13 @@ class Engine:
         self,
         context: Context,
         snapshots: Mapping[str, SelectionSnapshot],
-    ) -> dict[str, Selection[Any]]:
-        selections: dict[str, Selection[Any]] = {}
+    ) -> dict[str, SelectionSnapshot]:
+        selection_snapshots: dict[str, SelectionSnapshot] = {}
         for name, snapshot in snapshots.items():
-            worklist = self.compiled.worklists.get(name)
-            if worklist is None:
-                continue
-            selections[name] = worklist.restore_selection(context, snapshot)
-        return selections
+            if name in self.compiled.worklists:
+                selection_snapshots[name] = snapshot
+        context_runtime(context).set_selection_snapshots(selection_snapshots)
+        return selection_snapshots
 
     def _ensure_worklist_selection(
         self,
@@ -2005,7 +2014,8 @@ class Engine:
         worklist = self.compiled.worklists.get(worklist_name)
         if worklist is None:
             raise WorkflowExecutionError(f"unknown worklist {worklist_name!r}")
-        source_type = self._worklist_source_type(worklist)
+        snapshot = getattr(context, "_selection_snapshots", {}).get(worklist_name)
+        source_type = worklist.source_type
         source_path = self._worklist_source_path(worklist, context)
         try:
             worklist.ensure_source(context)
@@ -2039,19 +2049,13 @@ class Engine:
             ) from exc
         try:
             cached_items = worklist._cache_loaded_items(context, items)
-            selection = Selection(
-                worklist_name=worklist.name,
-                mode=worklist._resolve_mode(context),
-                items=worklist._select_items(cached_items, ctx=context),
-                explicit=worklist._has_explicit_selection(context),
-                current_index=0,
-            )
+            selection = worklist._selection_from_loaded_items(context, cached_items, snapshot=snapshot)
         except Exception as exc:
             raise self._worklist_selection_resolution_error(
                 worklist_name=worklist_name,
                 source_type=source_type,
                 source_path=source_path,
-                phase="select",
+                phase="restore" if snapshot is not None else "select",
                 error=exc,
                 selector_details=self._worklist_selector_details(worklist),
             ) from exc
@@ -2076,6 +2080,7 @@ class Engine:
         item_states: Mapping[str, BaseModel | dict[str, Any]] | None = None,
         step_item_states: Mapping[str, Mapping[str, BaseModel | dict[str, Any]]] | None = None,
         worklist_selections: Mapping[str, Selection[Any]] | None = None,
+        worklist_selection_snapshots: Mapping[str, SelectionSnapshot] | None = None,
         pending_handoffs: tuple[PendingHandoff, ...] = (),
         pending_input: PendingInput | None,
         pending_answer: str | None,
@@ -2090,7 +2095,10 @@ class Engine:
             step_states=self._serialize_step_states(step_states),
             item_states=self._serialize_item_states(item_states),
             step_item_states=self._serialize_step_item_states(step_item_states),
-            worklist_selections=self._snapshot_worklist_selections(worklist_selections),
+            worklist_selections=self._snapshot_worklist_selections(
+                worklist_selections,
+                snapshots=worklist_selection_snapshots,
+            ),
             pending_handoffs=tuple(pending_handoffs),
             pending_input=replace(pending_input) if pending_input is not None else None,
             pending_question=None,
@@ -2103,52 +2111,33 @@ class Engine:
     def _snapshot_worklist_selections(
         self,
         selections: Mapping[str, Selection[Any]] | None,
+        *,
+        snapshots: Mapping[str, SelectionSnapshot] | None = None,
     ) -> dict[str, SelectionSnapshot] | None:
-        if not selections:
+        if not selections and not snapshots:
             return None
-        snapshots: dict[str, SelectionSnapshot] = {}
-        for name, selection in selections.items():
+        serialized: dict[str, SelectionSnapshot] = {}
+        if snapshots:
+            for name, snapshot in snapshots.items():
+                if name in self.compiled.worklists:
+                    serialized[name] = snapshot
+        for name, selection in (selections or {}).items():
             worklist = self.compiled.worklists.get(name)
             if worklist is None:
                 continue
-            snapshots[name] = worklist.snapshot_selection(selection)
-        return snapshots or None
-
-    @staticmethod
-    def _worklist_source_type(worklist: Any) -> str:
-        source = getattr(worklist, "source", None)
-        if source is None:
-            return "unknown"
-        if getattr(source, "artifact_backed", False):
-            return "artifact"
-        param_name = getattr(source, "param_name", None)
-        if isinstance(param_name, str) and param_name:
-            return "parameter"
-        if type(source).__name__ == "_StaticWorklistSource":
-            return "static"
-        return type(source).__name__
+            serialized[name] = worklist.snapshot_selection(selection)
+        return serialized or None
 
     def _worklist_source_path(self, worklist: Any, context: Context) -> str | None:
-        source = getattr(worklist, "source", None)
-        if source is None:
+        descriptor = self._worklist_source_descriptor(worklist, context)
+        if ":" not in descriptor:
             return None
-        if getattr(source, "artifact_backed", False):
-            artifact = getattr(source, "artifact", None)
-            if artifact is None:
-                return None
-            try:
-                return str(resolve_artifact_template(artifact, context))
-            except Exception:
-                template = getattr(artifact, "template", None)
-                return template if isinstance(template, str) and template else None
-        return None
+        return descriptor.split(":", 1)[1]
 
     def _worklist_source_descriptor(self, worklist: Any, context: Context) -> str:
-        source_type = self._worklist_source_type(worklist)
-        source_path = self._worklist_source_path(worklist, context)
-        if source_path is None:
-            return source_type
-        return f"{source_type}:{source_path}"
+        if hasattr(worklist, "source_descriptor"):
+            return worklist.source_descriptor(context)
+        return "unknown"
 
     @staticmethod
     def _worklist_selector_details(worklist: Any) -> str | None:

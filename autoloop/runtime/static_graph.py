@@ -347,6 +347,10 @@ def _worklist_surfaces_payload(compiled: CompiledWorkflow) -> dict[str, dict[str
                 for field_name in sorted(worklist.runtime_item_state_model.model_fields.keys())
                 if field_name not in {"status", "last_step", "last_route"}
             ],
+            "source_type": worklist.source_type,
+            "source_descriptor": worklist.source_descriptor(),
+            "missing_policy": worklist.missing_policy,
+            "materialization_state": "declared",
         }
         for name, worklist in compiled.worklists.items()
     }

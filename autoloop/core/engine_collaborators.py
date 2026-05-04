@@ -1149,7 +1149,7 @@ class StateRuntime:
         self,
         context: "Context",
         snapshots: "Mapping[str, SelectionSnapshot]",
-    ) -> dict[str, "Selection[Any]"]:
+    ) -> dict[str, "SelectionSnapshot"]:
         return self._engine._restore_worklist_selections(context, snapshots)
 
     def ensure_worklist_selection(

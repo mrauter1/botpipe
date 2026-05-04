@@ -808,6 +808,9 @@ def _workflow_compile_cache_key(
             name: {
                 "item_state_model": worklist.runtime_item_state_model.__name__,
                 "item_state_fields": sorted(worklist.runtime_item_state_model.model_fields.keys()),
+                "source_type": worklist.source_type,
+                "missing_policy": worklist.missing_policy,
+                "source_descriptor": worklist.source_descriptor(),
             }
             for name, worklist in definition.worklists_by_name.items()
         },
@@ -909,6 +912,9 @@ def _topology_hash_payload(compiled: CompiledWorkflow) -> dict[str, Any]:
             name: {
                 "item_state_model": worklist.runtime_item_state_model.__name__,
                 "item_state_fields": list(worklist.runtime_item_state_model.model_fields.keys()),
+                "source_type": worklist.source_type,
+                "missing_policy": worklist.missing_policy,
+                "source_descriptor": worklist.source_descriptor(),
             }
             for name, worklist in compiled.worklists.items()
         },

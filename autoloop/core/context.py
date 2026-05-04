@@ -25,7 +25,7 @@ if TYPE_CHECKING:
     from .compiler import CompiledStep
     from .history import HistoryReader
     from .stores.protocols import SessionStore
-    from .worklists import Selection, WorkItem, Worklist
+    from .worklists import Selection, SelectionSnapshot, WorkItem, Worklist
 
 
 OutputT = TypeVar("OutputT")
@@ -180,6 +180,7 @@ class Context:
         session_definitions: Mapping[str, Session] | None = None,
         worklists: Mapping[str, "Worklist[Any]"] | None = None,
         selections: dict[str, "Selection[Any]"] | None = None,
+        selection_snapshots: dict[str, "SelectionSnapshot"] | None = None,
         active_worklist: str | None = None,
         params: BaseModel | None = None,
         workflow_params: Mapping[str, Any] | None = None,
@@ -212,6 +213,7 @@ class Context:
         self._session_definitions = normalize_mapping(session_definitions)
         self._worklists = normalize_mapping(worklists)
         self._selections = selections if selections is not None else {}
+        self._selection_snapshots = selection_snapshots if selection_snapshots is not None else {}
         self._active_worklist = active_worklist
         self._params = params if params is not None else EmptyParameters()
         self._workflow_params = normalize_mapping(workflow_params)
@@ -516,6 +518,8 @@ class Context:
 
     def _worklist_name(self, worklist: "Worklist[Any] | str") -> str:
         if isinstance(worklist, str):
+            if worklist not in self._worklists:
+                raise WorkflowExecutionError(f"unknown worklist {worklist!r}")
             return worklist
         name = getattr(worklist, "name", None)
         if not isinstance(name, str) or not name:
@@ -608,13 +612,18 @@ class _ContextRuntime:
         self._context._step_item_state = state
 
     def set_selection(self, worklist: "Worklist[Any] | str", selection: "Selection[Any]") -> None:
-        self._context._selections[self._context._worklist_name(worklist)] = selection
+        worklist_name = self._context._worklist_name(worklist)
+        self._context._selections[worklist_name] = selection
+        self._context._selection_snapshots.pop(worklist_name, None)
 
     def set_active_worklist(self, worklist: "Worklist[Any] | str | None") -> None:
         self._context._active_worklist = None if worklist is None else self._context._worklist_name(worklist)
 
     def set_selections(self, selections: dict[str, "Selection[Any]"]) -> None:
         self._context._selections = selections
+
+    def set_selection_snapshots(self, snapshots: dict[str, "SelectionSnapshot"]) -> None:
+        self._context._selection_snapshots = snapshots
 
     def set_worklist_selection_sync(self, callback: Callable[[str], None] | None) -> None:
         self._context._worklist_selection_sync = callback
@@ -708,9 +717,15 @@ class _ContextRuntime:
             "current_index": selection.current_index,
             "current_item_id": None if current is None else current.id,
             "lazy": lazy,
+            "materialization_state": "materialized",
         }
         if source is not None:
             payload["source"] = source
+        worklist = self._context._worklists.get(worklist_name)
+        if worklist is not None:
+            payload["source_type"] = worklist.source_type
+            if worklist.missing_policy is not None:
+                payload["missing_policy"] = worklist.missing_policy
         visit = _runtime_visits(self._context._step_item_state or self._context._step_state)
         if isinstance(visit, int):
             payload["visit"] = visit

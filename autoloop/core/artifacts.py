@@ -432,6 +432,7 @@ def _resolve_item_placeholder(
         )
     return _resolve_work_item_path(
         current,
+        context=context,
         expression=expression,
         parts=expression.split(".")[1:],
         placeholder_label=placeholder_label,
@@ -469,6 +470,7 @@ def _resolve_worklist_placeholder(
             )
         return _resolve_work_item_path(
             current,
+            context=context,
             expression=expression,
             parts=rest,
             placeholder_label=placeholder_label,
@@ -493,6 +495,7 @@ def _resolve_worklist_placeholder(
 def _resolve_work_item_path(
     item: Any,
     *,
+    context: Context,
     expression: str,
     parts: list[str],
     placeholder_label: str,
@@ -511,6 +514,25 @@ def _resolve_work_item_path(
             parts=rest,
             placeholder_label=placeholder_label,
             payload_path=[],
+            worklist_name=worklist_name,
+        )
+    if field_name == "state":
+        try:
+            item_state = context.item_state
+        except WorkflowExecutionError as exc:
+            raise WorkflowExecutionError(
+                f"{placeholder_label} {{{expression}}} could not resolve active item state"
+                + (f" on worklist {worklist_name!r}" if worklist_name else "")
+                + f": {exc}"
+            ) from exc
+        if not rest:
+            return item_state
+        return _resolve_runtime_path(
+            item_state,
+            expression=expression,
+            parts=rest,
+            placeholder_label=placeholder_label,
+            payload_path=None,
             worklist_name=worklist_name,
         )
     if field_name in {"id", "title", "status", "dir_key"}:

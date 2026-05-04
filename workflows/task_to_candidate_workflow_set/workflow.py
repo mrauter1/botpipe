@@ -101,17 +101,17 @@ class TaskToCandidateWorkflowSet(Workflow):
     workflow_instructions = Artifact("{package_folder}/../../Workflow_Instructions.md")
     candidate_set_checklist = Artifact("{package_folder}/assets/candidate_workflow_set_checklist.md")
 
-    invocation_contract = Artifact("{workflow_folder}/invocation_contract.json", role="managed")
-    workflow_capability_snapshot = Artifact("{workflow_folder}/workflow_capability_snapshot.json", role="managed")
-    candidate_request_brief = Artifact("{workflow_folder}/candidate_request_brief.md", role="managed")
-    candidate_selection_criteria = Artifact("{workflow_folder}/candidate_selection_criteria.md", role="managed")
-    workflow_candidate_matrix = Artifact("{workflow_folder}/workflow_candidate_matrix.md", role="managed")
-    workflow_gap_analysis = Artifact("{workflow_folder}/workflow_gap_analysis.md", role="managed")
-    candidate_route_posture = Artifact("{workflow_folder}/candidate_route_posture.md", role="managed")
-    candidate_workflow_set = Artifact("{workflow_folder}/candidate_workflow_set.md", role="managed")
-    candidate_workflow_set_summary = Artifact("{workflow_folder}/candidate_workflow_set_summary.json", role="managed")
-    candidate_next_action = Artifact("{workflow_folder}/candidate_next_action.md", role="managed")
-    candidate_workflow_set_receipt = Artifact("{workflow_folder}/candidate_workflow_set_receipt.json", role="managed")
+    invocation_contract = Artifact("{workflow_folder}/invocation_contract.json")
+    workflow_capability_snapshot = Artifact("{workflow_folder}/workflow_capability_snapshot.json")
+    candidate_request_brief = Artifact("{workflow_folder}/candidate_request_brief.md")
+    candidate_selection_criteria = Artifact("{workflow_folder}/candidate_selection_criteria.md")
+    workflow_candidate_matrix = Artifact("{workflow_folder}/workflow_candidate_matrix.md")
+    workflow_gap_analysis = Artifact("{workflow_folder}/workflow_gap_analysis.md")
+    candidate_route_posture = Artifact("{workflow_folder}/candidate_route_posture.md")
+    candidate_workflow_set = Artifact("{workflow_folder}/candidate_workflow_set.md")
+    candidate_workflow_set_summary = Artifact("{workflow_folder}/candidate_workflow_set_summary.json")
+    candidate_next_action = Artifact("{workflow_folder}/candidate_next_action.md")
+    candidate_workflow_set_receipt = Artifact("{workflow_folder}/candidate_workflow_set_receipt.json")
 
     @python_step(
         name="bootstrap",

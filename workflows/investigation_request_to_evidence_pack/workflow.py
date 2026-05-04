@@ -64,17 +64,17 @@ class InvestigationRequestToEvidencePack(Workflow):
     workflow_instructions = Artifact("{package_folder}/../../Workflow_Instructions.md")
     evidence_pack_checklist = Artifact("{package_folder}/assets/evidence_pack_checklist.md")
 
-    invocation_contract = Artifact("{workflow_folder}/invocation_contract.json", role="managed")
-    investigation_scope_brief = Artifact("{workflow_folder}/investigation_scope_brief.md", role="managed")
-    investigation_objectives = Artifact("{workflow_folder}/investigation_objectives.md", role="managed")
-    evidence_intake_register = Artifact("{workflow_folder}/evidence_intake_register.md", role="managed")
-    evidence_source_inventory = Artifact("{workflow_folder}/evidence_source_inventory.md", role="managed")
-    evidence_coverage_matrix = Artifact("{workflow_folder}/evidence_coverage_matrix.md", role="managed")
-    evidence_findings = Artifact("{workflow_folder}/evidence_findings.md", role="managed")
-    evidence_gap_register = Artifact("{workflow_folder}/evidence_gap_register.md", role="managed")
-    evidence_pack = Artifact("{workflow_folder}/evidence_pack.md", role="managed")
-    evidence_pack_summary = Artifact("{workflow_folder}/evidence_pack_summary.json", role="managed")
-    evidence_pack_receipt = Artifact("{workflow_folder}/evidence_pack_receipt.json", role="managed")
+    invocation_contract = Artifact("{workflow_folder}/invocation_contract.json")
+    investigation_scope_brief = Artifact("{workflow_folder}/investigation_scope_brief.md")
+    investigation_objectives = Artifact("{workflow_folder}/investigation_objectives.md")
+    evidence_intake_register = Artifact("{workflow_folder}/evidence_intake_register.md")
+    evidence_source_inventory = Artifact("{workflow_folder}/evidence_source_inventory.md")
+    evidence_coverage_matrix = Artifact("{workflow_folder}/evidence_coverage_matrix.md")
+    evidence_findings = Artifact("{workflow_folder}/evidence_findings.md")
+    evidence_gap_register = Artifact("{workflow_folder}/evidence_gap_register.md")
+    evidence_pack = Artifact("{workflow_folder}/evidence_pack.md")
+    evidence_pack_summary = Artifact("{workflow_folder}/evidence_pack_summary.json")
+    evidence_pack_receipt = Artifact("{workflow_folder}/evidence_pack_receipt.json")
 
     @python_step(
         name="bootstrap",

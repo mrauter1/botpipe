@@ -249,6 +249,10 @@ def test_topology_artifacts_include_state_surfaces_runtime_control_hook_location
         "item_state_fields": ["last_route", "last_step", "severity", "status"],
         "item_state_runtime_fields": ["status", "last_step", "last_route"],
         "item_state_custom_fields": ["severity"],
+        "source_type": "static",
+        "source_descriptor": "static",
+        "missing_policy": None,
+        "materialization_state": "declared",
     }
     assert review_static["step_item_state_fields"] == ["visits", "last_route", "last_reason", "attempts"]
     assert review_topology["step_item_state_surface"] == {
@@ -257,6 +261,8 @@ def test_topology_artifacts_include_state_surfaces_runtime_control_hook_location
         "runtime_fields": ["visits", "last_route", "last_reason"],
         "custom_fields": ["attempts"],
     }
+    assert topology_payload["worklists"]["gate"]["materialization_state"] == "declared"
+    assert topology_payload["worklists"]["gate"]["source_descriptor"] == "static"
     assert review_topology["runtime_control_hook_locations"] == [
         {"hook": "before", "callable": "before_review"},
         {"hook": "after", "callable": "after_review"},

@@ -274,87 +274,72 @@ class WorkflowRunTracesToOptimizationCandidates(Workflow):
     workflow_instructions = Artifact("{package_folder}/../../Workflow_Instructions.md")
     optimization_package_checklist = Artifact("{package_folder}/assets/optimization_package_checklist.md")
 
-    invocation_contract = Artifact("{workflow_folder}/invocation_contract.json", role="managed")
-    selected_workflow_capability = Artifact("{workflow_folder}/selected_workflow_capability.json", role="managed")
-    selected_workflow_authoring_surface = Artifact("{workflow_folder}/selected_workflow_authoring_surface.json", role="managed")
-    selected_workflow_decomposition_surface = Artifact("{workflow_folder}/selected_workflow_decomposition_surface.json", role="managed")
+    invocation_contract = Artifact("{workflow_folder}/invocation_contract.json")
+    selected_workflow_capability = Artifact("{workflow_folder}/selected_workflow_capability.json")
+    selected_workflow_authoring_surface = Artifact("{workflow_folder}/selected_workflow_authoring_surface.json")
+    selected_workflow_decomposition_surface = Artifact("{workflow_folder}/selected_workflow_decomposition_surface.json")
     selected_workflow_source_manifest = Artifact.json(
         "{workflow_folder}/selected_workflow_source_manifest.json",
         schema=SELECTED_WORKFLOW_SOURCE_MANIFEST_ARTIFACT.model_cls,
-        role="managed",
     )
     workflow_optimization_scope = Artifact.json(
         "{workflow_folder}/workflow_optimization_scope.json",
         schema=WORKFLOW_OPTIMIZATION_SCOPE_ARTIFACT.model_cls,
-        role="managed",
     )
     excluded_run_report = Artifact.json(
         "{workflow_folder}/excluded_run_report.json",
         schema=EXCLUDED_RUN_REPORT_ARTIFACT.model_cls,
-        role="managed",
     )
     workflow_optimization_trace_corpus = Artifact.json(
         "{workflow_folder}/workflow_optimization_trace_corpus.json",
         schema=WORKFLOW_OPTIMIZATION_TRACE_CORPUS_ARTIFACT.model_cls,
-        role="managed",
     )
     workflow_optimization_internal_trace_corpus = Artifact.json(
         "{workflow_folder}/_workflow_optimization_internal_trace_corpus.json",
-        role="managed",
     )
     step_trace_metrics = Artifact.json(
         "{workflow_folder}/step_trace_metrics.json",
         schema=STEP_TRACE_METRICS_ARTIFACT.model_cls,
-        role="managed",
     )
     step_optimization_priority_report = Artifact.json(
         "{workflow_folder}/step_optimization_priority_report.json",
         schema=STEP_OPTIMIZATION_PRIORITY_REPORT_ARTIFACT.model_cls,
-        role="managed",
     )
     workflow_failure_scenarios = Artifact.json(
         "{workflow_folder}/workflow_failure_scenarios.json",
         schema=WORKFLOW_FAILURE_SCENARIOS_ARTIFACT.model_cls,
-        role="managed",
     )
     workflow_failure_scenario_seeds = Artifact.json(
         "{workflow_folder}/workflow_failure_scenario_seeds.json",
         schema=WORKFLOW_FAILURE_SCENARIO_SEEDS_ARTIFACT.model_cls,
-        role="managed",
     )
     producer_prompt_optimization_candidates = Artifact.json(
         "{workflow_folder}/producer_prompt_optimization_candidates.json",
         schema=PRODUCER_PROMPT_OPTIMIZATION_CANDIDATES_ARTIFACT.model_cls,
-        role="managed",
     )
     verifier_rubric_optimization_candidates = Artifact.json(
         "{workflow_folder}/verifier_rubric_optimization_candidates.json",
         schema=VERIFIER_RUBRIC_OPTIMIZATION_CANDIDATES_ARTIFACT.model_cls,
-        role="managed",
     )
     token_optimization_candidates = Artifact.json(
         "{workflow_folder}/token_optimization_candidates.json",
         schema=TOKEN_OPTIMIZATION_CANDIDATES_ARTIFACT.model_cls,
-        role="managed",
     )
     adversarial_case_candidates = Artifact.json(
         "{workflow_folder}/adversarial_case_candidates.json",
         schema=ADVERSARIAL_CASE_CANDIDATES_ARTIFACT.model_cls,
-        role="managed",
     )
     workflow_level_optimization_candidates = Artifact.json(
         "{workflow_folder}/workflow_level_optimization_candidates.json",
         schema=WORKFLOW_LEVEL_OPTIMIZATION_CANDIDATES_ARTIFACT.model_cls,
-        role="managed",
     )
     workflow_optimization_scorecard = Artifact.json(
         "{workflow_folder}/workflow_optimization_scorecard.json",
         schema=WORKFLOW_OPTIMIZATION_SCORECARD_ARTIFACT.model_cls,
-        role="managed",
     )
-    workflow_refinement_evidence = Artifact.json("{workflow_folder}/workflow_refinement_evidence.json", role="managed")
-    workflow_optimization_packet = Artifact("{workflow_folder}/workflow_optimization_packet.md", role="managed")
-    optimization_publication_receipt = Artifact.json("{workflow_folder}/optimization_publication_receipt.json", role="managed")
+    workflow_refinement_evidence = Artifact.json("{workflow_folder}/workflow_refinement_evidence.json")
+    workflow_optimization_packet = Artifact("{workflow_folder}/workflow_optimization_packet.md")
+    optimization_publication_receipt = Artifact.json("{workflow_folder}/optimization_publication_receipt.json")
 
     frame = produce_verify_step(
         producer_prompt=Prompt.file("prompts/frame_producer.md"),

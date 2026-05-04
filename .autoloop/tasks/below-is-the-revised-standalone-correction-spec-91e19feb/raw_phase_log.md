@@ -511,3 +511,87 @@ Open issues / next step
 <loop-control>
 {"schema":"docloop.loop_control/v1","kind":"promise","promise":"COMPLETE"}
 </loop-control>
+
+
+---
+run_id=run-20260504T151346Z-4f933dd3 | entry=session_turn | pair=implement | phase=producer | cycle=1 | attempt=1 | thread_id=019df3ac-00a2-7a82-baae-1d81bebffdf5
+---
+provider=codex
+mode=start
+template=/home/rauter/.local/share/pipx/venvs/autoloop/lib/python3.12/site-packages/autoloop/templates/implement_producer.md
+session_id=019df3ac-00a2-7a82-baae-1d81bebffdf5
+
+
+---
+run_id=run-20260504T151346Z-4f933dd3 | entry=phase_output | pair=implement | phase=producer | process=codex-agent | cycle=1 | attempt=1 | thread_id=019df3ac-00a2-7a82-baae-1d81bebffdf5
+---
+I’m treating this turn as the `lazy-worklist-runtime` phase: first I’m reading the phase artifacts and locating the current worklist/runtime implementation so I can map the requested behavior to the existing code before editing.
+
+I’ve confirmed the phase scope and prior decisions. Next I’m reading the runtime worklist, engine, context, session, and inspection/static-graph code paths that currently control selection restore, first-use loading, and late-bound placeholder resolution.
+
+The current implementation still eagerly restores selections from checkpoints in `Engine._restore_worklist_selections()` and artifact-backed sources have no `missing=` policy yet. I’m now tracing placeholder rendering and capability/inspection payloads so the lazy behavior change doesn’t leave runtime/template or observability paths inconsistent.
+
+I have enough context for the implementation shape. Plan:
+1. Replace eager checkpoint restore with snapshot-backed lazy restore and make session work-item continuity resolve through that same first-use path.
+2. Add centralized artifact-backed `missing="error" | "scaffold"` handling in `Worklist.from_artifact(...)` and keep validation/load on first access only.
+3. Align runtime placeholder/materialization and inspection/static-graph payloads with declared vs materialized worklist state, then add focused contract/unit coverage for lazy restore, source policy, item-state placeholders, and observability.
+
+I’m starting the code edits in the runtime path now: first the worklist/context/engine changes that remove eager restore and centralize artifact-backed missing-source behavior, then I’ll update the tests around the new lazy semantics.
+
+I’ve finished the core runtime edit path. Next I’m updating the compile/static surfaces so the declared worklist contract reflects missing-source policy and non-materialized state, then I’ll rewrite the affected tests around resume and first-use behavior.
+
+I found a follow-up issue while wiring checkpoint saves: one of the resume error-save paths picked up a duplicated argument during patching. I’m cleaning that up before running the targeted tests.
+
+The placeholder change exposed a missing parameter threading issue in `artifacts.py`: `item.state` needs the live `Context`, but `_resolve_work_item_path(...)` previously only received the item payload. I’m correcting that call chain now, then I’ll run the focused suite.
+
+`pytest` isn’t on the shell PATH in this environment. I’m rerunning the same targeted suite through `python -m pytest` so I can validate the runtime path changes before touching the notes artifacts.
+
+The focused suites for the touched runtime, unit, and static-graph surfaces are green. I’m doing one more pass across adjacent compile/inspection tests before I finalize the notes and decisions artifacts.
+
+The additional adjacent suite exposed a real repo regression outside the lazy runtime path: several shipped workflow packages still instantiate `Artifact(..., role="managed")` even though that public surface was already removed in the prior route/artifact phase. I’m applying the mechanical cleanup now because it blocks adjacent import/compile validation and is a direct compatibility follow-through from the accepted Milestone A change.
+
+This follow-on cleanup is purely mechanical: I’m removing `role="managed"` from workflow package artifact declarations so the adjacent import/compile tests match the already-shipped artifact API change instead of failing before they even reach the lazy worklist code paths.
+
+The code and regression tests are green now. I’m writing the phase-local implementation notes and the non-obvious decisions ledger entries next so the run artifacts capture the lazy-restore contract and the small out-of-phase cleanup I had to make.
+
+The targeted imports generated tracked `__pycache__` updates under `workflows/`; those are just byproducts of running the tests, so I’m restoring only those generated binaries and keeping the source edits.
+
+The remaining tracked binary diffs are just fresh `.pyc` artifacts from running the suites. I’m restoring those generated files so the final change set stays source-only.
+
+Scope considered
+
+- Active `lazy-worklist-runtime` phase scope: worklist loading/materialization, checkpoint restore, artifact-backed missing-source policy, work-item continuity, placeholder/runtime alignment, and static graph worklist surfaces.
+- Adjacent regression surface: shipped workflow packages still using removed `role="managed"` artifact arguments.
+
+What I analyzed
+
+- Runtime paths in `autoloop/core/worklists.py`, `context.py`, `engine.py`, `engine_collaborators.py`, and `artifacts.py`.
+- Compile/static surfaces in `autoloop/core/compiler.py` and `autoloop/runtime/static_graph.py`.
+- Existing contract/unit coverage around lazy selection, restore, placeholders, session continuity, and static graph payloads.
+
+What I changed
+
+- Switched checkpointed worklist restore to strict-lazy behavior by keeping `SelectionSnapshot`s separate from materialized selections and materializing only on first real access.
+- Centralized artifact-backed missing-source policy on `Worklist.from_artifact(..., missing="error" | "scaffold")`; scaffold mode now creates an empty `{collection: []}` payload only at first use.
+- Routed `{item.state.<field>}` runtime rendering through active `ctx.item_state`.
+- Extended static worklist surfaces with `source_type`, `source_descriptor`, `missing_policy`, and declared materialization state; runtime worklist-resolution events now report materialized state too.
+- Added/updated focused tests for lazy restore, first-access reload, scaffold behavior, item-state placeholders, and static graph payloads.
+- Removed legacy `role="managed"` arguments from tracked workflow package artifact declarations so adjacent import/compile validation still passes after the earlier artifact API removal.
+
+Key findings / decisions
+
+- The safest lazy-restore shape was to preserve snapshots separately and merge them back into later checkpoints until they are actually materialized.
+- Artifact-backed scaffolding is now enforced in one place, `_ArtifactWorklistSource.ensure(...)`, instead of duplicating policy in engine call sites.
+- The workflow-package `role="managed"` cleanup was out of this phase’s core scope, but it was a necessary follow-through because adjacent validation still imports those packages and the constructor no longer accepts that API.
+
+Open issues / next step
+
+- Validation passed for the targeted and adjacent suites:
+  - `tests/unit/test_primitives_and_stores.py`
+  - `tests/runtime/test_runtime_static_graph.py`
+  - `tests/contract/test_engine_contracts.py`
+  - `tests/unit/test_simple_surface.py`
+  - `tests/runtime/test_workspace_and_context.py`
+  - `tests/unit/test_validation.py`
+- Remaining non-blocking warnings are the pre-existing Pydantic `schema` field-name warnings in `workflow_run_traces_to_optimization_candidates/contracts.py`.
+- Docs/examples cleanup for removed managed-artifact wording is still a separate follow-up surface.

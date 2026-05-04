@@ -21,6 +21,7 @@ if TYPE_CHECKING:
 
 T = TypeVar("T")
 SAFE_DIR_KEY_RE = re.compile(r"^[A-Za-z0-9][A-Za-z0-9._-]*$")
+MissingSourcePolicy = Literal["error", "scaffold"]
 
 
 def _context_runtime(ctx: "Context"):
@@ -198,6 +199,7 @@ class Worklist(Generic[T]):
         item_id: str,
         title: str,
         status: str | None = None,
+        missing: MissingSourcePolicy = "error",
         selector: Selector = Selector(),
         item_state: type[BaseModel] | None = None,
     ) -> "Worklist[Mapping[str, object]]":
@@ -207,6 +209,7 @@ class Worklist(Generic[T]):
             item_id=item_id,
             title=title,
             status=status,
+            missing=missing,
         )
         return cls(name=name, source=source, selector=selector, item_state_model=item_state)
 
@@ -217,6 +220,46 @@ class Worklist(Generic[T]):
     @property
     def artifact_backed(self) -> bool:
         return bool(getattr(self.source, "artifact_backed", False))
+
+    @property
+    def source_type(self) -> str:
+        source = self.source
+        if getattr(source, "artifact_backed", False):
+            return "artifact"
+        param_name = getattr(source, "param_name", None)
+        if isinstance(param_name, str) and param_name:
+            return "parameter"
+        if type(source).__name__ == "_StaticWorklistSource":
+            return "static"
+        return type(source).__name__
+
+    @property
+    def missing_policy(self) -> MissingSourcePolicy | None:
+        policy = getattr(self.source, "missing", None)
+        if policy in {"error", "scaffold"}:
+            return policy
+        return None
+
+    def source_descriptor(self, ctx: "Context | None" = None) -> str:
+        if self.artifact_backed:
+            artifact = getattr(self.source, "artifact", None)
+            if artifact is not None:
+                if ctx is not None:
+                    try:
+                        from .artifacts import resolve_artifact_template
+
+                        path = resolve_artifact_template(artifact, ctx)
+                        return f"artifact:{path}"
+                    except Exception:
+                        pass
+                template = getattr(artifact, "template", None)
+                if isinstance(template, str) and template:
+                    return f"artifact:{template}"
+            return "artifact"
+        param_name = getattr(self.source, "param_name", None)
+        if isinstance(param_name, str) and param_name:
+            return f"parameter:{param_name}"
+        return self.source_type
 
     def load_items(self, ctx: "Context") -> tuple[WorkItem[T], ...]:
         return self._load_items_snapshot(ctx)
@@ -268,16 +311,16 @@ class Worklist(Generic[T]):
 
     def initial_selection(self, ctx: "Context") -> Selection[T]:
         items = self.load_items(ctx)
-        return Selection(
-            worklist_name=self.name,
-            mode=self._resolve_mode(ctx),
-            items=self._select_items(items, ctx=ctx),
-            explicit=self._has_explicit_selection(ctx),
-            current_index=0,
-        )
+        return self._selection_from_loaded_items(ctx, items)
 
-    def restore_selection(self, ctx: "Context", snapshot: SelectionSnapshot) -> Selection[T]:
-        loaded_items = {item.id: item for item in self.load_items(ctx)}
+    def restore_selection(
+        self,
+        ctx: "Context",
+        snapshot: SelectionSnapshot,
+        *,
+        items: Sequence[WorkItem[T]] | None = None,
+    ) -> Selection[T]:
+        loaded_items = {item.id: item for item in (tuple(items) if items is not None else self.load_items(ctx))}
         restored_items: list[WorkItem[T]] = []
         for item_snapshot in snapshot.items:
             loaded = loaded_items.get(item_snapshot.id)
@@ -299,6 +342,23 @@ class Worklist(Generic[T]):
             items=tuple(restored_items),
             explicit=snapshot.explicit,
             current_index=snapshot.current_index,
+        )
+
+    def _selection_from_loaded_items(
+        self,
+        ctx: "Context",
+        items: Sequence[WorkItem[T]],
+        *,
+        snapshot: SelectionSnapshot | None = None,
+    ) -> Selection[T]:
+        if snapshot is not None:
+            return self.restore_selection(ctx, snapshot, items=items)
+        return Selection(
+            worklist_name=self.name,
+            mode=self._resolve_mode(ctx),
+            items=self._select_items(tuple(items), ctx=ctx),
+            explicit=self._has_explicit_selection(ctx),
+            current_index=0,
         )
 
     def snapshot_selection(self, selection: Selection[T]) -> SelectionSnapshot:
@@ -573,20 +633,21 @@ class _ArtifactWorklistSource:
     item_id: str
     title: str
     status: str | None = None
+    missing: MissingSourcePolicy = "error"
     mutable: bool = True
     artifact_backed: bool = True
 
     def ensure(self, ctx: "Context") -> None:
+        if self.missing != "scaffold":
+            return None
+        handle = self._handle(ctx)
+        if handle.exists():
+            return None
+        handle.write_json({self.collection: []})
         return None
 
     def load(self, ctx: "Context") -> Sequence[WorkItem[Mapping[str, object]]]:
-        from .artifacts import ArtifactHandle, resolve_artifact_template
-
-        handle = ArtifactHandle(
-            name=self.artifact.name or self.collection,
-            path=resolve_artifact_template(self.artifact, ctx),
-            artifact=self.artifact,
-        )
+        handle = self._handle(ctx)
         if not handle.exists():
             raise WorkflowExecutionError(
                 f"worklist artifact {self.artifact.name or self.collection!r} does not exist"
@@ -618,13 +679,7 @@ class _ArtifactWorklistSource:
         return tuple(items)
 
     def save(self, ctx: "Context", items: Sequence[WorkItem[Mapping[str, object]]]) -> None:
-        from .artifacts import ArtifactHandle, resolve_artifact_template
-
-        handle = ArtifactHandle(
-            name=self.artifact.name or self.collection,
-            path=resolve_artifact_template(self.artifact, ctx),
-            artifact=self.artifact,
-        )
+        handle = self._handle(ctx)
         payload = handle.read_json()
         if not isinstance(payload, Mapping):
             raise WorkflowExecutionError(f"worklist {self.collection!r} artifact payload must be a mapping")
@@ -657,6 +712,15 @@ class _ArtifactWorklistSource:
 
     def validate(self, ctx: "Context", items: Sequence[WorkItem[Mapping[str, object]]]) -> str | None:
         return None
+
+    def _handle(self, ctx: "Context"):
+        from .artifacts import ArtifactHandle, resolve_artifact_template
+
+        return ArtifactHandle(
+            name=self.artifact.name or self.collection,
+            path=resolve_artifact_template(self.artifact, ctx),
+            artifact=self.artifact,
+        )
 
 
 def _normalize_requested_item_ids(value: object, *, worklist_name: str) -> tuple[str, ...]:
