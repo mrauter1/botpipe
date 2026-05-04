@@ -15,13 +15,13 @@
       "builtins-packaging-docs-verification"
     ],
     "explicit": true,
-    "current_phase_index": 2,
-    "current_phase_id": "builtins-packaging-docs-verification"
+    "current_phase_index": 3,
+    "current_phase_id": null
   },
   "phase_status": {
     "catalog-root-refactor": "completed",
     "runtime-cli-metadata-integration": "completed",
-    "builtins-packaging-docs-verification": "in_progress"
+    "builtins-packaging-docs-verification": "completed"
   },
   "phase_history": [
     {
@@ -55,6 +55,13 @@
       "run_id": "run-20260504T192206Z-d3f7e940",
       "status": "in_progress",
       "ts": "2026-05-04T20:13:39.146544+00:00"
+    },
+    {
+      "phase_id": "builtins-packaging-docs-verification",
+      "run_id": "run-20260504T192206Z-d3f7e940",
+      "status": "completed",
+      "ts": "2026-05-04T20:39:55.364304+00:00",
+      "pair": "test"
     }
   ]
 }
