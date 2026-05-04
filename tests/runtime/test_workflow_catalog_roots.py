@@ -177,6 +177,36 @@ def test_workflow_search_roots_use_only_workspace_and_package_roots(
     assert all(root.path != tmp_path / "workflows" for root in roots)
 
 
+def test_discover_workflow_catalog_allows_missing_search_roots(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    missing_package_root = tmp_path / "installed" / "autoloop" / "workflows"
+    monkeypatch.setattr(
+        "autoloop.core.workflow_catalog.package_workflows_root",
+        lambda: missing_package_root.resolve(),
+    )
+
+    assert discover_workflow_catalog(tmp_path) == ()
+
+
+def test_discover_workflow_catalog_rejects_non_directory_search_root(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    workspace_root = tmp_path / ".autoloop" / "workflows"
+    workspace_root.parent.mkdir(parents=True, exist_ok=True)
+    workspace_root.write_text("not a directory\n", encoding="utf-8")
+    missing_package_root = tmp_path / "installed" / "autoloop" / "workflows"
+    monkeypatch.setattr(
+        "autoloop.core.workflow_catalog.package_workflows_root",
+        lambda: missing_package_root.resolve(),
+    )
+
+    with pytest.raises(WorkflowCatalogDiscoveryError, match=str(workspace_root)):
+        discover_workflow_catalog(tmp_path)
+
+
 def test_discover_workflow_catalog_returns_workspace_and_package_source_kinds(
     tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,
@@ -426,6 +456,90 @@ class SelectedWorkflow(Workflow):
     resolved = resolve_workflow_reference(tmp_path, "classed")
 
     assert resolved.workflow_cls.__name__ == "SelectedWorkflow"
+
+
+def test_manifest_module_field_selects_declared_module(tmp_path: Path) -> None:
+    package_dir = tmp_path / ".autoloop" / "workflows" / "module_override"
+    package_dir.mkdir(parents=True, exist_ok=True)
+    (package_dir / "workflow.toml").write_text(
+        'name = "module_override"\n'
+        'title = "Module Override"\n'
+        'description = "manifest module selector"\n'
+        'module = "impl"\n',
+        encoding="utf-8",
+    )
+    (package_dir / "flow.py").write_text(
+        """
+from __future__ import annotations
+
+from autoloop import Workflow, python_step
+
+
+class WrongWorkflow(Workflow):
+    name = "wrong"
+
+    @python_step(name="start")
+    def start(ctx):
+        return None
+""".strip()
+        + "\n",
+        encoding="utf-8",
+    )
+    (package_dir / "impl.py").write_text(
+        """
+from __future__ import annotations
+
+from autoloop import Workflow, python_step
+
+
+class ModuleOverrideWorkflow(Workflow):
+    name = "module_override"
+
+    @python_step(name="start")
+    def start(ctx):
+        return None
+""".strip()
+        + "\n",
+        encoding="utf-8",
+    )
+
+    resolved = resolve_workflow_reference(tmp_path, "module_override")
+
+    assert resolved.workflow_cls.__name__ == "ModuleOverrideWorkflow"
+    assert resolved.reference.source_path == package_dir / "impl.py"
+
+
+def test_manifest_without_module_falls_back_to_workflow_py_when_flow_missing(tmp_path: Path) -> None:
+    package_dir = tmp_path / ".autoloop" / "workflows" / "workflow_only"
+    package_dir.mkdir(parents=True, exist_ok=True)
+    (package_dir / "workflow.toml").write_text(
+        'name = "workflow_only"\n'
+        'title = "Workflow Only"\n'
+        'description = "workflow fallback"\n',
+        encoding="utf-8",
+    )
+    (package_dir / "workflow.py").write_text(
+        """
+from __future__ import annotations
+
+from autoloop import Workflow, python_step
+
+
+class WorkflowOnly(Workflow):
+    name = "workflow_only"
+
+    @python_step(name="start")
+    def start(ctx):
+        return None
+""".strip()
+        + "\n",
+        encoding="utf-8",
+    )
+
+    resolved = resolve_workflow_reference(tmp_path, "workflow_only")
+
+    assert resolved.workflow_cls.__name__ == "WorkflowOnly"
+    assert resolved.reference.source_path == package_dir / "workflow.py"
 
 
 def test_manifest_without_class_rejects_multiple_workflow_classes(tmp_path: Path) -> None:
