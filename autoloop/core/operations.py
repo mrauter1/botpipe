@@ -25,7 +25,7 @@ from .mappings import normalize_mapping
 from .prompts import Prompt, PromptRegistry, ResolvedPrompt, resolve_prompt_reference
 from .providers.models import OperationRequest
 from .providers.protocols import LLMProvider
-from .schema_registry import OPERATION_REPLAY_SCHEMA, migrate_schemaless_payload, validate_persisted_schema
+from .schema_registry import OPERATION_REPLAY_SCHEMA, validate_persisted_schema
 from .sessions import DEFAULT_SESSION_NAME
 from .stores.protocols import SessionBinding
 
@@ -215,8 +215,8 @@ def _run_operation(
     resolved_prompt = _resolve_prompt(spec.prompt, runtime=runtime)
     session = _resolve_session(runtime)
     callsite_id = callsite or _discover_callsite()
-    occurrence = _next_occurrence(runtime, spec.operation_kind, callsite_id)
-    replay_key = _operation_replay_key(runtime, spec.operation_kind, callsite_id, occurrence)
+    occurrence = _next_occurrence(runtime, spec.operation_kind)
+    replay_key = _operation_replay_key(runtime, spec.operation_kind, occurrence)
     fingerprint = _operation_fingerprint(
         runtime,
         spec=spec,
@@ -630,7 +630,6 @@ def _operation_fingerprint(
 def _operation_replay_key(
     runtime: OperationRuntime,
     operation_kind: str,
-    callsite: str,
     occurrence: int,
 ) -> str:
     payload = {
@@ -638,20 +637,18 @@ def _operation_replay_key(
         "step_name": runtime.step_name,
         "step_visit": runtime.step_visit,
         "operation_kind": operation_kind,
-        "callsite": callsite,
         "occurrence_index": occurrence,
     }
     return _sha256_json(payload)
 
 
-def _next_occurrence(runtime: OperationRuntime, operation_kind: str, callsite: str) -> int:
+def _next_occurrence(runtime: OperationRuntime, operation_kind: str) -> int:
     key = json.dumps(
         {
             "workflow_name": runtime.workflow_name,
             "step_name": runtime.step_name,
             "step_visit": runtime.step_visit,
             "operation_kind": operation_kind,
-            "callsite": callsite,
         },
         sort_keys=True,
         separators=(",", ":"),
@@ -728,17 +725,34 @@ def _operation_replay_path(run_folder: Path | None) -> Path | None:
     return run_folder / "operation_replay.json"
 
 
+def _migrate_operation_replay_store(payload: dict[str, Any]) -> dict[str, Any]:
+    """Migrate schemaless or v1 operation replay stores to v2.
+
+    Records are discarded because legacy replay keys included the callsite
+    string and are structurally incompatible with v2 keys. Attempts history is
+    preserved for diagnostic purposes.
+    """
+    attempts = payload.get("attempts")
+    return {
+        "schema": OPERATION_REPLAY_SCHEMA,
+        "records": {},
+        "attempts": attempts if isinstance(attempts, list) else [],
+    }
+
+
 def _load_replay_store(path: Path | None) -> dict[str, Any]:
     if path is None or not path.is_file():
         return {"schema": OPERATION_REPLAY_SCHEMA, "records": {}, "attempts": []}
     payload = json.loads(path.read_text(encoding="utf-8"))
     if not isinstance(payload, dict):
         return {"schema": OPERATION_REPLAY_SCHEMA, "records": {}, "attempts": []}
+    if payload.get("schema") != OPERATION_REPLAY_SCHEMA:
+        payload = _migrate_operation_replay_store(payload)
     validate_persisted_schema(
         payload,
         expected=OPERATION_REPLAY_SCHEMA,
         artifact_name=str(path),
-        legacy_migrator=lambda value: migrate_schemaless_payload(value, expected=OPERATION_REPLAY_SCHEMA),
+        legacy_migrator=_migrate_operation_replay_store,
     )
     records = payload.get("records")
     attempts = payload.get("attempts")
