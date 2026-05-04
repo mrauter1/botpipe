@@ -73,3 +73,12 @@ No open verifier issues. The plan is ready for the implementation phase.
 <loop-control>
 {"schema":"docloop.loop_control/v1","kind":"promise","promise":"COMPLETE"}
 </loop-control>
+
+
+---
+run_id=run-20260504T190003Z-04e7d84d | entry=phase_scope_resolved
+---
+phase_mode=single
+phase_ids=align-operation-replay-keying
+explicit=True
+current_phase_index=0

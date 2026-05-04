@@ -3,5 +3,28 @@
   "created_at": "2026-05-04T19:00:03.842041+00:00",
   "request_file": "/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/operation-replay-key-stability-fix-implementatio-b15a7c28/runs/run-20260504T190003Z-04e7d84d/request.md",
   "artifacts_dir": "/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/operation-replay-key-stability-fix-implementatio-b15a7c28/runs/run-20260504T190003Z-04e7d84d/artifacts",
-  "provider": "codex"
+  "provider": "codex",
+  "phase_plan_path": "/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/operation-replay-key-stability-fix-implementatio-b15a7c28/runs/run-20260504T190003Z-04e7d84d/artifacts/plan/phase_plan.yaml",
+  "phase_plan_version": 1,
+  "active_phase_selection": {
+    "run_id": "run-20260504T190003Z-04e7d84d",
+    "mode": "single",
+    "phase_ids": [
+      "align-operation-replay-keying"
+    ],
+    "explicit": true,
+    "current_phase_index": 0,
+    "current_phase_id": "align-operation-replay-keying"
+  },
+  "phase_status": {
+    "align-operation-replay-keying": "in_progress"
+  },
+  "phase_history": [
+    {
+      "phase_id": "align-operation-replay-keying",
+      "run_id": "run-20260504T190003Z-04e7d84d",
+      "status": "in_progress",
+      "ts": "2026-05-04T19:04:18.620620+00:00"
+    }
+  ]
 }
