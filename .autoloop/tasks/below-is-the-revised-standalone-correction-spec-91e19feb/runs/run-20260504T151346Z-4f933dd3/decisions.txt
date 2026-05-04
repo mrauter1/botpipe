@@ -2,3 +2,6 @@
 Treat workflow-level plus step-produced artifacts as one canonical workflow/public artifact identity; keep producer_steps as provenance only and do not rebind qualified_name to step-local names when workflow_level is true.
 Adopt the preferred strict lazy restore policy: resume restores worklist selection snapshots without loading backing sources until first runtime access.
 Keep Milestone A scoped to runtime-correctness changes first; Effects API cleanup, validation_step boundary cleanup, and broad docs/example sweeps stay deferred follow-up work unless needed to keep shipped behavior truthful.
+<autoloop-decisions-header version="1" block_seq="2" owner="planner" phase_id="task-global" pair="plan" turn_seq="2" run_id="run-20260504T151346Z-4f933dd3" ts="2026-05-04T15:20:56.853211+00:00" />
+Phase 1 must keep explicit regression coverage for child workflow result mapping so route-policy edits do not silently break child failed, blocked, or question behavior.
+Standardize missing-source policy only on the artifact-backed public surface, Worklist.from_artifact(..., missing="error" | "scaffold"), and centralize enforcement in _ArtifactWorklistSource rather than duplicating policy in generic WorklistSource implementations or engine call sites.
