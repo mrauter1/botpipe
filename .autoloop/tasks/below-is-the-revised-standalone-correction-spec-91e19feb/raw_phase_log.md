@@ -257,3 +257,51 @@ Open issues / next step
   - `./.venv/bin/python -m pytest tests/contract/test_engine_contracts.py -q -k "blocked_and_failed_routes_do_not_require_reason_field or rendered_provider_matches_direct_reason_optional_behavior_for_explicit_blocked_and_failed_routes or provider_question_route_is_illegal_in_full_auto_mode or rendered_provider_question_route_is_illegal_in_full_auto_mode"`
 - I did not run the full repository suite.
 - Broader authoring-doc/example cleanup for removed managed artifacts and the new route model remains deferred to the later docs-focused phase.
+
+
+---
+run_id=run-20260504T151346Z-4f933dd3 | entry=session_turn | pair=implement | phase=verifier | cycle=1 | attempt=1 | thread_id=019df396-f260-7532-a4c9-e81f7fe16999
+---
+provider=codex
+mode=resume
+template=/home/rauter/.local/share/pipx/venvs/autoloop/lib/python3.12/site-packages/autoloop/templates/implement_verifier.md
+session_id=019df396-f260-7532-a4c9-e81f7fe16999
+
+
+---
+run_id=run-20260504T151346Z-4f933dd3 | entry=phase_output | pair=implement | phase=verifier | process=codex-agent | cycle=1 | attempt=1 | thread_id=019df396-f260-7532-a4c9-e81f7fe16999
+---
+I’m reviewing only the scoped route/artifact contract changes and the paired implementation notes first, then I’ll inspect the targeted diffs and update the phase review artifacts with pass/fail criteria and any findings.
+
+I’m checking the rendered-provider error path specifically now. That’s the area most likely to hide a parity regression even when the happy-path tests are green.
+
+I found one material parity bug in the rendered-provider error path. It affects retry classification and user-facing retry feedback for invalid `question` payloads, so I’m marking the phase incomplete and recording the fix direction in the review artifacts.
+
+Scope considered
+- Scoped review of the route/artifact contract phase only: `autoloop/core/artifacts.py`, `inventory.py`, `compiler.py`, `lowering.py`, `providers/parsing.py`, `providers/rendering.py`, and the paired tests/notes named in the implementation artifact.
+- I treated unrelated dirty files elsewhere in the repo as out of scope.
+
+What I analyzed
+- The accepted phase contract, implementation notes, and run-local decisions ledger.
+- The current artifact identity flow, provider parsing path, provider retry classification path, and the targeted validation/contract tests.
+
+What I reviewed
+- Workflow-level artifact canonicalization and producer provenance handling.
+- Rendered outcome parsing changes for optional `reason` and `question` payload enforcement.
+- Authored `blocked`/`failed` summary behavior and full-auto `question` gating.
+- Child-workflow route mapping preservation.
+- The review artifacts have been updated:
+  - [criteria.md](</home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/below-is-the-revised-standalone-correction-spec-91e19feb/runs/run-20260504T151346Z-4f933dd3/artifacts/implement/phases/route-and-artifact-contracts/criteria.md>)
+  - [feedback.md](</home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/below-is-the-revised-standalone-correction-spec-91e19feb/runs/run-20260504T151346Z-4f933dd3/artifacts/implement/phases/route-and-artifact-contracts/feedback.md>)
+
+Key findings / decisions
+- `IMP-001` blocking: rendered-provider `question` payload failures are now classified as `malformed_provider_output` instead of `invalid_payload` because `parse_outcome_json(...)` raises a bare `ProviderExecutionError` and `Engine._provider_retry_kind(...)` falls back on message matching. That breaks the required direct/rendered parity for retry behavior and retry feedback under AC-2.
+- Because of that parity regression, I left all criteria unchecked and marked the phase incomplete.
+
+Open issues / next step
+- Fix the rendered `question`-payload error path so it carries `invalid_payload` semantics, ideally by centralizing the validation with the shared outcome validator or by attaching `failure_context`/`retry_kind` in `parse_outcome_json(...)` for question-specific payload defects.
+- Rerun the targeted engine/provider parity tests after that fix.
+
+<loop-control>
+{"schema":"docloop.loop_control/v1","kind":"promise","promise":"INCOMPLETE"}
+</loop-control>
