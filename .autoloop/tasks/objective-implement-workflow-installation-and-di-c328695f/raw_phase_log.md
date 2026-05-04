@@ -1082,3 +1082,65 @@ Open issues / next step
 - No open phase-local issues found
 - I did not run the entire repository test suite; verification was limited to the phase-relevant test surface
 - Unrelated dirty files in the repo were left untouched
+
+
+---
+run_id=run-20260504T192206Z-d3f7e940 | entry=session_turn | pair=implement | phase=verifier | cycle=1 | attempt=1 | thread_id=019df4a0-001b-79d2-b2a3-e59913c8d3ef
+---
+provider=codex
+mode=resume
+template=/home/rauter/.local/share/pipx/venvs/autoloop/lib/python3.12/site-packages/autoloop/templates/implement_verifier.md
+session_id=019df4a0-001b-79d2-b2a3-e59913c8d3ef
+
+
+---
+run_id=run-20260504T192206Z-d3f7e940 | entry=phase_output | pair=implement | phase=verifier | process=codex-agent | cycle=1 | attempt=1 | thread_id=019df4a0-001b-79d2-b2a3-e59913c8d3ef
+---
+I’m auditing the phase-local delta against the acceptance criteria first, then I’ll inspect the highest-risk runtime and packaging edges before I update the review artifacts.
+
+The acceptance criteria file is still untouched, so I’m verifying the actual runtime/package surface now rather than inferring from notes. I’m checking importability, package metadata, old-root stragglers, and whether any built-in paths still assume the old directory depth.
+
+I found at least one documentation straggler in the changed surface: `docs/authoring.md` still tells readers to point at `workflows/` instead of `autoloop/workflows/` in its recursive-guidance section. I’m checking whether that is isolated or part of a broader acceptance-criteria miss before I mark the docs complete.
+
+The stale `workflows/` reference is real, not just a grep false positive. I’m now checking whether the package import/catalog path is otherwise sound so I can decide if this is a docs-only finding or there’s also a runtime acceptance gap.
+
+I can’t re-import the runtime from the base shell because `pydantic` isn’t installed outside the temp venv, but that’s not the packaging contract being reviewed here. The stronger signal is the docs sweep: there are at least two stale or malformed path references in changed markdown, so I’m checking whether they materially violate the requested documentation consistency.
+
+The runtime/package side looks structurally sound from the moved packages and tests, so the review is shifting to acceptance-criteria fidelity. I’m doing one tighter scan for changed docs that still contradict the new package/workspace roots before I write findings.
+
+I have one blocking finding and one documentation-quality follow-up. I’m updating the review artifacts now; the phase is not complete because the changed docs still contradict the requested workflow-root contract.
+
+Scope considered
+
+- Phase-local built-in workflow relocation, packaging metadata, docs/templates, and packaging smoke tests
+- Adjacent loader change in `autoloop/core/descriptors.py` because it affects package/workspace parameter export behavior
+- Review artifacts under the active phase directory only for writes
+
+What I analyzed
+
+- `pyproject.toml`, `MANIFEST.in`, `autoloop/workflows/__init__.py`, and built-in package `__init__.py` exports
+- Changed docs and recursive templates for lingering `workflows/` references after the root migration
+- Phase-local tests, especially wheel packaging smoke and CLI/runtime metadata coverage
+- Implementation notes and run decisions for intent and acceptance-criteria alignment
+
+What I reviewed
+
+- Documentation consistency against AC-3
+- Package-root import/discovery expectations from the changed tests and moved workflow packages
+- Whether the moved built-ins still use corrected repo-relative doc/instruction paths
+- Whether the loader change introduced unnecessary indirection or obvious safety regressions
+
+Key findings / decisions
+
+- Blocking: [docs/authoring.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/docs/authoring.md:1169) still points readers at `workflows/`, which contradicts the requested `autoloop/workflows/` package root and means AC-3 is not fully satisfied.
+- Non-blocking: [docs/workflows/workflow_package_to_composable_building_blocks.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/docs/workflows/workflow_package_to_composable_building_blocks.md:53) contains a malformed path, `docs/autoloop/workflows/...`, from the bulk rewrite.
+- I did not find a separate runtime/package blocking issue in the reviewed scope; the packaging smoke coverage and moved package exports look coherent from the changed artifacts.
+
+Open issues / next step
+
+- Fix the stale `workflows/` reference in `docs/authoring.md` and the malformed workflow-doc citation, then rerun the phase-local docs/package verification.
+- Status for this review pass is `INCOMPLETE` because of the blocking documentation inconsistency.
+
+<loop-control>
+{"schema":"docloop.loop_control/v1","kind":"promise","promise":"INCOMPLETE"}
+</loop-control>
