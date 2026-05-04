@@ -1,0 +1,4 @@
+name = "task_to_candidate_workflow_set"
+title = "Task To Candidate Workflow Set"
+description = "Turn an arbitrary software-work task into a ranked candidate-workflow set, fit-gap package, and strategy-ready handoff."
+aliases = ["candidate-workflow-set", "workflow-candidate-set"]

@@ -1,0 +1,4 @@
+name = "workflow_portfolio_to_operating_system"
+title = "Workflow Portfolio To Operating System"
+description = "Turn workflow capability and portfolio health evidence into explicit lifecycle recommendations, change candidates, and an operating-system governance package."
+aliases = ["portfolio-operating-system", "workflow-portfolio-governance"]

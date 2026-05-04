@@ -1,0 +1,4 @@
+name = "workflow_run_traces_to_optimization_candidates"
+title = "Workflow Run Traces To Optimization Candidates"
+description = "Turn selected workflow run traces into step-local and workflow-level optimization candidates without mutating the authoritative workflow."
+aliases = ["workflow-optimization-candidates", "trace-to-optimization-candidates"]

@@ -23,7 +23,14 @@ from autoloop.core.primitives import Outcome
 def _clear_generated_modules() -> None:
     importlib.invalidate_caches()
     for name in list(sys.modules):
-        if name == "workflows" or name.startswith("workflows.") or name.startswith("_autoloop_dynamic_"):
+        if (
+            name == "workflows"
+            or name.startswith("workflows.")
+            or name == "autoloop.workflows"
+            or name.startswith("autoloop.workflows.")
+            or name == "_autoloop_workspace_workflows"
+            or name.startswith("_autoloop_workspace_workflows.")
+        ):
             sys.modules.pop(name, None)
 
 
@@ -32,6 +39,72 @@ def _isolate_generated_modules():
     _clear_generated_modules()
     yield
     _clear_generated_modules()
+
+
+def _workspace_catalog_root(root: Path) -> Path:
+    return root / ".autoloop" / "workflows"
+
+
+def _write_workspace_flow(
+    root: Path,
+    workflow_id: str,
+    *,
+    workflow_name: str | None = None,
+    source: str | None = None,
+    manifest: bool = False,
+) -> Path:
+    package_dir = _workspace_catalog_root(root) / workflow_id
+    package_dir.mkdir(parents=True, exist_ok=True)
+    if manifest:
+        workflow_name = workflow_name or workflow_id
+        (package_dir / "workflow.toml").write_text(
+            "\n".join(
+                (
+                    f'name = "{workflow_name}"',
+                    f'title = "{workflow_name.replace("_", " ").title()}"',
+                    'description = "workspace workflow"',
+                )
+            )
+            + "\n",
+            encoding="utf-8",
+        )
+    if source is None:
+        source = f"""
+from __future__ import annotations
+
+from autoloop import Workflow, python_step
+
+
+class {workflow_id.title().replace("_", "")}Workflow(Workflow):
+    name = "{workflow_name or workflow_id}"
+
+    @python_step(name="start")
+    def start(ctx):
+        return None
+""".strip()
+    (package_dir / "flow.py").write_text(source + "\n", encoding="utf-8")
+    return package_dir
+
+
+def _write_workspace_single_file(root: Path, workflow_id: str, *, source: str | None = None) -> Path:
+    source_path = _workspace_catalog_root(root) / f"{workflow_id}.py"
+    source_path.parent.mkdir(parents=True, exist_ok=True)
+    if source is None:
+        source = f"""
+from __future__ import annotations
+
+from autoloop import Workflow, python_step
+
+
+class {workflow_id.title().replace("_", "")}Workflow(Workflow):
+    name = "{workflow_id}"
+
+    @python_step(name="start")
+    def start(ctx):
+        return None
+""".strip()
+    source_path.write_text(source + "\n", encoding="utf-8")
+    return source_path
 
 
 def test_single_file_reference_runs_with_file_scoped_prompts_and_origin_metadata(tmp_path: Path) -> None:
@@ -108,34 +181,34 @@ class ReleaseReview(Workflow):
     assert workflow_meta["workflow"]["manifest_path"] is None
     assert workflow_meta["workflow"]["class_name"] == "ReleaseReview"
     assert workflow_meta["workflow"]["authoring_shape"] == "single_file"
-    assert workflow_meta["workflow"]["module_name"].startswith("_autoloop_dynamic_")
+    assert workflow_meta["workflow"]["module_name"].startswith("_autoloop_workspace_workflows.")
     assert run_meta["workflow"]["name"] == "release_review"
     assert run_meta["workflow"]["reference"] == "examples/release_review.py"
     assert run_meta["workflow"]["source_path"] == "examples/release_review.py"
 
 
 def test_flow_package_directory_reference_supports_relative_specs_and_named_inference(tmp_path: Path) -> None:
-    workflows_root = tmp_path / "workflows"
-    workflows_root.mkdir(parents=True, exist_ok=True)
-    workflows_root.joinpath("__init__.py").write_text("__all__ = []\n", encoding="utf-8")
+    catalog_package_dir = _workspace_catalog_root(tmp_path) / "release_review"
+    explicit_package_dir = tmp_path / "workflows" / "release_review"
 
-    package_dir = workflows_root / "release_review"
-    prompts_dir = package_dir / "prompts"
+    prompts_dir = catalog_package_dir / "prompts"
     prompts_dir.mkdir(parents=True, exist_ok=True)
     prompts_dir.joinpath("ask.md").write_text("flow package prompt\n", encoding="utf-8")
-    package_dir.joinpath("specs.py").write_text(
-        """
+    catalog_package_dir.joinpath("workflow.toml").write_text(
+        'name = "release_review"\n'
+        'title = "Release Review"\n'
+        'description = "workspace workflow"\n',
+        encoding="utf-8",
+    )
+    specs_source = """
 from pydantic import BaseModel
 
 
 class Params(BaseModel):
     mode: str = "strict"
 """.strip()
-        + "\n",
-        encoding="utf-8",
-    )
-    package_dir.joinpath("flow.py").write_text(
-        """
+    catalog_package_dir.joinpath("specs.py").write_text(specs_source + "\n", encoding="utf-8")
+    flow_source = """
 from __future__ import annotations
 
 from pydantic import BaseModel
@@ -157,16 +230,22 @@ class ReleaseReview(Workflow):
         writes=[Raw("context_dump", path="{run_folder}/context.json")],
     )
 """.strip()
-        + "\n",
-        encoding="utf-8",
-    )
+    catalog_package_dir.joinpath("flow.py").write_text(flow_source + "\n", encoding="utf-8")
+
+    (explicit_package_dir / "prompts").mkdir(parents=True, exist_ok=True)
+    (explicit_package_dir / "prompts" / "ask.md").write_text("flow package prompt\n", encoding="utf-8")
+    (explicit_package_dir / "specs.py").write_text(specs_source + "\n", encoding="utf-8")
+    (explicit_package_dir / "flow.py").write_text(flow_source + "\n", encoding="utf-8")
 
     resolved_by_name = resolve_workflow_reference(tmp_path, "release_review")
     resolved_by_directory = resolve_workflow_reference(tmp_path, "workflows/release_review")
-    assert resolved_by_name.reference.source_path == package_dir / "flow.py"
-    assert resolved_by_name.reference.authoring_shape == "flow_package"
+    assert resolved_by_name.reference.source_path == catalog_package_dir / "flow.py"
+    assert resolved_by_name.reference.source_root == _workspace_catalog_root(tmp_path)
+    assert resolved_by_name.reference.authoring_shape == "manifest_package"
+    assert resolved_by_directory.reference.source_path == explicit_package_dir / "flow.py"
     assert resolved_by_directory.parameters_cls is not None
-    assert resolved_by_directory.parameters_cls.__name__ == "Params"
+    assert resolved_by_directory.parameters_cls.__module__.startswith("_autoloop_workspace_workflows.")
+    assert resolved_by_directory.parameters_cls.__module__.endswith(".release_review.specs")
 
     provider = ScriptedLLMProvider(
         llm_turns=[
@@ -204,17 +283,17 @@ class ReleaseReview(Workflow):
     context_payload = json.loads((run_dir / "context.json").read_text(encoding="utf-8"))
 
     assert Path(context_payload["root"]) == tmp_path
-    assert Path(context_payload["package_folder"]) == package_dir
-    assert Path(context_payload["prompt_path"]) == package_dir / "prompts" / "ask.md"
+    assert Path(context_payload["package_folder"]) == explicit_package_dir
+    assert Path(context_payload["prompt_path"]) == explicit_package_dir / "prompts" / "ask.md"
     assert context_payload["workflow_params"] == {"mode": "strict"}
 
 
 def test_bare_workflow_names_are_not_shadowed_by_unrelated_repo_paths(tmp_path: Path) -> None:
-    workflows_root = tmp_path / "workflows"
-    workflows_root.mkdir(parents=True, exist_ok=True)
-    workflows_root.joinpath("__init__.py").write_text("__all__ = []\n", encoding="utf-8")
-    workflows_root.joinpath("demo.py").write_text(
-        """
+    package_dir = _write_workspace_flow(
+        tmp_path,
+        "demo",
+        manifest=True,
+        source="""
 from __future__ import annotations
 
 from autoloop import Workflow, python_step
@@ -227,14 +306,13 @@ class DemoWorkflow(Workflow):
     def start(ctx):
         return None
 """.strip()
-        + "\n",
-        encoding="utf-8",
     )
     (tmp_path / "demo").mkdir(parents=True, exist_ok=True)
 
     resolved = resolve_workflow_reference(tmp_path, "demo")
 
-    assert resolved.reference.source_path == workflows_root / "demo.py"
+    assert resolved.reference.source_path == package_dir / "flow.py"
+    assert resolved.reference.source_root == _workspace_catalog_root(tmp_path)
     assert resolved.reference.workflow_name == "demo"
 
 
@@ -256,23 +334,33 @@ class SimpleExample(Workflow):
         + "\n",
         encoding="utf-8",
     )
+    catalog_path = _write_workspace_single_file(
+        tmp_path,
+        "simple_example",
+        source="""
+from __future__ import annotations
+
+from autoloop.simple import Workflow, step
+
+
+class SimpleExample(Workflow):
+    a = step("Do A.")
+""".strip(),
+    )
 
     resolved_by_path = resolve_workflow_reference(tmp_path, "workflows/simple_example.py")
-    resolved_by_module = resolve_workflow_reference(tmp_path, "workflows.simple_example")
     resolved_by_name = resolve_workflow_reference(tmp_path, "simple_example")
     inspected = inspect_workflow_reference(tmp_path, "simple_example")
 
     assert resolved_by_path.reference.source_path == workflow_path
-    assert resolved_by_module.reference.source_path == workflow_path
-    assert resolved_by_name.reference.source_path == workflow_path
+    assert resolved_by_name.reference.source_path == catalog_path
+    assert resolved_by_name.reference.source_root == _workspace_catalog_root(tmp_path)
     assert resolved_by_name.reference.workflow_name == "simple_example"
-    assert inspected.workflow_path == workflow_path
+    assert inspected.workflow_path == catalog_path
     assert inspected.entry_step_name == "a"
     assert inspected.routes["a"] == {
         "done": "FINISH",
         "question": "AWAIT_INPUT",
-        "blocked": "AWAIT_INPUT",
-        "failed": "FAIL",
     }
 
 
@@ -280,7 +368,7 @@ def test_resolved_workflow_exposes_reference_only() -> None:
     assert not hasattr(ResolvedWorkflow, "package")
 
 
-def test_module_and_class_references_run_through_the_same_resolver_path(tmp_path: Path) -> None:
+def test_explicit_class_references_use_workspace_isolated_module_namespace(tmp_path: Path) -> None:
     workflows_root = tmp_path / "workflows"
     workflows_root.mkdir(parents=True, exist_ok=True)
     workflows_root.joinpath("__init__.py").write_text("__all__ = []\n", encoding="utf-8")
@@ -323,12 +411,13 @@ class ModuleReviewWorkflow(Workflow):
         encoding="utf-8",
     )
 
-    resolved = resolve_workflow_reference(tmp_path, "workflows.module_review.flow:ModuleReviewWorkflow")
+    resolved = resolve_workflow_reference(tmp_path, "workflows/module_review/flow.py:ModuleReviewWorkflow")
     assert resolved.parameters_cls is not None
-    assert resolved.parameters_cls.__module__ == "workflows.module_review.specs"
+    assert resolved.parameters_cls.__module__.startswith("_autoloop_workspace_workflows.")
+    assert resolved.parameters_cls.__module__.endswith(".module_review.specs")
 
     result = run_workflow_package(
-        "workflows.module_review.flow:ModuleReviewWorkflow",
+        "workflows/module_review/flow.py:ModuleReviewWorkflow",
         provider=ScriptedLLMProvider(),
         options=RunnerOptions(
             root=tmp_path,
@@ -377,12 +466,17 @@ class BetaWorkflow(Workflow):
 
 
 def test_named_references_fail_when_inferred_candidates_conflict(tmp_path: Path) -> None:
-    workflows_root = tmp_path / "workflows"
+    workflows_root = _workspace_catalog_root(tmp_path)
     workflows_root.mkdir(parents=True, exist_ok=True)
-    workflows_root.joinpath("__init__.py").write_text("__all__ = []\n", encoding="utf-8")
 
     package_dir = workflows_root / "release_review"
     package_dir.mkdir(parents=True, exist_ok=True)
+    package_dir.joinpath("workflow.toml").write_text(
+        'name = "release_review"\n'
+        'title = "Release Review"\n'
+        'description = "workspace workflow"\n',
+        encoding="utf-8",
+    )
     package_dir.joinpath("flow.py").write_text(
         """
 from __future__ import annotations
@@ -400,8 +494,10 @@ class PackageReleaseReview(Workflow):
         + "\n",
         encoding="utf-8",
     )
-    workflows_root.joinpath("release_review.py").write_text(
-        """
+    _write_workspace_single_file(
+        tmp_path,
+        "release_review",
+        source="""
 from __future__ import annotations
 
 from autoloop import Workflow, python_step
@@ -414,11 +510,9 @@ class FileReleaseReview(Workflow):
     def start(ctx):
         return None
 """.strip()
-        + "\n",
-        encoding="utf-8",
     )
 
-    with pytest.raises(WorkflowDiscoveryError, match="duplicate workflow name 'release_review'"):
+    with pytest.raises(WorkflowDiscoveryError, match="duplicate workflow resolution key 'release_review'"):
         resolve_workflow_reference(tmp_path, "release_review")
 
 
@@ -568,18 +662,21 @@ class NoParamsWorkflow(Workflow):
 
     class_params = resolve_workflow_reference(tmp_path, "examples/class_params.py")
     module_params = resolve_workflow_reference(tmp_path, "workflows/module_params")
-    package_params = resolve_workflow_reference(tmp_path, "workflows.package_params.flow:PackageParamsWorkflow")
+    package_params = resolve_workflow_reference(tmp_path, "workflows/package_params")
     legacy_params = resolve_workflow_reference(tmp_path, "workflows/legacy_params")
     no_params = resolve_workflow_reference(tmp_path, "workflows/no_params.py")
 
     assert class_params.parameters_cls is not None
     assert class_params.parameters_cls.__qualname__.endswith("ClassParamsWorkflow.Params")
     assert module_params.parameters_cls is not None
-    assert module_params.parameters_cls.__module__.startswith("_autoloop_dynamic_")
+    assert module_params.parameters_cls.__module__.startswith("_autoloop_workspace_workflows.")
+    assert module_params.parameters_cls.__module__.endswith(".module_params.flow")
     assert package_params.parameters_cls is not None
-    assert package_params.parameters_cls.__module__ == "workflows.package_params.specs"
+    assert package_params.parameters_cls.__module__.startswith("_autoloop_workspace_workflows.")
+    assert package_params.parameters_cls.__module__.endswith(".package_params.specs")
     assert legacy_params.parameters_cls is not None
-    assert legacy_params.parameters_cls.__module__.startswith("_autoloop_dynamic_")
+    assert legacy_params.parameters_cls.__module__.startswith("_autoloop_workspace_workflows.")
+    assert legacy_params.parameters_cls.__module__.endswith(".params")
     assert no_params.parameters_cls is None
 
 

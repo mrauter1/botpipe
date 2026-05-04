@@ -1,0 +1,4 @@
+name = "autoloop_v1"
+title = "Autoloop v1"
+description = "Autoloop-v1 workflow package running on the general runtime."
+aliases = ["autoloop-v1"]

@@ -27,10 +27,19 @@ def _venv_bin(venv_dir: Path, name: str) -> str:
 def test_built_wheel_installs_cli_and_packaged_workflow_assets(tmp_path: Path) -> None:
     dist_dir = tmp_path / "dist"
     dist_dir.mkdir(parents=True, exist_ok=True)
-    _run(sys.executable, "-m", "build", "--wheel", "--outdir", str(dist_dir))
+    _run(
+        sys.executable,
+        "-m",
+        "pip",
+        "wheel",
+        "--no-deps",
+        "--wheel-dir",
+        str(dist_dir),
+        ".",
+    )
 
     wheels = sorted(dist_dir.glob("*.whl"))
-    assert wheels, "python -m build did not produce a wheel"
+    assert wheels, "python -m pip wheel did not produce a wheel"
 
     venv_dir = tmp_path / "venv"
     venv.EnvBuilder(with_pip=True).create(venv_dir)

@@ -1,0 +1,4 @@
+name = "company_operation_to_recursive_improvement_cycle"
+title = "Company Operation To Recursive Improvement Cycle"
+description = "Turn company work history plus workflow telemetry into an explicit next-cycle recursive improvement package and deterministic publication receipt."
+aliases = ["company-recursive-improvement", "company-operation-cycle"]

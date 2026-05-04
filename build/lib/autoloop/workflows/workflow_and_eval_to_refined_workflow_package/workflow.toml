@@ -1,0 +1,4 @@
+name = "workflow_and_eval_to_refined_workflow_package"
+title = "Workflow And Eval To Refined Workflow Package"
+description = "Turn one selected workflow plus evaluation evidence into a candidate workflow surface, verification artifacts, and a deterministic refinement receipt without mutating the authoritative workflow package."
+aliases = ["workflow-refinement-package", "eval-to-refined-workflow"]
