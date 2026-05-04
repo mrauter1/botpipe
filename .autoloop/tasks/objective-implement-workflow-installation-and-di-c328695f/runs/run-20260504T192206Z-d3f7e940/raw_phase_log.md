@@ -640,3 +640,103 @@ Open issues / next step
 <loop-control>
 {"schema":"docloop.loop_control/v1","kind":"promise","promise":"INCOMPLETE"}
 </loop-control>
+
+
+---
+run_id=run-20260504T192206Z-d3f7e940 | entry=session_turn | pair=implement | phase=producer | cycle=2 | attempt=1 | thread_id=019df48d-ca11-78b0-bc57-ac1b0b7dcd2d
+---
+provider=codex
+mode=resume
+template=/home/rauter/.local/share/pipx/venvs/autoloop/lib/python3.12/site-packages/autoloop/templates/implement_producer.md
+session_id=019df48d-ca11-78b0-bc57-ac1b0b7dcd2d
+
+
+---
+run_id=run-20260504T192206Z-d3f7e940 | entry=phase_output | pair=implement | phase=producer | process=codex-agent | cycle=2 | attempt=1 | thread_id=019df48d-ca11-78b0-bc57-ac1b0b7dcd2d
+---
+I’m addressing the two blocking review findings now: restoring additive `workflows list` JSON compatibility and narrowing the out-of-root path normalization so it only affects workflow-origin metadata instead of all persisted runtime paths.
+
+I’m fixing the two blocking review findings in runtime metadata serialization and CLI JSON compatibility, then I’ll update the focused tests and notes to match the narrowed behavior.
+
+I’ve confirmed the review findings are narrow: one additive CLI contract fix and one over-broad path serialization change. I’m checking the exact existing test assertions and metadata call sites before patching so I don’t create another regression.
+
+I’ve isolated the broader regression surface: `_serialize_path` is used for general run/task metadata, so I’m reverting only that cross-cutting contract and moving the absolute-path behavior behind workflow-origin serialization.
+
+I have the concrete edit set now: restore `manifest_present`, narrow absolute normalization to workflow-origin fields only, and add one package-source execution test so the focused suite covers both source kinds.
+
+The fixes are in place. I’m doing a quick pass on the exact edited regions and then a syntax check so the review-clearing changes are verified against the narrowed contract.
+
+The syntax check is clean. I’m making one small follow-up adjustment to keep the generic serializer as close as possible to its pre-change behavior, rather than leaving unnecessary normalization in that shared helper.
+
+Scope considered
+- Reviewed and fixed the verifier’s two blocking findings within the active phase scope only.
+- Touched [autoloop/runtime/cli.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/autoloop/runtime/cli.py:193), [autoloop/runtime/workspace.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/autoloop/runtime/workspace.py:1095), [tests/runtime/test_runtime_cli_metadata_integration.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/tests/runtime/test_runtime_cli_metadata_integration.py:168), plus the phase [implementation_notes.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/objective-implement-workflow-installation-and-di-c328695f/runs/run-20260504T192206Z-d3f7e940/artifacts/implement/phases/runtime-cli-metadata-integration/implementation_notes.md:1) and the current-turn block in [decisions.txt](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/objective-implement-workflow-installation-and-di-c328695f/runs/run-20260504T192206Z-d3f7e940/decisions.txt:20).
+
+What I analyzed
+- The blocking feedback in the phase [feedback.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/objective-implement-workflow-installation-and-di-c328695f/runs/run-20260504T192206Z-d3f7e940/artifacts/implement/phases/runtime-cli-metadata-integration/feedback.md:1).
+- All `_serialize_path` call sites in `workspace.py` to separate workflow-origin normalization from generic run/task metadata serialization.
+- Existing CLI `workflows list` contract expectations, including older `manifest_present` coverage.
+- Focused phase tests to add package-source coverage without expanding into out-of-phase suite rewrites.
+
+What I changed
+- Restored `manifest_present` in `autoloop workflows list` JSON while keeping the new additive metadata fields.
+- Reverted generic `_serialize_path` to relative-path behavior and introduced `_serialize_origin_path` used only by nested workflow-origin fields in `_workflow_origin_payload`.
+- Extended focused tests to verify:
+  - external explicit manifest workflows keep absolute nested origin paths while top-level run metadata stays relative;
+  - package workflows resolve and persist `package_module` / `workflow_module` as `autoloop.workflows.<workflow_id>` / `.flow`;
+  - CLI list assertions include `manifest_present`.
+- Updated implementation notes and appended the non-obvious serialization decision under the current decisions header.
+
+Key findings / decisions
+- The verifier’s `IMP-001` and `IMP-002` were addressed directly without broadening scope.
+- I also covered the earlier non-blocking gap by adding a focused package-source runtime test.
+- Validation performed: `python3 -m py_compile autoloop/runtime/cli.py autoloop/runtime/workspace.py tests/runtime/test_runtime_cli_metadata_integration.py`.
+
+Open issues / next step
+- `pytest` is still unavailable in this environment, so I could not run the focused test file.
+- Next step is verifier re-review, then run the relevant pytest slice in an environment with project test dependencies installed.
+
+
+---
+run_id=run-20260504T192206Z-d3f7e940 | entry=session_turn | pair=implement | phase=verifier | cycle=2 | attempt=1 | thread_id=019df48d-ca11-78b0-bc57-ac1b0b7dcd2d
+---
+provider=codex
+mode=resume
+template=/home/rauter/.local/share/pipx/venvs/autoloop/lib/python3.12/site-packages/autoloop/templates/implement_verifier.md
+session_id=019df48d-ca11-78b0-bc57-ac1b0b7dcd2d
+
+
+---
+run_id=run-20260504T192206Z-d3f7e940 | entry=phase_output | pair=implement | phase=verifier | process=codex-agent | cycle=2 | attempt=1 | thread_id=019df48d-ca11-78b0-bc57-ac1b0b7dcd2d
+---
+I’m re-reviewing only the phase artifacts and the changed runtime/CLI/metadata paths, with emphasis on the two previously blocking regressions and the new package-source coverage.
+
+The prior blockers look resolved in code and in the focused tests. I’m updating the review artifacts now to mark the phase complete and record that this pass found no new issues.
+
+Scope considered
+- Phase-local re-review of the runtime/CLI/metadata integration changes and the active review artifacts only.
+- Focused on the previously flagged areas in `autoloop/runtime/cli.py`, `autoloop/runtime/workspace.py`, and `tests/runtime/test_runtime_cli_metadata_integration.py`.
+
+What I analyzed
+- The updated `workflows list` JSON payload for additive compatibility.
+- The narrowed path-serialization split between generic runtime metadata and nested workflow-origin metadata.
+- The added focused package-source runtime coverage and the implementation notes / decisions alignment.
+
+What I reviewed
+- `manifest_present` is restored in `autoloop workflows list` while the new fields remain additive.
+- `_serialize_path` is back to generic relative serialization, and `_serialize_origin_path` is only used for workflow-origin fields that need absolute out-of-root normalization.
+- Focused tests now cover explicit external manifest origin normalization and a package workflow run that persists `autoloop.workflows.<workflow_id>` module metadata.
+- `criteria.md` and `feedback.md` were updated in the active review artifact directory.
+
+Key findings / decisions
+- No new findings in this pass.
+- Previous findings `IMP-001`, `IMP-002`, and `IMP-003` are resolved.
+- The phase criteria are now fully checked as complete.
+
+Open issues / next step
+- No blocking review issues remain.
+- Runtime validation is still limited by the environment noted in implementation notes (`pytest` unavailable), but that is not a new code-review finding for this phase.
+
+<loop-control>
+{"schema":"docloop.loop_control/v1","kind":"promise","promise":"COMPLETE"}
+</loop-control>

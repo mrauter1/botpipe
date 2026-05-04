@@ -695,3 +695,48 @@ Key findings / decisions
 Open issues / next step
 - `pytest` is still unavailable in this environment, so I could not run the focused test file.
 - Next step is verifier re-review, then run the relevant pytest slice in an environment with project test dependencies installed.
+
+
+---
+run_id=run-20260504T192206Z-d3f7e940 | entry=session_turn | pair=implement | phase=verifier | cycle=2 | attempt=1 | thread_id=019df48d-ca11-78b0-bc57-ac1b0b7dcd2d
+---
+provider=codex
+mode=resume
+template=/home/rauter/.local/share/pipx/venvs/autoloop/lib/python3.12/site-packages/autoloop/templates/implement_verifier.md
+session_id=019df48d-ca11-78b0-bc57-ac1b0b7dcd2d
+
+
+---
+run_id=run-20260504T192206Z-d3f7e940 | entry=phase_output | pair=implement | phase=verifier | process=codex-agent | cycle=2 | attempt=1 | thread_id=019df48d-ca11-78b0-bc57-ac1b0b7dcd2d
+---
+I’m re-reviewing only the phase artifacts and the changed runtime/CLI/metadata paths, with emphasis on the two previously blocking regressions and the new package-source coverage.
+
+The prior blockers look resolved in code and in the focused tests. I’m updating the review artifacts now to mark the phase complete and record that this pass found no new issues.
+
+Scope considered
+- Phase-local re-review of the runtime/CLI/metadata integration changes and the active review artifacts only.
+- Focused on the previously flagged areas in `autoloop/runtime/cli.py`, `autoloop/runtime/workspace.py`, and `tests/runtime/test_runtime_cli_metadata_integration.py`.
+
+What I analyzed
+- The updated `workflows list` JSON payload for additive compatibility.
+- The narrowed path-serialization split between generic runtime metadata and nested workflow-origin metadata.
+- The added focused package-source runtime coverage and the implementation notes / decisions alignment.
+
+What I reviewed
+- `manifest_present` is restored in `autoloop workflows list` while the new fields remain additive.
+- `_serialize_path` is back to generic relative serialization, and `_serialize_origin_path` is only used for workflow-origin fields that need absolute out-of-root normalization.
+- Focused tests now cover explicit external manifest origin normalization and a package workflow run that persists `autoloop.workflows.<workflow_id>` module metadata.
+- `criteria.md` and `feedback.md` were updated in the active review artifact directory.
+
+Key findings / decisions
+- No new findings in this pass.
+- Previous findings `IMP-001`, `IMP-002`, and `IMP-003` are resolved.
+- The phase criteria are now fully checked as complete.
+
+Open issues / next step
+- No blocking review issues remain.
+- Runtime validation is still limited by the environment noted in implementation notes (`pytest` unavailable), but that is not a new code-review finding for this phase.
+
+<loop-control>
+{"schema":"docloop.loop_control/v1","kind":"promise","promise":"COMPLETE"}
+</loop-control>
