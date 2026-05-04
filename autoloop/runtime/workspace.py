@@ -56,6 +56,11 @@ class WorkflowWorkspace:
     module_name: str | None
     class_name: str | None
     authoring_shape: str | None
+    source_root_kind: str
+    source_root: Path | None
+    package_name: str | None
+    package_module: str | None
+    workflow_module: str | None
 
 
 @dataclass(frozen=True, slots=True)
@@ -311,6 +316,11 @@ def ensure_workflow_workspace(
     module_name: str | None = None,
     class_name: str | None = None,
     authoring_shape: str | None = None,
+    source_root_kind: str = "workspace",
+    source_root: Path | None = None,
+    package_name: str | None = None,
+    package_module: str | None = None,
+    workflow_module: str | None = None,
 ) -> WorkflowWorkspace:
     workspace = resolve_workflow_workspace(
         task_workspace,
@@ -322,6 +332,11 @@ def ensure_workflow_workspace(
         module_name=module_name,
         class_name=class_name,
         authoring_shape=authoring_shape,
+        source_root_kind=source_root_kind,
+        source_root=source_root,
+        package_name=package_name,
+        package_module=package_module,
+        workflow_module=workflow_module,
     )
     workflow_dir = workspace.workflow_dir
     workflow_dir.mkdir(parents=True, exist_ok=True)
@@ -352,6 +367,12 @@ def ensure_workflow_workspace(
         module_name=workspace.module_name,
         class_name=workspace.class_name,
         authoring_shape=workspace.authoring_shape,
+        source_root_kind=workspace.source_root_kind,
+        source_root=workspace.source_root,
+        package_name=workspace.package_name,
+        package_module=workspace.package_module,
+        workflow_module=workspace.workflow_module,
+        package_folder=workspace.package_dir,
     )
     payload["updated_at"] = now
     _write_json(workflow_meta_file, payload)
@@ -370,6 +391,11 @@ def resolve_workflow_workspace(
     module_name: str | None = None,
     class_name: str | None = None,
     authoring_shape: str | None = None,
+    source_root_kind: str = "workspace",
+    source_root: Path | None = None,
+    package_name: str | None = None,
+    package_module: str | None = None,
+    workflow_module: str | None = None,
 ) -> WorkflowWorkspace:
     workflow_dir = task_workspace.task_dir / f"wf_{workflow_name}"
     workflow_root_rel = repo_relative_path(task_workspace.root, workflow_dir)
@@ -387,6 +413,11 @@ def resolve_workflow_workspace(
         module_name=module_name,
         class_name=class_name,
         authoring_shape=authoring_shape,
+        source_root_kind=source_root_kind,
+        source_root=None if source_root is None else source_root.resolve(),
+        package_name=package_name,
+        package_module=package_module,
+        workflow_module=workflow_module,
     )
 
 
@@ -711,6 +742,12 @@ def update_run_metadata(
         module_name=workflow_workspace.module_name,
         class_name=workflow_workspace.class_name,
         authoring_shape=workflow_workspace.authoring_shape,
+        source_root_kind=workflow_workspace.source_root_kind,
+        source_root=workflow_workspace.source_root,
+        package_name=workflow_workspace.package_name,
+        package_module=workflow_workspace.package_module,
+        workflow_module=workflow_workspace.workflow_module,
+        package_folder=workflow_workspace.package_dir,
     )
     if workflow_params is not None:
         payload["workflow_params"] = normalize_mapping(workflow_params)
@@ -883,6 +920,12 @@ def update_workflow_metadata(
         module_name=workflow_workspace.module_name,
         class_name=workflow_workspace.class_name,
         authoring_shape=workflow_workspace.authoring_shape,
+        source_root_kind=workflow_workspace.source_root_kind,
+        source_root=workflow_workspace.source_root,
+        package_name=workflow_workspace.package_name,
+        package_module=workflow_workspace.package_module,
+        workflow_module=workflow_workspace.workflow_module,
+        package_folder=workflow_workspace.package_dir,
     )
     if last_run_id is not None:
         payload["last_run_id"] = last_run_id
@@ -1059,6 +1102,12 @@ def _workflow_origin_payload(
     module_name: str | None,
     class_name: str | None,
     authoring_shape: str | None,
+    source_root_kind: str,
+    source_root: Path | None,
+    package_name: str | None,
+    package_module: str | None,
+    workflow_module: str | None,
+    package_folder: Path,
 ) -> dict[str, Any]:
     payload: dict[str, Any] = {
         "name": workflow_name,
@@ -1068,6 +1117,12 @@ def _workflow_origin_payload(
         "class_name": class_name,
         "source_path": None if source_path is None else _serialize_path(root, source_path),
         "manifest_path": None if manifest_path is None else _serialize_path(root, manifest_path),
+        "package_folder": _serialize_path(root, package_folder),
+        "source_root_kind": source_root_kind,
+        "source_root": None if source_root is None else _serialize_path(root, source_root),
+        "package_name": package_name,
+        "package_module": package_module,
+        "workflow_module": workflow_module,
     }
     return payload
 
@@ -1231,10 +1286,12 @@ def _write_json(path: Path, payload: dict[str, Any]) -> None:
 
 
 def _serialize_path(root: Path, path: Path) -> str:
+    resolved_root = root.resolve()
+    resolved_path = path.resolve()
     try:
-        return str(repo_relative_path(root, path))
+        return str(resolved_path.relative_to(resolved_root))
     except ValueError:
-        return str(path)
+        return str(resolved_path)
 
 
 def _utcnow() -> str:

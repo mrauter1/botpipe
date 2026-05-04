@@ -555,8 +555,12 @@ def _resolve_context_root(*, root: Path | None, task_folder: Path, package_folde
     if root is not None:
         return root.resolve()
     resolved_package_folder = package_folder.resolve()
-    if resolved_package_folder.parent.name == "workflows":
-        return resolved_package_folder.parent.parent.resolve()
+    parts = resolved_package_folder.parts
+    for marker in (("autoloop", "workflows"), (".autoloop", "workflows")):
+        for index in range(len(parts) - 1):
+            if parts[index : index + 2] != marker:
+                continue
+            return Path(*parts[:index]).resolve()
     return task_folder.resolve()
 
 

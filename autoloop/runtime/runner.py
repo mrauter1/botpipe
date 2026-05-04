@@ -508,6 +508,10 @@ def _assert_workflow_identity_consistency(
         ("manifest_path", stored_manifest, requested_manifest),
         ("class_name", stored.get("class_name"), reference.class_name),
         ("authoring_shape", stored.get("authoring_shape"), reference.authoring_shape),
+        ("source_root_kind", stored.get("source_root_kind"), reference.source_root_kind),
+        ("package_name", stored.get("package_name"), reference.package_name),
+        ("package_module", stored.get("package_module"), reference.package_module),
+        ("workflow_module", stored.get("workflow_module"), reference.workflow_module),
     )
     conflicts = [field for field, stored_value, requested_value in comparable_pairs if stored_value != requested_value]
     if conflicts:
@@ -534,6 +538,11 @@ def _ensure_workflow_workspace(
         module_name=reference.module_name,
         class_name=reference.class_name,
         authoring_shape=reference.authoring_shape,
+        source_root_kind=reference.source_root_kind,
+        source_root=reference.source_root,
+        package_name=reference.package_name,
+        package_module=reference.package_module,
+        workflow_module=reference.workflow_module,
     )
 
 
@@ -587,6 +596,11 @@ def _plan_workspaces(
         module_name=reference.module_name,
         class_name=reference.class_name,
         authoring_shape=reference.authoring_shape,
+        source_root_kind=reference.source_root_kind,
+        source_root=reference.source_root,
+        package_name=reference.package_name,
+        package_module=reference.package_module,
+        workflow_module=reference.workflow_module,
     )
     _assert_workflow_identity_consistency(task_workspace, compiled.workflow_name, reference)
     if not options.resume:

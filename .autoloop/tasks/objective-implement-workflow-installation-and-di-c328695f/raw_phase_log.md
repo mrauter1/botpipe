@@ -509,3 +509,79 @@ This test phase is clear. Remaining coverage gaps belong to later phases already
 <loop-control>
 {"schema":"docloop.loop_control/v1","kind":"promise","promise":"COMPLETE"}
 </loop-control>
+
+
+---
+run_id=run-20260504T192206Z-d3f7e940 | entry=session_turn | pair=implement | phase=producer | cycle=1 | attempt=1 | thread_id=019df48d-ca11-78b0-bc57-ac1b0b7dcd2d
+---
+provider=codex
+mode=start
+template=/home/rauter/.local/share/pipx/venvs/autoloop/lib/python3.12/site-packages/autoloop/templates/implement_producer.md
+session_id=019df48d-ca11-78b0-bc57-ac1b0b7dcd2d
+
+
+---
+run_id=run-20260504T192206Z-d3f7e940 | entry=phase_output | pair=implement | phase=producer | process=codex-agent | cycle=1 | attempt=1 | thread_id=019df48d-ca11-78b0-bc57-ac1b0b7dcd2d
+---
+I’m reviewing the active phase artifacts and the current workflow/runtime/CLI code paths first, then I’ll patch the integration points and add targeted tests for metadata, loader behavior, and CLI output.
+
+I have the phase contract and prior decisions. Next I’m tracing the current loader, workspace metadata, context inference, capability inspection, and CLI surfaces to find the remaining `workflows/` assumptions before editing.
+
+The search surface is larger than the phase’s core files, but the main integration points are concentrated. I’m drilling into the resolver internals and the workspace serialization functions now so the edits stay localized and don’t reintroduce path-probing or broad module eviction.
+
+I’ve confirmed the main gaps: runtime metadata only stores the old minimal origin payload, CLI help/output still speaks in terms of repo-root `workflows/`, and context-root inference still hard-codes that old layout. I’m checking the existing test helpers now so I can extend them without dragging the built-in workflow relocation into this phase.
+
+Plan for this phase:
+1. Extend runtime origin metadata and workspace persistence to carry `source_root_kind`, `source_root`, `package_name`, `package_module`, and `workflow_module` end to end.
+2. Tighten loader/runtime integration so package workflows import via `autoloop.workflows.*`, workspace workflows stay on isolated filesystem namespaces, and explicit `.py` / `.toml` references keep normalized origin metadata.
+3. Update CLI `--root` help, `workflows list/show`, and `init workflow` to reflect `.autoloop/workflows` and emit the requested JSON fields, including shadowing metadata.
+4. Add and adjust focused tests for metadata payloads, CLI output/help/scaffold behavior, and workspace/package import expectations without pulling built-in relocation into scope.
+
+I’ve got the edit set narrowed down. I’m patching the runtime metadata path now, then I’ll switch the CLI list/show/init surfaces and follow with the focused test updates.
+
+I hit a context mismatch in the workspace patch because the surrounding function changed while I was editing. I’m reopening the precise sections and patching them in-place rather than broad matching.
+
+The runtime metadata and context-root pieces are in place. I’m switching the CLI surface now so the help text, catalog output, and scaffold target all reflect the new canonical roots instead of the old repo-root `workflows/` layout.
+
+The code-side changes are staged enough to validate. I’m running the focused catalog-root tests first to catch any integration errors before I widen to the CLI/runtime metadata coverage.
+
+Rather than churn the larger legacy test files blindly, I’m adding a focused runtime/CLI metadata test file for this phase’s contract: workspace origin metadata, shadowed catalog output, explicit-path normalization, and the new scaffold target.
+
+I can’t run `pytest` here because the environment is missing the test runner, so I’m doing direct Python smoke checks against the resolver and CLI entrypoints instead.
+
+I’m recording the non-obvious phase decisions and the implementation notes now, including what I validated and what remains intentionally deferred because this environment doesn’t have the runtime test dependencies installed.
+
+I’ve finished the edits and the phase notes. I’m pulling exact line references from the touched files now so the handoff is precise, then I’ll close with the scope/findings summary and validation limits.
+
+**Scope considered**
+- Phase-local runtime/CLI/metadata integration only.
+- Touched [autoloop/runtime/loader.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/autoloop/runtime/loader.py:103), [autoloop/runtime/workspace.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/autoloop/runtime/workspace.py:44), [autoloop/runtime/runner.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/autoloop/runtime/runner.py:484), [autoloop/runtime/cli.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/autoloop/runtime/cli.py:43), [autoloop/core/context.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/autoloop/core/context.py:554), and [tests/runtime/test_runtime_cli_metadata_integration.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/tests/runtime/test_runtime_cli_metadata_integration.py:1).
+
+**What I analyzed**
+- Resolver metadata flow from `WorkflowReference` into runtime workspace persistence and run metadata.
+- CLI `workflows list/show/init` behavior and remaining repo-root `workflows/` assumptions.
+- Context root inference and workflow identity consistency checks.
+- Existing phase decisions, plan, and artifact requirements.
+
+**What I changed**
+- Added direct source/module metadata accessors on `ResolvedWorkflow` so runtime callers can read `source_root_kind`, `source_root`, `package_name`, `package_module`, and `workflow_module` without unpacking ad hoc state.
+- Extended `WorkflowWorkspace` and workflow-origin persistence so `workflow.json` and `run.json` now record those origin fields plus `package_folder` through a centralized `_workflow_origin_payload`.
+- Tightened path serialization so in-workspace paths stay relative, while out-of-workspace paths persist as absolute paths instead of `../../...` escapes.
+- Updated runtime workspace planning/consistency checks to carry and validate the new origin fields.
+- Updated CLI help and behavior:
+  - `--root` now describes package workflows vs `.autoloop/workflows/`.
+  - `workflows list` supports `--all` and emits `package_folder`, `source_root_kind`, `shadowed`, `shadowed_by`.
+  - `workflows show` now emits `source_root_kind`, `source_root`, `package_folder`, `package_module`, `workflow_module`, and shadow metadata.
+  - `init workflow` now scaffolds under `.autoloop/workflows/` and defaults to the manifest-backed package shape.
+- Updated context-root inference to recognize both `autoloop/workflows` and `.autoloop/workflows`.
+- Added a focused phase test file for workspace metadata, explicit-path normalization, CLI shadow reporting, and scaffold location.
+
+**Key findings / decisions**
+- I kept broader built-in workflow relocation out of scope for this phase, per the active contract.
+- I did not rewrite the larger legacy runtime test suites that still assume repo-root `workflows/`; instead I added a focused integration test file and recorded that decision in the phase ledger and notes.
+- I preserved relative serialization for in-workspace runtime state, but normalized external/package roots to absolute persisted paths.
+
+**Open issues / next step**
+- Validation was limited to `python3 -m py_compile` on the touched code and new test file.
+- `pytest` is not installed here, and direct runtime smoke execution is also blocked because `pydantic` is missing from the environment.
+- Next step is to run the new focused tests plus the relevant existing runtime/CLI tests in an environment with project test dependencies installed.

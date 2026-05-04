@@ -45,7 +45,7 @@ def build_arg_parser() -> argparse.ArgumentParser:
         "--root",
         type=Path,
         default=Path.cwd(),
-        help="Repository root containing workflows/ and .autoloop/.",
+        help="Workspace root. Package workflows are loaded from the installed autoloop package; workspace workflows are loaded from .autoloop/workflows/.",
     )
 
     mutate = argparse.ArgumentParser(add_help=False)
@@ -53,7 +53,7 @@ def build_arg_parser() -> argparse.ArgumentParser:
         "--root",
         type=Path,
         default=Path.cwd(),
-        help="Repository root containing workflows/ and .autoloop/.",
+        help="Workspace root. Package workflows are loaded from the installed autoloop package; workspace workflows are loaded from .autoloop/workflows/.",
     )
     mutate.add_argument(
         "--provider",
@@ -78,6 +78,11 @@ def build_arg_parser() -> argparse.ArgumentParser:
         "list",
         parents=[common],
         help="List discovered workflow metadata without importing workflow modules.",
+    )
+    workflows_list.add_argument(
+        "--all",
+        action="store_true",
+        help="Include shadowed package workflows in addition to the effective catalog.",
     )
     workflows_list.set_defaults(handler=_handle_workflows_list)
 
@@ -147,14 +152,14 @@ def build_arg_parser() -> argparse.ArgumentParser:
     init_workflow = init_subparsers.add_parser(
         "workflow",
         parents=[common],
-        help="Create a workflow scaffold under workflows/.",
+        help="Create a workflow scaffold under .autoloop/workflows/.",
     )
     init_workflow.add_argument("name", help="Workflow name.")
     init_workflow.add_argument(
         "--shape",
         choices=("single", "flow-specs", "package"),
-        default="flow-specs",
-        help="Authoring shape to scaffold. Defaults to flow-specs.",
+        default="package",
+        help="Authoring shape to scaffold. Defaults to package.",
     )
     init_workflow.set_defaults(handler=_handle_init_workflow)
 
@@ -186,16 +191,19 @@ def main(
 
 def _handle_workflows_list(args: argparse.Namespace, *, provider_factory: Callable[..., Any] | None = None) -> int:
     del provider_factory
-    catalog = discover_workflow_catalog(args.root)
+    catalog = discover_workflow_catalog(args.root, include_shadowed=args.all)
     _emit_json(
         [
             {
                 "aliases": list(entry.aliases),
                 "authoring_shape": entry.authoring_shape,
                 "description": entry.description,
-                "manifest_present": entry.manifest_path is not None,
                 "name": entry.workflow_name,
+                "package_folder": str(entry.package_dir),
                 "source_path": str(entry.source_path),
+                "source_root_kind": entry.source_root_kind,
+                "shadowed": entry.shadowed,
+                "shadowed_by": entry.shadowed_by,
                 "title": entry.title,
             }
             for entry in catalog
@@ -206,8 +214,10 @@ def _handle_workflows_list(args: argparse.Namespace, *, provider_factory: Callab
 
 def _handle_workflows_show(args: argparse.Namespace, *, provider_factory: Callable[..., Any] | None = None) -> int:
     del provider_factory
+    root = args.root.resolve()
     entry = inspect_workflow_reference(args.root, args.workflow)
-    resolved = resolve_workflow_reference(args.root, args.workflow)
+    resolved = resolve_workflow_reference(root, args.workflow)
+    catalog_entry = _catalog_entry_for_resolved_reference(root, resolved)
     _emit_json(
         {
             "aliases": list(entry.aliases),
@@ -228,12 +238,12 @@ def _handle_workflows_show(args: argparse.Namespace, *, provider_factory: Callab
             "flow_path": None if entry.flow_path is None else str(entry.flow_path),
             "global_routes": dict(entry.global_routes),
             "workflow_py_path": None if entry.workflow_py_path is None else str(entry.workflow_py_path),
-            "manifest_path": None if entry.manifest_path is None else str(entry.manifest_path),
+            "manifest_path": None if resolved.manifest_path is None else str(resolved.manifest_path),
             "name": entry.workflow_name,
-            "package_folder": str(entry.package_folder),
+            "package_folder": str(resolved.package_dir),
             "package_init_path": None if entry.package_init_path is None else str(entry.package_init_path),
-            "package_module": entry.package_module,
-            "package_name": entry.package_name,
+            "package_module": resolved.package_module,
+            "package_name": resolved.package_name,
             "parameters": [
                 {
                     "default": field.default,
@@ -250,7 +260,11 @@ def _handle_workflows_show(args: argparse.Namespace, *, provider_factory: Callab
             "prompt_paths": [str(path) for path in entry.prompt_paths],
             "reference": resolved.reference.original,
             "sessions": list(entry.sessions),
-            "source_path": str(entry.source_path),
+            "shadowed": False if catalog_entry is None else catalog_entry.shadowed,
+            "shadowed_by": None if catalog_entry is None else catalog_entry.shadowed_by,
+            "source_path": None if resolved.source_path is None else str(resolved.source_path),
+            "source_root": None if resolved.source_root is None else str(resolved.source_root),
+            "source_root_kind": resolved.source_root_kind,
             "spec_paths": [str(path) for path in entry.spec_paths],
             "state_model": entry.state_model,
             "steps": [
@@ -295,7 +309,7 @@ def _handle_workflows_show(args: argparse.Namespace, *, provider_factory: Callab
                 "steps": {step_name: dict(routes) for step_name, routes in entry.routes.items()},
             },
             "workflow_class": entry.workflow_class,
-            "workflow_module": entry.workflow_module,
+            "workflow_module": resolved.workflow_module,
         }
     )
     return EXIT_SUCCESS
@@ -445,11 +459,8 @@ def _handle_init_workflow(args: argparse.Namespace, *, provider_factory: Callabl
     if not workflow_name.replace("_", "").isalnum() or workflow_name[0].isdigit():
         raise ConfigError("workflow name must be a valid Python package identifier using letters, digits, or underscores")
 
-    workflows_root = root / "workflows"
+    workflows_root = root / ".autoloop" / "workflows"
     workflows_root.mkdir(parents=True, exist_ok=True)
-    init_file = workflows_root / "__init__.py"
-    if not init_file.exists():
-        init_file.write_text("__all__ = []\n", encoding="utf-8")
 
     class_name = _workflow_class_name(workflow_name)
     shape = args.shape
@@ -655,6 +666,16 @@ def _run_record_payload(record, *, include_paths: bool = False) -> dict[str, Any
             }
         )
     return payload
+
+
+def _catalog_entry_for_resolved_reference(root: Path, resolved) -> Any:
+    for entry in discover_workflow_catalog(root, include_shadowed=True):
+        if resolved.source_path is not None and entry.source_path.resolve() == resolved.source_path.resolve():
+            return entry
+        if resolved.manifest_path is not None and entry.manifest_path is not None:
+            if entry.manifest_path.resolve() == resolved.manifest_path.resolve():
+                return entry
+    return None
 
 
 def _read_log_file(path: Path, label: str) -> str:

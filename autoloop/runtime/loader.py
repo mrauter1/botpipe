@@ -108,6 +108,54 @@ class ResolvedWorkflow:
     workflow_cls: type[Any]
     parameters_cls: type[Any] | None
 
+    @property
+    def params_cls(self) -> type[Any] | None:
+        return self.parameters_cls
+
+    @property
+    def workflow_name(self) -> str:
+        return self.reference.workflow_name
+
+    @property
+    def class_name(self) -> str | None:
+        return self.reference.class_name
+
+    @property
+    def authoring_shape(self) -> Literal["single_file", "flow_package", "workflow_package", "manifest_package", "unknown"]:
+        return self.reference.authoring_shape
+
+    @property
+    def source_path(self) -> Path | None:
+        return self.reference.source_path
+
+    @property
+    def package_dir(self) -> Path:
+        return self.reference.package_dir
+
+    @property
+    def manifest_path(self) -> Path | None:
+        return self.reference.manifest_path
+
+    @property
+    def source_root_kind(self) -> WorkflowSourceKind:
+        return self.reference.source_root_kind
+
+    @property
+    def source_root(self) -> Path | None:
+        return self.reference.source_root
+
+    @property
+    def package_name(self) -> str | None:
+        return self.reference.package_name
+
+    @property
+    def package_module(self) -> str | None:
+        return self.reference.package_module
+
+    @property
+    def workflow_module(self) -> str | None:
+        return self.reference.workflow_module
+
 
 def discover_workflow_catalog(
     root: str | Path,
