@@ -294,3 +294,85 @@ No open review issues in this phase scope.
 <loop-control>
 {"schema":"docloop.loop_control/v1","kind":"promise","promise":"COMPLETE"}
 </loop-control>
+
+
+---
+run_id=run-20260504T204430Z-152082a1 | entry=session_turn | pair=test | phase=producer | cycle=1 | attempt=1 | thread_id=019df4c1-56f4-7221-b0f6-9fb03e69c98b
+---
+provider=codex
+mode=resume
+template=/home/rauter/.local/share/pipx/venvs/autoloop/lib/python3.12/site-packages/autoloop/templates/test_producer.md
+session_id=019df4c1-56f4-7221-b0f6-9fb03e69c98b
+
+
+---
+run_id=run-20260504T204430Z-152082a1 | entry=phase_output | pair=test | phase=producer | process=codex-agent | cycle=1 | attempt=1 | thread_id=019df4c1-56f4-7221-b0f6-9fb03e69c98b
+---
+I’m auditing the current test coverage against the phase contract, especially alias behavior and the wheel-smoke path. First I’m reading the active test artifacts and the touched runtime tests before deciding whether the suite needs one more focused regression case.
+
+The main gap I still see is explicit alias coverage in the touched reference-resolution file. I’m adding one focused regression test that proves aliases do not come from `{workspace}/workflows` but do resolve from `.autoloop/workflows`, then I’ll rerun the requested slice.
+
+The added alias regression test passed with the full requested slice. I’m updating the test strategy artifact with the explicit coverage map and recording the test-phase summary in feedback.
+
+Scope considered
+
+The touched runtime test file, the wheel smoke test, adjacent catalog/CLI runtime coverage for alias and root-precedence behavior, and the active test-phase artifacts in the `close-validation-gaps` phase directory.
+
+What I analyzed
+
+I reviewed whether the updated reference-resolution tests still had an alias-specific gap against the phase contract, checked the wheel smoke’s new build path, and confirmed adjacent tests already cover package-root alias precedence and same-tier collision behavior.
+
+What I changed
+
+I added `test_manifest_aliases_resolve_from_workspace_catalog_root_only` to [tests/runtime/test_workflow_reference_resolution.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/tests/runtime/test_workflow_reference_resolution.py), and extended the local workspace-flow fixture helper so manifest-backed `.autoloop/workflows` tests can declare aliases. I also updated [test_strategy.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/objective-implement-workflow-installation-and-di-c328695f/runs/run-20260504T204430Z-152082a1/artifacts/test/phases/close-validation-gaps/test_strategy.md) with an explicit behavior-to-coverage map and appended the test-phase summary to [feedback.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/objective-implement-workflow-installation-and-di-c328695f/runs/run-20260504T204430Z-152082a1/artifacts/test/phases/close-validation-gaps/feedback.md).
+
+Key findings / decisions
+
+The only material coverage gap left in the touched file was alias behavior. The new test proves `review-release` does not resolve from `{workspace}/workflows`, then resolves once the manifest-backed workflow exists under `{workspace}/.autoloop/workflows`. Validation passed with `.venv_phase/bin/python -m pytest -q tests/runtime/test_workflow_reference_resolution.py tests/runtime/test_workflow_catalog_roots.py tests/runtime/test_runtime_cli_metadata_integration.py tests/runtime/test_package_cli.py tests/runtime/test_wheel_packaging_smoke.py`, which reported `60 passed`.
+
+Open issues / next step
+
+No open test-author issues in this phase scope.
+
+
+---
+run_id=run-20260504T204430Z-152082a1 | entry=session_turn | pair=test | phase=verifier | cycle=1 | attempt=1 | thread_id=019df4c1-56f4-7221-b0f6-9fb03e69c98b
+---
+provider=codex
+mode=resume
+template=/home/rauter/.local/share/pipx/venvs/autoloop/lib/python3.12/site-packages/autoloop/templates/test_verifier.md
+session_id=019df4c1-56f4-7221-b0f6-9fb03e69c98b
+
+
+---
+run_id=run-20260504T204430Z-152082a1 | entry=phase_output | pair=test | phase=verifier | process=codex-agent | cycle=1 | attempt=1 | thread_id=019df4c1-56f4-7221-b0f6-9fb03e69c98b
+---
+I’m auditing the final test coverage and artifact updates for this phase. First I’m reading the active test-audit artifacts, the touched test file, and the strategy/feedback additions to check for any remaining coverage or flake gaps before I mark criteria.
+
+The strategy and feedback align with the requested behaviors. I’m doing one independent rerun of the named five-suite slice before I close the audit, mainly to confirm the new alias regression test and the pip-wheel smoke remain stable together.
+
+The independent validation is clean, including the added alias regression case. I’m marking the audit criteria complete and recording that there were no blocking or non-blocking findings in scope.
+
+Scope considered
+
+The touched runtime test file, the wheel smoke test, the active test strategy and feedback artifacts for `close-validation-gaps`, the run-local decisions ledger, and one independent rerun of the required five-suite validation slice.
+
+What I analyzed
+
+I checked the added alias regression test against the explicit phase contract, verified that `{workspace}/workflows` remains path-only in the touched tests, confirmed the isolated namespace assertions still target `_autoloop_workspace_workflows.<hash>...`, and reviewed the wheel smoke’s `pip wheel` path for stability and preserved post-build checks.
+
+What I reviewed
+
+The test coverage is aligned with the requested behavior. The strategy artifact now maps bare-name, alias, explicit-path, isolated-namespace, and wheel-smoke coverage explicitly. The feedback artifact records the new alias test and the requested validation evidence. I updated [criteria.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/objective-implement-workflow-installation-and-di-c328695f/runs/run-20260504T204430Z-152082a1/artifacts/test/phases/close-validation-gaps/criteria.md) to fully checked and appended the no-findings audit result to [feedback.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/objective-implement-workflow-installation-and-di-c328695f/runs/run-20260504T204430Z-152082a1/artifacts/test/phases/close-validation-gaps/feedback.md).
+
+Key findings / decisions
+
+No blocking or non-blocking audit findings in scoped tests. Independent validation passed with `.venv_phase/bin/python -m pytest -q tests/runtime/test_workflow_reference_resolution.py tests/runtime/test_workflow_catalog_roots.py tests/runtime/test_runtime_cli_metadata_integration.py tests/runtime/test_package_cli.py tests/runtime/test_wheel_packaging_smoke.py`, reporting `60 passed`.
+
+Open issues / next step
+
+No open test-audit issues in this phase scope.
+
+<loop-control>
+{"schema":"docloop.loop_control/v1","kind":"promise","promise":"COMPLETE"}
+</loop-control>

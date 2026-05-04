@@ -9,3 +9,5 @@
 
 - Added `test_manifest_aliases_resolve_from_workspace_catalog_root_only` to prove bare aliases do not resolve from `{workspace}/workflows` and do resolve from `.autoloop/workflows`.
 - Revalidated the requested runtime/package slice with `.venv_phase/bin/python -m pytest -q tests/runtime/test_workflow_reference_resolution.py tests/runtime/test_workflow_catalog_roots.py tests/runtime/test_runtime_cli_metadata_integration.py tests/runtime/test_package_cli.py tests/runtime/test_wheel_packaging_smoke.py` (`60 passed`).
+
+No audit findings in scoped tests after coverage review and independent validation rerun.
