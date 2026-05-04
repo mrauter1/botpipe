@@ -81,30 +81,28 @@ def test_workflow_to_eval_suite_package_compiles_with_explicit_control_contracts
         "needs_rework",
         "needs_replan",
         "question",
-        "blocked",
-        "failed",
     )
     assert list(compiled.route("frame_evaluation_target", "evaluation_target_framed").required_writes) == [
-        "frame_evaluation_target.evaluation_request_brief",
-        "frame_evaluation_target.evaluation_dimensions",
+        "evaluation_request_brief",
+        "evaluation_dimensions",
     ]
     assert frame_step.expected_output_schema is not None
 
     design_step = compiled.steps["design_eval_cases"]
     assert list(compiled.route("design_eval_cases", "eval_cases_designed").required_writes) == [
-        "design_eval_cases.benchmark_case_matrix",
-        "design_eval_cases.edge_case_matrix",
-        "design_eval_cases.adversarial_case_matrix",
-        "design_eval_cases.eval_case_manifest",
-        "design_eval_cases.eval_rubric",
+        "benchmark_case_matrix",
+        "edge_case_matrix",
+        "adversarial_case_matrix",
+        "eval_case_manifest",
+        "eval_rubric",
     ]
     assert design_step.expected_output_schema is not None
 
     package_step = compiled.steps["package_workflow_eval_suite"]
     assert list(compiled.route("package_workflow_eval_suite", "workflow_eval_suite_ready").required_writes) == [
-        "package_workflow_eval_suite.workflow_eval_suite",
-        "package_workflow_eval_suite.workflow_eval_suite_summary",
-        "package_workflow_eval_suite.workflow_eval_next_action",
+        "workflow_eval_suite",
+        "workflow_eval_suite_summary",
+        "workflow_eval_next_action",
     ]
     assert package_step.expected_output_schema is not None
     assert set(package_step.expected_output_schema["required"]) >= {
@@ -123,15 +121,15 @@ def test_workflow_to_eval_suite_package_compiles_with_explicit_control_contracts
 
     publish_step = compiled.steps["publish_workflow_eval_suite"]
     assert publish_step.requires == (
-        "capture_selected_workflow_contract.selected_workflow_capability",
-        "design_eval_cases.benchmark_case_matrix",
-        "design_eval_cases.edge_case_matrix",
-        "design_eval_cases.adversarial_case_matrix",
-        "design_eval_cases.eval_case_manifest",
-        "design_eval_cases.eval_rubric",
-        "package_workflow_eval_suite.workflow_eval_suite",
-        "package_workflow_eval_suite.workflow_eval_suite_summary",
-        "package_workflow_eval_suite.workflow_eval_next_action",
+        "selected_workflow_capability",
+        "benchmark_case_matrix",
+        "edge_case_matrix",
+        "adversarial_case_matrix",
+        "eval_case_manifest",
+        "eval_rubric",
+        "workflow_eval_suite",
+        "workflow_eval_suite_summary",
+        "workflow_eval_next_action",
     )
 
 
@@ -959,21 +957,19 @@ def test_workflow_to_eval_suite_package_runs_and_publishes_terminal_eval_artifac
         "package_workflow_eval_suite",
     ]
     assert list(provider.calls[1].route_required_writes["evaluation_target_framed"]) == [
-        "frame_evaluation_target.evaluation_request_brief",
-        "frame_evaluation_target.evaluation_dimensions",
+        "evaluation_request_brief",
+        "evaluation_dimensions",
     ]
     assert provider.calls[3].available_routes == (
         "eval_cases_designed",
         "needs_rework",
         "needs_replan",
         "question",
-        "blocked",
-        "failed",
     )
     assert list(provider.calls[5].route_required_writes["workflow_eval_suite_ready"]) == [
-        "package_workflow_eval_suite.workflow_eval_suite",
-        "package_workflow_eval_suite.workflow_eval_suite_summary",
-        "package_workflow_eval_suite.workflow_eval_next_action",
+        "workflow_eval_suite",
+        "workflow_eval_suite_summary",
+        "workflow_eval_next_action",
     ]
 
 

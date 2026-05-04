@@ -4,6 +4,7 @@ from collections.abc import Mapping
 from typing import Any
 
 from autoloop import Event, Outcome
+from autoloop.core import compiler as workflow_compiler
 from autoloop.core.compiler import compile_workflow
 from autoloop.core.context import Context, context_runtime
 
@@ -14,8 +15,15 @@ def _normalize_control_result(result: Any) -> Any:
     return result
 
 
+def _compile_fresh_workflow(workflow_cls: type[Any]):
+    # Tests in this module monkeypatch workflow module handlers between invocations.
+    # Clear the compiler cache so helper-based step calls observe the patched callable.
+    workflow_compiler._COMPILED_WORKFLOW_CACHE.clear()
+    return compile_workflow(workflow_cls)
+
+
 def invoke_python_step(workflow_cls: type[Any], step_name: str, ctx: Context) -> Any:
-    compiled = compile_workflow(workflow_cls)
+    compiled = _compile_fresh_workflow(workflow_cls)
     handler = compiled.steps[step_name].python_handler
     assert handler is not None
     result = handler(ctx)
@@ -32,7 +40,7 @@ def invoke_after_verifier_hook(
     route: Mapping[str, Any] | Any | None = None,
     meta: Mapping[str, Any] | Any | None = None,
 ) -> Any:
-    compiled = compile_workflow(workflow_cls)
+    compiled = _compile_fresh_workflow(workflow_cls)
     hook = compiled.steps[step_name].after_verifier_hook
     assert hook is not None
     original_artifacts = ctx.artifacts

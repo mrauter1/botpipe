@@ -83,28 +83,26 @@ def test_workflow_run_history_to_failure_modes_package_compiles_with_explicit_co
         "needs_rework",
         "needs_replan",
         "question",
-        "blocked",
-        "failed",
     )
     assert list(compiled.route("frame_diagnostic_scope", "diagnostic_scope_framed").required_writes) == [
-        "frame_diagnostic_scope.diagnostic_scope_brief",
-        "frame_diagnostic_scope.run_history_scope",
+        "diagnostic_scope_brief",
+        "run_history_scope",
     ]
     assert frame_step.expected_output_schema is not None
 
     analysis_step = compiled.steps["map_failure_modes"]
     assert list(compiled.route("map_failure_modes", "failure_modes_mapped").required_writes) == [
-        "map_failure_modes.failure_mode_map",
-        "map_failure_modes.failure_mode_manifest",
-        "map_failure_modes.recurring_weak_points",
+        "failure_mode_map",
+        "failure_mode_manifest",
+        "recurring_weak_points",
     ]
     assert analysis_step.expected_output_schema is not None
 
     package_step = compiled.steps["package_improvement_pressure"]
     assert list(compiled.route("package_improvement_pressure", "improvement_pressure_packaged").required_writes) == [
-        "package_improvement_pressure.improvement_opportunities",
-        "package_improvement_pressure.improvement_opportunities_summary",
-        "package_improvement_pressure.diagnostic_next_actions",
+        "improvement_opportunities",
+        "improvement_opportunities_summary",
+        "diagnostic_next_actions",
     ]
     assert package_step.expected_output_schema is not None
     assert set(package_step.expected_output_schema["required"]) >= {
@@ -121,16 +119,16 @@ def test_workflow_run_history_to_failure_modes_package_compiles_with_explicit_co
 
     publish_step = compiled.steps["publish_failure_mode_package"]
     assert publish_step.requires == (
-        "capture_run_history_context.selected_workflow_capability",
-        "capture_run_history_context.selected_workflow_run_history",
-        "frame_diagnostic_scope.diagnostic_scope_brief",
-        "frame_diagnostic_scope.run_history_scope",
-        "map_failure_modes.failure_mode_map",
-        "map_failure_modes.failure_mode_manifest",
-        "map_failure_modes.recurring_weak_points",
-        "package_improvement_pressure.improvement_opportunities",
-        "package_improvement_pressure.improvement_opportunities_summary",
-        "package_improvement_pressure.diagnostic_next_actions",
+        "selected_workflow_capability",
+        "selected_workflow_run_history",
+        "diagnostic_scope_brief",
+        "run_history_scope",
+        "failure_mode_map",
+        "failure_mode_manifest",
+        "recurring_weak_points",
+        "improvement_opportunities",
+        "improvement_opportunities_summary",
+        "diagnostic_next_actions",
     )
 
 
@@ -1182,21 +1180,19 @@ def test_workflow_run_history_to_failure_modes_package_runs_and_publishes_termin
         "package_improvement_pressure",
     ]
     assert list(provider.calls[1].route_required_writes["diagnostic_scope_framed"]) == [
-        "frame_diagnostic_scope.diagnostic_scope_brief",
-        "frame_diagnostic_scope.run_history_scope",
+        "diagnostic_scope_brief",
+        "run_history_scope",
     ]
     assert provider.calls[3].available_routes == (
         "failure_modes_mapped",
         "needs_rework",
         "needs_replan",
         "question",
-        "blocked",
-        "failed",
     )
     assert list(provider.calls[5].route_required_writes["improvement_pressure_packaged"]) == [
-        "package_improvement_pressure.improvement_opportunities",
-        "package_improvement_pressure.improvement_opportunities_summary",
-        "package_improvement_pressure.diagnostic_next_actions",
+        "improvement_opportunities",
+        "improvement_opportunities_summary",
+        "diagnostic_next_actions",
     ]
 
 

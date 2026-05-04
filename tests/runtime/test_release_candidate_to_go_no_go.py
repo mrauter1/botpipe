@@ -102,13 +102,11 @@ def test_release_go_no_go_package_compiles_with_explicit_control_contracts(monke
         "needs_rework",
         "needs_replan",
         "question",
-        "blocked",
-        "failed",
     )
     assert list(compiled.route("frame_release", "release_framed").required_writes) == [
-        "frame_release.release_scope_brief",
-        "frame_release.decision_criteria",
-        "frame_release.evidence_intake_register",
+        "release_scope_brief",
+        "decision_criteria",
+        "evidence_intake_register",
     ]
     assert compiled.route("frame_release", "release_framed").handoff == (
         "Locks the release framing so evidence assembly can proceed against a fixed gate."
@@ -117,16 +115,16 @@ def test_release_go_no_go_package_compiles_with_explicit_control_contracts(monke
 
     assessment_step = compiled.steps["assess_go_no_go"]
     assert list(compiled.route("assess_go_no_go", "assessment_ready").required_writes) == [
-        "assess_go_no_go.go_no_go_assessment",
-        "assess_go_no_go.risk_register",
-        "assess_go_no_go.decision_summary",
+        "go_no_go_assessment",
+        "risk_register",
+        "decision_summary",
     ]
     assert assessment_step.expected_output_schema is not None
 
     package_step = compiled.steps["prepare_decision_package"]
     assert list(compiled.route("prepare_decision_package", "decision_package_ready").required_writes) == [
-        "prepare_decision_package.release_decision_package",
-        "prepare_decision_package.release_communications_draft",
+        "release_decision_package",
+        "release_communications_draft",
     ]
 
 
@@ -744,12 +742,10 @@ def test_release_go_no_go_package_runs_and_emits_terminal_receipt(tmp_path: Path
         "needs_rework",
         "needs_replan",
         "question",
-        "blocked",
-        "failed",
     )
     assert list(provider.calls[7].route_required_writes["decision_package_ready"]) == [
-        "prepare_decision_package.release_decision_package",
-        "prepare_decision_package.release_communications_draft",
+        "release_decision_package",
+        "release_communications_draft",
     ]
     assert provider.calls[7].routes["decision_package_ready"].handoff is None
     assert (run_dir / "run.json").exists()
