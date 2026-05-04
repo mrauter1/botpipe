@@ -156,3 +156,12 @@ No verifier-side open issues remain for the planning artifacts in this cycle. Th
 <loop-control>
 {"schema":"docloop.loop_control/v1","kind":"promise","promise":"COMPLETE"}
 </loop-control>
+
+
+---
+run_id=run-20260504T112330Z-32d8eec3 | entry=phase_scope_resolved
+---
+phase_mode=single
+phase_ids=milestone-a-runtime-route-policy-and-lazy-scoped-runtime,milestone-b-authoring-ergonomics-and-validation-polish
+explicit=True
+current_phase_index=0
