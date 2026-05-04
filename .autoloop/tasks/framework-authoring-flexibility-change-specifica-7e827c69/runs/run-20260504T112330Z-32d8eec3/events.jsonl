@@ -42,3 +42,6 @@
 {"ts": "2026-05-04T12:11:17.202591+00:00", "run_id": "run-20260504T112330Z-32d8eec3", "seq": 42, "event_type": "phase_completed", "pair": "test", "phase_id": "milestone-b-authoring-ergonomics-and-validation-polish", "phase_mode": "single"}
 {"ts": "2026-05-04T12:11:17.205894+00:00", "run_id": "run-20260504T112330Z-32d8eec3", "seq": 43, "event_type": "pair_started", "pair": "audit", "phase_id": null}
 {"ts": "2026-05-04T12:11:17.206155+00:00", "run_id": "run-20260504T112330Z-32d8eec3", "seq": 44, "event_type": "cycle_started", "pair": "audit", "cycle": 1, "attempt": 1, "phase_id": null}
+{"ts": "2026-05-04T12:17:05.719782+00:00", "run_id": "run-20260504T112330Z-32d8eec3", "seq": 45, "event_type": "phase_finished", "pair": "audit", "phase": "producer", "cycle": 1, "attempt": 1, "empty_output": false, "phase_id": null}
+{"ts": "2026-05-04T12:18:27.753798+00:00", "run_id": "run-20260504T112330Z-32d8eec3", "seq": 46, "event_type": "phase_finished", "pair": "audit", "phase": "verifier", "cycle": 1, "attempt": 1, "empty_output": false, "phase_id": null}
+{"ts": "2026-05-04T12:18:27.791006+00:00", "run_id": "run-20260504T112330Z-32d8eec3", "seq": 47, "event_type": "pair_completed", "pair": "audit", "cycle": 1, "attempt": 1, "phase_id": null}

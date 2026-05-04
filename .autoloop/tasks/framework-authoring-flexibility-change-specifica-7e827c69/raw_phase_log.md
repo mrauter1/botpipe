@@ -814,3 +814,48 @@ The next run should use a runnable Python test environment, execute the targeted
 <loop-control>
 {"schema":"docloop.loop_control/v1","kind":"promise","promise":"INCOMPLETE"}
 </loop-control>
+
+
+---
+run_id=run-20260504T112330Z-32d8eec3 | entry=session_turn | pair=audit | phase=verifier | cycle=1 | attempt=1 | thread_id=019df2e6-61de-7b20-b7d7-b4fd998ed262
+---
+provider=codex
+mode=resume
+template=/home/rauter/.local/share/pipx/venvs/autoloop/lib/python3.12/site-packages/autoloop/templates/audit_verifier.md
+session_id=019df2e6-61de-7b20-b7d7-b4fd998ed262
+
+
+---
+run_id=run-20260504T112330Z-32d8eec3 | entry=phase_output | pair=audit | phase=verifier | process=codex-agent | cycle=1 | attempt=1 | thread_id=019df2e6-61de-7b20-b7d7-b4fd998ed262
+---
+I’m verifying the audit artifacts themselves now: criteria/feedback, the gap classification, the revised follow-up request, and whether the claimed evidence matches the final code/tests and run ledger.
+
+The audit itself looks sound. I’m updating the verifier-owned audit criteria and feedback now to reflect a complete review, with one concise closure note rather than inventing issues that aren’t there.
+
+I introduced a formatting mistake in `criteria.md` by leaving the original unchecked lines in place. I’m cleaning that up now so the verifier artifact matches the required final state exactly.
+
+Scope considered
+
+The audit artifacts in the run-local `artifacts/audit` directory, the immutable request, the authoritative raw log and decisions ledger, the final framework code and cited tests, and the verifier-owned criteria/feedback files.
+
+What I analyzed
+
+I checked whether the audit accurately compared the original request against the shipped code/tests and whether it classified remaining gaps correctly. I verified the specific code paths and tests cited by the audit for route policy, lazy worklists/sessions, worklist effects, validation helpers, prompt diagnostics, and artifact ownership, and I confirmed the environment-backed test execution gap by checking the current Python environment.
+
+What I reviewed
+
+I reviewed `gap_report.md`, `revised_request.md`, and `audit_result.json`, then updated `criteria.md` to all checked and appended a verifier note to `feedback.md`. I also verified that `audit_result.json` is valid JSON and that its `material_gaps_found: true` setting is matched by a direct next-run request in `revised_request.md`.
+
+Key findings / decisions
+
+The audit quality is acceptable. It correctly treats the unexecuted acceptance suites as the one material unresolved gap, keeps the stale managed-artifact wording issue non-material, and gives a usable follow-up request focused on preparing a runnable environment, executing the targeted suites, fixing any failures found, and cleaning up the wording drift.
+
+No blocking audit defects were found. The verifier artifacts now reflect a complete review, and every checkbox in `criteria.md` is checked as required for a `COMPLETE` outcome.
+
+Open issues / next step
+
+No verifier-side audit correction remains. The next run, if taken, should follow `revised_request.md`.
+
+<loop-control>
+{"schema":"docloop.loop_control/v1","kind":"promise","promise":"COMPLETE"}
+</loop-control>
