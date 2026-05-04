@@ -650,3 +650,103 @@ Open issues / next step
 <loop-control>
 {"schema":"docloop.loop_control/v1","kind":"promise","promise":"INCOMPLETE"}
 </loop-control>
+
+
+---
+run_id=run-20260504T112330Z-32d8eec3 | entry=session_turn | pair=test | phase=producer | cycle=2 | attempt=1 | thread_id=019df2d5-a275-7a80-9230-3da4557a12de
+---
+provider=codex
+mode=resume
+template=/home/rauter/.local/share/pipx/venvs/autoloop/lib/python3.12/site-packages/autoloop/templates/test_producer.md
+session_id=019df2d5-a275-7a80-9230-3da4557a12de
+
+
+---
+run_id=run-20260504T112330Z-32d8eec3 | entry=phase_output | pair=test | phase=producer | process=codex-agent | cycle=2 | attempt=1 | thread_id=019df2d5-a275-7a80-9230-3da4557a12de
+---
+The blocking audit gap is specific: the operation-side prompt rendering path was edited but still isn’t under test. I’m reading the existing `llm()`/`classify()` contract tests now and then I’ll add a deterministic scoped operation case that hits `autoloop/core/operations.py` instead of the `PromptStep` path.
+
+The operation path isn’t a plain `PromptStep`; I’m checking the operation-step authoring surface next so I can attach the placeholder failure to a real engine-driven operation step instead of inventing a synthetic runtime.
+
+I found a clean way to exercise the edited operation prompt path without inventing a fake runtime: call `llm(...)` from a scoped step hook so the operation prompt renderer sees the real active worklist context. I’m adding that targeted regression test and then updating the test strategy/feedback map to reflect the new operation-path coverage.
+
+The blocking gap is addressed. I’m syntax-checking the updated contract file and re-reading the strategy/feedback artifacts now so the handoff stays crisp and the auditor can see the new operation-path coverage explicitly.
+
+The missing operation-path test is in place. I’m adding one more brief feedback note that explicitly calls out `TST-001` as addressed, so the next audit pass has a clear breadcrumb in the phase artifact.
+
+Scope considered
+
+- The remaining blocked Milestone B test scope only: the changed contract/unit tests, the duplicated prompt-rendering path in `autoloop/core/operations.py`, and the phase test artifacts.
+
+What I analyzed
+
+- The auditor’s `TST-001` finding against the current test set.
+- Existing operation coverage patterns in `tests/contract/test_engine_contracts.py`.
+- The operation runtime entry points in `autoloop/core/operations.py` and the simple authoring surface that reaches them.
+
+What I changed
+
+- Added `test_operation_prompt_runtime_reports_missing_payload_path_with_placeholder_context` to `tests/contract/test_engine_contracts.py`.
+- The new test invokes `llm(...)` from a scoped step hook so the assertion hits `autoloop/core/operations.py` with a real active worklist, not the `PromptStep` prompt path.
+- Updated `test_strategy.md` to explicitly map AC-3 coverage across both `PromptStep` and operation-path prompt rendering.
+- Appended feedback notes recording the added operation-path coverage and noting that `TST-001` was addressed.
+- Appended a matching test-scope decision to `decisions.txt`.
+
+Key findings / decisions
+
+- The cleanest way to cover the edited operation prompt path was a scoped hook calling `llm(...)`; that preserves real engine wiring and active-worklist context.
+- I kept the new test deterministic by failing during prompt rendering before any provider round-trip is needed.
+- `python3 -m compileall tests/contract/test_engine_contracts.py` passed after the addition.
+
+Open issues / next step
+
+- The environment still lacks `pytest` and `pydantic`, so I could not execute the updated suite here.
+- The next step is a fresh test-auditor pass to confirm `TST-001` is cleared and the phase criteria can be closed.
+
+
+---
+run_id=run-20260504T112330Z-32d8eec3 | entry=session_turn | pair=test | phase=verifier | cycle=2 | attempt=1 | thread_id=019df2d5-a275-7a80-9230-3da4557a12de
+---
+provider=codex
+mode=resume
+template=/home/rauter/.local/share/pipx/venvs/autoloop/lib/python3.12/site-packages/autoloop/templates/test_verifier.md
+session_id=019df2d5-a275-7a80-9230-3da4557a12de
+
+
+---
+run_id=run-20260504T112330Z-32d8eec3 | entry=phase_output | pair=test | phase=verifier | process=codex-agent | cycle=2 | attempt=1 | thread_id=019df2d5-a275-7a80-9230-3da4557a12de
+---
+I’m verifying that the new operation-path test really exercises `autoloop/core/operations.py` under the normal runtime, not just a nearby engine path. I’m checking the hook/runtime binding and then I’ll either clear `TST-001` or keep it open with evidence.
+
+The new operation-path test is sufficient: the hook runs inside the engine’s bound `OperationRuntime`, so the assertion now reaches the duplicated `autoloop/core/operations.py` prompt renderer exactly where the audit gap was. I’m clearing the criteria and recording that `TST-001` is resolved with no new findings.
+
+Scope considered
+
+- The remaining blocked Milestone B test scope only: the updated contract/unit tests, the active test strategy/feedback artifacts, and the adjacent operation runtime path that was previously uncovered.
+
+What I analyzed
+
+- The prior `TST-001` gap against the current test additions.
+- The engine’s operation-runtime binding in `autoloop/core/engine_collaborators.py`.
+- The new contract test that invokes `llm(...)` from a scoped hook and the updated test strategy/feedback notes.
+
+What I reviewed
+
+- Whether the new operation-path test truly reaches `autoloop/core/operations.py` under the normal engine-bound `OperationRuntime`.
+- Whether the coverage map now matches the changed behavior across both `PromptStep` prompt rendering and operation prompt rendering.
+- Whether any new regression, intent, or flake-risk issues were introduced by the added test.
+
+Key findings / decisions
+
+- `TST-001` is resolved: the new scoped-hook `llm(...)` test exercises the duplicated prompt-rendering path in `autoloop/core/operations.py`, not just the `PromptStep` path.
+- I found no additional blocking or non-blocking audit findings after that addition.
+- The phase criteria were updated to fully checked.
+
+Open issues / next step
+
+- The environment still lacks `pytest`/`pydantic`, so this remained a static coverage audit rather than an executed test run.
+- No further audit action is needed for this phase unless the implementation changes again.
+
+<loop-control>
+{"schema":"docloop.loop_control/v1","kind":"promise","promise":"COMPLETE"}
+</loop-control>

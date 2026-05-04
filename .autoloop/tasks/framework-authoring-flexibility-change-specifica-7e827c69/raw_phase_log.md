@@ -702,3 +702,51 @@ Open issues / next step
 
 - The environment still lacks `pytest` and `pydantic`, so I could not execute the updated suite here.
 - The next step is a fresh test-auditor pass to confirm `TST-001` is cleared and the phase criteria can be closed.
+
+
+---
+run_id=run-20260504T112330Z-32d8eec3 | entry=session_turn | pair=test | phase=verifier | cycle=2 | attempt=1 | thread_id=019df2d5-a275-7a80-9230-3da4557a12de
+---
+provider=codex
+mode=resume
+template=/home/rauter/.local/share/pipx/venvs/autoloop/lib/python3.12/site-packages/autoloop/templates/test_verifier.md
+session_id=019df2d5-a275-7a80-9230-3da4557a12de
+
+
+---
+run_id=run-20260504T112330Z-32d8eec3 | entry=phase_output | pair=test | phase=verifier | process=codex-agent | cycle=2 | attempt=1 | thread_id=019df2d5-a275-7a80-9230-3da4557a12de
+---
+I’m verifying that the new operation-path test really exercises `autoloop/core/operations.py` under the normal runtime, not just a nearby engine path. I’m checking the hook/runtime binding and then I’ll either clear `TST-001` or keep it open with evidence.
+
+The new operation-path test is sufficient: the hook runs inside the engine’s bound `OperationRuntime`, so the assertion now reaches the duplicated `autoloop/core/operations.py` prompt renderer exactly where the audit gap was. I’m clearing the criteria and recording that `TST-001` is resolved with no new findings.
+
+Scope considered
+
+- The remaining blocked Milestone B test scope only: the updated contract/unit tests, the active test strategy/feedback artifacts, and the adjacent operation runtime path that was previously uncovered.
+
+What I analyzed
+
+- The prior `TST-001` gap against the current test additions.
+- The engine’s operation-runtime binding in `autoloop/core/engine_collaborators.py`.
+- The new contract test that invokes `llm(...)` from a scoped hook and the updated test strategy/feedback notes.
+
+What I reviewed
+
+- Whether the new operation-path test truly reaches `autoloop/core/operations.py` under the normal engine-bound `OperationRuntime`.
+- Whether the coverage map now matches the changed behavior across both `PromptStep` prompt rendering and operation prompt rendering.
+- Whether any new regression, intent, or flake-risk issues were introduced by the added test.
+
+Key findings / decisions
+
+- `TST-001` is resolved: the new scoped-hook `llm(...)` test exercises the duplicated prompt-rendering path in `autoloop/core/operations.py`, not just the `PromptStep` path.
+- I found no additional blocking or non-blocking audit findings after that addition.
+- The phase criteria were updated to fully checked.
+
+Open issues / next step
+
+- The environment still lacks `pytest`/`pydantic`, so this remained a static coverage audit rather than an executed test run.
+- No further audit action is needed for this phase unless the implementation changes again.
+
+<loop-control>
+{"schema":"docloop.loop_control/v1","kind":"promise","promise":"COMPLETE"}
+</loop-control>
