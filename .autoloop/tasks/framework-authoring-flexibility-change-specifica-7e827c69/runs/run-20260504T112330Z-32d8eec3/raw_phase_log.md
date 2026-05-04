@@ -352,3 +352,87 @@ No code-level blocker remains for this phase. The next practical step is an exte
 <loop-control>
 {"schema":"docloop.loop_control/v1","kind":"promise","promise":"COMPLETE"}
 </loop-control>
+
+
+---
+run_id=run-20260504T112330Z-32d8eec3 | entry=session_turn | pair=test | phase=producer | cycle=1 | attempt=1 | thread_id=019df2c3-200f-73f2-9d49-64451ced9529
+---
+provider=codex
+mode=resume
+template=/home/rauter/.local/share/pipx/venvs/autoloop/lib/python3.12/site-packages/autoloop/templates/test_producer.md
+session_id=019df2c3-200f-73f2-9d49-64451ced9529
+
+
+---
+run_id=run-20260504T112330Z-32d8eec3 | entry=phase_output | pair=test | phase=producer | process=codex-agent | cycle=1 | attempt=1 | thread_id=019df2c3-200f-73f2-9d49-64451ced9529
+---
+I’m treating this as a focused Milestone A test pass: confirm the runtime-route, child-mapping, and lazy-worklist coverage that landed in the repository, then update the phase-local test strategy and feedback artifacts to reflect exactly what is now covered and what still depends on environment-backed execution.
+
+The repository already has the phase-relevant tests in place, so this turn is about making the coverage explicit and preserving the non-obvious rationale in the test artifacts. I’m updating the strategy map and the test feedback summary next, and I’ll record the deterministic source-fixture choice under the current test turn header.
+
+Scope considered
+
+Milestone A test coverage only: the contract tests already added in `tests/contract/test_engine_contracts.py`, the active test strategy and feedback artifacts, and the run-local decisions that define the required lazy-worklist and route-policy invariants.
+
+What I analyzed
+
+I mapped the implemented behavior against AC-1 through AC-4, checked which concrete tests already exist for provider route policy, child-workflow explicit mapping, lazy worklist observability, and source-policy-driven ensure behavior, and reviewed the current run-local decisions so the test artifacts reflect the same semantics.
+
+What I changed
+
+I updated [test_strategy.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/framework-authoring-flexibility-change-specifica-7e827c69/runs/run-20260504T112330Z-32d8eec3/artifacts/test/phases/milestone-a-runtime-route-policy-and-lazy-scoped-runtime/test_strategy.md:1) with an explicit behavior-to-test coverage map, preserved invariants, failure paths, stabilization notes, and known gaps. I appended a concise summary to [feedback.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/framework-authoring-flexibility-change-specifica-7e827c69/runs/run-20260504T112330Z-32d8eec3/artifacts/test/phases/milestone-a-runtime-route-policy-and-lazy-scoped-runtime/feedback.md:1), and I recorded the deterministic local-`ensure()` source-fixture choice under the current test turn header in `decisions.txt`.
+
+What I changed in repository tests was already present from the implementation cycles and is now explicitly covered in the strategy map: child undeclared `failed` / `blocked` mapping tests, additive `worklist_selection_resolved` payload assertions, and ensure-capable source tests for first use, resume restore, and refresh.
+
+Key findings / decisions
+
+The non-obvious test decision is to cover source-policy lazy-worklist regressions with deterministic local `ensure()` sources rather than external fixtures. That keeps the resume/refresh cases stable and directly exercises the contract the reviewer flagged.
+
+The remaining gap is execution, not coverage shape: this shell still lacks `pytest` and installed runtime dependencies, so the added and existing Milestone A suites are documented but not runnable here.
+
+Open issues / next step
+
+The next step is an environment-backed execution pass of the targeted Milestone A contract/runtime suites so the documented coverage map can be confirmed in a real test run.
+
+
+---
+run_id=run-20260504T112330Z-32d8eec3 | entry=session_turn | pair=test | phase=verifier | cycle=1 | attempt=1 | thread_id=019df2c3-200f-73f2-9d49-64451ced9529
+---
+provider=codex
+mode=resume
+template=/home/rauter/.local/share/pipx/venvs/autoloop/lib/python3.12/site-packages/autoloop/templates/test_verifier.md
+session_id=019df2c3-200f-73f2-9d49-64451ced9529
+
+
+---
+run_id=run-20260504T112330Z-32d8eec3 | entry=phase_output | pair=test | phase=verifier | process=codex-agent | cycle=1 | attempt=1 | thread_id=019df2c3-200f-73f2-9d49-64451ced9529
+---
+I’m auditing the Milestone A test coverage and the phase-local test artifacts only. I’ll read the current criteria, feedback, strategy, and the relevant contract tests together so I can decide whether any material coverage gap remains.
+
+The coverage shape looks adequate for the changed Milestone A behaviors and the preserved invariants with material risk. I’m marking the audit complete and recording only the environment-backed execution caveat as a non-blocking note.
+
+Scope considered
+
+Milestone A test coverage and the phase-local test artifacts only: the contract tests that cover route policy, child-workflow explicit mapping, lazy worklist observability, and source-policy `ensure()` behavior, plus `test_strategy.md` and the test feedback artifact.
+
+What I analyzed
+
+I checked the changed and request-relevant tests in `tests/contract/test_engine_contracts.py` against AC-1 through AC-4, reviewed the coverage map in `test_strategy.md`, and compared both to the run-local decisions that require source-policy-driven lazy worklist semantics and explicit child-route mapping.
+
+What I reviewed
+
+I updated [criteria.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/framework-authoring-flexibility-change-specifica-7e827c69/runs/run-20260504T112330Z-32d8eec3/artifacts/test/phases/milestone-a-runtime-route-policy-and-lazy-scoped-runtime/criteria.md:1) to all checked and appended the audit note to [feedback.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/framework-authoring-flexibility-change-specifica-7e827c69/runs/run-20260504T112330Z-32d8eec3/artifacts/test/phases/milestone-a-runtime-route-policy-and-lazy-scoped-runtime/feedback.md:1).
+
+Key findings / decisions
+
+No blocking coverage gaps remain in the audited scope. The tests now cover the material changed behaviors and preserved invariants with direct assertions for full-auto route visibility, explicit child `failed` / `blocked` mapping failures, additive `worklist_selection_resolved` payload fields, and ensure-capable source behavior across first use, resume restore, and refresh.
+
+The only remaining caveat is non-blocking and environment-level: this shell still cannot execute the targeted suites because `pytest` and installed runtime dependencies are unavailable here.
+
+Open issues / next step
+
+No audit blocker remains for this phase. The next step is an external environment run of the documented Milestone A suites so the coverage that is now present can also be observed passing.
+
+<loop-control>
+{"schema":"docloop.loop_control/v1","kind":"promise","promise":"COMPLETE"}
+</loop-control>
