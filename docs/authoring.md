@@ -31,18 +31,23 @@ Greenfield authoring defaults:
 
 ## Workflow Shapes
 
-Workflows commonly live under repo-root `workflows/`, but the runtime no longer requires one folder shape.
+There are two authoritative workflow locations:
+
+- package-installed workflows in `autoloop/workflows/`
+- workspace-local workflows in `{workspace}/.autoloop/workflows/`
+
+Workspace-local names and aliases override package-installed names and aliases. `{workspace}/workflows/` is not a discovery root.
 
 Supported authoring forms:
 
-- single Python file such as `workflows/release_review.py`
-- flow-first package such as `workflows/release_review/flow.py` plus optional `specs.py`
-- mature package such as `workflows/release_review/flow.py` or `workflow.py` plus optional `workflow.toml`, `prompts/`, `assets/`, docs, and tests
+- workspace-local single Python file such as `.autoloop/workflows/release_review.py`
+- workspace-local package such as `.autoloop/workflows/release_review/flow.py` plus optional `specs.py`
+- package-installed package such as `autoloop/workflows/release_review/flow.py` or `workflow.py` plus optional `workflow.toml`, `prompts/`, `assets/`, docs, and tests
 
 Recommended serious-workflow shape:
 
 ```text
-workflows/
+.autoloop/workflows/
   release_review/
     flow.py
     specs.py
@@ -53,14 +58,14 @@ workflows/
 Single-file workflow:
 
 ```text
-workflows/
+.autoloop/workflows/
   release_review.py
 ```
 
 Compatible mature package:
 
 ```text
-workflows/
+autoloop/workflows/
   release_review/
     __init__.py
     flow.py or workflow.py
@@ -70,7 +75,7 @@ workflows/
     assets/
 ```
 
-`specs.py` is ordinary Python, not a runtime convention. Use it to keep `flow.py` readable when the workflow grows. The runtime does not enforce one folder structure beyond resolving the workflow reference you asked it to run.
+`specs.py` is ordinary Python, not a runtime convention. Use it to keep `flow.py` readable when the workflow grows. Package-installed workflows are package directories; workspace-local workflows may also be single files.
 
 When a package uses `__init__.py`, it should re-export the main workflow class and any workflow-specific `Params` from the executable module so package-local imports stay straightforward.
 

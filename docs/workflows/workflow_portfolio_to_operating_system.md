@@ -13,7 +13,7 @@
 
 ## Invocation
 
-- Package path: `workflows/workflow_portfolio_to_operating_system/`
+- Package path: `autoloop/workflows/workflow_portfolio_to_operating_system/`
 - Discovery: `autoloop workflows show workflow_portfolio_to_operating_system`
 - Direct run:
 
@@ -222,8 +222,8 @@ Payload models used by the package:
 
 ## Evidence
 
-- Package implementation: `workflows/workflow_portfolio_to_operating_system/`
+- Package implementation: `autoloop/workflows/workflow_portfolio_to_operating_system/`
 - Shared seam consumed: `runtime/workspace.py` and `stdlib/portfolio.py`
-- Workflow asset: `workflows/workflow_portfolio_to_operating_system/assets/portfolio_operating_system_checklist.md`
+- Workflow asset: `autoloop/workflows/workflow_portfolio_to_operating_system/assets/portfolio_operating_system_checklist.md`
 - Workflow-specific proof: `tests/runtime/test_workflow_portfolio_to_operating_system.py`
 - The scripted tests prove workflow discovery, compilation, terminal governance publication, and publish-side rejection of missing scoped-evidence artifacts, unknown focus workflows, summary drift, invalid lifecycle postures, and hidden downstream execution signals.

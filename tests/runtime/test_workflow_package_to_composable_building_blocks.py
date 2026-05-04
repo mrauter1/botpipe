@@ -28,8 +28,8 @@ from tests.runtime.workflow_contract_helpers import invoke_python_step
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
 TASK_ID = "workflow-decomposition-task"
-PARENT_PROMPT_RELATIVE_PATH = "workflows/release_candidate_to_go_no_go/prompts/evidence_producer.md"
-PARENT_DOC_RELATIVE_PATH = "docs/workflows/release_candidate_to_go_no_go.md"
+PARENT_PROMPT_RELATIVE_PATH = "autoloop/workflows/release_candidate_to_go_no_go/prompts/evidence_producer.md"
+PARENT_DOC_RELATIVE_PATH = "docs/autoloop/workflows/release_candidate_to_go_no_go.md"
 PARENT_TEST_RELATIVE_PATH = "tests/runtime/test_release_candidate_to_go_no_go.py"
 BUILDING_BLOCK_NAME = "release_decision_evidence_pack"
 BUILDING_BLOCK_ROOT = f"workflows/{BUILDING_BLOCK_NAME}"
@@ -61,7 +61,7 @@ TARGET_TEST_COMMAND = (
 
 def _clear_workflow_modules() -> None:
     for name in list(sys.modules):
-        if name == "workflows" or name.startswith("workflows."):
+        if name == "workflows" or name.startswith("workflows.") or name == "autoloop.workflows" or name.startswith("autoloop.workflows."):
             sys.modules.pop(name, None)
 
 
@@ -81,8 +81,7 @@ def test_repo_workflows_namespace_discovers_workflow_package_to_composable_build
     assert "workflow-package-to-building-blocks" in package.aliases
     assert package.manifest_path == (
         REPO_ROOT
-        / "workflows"
-        / "workflow_package_to_composable_building_blocks"
+        / "autoloop" / "workflows" / "workflow_package_to_composable_building_blocks"
         / "workflow.toml"
     )
 
@@ -113,7 +112,7 @@ def test_workflow_package_to_composable_building_blocks_compiles_with_explicit_c
     importlib.invalidate_caches()
     _clear_workflow_modules()
 
-    workflow_pkg = importlib.import_module("workflows.workflow_package_to_composable_building_blocks")
+    workflow_pkg = importlib.import_module("autoloop.workflows.workflow_package_to_composable_building_blocks")
     resolved = resolve_workflow_reference(
         REPO_ROOT,
         workflow_pkg.WorkflowPackageToComposableBuildingBlocks,
@@ -223,8 +222,7 @@ def test_workflow_package_to_composable_building_blocks_docs_capture_decision_re
 def test_workflow_package_to_composable_building_blocks_prompt_readme_uses_shared_contract_sections() -> None:
     text = (
         REPO_ROOT
-        / "workflows"
-        / "workflow_package_to_composable_building_blocks"
+        / "autoloop" / "workflows" / "workflow_package_to_composable_building_blocks"
         / "prompts"
         / "README.md"
     ).read_text(encoding="utf-8")
@@ -426,8 +424,7 @@ def test_workflow_package_to_composable_building_blocks_prompts_keep_step_local_
 ) -> None:
     text = (
         REPO_ROOT
-        / "workflows"
-        / "workflow_package_to_composable_building_blocks"
+        / "autoloop" / "workflows" / "workflow_package_to_composable_building_blocks"
         / "prompts"
         / prompt_name
     ).read_text(encoding="utf-8")
@@ -507,7 +504,7 @@ def test_workflow_package_to_composable_building_blocks_bootstrap_reads_typed_ct
     importlib.invalidate_caches()
     _clear_workflow_modules()
 
-    workflow_pkg = importlib.import_module("workflows.workflow_package_to_composable_building_blocks")
+    workflow_pkg = importlib.import_module("autoloop.workflows.workflow_package_to_composable_building_blocks")
     parameters_cls = resolve_workflow_reference(REPO_ROOT, "workflow_package_to_composable_building_blocks").parameters_cls
     assert parameters_cls is not None
     typed_params = parameters_cls.model_validate(
@@ -548,7 +545,7 @@ def test_workflow_package_to_composable_building_blocks_bootstrap_reads_typed_ct
         task_folder=task_folder,
         workflow_folder=workflow_folder,
         run_folder=run_folder,
-        package_folder=REPO_ROOT / "workflows" / "workflow_package_to_composable_building_blocks",
+        package_folder=REPO_ROOT / "autoloop" / "workflows" / "workflow_package_to_composable_building_blocks",
         state=workflow_pkg.WorkflowPackageToComposableBuildingBlocks.State(),
         session_store=InMemorySessionStore(),
         params=typed_params,
@@ -848,7 +845,7 @@ def test_workflow_package_to_composable_building_blocks_publish_rejects_baseline
     run = _run_successful_decomposition_workflow(tmp_path, monkeypatch, include_evidence_paths=True)
     baseline_manifest_path = run.workflow_dir / "baseline_parent_manifest.json"
     payload = json.loads(baseline_manifest_path.read_text(encoding="utf-8"))
-    payload["parent_package_root_relative_path"] = "workflows/incident_to_hardening_program"
+    payload["parent_package_root_relative_path"] = "autoloop/workflows/incident_to_hardening_program"
     baseline_manifest_path.write_text(json.dumps(payload, indent=2, sort_keys=True) + "\n", encoding="utf-8")
 
     with pytest.raises(
@@ -898,7 +895,7 @@ def test_workflow_package_to_composable_building_blocks_publish_rejects_candidat
     run = _run_successful_decomposition_workflow(tmp_path, monkeypatch, include_evidence_paths=True)
     candidate_manifest_path = run.workflow_dir / "candidate_decomposition_manifest.json"
     payload = json.loads(candidate_manifest_path.read_text(encoding="utf-8"))
-    payload["parent_package_root_relative_path"] = "workflows/incident_to_hardening_program"
+    payload["parent_package_root_relative_path"] = "autoloop/workflows/incident_to_hardening_program"
     candidate_manifest_path.write_text(json.dumps(payload, indent=2, sort_keys=True) + "\n", encoding="utf-8")
 
     with pytest.raises(
@@ -1229,7 +1226,7 @@ def _run_successful_decomposition_workflow(
 
     monkeypatch.syspath_prepend(str(tmp_path))
     importlib.invalidate_caches()
-    workflow_pkg = importlib.import_module("workflows.workflow_package_to_composable_building_blocks.workflow")
+    workflow_pkg = importlib.import_module("autoloop.workflows.workflow_package_to_composable_building_blocks.workflow")
 
     task_dir = tmp_path / ".autoloop" / "tasks" / TASK_ID
     workflow_dir = task_dir / "wf_workflow_package_to_composable_building_blocks"
@@ -1262,7 +1259,7 @@ def test_workflow_package_to_composable_building_blocks_capture_step_normalizes_
     importlib.invalidate_caches()
     _clear_workflow_modules()
 
-    workflow_pkg = importlib.import_module("workflows.workflow_package_to_composable_building_blocks.workflow")
+    workflow_pkg = importlib.import_module("autoloop.workflows.workflow_package_to_composable_building_blocks.workflow")
     task_dir = tmp_path / ".autoloop" / "tasks" / "decomposition-capture-task"
     workflow_dir = task_dir / "wf_workflow_package_to_composable_building_blocks"
     workflow_dir.mkdir(parents=True, exist_ok=True)
@@ -1280,7 +1277,7 @@ def test_workflow_package_to_composable_building_blocks_capture_step_normalizes_
         task_folder=task_dir,
         workflow_folder=workflow_dir,
         run_folder=run_dir,
-        package_folder=tmp_path / "workflows" / "workflow_package_to_composable_building_blocks",
+        package_folder=tmp_path / "autoloop" / "workflows" / "workflow_package_to_composable_building_blocks",
         state=state,
         session_store=InMemorySessionStore(),
         workflow_params={"selected_workflow": "release-readiness", "task_title": state.task_title},
@@ -1317,7 +1314,7 @@ def _install_repo_workflow_package_to_composable_building_blocks(root: Path) -> 
         "release_candidate_to_go_no_go",
     ):
         shutil.copytree(
-            REPO_ROOT / "workflows" / package_name,
+            REPO_ROOT / "autoloop" / "workflows" / package_name,
             workflows_root / package_name,
             dirs_exist_ok=True,
             ignore=shutil.ignore_patterns("__pycache__", "*.pyc"),
@@ -1463,7 +1460,7 @@ def _write_candidate_decomposition_surface(request) -> str:
                 "",
                 "def _clear_workflow_modules() -> None:",
                 "    for name in list(sys.modules):",
-                '        if name == "workflows" or name.startswith("workflows."):',
+                '        if name == "workflows" or name.startswith("workflows.") or name == "autoloop.workflows" or name.startswith("autoloop.workflows."):',
                 "            sys.modules.pop(name, None)",
                 "",
                 "",
@@ -1560,7 +1557,7 @@ def _build_publish_context(
         task_folder=task_dir,
         workflow_folder=workflow_dir,
         run_folder=run_dir,
-        package_folder=root / "workflows" / "workflow_package_to_composable_building_blocks",
+        package_folder=root / "autoloop" / "workflows" / "workflow_package_to_composable_building_blocks",
         state=state,
         session_store=InMemorySessionStore(),
         workflow_params={},

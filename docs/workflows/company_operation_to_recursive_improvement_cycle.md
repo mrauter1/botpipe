@@ -13,7 +13,7 @@
 
 ## Invocation
 
-- Package path: `workflows/company_operation_to_recursive_improvement_cycle/`
+- Package path: `autoloop/workflows/company_operation_to_recursive_improvement_cycle/`
 - Discovery: `autoloop workflows show company_operation_to_recursive_improvement_cycle`
 - Direct run:
 
@@ -230,8 +230,8 @@ Payload models used by the package:
 
 ## Evidence
 
-- Package implementation: `workflows/company_operation_to_recursive_improvement_cycle/`
+- Package implementation: `autoloop/workflows/company_operation_to_recursive_improvement_cycle/`
 - Shared seams consumed: `runtime/workspace.py`, `stdlib/company.py`, and `stdlib/portfolio.py`
-- Workflow asset: `workflows/company_operation_to_recursive_improvement_cycle/assets/recursive_improvement_cycle_checklist.md`
+- Workflow asset: `autoloop/workflows/company_operation_to_recursive_improvement_cycle/assets/recursive_improvement_cycle_checklist.md`
 - Workflow-specific proof: `tests/runtime/test_company_operation_to_recursive_improvement_cycle.py`
 - The scripted tests prove workflow discovery, compilation, terminal publication, filter handling, and publish-side rejection of missing snapshots, unknown focus references, summary drift, invalid priority categories, and hidden downstream execution signals.

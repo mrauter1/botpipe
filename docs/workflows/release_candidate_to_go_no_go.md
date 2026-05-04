@@ -13,7 +13,7 @@
 
 ## Invocation
 
-- Package path: `workflows/release_candidate_to_go_no_go/`
+- Package path: `autoloop/workflows/release_candidate_to_go_no_go/`
 - Discovery: `autoloop workflows show release_candidate_to_go_no_go`
 - Run:
 
@@ -218,7 +218,7 @@ The package includes explicit step prompts for:
 
 ## Evidence
 
-- Package implementation: `workflows/release_candidate_to_go_no_go/`
-- Package asset: `workflows/release_candidate_to_go_no_go/assets/release_decision_package_checklist.md`
+- Package implementation: `autoloop/workflows/release_candidate_to_go_no_go/`
+- Package asset: `autoloop/workflows/release_candidate_to_go_no_go/assets/release_decision_package_checklist.md`
 - Workflow-specific proof: `tests/runtime/test_release_candidate_to_go_no_go.py`
 - The scripted exercise proves discovery, compilation, route legality, terminal package creation, and deterministic publication of `decision_receipt.json`.

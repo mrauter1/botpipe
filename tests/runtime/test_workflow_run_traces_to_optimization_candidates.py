@@ -27,7 +27,7 @@ REPO_ROOT = Path(__file__).resolve().parents[2]
 
 def _clear_workflow_modules() -> None:
     for name in list(sys.modules):
-        if name == "workflows" or name.startswith("workflows."):
+        if name == "workflows" or name.startswith("workflows.") or name == "autoloop.workflows" or name.startswith("autoloop.workflows."):
             sys.modules.pop(name, None)
 
 
@@ -67,7 +67,7 @@ def test_workflow_is_registered_and_describable() -> None:
     assert package.package_name == "workflow_run_traces_to_optimization_candidates"
     assert "workflow-optimization-candidates" in package.aliases
     assert package.manifest_path == (
-        REPO_ROOT / "workflows" / "workflow_run_traces_to_optimization_candidates" / "workflow.toml"
+        REPO_ROOT / "autoloop" / "workflows" / "workflow_run_traces_to_optimization_candidates" / "workflow.toml"
     )
 
 
@@ -76,7 +76,7 @@ def test_workflow_describe_lists_parameters_and_pairs(monkeypatch) -> None:
     importlib.invalidate_caches()
     _clear_workflow_modules()
 
-    workflow_pkg = importlib.import_module("workflows.workflow_run_traces_to_optimization_candidates")
+    workflow_pkg = importlib.import_module("autoloop.workflows.workflow_run_traces_to_optimization_candidates")
     resolved = resolve_workflow_reference(REPO_ROOT, workflow_pkg.WorkflowRunTracesToOptimizationCandidates)
     compiled = compile_workflow(resolved.workflow_cls)
 
@@ -158,7 +158,7 @@ def test_pairs_subset_must_be_ordered_prefix(monkeypatch) -> None:
     importlib.invalidate_caches()
     _clear_workflow_modules()
 
-    workflow_pkg = importlib.import_module("workflows.workflow_run_traces_to_optimization_candidates")
+    workflow_pkg = importlib.import_module("autoloop.workflows.workflow_run_traces_to_optimization_candidates")
     resolved = resolve_workflow_reference(REPO_ROOT, workflow_pkg.WorkflowRunTracesToOptimizationCandidates)
     compiled = compile_workflow(resolved.workflow_cls)
 
@@ -337,7 +337,7 @@ _NOT_APPLICABLE_HANDLER_CASES = [
                     "candidate_id": "producer-existing-001",
                     "step_name": "assessment",
                     "target_surface": "producer_prompt",
-                    "target_path": "workflows/release_candidate_to_go_no_go/prompts/assessment_producer.md",
+                    "target_path": "autoloop/workflows/release_candidate_to_go_no_go/prompts/assessment_producer.md",
                     "failure_ids_addressed": ["assessment_missing_rollback_evidence"],
                     "diagnosis": "Existing provider-authored producer candidate.",
                     "proposed_change_summary": "Preserve the authored producer candidate on not-applicable routes.",
@@ -467,7 +467,7 @@ _NOT_APPLICABLE_HANDLER_CASES = [
                     "diagnosis": "Existing provider-authored workflow-level candidate.",
                     "affected_steps": ["assessment"],
                     "proposed_change_summary": "Clarify the workflow-level review boundary.",
-                    "proposed_surfaces": ["workflows/release_candidate_to_go_no_go/prompts/README.md"],
+                    "proposed_surfaces": ["autoloop/workflows/release_candidate_to_go_no_go/prompts/README.md"],
                     "confidence": 0.64,
                     "evidence_strength": "low",
                     "risks": [],
@@ -558,7 +558,7 @@ _NOT_APPLICABLE_HANDLER_CASES = [
                         "affected_steps": ["assessment"],
                         "proposed_change_summary": "Clarify the workflow-level review boundary.",
                         "proposed_surfaces": [
-                            "workflows/release_candidate_to_go_no_go/prompts/README.md"
+                            "autoloop/workflows/release_candidate_to_go_no_go/prompts/README.md"
                         ],
                         "confidence": 0.64,
                         "evidence_strength": "low",
@@ -927,7 +927,7 @@ def test_max_candidates_per_pass_is_prompt_guidance_not_schema_limit(tmp_path: P
                 "candidate_id": "producer-assessment-001",
                 "step_name": "assessment",
                 "target_surface": "producer_prompt",
-                "target_path": "workflows/release_candidate_to_go_no_go/prompts/assessment_producer.md",
+                "target_path": "autoloop/workflows/release_candidate_to_go_no_go/prompts/assessment_producer.md",
                 "failure_ids_addressed": ["assessment_missing_rollback_evidence"],
                 "diagnosis": "First high-leverage candidate.",
                 "proposed_change_summary": "Tighten evidence requirements.",
@@ -940,7 +940,7 @@ def test_max_candidates_per_pass_is_prompt_guidance_not_schema_limit(tmp_path: P
                 "candidate_id": "producer-assessment-002",
                 "step_name": "assessment",
                 "target_surface": "producer_prompt",
-                "target_path": "workflows/release_candidate_to_go_no_go/prompts/assessment_producer.md",
+                "target_path": "autoloop/workflows/release_candidate_to_go_no_go/prompts/assessment_producer.md",
                 "failure_ids_addressed": ["assessment_missing_rollback_evidence"],
                 "diagnosis": "Second candidate kept intentionally over budget.",
                 "proposed_change_summary": "Add explicit unsupported-claim handling.",
@@ -1295,7 +1295,7 @@ def test_bootstrap_rejects_unknown_selected_workflow_before_side_effects(tmp_pat
     importlib.invalidate_caches()
     _clear_workflow_modules()
 
-    workflow_pkg = importlib.import_module("workflows.workflow_run_traces_to_optimization_candidates")
+    workflow_pkg = importlib.import_module("autoloop.workflows.workflow_run_traces_to_optimization_candidates")
     typed_params = workflow_pkg.Params(
         selected_workflow="does_not_exist",
         task_title="Release workflow optimization",
@@ -1314,7 +1314,7 @@ def test_bootstrap_rejects_unknown_selected_workflow_before_side_effects(tmp_pat
         task_folder=task_folder,
         workflow_folder=workflow_folder,
         run_folder=run_folder,
-        package_folder=tmp_path / "workflows" / "workflow_run_traces_to_optimization_candidates",
+        package_folder=tmp_path / "autoloop" / "workflows" / "workflow_run_traces_to_optimization_candidates",
         state=workflow_pkg.WorkflowRunTracesToOptimizationCandidates.State(),
         session_store=InMemorySessionStore(),
         params=typed_params,
@@ -1358,7 +1358,7 @@ def test_package_fails_if_selected_workflow_source_changed(tmp_path: Path, monke
     _write_publishable_package(ctx)
 
     target_prompt = (
-        tmp_path / "workflows" / "release_candidate_to_go_no_go" / "prompts" / "assessment_producer.md"
+        tmp_path / "autoloop" / "workflows" / "release_candidate_to_go_no_go" / "prompts" / "assessment_producer.md"
     )
     target_prompt.write_text(target_prompt.read_text(encoding="utf-8") + "\nMutation.\n", encoding="utf-8")
 
@@ -1369,7 +1369,7 @@ def test_package_fails_if_selected_workflow_source_changed(tmp_path: Path, monke
 
 def test_workflow_never_mutates_selected_workflow_source(tmp_path: Path) -> None:
     _install_repo_optimizer_package(tmp_path)
-    selected_workflow_dir = tmp_path / "workflows" / "release_candidate_to_go_no_go"
+    selected_workflow_dir = tmp_path / "autoloop" / "workflows" / "release_candidate_to_go_no_go"
     before_snapshot = _snapshot_tree(selected_workflow_dir)
 
     result, provider, workflow_dir = _run_enabled_candidate_workflow(tmp_path, install_repo=False)
@@ -1721,7 +1721,7 @@ def _bootstrap_context(
     monkeypatch.syspath_prepend(str(tmp_path))
     importlib.invalidate_caches()
     _clear_workflow_modules()
-    workflow_pkg = importlib.import_module("workflows.workflow_run_traces_to_optimization_candidates")
+    workflow_pkg = importlib.import_module("autoloop.workflows.workflow_run_traces_to_optimization_candidates")
     typed_params = workflow_pkg.Params(
         selected_workflow="release_candidate_to_go_no_go",
         task_title="Release workflow optimization",
@@ -1742,7 +1742,7 @@ def _bootstrap_context(
         task_folder=task_folder,
         workflow_folder=workflow_folder,
         run_folder=run_folder,
-        package_folder=tmp_path / "workflows" / "workflow_run_traces_to_optimization_candidates",
+        package_folder=tmp_path / "autoloop" / "workflows" / "workflow_run_traces_to_optimization_candidates",
         state=workflow_pkg.WorkflowRunTracesToOptimizationCandidates.State(),
         session_store=InMemorySessionStore(),
         params=typed_params,
@@ -1932,7 +1932,7 @@ def _produce_producer_candidates(request) -> str:
                         "candidate_id": "producer-assessment-001",
                         "step_name": "assessment",
                         "target_surface": "producer_prompt",
-                        "target_path": "workflows/release_candidate_to_go_no_go/prompts/assessment_producer.md",
+                        "target_path": "autoloop/workflows/release_candidate_to_go_no_go/prompts/assessment_producer.md",
                         "failure_ids_addressed": ["assessment_missing_rollback_evidence"],
                         "diagnosis": "Producer does not separate observed evidence from inference.",
                         "proposed_change_summary": "Add direct evidence and missing-evidence requirements.",
@@ -2007,7 +2007,7 @@ def _produce_verifier_rubric_candidates(request) -> str:
                         "proposed_changes": [
                             {
                                 "target_surface": "verifier_prompt",
-                                "target_path": "workflows/release_candidate_to_go_no_go/prompts/assessment_verifier.md",
+                                "target_path": "autoloop/workflows/release_candidate_to_go_no_go/prompts/assessment_verifier.md",
                                 "change_type": "tighten_acceptance_rule",
                                 "summary": "Reject approval when rollback readiness lacks direct evidence.",
                             },
@@ -2048,7 +2048,7 @@ def _produce_token_candidates(request) -> str:
                         "candidate_id": "token-assessment-001",
                         "step_name": "assessment",
                         "target_surface": "producer_prompt",
-                        "target_path": "workflows/release_candidate_to_go_no_go/prompts/assessment_producer.md",
+                        "target_path": "autoloop/workflows/release_candidate_to_go_no_go/prompts/assessment_producer.md",
                         "compression_kind": "remove_duplicate_static_guidance",
                         "risk_class": "safe_compression",
                         "estimated_input_token_reduction": 650,
@@ -2257,7 +2257,7 @@ def _write_valid_producer_candidates(ctx: Context) -> None:
                         "candidate_id": "producer-assessment-001",
                         "step_name": "assessment",
                         "target_surface": "producer_prompt",
-                        "target_path": "workflows/release_candidate_to_go_no_go/prompts/assessment_producer.md",
+                        "target_path": "autoloop/workflows/release_candidate_to_go_no_go/prompts/assessment_producer.md",
                         "failure_ids_addressed": ["assessment_missing_rollback_evidence"],
                         "diagnosis": "Producer does not separate observed evidence from inference.",
                         "proposed_change_summary": "Add an explicit evidence-versus-inference split.",
@@ -2315,7 +2315,7 @@ def _install_repo_optimizer_package(root: Path) -> None:
         "release_candidate_to_go_no_go",
     ):
         shutil.copytree(
-            REPO_ROOT / "workflows" / package_name,
+            REPO_ROOT / "autoloop" / "workflows" / package_name,
             workflows_root / package_name,
             dirs_exist_ok=True,
             ignore=shutil.ignore_patterns("__pycache__", "*.pyc"),

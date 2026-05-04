@@ -11,7 +11,7 @@
 
 ## Invocation
 
-- Package path: `workflows/workflow_run_traces_to_optimization_candidates/`
+- Package path: `autoloop/workflows/workflow_run_traces_to_optimization_candidates/`
 - Discovery: `autoloop workflows show workflow_run_traces_to_optimization_candidates`
 - Direct run:
 
@@ -97,6 +97,14 @@ Ordered step sequence:
 9. `package`
 
 Supported `pairs` subsets must be ordered prefixes only.
+
+### Route grammar
+
+Runtime control route:
+- `question` when provider questions are allowed by the interaction policy
+
+Application routes:
+- ordinary application routes rather than framework defaults
 
 ## Step-local optimization phase
 

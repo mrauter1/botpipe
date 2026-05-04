@@ -302,11 +302,11 @@ def test_package_run_metadata_records_package_modules(tmp_path: Path, monkeypatc
     payload = json.loads((run_dir / "run.json").read_text(encoding="utf-8"))["workflow"]
 
     assert payload["source_root_kind"] == "package"
-    assert payload["package_folder"] == str(package_dir)
+    assert payload["package_folder"] == "installed/autoloop/workflows/package_demo"
     assert payload["package_name"] == "package_demo"
     assert payload["package_module"] == "autoloop.workflows.package_demo"
     assert payload["workflow_module"] == "autoloop.workflows.package_demo.flow"
-    assert payload["source_root"] == str(package_root)
+    assert payload["source_root"] == "installed/autoloop/workflows"
 
 
 def test_cli_workflows_list_show_and_all_emit_shadow_and_source_metadata(
@@ -413,5 +413,5 @@ def test_cli_workflows_list_help_describes_package_and_dot_autoloop_roots(capsys
 
     assert excinfo.value.code == 0
     help_text = capsys.readouterr().out
-    assert "Package workflows are loaded from the installed autoloop package" in help_text
-    assert "workspace workflows are loaded from .autoloop/workflows/." in help_text
+    assert "package workflows are loaded" in help_text.lower()
+    assert ".autoloop/workflows/." in help_text

@@ -13,7 +13,7 @@
 
 ## Invocation
 
-- Package path: `workflows/workflow_idea_to_workflow_package/`
+- Package path: `autoloop/workflows/workflow_idea_to_workflow_package/`
 - Discovery: `autoloop workflows show workflow_idea_to_workflow_package`
 - Run:
 
@@ -172,7 +172,7 @@ Stable workflow-local artifacts:
 
 Generated package roots:
 
-- `workflows/<package_name>/`
+- `autoloop/workflows/<package_name>/`
 - `docs/workflows/<package_name>.md`
 - `tests/runtime/test_<package_name>.py`
 
@@ -226,6 +226,6 @@ Each prompt names the role, purpose, current work item, required reads, required
 
 ## Evidence
 
-- Package implementation: `workflows/workflow_idea_to_workflow_package/`
+- Package implementation: `autoloop/workflows/workflow_idea_to_workflow_package/`
 - Workflow-specific test: `tests/runtime/test_workflow_builder_package.py`
 - Scripted exercise proves discovery, compilation, execution, artifact generation, and a compilable generated package.

@@ -13,7 +13,7 @@
 
 ## Invocation
 
-- Package path: `workflows/investigation_request_to_evidence_pack/`
+- Package path: `autoloop/workflows/investigation_request_to_evidence_pack/`
 - Discovery: `autoloop workflows show investigation_request_to_evidence_pack`
 - Direct run:
 
@@ -238,7 +238,7 @@ Each prompt names the role, purpose, current work item, required reads, required
 
 ## Evidence
 
-- Package implementation: `workflows/investigation_request_to_evidence_pack/`
-- Package asset: `workflows/investigation_request_to_evidence_pack/assets/evidence_pack_checklist.md`
+- Package implementation: `autoloop/workflows/investigation_request_to_evidence_pack/`
+- Package asset: `autoloop/workflows/investigation_request_to_evidence_pack/assets/evidence_pack_checklist.md`
 - Workflow-specific proof: `tests/runtime/test_investigation_request_to_evidence_pack.py`
 - The scripted exercises prove discovery, compilation, direct execution, helper-based composition, artifact adoption, and deterministic publication of `evidence_pack_receipt.json`.

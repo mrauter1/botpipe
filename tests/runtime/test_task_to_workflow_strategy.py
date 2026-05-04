@@ -54,7 +54,7 @@ def _assert_compact_prompt_contract(
 
 def _clear_workflow_modules() -> None:
     for name in list(sys.modules):
-        if name == "workflows" or name.startswith("workflows."):
+        if name == "workflows" or name.startswith("workflows.") or name == "autoloop.workflows" or name.startswith("autoloop.workflows."):
             sys.modules.pop(name, None)
 
 
@@ -72,7 +72,7 @@ def test_repo_workflows_namespace_discovers_task_to_workflow_strategy_package() 
     package = discovered["task_to_workflow_strategy"]
     assert package.package_name == "task_to_workflow_strategy"
     assert "workflow-strategy" in package.aliases
-    assert package.manifest_path == (REPO_ROOT / "workflows" / "task_to_workflow_strategy" / "workflow.toml")
+    assert package.manifest_path == (REPO_ROOT / "autoloop" / "workflows" / "task_to_workflow_strategy" / "workflow.toml")
 
 
 def test_task_to_workflow_strategy_package_compiles_with_explicit_control_contracts(monkeypatch) -> None:
@@ -80,8 +80,8 @@ def test_task_to_workflow_strategy_package_compiles_with_explicit_control_contra
     importlib.invalidate_caches()
     _clear_workflow_modules()
 
-    workflow_pkg = importlib.import_module("workflows.task_to_workflow_strategy")
-    contracts_pkg = importlib.import_module("workflows.task_to_workflow_strategy.contracts")
+    workflow_pkg = importlib.import_module("autoloop.workflows.task_to_workflow_strategy")
+    contracts_pkg = importlib.import_module("autoloop.workflows.task_to_workflow_strategy.contracts")
     resolved = resolve_workflow_reference(REPO_ROOT, workflow_pkg.TaskToWorkflowStrategy)
     compiled = compile_workflow(resolved.workflow_cls)
 
@@ -172,16 +172,16 @@ def test_task_to_workflow_strategy_package_docs_capture_decision_records() -> No
 def test_task_to_workflow_strategy_adapt_handoff_docs_and_prompts_reference_adaptation_building_block() -> None:
     doc_text = (REPO_ROOT / "docs" / "workflows" / "task_to_workflow_strategy.md").read_text(encoding="utf-8")
     select_prompt = (
-        REPO_ROOT / "workflows" / "task_to_workflow_strategy" / "prompts" / "select_producer.md"
+        REPO_ROOT / "autoloop" / "workflows" / "task_to_workflow_strategy" / "prompts" / "select_producer.md"
     ).read_text(encoding="utf-8")
     package_prompt = (
-        REPO_ROOT / "workflows" / "task_to_workflow_strategy" / "prompts" / "package_producer.md"
+        REPO_ROOT / "autoloop" / "workflows" / "task_to_workflow_strategy" / "prompts" / "package_producer.md"
     ).read_text(encoding="utf-8")
     verifier_prompt = (
-        REPO_ROOT / "workflows" / "task_to_workflow_strategy" / "prompts" / "package_verifier.md"
+        REPO_ROOT / "autoloop" / "workflows" / "task_to_workflow_strategy" / "prompts" / "package_verifier.md"
     ).read_text(encoding="utf-8")
     checklist = (
-        REPO_ROOT / "workflows" / "task_to_workflow_strategy" / "assets" / "strategy_package_checklist.md"
+        REPO_ROOT / "autoloop" / "workflows" / "task_to_workflow_strategy" / "assets" / "strategy_package_checklist.md"
     ).read_text(encoding="utf-8")
 
     for text in (doc_text, select_prompt, package_prompt, verifier_prompt, checklist):
@@ -189,7 +189,7 @@ def test_task_to_workflow_strategy_adapt_handoff_docs_and_prompts_reference_adap
 
 
 def test_task_to_workflow_strategy_prompt_readme_uses_shared_contract_sections() -> None:
-    text = (REPO_ROOT / "workflows" / "task_to_workflow_strategy" / "prompts" / "README.md").read_text(
+    text = (REPO_ROOT / "autoloop" / "workflows" / "task_to_workflow_strategy" / "prompts" / "README.md").read_text(
         encoding="utf-8"
     )
 
@@ -285,7 +285,7 @@ def test_task_to_workflow_strategy_prompts_keep_step_local_contracts_explicit(
     prompt_name: str,
     required_markers: tuple[str, ...],
 ) -> None:
-    text = (REPO_ROOT / "workflows" / "task_to_workflow_strategy" / "prompts" / prompt_name).read_text(
+    text = (REPO_ROOT / "autoloop" / "workflows" / "task_to_workflow_strategy" / "prompts" / prompt_name).read_text(
         encoding="utf-8"
     )
 
@@ -345,7 +345,7 @@ def test_task_to_workflow_strategy_bootstrap_reads_typed_ctx_params(monkeypatch,
     importlib.invalidate_caches()
     _clear_workflow_modules()
 
-    workflow_pkg = importlib.import_module("workflows.task_to_workflow_strategy")
+    workflow_pkg = importlib.import_module("autoloop.workflows.task_to_workflow_strategy")
     parameters_cls = resolve_workflow_reference(REPO_ROOT, "task_to_workflow_strategy").parameters_cls
     assert parameters_cls is not None
     typed_params = parameters_cls.model_validate(
@@ -384,7 +384,7 @@ def test_task_to_workflow_strategy_bootstrap_reads_typed_ctx_params(monkeypatch,
         task_folder=task_folder,
         workflow_folder=workflow_folder,
         run_folder=run_folder,
-        package_folder=REPO_ROOT / "workflows" / "task_to_workflow_strategy",
+        package_folder=REPO_ROOT / "autoloop" / "workflows" / "task_to_workflow_strategy",
         state=workflow_pkg.TaskToWorkflowStrategy.State(),
         session_store=InMemorySessionStore(),
         params=typed_params,
@@ -1646,7 +1646,7 @@ def _make_publish_strategy_test_context(
     importlib.invalidate_caches()
     _clear_workflow_modules()
 
-    workflow_pkg = importlib.import_module("workflows.task_to_workflow_strategy")
+    workflow_pkg = importlib.import_module("autoloop.workflows.task_to_workflow_strategy")
     task_folder = tmp_path / "task"
     workflow_folder = task_folder / "wf_task_to_workflow_strategy"
     workflow_folder.mkdir(parents=True, exist_ok=True)
@@ -1720,7 +1720,7 @@ def _make_publish_strategy_test_context(
         task_folder=task_folder,
         workflow_folder=workflow_folder,
         run_folder=run_folder,
-        package_folder=REPO_ROOT / "workflows" / "task_to_workflow_strategy",
+        package_folder=REPO_ROOT / "autoloop" / "workflows" / "task_to_workflow_strategy",
         state=state,
         session_store=InMemorySessionStore(),
     )
@@ -1742,7 +1742,7 @@ def _install_repo_task_to_workflow_strategy_package(root: Path) -> None:
         "security_finding_to_verified_remediation",
     ):
         shutil.copytree(
-            REPO_ROOT / "workflows" / package_name,
+            REPO_ROOT / "autoloop" / "workflows" / package_name,
             workflows_root / package_name,
             dirs_exist_ok=True,
             ignore=shutil.ignore_patterns("__pycache__", "*.pyc"),

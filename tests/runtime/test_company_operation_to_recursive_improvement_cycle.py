@@ -53,7 +53,7 @@ _PRIORITY_CATEGORIES = [
 
 def _clear_workflow_modules() -> None:
     for name in list(sys.modules):
-        if name == "workflows" or name.startswith("workflows."):
+        if name == "workflows" or name.startswith("workflows.") or name == "autoloop.workflows" or name.startswith("autoloop.workflows."):
             sys.modules.pop(name, None)
 
 
@@ -73,8 +73,7 @@ def test_repo_workflows_namespace_discovers_company_operation_to_recursive_impro
     assert "company-recursive-improvement" in package.aliases
     assert package.manifest_path == (
         REPO_ROOT
-        / "workflows"
-        / "company_operation_to_recursive_improvement_cycle"
+        / "autoloop" / "workflows" / "company_operation_to_recursive_improvement_cycle"
         / "workflow.toml"
     )
 
@@ -86,7 +85,7 @@ def test_company_operation_to_recursive_improvement_cycle_compiles_with_explicit
     importlib.invalidate_caches()
     _clear_workflow_modules()
 
-    workflow_pkg = importlib.import_module("workflows.company_operation_to_recursive_improvement_cycle")
+    workflow_pkg = importlib.import_module("autoloop.workflows.company_operation_to_recursive_improvement_cycle")
     resolved = resolve_workflow_reference(REPO_ROOT, workflow_pkg.CompanyOperationToRecursiveImprovementCycle)
     compiled = compile_workflow(resolved.workflow_cls)
 
@@ -183,8 +182,7 @@ def test_company_operation_to_recursive_improvement_cycle_docs_capture_decision_
 def test_company_operation_to_recursive_improvement_cycle_prompt_readme_uses_shared_contract_sections() -> None:
     text = (
         REPO_ROOT
-        / "workflows"
-        / "company_operation_to_recursive_improvement_cycle"
+        / "autoloop" / "workflows" / "company_operation_to_recursive_improvement_cycle"
         / "prompts"
         / "README.md"
     ).read_text(encoding="utf-8")
@@ -344,8 +342,7 @@ def test_company_operation_to_recursive_improvement_cycle_prompts_keep_step_loca
 ) -> None:
     text = (
         REPO_ROOT
-        / "workflows"
-        / "company_operation_to_recursive_improvement_cycle"
+        / "autoloop" / "workflows" / "company_operation_to_recursive_improvement_cycle"
         / "prompts"
         / prompt_name
     ).read_text(encoding="utf-8")
@@ -440,7 +437,7 @@ def test_company_operation_to_recursive_improvement_cycle_bootstrap_reads_typed_
     importlib.invalidate_caches()
     _clear_workflow_modules()
 
-    workflow_pkg = importlib.import_module("workflows.company_operation_to_recursive_improvement_cycle")
+    workflow_pkg = importlib.import_module("autoloop.workflows.company_operation_to_recursive_improvement_cycle")
     parameters_cls = resolve_workflow_reference(REPO_ROOT, "company_operation_to_recursive_improvement_cycle").parameters_cls
     assert parameters_cls is not None
     typed_params = parameters_cls.model_validate(
@@ -490,7 +487,7 @@ def test_company_operation_to_recursive_improvement_cycle_bootstrap_reads_typed_
         task_folder=task_folder,
         workflow_folder=workflow_folder,
         run_folder=run_folder,
-        package_folder=REPO_ROOT / "workflows" / "company_operation_to_recursive_improvement_cycle",
+        package_folder=REPO_ROOT / "autoloop" / "workflows" / "company_operation_to_recursive_improvement_cycle",
         state=workflow_pkg.CompanyOperationToRecursiveImprovementCycle.State(),
         session_store=InMemorySessionStore(),
         params=typed_params,
@@ -1307,7 +1304,7 @@ def _make_publish_company_operation_cycle_test_context(
     importlib.invalidate_caches()
     _clear_workflow_modules()
 
-    workflow_pkg = importlib.import_module("workflows.company_operation_to_recursive_improvement_cycle")
+    workflow_pkg = importlib.import_module("autoloop.workflows.company_operation_to_recursive_improvement_cycle")
 
     focus_workflows = list(focus_workflows or _FOCUS_WORKFLOWS)
     scoped_task_ids = list(scoped_task_ids or _SCOPED_TASK_IDS)
@@ -1607,7 +1604,7 @@ def _make_publish_company_operation_cycle_test_context(
         task_folder=task_folder,
         workflow_folder=workflow_folder,
         run_folder=run_folder,
-        package_folder=REPO_ROOT / "workflows" / "company_operation_to_recursive_improvement_cycle",
+        package_folder=REPO_ROOT / "autoloop" / "workflows" / "company_operation_to_recursive_improvement_cycle",
         state=state,
         session_store=InMemorySessionStore(),
     )
@@ -1630,7 +1627,7 @@ def _install_repo_company_operation_package(root: Path) -> None:
         "workflow_to_eval_suite",
     ):
         shutil.copytree(
-            REPO_ROOT / "workflows" / package_name,
+            REPO_ROOT / "autoloop" / "workflows" / package_name,
             workflows_root / package_name,
             dirs_exist_ok=True,
             ignore=shutil.ignore_patterns("__pycache__", "*.pyc"),

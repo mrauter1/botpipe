@@ -53,7 +53,7 @@ def _assert_compact_prompt_contract(
 
 def _clear_workflow_modules() -> None:
     for name in list(sys.modules):
-        if name == "workflows" or name.startswith("workflows."):
+        if name == "workflows" or name.startswith("workflows.") or name == "autoloop.workflows" or name.startswith("autoloop.workflows."):
             sys.modules.pop(name, None)
 
 
@@ -72,7 +72,7 @@ def test_repo_workflows_namespace_discovers_workflow_builder_package() -> None:
     assert package.package_name == "workflow_idea_to_workflow_package"
     assert "workflow-builder" in package.aliases
     assert package.manifest_path == (
-        REPO_ROOT / "workflows" / "workflow_idea_to_workflow_package" / "workflow.toml"
+        REPO_ROOT / "autoloop" / "workflows" / "workflow_idea_to_workflow_package" / "workflow.toml"
     )
 
 
@@ -81,7 +81,7 @@ def test_workflow_builder_package_compiles_with_explicit_control_contracts(monke
     importlib.invalidate_caches()
     _clear_workflow_modules()
 
-    workflow_pkg = importlib.import_module("workflows.workflow_idea_to_workflow_package")
+    workflow_pkg = importlib.import_module("autoloop.workflows.workflow_idea_to_workflow_package")
     resolved = resolve_workflow_reference(REPO_ROOT, workflow_pkg.WorkflowIdeaToWorkflowPackage)
     compiled = compile_workflow(resolved.workflow_cls)
 
@@ -145,7 +145,7 @@ def test_workflow_builder_package_docs_capture_decision_records() -> None:
 
 
 def test_workflow_builder_package_prompt_readme_uses_shared_contract_sections() -> None:
-    text = (REPO_ROOT / "workflows" / "workflow_idea_to_workflow_package" / "prompts" / "README.md").read_text(
+    text = (REPO_ROOT / "autoloop" / "workflows" / "workflow_idea_to_workflow_package" / "prompts" / "README.md").read_text(
         encoding="utf-8"
     )
 
@@ -263,7 +263,7 @@ def test_workflow_builder_package_prompts_keep_step_local_contracts_explicit(
     required_markers: tuple[str, ...],
 ) -> None:
     text = (
-        REPO_ROOT / "workflows" / "workflow_idea_to_workflow_package" / "prompts" / prompt_name
+        REPO_ROOT / "autoloop" / "workflows" / "workflow_idea_to_workflow_package" / "prompts" / prompt_name
     ).read_text(encoding="utf-8")
 
     _assert_compact_prompt_contract(prompt_name, text, required_markers)
@@ -329,7 +329,7 @@ def test_workflow_builder_package_bootstrap_reads_typed_ctx_params(monkeypatch, 
     importlib.invalidate_caches()
     _clear_workflow_modules()
 
-    workflow_pkg = importlib.import_module("workflows.workflow_idea_to_workflow_package")
+    workflow_pkg = importlib.import_module("autoloop.workflows.workflow_idea_to_workflow_package")
     parameters_cls = resolve_workflow_reference(REPO_ROOT, "workflow_idea_to_workflow_package").parameters_cls
     assert parameters_cls is not None
     typed_params = parameters_cls.model_validate(
@@ -359,7 +359,7 @@ def test_workflow_builder_package_bootstrap_reads_typed_ctx_params(monkeypatch, 
         task_folder=task_folder,
         workflow_folder=workflow_folder,
         run_folder=run_folder,
-        package_folder=REPO_ROOT / "workflows" / "workflow_idea_to_workflow_package",
+        package_folder=REPO_ROOT / "autoloop" / "workflows" / "workflow_idea_to_workflow_package",
         state=workflow_pkg.WorkflowIdeaToWorkflowPackage.State(),
         session_store=InMemorySessionStore(),
         params=typed_params,
@@ -403,9 +403,9 @@ def test_workflow_builder_package_bootstrap_reads_typed_ctx_params(monkeypatch, 
 @pytest.mark.parametrize(
     ("authoring_shape", "expected_source"),
     [
-        ("single", "workflows/release_candidate_to_go_no_go.py"),
-        ("flow_specs", "workflows/release_candidate_to_go_no_go/flow.py"),
-        ("package", "workflows/release_candidate_to_go_no_go/flow.py"),
+        ("single", "autoloop/workflows/release_candidate_to_go_no_go.py"),
+        ("flow_specs", "autoloop/workflows/release_candidate_to_go_no_go/flow.py"),
+        ("package", "autoloop/workflows/release_candidate_to_go_no_go/flow.py"),
     ],
 )
 def test_workflow_builder_package_runs_and_generates_a_compilable_package(
@@ -709,7 +709,7 @@ def _install_repo_workflow_builder_package(root: Path) -> None:
 
     for package_name in ("workflow_idea_to_workflow_package", "autoloop_v1"):
         shutil.copytree(
-            REPO_ROOT / "workflows" / package_name,
+            REPO_ROOT / "autoloop" / "workflows" / package_name,
             workflows_root / package_name,
             dirs_exist_ok=True,
             ignore=shutil.ignore_patterns("__pycache__", "*.pyc"),

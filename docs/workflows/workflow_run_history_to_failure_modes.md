@@ -13,7 +13,7 @@
 
 ## Invocation
 
-- Package path: `workflows/workflow_run_history_to_failure_modes/`
+- Package path: `autoloop/workflows/workflow_run_history_to_failure_modes/`
 - Discovery: `autoloop workflows show workflow_run_history_to_failure_modes`
 - Direct run:
 
@@ -220,8 +220,8 @@ Payload models used by the package:
 
 ## Evidence
 
-- Package implementation: `workflows/workflow_run_history_to_failure_modes/`
+- Package implementation: `autoloop/workflows/workflow_run_history_to_failure_modes/`
 - Shared diagnostic seam consumed: `stdlib/diagnostics.py`
-- Workflow asset: `workflows/workflow_run_history_to_failure_modes/assets/failure_mode_diagnostic_checklist.md`
+- Workflow asset: `autoloop/workflows/workflow_run_history_to_failure_modes/assets/failure_mode_diagnostic_checklist.md`
 - Workflow-specific proof: `tests/runtime/test_workflow_run_history_to_failure_modes.py`
 - The scripted tests prove workflow discovery, compilation, terminal diagnostic publication, and publish-side rejection of empty filtered histories, selected-workflow mismatches, missing artifacts, and hidden downstream execution signals.

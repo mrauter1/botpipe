@@ -53,7 +53,7 @@ def _assert_compact_prompt_contract(
 
 def _clear_workflow_modules() -> None:
     for name in list(sys.modules):
-        if name == "workflows" or name.startswith("workflows."):
+        if name == "workflows" or name.startswith("workflows.") or name == "autoloop.workflows" or name.startswith("autoloop.workflows."):
             sys.modules.pop(name, None)
 
 
@@ -72,7 +72,7 @@ def test_repo_workflows_namespace_discovers_release_go_no_go_package() -> None:
     assert package.package_name == "release_candidate_to_go_no_go"
     assert "release-go-no-go" in package.aliases
     assert package.manifest_path == (
-        REPO_ROOT / "workflows" / "release_candidate_to_go_no_go" / "workflow.toml"
+        REPO_ROOT / "autoloop" / "workflows" / "release_candidate_to_go_no_go" / "workflow.toml"
     )
 
 
@@ -81,7 +81,7 @@ def test_release_go_no_go_package_compiles_with_explicit_control_contracts(monke
     importlib.invalidate_caches()
     _clear_workflow_modules()
 
-    workflow_pkg = importlib.import_module("workflows.release_candidate_to_go_no_go")
+    workflow_pkg = importlib.import_module("autoloop.workflows.release_candidate_to_go_no_go")
     resolved = resolve_workflow_reference(REPO_ROOT, workflow_pkg.ReleaseCandidateToGoNoGo)
     compiled = compile_workflow(resolved.workflow_cls)
 
@@ -146,7 +146,7 @@ def test_release_go_no_go_package_docs_capture_decision_records() -> None:
 
 
 def test_release_go_no_go_prompt_readme_uses_shared_contract_sections() -> None:
-    text = (REPO_ROOT / "workflows" / "release_candidate_to_go_no_go" / "prompts" / "README.md").read_text(
+    text = (REPO_ROOT / "autoloop" / "workflows" / "release_candidate_to_go_no_go" / "prompts" / "README.md").read_text(
         encoding="utf-8"
     )
 
@@ -175,7 +175,7 @@ def test_release_go_no_go_prompt_readme_uses_shared_contract_sections() -> None:
 
 
 def test_release_go_no_go_prompt_inventory_matches_expected_contract_surface() -> None:
-    prompt_dir = REPO_ROOT / "workflows" / "release_candidate_to_go_no_go" / "prompts"
+    prompt_dir = REPO_ROOT / "autoloop" / "workflows" / "release_candidate_to_go_no_go" / "prompts"
 
     assert sorted(path.name for path in prompt_dir.glob("*.md")) == [
         "README.md",
@@ -279,7 +279,7 @@ def test_release_go_no_go_prompts_keep_step_local_contracts_explicit(
     prompt_name: str,
     required_markers: tuple[str, ...],
 ) -> None:
-    text = (REPO_ROOT / "workflows" / "release_candidate_to_go_no_go" / "prompts" / prompt_name).read_text(
+    text = (REPO_ROOT / "autoloop" / "workflows" / "release_candidate_to_go_no_go" / "prompts" / prompt_name).read_text(
         encoding="utf-8"
     )
 
@@ -331,7 +331,7 @@ def test_release_go_no_go_bootstrap_reads_typed_ctx_params(monkeypatch, tmp_path
     importlib.invalidate_caches()
     _clear_workflow_modules()
 
-    workflow_pkg = importlib.import_module("workflows.release_candidate_to_go_no_go")
+    workflow_pkg = importlib.import_module("autoloop.workflows.release_candidate_to_go_no_go")
     parameters_cls = resolve_workflow_reference(REPO_ROOT, "release_candidate_to_go_no_go").parameters_cls
     assert parameters_cls is not None
     typed_params = parameters_cls.model_validate(
@@ -365,7 +365,7 @@ def test_release_go_no_go_bootstrap_reads_typed_ctx_params(monkeypatch, tmp_path
         task_folder=task_folder,
         workflow_folder=workflow_folder,
         run_folder=run_folder,
-        package_folder=REPO_ROOT / "workflows" / "release_candidate_to_go_no_go",
+        package_folder=REPO_ROOT / "autoloop" / "workflows" / "release_candidate_to_go_no_go",
         state=workflow_pkg.ReleaseCandidateToGoNoGo.State(),
         session_store=InMemorySessionStore(),
         params=typed_params,
@@ -779,7 +779,7 @@ def test_release_go_no_go_publish_decision_rejects_invalid_recommendation(
     importlib.invalidate_caches()
     _clear_workflow_modules()
 
-    workflow_pkg = importlib.import_module("workflows.release_candidate_to_go_no_go")
+    workflow_pkg = importlib.import_module("autoloop.workflows.release_candidate_to_go_no_go")
     workflow_folder = tmp_path / "task" / "wf_release_candidate_to_go_no_go"
     workflow_folder.mkdir(parents=True, exist_ok=True)
     (workflow_folder / "decision_summary.json").write_text(
@@ -801,7 +801,7 @@ def test_release_go_no_go_publish_decision_rejects_invalid_recommendation(
         task_folder=tmp_path / "task",
         workflow_folder=workflow_folder,
         run_folder=tmp_path / "task" / "wf_release_candidate_to_go_no_go" / "runs" / "run-1",
-        package_folder=REPO_ROOT / "workflows" / "release_candidate_to_go_no_go",
+        package_folder=REPO_ROOT / "autoloop" / "workflows" / "release_candidate_to_go_no_go",
         state=state,
         session_store=InMemorySessionStore(),
     )
@@ -820,7 +820,7 @@ def _install_repo_release_package(root: Path) -> None:
     importlib.invalidate_caches()
 
     shutil.copytree(
-        REPO_ROOT / "workflows" / "release_candidate_to_go_no_go",
+        REPO_ROOT / "autoloop" / "workflows" / "release_candidate_to_go_no_go",
         workflows_root / "release_candidate_to_go_no_go",
         dirs_exist_ok=True,
         ignore=shutil.ignore_patterns("__pycache__", "*.pyc"),

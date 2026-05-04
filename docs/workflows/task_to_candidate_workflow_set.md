@@ -13,7 +13,7 @@
 
 ## Invocation
 
-- Package path: `workflows/task_to_candidate_workflow_set/`
+- Package path: `autoloop/workflows/task_to_candidate_workflow_set/`
 - Discovery: `autoloop workflows show task_to_candidate_workflow_set`
 - Direct run:
 
@@ -216,9 +216,9 @@ Payload models used by the package:
 
 ## Evidence
 
-- Package implementation: `workflows/task_to_candidate_workflow_set/`
+- Package implementation: `autoloop/workflows/task_to_candidate_workflow_set/`
 - Shared capability seam consumed: `core/workflow_capabilities.py` and `stdlib/portfolio.py`
-- Immediate reuse proof: `workflows/task_to_workflow_strategy/`
-- Workflow asset: `workflows/task_to_candidate_workflow_set/assets/candidate_workflow_set_checklist.md`
+- Immediate reuse proof: `autoloop/workflows/task_to_workflow_strategy/`
+- Workflow asset: `autoloop/workflows/task_to_candidate_workflow_set/assets/candidate_workflow_set_checklist.md`
 - Workflow-specific proof: `tests/runtime/test_task_to_candidate_workflow_set.py`
 - The scripted tests prove workflow discovery, compilation, terminal publication, and publication-side validation that the builder baseline stays part of the compared-candidate set.

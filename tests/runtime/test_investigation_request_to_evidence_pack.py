@@ -53,7 +53,7 @@ def _assert_compact_prompt_contract(
 
 def _clear_workflow_modules() -> None:
     for name in list(sys.modules):
-        if name == "workflows" or name.startswith("workflows."):
+        if name == "workflows" or name.startswith("workflows.") or name == "autoloop.workflows" or name.startswith("autoloop.workflows."):
             sys.modules.pop(name, None)
 
 
@@ -72,7 +72,7 @@ def test_repo_workflows_namespace_discovers_investigation_evidence_pack_package(
     assert package.package_name == "investigation_request_to_evidence_pack"
     assert "investigation-evidence-pack" in package.aliases
     assert package.manifest_path == (
-        REPO_ROOT / "workflows" / "investigation_request_to_evidence_pack" / "workflow.toml"
+        REPO_ROOT / "autoloop" / "workflows" / "investigation_request_to_evidence_pack" / "workflow.toml"
     )
 
 
@@ -81,7 +81,7 @@ def test_investigation_evidence_pack_package_compiles_with_explicit_control_cont
     importlib.invalidate_caches()
     _clear_workflow_modules()
 
-    workflow_pkg = importlib.import_module("workflows.investigation_request_to_evidence_pack")
+    workflow_pkg = importlib.import_module("autoloop.workflows.investigation_request_to_evidence_pack")
     resolved = resolve_workflow_reference(REPO_ROOT, workflow_pkg.InvestigationRequestToEvidencePack)
     compiled = compile_workflow(resolved.workflow_cls)
 
@@ -152,7 +152,7 @@ def test_investigation_evidence_pack_package_docs_capture_decision_records() -> 
 
 def test_investigation_evidence_pack_prompt_readme_uses_shared_contract_sections() -> None:
     text = (
-        REPO_ROOT / "workflows" / "investigation_request_to_evidence_pack" / "prompts" / "README.md"
+        REPO_ROOT / "autoloop" / "workflows" / "investigation_request_to_evidence_pack" / "prompts" / "README.md"
     ).read_text(encoding="utf-8")
 
     for required in (
@@ -178,7 +178,7 @@ def test_investigation_evidence_pack_prompt_readme_uses_shared_contract_sections
 
 
 def test_investigation_evidence_pack_prompt_inventory_matches_expected_contract_surface() -> None:
-    prompt_dir = REPO_ROOT / "workflows" / "investigation_request_to_evidence_pack" / "prompts"
+    prompt_dir = REPO_ROOT / "autoloop" / "workflows" / "investigation_request_to_evidence_pack" / "prompts"
 
     assert sorted(path.name for path in prompt_dir.glob("*.md")) == [
         "README.md",
@@ -239,7 +239,7 @@ def test_investigation_evidence_pack_prompts_keep_step_local_contracts_explicit(
     required_markers: tuple[str, ...],
 ) -> None:
     text = (
-        REPO_ROOT / "workflows" / "investigation_request_to_evidence_pack" / "prompts" / prompt_name
+        REPO_ROOT / "autoloop" / "workflows" / "investigation_request_to_evidence_pack" / "prompts" / prompt_name
     ).read_text(encoding="utf-8")
 
     _assert_compact_prompt_contract(prompt_name, text, required_markers)
@@ -298,7 +298,7 @@ def test_investigation_evidence_pack_bootstrap_reads_typed_ctx_params(monkeypatc
     importlib.invalidate_caches()
     _clear_workflow_modules()
 
-    workflow_pkg = importlib.import_module("workflows.investigation_request_to_evidence_pack")
+    workflow_pkg = importlib.import_module("autoloop.workflows.investigation_request_to_evidence_pack")
     parameters_cls = resolve_workflow_reference(REPO_ROOT, "investigation_request_to_evidence_pack").parameters_cls
     assert parameters_cls is not None
     typed_params = parameters_cls.model_validate(
@@ -337,7 +337,7 @@ def test_investigation_evidence_pack_bootstrap_reads_typed_ctx_params(monkeypatc
         task_folder=task_folder,
         workflow_folder=workflow_folder,
         run_folder=run_folder,
-        package_folder=REPO_ROOT / "workflows" / "investigation_request_to_evidence_pack",
+        package_folder=REPO_ROOT / "autoloop" / "workflows" / "investigation_request_to_evidence_pack",
         state=workflow_pkg.InvestigationRequestToEvidencePack.State(),
         session_store=InMemorySessionStore(),
         params=typed_params,
@@ -606,7 +606,7 @@ def test_investigation_evidence_pack_publish_rejects_invalid_machine_readable_su
     _clear_workflow_modules()
     sys.path.insert(0, str(monkeypatch_root))
     try:
-        workflow_pkg = importlib.import_module("workflows.investigation_request_to_evidence_pack")
+        workflow_pkg = importlib.import_module("autoloop.workflows.investigation_request_to_evidence_pack")
     finally:
         sys.path.remove(str(monkeypatch_root))
         _clear_workflow_modules()
@@ -640,7 +640,7 @@ def test_investigation_evidence_pack_publish_rejects_invalid_machine_readable_su
         task_folder=tmp_path / "task",
         workflow_folder=workflow_folder,
         run_folder=tmp_path / "task" / "wf_investigation_request_to_evidence_pack" / "runs" / "run-1",
-        package_folder=REPO_ROOT / "workflows" / "investigation_request_to_evidence_pack",
+        package_folder=REPO_ROOT / "autoloop" / "workflows" / "investigation_request_to_evidence_pack",
         state=state,
         session_store=InMemorySessionStore(),
     )
@@ -1050,7 +1050,7 @@ def _install_repo_investigation_package(root: Path) -> None:
     importlib.invalidate_caches()
 
     shutil.copytree(
-        REPO_ROOT / "workflows" / "investigation_request_to_evidence_pack",
+        REPO_ROOT / "autoloop" / "workflows" / "investigation_request_to_evidence_pack",
         workflows_root / "investigation_request_to_evidence_pack",
         dirs_exist_ok=True,
         ignore=shutil.ignore_patterns("__pycache__", "*.pyc"),

@@ -156,6 +156,14 @@ def effective_parameters_model(workflow_cls: type[Any]) -> type[BaseModel] | Non
         base_model = getattr(workflow_cls, "Params", None)
         if base_model is None:
             return None
+        # autoloop.simple.Workflow provides EmptyParams as a sentinel default.
+        # Treat that default as "no explicit class-level params" so package-
+        # level exports such as params.py can still define the effective model.
+        if (getattr(base_model, "__module__", None), getattr(base_model, "__name__", None)) == (
+            "autoloop.simple",
+            "EmptyParams",
+        ):
+            return None
         if not isinstance(base_model, type) or not issubclass(base_model, BaseModel):
             return None
         return base_model

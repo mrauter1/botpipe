@@ -32,7 +32,7 @@ REPO_ROOT = Path(__file__).resolve().parents[2]
 
 def _clear_workflow_modules() -> None:
     for name in list(sys.modules):
-        if name == "workflows" or name.startswith("workflows."):
+        if name == "workflows" or name.startswith("workflows.") or name == "autoloop.workflows" or name.startswith("autoloop.workflows."):
             sys.modules.pop(name, None)
 
 
@@ -51,7 +51,7 @@ def test_repo_workflows_namespace_discovers_workflow_run_history_to_failure_mode
     assert package.package_name == "workflow_run_history_to_failure_modes"
     assert "workflow-failure-modes" in package.aliases
     assert package.manifest_path == (
-        REPO_ROOT / "workflows" / "workflow_run_history_to_failure_modes" / "workflow.toml"
+        REPO_ROOT / "autoloop" / "workflows" / "workflow_run_history_to_failure_modes" / "workflow.toml"
     )
 
 
@@ -62,7 +62,7 @@ def test_workflow_run_history_to_failure_modes_package_compiles_with_explicit_co
     importlib.invalidate_caches()
     _clear_workflow_modules()
 
-    workflow_pkg = importlib.import_module("workflows.workflow_run_history_to_failure_modes")
+    workflow_pkg = importlib.import_module("autoloop.workflows.workflow_run_history_to_failure_modes")
     resolved = resolve_workflow_reference(REPO_ROOT, workflow_pkg.WorkflowRunHistoryToFailureModes)
     compiled = compile_workflow(resolved.workflow_cls)
 
@@ -151,7 +151,7 @@ def test_workflow_run_history_to_failure_modes_package_docs_capture_decision_rec
 
 def test_workflow_run_history_to_failure_modes_prompt_readme_uses_shared_contract_sections() -> None:
     text = (
-        REPO_ROOT / "workflows" / "workflow_run_history_to_failure_modes" / "prompts" / "README.md"
+        REPO_ROOT / "autoloop" / "workflows" / "workflow_run_history_to_failure_modes" / "prompts" / "README.md"
     ).read_text(encoding="utf-8")
 
     for required in (
@@ -307,7 +307,7 @@ def test_workflow_run_history_to_failure_modes_prompts_keep_step_local_contracts
     required_markers: tuple[str, ...],
 ) -> None:
     text = (
-        REPO_ROOT / "workflows" / "workflow_run_history_to_failure_modes" / "prompts" / prompt_name
+        REPO_ROOT / "autoloop" / "workflows" / "workflow_run_history_to_failure_modes" / "prompts" / prompt_name
     ).read_text(encoding="utf-8")
 
     for marker in required_markers:
@@ -378,7 +378,7 @@ def test_workflow_run_history_to_failure_modes_bootstrap_reads_typed_ctx_params(
     importlib.invalidate_caches()
     _clear_workflow_modules()
 
-    workflow_pkg = importlib.import_module("workflows.workflow_run_history_to_failure_modes")
+    workflow_pkg = importlib.import_module("autoloop.workflows.workflow_run_history_to_failure_modes")
     parameters_cls = resolve_workflow_reference(REPO_ROOT, "workflow_run_history_to_failure_modes").parameters_cls
     assert parameters_cls is not None
     typed_params = parameters_cls.model_validate(
@@ -414,7 +414,7 @@ def test_workflow_run_history_to_failure_modes_bootstrap_reads_typed_ctx_params(
         task_folder=task_folder,
         workflow_folder=workflow_folder,
         run_folder=run_folder,
-        package_folder=REPO_ROOT / "workflows" / "workflow_run_history_to_failure_modes",
+        package_folder=REPO_ROOT / "autoloop" / "workflows" / "workflow_run_history_to_failure_modes",
         state=workflow_pkg.WorkflowRunHistoryToFailureModes.State(),
         session_store=InMemorySessionStore(),
         params=typed_params,
@@ -642,7 +642,7 @@ def test_workflow_run_history_to_failure_modes_package_runs_and_publishes_termin
                     "run_metadata": {
                         "created_at": "2026-04-23T08:00:00+00:00",
                         "error": None,
-                        "package_folder": "workflows/release_candidate_to_go_no_go",
+                        "package_folder": "autoloop/workflows/release_candidate_to_go_no_go",
                         "pending_question": "Who owns rollback approval for release 2026.07?",
                         "run_id": "run-release-paused",
                         "status": "awaiting_input",
@@ -770,7 +770,7 @@ def test_workflow_run_history_to_failure_modes_package_runs_and_publishes_termin
                     "run_metadata": {
                         "created_at": "2026-04-22T09:00:00+00:00",
                         "error": None,
-                        "package_folder": "workflows/release_candidate_to_go_no_go",
+                        "package_folder": "autoloop/workflows/release_candidate_to_go_no_go",
                         "pending_question": None,
                         "run_id": "run-release-blocked",
                         "status": "blocked",
@@ -898,7 +898,7 @@ def test_workflow_run_history_to_failure_modes_package_runs_and_publishes_termin
                     "run_metadata": {
                         "created_at": "2026-04-21T10:00:00+00:00",
                         "error": "Rollback readiness was never published.",
-                        "package_folder": "workflows/release_candidate_to_go_no_go",
+                        "package_folder": "autoloop/workflows/release_candidate_to_go_no_go",
                         "pending_question": None,
                         "run_id": "run-release-failed",
                         "status": "failed",
@@ -1203,7 +1203,7 @@ def test_workflow_run_history_to_failure_modes_package_validator_rejects_missing
     importlib.invalidate_caches()
     _clear_workflow_modules()
 
-    workflow_pkg = importlib.import_module("workflows.workflow_run_history_to_failure_modes")
+    workflow_pkg = importlib.import_module("autoloop.workflows.workflow_run_history_to_failure_modes")
     compiled = compile_workflow(workflow_pkg.WorkflowRunHistoryToFailureModes)
     package_step = compiled.steps["package_improvement_pressure"]
     payload = {
@@ -1576,8 +1576,8 @@ def test_workflow_run_history_capture_step_normalizes_alias_and_preserves_filter
     importlib.invalidate_caches()
     _clear_workflow_modules()
 
-    workflow_pkg = importlib.import_module("workflows.workflow_run_history_to_failure_modes")
-    workflow_module = importlib.import_module("workflows.workflow_run_history_to_failure_modes.workflow")
+    workflow_pkg = importlib.import_module("autoloop.workflows.workflow_run_history_to_failure_modes")
+    workflow_module = importlib.import_module("autoloop.workflows.workflow_run_history_to_failure_modes.workflow")
 
     def _unexpected_validate(*args, **kwargs):
         raise AssertionError("capture step should not revalidate the capability snapshot to recover the workflow name")
@@ -1602,7 +1602,7 @@ def test_workflow_run_history_capture_step_normalizes_alias_and_preserves_filter
         task_folder=task_folder,
         workflow_folder=workflow_folder,
         run_folder=run_folder,
-        package_folder=tmp_path / "workflows" / "workflow_run_history_to_failure_modes",
+        package_folder=tmp_path / "autoloop" / "workflows" / "workflow_run_history_to_failure_modes",
         state=state,
         session_store=InMemorySessionStore(),
         workflow_params={
@@ -1657,7 +1657,7 @@ def _make_publish_failure_modes_test_context(
     importlib.invalidate_caches()
     _clear_workflow_modules()
 
-    workflow_pkg = importlib.import_module("workflows.workflow_run_history_to_failure_modes")
+    workflow_pkg = importlib.import_module("autoloop.workflows.workflow_run_history_to_failure_modes")
     task_folder = tmp_path / ".autoloop" / "tasks" / "workflow-failure-modes-task"
     workflow_folder = task_folder / "wf_workflow_run_history_to_failure_modes"
     workflow_folder.mkdir(parents=True, exist_ok=True)
@@ -1679,7 +1679,7 @@ def _make_publish_failure_modes_test_context(
         task_folder=task_folder,
         workflow_folder=workflow_folder,
         run_folder=run_folder,
-        package_folder=tmp_path / "workflows" / "workflow_run_history_to_failure_modes",
+        package_folder=tmp_path / "autoloop" / "workflows" / "workflow_run_history_to_failure_modes",
         state=initial_state,
         session_store=InMemorySessionStore(),
         workflow_params={
@@ -1725,7 +1725,7 @@ def _make_publish_failure_modes_test_context(
         task_folder=task_folder,
         workflow_folder=workflow_folder,
         run_folder=run_folder,
-        package_folder=tmp_path / "workflows" / "workflow_run_history_to_failure_modes",
+        package_folder=tmp_path / "autoloop" / "workflows" / "workflow_run_history_to_failure_modes",
         state=state,
         session_store=InMemorySessionStore(),
         workflow_params={
@@ -1937,7 +1937,7 @@ def _install_repo_workflow_run_history_package(root: Path) -> None:
         "release_candidate_to_go_no_go",
     ):
         shutil.copytree(
-            REPO_ROOT / "workflows" / package_name,
+            REPO_ROOT / "autoloop" / "workflows" / package_name,
             workflows_root / package_name,
             dirs_exist_ok=True,
             ignore=shutil.ignore_patterns("__pycache__", "*.pyc"),

@@ -30,7 +30,7 @@ REPO_ROOT = Path(__file__).resolve().parents[2]
 
 def _clear_workflow_modules() -> None:
     for name in list(sys.modules):
-        if name == "workflows" or name.startswith("workflows."):
+        if name == "workflows" or name.startswith("workflows.") or name == "autoloop.workflows" or name.startswith("autoloop.workflows."):
             sys.modules.pop(name, None)
 
 
@@ -49,7 +49,7 @@ def test_repo_workflows_namespace_discovers_workflow_portfolio_to_operating_syst
     assert package.package_name == "workflow_portfolio_to_operating_system"
     assert "portfolio-operating-system" in package.aliases
     assert package.manifest_path == (
-        REPO_ROOT / "workflows" / "workflow_portfolio_to_operating_system" / "workflow.toml"
+        REPO_ROOT / "autoloop" / "workflows" / "workflow_portfolio_to_operating_system" / "workflow.toml"
     )
 
 
@@ -60,7 +60,7 @@ def test_workflow_portfolio_to_operating_system_compiles_with_explicit_control_c
     importlib.invalidate_caches()
     _clear_workflow_modules()
 
-    workflow_pkg = importlib.import_module("workflows.workflow_portfolio_to_operating_system")
+    workflow_pkg = importlib.import_module("autoloop.workflows.workflow_portfolio_to_operating_system")
     resolved = resolve_workflow_reference(REPO_ROOT, workflow_pkg.WorkflowPortfolioToOperatingSystem)
     compiled = compile_workflow(resolved.workflow_cls)
 
@@ -147,7 +147,7 @@ def test_workflow_portfolio_to_operating_system_docs_capture_decision_records() 
 
 def test_workflow_portfolio_to_operating_system_prompt_readme_uses_shared_contract_sections() -> None:
     text = (
-        REPO_ROOT / "workflows" / "workflow_portfolio_to_operating_system" / "prompts" / "README.md"
+        REPO_ROOT / "autoloop" / "workflows" / "workflow_portfolio_to_operating_system" / "prompts" / "README.md"
     ).read_text(encoding="utf-8")
 
     for required in (
@@ -304,7 +304,7 @@ def test_workflow_portfolio_to_operating_system_prompts_keep_step_local_contract
     required_markers: tuple[str, ...],
 ) -> None:
     text = (
-        REPO_ROOT / "workflows" / "workflow_portfolio_to_operating_system" / "prompts" / prompt_name
+        REPO_ROOT / "autoloop" / "workflows" / "workflow_portfolio_to_operating_system" / "prompts" / prompt_name
     ).read_text(encoding="utf-8")
 
     for marker in required_markers:
@@ -379,7 +379,7 @@ def test_workflow_portfolio_to_operating_system_bootstrap_reads_typed_ctx_params
     importlib.invalidate_caches()
     _clear_workflow_modules()
 
-    workflow_pkg = importlib.import_module("workflows.workflow_portfolio_to_operating_system")
+    workflow_pkg = importlib.import_module("autoloop.workflows.workflow_portfolio_to_operating_system")
     parameters_cls = resolve_workflow_reference(REPO_ROOT, "workflow_portfolio_to_operating_system").parameters_cls
     assert parameters_cls is not None
     typed_params = parameters_cls.model_validate(
@@ -425,7 +425,7 @@ def test_workflow_portfolio_to_operating_system_bootstrap_reads_typed_ctx_params
         task_folder=task_folder,
         workflow_folder=workflow_folder,
         run_folder=run_folder,
-        package_folder=REPO_ROOT / "workflows" / "workflow_portfolio_to_operating_system",
+        package_folder=REPO_ROOT / "autoloop" / "workflows" / "workflow_portfolio_to_operating_system",
         state=workflow_pkg.WorkflowPortfolioToOperatingSystem.State(),
         session_store=InMemorySessionStore(),
         params=typed_params,
@@ -1301,7 +1301,7 @@ def _make_publish_portfolio_operating_system_test_context(
     importlib.invalidate_caches()
     _clear_workflow_modules()
 
-    workflow_pkg = importlib.import_module("workflows.workflow_portfolio_to_operating_system")
+    workflow_pkg = importlib.import_module("autoloop.workflows.workflow_portfolio_to_operating_system")
 
     focus_workflows = list(
         focus_workflows
@@ -1530,7 +1530,7 @@ def _make_publish_portfolio_operating_system_test_context(
         task_folder=task_folder,
         workflow_folder=workflow_folder,
         run_folder=run_folder,
-        package_folder=REPO_ROOT / "workflows" / "workflow_portfolio_to_operating_system",
+        package_folder=REPO_ROOT / "autoloop" / "workflows" / "workflow_portfolio_to_operating_system",
         state=state,
         session_store=InMemorySessionStore(),
     )
@@ -1552,7 +1552,7 @@ def _install_repo_workflow_portfolio_package(root: Path) -> None:
         "workflow_run_history_to_failure_modes",
     ):
         shutil.copytree(
-            REPO_ROOT / "workflows" / package_name,
+            REPO_ROOT / "autoloop" / "workflows" / package_name,
             workflows_root / package_name,
             dirs_exist_ok=True,
             ignore=shutil.ignore_patterns("__pycache__", "*.pyc"),

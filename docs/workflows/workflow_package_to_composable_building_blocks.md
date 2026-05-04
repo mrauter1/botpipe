@@ -13,7 +13,7 @@
 
 ## Invocation
 
-- Package path: `workflows/workflow_package_to_composable_building_blocks/`
+- Package path: `autoloop/workflows/workflow_package_to_composable_building_blocks/`
 - Discovery: `autoloop workflows show workflow_package_to_composable_building_blocks`
 - Direct run:
 
@@ -50,7 +50,7 @@ Params:
 | `workflow_package_to_composable_building_blocks` | Turns explicit portfolio decomposition pressure into reusable extracted building blocks and parent-rewrite guidance | Requires a decomposition-specific authoring seam and careful candidate publication, but it directly fills the next missing recursive layer | Chosen and shipped in cycle 11 |
 | `company_operation_to_recursive_improvement_cycle` | Long-range operating-system workflow across company work history | Premature while the portfolio still lacked the decomposition layer that governance identified as the next missing consumer | Deferred |
 
-The workflow-builder was explicitly reconsidered and not selected because the repository already has a credible baseline in `workflow_idea_to_workflow_package`, `docs/workflows/workflow_idea_to_workflow_package.md`, and `tests/runtime/test_workflow_builder_package.py`.
+The workflow-builder was explicitly reconsidered and not selected because the repository already has a credible baseline in `workflow_idea_to_workflow_package`, `docs/autoloop/workflows/workflow_idea_to_workflow_package.md`, and `tests/runtime/test_workflow_builder_package.py`.
 
 ## Framework improvement candidates considered
 
@@ -247,8 +247,8 @@ Payload models used by the package:
 
 ## Evidence
 
-- Package implementation: `workflows/workflow_package_to_composable_building_blocks/`
+- Package implementation: `autoloop/workflows/workflow_package_to_composable_building_blocks/`
 - Shared decomposition seam consumed: `stdlib/decomposition.py`
-- Workflow asset: `workflows/workflow_package_to_composable_building_blocks/assets/decomposition_package_checklist.md`
+- Workflow asset: `autoloop/workflows/workflow_package_to_composable_building_blocks/assets/decomposition_package_checklist.md`
 - Workflow-specific proof: `tests/runtime/test_workflow_package_to_composable_building_blocks.py`
 - The scripted tests prove workflow discovery, compilation, prompt contract markers, terminal candidate publication, fallback evidence capture, blocked unreadable evidence paths, and publish-side rejection of hidden execution, identity drift, and boundary escapes.

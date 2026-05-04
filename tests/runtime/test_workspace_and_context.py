@@ -41,7 +41,7 @@ from autoloop.core.primitives import Outcome
 def _clear_workflow_modules() -> None:
     importlib.invalidate_caches()
     for name in list(sys.modules):
-        if name == "workflows" or name.startswith("workflows."):
+        if name == "workflows" or name.startswith("workflows.") or name == "autoloop.workflows" or name.startswith("autoloop.workflows."):
             sys.modules.pop(name, None)
 
 

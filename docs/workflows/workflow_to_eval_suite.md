@@ -13,7 +13,7 @@
 
 ## Invocation
 
-- Package path: `workflows/workflow_to_eval_suite/`
+- Package path: `autoloop/workflows/workflow_to_eval_suite/`
 - Discovery: `autoloop workflows show workflow_to_eval_suite`
 - Direct run:
 
@@ -216,8 +216,8 @@ Payload models used by the package:
 
 ## Evidence
 
-- Package implementation: `workflows/workflow_to_eval_suite/`
+- Package implementation: `autoloop/workflows/workflow_to_eval_suite/`
 - Shared evaluation seam consumed: `stdlib/evaluation.py`
-- Workflow asset: `workflows/workflow_to_eval_suite/assets/eval_suite_checklist.md`
+- Workflow asset: `autoloop/workflows/workflow_to_eval_suite/assets/eval_suite_checklist.md`
 - Workflow-specific proof: `tests/runtime/test_workflow_to_eval_suite.py`
 - The scripted tests prove workflow discovery, compilation, terminal publication, and publish-side validation of malformed case kinds, duplicate ids, workflow-parameter errors, unknown expected artifacts, and summary drift.

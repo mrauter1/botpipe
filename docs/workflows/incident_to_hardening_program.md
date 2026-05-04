@@ -13,7 +13,7 @@
 
 ## Invocation
 
-- Package path: `workflows/incident_to_hardening_program/`
+- Package path: `autoloop/workflows/incident_to_hardening_program/`
 - Discovery: `autoloop workflows show incident_to_hardening_program`
 - Run:
 
@@ -223,7 +223,7 @@ The package includes explicit step prompts for:
 
 ## Evidence
 
-- Package implementation: `workflows/incident_to_hardening_program/`
-- Package asset: `workflows/incident_to_hardening_program/assets/incident_hardening_package_checklist.md`
+- Package implementation: `autoloop/workflows/incident_to_hardening_program/`
+- Package asset: `autoloop/workflows/incident_to_hardening_program/assets/incident_hardening_package_checklist.md`
 - Workflow-specific proof: `tests/runtime/test_incident_to_hardening_program.py`
 - The scripted exercise proves discovery, compilation, route legality, terminal package creation, and deterministic publication of `incident_receipt.json`.

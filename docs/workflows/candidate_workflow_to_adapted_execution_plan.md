@@ -13,7 +13,7 @@
 
 ## Invocation
 
-- Package path: `workflows/candidate_workflow_to_adapted_execution_plan/`
+- Package path: `autoloop/workflows/candidate_workflow_to_adapted_execution_plan/`
 - Discovery: `autoloop workflows show candidate_workflow_to_adapted_execution_plan`
 - Direct run:
 
@@ -218,9 +218,9 @@ Payload models used by the package:
 
 ## Evidence
 
-- Package implementation: `workflows/candidate_workflow_to_adapted_execution_plan/`
+- Package implementation: `autoloop/workflows/candidate_workflow_to_adapted_execution_plan/`
 - Shared adaptation seam consumed: `stdlib/adaptation.py`
-- Front-door handoff update: `workflows/task_to_workflow_strategy/`
-- Workflow asset: `workflows/candidate_workflow_to_adapted_execution_plan/assets/adapted_execution_plan_checklist.md`
+- Front-door handoff update: `autoloop/workflows/task_to_workflow_strategy/`
+- Workflow asset: `autoloop/workflows/candidate_workflow_to_adapted_execution_plan/assets/adapted_execution_plan_checklist.md`
 - Workflow-specific proof: `tests/runtime/test_candidate_workflow_to_adapted_execution_plan.py`
 - The scripted tests prove workflow discovery, compilation, terminal publication, and publication-side validation of workflow-reference resolution, workflow-parameter coercion, authoritative-artifact declarations, and summary drift.

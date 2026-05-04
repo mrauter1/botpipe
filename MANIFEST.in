@@ -1,0 +1,10 @@
+recursive-include autoloop/workflows *
+prune .autoloop
+prune dist
+prune build
+prune .pytest_cache
+prune .mypy_cache
+prune .ruff_cache
+global-exclude __pycache__
+global-exclude *.py[cod]
+global-exclude *.egg-info

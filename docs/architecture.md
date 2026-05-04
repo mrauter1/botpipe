@@ -27,48 +27,57 @@ Legacy aliases are intentionally removed from the active public contract; workfl
 
 ## Workflow Surfaces
 
-Repo-root `workflows/` remains the common discovery root, but the framework no longer requires one package minimum shape. A workflow may be authored as:
+Autoloop has exactly two first-class workflow discovery roots:
 
-- a single Python file such as `workflows/release_review.py`
-- a flow-first package such as `workflows/release_review/flow.py` plus optional `specs.py`
-- a mature package such as `workflows/release_review/flow.py` or `workflow.py` plus optional `workflow.toml`, `prompts/`, `assets/`, docs, and tests
+- package-installed workflows under `autoloop/workflows/`
+- workspace-local workflows under `{workspace}/.autoloop/workflows/`
 
-Recommended serious-workflow shape:
+Workspace-local workflow names and aliases override package workflow names and aliases. `{workspace}/workflows/` is not a discovery root.
 
-```text
-workflows/
-  release_review/
-    flow.py
-    specs.py
-```
-
-`flow.py` plus `specs.py` is the recommended serious-workflow shape, but it is not required.
-
-Supported mature package shape:
+Package-installed workflows use package directories:
 
 ```text
-workflows/
+autoloop/workflows/
   release_review/
     __init__.py
     flow.py or workflow.py
-    specs.py
+    specs.py optional
     workflow.toml
     prompts/
     assets/
 ```
 
-Legacy `workflow.py` packages remain supported. A single Python file is also a first-class runnable entrypoint. The framework does not enforce one folder structure for execution.
+Workspace-local workflows may be package directories or single files:
 
-Workflow packages are still reusable building blocks. When a package uses `__init__.py`, it should re-export the main workflow class so package-local imports stay straightforward without changing the public authoring surface.
+```text
+{workspace}/.autoloop/workflows/
+  release_review/
+    flow.py or workflow.py
+    specs.py optional
+    workflow.toml optional
+    prompts/ optional
+    assets/ optional
+
+{workspace}/.autoloop/workflows/release_review.py
+```
+
+`flow.py` is the preferred scaffold and documentation shape. `workflow.py` remains supported. Workspace-local single-file workflows are supported; package-installed single-file workflows are not.
+
+Workspace-local single Python file workflows remain first-class runnable entries.
+
+Workflow packages are still reusable building blocks. Package-installed workflows should re-export the main workflow class from package `__init__.py`, and package-installed workflows that export `Params` should include `"Params"` in `__all__`.
 
 `workflow.toml` is optional for execution and metadata-only when present. It is limited to human-facing fields such as `name`, `title`, `description`, and `aliases`. It does not define topology, prompts, transitions, parameters, route policy, artifacts, or execution semantics.
 
-Shallow workflow discovery stays import-free and scans:
+Shallow workflow discovery stays import-free and scans only:
 
-- `<root>/workflows/*/workflow.toml`
-- `<root>/workflows/*/flow.py`
-- `<root>/workflows/*/workflow.py`
-- `<root>/workflows/*.py`
+- `autoloop/workflows/*/workflow.toml`
+- `autoloop/workflows/*/flow.py`
+- `autoloop/workflows/*/workflow.py`
+- `{workspace}/.autoloop/workflows/*/workflow.toml`
+- `{workspace}/.autoloop/workflows/*/flow.py`
+- `{workspace}/.autoloop/workflows/*/workflow.py`
+- `{workspace}/.autoloop/workflows/*.py`
 
 Deep inspection and execution may import and compile workflow modules. That richer seam reports compiled step contracts, parameters, prompt paths, support-file paths, and source metadata without widening `workflow.toml`.
 
@@ -105,9 +114,9 @@ Workflow references may be names, files, modules, or explicit classes:
 
 ```bash
 autoloop run release_review task-1 --message "Review this release"
-autoloop run workflows/release_review.py task-1 --message "Review this release"
-autoloop run workflows/release_review/flow.py:ReleaseReview task-1 --message "Review this release"
-autoloop run workflows.release_review.flow:ReleaseReview task-1 --message "Review this release"
+autoloop run .autoloop/workflows/release_review.py task-1 --message "Review this release"
+autoloop run .autoloop/workflows/release_review/flow.py:ReleaseReview task-1 --message "Review this release"
+autoloop run autoloop.workflows.release_review.workflow:ReleaseReview task-1 --message "Review this release"
 ```
 
 There is no public raw execution mode. File and module refs resolve through the same workflow runtime path as named workflows rather than bypassing the engine.
@@ -265,7 +274,7 @@ Recursive automation under `recursive_autoloop/` keeps the globally installed Au
 - Wrapper start commands use `autoloop --workspace ... --task-id ... --intent ... --pairs ...`
 - Wrapper resume commands use `autoloop --workspace ... --task-id ... --resume`
 - Recursive memory lives under `.autoloop_recursive/`
-- Recursive templates and guidance point readers at `docs/architecture.md`, `docs/authoring.md`, `core/`, `runtime/`, `extensions/`, `stdlib/`, and repo-root `workflows/`
+- Recursive templates and guidance point readers at `docs/architecture.md`, `docs/authoring.md`, `core/`, `runtime/`, `extensions/`, `stdlib/`, `autoloop/workflows/`, and `.autoloop/workflows/`
 
 ## Composition And Parity
 
@@ -284,4 +293,4 @@ ctx.invoke_workflow(ChildWorkflow, message="Do the child task", parameters={"mod
 
 Child runs stay under the same task but get their own workflow namespace, run id, checkpoint, event log, trace, sessions, and run-local request snapshot. Parent-child linkage is metadata-only through `children.jsonl` and `parent.json`; child runs are never nested under parent run folders.
 
-Autoloop-v1 parity is now package-local under `workflows/autoloop_v1/`. Framework-owned parity helpers and custom runners are not part of the architecture anymore.
+Autoloop-v1 parity is now package-local under `autoloop/workflows/autoloop_v1/`. Framework-owned parity helpers and custom runners are not part of the architecture anymore.

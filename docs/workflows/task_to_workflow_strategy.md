@@ -13,7 +13,7 @@
 
 ## Invocation
 
-- Package path: `workflows/task_to_workflow_strategy/`
+- Package path: `autoloop/workflows/task_to_workflow_strategy/`
 - Discovery: `autoloop workflows show task_to_workflow_strategy`
 - Run:
 
@@ -236,9 +236,9 @@ Step payload models:
 
 ## Evidence
 
-- Package implementation: `workflows/task_to_workflow_strategy/`
+- Package implementation: `autoloop/workflows/task_to_workflow_strategy/`
 - Shared portfolio seams consumed: `core/workflow_catalog.py`, `core/workflow_capabilities.py`, and `stdlib/portfolio.py`
-- Child building block consumed: `workflows/task_to_candidate_workflow_set/`
-- Workflow asset: `workflows/task_to_workflow_strategy/assets/strategy_package_checklist.md`
+- Child building block consumed: `autoloop/workflows/task_to_candidate_workflow_set/`
+- Workflow asset: `autoloop/workflows/task_to_workflow_strategy/assets/strategy_package_checklist.md`
 - Workflow-specific proof: `tests/runtime/test_task_to_workflow_strategy.py`
 - The scripted tests prove workflow discovery, explicit child composition, terminal strategy publication, and publication-side validation that the builder baseline stays part of the compared-candidate set.

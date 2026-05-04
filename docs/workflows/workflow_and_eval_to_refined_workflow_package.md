@@ -13,7 +13,7 @@
 
 ## Invocation
 
-- Package path: `workflows/workflow_and_eval_to_refined_workflow_package/`
+- Package path: `autoloop/workflows/workflow_and_eval_to_refined_workflow_package/`
 - Discovery: `autoloop workflows show workflow_and_eval_to_refined_workflow_package`
 - Direct run:
 
@@ -231,8 +231,8 @@ Payload models used by the package:
 
 ## Evidence
 
-- Package implementation: `workflows/workflow_and_eval_to_refined_workflow_package/`
+- Package implementation: `autoloop/workflows/workflow_and_eval_to_refined_workflow_package/`
 - Shared refinement seam consumed: `stdlib/refinement.py`
-- Workflow asset: `workflows/workflow_and_eval_to_refined_workflow_package/assets/refinement_package_checklist.md`
+- Workflow asset: `autoloop/workflows/workflow_and_eval_to_refined_workflow_package/assets/refinement_package_checklist.md`
 - Workflow-specific proof: `tests/runtime/test_workflow_and_eval_to_refined_workflow_package.py`
 - The scripted tests prove workflow discovery, compilation, prompt contract markers, terminal publication, isolated overlay validation, and publish-side rejection of boundary and evidence drift cases.

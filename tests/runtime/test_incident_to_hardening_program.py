@@ -53,7 +53,7 @@ def _assert_compact_prompt_contract(
 
 def _clear_workflow_modules() -> None:
     for name in list(sys.modules):
-        if name == "workflows" or name.startswith("workflows."):
+        if name == "workflows" or name.startswith("workflows.") or name == "autoloop.workflows" or name.startswith("autoloop.workflows."):
             sys.modules.pop(name, None)
 
 
@@ -72,7 +72,7 @@ def test_repo_workflows_namespace_discovers_incident_hardening_package() -> None
     assert package.package_name == "incident_to_hardening_program"
     assert "incident-hardening" in package.aliases
     assert package.manifest_path == (
-        REPO_ROOT / "workflows" / "incident_to_hardening_program" / "workflow.toml"
+        REPO_ROOT / "autoloop" / "workflows" / "incident_to_hardening_program" / "workflow.toml"
     )
 
 
@@ -81,7 +81,7 @@ def test_incident_hardening_package_compiles_with_explicit_control_contracts(mon
     importlib.invalidate_caches()
     _clear_workflow_modules()
 
-    workflow_pkg = importlib.import_module("workflows.incident_to_hardening_program")
+    workflow_pkg = importlib.import_module("autoloop.workflows.incident_to_hardening_program")
     resolved = resolve_workflow_reference(REPO_ROOT, workflow_pkg.IncidentToHardeningProgram)
     compiled = compile_workflow(resolved.workflow_cls)
 
@@ -152,7 +152,7 @@ def test_incident_hardening_package_docs_capture_decision_records() -> None:
 
 
 def test_incident_hardening_prompt_readme_uses_shared_contract_sections() -> None:
-    text = (REPO_ROOT / "workflows" / "incident_to_hardening_program" / "prompts" / "README.md").read_text(
+    text = (REPO_ROOT / "autoloop" / "workflows" / "incident_to_hardening_program" / "prompts" / "README.md").read_text(
         encoding="utf-8"
     )
 
@@ -181,7 +181,7 @@ def test_incident_hardening_prompt_readme_uses_shared_contract_sections() -> Non
 
 
 def test_incident_hardening_prompt_inventory_matches_expected_contract_surface() -> None:
-    prompt_dir = REPO_ROOT / "workflows" / "incident_to_hardening_program" / "prompts"
+    prompt_dir = REPO_ROOT / "autoloop" / "workflows" / "incident_to_hardening_program" / "prompts"
 
     assert sorted(path.name for path in prompt_dir.glob("*.md")) == [
         "README.md",
@@ -285,7 +285,7 @@ def test_incident_hardening_prompts_keep_step_local_contracts_explicit(
     prompt_name: str,
     required_markers: tuple[str, ...],
 ) -> None:
-    text = (REPO_ROOT / "workflows" / "incident_to_hardening_program" / "prompts" / prompt_name).read_text(
+    text = (REPO_ROOT / "autoloop" / "workflows" / "incident_to_hardening_program" / "prompts" / prompt_name).read_text(
         encoding="utf-8"
     )
 
@@ -339,7 +339,7 @@ def test_incident_hardening_bootstrap_reads_typed_ctx_params(monkeypatch, tmp_pa
     importlib.invalidate_caches()
     _clear_workflow_modules()
 
-    workflow_pkg = importlib.import_module("workflows.incident_to_hardening_program")
+    workflow_pkg = importlib.import_module("autoloop.workflows.incident_to_hardening_program")
     parameters_cls = resolve_workflow_reference(REPO_ROOT, "incident_to_hardening_program").parameters_cls
     assert parameters_cls is not None
     typed_params = parameters_cls.model_validate(
@@ -374,7 +374,7 @@ def test_incident_hardening_bootstrap_reads_typed_ctx_params(monkeypatch, tmp_pa
         task_folder=task_folder,
         workflow_folder=workflow_folder,
         run_folder=run_folder,
-        package_folder=REPO_ROOT / "workflows" / "incident_to_hardening_program",
+        package_folder=REPO_ROOT / "autoloop" / "workflows" / "incident_to_hardening_program",
         state=workflow_pkg.IncidentToHardeningProgram.State(),
         session_store=InMemorySessionStore(),
         params=typed_params,
@@ -921,7 +921,7 @@ def test_incident_hardening_publish_rejects_invalid_summary_fields(
     importlib.invalidate_caches()
     _clear_workflow_modules()
 
-    workflow_pkg = importlib.import_module("workflows.incident_to_hardening_program")
+    workflow_pkg = importlib.import_module("autoloop.workflows.incident_to_hardening_program")
     workflow_folder = tmp_path / "task" / "wf_incident_to_hardening_program"
     workflow_folder.mkdir(parents=True, exist_ok=True)
     (workflow_folder / "incident_summary.json").write_text(
@@ -946,7 +946,7 @@ def test_incident_hardening_publish_rejects_invalid_summary_fields(
         task_folder=tmp_path / "task",
         workflow_folder=workflow_folder,
         run_folder=tmp_path / "task" / "wf_incident_to_hardening_program" / "runs" / "run-1",
-        package_folder=REPO_ROOT / "workflows" / "incident_to_hardening_program",
+        package_folder=REPO_ROOT / "autoloop" / "workflows" / "incident_to_hardening_program",
         state=state,
         session_store=InMemorySessionStore(),
     )
@@ -965,7 +965,7 @@ def _install_repo_incident_package(root: Path) -> None:
     importlib.invalidate_caches()
 
     shutil.copytree(
-        REPO_ROOT / "workflows" / "incident_to_hardening_program",
+        REPO_ROOT / "autoloop" / "workflows" / "incident_to_hardening_program",
         workflows_root / "incident_to_hardening_program",
         dirs_exist_ok=True,
         ignore=shutil.ignore_patterns("__pycache__", "*.pyc"),

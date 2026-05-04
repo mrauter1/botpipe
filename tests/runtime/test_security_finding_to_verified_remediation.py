@@ -53,7 +53,7 @@ def _assert_compact_prompt_contract(
 
 def _clear_workflow_modules() -> None:
     for name in list(sys.modules):
-        if name == "workflows" or name.startswith("workflows."):
+        if name == "workflows" or name.startswith("workflows.") or name == "autoloop.workflows" or name.startswith("autoloop.workflows."):
             sys.modules.pop(name, None)
 
 
@@ -72,7 +72,7 @@ def test_repo_workflows_namespace_discovers_security_remediation_package() -> No
     assert package.package_name == "security_finding_to_verified_remediation"
     assert "security-remediation" in package.aliases
     assert package.manifest_path == (
-        REPO_ROOT / "workflows" / "security_finding_to_verified_remediation" / "workflow.toml"
+        REPO_ROOT / "autoloop" / "workflows" / "security_finding_to_verified_remediation" / "workflow.toml"
     )
 
 
@@ -81,7 +81,7 @@ def test_security_remediation_package_compiles_with_explicit_control_contracts(m
     importlib.invalidate_caches()
     _clear_workflow_modules()
 
-    workflow_pkg = importlib.import_module("workflows.security_finding_to_verified_remediation")
+    workflow_pkg = importlib.import_module("autoloop.workflows.security_finding_to_verified_remediation")
     resolved = resolve_workflow_reference(REPO_ROOT, workflow_pkg.SecurityFindingToVerifiedRemediation)
     compiled = compile_workflow(resolved.workflow_cls)
 
@@ -153,8 +153,7 @@ def test_security_remediation_package_docs_capture_decision_records() -> None:
 def test_security_remediation_prompt_readme_uses_shared_contract_sections() -> None:
     text = (
         REPO_ROOT
-        / "workflows"
-        / "security_finding_to_verified_remediation"
+        / "autoloop" / "workflows" / "security_finding_to_verified_remediation"
         / "prompts"
         / "README.md"
     ).read_text(encoding="utf-8")
@@ -184,7 +183,7 @@ def test_security_remediation_prompt_readme_uses_shared_contract_sections() -> N
 
 
 def test_security_remediation_prompt_inventory_matches_expected_contract_surface() -> None:
-    prompt_dir = REPO_ROOT / "workflows" / "security_finding_to_verified_remediation" / "prompts"
+    prompt_dir = REPO_ROOT / "autoloop" / "workflows" / "security_finding_to_verified_remediation" / "prompts"
 
     assert sorted(path.name for path in prompt_dir.glob("*.md")) == [
         "README.md",
@@ -268,8 +267,7 @@ def test_security_remediation_prompts_keep_step_local_contracts_explicit(
 ) -> None:
     text = (
         REPO_ROOT
-        / "workflows"
-        / "security_finding_to_verified_remediation"
+        / "autoloop" / "workflows" / "security_finding_to_verified_remediation"
         / "prompts"
         / prompt_name
     ).read_text(encoding="utf-8")
@@ -334,7 +332,7 @@ def test_security_remediation_bootstrap_reads_typed_ctx_params(monkeypatch, tmp_
     importlib.invalidate_caches()
     _clear_workflow_modules()
 
-    workflow_pkg = importlib.import_module("workflows.security_finding_to_verified_remediation")
+    workflow_pkg = importlib.import_module("autoloop.workflows.security_finding_to_verified_remediation")
     parameters_cls = resolve_workflow_reference(REPO_ROOT, "security_finding_to_verified_remediation").parameters_cls
     assert parameters_cls is not None
     typed_params = parameters_cls.model_validate(
@@ -375,7 +373,7 @@ def test_security_remediation_bootstrap_reads_typed_ctx_params(monkeypatch, tmp_
         task_folder=task_folder,
         workflow_folder=workflow_folder,
         run_folder=run_folder,
-        package_folder=REPO_ROOT / "workflows" / "security_finding_to_verified_remediation",
+        package_folder=REPO_ROOT / "autoloop" / "workflows" / "security_finding_to_verified_remediation",
         state=workflow_pkg.SecurityFindingToVerifiedRemediation.State(),
         session_store=InMemorySessionStore(),
         params=typed_params,
@@ -718,7 +716,7 @@ def test_security_remediation_compose_step_blocks_not_ready_child_and_keeps_depl
     importlib.invalidate_caches()
     _clear_workflow_modules()
 
-    workflow_pkg = importlib.import_module("workflows.security_finding_to_verified_remediation")
+    workflow_pkg = importlib.import_module("autoloop.workflows.security_finding_to_verified_remediation")
     task_folder = tmp_path / "task"
     workflow_folder = task_folder / "wf_security_finding_to_verified_remediation"
     workflow_folder.mkdir(parents=True, exist_ok=True)
@@ -782,7 +780,7 @@ def test_security_remediation_compose_step_blocks_not_ready_child_and_keeps_depl
         task_folder=task_folder,
         workflow_folder=child_workflow_folder,
         run_folder=child_run_folder,
-        package_folder=REPO_ROOT / "workflows" / "investigation_request_to_evidence_pack",
+        package_folder=REPO_ROOT / "autoloop" / "workflows" / "investigation_request_to_evidence_pack",
         request_file=child_run_folder / "request.md",
         run_meta_file=child_run_folder / "run.json",
         events_file=child_run_folder / "events.jsonl",
@@ -822,7 +820,7 @@ def test_security_remediation_compose_step_blocks_not_ready_child_and_keeps_depl
         task_folder=task_folder,
         workflow_folder=workflow_folder,
         run_folder=run_folder,
-        package_folder=REPO_ROOT / "workflows" / "security_finding_to_verified_remediation",
+        package_folder=REPO_ROOT / "autoloop" / "workflows" / "security_finding_to_verified_remediation",
         state=state,
         session_store=InMemorySessionStore(),
         workflow_invoker=_invoke_child,
@@ -867,7 +865,7 @@ def test_security_remediation_publish_rejects_missing_selected_remediation(tmp_p
     importlib.invalidate_caches()
     _clear_workflow_modules()
 
-    workflow_pkg = importlib.import_module("workflows.security_finding_to_verified_remediation")
+    workflow_pkg = importlib.import_module("autoloop.workflows.security_finding_to_verified_remediation")
     workflow_folder = tmp_path / "task" / "wf_security_finding_to_verified_remediation"
     workflow_folder.mkdir(parents=True, exist_ok=True)
     (workflow_folder / "security_evidence_pack_summary.json").write_text(
@@ -925,7 +923,7 @@ def test_security_remediation_publish_rejects_missing_selected_remediation(tmp_p
         task_folder=tmp_path / "task",
         workflow_folder=workflow_folder,
         run_folder=tmp_path / "task" / "wf_security_finding_to_verified_remediation" / "runs" / "run-1",
-        package_folder=REPO_ROOT / "workflows" / "security_finding_to_verified_remediation",
+        package_folder=REPO_ROOT / "autoloop" / "workflows" / "security_finding_to_verified_remediation",
         state=state,
         session_store=InMemorySessionStore(),
     )
@@ -1584,13 +1582,13 @@ def _install_repo_security_package(root: Path) -> None:
     importlib.invalidate_caches()
 
     shutil.copytree(
-        REPO_ROOT / "workflows" / "security_finding_to_verified_remediation",
+        REPO_ROOT / "autoloop" / "workflows" / "security_finding_to_verified_remediation",
         workflows_root / "security_finding_to_verified_remediation",
         dirs_exist_ok=True,
         ignore=shutil.ignore_patterns("__pycache__", "*.pyc"),
     )
     shutil.copytree(
-        REPO_ROOT / "workflows" / "investigation_request_to_evidence_pack",
+        REPO_ROOT / "autoloop" / "workflows" / "investigation_request_to_evidence_pack",
         workflows_root / "investigation_request_to_evidence_pack",
         dirs_exist_ok=True,
         ignore=shutil.ignore_patterns("__pycache__", "*.pyc"),

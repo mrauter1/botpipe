@@ -13,7 +13,7 @@
 
 ## Invocation
 
-- Package path: `workflows/security_finding_to_verified_remediation/`
+- Package path: `autoloop/workflows/security_finding_to_verified_remediation/`
 - Discovery: `autoloop workflows show security_finding_to_verified_remediation`
 - Direct run:
 
@@ -244,8 +244,8 @@ Step payload models:
 
 ## Evidence
 
-- Package implementation: `workflows/security_finding_to_verified_remediation/`
-- Child building block consumed: `workflows/investigation_request_to_evidence_pack/`
-- Workflow asset: `workflows/security_finding_to_verified_remediation/assets/security_remediation_package_checklist.md`
+- Package implementation: `autoloop/workflows/security_finding_to_verified_remediation/`
+- Child building block consumed: `autoloop/workflows/investigation_request_to_evidence_pack/`
+- Workflow asset: `autoloop/workflows/security_finding_to_verified_remediation/assets/security_remediation_package_checklist.md`
 - Workflow-specific proof: `tests/runtime/test_security_finding_to_verified_remediation.py`
 - The scripted tests prove workflow discovery, compilation, success-path execution, deterministic child-result adoption, publish validation, and child-question propagation.

@@ -54,7 +54,7 @@ def _assert_compact_prompt_contract(
 
 def _clear_workflow_modules() -> None:
     for name in list(sys.modules):
-        if name == "workflows" or name.startswith("workflows."):
+        if name == "workflows" or name.startswith("workflows.") or name == "autoloop.workflows" or name.startswith("autoloop.workflows."):
             sys.modules.pop(name, None)
 
 
@@ -72,7 +72,7 @@ def test_repo_workflows_namespace_discovers_task_to_candidate_workflow_set_packa
     package = discovered["task_to_candidate_workflow_set"]
     assert package.package_name == "task_to_candidate_workflow_set"
     assert "candidate-workflow-set" in package.aliases
-    assert package.manifest_path == (REPO_ROOT / "workflows" / "task_to_candidate_workflow_set" / "workflow.toml")
+    assert package.manifest_path == (REPO_ROOT / "autoloop" / "workflows" / "task_to_candidate_workflow_set" / "workflow.toml")
 
 
 def test_task_to_candidate_workflow_set_package_compiles_with_explicit_control_contracts(monkeypatch) -> None:
@@ -80,7 +80,7 @@ def test_task_to_candidate_workflow_set_package_compiles_with_explicit_control_c
     importlib.invalidate_caches()
     _clear_workflow_modules()
 
-    workflow_pkg = importlib.import_module("workflows.task_to_candidate_workflow_set")
+    workflow_pkg = importlib.import_module("autoloop.workflows.task_to_candidate_workflow_set")
     resolved = resolve_workflow_reference(REPO_ROOT, workflow_pkg.TaskToCandidateWorkflowSet)
     compiled = compile_workflow(resolved.workflow_cls)
 
@@ -155,7 +155,7 @@ def test_task_to_candidate_workflow_set_package_docs_capture_decision_records() 
 
 def test_task_to_candidate_workflow_set_prompt_readme_uses_shared_contract_sections() -> None:
     text = (
-        REPO_ROOT / "workflows" / "task_to_candidate_workflow_set" / "prompts" / "README.md"
+        REPO_ROOT / "autoloop" / "workflows" / "task_to_candidate_workflow_set" / "prompts" / "README.md"
     ).read_text(encoding="utf-8")
 
     for required in (
@@ -250,7 +250,7 @@ def test_task_to_candidate_workflow_set_prompts_keep_step_local_contracts_explic
     prompt_name: str,
     required_markers: tuple[str, ...],
 ) -> None:
-    text = (REPO_ROOT / "workflows" / "task_to_candidate_workflow_set" / "prompts" / prompt_name).read_text(
+    text = (REPO_ROOT / "autoloop" / "workflows" / "task_to_candidate_workflow_set" / "prompts" / prompt_name).read_text(
         encoding="utf-8"
     )
 
@@ -310,7 +310,7 @@ def test_task_to_candidate_workflow_set_bootstrap_reads_typed_ctx_params(monkeyp
     importlib.invalidate_caches()
     _clear_workflow_modules()
 
-    workflow_pkg = importlib.import_module("workflows.task_to_candidate_workflow_set")
+    workflow_pkg = importlib.import_module("autoloop.workflows.task_to_candidate_workflow_set")
     parameters_cls = resolve_workflow_reference(REPO_ROOT, "task_to_candidate_workflow_set").parameters_cls
     assert parameters_cls is not None
     typed_params = parameters_cls.model_validate(
@@ -349,7 +349,7 @@ def test_task_to_candidate_workflow_set_bootstrap_reads_typed_ctx_params(monkeyp
         task_folder=task_folder,
         workflow_folder=workflow_folder,
         run_folder=run_folder,
-        package_folder=REPO_ROOT / "workflows" / "task_to_candidate_workflow_set",
+        package_folder=REPO_ROOT / "autoloop" / "workflows" / "task_to_candidate_workflow_set",
         state=workflow_pkg.TaskToCandidateWorkflowSet.State(),
         session_store=InMemorySessionStore(),
         params=typed_params,
@@ -902,7 +902,7 @@ def _make_publish_candidate_workflow_set_test_context(
     importlib.invalidate_caches()
     _clear_workflow_modules()
 
-    workflow_pkg = importlib.import_module("workflows.task_to_candidate_workflow_set")
+    workflow_pkg = importlib.import_module("autoloop.workflows.task_to_candidate_workflow_set")
     task_folder = tmp_path / "task"
     workflow_folder = task_folder / "wf_task_to_candidate_workflow_set"
     workflow_folder.mkdir(parents=True, exist_ok=True)
@@ -956,7 +956,7 @@ def _make_publish_candidate_workflow_set_test_context(
         task_folder=task_folder,
         workflow_folder=workflow_folder,
         run_folder=run_folder,
-        package_folder=REPO_ROOT / "workflows" / "task_to_candidate_workflow_set",
+        package_folder=REPO_ROOT / "autoloop" / "workflows" / "task_to_candidate_workflow_set",
         state=state,
         session_store=InMemorySessionStore(),
     )
@@ -977,7 +977,7 @@ def _install_repo_task_to_candidate_workflow_set_package(root: Path) -> None:
         "security_finding_to_verified_remediation",
     ):
         shutil.copytree(
-            REPO_ROOT / "workflows" / package_name,
+            REPO_ROOT / "autoloop" / "workflows" / package_name,
             workflows_root / package_name,
             dirs_exist_ok=True,
             ignore=shutil.ignore_patterns("__pycache__", "*.pyc"),

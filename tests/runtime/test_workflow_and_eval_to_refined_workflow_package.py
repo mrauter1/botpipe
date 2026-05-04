@@ -28,14 +28,14 @@ from tests.runtime.workflow_contract_helpers import invoke_python_step
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
 TASK_ID = "workflow-refinement-task"
-PROMPT_RELATIVE_PATH = "workflows/release_candidate_to_go_no_go/prompts/assessment_producer.md"
-DOC_RELATIVE_PATH = "docs/workflows/release_candidate_to_go_no_go.md"
+PROMPT_RELATIVE_PATH = "autoloop/workflows/release_candidate_to_go_no_go/prompts/assessment_producer.md"
+DOC_RELATIVE_PATH = "docs/autoloop/workflows/release_candidate_to_go_no_go.md"
 TARGET_TEST_COMMAND = "pytest -q tests/runtime/test_release_candidate_to_go_no_go.py"
 
 
 def _clear_workflow_modules() -> None:
     for name in list(sys.modules):
-        if name == "workflows" or name.startswith("workflows."):
+        if name == "workflows" or name.startswith("workflows.") or name == "autoloop.workflows" or name.startswith("autoloop.workflows."):
             sys.modules.pop(name, None)
 
 
@@ -55,8 +55,7 @@ def test_repo_workflows_namespace_discovers_workflow_and_eval_to_refined_workflo
     assert "workflow-refinement-package" in package.aliases
     assert package.manifest_path == (
         REPO_ROOT
-        / "workflows"
-        / "workflow_and_eval_to_refined_workflow_package"
+        / "autoloop" / "workflows" / "workflow_and_eval_to_refined_workflow_package"
         / "workflow.toml"
     )
 
@@ -68,7 +67,7 @@ def test_workflow_and_eval_to_refined_workflow_package_compiles_with_explicit_co
     importlib.invalidate_caches()
     _clear_workflow_modules()
 
-    workflow_pkg = importlib.import_module("workflows.workflow_and_eval_to_refined_workflow_package")
+    workflow_pkg = importlib.import_module("autoloop.workflows.workflow_and_eval_to_refined_workflow_package")
     resolved = resolve_workflow_reference(
         REPO_ROOT,
         workflow_pkg.WorkflowAndEvalToRefinedWorkflowPackage,
@@ -178,8 +177,7 @@ def test_workflow_and_eval_to_refined_workflow_package_docs_capture_decision_rec
 def test_workflow_and_eval_to_refined_workflow_package_prompt_readme_uses_shared_contract_sections() -> None:
     text = (
         REPO_ROOT
-        / "workflows"
-        / "workflow_and_eval_to_refined_workflow_package"
+        / "autoloop" / "workflows" / "workflow_and_eval_to_refined_workflow_package"
         / "prompts"
         / "README.md"
     ).read_text(encoding="utf-8")
@@ -388,8 +386,7 @@ def test_workflow_and_eval_to_refined_workflow_package_prompts_keep_step_local_c
 ) -> None:
     text = (
         REPO_ROOT
-        / "workflows"
-        / "workflow_and_eval_to_refined_workflow_package"
+        / "autoloop" / "workflows" / "workflow_and_eval_to_refined_workflow_package"
         / "prompts"
         / prompt_name
     ).read_text(encoding="utf-8")
@@ -470,7 +467,7 @@ def test_workflow_and_eval_to_refined_workflow_package_bootstrap_reads_typed_ctx
     importlib.invalidate_caches()
     _clear_workflow_modules()
 
-    workflow_pkg = importlib.import_module("workflows.workflow_and_eval_to_refined_workflow_package")
+    workflow_pkg = importlib.import_module("autoloop.workflows.workflow_and_eval_to_refined_workflow_package")
     parameters_cls = resolve_workflow_reference(REPO_ROOT, "workflow_and_eval_to_refined_workflow_package").parameters_cls
     assert parameters_cls is not None
     typed_params = parameters_cls.model_validate(
@@ -509,7 +506,7 @@ def test_workflow_and_eval_to_refined_workflow_package_bootstrap_reads_typed_ctx
         task_folder=task_folder,
         workflow_folder=workflow_folder,
         run_folder=run_folder,
-        package_folder=REPO_ROOT / "workflows" / "workflow_and_eval_to_refined_workflow_package",
+        package_folder=REPO_ROOT / "autoloop" / "workflows" / "workflow_and_eval_to_refined_workflow_package",
         state=workflow_pkg.WorkflowAndEvalToRefinedWorkflowPackage.State(),
         session_store=InMemorySessionStore(),
         params=typed_params,
@@ -893,7 +890,7 @@ def test_workflow_and_eval_to_refined_workflow_package_publish_rejects_authoring
     authoring_surface_path = run.workflow_dir / "selected_workflow_authoring_surface.json"
     payload = json.loads(authoring_surface_path.read_text(encoding="utf-8"))
     payload["selected_workflow_authoring_surface"]["workflow_path"] = str(
-        tmp_path / "workflows" / "release_candidate_to_go_no_go" / "workflow_drift.py"
+        tmp_path / "autoloop" / "workflows" / "release_candidate_to_go_no_go" / "workflow_drift.py"
     )
     authoring_surface_path.write_text(json.dumps(payload, indent=2, sort_keys=True) + "\n", encoding="utf-8")
 
@@ -915,7 +912,7 @@ def test_workflow_and_eval_to_refined_workflow_package_publish_rejects_baseline_
     run = _run_successful_refinement_workflow(tmp_path, monkeypatch)
     baseline_manifest_path = run.workflow_dir / "baseline_workflow_manifest.json"
     payload = json.loads(baseline_manifest_path.read_text(encoding="utf-8"))
-    payload["package_root_relative_path"] = "workflows/incident_to_hardening_program"
+    payload["package_root_relative_path"] = "autoloop/workflows/incident_to_hardening_program"
     baseline_manifest_path.write_text(json.dumps(payload, indent=2, sort_keys=True) + "\n", encoding="utf-8")
 
     with pytest.raises(
@@ -957,7 +954,7 @@ def test_workflow_and_eval_to_refined_workflow_package_publish_rejects_candidate
     run = _run_successful_refinement_workflow(tmp_path, monkeypatch)
     candidate_manifest_path = run.workflow_dir / "candidate_workflow_manifest.json"
     payload = json.loads(candidate_manifest_path.read_text(encoding="utf-8"))
-    payload["package_root_relative_path"] = "workflows/incident_to_hardening_program"
+    payload["package_root_relative_path"] = "autoloop/workflows/incident_to_hardening_program"
     candidate_manifest_path.write_text(json.dumps(payload, indent=2, sort_keys=True) + "\n", encoding="utf-8")
 
     with pytest.raises(
@@ -1268,7 +1265,7 @@ def _run_successful_refinement_workflow(
 
     monkeypatch.syspath_prepend(str(tmp_path))
     importlib.invalidate_caches()
-    workflow_pkg = importlib.import_module("workflows.workflow_and_eval_to_refined_workflow_package")
+    workflow_pkg = importlib.import_module("autoloop.workflows.workflow_and_eval_to_refined_workflow_package")
 
     task_dir = tmp_path / ".autoloop" / "tasks" / TASK_ID
     workflow_dir = task_dir / "wf_workflow_and_eval_to_refined_workflow_package"
@@ -1304,7 +1301,7 @@ def _install_repo_workflow_and_eval_to_refined_workflow_package(root: Path) -> N
         "release_candidate_to_go_no_go",
     ):
         shutil.copytree(
-            REPO_ROOT / "workflows" / package_name,
+            REPO_ROOT / "autoloop" / "workflows" / package_name,
             workflows_root / package_name,
             dirs_exist_ok=True,
             ignore=shutil.ignore_patterns("__pycache__", "*.pyc"),
@@ -1492,7 +1489,7 @@ def _build_publish_context(
         task_folder=task_dir,
         workflow_folder=workflow_dir,
         run_folder=run_dir,
-        package_folder=root / "workflows" / "workflow_and_eval_to_refined_workflow_package",
+        package_folder=root / "autoloop" / "workflows" / "workflow_and_eval_to_refined_workflow_package",
         state=state,
         session_store=InMemorySessionStore(),
         workflow_params={},

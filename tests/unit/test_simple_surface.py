@@ -501,15 +501,15 @@ def test_simple_workflow_rejects_legacy_class_level_handler_methods() -> None:
 @pytest.mark.parametrize(
     ("module_name", "workflow_name"),
     (
-        ("workflows.company_operation_to_recursive_improvement_cycle", "CompanyOperationToRecursiveImprovementCycle"),
-        ("workflows.incident_to_hardening_program", "IncidentToHardeningProgram"),
-        ("workflows.workflow_and_eval_to_refined_workflow_package", "WorkflowAndEvalToRefinedWorkflowPackage"),
-        ("workflows.workflow_idea_to_workflow_package", "WorkflowIdeaToWorkflowPackage"),
-        ("workflows.workflow_package_to_composable_building_blocks", "WorkflowPackageToComposableBuildingBlocks"),
-        ("workflows.workflow_portfolio_to_operating_system", "WorkflowPortfolioToOperatingSystem"),
-        ("workflows.workflow_run_history_to_failure_modes", "WorkflowRunHistoryToFailureModes"),
-        ("workflows.workflow_run_traces_to_optimization_candidates", "WorkflowRunTracesToOptimizationCandidates"),
-        ("workflows.workflow_to_eval_suite", "WorkflowToEvalSuite"),
+        ("autoloop.workflows.company_operation_to_recursive_improvement_cycle", "CompanyOperationToRecursiveImprovementCycle"),
+        ("autoloop.workflows.incident_to_hardening_program", "IncidentToHardeningProgram"),
+        ("autoloop.workflows.workflow_and_eval_to_refined_workflow_package", "WorkflowAndEvalToRefinedWorkflowPackage"),
+        ("autoloop.workflows.workflow_idea_to_workflow_package", "WorkflowIdeaToWorkflowPackage"),
+        ("autoloop.workflows.workflow_package_to_composable_building_blocks", "WorkflowPackageToComposableBuildingBlocks"),
+        ("autoloop.workflows.workflow_portfolio_to_operating_system", "WorkflowPortfolioToOperatingSystem"),
+        ("autoloop.workflows.workflow_run_history_to_failure_modes", "WorkflowRunHistoryToFailureModes"),
+        ("autoloop.workflows.workflow_run_traces_to_optimization_candidates", "WorkflowRunTracesToOptimizationCandidates"),
+        ("autoloop.workflows.workflow_to_eval_suite", "WorkflowToEvalSuite"),
     ),
 )
 def test_exported_public_simple_workflows_no_longer_fail_for_legacy_class_handlers(

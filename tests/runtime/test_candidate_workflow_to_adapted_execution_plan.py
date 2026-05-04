@@ -56,7 +56,7 @@ def _assert_compact_prompt_contract(
 
 def _clear_workflow_modules() -> None:
     for name in list(sys.modules):
-        if name == "workflows" or name.startswith("workflows."):
+        if name == "workflows" or name.startswith("workflows.") or name == "autoloop.workflows" or name.startswith("autoloop.workflows."):
             sys.modules.pop(name, None)
 
 
@@ -75,7 +75,7 @@ def test_repo_workflows_namespace_discovers_candidate_workflow_to_adapted_execut
     assert package.package_name == "candidate_workflow_to_adapted_execution_plan"
     assert "adapted-execution-plan" in package.aliases
     assert package.manifest_path == (
-        REPO_ROOT / "workflows" / "candidate_workflow_to_adapted_execution_plan" / "workflow.toml"
+        REPO_ROOT / "autoloop" / "workflows" / "candidate_workflow_to_adapted_execution_plan" / "workflow.toml"
     )
 
 
@@ -86,7 +86,7 @@ def test_candidate_workflow_to_adapted_execution_plan_package_compiles_with_expl
     importlib.invalidate_caches()
     _clear_workflow_modules()
 
-    workflow_pkg = importlib.import_module("workflows.candidate_workflow_to_adapted_execution_plan")
+    workflow_pkg = importlib.import_module("autoloop.workflows.candidate_workflow_to_adapted_execution_plan")
     resolved = resolve_workflow_reference(REPO_ROOT, workflow_pkg.CandidateWorkflowToAdaptedExecutionPlan)
     compiled = compile_workflow(resolved.workflow_cls)
 
@@ -175,8 +175,7 @@ def test_candidate_workflow_to_adapted_execution_plan_package_docs_capture_decis
 def test_candidate_workflow_to_adapted_execution_plan_prompt_readme_uses_shared_contract_sections() -> None:
     text = (
         REPO_ROOT
-        / "workflows"
-        / "candidate_workflow_to_adapted_execution_plan"
+        / "autoloop" / "workflows" / "candidate_workflow_to_adapted_execution_plan"
         / "prompts"
         / "README.md"
     ).read_text(encoding="utf-8")
@@ -274,7 +273,7 @@ def test_candidate_workflow_to_adapted_execution_plan_prompts_keep_step_local_co
     required_markers: tuple[str, ...],
 ) -> None:
     text = (
-        REPO_ROOT / "workflows" / "candidate_workflow_to_adapted_execution_plan" / "prompts" / prompt_name
+        REPO_ROOT / "autoloop" / "workflows" / "candidate_workflow_to_adapted_execution_plan" / "prompts" / prompt_name
     ).read_text(encoding="utf-8")
 
     _assert_compact_prompt_contract(prompt_name, text, required_markers)
@@ -350,7 +349,7 @@ def test_candidate_workflow_to_adapted_execution_plan_bootstrap_reads_typed_ctx_
     importlib.invalidate_caches()
     _clear_workflow_modules()
 
-    workflow_pkg = importlib.import_module("workflows.candidate_workflow_to_adapted_execution_plan")
+    workflow_pkg = importlib.import_module("autoloop.workflows.candidate_workflow_to_adapted_execution_plan")
     parameters_cls = resolve_workflow_reference(REPO_ROOT, "candidate_workflow_to_adapted_execution_plan").parameters_cls
     assert parameters_cls is not None
     typed_params = parameters_cls.model_validate(
@@ -390,7 +389,7 @@ def test_candidate_workflow_to_adapted_execution_plan_bootstrap_reads_typed_ctx_
         task_folder=task_folder,
         workflow_folder=workflow_folder,
         run_folder=run_folder,
-        package_folder=REPO_ROOT / "workflows" / "candidate_workflow_to_adapted_execution_plan",
+        package_folder=REPO_ROOT / "autoloop" / "workflows" / "candidate_workflow_to_adapted_execution_plan",
         state=workflow_pkg.CandidateWorkflowToAdaptedExecutionPlan.State(),
         session_store=InMemorySessionStore(),
         params=typed_params,
@@ -854,7 +853,7 @@ def test_candidate_workflow_to_adapted_execution_plan_package_needs_rework_paylo
     importlib.invalidate_caches()
     _clear_workflow_modules()
 
-    workflow_pkg = importlib.import_module("workflows.candidate_workflow_to_adapted_execution_plan")
+    workflow_pkg = importlib.import_module("autoloop.workflows.candidate_workflow_to_adapted_execution_plan")
     state = workflow_pkg.CandidateWorkflowToAdaptedExecutionPlan.State(
         selected_workflow_reference="security_finding_to_verified_remediation",
         selected_workflow_name="security_finding_to_verified_remediation",
@@ -871,7 +870,7 @@ def test_candidate_workflow_to_adapted_execution_plan_package_needs_rework_paylo
         task_folder=task_folder,
         workflow_folder=workflow_folder,
         run_folder=run_folder,
-        package_folder=REPO_ROOT / "workflows" / "candidate_workflow_to_adapted_execution_plan",
+        package_folder=REPO_ROOT / "autoloop" / "workflows" / "candidate_workflow_to_adapted_execution_plan",
         state=state,
         session_store=InMemorySessionStore(),
         workflow_params={},
@@ -940,7 +939,7 @@ def test_candidate_workflow_to_adapted_execution_plan_package_validator_rejects_
     importlib.invalidate_caches()
     _clear_workflow_modules()
 
-    workflow_pkg = importlib.import_module("workflows.candidate_workflow_to_adapted_execution_plan")
+    workflow_pkg = importlib.import_module("autoloop.workflows.candidate_workflow_to_adapted_execution_plan")
     compiled = compile_workflow(workflow_pkg.CandidateWorkflowToAdaptedExecutionPlan)
     package_step = compiled.steps["package_adapted_execution_plan"]
     payload = {
@@ -1086,8 +1085,8 @@ def test_candidate_workflow_capture_step_normalizes_alias_without_revalidating_s
     importlib.invalidate_caches()
     _clear_workflow_modules()
 
-    workflow_pkg = importlib.import_module("workflows.candidate_workflow_to_adapted_execution_plan")
-    workflow_module = importlib.import_module("workflows.candidate_workflow_to_adapted_execution_plan.workflow")
+    workflow_pkg = importlib.import_module("autoloop.workflows.candidate_workflow_to_adapted_execution_plan")
+    workflow_module = importlib.import_module("autoloop.workflows.candidate_workflow_to_adapted_execution_plan.workflow")
 
     def _unexpected_validate(*args, **kwargs):
         raise AssertionError("capture step should not revalidate the capability snapshot to recover the workflow name")
@@ -1110,7 +1109,7 @@ def test_candidate_workflow_capture_step_normalizes_alias_without_revalidating_s
         task_folder=task_folder,
         workflow_folder=workflow_folder,
         run_folder=run_folder,
-        package_folder=tmp_path / "workflows" / "candidate_workflow_to_adapted_execution_plan",
+        package_folder=tmp_path / "autoloop" / "workflows" / "candidate_workflow_to_adapted_execution_plan",
         state=state,
         session_store=InMemorySessionStore(),
         workflow_params={"selected_workflow": "security-remediation", "task_title": state.task_title},
@@ -1143,7 +1142,7 @@ def _make_publish_adaptation_test_context(
     importlib.invalidate_caches()
     _clear_workflow_modules()
 
-    workflow_pkg = importlib.import_module("workflows.candidate_workflow_to_adapted_execution_plan")
+    workflow_pkg = importlib.import_module("autoloop.workflows.candidate_workflow_to_adapted_execution_plan")
     task_folder = tmp_path / "task"
     workflow_folder = task_folder / "wf_candidate_workflow_to_adapted_execution_plan"
     workflow_folder.mkdir(parents=True, exist_ok=True)
@@ -1173,7 +1172,7 @@ def _make_publish_adaptation_test_context(
         task_folder=task_folder,
         workflow_folder=workflow_folder,
         run_folder=run_folder,
-        package_folder=REPO_ROOT / "workflows" / "candidate_workflow_to_adapted_execution_plan",
+        package_folder=REPO_ROOT / "autoloop" / "workflows" / "candidate_workflow_to_adapted_execution_plan",
         state=state,
         session_store=InMemorySessionStore(),
         workflow_params={
@@ -1257,7 +1256,7 @@ def _install_repo_candidate_workflow_to_adapted_execution_plan_package(root: Pat
         "investigation_request_to_evidence_pack",
     ):
         shutil.copytree(
-            REPO_ROOT / "workflows" / package_name,
+            REPO_ROOT / "autoloop" / "workflows" / package_name,
             workflows_root / package_name,
             dirs_exist_ok=True,
             ignore=shutil.ignore_patterns("__pycache__", "*.pyc"),

@@ -565,7 +565,7 @@ def test_write_selected_workflow_source_manifest_normalizes_alias_to_canonical_w
     payload = json.loads(manifest_path.read_text(encoding="utf-8"))
 
     assert payload["selected_workflow"] == "release_candidate_to_go_no_go"
-    assert payload["package_dir"] == "workflows/release_candidate_to_go_no_go"
+    assert payload["package_dir"] == "autoloop/workflows/release_candidate_to_go_no_go"
     assert payload["files"]
 
 
@@ -580,7 +580,7 @@ def test_validate_selected_workflow_source_unchanged_detects_mutation(tmp_path: 
         selected_workflow="release_candidate_to_go_no_go",
         relative_path="selected_workflow_source_manifest.json",
     )
-    target_file = tmp_path / "workflows" / "release_candidate_to_go_no_go" / "workflow.toml"
+    target_file = tmp_path / "autoloop" / "workflows" / "release_candidate_to_go_no_go" / "workflow.toml"
     target_file.write_text(target_file.read_text(encoding="utf-8") + "# drift\n", encoding="utf-8")
 
     ok, details = validate_selected_workflow_source_unchanged(
@@ -1015,7 +1015,7 @@ def _install_selected_workflow(root: Path) -> None:
     workflows_root.mkdir(parents=True, exist_ok=True)
     (workflows_root / "__init__.py").write_text("__all__ = []\n", encoding="utf-8")
     shutil.copytree(
-        REPO_ROOT / "workflows" / "release_candidate_to_go_no_go",
+        REPO_ROOT / "autoloop" / "workflows" / "release_candidate_to_go_no_go",
         workflows_root / "release_candidate_to_go_no_go",
         dirs_exist_ok=True,
         ignore=shutil.ignore_patterns("__pycache__", "*.pyc"),
