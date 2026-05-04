@@ -249,3 +249,58 @@ Validation passed with `.venv_phase/bin/python -m pytest tests/runtime/test_work
 Open issues / next step
 
 The remaining work is the later-phase migration: move built-in workflows under `autoloop/workflows`, update CLI/help/scaffold and JSON payloads, expand persisted runtime metadata, and wire packaging/wheel verification. I did not run the broader legacy suite because many existing tests still assume the old `{workspace}/workflows` discovery root and need migration in those follow-on phases.
+
+
+---
+run_id=run-20260504T192206Z-d3f7e940 | entry=session_turn | pair=implement | phase=verifier | cycle=1 | attempt=1 | thread_id=019df477-80fb-7890-8bef-7c9700065afc
+---
+provider=codex
+mode=resume
+template=/home/rauter/.local/share/pipx/venvs/autoloop/lib/python3.12/site-packages/autoloop/templates/implement_verifier.md
+session_id=019df477-80fb-7890-8bef-7c9700065afc
+
+
+---
+run_id=run-20260504T192206Z-d3f7e940 | entry=phase_output | pair=implement | phase=verifier | process=codex-agent | cycle=1 | attempt=1 | thread_id=019df477-80fb-7890-8bef-7c9700065afc
+---
+I’m reviewing the phase-local implementation against the active criteria and the authoritative phase contract. First I’m opening the reviewer artifacts and the touched code paths so I can check acceptance coverage before I touch the criteria or feedback files.
+
+I have the phase contract and the implementation notes. Now I’m reading the actual catalog and loader changes with line numbers and checking them against the acceptance criteria, especially the same-tier collision logic, manifest handling, and any path/import edge cases that could create regressions.
+
+I’m validating the two likely correctness gaps against the current implementation, then I’ll update the phase review artifacts with only the supported review-scope edits.
+
+The repo shell doesn’t expose `python` directly here. I’m rerunning the checks with the project’s phase venv so I can confirm the failures before writing findings.
+
+The manifest validation bug is confirmed. I’m tightening the second check with a controlled package-path injection so the review finding is backed by an actual shadowing failure, not just a code-path argument.
+
+I’ve confirmed both failures with targeted reproductions. Next I’m updating the phase criteria and feedback artifacts to reflect that the refactor is not yet safe to accept.
+
+The review artifacts now reflect the blocking state. I’m doing a quick readback to make sure the findings are precise and the criteria file is internally consistent before I close the verifier turn.
+
+Scope considered
+
+Phase-local review of the catalog/root refactor only: the changed discovery, resolution, capability-loading, and focused test surfaces named in the implementation notes, plus the active phase artifacts and run decisions ledger.
+
+What I analyzed
+
+I read the active criteria, feedback, implementation notes, and decisions artifacts, then inspected the touched code in `autoloop/core/workflow_catalog.py`, `autoloop/runtime/loader.py`, `autoloop/core/workflow_capabilities.py`, and `tests/runtime/test_workflow_catalog_roots.py`. I also ran two targeted `.venv_phase/bin/python` reproductions to validate the highest-risk paths.
+
+What I reviewed
+
+I confirmed one manifest-validation bug directly: `read_workflow_manifest()` accepts a manifest containing only `name = "demo"` because the empty-`aliases` path returns before required-field validation. I also confirmed one shadowing regression directly: when a workspace workflow shadows a package workflow of the same name, `_resolve_imported_class_reference()` mis-resolves an imported `autoloop.workflows.<id>.flow` class back through the effective catalog and fails against the workspace module namespace instead of the shadowed package entry.
+
+What I changed
+
+I updated [criteria.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/objective-implement-workflow-installation-and-di-c328695f/runs/run-20260504T192206Z-d3f7e940/artifacts/implement/phases/catalog-root-refactor/criteria.md) to reflect an `INCOMPLETE` review result, and appended two blocking findings to [feedback.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/objective-implement-workflow-installation-and-di-c328695f/runs/run-20260504T192206Z-d3f7e940/artifacts/implement/phases/catalog-root-refactor/feedback.md) as `IMP-001` and `IMP-002`.
+
+Key findings / decisions
+
+`IMP-001` is blocking because the manifest parser currently violates the required `name`/`title`/`description` contract and undermines AC-4. `IMP-002` is blocking because explicit package-backed imports no longer behave independently of workspace shadowing, which breaks the required separation between explicit resolution and bare-name precedence.
+
+Open issues / next step
+
+The implementation should not be accepted yet. The next step is to fix the two blocking issues, add focused regression coverage for both paths, and rerun the phase validation.
+
+<loop-control>
+{"schema":"docloop.loop_control/v1","kind":"promise","promise":"INCOMPLETE"}
+</loop-control>
