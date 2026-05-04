@@ -232,7 +232,7 @@ def test_workflow_and_eval_to_refined_workflow_package_prompt_readme_uses_shared
                 "`refinement_request_framed`",
                 "`needs_rework`",
                 "`needs_replan`",
-                "Reserved routes are only",
+                "only default runtime control route",
             ),
         ),
         (
@@ -253,7 +253,7 @@ def test_workflow_and_eval_to_refined_workflow_package_prompt_readme_uses_shared
                 "`refinement_request_framed`",
                 "`needs_rework`",
                 "`needs_replan`",
-                "Use reserved routes only",
+                "ordinary application routes rather than framework defaults",
             ),
         ),
         (
@@ -273,7 +273,7 @@ def test_workflow_and_eval_to_refined_workflow_package_prompt_readme_uses_shared
                 "`refinement_plan_designed`",
                 "`needs_rework`",
                 "`needs_replan`",
-                "Reserved routes are only",
+                "only default runtime control route",
             ),
         ),
         (
@@ -294,7 +294,7 @@ def test_workflow_and_eval_to_refined_workflow_package_prompt_readme_uses_shared
                 "`refinement_plan_designed`",
                 "`needs_rework`",
                 "`needs_replan`",
-                "Use reserved routes only",
+                "ordinary application routes rather than framework defaults",
             ),
         ),
         (
@@ -314,7 +314,7 @@ def test_workflow_and_eval_to_refined_workflow_package_prompt_readme_uses_shared
                 "`workflow_refinement_applied`",
                 "`needs_rework`",
                 "`needs_replan`",
-                "Reserved routes are only",
+                "only default runtime control route",
             ),
         ),
         (
@@ -335,7 +335,7 @@ def test_workflow_and_eval_to_refined_workflow_package_prompt_readme_uses_shared
                 "`workflow_refinement_applied`",
                 "`needs_rework`",
                 "`needs_replan`",
-                "Use reserved routes only",
+                "ordinary application routes rather than framework defaults",
             ),
         ),
         (
@@ -357,7 +357,7 @@ def test_workflow_and_eval_to_refined_workflow_package_prompt_readme_uses_shared
                 "`needs_rework`",
                 "`needs_replan`",
                 "`workflow_refinement_receipt.json`",
-                "Reserved routes are only",
+                "only default runtime control route",
             ),
         ),
         (
@@ -379,7 +379,7 @@ def test_workflow_and_eval_to_refined_workflow_package_prompt_readme_uses_shared
                 "`workflow_refinement_evaluated`",
                 "`needs_rework`",
                 "`needs_replan`",
-                "Use reserved routes only",
+                "ordinary application routes rather than framework defaults",
             ),
         ),
     ),

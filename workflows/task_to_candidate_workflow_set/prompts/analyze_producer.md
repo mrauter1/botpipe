@@ -60,11 +60,14 @@
 
 ## Routes
 
+- Treat `question` as the only default runtime control route; use it only when a true intent gap or missing hard constraint blocks safe progress.
+- If this workflow authors `blocked` or `failed`, treat them as ordinary application routes rather than framework defaults.
+
 ### Route guidance for the verifier
 - `candidate_workflows_analyzed`: the comparison is explicit, the builder baseline was considered, and the portfolio posture is justified clearly.
 - `needs_rework`: the same analysis boundary holds, but the matrix, gap analysis, or posture explanation needs local repair.
 - `needs_replan`: the framing, legal comparison boundary, or portfolio posture changed materially.
-- Reserved routes are only for true intent gaps, missing prerequisites, or irreconcilable contradictions.
+- Treat `question` as the only default runtime control route; use it only for true intent gaps, missing prerequisites, or irreconcilable contradictions.
 
 ## Out Of Scope
 

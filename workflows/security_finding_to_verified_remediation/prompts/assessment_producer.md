@@ -58,11 +58,14 @@
 
 ## Routes
 
+- Treat `question` as the only default runtime control route; use it only when a true intent gap or missing hard constraint blocks safe progress.
+- If this workflow authors `blocked` or `failed`, treat them as ordinary application routes rather than framework defaults.
+
 ### Route guidance for the verifier
 - `finding_assessed`: the exploit, affected surface, root-cause reasoning, and remediation options are explicit and coherent.
 - `needs_rework`: the same assessment boundary still holds, but the analysis or option framing needs local repair.
 - `needs_replan`: the evidence boundary or remediation framing changed materially and the evidence-pack stage must be revisited.
-- Reserved routes are only for true intent gaps, missing prerequisites, or irreconcilable contradictions.
+- Treat `question` as the only default runtime control route; use it only for true intent gaps, missing prerequisites, or irreconcilable contradictions.
 
 ## Out Of Scope
 

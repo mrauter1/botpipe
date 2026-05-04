@@ -233,7 +233,7 @@ def test_company_operation_to_recursive_improvement_cycle_prompt_readme_uses_sha
                 "`company_operation_framed`",
                 "`needs_rework`",
                 "`needs_replan`",
-                "Reserved routes are only",
+                "only default runtime control route",
             ),
         ),
         (
@@ -253,7 +253,7 @@ def test_company_operation_to_recursive_improvement_cycle_prompt_readme_uses_sha
                 "`company_operation_framed`",
                 "`needs_rework`",
                 "`needs_replan`",
-                "Use reserved routes only",
+                "ordinary application routes rather than framework defaults",
             ),
         ),
         (
@@ -272,7 +272,7 @@ def test_company_operation_to_recursive_improvement_cycle_prompt_readme_uses_sha
                 "`recursive_improvement_pressures_analyzed`",
                 "`needs_rework`",
                 "`needs_replan`",
-                "Reserved routes are only",
+                "only default runtime control route",
             ),
         ),
         (
@@ -292,7 +292,7 @@ def test_company_operation_to_recursive_improvement_cycle_prompt_readme_uses_sha
                 "`recursive_improvement_pressures_analyzed`",
                 "`needs_rework`",
                 "`needs_replan`",
-                "Use reserved routes only",
+                "ordinary application routes rather than framework defaults",
             ),
         ),
         (
@@ -313,7 +313,7 @@ def test_company_operation_to_recursive_improvement_cycle_prompt_readme_uses_sha
                 "`needs_rework`",
                 "`needs_replan`",
                 "`recursive_improvement_publication_only`",
-                "Reserved routes are only",
+                "only default runtime control route",
             ),
         ),
         (
@@ -335,7 +335,7 @@ def test_company_operation_to_recursive_improvement_cycle_prompt_readme_uses_sha
                 "`needs_rework`",
                 "`needs_replan`",
                 "`recursive_improvement_publication_only`",
-                "Use reserved routes only",
+                "ordinary application routes rather than framework defaults",
             ),
         ),
     ),

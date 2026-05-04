@@ -273,7 +273,7 @@ def test_workflow_package_to_composable_building_blocks_prompt_readme_uses_share
                 "`decomposition_request_framed`",
                 "`needs_rework`",
                 "`needs_replan`",
-                "Reserved routes are only",
+                "only default runtime control route",
             ),
         ),
         (
@@ -293,7 +293,7 @@ def test_workflow_package_to_composable_building_blocks_prompt_readme_uses_share
                 "`decomposition_request_framed`",
                 "`needs_rework`",
                 "`needs_replan`",
-                "Use reserved routes only",
+                "ordinary application routes rather than framework defaults",
             ),
         ),
         (
@@ -313,7 +313,7 @@ def test_workflow_package_to_composable_building_blocks_prompt_readme_uses_share
                 "`decomposition_plan_designed`",
                 "`needs_rework`",
                 "`needs_replan`",
-                "Reserved routes are only",
+                "only default runtime control route",
             ),
         ),
         (
@@ -333,7 +333,7 @@ def test_workflow_package_to_composable_building_blocks_prompt_readme_uses_share
                 "`decomposition_plan_designed`",
                 "`needs_rework`",
                 "`needs_replan`",
-                "Use reserved routes only",
+                "ordinary application routes rather than framework defaults",
             ),
         ),
         (
@@ -354,7 +354,7 @@ def test_workflow_package_to_composable_building_blocks_prompt_readme_uses_share
                 "`candidate_decomposition_built`",
                 "`needs_rework`",
                 "`needs_replan`",
-                "Reserved routes are only",
+                "only default runtime control route",
             ),
         ),
         (
@@ -375,7 +375,7 @@ def test_workflow_package_to_composable_building_blocks_prompt_readme_uses_share
                 "`candidate_decomposition_built`",
                 "`needs_rework`",
                 "`needs_replan`",
-                "Use reserved routes only",
+                "ordinary application routes rather than framework defaults",
             ),
         ),
         (
@@ -396,7 +396,7 @@ def test_workflow_package_to_composable_building_blocks_prompt_readme_uses_share
                 "`needs_rework`",
                 "`needs_replan`",
                 "`workflow_decomposition_receipt.json`",
-                "Reserved routes are only",
+                "only default runtime control route",
             ),
         ),
         (
@@ -417,7 +417,7 @@ def test_workflow_package_to_composable_building_blocks_prompt_readme_uses_share
                 "`candidate_decomposition_evaluated`",
                 "`needs_rework`",
                 "`needs_replan`",
-                "Use reserved routes only",
+                "ordinary application routes rather than framework defaults",
             ),
         ),
     ),

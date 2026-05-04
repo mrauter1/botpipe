@@ -45,11 +45,14 @@
 
 ## Routes
 
+- Treat `question` as the only default runtime control route; use it only when a true intent gap or missing hard constraint blocks safe progress.
+- If this workflow authors `blocked` or `failed`, treat them as ordinary application routes rather than framework defaults.
+
 ### Route selection rules
 - Choose `hardening_program_ready` only if the final package is complete, cites the assessed posture correctly, and the communications draft is consistent with the incident package and summary.
 - Choose `needs_rework` when the same package assembly boundary still holds and the artifacts can be repaired locally.
 - Choose `needs_replan` when packaging proves the analysis itself must change materially before publication.
-- Use reserved routes only for genuine missing prerequisites or irrecoverable contradictions.
+- Use `question` only for genuine missing prerequisites or irrecoverable contradictions.
 
 ## Forbidden
 

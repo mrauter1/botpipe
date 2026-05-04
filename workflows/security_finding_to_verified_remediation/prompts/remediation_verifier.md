@@ -48,11 +48,14 @@
 
 ## Routes
 
+- Treat `question` as the only default runtime control route; use it only when a true intent gap or missing hard constraint blocks safe progress.
+- If this workflow authors `blocked` or `failed`, treat them as ordinary application routes rather than framework defaults.
+
 ### Route selection rules
 - Choose `remediation_planned` only if the chosen remediation is justified against the options, verification is explicit, rollout constraints are handled concretely, and rollback safety is not hand-waved.
 - Choose `needs_rework` when the same remediation-planning boundary still holds and the artifacts can be repaired locally.
 - Choose `needs_replan` when the assessment conclusion or fix strategy changed materially enough that the security finding must be reassessed.
-- Use reserved routes only for genuine missing prerequisites or irrecoverable contradictions.
+- Use `question` only for genuine missing prerequisites or irrecoverable contradictions.
 
 ## Forbidden
 

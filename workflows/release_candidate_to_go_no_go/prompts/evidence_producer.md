@@ -52,11 +52,14 @@
 
 ## Routes
 
+- Treat `question` as the only default runtime control route; use it only when a true intent gap or missing hard constraint blocks safe progress.
+- If this workflow authors `blocked` or `failed`, treat them as ordinary application routes rather than framework defaults.
+
 ### Route guidance for the verifier
 - `evidence_pack_ready`: the evidence pack is coherent, concrete, and ready for assessment.
 - `needs_rework`: the same evidence boundary still holds, but the pack or blocker analysis needs local repair.
 - `needs_replan`: the evidence plan or release boundary changed materially and framing must be revisited.
-- Reserved routes are only for genuine missing prerequisites, stakeholder blockers, or irrecoverable contradictions.
+- Treat `question` as the only default runtime control route; use it only for genuine missing prerequisites, stakeholder blockers, or irrecoverable contradictions.
 
 ## Out Of Scope
 

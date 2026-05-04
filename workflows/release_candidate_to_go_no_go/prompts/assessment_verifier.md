@@ -44,11 +44,14 @@
 
 ## Routes
 
+- Treat `question` as the only default runtime control route; use it only when a true intent gap or missing hard constraint blocks safe progress.
+- If this workflow authors `blocked` or `failed`, treat them as ordinary application routes rather than framework defaults.
+
 ### Route selection rules
 - Choose `assessment_ready` only if the recommendation is explicit, the risk register is coherent, the machine-readable summary is valid and aligned to the prose assessment, and the assessment clearly explains how blockers influence the decision.
 - Choose `needs_rework` when the same assessment boundary still holds and the synthesis can be repaired locally.
 - Choose `needs_replan` when the release boundary, criteria, or evidence surface changed materially enough that framing must restart.
-- Use reserved routes only for genuine missing prerequisites or irrecoverable contradictions.
+- Use `question` only for genuine missing prerequisites or irrecoverable contradictions.
 
 ## Forbidden
 

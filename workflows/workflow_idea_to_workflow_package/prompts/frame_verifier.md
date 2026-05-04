@@ -40,6 +40,9 @@
 
 ## Routes
 
+- Treat `question` as the only default runtime control route; use it only when a true intent gap or missing hard constraint blocks safe progress.
+- If this workflow authors `blocked` or `failed`, treat them as ordinary application routes rather than framework defaults.
+
 ### Route selection rules
 - Choose `candidate_selected` only if:
 - at least three credible candidates were compared,

@@ -36,10 +36,13 @@
 
 ## Route Guidance
 
+- Treat `question` as the only default runtime control route; use it only when a true intent gap or missing hard constraint blocks safe progress.
+- If this workflow authors `blocked` or `failed`, treat them as ordinary application routes rather than framework defaults.
+
 - Use `optimization_scope_framed` when eligible evidence exists and the framing is coherent.
 - Use `no_eligible_trace_evidence` when `eligible_run_count` is zero.
 - Use `needs_rework` only for local framing defects.
-- Use reserved routes only for true control conditions.
+- Use `question` only for true control conditions.
 
 ## Forbidden
 

@@ -74,11 +74,14 @@
 
 ## Routes
 
+- Treat `question` as the only default runtime control route; use it only when a true intent gap or missing hard constraint blocks safe progress.
+- If this workflow authors `blocked` or `failed`, treat them as ordinary application routes rather than framework defaults.
+
 ### Route guidance for the verifier
 - `candidate_decomposition_evaluated`: the verification report, migration guide, promotion record, and rollback plan are publication-ready.
 - `needs_rework`: the same decomposition boundary still holds, but the candidate package needs local repair before publication.
 - `needs_replan`: evaluation showed the accepted decomposition boundary or package set changed materially and planning must be revisited.
-- Reserved routes are only for true intent gaps, missing prerequisites, or irreconcilable contradictions.
+- Treat `question` as the only default runtime control route; use it only for true intent gaps, missing prerequisites, or irreconcilable contradictions.
 
 ## Out Of Scope
 

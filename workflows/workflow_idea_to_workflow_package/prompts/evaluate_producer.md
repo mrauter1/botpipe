@@ -59,6 +59,9 @@
 
 ## Routes
 
+- Treat `question` as the only default runtime control route; use it only when a true intent gap or missing hard constraint blocks safe progress.
+- If this workflow authors `blocked` or `failed`, treat them as ordinary application routes rather than framework defaults.
+
 ### Route guidance for the verifier
 - `evaluation_passed`: verification evidence and rollback evidence are strong enough for publication.
 - `needs_rework`: the same design still holds, but the built workflow or evidence needs local repair.

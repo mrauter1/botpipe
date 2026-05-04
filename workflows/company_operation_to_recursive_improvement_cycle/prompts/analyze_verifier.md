@@ -51,11 +51,14 @@
 
 ## Routes
 
+- Treat `question` as the only default runtime control route; use it only when a true intent gap or missing hard constraint blocks safe progress.
+- If this workflow authors `blocked` or `failed`, treat them as ordinary application routes rather than framework defaults.
+
 ### Route guidance
 - `recursive_improvement_pressures_analyzed`: the analysis artifacts are aligned and ready for packaging.
 - `needs_rework`: the same analysis boundary still holds, but the artifacts need local repair.
 - `needs_replan`: the scoped task slice, workflow slice, or recursive-improvement objective changed materially.
-- Use reserved routes only for genuine intent gaps, missing prerequisites, or irreconcilable contradictions.
+- Use `question` only for genuine intent gaps, missing prerequisites, or irreconcilable contradictions.
 
 ## Forbidden
 

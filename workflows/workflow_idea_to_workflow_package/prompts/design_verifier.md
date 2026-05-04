@@ -38,11 +38,14 @@
 
 ## Routes
 
+- Treat `question` as the only default runtime control route; use it only when a true intent gap or missing hard constraint blocks safe progress.
+- If this workflow authors `blocked` or `failed`, treat them as ordinary application routes rather than framework defaults.
+
 ### Route selection rules
 - Choose `design_accepted` only if the design artifacts define the workflow objective, deterministic responsibilities, provider-owned responsibilities, route grammar, artifact contract, runtime control contract, and verification surface explicitly.
 - Choose `needs_rework` when the same workflow identity and design boundary still hold but the artifacts are incomplete or inconsistent.
 - Choose `needs_replan` when the selected addition, workflow kind, topology, or artifact graph changed materially.
-- Use reserved routes only for real intent gaps, missing repository prerequisites, or unrecoverable contradictions.
+- Use `question` only for real intent gaps, missing repository prerequisites, or unrecoverable contradictions.
 
 ## Forbidden
 

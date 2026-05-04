@@ -196,7 +196,7 @@ def test_workflow_to_eval_suite_prompt_readme_uses_shared_contract_sections() ->
                 "`evaluation_target_framed`",
                 "`needs_rework`",
                 "`needs_replan`",
-                "Reserved routes are only",
+                "only default runtime control route",
             ),
         ),
         (
@@ -216,7 +216,7 @@ def test_workflow_to_eval_suite_prompt_readme_uses_shared_contract_sections() ->
                 "`evaluation_target_framed`",
                 "`needs_rework`",
                 "`needs_replan`",
-                "Use reserved routes only",
+                "ordinary application routes rather than framework defaults",
             ),
         ),
         (
@@ -237,7 +237,7 @@ def test_workflow_to_eval_suite_prompt_readme_uses_shared_contract_sections() ->
                 "`eval_cases_designed`",
                 "`needs_rework`",
                 "`needs_replan`",
-                "Reserved routes are only",
+                "only default runtime control route",
             ),
         ),
         (
@@ -257,7 +257,7 @@ def test_workflow_to_eval_suite_prompt_readme_uses_shared_contract_sections() ->
                 "`eval_cases_designed`",
                 "`needs_rework`",
                 "`needs_replan`",
-                "Use reserved routes only",
+                "ordinary application routes rather than framework defaults",
             ),
         ),
         (
@@ -278,7 +278,7 @@ def test_workflow_to_eval_suite_prompt_readme_uses_shared_contract_sections() ->
                 "`workflow_eval_suite_ready`",
                 "`needs_rework`",
                 "`needs_replan`",
-                "Reserved routes are only",
+                "only default runtime control route",
             ),
         ),
         (
@@ -301,7 +301,7 @@ def test_workflow_to_eval_suite_prompt_readme_uses_shared_contract_sections() ->
                 "`needs_replan`",
                 "`validated_eval_case_manifest.json`",
                 "`eval_rubric.md`",
-                "Use reserved routes only",
+                "ordinary application routes rather than framework defaults",
             ),
         ),
     ),

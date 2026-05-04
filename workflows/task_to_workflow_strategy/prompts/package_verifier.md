@@ -47,11 +47,14 @@
 
 ## Routes
 
+- Treat `question` as the only default runtime control route; use it only when a true intent gap or missing hard constraint blocks safe progress.
+- If this workflow authors `blocked` or `failed`, treat them as ordinary application routes rather than framework defaults.
+
 ### Route selection rules
 - Choose `strategy_package_ready` only if the human-facing package, machine-readable summary, and next-action artifact all agree on the selected route, stay consistent with `candidate_workflow_set_summary`, and keep downstream execution explicit rather than hidden.
 - Choose `needs_rework` when the same route still stands and the packaging artifacts can be corrected locally.
 - Choose `needs_replan` when packaging reveals that the selected route or recommended workflows changed materially enough that the selection step must run again.
-- Use reserved routes only for genuine missing prerequisites or irrecoverable contradictions.
+- Use `question` only for genuine missing prerequisites or irrecoverable contradictions.
 - If the selected route is `adapt`, the package, `strategy_summary.json` `next_action`, and `strategy_next_action.md` must name `candidate_workflow_to_adapted_execution_plan` explicitly as the downstream building block without adding new summary fields.
 
 ## Forbidden

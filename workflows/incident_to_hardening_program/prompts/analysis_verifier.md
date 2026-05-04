@@ -46,11 +46,14 @@
 
 ## Routes
 
+- Treat `question` as the only default runtime control route; use it only when a true intent gap or missing hard constraint blocks safe progress.
+- If this workflow authors `blocked` or `failed`, treat them as ordinary application routes rather than framework defaults.
+
 ### Route selection rules
 - Choose `hypotheses_ranked` only if the top-ranked hypothesis is explicit, mitigation guidance is concrete, the validation plan is credible, and the machine-readable summary is valid and aligned to the prose analysis.
 - Choose `needs_rework` when the same analysis boundary still holds and the synthesis can be repaired locally.
 - Choose `needs_replan` when the incident boundary or evidence surface changed materially enough that framing must restart.
-- Use reserved routes only for genuine missing prerequisites or irrecoverable contradictions.
+- Use `question` only for genuine missing prerequisites or irrecoverable contradictions.
 
 ## Forbidden
 

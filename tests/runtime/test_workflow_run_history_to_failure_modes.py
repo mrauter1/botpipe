@@ -198,7 +198,7 @@ def test_workflow_run_history_to_failure_modes_prompt_readme_uses_shared_contrac
                 "`diagnostic_scope_framed`",
                 "`needs_rework`",
                 "`needs_replan`",
-                "Reserved routes are only",
+                "only default runtime control route",
             ),
         ),
         (
@@ -218,7 +218,7 @@ def test_workflow_run_history_to_failure_modes_prompt_readme_uses_shared_contrac
                 "`diagnostic_scope_framed`",
                 "`needs_rework`",
                 "`needs_replan`",
-                "Use reserved routes only",
+                "ordinary application routes rather than framework defaults",
             ),
         ),
         (
@@ -237,7 +237,7 @@ def test_workflow_run_history_to_failure_modes_prompt_readme_uses_shared_contrac
                 "`failure_modes_mapped`",
                 "`needs_rework`",
                 "`needs_replan`",
-                "Reserved routes are only",
+                "only default runtime control route",
             ),
         ),
         (
@@ -257,7 +257,7 @@ def test_workflow_run_history_to_failure_modes_prompt_readme_uses_shared_contrac
                 "`failure_modes_mapped`",
                 "`needs_rework`",
                 "`needs_replan`",
-                "Use reserved routes only",
+                "ordinary application routes rather than framework defaults",
             ),
         ),
         (
@@ -277,7 +277,7 @@ def test_workflow_run_history_to_failure_modes_prompt_readme_uses_shared_contrac
                 "`improvement_pressure_packaged`",
                 "`needs_rework`",
                 "`needs_replan`",
-                "Reserved routes are only",
+                "only default runtime control route",
             ),
         ),
         (
@@ -299,7 +299,7 @@ def test_workflow_run_history_to_failure_modes_prompt_readme_uses_shared_contrac
                 "`needs_rework`",
                 "`needs_replan`",
                 "`diagnostic_publication_only`",
-                "Use reserved routes only",
+                "ordinary application routes rather than framework defaults",
             ),
         ),
     ),

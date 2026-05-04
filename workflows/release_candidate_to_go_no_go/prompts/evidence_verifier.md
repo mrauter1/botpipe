@@ -43,11 +43,14 @@
 
 ## Routes
 
+- Treat `question` as the only default runtime control route; use it only when a true intent gap or missing hard constraint blocks safe progress.
+- If this workflow authors `blocked` or `failed`, treat them as ordinary application routes rather than framework defaults.
+
 ### Route selection rules
 - Choose `evidence_pack_ready` only if the evidence pack covers the declared release criteria, explicitly records missing proof, and leaves the assessor with a coherent basis for a recommendation.
 - Choose `needs_rework` when the same evidence boundary still holds and the pack can be strengthened locally.
 - Choose `needs_replan` when the release boundary or evidence plan changed materially enough that framing must be revisited.
-- Use reserved routes only for genuine missing prerequisites or irrecoverable contradictions.
+- Use `question` only for genuine missing prerequisites or irrecoverable contradictions.
 
 ## Forbidden
 

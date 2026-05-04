@@ -49,14 +49,17 @@
 
 ## Routes
 
+- Treat `question` as the only default runtime control route; use it only when a true intent gap or missing hard constraint blocks safe progress.
+- If this workflow authors `blocked` or `failed`, treat them as ordinary application routes rather than framework defaults.
+
 ### Route guidance
 - Return `failure_modes_mapped` only when the clusters, manifest, and recurring weak points are explicit and packaging-ready.
 - Return `needs_rework` when the same boundary still holds and the artifacts need local repair.
 - Return `needs_replan` when the selected workflow boundary or evidence window changed materially.
-- Use reserved routes only for true intent gaps, missing prerequisites, or irreconcilable contradictions.
+- Use `question` only for true intent gaps, missing prerequisites, or irreconcilable contradictions.
 
 ## Forbidden
 
 - Do not overwrite the mapped artifacts during verification.
 - Do not convert missing evidence into vague acceptance.
-- Use reserved routes only when the normal application routes no longer fit the current facts.
+- Use `question` only when the normal application routes no longer fit the current facts.

@@ -59,11 +59,14 @@
 
 ## Routes
 
+- Treat `question` as the only default runtime control route; use it only when a true intent gap or missing hard constraint blocks safe progress.
+- If this workflow authors `blocked` or `failed`, treat them as ordinary application routes rather than framework defaults.
+
 ### Route guidance for the verifier
 - `eval_cases_designed`: benchmark, edge, and adversarial coverage plus the rubric are explicit and packaging-ready.
 - `needs_rework`: the same case-design boundary still holds, but the matrices, manifest, or rubric need local repair.
 - `needs_replan`: the selected workflow or evaluation boundary changed materially and framing must restart.
-- Reserved routes are only for true intent gaps, missing prerequisites, or irreconcilable contradictions.
+- Treat `question` as the only default runtime control route; use it only for true intent gaps, missing prerequisites, or irreconcilable contradictions.
 
 ## Out Of Scope
 

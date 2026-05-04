@@ -44,11 +44,14 @@
 
 ## Routes
 
+- Treat `question` as the only default runtime control route; use it only when a true intent gap or missing hard constraint blocks safe progress.
+- If this workflow authors `blocked` or `failed`, treat them as ordinary application routes rather than framework defaults.
+
 ### Route selection rules
 - Choose `package_built` only if the generated layout matches the declared shape, the expected files and directories exist, and `build_report` accounts for the output set.
 - Choose `needs_rework` when the same design can be satisfied with local file or evidence fixes.
 - Choose `needs_replan` when the design contract itself is no longer implementable or coherent.
-- Use reserved routes only for genuine missing prerequisites or irrecoverable contradictions.
+- Use `question` only for genuine missing prerequisites or irrecoverable contradictions.
 
 ## Forbidden
 

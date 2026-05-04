@@ -47,11 +47,14 @@
 
 ## Routes
 
+- Treat `question` as the only default runtime control route; use it only when a true intent gap or missing hard constraint blocks safe progress.
+- If this workflow authors `blocked` or `failed`, treat them as ordinary application routes rather than framework defaults.
+
 ### Route guidance for the verifier
 - `investigation_framed`: the investigation boundary, objectives, and evidence intake plan are explicit and usable.
 - `needs_rework`: the same framing boundary still holds, but one or more framing artifacts need local repair.
 - `needs_replan`: the investigation trigger, downstream consumer, or evidence surface changed materially and must be reframed.
-- Reserved routes are only for true intent gaps, missing prerequisites, or irreconcilable contradictions.
+- Treat `question` as the only default runtime control route; use it only for true intent gaps, missing prerequisites, or irreconcilable contradictions.
 
 ## Out Of Scope
 

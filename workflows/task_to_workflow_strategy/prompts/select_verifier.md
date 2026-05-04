@@ -43,6 +43,9 @@
 
 ## Routes
 
+- Treat `question` as the only default runtime control route; use it only when a true intent gap or missing hard constraint blocks safe progress.
+- If this workflow authors `blocked` or `failed`, treat them as ordinary application routes rather than framework defaults.
+
 ### Route selection rules
 - Choose `strategy_selected` only if:
 - the child package compares at least three candidates when the portfolio size permits,
@@ -53,7 +56,7 @@
 - the decision explains why the route is being packaged instead of auto-executed here.
 - Choose `needs_rework` when the same selection boundary still holds and the artifacts can be corrected locally.
 - Choose `needs_replan` when the framing or comparison boundary changed materially enough that the task must be reframed.
-- Use reserved routes only for genuine missing prerequisites or irrecoverable contradictions.
+- Use `question` only for genuine missing prerequisites or irrecoverable contradictions.
 
 ## Forbidden
 

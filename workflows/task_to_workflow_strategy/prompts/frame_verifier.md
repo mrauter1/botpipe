@@ -36,11 +36,14 @@
 
 ## Routes
 
+- Treat `question` as the only default runtime control route; use it only when a true intent gap or missing hard constraint blocks safe progress.
+- If this workflow authors `blocked` or `failed`, treat them as ordinary application routes rather than framework defaults.
+
 ### Route selection rules
 - Choose `task_framed` only if the artifacts define the task trigger, sponsor, terminal outcome, why a workflow strategy is needed, and explicit selection criteria for `run_existing`, `compose`, `adapt`, and `create_new`.
 - Choose `needs_rework` when the same framing boundary still holds and the artifacts can be corrected locally.
 - Choose `needs_replan` when the trigger, sponsor, downstream consumer, or acceptance surface changed materially.
-- Use reserved routes only for real intent gaps, missing prerequisites, or irrecoverable contradictions.
+- Use `question` only for real intent gaps, missing prerequisites, or irrecoverable contradictions.
 
 ## Forbidden
 

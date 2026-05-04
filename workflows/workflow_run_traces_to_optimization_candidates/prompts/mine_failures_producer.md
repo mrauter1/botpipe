@@ -35,6 +35,9 @@
 
 ## Route Guidance
 
+- Treat `question` as the only default runtime control route; use it only when a true intent gap or missing hard constraint blocks safe progress.
+- If this workflow authors `blocked` or `failed`, treat them as ordinary application routes rather than framework defaults.
+
 - Use `failure_scenarios_mined` when at least one grounded failure scenario exists.
 - Use `no_failure_scenarios` when ranked targets do not produce defensible scenarios.
 - Use `needs_rework` for local scenario repair.

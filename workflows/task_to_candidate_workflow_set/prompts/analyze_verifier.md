@@ -46,11 +46,14 @@
 
 ## Routes
 
+- Treat `question` as the only default runtime control route; use it only when a true intent gap or missing hard constraint blocks safe progress.
+- If this workflow authors `blocked` or `failed`, treat them as ordinary application routes rather than framework defaults.
+
 ### Route guidance
 - Return `candidate_workflows_analyzed` only when the matrix, gap analysis, and posture form a coherent ranked candidate set.
 - Return `needs_rework` when the same analysis boundary still holds but the artifacts need local repair.
 - Return `needs_replan` when the framing, candidate boundary, or posture changed materially enough that the workflow must return to framing.
-- Use reserved routes only for true intent gaps, missing prerequisites, or irreconcilable contradictions.
+- Use `question` only for true intent gaps, missing prerequisites, or irreconcilable contradictions.
 
 ## Forbidden
 

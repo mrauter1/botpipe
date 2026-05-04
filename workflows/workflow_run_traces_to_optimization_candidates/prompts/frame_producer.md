@@ -32,10 +32,13 @@
 
 ## Route Guidance
 
+- Treat `question` as the only default runtime control route; use it only when a true intent gap or missing hard constraint blocks safe progress.
+- If this workflow authors `blocked` or `failed`, treat them as ordinary application routes rather than framework defaults.
+
 - Prefer `optimization_scope_framed` when the selected workflow identity, frame artifacts, and eligible trace evidence are coherent.
 - Prefer `no_eligible_trace_evidence` when the corpus shows zero eligible runs after deterministic filtering.
 - Prefer `needs_rework` only for local framing or evidence-interpretation issues.
-- Reserved routes are only `question`, `blocked`, and `failed`.
+- Treat `question` as the only default runtime control route.
 
 ## Forbidden
 

@@ -39,11 +39,14 @@
 
 ## Routes
 
+- Treat `question` as the only default runtime control route; use it only when a true intent gap or missing hard constraint blocks safe progress.
+- If this workflow authors `blocked` or `failed`, treat them as ordinary application routes rather than framework defaults.
+
 ### Route guidance
 - Return `adaptation_surface_analyzed` only when the fit assessment and step matrix are bounded, explicit, and packaging-ready.
 - Return `needs_rework` when the same analysis boundary still holds and the artifacts need local repair.
 - Return `needs_replan` when the selected workflow or execution boundary changed materially.
-- Use reserved routes only for true intent gaps, missing prerequisites, or irreconcilable contradictions.
+- Use `question` only for true intent gaps, missing prerequisites, or irreconcilable contradictions.
 
 ## Forbidden
 

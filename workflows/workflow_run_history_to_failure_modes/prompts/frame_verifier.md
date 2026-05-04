@@ -46,14 +46,17 @@
 
 ## Routes
 
+- Treat `question` as the only default runtime control route; use it only when a true intent gap or missing hard constraint blocks safe progress.
+- If this workflow authors `blocked` or `failed`, treat them as ordinary application routes rather than framework defaults.
+
 ### Route guidance
 - Return `diagnostic_scope_framed` only when the selected workflow, filtered run window, and acceptance boundary are explicit enough for failure-mode clustering.
 - Return `needs_rework` when the same boundary still holds and the artifacts need local repair.
 - Return `needs_replan` when the selected workflow, filtered history boundary, or diagnostic objective changed materially.
-- Use reserved routes only for true intent gaps, missing prerequisites, or irreconcilable contradictions.
+- Use `question` only for true intent gaps, missing prerequisites, or irreconcilable contradictions.
 
 ## Forbidden
 
 - Do not choose another workflow.
 - Do not ask for a replan when local repair is sufficient.
-- Use reserved routes only when the normal application routes no longer fit the current facts.
+- Use `question` only when the normal application routes no longer fit the current facts.

@@ -28,6 +28,9 @@
 
 ## Route Guidance
 
+- Treat `question` as the only default runtime control route; use it only when a true intent gap or missing hard constraint blocks safe progress.
+- If this workflow authors `blocked` or `failed`, treat them as ordinary application routes rather than framework defaults.
+
 - Use `producer_candidates_ready` when the producer candidates are grounded and scoped correctly.
 - Use `producer_pass_not_applicable` when the evidence shows producer changes are not justified.
 - Use `needs_rework` for local candidate defects.

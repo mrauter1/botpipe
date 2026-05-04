@@ -54,11 +54,14 @@
 
 ## Routes
 
+- Treat `question` as the only default runtime control route; use it only when a true intent gap or missing hard constraint blocks safe progress.
+- If this workflow authors `blocked` or `failed`, treat them as ordinary application routes rather than framework defaults.
+
 ### Route selection rules
 - Choose `closure_package_ready` only if the package, communication draft, and closure-evidence contract accurately reflect the evidence and remediation plan and do not imply unearned closure.
 - Choose `needs_rework` when the same packaging boundary still holds and the artifacts can be repaired locally.
 - Choose `needs_replan` when the remediation or verification story changed materially enough that planning must be revisited.
-- Use reserved routes only for genuine missing prerequisites or irrecoverable contradictions.
+- Use `question` only for genuine missing prerequisites or irrecoverable contradictions.
 
 ## Forbidden
 

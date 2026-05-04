@@ -194,7 +194,7 @@ def test_workflow_portfolio_to_operating_system_prompt_readme_uses_shared_contra
                 "`portfolio_governance_framed`",
                 "`needs_rework`",
                 "`needs_replan`",
-                "Reserved routes are only",
+                "only default runtime control route",
             ),
         ),
         (
@@ -214,7 +214,7 @@ def test_workflow_portfolio_to_operating_system_prompt_readme_uses_shared_contra
                 "`portfolio_governance_framed`",
                 "`needs_rework`",
                 "`needs_replan`",
-                "Use reserved routes only",
+                "ordinary application routes rather than framework defaults",
             ),
         ),
         (
@@ -233,7 +233,7 @@ def test_workflow_portfolio_to_operating_system_prompt_readme_uses_shared_contra
                 "`portfolio_operating_model_analyzed`",
                 "`needs_rework`",
                 "`needs_replan`",
-                "Reserved routes are only",
+                "only default runtime control route",
             ),
         ),
         (
@@ -253,7 +253,7 @@ def test_workflow_portfolio_to_operating_system_prompt_readme_uses_shared_contra
                 "`portfolio_operating_model_analyzed`",
                 "`needs_rework`",
                 "`needs_replan`",
-                "Use reserved routes only",
+                "ordinary application routes rather than framework defaults",
             ),
         ),
         (
@@ -274,7 +274,7 @@ def test_workflow_portfolio_to_operating_system_prompt_readme_uses_shared_contra
                 "`needs_rework`",
                 "`needs_replan`",
                 "`operating_system_publication_only`",
-                "Reserved routes are only",
+                "only default runtime control route",
             ),
         ),
         (
@@ -296,7 +296,7 @@ def test_workflow_portfolio_to_operating_system_prompt_readme_uses_shared_contra
                 "`needs_rework`",
                 "`needs_replan`",
                 "`operating_system_publication_only`",
-                "Use reserved routes only",
+                "ordinary application routes rather than framework defaults",
             ),
         ),
     ),

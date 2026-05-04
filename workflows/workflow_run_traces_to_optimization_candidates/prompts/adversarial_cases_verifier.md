@@ -27,6 +27,9 @@
 
 ## Route Guidance
 
+- Treat `question` as the only default runtime control route; use it only when a true intent gap or missing hard constraint blocks safe progress.
+- If this workflow authors `blocked` or `failed`, treat them as ordinary application routes rather than framework defaults.
+
 - Use `adversarial_cases_ready` when the candidate cases are grounded and explicit.
 - Use `adversarial_generation_skipped` when generation is disabled.
 - Use `needs_rework` for local candidate defects.

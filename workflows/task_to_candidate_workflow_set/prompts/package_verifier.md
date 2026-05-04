@@ -52,11 +52,14 @@
 
 ## Routes
 
+- Treat `question` as the only default runtime control route; use it only when a true intent gap or missing hard constraint blocks safe progress.
+- If this workflow authors `blocked` or `failed`, treat them as ordinary application routes rather than framework defaults.
+
 ### Route guidance
 - Return `candidate_workflow_set_ready` only when the package, summary, and next-action artifact are aligned and publication-safe.
 - Return `needs_rework` when the same ranked candidate set still stands but the packaging artifacts need local repair.
 - Return `needs_replan` when packaging revealed that the ranked candidate set, posture, or downstream handoff changed materially.
-- Use reserved routes only for true intent gaps, missing prerequisites, or irreconcilable contradictions.
+- Use `question` only for true intent gaps, missing prerequisites, or irreconcilable contradictions.
 
 ## Forbidden
 

@@ -57,11 +57,14 @@
 
 ## Routes
 
+- Treat `question` as the only default runtime control route; use it only when a true intent gap or missing hard constraint blocks safe progress.
+- If this workflow authors `blocked` or `failed`, treat them as ordinary application routes rather than framework defaults.
+
 ### Route guidance for the verifier
 - `remediation_planned`: the selected remediation, verification plan, rollout plan, rollback-safety plan, and machine-readable summary are coherent and usable.
 - `needs_rework`: the same remediation-planning boundary still holds, but one or more plan artifacts need local repair.
 - `needs_replan`: the assessment conclusion or fix strategy changed materially and the finding must be reassessed before planning continues.
-- Reserved routes are only for genuine intent gaps, missing prerequisites, or irreconcilable contradictions.
+- Treat `question` as the only default runtime control route; use it only for genuine intent gaps, missing prerequisites, or irreconcilable contradictions.
 
 ## Out Of Scope
 

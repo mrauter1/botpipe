@@ -75,11 +75,14 @@
 
 ## Routes
 
+- Treat `question` as the only default runtime control route; use it only when a true intent gap or missing hard constraint blocks safe progress.
+- If this workflow authors `blocked` or `failed`, treat them as ordinary application routes rather than framework defaults.
+
 ### Route guidance for the verifier
 - `workflow_eval_suite_ready`: the suite package, summary, and next action are complete and aligned for publication.
 - `needs_rework`: the same evaluation-suite boundary still holds, but the package artifacts need local repair.
 - `needs_replan`: packaging revealed that the evaluation surface changed materially and case design must be revisited.
-- Reserved routes are only for true intent gaps, missing prerequisites, or irreconcilable contradictions.
+- Treat `question` as the only default runtime control route; use it only for true intent gaps, missing prerequisites, or irreconcilable contradictions.
 
 ## Out Of Scope
 

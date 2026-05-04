@@ -63,11 +63,14 @@
 
 ## Routes
 
+- Treat `question` as the only default runtime control route; use it only when a true intent gap or missing hard constraint blocks safe progress.
+- If this workflow authors `blocked` or `failed`, treat them as ordinary application routes rather than framework defaults.
+
 ### Route guidance for the verifier
 - `workflow_refinement_applied`: the candidate surface and build artifacts are complete and aligned for evaluation.
 - `needs_rework`: the same implementation boundary still holds, but the candidate files or build artifacts need local repair.
 - `needs_replan`: implementation exposed a material change to the selected workflow boundary or accepted plan.
-- Reserved routes are only for true intent gaps, missing prerequisites, or irreconcilable contradictions.
+- Treat `question` as the only default runtime control route; use it only for true intent gaps, missing prerequisites, or irreconcilable contradictions.
 
 ## Out Of Scope
 

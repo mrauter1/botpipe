@@ -33,6 +33,9 @@
 
 ## Route Guidance
 
+- Treat `question` as the only default runtime control route; use it only when a true intent gap or missing hard constraint blocks safe progress.
+- If this workflow authors `blocked` or `failed`, treat them as ordinary application routes rather than framework defaults.
+
 - Use `targets_ranked` when at least one defensible target is ranked.
 - Use `insufficient_evidence` when the corpus is too thin for credible ranking.
 - Use `needs_rework` only for local ranking repair.

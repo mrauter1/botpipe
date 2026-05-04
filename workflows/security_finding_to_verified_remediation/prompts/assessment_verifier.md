@@ -47,11 +47,14 @@
 
 ## Routes
 
+- Treat `question` as the only default runtime control route; use it only when a true intent gap or missing hard constraint blocks safe progress.
+- If this workflow authors `blocked` or `failed`, treat them as ordinary application routes rather than framework defaults.
+
 ### Route selection rules
 - Choose `finding_assessed` only if the exploit analysis is evidence-backed, the affected surface is explicit, root-cause reasoning is coherent, and remediation options are compared clearly enough for planning.
 - Choose `needs_rework` when the same assessment boundary still holds and the artifacts can be strengthened locally.
 - Choose `needs_replan` when the evidence boundary or remediation framing changed materially enough that the adopted evidence pack is no longer sufficient as the planning baseline.
-- Use reserved routes only for genuine missing prerequisites or irrecoverable contradictions.
+- Use `question` only for genuine missing prerequisites or irrecoverable contradictions.
 
 ## Forbidden
 

@@ -62,14 +62,17 @@
 
 ## Routes
 
+- Treat `question` as the only default runtime control route; use it only when a true intent gap or missing hard constraint blocks safe progress.
+- If this workflow authors `blocked` or `failed`, treat them as ordinary application routes rather than framework defaults.
+
 ### Route guidance
 - Return `portfolio_operating_system_ready` only when the package, JSON summary, and next-actions artifact are aligned and publication-ready.
 - Return `needs_rework` when the same packaging boundary still holds and the artifacts need local repair.
 - Return `needs_replan` when the package no longer matches the analyzed operating model.
-- Use reserved routes only for true intent gaps, missing prerequisites, or irreconcilable contradictions.
+- Use `question` only for true intent gaps, missing prerequisites, or irreconcilable contradictions.
 
 ## Forbidden
 
 - Do not overwrite the package artifacts during verification.
 - Do not ask for a replan when local repair is sufficient.
-- Use reserved routes only when the normal application routes no longer fit the current facts.
+- Use `question` only when the normal application routes no longer fit the current facts.
