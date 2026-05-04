@@ -261,13 +261,13 @@ def _render_control_response(schema: Mapping[str, Any] | None) -> str:
         json.dumps(
             {
                 "tag": "<one available route>",
-                "reason": "<short reason>",
                 "payload": {},
             },
             indent=2,
         ),
         "```",
         payload_rule,
+        "`reason` is optional and defaults to an empty string when omitted.",
         "If the selected route is `question`, include a non-empty top-level `question` string.",
         "",
         "#### Payload schema",

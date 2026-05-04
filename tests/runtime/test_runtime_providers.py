@@ -205,21 +205,21 @@ def test_build_session_binding_omits_per_turn_usage_fields_from_persisted_sessio
 
 
 def test_parse_outcome_json_accepts_plain_object() -> None:
-    outcome = parse_outcome_json('{"tag":"done","reason":"ok","payload":{"x":1}}')
+    outcome = parse_outcome_json('{"tag":"done","payload":{"x":1}}')
 
     assert outcome.tag == "done"
-    assert outcome.reason == "ok"
+    assert outcome.reason == ""
     assert outcome.payload == {"x": 1}
-    assert outcome.raw_output == '{"tag":"done","reason":"ok","payload":{"x":1}}'
+    assert outcome.raw_output == '{"tag":"done","payload":{"x":1}}'
 
 
 def test_parse_outcome_json_accepts_fenced_json_block() -> None:
-    raw = '```json\n{"tag":"question","reason":"Need user input.","question":"Proceed?"}\n```'
+    raw = '```json\n{"tag":"question","question":"Proceed?"}\n```'
 
     outcome = parse_outcome_json(raw)
 
     assert outcome.tag == "question"
-    assert outcome.reason == "Need user input."
+    assert outcome.reason == ""
     assert outcome.question == "Proceed?"
     assert outcome.payload == {}
     assert outcome.raw_output == raw
@@ -235,9 +235,17 @@ def test_parse_outcome_json_rejects_missing_tag() -> None:
         parse_outcome_json('{"reason":"missing"}')
 
 
-def test_parse_outcome_json_rejects_missing_reason() -> None:
-    with pytest.raises(ProviderExecutionError, match="must contain a non-empty string 'reason'"):
-        parse_outcome_json('{"tag":"done"}')
+def test_parse_outcome_json_accepts_missing_reason_for_authored_routes() -> None:
+    blocked = parse_outcome_json('{"tag":"blocked"}')
+    failed = parse_outcome_json('{"tag":"failed"}')
+
+    assert blocked.reason == ""
+    assert failed.reason == ""
+
+
+def test_parse_outcome_json_rejects_question_without_question_field() -> None:
+    with pytest.raises(ProviderExecutionError, match="must contain a non-empty string 'question'"):
+        parse_outcome_json('{"tag":"question"}')
 
 
 def test_parse_outcome_json_rejects_non_object_payload() -> None:

@@ -188,8 +188,6 @@ def definition_default_route_summaries() -> dict[str, str]:
         "needs_rework": "Verifier requested local repair within the same work boundary.",
         "needs_replan": "The current work boundary appears incorrect and replanning is needed.",
         "question": "Execution is awaiting user input.",
-        "blocked": "Execution is awaiting input because the step is blocked.",
-        "failed": "Execution failed.",
     }
 
 

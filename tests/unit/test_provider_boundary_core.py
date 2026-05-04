@@ -175,8 +175,8 @@ def test_render_provider_turn_renders_markdown_contract_without_raw_output() -> 
     assert "Effective required writes" in turn.prompt_text
     assert "### Control response" in turn.prompt_text
     assert '"tag": "<one available route>"' in turn.prompt_text
-    assert '"reason": "<short reason>"' in turn.prompt_text
     assert '"payload": {}' in turn.prompt_text
+    assert "`reason` is optional and defaults to an empty string when omitted." in turn.prompt_text
     assert "If the selected route is `question`" in turn.prompt_text
     assert "If the selected route is `blocked` or `failed`" not in turn.prompt_text
     assert "#### Payload schema" in turn.prompt_text
@@ -504,9 +504,10 @@ def test_fake_provider_can_emit_usage() -> None:
     assert llm_response.usage == llm_usage
 
 
-def test_parse_outcome_json_requires_reason_field() -> None:
-    with pytest.raises(ProviderExecutionError, match="non-empty string 'reason'"):
-        parse_outcome_json('{"tag":"done"}')
+def test_parse_outcome_json_defaults_missing_reason_to_empty_string() -> None:
+    outcome = parse_outcome_json('{"tag":"done"}')
+
+    assert outcome.reason == ""
 
 
 def test_rendered_llm_provider_returns_producer_response() -> None:

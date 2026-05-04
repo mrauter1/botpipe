@@ -28,6 +28,7 @@ def collect_artifact_inventory(definition: Any) -> dict[str, ArtifactInventoryRe
     workflow_level_names_to_identity: dict[str, int] = {}
     qualified_names_to_identity: dict[str, int] = {}
     records_by_identity: dict[int, dict[str, Any]] = {}
+    steps_by_name = {step.name: step for step in definition.steps}
 
     def register(
         artifact: Artifact,
@@ -48,16 +49,19 @@ def collect_artifact_inventory(definition: Any) -> dict[str, ArtifactInventoryRe
         workflow_level_declared = bool(existing_record and existing_record["workflow_level"])
         allow_producer_rebind = bool(
             existing_record
+            and not workflow_level_declared
             and not existing_record["producer_steps"]
             and existing_record["owner_step"] is None
             and producer_step is not None
         )
 
-        if producer_step is not None and artifact.owner_step is None and (
-            not workflow_level_declared or allow_producer_rebind
-        ):
+        if workflow_level or workflow_level_declared:
+            artifact.owner_step = None
+            artifact.owner = None
+            artifact.qualified_name = name
+        elif producer_step is not None and artifact.owner_step is None:
             artifact.bind_owner_step(producer_step)
-            artifact.owner = next(step for step in definition.steps if step.name == producer_step)
+            artifact.owner = steps_by_name[producer_step]
         elif artifact.qualified_name is None:
             artifact.qualified_name = name
 
@@ -69,31 +73,33 @@ def collect_artifact_inventory(definition: Any) -> dict[str, ArtifactInventoryRe
         if workflow_level:
             existing_identity = workflow_level_names_to_identity.get(name)
             if existing_identity is not None and existing_identity != artifact_id:
-                existing_record = records_by_identity.get(existing_identity)
-                if producer_step is not None and existing_record is not None:
-                    _raise_artifact_ownership_ambiguity_error(
-                        artifact_name=name,
-                        workflow_level_record=existing_record,
-                        producer_qualified_name=qualified_name,
-                        producer_steps=(producer_step,),
-                    )
-                raise WorkflowValidationError(f"duplicate artifact name {name!r}")
+                if producer_step is None:
+                    raise WorkflowValidationError(f"duplicate artifact name {name!r}")
+                _raise_workflow_level_artifact_conflict_error(
+                    artifact_name=name,
+                    workflow_level_record=records_by_identity.get(existing_identity),
+                    conflicting_artifact=artifact,
+                    conflicting_qualified_name=qualified_name,
+                    producer_step=producer_step,
+                )
             workflow_level_names_to_identity[name] = artifact_id
         elif producer_step is not None:
             existing_identity = workflow_level_names_to_identity.get(name)
             if existing_identity is not None and existing_identity != artifact_id:
-                existing_record = records_by_identity.get(existing_identity)
-                if existing_record is not None:
-                    producer_steps = tuple(existing_record.get("producer_steps", ())) + (producer_step,)
-                    _raise_artifact_ownership_ambiguity_error(
-                        artifact_name=name,
-                        workflow_level_record=existing_record,
-                        producer_qualified_name=qualified_name,
-                        producer_steps=producer_steps,
-                    )
+                _raise_workflow_level_artifact_conflict_error(
+                    artifact_name=name,
+                    workflow_level_record=records_by_identity.get(existing_identity),
+                    conflicting_artifact=artifact,
+                    conflicting_qualified_name=qualified_name,
+                    producer_step=producer_step,
+                )
         existing_identity = qualified_names_to_identity.get(qualified_name)
         if existing_identity is not None and existing_identity != artifact_id:
-            raise WorkflowValidationError(f"duplicate qualified artifact name {qualified_name!r}")
+            _raise_duplicate_qualified_artifact_name_error(
+                qualified_name=qualified_name,
+                existing_record=records_by_identity.get(existing_identity),
+                conflicting_artifact=artifact,
+            )
         qualified_names_to_identity[qualified_name] = artifact_id
         record = records_by_identity.setdefault(
             artifact_id,
@@ -123,12 +129,6 @@ def collect_artifact_inventory(definition: Any) -> dict[str, ArtifactInventoryRe
             record["workflow_level"] = True
         if producer_step is not None and producer_step not in record["producer_steps"]:
             record["producer_steps"].append(producer_step)
-        if (
-            record["workflow_level"]
-            and record["producer_steps"]
-            and getattr(record["artifact"], "role", None) != "managed"
-        ):
-            _raise_dual_role_artifact_error(record)
 
     for attr_name, artifact in definition.workflow_artifacts.items():
         register(artifact, fallback_name=attr_name, workflow_level=True)
@@ -158,33 +158,54 @@ def collect_artifact_inventory(definition: Any) -> dict[str, ArtifactInventoryRe
         for record in records_by_identity.values()
     }
 
-
-def _raise_dual_role_artifact_error(record: dict[str, Any]) -> None:
-    _raise_artifact_ownership_ambiguity_error(
-        artifact_name=record["name"],
-        workflow_level_record=record,
-        producer_qualified_name=record["qualified_name"],
-        producer_steps=tuple(record["producer_steps"]),
-    )
-
-
-def _raise_artifact_ownership_ambiguity_error(
+def _raise_workflow_level_artifact_conflict_error(
     *,
     artifact_name: str,
-    workflow_level_record: dict[str, Any],
-    producer_qualified_name: str,
-    producer_steps: tuple[str, ...],
+    workflow_level_record: dict[str, Any] | None,
+    conflicting_artifact: Artifact,
+    conflicting_qualified_name: str,
+    producer_step: str | None,
 ) -> None:
+    if workflow_level_record is None:
+        raise WorkflowValidationError(f"duplicate artifact name {artifact_name!r}")
+    workflow_artifact = workflow_level_record["artifact"]
     workflow_qualified_name = workflow_level_record.get("qualified_name", artifact_name)
-    producers = ", ".join(repr(step_name) for step_name in producer_steps) or "<none>"
-    raise WorkflowValidationError(
-        f"artifact {artifact_name!r} has ambiguous ownership between the workflow-level declaration and produced "
-        f"step outputs; workflow-level declaration: workflow class attribute {artifact_name!r} "
-        f"(qualified name {workflow_qualified_name!r}); produced artifact qualified name {producer_qualified_name!r}; "
-        f"producer step names: {producers}. Recommended fix: For external/input artifacts: keep as workflow class "
-        f"attribute and remove from step writes. For produced artifacts: keep as step writes only and do not assign "
-        f"as workflow class attribute. For managed artifacts: declare them with Artifact.managed(...) or role='managed'."
+    producer_suffix = (
+        f" step output {conflicting_qualified_name!r} from step {producer_step!r}"
+        if producer_step is not None
+        else f" declaration {conflicting_qualified_name!r}"
     )
+    raise WorkflowValidationError(
+        f"artifact {artifact_name!r} is declared by multiple artifact objects with the same public name; "
+        f"workflow-level declaration {workflow_qualified_name!r} uses "
+        f"{_artifact_signature(workflow_artifact)}, while{producer_suffix} uses "
+        f"{_artifact_signature(conflicting_artifact)}. Recommended fix: reuse the same Artifact object when a "
+        "workflow-level artifact is intentionally written by steps, or rename one of the declarations."
+    )
+
+
+def _raise_duplicate_qualified_artifact_name_error(
+    *,
+    qualified_name: str,
+    existing_record: dict[str, Any] | None,
+    conflicting_artifact: Artifact,
+) -> None:
+    if existing_record is None:
+        raise WorkflowValidationError(f"duplicate qualified artifact name {qualified_name!r}")
+    raise WorkflowValidationError(
+        f"artifact qualified name {qualified_name!r} is declared by multiple artifact objects; existing "
+        f"declaration uses {_artifact_signature(existing_record['artifact'])}, while the conflicting declaration "
+        f"uses {_artifact_signature(conflicting_artifact)}. Recommended fix: share one Artifact object for the "
+        "same artifact identity or rename one declaration."
+    )
+
+
+def _artifact_signature(artifact: Artifact) -> str:
+    parts = [f"template={artifact.template!r}", f"kind={artifact.kind!r}"]
+    if artifact.schema is not None:
+        schema_name = getattr(artifact.schema, "__name__", type(artifact.schema).__name__)
+        parts.append(f"schema={schema_name!r}")
+    return ", ".join(parts)
 
 
 def public_artifact_inventory(inventory: dict[str, ArtifactInventoryRecord]) -> dict[str, ArtifactInventoryRecord]:

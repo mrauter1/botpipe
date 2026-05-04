@@ -18,6 +18,7 @@ from .extensions import WorkflowExtension
 from .errors import RoutingError, WorkflowCompilationError
 from .inventory import ArtifactInventoryRecord, collect_artifact_inventory, public_artifact_inventory, resolve_artifact_reference, resolve_optional_read_reference
 from .lowering import (
+    _fallback_route_summary,
     compile_expected_output_contract,
     normalize_step_route_metadata,
     step_authored_route_tags,
@@ -589,7 +590,13 @@ def _compile_routes(definition: WorkflowDefinition) -> dict[str, dict[str, Compi
 def _compile_global_routes(definition: WorkflowDefinition) -> dict[str, CompiledRoute]:
     source_routes = definition.transitions.get(GLOBAL, {})
     return {
-        tag: _compile_route(None, GLOBAL, tag, destination)
+        tag: _compile_route(
+            None,
+            GLOBAL,
+            tag,
+            destination,
+            summary=_fallback_route_summary(GLOBAL, tag, destination),
+        )
         for tag, destination in source_routes.items()
     }
 
