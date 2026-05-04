@@ -3,3 +3,5 @@ Preserve the specification's two-milestone order even though the repository alre
 Treat RuntimeInteractionPolicy, ControlRoutes, Context.ensure_selection, Effects/WorklistEffect, and ValidationResult/validation_step as existing foundations to reconcile in place rather than replace with parallel abstractions.
 Default blocked/failed route injection removal is an intentional breaking change that must be reflected together in engine behavior, inspection/static-graph payloads, CLI-facing metadata, and tests.
 Checkpoint compatibility is required for missing or null worklist_selections; resume must not materialize undeclared or unused worklists just to restore legacy checkpoints.
+<autoloop-decisions-header version="1" block_seq="2" owner="planner" phase_id="task-global" pair="plan" turn_seq="2" run_id="run-20260504T112330Z-32d8eec3" ts="2026-05-04T11:29:35.712688+00:00" />
+Milestone A must explicitly preserve source-policy-driven lazy worklist first-use semantics: ensure/scaffold-capable sources may create backing data, while required external inputs may fail at first use; the framework must not replace that with a blanket missing-source failure rule.
