@@ -8,3 +8,6 @@ Explicit filesystem references include path-separator, .py, and .toml forms; out
 <autoloop-decisions-header version="1" block_seq="3" owner="implementer" phase_id="catalog-root-refactor" pair="implement" turn_seq="1" run_id="run-20260504T192206Z-d3f7e940" ts="2026-05-04T19:29:25.249823+00:00" />
 Phase-local validation uses a temporary injected autoloop package path in focused tests so package-root discovery/import semantics can be exercised before built-in workflows are relocated under autoloop/workflows.
 This phase adds the autoloop.workflows namespace package and canonical catalog/resolution semantics, but intentionally leaves built-in workflow relocation, CLI surface changes, and wheel packaging work for later phases.
+<autoloop-decisions-header version="1" block_seq="4" owner="implementer" phase_id="catalog-root-refactor" pair="implement" turn_seq="2" run_id="run-20260504T192206Z-d3f7e940" ts="2026-05-04T19:45:43.256242+00:00" />
+Imported package-class references must reconcile through include_shadowed catalog entries matched by concrete source paths so explicit package imports remain stable even when a workspace workflow shadows the same bare name.
+Manifest required-field validation must run even when aliases are omitted, because aliases are optional normalization data rather than a control-flow shortcut.

@@ -368,3 +368,48 @@ Focused validation is green: `.venv_phase/bin/python -m py_compile autoloop/core
 <loop-control>
 {"schema":"docloop.loop_control/v1","kind":"promise","promise":"COMPLETE"}
 </loop-control>
+
+
+---
+run_id=run-20260504T192206Z-d3f7e940 | entry=session_turn | pair=implement | phase=verifier | cycle=2 | attempt=1 | thread_id=019df477-80fb-7890-8bef-7c9700065afc
+---
+provider=codex
+mode=resume
+template=/home/rauter/.local/share/pipx/venvs/autoloop/lib/python3.12/site-packages/autoloop/templates/implement_verifier.md
+session_id=019df477-80fb-7890-8bef-7c9700065afc
+
+
+---
+run_id=run-20260504T192206Z-d3f7e940 | entry=phase_output | pair=implement | phase=verifier | process=codex-agent | cycle=2 | attempt=1 | thread_id=019df477-80fb-7890-8bef-7c9700065afc
+---
+I’m re-reviewing the two previously blocked paths plus the focused test coverage, then I’ll update the phase review artifacts to either clear the phase or carry forward any remaining risk.
+
+The fixes match the prior findings structurally. I’m rerunning the focused validation and a minimal shadowing repro now to make sure the green path is real before I clear the phase.
+
+The repros are clean and the focused suite is still green. I’m marking the phase complete in the criteria artifact and appending a re-review disposition to the feedback artifact so the old blocking notes aren’t misread as still open.
+
+The review artifacts now reflect the cleared state. I’m doing a quick readback to ensure the criteria are fully checked and the feedback log records the re-review outcome without introducing a new finding.
+
+Scope considered
+
+Phase-local re-review of the `catalog-root-refactor` changes only: the two previously blocked code paths in `autoloop/core/workflow_catalog.py` and `autoloop/runtime/loader.py`, the focused regression tests in `tests/runtime/test_workflow_catalog_roots.py`, and the active phase artifacts including `implementation_notes.md` and `decisions.txt`.
+
+What I analyzed
+
+I re-read the prior blocking findings, inspected the patched manifest parser and imported-class resolution logic, checked the updated implementation notes and decisions ledger for drift, and reran the focused validation plus two concrete reproductions for the previously failing scenarios.
+
+What I reviewed
+
+`read_workflow_manifest()` now validates required `name`/`title`/`description` fields even when `aliases` is omitted, which closes the manifest-contract hole from `IMP-001`. `_resolve_imported_class_reference()` now reconciles imported package classes through the concrete include-shadowed catalog entry for the source file, which preserves explicit package imports under workspace shadowing and closes `IMP-002`. The focused phase suite passed with `14` tests, and the ad hoc repros now return `WorkflowCatalogManifestError` for the invalid manifest case and `package package_demo` for the shadowed imported-class case.
+
+Key findings / decisions
+
+No additional findings remain for this phase. I updated the review artifacts to mark the phase `COMPLETE` and appended a re-review disposition noting that `IMP-001` and `IMP-002` are resolved.
+
+Open issues / next step
+
+This phase is clear for acceptance. The remaining work belongs to later phases already called out in the phase notes: built-in workflow relocation, CLI/help/json updates, runtime metadata expansion, and packaging/wheel verification.
+
+<loop-control>
+{"schema":"docloop.loop_control/v1","kind":"promise","promise":"COMPLETE"}
+</loop-control>
