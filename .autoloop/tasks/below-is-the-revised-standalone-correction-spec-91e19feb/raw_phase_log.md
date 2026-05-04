@@ -1549,3 +1549,60 @@ Open issues / next step
 <loop-control>
 {"schema":"docloop.loop_control/v1","kind":"promise","promise":"COMPLETE"}
 </loop-control>
+
+
+---
+run_id=run-20260504T163613Z-cf62c11b | entry=session_turn | pair=test | phase=producer | cycle=1 | attempt=1 | thread_id=019df3e1-7db9-7150-ac0b-aa1c60526b51
+---
+provider=codex
+mode=resume
+template=/home/rauter/.local/share/pipx/venvs/autoloop/lib/python3.12/site-packages/autoloop/templates/test_producer.md
+session_id=019df3e1-7db9-7150-ac0b-aa1c60526b51
+
+
+---
+run_id=run-20260504T163613Z-cf62c11b | entry=phase_output | pair=test | phase=producer | process=codex-agent | cycle=1 | attempt=1 | thread_id=019df3e1-7db9-7150-ac0b-aa1c60526b51
+---
+I’m checking the current phase test artifacts and the changed runtime helper/tests to decide whether the existing coverage is enough or whether a focused regression test should be added for the compile-cache isolation seam. After that I’ll update the phase strategy and feedback artifacts.
+
+The existing eval-suite failure test now passes because the helper recompiles fresh, but it only proves the end state. I’m adding one explicit regression test that seeds the compile cache before monkeypatching the workflow module, so a future helper regression will fail in a single test instead of only by full-file ordering.
+
+I added a self-contained cache-regression test in the eval-suite runtime file and folded the invalid-manifest writer into a helper to avoid duplicated setup. I’m running the targeted eval-suite file plus the shared prompt-body baseline before I update the phase test artifacts.
+
+The new regression test is green in-file. I’m doing one broader pass over the AC-3 suite set as a final check that the added coverage didn’t destabilize the runtime package tests.
+
+I’m using the broader AC-3 runtime set as the stabilization check for the new self-contained regression. While that runs, I’m updating the phase artifacts with a behavior-to-test map that calls out the prompt-body baseline, the shipped route-model assertions, and the new cache-order guard.
+
+Scope considered
+
+- Request-relevant test surface for prompt-body route wording and runtime prompt-package assertions.
+- The changed helper seam in [tests/runtime/workflow_contract_helpers.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/tests/runtime/workflow_contract_helpers.py:1) and its highest-risk consumer file [tests/runtime/test_workflow_to_eval_suite.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/tests/runtime/test_workflow_to_eval_suite.py:1).
+- Phase-local test artifacts [test_strategy.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/below-is-the-revised-standalone-correction-spec-91e19feb/runs/run-20260504T163613Z-cf62c11b/artifacts/test/phases/align-prompt-route-wording/test_strategy.md:1) and [feedback.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/below-is-the-revised-standalone-correction-spec-91e19feb/runs/run-20260504T163613Z-cf62c11b/artifacts/test/phases/align-prompt-route-wording/feedback.md:1).
+
+What I analyzed
+
+- The shared prompt-body baseline added for AC-4.
+- The runtime prompt-package suites already updated for the shipped route model.
+- The remaining regression risk from helper-driven step invocation after workflow-module monkeypatching, which previously only surfaced as a full-file cache-order failure.
+
+What I changed
+
+- Added a focused regression test in [tests/runtime/test_workflow_to_eval_suite.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/tests/runtime/test_workflow_to_eval_suite.py:1124) that:
+  - seeds the workflow compile cache,
+  - monkeypatches `write_validated_eval_case_manifest`,
+  - asserts `invoke_python_step(...)` recompiles fresh handlers and still raises `ValidationError` for missing `case_ids`.
+- Deduplicated the invalid validated-manifest writer setup in that file with a local factory helper.
+- Updated [test_strategy.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/below-is-the-revised-standalone-correction-spec-91e19feb/runs/run-20260504T163613Z-cf62c11b/artifacts/test/phases/align-prompt-route-wording/test_strategy.md:1) with an explicit AC-to-test coverage map, preserved invariants, edge/failure paths, and flake stabilization notes.
+- Appended a concise summary entry to [feedback.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/below-is-the-revised-standalone-correction-spec-91e19feb/runs/run-20260504T163613Z-cf62c11b/artifacts/test/phases/align-prompt-route-wording/feedback.md:1).
+
+Key findings / decisions
+
+- The right regression guard for the helper change is a self-contained test that preloads the compile cache before monkeypatching, not reliance on whole-file test ordering.
+- Validation passed:
+  - `/tmp/autoloop-prompt-route-verify-sF91JR/bin/python -m pytest tests/test_architecture_baseline_docs.py::test_workflow_prompt_bodies_use_question_only_runtime_control_wording -q` → `1 passed`
+  - `/tmp/autoloop-prompt-route-verify-sF91JR/bin/python -m pytest tests/runtime/test_workflow_to_eval_suite.py -q` → `30 passed`
+  - `/tmp/autoloop-prompt-route-verify-sF91JR/bin/python -m pytest tests/runtime/test_company_operation_to_recursive_improvement_cycle.py tests/runtime/test_workflow_portfolio_to_operating_system.py tests/runtime/test_workflow_run_history_to_failure_modes.py tests/runtime/test_workflow_and_eval_to_refined_workflow_package.py tests/runtime/test_workflow_package_to_composable_building_blocks.py tests/runtime/test_workflow_to_eval_suite.py tests/runtime/test_release_candidate_to_go_no_go.py -q` → `183 passed`
+
+Open issues / next step
+
+- No open test-author issues remain within this phase scope.

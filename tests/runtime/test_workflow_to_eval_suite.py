@@ -1121,23 +1121,24 @@ def test_workflow_to_eval_suite_publish_rejects_invalid_selected_workflow_refere
         invoke_python_step(workflow_pkg.WorkflowToEvalSuite, "publish_workflow_eval_suite", ctx)
 
 
-def test_workflow_to_eval_suite_publish_rejects_validated_manifest_missing_typed_required_field(
-    tmp_path: Path,
-    monkeypatch,
-) -> None:
-    workflow_pkg, state, ctx = _make_publish_eval_suite_test_context(tmp_path, monkeypatch)
-    workflow_module = importlib.import_module("workflows.workflow_to_eval_suite.workflow")
-
+def _write_invalid_validated_manifest_factory(
+    ctx: Context,
+    *,
+    run_id: str,
+    selected_workflow_name: str,
+    task_id: str,
+    workflow_name: str,
+):
     def _write_invalid_validated_manifest(*_args, **_kwargs):
         path = ctx.workflow_folder / "validated_eval_case_manifest.json"
         path.write_text(
             json.dumps(
                 {
                     "repo_root": str(REPO_ROOT),
-                    "run_id": ctx.run_id,
-                    "selected_workflow_name": state.selected_workflow_name,
-                    "task_id": ctx.task_id,
-                    "workflow_name": ctx.workflow_name,
+                    "run_id": run_id,
+                    "selected_workflow_name": selected_workflow_name,
+                    "task_id": task_id,
+                    "workflow_name": workflow_name,
                     "case_count": 3,
                     "case_kinds": ["benchmark", "edge", "adversarial"],
                     "validated_cases": [
@@ -1161,10 +1162,49 @@ def test_workflow_to_eval_suite_publish_rejects_validated_manifest_missing_typed
         )
         return path
 
+    return _write_invalid_validated_manifest
+
+
+def test_invoke_python_step_recompiles_after_workflow_module_monkeypatch(
+    tmp_path: Path,
+    monkeypatch,
+) -> None:
+    workflow_pkg, state, ctx = _make_publish_eval_suite_test_context(tmp_path, monkeypatch)
+    workflow_module = importlib.import_module("workflows.workflow_to_eval_suite.workflow")
+
+    compile_workflow(workflow_pkg.WorkflowToEvalSuite)
     monkeypatch.setattr(
         workflow_module,
         "write_validated_eval_case_manifest",
-        _write_invalid_validated_manifest,
+        _write_invalid_validated_manifest_factory(
+            ctx,
+            run_id=ctx.run_id,
+            selected_workflow_name=state.selected_workflow_name,
+            task_id=ctx.task_id,
+            workflow_name=ctx.workflow_name,
+        ),
+    )
+
+    with pytest.raises(ValidationError, match="case_ids"):
+        invoke_python_step(workflow_pkg.WorkflowToEvalSuite, "publish_workflow_eval_suite", ctx)
+
+
+def test_workflow_to_eval_suite_publish_rejects_validated_manifest_missing_typed_required_field(
+    tmp_path: Path,
+    monkeypatch,
+) -> None:
+    workflow_pkg, state, ctx = _make_publish_eval_suite_test_context(tmp_path, monkeypatch)
+    workflow_module = importlib.import_module("workflows.workflow_to_eval_suite.workflow")
+    monkeypatch.setattr(
+        workflow_module,
+        "write_validated_eval_case_manifest",
+        _write_invalid_validated_manifest_factory(
+            ctx,
+            run_id=ctx.run_id,
+            selected_workflow_name=state.selected_workflow_name,
+            task_id=ctx.task_id,
+            workflow_name=ctx.workflow_name,
+        ),
     )
 
     with pytest.raises(ValidationError, match="case_ids"):
