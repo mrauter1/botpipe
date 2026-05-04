@@ -1,1 +1,5 @@
-{}
+{
+  "material_gaps_found": true,
+  "summary": "Runtime semantics are largely aligned, but workflow prompt bodies and their tests still encode the retired reserved-route model, so a narrow documentation/test follow-up is still required.",
+  "revised_request_path": "/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/below-is-the-revised-standalone-correction-spec-91e19feb/runs/run-20260504T151346Z-4f933dd3/artifacts/audit/revised_request.md"
+}

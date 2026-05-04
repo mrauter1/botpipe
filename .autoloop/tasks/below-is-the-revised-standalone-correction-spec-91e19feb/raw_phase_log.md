@@ -1003,3 +1003,67 @@ Open issues / next step
 <loop-control>
 {"schema":"docloop.loop_control/v1","kind":"promise","promise":"COMPLETE"}
 </loop-control>
+
+
+---
+run_id=run-20260504T151346Z-4f933dd3 | entry=session_turn | pair=audit | phase=producer | cycle=1 | attempt=1 | thread_id=019df3d4-7217-7af0-9eac-42750e11ff81
+---
+provider=codex
+mode=start
+template=/home/rauter/.local/share/pipx/venvs/autoloop/lib/python3.12/site-packages/autoloop/templates/audit_producer.md
+session_id=019df3d4-7217-7af0-9eac-42750e11ff81
+
+
+---
+run_id=run-20260504T151346Z-4f933dd3 | entry=phase_output | pair=audit | phase=producer | process=codex-agent | cycle=1 | attempt=1 | thread_id=019df3d4-7217-7af0-9eac-42750e11ff81
+---
+I’m auditing the completed run against the original request, clarifications, artifacts, tests, and current codebase, then I’ll write the run-local audit outputs under the `artifacts/audit` directory only.
+
+I’ve read the authority files and now I’m tracing what actually landed: implementation/test phase artifacts, touched framework modules, and targeted tests, so the audit can distinguish real gaps from planned deferrals.
+
+I have the implementation notes for all three phases. Next I’m checking the final test and verifier artifacts plus the live code/test state, because the audit needs to confirm shipped behavior rather than rely on phase notes alone.
+
+I’m switching from phase notes to direct repository evidence now: changed files, live symbols, and targeted searches for the old APIs and route behavior. That’s where any unresolved gap will show up if the artifacts overstate completion.
+
+One likely gap has surfaced already: the public docs were cleaned up, but many workflow prompt bodies still teach “Reserved routes” language, and a few still explicitly say `question`, `blocked`, and `failed` are reserved. I’m verifying whether that is the only material drift or whether any runtime semantics are still incomplete.
+
+I’ve confirmed the runtime-side Milestone A code paths match the requested semantics closely. The clearest remaining drift is documentation/example text in workflow prompt bodies, so I’m pulling a few representative files and the guarding tests to determine whether that drift is material enough to require a follow-up run.
+
+I’ve isolated the substantive gap: runtime semantics and public docs are aligned, but many workflow prompt bodies and their runtime assertion tests still encode the retired “Reserved routes” model, including explicit `blocked`/`failed` reservation in some files. I’m quantifying that drift and checking whether any comparable runtime gap remains.
+
+I have enough evidence to write the audit artifacts. I’m keeping the follow-up request narrow: runtime behavior looks complete, but workflow prompt bodies and the tests that lock them still teach the retired reserved-route model, which conflicts with the requested documentation contract.
+
+I’m writing the audit outputs now: evidence-backed gap classification, a narrow next-run request, and the machine-readable result. After that I’ll do a quick integrity pass and finish with the required loop-control block.
+
+The audit files are written. I’m doing a quick integrity pass now on the rendered content and the JSON so the handoff is internally consistent before I close with the required summary and control block.
+
+Scope considered
+
+The immutable request snapshot, the authoritative raw log, `decisions.txt`, all run-local plan/implement/test artifacts, the final repository state in the relevant framework modules, and the request-relevant tests and docs surfaces.
+
+What I analyzed
+
+Runtime artifact, route, and worklist code in `autoloop/core/*` and `autoloop/runtime/static_graph.py`, the phase implementation/test artifacts, and the final docs/test surfaces that were supposed to reflect the new route model. I also checked for retired APIs and wording such as `Artifact.managed(...)`, `role="managed"`, and default/reserved `blocked` / `failed` guidance.
+
+What I changed
+
+I wrote the audit outputs in:
+- `.autoloop/tasks/below-is-the-revised-standalone-correction-spec-91e19feb/runs/run-20260504T151346Z-4f933dd3/artifacts/audit/gap_report.md`
+- `.autoloop/tasks/below-is-the-revised-standalone-correction-spec-91e19feb/runs/run-20260504T151346Z-4f933dd3/artifacts/audit/revised_request.md`
+- `.autoloop/tasks/below-is-the-revised-standalone-correction-spec-91e19feb/runs/run-20260504T151346Z-4f933dd3/artifacts/audit/audit_result.json`
+
+I also marked the audit checklist complete in `artifacts/audit/criteria.md`.
+
+Key findings / decisions
+
+Most requested runtime semantics appear implemented and consistent with the run decisions: managed-artifact ownership was removed, workflow-level artifacts stay canonical, rendered `reason` is optional, `question` remains policy-gated, and lazy worklist restore/materialization is in place.
+
+One material gap remains in documentation/examples: `46` workflow prompt-body markdown files under `workflows/**/prompts/*.md` still use retired `Reserved routes` wording, including files that explicitly treat `question`, `blocked`, and `failed` as the reserved/default set. The related runtime prompt-package tests still assert that stale wording, so the old contract is still codified in that surface.
+
+Open issues / next step
+
+The follow-up should be narrow: update workflow prompt bodies and the tests that lock them so they describe `question` as the only default runtime control route and treat authored `blocked` / `failed` as ordinary application routes. `audit_result.json` records `material_gaps_found: true` and points to the revised next-run request.
+
+<loop-control>
+{"schema":"docloop.loop_control/v1","kind":"promise","promise":"INCOMPLETE"}
+</loop-control>
