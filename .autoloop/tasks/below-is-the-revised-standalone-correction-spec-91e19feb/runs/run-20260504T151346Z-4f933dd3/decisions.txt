@@ -1,0 +1,4 @@
+<autoloop-decisions-header version="1" block_seq="1" owner="planner" phase_id="task-global" pair="plan" turn_seq="1" run_id="run-20260504T151346Z-4f933dd3" ts="2026-05-04T15:13:47.160628+00:00" />
+Treat workflow-level plus step-produced artifacts as one canonical workflow/public artifact identity; keep producer_steps as provenance only and do not rebind qualified_name to step-local names when workflow_level is true.
+Adopt the preferred strict lazy restore policy: resume restores worklist selection snapshots without loading backing sources until first runtime access.
+Keep Milestone A scoped to runtime-correctness changes first; Effects API cleanup, validation_step boundary cleanup, and broad docs/example sweeps stay deferred follow-up work unless needed to keep shipped behavior truthful.
