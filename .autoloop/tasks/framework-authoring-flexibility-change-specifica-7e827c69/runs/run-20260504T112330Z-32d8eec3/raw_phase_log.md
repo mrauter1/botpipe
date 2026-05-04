@@ -553,3 +553,100 @@ Open issues / next step
 <loop-control>
 {"schema":"docloop.loop_control/v1","kind":"promise","promise":"COMPLETE"}
 </loop-control>
+
+
+---
+run_id=run-20260504T112330Z-32d8eec3 | entry=session_turn | pair=test | phase=producer | cycle=1 | attempt=1 | thread_id=019df2d5-a275-7a80-9230-3da4557a12de
+---
+provider=codex
+mode=resume
+template=/home/rauter/.local/share/pipx/venvs/autoloop/lib/python3.12/site-packages/autoloop/templates/test_producer.md
+session_id=019df2d5-a275-7a80-9230-3da4557a12de
+
+
+---
+run_id=run-20260504T112330Z-32d8eec3 | entry=phase_output | pair=test | phase=producer | process=codex-agent | cycle=1 | attempt=1 | thread_id=019df2d5-a275-7a80-9230-3da4557a12de
+---
+I’m validating the Milestone B test surface against the accepted phase contract and the implementation diff. First I’m reading the active test artifacts plus the newly added coverage so I can extend only the missing high-risk cases.
+
+The current repo changes already cover direct `WorklistEffect` returns from python steps, but the riskiest untested path is the same return coming from a route hook on an active scoped worklist. I’m adding that regression test now, plus a small API assertion for the new no-arg refresh helper.
+
+The additional coverage is in. I’m doing the validation that’s possible here now: syntax-compiling the updated test files and checking the artifact updates, since the environment still doesn’t have the Python test dependencies installed.
+
+Scope considered
+
+- Phase-local Milestone B test scope only: the touched helper/runtime tests, the implementation notes, the run-local decisions ledger, and the active test artifacts.
+
+What I analyzed
+
+- The implementation diff around `WorklistEffect`/`Effects`, route-hook normalization, prompt runtime diagnostics, and artifact ownership ambiguity.
+- Existing Milestone B coverage already added in `tests/unit/test_simple_surface.py`, `tests/contract/test_engine_contracts.py`, and `tests/unit/test_validation.py`.
+- The active `test_strategy.md` and `feedback.md` artifacts.
+
+What I changed
+
+- Extended `tests/unit/test_simple_surface.py` to assert the new no-arg `Effects.refresh()` helper shape.
+- Added a contract regression test in `tests/contract/test_engine_contracts.py` for direct `WorklistEffect` returns from a route `on_taken` hook using the active scoped worklist.
+- Updated `test_strategy.md` with an explicit AC-to-test coverage map, invariants, edge cases, flake controls, and known gaps.
+- Appended a concise summary entry to the phase `feedback.md`.
+- Appended one test-scope decision to `decisions.txt` for the route-hook direct-effect coverage rationale.
+
+Key findings / decisions
+
+- The main uncovered risk after the implementation pass was hook-phase direct `WorklistEffect` normalization; that path now has explicit coverage separate from python-step handler coverage.
+- I kept the added tests deterministic by using temp directories, in-memory stores, and scripted provider outcomes only.
+- I did not add any expectation around the reviewer’s non-blocking managed-artifact wording issue, since that would normalize a known inconsistency instead of testing intended behavior.
+
+Open issues / next step
+
+- `python3 -m compileall` passed for the updated test files.
+- Full execution is still blocked in this environment because `pytest` and `pydantic` are unavailable, so the next step is to run the targeted Milestone B suites in the project’s normal Python environment.
+
+
+---
+run_id=run-20260504T112330Z-32d8eec3 | entry=session_turn | pair=test | phase=verifier | cycle=1 | attempt=1 | thread_id=019df2d5-a275-7a80-9230-3da4557a12de
+---
+provider=codex
+mode=resume
+template=/home/rauter/.local/share/pipx/venvs/autoloop/lib/python3.12/site-packages/autoloop/templates/test_verifier.md
+session_id=019df2d5-a275-7a80-9230-3da4557a12de
+
+
+---
+run_id=run-20260504T112330Z-32d8eec3 | entry=phase_output | pair=test | phase=verifier | process=codex-agent | cycle=1 | attempt=1 | thread_id=019df2d5-a275-7a80-9230-3da4557a12de
+---
+I’m checking the adjacent operation prompt-rendering path before I finalize the audit. The implementation touched both `engine.py` and `operations.py`, so I want to confirm the test suite already covers the operation-side placeholder diagnostics instead of assuming the step-path tests are enough.
+
+I found one material coverage gap: the implementation changed both the step prompt path and the operation prompt path, but the new tests only exercise the step path. I’m marking that as a blocking audit finding and updating the criteria accordingly.
+
+Scope considered
+
+- Phase-local Milestone B test scope: the active test strategy/feedback artifacts, the run-local decisions ledger, and the changed tests plus the adjacent changed runtime files they are meant to cover.
+
+What I analyzed
+
+- The accepted phase contract and the current `test_strategy.md`.
+- The newly added test coverage in `tests/unit/test_simple_surface.py`, `tests/contract/test_engine_contracts.py`, and `tests/unit/test_validation.py`.
+- The adjacent implementation touchpoints in `autoloop/core/engine.py` and `autoloop/core/operations.py` to check whether the changed behavior was actually exercised.
+
+What I reviewed
+
+- Coverage for direct `WorklistEffect` returns from python-step handlers and route hooks.
+- Coverage for prompt/runtime diagnostic wording changes.
+- Coverage for ownership-ambiguity diagnostics.
+- Flake-risk control and deterministic setup choices in the added tests.
+
+Key findings / decisions
+
+- One blocking coverage gap remains: the implementation changed both the engine prompt path and the operation prompt path, but the new tests only exercise the engine/`PromptStep` path.
+- I recorded that gap as `TST-001` in the phase feedback and left the coverage/regression/edge-case criteria unchecked.
+- The authored tests themselves are deterministic and do not encode an unintended behavior break.
+
+Open issues / next step
+
+- Add a scoped operation-path regression test that reaches `autoloop/core/operations.py` prompt rendering via `llm()` or `classify()` with late-bound `item`/`worklist` placeholders and asserts the updated step/worklist-aware runtime diagnostics.
+- After that, the coverage should be re-audited for completion.
+
+<loop-control>
+{"schema":"docloop.loop_control/v1","kind":"promise","promise":"INCOMPLETE"}
+</loop-control>
