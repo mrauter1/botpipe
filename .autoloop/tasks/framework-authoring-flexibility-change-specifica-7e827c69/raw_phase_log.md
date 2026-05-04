@@ -750,3 +750,67 @@ Open issues / next step
 <loop-control>
 {"schema":"docloop.loop_control/v1","kind":"promise","promise":"COMPLETE"}
 </loop-control>
+
+
+---
+run_id=run-20260504T112330Z-32d8eec3 | entry=session_turn | pair=audit | phase=producer | cycle=1 | attempt=1 | thread_id=019df2e6-61de-7b20-b7d7-b4fd998ed262
+---
+provider=codex
+mode=start
+template=/home/rauter/.local/share/pipx/venvs/autoloop/lib/python3.12/site-packages/autoloop/templates/audit_producer.md
+session_id=019df2e6-61de-7b20-b7d7-b4fd998ed262
+
+
+---
+run_id=run-20260504T112330Z-32d8eec3 | entry=phase_output | pair=audit | phase=producer | process=codex-agent | cycle=1 | attempt=1 | thread_id=019df2e6-61de-7b20-b7d7-b4fd998ed262
+---
+I’m auditing the completed run against the original request, later clarifications, and the final code/tests. I’ll read the authoritative run artifacts first, then inspect the implementation and test coverage before writing the audit outputs in the run-local `artifacts/audit` directory.
+
+I’ve pulled the run ledger and decisions. Next I’m reading the implementation and test artifacts alongside the touched runtime modules and contract tests to determine what actually shipped versus what was only planned or discussed.
+
+The implementation pair closed both milestones, but I want the test pair’s view before concluding anything is complete. I’m reading the test artifacts now, then I’ll verify the claimed behaviors directly in the code and contract suites.
+
+I need the back half of the run log now. The early entries show milestone-level review findings, but I haven’t yet seen whether those findings were resolved in later implement/test turns or left outstanding.
+
+I’ve reconstructed the run history. Now I’m verifying the final repository state directly: the runtime modules, ergonomics modules, and the new contract/unit tests that were cited in the artifacts.
+
+I’ve confirmed the major symbols and tests are present. I’m reading the concrete implementations now, especially the places most likely to hide remaining drift: provider route construction, child-workflow mapping, lazy worklist restoration/refresh, runtime prompt errors, and the ownership diagnostic.
+
+I’ve confirmed the lazy worklist and child-route pieces in code. I’m checking the discovery/provider-contract side now to verify default `blocked`/`failed` injection is actually gone and `question` is policy-gated rather than compile-time always-visible.
+
+I’ve verified route injection only adds `question`. The remaining risk is whether inspection/static-graph and prompt validation reflect the new semantics or just the runtime path. I’m checking those last user-facing surfaces now.
+
+I have one likely residual issue from the artifacts alone: the run never reached an executed test pass. I’m checking the current environment directly so the audit can distinguish a real implementation gap from a validation-only gap.
+
+I have enough evidence to write the audit outputs. I’m updating only the run-local `artifacts/audit` files now with the final gap report, follow-up request, and machine-readable audit result.
+
+The audit files are written. I’m doing a quick readback pass now to make sure the report, revised request, and JSON all say the same thing and stay within the audit-only write scope.
+
+Scope considered
+
+The original request, the authoritative raw log and decisions ledger, the plan/implement/test artifacts for both milestones, the final framework code in `autoloop/core` and `autoloop/runtime`, and the cited contract/unit tests.
+
+What I analyzed
+
+I compared the requested Milestone A and Milestone B behaviors against the final code paths for route policy, child-workflow mapping, lazy worklists, lazy work-item sessions, worklist effects, validation helpers, prompt runtime diagnostics, artifact ownership diagnostics, and workflow capability/static-graph metadata. I also checked the run artifacts for whether the requested tests were actually executed.
+
+What I changed
+
+I wrote the audit outputs in the run-local audit directory:
+- `.autoloop/tasks/framework-authoring-flexibility-change-specifica-7e827c69/runs/run-20260504T112330Z-32d8eec3/artifacts/audit/gap_report.md`
+- `.autoloop/tasks/framework-authoring-flexibility-change-specifica-7e827c69/runs/run-20260504T112330Z-32d8eec3/artifacts/audit/revised_request.md`
+- `.autoloop/tasks/framework-authoring-flexibility-change-specifica-7e827c69/runs/run-20260504T112330Z-32d8eec3/artifacts/audit/audit_result.json`
+
+Key findings / decisions
+
+The implementation appears to satisfy the substantive framework changes: default provider `blocked`/`failed` injection is gone, `question` is policy-gated, child workflow `blocked`/`failed` mappings now require explicit routes, lazy worklist/session behavior is present, direct `WorklistEffect` returns and `validation_step` are in place, prompt runtime diagnostics are late-bound and step/worklist-aware, and ownership ambiguity diagnostics exist.
+
+The material unresolved gap is acceptance evidence, not a clear code-behavior miss: the run never executed the targeted suites because the environment lacked `pytest` and `pydantic`, so the request’s “all listed tests pass” criterion is still unproven. I also recorded one minor residual wording issue in `autoloop/core/inventory.py`, where the managed-artifact recommendation still implies a future feature even though `Artifact.managed(...)` already exists.
+
+Open issues / next step
+
+The next run should use a runnable Python test environment, execute the targeted contract/unit suites for this change, fix any failures found, and clean up the stale managed-artifact wording. The audit result is marked with `material_gaps_found: true` for that reason.
+
+<loop-control>
+{"schema":"docloop.loop_control/v1","kind":"promise","promise":"INCOMPLETE"}
+</loop-control>
