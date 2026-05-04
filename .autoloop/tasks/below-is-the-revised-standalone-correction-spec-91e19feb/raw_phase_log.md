@@ -1119,3 +1119,39 @@ workspace=/home/rauter/autoloop_v3_bkp/autoloop_v3
 pairs=plan,implement,test,audit
 request_file=/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/below-is-the-revised-standalone-correction-spec-91e19feb/runs/run-20260504T163613Z-cf62c11b/request.md
 session_mode=persistent
+
+
+---
+run_id=run-20260504T163613Z-cf62c11b | entry=session_turn | pair=plan | phase=producer | cycle=1 | attempt=1 | thread_id=019df3d8-f1f8-7b12-a390-012ab6ab3571
+---
+provider=codex
+mode=start
+template=/home/rauter/.local/share/pipx/venvs/autoloop/lib/python3.12/site-packages/autoloop/templates/plan_producer.md
+session_id=019df3d8-f1f8-7b12-a390-012ab6ab3571
+
+
+---
+run_id=run-20260504T163613Z-cf62c11b | entry=phase_output | pair=plan | phase=producer | process=codex-agent | cycle=1 | attempt=1 | thread_id=019df3d8-f1f8-7b12-a390-012ab6ab3571
+---
+I’m grounding the plan in the authoritative request, the current plan artifacts, and the code paths that define prompt-body wording and its tests. Then I’ll update the run-local planning files with a concrete implementation slice and regression controls.
+
+I have the authoritative request and empty planning artifacts. Next I’m mapping the actual prompt-body files and the test surface so the plan is grounded in the shipped wording and the existing regression hooks.
+
+The repository already reflects the new route model in architecture and authoring docs, but many workflow prompt bodies still use the retired reserved-route phrasing. I’m locating the runtime packaging tests and any central baseline test seam so the plan covers both content replacement and a durable regression guard.
+
+The runtime tests are not centralized today: several package-specific tests hard-code the retired phrases inside per-prompt marker lists, while the baseline doc test only guards docs and prompt `README.md`. I’m checking the common runtime test structure to plan a small, shared assertion seam instead of another round of duplicated string updates.
+
+I’ve finished the repo analysis. I’m updating the run-local plan artifacts now with a single coherent implementation slice, explicit test targets, and the central regression seam that closes the current prompt-body coverage gap.
+
+The artifacts are written. I’m validating them now for planner-contract correctness, especially the machine-readable phase file, before I close out.
+
+Updated the run-local planning artifacts:
+
+- [plan.md](</home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/below-is-the-revised-standalone-correction-spec-91e19feb/runs/run-20260504T163613Z-cf62c11b/artifacts/plan/plan.md>)
+- [phase_plan.yaml](</home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/below-is-the-revised-standalone-correction-spec-91e19feb/runs/run-20260504T163613Z-cf62c11b/artifacts/plan/phase_plan.yaml>)
+- [feedback.md](</home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/below-is-the-revised-standalone-correction-spec-91e19feb/runs/run-20260504T163613Z-cf62c11b/artifacts/plan/feedback.md>)
+- [decisions.txt](</home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/below-is-the-revised-standalone-correction-spec-91e19feb/runs/run-20260504T163613Z-cf62c11b/decisions.txt>)
+
+The plan is a single implementation phase. It targets the 89 non-README prompt bodies still using retired reserved-route wording, the six runtime suites that explicitly assert that wording today, and a new shared baseline guard because current central coverage only scans workflow docs and prompt `README.md` files. I also captured the non-obvious decision that prompt-body regression coverage must scan prompt bodies directly, which closes the current gap around packages like `workflow_run_traces_to_optimization_candidates`.
+
+I did not run tests; this turn was planning-only.
