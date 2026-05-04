@@ -1064,3 +1064,48 @@ No open review issues in this phase. The remaining warnings are pre-existing Pyd
 <loop-control>
 {"schema":"docloop.loop_control/v1","kind":"promise","promise":"COMPLETE"}
 </loop-control>
+
+
+---
+run_id=run-20260504T121827Z-ab703ce9 | entry=session_turn | pair=test | phase=producer | cycle=1 | attempt=1 | thread_id=019df2f1-648b-79f3-bd2a-98098f283570
+---
+provider=codex
+mode=resume
+template=/home/rauter/.local/share/pipx/venvs/autoloop/lib/python3.12/site-packages/autoloop/templates/test_producer.md
+session_id=019df2f1-648b-79f3-bd2a-98098f283570
+
+
+---
+run_id=run-20260504T121827Z-ab703ce9 | entry=phase_output | pair=test | phase=producer | process=codex-agent | cycle=1 | attempt=1 | thread_id=019df2f1-648b-79f3-bd2a-98098f283570
+---
+I’m checking the existing test-phase artifacts and the current ownership-ambiguity coverage first. Then I’ll decide whether the repository tests already added are sufficient or need one more focused refinement, and I’ll update the test strategy and feedback accordingly.
+
+The existing coverage is close, but I’m adding one narrower assertion so the tests explicitly reject the stale “once implemented” wording, not just accept the new wording. Then I’ll rerun the relevant validation path and refresh the test-phase artifacts with the coverage map and summary.
+
+The negative regression assertion is in place. I’m running the full requested slice again, not just `test_validation.py`, so this turn validates the added test refinement against the same acceptance command.
+
+The acceptance rerun is still active. Once it finishes, I’ll close out with the exact result and the updated coverage map artifact.
+
+The refined test passes under the full requested slice: `356 passed, 14 warnings in 1.89s`. I’m adding that run result to the test-phase feedback artifact so the test turn records both the coverage intent and its observed outcome.
+
+Scope considered
+
+The work stayed on the requested regression slice: the ownership-ambiguity assertions in [tests/unit/test_validation.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/tests/unit/test_validation.py:464), plus the test-phase artifacts [test_strategy.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/framework-authoring-flexibility-change-specifica-7e827c69/runs/run-20260504T121827Z-ab703ce9/artifacts/test/phases/prove-framework-authoring-flexibility-regression-slice/test_strategy.md:10) and [feedback.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/framework-authoring-flexibility-change-specifica-7e827c69/runs/run-20260504T121827Z-ab703ce9/artifacts/test/phases/prove-framework-authoring-flexibility-regression-slice/feedback.md:10).
+
+What I analyzed
+
+I reviewed the implemented wording change, the existing ambiguity-ownership tests, the run decisions, and the implementation evidence. The main gap was that the tests accepted the new managed-artifact guidance but did not explicitly reject the removed future-tense wording.
+
+What I changed
+
+I refined [tests/unit/test_validation.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/tests/unit/test_validation.py:464) to assert that the ambiguity diagnostic no longer contains `once implemented`. I also filled in the explicit behavior-to-test coverage map in [test_strategy.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/framework-authoring-flexibility-change-specifica-7e827c69/runs/run-20260504T121827Z-ab703ce9/artifacts/test/phases/prove-framework-authoring-flexibility-regression-slice/test_strategy.md:10) and appended the test-summary plus rerun result to [feedback.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/framework-authoring-flexibility-change-specifica-7e827c69/runs/run-20260504T121827Z-ab703ce9/artifacts/test/phases/prove-framework-authoring-flexibility-regression-slice/feedback.md:10).
+
+Key findings / decisions
+
+The test refinement is intentionally narrow: it pins the removal of stale future-work guidance without broadening the slice. The full required acceptance command passed after the change:
+`./.venv/bin/python -m pytest -q tests/contract/test_engine_contracts.py tests/unit/test_simple_surface.py tests/unit/test_primitives_and_stores.py tests/unit/test_validation.py tests/runtime/test_runtime_static_graph.py`
+with `356 passed, 14 warnings in 1.89s`.
+
+Open issues / next step
+
+No blocking issues in this test turn. The remaining warnings are the same pre-existing Pydantic field-shadowing warnings from `tests/unit/test_simple_surface.py`.
