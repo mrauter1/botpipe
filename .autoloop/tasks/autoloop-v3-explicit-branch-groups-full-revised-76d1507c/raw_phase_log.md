@@ -375,3 +375,44 @@ Validation passed:
 Open issues / next step
 
 This resolves the blocking compile-model review finding. The remaining out-of-phase work is unchanged: runtime branch-group execution, mechanical outcome evaluation, manifest/context writing, and fan-in orchestration still belong to later phases.
+
+
+---
+run_id=run-20260505T171950Z-13ce26d6 | entry=session_turn | pair=implement | phase=verifier | cycle=2 | attempt=1 | thread_id=019df930-00de-7970-af32-efc750f7efc4
+---
+provider=codex
+mode=resume
+template=/home/rauter/.local/share/pipx/venvs/autoloop/lib/python3.12/site-packages/autoloop/templates/implement_verifier.md
+session_id=019df930-00de-7970-af32-efc750f7efc4
+
+
+---
+run_id=run-20260505T171950Z-13ce26d6 | entry=phase_output | pair=implement | phase=verifier | process=codex-agent | cycle=2 | attempt=1 | thread_id=019df930-00de-7970-af32-efc750f7efc4
+---
+I’m re-reviewing the revised compile-model changes with focus on the route-lowering fix and any adjacent regressions. I’ll verify the updated source behavior, then update the review artifacts only.
+
+The route defect is fixed and covered by a direct regression test. I’m updating the review artifacts to reflect a clean pass rather than leaving the stale blocking note as the active review state.
+
+Scope considered
+
+Phase-local verifier scope for `authoring-and-compile-model` only. I reviewed the revised branch-group compile-model changes, with emphasis on the previously blocking no-`fan_in` route-lowering defect and its nearby regression surface.
+
+What I analyzed
+
+I checked the updated `BranchGroupStep` default-route logic in [autoloop/core/discovery.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/autoloop/core/discovery.py), the new regression coverage in [tests/unit/test_simple_surface.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/tests/unit/test_simple_surface.py), and the implementation notes and decisions ledger for consistency with the accepted phase scope.
+
+What I reviewed
+
+I updated [criteria.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/autoloop-v3-explicit-branch-groups-full-revised-76d1507c/runs/run-20260505T171950Z-13ce26d6/artifacts/implement/phases/authoring-and-compile-model/criteria.md) to fully checked. I updated [feedback.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/autoloop-v3-explicit-branch-groups-full-revised-76d1507c/runs/run-20260505T171950Z-13ce26d6/artifacts/implement/phases/authoring-and-compile-model/feedback.md) to reflect that `IMP-001` is resolved and that there are no active findings in this pass.
+
+Key findings / decisions
+
+No active findings remain. The prior route-table mismatch is fixed: no-`fan_in` branch groups now compile deterministic `done`, `partial`, `question`, and `failed` destinations, and the direct regression test covers the exact failure mode that previously broke AC-1.
+
+Open issues / next step
+
+This phase is review-complete. Remaining branch-group work is the later runtime phase: execution, settlement, manifests/context, and fan-in orchestration.
+
+<loop-control>
+{"schema":"docloop.loop_control/v1","kind":"promise","promise":"COMPLETE"}
+</loop-control>
