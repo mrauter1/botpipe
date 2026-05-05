@@ -507,3 +507,116 @@ Open issues / next step
 <loop-control>
 {"schema":"docloop.loop_control/v1","kind":"promise","promise":"COMPLETE"}
 </loop-control>
+
+
+---
+run_id=run-20260505T122105Z-b9a3f746 | entry=session_turn | pair=implement | phase=producer | cycle=1 | attempt=1 | thread_id=019df82b-3678-7872-90df-9fde956110d3
+---
+provider=codex
+mode=start
+template=/home/rauter/.local/share/pipx/venvs/autoloop/lib/python3.12/site-packages/autoloop/templates/implement_producer.md
+session_id=019df82b-3678-7872-90df-9fde956110d3
+
+
+---
+run_id=run-20260505T122105Z-b9a3f746 | entry=phase_output | pair=implement | phase=producer | process=codex-agent | cycle=1 | attempt=1 | thread_id=019df82b-3678-7872-90df-9fde956110d3
+---
+I’m implementing the stdlib progress worklist phase and starting by reading the active phase artifacts plus the current core/stdlib worklist code to anchor the change set and test surface.
+
+Core selector work already landed in this branch, so I’m checking the rest of `worklists.py` plus the stdlib module and current tests to see what remains for the progress JSON layer and where the runtime integration hooks already exist.
+
+The stdlib module and requested tests already exist in the workspace. I’m reading the rest of that implementation and the new test files now, then I’ll run the focused suites to see what still breaks in this phase.
+
+I have enough context to verify behavior directly. Next step is running the focused selector/stdlib/runtime suites the request calls for, then I’ll patch only the concrete failures in scope.
+
+`pytest` is not on `PATH` in this shell. I’m checking the project’s Python entrypoint and test environment, then I’ll rerun through the interpreter instead of assuming a global binary.
+
+The repo only declares runtime deps, and this shell lacks `pytest`. I’m installing the minimal test dependency into the current interpreter so I can run the requested suites and validate the phase properly.
+
+The venv setup is in flight. Once it finishes I’ll run the focused suites inside that isolated interpreter so the repo validation is repeatable and doesn’t touch system Python.
+
+The focused suites are green. I’m running the adjacent regression suites next because this phase touches artifact resolution, stdlib exports, and runtime persistence, and those are the likely drift surfaces.
+
+The scoped worklist changes are already present and the targeted suites are green. I’m checking the exact diff on the phase-owned files now so I can record what landed and separate it from the unrelated adjacent-suite failures.
+
+I’m updating the phase notes and decision ledger now. No source changes are needed in this turn because the scoped implementation is already present and the targeted suites are green.
+
+Scope considered
+
+- Phase-local stdlib progress worklist scope plus its declared dependency surface in [autoloop/core/worklists.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/autoloop/core/worklists.py) and the requested focused/adjacent tests.
+- Authoritative artifacts reviewed: phase `feedback.md`, `plan.md`, `decisions.txt`, and updated [implementation_notes.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/goal-implement-a-greenfield-autoloop-v3-worklist-3cb1f2e6/runs/run-20260505T122105Z-b9a3f746/artifacts/implement/phases/stdlib-progress-worklists/implementation_notes.md).
+
+What I analyzed
+
+- Existing phase implementation in [autoloop/stdlib/worklists.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/autoloop/stdlib/worklists.py), [autoloop/stdlib/__init__.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/autoloop/stdlib/__init__.py), and the selector dependency already present in [autoloop/core/worklists.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/autoloop/core/worklists.py).
+- Requested tests in [tests/unit/test_worklist_selectors.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/tests/unit/test_worklist_selectors.py), [tests/unit/test_stdlib_progress_worklists.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/tests/unit/test_stdlib_progress_worklists.py), and [tests/runtime/test_progress_worklists.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/tests/runtime/test_progress_worklists.py).
+- Adjacent regressions from `tests/unit/test_stdlib_and_extensions.py` and `tests/runtime/test_workspace_and_context.py`.
+
+What I changed
+
+- No phase-owned source behavior needed changes in this turn; the scoped implementation was already present and matched the requested surface.
+- Updated the authoritative notes in [implementation_notes.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/goal-implement-a-greenfield-autoloop-v3-worklist-3cb1f2e6/runs/run-20260505T122105Z-b9a3f746/artifacts/implement/phases/stdlib-progress-worklists/implementation_notes.md).
+- Appended the current validation/state note under the latest phase header in [decisions.txt](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/goal-implement-a-greenfield-autoloop-v3-worklist-3cb1f2e6/runs/run-20260505T122105Z-b9a3f746/decisions.txt).
+- Created a local `.venv/` to run pytest in this workspace.
+
+Key findings / decisions
+
+- Focused validation passed: `.venv/bin/python -m pytest tests/unit/test_worklist_selectors.py tests/unit/test_stdlib_progress_worklists.py tests/runtime/test_progress_worklists.py` -> `47 passed`.
+- The scoped stdlib progress worklist implementation is already in place: canonical `items/id/title/status`, strict default statuses, fallback materialization, derived artifact/selector defaults, and `.artifact` exposure are present.
+- Adjacent failures are outside this phase scope. They are concentrated in workflow catalog/root resolution and portfolio/company/runtime discovery paths, not in the progress worklist files.
+
+Open issues / next step
+
+- If the next phase wants broader green status, it should address the unrelated discovery/root failures surfacing in `tests/unit/test_stdlib_and_extensions.py` and `tests/runtime/test_workspace_and_context.py`.
+- For this phase-local scope, the requested progress worklist implementation and focused verification are complete.
+
+
+---
+run_id=run-20260505T122105Z-b9a3f746 | entry=session_turn | pair=implement | phase=verifier | cycle=1 | attempt=1 | thread_id=019df82b-3678-7872-90df-9fde956110d3
+---
+provider=codex
+mode=resume
+template=/home/rauter/.local/share/pipx/venvs/autoloop/lib/python3.12/site-packages/autoloop/templates/implement_verifier.md
+session_id=019df82b-3678-7872-90df-9fde956110d3
+
+
+---
+run_id=run-20260505T122105Z-b9a3f746 | entry=phase_output | pair=implement | phase=verifier | process=codex-agent | cycle=1 | attempt=1 | thread_id=019df82b-3678-7872-90df-9fde956110d3
+---
+I’m switching to review mode: reading the phase criteria and existing feedback, then I’ll verify the request against the current stdlib worklist implementation and record any blocking gaps directly in the review artifacts.
+
+I’ve isolated one risky seam in the stdlib source: fallback materialization may write an invalid board if the fallback returns duplicate item ids. I’m reproducing that behavior directly before I decide whether it’s a blocking review finding.
+
+I found a concrete blocking gap in the stdlib source’s fallback path and I’m recording it in the review artifacts now, along with the criteria status for this phase.
+
+Scope considered
+
+- Phase-local stdlib progress worklist surface in [autoloop/stdlib/worklists.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/autoloop/stdlib/worklists.py) and [autoloop/stdlib/__init__.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/autoloop/stdlib/__init__.py).
+- Request-mandated tests and the active review artifacts in the phase directory.
+
+What I analyzed
+
+- The current `WorkStatusPolicy`, `ProgressJsonCollectionSource`, `progress_selector`, and `progress_artifact_worklist` implementation against AC-1 through AC-3.
+- The focused selector/stdlib/runtime tests already added for this phase.
+- The fallback materialization path specifically, because it is the only path that creates a board before a normal `load()` pass.
+
+What I reviewed
+
+- Updated [criteria.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/goal-implement-a-greenfield-autoloop-v3-worklist-3cb1f2e6/runs/run-20260505T122105Z-b9a3f746/artifacts/implement/phases/stdlib-progress-worklists/criteria.md) to reflect one remaining blocking gap.
+- Appended the blocking finding to [feedback.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/goal-implement-a-greenfield-autoloop-v3-worklist-3cb1f2e6/runs/run-20260505T122105Z-b9a3f746/artifacts/implement/phases/stdlib-progress-worklists/feedback.md).
+- Reproduced the failure mode directly: a duplicate-id fallback is written to disk by `ensure()` and only fails later when `load()` re-reads it.
+
+Key findings / decisions
+
+- `IMP-001` is blocking: `ProgressJsonCollectionSource` does not reject duplicate ids during fallback normalization, so `ensure()` / `load(write_fallback=True)` can persist an invalid canonical board and defer the failure until a later load.
+- That violates AC-3 because fallback materialization is expected to produce a valid canonical progress board, not write corrupted state first and fail later.
+- I did not find a reason to reject the overall architecture or export surface; the blocking issue is localized to fallback validation.
+
+Open issues / next step
+
+- Fix duplicate-id rejection in the fallback materialization path before any write occurs, preferably by centralizing duplicate-id validation shared with load-time item creation.
+- Add a focused regression test covering duplicate ids returned from fallback, then rerun the phase’s focused suites.
+
+<loop-control>
+{"schema":"docloop.loop_control/v1","kind":"promise","promise":"INCOMPLETE"}
+</loop-control>
