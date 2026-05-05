@@ -39,3 +39,7 @@
 {"ts": "2026-05-05T21:04:42.461783+00:00", "run_id": "run-20260505T201926Z-7fdaad17", "seq": 39, "event_type": "phase_finished", "pair": "test", "phase": "producer", "cycle": 1, "attempt": 1, "empty_output": false, "phase_id": "async-step-provider-foundation"}
 {"ts": "2026-05-05T21:05:36.186842+00:00", "run_id": "run-20260505T201926Z-7fdaad17", "seq": 40, "event_type": "phase_finished", "pair": "test", "phase": "verifier", "cycle": 1, "attempt": 1, "empty_output": false, "phase_id": "async-step-provider-foundation"}
 {"ts": "2026-05-05T21:05:36.247581+00:00", "run_id": "run-20260505T201926Z-7fdaad17", "seq": 41, "event_type": "pair_completed", "pair": "test", "cycle": 1, "attempt": 1, "phase_id": "async-step-provider-foundation"}
+{"ts": "2026-05-05T21:05:36.329403+00:00", "run_id": "run-20260505T201926Z-7fdaad17", "seq": 42, "event_type": "phase_completed", "pair": "test", "phase_id": "async-step-provider-foundation", "phase_mode": "single"}
+{"ts": "2026-05-05T21:05:36.331656+00:00", "run_id": "run-20260505T201926Z-7fdaad17", "seq": 43, "event_type": "phase_started", "phase_id": "async-branch-runtime", "phase_mode": "single"}
+{"ts": "2026-05-05T21:05:36.332955+00:00", "run_id": "run-20260505T201926Z-7fdaad17", "seq": 44, "event_type": "pair_started", "pair": "implement", "phase_id": "async-branch-runtime"}
+{"ts": "2026-05-05T21:05:36.333089+00:00", "run_id": "run-20260505T201926Z-7fdaad17", "seq": 45, "event_type": "cycle_started", "pair": "implement", "cycle": 1, "attempt": 1, "phase_id": "async-branch-runtime"}
