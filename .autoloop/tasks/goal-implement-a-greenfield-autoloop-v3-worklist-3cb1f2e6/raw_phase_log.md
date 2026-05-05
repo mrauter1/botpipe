@@ -1375,3 +1375,51 @@ Updated the run-local planning artifacts:
 - [decisions.txt](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/goal-implement-a-greenfield-autoloop-v3-worklist-3cb1f2e6/runs/run-20260505T133333Z-ef073886/decisions.txt)
 
 The plan is a 3-phase recovery sequence: first restore workflow resolution semantics, then fix optimizer observability/source-manifest contracts, then repair the remaining packaged-workflow route/artifact regressions and prove the full suite. I also validated the targeted failure clusters with the project venv and used those concrete breakpoints to drive the phase boundaries rather than broad speculative cleanup.
+
+
+---
+run_id=run-20260505T133333Z-ef073886 | entry=session_turn | pair=plan | phase=verifier | cycle=1 | attempt=1 | thread_id=019df858-124c-7df2-9750-8ea2d08f9fb2
+---
+provider=codex
+mode=resume
+template=/home/rauter/.local/share/pipx/venvs/autoloop/lib/python3.12/site-packages/autoloop/templates/plan_verifier.md
+session_id=019df858-124c-7df2-9750-8ea2d08f9fb2
+
+
+---
+run_id=run-20260505T133333Z-ef073886 | entry=phase_output | pair=plan | phase=verifier | process=codex-agent | cycle=1 | attempt=1 | thread_id=019df858-124c-7df2-9750-8ea2d08f9fb2
+---
+I’m verifying the run-local plan artifacts against the request, the decisions ledger, and the concrete failure evidence from the targeted suites. I’ll update the criteria checkboxes to match the actual audit result, append any findings with stable IDs to `feedback.md`, and then return the loop-control status.
+
+I found one blocking issue and it is central, not cosmetic: the plan locks in repo-local canonical-name precedence for named workflow resolution, but the request and the failing reference-resolution tests explicitly show mixed-root cases where the older contract still expects `.autoloop/workflows/` to win. I’m recording that as a blocking finding and marking the criteria accordingly.
+
+Scope considered
+- The run-local planning artifacts in `artifacts/plan/`
+- The immutable request snapshot and current turn `decisions.txt`
+- The concrete workflow-resolution tests directly cited by the request and implicated by the plan’s Phase 1 direction
+
+What I analyzed
+- The Phase 1 resolution strategy in `plan.md`
+- The ordered phase contract in `phase_plan.yaml`
+- The planner-authored non-obvious direction recorded in `decisions.txt`
+- The mixed-root reference expectations in `tests/runtime/test_workflow_reference_resolution.py`
+
+What I reviewed
+- `plan.md`
+- `phase_plan.yaml`
+- `criteria.md`
+- `feedback.md`
+- `decisions.txt`
+- Request coverage for workflow-resolution, optimizer, packaged-workflow, and full-suite acceptance criteria
+
+Key findings / decisions
+- Recorded `PLAN-001` as `blocking` in `feedback.md`.
+- The plan currently hard-codes repo-local `workflows/` named-resolution precedence, but the request and failing reference-resolution tests explicitly require restoring mixed-root cases where `.autoloop/workflows/` remains authoritative.
+- Updated `criteria.md` to leave `Intent Fidelity`, `Behavioral Safety`, `Completeness`, and `Feasibility / Compatibility` unchecked; `Technical Debt` remains checked.
+
+Open issues / next step
+- Planner needs to revise Phase 1 so named/workspace resolution restores the observed `.autoloop/workflows/` contract in mixed-root cases, then add a superseding direction for the conflicting decision entry before this plan can be marked complete.
+
+<loop-control>
+{"schema":"docloop.loop_control/v1","kind":"promise","promise":"INCOMPLETE"}
+</loop-control>
