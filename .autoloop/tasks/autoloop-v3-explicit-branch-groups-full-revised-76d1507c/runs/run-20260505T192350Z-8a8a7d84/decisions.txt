@@ -1,0 +1,4 @@
+<autoloop-decisions-header version="1" block_seq="1" owner="planner" phase_id="task-global" pair="plan" turn_seq="1" run_id="run-20260505T192350Z-8a8a7d84" ts="2026-05-05T19:23:51.343182+00:00" />
+This follow-up should ship as one narrow slice centered on tests/contract/test_branch_group_runtime.py, with runtime edits limited to autoloop/core/branch_groups/runtime.py or autoloop/core/engine.py only if the new contract tests fail.
+The missing shared-effect semantics must be proven through real Engine.run() branch execution rather than only branch-context unit helpers, because the unresolved gap is end-to-end branch settlement behavior.
+Fan-in RequestInput coverage must assert checkpoint.stage remains the composite branch-group step name and must resume through normal Engine.resume(), preserving the v1 composite-boundary-only checkpoint contract.
