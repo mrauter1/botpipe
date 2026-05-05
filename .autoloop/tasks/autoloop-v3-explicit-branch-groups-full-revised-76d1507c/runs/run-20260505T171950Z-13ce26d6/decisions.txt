@@ -1,0 +1,5 @@
+<autoloop-decisions-header version="1" block_seq="1" owner="planner" phase_id="task-global" pair="plan" turn_seq="1" run_id="run-20260505T171950Z-13ce26d6" ts="2026-05-05T17:19:50.568840+00:00" />
+Branch groups should reuse StepDispatcher.execute() as the nested single-step executor; workflow cursor advancement must remain owned only by Engine.run().
+Branch-local provider session isolation requires a context-bound session-store view because current Engine session selection/persistence still reads and writes the engine-global SessionStore directly.
+Branch-step provider session validation must run before compiler default-session lowering; a compiled session_name alone does not prove explicit Session.fresh() authoring.
+V1 checkpointing stays at the composite boundary only; branch RequestInput results are recorded in branch results and only become parent pending input if the composite later routes to question.
