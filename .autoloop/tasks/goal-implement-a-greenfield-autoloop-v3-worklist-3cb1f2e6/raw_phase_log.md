@@ -715,3 +715,51 @@ Open issues / next step
 <loop-control>
 {"schema":"docloop.loop_control/v1","kind":"promise","promise":"COMPLETE"}
 </loop-control>
+
+
+---
+run_id=run-20260505T122105Z-b9a3f746 | entry=session_turn | pair=test | phase=producer | cycle=1 | attempt=1 | thread_id=019df82b-3678-7872-90df-9fde956110d3
+---
+provider=codex
+mode=resume
+template=/home/rauter/.local/share/pipx/venvs/autoloop/lib/python3.12/site-packages/autoloop/templates/test_producer.md
+session_id=019df82b-3678-7872-90df-9fde956110d3
+
+
+---
+run_id=run-20260505T122105Z-b9a3f746 | entry=phase_output | pair=test | phase=producer | process=codex-agent | cycle=1 | attempt=1 | thread_id=019df82b-3678-7872-90df-9fde956110d3
+---
+I’m checking the phase test artifacts and the current stdlib progress worklist tests to decide whether the new fallback-duplicate fix needs any extra regression coverage beyond what already landed.
+
+I’m adding one more regression test to cover the second missing-artifact entrypoint. `ensure()` and `load(write_fallback=True)` both materialize fallback state, so both should be locked against duplicate-id writes.
+
+The extra regression case is in. I’m running the focused suites again now so the test artifacts can record the exact covered behavior and the green result.
+
+I have the final test delta and a green focused run. I’m recording the coverage map, the added regression cases, and the shared missing-artifact entrypoint decision in the phase test artifacts now.
+
+Scope considered
+
+- Phase-local stdlib progress worklist tests, especially the fallback duplicate-id regression fixed in [tests/unit/test_stdlib_progress_worklists.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/tests/unit/test_stdlib_progress_worklists.py).
+- The phase test artifacts [test_strategy.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/goal-implement-a-greenfield-autoloop-v3-worklist-3cb1f2e6/runs/run-20260505T122105Z-b9a3f746/artifacts/test/phases/stdlib-progress-worklists/test_strategy.md) and [feedback.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/goal-implement-a-greenfield-autoloop-v3-worklist-3cb1f2e6/runs/run-20260505T122105Z-b9a3f746/artifacts/test/phases/stdlib-progress-worklists/feedback.md).
+
+What I analyzed
+
+- The shared fallback materialization path used by both `ProgressJsonCollectionSource.ensure()` and `load()` when the artifact is missing.
+- Existing focused selector, stdlib, and runtime progress worklist coverage to avoid redundant or low-signal test churn.
+
+What I changed
+
+- Added `test_progress_source_load_rejects_duplicate_ids_in_fallback_before_write` to cover the `load()` missing-artifact entrypoint in addition to the existing `ensure()` regression test.
+- Updated [test_strategy.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/goal-implement-a-greenfield-autoloop-v3-worklist-3cb1f2e6/runs/run-20260505T122105Z-b9a3f746/artifacts/test/phases/stdlib-progress-worklists/test_strategy.md) with an explicit behavior-to-test coverage map, preserved invariants, failure paths, stabilization notes, and known gaps.
+- Appended a concise test-addition summary to [feedback.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/goal-implement-a-greenfield-autoloop-v3-worklist-3cb1f2e6/runs/run-20260505T122105Z-b9a3f746/artifacts/test/phases/stdlib-progress-worklists/feedback.md).
+- Appended the non-obvious entrypoint-coverage decision under the current test-phase header in `decisions.txt`.
+
+Key findings / decisions
+
+- Duplicate fallback ids are now guarded at both missing-artifact entrypoints, which is the highest-value regression surface for the recent fix.
+- Focused validation passed: `.venv/bin/python -m pytest tests/unit/test_worklist_selectors.py tests/unit/test_stdlib_progress_worklists.py tests/runtime/test_progress_worklists.py` -> `49 passed`.
+
+Open issues / next step
+
+- No additional phase-local test gaps are known for the canonical progress worklist scope.
+- Next step is auditor review of the updated test strategy and the new `load()` regression coverage.
