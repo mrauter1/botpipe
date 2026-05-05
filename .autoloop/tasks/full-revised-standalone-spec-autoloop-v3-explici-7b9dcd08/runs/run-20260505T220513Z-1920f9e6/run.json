@@ -13,11 +13,11 @@
       "restore-provider-route-required-writes"
     ],
     "explicit": true,
-    "current_phase_index": 0,
-    "current_phase_id": "restore-provider-route-required-writes"
+    "current_phase_index": 1,
+    "current_phase_id": null
   },
   "phase_status": {
-    "restore-provider-route-required-writes": "in_progress"
+    "restore-provider-route-required-writes": "completed"
   },
   "phase_history": [
     {
@@ -25,6 +25,13 @@
       "run_id": "run-20260505T220513Z-1920f9e6",
       "status": "in_progress",
       "ts": "2026-05-05T22:09:08.051483+00:00"
+    },
+    {
+      "phase_id": "restore-provider-route-required-writes",
+      "run_id": "run-20260505T220513Z-1920f9e6",
+      "status": "completed",
+      "ts": "2026-05-05T22:21:48.232249+00:00",
+      "pair": "test"
     }
   ]
 }
