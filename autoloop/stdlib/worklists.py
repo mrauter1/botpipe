@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import json
+import re
 from collections.abc import Callable, Mapping, Sequence
 from dataclasses import dataclass, field
 from enum import Enum
@@ -17,6 +18,9 @@ from autoloop.core.worklists import Selector, WorkItem, Worklist, WorklistSource
 
 if TYPE_CHECKING:
     from autoloop.core.context import Context
+
+
+SAFE_DIR_KEY_RE = re.compile(r"^[A-Za-z0-9][A-Za-z0-9._-]*$")
 
 
 class WorkStatus(str, Enum):
@@ -237,7 +241,7 @@ class ProgressJsonCollectionSource(WorklistSource[Mapping[str, Any]]):
     def save(self, ctx: "Context", items: Sequence[WorkItem[Mapping[str, Any]]]) -> None:
         handle = self._handle(ctx)
         if handle.exists():
-            payload = self._read_existing_payload(handle)
+            payload = self._read_existing_payload(handle, canonicalize_with_model=False)
         elif self.fallback is not None:
             payload = self._materialize_fallback(ctx, handle.path)
         else:
@@ -290,7 +294,12 @@ class ProgressJsonCollectionSource(WorklistSource[Mapping[str, Any]]):
             artifact=self.artifact,
         )
 
-    def _read_existing_payload(self, handle: ArtifactHandle) -> dict[str, Any]:
+    def _read_existing_payload(
+        self,
+        handle: ArtifactHandle,
+        *,
+        canonicalize_with_model: bool = True,
+    ) -> dict[str, Any]:
         try:
             payload = handle.read_json()
         except json.JSONDecodeError as exc:
@@ -302,7 +311,8 @@ class ProgressJsonCollectionSource(WorklistSource[Mapping[str, Any]]):
         candidate = dict(payload)
         if self.model is not None:
             validated = self._validate_model(candidate, path=handle.path)
-            return validated.model_dump(mode="json")
+            if canonicalize_with_model:
+                return validated.model_dump(mode="json")
         return candidate
 
     def _materialize_fallback(self, ctx: "Context", path: Path) -> dict[str, Any]:
@@ -364,6 +374,7 @@ class ProgressJsonCollectionSource(WorklistSource[Mapping[str, Any]]):
                     title=title,
                     payload=item_payload,
                     status=status,
+                    dir_key=self._dir_key(item_payload, item_id=item_id),
                 )
             )
         return tuple(items)
@@ -417,6 +428,16 @@ class ProgressJsonCollectionSource(WorklistSource[Mapping[str, Any]]):
                 continue
             seen.add(item.id)
         return tuple(duplicates)
+
+    @staticmethod
+    def _dir_key(payload: Mapping[str, Any], *, item_id: str) -> str:
+        dir_key = payload.get("dir_key")
+        if isinstance(dir_key, str) and dir_key.strip():
+            return dir_key.strip()
+        normalized = item_id.strip()
+        if SAFE_DIR_KEY_RE.fullmatch(normalized):
+            return normalized
+        return f"_item-{normalized.encode('utf-8').hex()}"
 
 
 def progress_selector(name: str) -> Selector:

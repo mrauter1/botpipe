@@ -40,6 +40,8 @@
 - `mode=all` now rejects selector-bound item/start/end params by design.
 - Generic worklists now support inclusive `up_to` and `from_to` selection in addition to `all` and `single`.
 - Artifact-backed generated progress worklists expose `.artifact` directly from the returned `Worklist`.
+- Model-backed progress worklist saves now validate the existing payload without canonicalizing it first, so status-only saves do not backfill unrelated model defaults.
+- Progress worklist items now derive `dir_key` the same way as existing artifact-backed generic worklists.
 
 ## Known Non-Changes
 - No root `autoloop/__init__.py` edits.

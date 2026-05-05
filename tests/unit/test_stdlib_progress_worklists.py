@@ -34,6 +34,15 @@ class PhasePlan(ProgressBoard[PhaseItem]):
     pass
 
 
+class PhaseItemWithCriteria(ProgressItem):
+    objective: str
+    acceptance_criteria: list[str] = []
+
+
+class PhasePlanWithCriteria(ProgressBoard[PhaseItemWithCriteria]):
+    pass
+
+
 def _context(tmp_path: Path) -> Context:
     return Context(
         task_id="task-1",
@@ -170,6 +179,7 @@ def test_progress_source_normalizes_missing_status_to_initial(tmp_path: Path) ->
     items = ProgressJsonCollectionSource(artifact=_artifact()).load(ctx)
 
     assert items[0].status == WorkStatus.planned.value
+    assert items[0].dir_key == "p1"
 
 
 def test_progress_source_rejects_duplicate_ids(tmp_path: Path) -> None:
@@ -280,6 +290,53 @@ def test_progress_source_save_updates_status_only(tmp_path: Path) -> None:
         "title": "Phase 2",
         "status": "completed",
         "objective": "Also keep me",
+    }
+
+
+def test_progress_source_save_with_model_preserves_non_status_fields(tmp_path: Path) -> None:
+    ctx = _context(tmp_path)
+    path = ctx.workflow_folder / "worklists" / "phase.json"
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.write_text(
+        json.dumps(
+            {
+                "items": [
+                    {
+                        "id": "p1",
+                        "title": "Phase 1",
+                        "status": "planned",
+                        "objective": "Keep me sparse",
+                    }
+                ]
+            }
+        )
+        + "\n",
+        encoding="utf-8",
+    )
+    source = ProgressJsonCollectionSource(artifact=_artifact(), model=PhasePlanWithCriteria)
+
+    source.save(
+        ctx,
+        (
+            WorkItem(
+                id="p1",
+                title="Phase 1",
+                payload={"id": "p1", "title": "Phase 1", "objective": "Keep me sparse"},
+                status="completed",
+            ),
+        ),
+    )
+
+    payload = json.loads(path.read_text(encoding="utf-8"))
+    assert payload == {
+        "items": [
+            {
+                "id": "p1",
+                "title": "Phase 1",
+                "status": "completed",
+                "objective": "Keep me sparse",
+            }
+        ]
     }
 
 
