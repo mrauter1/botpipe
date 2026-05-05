@@ -1739,3 +1739,114 @@ Open issues / next step
 <loop-control>
 {"schema":"docloop.loop_control/v1","kind":"promise","promise":"COMPLETE"}
 </loop-control>
+
+
+---
+run_id=run-20260505T201926Z-7fdaad17 | entry=session_turn | pair=implement | phase=producer | cycle=1 | attempt=1 | thread_id=019dfa1c-b1de-7ad3-bc90-31545cf131de
+---
+provider=codex
+mode=start
+template=/home/rauter/.local/share/pipx/venvs/autoloop/lib/python3.12/site-packages/autoloop/templates/implement_producer.md
+session_id=019dfa1c-b1de-7ad3-bc90-31545cf131de
+
+
+---
+run_id=run-20260505T201926Z-7fdaad17 | entry=phase_output | pair=implement | phase=producer | process=codex-agent | cycle=1 | attempt=1 | thread_id=019dfa1c-b1de-7ad3-bc90-31545cf131de
+---
+I’m treating this as the strictness-and-cleanup phase: first I’ll read the phase artifacts, inspect the current branch-group implementation and tests, and identify the remaining spec gaps before editing.
+
+The phase artifacts are mostly placeholders, so I’m reading the current runtime, validation, and test surfaces directly to find the remaining gaps against the acceptance criteria and required matrix.
+
+I have enough structure to see the core runtime is already async. Next I’m checking for remaining compatibility branches, missing matrix cases, and any banned primitives that still exist in the branch-group path.
+
+`pytest` is not on the shell path here, so I’m checking the repository’s test entrypoint and reading the existing strictness coverage before I start editing.
+
+The repo doesn’t have `pytest` installed in the default interpreter, so I’m checking whether there is a local virtualenv or runner before I rely on execution for validation.
+
+The branch-group tests are already broad, so I’m checking whether the remaining gap is mostly strictness scan coverage and any edge cases the current suite still misses.
+
+I found a local virtualenv and started the focused branch-group suite there. While that runs, I’m checking for any remaining gaps in the strictness scan itself rather than the runtime behavior.
+
+The focused suite exposed a real contract mismatch: `context.md` places failure details after the needs-input section, but the contract test expects those details inside the failure section. I’m fixing that rendering order first, then I’ll add the small missing coverage I found around branch `Fail` capture and strictness scan scope.
+
+I’m editing the branch-group context renderer, the strictness test, and the contract runtime suite now. The change is local: no behavior redesign, just bringing the evidence surface and coverage in line with the current async branch-group contract.
+
+The local edits are in place. I’m rerunning the focused branch-group suite in the project venv to confirm the renderer fix and the added strictness/runtime coverage.
+
+The focused branch-group suite is green now. I’m doing one more sweep of branch-group-specific test files to make sure I’m not leaving an unrun regression surface behind before I update the run artifacts.
+
+I’ve got the final set of code and test changes. I’m updating the phase artifacts now so the run ledger captures the non-obvious choices and the checklist mapping for later turns.
+
+Scope considered
+
+Phase-local strictness-and-cleanup work for the branch-group path: [manifest.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/autoloop/core/branch_groups/manifest.py), [test_branch_group_runtime.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/tests/contract/test_branch_group_runtime.py), [test_no_compat.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/tests/strictness/test_no_compat.py), plus the required run artifacts in `decisions.txt` and `implementation_notes.md`.
+
+What I analyzed
+
+I read the active phase artifacts, inspected the current async branch-group runtime and strictness coverage, and ran the focused branch-group suite in `./.venv`. That surfaced one real contract failure: `context.md` was rendering failure details after `## Needs Input Summary`, which broke the expected section ordering.
+
+What I changed
+
+In [manifest.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/autoloop/core/branch_groups/manifest.py), I reordered `render_branch_group_context()` so failure details stay inside the failure section before the needs-input and cancellation sections. In [test_no_compat.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/tests/strictness/test_no_compat.py), I broadened the forbidden-primitive scan to cover both `autoloop/core/branch_groups/**` and `autoloop/core/engine_collaborators.py`, since branch groups execute through that async dispatcher path. In [test_branch_group_runtime.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/tests/contract/test_branch_group_runtime.py), I added a runtime regression test that pins branch `Fail(...)` capture as `status="failed"` with `runtime_control="fail"` and no destination following.
+
+Key findings / decisions
+
+The branch-group runtime itself was already aligned with the async-only direction; the remaining issue here was evidence-surface ordering and coverage. I also recorded the non-obvious decisions in the run ledger and updated the phase implementation notes.
+
+Validation passed:
+`./.venv/bin/python -m pytest -q tests/strictness/test_no_compat.py tests/unit/test_simple_surface.py tests/unit/test_branch_group_context_sessions.py tests/contract/test_async_step_dispatcher.py tests/contract/test_branch_group_runtime.py tests/runtime/test_runtime_tracing.py tests/runtime/test_runtime_static_graph.py`
+`./.venv/bin/python -m pytest -q tests/unit/test_validation.py`
+
+Open issues / next step
+
+No blocking branch-group issues remain from this phase slice. The focused suites passed; the only output was pre-existing Pydantic field-name warnings in unrelated workflow contract models.
+
+
+---
+run_id=run-20260505T201926Z-7fdaad17 | entry=session_turn | pair=implement | phase=verifier | cycle=1 | attempt=1 | thread_id=019dfa1c-b1de-7ad3-bc90-31545cf131de
+---
+provider=codex
+mode=resume
+template=/home/rauter/.local/share/pipx/venvs/autoloop/lib/python3.12/site-packages/autoloop/templates/implement_verifier.md
+session_id=019dfa1c-b1de-7ad3-bc90-31545cf131de
+
+
+---
+run_id=run-20260505T201926Z-7fdaad17 | entry=phase_output | pair=implement | phase=verifier | process=codex-agent | cycle=1 | attempt=1 | thread_id=019dfa1c-b1de-7ad3-bc90-31545cf131de
+---
+I’m reviewing the phase artifacts and re-running the focused validation surface before I mark the criteria and findings.
+
+I’ve got two phase-blocking review findings: one in the strictness guard itself and one in the required evidence-write coverage. I’m recording those in the verifier artifacts now.
+
+Scope considered
+
+Phase-local strictness-and-cleanup review across the changed branch-group files and required verifier artifacts: `autoloop/core/branch_groups/manifest.py`, `tests/strictness/test_no_compat.py`, `tests/contract/test_branch_group_runtime.py`, plus the phase `criteria.md`, `feedback.md`, `implementation_notes.md`, and the run `decisions.txt`.
+
+What I analyzed
+
+I reviewed the implementation diff against the phase contract and the branch-group spec, with emphasis on AC-1 through AC-3. I also checked the current evidence-write tests and the strictness scan logic for evasion paths.
+
+What I reviewed
+
+I re-ran the focused validation surface with:
+
+`./.venv/bin/python -m pytest -q tests/strictness/test_no_compat.py tests/unit/test_simple_surface.py tests/unit/test_branch_group_context_sessions.py tests/contract/test_async_step_dispatcher.py tests/contract/test_branch_group_runtime.py tests/runtime/test_runtime_tracing.py tests/runtime/test_runtime_static_graph.py tests/unit/test_validation.py`
+
+That suite passed: `249 passed`.
+
+Key findings / decisions
+
+I recorded two blocking findings in `feedback.md`.
+
+- `IMP-001` blocking: the strictness guard is still a raw token scan and misses realistic forbidden import forms like `from threading import RLock` and `from asyncio import to_thread`, so AC-1 is not fully satisfied.
+- `IMP-002` blocking: the phase still lacks the two distinct evidence-write failure tests required by the spec. Current tests only fail `write_branch_group_evidence()` before either file write, so AC-2 is still incomplete for `results.json` failure vs `context.md` failure.
+
+I updated `criteria.md` accordingly and left the checkboxes unchecked because blocking findings remain.
+
+Open issues / next step
+
+Implement the two fixes from `feedback.md`, then rerun the same focused suite. After that, the phase should be ready for a clean re-review.
+
+<loop-control>
+{"schema":"docloop.loop_control/v1","kind":"promise","promise":"INCOMPLETE"}
+</loop-control>
