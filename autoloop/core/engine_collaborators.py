@@ -6,7 +6,7 @@ import asyncio
 from contextlib import contextmanager
 from copy import deepcopy
 from dataclasses import dataclass, replace
-from typing import TYPE_CHECKING, Any, Callable, Literal
+from typing import TYPE_CHECKING, Any, Awaitable, Callable, Literal, TypeVar
 
 from pydantic import BaseModel
 
@@ -138,6 +138,9 @@ class ProviderExecResult:
     usage: TokenUsage | None = None
     session: "SessionBinding | None" = None
     outcome: Outcome | None = None
+
+
+_T = TypeVar("_T")
 
 
 class ProviderContractBuilder:
@@ -335,14 +338,15 @@ class StepDispatcher:
         route_mode: RouteMode = "finalize",
     ) -> StepExecutionResult:
         if route_mode == "capture":
-            return _run_awaitable_sync(
-                self.execute_async(
+            return run_awaitable_sync(
+                lambda: self.execute_async(
                     step,
                     context,
                     state,
                     pending_handoffs,
                     route_mode=route_mode,
-                )
+                ),
+                active_loop_error="Synchronous step execution cannot bridge async execution inside an active event loop.",
             )
         runtime = context_runtime(context)
         runtime.set_state(state)
@@ -525,7 +529,7 @@ class StepDispatcher:
         if step.kind == "branch_group":
             if route_mode != "finalize":
                 raise WorkflowExecutionError("branch-group composite steps do not support capture mode")
-            return self._engine.branch_group_runtime.run(step, context, state, pending_handoffs)
+            return await self._engine.branch_group_runtime.run_async(step, context, state, pending_handoffs)
 
         before_result = self._engine.hook_runner.run_before(step, context, state, artifacts=initial_artifacts)
         state = before_result.state
@@ -1259,12 +1263,16 @@ class StepDispatcher:
         )
 
 
-def _run_awaitable_sync(awaitable):
+def run_awaitable_sync(
+    awaitable_factory: Callable[[], Awaitable[_T]],
+    *,
+    active_loop_error: str,
+) -> _T:
     try:
         asyncio.get_running_loop()
     except RuntimeError:
-        return asyncio.run(awaitable)
-    raise RuntimeError("Synchronous step execution cannot bridge async execution inside an active event loop.")
+        return asyncio.run(awaitable_factory())
+    raise RuntimeError(active_loop_error)
 
 
 class RouteFinalizer:

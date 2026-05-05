@@ -11,7 +11,7 @@ from pydantic import BaseModel
 
 from ..artifacts import validate_artifact_handle
 from ..context import context_runtime
-from ..engine_collaborators import StepExecutionResult, StepFinalizationRequest
+from ..engine_collaborators import StepExecutionResult, StepFinalizationRequest, run_awaitable_sync
 from ..errors import ProviderExecutionError, WorkflowExecutionError
 from ..primitives import AWAIT_INPUT, Event
 from ..providers.protocols import supports_async_llm_provider
@@ -51,6 +51,18 @@ class BranchGroupRuntime:
         state: BaseModel,
         pending_handoffs: tuple["PendingHandoff", ...],
     ) -> StepExecutionResult:
+        return run_awaitable_sync(
+            lambda: self.run_async(step, context, state, pending_handoffs),
+            active_loop_error="Synchronous branch-group execution cannot bridge async execution inside an active event loop.",
+        )
+
+    async def run_async(
+        self,
+        step: "CompiledStep",
+        context: "Context",
+        state: BaseModel,
+        pending_handoffs: tuple["PendingHandoff", ...],
+    ) -> StepExecutionResult:
         spec = step.branch_group
         if spec is None:
             raise WorkflowExecutionError(f"branch-group step {step.name!r} is missing compiled branch metadata")
@@ -69,7 +81,7 @@ class BranchGroupRuntime:
         self._ensure_async_provider_support(spec)
         parent_runtime.set_values(context._values)
         started_at = _utc_now()
-        branch_results = self._run_branches(spec, context=context, state=state)
+        branch_results = await self._run_branches(spec, context=context, state=state)
         finished_at = _utc_now()
         duration_ms = _duration_ms(started_at, finished_at)
         ordered_results = [branch_results[index] for index in range(len(spec.branches))]
@@ -103,7 +115,7 @@ class BranchGroupRuntime:
         )
 
         if spec.fan_in_step is not None:
-            step_result = self._run_fan_in(
+            step_result = await self._run_fan_in(
                 composite_step=step,
                 spec=spec,
                 context=context,
@@ -139,7 +151,7 @@ class BranchGroupRuntime:
         )
         return step_result
 
-    def _run_branches(
+    async def _run_branches(
         self,
         spec: Any,
         *,
@@ -173,13 +185,13 @@ class BranchGroupRuntime:
                 branch_index=branch.index,
                 step_name=branch.step.name,
             )
-            result = self._execute_branch(spec, branch, context)
+            result = await self._execute_branch(spec, branch, context)
             results[branch.index] = result
             if spec.settle == "fail_fast" and result["status"] == "failed":
                 fail_fast_triggered = True
         return results
 
-    def _execute_branch(self, spec: Any, branch: Any, parent_context: "Context") -> dict[str, Any]:
+    async def _execute_branch(self, spec: Any, branch: Any, parent_context: "Context") -> dict[str, Any]:
         compiled_step = branch.step
         branch_meta = BranchMetadata(
             name=branch.name,
@@ -244,7 +256,7 @@ class BranchGroupRuntime:
         branch_dir = parent_context.root / "_branch_groups" / spec.name / "branches" / branch.name
         started_at = _utc_now()
         try:
-            step_result = self._engine.step_dispatcher.execute(
+            step_result = await self._engine.step_dispatcher.execute_async(
                 compiled_step,
                 branch_context,
                 branch_context.state,
@@ -479,7 +491,7 @@ class BranchGroupRuntime:
         provider_session = next(iter(sessions.values()), None)
         return provider_session, sessions
 
-    def _run_fan_in(
+    async def _run_fan_in(
         self,
         *,
         composite_step: "CompiledStep",
@@ -530,7 +542,7 @@ class BranchGroupRuntime:
         runtime.set_values(context._values)
         self._engine._increment_step_runtime_state(fan_in_context._step_state)
         runtime.set_step_state_store(fan_in_context._step_state)
-        step_result = self._engine.step_dispatcher.execute(
+        step_result = await self._engine.step_dispatcher.execute_async(
             fan_in_step,
             fan_in_context,
             fan_in_context.state,

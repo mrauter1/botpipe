@@ -603,3 +603,68 @@ Open issues / next step
 <loop-control>
 {"schema":"docloop.loop_control/v1","kind":"promise","promise":"INCOMPLETE"}
 </loop-control>
+
+
+---
+run_id=run-20260505T201926Z-7fdaad17 | entry=session_turn | pair=implement | phase=producer | cycle=2 | attempt=1 | thread_id=019df9dd-89bf-7fa2-b1bc-911798ef8bf7
+---
+provider=codex
+mode=resume
+template=/home/rauter/.local/share/pipx/venvs/autoloop/lib/python3.12/site-packages/autoloop/templates/implement_producer.md
+session_id=019df9dd-89bf-7fa2-b1bc-911798ef8bf7
+
+
+---
+run_id=run-20260505T201926Z-7fdaad17 | entry=phase_output | pair=implement | phase=producer | process=codex-agent | cycle=2 | attempt=1 | thread_id=019df9dd-89bf-7fa2-b1bc-911798ef8bf7
+---
+I’m fixing the reviewer’s async-dispatch finding by making the branch-group path truly awaitable instead of falling back into the sync capture bridge. I’m also tightening the sync-bridge helper so it stops constructing coroutine objects before the running-loop guard fires.
+
+I’ve narrowed the implementation to two connected changes: move composite branch-group execution onto a real async entrypoint, and make the sync bridge lazy so it never leaks an unawaited coroutine on refusal. I’m checking the current decisions header before editing so any new turn-local constraint is recorded in the right block.
+
+I’m editing the execution boundary now. The change is surgical: make branch groups use an awaitable runtime from the async dispatcher, and convert the sync bridge into a lazy factory so it can reject active-loop calls without leaking coroutines.
+
+The runtime pieces are in place. I’m adding focused contract tests now: one for `await execute_async(...)` on a composite branch-group step, and one for the sync capture bridge refusing an active event loop cleanly after the lazy-bridge change.
+
+I’ve patched the runtime and the contract tests. Next I’m running focused validation on the touched modules and the async dispatcher/branch-group tests to catch any regressions before I update notes and decisions.
+
+The branch-group async contract tests pass with the new awaitable path. I’m running the wider phase suite as a regression check because the dispatcher helper and branch-group runtime are shared surfaces.
+
+I’m recording the non-obvious execution decision now. This turn changed the branch-group entrypoint shape in a way that later phases could easily regress if it isn’t written into the run ledger.
+
+The code is validated. I’m updating the implementation notes now so the phase artifact reflects the reviewer fix, the async branch-group entrypoint, and the new regression coverage.
+
+I’m making one last cleanup to the run ledger format before closing out. The decisions file should stay plain-text so later turns can consume it without markdown-specific parsing assumptions.
+
+Scope considered
+
+- Phase-local fix for reviewer finding `IMP-001` in the async step/provider foundation only: `StepDispatcher.execute_async`, the branch-group runtime handoff, the sync async-bridge helper, and focused contract coverage.
+
+What I analyzed
+
+- Re-read the verifier feedback and the active phase plan/notes.
+- Traced the async branch-group call path through [engine_collaborators.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/autoloop/core/engine_collaborators.py) and [runtime.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/autoloop/core/branch_groups/runtime.py).
+- Reproduced the verifier’s failure mode for `await step_dispatcher.execute_async(branch_group_step, ...)` inside an active event loop.
+
+What I changed
+
+- Added `BranchGroupRuntime.run_async(...)` in [runtime.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/autoloop/core/branch_groups/runtime.py) and routed nested branch/fan-in execution through awaited `step_dispatcher.execute_async(..., route_mode="capture")`.
+- Changed [engine_collaborators.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/autoloop/core/engine_collaborators.py) so `StepDispatcher.execute_async(...)` uses the async branch-group runtime path, while sync callers keep a thin outer wrapper.
+- Reworked the sync async-bridge helper into `run_awaitable_sync(...)`, which now takes a lazy awaitable factory and rejects active-loop calls before any coroutine is created.
+- Extended [test_async_step_dispatcher.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/tests/contract/test_async_step_dispatcher.py) with:
+  - async finalize coverage for a composite branch-group step inside an event loop
+  - a guard test for sync capture-mode bridging inside an active event loop
+- Updated [implementation_notes.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/full-revised-standalone-spec-autoloop-v3-explici-7b9dcd08/runs/run-20260505T201926Z-7fdaad17/artifacts/implement/phases/async-step-provider-foundation/implementation_notes.md) and appended the non-obvious resolution details under the current turn header in `decisions.txt`.
+
+Key findings / decisions
+
+- Reviewer finding `IMP-001` is resolved. Async callers no longer fall back into the sync capture bridge for branch groups, so the composite path stays event-loop-safe and no longer degrades into recorded branch failures plus unawaited-coroutine warnings.
+- Sync outer entrypoints remain intact, but they now delegate to one async branch-group implementation instead of carrying separate nested-step behavior.
+
+Open issues / next step
+
+- This phase’s reviewer fix is complete and the focused phase suite passes.
+- Still deferred by phase scope: real `asyncio.Task`/`Semaphore` branch scheduling, branch-session overlay corrections, and workflow-folder evidence rooting.
+
+<loop-control>
+{"schema":"docloop.loop_control/v1","kind":"promise","promise":"COMPLETE"}
+</loop-control>
