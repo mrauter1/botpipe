@@ -8,3 +8,7 @@ Keep Engine.run stable if feasible, but route all branch-group execution through
 Branch-group runtime events and additive static-graph/topology payloads are required contract surfaces in v1, not optional diagnostics, and must be planned and tested explicitly.
 Branch-group checkpointing remains at the composite boundary in v1; interruption reruns the full group and v1 does not add branch-specific resume.
 Any retained sync step-dispatch entrypoint must stay an outer caller only and must not become a new compatibility shim that shapes branch-group internals.
+<autoloop-decisions-header version="1" block_seq="3" owner="implementer" phase_id="contract-hardening" pair="implement" turn_seq="1" run_id="run-20260505T201926Z-7fdaad17" ts="2026-05-05T20:26:33.474308+00:00" />
+Contract-hardening bypasses the compiled workflow cache for any workflow whose discovered top-level steps include a branch-group step; non-branch workflows keep the existing cache path unchanged.
+Discovery now materializes branch-group internals as BranchGroupDeclarationSpec/BranchStepDeclarationSpec and the compiler emits separate CompiledBranchGroupSpec/CompiledBranchStepSpec objects instead of mutating one shared spec shape across phases.
+This phase rejects scoped and operation branch steps as unsupported v1 branch kinds, but keeps operation-based fan-in declarations accepted because the current authoring surface and tests still treat fan-in operation steps as valid.
