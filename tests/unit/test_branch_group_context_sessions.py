@@ -19,6 +19,7 @@ from autoloop.core.errors import WorkflowExecutionError
 from autoloop.core.providers.fake import ScriptedLLMProvider
 from autoloop.core.sessions import Continuity
 from autoloop.core.stores import InMemoryCheckpointStore, InMemorySessionStore, SessionBinding
+from autoloop.core.worklists import Worklist
 
 
 class _State(BaseModel):
@@ -148,6 +149,50 @@ def test_branch_session_store_view_keeps_activation_local_to_branch(tmp_path: Pa
 
     assert branch.get_session("main").session_id == "branch-session-updated"
     assert parent.get_session("main").session_id == parent_binding.session_id
+
+
+def test_branch_context_resolves_worklists_locally_without_mutating_parent(tmp_path: Path) -> None:
+    worklist = Worklist.from_items(
+        "items",
+        (
+            {"id": "one", "title": "One"},
+            {"id": "two", "title": "Two"},
+        ),
+        item_id="id",
+        title="title",
+    )
+    parent = Context(
+        task_id="task-1",
+        run_id="run-1",
+        workflow_name="example",
+        task_folder=tmp_path / "task",
+        workflow_folder=tmp_path / "task" / "wf_example",
+        run_folder=tmp_path / "run",
+        package_folder=tmp_path / "package",
+        state=_State(),
+        session_store=InMemorySessionStore(),
+        worklists={"items": worklist},
+    )
+    branch = create_branch_context(
+        parent,
+        step_name="assess",
+        branch=BranchMetadata(name="security", index=0, group="reviews", input={}, count=1),
+        session_store=BranchSessionStoreView(parent._session_store, namespace="reviews.security"),
+    )
+
+    selection = branch.selection("items")
+    assert selection.current is not None
+    assert selection.current.id == "one"
+    assert "items" not in parent._selections
+    assert "items" in branch._selections
+
+    branch.worklist("items").advance()
+
+    assert parent._selections == {}
+    assert branch._selections["items"].current is not None
+    assert branch._selections["items"].current.id == "two"
+    assert parent._worklist_items_cache == {}
+    assert "items" in branch._worklist_items_cache
 
 
 def test_engine_session_selection_and_persistence_follow_context_store(tmp_path: Path) -> None:

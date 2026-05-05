@@ -26,6 +26,9 @@
 - `StateCell`
 - `BranchMetadata`
 - `FanInMetadata`
+- `_create_child_context`
+- `_inherit_child_runtime_bookkeeping`
+- `_child_worklist_selection_resolver`
 - `create_branch_context`
 - `create_fan_in_context`
 - `BranchSessionStoreView`
@@ -41,8 +44,10 @@
   - Rewired nested engine session snapshot/select/persist paths to use `context._session_store`.
 - Plan milestone 2 / branch-scoped execution id scaffolding:
   - Added branch execution-id helper plumbing and branch-context factories that set a branch-scoped execution-id prefix.
+- Plan milestone 2 / branch-scoped bookkeeping:
+  - Child branch/fan-in contexts now clone selection/snapshot/cache bookkeeping by value and resolve worklists through a child-local lazy resolver instead of reusing parent bookkeeping closures.
 - Plan milestone 4 / validation coverage for this slice:
-  - Added focused unit coverage for shared state/value behavior, fan-in metadata access, branch-local session activation, and context-bound engine session persistence.
+  - Added focused unit coverage for shared state/value behavior, fan-in metadata access, branch-local session activation, child-local worklist resolution, and context-bound engine session persistence.
 
 ## Assumptions
 - Branch runtime will create dedicated child contexts rather than mutating the parent context object in place.
@@ -62,9 +67,11 @@
 - No branch scheduler, manifest generation, fan-in orchestration, or branch result routing was implemented in this phase.
 - No shared-values replacement cell or concurrency locking was added yet; branch contexts still share one mutable values mapping by reference.
 - No checkpoint schema changes were made for branch-local session overlays in this phase.
+- Branch child contexts now resolve and isolate worklist selections locally, but full scoped item-state remapping across branch-specific item stores still belongs to the later branch runtime orchestration phase.
 
 ## Expected Side Effects
 - Any future branch runtime using `create_branch_context(...)` can share parent state/value references while keeping provider-session activation local to that branch store view.
+- Branch/fan-in contexts can now load and advance worklist selections without mutating the parent context’s selection dictionaries or cache.
 - Runtime event payloads can now carry a branch-scoped `step_execution_id` when a child context sets an execution-id override.
 
 ## Validation Performed

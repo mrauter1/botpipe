@@ -9,8 +9,11 @@ from typing import TYPE_CHECKING, Any
 
 from pydantic import BaseModel
 
+from ..errors import WorkflowExecutionError
+
 if TYPE_CHECKING:
     from ..context import Context
+    from ..worklists import Selection
     from ..stores.protocols import SessionStore
 
 
@@ -80,43 +83,18 @@ def create_branch_context(
 ) -> "Context":
     """Clone a parent runtime context for one branch execution."""
 
-    from ..context import Context
-
-    return Context(
-        root=parent.root,
-        task_id=parent.task_id,
-        run_id=parent.run_id,
-        workflow_name=parent.workflow_name,
-        task_folder=parent.task_folder,
-        workflow_folder=parent.workflow_folder,
-        run_folder=parent.run_folder,
-        package_folder=parent.package_folder,
-        state=parent.state,
-        state_cell=parent.state_cell,
-        session_store=session_store,
-        session_definitions=parent._session_definitions,
-        worklists=parent._worklists,
-        selections=parent._selections,
-        selection_snapshots=parent._selection_snapshots,
-        active_worklist=parent._active_worklist,
-        params=parent.params,
-        workflow_params=parent._workflow_params,
-        workflow_input=parent.input,
-        workflow_invoker=parent._workflow_invoker,
-        answer=parent.answer,
-        input_response=parent.input_response,
+    return _create_child_context(
+        parent,
         step_name=step_name,
-        default_session_name=parent._default_session_name,
-        artifacts=parent.artifacts,
-        values=parent._values,
+        session_store=session_store,
         route=route,
         outcome=outcome,
         meta=meta,
         step_state_store=step_state_store,
         item_state_store=item_state_store,
         step_item_state_store=step_item_state_store,
-        runtime_event_sink=parent._runtime_event_sink,
         branch=branch,
+        fan_in=None,
         step_execution_id=branch_execution_id(
             group_name=branch.group,
             branch_name=branch.name,
@@ -141,9 +119,42 @@ def create_fan_in_context(
 ) -> "Context":
     """Clone a parent runtime context for authored fan-in execution."""
 
+    return _create_child_context(
+        parent,
+        step_name=step_name,
+        session_store=session_store,
+        route=route,
+        outcome=outcome,
+        meta=meta,
+        step_state_store=step_state_store,
+        item_state_store=item_state_store,
+        step_item_state_store=step_item_state_store,
+        branch=None,
+        fan_in=fan_in,
+        step_execution_id=None,
+    )
+
+
+def _create_child_context(
+    parent: "Context",
+    *,
+    step_name: str,
+    session_store: "SessionStore",
+    route: Mapping[str, Any] | Any | None,
+    outcome: Mapping[str, Any] | Any | None,
+    meta: Mapping[str, Any] | Any | None,
+    step_state_store: BaseModel | dict[str, Any] | None,
+    item_state_store: BaseModel | dict[str, Any] | None,
+    step_item_state_store: BaseModel | dict[str, Any] | None,
+    branch: BranchMetadata | None,
+    fan_in: FanInMetadata | None,
+    step_execution_id: str | None,
+) -> "Context":
+    """Clone a parent runtime context for branch-group nested execution."""
+
     from ..context import Context
 
-    return Context(
+    child = Context(
         root=parent.root,
         task_id=parent.task_id,
         run_id=parent.run_id,
@@ -157,8 +168,8 @@ def create_fan_in_context(
         session_store=session_store,
         session_definitions=parent._session_definitions,
         worklists=parent._worklists,
-        selections=parent._selections,
-        selection_snapshots=parent._selection_snapshots,
+        selections=dict(parent._selections),
+        selection_snapshots=dict(parent._selection_snapshots),
         active_worklist=parent._active_worklist,
         params=parent.params,
         workflow_params=parent._workflow_params,
@@ -177,8 +188,55 @@ def create_fan_in_context(
         item_state_store=item_state_store,
         step_item_state_store=step_item_state_store,
         runtime_event_sink=parent._runtime_event_sink,
+        branch=branch,
         fan_in=fan_in,
+        step_execution_id=step_execution_id,
     )
+    _inherit_child_runtime_bookkeeping(parent, child)
+    return child
+
+
+def _inherit_child_runtime_bookkeeping(parent: "Context", child: "Context") -> None:
+    """Initialize branch-local runtime bookkeeping from a parent context."""
+
+    from ..context import context_runtime
+
+    runtime = context_runtime(child)
+    runtime.set_selection_snapshots(dict(parent._selection_snapshots))
+    runtime.set_worklist_selection_resolver(_child_worklist_selection_resolver(child))
+    child._worklist_items_cache = dict(parent._worklist_items_cache)
+
+
+def _child_worklist_selection_resolver(child: "Context"):
+    """Build a child-local lazy worklist selection resolver."""
+
+    from ..context import context_runtime
+
+    def resolve(worklist_name: str) -> "Selection[Any]":
+        existing = child._selections.get(worklist_name)
+        if existing is not None:
+            return existing
+        worklist = child._worklists.get(worklist_name)
+        if worklist is None:
+            raise WorkflowExecutionError(f"unknown worklist {worklist_name!r}")
+        snapshot = child._selection_snapshots.get(worklist_name)
+        worklist.ensure_source(child)
+        items = worklist._load_source_items(child, ensure=False)
+        worklist._validate_loaded_items(child, items)
+        cached_items = worklist._cache_loaded_items(child, items)
+        selection = worklist._selection_from_loaded_items(child, cached_items, snapshot=snapshot)
+        runtime = context_runtime(child)
+        runtime.set_selection(worklist_name, selection)
+        runtime.sync_scoped_state_after_worklist_selection_change(worklist_name)
+        runtime.emit_worklist_selection_resolved(
+            worklist_name=worklist_name,
+            selection=selection,
+            lazy=True,
+            source=worklist.source_descriptor(child),
+        )
+        return selection
+
+    return resolve
 
 
 __all__ = [
