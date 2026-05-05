@@ -12,6 +12,18 @@ from typing import Any
 from pydantic import BaseModel
 
 from .artifacts import Artifact
+from .branch_groups.lowering import build_branch_group_spec, declared_internal_route_tags
+from .branch_groups.models import BranchStepSpec
+from .branch_groups.validation import (
+    ensure_json_serializable,
+    validate_branch_placeholder_reference,
+    validate_branch_step_kind,
+    validate_branch_step_session_requirements,
+    validate_fan_in_helper_placement,
+    validate_fan_in_placeholder_reference,
+    validate_fan_in_step_kind,
+    validate_path_safe_name,
+)
 from .descriptors import (
     ParameterField,
     StateField,
@@ -26,7 +38,7 @@ from .providers.retries import ProviderRetryPolicy
 from .routes import Route, normalize_route_spec
 from .sessions import DEFAULT_SESSION_NAME
 from .step_state import build_step_item_state_model, build_step_state_model
-from .steps import ChildWorkflowStep, ProduceVerifyStep, PromptStep, PythonStep, Session, Step
+from .steps import BranchGroupStep, ChildWorkflowStep, ProduceVerifyStep, PromptStep, PythonStep, Session, Step
 from .worklists import Worklist
 
 
@@ -169,6 +181,7 @@ def describe_workflow_class(workflow_cls: type[Any]) -> WorkflowDefinition:
     seen_simple_declarations: set[int] = set()
     step_order: dict[int, int] = {}
     simple_seeds: list[_SimpleStepSeed] = []
+    branch_group_consumed_declarations = _collect_branch_group_nested_declaration_ids(workflow_cls)
 
     for attr_order, (attr_name, value) in enumerate(_iter_visible_workflow_namespace_items(workflow_cls)):
         if isinstance(value, Artifact):
@@ -202,6 +215,8 @@ def describe_workflow_class(workflow_cls: type[Any]) -> WorkflowDefinition:
             seen_steps.add(id(value))
             step_order[id(value)] = attr_order
         elif _is_simple_step_declaration(value):
+            if id(value) in branch_group_consumed_declarations and not _is_branch_group_declaration(value):
+                continue
             if id(value) in seen_simple_declarations:
                 continue
             simple_name = getattr(value, "name", None)
@@ -372,6 +387,24 @@ def _is_simple_step_declaration(value: object) -> bool:
     return isinstance(value, _NamedDeclaration)
 
 
+def _is_branch_group_declaration(value: object) -> bool:
+    return bool(getattr(value, "kind", None) == "branch_group" and getattr(value, "branch_group_kind", None))
+
+
+def _collect_branch_group_nested_declaration_ids(workflow_cls: type[Any]) -> set[int]:
+    consumed: set[int] = set()
+    for _, value in _iter_visible_workflow_namespace_items(workflow_cls):
+        if not _is_branch_group_declaration(value):
+            continue
+        nested = getattr(value, "nested_declarations", None)
+        if not callable(nested):
+            continue
+        for declaration in nested():
+            if _is_simple_step_declaration(declaration):
+                consumed.add(id(declaration))
+    return consumed
+
+
 def _is_simple_artifact_spec(value: object) -> bool:
     from autoloop.simple import ArtifactSpec
 
@@ -444,135 +477,438 @@ def _lower_simple_steps(
             artifact_name_counts[artifact.name] = artifact_name_counts.get(artifact.name, 0) + 1
     lowered: list[tuple[_SimpleStepSeed, Step]] = []
     for seed in simple_seeds:
-        declaration = seed.declaration
-        explicit_reads = _normalize_simple_input_references(getattr(declaration, "reads", ()), step_name=seed.name)
-        prompt_references, inferred_reads = _analyze_simple_prompt_references(
+        step = _lower_one_simple_seed(
             workflow_cls,
             seed=seed,
             existing_steps=existing_steps,
             simple_seeds=simple_seeds,
             artifact_name_counts=artifact_name_counts,
         )
-        reads = tuple(dict.fromkeys((*explicit_reads, *inferred_reads)))
-        requires = tuple(dict.fromkeys(_normalize_simple_input_references(getattr(declaration, "requires", ()), step_name=seed.name)))
-        verifier_requires = tuple(dict.fromkeys(_normalize_simple_input_references(getattr(declaration, "verifier_requires", ()), step_name=seed.name)))
-        verifier_reads = tuple(dict.fromkeys((*_normalize_simple_input_references(getattr(declaration, "verifier_reads", ()), step_name=seed.name), *seed.writes.keys())))
-        state_model = _normalize_simple_state_model(
-            getattr(declaration, "state", None),
-            step_name=seed.name,
-            step_kind=seed.kind,
-            module_name=workflow_cls.__module__,
-        )
-        step_item_state_model = _normalize_simple_item_state_model(
-            getattr(declaration, "item_state", None),
-            step_name=seed.name,
-            step_kind=seed.kind,
-            scope=getattr(declaration, "scope", None),
-            module_name=workflow_cls.__module__,
-        )
-        retry_policy = _lower_simple_retry_policy(getattr(declaration, "retry", None), step_name=seed.name)
-        session = getattr(declaration, "session", None)
-        if session is not None and not isinstance(session, Session):
-            raise WorkflowValidationError(f"simple step {seed.name!r} session must be declared with workflow.Session")
-        verifier_session = getattr(declaration, "verifier_session", None)
-        if verifier_session is not None and not isinstance(verifier_session, Session):
-            raise WorkflowValidationError(
-                f"simple step {seed.name!r} verifier_session must be declared with workflow.Session"
-            )
-        if seed.kind in {"llm", "step"}:
-            step = PromptStep(
-                name=seed.name,
-                producer=getattr(declaration, "prompt"),
-                session=session,
-                scope=getattr(declaration, "scope", None),
-                reads=reads,
-                requires=requires,
-                writes=seed.writes,
-                expected_output_schema=getattr(declaration, "control_schema", None),
-                retry_policy=retry_policy,
-                before=getattr(declaration, "before", None),
-                after=getattr(declaration, "after", None),
-                item_state=step_item_state_model,
-                control_routes=getattr(declaration, "control_routes", None),
-            )
-        elif seed.kind == "operation":
-            step = PythonStep(
-                name=seed.name,
-                reads=reads,
-                requires=requires,
-                writes={},
-                handler=getattr(declaration, "build_handler")(),
-                retry_policy=None,
-                before=None,
-                after=None,
-                control_routes=getattr(declaration, "control_routes", None),
-            )
-        elif seed.kind in {"review", "produce_verify"}:
-            step = ProduceVerifyStep(
-                name=seed.name,
-                producer=getattr(declaration, "producer_prompt"),
-                verifier=getattr(declaration, "verifier_prompt"),
-                session=session,
-                verifier_session=verifier_session,
-                scope=getattr(declaration, "scope", None),
-                reads=reads,
-                requires=requires,
-                verifier_requires=verifier_requires,
-                producer_writes=seed.writes,
-                verifier_writes=seed.verifier_writes,
-                expected_output_schema=getattr(declaration, "control_schema", None),
-                retry_policy=retry_policy,
-                before=None,
-                after=None,
-                before_producer=getattr(declaration, "before_producer", None),
-                after_producer=getattr(declaration, "after_producer", None),
-                before_verifier=getattr(declaration, "before_verifier", None),
-                after_verifier=getattr(declaration, "after_verifier", None),
-                item_state=step_item_state_model,
-                control_routes=getattr(declaration, "control_routes", None),
-            )
-        elif seed.kind in {"system", "python"}:
-            step = PythonStep(
-                name=seed.name,
-                reads=reads,
-                requires=requires,
-                writes=seed.writes,
-                handler=getattr(declaration, "fn"),
-                retry_policy=retry_policy,
-                before=getattr(declaration, "before", None),
-                after=getattr(declaration, "after", None),
-                control_routes=getattr(declaration, "control_routes", None),
-            )
-        elif seed.kind == "workflow":
-            step = ChildWorkflowStep(
-                name=seed.name,
-                workflow=getattr(declaration, "workflow"),
-                message=getattr(declaration, "message", None),
-                message_from=getattr(declaration, "message_from", None),
-                params=getattr(declaration, "params", None),
-                input=getattr(declaration, "input", None),
-                reads=reads,
-                requires=requires,
-                writes=seed.writes,
-                retry_policy=retry_policy,
-                before=getattr(declaration, "before", None),
-                after=getattr(declaration, "after", None),
-                control_routes=getattr(declaration, "control_routes", None),
-            )
-        else:
-            raise WorkflowValidationError(f"unsupported simple step kind {seed.kind!r}")
-        setattr(step, "simple_declaration", declaration)
-        setattr(step, "simple_prompt_references", prompt_references)
-        setattr(step, "producer_reads", reads)
-        setattr(step, "producer_requires", requires)
-        setattr(step, "producer_writes", tuple(seed.writes.keys()))
-        setattr(step, "verifier_reads", verifier_reads)
-        setattr(step, "verifier_requires", verifier_requires)
-        setattr(step, "verifier_writes", tuple(seed.verifier_writes.keys()))
-        setattr(step, "state_model", state_model)
-        setattr(step, "step_item_state_model", step_item_state_model)
         lowered.append((seed, step))
     return lowered
+
+
+def _lower_one_simple_seed(
+    workflow_cls: type[Any],
+    *,
+    seed: _SimpleStepSeed,
+    existing_steps: Sequence[Step],
+    simple_seeds: Sequence[_SimpleStepSeed],
+    artifact_name_counts: Mapping[str, int],
+    allow_branch_placeholders: bool = False,
+    allow_fan_in_placeholders: bool = False,
+    allow_fan_in_helpers: bool = False,
+) -> Step:
+    declaration = seed.declaration
+    if seed.kind == "branch_group":
+        return _lower_simple_branch_group_step(
+            workflow_cls,
+            seed=seed,
+            existing_steps=existing_steps,
+            simple_seeds=simple_seeds,
+            artifact_name_counts=artifact_name_counts,
+        )
+
+    explicit_reads = _normalize_simple_input_references(
+        getattr(declaration, "reads", ()),
+        step_name=seed.name,
+        allow_fan_in_helpers=allow_fan_in_helpers,
+    )
+    prompt_references, inferred_reads = _analyze_simple_prompt_references(
+        workflow_cls,
+        seed=seed,
+        existing_steps=existing_steps,
+        simple_seeds=simple_seeds,
+        artifact_name_counts=artifact_name_counts,
+        allow_branch_placeholders=allow_branch_placeholders,
+        allow_fan_in_placeholders=allow_fan_in_placeholders,
+    )
+    reads = tuple(dict.fromkeys((*explicit_reads, *inferred_reads)))
+    requires = tuple(
+        dict.fromkeys(
+            _normalize_simple_input_references(
+                getattr(declaration, "requires", ()),
+                step_name=seed.name,
+                allow_fan_in_helpers=allow_fan_in_helpers,
+            )
+        )
+    )
+    verifier_requires = tuple(
+        dict.fromkeys(
+            _normalize_simple_input_references(
+                getattr(declaration, "verifier_requires", ()),
+                step_name=seed.name,
+                allow_fan_in_helpers=allow_fan_in_helpers,
+            )
+        )
+    )
+    verifier_reads = tuple(
+        dict.fromkeys(
+            (
+                *_normalize_simple_input_references(
+                    getattr(declaration, "verifier_reads", ()),
+                    step_name=seed.name,
+                    allow_fan_in_helpers=allow_fan_in_helpers,
+                ),
+                *seed.writes.keys(),
+            )
+        )
+    )
+    state_model = _normalize_simple_state_model(
+        getattr(declaration, "state", None),
+        step_name=seed.name,
+        step_kind=seed.kind,
+        module_name=workflow_cls.__module__,
+    )
+    step_item_state_model = _normalize_simple_item_state_model(
+        getattr(declaration, "item_state", None),
+        step_name=seed.name,
+        step_kind=seed.kind,
+        scope=getattr(declaration, "scope", None),
+        module_name=workflow_cls.__module__,
+    )
+    retry_policy = _lower_simple_retry_policy(getattr(declaration, "retry", None), step_name=seed.name)
+    session = getattr(declaration, "session", None)
+    if session is not None and not isinstance(session, Session):
+        raise WorkflowValidationError(f"simple step {seed.name!r} session must be declared with workflow.Session")
+    verifier_session = getattr(declaration, "verifier_session", None)
+    if verifier_session is not None and not isinstance(verifier_session, Session):
+        raise WorkflowValidationError(
+            f"simple step {seed.name!r} verifier_session must be declared with workflow.Session"
+        )
+    if seed.kind in {"llm", "step"}:
+        step = PromptStep(
+            name=seed.name,
+            producer=getattr(declaration, "prompt"),
+            session=session,
+            scope=getattr(declaration, "scope", None),
+            reads=reads,
+            requires=requires,
+            writes=seed.writes,
+            expected_output_schema=getattr(declaration, "control_schema", None),
+            retry_policy=retry_policy,
+            before=getattr(declaration, "before", None),
+            after=getattr(declaration, "after", None),
+            item_state=step_item_state_model,
+            control_routes=getattr(declaration, "control_routes", None),
+        )
+    elif seed.kind == "operation":
+        step = PythonStep(
+            name=seed.name,
+            reads=reads,
+            requires=requires,
+            writes={},
+            handler=getattr(declaration, "build_handler")(),
+            retry_policy=None,
+            before=None,
+            after=None,
+            control_routes=getattr(declaration, "control_routes", None),
+        )
+    elif seed.kind in {"review", "produce_verify"}:
+        step = ProduceVerifyStep(
+            name=seed.name,
+            producer=getattr(declaration, "producer_prompt"),
+            verifier=getattr(declaration, "verifier_prompt"),
+            session=session,
+            verifier_session=verifier_session,
+            scope=getattr(declaration, "scope", None),
+            reads=reads,
+            requires=requires,
+            verifier_requires=verifier_requires,
+            producer_writes=seed.writes,
+            verifier_writes=seed.verifier_writes,
+            expected_output_schema=getattr(declaration, "control_schema", None),
+            retry_policy=retry_policy,
+            before=None,
+            after=None,
+            before_producer=getattr(declaration, "before_producer", None),
+            after_producer=getattr(declaration, "after_producer", None),
+            before_verifier=getattr(declaration, "before_verifier", None),
+            after_verifier=getattr(declaration, "after_verifier", None),
+            item_state=step_item_state_model,
+            control_routes=getattr(declaration, "control_routes", None),
+        )
+    elif seed.kind in {"system", "python"}:
+        step = PythonStep(
+            name=seed.name,
+            reads=reads,
+            requires=requires,
+            writes=seed.writes,
+            handler=getattr(declaration, "fn"),
+            retry_policy=retry_policy,
+            before=getattr(declaration, "before", None),
+            after=getattr(declaration, "after", None),
+            control_routes=getattr(declaration, "control_routes", None),
+        )
+    elif seed.kind == "workflow":
+        step = ChildWorkflowStep(
+            name=seed.name,
+            workflow=getattr(declaration, "workflow"),
+            message=getattr(declaration, "message", None),
+            message_from=getattr(declaration, "message_from", None),
+            params=getattr(declaration, "params", None),
+            input=getattr(declaration, "input", None),
+            reads=reads,
+            requires=requires,
+            writes=seed.writes,
+            retry_policy=retry_policy,
+            before=getattr(declaration, "before", None),
+            after=getattr(declaration, "after", None),
+            control_routes=getattr(declaration, "control_routes", None),
+        )
+    else:
+        raise WorkflowValidationError(f"unsupported simple step kind {seed.kind!r}")
+    setattr(step, "simple_declaration", declaration)
+    setattr(step, "simple_prompt_references", prompt_references)
+    setattr(step, "producer_reads", reads)
+    setattr(step, "producer_requires", requires)
+    setattr(step, "producer_writes", tuple(seed.writes.keys()))
+    setattr(step, "verifier_reads", verifier_reads)
+    setattr(step, "verifier_requires", verifier_requires)
+    setattr(step, "verifier_writes", tuple(seed.verifier_writes.keys()))
+    setattr(step, "state_model", state_model)
+    setattr(step, "step_item_state_model", step_item_state_model)
+    return step
+
+
+def _lower_simple_branch_group_step(
+    workflow_cls: type[Any],
+    *,
+    seed: _SimpleStepSeed,
+    existing_steps: Sequence[Step],
+    simple_seeds: Sequence[_SimpleStepSeed],
+    artifact_name_counts: Mapping[str, int],
+) -> BranchGroupStep:
+    declaration = seed.declaration
+    group_name = seed.name
+    validate_path_safe_name(kind="name", value=group_name, owner="branch group")
+    if getattr(declaration, "fan_in", None) is not None and getattr(declaration, "routes", None):
+        raise WorkflowValidationError(
+            f"branch group {group_name!r} must not declare composite routes when fan_in is present"
+        )
+    concurrency = getattr(declaration, "concurrency", None)
+    if concurrency is not None and (not isinstance(concurrency, int) or isinstance(concurrency, bool) or concurrency <= 0):
+        raise WorkflowValidationError(f"branch group {group_name!r} concurrency must be a positive integer when provided")
+    settle = getattr(declaration, "settle", "all")
+    if settle not in {"all", "fail_fast"}:
+        raise WorkflowValidationError(f"branch group {group_name!r} settle must be 'all' or 'fail_fast'")
+    success_routes = tuple(getattr(declaration, "success_routes", ("done", "accepted")))
+    if not success_routes or not all(isinstance(route, str) and route.strip() for route in success_routes):
+        raise WorkflowValidationError(f"branch group {group_name!r} success_routes must contain non-empty strings")
+
+    lowered_branches: list[BranchStepSpec] = []
+    if getattr(declaration, "branch_group_kind", None) == "parallel":
+        raw_branches = dict(getattr(declaration, "branches", {}))
+        if not raw_branches:
+            raise WorkflowValidationError(f"branch group {group_name!r} requires a non-empty branches mapping")
+        for index, (branch_name, branch_declaration) in enumerate(raw_branches.items()):
+            validate_path_safe_name(kind="branch name", value=branch_name, owner=f"branch group {group_name!r}")
+            branch_step = _lower_branch_group_internal_step(
+                workflow_cls,
+                group_name=group_name,
+                branch_name=branch_name,
+                declaration=branch_declaration,
+                existing_steps=existing_steps,
+                simple_seeds=simple_seeds,
+                artifact_name_counts=artifact_name_counts,
+                allow_branch_placeholders=True,
+                allow_fan_in_placeholders=False,
+                allow_fan_in_helpers=False,
+                step_name=_internal_branch_step_name(group_name=group_name, branch_name=branch_name, declaration=branch_declaration),
+            )
+            validate_branch_step_kind(group_name=group_name, step=branch_step)
+            validate_branch_step_session_requirements(group_name=group_name, step=branch_step)
+            _validate_branch_group_artifact_templates(
+                step=branch_step,
+                step_name=branch_step.name,
+                allow_branch_placeholders=True,
+                allow_fan_in_placeholders=False,
+            )
+            lowered_branches.append(BranchStepSpec(name=branch_name, index=index, input={}, step=branch_step))
+    else:
+        raw_branches = dict(getattr(declaration, "branches", {}))
+        if not raw_branches:
+            raise WorkflowValidationError(f"branch group {group_name!r} requires a non-empty branches mapping")
+        shared_declaration = getattr(declaration, "step", None)
+        for index, (branch_name, branch_input) in enumerate(raw_branches.items()):
+            validate_path_safe_name(kind="branch name", value=branch_name, owner=f"branch group {group_name!r}")
+            ensure_json_serializable(branch_input, label=f"branch group {group_name!r} branch {branch_name!r} input")
+            branch_step = _lower_branch_group_internal_step(
+                workflow_cls,
+                group_name=group_name,
+                branch_name=branch_name,
+                declaration=shared_declaration,
+                existing_steps=existing_steps,
+                simple_seeds=simple_seeds,
+                artifact_name_counts=artifact_name_counts,
+                allow_branch_placeholders=True,
+                allow_fan_in_placeholders=False,
+                allow_fan_in_helpers=False,
+                step_name=_internal_fan_out_step_name(group_name=group_name, declaration=shared_declaration),
+            )
+            validate_branch_step_kind(group_name=group_name, step=branch_step)
+            validate_branch_step_session_requirements(group_name=group_name, step=branch_step)
+            _validate_branch_group_artifact_templates(
+                step=branch_step,
+                step_name=branch_step.name,
+                allow_branch_placeholders=True,
+                allow_fan_in_placeholders=False,
+            )
+            lowered_branches.append(BranchStepSpec(name=branch_name, index=index, input=branch_input, step=branch_step))
+
+    fan_in_declaration = getattr(declaration, "fan_in", None)
+    fan_in_step: Step | None = None
+    composite_route_tags: tuple[str, ...]
+    default_chain_route = getattr(declaration, "default_chain_route", "done")
+    rework_chain_route = getattr(declaration, "rework_chain_route", None)
+    if fan_in_declaration is not None:
+        fan_in_step = _lower_branch_group_internal_step(
+            workflow_cls,
+            group_name=group_name,
+            branch_name="fan_in",
+            declaration=fan_in_declaration,
+            existing_steps=existing_steps,
+            simple_seeds=simple_seeds,
+            artifact_name_counts=artifact_name_counts,
+            allow_branch_placeholders=False,
+            allow_fan_in_placeholders=True,
+            allow_fan_in_helpers=True,
+            step_name=_internal_fan_in_step_name(group_name=group_name, declaration=fan_in_declaration),
+        )
+        validate_fan_in_step_kind(group_name=group_name, step=fan_in_step)
+        validate_fan_in_helper_placement(
+            (*fan_in_step.reads, *fan_in_step.requires, *getattr(fan_in_step, "verifier_requires", ())),
+            group_name=group_name,
+            step_name=fan_in_step.name,
+            allow_helpers=True,
+        )
+        _validate_branch_group_artifact_templates(
+            step=fan_in_step,
+            step_name=fan_in_step.name,
+            allow_branch_placeholders=False,
+            allow_fan_in_placeholders=True,
+        )
+        composite_route_tags = declared_internal_route_tags(fan_in_declaration, step=fan_in_step)
+        if isinstance(fan_in_step, ProduceVerifyStep):
+            default_chain_route = "accepted"
+            rework_chain_route = "needs_rework"
+        else:
+            default_chain_route = "done"
+            rework_chain_route = None
+    else:
+        composite_route_tags = ("done", "partial", "question", "failed")
+
+    branch_group = build_branch_group_spec(
+        name=group_name,
+        kind=str(getattr(declaration, "branch_group_kind")),
+        branches=tuple(lowered_branches),
+        concurrency=concurrency,
+        settle=settle,
+        success_routes=tuple(dict.fromkeys(route.strip() for route in success_routes)),
+        outcome=getattr(declaration, "outcome", None),
+        fan_in_step=fan_in_step,
+        composite_route_tags=composite_route_tags,
+        default_chain_route=default_chain_route,
+        rework_chain_route=rework_chain_route,
+    )
+    step = BranchGroupStep(name=group_name, branch_group=branch_group)
+    setattr(step, "simple_declaration", declaration)
+    setattr(step, "simple_prompt_references", ())
+    setattr(step, "state_model", build_step_state_model(None, step_name=group_name, step_kind=seed.kind, module_name=workflow_cls.__module__))
+    setattr(step, "step_item_state_model", None)
+    setattr(step, "composite_route_tags", composite_route_tags)
+    setattr(step, "default_chain_route", default_chain_route)
+    setattr(step, "rework_chain_route", rework_chain_route)
+    return step
+
+
+def _lower_branch_group_internal_step(
+    workflow_cls: type[Any],
+    *,
+    group_name: str,
+    branch_name: str,
+    declaration: object,
+    existing_steps: Sequence[Step],
+    simple_seeds: Sequence[_SimpleStepSeed],
+    artifact_name_counts: Mapping[str, int],
+    allow_branch_placeholders: bool,
+    allow_fan_in_placeholders: bool,
+    allow_fan_in_helpers: bool,
+    step_name: str,
+) -> Step:
+    if not _is_simple_step_declaration(declaration):
+        raise WorkflowValidationError(
+            f"branch group {group_name!r} branch {branch_name!r} must reference an authored step declaration"
+        )
+    nested_seed = _SimpleStepSeed(
+        order=-1,
+        attr_name=step_name,
+        declaration=declaration,
+        name=step_name,
+        kind=str(getattr(declaration, "kind", "")),
+        writes=_lower_simple_writes(declaration, step_name),
+        verifier_writes=_lower_simple_verifier_writes(declaration, step_name),
+        output_order=(),
+    )
+    return _lower_one_simple_seed(
+        workflow_cls,
+        seed=nested_seed,
+        existing_steps=existing_steps,
+        simple_seeds=simple_seeds,
+        artifact_name_counts=artifact_name_counts,
+        allow_branch_placeholders=allow_branch_placeholders,
+        allow_fan_in_placeholders=allow_fan_in_placeholders,
+        allow_fan_in_helpers=allow_fan_in_helpers,
+    )
+
+
+def _internal_branch_step_name(*, group_name: str, branch_name: str, declaration: object) -> str:
+    authored = getattr(declaration, "name", None)
+    if isinstance(authored, str) and authored.strip():
+        return authored
+    return f"{group_name}__{branch_name}"
+
+
+def _internal_fan_out_step_name(*, group_name: str, declaration: object) -> str:
+    authored = getattr(declaration, "name", None)
+    if isinstance(authored, str) and authored.strip():
+        return authored
+    return f"{group_name}__branch"
+
+
+def _internal_fan_in_step_name(*, group_name: str, declaration: object) -> str:
+    authored = getattr(declaration, "name", None)
+    if isinstance(authored, str) and authored.strip():
+        return authored
+    return f"{group_name}__fan_in"
+
+
+def _validate_branch_group_artifact_templates(
+    *,
+    step: Step,
+    step_name: str,
+    allow_branch_placeholders: bool,
+    allow_fan_in_placeholders: bool,
+) -> None:
+    for artifact in step.writes.values():
+        template = getattr(artifact, "template", None)
+        if not isinstance(template, str) or "{" not in template:
+            continue
+        for placeholder in _PROMPT_PLACEHOLDER_RE.findall(template):
+            reference = placeholder.strip()
+            if not reference:
+                continue
+            if validate_branch_placeholder_reference(
+                reference,
+                step_name=step_name,
+                allowed=allow_branch_placeholders,
+            ):
+                continue
+            validate_fan_in_placeholder_reference(
+                reference,
+                step_name=step_name,
+                allowed=allow_fan_in_placeholders,
+            )
 
 
 def _normalize_simple_state_model(raw_state: object, *, step_name: str, step_kind: str, module_name: str) -> type[BaseModel]:
@@ -594,12 +930,26 @@ def _normalize_simple_item_state_model(
     return build_step_item_state_model(raw_state, step_name=step_name, step_kind=step_kind, module_name=module_name)
 
 
-def _normalize_simple_input_references(references: Sequence[object], *, step_name: str) -> tuple[Artifact | str, ...]:
-    normalized: list[Artifact | str] = []
+def _normalize_simple_input_references(
+    references: Sequence[object],
+    *,
+    step_name: str,
+    allow_fan_in_helpers: bool = False,
+) -> tuple[object, ...]:
+    from .branch_groups.models import FanInHelperReference
+
+    normalized: list[object] = []
     for reference in references:
         if isinstance(reference, Artifact):
             normalized.append(reference)
             continue
+        if allow_fan_in_helpers and isinstance(reference, FanInHelperReference):
+            normalized.append(reference)
+            continue
+        if isinstance(reference, FanInHelperReference):
+            raise WorkflowValidationError(
+                f"simple step {step_name!r} uses {reference}, which is only valid inside fan-in"
+            )
         if _is_simple_artifact_spec(reference):
             normalized.append(str(reference.name))
             continue
@@ -631,6 +981,8 @@ def _analyze_simple_prompt_references(
     existing_steps: Sequence[Step],
     simple_seeds: Sequence[_SimpleStepSeed],
     artifact_name_counts: Mapping[str, int],
+    allow_branch_placeholders: bool = False,
+    allow_fan_in_placeholders: bool = False,
 ) -> tuple[tuple[str, ...], tuple[str, ...]]:
     prompts: list[object] = []
     if seed.kind in {"llm", "operation", "step"}:
@@ -673,6 +1025,8 @@ def _analyze_simple_prompt_references(
                 step_item_state_fields=step_item_state_fields,
                 step_output_names=step_output_names,
                 artifact_name_counts=artifact_name_counts,
+                allow_branch_placeholders=allow_branch_placeholders,
+                allow_fan_in_placeholders=allow_fan_in_placeholders,
             )
             if inferred_artifact is not None:
                 inferred.append(inferred_artifact)
@@ -759,7 +1113,21 @@ def _validate_simple_prompt_reference(
     step_item_state_fields: Mapping[str, frozenset[str]],
     step_output_names: Mapping[str, frozenset[str]],
     artifact_name_counts: Mapping[str, int],
+    allow_branch_placeholders: bool = False,
+    allow_fan_in_placeholders: bool = False,
 ) -> str | None:
+    if validate_branch_placeholder_reference(
+        reference,
+        step_name=step_name,
+        allowed=allow_branch_placeholders,
+    ):
+        return None
+    if validate_fan_in_placeholder_reference(
+        reference,
+        step_name=step_name,
+        allowed=allow_fan_in_placeholders,
+    ):
+        return None
     parts = reference.split(".")
     if len(parts) == 1:
         name = parts[0]
@@ -883,6 +1251,8 @@ def _validate_simple_prompt_reference(
             step_item_state_fields=step_item_state_fields,
             step_output_names=step_output_names,
             artifact_name_counts=artifact_name_counts,
+            allow_branch_placeholders=allow_branch_placeholders,
+            allow_fan_in_placeholders=allow_fan_in_placeholders,
         )
     if root not in step_output_names:
         raise WorkflowValidationError(
@@ -1010,8 +1380,7 @@ def _lower_simple_transition_table(transitions: object, simple_step_map: Mapping
 def _lower_simple_declared_routes(simple_step_map: Mapping[object, Step]) -> dict[Step | str, dict[str, object]]:
     lowered: dict[Step | str, dict[str, object]] = {}
     for declaration, step in simple_step_map.items():
-        raw_routes = getattr(declaration, "routes", None)
-        implicit_routes = getattr(declaration, "implicit_routes", None)
+        raw_routes, implicit_routes = _simple_declaration_route_sources(declaration)
         merged_routes: dict[str, object] = {}
         if isinstance(raw_routes, dict):
             merged_routes.update(raw_routes)
@@ -1026,29 +1395,45 @@ def _lower_simple_declared_routes(simple_step_map: Mapping[object, Step]) -> dic
     return lowered
 
 
+def _simple_declaration_route_sources(declaration: object) -> tuple[object | None, object | None]:
+    if _is_branch_group_declaration(declaration) and getattr(declaration, "fan_in", None) is not None:
+        fan_in = getattr(declaration, "fan_in", None)
+        return getattr(fan_in, "routes", None), getattr(fan_in, "implicit_routes", None)
+    return getattr(declaration, "routes", None), getattr(declaration, "implicit_routes", None)
+
+
 def _lower_simple_default_routes(ordered_steps: Sequence[Step]) -> dict[Step | str, dict[str, object]]:
     lowered: dict[Step | str, dict[str, object]] = {}
     for index, step in enumerate(ordered_steps):
         declaration = getattr(step, "simple_declaration", None)
         if declaration is None:
             continue
-        declared_routes = getattr(declaration, "routes", None)
+        declared_routes, declared_implicit_routes = _simple_declaration_route_sources(declaration)
+        has_declared_routes = bool(declared_routes) or bool(declared_implicit_routes)
         step_routes = lowered.setdefault(step, {})
         if isinstance(step, ProduceVerifyStep):
-            if not declared_routes:
+            if not has_declared_routes:
                 next_target: object = ordered_steps[index + 1] if index + 1 < len(ordered_steps) else FINISH
                 step_routes.setdefault(getattr(step, "simple_accept_route", "accepted"), next_target)
                 step_routes.setdefault(getattr(step, "simple_rework_route", "needs_rework"), step)
             continue
         if isinstance(step, ChildWorkflowStep):
-            if not declared_routes:
+            if not has_declared_routes:
                 step_routes.setdefault("done", ordered_steps[index + 1] if index + 1 < len(ordered_steps) else FINISH)
+            continue
+        if isinstance(step, BranchGroupStep):
+            if not has_declared_routes:
+                next_target: object = ordered_steps[index + 1] if index + 1 < len(ordered_steps) else FINISH
+                step_routes.setdefault(getattr(step, "default_chain_route", "done"), next_target)
+                rework_route = getattr(step, "rework_chain_route", None)
+                if isinstance(rework_route, str) and rework_route:
+                    step_routes.setdefault(rework_route, step)
             continue
         if isinstance(step, PythonStep):
-            if not declared_routes:
+            if not has_declared_routes:
                 step_routes.setdefault("done", ordered_steps[index + 1] if index + 1 < len(ordered_steps) else FINISH)
             continue
-        if declared_routes:
+        if has_declared_routes:
             continue
         step_routes.setdefault("done", ordered_steps[index + 1] if index + 1 < len(ordered_steps) else FINISH)
     return lowered
@@ -1057,6 +1442,8 @@ def _lower_simple_default_routes(ordered_steps: Sequence[Step]) -> dict[Step | s
 def _default_completion_route_for_step(step: object) -> str:
     if isinstance(step, ProduceVerifyStep):
         return str(getattr(step, "simple_accept_route", "accepted"))
+    if isinstance(step, BranchGroupStep):
+        return str(getattr(step, "default_chain_route", "done"))
     if isinstance(step, (PromptStep, PythonStep, ChildWorkflowStep)):
         return "done"
     if isinstance(step, Step):

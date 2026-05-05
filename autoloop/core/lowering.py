@@ -26,6 +26,10 @@ def outcome_middleware_name(definition: Any) -> str | None:
 def step_available_route_tags(definition: Any, step: Step) -> tuple[str, ...]:
     """Return the ordered legal route tags for a step."""
 
+    composite_tags = getattr(step, "composite_route_tags", None)
+    if composite_tags:
+        runtime_control = step_runtime_control_route_tags(definition, step)
+        return tuple(dict.fromkeys((*tuple(composite_tags), *runtime_control)))
     authored = step_authored_route_tags(definition, step)
     runtime_control = step_runtime_control_route_tags(definition, step)
     return tuple(dict.fromkeys((*authored, *runtime_control)))
@@ -34,6 +38,9 @@ def step_available_route_tags(definition: Any, step: Step) -> tuple[str, ...]:
 def step_authored_route_tags(definition: Any, step: Step) -> tuple[str, ...]:
     """Return the ordered authored route tags for a step."""
 
+    composite_tags = getattr(step, "composite_route_tags", None)
+    if composite_tags:
+        return tuple(composite_tags)
     step_routes = definition.authored_transitions.get(step, {})
     global_routes = definition.authored_transitions.get(definition.global_route_sentinel, {})
     return tuple(dict.fromkeys((*step_routes.keys(), *global_routes.keys())))

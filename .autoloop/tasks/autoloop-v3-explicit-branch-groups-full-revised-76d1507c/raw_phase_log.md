@@ -161,3 +161,112 @@ phase_mode=single
 phase_ids=authoring-and-compile-model,shared-context-and-session-scaffolding,composite-runtime-and-evidence,surface-hardening-and-regression-suite
 explicit=True
 current_phase_index=0
+
+
+---
+run_id=run-20260505T171950Z-13ce26d6 | entry=session_turn | pair=implement | phase=producer | cycle=1 | attempt=1 | thread_id=019df930-00de-7970-af32-efc750f7efc4
+---
+provider=codex
+mode=start
+template=/home/rauter/.local/share/pipx/venvs/autoloop/lib/python3.12/site-packages/autoloop/templates/implement_producer.md
+session_id=019df930-00de-7970-af32-efc750f7efc4
+
+
+---
+run_id=run-20260505T171950Z-13ce26d6 | entry=phase_output | pair=implement | phase=producer | process=codex-agent | cycle=1 | attempt=1 | thread_id=019df930-00de-7970-af32-efc750f7efc4
+---
+I’m treating this as the authoring-and-compile-model phase only. First I’m reading the phase artifacts and the existing compile/lowering pipeline so I can fit branch-group declarations into the current architecture without pulling runtime work into scope.
+
+The plan artifact is concrete enough to use as guardrails. Next I’m mapping it onto the actual package layout and current declaration/compiler flow, while ignoring the unrelated dirty deletions outside this task scope.
+
+I’ve confirmed the repo already has the expected `autoloop/core/*` pipeline. I’m reading the exact step/declaration types now so the composite step can plug into the same lowering and validation path instead of bypassing it.
+
+The current model is straightforward: simple declarations are discovered, lowered into concrete `Step` objects, then compiled. I’m checking where placeholder legality and default-session behavior are enforced so branch-only restrictions can happen before ordinary lowering changes the signal.
+
+The existing validation is split cleanly enough that I can keep this phase compile-focused. I’m reading the unit tests and current public-surface conventions next so the new declarations behave like the rest of the simple authoring API.
+
+Plan for this phase:
+1. Add the public branch-group authoring surface and the new internal branch-group models.
+2. Wire discovery/lowering so branch groups compile as one external step while nested branch specs stay internal and ordered.
+3. Add compile-time branch-group validation for names, step-kind support, helper placement, placeholder legality, fan-out input serializability, and branch-only fresh-session rules.
+4. Extend compiler metadata just enough to carry the composite branch-group payload without pulling runtime scheduling into this phase.
+5. Add focused unit coverage and update the phase notes/decision artifacts.
+
+I have the integration points pinned down. I’m adding the branch-group package and the public declarations first, then I’ll splice them into discovery and validation rather than threading ad hoc checks through the compiler.
+
+The public surface is next. I’m keeping the declaration objects simple and explicit so discovery can lower them without introducing another generic authoring layer.
+
+The declaration types are in place. I’m wiring the internal composite step next so discovery can lower branch groups without exposing their branch steps as top-level workflow nodes.
+
+I’m in the main splice point now: discovery. The key part is letting nested branch declarations lower through the same step-construction rules while keeping them out of the top-level workflow graph.
+
+Discovery now knows how to lower a composite step with internal ordered branch specs. I’m updating the compiler metadata path so that payload survives compilation without changing ordinary step behavior.
+
+The core code is in. I’m switching to test updates now, using the existing simple-surface and validation suites so the new public API and compile behavior are pinned down before I run them.
+
+I found one limitation in this phase cut: outer transition destinations still come from the composite step, not automatically from internal fan-in route maps yet. The compile tests are therefore targeting the validated composite metadata and external single-step shape, which is the scoped deliverable for this turn.
+
+I’ve got the first pass wired and the public tests updated. I’m running the targeted unit suites now to catch the integration mistakes before I touch the run notes.
+
+`pytest` is not on PATH here, so I’m rerunning through `python -m pytest`. If that fails, I’ll use the error output to tighten the compile path before I touch artifacts.
+
+There’s no globally installed `pytest` in this shell. I’m checking the repo’s local interpreter/tooling next so I can still run the targeted tests without widening scope.
+
+The focused unit suites are green. I’m running one adjacent runtime/static-graph suite next because `CompiledStep` grew a new optional field and I want to make sure that didn’t shake loose downstream serializers.
+
+The nearby regression checks passed too. I’m doing one last syntax/import sweep on the touched modules, then I’ll update the run artifacts with the scope, decisions, and validation record.
+
+The code path is clean and the touched modules compile. I’m updating the phase artifacts now, including the one non-obvious implementation cut: fan-in route tags are exposed on the composite metadata in this phase, but outer transition destinations still come from the composite step’s own route table until the runtime phase lands.
+
+I found one gap while reviewing the compiled graph shape: explicit fan-in routes were visible in the composite metadata but not yet copied into the outer transition table. I’m fixing that now so compile-time route exposure matches authored fan-in routes when they’re explicitly declared.
+
+The failing case was the one I expected: the default outer `done` route was still being injected even when explicit fan-in routes existed. I’m switching the default-route logic to look at the fan-in-authored route source for branch groups, not just the composite declaration’s own `routes` field.
+
+I closed the compile-time route gap for explicit fan-in routes. I’m updating the phase notes to reflect that the remaining non-change is runtime orchestration, not route exposure.
+
+Scope considered
+
+Authoring-and-compile-model only. I kept runtime scheduling, manifest/context writing, and engine execution changes out of scope, and I ignored unrelated dirty files outside the phase working set.
+
+What I analyzed
+
+I traced the current simple-surface to discovery to lowering to compiler path in `autoloop/simple.py`, `autoloop/core/discovery.py`, `autoloop/core/lowering.py`, `autoloop/core/compiler.py`, and `autoloop/core/steps.py`. I also checked the existing public-surface and validation tests to fit the new composite step into the current compile model without changing non-branch workflow behavior.
+
+What I changed
+
+I added the public branch-group surface: `parallel(...)`, `fan_out(...)`, and `FanIn`, exported from [autoloop/simple.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/autoloop/simple.py) and [autoloop/__init__.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/autoloop/__init__.py).
+
+I introduced the compile-time branch-group package under `autoloop/core/branch_groups/` with composite metadata models, fan-in helper tokens, validation helpers, and route-tag lowering helpers.
+
+I added `BranchGroupStep` in [autoloop/core/steps.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/autoloop/core/steps.py), taught [autoloop/core/discovery.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/autoloop/core/discovery.py) to:
+- skip branch-consumed declarations from top-level discovery,
+- lower branch groups as one external step with ordered internal branch specs,
+- validate path-safe group/branch names,
+- enforce branch-only `Session.fresh()` rules for prompt and produce/verify branch steps,
+- reject child-workflow branch steps and fan-in,
+- validate branch/fan-in placeholder legality,
+- reject `FanIn.results()` / `FanIn.context()` outside fan-in,
+- reject non-JSON-serializable `fan_out(...)` inputs.
+
+I extended [autoloop/core/lowering.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/autoloop/core/lowering.py) and [autoloop/core/compiler.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/autoloop/core/compiler.py) so compiled branch groups carry composite route tags and branch-group metadata through `CompiledStep.branch_group`.
+
+I updated [tests/unit/test_simple_surface.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/tests/unit/test_simple_surface.py) with public-surface, compile-model, and validation coverage, and I updated the phase `implementation_notes.md` plus `decisions.txt`.
+
+Key findings / decisions
+
+Branch-group-consumed simple declarations now compile only as internal branch specs; they are not also emitted as top-level workflow steps.
+
+Explicit fan-in routes now propagate into the outer composite route table at compile time. Runtime fan-in execution is still not implemented.
+
+Non-branch provider steps keep existing default-session behavior. The stricter explicit-fresh session rule is enforced only for provider-backed branch steps.
+
+Validation run:
+- `./.venv/bin/python -m pytest tests/unit/test_simple_surface.py -q`
+- `./.venv/bin/python -m pytest tests/unit/test_validation.py -q`
+- `./.venv/bin/python -m pytest tests/runtime/test_runtime_static_graph.py -q`
+- `./.venv/bin/python -m pytest tests/contract/test_engine_contracts.py -q -k "deterministic or control_routes"`
+- `./.venv/bin/python -m py_compile ...` on the touched modules
+
+Open issues / next step
+
+The next phase still needs the actual branch-group runtime: branch scheduling, branch-local session activation, manifest/context artifact writing, fan-in execution, and mechanical outcome routing. The compile model is in place for that work.

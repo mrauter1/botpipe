@@ -7,6 +7,7 @@ from .simple import (
     Effects,
     Event,
     FAIL,
+    FanIn,
     FINISH,
     Fail,
     Goto,
@@ -22,7 +23,21 @@ from .simple import (
     ValidationResult,
     WorklistEffect,
 )
-from .simple import StateVar, Text, Workflow, Worklist, classify, llm, produce_verify_step, python_step, step, validation_step, workflow_step
+from .simple import (
+    StateVar,
+    Text,
+    Workflow,
+    Worklist,
+    classify,
+    fan_out,
+    llm,
+    parallel,
+    produce_verify_step,
+    python_step,
+    step,
+    validation_step,
+    workflow_step,
+)
 
 __all__ = [
     "Workflow",
@@ -31,6 +46,8 @@ __all__ = [
     "python_step",
     "validation_step",
     "workflow_step",
+    "parallel",
+    "fan_out",
     "llm",
     "classify",
     "ControlRoutes",
@@ -43,6 +60,7 @@ __all__ = [
     "Route",
     "Session",
     "Continuity",
+    "FanIn",
     "Worklist",
     "WorklistEffect",
     "StateVar",

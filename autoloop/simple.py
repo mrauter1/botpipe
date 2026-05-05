@@ -9,6 +9,7 @@ from typing import Any, Mapping, Sequence
 from pydantic import BaseModel
 
 from autoloop.core import Artifact
+from autoloop.core.branch_groups.declarations import FanIn
 from autoloop.core.context import context_runtime
 from autoloop.core.effects import Effects, WorklistEffect
 from autoloop.core.operations import OperationStepSpec, classify_call, execute_step_operation, llm_call
@@ -302,6 +303,111 @@ class _WorkflowStepDeclaration(_NamedDeclaration):
         )
 
 
+class _BranchGroupDeclaration(_NamedDeclaration):
+    """Simple branch-group declaration lowered to one composite step."""
+
+    kind = "branch_group"
+    writes: tuple[Artifact | ArtifactSpec, ...] = ()
+    verifier_writes: tuple[Artifact | ArtifactSpec, ...] = ()
+
+    def __init__(
+        self,
+        *,
+        name: str | None = None,
+        settle: str = "all",
+        concurrency: int | None = None,
+        fan_in: Any | None = None,
+        outcome: Any = "all_done",
+        success_routes: Sequence[str] = ("done", "accepted"),
+        routes: RouteMapping | None = None,
+        branch_group_kind: str,
+    ) -> None:
+        super().__init__(name=name)
+        self.branch_group_kind = branch_group_kind
+        self.settle = settle
+        self.concurrency = concurrency
+        self.fan_in = fan_in
+        self.outcome = outcome
+        self.success_routes = tuple(dict.fromkeys(success_routes))
+        self.routes = dict(routes or {})
+        self.control_routes = ControlRoutes(question="never")
+        self.implicit_routes = {"question": AWAIT_INPUT, "failed": FAIL} if fan_in is None else {}
+        self.default_chain_route, self.rework_chain_route = _default_branch_group_chain_routes(fan_in)
+
+    def nested_declarations(self) -> tuple[object, ...]:
+        raise NotImplementedError
+
+
+class ParallelDeclaration(_BranchGroupDeclaration):
+    """Simple `parallel(...)` composite declaration."""
+
+    def __init__(
+        self,
+        *,
+        branches: Mapping[str, object],
+        name: str | None = None,
+        concurrency: int | None = None,
+        settle: str = "all",
+        fan_in: Any | None = None,
+        outcome: Any = "all_done",
+        success_routes: Sequence[str] = ("done", "accepted"),
+        routes: RouteMapping | None = None,
+    ) -> None:
+        super().__init__(
+            name=name,
+            settle=settle,
+            concurrency=concurrency,
+            fan_in=fan_in,
+            outcome=outcome,
+            success_routes=success_routes,
+            routes=routes,
+            branch_group_kind="parallel",
+        )
+        self.branches = dict(branches)
+
+    def nested_declarations(self) -> tuple[object, ...]:
+        nested = list(self.branches.values())
+        if self.fan_in is not None:
+            nested.append(self.fan_in)
+        return tuple(nested)
+
+
+class FanOutDeclaration(_BranchGroupDeclaration):
+    """Simple `fan_out(...)` composite declaration."""
+
+    def __init__(
+        self,
+        *,
+        step: object,
+        branches: Mapping[str, object],
+        name: str | None = None,
+        concurrency: int | None = None,
+        settle: str = "all",
+        fan_in: Any | None = None,
+        outcome: Any = "all_done",
+        success_routes: Sequence[str] = ("done", "accepted"),
+        routes: RouteMapping | None = None,
+    ) -> None:
+        super().__init__(
+            name=name,
+            settle=settle,
+            concurrency=concurrency,
+            fan_in=fan_in,
+            outcome=outcome,
+            success_routes=success_routes,
+            routes=routes,
+            branch_group_kind="fan_out",
+        )
+        self.step = step
+        self.branches = dict(branches)
+
+    def nested_declarations(self) -> tuple[object, ...]:
+        nested = [self.step]
+        if self.fan_in is not None:
+            nested.append(self.fan_in)
+        return tuple(nested)
+
+
 class OperationStepDeclaration(_NamedDeclaration):
     """Simple feedforward value-producing declaration."""
 
@@ -582,10 +688,65 @@ def workflow_step(
     )
 
 
+def parallel(
+    *,
+    branches: Mapping[str, object],
+    name: str | None = None,
+    concurrency: int | None = None,
+    settle: str = "all",
+    fan_in: Any | None = None,
+    outcome: Any = "all_done",
+    success_routes: Sequence[str] = ("done", "accepted"),
+    routes: RouteMapping | None = None,
+) -> ParallelDeclaration:
+    return ParallelDeclaration(
+        branches=branches,
+        name=name,
+        concurrency=concurrency,
+        settle=settle,
+        fan_in=fan_in,
+        outcome=outcome,
+        success_routes=success_routes,
+        routes=routes,
+    )
+
+
+def fan_out(
+    *,
+    step: object,
+    branches: Mapping[str, object],
+    name: str | None = None,
+    concurrency: int | None = None,
+    settle: str = "all",
+    fan_in: Any | None = None,
+    outcome: Any = "all_done",
+    success_routes: Sequence[str] = ("done", "accepted"),
+    routes: RouteMapping | None = None,
+) -> FanOutDeclaration:
+    return FanOutDeclaration(
+        step=step,
+        branches=branches,
+        name=name,
+        concurrency=concurrency,
+        settle=settle,
+        fan_in=fan_in,
+        outcome=outcome,
+        success_routes=success_routes,
+        routes=routes,
+    )
+
+
 def _normalize_writes(
     writes: Sequence[Artifact | ArtifactSpec],
 ) -> tuple[Artifact | ArtifactSpec, ...]:
     return tuple(writes)
+
+
+def _default_branch_group_chain_routes(fan_in: Any | None) -> tuple[str, str | None]:
+    fan_in_kind = getattr(fan_in, "kind", None)
+    if fan_in_kind in {"review", "produce_verify"}:
+        return "accepted", "needs_rework"
+    return "done", None
 
 
 def _artifact_reference_name(reference: Artifact | ArtifactSpec) -> str:
@@ -723,6 +884,7 @@ classify = ClassifyOperation()
 
 __all__ = [
     "AWAIT_INPUT",
+    "FanIn",
     "Continuity",
     "Effects",
     "Event",
@@ -748,7 +910,9 @@ __all__ = [
     "Worklist",
     "ClassifyOperation",
     "classify",
+    "fan_out",
     "llm",
+    "parallel",
     "produce_verify_step",
     "python_step",
     "step",

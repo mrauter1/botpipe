@@ -32,7 +32,7 @@ from .route_required_writes import route_required_write_payload
 from .routes import Route, normalize_route_spec
 from .sessions import Continuity, DEFAULT_SESSION_NAME
 from .step_state import build_step_item_state_model, build_step_state_model
-from .steps import PromptStep, ProduceVerifyStep, Session, Step, PythonStep, ChildWorkflowStep
+from .steps import BranchGroupStep, PromptStep, ProduceVerifyStep, Session, Step, PythonStep, ChildWorkflowStep
 from .validation import PayloadValidator
 from .worklists import Worklist
 
@@ -83,6 +83,7 @@ class CompiledStep:
     step_state_fields: tuple[str, ...]
     step_item_state_model: type[BaseModel] | None
     step_item_state_fields: tuple[str, ...]
+    branch_group: Any | None = None
 
 
 @dataclass(frozen=True, slots=True)
@@ -294,6 +295,8 @@ def _compile_steps(
                 )
             step_item_state_fields = tuple(dict.fromkeys(step_item_state_model.model_fields.keys()))
         compiled_session_name = step.session.name if step.session is not None else definition.default_session_name
+        if isinstance(step, BranchGroupStep):
+            compiled_session_name = None
         producer_reads = tuple(getattr(step, "producer_reads", reads))
         producer_requires = tuple(getattr(step, "producer_requires", requires))
         verifier_requires = tuple(getattr(step, "verifier_requires", verifier_requires))
@@ -467,6 +470,48 @@ def _compile_steps(
                 step_state_fields=step_state_fields,
                 step_item_state_model=step_item_state_model,
                 step_item_state_fields=step_item_state_fields,
+            )
+        elif isinstance(step, BranchGroupStep):
+            compiled_steps[step.name] = CompiledStep(
+                name=step.name,
+                kind="branch_group",
+                step=step,
+                session_name=None,
+                scope_name=None,
+                reads=(),
+                requires=(),
+                writes=(),
+                log_artifacts=(),
+                available_routes=available_routes,
+                authored_routes=authored_routes,
+                runtime_control_routes=runtime_control_routes,
+                provider_visible_routes_interactive=provider_visible_routes_interactive,
+                provider_visible_routes_full_auto=provider_visible_routes_full_auto,
+                expected_output_schema=None,
+                retry_policy=ProviderRetryPolicy(),
+                prompt=None,
+                producer_prompt=None,
+                verifier_prompt=None,
+                producer_reads=(),
+                producer_requires=(),
+                producer_writes=(),
+                verifier_reads=(),
+                verifier_requires=(),
+                verifier_writes=(),
+                verifier_session_name=None,
+                expected_output_validator=None,
+                python_handler=None,
+                before_hook=None,
+                after_hook=None,
+                before_producer_hook=None,
+                after_producer_hook=None,
+                before_verifier_hook=None,
+                after_verifier_hook=None,
+                step_state_model=step_state_model,
+                step_state_fields=step_state_fields,
+                step_item_state_model=None,
+                step_item_state_fields=(),
+                branch_group=step.branch_group,
             )
         else:
             raise WorkflowCompilationError(f"unsupported step type {type(step)!r}")
@@ -676,6 +721,8 @@ def _compiled_step_kind(step: Step) -> str:
         return "produce_verify"
     if isinstance(step, PromptStep):
         return "step"
+    if isinstance(step, BranchGroupStep):
+        return "branch_group"
     if isinstance(step, ChildWorkflowStep):
         return "workflow"
     if isinstance(step, PythonStep):

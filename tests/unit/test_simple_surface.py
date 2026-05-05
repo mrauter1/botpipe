@@ -62,6 +62,8 @@ def test_autoloop_root_exports_only_the_canonical_public_surface() -> None:
         "python_step",
         "validation_step",
         "workflow_step",
+        "parallel",
+        "fan_out",
         "llm",
         "classify",
         "ControlRoutes",
@@ -74,6 +76,7 @@ def test_autoloop_root_exports_only_the_canonical_public_surface() -> None:
         "Route",
         "Session",
         "Continuity",
+        "FanIn",
         "Worklist",
         "WorklistEffect",
         "StateVar",
@@ -395,6 +398,27 @@ def test_canonical_simple_signatures_expose_only_canonical_argument_names() -> N
         "after",
         "control_routes",
     )
+    assert tuple(inspect.signature(simple.parallel).parameters) == (
+        "branches",
+        "name",
+        "concurrency",
+        "settle",
+        "fan_in",
+        "outcome",
+        "success_routes",
+        "routes",
+    )
+    assert tuple(inspect.signature(simple.fan_out).parameters) == (
+        "step",
+        "branches",
+        "name",
+        "concurrency",
+        "settle",
+        "fan_in",
+        "outcome",
+        "success_routes",
+        "routes",
+    )
 
 
 def test_legacy_simple_keyword_arguments_fail_fast() -> None:
@@ -621,6 +645,187 @@ def test_simple_workflow_compiles_with_pydantic_state_params_and_produce_verify_
         "attempts",
         "history",
     }
+
+
+def test_parallel_branch_group_compiles_as_one_external_step_with_ordered_internal_specs() -> None:
+    class BranchGroupWorkflow(simple.Workflow):
+        class State(BaseModel):
+            approved: bool = False
+
+        reviews = simple.parallel(
+            branches={
+                "security": simple.step("Review {branch.name}.", name="security_review", session=simple.Session.fresh()),
+                "cost": simple.step("Review {branch.group}.", name="cost_review", session=simple.Session.fresh()),
+            },
+            fan_in=simple.python_step(lambda ctx: simple.Event("done"), name="combine_reviews"),
+        )
+        publish = simple.python_step(lambda ctx: simple.Event("done"))
+
+    compiled = compile_workflow(BranchGroupWorkflow)
+
+    assert compiled.entry_step_name == "reviews"
+    assert compiled.steps["reviews"].kind == "branch_group"
+    assert compiled.routes["reviews"]["done"].target == "publish"
+    branch_group = compiled.steps["reviews"].branch_group
+    assert branch_group is not None
+    assert branch_group.kind == "parallel"
+    assert branch_group.composite_route_tags == ("done",)
+    assert tuple(branch.name for branch in branch_group.branches) == ("security", "cost")
+    assert tuple(branch.index for branch in branch_group.branches) == (0, 1)
+    assert tuple(branch.step.name for branch in branch_group.branches) == ("security_review", "cost_review")
+    assert branch_group.fan_in_step is not None
+    assert branch_group.fan_in_step.name == "combine_reviews"
+
+
+def test_parallel_branch_group_propagates_explicit_fan_in_routes_to_outer_routes() -> None:
+    class FanInRoutesWorkflow(simple.Workflow):
+        class State(BaseModel):
+            pass
+
+        assess = simple.parallel(
+            branches={
+                "security": simple.step("Review {branch.name}.", name="security_review", session=simple.Session.fresh()),
+            },
+            fan_in=simple.step(
+                "Summarize {fan_in.context_text}.",
+                name="synthesize_reviews",
+                routes={"approved": simple.FINISH, "needs_revision": simple.SELF},
+            ),
+        )
+
+    compiled = compile_workflow(FanInRoutesWorkflow)
+
+    assert compiled.steps["assess"].available_routes == ("approved", "needs_revision")
+    assert compiled.routes["assess"]["approved"].target == "FINISH"
+    assert compiled.routes["assess"]["needs_revision"].target == "assess"
+
+
+@pytest.mark.parametrize(
+    "fan_in_factory",
+    [
+        lambda: simple.step("Summarize {fan_in.context_text}.", name="fan_in_prompt"),
+        lambda: simple.produce_verify_step(
+            producer_prompt="Draft from {fan_in.results_path}.",
+            verifier_prompt="Verify from {fan_in.context_path}.",
+            name="fan_in_pair",
+        ),
+        lambda: simple.python_step(lambda ctx: simple.Event("done"), name="fan_in_python"),
+        lambda: simple.llm.step(prompt="Classify {fan_in.branch_count}.", name="fan_in_operation"),
+    ],
+)
+def test_branch_group_fan_in_accepts_supported_step_kinds(fan_in_factory) -> None:
+    class FanInWorkflow(simple.Workflow):
+        class State(BaseModel):
+            pass
+
+        assess = simple.parallel(
+            branches={
+                "a": simple.python_step(lambda ctx: simple.Event("done"), name="branch_a"),
+            },
+            fan_in=fan_in_factory(),
+        )
+
+    compiled = compile_workflow(FanInWorkflow)
+
+    assert compiled.steps["assess"].kind == "branch_group"
+    assert compiled.steps["assess"].branch_group is not None
+    assert compiled.steps["assess"].branch_group.fan_in_step is not None
+
+
+def test_branch_group_fan_in_helpers_are_rejected_outside_fan_in() -> None:
+    with pytest.raises(WorkflowValidationError, match="only valid inside fan-in"):
+
+        class InvalidHelperWorkflow(simple.Workflow):
+            class State(BaseModel):
+                pass
+
+            ask = simple.step("Draft.", reads=[simple.FanIn.results()])
+
+        compile_workflow(InvalidHelperWorkflow)
+
+
+def test_branch_placeholder_is_rejected_outside_branch_steps() -> None:
+    with pytest.raises(WorkflowValidationError, match="only valid inside branch steps"):
+
+        class InvalidBranchPlaceholderWorkflow(simple.Workflow):
+            class State(BaseModel):
+                pass
+
+            ask = simple.step("Draft {branch.name}.")
+
+        compile_workflow(InvalidBranchPlaceholderWorkflow)
+
+
+def test_provider_backed_branch_steps_require_explicit_fresh_sessions_only_inside_branch_groups() -> None:
+    class TopLevelWorkflow(simple.Workflow):
+        class State(BaseModel):
+            pass
+
+        ask = simple.step("Draft without explicit session.")
+
+    assert compile_workflow(TopLevelWorkflow).steps["ask"].session_name == "global"
+
+    with pytest.raises(WorkflowValidationError, match="without explicit session=Session\\.fresh\\(\\)"):
+
+        class MissingFreshSessionWorkflow(simple.Workflow):
+            class State(BaseModel):
+                pass
+
+            assess = simple.parallel(
+                branches={
+                    "a": simple.step("Draft branch.", name="branch_prompt"),
+                }
+            )
+
+        compile_workflow(MissingFreshSessionWorkflow)
+
+    with pytest.raises(WorkflowValidationError, match="non-fresh session continuity 'run'"):
+
+        class NonFreshSessionWorkflow(simple.Workflow):
+            class State(BaseModel):
+                pass
+
+            assess = simple.parallel(
+                branches={
+                    "a": simple.step("Draft branch.", name="branch_prompt", session=simple.Session.run()),
+                }
+            )
+
+        compile_workflow(NonFreshSessionWorkflow)
+
+
+def test_branch_group_rejects_child_workflow_fan_in_and_non_serializable_fan_out_inputs() -> None:
+    class Child(simple.Workflow):
+        class State(BaseModel):
+            pass
+
+        finish = simple.python_step(lambda ctx: simple.Event("done"))
+
+    with pytest.raises(WorkflowValidationError, match="child workflow fan-in step"):
+
+        class InvalidFanInWorkflow(simple.Workflow):
+            class State(BaseModel):
+                pass
+
+            assess = simple.parallel(
+                branches={"a": simple.python_step(lambda ctx: simple.Event("done"), name="branch_a")},
+                fan_in=simple.workflow_step(Child, name="join_child"),
+            )
+
+        compile_workflow(InvalidFanInWorkflow)
+
+    with pytest.raises(WorkflowValidationError, match="must be JSON-serializable"):
+
+        class InvalidFanOutInputWorkflow(simple.Workflow):
+            class State(BaseModel):
+                pass
+
+            assess = simple.fan_out(
+                step=simple.python_step(lambda ctx: simple.Event("done"), name="branch_a"),
+                branches={"a": {1, 2, 3}},
+            )
+
+        compile_workflow(InvalidFanOutInputWorkflow)
 
 
 def test_simple_workflow_injects_canonical_default_routes_by_step_kind() -> None:

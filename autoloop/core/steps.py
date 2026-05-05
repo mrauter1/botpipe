@@ -375,3 +375,33 @@ class ChildWorkflowStep(Step):
         self.message_from = message_from
         self.params = dict(params or {})
         self.input = input
+
+
+class BranchGroupStep(Step):
+    """Composite step that owns internal branch-group metadata."""
+
+    kind = "branch_group"
+
+    def __init__(
+        self,
+        *,
+        name: str,
+        branch_group: Any,
+        route_metadata: Mapping[str, Route | str] | None = None,
+    ) -> None:
+        super().__init__(
+            name=name,
+            session=None,
+            scope=None,
+            reads=(),
+            requires=(),
+            writes={},
+            log_artifacts=(),
+            expected_output_schema=None,
+            route_metadata=route_metadata,
+            retry_policy=None,
+            before=None,
+            after=None,
+            control_routes=ControlRoutes(question="never"),
+        )
+        self.branch_group = branch_group
