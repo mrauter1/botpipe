@@ -49,3 +49,6 @@
 {"ts": "2026-05-05T21:22:23.686679+00:00", "run_id": "run-20260505T201926Z-7fdaad17", "seq": 49, "event_type": "phase_finished", "pair": "implement", "phase": "producer", "cycle": 2, "attempt": 1, "empty_output": false, "phase_id": "async-branch-runtime"}
 {"ts": "2026-05-05T21:23:29.565021+00:00", "run_id": "run-20260505T201926Z-7fdaad17", "seq": 50, "event_type": "phase_finished", "pair": "implement", "phase": "verifier", "cycle": 2, "attempt": 1, "empty_output": false, "phase_id": "async-branch-runtime"}
 {"ts": "2026-05-05T21:23:29.613731+00:00", "run_id": "run-20260505T201926Z-7fdaad17", "seq": 51, "event_type": "pair_completed", "pair": "implement", "cycle": 2, "attempt": 1, "phase_id": "async-branch-runtime"}
+{"ts": "2026-05-05T21:23:29.724968+00:00", "run_id": "run-20260505T201926Z-7fdaad17", "seq": 52, "event_type": "phase_deferred", "pair": "implement", "phase_mode": "single", "phase_id": "async-branch-runtime", "reason": "awaiting enabled test pair completion"}
+{"ts": "2026-05-05T21:23:29.726264+00:00", "run_id": "run-20260505T201926Z-7fdaad17", "seq": 53, "event_type": "pair_started", "pair": "test", "phase_id": "async-branch-runtime"}
+{"ts": "2026-05-05T21:23:29.726582+00:00", "run_id": "run-20260505T201926Z-7fdaad17", "seq": 54, "event_type": "cycle_started", "pair": "test", "cycle": 1, "attempt": 1, "phase_id": "async-branch-runtime"}
