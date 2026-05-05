@@ -569,3 +569,54 @@ Open issues / next step
 
 - If the next phase wants broader green status, it should address the unrelated discovery/root failures surfacing in `tests/unit/test_stdlib_and_extensions.py` and `tests/runtime/test_workspace_and_context.py`.
 - For this phase-local scope, the requested progress worklist implementation and focused verification are complete.
+
+
+---
+run_id=run-20260505T122105Z-b9a3f746 | entry=session_turn | pair=implement | phase=verifier | cycle=1 | attempt=1 | thread_id=019df82b-3678-7872-90df-9fde956110d3
+---
+provider=codex
+mode=resume
+template=/home/rauter/.local/share/pipx/venvs/autoloop/lib/python3.12/site-packages/autoloop/templates/implement_verifier.md
+session_id=019df82b-3678-7872-90df-9fde956110d3
+
+
+---
+run_id=run-20260505T122105Z-b9a3f746 | entry=phase_output | pair=implement | phase=verifier | process=codex-agent | cycle=1 | attempt=1 | thread_id=019df82b-3678-7872-90df-9fde956110d3
+---
+I’m switching to review mode: reading the phase criteria and existing feedback, then I’ll verify the request against the current stdlib worklist implementation and record any blocking gaps directly in the review artifacts.
+
+I’ve isolated one risky seam in the stdlib source: fallback materialization may write an invalid board if the fallback returns duplicate item ids. I’m reproducing that behavior directly before I decide whether it’s a blocking review finding.
+
+I found a concrete blocking gap in the stdlib source’s fallback path and I’m recording it in the review artifacts now, along with the criteria status for this phase.
+
+Scope considered
+
+- Phase-local stdlib progress worklist surface in [autoloop/stdlib/worklists.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/autoloop/stdlib/worklists.py) and [autoloop/stdlib/__init__.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/autoloop/stdlib/__init__.py).
+- Request-mandated tests and the active review artifacts in the phase directory.
+
+What I analyzed
+
+- The current `WorkStatusPolicy`, `ProgressJsonCollectionSource`, `progress_selector`, and `progress_artifact_worklist` implementation against AC-1 through AC-3.
+- The focused selector/stdlib/runtime tests already added for this phase.
+- The fallback materialization path specifically, because it is the only path that creates a board before a normal `load()` pass.
+
+What I reviewed
+
+- Updated [criteria.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/goal-implement-a-greenfield-autoloop-v3-worklist-3cb1f2e6/runs/run-20260505T122105Z-b9a3f746/artifacts/implement/phases/stdlib-progress-worklists/criteria.md) to reflect one remaining blocking gap.
+- Appended the blocking finding to [feedback.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/goal-implement-a-greenfield-autoloop-v3-worklist-3cb1f2e6/runs/run-20260505T122105Z-b9a3f746/artifacts/implement/phases/stdlib-progress-worklists/feedback.md).
+- Reproduced the failure mode directly: a duplicate-id fallback is written to disk by `ensure()` and only fails later when `load()` re-reads it.
+
+Key findings / decisions
+
+- `IMP-001` is blocking: `ProgressJsonCollectionSource` does not reject duplicate ids during fallback normalization, so `ensure()` / `load(write_fallback=True)` can persist an invalid canonical board and defer the failure until a later load.
+- That violates AC-3 because fallback materialization is expected to produce a valid canonical progress board, not write corrupted state first and fail later.
+- I did not find a reason to reject the overall architecture or export surface; the blocking issue is localized to fallback validation.
+
+Open issues / next step
+
+- Fix duplicate-id rejection in the fallback materialization path before any write occurs, preferably by centralizing duplicate-id validation shared with load-time item creation.
+- Add a focused regression test covering duplicate ids returned from fallback, then rerun the phase’s focused suites.
+
+<loop-control>
+{"schema":"docloop.loop_control/v1","kind":"promise","promise":"INCOMPLETE"}
+</loop-control>
