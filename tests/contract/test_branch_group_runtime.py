@@ -563,6 +563,58 @@ def test_fan_out_renders_branch_input_roots_artifacts_and_keeps_branch_sessions_
     )
 
 
+def test_parallel_branch_group_leaves_manifest_provider_session_empty_without_provider_returned_id(tmp_path: Path) -> None:
+    seen_sessions: list[str | None] = []
+
+    class NoReturnedSessionWorkflow(simple.Workflow):
+        class State(BaseModel):
+            pass
+
+        reviews = simple.parallel(
+            branches={
+                "security": simple.step(
+                    "Review security.",
+                    name="security_review",
+                    session=simple.Session.fresh(),
+                )
+            },
+            routes={"done": simple.FINISH},
+        )
+
+    provider = ScriptedLLMProvider(
+        llm_turns=[
+            lambda request: (
+                seen_sessions.append(None if request.session is None else request.session.session_id),
+                Outcome(raw_output="ok", tag="done"),
+            )[-1]
+        ]
+    )
+    session_store = InMemorySessionStore()
+    task_folder, run_folder = _workspace(tmp_path)
+    result = Engine(
+        NoReturnedSessionWorkflow,
+        provider=provider,
+        session_store=session_store,
+        checkpoint_store=InMemoryCheckpointStore(),
+    ).run(
+        task_id="task-no-returned-session",
+        run_id="run-no-returned-session",
+        task_folder=task_folder,
+        run_folder=run_folder,
+        root=tmp_path,
+    )
+
+    assert result.terminal == simple.FINISH
+    assert seen_sessions == [None]
+    manifest = json.loads(
+        (_branch_group_dir(task_folder, NoReturnedSessionWorkflow, "reviews") / "results.json").read_text(encoding="utf-8")
+    )
+    branch = manifest["branches"][0]
+    assert branch["provider_session"] is None
+    assert branch["provider_sessions"] == {}
+    assert all(binding.session_id is not None for binding in session_store.snapshot().bindings)
+
+
 def test_parallel_branch_group_captures_goto_without_following_branch_destination(tmp_path: Path) -> None:
     class GotoWorkflow(simple.Workflow):
         class State(BaseModel):

@@ -1401,3 +1401,56 @@ Open issues / next step
 <loop-control>
 {"schema":"docloop.loop_control/v1","kind":"promise","promise":"COMPLETE"}
 </loop-control>
+
+
+---
+run_id=run-20260505T201926Z-7fdaad17 | entry=session_turn | pair=test | phase=producer | cycle=1 | attempt=1 | thread_id=019dfa0a-87de-7353-b5f8-4a53c8408820
+---
+provider=codex
+mode=resume
+template=/home/rauter/.local/share/pipx/venvs/autoloop/lib/python3.12/site-packages/autoloop/templates/test_producer.md
+session_id=019dfa0a-87de-7353-b5f8-4a53c8408820
+
+
+---
+run_id=run-20260505T201926Z-7fdaad17 | entry=phase_output | pair=test | phase=producer | process=codex-agent | cycle=1 | attempt=1 | thread_id=019dfa0a-87de-7353-b5f8-4a53c8408820
+---
+Producing the phase-local test pass for `session-state-evidence-correctness`. I’m reading the active test artifacts and the already-landed branch-session tests first, then I’ll decide whether the repository needs any extra regression coverage beyond what the implementation added.
+
+The implementer coverage is close, but there’s one useful edge case still worth pinning: when a fresh branch session starts with `session_id=None` and the provider never returns a real id, the manifest should stay empty rather than regressing back to synthetic or parent-derived ids. I’m adding that targeted test now, then I’ll refresh the phase test artifacts.
+
+I added the negative-path manifest check. I’m rerunning the branch-group contract file and the adjacent unit/tracing tests so the phase artifacts can point to one coherent validation set rather than a partial recheck.
+
+The added edge case passed, and it closes the last obvious gap in AC-2 coverage. I’m recording that test-split decision for later turns, then I’ll update the phase test strategy and feedback artifacts with the behavior map and validation summary.
+
+Scope considered
+- Active phase only: `session-state-evidence-correctness`.
+- Reviewed the landed branch-session changes and added one extra contract test for the remaining AC-2 edge case.
+- Updated only scoped test artifacts plus one request-relevant repository test file.
+
+What I analyzed
+- Existing branch-session coverage in `tests/unit/test_branch_group_context_sessions.py` and `tests/contract/test_branch_group_runtime.py`.
+- The active phase contract, implementation decisions, and current phase-local session file.
+- Evidence-path/tracing coverage already present in `tests/runtime/test_runtime_tracing.py -k branch_group`.
+
+What I changed
+- Added `test_parallel_branch_group_leaves_manifest_provider_session_empty_without_provider_returned_id` to [test_branch_group_runtime.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/tests/contract/test_branch_group_runtime.py) to pin the negative path for AC-2.
+- Updated [test_strategy.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/full-revised-standalone-spec-autoloop-v3-explici-7b9dcd08/runs/run-20260505T201926Z-7fdaad17/artifacts/test/phases/session-state-evidence-correctness/test_strategy.md) with a behavior-to-test coverage map, preserved invariants, edge cases, flake controls, and known gaps.
+- Appended a concise validation summary to [feedback.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/full-revised-standalone-spec-autoloop-v3-explici-7b9dcd08/runs/run-20260505T201926Z-7fdaad17/artifacts/test/phases/session-state-evidence-correctness/feedback.md).
+- Appended one scoped test decision to [decisions.txt](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/full-revised-standalone-spec-autoloop-v3-explici-7b9dcd08/runs/run-20260505T201926Z-7fdaad17/decisions.txt).
+
+Key findings / decisions
+- The implementer coverage already handled the positive AC-2 path where the provider returns real session ids.
+- The remaining regression risk was the negative AC-2 path: no provider-returned id must leave manifest session fields empty rather than leaking synthetic or parent-derived ids.
+- No new flake-sensitive timing assertions were introduced; the added case is single-branch and deterministic.
+
+Open issues / next step
+- Validation passed:
+  - `./.venv/bin/pytest tests/contract/test_branch_group_runtime.py`
+  - `./.venv/bin/pytest tests/unit/test_branch_group_context_sessions.py`
+  - `./.venv/bin/pytest tests/runtime/test_runtime_tracing.py -k branch_group`
+- No blocking gaps remain in the active phase test scope.
+
+<loop-control>
+{"schema":"docloop.loop_control/v1","kind":"promise","promise":"COMPLETE"}
+</loop-control>
