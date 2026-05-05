@@ -84,6 +84,7 @@ autoloop/stdlib/lifecycle.py
 autoloop/stdlib/parameters.py
 autoloop/stdlib/prompts.py
 autoloop/stdlib/validation.py
+autoloop/stdlib/worklists.py
 autoloop/stdlib/state/__init__.py
 autoloop/stdlib/state/cursor.py
 autoloop/workflows/__init__.py
