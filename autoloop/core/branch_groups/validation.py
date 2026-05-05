@@ -76,6 +76,10 @@ def validate_fan_in_step_kind(*, group_name: str, step: Step) -> None:
         raise WorkflowValidationError(
             f"branch group {group_name!r} includes child workflow fan-in step {step.name!r}, which is unsupported in v1."
         )
+    if _simple_declaration_kind(step) == "operation":
+        raise WorkflowValidationError(
+            f"branch group {group_name!r} includes unsupported fan-in step {step.name!r} of kind 'operation'."
+        )
     if isinstance(step, BranchGroupStep):
         raise WorkflowValidationError(
             f"branch group {group_name!r} includes unsupported fan-in step {step.name!r} of kind {step.kind!r}."

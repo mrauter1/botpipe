@@ -298,3 +298,51 @@ The implementation should reject authored `operation` fan-in declarations in `va
 <loop-control>
 {"schema":"docloop.loop_control/v1","kind":"promise","promise":"INCOMPLETE"}
 </loop-control>
+
+
+---
+run_id=run-20260505T201926Z-7fdaad17 | entry=session_turn | pair=implement | phase=producer | cycle=2 | attempt=1 | thread_id=019df9d2-2c65-7691-8f27-aacfb5bd74b9
+---
+provider=codex
+mode=resume
+template=/home/rauter/.local/share/pipx/venvs/autoloop/lib/python3.12/site-packages/autoloop/templates/implement_producer.md
+session_id=019df9d2-2c65-7691-8f27-aacfb5bd74b9
+
+
+---
+run_id=run-20260505T201926Z-7fdaad17 | entry=phase_output | pair=implement | phase=producer | process=codex-agent | cycle=2 | attempt=1 | thread_id=019df9d2-2c65-7691-8f27-aacfb5bd74b9
+---
+I’m addressing the reviewer’s blocking finding only: the fan-in kind validation still admits operation declarations through the lowered `PythonStep` path. I’ll inspect that validation/test surface, patch it centrally, rerun the relevant branch-group tests, and then update the phase notes and decision ledger.
+
+The fix is narrow: I’m changing fan-in kind validation to inspect the authored declaration kind, then I’ll replace the test that preserved operation fan-in support with a rejection test so the contract is enforced instead of codified incorrectly.
+
+The validation path and test contract are patched. I’m rerunning the same targeted branch-group compile/runtime suites to make sure the reviewer’s repro is closed without spilling into adjacent behavior.
+
+The tests are green again. I’m updating the run notes and the new turn’s decision block to reflect that operation-based fan-in declarations are now explicitly rejected instead of treated as supported.
+
+Scope considered
+
+Phase-local `contract-hardening` only. I limited changes to the reviewer’s blocking finding around fan-in kind validation, plus the corresponding phase notes and decision ledger updates.
+
+What I analyzed
+
+I re-read the active reviewer feedback, the current branch-group validation path in [`autoloop/core/branch_groups/validation.py`](/home/rauter/autoloop_v3_bkp/autoloop_v3/autoloop/core/branch_groups/validation.py), the fan-in kind test coverage in [`tests/unit/test_simple_surface.py`](/home/rauter/autoloop_v3_bkp/autoloop_v3/tests/unit/test_simple_surface.py), and the latest turn blocks in [`decisions.txt`](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/full-revised-standalone-spec-autoloop-v3-explici-7b9dcd08/runs/run-20260505T201926Z-7fdaad17/decisions.txt).
+
+What I changed
+
+I made `validate_fan_in_step_kind()` reject authored `operation` fan-in declarations using the same `_simple_declaration_kind(step)` check already used for branch-step validation. I also replaced the prior test that preserved `simple.llm.step(...)` fan-in support with a rejection test, so the compile-time contract now matches the v1 supported fan-in kind list.
+
+I updated [`implementation_notes.md`](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/full-revised-standalone-spec-autoloop-v3-explici-7b9dcd08/runs/run-20260505T201926Z-7fdaad17/artifacts/implement/phases/contract-hardening/implementation_notes.md) and appended the superseding decision under the latest runtime-created header in [`decisions.txt`](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/full-revised-standalone-spec-autoloop-v3-explici-7b9dcd08/runs/run-20260505T201926Z-7fdaad17/decisions.txt).
+
+Key findings / decisions
+
+Reviewer finding `IMP-001` is addressed by enforcing the contract at the authored-kind level instead of trusting the lowered runtime `Step` type. The previous turn’s temporary allowance for operation-based fan-in is now explicitly superseded in the run-local ledger.
+
+Validation passed with:
+- `.venv/bin/python -m pytest tests/unit/test_simple_surface.py -k 'branch_group or compile_cache'`
+- `.venv/bin/python -m pytest tests/runtime/test_runtime_static_graph.py -k 'branch_group'`
+- `.venv/bin/python -m pytest tests/contract/test_branch_group_runtime.py`
+
+Open issues / next step
+
+No new phase-local issues surfaced in this fix. The next step is verifier re-review against the updated feedback item and criteria.

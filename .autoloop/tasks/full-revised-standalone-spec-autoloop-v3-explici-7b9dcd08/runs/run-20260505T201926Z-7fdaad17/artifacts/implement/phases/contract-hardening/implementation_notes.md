@@ -26,13 +26,13 @@
 
 ## Checklist mapping
 - Plan milestone 1 / declaration-compiled split: completed via separate authored and compiled branch-group spec dataclasses.
-- Plan milestone 1 / validation hardening: completed for exact placeholder roots, scoped branch rejection, operation branch rejection, child-workflow rejection, and existing explicit-fresh-session enforcement.
+- Plan milestone 1 / validation hardening: completed for exact placeholder roots, scoped branch rejection, operation branch rejection, operation fan-in rejection, child-workflow rejection, and existing explicit-fresh-session enforcement.
 - Plan milestone 1 / composite route exposure: preserved by continuing to source composite routes from fan-in or mechanical outcomes only.
 - Plan milestone 1 / compile-cache safety: completed by bypassing `_COMPILED_WORKFLOW_CACHE` for branch-group workflows.
-- Plan milestone 1 / compile-time tests: completed with added coverage for spec split, scoped/operation branch rejection, exact placeholder-root matching, and cache bypass.
+- Plan milestone 1 / compile-time tests: completed with added coverage for spec split, scoped/operation branch rejection, operation fan-in rejection, exact placeholder-root matching, and cache bypass.
 
 ## Assumptions
-- Operation-based fan-in declarations remain allowed in this phase because existing authoring/tests already treat them as supported; only branch operation steps were tightened.
+- No new intent assumptions were added after resolving reviewer finding `IMP-001`; fan-in kind validation now follows the v1 contract directly.
 
 ## Preserved invariants
 - Non-branch workflow compilation still uses the existing cache path.
@@ -42,7 +42,7 @@
 ## Intended behavior changes
 - Branch-group workflows now compile into separate authored vs compiled spec objects.
 - Branch-group workflows no longer reuse the compiled workflow cache.
-- Scoped branch steps and operation branch steps now fail compilation as unsupported v1 branch kinds.
+- Scoped branch steps, operation branch steps, and operation fan-in steps now fail compilation as unsupported v1 kinds.
 - Placeholder root matching for `branch` and `fan_in` is exact instead of prefix-based.
 
 ## Known non-changes

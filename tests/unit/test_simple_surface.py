@@ -772,7 +772,6 @@ def test_fan_out_branch_group_preserves_branch_inputs_and_order() -> None:
             name="fan_in_pair",
         ),
         lambda: simple.python_step(lambda ctx: simple.Event("done"), name="fan_in_python"),
-        lambda: simple.llm.step(prompt="Classify {fan_in.branch_count}.", name="fan_in_operation"),
     ],
 )
 def test_branch_group_fan_in_accepts_supported_step_kinds(fan_in_factory) -> None:
@@ -792,6 +791,23 @@ def test_branch_group_fan_in_accepts_supported_step_kinds(fan_in_factory) -> Non
     assert compiled.steps["assess"].kind == "branch_group"
     assert compiled.steps["assess"].branch_group is not None
     assert compiled.steps["assess"].branch_group.fan_in_step is not None
+
+
+def test_branch_group_rejects_operation_fan_in_steps() -> None:
+    with pytest.raises(WorkflowValidationError, match="unsupported fan-in step .* kind 'operation'"):
+
+        class InvalidOperationFanInWorkflow(simple.Workflow):
+            class State(BaseModel):
+                pass
+
+            assess = simple.parallel(
+                branches={
+                    "a": simple.python_step(lambda ctx: simple.Event("done"), name="branch_a"),
+                },
+                fan_in=simple.llm.step(prompt="Classify {fan_in.branch_count}.", name="fan_in_operation"),
+            )
+
+        compile_workflow(InvalidOperationFanInWorkflow)
 
 
 def test_branch_group_fan_in_helpers_are_rejected_outside_fan_in() -> None:
