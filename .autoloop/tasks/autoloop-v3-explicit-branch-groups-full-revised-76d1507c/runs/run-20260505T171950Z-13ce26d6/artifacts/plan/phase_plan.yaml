@@ -9,7 +9,7 @@ phases:
     in_scope:
       - "Public `parallel(...)`, `fan_out(...)`, and `FanIn` declarations plus exports."
       - "Composite branch-group step shape and internal branch-spec metadata."
-      - "Compile-time validation for names, helper legality, placeholder legality, supported branch step kinds, fan-out input serializability, and branch-only fresh-session rules."
+      - "Compile-time validation for names, helper legality, placeholder legality, supported branch and fan-in step kinds, fan-out input serializability, and branch-only fresh-session rules."
     out_of_scope:
       - "Runtime branch scheduling."
       - "Checkpoint/resume changes beyond composite-step modeling."
@@ -20,6 +20,8 @@ phases:
         text: "Branch groups compile as one external workflow step with deterministic exposed routes and ordered internal branch specs."
       - id: "AC-2"
         text: "Provider-backed branch steps fail compilation unless they explicitly declare `Session.fresh()`, while non-branch provider steps retain existing default-session behavior."
+      - id: "AC-3"
+        text: "Fan-in accepts LLM, produce-verify, Python, and operation steps, and rejects child-workflow fan-in in v1."
     deliverables:
       - "Branch-group public declarations in `autoloop/simple.py` and `autoloop/__init__.py`."
       - "Branch-group models/lowering/validation under `autoloop/core/branch_groups/`."
@@ -68,8 +70,8 @@ phases:
       - "Dedicated `BranchGroupRuntime` collaborator and dispatcher integration."
       - "Bounded branch scheduling with `concurrency` and `settle` semantics."
       - "Ordered branch-result capture from `StepExecutionResult` without following branch destinations."
-      - "Runtime-owned `_branch_groups/<group>/results.json` and `context.md` outputs."
-      - "Fan-in execution and mechanical outcome routing."
+      - "Runtime-owned `_branch_groups/<group>/results.json` and `context.md` outputs with the requested schema/content contract."
+      - "Fan-in execution plus explicit `success_routes`, built-in outcome, and custom-aggregator routing semantics."
       - "Composite-boundary checkpoint behavior."
     out_of_scope:
       - "Branch-specific checkpoint resume."
@@ -82,6 +84,8 @@ phases:
         text: "Branch groups execute ordered branch specs under the declared settlement policy and resolve only after manifest/context writing and optional fan-in/outcome selection complete."
       - id: "AC-2"
         text: "Branch `Goto`, `Fail`, and `RequestInput` results are captured in the manifest without advancing the parent workflow cursor or checkpointing mid-branch."
+      - id: "AC-3"
+        text: "The runtime writes `autoloop.branch_results/v1` manifests and deterministic context markdown, and no-fan-in routing honors the requested `success_routes`, `all_done`, `all_settled`, `any_done`, and custom aggregator semantics."
     deliverables:
       - "Runtime modules under `autoloop/core/branch_groups/{runtime,manifest,outcomes}.py`."
       - "Dispatcher and minimal engine wiring in `autoloop/core/engine_collaborators.py` and `autoloop/core/engine.py`."

@@ -83,3 +83,26 @@ The plan needs one revision pass to explicitly encode the fan-in support matrix 
 <loop-control>
 {"schema":"docloop.loop_control/v1","kind":"promise","promise":"INCOMPLETE"}
 </loop-control>
+
+
+---
+run_id=run-20260505T171950Z-13ce26d6 | entry=session_turn | pair=plan | phase=producer | cycle=2 | attempt=1 | thread_id=019df927-3d77-70d1-9f85-b0c351b71705
+---
+provider=codex
+mode=resume
+template=/home/rauter/.local/share/pipx/venvs/autoloop/lib/python3.12/site-packages/autoloop/templates/plan_producer.md
+session_id=019df927-3d77-70d1-9f85-b0c351b71705
+
+
+---
+run_id=run-20260505T171950Z-13ce26d6 | entry=phase_output | pair=plan | phase=producer | process=codex-agent | cycle=2 | attempt=1 | thread_id=019df927-3d77-70d1-9f85-b0c351b71705
+---
+I’m revising the plan against the verifier’s blocking findings, not changing scope. First I’m re-reading the current plan artifacts and decision ledger so I can patch only the missing contract details: the fan-in support matrix and the persisted manifest/outcome semantics.
+
+I’m patching the plan in two targeted places. The revision will make the fan-in support matrix explicit and pin the persisted `results.json`/`context.md` plus no-fan-in routing contract tightly enough that the implementation can’t drift while still “following the plan.”
+
+The revision is in place. I’m doing one readback to make sure the added contract details are explicit in both the narrative plan and the phase contract, and that the new decisions landed only under the current turn’s header.
+
+Updated [plan.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/autoloop-v3-explicit-branch-groups-full-revised-76d1507c/runs/run-20260505T171950Z-13ce26d6/artifacts/plan/plan.md) and [phase_plan.yaml](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/autoloop-v3-explicit-branch-groups-full-revised-76d1507c/runs/run-20260505T171950Z-13ce26d6/artifacts/plan/phase_plan.yaml) to close the verifier’s two blocking gaps. The plan now makes the fan-in step-kind matrix explicit, keeps child-workflow fan-in unsupported in v1, and pins the persisted `results.json` / `context.md` contract plus `success_routes` and no-fan-in outcome semantics as implementation requirements rather than implied behavior.
+
+I also appended the resolution note to [feedback.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/autoloop-v3-explicit-branch-groups-full-revised-76d1507c/runs/run-20260505T171950Z-13ce26d6/artifacts/plan/feedback.md) and recorded the non-obvious constraints under the current turn header in [decisions.txt](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/autoloop-v3-explicit-branch-groups-full-revised-76d1507c/runs/run-20260505T171950Z-13ce26d6/decisions.txt). I did not touch [criteria.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/autoloop-v3-explicit-branch-groups-full-revised-76d1507c/runs/run-20260505T171950Z-13ce26d6/artifacts/plan/criteria.md). No tests were run in this planning turn.
