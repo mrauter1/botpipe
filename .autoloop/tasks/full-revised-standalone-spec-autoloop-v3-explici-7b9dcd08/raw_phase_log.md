@@ -249,3 +249,52 @@ Validation passed with:
 Open issues / next step
 
 Async execution, provider async transport, branch-local session runtime behavior, and evidence-path migration are still untouched and belong to later phases. The next phase can build on the authored/compiled split without reworking this contract surface again.
+
+
+---
+run_id=run-20260505T201926Z-7fdaad17 | entry=session_turn | pair=implement | phase=verifier | cycle=1 | attempt=1 | thread_id=019df9d2-2c65-7691-8f27-aacfb5bd74b9
+---
+provider=codex
+mode=resume
+template=/home/rauter/.local/share/pipx/venvs/autoloop/lib/python3.12/site-packages/autoloop/templates/implement_verifier.md
+session_id=019df9d2-2c65-7691-8f27-aacfb5bd74b9
+
+
+---
+run_id=run-20260505T201926Z-7fdaad17 | entry=phase_output | pair=implement | phase=verifier | process=codex-agent | cycle=1 | attempt=1 | thread_id=019df9d2-2c65-7691-8f27-aacfb5bd74b9
+---
+I’m reviewing the phase-local implementation against the active contract and updating only the review artifacts. I’ll verify the changed branch-group/compiler paths, compare them to the acceptance criteria, and then record criteria status plus any findings in the phase feedback file.
+
+I found one contract question worth validating directly: whether operation-based fan-in declarations still compile. The spec’s allowed fan-in kinds exclude operation steps, so I’m checking that path explicitly before I write the review finding.
+
+I have one blocking finding. I’m recording it in the phase feedback and marking the criteria to reflect that the structural cleanup landed, but intent-fidelity and safety are not fully satisfied yet.
+
+The review artifacts are updated. I’m doing a quick readback of the criteria and feedback so the final status matches exactly what was written.
+
+Scope considered
+
+Phase-local `contract-hardening` only. I reviewed the changed branch-group declaration/compiler/validation paths, the implementation notes, the run decisions ledger, and the compile-time/runtime branch-group tests relevant to this phase.
+
+What I analyzed
+
+I checked the new authored-vs-compiled branch-group model split, the validation changes for placeholder roots and unsupported branch kinds, the compile-cache bypass path in `compile_workflow`, and the tests added around these behaviors. I also directly validated the fan-in operation path with a small compile-time repro.
+
+What I reviewed
+
+I updated:
+- [`criteria.md`](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/full-revised-standalone-spec-autoloop-v3-explici-7b9dcd08/runs/run-20260505T201926Z-7fdaad17/artifacts/implement/phases/contract-hardening/criteria.md)
+- [`feedback.md`](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/full-revised-standalone-spec-autoloop-v3-explici-7b9dcd08/runs/run-20260505T201926Z-7fdaad17/artifacts/implement/phases/contract-hardening/feedback.md)
+
+Key findings / decisions
+
+There is 1 blocking finding: `IMP-001`. Operation-based fan-in declarations still compile because `validate_fan_in_step_kind()` only looks at the lowered runtime `Step` type, so `simple.llm.step(...)` is accepted as a `PythonStep`. That contradicts the v1 contract-hardening goal of rejecting unsupported authored fan-in kinds before runtime work.
+
+The structural cleanup itself is otherwise coherent: the authored/compiled spec split landed cleanly, validation was centralized, and branch-group workflows now bypass the compile cache as intended.
+
+Open issues / next step
+
+The implementation should reject authored `operation` fan-in declarations in `validate_fan_in_step_kind()` and update the fan-in-kind test accordingly. After that, this phase should be re-reviewed.
+
+<loop-control>
+{"schema":"docloop.loop_control/v1","kind":"promise","promise":"INCOMPLETE"}
+</loop-control>
