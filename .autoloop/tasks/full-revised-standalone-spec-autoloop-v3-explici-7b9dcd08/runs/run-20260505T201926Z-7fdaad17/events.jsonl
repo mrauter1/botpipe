@@ -84,3 +84,7 @@
 {"ts": "2026-05-05T21:46:21.069772+00:00", "run_id": "run-20260505T201926Z-7fdaad17", "seq": 84, "event_type": "phase_finished", "pair": "test", "phase": "producer", "cycle": 1, "attempt": 1, "empty_output": false, "phase_id": "fan-in-outcomes-and-surface"}
 {"ts": "2026-05-05T21:47:56.963780+00:00", "run_id": "run-20260505T201926Z-7fdaad17", "seq": 85, "event_type": "phase_finished", "pair": "test", "phase": "verifier", "cycle": 1, "attempt": 1, "empty_output": false, "phase_id": "fan-in-outcomes-and-surface"}
 {"ts": "2026-05-05T21:47:57.034904+00:00", "run_id": "run-20260505T201926Z-7fdaad17", "seq": 86, "event_type": "pair_completed", "pair": "test", "cycle": 1, "attempt": 1, "phase_id": "fan-in-outcomes-and-surface"}
+{"ts": "2026-05-05T21:47:57.137796+00:00", "run_id": "run-20260505T201926Z-7fdaad17", "seq": 87, "event_type": "phase_completed", "pair": "test", "phase_id": "fan-in-outcomes-and-surface", "phase_mode": "single"}
+{"ts": "2026-05-05T21:47:57.141108+00:00", "run_id": "run-20260505T201926Z-7fdaad17", "seq": 88, "event_type": "phase_started", "phase_id": "strictness-and-cleanup", "phase_mode": "single"}
+{"ts": "2026-05-05T21:47:57.143149+00:00", "run_id": "run-20260505T201926Z-7fdaad17", "seq": 89, "event_type": "pair_started", "pair": "implement", "phase_id": "strictness-and-cleanup"}
+{"ts": "2026-05-05T21:47:57.143307+00:00", "run_id": "run-20260505T201926Z-7fdaad17", "seq": 90, "event_type": "cycle_started", "pair": "implement", "cycle": 1, "attempt": 1, "phase_id": "strictness-and-cleanup"}
