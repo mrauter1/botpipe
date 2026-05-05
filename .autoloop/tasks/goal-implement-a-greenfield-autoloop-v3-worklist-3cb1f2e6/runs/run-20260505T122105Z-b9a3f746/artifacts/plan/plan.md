@@ -35,10 +35,22 @@
 - Keep existing source contracts intact; sources still only materialize ordered items.
 
 ### 2. Generic worklist compatibility points
-- Preserve `Worklist.from_items`, `from_param`, and `from_artifact` behavior except where selector validation or selection semantics intentionally broaden the generic API.
-- Add a read-only `Worklist.artifact` convenience property that returns the backing artifact when the source is artifact-backed and exposes one, otherwise `None`.
+- Preserve `Worklist.from_items`, `from_param`, and `from_artifact` behavior except for the selector contract changes explicitly required by this request.
+- Add an artifact-backed authoring surface for generated progress worklists:
+  - preferred implementation is a read-only `Worklist.artifact` property that returns the backing artifact when the source exposes one,
+  - if that is too invasive, the fallback is a thin artifact-backed worklist type that still returns a single worklist object and exposes `.artifact`,
+  - do not return tuples or require authors to separately construct the common-case artifact.
 - Keep existing source descriptor / missing-policy surfaces stable so runtime/compiler/static-graph behavior does not drift unnecessarily.
 - Only update engine/compiler/static-graph-facing selector detail formatting if test coverage proves the new selector fields need to be surfaced.
+
+## Compatibility Notes
+- This request intentionally changes existing generic selector behavior: a worklist that currently uses `Selector(item_param=..., allowed_modes=("all",))` to select a subset under default `all` mode must now fail when that selector-bound parameter is supplied.
+- That break is required by the new core selector contract, not by progress-board shape changes. It must therefore be implemented deliberately and documented as a selector API compatibility break, not treated as incidental fallout.
+- Regression handling for that break must include:
+  - identifying repo tests and any existing authoring surfaces that assert selector-on-`all` subset selection,
+  - updating or retiring those expectations intentionally,
+  - verifying that other generic worklist behaviors remain unchanged.
+- No other compatibility broadening is authorized: do not add aliases, board-shape adapters, selector fallback heuristics, or route-wrapper layers to smooth this break.
 
 ### 3. Stdlib progress worklist module
 - Add `autoloop/stdlib/worklists.py` with:
@@ -86,29 +98,31 @@
   - `tests/unit/test_stdlib_and_extensions.py`
   - `tests/unit/test_primitives_and_stores.py`
   - `tests/runtime/test_workspace_and_context.py`
-- Expect existing selector tests in `tests/contract/test_engine_contracts.py` and unit tests in `tests/unit/test_primitives_and_stores.py` to remain valid after the broader selector implementation.
+- Treat existing assertions of selector-on-`all` subset selection as intentional update points rather than surprise regressions; specifically review the current unit coverage in `tests/unit/test_primitives_and_stores.py` and any similar call sites before declaring adjacent suites green.
+- Expect existing selector tests that already opt into `single` mode, such as `tests/contract/test_engine_contracts.py`, to remain valid after the broader selector implementation.
 
 ## Regression Surfaces And Controls
 - Selector semantics affect all generic worklists, so keep source loading unchanged and confine new behavior to post-load selection helpers.
+- Existing generic selector-on-`all` subset selection is a known intentional break under the new contract; isolate that change to selector resolution, update the affected tests deliberately, and confirm that generic `single`, artifact persistence, selection snapshot restore, and scoped runtime behavior do not drift.
 - Persisted selection snapshots store selected item ids and mode; restoring older snapshots should keep working because item snapshots already carry ids/titles/statuses and the new modes remain plain strings.
 - Artifact-backed worklists already participate in runtime/static-graph metadata. Avoid changing descriptor formats unless required, to prevent incidental snapshot churn.
 - Stdlib module purity matters: keep the new module as authoring/helpers only, with no runtime or workflow-package imports beyond existing core/stdlib patterns.
 
 ## Risk Register
 - Risk: selector validation becomes stricter for authored `Selector(...)` declarations.
-  - Control: limit strictness to documented invalid inputs; keep existing `("all", "single")` use cases valid.
+  - Control: limit strictness to documented invalid inputs, explicitly call out the intentional break for `allowed_modes=("all",)` plus selector-bound params, and update/retire the affected tests deliberately rather than discovering them late.
 - Risk: `Selection.explicit` flips for current callers that rely on parameter presence rather than effective bounds.
   - Control: align logic exactly to the request and add unit coverage for implicit-first-item and unbounded range cases.
 - Risk: fallback write/load/save paths could leak raw JSON/Pydantic errors.
   - Control: wrap artifact read/validation failures with artifact-path/context-rich `WorkflowExecutionError` messages.
 - Risk: adding `.artifact` on `Worklist` could be implemented too invasively.
-  - Control: prefer a simple property that introspects `source.artifact`; do not subclass unless necessary.
+  - Control: prefer a simple property that introspects `source.artifact`; if that proves invasive, switch to a thin artifact-backed worklist type rather than dropping the `.artifact` surface.
 
 ## Rollout And Rollback
 - Rollout order:
-  1. core selector behavior and compatibility property,
+  1. core selector behavior, including the explicit `mode=all` compatibility break note and `.artifact` surface choice,
   2. stdlib progress worklist module and exports,
-  3. focused unit/runtime tests,
+  3. focused unit/runtime tests plus deliberate updates to existing tests that currently assert selector-on-`all` subset selection,
   4. adjacent regression suites.
 - Rollback if needed:
   - revert stdlib module/export addition independently from selector changes,

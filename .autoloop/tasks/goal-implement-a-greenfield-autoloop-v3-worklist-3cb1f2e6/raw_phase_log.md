@@ -89,3 +89,28 @@ The producer plan should be revised to explicitly document the intentional break
 <loop-control>
 {"schema":"docloop.loop_control/v1","kind":"promise","promise":"INCOMPLETE"}
 </loop-control>
+
+
+---
+run_id=run-20260505T122105Z-b9a3f746 | entry=session_turn | pair=plan | phase=producer | cycle=2 | attempt=1 | thread_id=019df815-baeb-7cb2-8a92-09e542cbd06c
+---
+provider=codex
+mode=resume
+template=/home/rauter/.local/share/pipx/venvs/autoloop/lib/python3.12/site-packages/autoloop/templates/plan_producer.md
+session_id=019df815-baeb-7cb2-8a92-09e542cbd06c
+
+
+---
+run_id=run-20260505T122105Z-b9a3f746 | entry=phase_output | pair=plan | phase=producer | process=codex-agent | cycle=2 | attempt=1 | thread_id=019df815-baeb-7cb2-8a92-09e542cbd06c
+---
+I’m revising the plan against the verifier’s blocking feedback. First I’m checking the current artifact state and the latest decisions header so I can make the compatibility break explicit without touching verifier-owned files.
+
+I’ve got the revisions scoped: the plan needs to name the existing `mode=all` subset-selection behavior as an intentional break required by the new contract, and the phase contract needs to make the `.artifact` surface mandatory with the thin-subclass fallback preserved. I’m updating those artifacts directly now.
+
+The blocking gap is addressed in the artifacts now. I’m doing one quick pass over the revised sections and the new decision block so the next verifier turn sees the compatibility break and `.artifact` requirement stated unambiguously.
+
+Updated the run-local planning artifacts to address the verifier findings.
+
+`plan.md` now explicitly documents the intentional compatibility break for existing selector-on-`all` subset selection, names it as a required selector-contract change rather than incidental fallout, and adds concrete regression handling for affected tests/consumers. `phase_plan.yaml` now makes the `.artifact` authoring surface mandatory, with `Worklist.artifact` preferred and a thin artifact-backed worklist type as the allowed fallback.
+
+I also appended the revision note to `feedback.md` and recorded the non-obvious constraints in the current turn’s block of `decisions.txt`. I did not modify verifier-owned `criteria.md` or any repository source code in this turn.

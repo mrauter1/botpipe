@@ -9,7 +9,8 @@ phases:
     in_scope:
       - "Expand Selector validation and parameter shape in autoloop/core/worklists.py."
       - "Implement ordered bound resolution, explicit-selection tracking, and contextual selector execution errors in Worklist."
-      - "Add a read-only worklist artifact convenience property only if it can be done locally and safely."
+      - "Expose an artifact-backed authoring surface for generated progress worklists via Worklist.artifact when feasible, with a thin artifact-backed worklist type as the allowed fallback if direct addition is too invasive."
+      - "Document and validate the intentional break where selector-bound parameters are no longer accepted under mode=all, including current repo tests that rely on that behavior."
     out_of_scope:
       - "Provider, checkpoint, session, or route-internal refactors."
       - "Any phase-specific or domain-specific selector semantics."
@@ -22,11 +23,15 @@ phases:
         text: "Selector validation rejects empty param names, duplicate/unknown modes, and default modes outside allowed_modes with clear failures."
       - id: "AC-3"
         text: "Selector execution errors include worklist name, mode, parameter name/value, and known ids when lookup fails."
+      - id: "AC-4"
+        text: "The intentional compatibility break for selector-on-all subset selection is called out explicitly, affected tests/consumers are updated deliberately, and no other generic worklist behavior drifts."
     deliverables:
       - "Core worklist selector plan and implementation slice in autoloop/core/worklists.py."
       - "Unit coverage for selector semantics and validation."
+      - "An artifact-backed worklist authoring surface that exposes .artifact without returning tuples."
     risks:
       - "Broader selector semantics may unintentionally affect existing generic worklists if post-load behavior is not isolated."
+      - "Existing selector-on-all tests may mask an intended API break if not updated explicitly."
       - "Selection.explicit semantics may drift from the requested contract without direct unit coverage."
     rollback:
       - "Revert selector helper and validation changes in autoloop/core/worklists.py while preserving existing source implementations."
@@ -69,6 +74,7 @@ phases:
       - "Add runtime integration coverage for default all, single, up_to, from_to, invalid ranges, and optional skipped-policy acceptance."
       - "Run the focused new tests plus adjacent stdlib/context/worklist regression suites named in the request."
       - "Adjust only directly exposed integration breakpoints if a failing test proves a local compatibility fix is required."
+      - "Update or retire existing tests that intentionally relied on selector-bound params being accepted in mode=all."
     out_of_scope:
       - "Unrelated workflow-package rewrites or broad runtime cleanup."
       - "Compatibility restoration for intentionally unsupported legacy aliases or board shapes."
