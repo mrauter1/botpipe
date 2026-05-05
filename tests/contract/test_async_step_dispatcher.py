@@ -1,6 +1,8 @@
 from __future__ import annotations
 
 import asyncio
+import gc
+import warnings
 from pathlib import Path
 
 from pydantic import BaseModel
@@ -180,11 +182,15 @@ def test_step_dispatcher_capture_rejects_active_event_loop_without_running_sync_
     step, context = _build_step_context(engine, tmp_path, step_name="review")
 
     async def run_in_loop() -> None:
-        try:
-            engine.step_dispatcher.execute(step, context, context.state, (), route_mode="capture")
-        except RuntimeError as exc:
-            assert "active event loop" in str(exc)
-            return
-        raise AssertionError("capture mode should reject sync bridging inside an active event loop")
+        with warnings.catch_warnings(record=True) as caught:
+            warnings.simplefilter("always")
+            try:
+                engine.step_dispatcher.execute(step, context, context.state, (), route_mode="capture")
+            except RuntimeError as exc:
+                assert "active event loop" in str(exc)
+            else:
+                raise AssertionError("capture mode should reject sync bridging inside an active event loop")
+            gc.collect()
+        assert not any("never awaited" in str(warning.message) for warning in caught)
 
     asyncio.run(run_in_loop())

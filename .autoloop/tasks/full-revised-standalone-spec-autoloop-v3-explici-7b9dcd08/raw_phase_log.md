@@ -723,3 +723,58 @@ Open issues / next step
 <loop-control>
 {"schema":"docloop.loop_control/v1","kind":"promise","promise":"COMPLETE"}
 </loop-control>
+
+
+---
+run_id=run-20260505T201926Z-7fdaad17 | entry=session_turn | pair=test | phase=producer | cycle=1 | attempt=1 | thread_id=019df9dd-89bf-7fa2-b1bc-911798ef8bf7
+---
+provider=codex
+mode=resume
+template=/home/rauter/.local/share/pipx/venvs/autoloop/lib/python3.12/site-packages/autoloop/templates/test_producer.md
+session_id=019df9dd-89bf-7fa2-b1bc-911798ef8bf7
+
+
+---
+run_id=run-20260505T201926Z-7fdaad17 | entry=phase_output | pair=test | phase=producer | process=codex-agent | cycle=1 | attempt=1 | thread_id=019df9dd-89bf-7fa2-b1bc-911798ef8bf7
+---
+I’m checking the existing async-step/provider coverage and the test-phase artifacts first. Then I’ll decide whether the current suite already covers the reviewer-fixed branch-group async path or if it needs one more regression test before I update the strategy and feedback artifacts.
+
+The current tests hit the right paths, but there’s one regression surface still worth pinning down in the test phase: the old bug emitted an unawaited-coroutine warning only on garbage collection. I’m tightening that active-loop rejection test so it fails if the lazy-bridge guard ever regresses.
+
+I’ve made the active-loop rejection test assert the absence of the old unawaited-coroutine warning. Now I’m rerunning the focused contract files before I update the strategy and the test-phase feedback.
+
+The focused suite is green. I’m recording the stabilization detail for the warning-regression test and then I’ll update the test strategy and test-phase feedback with the behavior-to-coverage map.
+
+Scope considered
+
+- Phase-local test work for the async-step/provider foundation only: async provider/transport behavior, async one-step dispatch, the reviewer-fixed async branch-group entrypoint, and the active-loop sync-capture regression surface.
+
+What I analyzed
+
+- Reviewed the current phase scope, implementation decisions, and the reviewer-resolved branch-group async dispatch fix.
+- Checked the existing contract coverage in [test_async_step_dispatcher.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/tests/contract/test_async_step_dispatcher.py) and [test_branch_group_runtime.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/tests/contract/test_branch_group_runtime.py).
+- Identified one remaining regression surface worth pinning down in tests: the old unawaited-coroutine warning only appeared at garbage-collection time after the sync bridge rejected an active event loop.
+
+What I changed
+
+- Tightened [test_async_step_dispatcher.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/tests/contract/test_async_step_dispatcher.py) so the active-loop sync-capture rejection test now:
+  - captures warnings,
+  - forces `gc.collect()`,
+  - asserts that no `coroutine ... was never awaited` warning is emitted after the expected `RuntimeError`.
+- Updated [test_strategy.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/full-revised-standalone-spec-autoloop-v3-explici-7b9dcd08/runs/run-20260505T201926Z-7fdaad17/artifacts/test/phases/async-step-provider-foundation/test_strategy.md) with an explicit behavior-to-coverage map for AC-1, AC-2, AC-3, preserved invariants, failure paths, flake controls, and known gaps.
+- Appended a concise summary to [feedback.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/full-revised-standalone-spec-autoloop-v3-explici-7b9dcd08/runs/run-20260505T201926Z-7fdaad17/artifacts/test/phases/async-step-provider-foundation/feedback.md).
+- Appended the non-obvious test stabilization decisions under the current test-phase header in `decisions.txt`.
+
+Key findings / decisions
+
+- The active-loop sync-capture regression is now covered deterministically rather than only implicitly.
+- Coverage is intentionally split between direct awaitable composite-step dispatch and sync `Engine.run(...)` branch-group tests so both the new async entrypoint and the preserved sync outer caller remain pinned.
+
+Open issues / next step
+
+- No blocking test gaps remain within this phase scope.
+- Deferred by plan and left documented in the strategy: true `asyncio.Task`/`Semaphore` scheduling, workflow-folder evidence rooting, and branch-session overlay correctness.
+
+<loop-control>
+{"schema":"docloop.loop_control/v1","kind":"promise","promise":"COMPLETE"}
+</loop-control>
