@@ -1596,3 +1596,54 @@ Open issues / next step
 
 - The next failure cluster is still `tests/unit/test_optimization_helpers.py`: 10 failures remain, centered on observability bundle validation, trace-corpus eligibility/filtering, and canonical selected-workflow source-manifest paths.
 - I did not run full `.venv/bin/python -m pytest` after this phase, and the repository is not globally green yet.
+
+
+---
+run_id=run-20260505T133333Z-ef073886 | entry=session_turn | pair=implement | phase=verifier | cycle=1 | attempt=1 | thread_id=019df85f-e454-7e32-a85f-f676e36c2390
+---
+provider=codex
+mode=resume
+template=/home/rauter/.local/share/pipx/venvs/autoloop/lib/python3.12/site-packages/autoloop/templates/implement_verifier.md
+session_id=019df85f-e454-7e32-a85f-f676e36c2390
+
+
+---
+run_id=run-20260505T133333Z-ef073886 | entry=phase_output | pair=implement | phase=verifier | process=codex-agent | cycle=1 | attempt=1 | thread_id=019df85f-e454-7e32-a85f-f676e36c2390
+---
+I’m reviewing the phase-local loader/catalog changes against the acceptance criteria and the recorded decisions first, then I’ll verify whether the implementation notes and test evidence justify marking the phase complete.
+
+The recorded decisions and implementation notes line up with the intended split. I’m reading the final loader/catalog code directly now to check for any hidden compatibility holes that the targeted suite might miss before I mark criteria.
+
+I found one place where the implementation may still be too coarse: whole-entry shadowing in the effective catalog can drop a repo-local unique alias even when only the workflow name collides with `.autoloop/workflows`. I’m reproducing that specific mixed-root case before I decide whether it’s a blocking contract miss.
+
+I have two blocking contract gaps, both within the phase scope. I’m recording them in the verifier artifact now; the criteria stay incomplete because the implementation still misses one key-level fallback case and one explicit class-reference behavior promised in the phase contract.
+
+Scope considered
+
+- Phase-local workflow-resolution changes only: [workflow_catalog.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/autoloop/core/workflow_catalog.py), [loader.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/autoloop/runtime/loader.py), and [workflow_capabilities.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/autoloop/core/workflow_capabilities.py), plus the active phase artifacts and decisions ledger.
+
+What I analyzed
+
+- The accepted phase contract, implementation notes, and run-local decisions.
+- The final loader/catalog/capability code paths for named resolution, explicit path/class loading, and shadowed-entry metadata recovery.
+- The validation evidence cited by the implementer, and two focused repros for mixed-root alias fallback and direct repo-local class-object resolution.
+
+What I reviewed
+
+- `criteria.md`: left incomplete because blocking findings remain.
+- `feedback.md`: appended `IMP-001` and `IMP-002` as blocking findings.
+- The implementation does satisfy the tested `.autoloop` authority split and adjacent suite stability, but it still misses two contract details that were explicitly in scope.
+
+Key findings / decisions
+
+- `IMP-001` blocking: whole-entry shadowing in `_effective_catalog` still drops unique lower-precedence repo-local aliases when only the workflow name collides, so repo-local named fallback is not actually key-based.
+- `IMP-002` blocking: `_resolve_imported_class_reference` still leaves direct repo-local `workflows.*` class-object references in the `workflows.*` namespace instead of reloading them through `_autoloop_workspace_workflows.*`, which conflicts with the explicit class-reference requirement in the phase contract.
+
+Open issues / next step
+
+- Fix key-level mixed-root shadowing so unclaimed repo-local aliases survive collisions with `.autoloop/workflows`.
+- Fix direct repo-local class-object references to use isolated loading, and move any internal callers that need named `workflows.*` metadata onto the named catalog resolution path instead of relying on class-object round-trips.
+
+<loop-control>
+{"schema":"docloop.loop_control/v1","kind":"promise","promise":"INCOMPLETE"}
+</loop-control>
