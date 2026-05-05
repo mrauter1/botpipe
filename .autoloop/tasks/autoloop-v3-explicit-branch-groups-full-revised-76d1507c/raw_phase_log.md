@@ -1052,3 +1052,60 @@ Key findings / decisions
 Open issues / next step
 - This phase is implemented. The next useful step is a broader full-suite regression run once the repository’s unrelated dirty state is stabilized.
 - The working tree still contains many pre-existing unrelated deletions/untracked files outside this phase; I did not modify or clean those up.
+
+
+---
+run_id=run-20260505T171950Z-13ce26d6 | entry=session_turn | pair=implement | phase=verifier | cycle=1 | attempt=1 | thread_id=019df95d-8fea-77f3-8730-5b37b11034f7
+---
+provider=codex
+mode=resume
+template=/home/rauter/.local/share/pipx/venvs/autoloop/lib/python3.12/site-packages/autoloop/templates/implement_verifier.md
+session_id=019df95d-8fea-77f3-8730-5b37b11034f7
+
+
+---
+run_id=run-20260505T171950Z-13ce26d6 | entry=phase_output | pair=implement | phase=verifier | process=codex-agent | cycle=1 | attempt=1 | thread_id=019df95d-8fea-77f3-8730-5b37b11034f7
+---
+I’m auditing the phase-local implementation against the acceptance criteria, starting from the active criteria/feedback artifacts and the branch-group runtime diff surfaces.
+
+I’ve confirmed the implementation notes and decision ledger. Next I’m reading the runtime and its integration points for correctness gaps that the targeted tests may not cover.
+
+I’m checking the shared-state/value plumbing and the route/finalization helpers now. The main risks are subtle: nested context aliasing, state propagation, and route semantics that pass the targeted tests but break adjacent behavior.
+
+I’ve narrowed the likely regression surfaces to two areas: nested artifact/session lowering, and branch-group runtime behavior that depends on route finalization rather than the explicit branch-group spec.
+
+I found a likely integration seam around nested route tables. I’m checking whether internal branch/fan-in steps still see workflow-global routes after the local `route_table` lowering.
+
+The route-table concern is real enough to test directly. I’m checking whether branch or fan-in steps can still use workflow-global routes, because losing those would be a material compatibility regression.
+
+I’m validating one more regression hypothesis with the route system itself. If it holds, it’s blocking because branch/fan-in steps would silently lose a supported routing surface that ordinary steps still have.
+
+I found a more direct outcome-policy issue: `all_settled` appears to ignore `success_routes` entirely. I’m verifying that with a minimal runtime check, because AC-3 explicitly calls out success-route-aware no-fan-in routing.
+
+I’ve got one concrete blocking defect with a reproducible scenario. I’m updating the phase review artifacts now, including the criteria status and the prioritized feedback entry.
+
+I’ve finished the audit. The implementation is close, but AC-3 is not met because `all_settled` currently misclassifies completed non-success routes as `done`.
+
+Scope considered
+- Phase-local review only: the branch-group runtime/evidence implementation, its compiler/dispatcher/context/artifact integration points, and the active review artifacts. I excluded unrelated dirty files elsewhere in the repository.
+
+What I analyzed
+- I read the active [criteria.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/autoloop-v3-explicit-branch-groups-full-revised-76d1507c/runs/run-20260505T171950Z-13ce26d6/artifacts/implement/phases/composite-runtime-and-evidence/criteria.md), [feedback.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/autoloop-v3-explicit-branch-groups-full-revised-76d1507c/runs/run-20260505T171950Z-13ce26d6/artifacts/implement/phases/composite-runtime-and-evidence/feedback.md), [implementation_notes.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/autoloop-v3-explicit-branch-groups-full-revised-76d1507c/runs/run-20260505T171950Z-13ce26d6/artifacts/implement/phases/composite-runtime-and-evidence/implementation_notes.md), and the current turn block in [decisions.txt](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/autoloop-v3-explicit-branch-groups-full-revised-76d1507c/runs/run-20260505T171950Z-13ce26d6/decisions.txt).
+- I inspected the changed runtime and integration code in `branch_groups/runtime.py`, `manifest.py`, `outcomes.py`, `compiler.py`, `engine.py`, `engine_collaborators.py`, `artifacts.py`, `inventory.py`, and the new branch-group contract tests.
+- I also ran a minimal `.venv/bin/python` reproduction to verify the `all_settled` outcome behavior for a completed non-success branch route.
+
+What I reviewed
+- I updated [criteria.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/autoloop-v3-explicit-branch-groups-full-revised-76d1507c/runs/run-20260505T171950Z-13ce26d6/artifacts/implement/phases/composite-runtime-and-evidence/criteria.md) to keep the acceptance checkboxes unchecked because AC-3 is not currently satisfied.
+- I appended a prioritized blocking finding to [feedback.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/autoloop-v3-explicit-branch-groups-full-revised-76d1507c/runs/run-20260505T171950Z-13ce26d6/artifacts/implement/phases/composite-runtime-and-evidence/feedback.md).
+
+Key findings / decisions
+- `IMP-001` blocking: [autoloop/core/branch_groups/outcomes.py:47](/home/rauter/autoloop_v3_bkp/autoloop_v3/autoloop/core/branch_groups/outcomes.py:47) implements `_all_settled()` without consulting `success_routes`. A branch group such as `parallel(outcome="all_settled")` with a completed branch route like `approved` and default `success_routes=("done", "accepted")` currently resolves `done`, but AC-3 and the spec require that to be `partial` because the branch completed with a non-success route.
+- The existing mechanical-outcome coverage in [tests/contract/test_branch_group_runtime.py:233](/home/rauter/autoloop_v3_bkp/autoloop_v3/tests/contract/test_branch_group_runtime.py:233) only exercises the `blocked` case, so this non-success completed-route regression is not covered.
+
+Open issues / next step
+- Fix `_all_settled()` to classify non-success via the shared success predicate instead of the current `{"failed", "blocked"}` special-case.
+- Add a contract test for a completed non-success route under `all_settled`, then rerun the branch-group contract slice.
+
+<loop-control>
+{"schema":"docloop.loop_control/v1","kind":"promise","promise":"INCOMPLETE"}
+</loop-control>
