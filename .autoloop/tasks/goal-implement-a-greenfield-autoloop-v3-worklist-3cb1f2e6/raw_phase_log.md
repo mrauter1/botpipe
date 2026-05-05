@@ -1502,3 +1502,12 @@ Open issues / next step
 <loop-control>
 {"schema":"docloop.loop_control/v1","kind":"promise","promise":"COMPLETE"}
 </loop-control>
+
+
+---
+run_id=run-20260505T133333Z-ef073886 | entry=phase_scope_resolved
+---
+phase_mode=single
+phase_ids=restore-workflow-resolution-contract,reconcile-optimizer-source-contracts,repair-packaged-workflow-contracts-and-proof
+explicit=True
+current_phase_index=0

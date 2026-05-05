@@ -3,5 +3,32 @@
   "created_at": "2026-05-05T13:33:33.899756+00:00",
   "request_file": "/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/goal-implement-a-greenfield-autoloop-v3-worklist-3cb1f2e6/runs/run-20260505T133333Z-ef073886/request.md",
   "artifacts_dir": "/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/goal-implement-a-greenfield-autoloop-v3-worklist-3cb1f2e6/runs/run-20260505T133333Z-ef073886/artifacts",
-  "provider": "codex"
+  "provider": "codex",
+  "phase_plan_path": "/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/goal-implement-a-greenfield-autoloop-v3-worklist-3cb1f2e6/runs/run-20260505T133333Z-ef073886/artifacts/plan/phase_plan.yaml",
+  "phase_plan_version": 1,
+  "active_phase_selection": {
+    "run_id": "run-20260505T133333Z-ef073886",
+    "mode": "single",
+    "phase_ids": [
+      "restore-workflow-resolution-contract",
+      "reconcile-optimizer-source-contracts",
+      "repair-packaged-workflow-contracts-and-proof"
+    ],
+    "explicit": true,
+    "current_phase_index": 0,
+    "current_phase_id": "restore-workflow-resolution-contract"
+  },
+  "phase_status": {
+    "restore-workflow-resolution-contract": "in_progress",
+    "reconcile-optimizer-source-contracts": "planned",
+    "repair-packaged-workflow-contracts-and-proof": "planned"
+  },
+  "phase_history": [
+    {
+      "phase_id": "restore-workflow-resolution-contract",
+      "run_id": "run-20260505T133333Z-ef073886",
+      "status": "in_progress",
+      "ts": "2026-05-05T13:42:06.540727+00:00"
+    }
+  ]
 }
