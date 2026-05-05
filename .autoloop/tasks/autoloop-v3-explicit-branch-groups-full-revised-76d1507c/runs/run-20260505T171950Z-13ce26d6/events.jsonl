@@ -80,3 +80,6 @@
 {"ts": "2026-05-05T19:16:50.496882+00:00", "run_id": "run-20260505T171950Z-13ce26d6", "seq": 80, "event_type": "phase_finished", "pair": "test", "phase": "producer", "cycle": 1, "attempt": 1, "empty_output": false, "phase_id": "surface-hardening-and-regression-suite"}
 {"ts": "2026-05-05T19:17:40.065262+00:00", "run_id": "run-20260505T171950Z-13ce26d6", "seq": 81, "event_type": "phase_finished", "pair": "test", "phase": "verifier", "cycle": 1, "attempt": 1, "empty_output": false, "phase_id": "surface-hardening-and-regression-suite"}
 {"ts": "2026-05-05T19:17:40.124042+00:00", "run_id": "run-20260505T171950Z-13ce26d6", "seq": 82, "event_type": "pair_completed", "pair": "test", "cycle": 1, "attempt": 1, "phase_id": "surface-hardening-and-regression-suite"}
+{"ts": "2026-05-05T19:17:40.244077+00:00", "run_id": "run-20260505T171950Z-13ce26d6", "seq": 83, "event_type": "phase_completed", "pair": "test", "phase_id": "surface-hardening-and-regression-suite", "phase_mode": "single"}
+{"ts": "2026-05-05T19:17:40.247623+00:00", "run_id": "run-20260505T171950Z-13ce26d6", "seq": 84, "event_type": "pair_started", "pair": "audit", "phase_id": null}
+{"ts": "2026-05-05T19:17:40.247906+00:00", "run_id": "run-20260505T171950Z-13ce26d6", "seq": 85, "event_type": "cycle_started", "pair": "audit", "cycle": 1, "attempt": 1, "phase_id": null}
