@@ -1422,6 +1422,13 @@ def _lower_simple_default_routes(ordered_steps: Sequence[Step]) -> dict[Step | s
                 step_routes.setdefault("done", ordered_steps[index + 1] if index + 1 < len(ordered_steps) else FINISH)
             continue
         if isinstance(step, BranchGroupStep):
+            if getattr(declaration, "fan_in", None) is None:
+                next_target = ordered_steps[index + 1] if index + 1 < len(ordered_steps) else FINISH
+                # Mechanical-outcome composites always expose `done` and `partial`;
+                # implicit control routes must not suppress those destinations.
+                step_routes.setdefault(getattr(step, "default_chain_route", "done"), next_target)
+                step_routes.setdefault("partial", next_target)
+                continue
             if not has_declared_routes:
                 next_target: object = ordered_steps[index + 1] if index + 1 < len(ordered_steps) else FINISH
                 step_routes.setdefault(getattr(step, "default_chain_route", "done"), next_target)

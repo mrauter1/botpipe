@@ -700,6 +700,27 @@ def test_parallel_branch_group_propagates_explicit_fan_in_routes_to_outer_routes
     assert compiled.routes["assess"]["needs_revision"].target == "assess"
 
 
+def test_parallel_branch_group_without_fan_in_materializes_mechanical_outcome_routes() -> None:
+    class MechanicalOutcomeWorkflow(simple.Workflow):
+        class State(BaseModel):
+            pass
+
+        assess = simple.parallel(
+            branches={
+                "security": simple.python_step(lambda ctx: simple.Event("done"), name="security_review"),
+            },
+        )
+        publish = simple.python_step(lambda ctx: simple.Event("done"))
+
+    compiled = compile_workflow(MechanicalOutcomeWorkflow)
+
+    assert compiled.steps["assess"].available_routes == ("done", "partial", "question", "failed")
+    assert compiled.routes["assess"]["done"].target == "publish"
+    assert compiled.routes["assess"]["partial"].target == "publish"
+    assert compiled.routes["assess"]["question"].target == "AWAIT_INPUT"
+    assert compiled.routes["assess"]["failed"].target == "FAIL"
+
+
 @pytest.mark.parametrize(
     "fan_in_factory",
     [

@@ -24,7 +24,7 @@
 ## Symbols Touched
 - Public surface: `parallel`, `fan_out`, `FanIn`, `ParallelDeclaration`, `FanOutDeclaration`
 - Composite step model: `BranchGroupStep`, `BranchGroupSpec`, `BranchStepSpec`, `CompiledStep.branch_group`
-- Discovery/lowering: `_collect_branch_group_nested_declaration_ids`, `_lower_one_simple_seed`, `_lower_simple_branch_group_step`
+- Discovery/lowering: `_collect_branch_group_nested_declaration_ids`, `_lower_one_simple_seed`, `_lower_simple_branch_group_step`, `_lower_simple_default_routes`
 - Validation hooks: branch/fan-in placeholder validation, branch-only fresh-session validation, child-workflow fan-in rejection, fan-out input serializability checks
 
 ## Checklist Mapping
@@ -47,6 +47,7 @@
 - Workflows can now declare `parallel(...)` and `fan_out(...)` and compile them into one external `branch_group` step carrying internal ordered branch metadata.
 - Provider-backed branch steps now fail compilation unless they explicitly declare `Session.fresh()`.
 - `FanIn.results()` and `FanIn.context()` are reserved for fan-in-only reads and reject use elsewhere.
+- No-`fan_in` branch groups now materialize deterministic composite `done` and `partial` destinations to the next chained step by default, while preserving `question` / `failed` as control routes.
 
 ## Known Non-Changes
 - No branch-group runtime execution, settlement, or manifest/context artifact writing yet.
@@ -67,3 +68,4 @@
 ## Deduplication / Centralization
 - Reused the existing simple-step lowering path through `_lower_one_simple_seed` for both top-level steps and nested branch/fan-in steps.
 - Kept branch-group-specific validation and metadata helpers under `autoloop/core/branch_groups/` instead of growing `compiler.py` or `engine.py`.
+- Kept the no-`fan_in` mechanical outcome default-route fix inside the `BranchGroupStep` branch of `_lower_simple_default_routes` so generic simple-step route inference still behaves unchanged for non-branch steps.

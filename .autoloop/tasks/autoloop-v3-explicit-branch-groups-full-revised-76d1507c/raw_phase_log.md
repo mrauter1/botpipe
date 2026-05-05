@@ -319,3 +319,59 @@ Fix the no-`fan_in` route materialization in branch-group lowering so composite 
 <loop-control>
 {"schema":"docloop.loop_control/v1","kind":"promise","promise":"INCOMPLETE"}
 </loop-control>
+
+
+---
+run_id=run-20260505T171950Z-13ce26d6 | entry=session_turn | pair=implement | phase=producer | cycle=2 | attempt=1 | thread_id=019df930-00de-7970-af32-efc750f7efc4
+---
+provider=codex
+mode=resume
+template=/home/rauter/.local/share/pipx/venvs/autoloop/lib/python3.12/site-packages/autoloop/templates/implement_producer.md
+session_id=019df930-00de-7970-af32-efc750f7efc4
+
+
+---
+run_id=run-20260505T171950Z-13ce26d6 | entry=phase_output | pair=implement | phase=producer | process=codex-agent | cycle=2 | attempt=1 | thread_id=019df930-00de-7970-af32-efc750f7efc4
+---
+I’m addressing the verifier’s blocking route-lowering defect in the compile model. I’ll re-check the branch-group lowering path, patch the minimal route materialization logic, then rerun the affected compile tests and update the phase notes.
+
+I’ve got the reviewer repro and the current implementation notes in hand. Next I’m reading the exact branch-group route-lowering code so the fix stays local and doesn’t perturb non-branch default routing.
+
+I’ve isolated the fix surface to `discovery.py` plus a regression test. The important choice is preserving existing control routes while explicitly defaulting the no-`fan_in` mechanical outcomes, rather than changing generic simple-step routing behavior.
+
+I’m editing `discovery.py` to make no-`fan_in` branch-group routes explicit and adding a direct regression test for the route table. After that I’ll rerun the targeted suite and update the run notes and decisions ledger.
+
+The mechanical-outcome route repro is fixed: `done` and `partial` now compile to the next step alongside `question` and `failed`. I’m waiting on the full simple-surface test file, then I’ll run a couple of adjacent regression suites before updating notes.
+
+The direct regression is covered and the adjacent unit/runtime suites are clean. I’m doing one last contract/compile check, then I’ll record the exact decision and validation set in the phase notes.
+
+I’ve got the final validation results. I’m updating the implementation notes and the turn-local decisions block with the one non-obvious routing rule this fix introduced, then I’ll close with the phase summary.
+
+Scope considered
+
+Phase-local `authoring-and-compile-model` work only. I limited the fix to the reviewer-reported no-`fan_in` route-lowering defect and checked adjacent compile-model regressions without broadening into runtime execution.
+
+What I analyzed
+
+I re-read the reviewer finding in [feedback.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/autoloop-v3-explicit-branch-groups-full-revised-76d1507c/runs/run-20260505T171950Z-13ce26d6/artifacts/implement/phases/authoring-and-compile-model/feedback.md), traced branch-group route lowering in [autoloop/core/discovery.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/autoloop/core/discovery.py), and reproduced the mismatch where `available_routes` exposed `done` / `partial` but the compiled route table only had `question` / `failed`.
+
+What I changed
+
+I fixed [autoloop/core/discovery.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/autoloop/core/discovery.py) so branch groups without `fan_in` always materialize `done` and `partial` destinations to the next chained step by default, while leaving `question` and `failed` as control routes. I added a direct regression in [tests/unit/test_simple_surface.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/tests/unit/test_simple_surface.py) that asserts the full mechanical-outcome route table.
+
+I updated [implementation_notes.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/autoloop-v3-explicit-branch-groups-full-revised-76d1507c/runs/run-20260505T171950Z-13ce26d6/artifacts/implement/phases/authoring-and-compile-model/implementation_notes.md) and appended the non-obvious routing rule to [decisions.txt](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/autoloop-v3-explicit-branch-groups-full-revised-76d1507c/runs/run-20260505T171950Z-13ce26d6/decisions.txt).
+
+Key findings / decisions
+
+The defect came from synthetic implicit `question` / `failed` routes suppressing generic default-route injection. I kept the fix localized to the `BranchGroupStep` branch in `_lower_simple_default_routes` so ordinary simple-step routing stays unchanged.
+
+Validation passed:
+- `./.venv/bin/python -m pytest tests/unit/test_simple_surface.py -q`
+- `./.venv/bin/python -m pytest tests/unit/test_validation.py -q`
+- `./.venv/bin/python -m pytest tests/runtime/test_runtime_static_graph.py -q`
+- `./.venv/bin/python -m pytest tests/contract/test_engine_contracts.py -q -k "deterministic or control_routes"`
+- `./.venv/bin/python -m py_compile autoloop/core/discovery.py tests/unit/test_simple_surface.py`
+
+Open issues / next step
+
+This resolves the blocking compile-model review finding. The remaining out-of-phase work is unchanged: runtime branch-group execution, mechanical outcome evaluation, manifest/context writing, and fan-in orchestration still belong to later phases.
