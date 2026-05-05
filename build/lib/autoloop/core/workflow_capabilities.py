@@ -153,7 +153,7 @@ def load_workflow_package_contract(root: str | Path, entry: WorkflowCatalogEntry
     """Load the main workflow class, parameters model, and compiled workflow for one catalog entry."""
 
     root_path = Path(root).resolve()
-    if entry.source_root_kind != "package" or entry.workflow_module is None or entry.package_module is None:
+    if entry.workflow_module is None or entry.package_module is None:
         resolved = _resolve_reference(root_path, str(entry.source_path))
         compiled = compile_workflow(resolved.workflow_cls)
         return WorkflowLoadedPackage(
@@ -528,7 +528,7 @@ def selected_workflow_decomposition_surface_payload(
 
 
 def _inspect_catalog_entry(root_path: Path, entry: WorkflowCatalogEntry) -> WorkflowCapabilityEntry:
-    if entry.source_root_kind == "package" and entry.workflow_module is not None and entry.package_module is not None:
+    if entry.workflow_module is not None and entry.package_module is not None:
         from autoloop.runtime.loader import ResolvedWorkflow, WorkflowReference
 
         loaded = load_workflow_package_contract(root_path, entry)
@@ -921,12 +921,23 @@ def _validate_package_exports(
 
 def _import_discovered_module(module_name: str, root_path: Path) -> ModuleType:
     importlib.invalidate_caches()
-    _evict_stale_workflow_modules(module_name)
+    _evict_stale_workflow_modules(module_name, root_path)
     with _repo_root_on_syspath(root_path):
         return importlib.import_module(module_name)
 
 
-def _evict_stale_workflow_modules(module_name: str) -> None:
+def _evict_stale_workflow_modules(module_name: str, root_path: Path) -> None:
+    if module_name == "workflows" or module_name.startswith("workflows."):
+        expected_root = (root_path / "workflows").resolve()
+        module = sys.modules.get("workflows")
+        if module is not None:
+            origin = _module_origin_path(module)
+            if origin is not None and origin.is_relative_to(expected_root):
+                return
+        for cached_name in tuple(sys.modules):
+            if cached_name == "workflows" or cached_name.startswith("workflows."):
+                sys.modules.pop(cached_name, None)
+        return
     if not module_name.startswith("autoloop.workflows."):
         return
     for name, module in tuple(sys.modules.items()):

@@ -79,6 +79,10 @@ def workspace_workflows_root(workspace_root: Path) -> Path:
     return workspace_root.resolve() / ".autoloop" / "workflows"
 
 
+def repo_workflows_root(workspace_root: Path) -> Path:
+    return workspace_root.resolve() / "workflows"
+
+
 def package_workflows_root() -> Path:
     return Path(str(files("autoloop") / "workflows")).resolve()
 
@@ -86,6 +90,12 @@ def package_workflows_root() -> Path:
 def workflow_search_roots(workspace_root: str | Path) -> tuple[WorkflowSearchRoot, ...]:
     root = Path(workspace_root).resolve()
     return (
+        WorkflowSearchRoot(
+            kind="workspace",
+            path=repo_workflows_root(root),
+            import_prefix="workflows",
+            precedence=110,
+        ),
         WorkflowSearchRoot(
             kind="workspace",
             path=workspace_workflows_root(root),
@@ -101,7 +111,11 @@ def workflow_search_roots(workspace_root: str | Path) -> tuple[WorkflowSearchRoo
     )
 
 
-def read_workflow_manifest(manifest_path: Path) -> dict[str, Any]:
+def read_workflow_manifest(
+    manifest_path: Path,
+    *,
+    require_title_description: bool = True,
+) -> dict[str, Any]:
     with manifest_path.open("rb") as handle:
         payload = tomllib.load(handle)
     if not isinstance(payload, dict):
@@ -147,12 +161,17 @@ def read_workflow_manifest(manifest_path: Path) -> dict[str, Any]:
             seen_aliases.add(alias_text)
             normalized_aliases.append(alias_text)
         normalized["aliases"] = tuple(normalized_aliases)
-    missing_required = [field for field in ("name", "title", "description") if field not in normalized]
+    missing_required = ["name"] if "name" not in normalized else []
+    if require_title_description:
+        missing_required.extend(field for field in ("title", "description") if field not in normalized)
     if missing_required:
         names = ", ".join(missing_required)
         raise WorkflowCatalogManifestError(
             f"workflow manifest {manifest_path} must define non-empty {names}"
         )
+    if not require_title_description:
+        normalized.setdefault("title", _default_title(normalized["name"]))
+        normalized.setdefault("description", "")
     return normalized
 
 
@@ -183,7 +202,14 @@ def _discover_search_root(workspace_root: Path, search_root: WorkflowSearchRoot)
 
     for package_dir in sorted(path for path in search_root.path.iterdir() if path.is_dir()):
         manifest_path = package_dir / "workflow.toml"
-        manifest = read_workflow_manifest(manifest_path) if manifest_path.is_file() else None
+        manifest = (
+            read_workflow_manifest(
+                manifest_path,
+                require_title_description=search_root.import_prefix != "workflows",
+            )
+            if manifest_path.is_file()
+            else None
+        )
         source_path = _directory_source_path(package_dir, manifest_path if manifest_path.is_file() else None, manifest)
         if source_path is None:
             continue
@@ -311,7 +337,12 @@ def _build_entry(
     asset_paths = _iter_file_tree(assets_dir)
     doc_paths = () if docs_path is None else (docs_path,)
     spec_paths = tuple(path for path in (specs_path, contracts_path) if path is not None)
-    test_paths = _iter_file_tree(tests_dir)
+    test_paths = _discover_test_paths(
+        workspace_root,
+        package_dir,
+        workflow_name=workflow_name,
+        package_name=package_name,
+    )
     package_module, workflow_module = _module_names_for_source(search_root, source_path, package_name=package_name)
 
     return WorkflowCatalogEntry(
@@ -508,6 +539,27 @@ def _iter_file_tree(root: Path | None) -> tuple[Path, ...]:
     return tuple(sorted(path.resolve() for path in root.rglob("*") if path.is_file()))
 
 
+def _discover_test_paths(
+    workspace_root: Path,
+    package_dir: Path,
+    *,
+    workflow_name: str,
+    package_name: str,
+) -> tuple[Path, ...]:
+    paths = list(_iter_file_tree(_optional_dir(package_dir / "tests")))
+    seen = {path.resolve() for path in paths}
+    repo_tests_root = workspace_root / "tests"
+    if repo_tests_root.is_dir():
+        for name in dict.fromkeys((package_name, workflow_name)):
+            for candidate in sorted(repo_tests_root.rglob(f"test_{name}.py")):
+                resolved = candidate.resolve()
+                if resolved in seen:
+                    continue
+                seen.add(resolved)
+                paths.append(resolved)
+    return tuple(paths)
+
+
 def _default_title(name: str) -> str:
     return name.replace("_", " ").title()
 
@@ -517,6 +569,7 @@ __all__ = [
     "WorkflowCatalogDiscoveryError",
     "WorkflowCatalogEntry",
     "WorkflowCatalogManifestError",
+    "repo_workflows_root",
     "WorkflowSearchRoot",
     "WorkflowSourceKind",
     "discover_workflow_catalog",

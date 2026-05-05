@@ -1,1 +1,5 @@
-{}
+{
+  "material_gaps_found": true,
+  "summary": "The requested worklist feature is implemented and the named focused/adjacent suites pass, but the final tree still fails 90 tests in the full suite so follow-up compatibility work is required.",
+  "revised_request_path": "/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/goal-implement-a-greenfield-autoloop-v3-worklist-3cb1f2e6/runs/run-20260505T122105Z-b9a3f746/artifacts/audit/revised_request.md"
+}

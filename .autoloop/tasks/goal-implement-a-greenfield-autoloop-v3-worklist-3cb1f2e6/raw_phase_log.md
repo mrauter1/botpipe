@@ -1180,3 +1180,92 @@ Open issues / next step
 <loop-control>
 {"schema":"docloop.loop_control/v1","kind":"promise","promise":"COMPLETE"}
 </loop-control>
+
+
+---
+run_id=run-20260505T122105Z-b9a3f746 | entry=session_turn | pair=audit | phase=producer | cycle=1 | attempt=1 | thread_id=019df851-79a0-7222-a7c0-dd52727207da
+---
+provider=codex
+mode=start
+template=/home/rauter/.local/share/pipx/venvs/autoloop/lib/python3.12/site-packages/autoloop/templates/audit_producer.md
+session_id=019df851-79a0-7222-a7c0-dd52727207da
+
+
+---
+run_id=run-20260505T122105Z-b9a3f746 | entry=phase_output | pair=audit | phase=producer | process=codex-agent | cycle=1 | attempt=1 | thread_id=019df851-79a0-7222-a7c0-dd52727207da
+---
+I’m auditing the completed run against the original request, clarifications, decisions, code, and tests, then I’ll write the three audit artifacts under the run-local `artifacts/audit` directory only.
+
+I’m gathering the authoritative scope records first so the audit tracks later clarifications rather than just the initial snapshot. After that I’ll compare those records to the final implementation and test coverage.
+
+I’ve confirmed the run recorded late decisions after the implementation and test phases, so I’m now cross-checking those against the final code and the phase artifacts rather than trusting the raw log summary alone.
+
+The run used multiple implement/test cycles across the scoped phases, so I’m reading those later sections directly now to separate final resolved issues from earlier temporary failures.
+
+I have the phase history. Now I’m checking the final tree itself, because the audit has to be based on what actually landed, not only on the phase summaries.
+
+I’m now checking the final surface area against the request’s file-scope constraints so the audit can distinguish requested work from extra integration fallout that was pulled in later.
+
+I’ve confirmed the run expanded beyond the original file list to fix discovery/runtime integration regressions. I’m rerunning the claimed green commands now so the audit result is backed by current evidence from the final tree.
+
+The focused progress suite and the repo-local workflow regression file are green on direct rerun. I’m waiting for the broader adjacent command to finish, then I’ll finalize the gap assessment.
+
+I have enough code and test evidence. I’m doing a last pass over the run-local phase artifacts now so the gap report can cite both final behavior and the recorded justification for the extra discovery/runtime changes.
+
+The remaining open question is validation breadth. The scoped commands are green, but the request also says existing tests should continue to pass, so I’m running the full suite once rather than leaving that as an assumption.
+
+The full suite is in flight. I’ll use that result to decide whether the audit ends cleanly or needs a follow-up request limited to whatever still fails now.
+
+The full suite has concrete failures outside the focused worklist/regression commands. I’m letting it finish so the audit can cite the actual remaining failing areas instead of a partial snapshot.
+
+The failures are broader than a single stray test. I’m still waiting on the final summary so I can separate “material gap in this run” from “pre-existing unrelated breakage” with actual counts and test names.
+
+The full suite is still moving, but it’s already clear the final tree is not globally green. I’m waiting for the end summary and the failing names before I write the revised request.
+
+The full suite finished with 90 failures, so there is a real unresolved acceptance gap. I’m drilling into one representative failure cluster now to keep the revised request concrete instead of just dumping the full list.
+
+The first concrete cluster is clear: the repo-local `workflows/` follow-up fixed the adjacent suite but left broader reference-resolution and optimization-helper expectations inconsistent. I’m collecting one more representative runtime package failure set, then I’ll write the follow-up request around those linked surfaces.
+
+I’ve reached the audit conclusion: the requested worklist feature itself is implemented and the named suites are green, but the final tree still fails the full test suite. I’m writing the audit artifacts now with a follow-up request limited to those remaining regressions.
+
+The audit artifacts are written. I’m doing a quick validation pass on the three files so the final summary matches what was actually recorded.
+
+The markdown artifacts are fine. I hit a PATH issue validating the JSON because `python` isn’t on this shell; I’m rerunning that through the repo venv, then I’m done.
+
+Scope considered
+
+Original request, raw phase log, decisions ledger, plan/implement/test artifacts, the final code in the touched worklist/runtime files, and the current test state from direct reruns.
+
+What I analyzed
+
+The final implementation in `autoloop/core/worklists.py`, `autoloop/stdlib/worklists.py`, and `autoloop/stdlib/__init__.py`; the added tests for selector/progress behavior; the later runtime-validation follow-up in context/catalog/loader/capability/portfolio code; and the current test outcomes from:
+- `.venv/bin/python -m pytest tests/unit/test_worklist_selectors.py tests/unit/test_stdlib_progress_worklists.py tests/runtime/test_progress_worklists.py` -> `49 passed`
+- `.venv/bin/python -m pytest tests/unit/test_stdlib_and_extensions.py tests/unit/test_primitives_and_stores.py tests/runtime/test_workspace_and_context.py` -> `173 passed`
+- `.venv/bin/python -m pytest tests/runtime/test_workflow_catalog_roots.py` -> `20 passed`
+- `.venv/bin/python -m pytest` -> `90 failed, 1119 passed, 616 warnings`
+
+What I changed
+
+I wrote the audit artifacts only:
+- `.autoloop/.../artifacts/audit/gap_report.md`
+- `.autoloop/.../artifacts/audit/revised_request.md`
+- `.autoloop/.../artifacts/audit/audit_result.json`
+
+Key findings / decisions
+
+The requested greenfield worklist feature is implemented and the named focused/adjacent suites are green. The material unresolved gap is broader validation: the full repository suite is not green, so the acceptance criterion that existing tests continue to pass is still unmet.
+
+The failures cluster around broader workflow reference/discovery/import contracts and downstream helper/package expectations after the repo-local `workflows/` follow-up. Representative evidence:
+- `tests/runtime/test_workflow_reference_resolution.py` -> `5 failed, 7 passed`
+- `tests/unit/test_optimization_helpers.py` -> `10 failed, 19 passed`
+- many remaining runtime package tests still fail in the full-suite run
+
+I marked this as a material gap and wrote a follow-up request focused on restoring full-suite compatibility without reworking the new worklist API/semantics.
+
+Open issues / next step
+
+Next run should target the remaining full-suite regressions, especially workflow reference-resolution, optimization-helper path/observability contracts, and packaged-workflow runtime/compile failures, and should finish with a green `.venv/bin/python -m pytest`.
+
+<loop-control>
+{"schema":"docloop.loop_control/v1","kind":"promise","promise":"INCOMPLETE"}
+</loop-control>

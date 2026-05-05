@@ -46,14 +46,52 @@ class Selector:
     """Declarative selection policy for a worklist."""
 
     item_param: str | None = None
+    start_param: str | None = None
+    end_param: str | None = None
     mode_param: str | None = None
-    default_mode: Literal["all", "single", "up_to"] = "all"
-    allowed_modes: tuple[str, ...] = ("all",)
+    default_mode: Literal["all", "single", "up_to", "from_to"] = "all"
+    allowed_modes: tuple[str, ...] = ("all", "single", "up_to", "from_to")
 
     def __post_init__(self) -> None:
+        for field_name in ("item_param", "start_param", "end_param", "mode_param"):
+            raw_value = getattr(self, field_name)
+            if raw_value is None:
+                continue
+            if not isinstance(raw_value, str):
+                raise ValueError(f"Selector.{field_name} must be a string when provided")
+            normalized = raw_value.strip()
+            if not normalized:
+                raise ValueError(f"Selector.{field_name} must not be empty")
+            object.__setattr__(self, field_name, normalized)
+
+        if not isinstance(self.default_mode, str):
+            raise ValueError("Selector.default_mode must be a string")
+        default_mode = self.default_mode.strip()
+        if not default_mode:
+            raise ValueError("Selector.default_mode must not be empty")
+
         if not self.allowed_modes:
             raise ValueError("Selector.allowed_modes must contain at least one mode")
-        if self.default_mode not in self.allowed_modes:
+        normalized_modes: list[str] = []
+        seen_modes: set[str] = set()
+        supported_modes = {"all", "single", "up_to", "from_to"}
+        for raw_mode in self.allowed_modes:
+            if not isinstance(raw_mode, str):
+                raise ValueError("Selector.allowed_modes must contain only strings")
+            mode = raw_mode.strip()
+            if not mode:
+                raise ValueError("Selector.allowed_modes must not contain empty values")
+            if mode not in supported_modes:
+                raise ValueError(
+                    "Selector.allowed_modes entries must be one of: all, single, up_to, from_to"
+                )
+            if mode in seen_modes:
+                raise ValueError(f"Selector.allowed_modes must not contain duplicate mode {mode!r}")
+            seen_modes.add(mode)
+            normalized_modes.append(mode)
+        object.__setattr__(self, "default_mode", default_mode)
+        object.__setattr__(self, "allowed_modes", tuple(normalized_modes))
+        if default_mode not in normalized_modes:
             raise ValueError("Selector.default_mode must be included in allowed_modes")
 
 
@@ -222,6 +260,10 @@ class Worklist(Generic[T]):
         return bool(getattr(self.source, "artifact_backed", False))
 
     @property
+    def artifact(self) -> "Artifact | None":
+        return getattr(self.source, "artifact", None)
+
+    @property
     def source_type(self) -> str:
         source = self.source
         if getattr(source, "artifact_backed", False):
@@ -353,11 +395,12 @@ class Worklist(Generic[T]):
     ) -> Selection[T]:
         if snapshot is not None:
             return self.restore_selection(ctx, snapshot, items=items)
+        mode, selected_items, explicit = self._resolve_selection(ctx, tuple(items))
         return Selection(
             worklist_name=self.name,
-            mode=self._resolve_mode(ctx),
-            items=self._select_items(tuple(items), ctx=ctx),
-            explicit=self._has_explicit_selection(ctx),
+            mode=mode,
+            items=selected_items,
+            explicit=explicit,
             current_index=0,
         )
 
@@ -408,40 +451,152 @@ class Worklist(Generic[T]):
     def validate_items(self, ctx: "Context", items: Sequence[WorkItem[T]]) -> str | None:
         return self.source.validate(ctx, items)
 
-    def _resolve_mode(self, ctx: "Context") -> str:
-        if self.selector.mode_param is None:
-            return self.selector.default_mode
-        raw_mode = ctx.workflow_params.get(self.selector.mode_param, self.selector.default_mode)
-        if not isinstance(raw_mode, str) or raw_mode not in self.selector.allowed_modes:
-            allowed = ", ".join(self.selector.allowed_modes)
-            raise WorkflowExecutionError(
-                f"worklist {self.name!r} mode must be one of: {allowed}"
-            )
-        return raw_mode
+    def _resolve_selection(
+        self,
+        ctx: "Context",
+        items: tuple[WorkItem[T], ...],
+    ) -> tuple[str, tuple[WorkItem[T], ...], bool]:
+        mode = _selector_mode(ctx, self.selector, self.name)
+        item_indexes = _item_indexes(items)
 
-    def _has_explicit_selection(self, ctx: "Context") -> bool:
-        if self.selector.item_param is None:
-            return False
-        return self.selector.item_param in ctx.workflow_params
+        item_value = self._selector_value(ctx, self.selector.item_param, mode=mode)
+        start_value = self._selector_value(ctx, self.selector.start_param, mode=mode)
+        end_value = self._selector_value(ctx, self.selector.end_param, mode=mode)
 
-    def _select_items(self, items: tuple[WorkItem[T], ...], *, ctx: "Context") -> tuple[WorkItem[T], ...]:
-        mode = self._resolve_mode(ctx)
-        if self.selector.item_param is None or self.selector.item_param not in ctx.workflow_params:
-            if mode == "single":
-                return items[:1]
-            return items
+        if mode == "all":
+            self._reject_selector_param(mode, self.selector.item_param, item_value)
+            self._reject_selector_param(mode, self.selector.start_param, start_value)
+            self._reject_selector_param(mode, self.selector.end_param, end_value)
+            return mode, items, False
 
-        requested_ids = _normalize_requested_item_ids(ctx.workflow_params[self.selector.item_param], worklist_name=self.name)
-        item_map = {item.id: item for item in items}
-        missing = [item_id for item_id in requested_ids if item_id not in item_map]
-        if missing:
-            raise WorkflowExecutionError(
-                f"worklist {self.name!r} received unknown item id(s): {', '.join(missing)}"
-            )
-        selected_items = tuple(item_map[item_id] for item_id in requested_ids)
         if mode == "single":
-            return selected_items[:1]
-        return selected_items
+            self._reject_selector_param(mode, self.selector.start_param, start_value)
+            self._reject_selector_param(mode, self.selector.end_param, end_value)
+            if item_value is None:
+                return mode, items[:1], False
+            index = _require_item_id(
+                items,
+                item_indexes,
+                worklist_name=self.name,
+                mode=mode,
+                parameter_name=self.selector.item_param,
+                item_id=item_value,
+            )
+            return mode, (items[index],), True
+
+        if mode == "up_to":
+            self._reject_selector_param(mode, self.selector.start_param, start_value)
+            end_name, end_bound = self._end_bound(
+                mode=mode,
+                primary_name=self.selector.end_param,
+                primary_value=end_value,
+                fallback_name=self.selector.item_param,
+                fallback_value=item_value,
+            )
+            if end_bound is None:
+                return mode, items, False
+            end_index = _require_item_id(
+                items,
+                item_indexes,
+                worklist_name=self.name,
+                mode=mode,
+                parameter_name=end_name,
+                item_id=end_bound,
+            )
+            return mode, items[: end_index + 1], True
+
+        start_index: int | None = None
+        end_name, end_bound = self._end_bound(
+            mode=mode,
+            primary_name=self.selector.end_param,
+            primary_value=end_value,
+            fallback_name=self.selector.item_param,
+            fallback_value=item_value,
+        )
+        if start_value is not None:
+            start_index = _require_item_id(
+                items,
+                item_indexes,
+                worklist_name=self.name,
+                mode=mode,
+                parameter_name=self.selector.start_param,
+                item_id=start_value,
+            )
+        end_index: int | None = None
+        if end_bound is not None:
+            end_index = _require_item_id(
+                items,
+                item_indexes,
+                worklist_name=self.name,
+                mode=mode,
+                parameter_name=end_name,
+                item_id=end_bound,
+            )
+        if start_index is not None and end_index is not None and start_index > end_index:
+            raise WorkflowExecutionError(
+                f"worklist {self.name!r} selector mode {mode!r} has invalid range: "
+                f"parameter {self.selector.start_param!r} value {start_value!r} resolves after "
+                f"parameter {end_name!r} value {end_bound!r}"
+            )
+        if start_index is None and end_index is None:
+            return mode, items, False
+        if start_index is None:
+            assert end_index is not None
+            return mode, items[: end_index + 1], True
+        if end_index is None:
+            return mode, items[start_index:], True
+        return mode, items[start_index : end_index + 1], True
+
+    def _selector_value(
+        self,
+        ctx: "Context",
+        parameter_name: str | None,
+        *,
+        mode: str,
+    ) -> str | None:
+        if parameter_name is None:
+            return None
+        raw_value = ctx.workflow_params.get(parameter_name)
+        if raw_value is None:
+            return None
+        if isinstance(raw_value, str):
+            normalized = raw_value.strip()
+            return normalized or None
+        raise WorkflowExecutionError(
+            f"worklist {self.name!r} selector mode {mode!r} parameter {parameter_name!r} "
+            f"must be a string; received {raw_value!r}"
+        )
+
+    def _reject_selector_param(
+        self,
+        mode: str,
+        parameter_name: str | None,
+        parameter_value: str | None,
+    ) -> None:
+        if parameter_name is None or parameter_value is None:
+            return
+        raise WorkflowExecutionError(
+            f"worklist {self.name!r} selector mode {mode!r} does not accept parameter "
+            f"{parameter_name!r} with value {parameter_value!r}"
+        )
+
+    def _end_bound(
+        self,
+        *,
+        mode: str,
+        primary_name: str | None,
+        primary_value: str | None,
+        fallback_name: str | None,
+        fallback_value: str | None,
+    ) -> tuple[str | None, str | None]:
+        if primary_value is not None and fallback_value is not None:
+            raise WorkflowExecutionError(
+                f"worklist {self.name!r} selector mode {mode!r} received conflicting parameters "
+                f"{fallback_name!r}={fallback_value!r} and {primary_name!r}={primary_value!r}"
+            )
+        if primary_value is not None:
+            return primary_name, primary_value
+        return fallback_name, fallback_value
 
 
 class WorklistRuntimeView(Generic[T]):
@@ -723,19 +878,62 @@ class _ArtifactWorklistSource:
         )
 
 
-def _normalize_requested_item_ids(value: object, *, worklist_name: str) -> tuple[str, ...]:
-    if isinstance(value, str):
-        normalized = value.strip()
-        if not normalized:
-            raise WorkflowExecutionError(f"worklist {worklist_name!r} item selector cannot be empty")
-        return (normalized,)
-    if isinstance(value, Sequence) and not isinstance(value, (bytes, bytearray)):
-        item_ids = tuple(str(item).strip() for item in value)
-        if not item_ids or any(not item_id for item_id in item_ids):
-            raise WorkflowExecutionError(f"worklist {worklist_name!r} item selector must contain non-empty ids")
-        return item_ids
+def _selector_mode(ctx: "Context", selector: Selector, worklist_name: str) -> str:
+    parameter_name = selector.mode_param
+    if parameter_name is None:
+        return selector.default_mode
+    raw_value = ctx.workflow_params.get(parameter_name)
+    if raw_value is None:
+        return selector.default_mode
+    if not isinstance(raw_value, str):
+        raise WorkflowExecutionError(
+            f"worklist {worklist_name!r} selector parameter {parameter_name!r} "
+            f"must be a string; received {raw_value!r}"
+        )
+    mode = raw_value.strip()
+    if not mode:
+        return selector.default_mode
+    if mode not in selector.allowed_modes:
+        allowed = ", ".join(selector.allowed_modes)
+        raise WorkflowExecutionError(
+            f"worklist {worklist_name!r} selector parameter {parameter_name!r} "
+            f"received invalid mode {mode!r}; allowed modes: {allowed}"
+        )
+    return mode
+
+
+def _selector_param(ctx: "Context", name: str | None) -> str | None:
+    if name is None:
+        return None
+    raw_value = ctx.workflow_params.get(name)
+    if raw_value is None:
+        return None
+    if not isinstance(raw_value, str):
+        return str(raw_value).strip() or None
+    normalized = raw_value.strip()
+    return normalized or None
+
+
+def _item_indexes(items: Sequence[WorkItem[T]]) -> dict[str, int]:
+    return {item.id: index for index, item in enumerate(items)}
+
+
+def _require_item_id(
+    items: Sequence[WorkItem[T]],
+    item_indexes: Mapping[str, int],
+    *,
+    worklist_name: str,
+    mode: str,
+    parameter_name: str | None,
+    item_id: str,
+) -> int:
+    index = item_indexes.get(item_id)
+    if index is not None:
+        return index
+    known_ids = ", ".join(item.id for item in items) or "(none)"
     raise WorkflowExecutionError(
-        f"worklist {worklist_name!r} item selector must be a string or a sequence of strings"
+        f"worklist {worklist_name!r} selector mode {mode!r} parameter {parameter_name!r} "
+        f"references unknown item id {item_id!r}; known ids: {known_ids}"
     )
 
 
