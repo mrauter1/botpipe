@@ -1726,3 +1726,105 @@ Open issues / next step
 <loop-control>
 {"schema":"docloop.loop_control/v1","kind":"promise","promise":"COMPLETE"}
 </loop-control>
+
+
+---
+run_id=run-20260505T171950Z-13ce26d6 | entry=session_turn | pair=test | phase=producer | cycle=1 | attempt=1 | thread_id=019df984-d58c-75e0-ad54-c818ea8e03b7
+---
+provider=codex
+mode=resume
+template=/home/rauter/.local/share/pipx/venvs/autoloop/lib/python3.12/site-packages/autoloop/templates/test_producer.md
+session_id=019df984-d58c-75e0-ad54-c818ea8e03b7
+
+
+---
+run_id=run-20260505T171950Z-13ce26d6 | entry=phase_output | pair=test | phase=producer | process=codex-agent | cycle=1 | attempt=1 | thread_id=019df984-d58c-75e0-ad54-c818ea8e03b7
+---
+I’m checking the changed branch-group test surfaces and the review feedback first, then I’ll add any missing regression coverage and update the test-phase artifacts.
+
+I found one gap worth closing: the new graph payloads stringify `fan_out` branch inputs instead of preserving structured JSON. I’m fixing that surface and adding a regression test for it, then I’ll record the coverage map and test-phase summary artifacts.
+
+I’ve scoped the fix to one serialization site and one focused regression. After that I’ll run the static-graph tests, then update the strategy and feedback artifacts with the exact coverage added.
+
+The regression is now encoded in both code and tests. I’m running the static-graph suite against the touched serialization path before I close out the test-phase artifacts.
+
+Scope considered
+
+- Phase-local test surface for placeholder/rooting, additive static-graph/topology metadata, and regression coverage tied to branch groups.
+- The touched runtime serialization path in [static_graph.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/autoloop/runtime/static_graph.py:349), existing static-graph tests in [test_runtime_static_graph.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/tests/runtime/test_runtime_static_graph.py:108), and the active test artifacts.
+
+What I analyzed
+
+- The current `branch_group` payload serialization path in `autoloop/runtime/static_graph.py`.
+- Existing coverage in `tests/runtime/test_runtime_static_graph.py`, plus the test-phase artifacts [test_strategy.md](</home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/autoloop-v3-explicit-branch-groups-full-revised-76d1507c/runs/run-20260505T171950Z-13ce26d6/artifacts/test/phases/surface-hardening-and-regression-suite/test_strategy.md>) and [feedback.md](</home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/autoloop-v3-explicit-branch-groups-full-revised-76d1507c/runs/run-20260505T171950Z-13ce26d6/artifacts/test/phases/surface-hardening-and-regression-suite/feedback.md>).
+- The latest turn header in `decisions.txt` so the new test constraint could be appended without drifting from the run ledger.
+
+What I changed
+
+- Fixed the additive static-graph/topology payload surface so `branch_group.branches[].input` preserves raw structured JSON values instead of Python `repr` strings in [static_graph.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/autoloop/runtime/static_graph.py:367).
+- Added a focused regression in [test_runtime_static_graph.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/tests/runtime/test_runtime_static_graph.py:178) that asserts structured `fan_out` inputs survive both in-memory payload generation and persisted `static_step_graph.json` / `topology.json`.
+- Updated [test_strategy.md](</home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/autoloop-v3-explicit-branch-groups-full-revised-76d1507c/runs/run-20260505T171950Z-13ce26d6/artifacts/test/phases/surface-hardening-and-regression-suite/test_strategy.md>) with the behavior-to-coverage map, preserved invariants, edge cases, and gaps.
+- Appended the test-phase summary to [feedback.md](</home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/autoloop-v3-explicit-branch-groups-full-revised-76d1507c/runs/run-20260505T171950Z-13ce26d6/artifacts/test/phases/surface-hardening-and-regression-suite/feedback.md>) and recorded the non-obvious regression target in `decisions.txt`.
+
+Key findings / decisions
+
+- The reviewer’s non-blocking finding was valid: the new additive metadata was machine-readable in shape but not in value semantics because branch inputs were being stringified.
+- The least risky fix was local serialization correction plus one regression test, rather than widening the graph payload surface further.
+- Validation passed: `.venv/bin/pytest -q tests/runtime/test_runtime_static_graph.py`
+
+Open issues / next step
+
+- No blocking gaps remain in this test slice.
+- Broader branch-group suites were left untouched because this turn only needed to close the structured-input regression without adding unrelated churn.
+
+
+---
+run_id=run-20260505T171950Z-13ce26d6 | entry=session_turn | pair=test | phase=verifier | cycle=1 | attempt=1 | thread_id=019df984-d58c-75e0-ad54-c818ea8e03b7
+---
+provider=codex
+mode=resume
+template=/home/rauter/.local/share/pipx/venvs/autoloop/lib/python3.12/site-packages/autoloop/templates/test_verifier.md
+session_id=019df984-d58c-75e0-ad54-c818ea8e03b7
+
+
+---
+run_id=run-20260505T171950Z-13ce26d6 | entry=phase_output | pair=test | phase=verifier | process=codex-agent | cycle=1 | attempt=1 | thread_id=019df984-d58c-75e0-ad54-c818ea8e03b7
+---
+I’m auditing the new test slice and the updated strategy first, then I’ll update the audit artifacts with any findings and close the phase with the required loop-control block.
+
+The new regression is targeted and stable, and the updated strategy matches the changed surface. I’m marking the audit criteria complete and recording that there are no additional findings in the audit feedback.
+
+The audit artifacts are updated. I’m doing one quick consistency check on the checked criteria and appended feedback, then I’ll close the audit as complete.
+
+Scope considered
+
+- Phase-local audit for `surface-hardening-and-regression-suite`.
+- The newly added static-graph/topology regression, the updated test strategy artifact, and adjacent existing branch-group coverage referenced by that strategy.
+
+What I analyzed
+
+- [test_runtime_static_graph.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/tests/runtime/test_runtime_static_graph.py:148), especially the new structured `fan_out` input regression.
+- [test_strategy.md](</home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/autoloop-v3-explicit-branch-groups-full-revised-76d1507c/runs/run-20260505T171950Z-13ce26d6/artifacts/test/phases/surface-hardening-and-regression-suite/test_strategy.md>) and `decisions.txt` for coverage intent, preserved invariants, and non-obvious constraints.
+- The audit artifacts [criteria.md](</home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/autoloop-v3-explicit-branch-groups-full-revised-76d1507c/runs/run-20260505T171950Z-13ce26d6/artifacts/test/phases/surface-hardening-and-regression-suite/criteria.md>) and [feedback.md](</home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/autoloop-v3-explicit-branch-groups-full-revised-76d1507c/runs/run-20260505T171950Z-13ce26d6/artifacts/test/phases/surface-hardening-and-regression-suite/feedback.md>).
+
+What I reviewed
+
+- Coverage quality for the changed branch-group serialization surface.
+- Regression protection for the specific bug class the implement review surfaced: stringified branch inputs in additive graph payloads.
+- Edge-case and reliability properties of the new test: structured mapping/list/bool payloads, persisted JSON verification, and deterministic single-workflow setup.
+- Behavioral intent alignment: no test expectations encode an unconfirmed regression or contract narrowing.
+
+Key findings / decisions
+
+- No blocking findings.
+- No non-blocking findings beyond the producer’s own summary; the added regression is targeted, deterministic, and materially improves protection for the changed static-graph/topology surface.
+- The audit criteria were marked complete and the feedback artifact was updated to record that no additional audit findings were discovered.
+
+Open issues / next step
+
+- No open audit issues remain for this phase.
+- This test slice is ready to close as complete.
+
+<loop-control>
+{"schema":"docloop.loop_control/v1","kind":"promise","promise":"COMPLETE"}
+</loop-control>

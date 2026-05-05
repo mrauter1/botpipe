@@ -9,3 +9,7 @@
 
 - Added a focused static-graph/topology regression in `tests/runtime/test_runtime_static_graph.py` that asserts structured `fan_out` branch inputs remain JSON objects in both in-memory payloads and persisted `static_step_graph.json` / `topology.json`.
 - Updated the phase test strategy with the AC-to-test coverage map, preserved invariants, edge cases, and known gaps for this surface-hardening phase.
+
+## Audit Findings
+
+- No additional blocking or non-blocking audit findings. The new regression test is deterministic, targets the changed serialization surface directly, and the updated strategy accurately maps the branch-group coverage already present across unit, contract, and runtime suites.
