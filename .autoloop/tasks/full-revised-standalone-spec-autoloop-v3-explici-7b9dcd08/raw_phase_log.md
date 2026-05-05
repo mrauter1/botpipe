@@ -913,3 +913,45 @@ Open issues / next step
 - Evidence is still written under `context.root / "_branch_groups"`; the spec’s workflow-folder evidence-root migration is still deferred.
 - Branch-session overlay cleanup is still deferred; this phase did not change synthetic session-id or parent-fallback behavior.
 - Validation run: `54 passed` for the phase-targeted suite and `175 passed` for adjacent engine/session coverage. I did not run the full repository test suite.
+
+
+---
+run_id=run-20260505T201926Z-7fdaad17 | entry=session_turn | pair=implement | phase=verifier | cycle=1 | attempt=1 | thread_id=019df9f5-ed08-7ca1-9227-242a7cdac2f6
+---
+provider=codex
+mode=resume
+template=/home/rauter/.local/share/pipx/venvs/autoloop/lib/python3.12/site-packages/autoloop/templates/implement_verifier.md
+session_id=019df9f5-ed08-7ca1-9227-242a7cdac2f6
+
+
+---
+run_id=run-20260505T201926Z-7fdaad17 | entry=phase_output | pair=implement | phase=verifier | process=codex-agent | cycle=1 | attempt=1 | thread_id=019df9f5-ed08-7ca1-9227-242a7cdac2f6
+---
+I’ve narrowed the review to the changed scheduler/runtime surfaces plus the adjacent cancellation path they touched. I’m updating the phase criteria and feedback now; the main substantive issue is that the implementation still writes branch evidence to the root-level `_branch_groups` location that the authoritative decisions explicitly superseded.
+
+I’ve finished the audit. I’m recording one blocking finding tied directly to the authoritative decisions and the touched runtime surface, then I’ll return `INCOMPLETE`.
+
+Scope considered
+
+Phase-local review of the async branch runtime changes, the adjacent async cancellation path in step dispatch, and the phase artifacts. I ignored unrelated dirty files outside the touched scheduler/runtime/test surfaces.
+
+What I analyzed
+
+I reviewed the changed runtime and dispatcher code in [runtime.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/autoloop/core/branch_groups/runtime.py:61), [engine_collaborators.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/autoloop/core/engine_collaborators.py:877), the evidence-path helper in [manifest.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/autoloop/core/branch_groups/manifest.py:10), the updated contract/tracing tests, the active implementation notes, and the authoritative decisions ledger.
+
+What I reviewed
+
+I verified the new asyncio task/semaphore scheduler, `fail_fast` launch/cancel behavior, cancellation propagation through provider-backed async execution, manifest ordering, and trace-event coverage. I also checked the implementation against the task-global decision requiring branch-group evidence to move from root-level `_branch_groups` to `{workflow_folder}/_branch_groups`.
+
+Key findings / decisions
+
+- One blocking finding was added to [feedback.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/full-revised-standalone-spec-autoloop-v3-explici-7b9dcd08/runs/run-20260505T201926Z-7fdaad17/artifacts/implement/phases/async-branch-runtime/feedback.md:9): the runtime still writes evidence under `context.root / "_branch_groups"` and the new tests now assert that superseded location.
+- [criteria.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/full-revised-standalone-spec-autoloop-v3-explici-7b9dcd08/runs/run-20260505T201926Z-7fdaad17/artifacts/implement/phases/async-branch-runtime/criteria.md:11) was updated accordingly; only maintainability/validation is checked.
+
+Open issues / next step
+
+The implementation should be revised so `branch_group_paths(...)` and per-branch raw-output storage root under `context.workflow_folder`, and the branch-group runtime/tracing tests should be updated in the same change set to assert the workflow-folder evidence paths. After that, this phase should be re-reviewed.
+
+<loop-control>
+{"schema":"docloop.loop_control/v1","kind":"promise","promise":"INCOMPLETE"}
+</loop-control>
