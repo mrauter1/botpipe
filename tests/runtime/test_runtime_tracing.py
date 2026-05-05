@@ -4,13 +4,16 @@ import json
 from hashlib import sha256
 from pathlib import Path
 
+import autoloop.simple as simple
 import pytest
 from pydantic import BaseModel
 
 from autoloop.core.extensions import HookRouteRedirect, RunBinding, StepFinish, StepStart, TerminalFinish
+from autoloop.core.providers.fake import ScriptedLLMProvider
 from autoloop.core.providers.models import StepProviderUsage, TokenUsage
 from autoloop.core.primitives import Event, Outcome
-from autoloop.runtime.config import TracingRuntimeConfig
+from autoloop.runtime.config import GitTrackingRuntimeConfig, RuntimeConfig, TracingRuntimeConfig
+from autoloop.runtime.runner import RunnerOptions, execute_workflow_package
 from autoloop.core.schema_registry import RUNTIME_TRACE_SCHEMA, RUN_METADATA_SCHEMA, WORKFLOW_STATIC_STEP_GRAPH_SCHEMA
 from autoloop.runtime.tracing import RuntimeTraceError, RuntimeTraceWriter
 from autoloop.runtime.workspace import next_observability_sequence
@@ -365,6 +368,76 @@ def test_runtime_trace_records_generic_runtime_events(tmp_path: Path) -> None:
     assert record["visit"] == 4
     assert record["step_execution_id"] == "assessment:4"
     assert record["token_usage"] == {"total_tokens": 9, "input_tokens": 4}
+
+
+def test_runtime_trace_records_branch_group_runtime_events_with_additive_metadata(tmp_path: Path) -> None:
+    class BranchTraceWorkflow(simple.Workflow):
+        class State(BaseModel):
+            pass
+
+        reviews = simple.parallel(
+            branches={
+                "security": simple.python_step(lambda ctx: Event("done"), name="security_review"),
+                "cost": simple.python_step(lambda ctx: Event("done"), name="cost_review"),
+            },
+            fan_in=simple.python_step(
+                lambda ctx: Event("approved"),
+                name="combine_reviews",
+                routes={"approved": simple.FINISH},
+            ),
+        )
+
+    execution = execute_workflow_package(
+        BranchTraceWorkflow,
+        provider=ScriptedLLMProvider(),
+        options=RunnerOptions(
+            root=tmp_path,
+            task_id="task-branch-trace",
+            run_id="run-branch-trace",
+            message="trace branch group events",
+            runtime_config=RuntimeConfig(git_tracking=GitTrackingRuntimeConfig(enabled=False)),
+        ),
+    )
+
+    assert execution.result.terminal == simple.FINISH
+
+    trace_path = execution.run_workspace.run_dir / "trace.jsonl"
+    records = [
+        json.loads(line)
+        for line in trace_path.read_text(encoding="utf-8").splitlines()
+        if line.strip()
+    ]
+    branch_group_started = next(record for record in records if record["event_type"] == "branch_group_started")
+    branch_started = next(record for record in records if record["event_type"] == "branch_started")
+    manifest_written = next(record for record in records if record["event_type"] == "branch_manifest_written")
+    fan_in_started = next(record for record in records if record["event_type"] == "fan_in_started")
+    branch_group_completed = next(record for record in records if record["event_type"] == "branch_group_completed")
+
+    assert branch_group_started["step_name"] == "reviews"
+    assert branch_group_started["group_name"] == "reviews"
+    assert branch_group_started["group_kind"] == "parallel"
+    assert branch_group_started["branch_count"] == 2
+
+    assert branch_started["branch_name"] in {"security", "cost"}
+    assert branch_started["step_name"] in {"security_review", "cost_review"}
+    assert branch_started["execution_id"].startswith("reviews:")
+
+    assert manifest_written["step_name"] == "reviews"
+    assert manifest_written["artifact_paths"] == [
+        "_branch_groups/reviews/results.json",
+        "_branch_groups/reviews/context.md",
+    ]
+
+    assert fan_in_started["composite_step_name"] == "reviews"
+    assert fan_in_started["step_name"] == "combine_reviews"
+    assert fan_in_started["artifact_paths"] == [
+        "_branch_groups/reviews/results.json",
+        "_branch_groups/reviews/context.md",
+    ]
+
+    assert branch_group_completed["step_name"] == "reviews"
+    assert branch_group_completed["status"] == "completed"
+    assert branch_group_completed["route"] == "approved"
 
 
 def test_runtime_trace_can_be_disabled(tmp_path: Path) -> None:

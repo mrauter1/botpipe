@@ -3,6 +3,7 @@ from __future__ import annotations
 import json
 from pathlib import Path
 
+import autoloop.simple as simple
 from pydantic import BaseModel
 
 from autoloop import AWAIT_INPUT, FINISH, Md, Prompt, Route, StateVar, Workflow, Worklist, produce_verify_step, python_step, step
@@ -102,6 +103,76 @@ def test_static_step_graph_includes_route_metadata_and_schema_presence(tmp_path:
     assert assessment["has_expected_output_schema"] is True
     assert payload["terminals"] == ["FINISH", "AWAIT_INPUT", "FAIL"]
     assert assessment["runtime_control_hook_locations"] == []
+
+
+def test_branch_group_payloads_are_additive_in_static_graph_and_topology() -> None:
+    class BranchGroupTopologyWorkflow(Workflow):
+        class State(BaseModel):
+            pass
+
+        reviews = simple.parallel(
+            branches={
+                "security": simple.step("Review security.", name="security_review", session=simple.Session.fresh()),
+                "cost": simple.step("Review cost.", name="cost_review", session=simple.Session.fresh()),
+            },
+            fan_in=simple.step(
+                "Summarize reviews.",
+                name="combine_reviews",
+                routes={"approved": FINISH, "needs_revision": "publish"},
+            ),
+        )
+        publish = python_step(routes={"done": FINISH})(lambda ctx: None)
+
+    compiled = compile_workflow(BranchGroupTopologyWorkflow)
+
+    static_payload = workflow_static_step_graph_payload(compiled)
+    topology_payload = workflow_topology_payload(compiled)
+    static_reviews = next(step_payload for step_payload in static_payload["steps"] if step_payload["name"] == "reviews")
+    topology_reviews = next(step_payload for step_payload in topology_payload["steps"] if step_payload["name"] == "reviews")
+
+    assert static_reviews["kind"] == "branch_group"
+    assert static_reviews["branch_group"]["kind"] == "parallel"
+    assert static_reviews["branch_group"]["branch_count"] == 2
+    assert [branch["name"] for branch in static_reviews["branch_group"]["branches"]] == ["security", "cost"]
+    assert static_reviews["branch_group"]["branches"][0]["step"]["name"] == "security_review"
+    assert static_reviews["branch_group"]["branches"][1]["step"]["name"] == "cost_review"
+    assert static_reviews["branch_group"]["fan_in_step"]["name"] == "combine_reviews"
+    assert static_reviews["branch_group"]["fan_in_step"]["routes"]["approved"]["target"] == "FINISH"
+
+    assert topology_reviews["branch_group"]["kind"] == "parallel"
+    assert topology_reviews["branch_group"]["exposed_routes"] == ["approved", "needs_revision"]
+    assert topology_reviews["branch_group"]["branches"][0]["step"]["routes"][0]["tag"] == "done"
+    assert topology_reviews["branch_group"]["fan_in_step"]["routes"][0]["tag"] == "approved"
+
+
+def test_branch_group_internal_shape_changes_topology_hash() -> None:
+    class BranchHashWorkflowA(Workflow):
+        name = "branch_hash_demo"
+
+        class State(BaseModel):
+            pass
+
+        assess = simple.fan_out(
+            step=simple.step("Assess {branch.input.area}.", name="assess_one", session=simple.Session.fresh()),
+            branches={"security": {"area": "security"}},
+        )
+
+    class BranchHashWorkflowB(Workflow):
+        name = "branch_hash_demo"
+
+        class State(BaseModel):
+            pass
+
+        assess = simple.fan_out(
+            step=simple.step("Assess {branch.input.area}.", name="assess_one", session=simple.Session.fresh()),
+            branches={"security": {"area": "performance"}},
+        )
+
+    compiled_a = compile_workflow(BranchHashWorkflowA)
+    compiled_b = compile_workflow(BranchHashWorkflowB)
+
+    assert compiled_a.workflow_name == compiled_b.workflow_name == "branch_hash_demo"
+    assert compiled_a.topology_hash != compiled_b.topology_hash
 
 
 def test_topology_artifacts_are_written_additively_with_canonical_finish_surface(tmp_path: Path) -> None:

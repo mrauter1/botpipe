@@ -1213,44 +1213,7 @@ def _topology_hash_payload(compiled: CompiledWorkflow) -> dict[str, Any]:
         "workflow_name": compiled.workflow_name,
         "entry_step_name": compiled.entry_step_name,
         "global_session": compiled.default_session_name,
-        "steps": [
-            {
-                "name": step.name,
-                "kind": step.kind,
-                "scope_name": step.scope_name,
-                "reads": list(step.reads),
-                "requires": list(step.requires),
-                "writes": list(step.writes),
-                "producer_reads": list(step.producer_reads),
-                "producer_requires": list(step.producer_requires),
-                "producer_writes": list(step.producer_writes),
-                "verifier_reads": list(step.verifier_reads),
-                "verifier_requires": list(step.verifier_requires),
-                "verifier_writes": list(step.verifier_writes),
-                "available_routes": list(step.available_routes),
-                "authored_routes": list(step.authored_routes),
-                "runtime_control_routes": list(step.runtime_control_routes),
-                "provider_visible_routes_interactive": list(step.provider_visible_routes_interactive),
-                "provider_visible_routes_full_auto": list(step.provider_visible_routes_full_auto),
-                "session_name": step.session_name,
-                "verifier_session_name": step.verifier_session_name,
-                "state_fields": list(step.step_state_fields),
-                "state_model": step.step_state_model.__name__,
-                "item_state_fields": list(step.step_item_state_fields),
-                "item_state_model": step.step_item_state_model.__name__ if step.step_item_state_model is not None else None,
-                "before_hook": _callable_name(step.before_hook),
-                "after_hook": _callable_name(step.after_hook),
-                "before_producer_hook": _callable_name(step.before_producer_hook),
-                "after_producer_hook": _callable_name(step.after_producer_hook),
-                "before_verifier_hook": _callable_name(step.before_verifier_hook),
-                "after_verifier_hook": _callable_name(step.after_verifier_hook),
-                "prompt_refs": [
-                    _topology_json_value(reference)
-                    for reference in getattr(step.step, "simple_prompt_references", ())
-                ],
-            }
-            for step in compiled.steps.values()
-        ],
+        "steps": [_topology_hash_step_payload(step) for step in compiled.steps.values()],
         "worklists": {
             name: {
                 "item_state_model": worklist.runtime_item_state_model.__name__,
@@ -1306,6 +1269,83 @@ def _topology_hash_payload(compiled: CompiledWorkflow) -> dict[str, Any]:
         "parameter_fields": sorted(getattr(compiled.parameters_cls, "model_fields", {}).keys())
         if compiled.parameters_cls is not None
         else [],
+    }
+
+
+def _topology_hash_step_payload(step: CompiledStep) -> dict[str, Any]:
+    payload = {
+        "name": step.name,
+        "kind": step.kind,
+        "scope_name": step.scope_name,
+        "reads": list(step.reads),
+        "requires": list(step.requires),
+        "writes": list(step.writes),
+        "producer_reads": list(step.producer_reads),
+        "producer_requires": list(step.producer_requires),
+        "producer_writes": list(step.producer_writes),
+        "verifier_reads": list(step.verifier_reads),
+        "verifier_requires": list(step.verifier_requires),
+        "verifier_writes": list(step.verifier_writes),
+        "available_routes": list(step.available_routes),
+        "authored_routes": list(step.authored_routes),
+        "runtime_control_routes": list(step.runtime_control_routes),
+        "provider_visible_routes_interactive": list(step.provider_visible_routes_interactive),
+        "provider_visible_routes_full_auto": list(step.provider_visible_routes_full_auto),
+        "session_name": step.session_name,
+        "verifier_session_name": step.verifier_session_name,
+        "state_fields": list(step.step_state_fields),
+        "state_model": step.step_state_model.__name__,
+        "item_state_fields": list(step.step_item_state_fields),
+        "item_state_model": step.step_item_state_model.__name__ if step.step_item_state_model is not None else None,
+        "before_hook": _callable_name(step.before_hook),
+        "after_hook": _callable_name(step.after_hook),
+        "before_producer_hook": _callable_name(step.before_producer_hook),
+        "after_producer_hook": _callable_name(step.after_producer_hook),
+        "before_verifier_hook": _callable_name(step.before_verifier_hook),
+        "after_verifier_hook": _callable_name(step.after_verifier_hook),
+        "prompt_refs": [
+            _topology_json_value(reference)
+            for reference in getattr(step.step, "simple_prompt_references", ())
+        ],
+    }
+    if step.route_table:
+        payload["route_table"] = {
+            tag: {
+                "target": route.target,
+                "summary": route.summary,
+                "required_writes": list(route.required_writes),
+                "handoff": route.handoff,
+                "on_taken": _callable_name(route.on_taken),
+                "provider_visible": route.provider_visible,
+                "provider_visible_interactive": route.provider_visible_interactive,
+                "provider_visible_full_auto": route.provider_visible_full_auto,
+                "is_runtime_control": route.is_runtime_control,
+            }
+            for tag, route in step.route_table.items()
+        }
+    if step.branch_group is not None:
+        payload["branch_group"] = _topology_hash_branch_group_payload(step.branch_group)
+    return payload
+
+
+def _topology_hash_branch_group_payload(spec: Any) -> dict[str, Any]:
+    return {
+        "name": spec.name,
+        "kind": spec.kind,
+        "concurrency": spec.concurrency,
+        "settle": spec.settle,
+        "success_routes": list(spec.success_routes),
+        "exposed_routes": list(spec.composite_route_tags),
+        "branches": [
+            {
+                "name": branch.name,
+                "index": branch.index,
+                "input": branch.input,
+                "step": _topology_hash_step_payload(branch.step),
+            }
+            for branch in spec.branches
+        ],
+        "fan_in_step": None if spec.fan_in_step is None else _topology_hash_step_payload(spec.fan_in_step),
     }
 
 

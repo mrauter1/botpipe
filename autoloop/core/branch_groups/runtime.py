@@ -82,6 +82,8 @@ class BranchGroupRuntime:
         parent_runtime = context_runtime(context)
         parent_runtime.emit_runtime_event(
             "branch_group_started",
+            step_name=step.name,
+            execution_id=getattr(context, "_step_execution_id", None),
             group_name=spec.name,
             group_kind=spec.kind,
             branch_count=len(spec.branches),
@@ -114,10 +116,16 @@ class BranchGroupRuntime:
         )
         parent_runtime.emit_runtime_event(
             "branch_manifest_written",
+            step_name=step.name,
+            execution_id=getattr(context, "_step_execution_id", None),
             group_name=spec.name,
             group_kind=spec.kind,
             results_path=_relative_to_root(results_path, context=context),
             context_path=_relative_to_root(context_path, context=context),
+            artifact_paths=[
+                _relative_to_root(results_path, context=context),
+                _relative_to_root(context_path, context=context),
+            ],
         )
 
         try:
@@ -149,11 +157,17 @@ class BranchGroupRuntime:
         final_route = None if step_result.finalization is None else step_result.finalization.final_route
         parent_runtime.emit_runtime_event(
             "branch_group_completed",
+            step_name=step.name,
+            execution_id=getattr(context, "_step_execution_id", None),
             group_name=spec.name,
             group_kind=spec.kind,
             route=final_route,
             destination=step_result.destination,
             status=_composite_status(step_result),
+            artifact_paths=[
+                _relative_to_root(results_path, context=context),
+                _relative_to_root(context_path, context=context),
+            ],
         )
         return step_result
 
@@ -181,13 +195,26 @@ class BranchGroupRuntime:
                     branch = active.pop(future)
                     if future.cancelled():
                         result = _cancelled_branch_result(spec=spec, branch=branch, context=context)
+                        context_runtime(context).emit_runtime_event(
+                            "branch_cancelled",
+                            group_name=spec.name,
+                            group_kind=spec.kind,
+                            branch_name=branch.name,
+                            branch_index=branch.index,
+                            step_name=branch.step.name,
+                            status="cancelled",
+                            reason=result["reason"],
+                            error=result["error"],
+                            artifact_paths=[],
+                        )
                     else:
                         result = future.result()
                     results[branch.index] = result
                     if spec.settle == "fail_fast" and result["status"] == "failed" and not fail_fast_triggered:
                         fail_fast_triggered = True
                         for queued in branch_queue:
-                            results[queued.index] = _skipped_branch_result(spec=spec, branch=queued, context=context)
+                            skipped_result = _skipped_branch_result(spec=spec, branch=queued, context=context)
+                            results[queued.index] = skipped_result
                             context_runtime(context).emit_runtime_event(
                                 "branch_skipped",
                                 group_name=spec.name,
@@ -195,6 +222,10 @@ class BranchGroupRuntime:
                                 branch_name=queued.name,
                                 branch_index=queued.index,
                                 step_name=queued.step.name,
+                                status="skipped",
+                                reason=skipped_result["reason"],
+                                error=skipped_result["error"],
+                                artifact_paths=[],
                             )
                         branch_queue.clear()
                         for running in active:
@@ -281,6 +312,7 @@ class BranchGroupRuntime:
             group_kind=spec.kind,
             branch_name=branch.name,
             branch_index=branch.index,
+            step_name=compiled_step.name,
             execution_id=execution_id,
         )
         branch_dir = parent_context.root / "_branch_groups" / spec.name / "branches" / branch.name
@@ -309,10 +341,12 @@ class BranchGroupRuntime:
                 group_kind=spec.kind,
                 branch_name=branch.name,
                 branch_index=branch.index,
+                step_name=compiled_step.name,
                 execution_id=execution_id,
                 route=result.get("route"),
                 destination=result.get("destination"),
                 status=result["status"],
+                reason=result.get("reason"),
                 error=result.get("error"),
                 artifact_paths=[artifact["path"] for artifact in result["artifacts"]],
             )
@@ -333,8 +367,10 @@ class BranchGroupRuntime:
                 group_kind=spec.kind,
                 branch_name=branch.name,
                 branch_index=branch.index,
+                step_name=compiled_step.name,
                 execution_id=execution_id,
                 status="failed",
+                reason=failed_result["reason"],
                 error=failed_result["error"],
                 artifact_paths=[artifact["path"] for artifact in failed_result["artifacts"]],
             )
@@ -531,7 +567,14 @@ class BranchGroupRuntime:
             "fan_in_started",
             group_name=spec.name,
             group_kind=spec.kind,
+            composite_step_name=composite_step.name,
             step_name=fan_in_step.name,
+            results_path=_relative_to_root(results_path, context=context),
+            context_path=_relative_to_root(context_path, context=context),
+            artifact_paths=[
+                _relative_to_root(results_path, context=context),
+                _relative_to_root(context_path, context=context),
+            ],
         )
         metadata = FanInMetadata(
             results=dict(manifest),
@@ -560,9 +603,15 @@ class BranchGroupRuntime:
             "fan_in_completed",
             group_name=spec.name,
             group_kind=spec.kind,
+            composite_step_name=composite_step.name,
+            step_name=fan_in_step.name,
             route=None if step_result.finalization is None else step_result.finalization.final_route,
             destination=step_result.destination,
             status=_composite_status(step_result),
+            artifact_paths=[
+                _relative_to_root(results_path, context=context),
+                _relative_to_root(context_path, context=context),
+            ],
         )
         return self._map_nested_result_to_composite(
             composite_step=composite_step,

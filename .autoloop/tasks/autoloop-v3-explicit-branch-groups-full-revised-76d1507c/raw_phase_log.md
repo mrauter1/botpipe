@@ -1589,3 +1589,82 @@ Open issues / next step
 <loop-control>
 {"schema":"docloop.loop_control/v1","kind":"promise","promise":"COMPLETE"}
 </loop-control>
+
+
+---
+run_id=run-20260505T171950Z-13ce26d6 | entry=session_turn | pair=implement | phase=producer | cycle=1 | attempt=1 | thread_id=019df984-d58c-75e0-ad54-c818ea8e03b7
+---
+provider=codex
+mode=start
+template=/home/rauter/.local/share/pipx/venvs/autoloop/lib/python3.12/site-packages/autoloop/templates/implement_producer.md
+session_id=019df984-d58c-75e0-ad54-c818ea8e03b7
+
+
+---
+run_id=run-20260505T171950Z-13ce26d6 | entry=phase_output | pair=implement | phase=producer | process=codex-agent | cycle=1 | attempt=1 | thread_id=019df984-d58c-75e0-ad54-c818ea8e03b7
+---
+I’m implementing the surface-hardening phase for branch groups. First I’m reading the phase artifacts and the current branch-group code paths so I can close the placeholder, topology, tracing, and regression gaps without widening scope.
+
+The phase artifacts are essentially stubs, so I’m using the approved plan plus current code as the authority for this pass. Next I’m tracing the placeholder, artifact-rooting, static-graph, and event surfaces that still need hardening.
+
+I’ve confirmed the repo is already mid-flight with broad unrelated dirt outside this task, so I’m keeping edits strictly to the branch-group surfaces and tests. Now I’m reading the exact functions that own placeholder validation/rendering, artifact rooting, topology payloads, and runtime trace emission.
+
+The runtime already has most of the branch-group core, but two gaps are visible: the graph payloads still serialize branch groups like ordinary flat steps, and the branch context markdown currently uses indented bullets that won’t stay stable if we need stricter contract assertions. I’m checking the current tests next to see what is covered and what still needs to be added or tightened.
+
+`pytest` and `python` are not on the bare PATH here, so I’m switching to the local runtime tooling and direct file inspection rather than assuming command names. I’m also checking the artifact unit tests because that’s the likely place to add the rooting regression coverage cleanly.
+
+Plan for this phase:
+1. Add additive branch-group metadata serialization shared by topology/static-graph and topology-hash paths.
+2. Tighten branch-group runtime-event payloads where metadata is currently sparse, without changing non-branch event contracts.
+3. Add regression coverage for branch/fan-in placeholder rendering, relative templated artifact rooting, graph payloads, and trace events.
+4. Run the targeted test slice, then record implementation notes and any non-obvious decisions.
+
+I’ve got the code path now. I’m editing the graph/hash serialization and branch-group event payloads first, then I’ll add the regression tests around branch artifact rooting and trace visibility.
+
+The code changes are in. I’m running the focused test slice now so I can catch any contract drift in the new graph payloads or event metadata before I write the phase notes.
+
+The unit and static-graph slices passed. The trace integration failed because `Engine.run()` is persisting the trace under the resolved run binding rather than the raw `run_folder` argument I assumed, so I’m checking the run-directory contract and adjusting the assertion to the actual runtime location instead of guessing.
+
+The trace integration issue was environmental, not behavioral: those events only exist on the filesystem runner path, and disabling git tracking fixed the harness. I’m doing one final targeted pass across the branch-group contract, artifact, graph, and trace suites before I write the run notes.
+
+I’ve finished the code and the focused regression slice is green. I’m recording the non-obvious decisions and the phase implementation notes now, then I’ll close with the scoped summary and validation results.
+
+Scope considered
+
+- Phase-local surface hardening for branch-group placeholders, artifact rooting, topology/static-graph output, runtime tracing, and regression coverage.
+- Relevant code paths only: `autoloop/core/compiler.py`, `autoloop/core/branch_groups/runtime.py`, `autoloop/runtime/static_graph.py`, and focused tests.
+
+What I analyzed
+
+- Runtime placeholder and artifact resolution in `autoloop/core/artifacts.py` and existing legality checks in `tests/unit/test_simple_surface.py`.
+- Branch-group execution/event emission in `autoloop/core/branch_groups/runtime.py`.
+- Static graph/topology serialization in `autoloop/runtime/static_graph.py`.
+- Topology hash materialization in `autoloop/core/compiler.py`.
+- Existing branch-group contract coverage plus runtime tracing behavior on the filesystem runner path.
+
+What I changed
+
+- Added additive nested `branch_group` metadata to static-graph and topology payloads, including inspectable branch/fan-in internal step surfaces.
+- Extended topology-hash serialization so branch-group internal shape now affects `topology_hash`.
+- Enriched branch-group runtime events with composite/nested `step_name`, evidence `artifact_paths`, and explicit skipped/cancelled event emission under `fail_fast`.
+- Added regression tests for:
+  - branch/fan-in artifact-template rooting under owner-step directories,
+  - branch-group static-graph/topology payloads,
+  - branch-group topology-hash drift on internal changes,
+  - branch-group runtime trace events on the filesystem runner path.
+- Updated the phase `implementation_notes.md` and appended the non-obvious decisions to `decisions.txt`.
+
+Key findings / decisions
+
+- The runner, not bare `Engine.run()`, owns `trace.jsonl`; the trace regression had to execute through `execute_workflow_package(...)`.
+- Additive metadata was sufficient; no topology/checkpoint schema version churn was needed.
+- Existing compile-time tests already covered illegal placeholder placement, so this pass focused runtime rooting/rendering regressions instead of duplicating that validation surface.
+
+Open issues / next step
+
+- No blocking issues found in this phase.
+- Validation passed:
+  - `.venv/bin/pytest -q tests/contract/test_branch_group_runtime.py -q`
+  - `.venv/bin/pytest -q tests/unit/test_simple_surface.py -q`
+  - `.venv/bin/pytest -q tests/unit/test_primitives_and_stores.py tests/runtime/test_runtime_static_graph.py tests/runtime/test_runtime_tracing.py -q`
+- Residual note: `tests/unit/test_simple_surface.py` still emits pre-existing Pydantic `schema` field-shadow warnings unrelated to this change.
