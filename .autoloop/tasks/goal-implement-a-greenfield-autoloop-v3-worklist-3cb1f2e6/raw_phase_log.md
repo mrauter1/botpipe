@@ -1720,3 +1720,61 @@ Open issues / next step
 - This phase’s two blocking reviewer findings should now be resolved.
 - I did not run the full repository suite in this turn.
 - The next remaining failure cluster is still out of phase here: `tests/unit/test_optimization_helpers.py` and the packaged-workflow/runtime suites.
+
+
+---
+run_id=run-20260505T133333Z-ef073886 | entry=session_turn | pair=implement | phase=verifier | cycle=2 | attempt=1 | thread_id=019df85f-e454-7e32-a85f-f676e36c2390
+---
+provider=codex
+mode=resume
+template=/home/rauter/.local/share/pipx/venvs/autoloop/lib/python3.12/site-packages/autoloop/templates/implement_verifier.md
+session_id=019df85f-e454-7e32-a85f-f676e36c2390
+
+
+---
+run_id=run-20260505T133333Z-ef073886 | entry=phase_output | pair=implement | phase=verifier | process=codex-agent | cycle=2 | attempt=1 | thread_id=019df85f-e454-7e32-a85f-f676e36c2390
+---
+I’m reviewing the phase-local loader changes against the two prior blocking findings, then I’ll update the review artifacts to reflect whether the acceptance criteria are now actually met. I’ll stay inside the active review artifact directory for writes and treat the source changes as read-only evidence.
+
+The artifact state matches the claimed fix surface. I’m checking the final loader branches directly now to confirm the marker path cannot accidentally bypass isolation for explicit repo-local classes, and that the shadowed-catalog lookup still preserves `.autoloop` authority for bare names.
+
+The code review has narrowed to one question: whether the new marker path preserves the helper round-trip without reopening the explicit-class regression. I’m rerunning the core resolution suites plus the adjacent stdlib suite myself so the criteria update is based on verifier-side evidence, not only implementation notes.
+
+The reviewer-side test run is clean so far on both branches. I’m waiting for the longer adjacent suite to finish before I mark the criteria, because that’s the best regression signal for the new class-marker split.
+
+Scope considered
+
+- Phase-local workflow-resolution changes only: mixed-root bare-name and alias authority, repo-local named fallback behavior, and explicit repo-local class-reference isolation.
+- Review scope included the active phase artifacts, the run-local decisions ledger, [loader.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/autoloop/runtime/loader.py), and the new regression tests in [test_workflow_catalog_roots.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/tests/runtime/test_workflow_catalog_roots.py) and [test_workflow_reference_resolution.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/tests/runtime/test_workflow_reference_resolution.py).
+
+What I analyzed
+
+- The prior blocking findings `IMP-001` and `IMP-002`.
+- The current loader branches for `_resolve_catalog_entry_by_reference`, `_resolve_imported_class_reference`, `_resolve_catalog_repo_module_reference`, and the new named-reference marker helpers.
+- The implementation notes and decisions to confirm the fix still honors `.autoloop/workflows` authority and isolates only explicit repo-local class references.
+
+What I reviewed
+
+- Updated [criteria.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/goal-implement-a-greenfield-autoloop-v3-worklist-3cb1f2e6/runs/run-20260505T133333Z-ef073886/artifacts/implement/phases/restore-workflow-resolution-contract/criteria.md) to fully checked.
+- Appended the re-review result to [feedback.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/goal-implement-a-greenfield-autoloop-v3-worklist-3cb1f2e6/runs/run-20260505T133333Z-ef073886/artifacts/implement/phases/restore-workflow-resolution-contract/feedback.md).
+- Verifier-side validation passed:
+  - `tests/runtime/test_workflow_reference_resolution.py`
+  - `tests/runtime/test_workflow_catalog_roots.py`
+  - `tests/runtime/test_runtime_cli_metadata_integration.py`
+  - `tests/runtime/test_workspace_and_context.py`
+  - `tests/unit/test_stdlib_and_extensions.py`
+
+Key findings / decisions
+
+- `IMP-001` is resolved: shadowed catalog entries are now visible to named lookup, so repo-local unique aliases survive mixed-root name collisions without weakening `.autoloop/workflows` precedence.
+- `IMP-002` is resolved: direct imported repo-local `workflows.*` class references now reload through `_autoloop_workspace_workflows...`, while named repo-local class round-trips keep `workflows.*` identity via the stored named key.
+- I found no new blocking or non-blocking issues within this phase scope.
+
+Open issues / next step
+
+- This phase is complete from a verifier perspective.
+- Remaining repository-wide failures are outside this phase and still belong to the next clusters: optimization helpers and packaged-workflow/runtime compatibility.
+
+<loop-control>
+{"schema":"docloop.loop_control/v1","kind":"promise","promise":"COMPLETE"}
+</loop-control>

@@ -16,3 +16,13 @@
 - `IMP-002` `blocking`
   File/symbol: `autoloop/runtime/loader.py::_resolve_imported_class_reference`
   Direct repo-local class-object references still do not preserve the isolated workspace-module contract required by this phase. Repro: import `workflows.module_review.flow.ModuleReviewWorkflow` from a repo-local package and call `resolve_workflow_reference(root, ModuleReviewWorkflow)`; the resolved workflow class remains in `workflows.module_review.flow` instead of loading under `_autoloop_workspace_workflows...`. The accepted phase contract and run decisions explicitly call out explicit repo-local class references as isolated-reference behavior. Minimal fix: route direct repo-local `workflows.*` class references through the same isolated source-path load used for explicit path/class resolution, and move any named-resolution helper callers that need stable `workflows.*` metadata onto the named catalog path instead of depending on direct class-object references.
+
+## Re-review (Cycle 2)
+
+- `IMP-001` resolved
+  Verifier re-ran the mixed-root alias scenario through `tests/runtime/test_workflow_catalog_roots.py`; named lookup now scans shadowed catalog entries, so repo-local unique aliases remain reachable without changing `.autoloop/workflows` authority for bare names.
+
+- `IMP-002` resolved
+  Verifier re-ran the explicit imported-class scenario through `tests/runtime/test_workflow_reference_resolution.py`; direct repo-local `workflows.*` class-object references now reload through `_autoloop_workspace_workflows...`, while named repo-local round-trips remain on the `workflows.*` path via the stored named reference key.
+
+- No new findings.
