@@ -179,7 +179,8 @@ def test_fan_out_renders_branch_input_roots_artifacts_and_keeps_branch_sessions_
     )
 
     assert result.terminal == simple.FINISH
-    assert prompts == ["Assess area security.", "Assess area performance."]
+    assert len(prompts) == 2
+    assert set(prompts) == {"Assess area security.", "Assess area performance."}
     assert len(set(session_id for session_id in sessions if session_id is not None)) == 2
     parent_snapshot = session_store.snapshot()
     assert all(binding.session_id not in sessions for binding in parent_snapshot.bindings)
@@ -252,8 +253,14 @@ def test_branch_group_mechanical_outcomes_support_all_settled_and_custom_aggrega
 
     provider = ScriptedLLMProvider(
         llm_turns=[
-            Outcome(raw_output="approved", tag="approved"),
-            Outcome(raw_output="done", tag="done"),
+            lambda request: Outcome(
+                raw_output="approved" if request.prompt.text == "Approved." else "done",
+                tag="approved" if request.prompt.text == "Approved." else "done",
+            ),
+            lambda request: Outcome(
+                raw_output="approved" if request.prompt.text == "Approved." else "done",
+                tag="approved" if request.prompt.text == "Approved." else "done",
+            ),
         ]
     )
     task_folder, run_folder = _workspace(tmp_path)
@@ -298,8 +305,14 @@ def test_branch_group_mechanical_outcomes_support_all_settled_and_custom_aggrega
         SuccessRoutesWorkflow,
         provider=ScriptedLLMProvider(
             llm_turns=[
-                Outcome(raw_output="approved", tag="approved"),
-                Outcome(raw_output="done", tag="done"),
+                lambda request: Outcome(
+                    raw_output="approved" if request.prompt.text == "Approved." else "done",
+                    tag="approved" if request.prompt.text == "Approved." else "done",
+                ),
+                lambda request: Outcome(
+                    raw_output="approved" if request.prompt.text == "Approved." else "done",
+                    tag="approved" if request.prompt.text == "Approved." else "done",
+                ),
             ]
         ),
         session_store=InMemorySessionStore(),

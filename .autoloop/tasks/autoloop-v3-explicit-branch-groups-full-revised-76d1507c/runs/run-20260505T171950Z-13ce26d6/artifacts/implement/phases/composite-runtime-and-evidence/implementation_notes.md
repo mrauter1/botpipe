@@ -50,6 +50,7 @@
   - Implemented bounded thread-based scheduling with `concurrency`, `all`, and `fail_fast` handling.
 - Plan milestone 3 / ordered branch-result capture:
   - Reused `StepDispatcher.execute()` for branch/fan-in execution and persisted declaration-order manifests.
+  - Kept the ordering guarantee scoped to declaration-order manifests/evidence rather than provider call interleaving inside concurrent branch execution.
 - Plan milestone 3 / evidence contract:
   - Wrote `_branch_groups/<group>/results.json` and `context.md` with deterministic summaries and per-branch results.
 - Plan milestone 3 / fan-in and mechanical outcomes:
@@ -68,6 +69,7 @@
 - Branch and fan-in steps still execute through the ordinary single-step engine path, including hooks, provider calls, artifact validation, and route finalization.
 - Parent session-store activation remains unchanged after branch completion; branch-created provider sessions stay inside `BranchSessionStoreView`.
 - Ordinary non-branch workflows keep their existing compile-time route tables and default-session behavior.
+- Concurrent branch execution still does not guarantee provider/log interleaving order; only persisted branch result order remains declaration-ordered.
 
 ## Intended Behavior Changes
 - Branch-group steps now execute as composite barriers that emit runtime-owned evidence under `_branch_groups/<group>/...`.
@@ -91,6 +93,7 @@
 - `.venv/bin/python -m pytest -q tests/unit/test_branch_group_context_sessions.py`
 - `.venv/bin/python -m pytest -q tests/contract/test_engine_contracts.py -k 'provider_steps_without_explicit_session_use_default_session or declared_session_auto_opens_without_on_start or on_start_opens_sessions_before_execution or llm_step_contract_logs_outcome_raw_output_and_uses_global_route'`
 - `.venv/bin/python -m pytest -q tests/contract/test_branch_group_runtime.py -k mechanical_outcomes`
+- `for i in 1 2 3 4 5; do .venv/bin/python -m pytest -q tests/contract/test_branch_group_runtime.py -k fan_out_renders_branch_input_roots_artifacts_and_keeps_branch_sessions_local; done`
 
 ## Deduplication / Centralization
 - Local nested-step route execution is centralized in compiler-produced `CompiledStep.route_table` plus engine route lookup helpers rather than a second branch-only executor.
