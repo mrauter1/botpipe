@@ -1346,3 +1346,58 @@ Open issues / next step
   - `./.venv/bin/pytest tests/contract/test_branch_group_runtime.py`
   - `./.venv/bin/pytest tests/runtime/test_runtime_tracing.py -k branch_group`
 - I did not run the full repository test suite; next step is broader phase handoff/review.
+
+
+---
+run_id=run-20260505T201926Z-7fdaad17 | entry=session_turn | pair=implement | phase=verifier | cycle=1 | attempt=1 | thread_id=019dfa0a-87de-7353-b5f8-4a53c8408820
+---
+provider=codex
+mode=resume
+template=/home/rauter/.local/share/pipx/venvs/autoloop/lib/python3.12/site-packages/autoloop/templates/implement_verifier.md
+session_id=019dfa0a-87de-7353-b5f8-4a53c8408820
+
+
+---
+run_id=run-20260505T201926Z-7fdaad17 | entry=phase_output | pair=implement | phase=verifier | process=codex-agent | cycle=1 | attempt=1 | thread_id=019dfa0a-87de-7353-b5f8-4a53c8408820
+---
+Reviewing the phase-local implementation against the session/state/evidence contract. I’m reading the criteria and feedback artifacts first, then I’ll audit the changed branch-session and runtime paths for correctness and regressions before updating the review files.
+
+I’ve got the artifact context and the changed decision record. I’m auditing the actual session-store diff now against `Context.open_session/get_session` and engine session selection, because the main review risk here is over-broad behavior change beyond the fresh branch-session contract.
+
+I don’t see an obvious architecture breach yet. I’m running the same focused validation commands from the implementation notes so the review result is based on observed behavior, not just static inspection.
+
+The targeted suites passed exactly as claimed, and the session overlay change stays within the intended branch-local surface. I’m marking the criteria complete and recording that this review found no blocking or non-blocking issues in the active phase scope.
+
+Scope considered
+- Active phase only: `session-state-evidence-correctness`.
+- Reviewed the changed branch-session overlay and the phase-local artifacts only.
+- Ignored unrelated dirty files outside scoped review surfaces.
+
+What I analyzed
+- `autoloop/core/branch_groups/sessions.py` against the v1 session contract in the request and `decisions.txt`.
+- Interaction with `Context.open_session/get_session`, engine session selection, and branch runtime evidence/session capture.
+- Phase implementation notes and the claimed validation set.
+
+What I reviewed
+- Fresh branch session creation now starts with `session_id=None`.
+- Fresh branch lookups reuse the active branch-local binding and do not fall back to the parent active slot.
+- Manifest/session assertions added for real provider-returned ids only.
+- Evidence/raw output path assertions remain under `workflow_folder/_branch_groups/...`.
+- Validation rerun:
+  - `./.venv/bin/pytest tests/unit/test_branch_group_context_sessions.py`
+  - `./.venv/bin/pytest tests/contract/test_branch_group_runtime.py`
+  - `./.venv/bin/pytest tests/runtime/test_runtime_tracing.py -k branch_group`
+
+Key findings / decisions
+- No blocking findings.
+- No non-blocking findings.
+- Criteria were updated to checked in [criteria.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/full-revised-standalone-spec-autoloop-v3-explici-7b9dcd08/runs/run-20260505T201926Z-7fdaad17/artifacts/implement/phases/session-state-evidence-correctness/criteria.md).
+- Feedback was updated in [feedback.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/full-revised-standalone-spec-autoloop-v3-explici-7b9dcd08/runs/run-20260505T201926Z-7fdaad17/artifacts/implement/phases/session-state-evidence-correctness/feedback.md) to record that no scoped issues were identified.
+
+Open issues / next step
+- No open review issues in this phase scope.
+- Ready for the next loop phase.
+
+<loop-control>
+{"schema":"docloop.loop_control/v1","kind":"promise","promise":"COMPLETE"}
+</loop-control>
