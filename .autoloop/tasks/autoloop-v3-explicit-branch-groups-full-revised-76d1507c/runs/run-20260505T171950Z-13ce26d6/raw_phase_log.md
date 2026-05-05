@@ -1485,3 +1485,107 @@ Open issues / next step
 <loop-control>
 {"schema":"docloop.loop_control/v1","kind":"promise","promise":"INCOMPLETE"}
 </loop-control>
+
+
+---
+run_id=run-20260505T171950Z-13ce26d6 | entry=session_turn | pair=test | phase=producer | cycle=3 | attempt=1 | thread_id=019df95d-8fea-77f3-8730-5b37b11034f7
+---
+provider=codex
+mode=resume
+template=/home/rauter/.local/share/pipx/venvs/autoloop/lib/python3.12/site-packages/autoloop/templates/test_producer.md
+session_id=019df95d-8fea-77f3-8730-5b37b11034f7
+
+
+---
+run_id=run-20260505T171950Z-13ce26d6 | entry=phase_output | pair=test | phase=producer | process=codex-agent | cycle=3 | attempt=1 | thread_id=019df95d-8fea-77f3-8730-5b37b11034f7
+---
+I’m covering the remaining gap with fault-injection rather than indirect assertions. The new contract needs to prove that an evidence-write failure aborts the composite before fan-in runs and before no-fan-in routing can advance the workflow.
+
+The first draft of the fault-injection test needs cleanup before I run it: the fan-in path should use one workspace, and the fan-in-called flag should come from the provider turn directly rather than a placeholder expression.
+
+I’ve corrected the fault-injection setup. I’m running the new evidence-write tests now before I touch the strategy and feedback artifacts, because the only useful version of those artifacts is one that matches passing contract coverage.
+
+The new fault-injection cases are green in isolation. I’m running the full branch-group contract file next, then I’ll update the phase artifacts to remove the last known gap and record the exact stabilization choice.
+
+The full contract file is now green with the evidence-write fault injection included. I’m updating the strategy, feedback, and the current test-author decisions block now so the phase artifacts reflect that the remaining blocking gap is closed.
+
+I’ve confirmed the new fault-injection coverage is stable. I’m updating the phase-local artifacts now to replace the old known gap with the new explicit evidence-write-failure coverage and to record the monkeypatch target as part of the contract surface.
+
+The contract slice and phase artifacts are aligned now. I’m doing a final readback of the updated strategy and decisions entry so the close-out can state the remaining risk accurately, rather than repeating the old known gap.
+
+Scope considered
+- Phase-local test work for `composite-runtime-and-evidence` only: [tests/contract/test_branch_group_runtime.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/tests/contract/test_branch_group_runtime.py), the active [test_strategy.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/autoloop-v3-explicit-branch-groups-full-revised-76d1507c/runs/run-20260505T171950Z-13ce26d6/artifacts/test/phases/composite-runtime-and-evidence/test_strategy.md), the phase [feedback.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/autoloop-v3-explicit-branch-groups-full-revised-76d1507c/runs/run-20260505T171950Z-13ce26d6/artifacts/test/phases/composite-runtime-and-evidence/feedback.md), and the current turn block in [decisions.txt](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/autoloop-v3-explicit-branch-groups-full-revised-76d1507c/runs/run-20260505T171950Z-13ce26d6/decisions.txt).
+- I did not edit auditor-owned [criteria.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/autoloop-v3-explicit-branch-groups-full-revised-76d1507c/runs/run-20260505T171950Z-13ce26d6/artifacts/test/phases/composite-runtime-and-evidence/criteria.md).
+
+What I analyzed
+- I traced the composite evidence-write barrier in [autoloop/core/branch_groups/runtime.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/autoloop/core/branch_groups/runtime.py), specifically the imported `write_branch_group_evidence(...)` call that sits before both fan-in execution and no-fan-in outcome routing.
+- I re-read the active audit finding in [feedback.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/autoloop-v3-explicit-branch-groups-full-revised-76d1507c/runs/run-20260505T171950Z-13ce26d6/artifacts/test/phases/composite-runtime-and-evidence/feedback.md) and the current test-phase decisions in [decisions.txt](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/autoloop-v3-explicit-branch-groups-full-revised-76d1507c/runs/run-20260505T171950Z-13ce26d6/decisions.txt).
+- I used that to choose deterministic fault injection by monkeypatching the runtime call site directly rather than relying on filesystem-permission side effects.
+
+What I changed
+- I added two new contract tests in [tests/contract/test_branch_group_runtime.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/tests/contract/test_branch_group_runtime.py):
+  - `test_branch_group_evidence_write_failure_stops_before_fan_in_and_downstream_routing(...)`
+  - `test_branch_group_evidence_write_failure_stops_before_mechanical_outcome_routing(...)`
+- Those tests monkeypatch `autoloop.core.branch_groups.runtime.write_branch_group_evidence` to raise `OSError("disk full")`, then assert:
+  - the composite raises immediately
+  - fan-in never runs
+  - downstream publish steps never run
+  - `_branch_groups/<group>/results.json` and `context.md` are not materialized
+- I updated [test_strategy.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/autoloop-v3-explicit-branch-groups-full-revised-76d1507c/runs/run-20260505T171950Z-13ce26d6/artifacts/test/phases/composite-runtime-and-evidence/test_strategy.md) to map this behavior explicitly under AC-1, add the failure-path and flake-control notes, and clear the old known gap.
+- I appended a concise summary entry to [feedback.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/autoloop-v3-explicit-branch-groups-full-revised-76d1507c/runs/run-20260505T171950Z-13ce26d6/artifacts/test/phases/composite-runtime-and-evidence/feedback.md) and recorded the non-obvious monkeypatch target under block `14` in [decisions.txt](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/autoloop-v3-explicit-branch-groups-full-revised-76d1507c/runs/run-20260505T171950Z-13ce26d6/decisions.txt).
+
+Key findings / decisions
+- The stable regression surface for this failure path is the imported runtime barrier `write_branch_group_evidence(...)`, because it is the last deterministic checkpoint before fan-in/outcome execution and avoids environment-dependent filesystem failures.
+- Validation passed:
+  - `.venv/bin/python -m pytest -q tests/contract/test_branch_group_runtime.py`
+  - `.venv/bin/python -m pytest -q tests/contract/test_branch_group_runtime.py -k 'evidence_write_failure or fail_fast_stops_new_branch_launches'`
+  - `for i in 1 2; do .venv/bin/python -m pytest -q tests/contract/test_branch_group_runtime.py -k 'evidence_write_failure' || exit 1; done`
+
+Open issues / next step
+- No additional phase-local gaps are recorded in the current contract slice.
+- The next step is auditor review of the updated evidence-write fault-injection coverage and refreshed phase artifacts.
+
+
+---
+run_id=run-20260505T171950Z-13ce26d6 | entry=session_turn | pair=test | phase=verifier | cycle=3 | attempt=1 | thread_id=019df95d-8fea-77f3-8730-5b37b11034f7
+---
+provider=codex
+mode=resume
+template=/home/rauter/.local/share/pipx/venvs/autoloop/lib/python3.12/site-packages/autoloop/templates/test_verifier.md
+session_id=019df95d-8fea-77f3-8730-5b37b11034f7
+
+
+---
+run_id=run-20260505T171950Z-13ce26d6 | entry=phase_output | pair=test | phase=verifier | process=codex-agent | cycle=3 | attempt=1 | thread_id=019df95d-8fea-77f3-8730-5b37b11034f7
+---
+I’m doing the final audit pass now against the refreshed contract file and phase artifacts. The main check is whether the new fault-injection tests actually close the last AC-1 coverage hole without introducing a new flaky surface.
+
+The contract slice is green and the remaining strategy gap is gone. I’m marking the audit criteria complete now and appending a final audit note that the prior blockers are resolved, with no new findings in this phase-local scope.
+
+The audit artifacts are updated. I’m doing one quick readback of the final checkbox state and audit note so the close-out matches the on-disk verifier record exactly.
+
+Scope considered
+- Phase-local test audit only for `composite-runtime-and-evidence`: the updated [tests/contract/test_branch_group_runtime.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/tests/contract/test_branch_group_runtime.py), the active [test_strategy.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/autoloop-v3-explicit-branch-groups-full-revised-76d1507c/runs/run-20260505T171950Z-13ce26d6/artifacts/test/phases/composite-runtime-and-evidence/test_strategy.md), the run-local [decisions.txt](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/autoloop-v3-explicit-branch-groups-full-revised-76d1507c/runs/run-20260505T171950Z-13ce26d6/decisions.txt), and the active audit artifacts.
+- I did not modify repository code/tests or any files outside the active audit artifact directory.
+
+What I analyzed
+- I re-read the final contract file additions for `fail_fast` settlement and evidence-write fault injection.
+- I checked the refreshed strategy text to confirm the old known gaps are now covered rather than merely documented.
+- I reran `.venv/bin/python -m pytest -q tests/contract/test_branch_group_runtime.py`, which passed with `8 passed in 0.33s`.
+
+What I reviewed
+- `TST-001` is resolved: the suite now covers deterministic `fail_fast` settlement behavior, including admission stopping and persisted `skipped` results.
+- `TST-002` is resolved: the suite now fault-injects evidence-write failure at the runtime barrier and proves the composite aborts before fan-in execution or no-fan-in routing.
+- I updated [criteria.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/autoloop-v3-explicit-branch-groups-full-revised-76d1507c/runs/run-20260505T171950Z-13ce26d6/artifacts/test/phases/composite-runtime-and-evidence/criteria.md) to fully checked and appended a final audit rerun note to [feedback.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/autoloop-v3-explicit-branch-groups-full-revised-76d1507c/runs/run-20260505T171950Z-13ce26d6/artifacts/test/phases/composite-runtime-and-evidence/feedback.md).
+
+Key findings / decisions
+- No remaining blocking or non-blocking findings in this phase-local test scope.
+- The final contract surface now matches the run-local decisions: persisted evidence ordering is asserted, provider callback interleaving is not; `fail_fast` uses deterministic `concurrency=1`; and evidence-write failure is tested at the imported runtime call site rather than via flaky filesystem behavior.
+
+Open issues / next step
+- No phase-local test audit issues remain for `composite-runtime-and-evidence`.
+- This test phase is ready to advance.
+
+<loop-control>
+{"schema":"docloop.loop_control/v1","kind":"promise","promise":"COMPLETE"}
+</loop-control>
