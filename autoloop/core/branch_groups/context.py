@@ -131,7 +131,7 @@ def create_fan_in_context(
         step_item_state_store=step_item_state_store,
         branch=None,
         fan_in=fan_in,
-        step_execution_id=None,
+        step_execution_id=f"{step_name}:0",
     )
 
 

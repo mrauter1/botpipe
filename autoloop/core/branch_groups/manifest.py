@@ -50,6 +50,10 @@ def build_branch_manifest(
 def render_branch_group_context(manifest: Mapping[str, Any]) -> str:
     branches = list(manifest.get("branches", []))
     counts = _status_counts(branches)
+    failed_branches = [branch for branch in branches if branch.get("status") == "failed"]
+    needs_input_branches = [branch for branch in branches if branch.get("status") == "needs_input"]
+    cancelled_branches = [branch for branch in branches if branch.get("status") == "cancelled"]
+    skipped_branches = [branch for branch in branches if branch.get("status") == "skipped"]
     lines = [
         f"# Branch Group: {manifest.get('name', '')}",
         "",
@@ -99,6 +103,27 @@ def render_branch_group_context(manifest: Mapping[str, Any]) -> str:
             f"- Skipped branches: {counts['skipped']}",
         ]
     )
+    if failed_branches:
+        for branch in failed_branches:
+            lines.append(
+                f"- {branch.get('name', '')}: {branch_error_summary(branch) or branch.get('reason') or '(no error summary)'}"
+            )
+    else:
+        lines.append("- None.")
+    lines.extend(["", "## Needs Input Details", ""])
+    if needs_input_branches:
+        for branch in needs_input_branches:
+            lines.append(
+                f"- {branch.get('name', '')}: {branch.get('question') or branch.get('reason') or 'Input required.'}"
+            )
+    else:
+        lines.append("- None.")
+    lines.extend(["", "## Cancellation Details", ""])
+    if cancelled_branches or skipped_branches:
+        for branch in (*cancelled_branches, *skipped_branches):
+            lines.append(f"- {branch.get('name', '')}: {branch.get('reason') or branch.get('status', '')}")
+    else:
+        lines.append("- None.")
     for branch in branches:
         lines.extend(
             [
@@ -138,10 +163,7 @@ def render_branch_group_context(manifest: Mapping[str, Any]) -> str:
         error = branch.get("error")
         if isinstance(error, Mapping):
             lines.append("- Error summary:")
-            lines.append(
-                "  - "
-                + f"{error.get('type', 'Error')}: {error.get('message', '') or '(no message)'}"
-            )
+            lines.append("  - " + (branch_error_summary(branch) or "(no error summary)"))
         else:
             lines.append("- Error summary: (none)")
     return "\n".join(lines) + "\n"
@@ -154,3 +176,12 @@ def _status_counts(branches: list[Mapping[str, Any]]) -> dict[str, int]:
         if isinstance(status, str) and status in counts:
             counts[status] += 1
     return counts
+
+
+def branch_error_summary(branch: Mapping[str, Any]) -> str | None:
+    error = branch.get("error")
+    if not isinstance(error, Mapping):
+        return None
+    error_type = error.get("type", "Error")
+    message = error.get("message", "") or "(no message)"
+    return f"{error_type}: {message}"

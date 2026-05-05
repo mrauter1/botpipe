@@ -1506,3 +1506,68 @@ Open issues / next step
 <loop-control>
 {"schema":"docloop.loop_control/v1","kind":"promise","promise":"COMPLETE"}
 </loop-control>
+
+
+---
+run_id=run-20260505T201926Z-7fdaad17 | entry=session_turn | pair=implement | phase=producer | cycle=1 | attempt=1 | thread_id=019dfa12-b013-7731-be93-05caf44ed406
+---
+provider=codex
+mode=start
+template=/home/rauter/.local/share/pipx/venvs/autoloop/lib/python3.12/site-packages/autoloop/templates/implement_producer.md
+session_id=019dfa12-b013-7731-be93-05caf44ed406
+
+
+---
+run_id=run-20260505T201926Z-7fdaad17 | entry=phase_output | pair=implement | phase=producer | process=codex-agent | cycle=1 | attempt=1 | thread_id=019dfa12-b013-7731-be93-05caf44ed406
+---
+I’m treating this as the `fan-in-outcomes-and-surface` phase only. First I’m reading the active phase artifacts and the current branch-group implementation to identify the exact gaps against the acceptance criteria.
+
+I have the phase plan and current branch-group surface locations. Next I’m reading the runtime, manifest, topology/static-graph, and artifact-routing code paths that directly control this phase’s acceptance criteria.
+
+The branch runtime already covers a lot of the surface, but I need to verify route-finalization semantics, topology payload shape, and how resume/checkpoint state treats composite steps. I’m reading those paths and the existing branch-group contract tests now.
+
+I’ve confirmed there isn’t phase-specific reviewer text beyond the scoped contract, so the next useful signal is the current test status. I’m running the branch-group runtime, static-graph, and tracing tests that pin this phase.
+
+`pytest` is not on the shell path in this workspace. I’m checking the local tooling entrypoint and then I’ll rerun the same targeted suite through the repo’s Python environment.
+
+I’m looking for hidden-risk gaps now rather than just the obvious tested cases. The main suspects are manifest/context completeness, exact fan-in metadata, and any branch-group surface omitted from topology or resume state.
+
+I don’t have a local test runner installed, so I’m bootstrapping `pytest` into the workspace Python to get real regression feedback before I edit.
+
+The system Python is PEP 668 managed, so I’m using an isolated `.venv` under the repo instead of touching the host environment. After that I can run the targeted branch-group suites.
+
+The primary phase suites are green already, so I’m widening to adjacent branch-group and async-dispatch surfaces to catch contract drift that the phase-local tests don’t cover.
+
+I’ve got a small additive patch plan now: tighten the fan-in observability surface, enrich the branch-group context summaries, and expose outcome metadata in static graph/topology without changing existing behavior. I’m applying those edits next.
+
+The code changes are in and the focused regression suites passed. I’m recording the two non-obvious surface decisions for future turns, then I’ll update the phase implementation notes with scope, checklist mapping, and validation.
+
+Scope considered
+
+- Phase-local `fan-in-outcomes-and-surface` work only.
+- Runtime/event surfacing, branch-group context rendering, and static-graph/topology payloads around [runtime.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/autoloop/core/branch_groups/runtime.py), [context.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/autoloop/core/branch_groups/context.py), [manifest.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/autoloop/core/branch_groups/manifest.py), and [static_graph.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/autoloop/runtime/static_graph.py).
+
+What I analyzed
+
+- The active phase contract, plan, and existing branch-group implementation.
+- Existing branch-group contract, tracing, static-graph, strictness, and context-session tests.
+- Current checkpoint/resume behavior to confirm no branch-level resume semantics were introduced.
+
+What I changed
+
+- Fan-in child contexts now get deterministic step execution ids in [context.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/autoloop/core/branch_groups/context.py).
+- Fan-in runtime events now emit from the fan-in context, and `branch_scheduled` includes the composite execution id in [runtime.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/autoloop/core/branch_groups/runtime.py).
+- Branch-group `context.md` now includes declaration-order detail lines for failures, needs-input, cancellations, and skips in [manifest.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/autoloop/core/branch_groups/manifest.py).
+- Static graph/topology branch-group payloads now expose additive outcome/chain-route metadata in [static_graph.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/autoloop/runtime/static_graph.py).
+- I updated [implementation_notes.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/full-revised-standalone-spec-autoloop-v3-explici-7b9dcd08/runs/run-20260505T201926Z-7fdaad17/artifacts/implement/phases/fan-in-outcomes-and-surface/implementation_notes.md) and appended the non-obvious decisions to [decisions.txt](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/full-revised-standalone-spec-autoloop-v3-explici-7b9dcd08/runs/run-20260505T201926Z-7fdaad17/decisions.txt).
+
+Key findings / decisions
+
+- The phase-local suites were already green; I kept behavior stable and limited this turn to additive surface/observability improvements.
+- Fan-in should be traceable as its own authored nested step, not only as part of the composite branch-group event stream.
+- Static graph/topology consumers benefit from explicit `outcome_policy` and chain-route metadata without changing existing keys.
+
+Open issues / next step
+
+- No open phase-local blockers from the tested surfaces.
+- Validation run: `.venv/bin/python -m pytest -q tests/contract/test_branch_group_runtime.py tests/runtime/test_runtime_static_graph.py tests/runtime/test_runtime_tracing.py tests/unit/test_branch_group_context_sessions.py tests/strictness/test_no_compat.py` -> `76 passed`.

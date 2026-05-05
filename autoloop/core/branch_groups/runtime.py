@@ -198,6 +198,7 @@ class BranchGroupRuntime:
         def launch(branch: Any) -> None:
             parent_runtime.emit_runtime_event(
                 "branch_scheduled",
+                execution_id=getattr(context, "_step_execution_id", None),
                 group_name=spec.name,
                 group_kind=spec.kind,
                 branch_name=branch.name,
@@ -581,20 +582,6 @@ class BranchGroupRuntime:
         fan_in_step = spec.fan_in_step
         if fan_in_step is None:
             raise WorkflowExecutionError(f"branch group {spec.name!r} is missing its compiled fan-in step")
-        parent_runtime = context_runtime(context)
-        parent_runtime.emit_runtime_event(
-            "fan_in_started",
-            group_name=spec.name,
-            group_kind=spec.kind,
-            composite_step_name=composite_step.name,
-            step_name=fan_in_step.name,
-            results_path=_relative_to_root(results_path, context=context),
-            context_path=_relative_to_root(context_path, context=context),
-            artifact_paths=[
-                _relative_to_root(results_path, context=context),
-                _relative_to_root(context_path, context=context),
-            ],
-        )
         metadata = FanInMetadata(
             results=dict(manifest),
             results_path=results_path,
@@ -617,6 +604,19 @@ class BranchGroupRuntime:
         runtime.set_values(context._values)
         self._engine._increment_step_runtime_state(fan_in_context._step_state)
         runtime.set_step_state_store(fan_in_context._step_state)
+        runtime.emit_runtime_event(
+            "fan_in_started",
+            group_name=spec.name,
+            group_kind=spec.kind,
+            composite_step_name=composite_step.name,
+            step_name=fan_in_step.name,
+            results_path=_relative_to_root(results_path, context=context),
+            context_path=_relative_to_root(context_path, context=context),
+            artifact_paths=[
+                _relative_to_root(results_path, context=context),
+                _relative_to_root(context_path, context=context),
+            ],
+        )
         step_result = await self._engine.step_dispatcher.execute_async(
             fan_in_step,
             fan_in_context,
@@ -624,7 +624,7 @@ class BranchGroupRuntime:
             (),
             route_mode="capture",
         )
-        parent_runtime.emit_runtime_event(
+        runtime.emit_runtime_event(
             "fan_in_completed",
             group_name=spec.name,
             group_kind=spec.kind,

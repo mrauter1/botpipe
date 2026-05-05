@@ -359,7 +359,11 @@ def _branch_group_surface_payload(
         "concurrency": spec.concurrency,
         "settle": spec.settle,
         "success_routes": list(spec.success_routes),
+        "outcome_policy": _branch_group_outcome_payload(spec.outcome),
         "exposed_routes": list(spec.composite_route_tags),
+        "has_fan_in": spec.fan_in_step is not None,
+        "default_chain_route": spec.default_chain_route,
+        "rework_chain_route": spec.rework_chain_route,
         "branches": [
             {
                 "name": branch.name,
@@ -381,6 +385,14 @@ def _branch_group_surface_payload(
             route_shape=route_shape,
         ),
     }
+
+
+def _branch_group_outcome_payload(outcome: object) -> str | None:
+    if outcome is None:
+        return None
+    if isinstance(outcome, str):
+        return outcome
+    return _callable_name(outcome) or type(outcome).__name__
 
 
 def _internal_step_surface_payload(
