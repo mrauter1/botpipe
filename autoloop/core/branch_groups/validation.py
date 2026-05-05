@@ -45,9 +45,17 @@ def ensure_json_serializable(value: Any, *, label: str) -> None:
 
 
 def validate_branch_step_kind(*, group_name: str, step: Step) -> None:
+    if step.scope is not None:
+        raise WorkflowValidationError(
+            f"branch group {group_name!r} includes scoped branch step {step.name!r}, which is unsupported in v1."
+        )
     if isinstance(step, ChildWorkflowStep):
         raise WorkflowValidationError(
             f"branch group {group_name!r} includes child workflow branch step {step.name!r}, which is unsupported in v1."
+        )
+    if _simple_declaration_kind(step) == "operation":
+        raise WorkflowValidationError(
+            f"branch group {group_name!r} includes operation branch step {step.name!r}, which is unsupported in v1."
         )
     if isinstance(step, BranchGroupStep):
         raise WorkflowValidationError(
@@ -60,6 +68,10 @@ def validate_branch_step_kind(*, group_name: str, step: Step) -> None:
 
 
 def validate_fan_in_step_kind(*, group_name: str, step: Step) -> None:
+    if step.scope is not None:
+        raise WorkflowValidationError(
+            f"branch group {group_name!r} includes scoped fan-in step {step.name!r}, which is unsupported in v1."
+        )
     if isinstance(step, ChildWorkflowStep):
         raise WorkflowValidationError(
             f"branch group {group_name!r} includes child workflow fan-in step {step.name!r}, which is unsupported in v1."
@@ -135,7 +147,7 @@ def validate_branch_placeholder_reference(
     step_name: str,
     allowed: bool,
 ) -> bool:
-    if not reference.startswith("branch"):
+    if _placeholder_root(reference) != "branch":
         return False
     if not allowed:
         raise WorkflowValidationError(
@@ -162,7 +174,7 @@ def validate_fan_in_placeholder_reference(
     step_name: str,
     allowed: bool,
 ) -> bool:
-    if not reference.startswith("fan_in"):
+    if _placeholder_root(reference) != "fan_in":
         return False
     if not allowed:
         raise WorkflowValidationError(
@@ -175,3 +187,13 @@ def validate_fan_in_placeholder_reference(
             f"simple step {step_name!r} placeholder {{{reference}}} must use one of: {allowed_fields}"
         )
     return True
+
+
+def _placeholder_root(reference: str) -> str:
+    return reference.split(".", 1)[0]
+
+
+def _simple_declaration_kind(step: Step) -> str | None:
+    declaration = getattr(step, "simple_declaration", None)
+    kind = getattr(declaration, "kind", None)
+    return kind if isinstance(kind, str) else None

@@ -14,8 +14,10 @@ import autoloop.simple as simple
 import autoloop.core as core
 import autoloop.core.steps as core_steps
 import autoloop.core.validation as core_validation
+from autoloop.core.branch_groups.models import BranchGroupDeclarationSpec, CompiledBranchGroupSpec
 from autoloop.core.compiler import compile_workflow
 from autoloop.core.context import Context
+from autoloop.core.discovery import get_workflow_definition
 from autoloop.core.engine import Engine
 from autoloop.core.errors import WorkflowExecutionError, WorkflowValidationError
 from autoloop.core.providers.fake import ScriptedLLMProvider
@@ -662,10 +664,13 @@ def test_parallel_branch_group_compiles_as_one_external_step_with_ordered_intern
         publish = simple.python_step(lambda ctx: simple.Event("done"))
 
     compiled = compile_workflow(BranchGroupWorkflow)
+    definition = get_workflow_definition(BranchGroupWorkflow)
 
     assert compiled.entry_step_name == "reviews"
     assert tuple(compiled.steps) == ("reviews", "publish")
     assert compiled.steps["reviews"].kind == "branch_group"
+    assert isinstance(definition.steps_by_name["reviews"].branch_group, BranchGroupDeclarationSpec)
+    assert isinstance(compiled.steps["reviews"].branch_group, CompiledBranchGroupSpec)
     assert "security_review" not in compiled.steps
     assert "cost_review" not in compiled.steps
     assert "security_review" not in compiled.routes
@@ -941,6 +946,49 @@ def test_branch_group_rejects_unsafe_names_child_workflow_fan_in_and_non_seriali
 
         compile_workflow(InvalidBranchStepWorkflow)
 
+    with pytest.raises(WorkflowValidationError, match="scoped branch step"):
+
+        class InvalidScopedBranchStepWorkflow(simple.Workflow):
+            class State(BaseModel):
+                pass
+
+            queue = simple.Worklist.from_items(
+                name="queue",
+                items=["a"],
+                item_id=lambda item: item,
+                title=lambda item: item,
+            )
+            assess = simple.parallel(
+                branches={
+                    "a": simple.step(
+                        "Draft branch.",
+                        name="scoped_branch",
+                        session=simple.Session.fresh(),
+                        scope=queue,
+                    ),
+                }
+            )
+
+        compile_workflow(InvalidScopedBranchStepWorkflow)
+
+    with pytest.raises(WorkflowValidationError, match="operation branch step"):
+
+        class InvalidOperationBranchStepWorkflow(simple.Workflow):
+            class State(BaseModel):
+                pass
+
+            assess = simple.parallel(
+                branches={
+                    "a": simple.classify.step(
+                        prompt="Choose one.",
+                        choices=("yes", "no"),
+                        name="branch_operation",
+                    ),
+                }
+            )
+
+        compile_workflow(InvalidOperationBranchStepWorkflow)
+
     with pytest.raises(WorkflowValidationError, match="child workflow fan-in step"):
 
         class InvalidFanInWorkflow(simple.Workflow):
@@ -966,6 +1014,36 @@ def test_branch_group_rejects_unsafe_names_child_workflow_fan_in_and_non_seriali
             )
 
         compile_workflow(InvalidFanOutInputWorkflow)
+
+
+def test_branch_group_compile_cache_is_bypassed() -> None:
+    class BranchGroupCacheWorkflow(simple.Workflow):
+        class State(BaseModel):
+            pass
+
+        reviews = simple.parallel(
+            branches={
+                "security": simple.step("Review security.", name="security_review", session=simple.Session.fresh()),
+            }
+        )
+
+    first = compile_workflow(BranchGroupCacheWorkflow)
+    second = compile_workflow(BranchGroupCacheWorkflow)
+
+    assert first is not second
+    assert first.topology_hash == second.topology_hash
+
+
+def test_branch_group_placeholder_root_matching_is_exact() -> None:
+    with pytest.raises(WorkflowValidationError, match="references unknown step 'branching'"):
+
+        class InvalidExactRootWorkflow(simple.Workflow):
+            class State(BaseModel):
+                pass
+
+            ask = simple.step("Draft {branching.name}.")
+
+        compile_workflow(InvalidExactRootWorkflow)
 
 
 def test_simple_workflow_injects_canonical_default_routes_by_step_kind() -> None:

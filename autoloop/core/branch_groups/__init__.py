@@ -3,15 +3,23 @@
 from .context import BranchMetadata, FanInMetadata, StateCell
 from .declarations import FanIn
 from .manifest import branch_group_paths
-from .models import BranchGroupSpec, BranchStepSpec, FanInHelperReference
+from .models import (
+    BranchGroupDeclarationSpec,
+    BranchStepDeclarationSpec,
+    CompiledBranchGroupSpec,
+    CompiledBranchStepSpec,
+    FanInHelperReference,
+)
 from .outcomes import select_branch_group_outcome
 from .sessions import BranchSessionStoreView
 
 __all__ = [
-    "BranchGroupSpec",
+    "BranchGroupDeclarationSpec",
     "BranchMetadata",
     "BranchSessionStoreView",
-    "BranchStepSpec",
+    "BranchStepDeclarationSpec",
+    "CompiledBranchGroupSpec",
+    "CompiledBranchStepSpec",
     "FanIn",
     "FanInHelperReference",
     "FanInMetadata",

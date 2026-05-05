@@ -7,7 +7,7 @@ from typing import Any
 
 from autoloop.core.steps import ProduceVerifyStep, Step
 
-from .models import BranchGroupSpec, BranchStepSpec
+from .models import BranchGroupDeclarationSpec, BranchStepDeclarationSpec
 
 
 def declared_internal_route_tags(declaration: object, *, step: Step) -> tuple[str, ...]:
@@ -25,11 +25,11 @@ def declared_internal_route_tags(declaration: object, *, step: Step) -> tuple[st
     return ("done",)
 
 
-def build_branch_group_spec(
+def build_branch_group_declaration_spec(
     *,
     name: str,
     kind: str,
-    branches: tuple[BranchStepSpec, ...],
+    branches: tuple[BranchStepDeclarationSpec, ...],
     concurrency: int | None,
     settle: str,
     success_routes: tuple[str, ...],
@@ -38,8 +38,8 @@ def build_branch_group_spec(
     composite_route_tags: tuple[str, ...],
     default_chain_route: str,
     rework_chain_route: str | None = None,
-) -> BranchGroupSpec:
-    return BranchGroupSpec(
+) -> BranchGroupDeclarationSpec:
+    return BranchGroupDeclarationSpec(
         name=name,
         kind=kind,
         branches=branches,

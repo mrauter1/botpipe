@@ -12,7 +12,12 @@ from typing import Any, Callable, Mapping
 from pydantic import BaseModel
 
 from .artifacts import CompiledArtifact
-from .branch_groups.models import FanInHelperReference
+from .branch_groups.models import (
+    BranchGroupDeclarationSpec,
+    CompiledBranchGroupSpec,
+    CompiledBranchStepSpec,
+    FanInHelperReference,
+)
 from .context import Context
 from .discovery import WorkflowDefinition, get_workflow_definition
 from .extensions import WorkflowExtension
@@ -163,14 +168,16 @@ def compile_workflow(workflow_cls: type[Any]) -> CompiledWorkflow:
 
     definition = get_workflow_definition(workflow_cls)
     source_hash = _workflow_source_hash(workflow_cls)
-    cache_key = _workflow_compile_cache_key(
-        workflow_cls,
-        definition=definition,
-        source_hash=source_hash,
-    )
-    cached = _COMPILED_WORKFLOW_CACHE.get(cache_key)
-    if cached is not None:
-        return cached
+    cache_key: tuple[str, str, str] | None = None
+    if not _definition_contains_branch_groups(definition):
+        cache_key = _workflow_compile_cache_key(
+            workflow_cls,
+            definition=definition,
+            source_hash=source_hash,
+        )
+        cached = _COMPILED_WORKFLOW_CACHE.get(cache_key)
+        if cached is not None:
+            return cached
     inventory = collect_artifact_inventory(definition)
     compiled_routes = _compile_routes(definition)
     compiled_global_routes = _compile_global_routes(definition)
@@ -199,7 +206,8 @@ def compile_workflow(workflow_cls: type[Any]) -> CompiledWorkflow:
         topology_hash="",
     )
     compiled = _with_topology_hash(compiled)
-    _COMPILED_WORKFLOW_CACHE[cache_key] = compiled
+    if cache_key is not None:
+        _COMPILED_WORKFLOW_CACHE[cache_key] = compiled
     return compiled
 
 
@@ -569,13 +577,15 @@ def _compiled_route_visible_for_policy(route: CompiledRoute, *, policy: str) -> 
 
 def _compile_branch_group_internal_steps(
     definition: WorkflowDefinition,
-    branch_group: Any,
+    branch_group: BranchGroupDeclarationSpec,
     *,
     inventory: dict[str, ArtifactInventoryRecord],
-) -> Any:
+) -> CompiledBranchGroupSpec:
     compiled_branches = tuple(
-        replace(
-            branch,
+        CompiledBranchStepSpec(
+            name=branch.name,
+            index=branch.index,
+            input=branch.input,
             step=_compile_branch_group_internal_step(
                 definition,
                 branch.step,
@@ -593,10 +603,18 @@ def _compile_branch_group_internal_steps(
             inventory=inventory,
         )
     )
-    return replace(
-        branch_group,
+    return CompiledBranchGroupSpec(
+        name=branch_group.name,
+        kind=branch_group.kind,
         branches=compiled_branches,
+        concurrency=branch_group.concurrency,
+        settle=branch_group.settle,
+        success_routes=branch_group.success_routes,
+        outcome=branch_group.outcome,
         fan_in_step=compiled_fan_in_step,
+        composite_route_tags=branch_group.composite_route_tags,
+        default_chain_route=branch_group.default_chain_route,
+        rework_chain_route=branch_group.rework_chain_route,
     )
 
 
@@ -1107,6 +1125,10 @@ def _workflow_source_hash(workflow_cls: type[Any]) -> str | None:
     if not path.is_file():
         return None
     return hashlib.sha256(path.read_bytes()).hexdigest()
+
+
+def _definition_contains_branch_groups(definition: WorkflowDefinition) -> bool:
+    return any(isinstance(step, BranchGroupStep) for step in definition.steps)
 
 
 def _workflow_compile_cache_key(

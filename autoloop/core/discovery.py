@@ -12,8 +12,8 @@ from typing import Any
 from pydantic import BaseModel
 
 from .artifacts import Artifact
-from .branch_groups.lowering import build_branch_group_spec, declared_internal_route_tags
-from .branch_groups.models import BranchStepSpec
+from .branch_groups.lowering import build_branch_group_declaration_spec, declared_internal_route_tags
+from .branch_groups.models import BranchStepDeclarationSpec
 from .branch_groups.validation import (
     ensure_json_serializable,
     validate_branch_placeholder_reference,
@@ -696,7 +696,7 @@ def _lower_simple_branch_group_step(
     if not success_routes or not all(isinstance(route, str) and route.strip() for route in success_routes):
         raise WorkflowValidationError(f"branch group {group_name!r} success_routes must contain non-empty strings")
 
-    lowered_branches: list[BranchStepSpec] = []
+    lowered_branches: list[BranchStepDeclarationSpec] = []
     if getattr(declaration, "branch_group_kind", None) == "parallel":
         raw_branches = dict(getattr(declaration, "branches", {}))
         if not raw_branches:
@@ -725,7 +725,7 @@ def _lower_simple_branch_group_step(
                 allow_fan_in_placeholders=False,
             )
             setattr(branch_step, "_branch_group_name", group_name)
-            lowered_branches.append(BranchStepSpec(name=branch_name, index=index, input={}, step=branch_step))
+            lowered_branches.append(BranchStepDeclarationSpec(name=branch_name, index=index, input={}, step=branch_step))
     else:
         raw_branches = dict(getattr(declaration, "branches", {}))
         if not raw_branches:
@@ -756,7 +756,7 @@ def _lower_simple_branch_group_step(
                 allow_fan_in_placeholders=False,
             )
             setattr(branch_step, "_branch_group_name", group_name)
-            lowered_branches.append(BranchStepSpec(name=branch_name, index=index, input=branch_input, step=branch_step))
+            lowered_branches.append(BranchStepDeclarationSpec(name=branch_name, index=index, input=branch_input, step=branch_step))
 
     fan_in_declaration = getattr(declaration, "fan_in", None)
     fan_in_step: Step | None = None
@@ -801,7 +801,7 @@ def _lower_simple_branch_group_step(
     else:
         composite_route_tags = ("done", "partial", "question", "failed")
 
-    branch_group = build_branch_group_spec(
+    branch_group = build_branch_group_declaration_spec(
         name=group_name,
         kind=str(getattr(declaration, "branch_group_kind")),
         branches=tuple(lowered_branches),
