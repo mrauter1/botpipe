@@ -545,3 +545,61 @@ Validation passed with:
 Open issues / next step
 
 No blocking issues remain for this phase. The next phase should replace the sequential branch-group loop with real `asyncio.Task`/`Semaphore` scheduling and then continue the remaining branch-session and evidence-root contract work.
+
+
+---
+run_id=run-20260505T201926Z-7fdaad17 | entry=session_turn | pair=implement | phase=verifier | cycle=1 | attempt=1 | thread_id=019df9dd-89bf-7fa2-b1bc-911798ef8bf7
+---
+provider=codex
+mode=resume
+template=/home/rauter/.local/share/pipx/venvs/autoloop/lib/python3.12/site-packages/autoloop/templates/implement_verifier.md
+session_id=019df9dd-89bf-7fa2-b1bc-911798ef8bf7
+
+
+---
+run_id=run-20260505T201926Z-7fdaad17 | entry=phase_output | pair=implement | phase=verifier | process=codex-agent | cycle=1 | attempt=1 | thread_id=019df9dd-89bf-7fa2-b1bc-911798ef8bf7
+---
+I’m reviewing the async-step/provider foundation changes against the phase contract. First I’m reading the review artifacts and then I’ll verify the touched runtime/provider paths and the focused test coverage before I update the criteria and feedback files.
+
+Reviewing the async-step/provider foundation changes against the phase contract first. I’m checking the actual diff, the branch-group/runtime touchpoints, and the active review artifacts before I update `criteria.md` and `feedback.md`.
+
+The implementation notes align with the phase scope, so I’m checking whether the new async path actually preserves the existing step semantics and whether the branch-group runtime enforces the async-only contract cleanly.
+
+I’m comparing the new async step path against the existing sync path now. The main risk surface is subtle behavioral drift in hooks, session persistence, and route finalization rather than the async transport plumbing itself.
+
+One edge I’m probing is whether the new async dispatcher can safely handle a composite branch-group step when called from an active event loop. That’s adjacent to the phase goal and the likeliest place for an unintentional sync bridge to leak through.
+
+I found a real contract hole in the new async API: the async dispatcher takes a branch-group step, but the current implementation falls back into the sync capture bridge inside an active event loop. I’m pinning the exact lines and then I’ll update the verifier artifacts with that blocking finding.
+
+The main defect is clear enough now: the new async dispatcher’s branch-group path is not actually event-loop-safe, and it degrades into recorded branch failures instead of failing fast or awaiting correctly. I’m updating the review artifacts with that blocking finding and leaving the phase incomplete.
+
+Scope considered
+
+- Phase-local review of the async-step/provider foundation changes only: async provider protocols/transports, `StepDispatcher.execute_async`, capture/finalize routing, and the current branch-group bridge into that path.
+
+What I analyzed
+
+- Compared the new async execution path in `autoloop/core/engine_collaborators.py` against the existing sync engine behavior in `autoloop/core/engine.py`.
+- Inspected the branch-group runtime handoff in `autoloop/core/branch_groups/runtime.py` and the async transport/provider additions in `autoloop/core/providers/*` and `autoloop/runtime/providers/*`.
+- Checked the active implementation notes and run decisions for scope and intended deferments.
+- Reproduced `await engine.step_dispatcher.execute_async(branch_group_step, ...)` under an active event loop to validate the async contract boundary.
+
+What I reviewed
+
+- Updated [criteria.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/full-revised-standalone-spec-autoloop-v3-explici-7b9dcd08/runs/run-20260505T201926Z-7fdaad17/artifacts/implement/phases/async-step-provider-foundation/criteria.md).
+- Appended `IMP-001` to [feedback.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/full-revised-standalone-spec-autoloop-v3-explici-7b9dcd08/runs/run-20260505T201926Z-7fdaad17/artifacts/implement/phases/async-step-provider-foundation/feedback.md).
+- Reviewed the touched execution/runtime/provider files and the new focused tests.
+
+Key findings / decisions
+
+- `IMP-001` is blocking. `StepDispatcher.execute_async()` accepts finalize-mode `branch_group` steps, but it immediately falls back to synchronous `BranchGroupRuntime.run()`, which then re-enters the sync capture bridge for nested branch steps. In an actual async caller, that path records branch failures, can return a misleading composite route like `partial`, and emits `RuntimeWarning: coroutine 'StepDispatcher.execute_async' was never awaited` instead of executing the group correctly.
+- The phase is not complete until the branch-group async entrypoint is made event-loop-safe or explicitly rejected from `execute_async()`.
+
+Open issues / next step
+
+- Add a real async branch-group runtime path such as `BranchGroupRuntime.run_async(...)` that awaits nested `execute_async(..., route_mode="capture")`, or reject `branch_group` from `execute_async()` until that exists.
+- Add a regression test that runs `await step_dispatcher.execute_async(branch_group_step, ...)` inside an active event loop.
+
+<loop-control>
+{"schema":"docloop.loop_control/v1","kind":"promise","promise":"INCOMPLETE"}
+</loop-control>
