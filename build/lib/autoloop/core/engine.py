@@ -16,6 +16,7 @@ from uuid import uuid4
 from pydantic import BaseModel, TypeAdapter
 
 from .artifacts import Artifact, ArtifactHandle, ResolvedArtifacts, render_runtime_template, resolve_artifact_template
+from .branch_groups.runtime import BranchGroupRuntime
 from .compiler import CompiledRoute, CompiledStep, CompiledWorkflow, compile_workflow
 from .context import Context, context_runtime
 from .engine_collaborators import (
@@ -172,6 +173,7 @@ class Engine:
         self.operation_recorder = OperationRecorder(self)
         self.workflow_invoker = WorkflowInvoker(self)
         self.provider_contract_builder = ProviderContractBuilder(self)
+        self.branch_group_runtime = BranchGroupRuntime(self)
 
     def run(
         self,
@@ -790,9 +792,9 @@ class Engine:
                     restorable_pending_handoffs=pending_handoffs,
                 )
                 if pair_result.producer_session is not None:
-                    self._persist_session(pair_result.producer_session)
+                    self._persist_session(pair_result.producer_session, context=context)
                 if pair_result.verifier_session is not None:
-                    self._persist_session(pair_result.verifier_session)
+                    self._persist_session(pair_result.verifier_session, context=context)
                 if pair_result.direct_control is not None:
                     direct_control = pair_result.direct_control
                     assert isinstance(direct_control, _DirectRuntimeControl)
@@ -926,7 +928,7 @@ class Engine:
                         provider_attributable=True,
                     )
                 )
-                self._persist_session(llm_result.session)
+                self._persist_session(llm_result.session, context=context)
                 return self._step_result_from_route_finalization(
                     step=step,
                     route_finalization=finalization,
@@ -1058,7 +1060,7 @@ class Engine:
         )
         self._append_logs(step, artifacts, producer_exec.text)
         if producer_exec.session is not None:
-            self._persist_session(producer_exec.session)
+            self._persist_session(producer_exec.session, context=context)
         after_producer_result = self.hook_runner.run_after(
             step,
             context,
@@ -1531,11 +1533,11 @@ class Engine:
             step_state=self._clone_model_or_dict(getattr(context, "_step_state", None)),
             item_state=self._clone_model_or_dict(getattr(context, "_item_state", None)),
             step_item_state=self._clone_model_or_dict(getattr(context, "_step_item_state", None)),
-            session=self.session_store.snapshot(),
+            session=context._session_store.snapshot(),
         )
 
     def _restore_hook_context(self, context: Context, snapshot: _HookSnapshot) -> None:
-        self.session_store.restore(snapshot.session)
+        context._session_store.restore(snapshot.session)
         if snapshot.state is not None:
             context_runtime(context).set_state(self._clone_state(snapshot.state))
         self._restore_model_or_dict(getattr(context, "_step_state", None), snapshot.step_state)
@@ -1548,7 +1550,7 @@ class Engine:
     def _select_session(self, step: CompiledStep, context: Context) -> SessionBinding | None:
         if step.session_name is None:
             return None
-        active_key = self.session_store.snapshot().active_keys_by_slot.get(step.session_name)
+        active_key = context._session_store.snapshot().active_keys_by_slot.get(step.session_name)
         if active_key is not None and active_key.domain in {"explicit_scope", "explicit_key"}:
             binding = context.get_session(step.session_name)
             return binding or context.open_session(step.session_name)
@@ -1557,9 +1559,10 @@ class Engine:
         binding = context.get_session(step.session_name, continuity=continuity)
         return binding or context.open_session(step.session_name, continuity=continuity)
 
-    def _persist_session(self, binding: SessionBinding | None) -> None:
+    def _persist_session(self, binding: SessionBinding | None, *, context: Context | None = None) -> None:
         if binding is not None:
-            self.session_store.upsert(binding)
+            target_store = self.session_store if context is None else context._session_store
+            target_store.upsert(binding)
 
     def _append_logs(self, step: CompiledStep, artifacts: ResolvedArtifacts, content: str) -> None:
         for name in step.log_artifacts:
@@ -1642,11 +1645,29 @@ class Engine:
             )
 
     def _required_output_artifacts(self, step: CompiledStep, route_tag: str) -> tuple[str, ...]:
+        if step.route_table is not None:
+            compiled_route = step.route_table.get(route_tag)
+            return () if compiled_route is None else tuple(compiled_route.required_writes or ())
         return effective_route_required_writes(
             self.compiled,
             step_name=step.name,
             route_tag=route_tag,
         )
+
+    def _route_table_for_step(self, step: CompiledStep) -> dict[str, CompiledRoute]:
+        if step.route_table is not None:
+            return dict(step.route_table)
+        route_table = dict(self.compiled.global_routes)
+        route_table.update(self.compiled.routes.get(step.name, {}))
+        return route_table
+
+    def _compiled_route_for_step(self, step: CompiledStep, route_tag: str) -> CompiledRoute:
+        if step.route_table is not None:
+            compiled_route = step.route_table.get(route_tag)
+            if compiled_route is None:
+                raise RoutingError(f"no route for step {step.name!r} and tag {route_tag!r}")
+            return compiled_route
+        return self.compiled.route(step.name, route_tag)
 
     def _should_validate_optional_output(self, handle: ArtifactHandle) -> bool:
         artifact = handle.artifact
@@ -1826,7 +1847,7 @@ class Engine:
                 resolved.text,
                 context,
                 placeholder_label=placeholder_label,
-                replace_roots=frozenset({"item", "worklist"}),
+                replace_roots=frozenset({"item", "worklist", "branch", "fan_in"}),
             ),
         )
 
@@ -1946,6 +1967,8 @@ class Engine:
         candidate = Path(raw_path)
         if candidate.is_absolute():
             return candidate
+        if candidate.parts and candidate.parts[0] == "_branch_groups":
+            return (context.workflow_folder / candidate).resolve()
         return (context.root / candidate).resolve()
 
     @staticmethod
@@ -1972,7 +1995,7 @@ class Engine:
     ) -> SessionBinding | None:
         if step.verifier_session_name is None:
             return producer_session
-        active_key = self.session_store.snapshot().active_keys_by_slot.get(step.verifier_session_name)
+        active_key = context._session_store.snapshot().active_keys_by_slot.get(step.verifier_session_name)
         if active_key is not None and active_key.domain in {"explicit_scope", "explicit_key"}:
             binding = context.get_session(step.verifier_session_name)
             return binding or context.open_session(step.verifier_session_name)

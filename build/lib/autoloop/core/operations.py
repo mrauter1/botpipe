@@ -532,7 +532,7 @@ def _resolve_prompt(prompt: Prompt | str, *, runtime: OperationRuntime) -> Resol
             resolved.text,
             runtime.context,
             placeholder_label=placeholder_label,
-            replace_roots=frozenset({"item", "worklist"}),
+            replace_roots=frozenset({"item", "worklist", "branch", "fan_in"}),
         ),
     )
 

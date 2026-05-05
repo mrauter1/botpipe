@@ -1,1 +1,5 @@
-{}
+{
+  "material_gaps_found": true,
+  "summary": "Branch-group-focused validation is green, but the final repository state still fails two canonical runtime contract tests, so the original merge gate is not yet met.",
+  "revised_request_path": "/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/full-revised-standalone-spec-autoloop-v3-explici-7b9dcd08/runs/run-20260505T201926Z-7fdaad17/artifacts/audit/revised_request.md"
+}

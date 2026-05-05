@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import asyncio
 import json
 import shutil
 import subprocess
@@ -129,6 +130,61 @@ class ClaudeTransport(ProviderTransport):
             )
 
         result_text, resolved_session_id, provider_metadata, usage = parse_claude_exec_json(completed.stdout)
+        if resolved_session_id is None and resume_session_id is not None:
+            resolved_session_id = resume_session_id
+        if resolved_session_id is None and turn.session is not None:
+            raise ProviderExecutionError(
+                f"provider 'claude' did not return a resumable session_id for step {turn.step_name!r}."
+            )
+
+        binding = (
+            build_session_binding(
+                turn.session,
+                session_id=resolved_session_id,
+                provider_name="claude",
+                provider_metadata=provider_metadata,
+                model=self._config.model,
+                effort=self._config.effort,
+            )
+            if turn.session is not None and resolved_session_id is not None
+            else None
+        )
+        metadata = {
+            "mode": "resume" if resume_session_id is not None else "start",
+            "provider_metadata": dict(provider_metadata),
+        }
+        return ProviderTurnResult(raw_text=result_text, session=binding, metadata=metadata, usage=usage)
+
+    async def run_turn_async(self, turn: RenderedProviderTurn) -> ProviderTurnResult:
+        ensure_session_provider_match("claude", turn.session)
+        resume_session_id = _resumable_session_id("claude", turn.session)
+
+        command = ["claude"]
+        if resume_session_id is not None:
+            command.extend(["--resume", resume_session_id])
+        command.extend(["-p", turn.prompt_text, "--output-format", "json"])
+        if self._config.model:
+            command.extend(["--model", self._config.model])
+        if self._config.effort:
+            command.extend(["--effort", self._config.effort])
+        command.extend(claude_permission_args(self._config))
+
+        process = await asyncio.create_subprocess_exec(
+            *command,
+            stdout=asyncio.subprocess.PIPE,
+            stderr=asyncio.subprocess.PIPE,
+        )
+        stdout_bytes, stderr_bytes = await process.communicate()
+        stdout = stdout_bytes.decode("utf-8")
+        stderr = stderr_bytes.decode("utf-8")
+        if process.returncode != 0:
+            streams = format_subprocess_streams(stdout, stderr)
+            raise ProviderExecutionError(
+                f"provider 'claude' failed while running step {turn.step_name!r} "
+                f"(exit code {process.returncode}): {streams}"
+            )
+
+        result_text, resolved_session_id, provider_metadata, usage = parse_claude_exec_json(stdout)
         if resolved_session_id is None and resume_session_id is not None:
             resolved_session_id = resume_session_id
         if resolved_session_id is None and turn.session is not None:

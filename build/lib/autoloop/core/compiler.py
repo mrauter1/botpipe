@@ -5,13 +5,19 @@ from __future__ import annotations
 import hashlib
 import inspect
 import json
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 from pathlib import Path
-from typing import Any, Callable
+from typing import Any, Callable, Mapping
 
 from pydantic import BaseModel
 
 from .artifacts import CompiledArtifact
+from .branch_groups.models import (
+    BranchGroupDeclarationSpec,
+    CompiledBranchGroupSpec,
+    CompiledBranchStepSpec,
+    FanInHelperReference,
+)
 from .context import Context
 from .discovery import WorkflowDefinition, get_workflow_definition
 from .extensions import WorkflowExtension
@@ -25,14 +31,14 @@ from .lowering import (
     step_available_route_tags,
     step_runtime_control_route_tags,
 )
-from .primitives import FAIL, FINISH, GLOBAL
+from .primitives import AWAIT_INPUT, FAIL, FINISH, GLOBAL, SELF
 from .prompts import PromptSpec
 from .providers.retries import ProviderRetryPolicy
 from .route_required_writes import route_required_write_payload
 from .routes import Route, normalize_route_spec
 from .sessions import Continuity, DEFAULT_SESSION_NAME
 from .step_state import build_step_item_state_model, build_step_state_model
-from .steps import PromptStep, ProduceVerifyStep, Session, Step, PythonStep, ChildWorkflowStep
+from .steps import BranchGroupStep, PromptStep, ProduceVerifyStep, Session, Step, PythonStep, ChildWorkflowStep
 from .validation import PayloadValidator
 from .worklists import Worklist
 
@@ -83,6 +89,8 @@ class CompiledStep:
     step_state_fields: tuple[str, ...]
     step_item_state_model: type[BaseModel] | None
     step_item_state_fields: tuple[str, ...]
+    branch_group: Any | None = None
+    route_table: dict[str, "CompiledRoute"] | None = None
 
 
 @dataclass(frozen=True, slots=True)
@@ -160,14 +168,16 @@ def compile_workflow(workflow_cls: type[Any]) -> CompiledWorkflow:
 
     definition = get_workflow_definition(workflow_cls)
     source_hash = _workflow_source_hash(workflow_cls)
-    cache_key = _workflow_compile_cache_key(
-        workflow_cls,
-        definition=definition,
-        source_hash=source_hash,
-    )
-    cached = _COMPILED_WORKFLOW_CACHE.get(cache_key)
-    if cached is not None:
-        return cached
+    cache_key: tuple[str, str, str] | None = None
+    if not _definition_contains_branch_groups(definition):
+        cache_key = _workflow_compile_cache_key(
+            workflow_cls,
+            definition=definition,
+            source_hash=source_hash,
+        )
+        cached = _COMPILED_WORKFLOW_CACHE.get(cache_key)
+        if cached is not None:
+            return cached
     inventory = collect_artifact_inventory(definition)
     compiled_routes = _compile_routes(definition)
     compiled_global_routes = _compile_global_routes(definition)
@@ -196,7 +206,8 @@ def compile_workflow(workflow_cls: type[Any]) -> CompiledWorkflow:
         topology_hash="",
     )
     compiled = _with_topology_hash(compiled)
-    _COMPILED_WORKFLOW_CACHE[cache_key] = compiled
+    if cache_key is not None:
+        _COMPILED_WORKFLOW_CACHE[cache_key] = compiled
     return compiled
 
 
@@ -227,20 +238,19 @@ def _compile_steps(
         )
         expected_output_schema, expected_output_validator = _compile_expected_output_contract(step)
         reads = tuple(
-            _compile_read_reference(artifact_reference, inventory)
+            _compile_read_reference(artifact_reference, inventory, step=step)
             for artifact_reference in step.reads
         )
         requires = tuple(
-            resolve_artifact_reference(artifact_reference, inventory).qualified_name
+            _compile_required_reference(artifact_reference, inventory, step=step)
             for artifact_reference in step.requires
         )
         verifier_requires = tuple(
-            resolve_artifact_reference(
+            _compile_required_reference(
                 artifact_reference,
                 inventory,
-                step_name=step.name,
-                prefer_step_local=True,
-            ).qualified_name
+                step=step,
+            )
             for artifact_reference in getattr(step, "verifier_requires", ())
         )
         writes = tuple(
@@ -293,7 +303,13 @@ def _compile_steps(
                     module_name=definition.workflow_cls.__module__,
                 )
             step_item_state_fields = tuple(dict.fromkeys(step_item_state_model.model_fields.keys()))
-        compiled_session_name = step.session.name if step.session is not None else definition.default_session_name
+        compiled_session_name = (
+            _compiled_step_session_name(step, step.session, default_session_name=definition.default_session_name)
+            if step.session is not None
+            else definition.default_session_name
+        )
+        if isinstance(step, BranchGroupStep):
+            compiled_session_name = None
         producer_reads = tuple(getattr(step, "producer_reads", reads))
         producer_requires = tuple(getattr(step, "producer_requires", requires))
         verifier_requires = tuple(getattr(step, "verifier_requires", verifier_requires))
@@ -328,7 +344,12 @@ def _compile_steps(
                 verifier_requires=verifier_requires,
                 verifier_writes=verifier_writes or writes,
                 verifier_session_name=(
-                    step.verifier_session.name
+                    _compiled_step_session_name(
+                        step,
+                        step.verifier_session,
+                        default_session_name=definition.default_session_name,
+                        role="verifier_session",
+                    )
                     if getattr(step, "verifier_session", None) is not None
                     else None
                 ),
@@ -391,7 +412,11 @@ def _compile_steps(
                 name=step.name,
                 kind=step_kind,
                 step=step,
-                session_name=step.session.name if step.session is not None else None,
+                session_name=(
+                    _compiled_step_session_name(step, step.session, default_session_name=definition.default_session_name)
+                    if step.session is not None
+                    else None
+                ),
                 scope_name=None,
                 reads=reads,
                 requires=requires,
@@ -432,7 +457,11 @@ def _compile_steps(
                 name=step.name,
                 kind=step_kind,
                 step=step,
-                session_name=step.session.name if step.session is not None else None,
+                session_name=(
+                    _compiled_step_session_name(step, step.session, default_session_name=definition.default_session_name)
+                    if step.session is not None
+                    else None
+                ),
                 scope_name=_compile_scope_name(step.scope),
                 reads=reads,
                 requires=requires,
@@ -468,6 +497,53 @@ def _compile_steps(
                 step_item_state_model=step_item_state_model,
                 step_item_state_fields=step_item_state_fields,
             )
+        elif isinstance(step, BranchGroupStep):
+            compiled_branch_group = _compile_branch_group_internal_steps(
+                definition,
+                step.branch_group,
+                inventory=inventory,
+            )
+            compiled_steps[step.name] = CompiledStep(
+                name=step.name,
+                kind="branch_group",
+                step=step,
+                session_name=None,
+                scope_name=None,
+                reads=(),
+                requires=(),
+                writes=(),
+                log_artifacts=(),
+                available_routes=available_routes,
+                authored_routes=authored_routes,
+                runtime_control_routes=runtime_control_routes,
+                provider_visible_routes_interactive=provider_visible_routes_interactive,
+                provider_visible_routes_full_auto=provider_visible_routes_full_auto,
+                expected_output_schema=None,
+                retry_policy=ProviderRetryPolicy(),
+                prompt=None,
+                producer_prompt=None,
+                verifier_prompt=None,
+                producer_reads=(),
+                producer_requires=(),
+                producer_writes=(),
+                verifier_reads=(),
+                verifier_requires=(),
+                verifier_writes=(),
+                verifier_session_name=None,
+                expected_output_validator=None,
+                python_handler=None,
+                before_hook=None,
+                after_hook=None,
+                before_producer_hook=None,
+                after_producer_hook=None,
+                before_verifier_hook=None,
+                after_verifier_hook=None,
+                step_state_model=step_state_model,
+                step_state_fields=step_state_fields,
+                step_item_state_model=None,
+                step_item_state_fields=(),
+                branch_group=compiled_branch_group,
+            )
         else:
             raise WorkflowCompilationError(f"unsupported step type {type(step)!r}")
     return compiled_steps
@@ -499,6 +575,206 @@ def _compiled_route_visible_for_policy(route: CompiledRoute, *, policy: str) -> 
     raise WorkflowCompilationError(f"unsupported provider-visibility policy {policy!r}")
 
 
+def _compile_branch_group_internal_steps(
+    definition: WorkflowDefinition,
+    branch_group: BranchGroupDeclarationSpec,
+    *,
+    inventory: dict[str, ArtifactInventoryRecord],
+) -> CompiledBranchGroupSpec:
+    compiled_branches = tuple(
+        CompiledBranchStepSpec(
+            name=branch.name,
+            index=branch.index,
+            input=branch.input,
+            step=_compile_branch_group_internal_step(
+                definition,
+                branch.step,
+                inventory=inventory,
+            ),
+        )
+        for branch in branch_group.branches
+    )
+    compiled_fan_in_step = (
+        None
+        if branch_group.fan_in_step is None
+        else _compile_branch_group_internal_step(
+            definition,
+            branch_group.fan_in_step,
+            inventory=inventory,
+        )
+    )
+    return CompiledBranchGroupSpec(
+        name=branch_group.name,
+        kind=branch_group.kind,
+        branches=compiled_branches,
+        concurrency=branch_group.concurrency,
+        settle=branch_group.settle,
+        success_routes=branch_group.success_routes,
+        outcome=branch_group.outcome,
+        fan_in_step=compiled_fan_in_step,
+        composite_route_tags=branch_group.composite_route_tags,
+        default_chain_route=branch_group.default_chain_route,
+        rework_chain_route=branch_group.rework_chain_route,
+    )
+
+
+def _compile_branch_group_internal_step(
+    definition: WorkflowDefinition,
+    step: Step,
+    *,
+    inventory: dict[str, ArtifactInventoryRecord],
+) -> CompiledStep:
+    internal_definition = WorkflowDefinition(
+        workflow_cls=definition.workflow_cls,
+        workflow_name=definition.workflow_name,
+        state_cls=definition.state_cls,
+        parameters_cls=definition.parameters_cls,
+        entry=step,
+        steps=(step,),
+        steps_by_name={step.name: step},
+        sessions_by_name=dict(definition.sessions_by_name),
+        default_session_name=definition.default_session_name,
+        worklists_by_name=dict(definition.worklists_by_name),
+        workflow_artifacts=dict(definition.workflow_artifacts),
+        workflow_log_artifacts=tuple(definition.workflow_log_artifacts),
+        extensions=(),
+        authored_transitions={step: _internal_step_authored_routes(definition, step)},
+        transitions={step: _internal_step_runtime_routes(definition, step)},
+        runtime_control_routes_by_step={step.name: _internal_step_runtime_control_routes(step)},
+    )
+    compiled_routes = _compile_routes(internal_definition)
+    compiled_global_routes = _compile_global_routes(internal_definition)
+    compiled_step = _compile_steps(
+        internal_definition,
+        inventory,
+        compiled_routes,
+        compiled_global_routes,
+    )[step.name]
+    return replace(compiled_step, route_table=dict(compiled_routes.get(step.name, {})))
+
+
+def _internal_step_authored_routes(
+    definition: WorkflowDefinition,
+    step: Step,
+) -> dict[str, object]:
+    authored = _lower_internal_step_route_map(definition, step)
+    if authored:
+        return authored
+    if isinstance(step, ProduceVerifyStep):
+        return {"accepted": FINISH, "needs_rework": step.name}
+    if isinstance(step, ChildWorkflowStep):
+        return {"done": FINISH}
+    return {"done": FINISH}
+
+
+def _internal_step_runtime_routes(
+    definition: WorkflowDefinition,
+    step: Step,
+) -> dict[str, object]:
+    routes = dict(_internal_step_authored_routes(definition, step))
+    question_mode = getattr(getattr(step, "control_routes", None), "question", "never")
+    if question_mode != "never" and "question" not in routes:
+        routes["question"] = AWAIT_INPUT
+    if isinstance(step, (PromptStep, ProduceVerifyStep)):
+        routes.setdefault("blocked", AWAIT_INPUT)
+        routes.setdefault("failed", FAIL)
+    return routes
+
+
+def _internal_step_runtime_control_routes(step: Step) -> tuple[str, ...]:
+    runtime_routes: list[str] = []
+    question_mode = getattr(getattr(step, "control_routes", None), "question", "never")
+    if question_mode != "never":
+        runtime_routes.append("question")
+    if isinstance(step, (PromptStep, ProduceVerifyStep)):
+        runtime_routes.extend(("blocked", "failed"))
+    return tuple(runtime_routes)
+
+
+def _lower_internal_step_route_map(
+    definition: WorkflowDefinition,
+    step: Step,
+) -> dict[str, object]:
+    declaration = getattr(step, "simple_declaration", None)
+    raw_routes = getattr(declaration, "routes", None)
+    implicit_routes = getattr(declaration, "implicit_routes", None)
+    merged: dict[str, object] = {}
+    if isinstance(raw_routes, Mapping):
+        merged.update(raw_routes)
+    if isinstance(implicit_routes, Mapping):
+        merged.update(implicit_routes)
+    if not merged:
+        return {}
+    destination_names = _internal_branch_destination_names(definition, step)
+    return {
+        route_name: _lower_internal_route_destination(
+            destination,
+            destination_names=destination_names,
+            current_step_name=step.name,
+        )
+        for route_name, destination in merged.items()
+    }
+
+
+def _internal_branch_destination_names(
+    definition: WorkflowDefinition,
+    step: Step,
+) -> dict[int, str]:
+    names: dict[int, str] = {id(step): step.name}
+    declaration = getattr(step, "simple_declaration", None)
+    if declaration is not None:
+        names[id(declaration)] = step.name
+    for candidate in definition.steps:
+        names[id(candidate)] = candidate.name
+        candidate_declaration = getattr(candidate, "simple_declaration", None)
+        if candidate_declaration is not None:
+            names[id(candidate_declaration)] = candidate.name
+    return names
+
+
+def _lower_internal_route_destination(
+    destination: object,
+    *,
+    destination_names: Mapping[int, str],
+    current_step_name: str,
+) -> object:
+    if isinstance(destination, Route):
+        lowered_target = _lower_internal_route_target(
+            destination.target,
+            destination_names=destination_names,
+            current_step_name=current_step_name,
+        )
+        return Route(
+            target=lowered_target,
+            summary=destination.summary,
+            required_writes=destination.required_writes,
+            handoff=destination.handoff,
+            on_taken=destination.on_taken,
+            provider_visible=destination.provider_visible,
+        )
+    return _lower_internal_route_target(
+        destination,
+        destination_names=destination_names,
+        current_step_name=current_step_name,
+    )
+
+
+def _lower_internal_route_target(
+    target: object,
+    *,
+    destination_names: Mapping[int, str],
+    current_step_name: str,
+) -> object:
+    if isinstance(target, Step):
+        return target.name
+    if target is SELF:
+        return current_step_name
+    mapped = destination_names.get(id(target))
+    if mapped is not None:
+        return mapped
+    return target
+
+
 def _compile_optional_model(workflow_cls: type[Any], attribute: str) -> type[BaseModel] | None:
     raw = getattr(workflow_cls, attribute, None)
     if raw is None:
@@ -523,6 +799,8 @@ def _compile_sessions(definition: WorkflowDefinition) -> dict[str, Session]:
     compiled: dict[str, Session] = {}
     for name, session in definition.sessions_by_name.items():
         compiled[name] = _compiled_session_copy(name, session)
+    for step in definition.steps:
+        _register_inline_step_sessions(compiled, step)
     if definition.default_session_name not in compiled:
         compiled[definition.default_session_name] = _compiled_session_copy(
             definition.default_session_name,
@@ -538,6 +816,53 @@ def _compiled_session_copy(name: str, session: Session | None) -> Session:
     compiled = Session(continuity=continuity, open=session.open if isinstance(session, Session) else False)
     compiled.bind_name(name)
     return compiled
+
+
+def _register_inline_step_sessions(compiled: dict[str, Session], step: Step) -> None:
+    if isinstance(step, BranchGroupStep):
+        branch_group = getattr(step, "branch_group", None)
+        if branch_group is not None:
+            for branch in getattr(branch_group, "branches", ()):
+                _register_inline_step_sessions(compiled, branch.step)
+            fan_in_step = getattr(branch_group, "fan_in_step", None)
+            if isinstance(fan_in_step, Step):
+                _register_inline_step_sessions(compiled, fan_in_step)
+        return
+    if step.session is not None:
+        compiled.setdefault(
+            _compiled_step_session_name(step, step.session, default_session_name=DEFAULT_SESSION_NAME),
+            _compiled_session_copy(
+                _compiled_step_session_name(step, step.session, default_session_name=DEFAULT_SESSION_NAME),
+                step.session,
+            ),
+        )
+    verifier_session = getattr(step, "verifier_session", None)
+    if verifier_session is not None:
+        compiled.setdefault(
+            _compiled_step_session_name(step, verifier_session, default_session_name=DEFAULT_SESSION_NAME, role="verifier_session"),
+            _compiled_session_copy(
+                _compiled_step_session_name(step, verifier_session, default_session_name=DEFAULT_SESSION_NAME, role="verifier_session"),
+                verifier_session,
+            ),
+        )
+
+
+def _compiled_step_session_name(
+    step: Step,
+    session: Session,
+    *,
+    default_session_name: str,
+    role: str = "session",
+) -> str:
+    if session.name is not None:
+        return session.name
+    if role == "session" and isinstance(step, PromptStep):
+        return f"{step.name}__session"
+    if role == "session" and isinstance(step, ProduceVerifyStep):
+        return f"{step.name}__producer_session"
+    if role == "verifier_session":
+        return f"{step.name}__verifier_session"
+    return f"{step.name}__{role}"
 
 
 def _compile_system_handler(step: PythonStep) -> SystemHandler:
@@ -676,6 +1001,8 @@ def _compiled_step_kind(step: Step) -> str:
         return "produce_verify"
     if isinstance(step, PromptStep):
         return "step"
+    if isinstance(step, BranchGroupStep):
+        return "branch_group"
     if isinstance(step, ChildWorkflowStep):
         return "workflow"
     if isinstance(step, PythonStep):
@@ -725,7 +1052,12 @@ def _compile_expected_output_contract(step: Step) -> tuple[dict[str, Any] | None
 def _compile_read_reference(
     reference: object,
     inventory: dict[str, ArtifactInventoryRecord],
+    *,
+    step: Step | None = None,
 ) -> str:
+    helper_path = _fan_in_helper_runtime_path(reference, step=step)
+    if helper_path is not None:
+        return helper_path
     resolved = resolve_optional_read_reference(reference, inventory)
     if resolved is not None:
         return resolved
@@ -734,6 +1066,33 @@ def _compile_read_reference(
     if isinstance(reference, str):
         return reference
     raise WorkflowCompilationError(f"unsupported read reference {reference!r}")
+
+
+def _compile_required_reference(
+    reference: object,
+    inventory: dict[str, ArtifactInventoryRecord],
+    *,
+    step: Step | None = None,
+) -> str:
+    helper_path = _fan_in_helper_runtime_path(reference, step=step)
+    if helper_path is not None:
+        return helper_path
+    return resolve_artifact_reference(
+        reference,
+        inventory,
+        step_name=None if step is None else step.name,
+        prefer_step_local=step is not None,
+    ).qualified_name
+
+
+def _fan_in_helper_runtime_path(reference: object, *, step: Step | None) -> str | None:
+    if not isinstance(reference, FanInHelperReference):
+        return None
+    group_name = getattr(step, "_branch_group_name", None) if step is not None else None
+    if not isinstance(group_name, str) or not group_name:
+        raise WorkflowCompilationError(f"{reference} requires an internal fan-in step with a branch-group owner")
+    filename = "results.json" if reference.helper == "results" else "context.md"
+    return f"_branch_groups/{group_name}/{filename}"
 
 
 def _compile_scope_name(scope: object | None) -> str | None:
@@ -766,6 +1125,10 @@ def _workflow_source_hash(workflow_cls: type[Any]) -> str | None:
     if not path.is_file():
         return None
     return hashlib.sha256(path.read_bytes()).hexdigest()
+
+
+def _definition_contains_branch_groups(definition: WorkflowDefinition) -> bool:
+    return any(isinstance(step, BranchGroupStep) for step in definition.steps)
 
 
 def _workflow_compile_cache_key(
@@ -872,44 +1235,7 @@ def _topology_hash_payload(compiled: CompiledWorkflow) -> dict[str, Any]:
         "workflow_name": compiled.workflow_name,
         "entry_step_name": compiled.entry_step_name,
         "global_session": compiled.default_session_name,
-        "steps": [
-            {
-                "name": step.name,
-                "kind": step.kind,
-                "scope_name": step.scope_name,
-                "reads": list(step.reads),
-                "requires": list(step.requires),
-                "writes": list(step.writes),
-                "producer_reads": list(step.producer_reads),
-                "producer_requires": list(step.producer_requires),
-                "producer_writes": list(step.producer_writes),
-                "verifier_reads": list(step.verifier_reads),
-                "verifier_requires": list(step.verifier_requires),
-                "verifier_writes": list(step.verifier_writes),
-                "available_routes": list(step.available_routes),
-                "authored_routes": list(step.authored_routes),
-                "runtime_control_routes": list(step.runtime_control_routes),
-                "provider_visible_routes_interactive": list(step.provider_visible_routes_interactive),
-                "provider_visible_routes_full_auto": list(step.provider_visible_routes_full_auto),
-                "session_name": step.session_name,
-                "verifier_session_name": step.verifier_session_name,
-                "state_fields": list(step.step_state_fields),
-                "state_model": step.step_state_model.__name__,
-                "item_state_fields": list(step.step_item_state_fields),
-                "item_state_model": step.step_item_state_model.__name__ if step.step_item_state_model is not None else None,
-                "before_hook": _callable_name(step.before_hook),
-                "after_hook": _callable_name(step.after_hook),
-                "before_producer_hook": _callable_name(step.before_producer_hook),
-                "after_producer_hook": _callable_name(step.after_producer_hook),
-                "before_verifier_hook": _callable_name(step.before_verifier_hook),
-                "after_verifier_hook": _callable_name(step.after_verifier_hook),
-                "prompt_refs": [
-                    _topology_json_value(reference)
-                    for reference in getattr(step.step, "simple_prompt_references", ())
-                ],
-            }
-            for step in compiled.steps.values()
-        ],
+        "steps": [_topology_hash_step_payload(step) for step in compiled.steps.values()],
         "worklists": {
             name: {
                 "item_state_model": worklist.runtime_item_state_model.__name__,
@@ -965,6 +1291,83 @@ def _topology_hash_payload(compiled: CompiledWorkflow) -> dict[str, Any]:
         "parameter_fields": sorted(getattr(compiled.parameters_cls, "model_fields", {}).keys())
         if compiled.parameters_cls is not None
         else [],
+    }
+
+
+def _topology_hash_step_payload(step: CompiledStep) -> dict[str, Any]:
+    payload = {
+        "name": step.name,
+        "kind": step.kind,
+        "scope_name": step.scope_name,
+        "reads": list(step.reads),
+        "requires": list(step.requires),
+        "writes": list(step.writes),
+        "producer_reads": list(step.producer_reads),
+        "producer_requires": list(step.producer_requires),
+        "producer_writes": list(step.producer_writes),
+        "verifier_reads": list(step.verifier_reads),
+        "verifier_requires": list(step.verifier_requires),
+        "verifier_writes": list(step.verifier_writes),
+        "available_routes": list(step.available_routes),
+        "authored_routes": list(step.authored_routes),
+        "runtime_control_routes": list(step.runtime_control_routes),
+        "provider_visible_routes_interactive": list(step.provider_visible_routes_interactive),
+        "provider_visible_routes_full_auto": list(step.provider_visible_routes_full_auto),
+        "session_name": step.session_name,
+        "verifier_session_name": step.verifier_session_name,
+        "state_fields": list(step.step_state_fields),
+        "state_model": step.step_state_model.__name__,
+        "item_state_fields": list(step.step_item_state_fields),
+        "item_state_model": step.step_item_state_model.__name__ if step.step_item_state_model is not None else None,
+        "before_hook": _callable_name(step.before_hook),
+        "after_hook": _callable_name(step.after_hook),
+        "before_producer_hook": _callable_name(step.before_producer_hook),
+        "after_producer_hook": _callable_name(step.after_producer_hook),
+        "before_verifier_hook": _callable_name(step.before_verifier_hook),
+        "after_verifier_hook": _callable_name(step.after_verifier_hook),
+        "prompt_refs": [
+            _topology_json_value(reference)
+            for reference in getattr(step.step, "simple_prompt_references", ())
+        ],
+    }
+    if step.route_table:
+        payload["route_table"] = {
+            tag: {
+                "target": route.target,
+                "summary": route.summary,
+                "required_writes": list(route.required_writes),
+                "handoff": route.handoff,
+                "on_taken": _callable_name(route.on_taken),
+                "provider_visible": route.provider_visible,
+                "provider_visible_interactive": route.provider_visible_interactive,
+                "provider_visible_full_auto": route.provider_visible_full_auto,
+                "is_runtime_control": route.is_runtime_control,
+            }
+            for tag, route in step.route_table.items()
+        }
+    if step.branch_group is not None:
+        payload["branch_group"] = _topology_hash_branch_group_payload(step.branch_group)
+    return payload
+
+
+def _topology_hash_branch_group_payload(spec: Any) -> dict[str, Any]:
+    return {
+        "name": spec.name,
+        "kind": spec.kind,
+        "concurrency": spec.concurrency,
+        "settle": spec.settle,
+        "success_routes": list(spec.success_routes),
+        "exposed_routes": list(spec.composite_route_tags),
+        "branches": [
+            {
+                "name": branch.name,
+                "index": branch.index,
+                "input": branch.input,
+                "step": _topology_hash_step_payload(branch.step),
+            }
+            for branch in spec.branches
+        ],
+        "fan_in_step": None if spec.fan_in_step is None else _topology_hash_step_payload(spec.fan_in_step),
     }
 
 

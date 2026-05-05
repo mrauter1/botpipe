@@ -227,7 +227,12 @@ def resolve_artifact_template(template: str | Artifact, context: Context) -> Pat
     if "{" not in raw_template and "}" not in raw_template and artifact is not None and artifact.owner_step is not None:
         return context.workflow_folder / artifact.owner_step / raw_template
     rendered = render_runtime_template(raw_template, context, placeholder_label="artifact template placeholder")
-    return Path(rendered)
+    rendered_path = Path(rendered)
+    if rendered_path.is_absolute():
+        return rendered_path
+    if artifact is not None and artifact.owner_step is not None:
+        return context.workflow_folder / artifact.owner_step / rendered_path
+    return rendered_path
 
 
 def render_runtime_template(
@@ -399,6 +404,14 @@ def _resolve_placeholder(expression: str, context: Context, *, placeholder_label
             context,
             placeholder_label=placeholder_label,
         )
+    elif root_name == "branch":
+        if getattr(context, "_branch", None) is None:
+            return "{" + expression + "}"
+        current = context.branch
+    elif root_name == "fan_in":
+        if getattr(context, "_fan_in", None) is None:
+            return "{" + expression + "}"
+        current = context.fan_in
     else:
         return ""
     for part in parts[1:]:

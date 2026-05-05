@@ -2067,3 +2067,75 @@ No phase-local test audit issues remain.
 <loop-control>
 {"schema":"docloop.loop_control/v1","kind":"promise","promise":"COMPLETE"}
 </loop-control>
+
+
+---
+run_id=run-20260505T201926Z-7fdaad17 | entry=session_turn | pair=audit | phase=producer | cycle=1 | attempt=1 | thread_id=019dfa26-4f39-7ee1-86fe-aa68ac5a9a11
+---
+provider=codex
+mode=start
+template=/home/rauter/.local/share/pipx/venvs/autoloop/lib/python3.12/site-packages/autoloop/templates/audit_producer.md
+session_id=019dfa26-4f39-7ee1-86fe-aa68ac5a9a11
+
+
+---
+run_id=run-20260505T201926Z-7fdaad17 | entry=phase_output | pair=audit | phase=producer | process=codex-agent | cycle=1 | attempt=1 | thread_id=019dfa26-4f39-7ee1-86fe-aa68ac5a9a11
+---
+I’m auditing the run against the authoritative request, clarification log, decisions, produced artifacts, and the current code/tests. I’ll gather the run context first, then compare implemented behavior to the requested branch-group spec and write the audit artifacts under the run-local `artifacts/audit` directory only.
+
+I’ve confirmed the run-local artifact set and the worktree is dirty well outside this run, so I’m keeping scope tight to the branch-group implementation, related tests, and this run’s artifacts. Next I’m reading the request, clarification ledger, decisions, and the phase outputs to see what the run intended to finish versus what the code actually provides.
+
+The decision ledger already shows several superseding choices inside the run, including a corrected fan-in validation decision. I’m reading the later phase outputs and the current branch-group code/tests now so the audit is based on the final implemented state, not intermediate notes.
+
+The phase artifacts mostly claim closure, but the audit still needs to verify the final repository against the original contract. I’m checking the actual branch-group implementation surfaces and running the focused branch-group suites so any remaining mismatch is grounded in code and executable behavior, not just phase notes.
+
+I have enough structural context to validate behavior directly. I’m running the focused branch-group compile/runtime/tracing/strictness suites now, then I’ll compare any uncovered gaps against the original contract and the run’s superseding decisions.
+
+The focused suite is still running. While that finishes, I’m checking for contract points that may not be exercised by the existing tests, especially around placeholder/runtime surfaces and static-graph exposure, because that’s where a false “all green” result tends to hide gaps.
+
+The focused branch-group suites are green. The remaining audit question is whether the run actually satisfies the spec’s final merge gate around validation breadth, so I’m checking whether a broader repository test run is feasible now instead of inferring from phase-local subsets.
+
+The full repository suite is in progress. While that runs, I’m reviewing whether any gaps remain that are structural rather than test-visible, so the audit can distinguish “not implemented” from “implemented but only lightly exercised.”
+
+The full repo suite is not green; there are at least two failures early in the run. I’m letting it finish so I can classify whether those are branch-group regressions introduced by this work or unrelated pre-existing breakage before I write the audit.
+
+The audit has a concrete unresolved issue now: the full repository suite fails even though the branch-group-focused matrix is green. I’m tracing the failing canonical contract to the route-required-writes surface so the gap report can point to the narrow follow-up instead of just saying “full suite red.”
+
+I’ve narrowed the unresolved issue to one shared provider-route contract regression outside the branch-group-specific tests. I’m writing the audit artifacts now: the gap report will record that the branch-group work largely matches intent, but the original merge gate is still unmet because the full suite is red on two canonical contract tests.
+
+The audit artifacts are written. I’m doing a final readback and JSON validation now so the report, follow-up request, and machine result are internally consistent before I close with the required loop-control block.
+
+Scope considered
+
+Immutable request, authoritative raw log clarifications, run decisions, plan/implement/test artifacts for all six phases, the final branch-group codepaths, the focused branch-group test matrix, and a full `./.venv/bin/python -m pytest -q` run.
+
+What I analyzed
+
+I compared the accepted asyncio-only branch-group contract against the final implementation in `autoloop/core/branch_groups/**`, related compiler/discovery/context/provider surfaces, and the final tests. I also checked whether the original merge gate was met by running both the focused branch-group suites and the full repository suite.
+
+What I changed
+
+I wrote the run-local audit artifacts:
+- `.autoloop/tasks/full-revised-standalone-spec-autoloop-v3-explici-7b9dcd08/runs/run-20260505T201926Z-7fdaad17/artifacts/audit/gap_report.md`
+- `.autoloop/tasks/full-revised-standalone-spec-autoloop-v3-explici-7b9dcd08/runs/run-20260505T201926Z-7fdaad17/artifacts/audit/revised_request.md`
+- `.autoloop/tasks/full-revised-standalone-spec-autoloop-v3-explici-7b9dcd08/runs/run-20260505T201926Z-7fdaad17/artifacts/audit/audit_result.json`
+
+Key findings / decisions
+
+The branch-group implementation itself is largely aligned with the accepted spec. The focused branch-group validation run passed: `277 passed`.
+
+A material unresolved gap remains because the original merge gate required the full test matrix to pass, and the full suite does not. `./.venv/bin/python -m pytest -q` finished with `1280 passed, 2 failed`.
+
+The two failures are:
+- `tests/contract/test_canonical_runtime_contracts.py::test_canonical_step_contract_uses_finish_and_required_writes`
+- `tests/contract/test_canonical_runtime_contracts.py::test_canonical_produce_verify_contract_splits_phase_writes_and_verifier_routes`
+
+The failing behavior is that provider-visible `route_required_writes` is exposing only explicit route metadata, not effective required writes for inherited required artifacts. The gap report points to `autoloop/core/engine_collaborators.py:296` and classifies this as an unresolved regression, not a justified spec change.
+
+Open issues / next step
+
+The next run should fix the ordinary step / produce-verify provider `route_required_writes` contract, preserve the now-green branch-group behavior, rerun the two failing canonical tests, and then rerun the full repository suite until `pytest -q` is green.
+
+<loop-control>
+{"schema":"docloop.loop_control/v1","kind":"promise","promise":"INCOMPLETE"}
+</loop-control>

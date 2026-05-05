@@ -36,6 +36,16 @@ autoloop/core/validation_helpers.py
 autoloop/core/workflow_capabilities.py
 autoloop/core/workflow_catalog.py
 autoloop/core/worklists.py
+autoloop/core/branch_groups/__init__.py
+autoloop/core/branch_groups/context.py
+autoloop/core/branch_groups/declarations.py
+autoloop/core/branch_groups/lowering.py
+autoloop/core/branch_groups/manifest.py
+autoloop/core/branch_groups/models.py
+autoloop/core/branch_groups/outcomes.py
+autoloop/core/branch_groups/runtime.py
+autoloop/core/branch_groups/sessions.py
+autoloop/core/branch_groups/validation.py
 autoloop/core/providers/__init__.py
 autoloop/core/providers/fake.py
 autoloop/core/providers/models.py
