@@ -2,8 +2,6 @@
 
 from __future__ import annotations
 
-from itertools import count
-
 from ..sessions import SessionKey
 from ..stores.protocols import SessionBinding, SessionSnapshot, SessionStore
 
@@ -16,7 +14,6 @@ class BranchSessionStoreView:
         self._namespace = namespace
         self._bindings: dict[SessionKey, SessionBinding] = {}
         self._active_keys_by_slot: dict[str, SessionKey] = {}
-        self._counter = count(1)
 
     def open(self, ref_name: str | SessionKey, scope: str | None = None) -> SessionBinding:
         key = self._resolve_key(ref_name, scope=scope, for_lookup=False)
@@ -24,7 +21,7 @@ class BranchSessionStoreView:
         if binding is None:
             binding = SessionBinding(
                 key=key,
-                session_id=f"{key.slot}:{self._namespace}:{self._session_value_token(key)}:{next(self._counter)}",
+                session_id=None,
             )
         self._bindings[key] = binding
         self._active_keys_by_slot[key.slot] = key
@@ -55,23 +52,22 @@ class BranchSessionStoreView:
     def restore(self, snapshot: SessionSnapshot) -> None:
         self._bindings = {binding.key: binding for binding in snapshot.bindings}
         self._active_keys_by_slot = dict(snapshot.active_keys_by_slot)
-        highest = 0
-        for binding in snapshot.bindings:
-            if not binding.session_id:
-                continue
-            suffix = binding.session_id.rsplit(":", 1)[-1]
-            if suffix.isdigit():
-                highest = max(highest, int(suffix))
-        self._counter = count(highest + 1)
 
     def _binding_for_key(self, key: SessionKey) -> SessionBinding | None:
         binding = self._bindings.get(key)
         if binding is not None:
             return binding
+        if key.domain == "fresh":
+            return None
         return self._parent_store.get(key)
 
     def _resolve_key(self, ref_name: str | SessionKey, *, scope: str | None, for_lookup: bool) -> SessionKey:
         if isinstance(ref_name, SessionKey):
+            if ref_name.domain == "fresh":
+                active = self._active_keys_by_slot.get(ref_name.slot)
+                if for_lookup and active is not None and active.domain == "fresh":
+                    return active
+                return self._branch_fresh_key(ref_name)
             return ref_name
         if scope is not None:
             return SessionKey(slot=ref_name, domain="explicit_scope", value=scope)
@@ -84,11 +80,11 @@ class BranchSessionStoreView:
                 return parent_active
         return SessionKey(slot=ref_name, domain="run", value=ref_name)
 
-    @staticmethod
-    def _session_value_token(key: SessionKey) -> str:
-        if key.domain == "run":
-            return "global"
-        return key.value or key.domain
+    def _branch_fresh_key(self, key: SessionKey) -> SessionKey:
+        value = key.value
+        if not value.startswith(f"{self._namespace}:"):
+            value = f"{self._namespace}:{value}"
+        return SessionKey(slot=key.slot, domain="fresh", value=value)
 
 
 __all__ = ["BranchSessionStoreView"]

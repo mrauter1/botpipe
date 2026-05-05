@@ -1256,3 +1256,93 @@ I updated [criteria.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks
 <loop-control>
 {"schema":"docloop.loop_control/v1","kind":"promise","promise":"COMPLETE"}
 </loop-control>
+
+
+---
+run_id=run-20260505T201926Z-7fdaad17 | entry=session_turn | pair=implement | phase=producer | cycle=1 | attempt=1 | thread_id=019dfa0a-87de-7353-b5f8-4a53c8408820
+---
+provider=codex
+mode=start
+template=/home/rauter/.local/share/pipx/venvs/autoloop/lib/python3.12/site-packages/autoloop/templates/implement_producer.md
+session_id=019dfa0a-87de-7353-b5f8-4a53c8408820
+
+
+---
+run_id=run-20260505T201926Z-7fdaad17 | entry=phase_output | pair=implement | phase=producer | process=codex-agent | cycle=1 | attempt=1 | thread_id=019dfa0a-87de-7353-b5f8-4a53c8408820
+---
+Implementing the `session-state-evidence-correctness` phase. I’m starting by reading the phase artifacts and the current branch-group/session code so I can map the required state, session, and evidence-path changes before editing.
+
+The phase artifacts confirm the exact blast radius: shared `StateCell` semantics, branch-local session overlay behavior, and evidence-path rooting. I’m reading the branch-group runtime, context, and session code next, plus the tests that currently pin those behaviors.
+
+I’ve confirmed the core divergence points in code: `BranchSessionStoreView` still fabricates ids and falls back to parent active sessions, while branch execution already roots raw branch output under `workflow_folder`. I’m checking the remaining runtime/result plumbing and the existing tests before I patch anything.
+
+The existing tests already pin most of the intended behavior, but they still tolerate synthetic branch session ids. I’m tracing how `Context`, session selection, and artifact/evidence path helpers interact so the patch stays localized and doesn’t leak into non-branch execution.
+
+Most of the state-cell contract is already in place in `Context`; the remaining risk is session overlay semantics, especially how branch-local fresh keys interact with `Context.get_session()` and engine session selection. I’m reading the session store protocol and current branch-group tests in full before I make the overlay change.
+
+I’ve narrowed the likely code changes to the branch session overlay plus a few result/tests surfaces. I’m checking the compiler/runtime helpers that synthesize fan-in evidence references, because evidence already writes under `workflow_folder` but relative reads still need to stay coherent.
+
+I found the main behavioral mismatch: branch fresh sessions are currently materialized as resumable ids before the provider ever runs. The fix is going to be in the overlay, plus tests that prove first-turn requests see `session_id=None` and only returned provider ids show up in manifests.
+
+Plan for this phase:
+
+1. Rework `BranchSessionStoreView` so branch-fresh sessions are branch-local overlays with `session_id=None` on open, branch-specific fresh keys, and no parent-active fallback for fresh lookups.
+2. Keep the shared-context behavior lock-free and verify evidence/read paths still resolve under `workflow_folder/_branch_groups`.
+3. Update branch-group tests to assert the new session contract explicitly:
+   - first provider turn sees `session_id=None`
+   - parent session store is not activated by branch-local sessions
+   - manifest/session snapshots record only real returned provider ids
+   - branch evidence and raw outputs stay under the workflow folder
+4. Run the targeted unit/contract/runtime tests, then write `implementation_notes.md` and append any non-obvious decisions under this turn’s decisions header only if needed.
+
+I have enough context to edit safely. I’m changing the branch session overlay first so fresh branch sessions stay local, open with `session_id=None`, and resolve back to the same branch-local binding during a single branch execution instead of drifting to parent state.
+
+The overlay change is in; I’m cleaning one small follow-on issue in the key resolver and then I’ll update the targeted unit and contract tests to lock the new behavior in place.
+
+I’m updating the contract test now. It needs to prove both halves of the session contract at runtime: the provider sees a fresh branch session with no resumable id on entry, and the manifest only records the real ids returned by the provider.
+
+The overlay and test updates are in place. I’m running the focused branch-context and branch-runtime suites now to catch any knock-on issues around fresh session reuse, provider persistence, and evidence paths before I touch the phase notes.
+
+The repo shell doesn’t have `pytest` on `PATH`, so I’m checking the project’s declared test runner and environment wrapper instead of guessing. After that I’ll rerun the same focused suites with the correct command.
+
+The workspace has project venvs; I’m rerunning the focused suites with the repo-local `pytest` binary so the validation uses the intended environment rather than the base shell.
+
+The focused unit and contract suites are green. I’m doing one last narrow pass over related path/session references so I can decide whether any additional regression coverage is warranted before I write the phase notes.
+
+The focused diffs look correct. I’m adding one more narrow regression check from the runtime-tracing surface because it asserts the workflow-scoped branch-group artifact paths, which is part of this phase’s evidence contract.
+
+The runtime-tracing check also passed, so the patch is stable on the likely regression surfaces. I’m recording the non-obvious session-overlay decision for later turns, then I’ll write the phase implementation notes with the checklist mapping and validation summary.
+
+Scope considered
+- Active phase only: session/state/evidence correctness for branch groups.
+- Analyzed and edited [sessions.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/autoloop/core/branch_groups/sessions.py), [test_branch_group_context_sessions.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/tests/unit/test_branch_group_context_sessions.py), [test_branch_group_runtime.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/tests/contract/test_branch_group_runtime.py).
+- Left unrelated dirty files outside this phase untouched.
+
+What I analyzed
+- `BranchSessionStoreView` key resolution, activation, snapshot/restore, and parent fallback behavior.
+- Branch runtime evidence/rooting and manifest session capture paths.
+- Engine session selection/persistence paths used by branch contexts.
+- Existing unit, contract, and runtime-tracing tests that pin these behaviors.
+
+What I changed
+- Removed synthetic branch session ids on fresh branch opens; branch-local fresh bindings now start with `session_id=None`.
+- Rewrote branch fresh keys under the branch namespace and made repeated fresh lookups for the same slot resolve to the active branch-local fresh binding.
+- Blocked parent-store fallback for fresh branch session lookups, so provider-backed branch sessions do not inherit the parent active slot.
+- Strengthened tests to assert:
+  - first provider turn sees `session_id=None`
+  - parent session store is not activated by branch-local sessions
+  - manifests only record real provider-returned session ids
+  - per-branch raw output paths stay under `workflow_folder/_branch_groups/...`
+- Updated phase notes in [implementation_notes.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/full-revised-standalone-spec-autoloop-v3-explici-7b9dcd08/runs/run-20260505T201926Z-7fdaad17/artifacts/implement/phases/session-state-evidence-correctness/implementation_notes.md) and appended the non-obvious overlay decision to [decisions.txt](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/full-revised-standalone-spec-autoloop-v3-explici-7b9dcd08/runs/run-20260505T201926Z-7fdaad17/decisions.txt).
+
+Key findings / decisions
+- Shared lock-free state/value semantics and workflow-folder evidence rooting were already correct in the current code; this turn preserved them rather than refactoring them again.
+- The actual contract gap was in fresh-session overlay semantics: synthetic ids and parent fallback.
+- The fix stayed localized to `BranchSessionStoreView` so engine/session APIs did not need branch-specific conditionals.
+
+Open issues / next step
+- Targeted validation passed:
+  - `./.venv/bin/pytest tests/unit/test_branch_group_context_sessions.py`
+  - `./.venv/bin/pytest tests/contract/test_branch_group_runtime.py`
+  - `./.venv/bin/pytest tests/runtime/test_runtime_tracing.py -k branch_group`
+- I did not run the full repository test suite; next step is broader phase handoff/review.

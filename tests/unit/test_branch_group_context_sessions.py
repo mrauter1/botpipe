@@ -139,9 +139,14 @@ def test_branch_session_store_view_keeps_activation_local_to_branch(tmp_path: Pa
         session_store=branch_store,
     )
 
+    assert branch.get_session("main", continuity=Continuity.fresh()) is None
     fresh_binding = branch.open_session("main", continuity=Continuity.fresh())
     assert branch.get_session("main") == fresh_binding
+    assert branch.get_session("main", continuity=Continuity.fresh()) == fresh_binding
     assert fresh_binding.key != parent_binding.key
+    assert fresh_binding.key.domain == "fresh"
+    assert fresh_binding.key.value.startswith("reviews.security:")
+    assert fresh_binding.session_id is None
     assert parent.get_session("main") == parent_binding
 
     updated = SessionBinding(key=fresh_binding.key, session_id="branch-session-updated")
@@ -215,6 +220,7 @@ def test_engine_session_selection_and_persistence_follow_context_store(tmp_path:
         session_store=parent_store,
         session_definitions=engine.compiled.sessions,
     )
+    parent_binding = parent.open_session("main")
     branch = create_branch_context(
         parent,
         step_name="ask",
@@ -224,15 +230,22 @@ def test_engine_session_selection_and_persistence_follow_context_store(tmp_path:
 
     step = engine.compiled.steps["ask"]
     binding = engine._select_session(step, branch)
+    rebound = engine._select_session(step, branch)
 
     assert binding is not None
-    assert parent_store.snapshot().active_keys_by_slot == {}
+    assert binding == rebound
+    assert binding.session_id is None
+    assert binding.key.domain == "fresh"
+    assert binding.key.value.startswith("reviews.security:")
+    assert parent.get_session("main") == parent_binding
+    assert parent_store.snapshot().active_keys_by_slot["main"] == parent_binding.key
 
     updated = SessionBinding(key=binding.key, session_id="provider-session")
     engine._persist_session(updated, context=branch)
 
     assert branch.get_session("main").session_id == "provider-session"
     assert parent_store.get(binding.key) is None
+    assert parent.get_session("main") == parent_binding
 
 
 def test_engine_hook_snapshot_and_restore_follow_branch_context_store(tmp_path: Path) -> None:

@@ -15,6 +15,7 @@ from autoloop.core.primitives import Event, Goto, Outcome, RequestInput
 from autoloop.core.providers.fake import ScriptedLLMProvider
 from autoloop.core.providers.models import LLMRequest, OutcomeResponse, ProducerRequest, ProducerResponse, VerifierRequest
 from autoloop.core.stores import InMemoryCheckpointStore, InMemorySessionStore
+from autoloop.core.stores.protocols import SessionBinding
 import autoloop.simple as simple
 
 
@@ -471,6 +472,7 @@ def test_parallel_branch_group_rejects_sync_only_provider_for_provider_backed_st
 def test_fan_out_renders_branch_input_roots_artifacts_and_keeps_branch_sessions_local(tmp_path: Path) -> None:
     prompts: list[str] = []
     sessions: list[str | None] = []
+    returned_sessions: list[str] = []
 
     class FanOutWorkflow(simple.Workflow):
         class State(BaseModel):
@@ -496,12 +498,26 @@ def test_fan_out_renders_branch_input_roots_artifacts_and_keeps_branch_sessions_
             lambda request: (
                 prompts.append(request.prompt.text),
                 sessions.append(None if request.session is None else request.session.session_id),
-                Outcome(raw_output="ok", tag="done"),
+                returned_sessions.append(f"provider-session-{request.context.branch.name}"),
+                OutcomeResponse(
+                    outcome=Outcome(raw_output="ok", tag="done"),
+                    session=SessionBinding(
+                        key=request.session.key,
+                        session_id=f"provider-session-{request.context.branch.name}",
+                    ),
+                ),
             )[-1],
             lambda request: (
                 prompts.append(request.prompt.text),
                 sessions.append(None if request.session is None else request.session.session_id),
-                Outcome(raw_output="ok", tag="done"),
+                returned_sessions.append(f"provider-session-{request.context.branch.name}"),
+                OutcomeResponse(
+                    outcome=Outcome(raw_output="ok", tag="done"),
+                    session=SessionBinding(
+                        key=request.session.key,
+                        session_id=f"provider-session-{request.context.branch.name}",
+                    ),
+                ),
             )[-1],
         ]
     )
@@ -523,9 +539,9 @@ def test_fan_out_renders_branch_input_roots_artifacts_and_keeps_branch_sessions_
     assert result.terminal == simple.FINISH
     assert len(prompts) == 2
     assert set(prompts) == {"Assess area security.", "Assess area performance."}
-    assert len(set(session_id for session_id in sessions if session_id is not None)) == 2
+    assert sessions == [None, None]
     parent_snapshot = session_store.snapshot()
-    assert all(binding.session_id not in sessions for binding in parent_snapshot.bindings)
+    assert all(binding.session_id not in returned_sessions for binding in parent_snapshot.bindings)
     security_report = task_folder / "wf_fan_out_workflow" / "assess_one" / "reports" / "security.md"
     performance_report = task_folder / "wf_fan_out_workflow" / "assess_one" / "reports" / "performance.md"
     assert security_report.read_text(encoding="utf-8").strip() == "security"
@@ -533,6 +549,18 @@ def test_fan_out_renders_branch_input_roots_artifacts_and_keeps_branch_sessions_
     manifest = json.loads((_branch_group_dir(task_folder, FanOutWorkflow, "assess") / "results.json").read_text(encoding="utf-8"))
     assert manifest["branches"][0]["artifacts"][0]["path"].endswith("wf_fan_out_workflow/assess_one/reports/security.md")
     assert manifest["branches"][1]["artifacts"][0]["path"].endswith("wf_fan_out_workflow/assess_one/reports/performance.md")
+    assert [branch["provider_session"] for branch in manifest["branches"]] == [
+        "provider-session-security",
+        "provider-session-performance",
+    ]
+    assert manifest["branches"][0]["provider_sessions"] == {"producer": "provider-session-security"}
+    assert manifest["branches"][1]["provider_sessions"] == {"producer": "provider-session-performance"}
+    assert manifest["branches"][0]["raw_output_path"] == str(
+        (_branch_group_dir(task_folder, FanOutWorkflow, "assess") / "branches" / "security" / "producer.txt").relative_to(tmp_path)
+    )
+    assert manifest["branches"][1]["raw_output_path"] == str(
+        (_branch_group_dir(task_folder, FanOutWorkflow, "assess") / "branches" / "performance" / "producer.txt").relative_to(tmp_path)
+    )
 
 
 def test_parallel_branch_group_captures_goto_without_following_branch_destination(tmp_path: Path) -> None:
