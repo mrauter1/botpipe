@@ -668,3 +668,58 @@ Open issues / next step
 <loop-control>
 {"schema":"docloop.loop_control/v1","kind":"promise","promise":"COMPLETE"}
 </loop-control>
+
+
+---
+run_id=run-20260505T201926Z-7fdaad17 | entry=session_turn | pair=implement | phase=verifier | cycle=2 | attempt=1 | thread_id=019df9dd-89bf-7fa2-b1bc-911798ef8bf7
+---
+provider=codex
+mode=resume
+template=/home/rauter/.local/share/pipx/venvs/autoloop/lib/python3.12/site-packages/autoloop/templates/implement_verifier.md
+session_id=019df9dd-89bf-7fa2-b1bc-911798ef8bf7
+
+
+---
+run_id=run-20260505T201926Z-7fdaad17 | entry=phase_output | pair=implement | phase=verifier | process=codex-agent | cycle=2 | attempt=1 | thread_id=019df9dd-89bf-7fa2-b1bc-911798ef8bf7
+---
+I’m re-checking the async dispatcher and branch-group runtime after the producer’s fix. First I’m verifying the changed execution path and the updated tests, then I’ll decide whether the phase criteria can be fully checked off.
+
+I have the updated notes and decisions. Now I’m checking the exact implementation shape in the dispatcher/runtime files and rerunning the focused suite so I can decide whether the previous blocker is actually resolved end-to-end.
+
+The focused contract tests pass. I’m doing one direct runtime repro of the old failure shape now to make sure the branch-group async path no longer degrades into `partial` or emits the unawaited-coroutine warning outside pytest.
+
+The old blocker is resolved in the code and in direct execution. I’m updating the review artifacts now: all criteria to checked, and a resolution note in feedback so the artifact no longer reads as if `IMP-001` were still open.
+
+Scope considered
+
+- Phase-local re-review of the async-step/provider foundation fix, focused on the async dispatcher, branch-group runtime handoff, sync async-bridge behavior, updated tests, and the active implementation notes/decisions.
+
+What I analyzed
+
+- Re-checked the `StepDispatcher.execute_async(...)` branch-group path in [engine_collaborators.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/autoloop/core/engine_collaborators.py).
+- Re-checked the new `BranchGroupRuntime.run_async(...)` flow in [runtime.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/autoloop/core/branch_groups/runtime.py).
+- Reviewed the new contract coverage in [test_async_step_dispatcher.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/tests/contract/test_async_step_dispatcher.py).
+- Verified the updated implementation notes and the turn-local decisions ledger entries.
+
+What I reviewed
+
+- Updated [criteria.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/full-revised-standalone-spec-autoloop-v3-explici-7b9dcd08/runs/run-20260505T201926Z-7fdaad17/artifacts/implement/phases/async-step-provider-foundation/criteria.md) to fully checked.
+- Appended an `IMP-001` resolution note to [feedback.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/full-revised-standalone-spec-autoloop-v3-explici-7b9dcd08/runs/run-20260505T201926Z-7fdaad17/artifacts/implement/phases/async-step-provider-foundation/feedback.md).
+- Re-ran:
+  - `.venv/bin/pytest tests/contract/test_async_step_dispatcher.py tests/contract/test_branch_group_runtime.py -q`
+  - `.venv/bin/pytest tests/unit/test_provider_boundary_core.py tests/runtime/test_runtime_providers.py tests/contract/test_branch_group_runtime.py tests/contract/test_async_step_dispatcher.py -q`
+- Reproduced the formerly broken `await step_dispatcher.execute_async(branch_group_step, ...)` path directly; it now completed with `end done` and no warning output.
+
+Key findings / decisions
+
+- `IMP-001` is resolved. The async dispatcher now awaits a real async branch-group runtime path, and the sync bridge refuses active-loop use before coroutine creation.
+- I found no additional blocking or non-blocking findings in the reviewed scope.
+
+Open issues / next step
+
+- No review blockers remain for this phase.
+- The next work stays where the phase plan already points: real `asyncio.Task`/`Semaphore` branch scheduling, then the deferred branch-session and evidence-root changes.
+
+<loop-control>
+{"schema":"docloop.loop_control/v1","kind":"promise","promise":"COMPLETE"}
+</loop-control>
