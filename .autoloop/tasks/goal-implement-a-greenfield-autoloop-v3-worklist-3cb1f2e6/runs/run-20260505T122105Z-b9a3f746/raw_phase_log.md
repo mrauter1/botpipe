@@ -167,3 +167,134 @@ phase_mode=single
 phase_ids=core-selector-semantics,stdlib-progress-worklists,runtime-validation-and-regression-checks
 explicit=True
 current_phase_index=0
+
+
+---
+run_id=run-20260505T122105Z-b9a3f746 | entry=session_turn | pair=implement | phase=producer | cycle=1 | attempt=1 | thread_id=019df81b-911f-7df1-b586-291296e0c087
+---
+provider=codex
+mode=start
+template=/home/rauter/.local/share/pipx/venvs/autoloop/lib/python3.12/site-packages/autoloop/templates/implement_producer.md
+session_id=019df81b-911f-7df1-b586-291296e0c087
+
+
+---
+run_id=run-20260505T122105Z-b9a3f746 | entry=phase_output | pair=implement | phase=producer | process=codex-agent | cycle=1 | attempt=1 | thread_id=019df81b-911f-7df1-b586-291296e0c087
+---
+I’m treating this as the phase-scoped core selector slice: first I’m reading the active artifacts and the current worklist implementation so I can map the required selector break and the `.artifact` authoring surface onto the existing code without drifting scope.
+
+I’ve got the phase constraints and the current core shape. Next I’m reading the rest of the worklist implementation plus nearby tests so I can change selector semantics in one place and update only the intentionally broken expectations.
+
+The current selector implementation is narrower than the requested contract and there’s one existing unit test that deliberately relies on selector-under-`all`. I’m reading those exact call sites plus artifact helpers now so I can update the break intentionally and wire `.artifact` with minimal blast radius.
+
+I’ve confirmed the old subset-on-`all` behavior is isolated. Now I’m checking existing authoring/runtime patterns for artifact-backed sources and Pydantic JSON handling so the new stdlib helper fits the repo instead of inventing a parallel style.
+
+I have enough context to implement now. Plan is: update `autoloop/core/worklists.py` for strict selector validation and ordered range selection, add `.artifact` off the backing source, then add the stdlib progress worklist module and focused tests before running the targeted suites and adjusting only the explicit compatibility break.
+
+I’m editing the core worklist module now. The changes are confined to post-load selector resolution plus the `.artifact` property so source ownership stays intact and the only intentional generic behavior break is selector-bound params under `mode=all`.
+
+I’m adding the stdlib helper as a separate module rather than threading progress-board rules into core. That keeps the core selector change generic and puts the canonical `items/id/title/status` contract, fallback writing, and status policy exactly where the request assigns ownership.
+
+The core and stdlib code is in place. I’m writing the focused tests against the requested API now, including the deliberate update for the old subset-on-`all` behavior so the contract change is explicit in coverage rather than incidental.
+
+I’ve finished the first pass of edits and I’m running the focused selector/progress suites now. I expect some tightening work here, especially around the new helper’s interaction with existing core validation and the exact runtime status-persistence path.
+
+`pytest` isn’t on the shell PATH here, so I’m rerunning through `python -m pytest` to get the actual failures and tighten the implementation against them.
+
+The environment has no `pytest` module in the default interpreter, so I’m locating the project’s test runner or virtualenv before I do any more code changes.
+
+The focused suite is down to one runtime edge. I’m reproducing it directly against the source helper now because the failure indicates a test setup issue or an unexpected policy path, not a broad selector regression.
+
+The focused suites are green. I’m running the adjacent regression surfaces now: the existing worklist/context/store coverage that the request called out, plus stdlib/runtime workspace tests that touch artifact resolution and lazy worklist materialization.
+
+The adjacent run is still in progress. I’ve only got early passing output so far, so I’m waiting on the rest instead of assuming the selector change is isolated enough.
+
+The adjacent suites exposed a separate workspace/catalog failure surface that doesn’t point back to the worklist changes. I’m checking a few existing contract tests that are directly on the selector and artifact-backed worklist path so I can separate real regressions from unrelated repo instability.
+
+I’ve validated the direct worklist paths. Before I close out, I’m capturing the implementation notes and the one non-obvious decision for later turns: the adjacent workspace/catalog failures reproduced but they’re outside this phase’s selector/progress slice and don’t track back to the edited code.
+
+I’m updating the phase artifacts now with the concrete file/symbol map, validation results, and the one compatibility note that later turns are most likely to trip over.
+
+Scope considered
+
+- Phase-local selector/progress worklist slice only: [autoloop/core/worklists.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/autoloop/core/worklists.py:45), [autoloop/stdlib/worklists.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/autoloop/stdlib/worklists.py:22), [autoloop/stdlib/__init__.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/autoloop/stdlib/__init__.py:13).
+- I left provider, checkpoint, session, route internals, loader/catalog code, and root `autoloop/__init__.py` unchanged.
+
+What I analyzed
+
+- The existing selector flow in [autoloop/core/worklists.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/autoloop/core/worklists.py:389), the artifact-backed generic source, and the one existing unit test that relied on subset selection under default `all`.
+- Existing engine contract coverage for scoped worklists and artifact-backed worklists, plus the requested phase artifacts and plan.
+
+What I changed
+
+- Extended `Selector` and core selection resolution to support exactly `all`, `single`, `up_to`, and `from_to`, with strict validation, inclusive ordered bounds, explicit-selection tracking, and contextual selector errors in [autoloop/core/worklists.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/autoloop/core/worklists.py:45) and [autoloop/core/worklists.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/autoloop/core/worklists.py:454).
+- Added `Worklist.artifact` for artifact-backed authoring in [autoloop/core/worklists.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/autoloop/core/worklists.py:262).
+- Added the stdlib progress worklist surface in [autoloop/stdlib/worklists.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/autoloop/stdlib/worklists.py:192): `WorkStatus`, `WorkStatusPolicy`, `ProgressItem`, `ProgressBoard`, `ProgressJsonCollectionSource`, `progress_selector`, and `progress_artifact_worklist`.
+- Exported the new stdlib helpers in [autoloop/stdlib/__init__.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/autoloop/stdlib/__init__.py:13).
+- Added focused selector, stdlib, and runtime tests in [tests/unit/test_worklist_selectors.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/tests/unit/test_worklist_selectors.py:33), [tests/unit/test_stdlib_progress_worklists.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/tests/unit/test_stdlib_progress_worklists.py:55), and [tests/runtime/test_progress_worklists.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/tests/runtime/test_progress_worklists.py:113), and updated the existing mutable-source cache test to use explicit `single` mode in [tests/unit/test_primitives_and_stores.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/tests/unit/test_primitives_and_stores.py:1144).
+
+Key findings / decisions
+
+- The requested compatibility break is now explicit: selector-bound params under `mode=all` fail instead of silently subsetting.
+- The common-case progress helper is strict greenfield only: fixed `items/id/title/status`, no aliases for modes or board shape, and `skipped` is opt-in through policy only.
+- Validation passed for:
+  - `.venv_phase/bin/python -m pytest tests/unit/test_worklist_selectors.py tests/unit/test_stdlib_progress_worklists.py tests/runtime/test_progress_worklists.py`
+  - `.venv_phase/bin/python -m pytest tests/contract/test_engine_contracts.py -k "selector_single_item_from_workflow_params_limits_scoped_execution or after_hook_effects_complete_and_advance_persist_status_and_exhaust or missing_artifact_backed_worklist_fails_at_first_scoped_use or artifact_backed_worklist_materializes_after_runtime_creates_source"`
+
+Open issues / next step
+
+- The requested adjacent suite run is not green, but the failures are in existing workflow catalog/root-resolution paths outside this phase’s worklist changes:
+  - `tests/unit/test_stdlib_and_extensions.py`
+  - `tests/runtime/test_workspace_and_context.py`
+- Next step is a separate scoped pass on loader/catalog workspace resolution if you want those unrelated failures addressed.
+
+
+---
+run_id=run-20260505T122105Z-b9a3f746 | entry=session_turn | pair=implement | phase=verifier | cycle=1 | attempt=1 | thread_id=019df81b-911f-7df1-b586-291296e0c087
+---
+provider=codex
+mode=resume
+template=/home/rauter/.local/share/pipx/venvs/autoloop/lib/python3.12/site-packages/autoloop/templates/implement_verifier.md
+session_id=019df81b-911f-7df1-b586-291296e0c087
+
+
+---
+run_id=run-20260505T122105Z-b9a3f746 | entry=phase_output | pair=implement | phase=verifier | process=codex-agent | cycle=1 | attempt=1 | thread_id=019df81b-911f-7df1-b586-291296e0c087
+---
+I’ve isolated two material correctness issues in the new stdlib worklist source and I’m updating the review artifacts with those specifically. Before writing the findings, I’m checking the phase criteria file so the checkboxes reflect the blocked state accurately.
+
+I’ve got the review artifacts ready: two blocking findings, both in the new stdlib source, and the criteria are staying unchecked because they materially affect behavior and persistence guarantees.
+
+The findings are recorded. I’m doing one quick pass over the review artifacts to make sure the status is internally consistent before I close the verifier turn.
+
+Scope considered
+
+- Phase-local review of the requested selector/progress worklist implementation, centered on [autoloop/core/worklists.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/autoloop/core/worklists.py:45), [autoloop/stdlib/worklists.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/autoloop/stdlib/worklists.py:22), [autoloop/stdlib/__init__.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/autoloop/stdlib/__init__.py:13), and the new focused tests.
+- I did not review unrelated dirty files except where existing core worklist behavior provided the comparison baseline.
+
+What I analyzed
+
+- The new selector validation and range-selection flow in [autoloop/core/worklists.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/autoloop/core/worklists.py:454).
+- The new stdlib progress source load/save/fallback path in [autoloop/stdlib/worklists.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/autoloop/stdlib/worklists.py:223).
+- The new focused tests and the updated existing compatibility-break test expectation.
+
+What I reviewed
+
+- Criteria and feedback artifacts under the active phase directory.
+- The implementation against the phase acceptance criteria, especially the requested save contract and the promise that generated progress worklists behave like regular artifact-backed worklists.
+
+Key findings / decisions
+
+- I recorded two blocking findings in [feedback.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/goal-implement-a-greenfield-autoloop-v3-worklist-3cb1f2e6/runs/run-20260505T122105Z-b9a3f746/artifacts/implement/phases/core-selector-semantics/feedback.md:1).
+- `IMP-001`: `ProgressJsonCollectionSource.save()` currently rewrites non-status payload fields whenever a model is configured, which violates the requested "status-only" mutation contract.
+- `IMP-002`: progress worklist items are emitted without a `dir_key`, so they do not preserve the existing per-item path/continuity behavior that other worklist sources provide.
+
+Open issues / next step
+
+- Fix `ProgressJsonCollectionSource.save()` so model validation during save does not canonicalize and rewrite the raw payload.
+- Add `dir_key` population for progress items using the same defaulting behavior as the existing core artifact-backed source.
+- The criteria remain unchecked because these two issues are material correctness/behavioral-safety regressions.
+
+<loop-control>
+{"schema":"docloop.loop_control/v1","kind":"promise","promise":"INCOMPLETE"}
+</loop-control>
