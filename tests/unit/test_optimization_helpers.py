@@ -545,7 +545,11 @@ def test_write_selected_workflow_source_manifest_records_hashes(tmp_path: Path) 
 
     assert payload["selected_workflow"] == "release_candidate_to_go_no_go"
     first_entry = payload["files"][0]
-    absolute_path = tmp_path / first_entry["path"]
+    absolute_path = _manifest_entry_source_path(
+        tmp_path,
+        first_entry["path"],
+        workflow_name="release_candidate_to_go_no_go",
+    )
     content = absolute_path.read_bytes()
     assert first_entry["sha256"] == hashlib.sha256(content).hexdigest()
     assert first_entry["bytes"] == len(content)
@@ -580,7 +584,7 @@ def test_validate_selected_workflow_source_unchanged_detects_mutation(tmp_path: 
         selected_workflow="release_candidate_to_go_no_go",
         relative_path="selected_workflow_source_manifest.json",
     )
-    target_file = tmp_path / "autoloop" / "workflows" / "release_candidate_to_go_no_go" / "workflow.toml"
+    target_file = tmp_path / "workflows" / "release_candidate_to_go_no_go" / "workflow.toml"
     target_file.write_text(target_file.read_text(encoding="utf-8") + "# drift\n", encoding="utf-8")
 
     ok, details = validate_selected_workflow_source_unchanged(
@@ -801,6 +805,15 @@ def _to_namespace(value):
     if isinstance(value, list):
         return [_to_namespace(item) for item in value]
     return value
+
+
+def _manifest_entry_source_path(root: Path, entry_path: str, *, workflow_name: str) -> Path:
+    relative_path = Path(entry_path)
+    canonical_root = Path("autoloop") / "workflows" / workflow_name
+    if relative_path.parts[: len(canonical_root.parts)] == canonical_root.parts:
+        suffix = relative_path.relative_to(canonical_root)
+        return root / "workflows" / workflow_name / suffix
+    return root / relative_path
 
 
 def _write_observable_run(root: Path, task_id: str, workflow_name: str, run_id: str) -> Path:

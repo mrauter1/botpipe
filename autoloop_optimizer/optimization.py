@@ -3,7 +3,6 @@
 from __future__ import annotations
 
 import json
-import shutil
 from collections import Counter, defaultdict
 from collections.abc import Mapping, Sequence
 from dataclasses import dataclass
@@ -872,7 +871,12 @@ def write_selected_workflow_source_manifest(
 
     repo_root = ctx.root.resolve()
     package = resolve_workflow_package(repo_root, selected_workflow)
-    package_dir = _canonical_selected_workflow_manifest_dir(repo_root, package.workflow_name, package.package_dir)
+    package_dir = package.package_dir.resolve()
+    manifest_package_dir = _selected_workflow_manifest_package_dir_label(
+        repo_root,
+        workflow_name=package.workflow_name,
+        package_dir=package_dir,
+    )
     editable_paths = sorted(
         path.resolve()
         for path in package_dir.rglob("*")
@@ -883,7 +887,12 @@ def write_selected_workflow_source_manifest(
         payload = path.read_bytes()
         files.append(
             {
-                "path": _repo_relative_if_possible(path, repo_root),
+                "path": _selected_workflow_manifest_file_label(
+                    repo_root,
+                    workflow_name=package.workflow_name,
+                    package_dir=package_dir,
+                    file_path=path,
+                ),
                 "sha256": sha256(payload).hexdigest(),
                 "bytes": len(payload),
             }
@@ -891,7 +900,7 @@ def write_selected_workflow_source_manifest(
     manifest = {
         "schema": SOURCE_MANIFEST_SCHEMA,
         "selected_workflow": package.workflow_name,
-        "package_dir": _repo_relative_if_possible(package_dir, repo_root),
+        "package_dir": manifest_package_dir,
         "files": sorted(files, key=lambda entry: str(entry["path"])),
     }
     return write_workflow_json(ctx, relative_path, manifest)
@@ -1134,36 +1143,34 @@ def _validate_runtime_observability_schema(path: Path, payload: Mapping[str, Any
     )
 
 
-def _canonical_selected_workflow_manifest_dir(
+def _selected_workflow_manifest_package_dir_label(
     repo_root: Path,
     workflow_name: str,
-    resolved_package_dir: Path,
-) -> Path:
-    canonical_source_dir = _first_party_workflow_source_dir(workflow_name)
-    if canonical_source_dir is None:
-        return resolved_package_dir.resolve()
+    package_dir: Path,
+) -> str:
+    if _is_first_party_workflow_name(workflow_name):
+        return str(Path("autoloop") / "workflows" / workflow_name)
+    return _repo_relative_if_possible(package_dir, repo_root)
 
-    canonical_repo_dir = (repo_root / "autoloop" / "workflows" / workflow_name).resolve()
-    if canonical_repo_dir == resolved_package_dir.resolve() or canonical_repo_dir.is_dir():
-        return canonical_repo_dir
 
-    canonical_repo_dir.parent.mkdir(parents=True, exist_ok=True)
-    shutil.copytree(
-        canonical_source_dir,
-        canonical_repo_dir,
-        dirs_exist_ok=True,
-        ignore=shutil.ignore_patterns("__pycache__", "*.pyc"),
+def _selected_workflow_manifest_file_label(
+    repo_root: Path,
+    workflow_name: str,
+    package_dir: Path,
+    file_path: Path,
+) -> str:
+    manifest_package_dir = _selected_workflow_manifest_package_dir_label(
+        repo_root,
+        workflow_name=workflow_name,
+        package_dir=package_dir,
     )
-    return canonical_repo_dir
+    if not _is_first_party_workflow_name(workflow_name):
+        return _repo_relative_if_possible(file_path, repo_root)
+    return str(Path(manifest_package_dir) / file_path.resolve().relative_to(package_dir.resolve()))
 
 
-def _first_party_workflow_source_dir(workflow_name: str) -> Path | None:
-    package_source_dir = (
-        Path(__file__).resolve().parents[1] / "autoloop" / "workflows" / workflow_name
-    ).resolve()
-    if not package_source_dir.is_dir():
-        return None
-    return package_source_dir
+def _is_first_party_workflow_name(workflow_name: str) -> bool:
+    return (Path(__file__).resolve().parents[1] / "autoloop" / "workflows" / workflow_name).is_dir()
 
 
 def _git_tracking_index(records: Sequence[Mapping[str, Any]]) -> dict[int, dict[str, Any]]:

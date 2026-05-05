@@ -1358,7 +1358,7 @@ def test_package_fails_if_selected_workflow_source_changed(tmp_path: Path, monke
     _write_publishable_package(ctx)
 
     target_prompt = (
-        tmp_path / "autoloop" / "workflows" / "release_candidate_to_go_no_go" / "prompts" / "assessment_producer.md"
+        tmp_path / "workflows" / "release_candidate_to_go_no_go" / "prompts" / "assessment_producer.md"
     )
     target_prompt.write_text(target_prompt.read_text(encoding="utf-8") + "\nMutation.\n", encoding="utf-8")
 
@@ -1369,7 +1369,7 @@ def test_package_fails_if_selected_workflow_source_changed(tmp_path: Path, monke
 
 def test_workflow_never_mutates_selected_workflow_source(tmp_path: Path) -> None:
     _install_repo_optimizer_package(tmp_path)
-    selected_workflow_dir = tmp_path / "autoloop" / "workflows" / "release_candidate_to_go_no_go"
+    selected_workflow_dir = tmp_path / "workflows" / "release_candidate_to_go_no_go"
     before_snapshot = _snapshot_tree(selected_workflow_dir)
 
     result, provider, workflow_dir = _run_enabled_candidate_workflow(tmp_path, install_repo=False)
