@@ -18,3 +18,10 @@
   File / symbol: `autoloop/core/workflow_catalog.py::workflow_search_roots`.
   Failure: workflow discovery currently searches only `<root>/.autoloop/workflows` plus installed package workflows. The adjacent runtime tests create temporary packages under `<root>/workflows/<workflow_name>`, so `run_workflow_package(..., root=tmp_path)` cannot resolve names like `parent_typed`, `parent_failing`, or `compile_cache_demo`, producing the `WorkflowDiscoveryError` failures in `tests/runtime/test_workspace_and_context.py` and leaving AC-3 unmet.
   Minimal fix direction: centralize catalog discovery so the repo-local `workflows/` tree is searched alongside `.autoloop/workflows` and installed package workflows, then rerun the requested adjacent regression suites.
+
+## Re-review
+
+- IMP-003 `non-blocking`
+  File / symbol: review sweep across `autoloop/core/context.py`, `autoloop/core/workflow_catalog.py`, `autoloop/runtime/loader.py`, `autoloop/core/workflow_capabilities.py`, `autoloop_optimizer/portfolio.py`, `tests/runtime/test_workflow_catalog_roots.py`, and `tests/unit/test_stdlib_and_extensions.py`.
+  Finding: no additional issues after the follow-up patch set. The previous blockers are resolved by first-class repo-local `workflows/` discovery/import support, workspace-scoped portfolio snapshots, and updated adjacent assertions. The verifier reran the requested commands and observed `173 passed` for the adjacent regression suite and `49 passed` for the focused selector/progress suite.
+  Minimal fix direction: none.

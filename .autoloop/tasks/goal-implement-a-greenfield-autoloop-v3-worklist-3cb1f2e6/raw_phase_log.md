@@ -1018,3 +1018,53 @@ Open issues / next step
 
 - No phase-local blockers remain from this pass.
 - I did not run the full `pytest` suite.
+
+
+---
+run_id=run-20260505T122105Z-b9a3f746 | entry=session_turn | pair=implement | phase=verifier | cycle=2 | attempt=1 | thread_id=019df832-c99e-72c1-904c-48decc0b2141
+---
+provider=codex
+mode=resume
+template=/home/rauter/.local/share/pipx/venvs/autoloop/lib/python3.12/site-packages/autoloop/templates/implement_verifier.md
+session_id=019df832-c99e-72c1-904c-48decc0b2141
+
+
+---
+run_id=run-20260505T122105Z-b9a3f746 | entry=phase_output | pair=implement | phase=verifier | process=codex-agent | cycle=2 | attempt=1 | thread_id=019df832-c99e-72c1-904c-48decc0b2141
+---
+I’m rechecking the scoped runtime/regression follow-up against the reviewer blockers, then I’ll update the review artifacts to either clear the phase or record any remaining concrete risks.
+
+The reviewer blockers appear addressed in code and in the affected adjacent expectations. I’m rerunning the two required pytest commands directly so the criteria reflect observed results, not only implementation notes.
+
+The direct reruns are green: `173 passed` for the adjacent regression command and `49 passed` for the focused selector/progress command. I’m clearing the criteria and recording that the prior blockers are resolved.
+
+Scope considered
+
+- Phase-local re-review of the runtime-validation and regression-follow-up changes, limited to the reviewer-blocked repo-root, workflow discovery/import, workspace snapshot, and adjacent assertion surfaces.
+
+What I analyzed
+
+- The updated implementation notes in [implementation_notes.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/goal-implement-a-greenfield-autoloop-v3-worklist-3cb1f2e6/runs/run-20260505T122105Z-b9a3f746/artifacts/implement/phases/runtime-validation-and-regression-checks/implementation_notes.md).
+- The touched code paths in [autoloop/core/context.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/autoloop/core/context.py), [autoloop/core/workflow_catalog.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/autoloop/core/workflow_catalog.py), [autoloop/runtime/loader.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/autoloop/runtime/loader.py), [autoloop/core/workflow_capabilities.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/autoloop/core/workflow_capabilities.py), [autoloop_optimizer/portfolio.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/autoloop_optimizer/portfolio.py), [tests/runtime/test_workflow_catalog_roots.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/tests/runtime/test_workflow_catalog_roots.py), and [tests/unit/test_stdlib_and_extensions.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/tests/unit/test_stdlib_and_extensions.py).
+- The review artifacts in [criteria.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/goal-implement-a-greenfield-autoloop-v3-worklist-3cb1f2e6/runs/run-20260505T122105Z-b9a3f746/artifacts/implement/phases/runtime-validation-and-regression-checks/criteria.md) and [feedback.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/goal-implement-a-greenfield-autoloop-v3-worklist-3cb1f2e6/runs/run-20260505T122105Z-b9a3f746/artifacts/implement/phases/runtime-validation-and-regression-checks/feedback.md).
+
+What I reviewed
+
+- I reran the required adjacent regression command: `pytest tests/unit/test_stdlib_and_extensions.py tests/unit/test_primitives_and_stores.py tests/runtime/test_workspace_and_context.py` and observed `173 passed`.
+- I reran the focused selector/progress command: `pytest tests/unit/test_worklist_selectors.py tests/unit/test_stdlib_progress_worklists.py tests/runtime/test_progress_worklists.py` and observed `49 passed`.
+- I updated the verifier artifacts to mark the criteria complete and recorded that no additional findings remain after the follow-up patch set.
+
+Key findings / decisions
+
+- No blocking findings remain.
+- The prior blockers around repo-root inference and repo-local `workflows/` discovery/import are resolved.
+- The phase now satisfies AC-1, AC-2, and AC-3 based on direct reruns of the requested commands.
+
+Open issues / next step
+
+- No phase-local open issues.
+- I did not run the full `pytest` suite, only the required focused and adjacent commands.
+
+<loop-control>
+{"schema":"docloop.loop_control/v1","kind":"promise","promise":"COMPLETE"}
+</loop-control>

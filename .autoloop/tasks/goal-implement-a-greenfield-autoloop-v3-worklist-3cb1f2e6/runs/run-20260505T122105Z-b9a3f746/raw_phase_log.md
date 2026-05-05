@@ -919,3 +919,152 @@ Open issues / next step
 <loop-control>
 {"schema":"docloop.loop_control/v1","kind":"promise","promise":"INCOMPLETE"}
 </loop-control>
+
+
+---
+run_id=run-20260505T122105Z-b9a3f746 | entry=session_turn | pair=implement | phase=producer | cycle=2 | attempt=1 | thread_id=019df832-c99e-72c1-904c-48decc0b2141
+---
+provider=codex
+mode=resume
+template=/home/rauter/.local/share/pipx/venvs/autoloop/lib/python3.12/site-packages/autoloop/templates/implement_producer.md
+session_id=019df832-c99e-72c1-904c-48decc0b2141
+
+
+---
+run_id=run-20260505T122105Z-b9a3f746 | entry=phase_output | pair=implement | phase=producer | process=codex-agent | cycle=2 | attempt=1 | thread_id=019df832-c99e-72c1-904c-48decc0b2141
+---
+The reviewer’s blockers are concrete enough to act on: I’m tracing the shared root/discovery path now so I can fix it centrally instead of patching individual tests or helpers. After that I’ll rerun the adjacent suites that were red.
+
+The runtime suite already expects a plain `<root>/workflows` layout in many places, while the catalog-root tests currently codify the older `.autoloop/workflows` convention. I’m checking those root tests before editing so I can make one coherent compatibility update rather than trading one regression for another.
+
+I’m at the edit boundary. The root cause is broader than a single fallback: discovery needs to understand both `workflows/` and `.autoloop/workflows/`, and named resolution has to keep package-style imports working for repo-local workflow packages. I’m checking the loader path once before patching so I don’t fix discovery but break imports.
+
+I’ve got a concrete fix plan:
+- teach `Context` to infer repo root from plain `workflows/`;
+- add repo-local `workflows/` as a first-class catalog search root;
+- treat any catalog entry with module metadata as repo-importable so cross-workflow imports keep working;
+- update the catalog-root test that encoded the older two-root assumption.
+
+I’ve made the central root/discovery changes. I’m running the previously failing adjacent tests first, plus the catalog-root regression test I had to update, before I widen back out to the full requested regression command.
+
+The first pass exposed three secondary edges behind the reviewer’s blockers:
+- repo-local workflow packages were still being mixed with installed package workflows in the optimizer snapshots;
+- manifest parsing for repo-local `workflows/` packages is stricter than the adjacent runtime tests expect;
+- the loader/capability import path for repo-local packages was still recursing back through path resolution.
+
+I’m tightening those surfaces now so the discovery fix works consistently instead of only changing the first error.
+
+The fix is now coherent across discovery, import, and optimizer snapshots. I’m rerunning the same targeted failures to confirm the recursion and manifest issues are actually gone before I go back to the full adjacent command.
+
+The representative failures are green now. I’m running the full requested focused and adjacent regression commands next so the phase outcome is based on the same gates the request named, not on a narrower spot check.
+
+The previously blocked clusters are fixed, but the full adjacent run still has later failures in `test_stdlib_and_extensions.py`. I’m pulling the remaining traceback before deciding whether there’s one more phase-local edge to close or whether the remaining reds are outside this request.
+
+The remaining failures are no longer about the requested adjacent runtime gate; they’re all in the optimizer/selected-workflow helper layer. I’m tracing one representative selected-workflow path now, because the symptoms line up with metadata being lost during repo-local resolution rather than with the progress worklist code itself.
+
+I need one direct observation from the selected-workflow path before changing more code, because the remaining failures point to metadata falling off between `resolve_workflow_reference()` and capability inspection. I’m checking the actual resolved reference for one repo-local workflow now.
+
+I’ve isolated the remaining failures to the selected-workflow/optimizer helper layer. They’re now about repo-local workflow metadata completeness: repo-level runtime tests aren’t being discovered for catalog entries, and the few assertions that still expect package-style `autoloop.workflows.*` metadata don’t match repo-local `workflows.*` resolution. I’m checking the existing test-path inference before I decide whether this is a product fix, a test update, or both.
+
+I’m fixing the remaining product-side issues first: repo-local workflow module caches need eviction across temp roots, repo-level runtime tests need to be discoverable in catalog metadata, and the portfolio capability snapshot needs the missing import. After that I’ll see what expectations still need to move with the broadened `workflows/` surface.
+
+At this point the product behavior is consistent: repo-local workflows resolve under `workflows/` and the selected-workflow metadata follows that root. The remaining adjacent failures are expectation drift inside the adjacent test file, so I’m updating those assertions to the now-exercised repo-local path/module shape rather than forcing the product back into a package-only namespace.
+
+The test updates need to be more surgical because that file has multiple nearby variants of the same path strings. I’m pulling the exact failing expectation blocks now and then I’ll patch them in smaller hunks to avoid drifting unrelated assertions.
+
+The path-namespace updates are straightforward, but that test file has several nearly identical blocks, so I’m applying them in smaller chunks to keep the edits precise and avoid trampling unrelated expectations.
+
+I’m addressing the reviewer’s two blockers and the remaining adjacent regression drift. First I’m checking the current test expectations and the touched runtime/catalog code so I can finish the narrow fixes and rerun the required suites.
+
+The remaining red tests are concentrated in one adjacent suite and look like expectation drift against the repo-local `workflows/` namespace. I’m running that suite alone now to get the exact failing assertions before I patch them.
+
+The product code looks stable now; the remaining failures are all test assertions still pinned to the old `autoloop/workflows` paths. I’m patching those expectations in one pass, then I’ll rerun the unit file and the requested regression commands.
+
+I’ve narrowed it down to five stale assertion blocks in one test file. I’m updating those expectations only; the runtime/catalog code changes are already in place and the adjacent failures no longer point to product behavior.
+
+The stale path assertions are patched. I’m rerunning the previously failing unit suite now; if that goes green, I’ll rerun the exact adjacent command and then the focused worklist command to confirm nothing regressed.
+
+Both required regression commands are green now. I’m doing the last pass on notes and the decisions ledger, then I’ll summarize the exact scoped changes and validation results.
+
+The regression surface turned out to be a real local compatibility break in repo-root discovery, not unrelated noise. I’m recording that explicitly in the run artifacts now so later turns don’t drift back to the previous package-only assumptions.
+
+Scope considered
+
+- Phase-local runtime validation and regression follow-up for the new selector/progress worklist path, limited to the reviewer-blocked repo-root, workflow discovery, import, and adjacent test surfaces.
+
+What I analyzed
+
+- Reviewer findings in [feedback.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/goal-implement-a-greenfield-autoloop-v3-worklist-3cb1f2e6/runs/run-20260505T122105Z-b9a3f746/artifacts/implement/phases/runtime-validation-and-regression-checks/feedback.md).
+- Repo-root and workflow discovery/import paths in [autoloop/core/context.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/autoloop/core/context.py), [autoloop/core/workflow_catalog.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/autoloop/core/workflow_catalog.py), [autoloop/runtime/loader.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/autoloop/runtime/loader.py), [autoloop/core/workflow_capabilities.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/autoloop/core/workflow_capabilities.py), and [autoloop_optimizer/portfolio.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/autoloop_optimizer/portfolio.py).
+- Adjacent expectations in [tests/runtime/test_workflow_catalog_roots.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/tests/runtime/test_workflow_catalog_roots.py) and [tests/unit/test_stdlib_and_extensions.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/tests/unit/test_stdlib_and_extensions.py).
+
+What I changed
+
+- Fixed context root resolution so repo-local workflow packages under `<repo>/workflows` resolve to the repo root instead of falling back to the task folder.
+- Added repo-local workflow search roots and repo-level runtime-test discovery in the workflow catalog, while keeping `.autoloop/workflows` and installed package discovery intact.
+- Updated loader/capability import paths to treat discovered repo-local workflows as `workflows.*` modules and evict stale cached modules between temp-root test runs.
+- Scoped portfolio/capability snapshots to workspace catalog entries so helper outputs do not silently include installed package workflows.
+- Updated adjacent tests to assert the repo-local `workflows/...` and `docs/workflows/...` path shape, and recorded the turn in [implementation_notes.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/goal-implement-a-greenfield-autoloop-v3-worklist-3cb1f2e6/runs/run-20260505T122105Z-b9a3f746/artifacts/implement/phases/runtime-validation-and-regression-checks/implementation_notes.md) and [decisions.txt](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/goal-implement-a-greenfield-autoloop-v3-worklist-3cb1f2e6/runs/run-20260505T122105Z-b9a3f746/decisions.txt).
+
+Key findings / decisions
+
+- The reviewer blockers were real local integration regressions, not unrelated noise: repo-root inference and workflow search/import needed to recognize repo-local `workflows/`.
+- Validation is green for the required commands:
+  - `pytest tests/unit/test_stdlib_and_extensions.py` -> `97 passed`
+  - `pytest tests/unit/test_stdlib_and_extensions.py tests/unit/test_primitives_and_stores.py tests/runtime/test_workspace_and_context.py` -> `173 passed`
+  - `pytest tests/unit/test_worklist_selectors.py tests/unit/test_stdlib_progress_worklists.py tests/runtime/test_progress_worklists.py` -> `49 passed`
+
+Open issues / next step
+
+- No phase-local blockers remain from this pass.
+- I did not run the full `pytest` suite.
+
+
+---
+run_id=run-20260505T122105Z-b9a3f746 | entry=session_turn | pair=implement | phase=verifier | cycle=2 | attempt=1 | thread_id=019df832-c99e-72c1-904c-48decc0b2141
+---
+provider=codex
+mode=resume
+template=/home/rauter/.local/share/pipx/venvs/autoloop/lib/python3.12/site-packages/autoloop/templates/implement_verifier.md
+session_id=019df832-c99e-72c1-904c-48decc0b2141
+
+
+---
+run_id=run-20260505T122105Z-b9a3f746 | entry=phase_output | pair=implement | phase=verifier | process=codex-agent | cycle=2 | attempt=1 | thread_id=019df832-c99e-72c1-904c-48decc0b2141
+---
+I’m rechecking the scoped runtime/regression follow-up against the reviewer blockers, then I’ll update the review artifacts to either clear the phase or record any remaining concrete risks.
+
+The reviewer blockers appear addressed in code and in the affected adjacent expectations. I’m rerunning the two required pytest commands directly so the criteria reflect observed results, not only implementation notes.
+
+The direct reruns are green: `173 passed` for the adjacent regression command and `49 passed` for the focused selector/progress command. I’m clearing the criteria and recording that the prior blockers are resolved.
+
+Scope considered
+
+- Phase-local re-review of the runtime-validation and regression-follow-up changes, limited to the reviewer-blocked repo-root, workflow discovery/import, workspace snapshot, and adjacent assertion surfaces.
+
+What I analyzed
+
+- The updated implementation notes in [implementation_notes.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/goal-implement-a-greenfield-autoloop-v3-worklist-3cb1f2e6/runs/run-20260505T122105Z-b9a3f746/artifacts/implement/phases/runtime-validation-and-regression-checks/implementation_notes.md).
+- The touched code paths in [autoloop/core/context.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/autoloop/core/context.py), [autoloop/core/workflow_catalog.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/autoloop/core/workflow_catalog.py), [autoloop/runtime/loader.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/autoloop/runtime/loader.py), [autoloop/core/workflow_capabilities.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/autoloop/core/workflow_capabilities.py), [autoloop_optimizer/portfolio.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/autoloop_optimizer/portfolio.py), [tests/runtime/test_workflow_catalog_roots.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/tests/runtime/test_workflow_catalog_roots.py), and [tests/unit/test_stdlib_and_extensions.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/tests/unit/test_stdlib_and_extensions.py).
+- The review artifacts in [criteria.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/goal-implement-a-greenfield-autoloop-v3-worklist-3cb1f2e6/runs/run-20260505T122105Z-b9a3f746/artifacts/implement/phases/runtime-validation-and-regression-checks/criteria.md) and [feedback.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/goal-implement-a-greenfield-autoloop-v3-worklist-3cb1f2e6/runs/run-20260505T122105Z-b9a3f746/artifacts/implement/phases/runtime-validation-and-regression-checks/feedback.md).
+
+What I reviewed
+
+- I reran the required adjacent regression command: `pytest tests/unit/test_stdlib_and_extensions.py tests/unit/test_primitives_and_stores.py tests/runtime/test_workspace_and_context.py` and observed `173 passed`.
+- I reran the focused selector/progress command: `pytest tests/unit/test_worklist_selectors.py tests/unit/test_stdlib_progress_worklists.py tests/runtime/test_progress_worklists.py` and observed `49 passed`.
+- I updated the verifier artifacts to mark the criteria complete and recorded that no additional findings remain after the follow-up patch set.
+
+Key findings / decisions
+
+- No blocking findings remain.
+- The prior blockers around repo-root inference and repo-local `workflows/` discovery/import are resolved.
+- The phase now satisfies AC-1, AC-2, and AC-3 based on direct reruns of the requested commands.
+
+Open issues / next step
+
+- No phase-local open issues.
+- I did not run the full `pytest` suite, only the required focused and adjacent commands.
+
+<loop-control>
+{"schema":"docloop.loop_control/v1","kind":"promise","promise":"COMPLETE"}
+</loop-control>
