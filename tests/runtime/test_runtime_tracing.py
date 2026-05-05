@@ -476,9 +476,11 @@ def test_runtime_trace_records_branch_group_runtime_events_with_additive_metadat
     assert branch_group_started["group_name"] == "reviews"
     assert branch_group_started["group_kind"] == "parallel"
     assert branch_group_started["branch_count"] == 3
+    assert branch_group_started["step_execution_id"].startswith("reviews:")
 
     assert len(branch_scheduled) == 3
     assert {record["branch_name"] for record in branch_scheduled} == {"security", "cost", "clarify"}
+    assert {record["step_execution_id"] for record in branch_scheduled} == {branch_group_started["step_execution_id"]}
 
     assert branch_started["branch_name"] in {"security", "cost", "clarify"}
     assert branch_started["step_name"] in {"security_review", "cost_review", "clarify_review"}
@@ -494,7 +496,9 @@ def test_runtime_trace_records_branch_group_runtime_events_with_additive_metadat
 
     assert fan_in_started["composite_step_name"] == "reviews"
     assert fan_in_started["step_name"] == "combine_reviews"
+    assert fan_in_started["step_execution_id"].startswith("combine_reviews:")
     assert fan_in_started["artifact_paths"] == expected_artifact_paths
+    assert fan_in_completed["step_execution_id"] == fan_in_started["step_execution_id"]
     assert fan_in_completed["route"] == "approved"
     assert fan_in_completed["status"] == "completed"
 

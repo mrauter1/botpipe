@@ -133,6 +133,10 @@ def test_branch_group_payloads_are_additive_in_static_graph_and_topology() -> No
     assert static_reviews["kind"] == "branch_group"
     assert static_reviews["branch_group"]["kind"] == "parallel"
     assert static_reviews["branch_group"]["branch_count"] == 2
+    assert static_reviews["branch_group"]["outcome_policy"] == "all_done"
+    assert static_reviews["branch_group"]["has_fan_in"] is True
+    assert static_reviews["branch_group"]["default_chain_route"] == "done"
+    assert static_reviews["branch_group"]["rework_chain_route"] is None
     assert [branch["name"] for branch in static_reviews["branch_group"]["branches"]] == ["security", "cost"]
     assert static_reviews["branch_group"]["branches"][0]["step"]["name"] == "security_review"
     assert static_reviews["branch_group"]["branches"][1]["step"]["name"] == "cost_review"
@@ -140,9 +144,45 @@ def test_branch_group_payloads_are_additive_in_static_graph_and_topology() -> No
     assert static_reviews["branch_group"]["fan_in_step"]["routes"]["approved"]["target"] == "FINISH"
 
     assert topology_reviews["branch_group"]["kind"] == "parallel"
+    assert topology_reviews["branch_group"]["outcome_policy"] == "all_done"
+    assert topology_reviews["branch_group"]["has_fan_in"] is True
+    assert topology_reviews["branch_group"]["default_chain_route"] == "done"
+    assert topology_reviews["branch_group"]["rework_chain_route"] is None
     assert topology_reviews["branch_group"]["exposed_routes"] == ["approved", "needs_revision"]
     assert topology_reviews["branch_group"]["branches"][0]["step"]["routes"][0]["tag"] == "done"
     assert topology_reviews["branch_group"]["fan_in_step"]["routes"][0]["tag"] == "approved"
+
+
+def test_branch_group_surface_payloads_expose_mechanical_outcome_metadata() -> None:
+    class BranchOutcomeSurfaceWorkflow(Workflow):
+        class State(BaseModel):
+            pass
+
+        reviews = simple.parallel(
+            outcome="all_settled",
+            branches={
+                "security": simple.python_step(lambda ctx: simple.Event("done"), name="security_review"),
+                "cost": simple.python_step(lambda ctx: simple.Event("done"), name="cost_review"),
+            },
+            routes={"done": FINISH, "partial": FINISH},
+        )
+
+    compiled = compile_workflow(BranchOutcomeSurfaceWorkflow)
+
+    static_payload = workflow_static_step_graph_payload(compiled)
+    topology_payload = workflow_topology_payload(compiled)
+    static_reviews = next(step_payload for step_payload in static_payload["steps"] if step_payload["name"] == "reviews")
+    topology_reviews = next(step_payload for step_payload in topology_payload["steps"] if step_payload["name"] == "reviews")
+
+    assert static_reviews["branch_group"]["outcome_policy"] == "all_settled"
+    assert static_reviews["branch_group"]["has_fan_in"] is False
+    assert static_reviews["branch_group"]["default_chain_route"] == "done"
+    assert static_reviews["branch_group"]["rework_chain_route"] is None
+
+    assert topology_reviews["branch_group"]["outcome_policy"] == "all_settled"
+    assert topology_reviews["branch_group"]["has_fan_in"] is False
+    assert topology_reviews["branch_group"]["default_chain_route"] == "done"
+    assert topology_reviews["branch_group"]["rework_chain_route"] is None
 
 
 def test_branch_group_internal_shape_changes_topology_hash() -> None:

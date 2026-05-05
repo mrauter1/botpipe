@@ -173,12 +173,15 @@ def test_parallel_branch_group_without_fan_in_routes_question_and_writes_evidenc
     results_path = _branch_group_dir(task_folder, ReviewWorkflow, "reviews") / "results.json"
     context_path = _branch_group_dir(task_folder, ReviewWorkflow, "reviews") / "context.md"
     manifest = json.loads(results_path.read_text(encoding="utf-8"))
+    context_text = context_path.read_text(encoding="utf-8")
     assert manifest["schema"] == "autoloop.branch_results/v1"
     assert [branch["name"] for branch in manifest["branches"]] == ["security", "cost"]
     assert manifest["branches"][0]["status"] == "needs_input"
     assert manifest["branches"][0]["question"] == "Approve security review?"
     assert manifest["branches"][1]["status"] == "completed"
-    assert "Approve security review?" in context_path.read_text(encoding="utf-8")
+    assert "Approve security review?" in context_text
+    assert "## Needs Input Details" in context_text
+    assert "- security: Approve security review?" in context_text
 
 
 def test_parallel_branch_group_with_fan_in_routes_through_fan_in_and_exposes_helpers(tmp_path: Path) -> None:
@@ -807,11 +810,24 @@ def test_parallel_branch_group_fail_fast_cancels_in_flight_async_branches_and_ke
     assert sorted(provider.cancelled) == ["slow_a_branch", "slow_b_branch"]
 
     manifest = json.loads((_branch_group_dir(task_folder, AsyncFailFastWorkflow, "reviews") / "results.json").read_text(encoding="utf-8"))
+    context_text = (_branch_group_dir(task_folder, AsyncFailFastWorkflow, "reviews") / "context.md").read_text(
+        encoding="utf-8"
+    )
     assert [branch["name"] for branch in manifest["branches"]] == ["explode", "slow_a", "slow_b", "later"]
     assert [branch["status"] for branch in manifest["branches"]] == ["failed", "cancelled", "cancelled", "skipped"]
     assert manifest["branches"][1]["cancellation_requested"] is True
     assert manifest["branches"][2]["cancellation_completed"] is True
     assert manifest["branches"][3]["reason"] == "Branch was not scheduled because fail_fast stopped new branch launches."
+    assert "## Failure Summary" in context_text
+    failure_detail = "- explode: WorkflowExecutionError: explode_branch failed"
+    assert failure_detail in context_text
+    assert context_text.index("## Failure Summary") < context_text.index(failure_detail) < context_text.index(
+        "## Needs Input Summary"
+    )
+    assert "## Cancellation Details" in context_text
+    assert "- slow_a: Cancellation requested after fail_fast." in context_text
+    assert "- slow_b: Cancellation requested after fail_fast." in context_text
+    assert "- later: Branch was not scheduled because fail_fast stopped new branch launches." in context_text
 
 
 def test_parallel_branch_group_runtime_preserves_shared_state_values_and_overlapping_writes(tmp_path: Path) -> None:

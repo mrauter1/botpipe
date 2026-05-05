@@ -6,3 +6,9 @@
 - Phase Directory Key: fan-in-outcomes-and-surface
 - Phase Title: Fan-In, Outcomes, Surface
 - Scope: phase-local authoritative verifier artifact
+
+- Added targeted coverage for the new fan-in trace execution-id surface, additive branch-group topology/static-graph metadata, and expanded branch-group `context.md` detail sections.
+- Validation result: `.venv/bin/python -m pytest -q tests/contract/test_branch_group_runtime.py tests/runtime/test_runtime_static_graph.py tests/runtime/test_runtime_tracing.py`
+  - `58 passed, 1 failed`
+  - Remaining red test: `tests/contract/test_branch_group_runtime.py::test_parallel_branch_group_fail_fast_cancels_in_flight_async_branches_and_keeps_manifest_order`
+  - Failure reason: the new failure-detail line is rendered after the cancellation-summary block instead of inside the failure-summary block.
