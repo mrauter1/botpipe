@@ -110,8 +110,8 @@ def test_fan_in_context_exposes_metadata_and_branch_execution_ids(tmp_path: Path
         step_name="combine",
         fan_in=FanInMetadata(
             results={"branches": []},
-            results_path=tmp_path / "_branch_groups" / "reviews" / "results.json",
-            context_path=tmp_path / "_branch_groups" / "reviews" / "context.md",
+            results_path=parent.workflow_folder / "_branch_groups" / "reviews" / "results.json",
+            context_path=parent.workflow_folder / "_branch_groups" / "reviews" / "context.md",
             context_text="# Reviews",
             branch_count=2,
             completed_count=2,

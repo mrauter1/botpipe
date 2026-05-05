@@ -67,6 +67,11 @@ class _TracingAsyncLLMProvider:
         return OutcomeResponse(outcome=Outcome(raw_output=f"{request.step_name} ok", tag="done"))
 
 
+def _branch_group_artifact_paths(*, root: Path, workflow_dir: Path, group_name: str) -> list[str]:
+    base = workflow_dir.relative_to(root) / "_branch_groups" / group_name
+    return [str(base / "results.json"), str(base / "context.md")]
+
+
 def _binding(run_dir: Path) -> RunBinding:
     root = run_dir.parents[5]
     task_folder = run_dir.parents[3]
@@ -445,6 +450,11 @@ def test_runtime_trace_records_branch_group_runtime_events_with_additive_metadat
     )
 
     assert execution.result.terminal == simple.FINISH
+    expected_artifact_paths = _branch_group_artifact_paths(
+        root=tmp_path,
+        workflow_dir=execution.workflow_workspace.workflow_dir,
+        group_name="reviews",
+    )
 
     trace_path = execution.run_workspace.run_dir / "trace.jsonl"
     records = [
@@ -480,17 +490,11 @@ def test_runtime_trace_records_branch_group_runtime_events_with_additive_metadat
     assert branch_needs_input["status"] == "needs_input"
 
     assert manifest_written["step_name"] == "reviews"
-    assert manifest_written["artifact_paths"] == [
-        "_branch_groups/reviews/results.json",
-        "_branch_groups/reviews/context.md",
-    ]
+    assert manifest_written["artifact_paths"] == expected_artifact_paths
 
     assert fan_in_started["composite_step_name"] == "reviews"
     assert fan_in_started["step_name"] == "combine_reviews"
-    assert fan_in_started["artifact_paths"] == [
-        "_branch_groups/reviews/results.json",
-        "_branch_groups/reviews/context.md",
-    ]
+    assert fan_in_started["artifact_paths"] == expected_artifact_paths
     assert fan_in_completed["route"] == "approved"
     assert fan_in_completed["status"] == "completed"
 

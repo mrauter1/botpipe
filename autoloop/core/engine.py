@@ -1967,6 +1967,8 @@ class Engine:
         candidate = Path(raw_path)
         if candidate.is_absolute():
             return candidate
+        if candidate.parts and candidate.parts[0] == "_branch_groups":
+            return (context.workflow_folder / candidate).resolve()
         return (context.root / candidate).resolve()
 
     @staticmethod

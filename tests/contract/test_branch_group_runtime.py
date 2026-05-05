@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import asyncio
 import json
+import re
 from pathlib import Path
 
 import pytest
@@ -23,6 +24,16 @@ def _workspace(tmp_path: Path) -> tuple[Path, Path]:
     task_folder.mkdir()
     run_folder.mkdir()
     return task_folder, run_folder
+
+
+def _workflow_folder(task_folder: Path, workflow_cls: type[object]) -> Path:
+    workflow_name = re.sub(r"(?<!^)(?=[A-Z])", "_", workflow_cls.__name__).lower()
+    workflow_name = re.sub(r"[^a-z0-9_]+", "_", workflow_name).strip("_") or workflow_cls.__name__.lower()
+    return task_folder / f"wf_{workflow_name}"
+
+
+def _branch_group_dir(task_folder: Path, workflow_cls: type[object], group_name: str) -> Path:
+    return _workflow_folder(task_folder, workflow_cls) / "_branch_groups" / group_name
 
 
 def _prompt_routed_outcome(request: object) -> Outcome:
@@ -158,8 +169,8 @@ def test_parallel_branch_group_without_fan_in_routes_question_and_writes_evidenc
     assert result.terminal == simple.AWAIT_INPUT
     assert result.checkpoint is not None
     assert result.checkpoint.stage == "reviews"
-    results_path = tmp_path / "_branch_groups" / "reviews" / "results.json"
-    context_path = tmp_path / "_branch_groups" / "reviews" / "context.md"
+    results_path = _branch_group_dir(task_folder, ReviewWorkflow, "reviews") / "results.json"
+    context_path = _branch_group_dir(task_folder, ReviewWorkflow, "reviews") / "context.md"
     manifest = json.loads(results_path.read_text(encoding="utf-8"))
     assert manifest["schema"] == "autoloop.branch_results/v1"
     assert [branch["name"] for branch in manifest["branches"]] == ["security", "cost"]
@@ -225,11 +236,13 @@ def test_parallel_branch_group_with_fan_in_routes_through_fan_in_and_exposes_hel
     assert result.last_event is not None
     assert result.last_event.tag == "approved"
     assert seen["branch_count"] == 2
-    assert str(seen["results_path"]).endswith("_branch_groups/reviews/results.json")
-    assert str(seen["context_path"]).endswith("_branch_groups/reviews/context.md")
+    expected_results_path = _branch_group_dir(task_folder, FanInWorkflow, "reviews") / "results.json"
+    expected_context_path = _branch_group_dir(task_folder, FanInWorkflow, "reviews") / "context.md"
+    assert seen["results_path"] == expected_results_path
+    assert seen["context_path"] == expected_context_path
     assert "Branch Group: reviews" in str(seen["context_text"])
-    assert any(str(path).endswith("_branch_groups/reviews/results.json") for path in seen["readable_paths"])
-    assert any(str(path).endswith("_branch_groups/reviews/context.md") for path in seen["readable_paths"])
+    assert str(expected_results_path) in seen["readable_paths"]
+    assert str(expected_context_path) in seen["readable_paths"]
 
 
 def test_parallel_branch_group_uses_async_provider_path_for_branch_steps(tmp_path: Path) -> None:
@@ -429,7 +442,7 @@ def test_fan_out_renders_branch_input_roots_artifacts_and_keeps_branch_sessions_
     performance_report = task_folder / "wf_fan_out_workflow" / "assess_one" / "reports" / "performance.md"
     assert security_report.read_text(encoding="utf-8").strip() == "security"
     assert performance_report.read_text(encoding="utf-8").strip() == "performance"
-    manifest = json.loads((tmp_path / "_branch_groups" / "assess" / "results.json").read_text(encoding="utf-8"))
+    manifest = json.loads((_branch_group_dir(task_folder, FanOutWorkflow, "assess") / "results.json").read_text(encoding="utf-8"))
     assert manifest["branches"][0]["artifacts"][0]["path"].endswith("wf_fan_out_workflow/assess_one/reports/security.md")
     assert manifest["branches"][1]["artifacts"][0]["path"].endswith("wf_fan_out_workflow/assess_one/reports/performance.md")
 
@@ -465,7 +478,7 @@ def test_parallel_branch_group_captures_goto_without_following_branch_destinatio
 
     assert result.terminal == simple.FINISH
     assert result.history[:2] == ("reviews", "publish")
-    manifest = json.loads((tmp_path / "_branch_groups" / "reviews" / "results.json").read_text(encoding="utf-8"))
+    manifest = json.loads((_branch_group_dir(task_folder, GotoWorkflow, "reviews") / "results.json").read_text(encoding="utf-8"))
     reroute_branch = next(branch for branch in manifest["branches"] if branch["name"] == "reroute")
     assert reroute_branch["status"] == "completed"
     assert reroute_branch["runtime_control"] == "goto"
@@ -513,7 +526,7 @@ def test_parallel_branch_group_capture_mode_skips_branch_route_on_taken_hooks(tm
     assert result.terminal == simple.FINISH
     assert result.history[:2] == ("reviews", "publish")
     assert on_taken_calls == []
-    manifest = json.loads((tmp_path / "_branch_groups" / "reviews" / "results.json").read_text(encoding="utf-8"))
+    manifest = json.loads((_branch_group_dir(task_folder, CaptureWorkflow, "reviews") / "results.json").read_text(encoding="utf-8"))
     assert manifest["branches"][0]["route"] == "done"
     assert manifest["branches"][0]["destination"] == "repair"
 
@@ -568,7 +581,7 @@ def test_parallel_branch_group_fail_fast_stops_new_branch_launches_and_persists_
     assert result.last_event.tag == "partial"
     assert executed == ["explode"]
 
-    manifest = json.loads((tmp_path / "_branch_groups" / "reviews" / "results.json").read_text(encoding="utf-8"))
+    manifest = json.loads((_branch_group_dir(task_folder, FailFastWorkflow, "reviews") / "results.json").read_text(encoding="utf-8"))
     assert manifest["settle"] == "fail_fast"
     assert [branch["name"] for branch in manifest["branches"]] == ["explode", "later_a", "later_b"]
     assert [branch["status"] for branch in manifest["branches"]] == ["failed", "skipped", "skipped"]
@@ -625,7 +638,7 @@ def test_parallel_branch_group_fail_fast_cancels_in_flight_async_branches_and_ke
     assert result.last_event.tag == "partial"
     assert sorted(provider.cancelled) == ["slow_a_branch", "slow_b_branch"]
 
-    manifest = json.loads((tmp_path / "_branch_groups" / "reviews" / "results.json").read_text(encoding="utf-8"))
+    manifest = json.loads((_branch_group_dir(task_folder, AsyncFailFastWorkflow, "reviews") / "results.json").read_text(encoding="utf-8"))
     assert [branch["name"] for branch in manifest["branches"]] == ["explode", "slow_a", "slow_b", "later"]
     assert [branch["status"] for branch in manifest["branches"]] == ["failed", "cancelled", "cancelled", "skipped"]
     assert manifest["branches"][1]["cancellation_requested"] is True
@@ -711,7 +724,7 @@ def test_parallel_branch_group_runtime_preserves_shared_state_values_and_overlap
     assert (tmp_path / overlap_path).exists()
     assert (tmp_path / overlap_path).read_text(encoding="utf-8") == "second branch write\n"
 
-    manifest = json.loads((tmp_path / "_branch_groups" / "reviews" / "results.json").read_text(encoding="utf-8"))
+    manifest = json.loads((_branch_group_dir(task_folder, SharedEffectsWorkflow, "reviews") / "results.json").read_text(encoding="utf-8"))
     assert [branch["status"] for branch in manifest["branches"]] == ["completed", "completed", "completed", "completed"]
 
 
@@ -849,8 +862,8 @@ def test_branch_group_evidence_write_failure_stops_before_fan_in_and_downstream_
 
     assert fan_in_called is False
     assert published == []
-    assert not (tmp_path / "_branch_groups" / "reviews" / "results.json").exists()
-    assert not (tmp_path / "_branch_groups" / "reviews" / "context.md").exists()
+    assert not (_branch_group_dir(task_folder, FanInWriteFailureWorkflow, "reviews") / "results.json").exists()
+    assert not (_branch_group_dir(task_folder, FanInWriteFailureWorkflow, "reviews") / "context.md").exists()
 
 
 def test_branch_group_evidence_write_failure_stops_before_mechanical_outcome_routing(
@@ -895,8 +908,8 @@ def test_branch_group_evidence_write_failure_stops_before_mechanical_outcome_rou
         )
 
     assert published == []
-    assert not (tmp_path / "_branch_groups" / "reviews" / "results.json").exists()
-    assert not (tmp_path / "_branch_groups" / "reviews" / "context.md").exists()
+    assert not (_branch_group_dir(task_folder, OutcomeWriteFailureWorkflow, "reviews") / "results.json").exists()
+    assert not (_branch_group_dir(task_folder, OutcomeWriteFailureWorkflow, "reviews") / "context.md").exists()
 
 
 def test_branch_group_mechanical_outcomes_support_all_settled_and_custom_aggregators(tmp_path: Path) -> None:

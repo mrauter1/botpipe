@@ -94,7 +94,7 @@ class BranchGroupRuntime:
             duration_ms=duration_ms,
             branches=ordered_results,
         )
-        _, results_path, context_path = branch_group_paths(root=context.root, group_name=spec.name)
+        _, results_path, context_path = branch_group_paths(workflow_folder=context.workflow_folder, group_name=spec.name)
         context_text = render_branch_group_context(manifest)
         write_branch_group_evidence(
             results_path=results_path,
@@ -302,7 +302,7 @@ class BranchGroupRuntime:
             step_name=compiled_step.name,
             execution_id=execution_id,
         )
-        branch_dir = parent_context.root / "_branch_groups" / spec.name / "branches" / branch.name
+        branch_dir = parent_context.workflow_folder / "_branch_groups" / spec.name / "branches" / branch.name
         started_at = _utc_now()
         try:
             step_result = await self._engine.step_dispatcher.execute_async(

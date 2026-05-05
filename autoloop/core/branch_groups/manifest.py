@@ -7,8 +7,8 @@ from pathlib import Path
 from typing import Any, Mapping
 
 
-def branch_group_paths(*, root: Path, group_name: str) -> tuple[Path, Path, Path]:
-    group_dir = root / "_branch_groups" / group_name
+def branch_group_paths(*, workflow_folder: Path, group_name: str) -> tuple[Path, Path, Path]:
+    group_dir = workflow_folder / "_branch_groups" / group_name
     return group_dir, group_dir / "results.json", group_dir / "context.md"
 
 
