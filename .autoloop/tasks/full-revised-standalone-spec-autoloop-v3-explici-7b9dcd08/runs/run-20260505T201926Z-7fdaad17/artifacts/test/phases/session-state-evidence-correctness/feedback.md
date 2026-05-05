@@ -14,3 +14,7 @@
   - `./.venv/bin/pytest tests/contract/test_branch_group_runtime.py`
   - `./.venv/bin/pytest tests/unit/test_branch_group_context_sessions.py`
   - `./.venv/bin/pytest tests/runtime/test_runtime_tracing.py -k branch_group`
+
+## Audit Findings
+
+- No findings. AC-1 through AC-3 are covered at unit, contract, and runtime-tracing levels, including the negative-path manifest assertion for missing provider-returned session ids, and the scoped suite passed without adding flaky timing or ordering assumptions.

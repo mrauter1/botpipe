@@ -1454,3 +1454,55 @@ Open issues / next step
 <loop-control>
 {"schema":"docloop.loop_control/v1","kind":"promise","promise":"COMPLETE"}
 </loop-control>
+
+
+---
+run_id=run-20260505T201926Z-7fdaad17 | entry=session_turn | pair=test | phase=verifier | cycle=1 | attempt=1 | thread_id=019dfa0a-87de-7353-b5f8-4a53c8408820
+---
+provider=codex
+mode=resume
+template=/home/rauter/.local/share/pipx/venvs/autoloop/lib/python3.12/site-packages/autoloop/templates/test_verifier.md
+session_id=019dfa0a-87de-7353-b5f8-4a53c8408820
+
+
+---
+run_id=run-20260505T201926Z-7fdaad17 | entry=phase_output | pair=test | phase=verifier | process=codex-agent | cycle=1 | attempt=1 | thread_id=019dfa0a-87de-7353-b5f8-4a53c8408820
+---
+Auditing the phase-local test coverage for `session-state-evidence-correctness`. I’m reading the active audit artifacts and the changed branch-group tests first, then I’ll verify that AC-1 through AC-3 are covered without normalizing unintended behavior.
+
+The strategy and decisions line up with the phase contract: AC-2 is now split into positive and negative manifest cases, which is the right regression surface. I’m reading the concrete test bodies and rerunning the scoped suite so the audit result is based on the actual assertions, not just the strategy summary.
+
+I don’t see a material coverage gap: AC-1, AC-2 positive and negative cases, and AC-3 are all exercised at appropriate levels, and the added negative-path test does not introduce flake-sensitive assumptions. I’m marking the audit criteria complete and recording that no blocking or non-blocking findings were identified in scoped coverage.
+
+Scope considered
+- Active phase only: `session-state-evidence-correctness` test coverage.
+- Reviewed the scoped test artifacts plus the branch-session unit/contract tests and the branch-group tracing test they reference.
+- Ignored unrelated repository churn outside the active audit scope.
+
+What I analyzed
+- The phase contract, `decisions.txt`, and the updated `test_strategy.md`.
+- `tests/unit/test_branch_group_context_sessions.py` for branch-local session overlay and parent-store invariants.
+- `tests/contract/test_branch_group_runtime.py` for AC-2 positive/negative manifest behavior and AC-3 raw output/evidence paths.
+- `tests/runtime/test_runtime_tracing.py -k branch_group` for workflow-scoped evidence path observability.
+
+What I reviewed
+- AC-1 coverage: branch-local fresh selection, reuse, and non-activation of parent session slots.
+- AC-2 coverage: provider sees `session_id=None` on first branch turn, manifests record real returned ids when present, and stay empty when no id is returned.
+- AC-3 coverage: branch evidence and raw output paths remain rooted under `workflow_folder/_branch_groups/...`.
+- Reliability: no new timing-sensitive or completion-order-sensitive assertions were added in the negative-path test.
+- Validation rerun:
+  - `./.venv/bin/pytest tests/contract/test_branch_group_runtime.py tests/unit/test_branch_group_context_sessions.py tests/runtime/test_runtime_tracing.py -k 'branch_group or branch_group_context_sessions'`
+
+Key findings / decisions
+- No blocking findings.
+- No non-blocking findings.
+- Criteria were updated to checked in [criteria.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/full-revised-standalone-spec-autoloop-v3-explici-7b9dcd08/runs/run-20260505T201926Z-7fdaad17/artifacts/test/phases/session-state-evidence-correctness/criteria.md).
+- Feedback was updated in [feedback.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/full-revised-standalone-spec-autoloop-v3-explici-7b9dcd08/runs/run-20260505T201926Z-7fdaad17/artifacts/test/phases/session-state-evidence-correctness/feedback.md) to record that no audit issues were identified.
+
+Open issues / next step
+- No open test-audit issues in this phase scope.
+- Ready for the next loop phase.
+
+<loop-control>
+{"schema":"docloop.loop_control/v1","kind":"promise","promise":"COMPLETE"}
+</loop-control>
