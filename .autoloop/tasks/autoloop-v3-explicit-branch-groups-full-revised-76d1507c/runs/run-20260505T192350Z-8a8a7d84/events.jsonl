@@ -23,3 +23,6 @@
 {"ts": "2026-05-05T19:37:54.035001+00:00", "run_id": "run-20260505T192350Z-8a8a7d84", "seq": 23, "event_type": "phase_completed", "pair": "test", "phase_id": "branch-group-runtime-regression-coverage", "phase_mode": "single"}
 {"ts": "2026-05-05T19:37:54.039733+00:00", "run_id": "run-20260505T192350Z-8a8a7d84", "seq": 24, "event_type": "pair_started", "pair": "audit", "phase_id": null}
 {"ts": "2026-05-05T19:37:54.040188+00:00", "run_id": "run-20260505T192350Z-8a8a7d84", "seq": 25, "event_type": "cycle_started", "pair": "audit", "cycle": 1, "attempt": 1, "phase_id": null}
+{"ts": "2026-05-05T19:40:13.132618+00:00", "run_id": "run-20260505T192350Z-8a8a7d84", "seq": 26, "event_type": "phase_finished", "pair": "audit", "phase": "producer", "cycle": 1, "attempt": 1, "empty_output": false, "phase_id": null}
+{"ts": "2026-05-05T19:41:05.965234+00:00", "run_id": "run-20260505T192350Z-8a8a7d84", "seq": 27, "event_type": "phase_finished", "pair": "audit", "phase": "verifier", "cycle": 1, "attempt": 1, "empty_output": false, "phase_id": null}
+{"ts": "2026-05-05T19:41:06.014272+00:00", "run_id": "run-20260505T192350Z-8a8a7d84", "seq": 28, "event_type": "pair_completed", "pair": "audit", "cycle": 1, "attempt": 1, "phase_id": null}
