@@ -1850,3 +1850,114 @@ Implement the two fixes from `feedback.md`, then rerun the same focused suite. A
 <loop-control>
 {"schema":"docloop.loop_control/v1","kind":"promise","promise":"INCOMPLETE"}
 </loop-control>
+
+
+---
+run_id=run-20260505T201926Z-7fdaad17 | entry=session_turn | pair=implement | phase=producer | cycle=2 | attempt=1 | thread_id=019dfa1c-b1de-7ad3-bc90-31545cf131de
+---
+provider=codex
+mode=resume
+template=/home/rauter/.local/share/pipx/venvs/autoloop/lib/python3.12/site-packages/autoloop/templates/implement_producer.md
+session_id=019dfa1c-b1de-7ad3-bc90-31545cf131de
+
+
+---
+run_id=run-20260505T201926Z-7fdaad17 | entry=phase_output | pair=implement | phase=producer | process=codex-agent | cycle=2 | attempt=1 | thread_id=019dfa1c-b1de-7ad3-bc90-31545cf131de
+---
+I’m addressing the two reviewer findings directly: first by hardening the strictness scan so imported forms are caught, then by adding separate `results.json` and `context.md` evidence-write failure tests.
+
+I’ve confirmed the two gaps in the current tree. I’m patching the strictness test first so it catches imported forms, then I’ll replace the coarse evidence-write failure coverage with separate first-write and second-write cases.
+
+I’m switching the evidence-write coverage from the coarse helper-level failure to exact path-level failure injection, so we can prove the first and second branch-group evidence writes are both handled correctly.
+
+The test-only changes are in. I’m running the strictness and branch-group runtime slices first, then the full focused phase suite if those stay green.
+
+The two reviewer findings are covered by focused slices now. I’m running the same full phase validation surface the reviewer used to verify nothing adjacent regressed.
+
+I’m updating the run ledger and implementation notes with the non-obvious parts of this follow-up pass, then I’ll do one last sanity check on the touched files.
+
+I found one more strictness edge while checking the helper: `from concurrent.futures import wait` was still uncaught. I’m fixing that before I close this turn.
+
+The strictness helper fix is in and the focused slices still pass. I’m rerunning the full phase validation command once more so the final notes reflect the exact post-fix state.
+
+Scope considered
+
+Phase-local strictness-and-cleanup follow-up for the reviewer findings in [feedback.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/full-revised-standalone-spec-autoloop-v3-explici-7b9dcd08/runs/run-20260505T201926Z-7fdaad17/artifacts/implement/phases/strictness-and-cleanup/feedback.md), limited to [test_no_compat.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/tests/strictness/test_no_compat.py), [test_branch_group_runtime.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/tests/contract/test_branch_group_runtime.py), and the phase run artifacts.
+
+What I analyzed
+
+I verified the reviewer’s two blockers directly. The strictness guard was still a raw string scan that missed imported forms like `from threading import RLock` and `from asyncio import to_thread`. The evidence-write coverage only exercised a coarse helper-level failure and did not distinguish `results.json` failure from `context.md` failure.
+
+What I changed
+
+In [test_no_compat.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/tests/strictness/test_no_compat.py), I replaced the raw token-only check with centralized AST-based detection for forbidden imports and attribute access across the branch-group execution path, including `concurrent.futures.wait`, `ThreadPoolExecutor`, `Future`, `FIRST_COMPLETED`, `threading.RLock`, and `asyncio.to_thread`.
+
+In [test_branch_group_runtime.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/tests/contract/test_branch_group_runtime.py), I added exact-path write failure injection so the suite now separately asserts:
+- `results.json` write failure stops before fan-in and downstream routing
+- `context.md` write failure after a successful manifest write still stops before fan-in and downstream routing
+
+I also updated the phase [implementation_notes.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/full-revised-standalone-spec-autoloop-v3-explici-7b9dcd08/runs/run-20260505T201926Z-7fdaad17/artifacts/implement/phases/strictness-and-cleanup/implementation_notes.md) and appended the non-obvious decisions under the current turn header in [decisions.txt](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/full-revised-standalone-spec-autoloop-v3-explici-7b9dcd08/runs/run-20260505T201926Z-7fdaad17/decisions.txt).
+
+Key findings / decisions
+
+The production branch-group runtime did not need behavioral changes for these blockers; both were resolved by tightening validation coverage. The strictness gate is now conservative on imported forms, and the evidence-write matrix now covers the first-write and second-write failure paths explicitly.
+
+Validation passed:
+- `./.venv/bin/python -m pytest -q tests/strictness/test_no_compat.py`
+- `./.venv/bin/python -m pytest -q tests/contract/test_branch_group_runtime.py`
+- `./.venv/bin/python -m pytest -q tests/strictness/test_no_compat.py tests/unit/test_simple_surface.py tests/unit/test_branch_group_context_sessions.py tests/contract/test_async_step_dispatcher.py tests/contract/test_branch_group_runtime.py tests/runtime/test_runtime_tracing.py tests/runtime/test_runtime_static_graph.py tests/unit/test_validation.py`
+
+Open issues / next step
+
+No blocking issues remain from the reviewer feedback I addressed. The focused phase validation surface is green.
+
+
+---
+run_id=run-20260505T201926Z-7fdaad17 | entry=session_turn | pair=implement | phase=verifier | cycle=2 | attempt=1 | thread_id=019dfa1c-b1de-7ad3-bc90-31545cf131de
+---
+provider=codex
+mode=resume
+template=/home/rauter/.local/share/pipx/venvs/autoloop/lib/python3.12/site-packages/autoloop/templates/implement_verifier.md
+session_id=019dfa1c-b1de-7ad3-bc90-31545cf131de
+
+
+---
+run_id=run-20260505T201926Z-7fdaad17 | entry=phase_output | pair=implement | phase=verifier | process=codex-agent | cycle=2 | attempt=1 | thread_id=019dfa1c-b1de-7ad3-bc90-31545cf131de
+---
+I’m re-reviewing the exact reviewer blockers, the touched tests, and the same focused validation command before I update the phase artifacts.
+
+The reviewer blockers are resolved and the full focused phase suite is green. I’m marking the criteria complete and appending the re-review outcome to the feedback artifact.
+
+Scope considered
+
+Phase-local re-review of the strictness-and-cleanup fixes in `tests/strictness/test_no_compat.py`, `tests/contract/test_branch_group_runtime.py`, and the updated phase artifacts.
+
+What I analyzed
+
+I rechecked the two previously blocking areas against the phase contract:
+- AC-1 strictness coverage for forbidden thread and fake-async primitives in the branch-group execution path
+- AC-2 coverage for distinct `results.json` and `context.md` evidence-write failure cases
+
+What I reviewed
+
+I inspected the updated strictness helper and the new evidence-write tests, then re-ran the focused validation command:
+
+`./.venv/bin/python -m pytest -q tests/strictness/test_no_compat.py tests/unit/test_simple_surface.py tests/unit/test_branch_group_context_sessions.py tests/contract/test_async_step_dispatcher.py tests/contract/test_branch_group_runtime.py tests/runtime/test_runtime_tracing.py tests/runtime/test_runtime_static_graph.py tests/unit/test_validation.py`
+
+Result: `250 passed`.
+
+Key findings / decisions
+
+No new blocking findings.
+
+- The strictness guard now catches imported and dotted forbidden forms, including the previously missing `concurrent.futures.wait`, `threading.RLock`, and `asyncio.to_thread` import patterns.
+- The branch-group runtime coverage now separately proves failure on the first evidence write and the second evidence write before fan-in can run.
+- I marked all criteria complete and appended a Cycle 2 re-review note to `feedback.md` stating that IMP-001 and IMP-002 are resolved.
+
+Open issues / next step
+
+No blocking issues remain in this phase slice.
+
+<loop-control>
+{"schema":"docloop.loop_control/v1","kind":"promise","promise":"COMPLETE"}
+</loop-control>
