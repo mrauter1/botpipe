@@ -24,6 +24,7 @@ from autoloop.core.schema_registry import (
     WORKFLOW_OPTIMIZATION_STEP_TRACE_METRICS_SCHEMA,
     WORKFLOW_OPTIMIZATION_TRACE_CORPUS_SCHEMA,
     WORKFLOW_REFINEMENT_EVIDENCE_SCHEMA,
+    migrate_schemaless_payload,
     validate_persisted_schema,
 )
 from autoloop.core.statuses import route_is_input_request, route_is_replan, route_is_rework, runtime_control_to_terminal
@@ -871,6 +872,11 @@ def write_selected_workflow_source_manifest(
     repo_root = ctx.root.resolve()
     package = resolve_workflow_package(repo_root, selected_workflow)
     package_dir = package.package_dir.resolve()
+    manifest_package_dir = _selected_workflow_manifest_package_dir_label(
+        repo_root,
+        workflow_name=package.workflow_name,
+        package_dir=package_dir,
+    )
     editable_paths = sorted(
         path.resolve()
         for path in package_dir.rglob("*")
@@ -881,7 +887,12 @@ def write_selected_workflow_source_manifest(
         payload = path.read_bytes()
         files.append(
             {
-                "path": _repo_relative_if_possible(path, repo_root),
+                "path": _selected_workflow_manifest_file_label(
+                    repo_root,
+                    workflow_name=package.workflow_name,
+                    package_dir=package_dir,
+                    file_path=path,
+                ),
                 "sha256": sha256(payload).hexdigest(),
                 "bytes": len(payload),
             }
@@ -889,7 +900,7 @@ def write_selected_workflow_source_manifest(
     manifest = {
         "schema": SOURCE_MANIFEST_SCHEMA,
         "selected_workflow": package.workflow_name,
-        "package_dir": _repo_relative_if_possible(package_dir, repo_root),
+        "package_dir": manifest_package_dir,
         "files": sorted(files, key=lambda entry: str(entry["path"])),
     }
     return write_workflow_json(ctx, relative_path, manifest)
@@ -1124,7 +1135,42 @@ def _validate_runtime_observability_schema(path: Path, payload: Mapping[str, Any
     expected = _RUNTIME_OBSERVABILITY_SCHEMAS.get(path.name)
     if expected is None:
         return
-    validate_persisted_schema(payload, expected=expected, artifact_name=str(path))
+    validate_persisted_schema(
+        payload,
+        expected=expected,
+        artifact_name=str(path),
+        legacy_migrator=lambda value: migrate_schemaless_payload(value, expected=expected),
+    )
+
+
+def _selected_workflow_manifest_package_dir_label(
+    repo_root: Path,
+    workflow_name: str,
+    package_dir: Path,
+) -> str:
+    if _is_first_party_workflow_name(workflow_name):
+        return str(Path("autoloop") / "workflows" / workflow_name)
+    return _repo_relative_if_possible(package_dir, repo_root)
+
+
+def _selected_workflow_manifest_file_label(
+    repo_root: Path,
+    workflow_name: str,
+    package_dir: Path,
+    file_path: Path,
+) -> str:
+    manifest_package_dir = _selected_workflow_manifest_package_dir_label(
+        repo_root,
+        workflow_name=workflow_name,
+        package_dir=package_dir,
+    )
+    if not _is_first_party_workflow_name(workflow_name):
+        return _repo_relative_if_possible(file_path, repo_root)
+    return str(Path(manifest_package_dir) / file_path.resolve().relative_to(package_dir.resolve()))
+
+
+def _is_first_party_workflow_name(workflow_name: str) -> bool:
+    return (Path(__file__).resolve().parents[1] / "autoloop" / "workflows" / workflow_name).is_dir()
 
 
 def _git_tracking_index(records: Sequence[Mapping[str, Any]]) -> dict[int, dict[str, Any]]:

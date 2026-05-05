@@ -8,7 +8,7 @@ from pydantic import BaseModel, Field
 
 from autoloop.stdlib import JsonArtifactSpec
 
-from autoloop import Route, SELF
+from autoloop import AWAIT_INPUT, FAIL, Route, SELF
 
 from ..task_to_candidate_workflow_set.contracts import CandidateWorkflowSetSummaryPayload
 
@@ -70,6 +70,16 @@ CANDIDATE_WORKFLOW_SET_SUMMARY_ARTIFACT = JsonArtifactSpec(
 )
 STRATEGY_SUMMARY_ARTIFACT = JsonArtifactSpec("strategy_summary.json", StrategySummaryPayload)
 
+_QUESTION_ROUTE = Route.to(AWAIT_INPUT, summary="Execution is awaiting user input.")
+_BLOCKED_ROUTE = Route.to(
+    AWAIT_INPUT,
+    summary="The current workflow-strategy work item is blocked pending missing context, evidence, or approval.",
+)
+_FAILED_ROUTE = Route.to(
+    FAIL,
+    summary="The current workflow-strategy work item cannot continue because a required assumption, artifact, or validation failed.",
+)
+
 
 FRAME_TASK_ROUTE_CONTRACTS = {
     "task_framed": Route.to(
@@ -88,6 +98,9 @@ FRAME_TASK_ROUTE_CONTRACTS = {
         summary="The task trigger, desired outcome, or strategy boundary changed materially and the task must be reframed before any portfolio decision is credible.",
         handoff="Resets the framing boundary before workflow selection continues.",
     ),
+    "question": _QUESTION_ROUTE,
+    "blocked": _BLOCKED_ROUTE,
+    "failed": _FAILED_ROUTE,
 }
 
 SELECT_STRATEGY_ROUTE_CONTRACTS = {
@@ -108,6 +121,9 @@ SELECT_STRATEGY_ROUTE_CONTRACTS = {
         summary="The framing, child candidate set, or legal strategy route changed materially and the task must be reframed before selection continues.",
         handoff="Returns the workflow to framing because the current portfolio comparison is no longer authoritative.",
     ),
+    "question": _QUESTION_ROUTE,
+    "blocked": _BLOCKED_ROUTE,
+    "failed": _FAILED_ROUTE,
 }
 
 PACKAGE_STRATEGY_ROUTE_CONTRACTS = {
@@ -127,6 +143,9 @@ PACKAGE_STRATEGY_ROUTE_CONTRACTS = {
         summary="Packaging revealed that the chosen strategy route, recommended workflows, or handoff contract changed materially and selection must be revisited.",
         handoff="Routes back to strategy selection because the current package no longer matches the chosen route.",
     ),
+    "question": _QUESTION_ROUTE,
+    "blocked": _BLOCKED_ROUTE,
+    "failed": _FAILED_ROUTE,
 }
 
 

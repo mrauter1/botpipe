@@ -101,7 +101,7 @@ def _provider_session(provider: str, session_id: str = "session-1") -> SessionBi
 def _producer_request(*, prompt_text: str = "prompt", session: SessionBinding | None = None) -> ProducerRequest:
     return ProducerRequest(
         step_name="produce",
-        prompt=ResolvedPrompt(path="prompt.md", text=prompt_text),
+        producer_prompt=ResolvedPrompt(path="prompt.md", text=prompt_text),
         context=object(),
         artifacts=object(),
         session=session,
@@ -116,8 +116,8 @@ def _verifier_request(
 ) -> VerifierRequest:
     return VerifierRequest(
         step_name="verify",
-        prompt=ResolvedPrompt(path="verify.md", text=prompt_text),
-        raw_output=raw_output,
+        verifier_prompt=ResolvedPrompt(path="verify.md", text=prompt_text),
+        producer_raw_output=raw_output,
         context=object(),
         artifacts=object(),
         session=session,

@@ -29,7 +29,8 @@ from tests.runtime.workflow_contract_helpers import invoke_python_step
 REPO_ROOT = Path(__file__).resolve().parents[2]
 TASK_ID = "workflow-refinement-task"
 PROMPT_RELATIVE_PATH = "autoloop/workflows/release_candidate_to_go_no_go/prompts/assessment_producer.md"
-DOC_RELATIVE_PATH = "docs/autoloop/workflows/release_candidate_to_go_no_go.md"
+ACTUAL_PROMPT_SOURCE_RELATIVE_PATH = "workflows/release_candidate_to_go_no_go/prompts/assessment_producer.md"
+DOC_RELATIVE_PATH = "docs/workflows/release_candidate_to_go_no_go.md"
 TARGET_TEST_COMMAND = "pytest -q tests/runtime/test_release_candidate_to_go_no_go.py"
 
 
@@ -92,6 +93,8 @@ def test_workflow_and_eval_to_refined_workflow_package_compiles_with_explicit_co
         "needs_rework",
         "needs_replan",
         "question",
+        "blocked",
+        "failed",
     )
     assert list(compiled.route("frame_refinement_request", "refinement_request_framed").required_writes) == [
         "refinement_request_brief",
@@ -649,7 +652,9 @@ def test_workflow_and_eval_to_refined_workflow_package_runs_and_publishes_candid
     assert (run.workflow_dir / "candidate_workflow_surface" / DOC_RELATIVE_PATH).read_text(
         encoding="utf-8"
     ) != run.source_snapshot[DOC_RELATIVE_PATH]
-    assert (tmp_path / PROMPT_RELATIVE_PATH).read_text(encoding="utf-8") == run.source_snapshot[PROMPT_RELATIVE_PATH]
+    assert (tmp_path / ACTUAL_PROMPT_SOURCE_RELATIVE_PATH).read_text(encoding="utf-8") == run.source_snapshot[
+        PROMPT_RELATIVE_PATH
+    ]
     assert (tmp_path / DOC_RELATIVE_PATH).read_text(encoding="utf-8") == run.source_snapshot[DOC_RELATIVE_PATH]
     baseline_refinement_evidence = json.loads(
         (run.workflow_dir / "baseline_refinement_evidence.json").read_text(encoding="utf-8")
@@ -684,6 +689,8 @@ def test_workflow_and_eval_to_refined_workflow_package_runs_and_publishes_candid
         "needs_rework",
         "needs_replan",
         "question",
+        "blocked",
+        "failed",
     )
     assert list(run.provider.calls[7].route_required_writes["workflow_refinement_evaluated"]) == [
         "refinement_verification_report",
@@ -973,7 +980,7 @@ def test_workflow_and_eval_to_refined_workflow_package_publish_rejects_authorita
     monkeypatch,
 ) -> None:
     run = _run_successful_refinement_workflow(tmp_path, monkeypatch)
-    authoritative_prompt = tmp_path / PROMPT_RELATIVE_PATH
+    authoritative_prompt = tmp_path / ACTUAL_PROMPT_SOURCE_RELATIVE_PATH
     authoritative_prompt.write_text(authoritative_prompt.read_text(encoding="utf-8") + "\nDrift.\n", encoding="utf-8")
 
     with pytest.raises(
@@ -1041,7 +1048,7 @@ def _run_successful_refinement_workflow(
     _install_repo_workflow_and_eval_to_refined_workflow_package(tmp_path)
     evidence_paths = _write_refinement_evidence(tmp_path)
     source_snapshot = {
-        PROMPT_RELATIVE_PATH: (tmp_path / PROMPT_RELATIVE_PATH).read_text(encoding="utf-8"),
+        PROMPT_RELATIVE_PATH: (tmp_path / ACTUAL_PROMPT_SOURCE_RELATIVE_PATH).read_text(encoding="utf-8"),
         DOC_RELATIVE_PATH: (tmp_path / DOC_RELATIVE_PATH).read_text(encoding="utf-8"),
     }
 

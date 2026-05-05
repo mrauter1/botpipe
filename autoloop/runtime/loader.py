@@ -1320,10 +1320,14 @@ def _should_treat_as_package_module(source_path: Path) -> bool:
 def _load_isolated_python_module(source_path: Path) -> ModuleType:
     source_path = source_path.resolve()
     if _should_treat_as_package_module(source_path):
+        package_source_root = _isolated_package_source_root(source_path)
         package_module_name, module_name = _isolated_package_module_name(source_path)
         _evict_isolated_namespace(package_module_name)
         _ensure_namespace_package("_autoloop_workspace_workflows", ())
-        _ensure_namespace_package(".".join(package_module_name.split(".")[:2]), ())
+        _ensure_namespace_package(
+            ".".join(package_module_name.split(".")[:2]),
+            (str(package_source_root),),
+        )
         _ensure_namespace_package(package_module_name, (str(source_path.parent),))
         if source_path.name == "__init__.py":
             spec = importlib.util.spec_from_file_location(
@@ -1374,11 +1378,15 @@ def _evict_stale_repo_workflow_modules(module_name: str, root_path: Path) -> Non
 
 def _isolated_package_module_name(source_path: Path) -> tuple[str, str]:
     workflow_id = _sanitize_identifier(source_path.parent.name or source_path.stem)
-    package_digest = sha1(str(source_path.parent.resolve()).encode("utf-8")).hexdigest()[:12]
+    package_digest = sha1(str(_isolated_package_source_root(source_path)).encode("utf-8")).hexdigest()[:12]
     package_module = f"_autoloop_workspace_workflows.{package_digest}.{workflow_id}"
     if source_path.name == "__init__.py":
         return package_module, package_module
     return package_module, f"{package_module}.{source_path.stem}"
+
+
+def _isolated_package_source_root(source_path: Path) -> Path:
+    return source_path.parent.parent.resolve()
 
 
 def _isolated_module_name(source_path: Path) -> str:

@@ -945,6 +945,7 @@ def _json_safe_output_value(output: Any | None) -> Any | None:
 
 def _build_child_workflow_result(execution: RunExecution) -> ChildWorkflowResult:
     context = SimpleNamespace(
+        root=execution.task_workspace.root,
         task_id=execution.task_workspace.task_id,
         run_id=execution.run_workspace.run_id,
         workflow_name=execution.compiled.workflow_name,

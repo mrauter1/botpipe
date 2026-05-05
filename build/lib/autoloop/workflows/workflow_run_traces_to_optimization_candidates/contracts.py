@@ -8,7 +8,7 @@ from pydantic import BaseModel, Field
 
 from autoloop.stdlib import JsonArtifactSpec
 
-from autoloop import Route, SELF
+from autoloop import AWAIT_INPUT, FAIL, Route, SELF
 
 
 EvidenceStrength = Literal["low", "medium", "high"]
@@ -496,6 +496,16 @@ WORKFLOW_OPTIMIZATION_SCORECARD_ARTIFACT = JsonArtifactSpec(
     WorkflowOptimizationScorecardArtifactPayload,
 )
 
+_QUESTION_ROUTE = Route.to(AWAIT_INPUT, summary="Execution is awaiting user input.")
+_BLOCKED_ROUTE = Route.to(
+    AWAIT_INPUT,
+    summary="The current optimization work item is blocked pending missing context, evidence, or approval.",
+)
+_FAILED_ROUTE = Route.to(
+    FAIL,
+    summary="The current optimization work item cannot continue because a required assumption, artifact, or validation failed.",
+)
+
 
 FRAME_ROUTE_CONTRACTS = {
     "optimization_scope_framed": Route.to(
@@ -539,6 +549,9 @@ FRAME_ROUTE_CONTRACTS = {
         ),
         handoff="Keeps the work local to optimizer framing without changing the selected workflow or rerunning the target workflow.",
     ),
+    "question": _QUESTION_ROUTE,
+    "blocked": _BLOCKED_ROUTE,
+    "failed": _FAILED_ROUTE,
 }
 
 RANK_TARGETS_ROUTE_CONTRACTS = {
@@ -560,6 +573,9 @@ RANK_TARGETS_ROUTE_CONTRACTS = {
         required_writes=("step_trace_metrics", "step_optimization_priority_report"),
         handoff="Keeps ranking local to the same trace corpus and selected workflow boundary.",
     ),
+    "question": _QUESTION_ROUTE,
+    "blocked": _BLOCKED_ROUTE,
+    "failed": _FAILED_ROUTE,
 }
 
 MINE_FAILURES_ROUTE_CONTRACTS = {
@@ -580,6 +596,9 @@ MINE_FAILURES_ROUTE_CONTRACTS = {
         required_writes=("workflow_failure_scenarios",),
         handoff="Keeps failure analysis local to the same ranked target set.",
     ),
+    "question": _QUESTION_ROUTE,
+    "blocked": _BLOCKED_ROUTE,
+    "failed": _FAILED_ROUTE,
 }
 
 OPTIMIZE_PRODUCER_ROUTE_CONTRACTS = {
@@ -601,6 +620,9 @@ OPTIMIZE_PRODUCER_ROUTE_CONTRACTS = {
         required_writes=("producer_prompt_optimization_candidates",),
         handoff="Keeps candidate generation local to producer-facing surfaces only.",
     ),
+    "question": _QUESTION_ROUTE,
+    "blocked": _BLOCKED_ROUTE,
+    "failed": _FAILED_ROUTE,
 }
 
 OPTIMIZE_VERIFIER_RUBRIC_ROUTE_CONTRACTS = {
@@ -620,6 +642,9 @@ OPTIMIZE_VERIFIER_RUBRIC_ROUTE_CONTRACTS = {
         required_writes=("verifier_rubric_optimization_candidates",),
         handoff="Keeps verifier/rubric work local to the same ranked target and failure set.",
     ),
+    "question": _QUESTION_ROUTE,
+    "blocked": _BLOCKED_ROUTE,
+    "failed": _FAILED_ROUTE,
 }
 
 OPTIMIZE_TOKENS_ROUTE_CONTRACTS = {
@@ -639,6 +664,9 @@ OPTIMIZE_TOKENS_ROUTE_CONTRACTS = {
         required_writes=("token_optimization_candidates",),
         handoff="Keeps token analysis local to compression classification and prompt-shape pressure only.",
     ),
+    "question": _QUESTION_ROUTE,
+    "blocked": _BLOCKED_ROUTE,
+    "failed": _FAILED_ROUTE,
 }
 
 ADVERSARIAL_CASES_ROUTE_CONTRACTS = {
@@ -658,6 +686,9 @@ ADVERSARIAL_CASES_ROUTE_CONTRACTS = {
         required_writes=("adversarial_case_candidates",),
         handoff="Keeps adversarial work local to observed failure modes only.",
     ),
+    "question": _QUESTION_ROUTE,
+    "blocked": _BLOCKED_ROUTE,
+    "failed": _FAILED_ROUTE,
 }
 
 WORKFLOW_LEVEL_ROUTE_CONTRACTS = {
@@ -679,6 +710,9 @@ WORKFLOW_LEVEL_ROUTE_CONTRACTS = {
         required_writes=("workflow_level_optimization_candidates",),
         handoff="Keeps workflow-level analysis local and evidence-driven.",
     ),
+    "question": _QUESTION_ROUTE,
+    "blocked": _BLOCKED_ROUTE,
+    "failed": _FAILED_ROUTE,
 }
 
 PACKAGE_ROUTE_CONTRACTS = {
@@ -693,6 +727,9 @@ PACKAGE_ROUTE_CONTRACTS = {
         required_writes=("workflow_optimization_scorecard", "workflow_optimization_packet"),
         handoff="Keeps packaging local and candidate-only without inventing downstream execution.",
     ),
+    "question": _QUESTION_ROUTE,
+    "blocked": _BLOCKED_ROUTE,
+    "failed": _FAILED_ROUTE,
 }
 
 

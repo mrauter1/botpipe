@@ -106,6 +106,8 @@ def test_company_operation_to_recursive_improvement_cycle_compiles_with_explicit
         "needs_rework",
         "needs_replan",
         "question",
+        "blocked",
+        "failed",
     )
     assert list(compiled.route("frame_company_operation", "company_operation_framed").required_writes) == [
         "company_operation_brief",
@@ -859,6 +861,8 @@ def test_company_operation_to_recursive_improvement_cycle_runs_and_publishes_ter
         "needs_rework",
         "needs_replan",
         "question",
+        "blocked",
+        "failed",
     )
     assert list(provider.calls[5].route_required_writes["recursive_improvement_cycle_ready"]) == [
         "recursive_improvement_cycle",

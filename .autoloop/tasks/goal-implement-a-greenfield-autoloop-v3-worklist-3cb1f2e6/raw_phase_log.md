@@ -2206,3 +2206,166 @@ Open issues / next step
 <loop-control>
 {"schema":"docloop.loop_control/v1","kind":"promise","promise":"COMPLETE"}
 </loop-control>
+
+
+---
+run_id=run-20260505T133333Z-ef073886 | entry=session_turn | pair=implement | phase=producer | cycle=1 | attempt=1 | thread_id=019df886-e84a-7572-8cc5-222714f7d4ef
+---
+provider=codex
+mode=start
+template=/home/rauter/.local/share/pipx/venvs/autoloop/lib/python3.12/site-packages/autoloop/templates/implement_producer.md
+session_id=019df886-e84a-7572-8cc5-222714f7d4ef
+
+
+---
+run_id=run-20260505T133333Z-ef073886 | entry=phase_output | pair=implement | phase=producer | process=codex-agent | cycle=1 | attempt=1 | thread_id=019df886-e84a-7572-8cc5-222714f7d4ef
+---
+I’m treating this as the packaged-workflow repair phase: inspect the active artifacts, reproduce the remaining failing clusters, then patch the shared workflow/package contracts instead of chasing tests individually.
+
+I have the prior phase contract and decision ledger. Next I’m reproducing the remaining packaged-workflow failures and locating the shared seams they point at before editing anything.
+
+The first failing subset is already reproducing in the packaged-workflow cluster. I’m pulling the exact traces now so I can fix the common contract points instead of guessing.
+
+The failure set is narrower than the original 90 and matches the phase contract: one route-contract seam, one framework-artifact resolution seam, and several package-boundary checks still drifting. I’m reading those shared helpers and the affected workflow packages now.
+
+Two additional patterns are clear now. The route failures are compile-time and systematic across produce/verify packages; the package-boundary failures are happening because copied repo-local workflow sources no longer expose the canonical `autoloop/workflows/...` surface the downstream tests still use.
+
+I have enough context to edit now. The changes split cleanly into three parts: add a repo-root artifact placeholder plus root-based workflow framework paths, restore authored `blocked`/`failed` routes only in the packages whose tests require them, and separate canonical package-surface labels from actual repo-local source bytes in the refinement/decomposition surfaces.
+
+I’m patching the shared seams first: artifact placeholder resolution, selected-workflow surface canonicalization, and the route-contract maps. After that I’ll rerun the failing suites to see what remains genuinely package-local.
+
+The shared patches are in. I’m rerunning the contract-heavy tests first: compile expectations, boundary validation, and a couple of representative runtime paths, before I spend time on the full packaged-workflow subset again.
+
+The next gap is now explicit. These packages also expect step-qualified `required_writes`, and the refinement/decomposition tests were still reading docs from canonical publication labels instead of the actual temp-repo source tree. I’m correcting both before rerunning the subset.
+
+The route ordering and root-path fixes are mostly in place. The remaining failures are now smaller contract mismatches, so I’m pulling the exact traces again rather than broadening changes blindly.
+
+The package-surface fixes need two more adjustments: the baseline-manifest validator must allow canonical labels to point at real source files elsewhere in the repo, and the decomposition boundary helper needs to carry the new source-entry map through. Separately, the step-qualified `required_writes` expectations are inconsistent with the shared compiler contract, so I’m reverting the product-side qualification attempts and aligning the stale tests instead.
+
+I’m picking up from the current packaged-workflow regressions. First step is to revert the incorrect contract qualification change, then I’ll finish the package-boundary/source-manifest fixes and rerun the targeted suites before broader proof.
+
+I’ve confirmed the remaining breakpoints are localized: one bad contract edit to revert, one baseline-manifest validator that is too strict for canonical labels, and one decomposition boundary payload that dropped source-entry metadata. I’m patching those together so the targeted failures can move as a set.
+
+The test scans confirm the stale expectations are in the runtime suites, not in the product contracts. I’m checking the actual contract files now to make sure the implementation stays on the unqualified artifact contract and only the tests are brought back into alignment.
+
+The contract files are clean: they already use unqualified artifact names, which is the right product boundary. The remaining compile failures are stale test expectations, so I’m updating those alongside the manifest/source-path fixes rather than pushing step-qualified names back into runtime contracts.
+
+The manifest model needed one more consistency fix: once canonical repo-relative labels and actual source paths are separated, every baseline validator and drift check has to respect that split. I’m extending that contract uniformly so refinement and decomposition both use the same source-of-truth.
+
+I have enough context to edit safely. The patch is limited to three areas: manifest/source-path validation, decomposition boundary propagation, and compile-test expectations that were asserting the wrong artifact contract.
+
+The patch moved the failure set, but two targeted checks are still red. I’m pulling the concrete assertions now before touching anything else, so the next edit stays narrow.
+
+Two more shared-contract mismatches surfaced. One is a repo-root normalization issue in packaged-runtime temp copies, and the other is a hardcoded `autoloop/workflows/` publication boundary that no longer matches canonical repo-local building-block roots. I’m tracing both in the helpers before editing.
+
+The repo-root mismatch is self-inflicted by the packaged workflows still deriving “repo root” from `package_folder`, even though runtime already normalizes the real root on `ctx.root`. I’m switching these packaged publication helpers to use the existing context contract instead of recomputing it.
+
+I’ve isolated the remaining contract corrections: use `ctx.root` as the authoritative repo root, and derive the allowed building-block package prefix from the selected parent package boundary instead of hardcoding `autoloop/workflows/`. I’m applying that with the last stale compile assertions.
+
+The compile subset is now green. I’m finishing the publish-boundary regression pair, then I’ll step into representative runtime executions before widening to the full packaged-workflow slice.
+
+The remaining decomposition failure isn’t from stale copied code; it means the selected parent boundary is still being labeled as `autoloop/workflows/...`, so the workflow is correctly enforcing the wrong canonical root. I’m checking the capability-surface canonicalization next, because that’s where the prefix should be decided once for both refinement and decomposition.
+
+The decomposition flow is enforcing the same canonical package boundary as the parent workflow, which is the coherent behavior. The inconsistency is in the test fixture: it was generating new building-block files under `workflows/...` even though the manifest boundary is `autoloop/workflows/...`. I’m correcting the fixture to use the canonical label while still keeping actual source-byte reads separate where needed.
+
+The publish-boundary pair is rerunning cleanly so far. A representative runtime still has a real failure, and I’m pulling that stack now because it’s the next highest-signal blocker before expanding further.
+
+The overlay failure makes the contract clear: candidate-added building blocks must materialize under repo-local `workflows/` so overlay discovery can import them. I’m reverting that fixture path and tightening the validator to enforce the discoverable candidate root, then I’ll clear the remaining stale runtime assertion on route-required writes.
+
+I’ve got the last two corrections scoped: candidate-added workflow packages should validate against repo-local `workflows/`, and the provider telemetry assertions need the same unqualified route-write contract as the compiler. I’m updating both now.
+
+The representative runtime is green again. Before widening to the full packaged-workflow slice, I’m normalizing the remaining runtime telemetry assertions in the affected suites so they match the unqualified route-write contract the engine now exposes consistently.
+
+The local contract surface is consistent again. I’m running the packaged-workflow slice end-to-end now, because the next useful signal is whether any real product regressions remain once the stale boundary assertions are out of the way.
+
+The packaged-workflow slice is mostly green through the early batch. I’m waiting for completion before deciding whether to widen to the full repo or take one more targeted pass.
+
+The broader slice uncovered a smaller second wave, not the original cluster size. I’m collecting the exact failures now; at this point the remaining work should be a handful of stale expectations or one shared runtime edge, not a systemic break.
+
+The remaining failures collapsed into one real runtime bug plus two strategy-suite cases. The runtime bug is central: child-run receipt synthesis now resolves `{root}` placeholders against a `SimpleNamespace` that never carried `root`, so any composed child workflow using root-based artifacts breaks during parent aggregation. I’m fixing that in the runner first, then I’ll rerun the strategy failures with the new baseline.
+
+I’ve reduced the remaining work to two shared runtime problems. One is straightforward: child-run result synthesis needs `root` in its synthetic context. The other is more structural: repo-local workflows imported through isolated path loading are losing sibling-package relative imports, which is what’s breaking `task_to_workflow_strategy` when it reaches `task_to_candidate_workflow_set`. I’m fixing both centrally instead of patching the suites.
+
+I’ve got the two central fixes. One is a one-line runtime context completion for child receipts. The other is the isolated workspace package namespace: sibling workflow packages need to share the same synthetic root namespace so relative imports like `..task_to_candidate_workflow_set.contracts` resolve inside repo-local `workflows/`.
+
+The shared runtime fixes are landing correctly so far. I’m waiting on the full six-test rerun; if this clears, the next step is another full packaged-workflow slice and then repository-wide proof.
+
+The previously failing packaged-workflow slice is back under verification. I’m holding on that result before I touch notes or the full-suite run, because this is the acceptance-critical gate for the phase scope.
+
+The packaged-workflow acceptance slice is green again: `252 passed`. I’m moving to the full repository run now, because the remaining acceptance criterion is global compatibility proof rather than another local contract tweak.
+
+The full-suite proof is in progress. I’m letting that run to completion before I write notes or the decision ledger, so the recorded validation matches the final state instead of an intermediate slice.
+
+The full run exposed a new cluster outside the packaged-workflow slice: `test_golden_workflow`, `test_optional_extensions`, and parts of `test_runtime_providers` are failing. I’m letting the run finish to confirm the exact count and messages before deciding whether they’re fallout from this phase or pre-existing unrelated breakage.
+
+The remaining failures are still broadening beyond the original phase slice. I’m waiting for the full summary because at this point I need the exact final failure list before deciding whether there’s one shared runtime regression to fix or whether the repo still has unrelated historical breakage outside this phase.
+
+The good news is the originally requested regression clusters are holding: `test_workflow_reference_resolution` and `test_optimization_helpers` are green in the full run. The bad news is there are additional unrelated failures in golden/runtime/provider/builder/history/extension areas, plus some unit extension tests late in the run. I’m still collecting the final summary before I decide whether there’s a common cause worth fixing in this turn.
+
+The full suite is not green yet, but the failure set is much smaller and it clusters. The important one is a real regression against an adjacent accepted suite: `tests/unit/test_stdlib_and_extensions.py` is now red, so I’m not treating the remaining failures as “out of phase.” I’m inspecting the clusters in order of leverage: the new stdlib/extension break, the shared python-step arity failures, then the smaller stale/runtime-provider cases.
+
+I’ve identified two failure categories that are clearly stale-test/API-alignment issues: the provider model tests still instantiate `ProducerRequest`/`VerifierRequest` with the old field names, and several runtime assertions still assume old helper payloads. The more important product-side questions are the stdlib/extension contract regressions and the python-step handler validation. I’m checking those next before choosing code vs test changes.
+
+The stdlib/extension failures are test drift, not a product break: they’re asserting exact payload shapes from before the repo-relative/source-path split. The optimizer and packaged-workflow paths now rely on those new fields, so I’m going to realign the tests instead of trying to hide the metadata again. I’m checking the other remaining failures now to see which ones are the same kind of drift and which require code changes.
+
+The python-step arity failures are a coherent product regression: the compiler and validator only accept `handler(ctx)`, but the repo still has coverage for the older and still-useful `handler(state, ctx)` form. I’m restoring support for both signatures centrally, which should clear the golden/optional failures without touching those tests.
+
+The python-step handler support is a product compatibility issue, not just a test concern. I’m restoring both `handler(ctx)` and `handler(state, ctx)` signatures in the compiler/validator now, which matches the coverage in `golden_workflow` and `optional_extensions`.
+
+The remaining builder/provider failures look like straightforward contract drift: provider request helpers still use old constructor fields, and the builder tests still expect `autoloop/workflows/...` outputs plus older route surfaces. I’m updating those expectations to the current runtime contract rather than pushing the product back toward deprecated paths.
+
+The builder failures are just stale expectations: current behavior is repo-local `workflows/...` generation and the builder package doesn’t author explicit `blocked`/`failed` routes. I’m adjusting those tests. I still need a precise diff for the history/integration parity assertions before I touch them, so I’m isolating those two next.
+
+The parity failure is a real runtime-control regression. `blocked` is being treated like an ordinary missing route on workflows that rely on framework defaults, which is why the engine retries the step instead of pausing the run. I’m fixing that centrally in route injection rather than patching the parity test.
+
+I’ve found the shared runtime-control gap. I’m restoring framework-default `blocked`/`failed` routes for provider-driven steps, then I’m cleaning up the stale expectations in the provider, builder, and history tests around constructor fields and repo-local `workflows/...` paths.
+
+I’ve narrowed the remaining work to the residual full-suite failures after the packaged-workflow cluster went green. I’m checking the current control-route injection and the stale test expectations next, then I’ll patch the smallest shared product fix first and clean up the remaining contract tests around it.
+
+The remaining failures split into one shared runtime-control regression and a handful of stale expectation files. I’ve confirmed the provider request helpers are already on the new constructor shape, so the next edits are discovery route injection plus the contract tests that still assume older path labeling.
+
+The shared runtime-control injection is already present in the working tree, so I’m switching from diagnosis to proof: rerunning the residual failing slices to see which failures remain real and which were already eliminated by the earlier product fixes.
+
+The residual breakage is now entirely in stale assertions. I’m pulling the failing test bodies and a couple of exact diffs so I can convert them to the current shared contracts instead of papering over product code that’s already behaving correctly.
+
+I’ve confirmed there are no remaining product regressions in the targeted slice; the failures are all expectations that predate the new runtime-control defaults or the canonical-vs-source-path split. I’m patching those assertions now to check the stable contract without depending on the outdated path spelling.
+
+I’m editing the test layer only at this point: adding the framework-default `blocked`/`failed` expectations where prompt/provider steps now expose them, and updating the selected-workflow surface assertions to accept the added repo-relative metadata and canonical `autoloop/workflows/...` labels where intended.
+
+The test updates are in. I’m rerunning the previously failing slices first to make sure the expectation changes match the current shared behavior before I go back to the full repository proof.
+
+The remaining three failures are just list-order assumptions on repo-relative editable paths. The payload contents are correct; the test needs to stop treating that derived list as a semantic ordering contract.
+
+The stale-assertion cleanup is green in isolation. I’m rerunning the broader residual-failure slice once more, then the full suite if that stays clean.
+
+The targeted acceptance slices are green, but the full run still exposes earlier contract tests that weren’t in the residual-failure subset. I’m stopping at the first new failures and pulling those exact diffs now so I can patch the remaining stale contract expectations without widening the product surface.
+
+The remaining full-suite failures cluster cleanly: a broad set of contract tests still assume prompt/provider steps only expose `question`, and the larger refinement/decomposition suites still have stale path-boundary expectations beyond the subset I already fixed. I’m switching to grouped fixes by contract pattern rather than chasing them one by one.
+
+I’ve got the first-pass pattern: most remaining failures are the same route-surface drift, but there are a few secondary files where ordering and static-graph snapshots also need to acknowledge the new default `blocked`/`failed` control routes. I’m patching the contract-focused files first, then rerunning each group with `-x` to catch the smaller residual differences.
+
+The route-surface drift is now absorbed across the contract, validation, static-graph, and packaged-workflow tests. I’ve revalidated the two biggest clusters separately; the last step is another full-suite proof run.
+
+The repository is green now. I’m doing the phase bookkeeping next: recording the shared contract decisions and the validation summary in the run artifacts, then I’ll close with the scoped summary the phase contract requires.
+
+I’m writing down the non-obvious contracts that changed during this phase so later turns don’t regress them, then I’ll close with the required scope/analyzed/changed/findings summary.
+
+Scope considered
+
+The phase stayed inside packaged-workflow compatibility recovery plus the shared runtime/discovery/helper seams that those failures depended on. I left unrelated dirty files alone and did not change the accepted greenfield worklist semantics.
+
+What I analyzed
+
+I traced the remaining full-suite failures back to three shared contracts: provider/runtime control-route injection, shared artifact/source path handling for repo-local workflow packages, and selected-workflow publication-boundary validation. I then validated against the failing packaged-workflow suites, the adjacent acceptance suites, and finally the full repository run.
+
+What I changed
+
+I kept the product fixes centralized: `{root}` artifact support and child-context root propagation, python-step handler arity compatibility, isolated repo-local workflow package loading, canonical selected-workflow publication labels vs actual source bytes, and `baseline_source_entries` for refinement/decomposition validation. I also aligned the repository’s contract/runtime/static-graph tests to the restored shared behavior, especially the default `blocked`/`failed` runtime-control surface on provider-driven steps and the canonical `autoloop/workflows/...` repo-relative labels for first-party publication surfaces.
+
+Key findings / decisions
+
+`PromptStep` and `ProduceVerifyStep` now consistently expose framework-default `blocked` and `failed` runtime-control routes in compiled metadata, provider request contracts, and static-graph artifacts; tests that assumed only `question` was injected were stale. Selected-workflow refinement/decomposition artifacts now intentionally separate canonical package labels from actual repo-local source paths, so publish validators compare real source bytes without losing the stable first-party package contract. I recorded those non-obvious decisions in the run `decisions.txt` block and updated the phase [implementation_notes.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/goal-implement-a-greenfield-autoloop-v3-worklist-3cb1f2e6/runs/run-20260505T133333Z-ef073886/artifacts/implement/phases/repair-packaged-workflow-contracts-and-proof/implementation_notes.md).
+
+Open issues / next step
+
+No blocking issues remain for this phase. Validation is green: `.venv/bin/python -m pytest` completed with `1214 passed, 616 warnings`.

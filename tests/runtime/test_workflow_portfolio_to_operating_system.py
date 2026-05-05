@@ -81,6 +81,8 @@ def test_workflow_portfolio_to_operating_system_compiles_with_explicit_control_c
         "needs_rework",
         "needs_replan",
         "question",
+        "blocked",
+        "failed",
     )
     assert list(compiled.route("frame_portfolio_governance", "portfolio_governance_framed").required_writes) == [
         "portfolio_governance_brief",
@@ -868,6 +870,8 @@ def test_workflow_portfolio_to_operating_system_runs_and_publishes_terminal_gove
         "needs_rework",
         "needs_replan",
         "question",
+        "blocked",
+        "failed",
     )
     assert list(provider.calls[5].route_required_writes["portfolio_operating_system_ready"]) == [
         "workflow_portfolio_operating_system",

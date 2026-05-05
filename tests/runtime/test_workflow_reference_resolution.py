@@ -416,6 +416,8 @@ class SimpleExample(Workflow):
     assert inspected.routes["a"] == {
         "done": "FINISH",
         "question": "AWAIT_INPUT",
+        "blocked": "AWAIT_INPUT",
+        "failed": "FAIL",
     }
 
 

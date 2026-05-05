@@ -29,7 +29,8 @@ from tests.runtime.workflow_contract_helpers import invoke_python_step
 REPO_ROOT = Path(__file__).resolve().parents[2]
 TASK_ID = "workflow-decomposition-task"
 PARENT_PROMPT_RELATIVE_PATH = "autoloop/workflows/release_candidate_to_go_no_go/prompts/evidence_producer.md"
-PARENT_DOC_RELATIVE_PATH = "docs/autoloop/workflows/release_candidate_to_go_no_go.md"
+ACTUAL_PARENT_PROMPT_SOURCE_RELATIVE_PATH = "workflows/release_candidate_to_go_no_go/prompts/evidence_producer.md"
+PARENT_DOC_RELATIVE_PATH = "docs/workflows/release_candidate_to_go_no_go.md"
 PARENT_TEST_RELATIVE_PATH = "tests/runtime/test_release_candidate_to_go_no_go.py"
 BUILDING_BLOCK_NAME = "release_decision_evidence_pack"
 BUILDING_BLOCK_ROOT = f"workflows/{BUILDING_BLOCK_NAME}"
@@ -137,6 +138,8 @@ def test_workflow_package_to_composable_building_blocks_compiles_with_explicit_c
         "needs_rework",
         "needs_replan",
         "question",
+        "blocked",
+        "failed",
     )
     assert list(compiled.route("frame_decomposition_request", "decomposition_request_framed").required_writes) == [
         "decomposition_request_brief",
@@ -679,7 +682,7 @@ def test_workflow_package_to_composable_building_blocks_runs_and_publishes_candi
     assert (run.workflow_dir / "candidate_decomposition_surface" / PARENT_DOC_RELATIVE_PATH).read_text(
         encoding="utf-8"
     ) != run.source_snapshot[PARENT_DOC_RELATIVE_PATH]
-    assert (tmp_path / PARENT_PROMPT_RELATIVE_PATH).read_text(encoding="utf-8") == run.source_snapshot[
+    assert (tmp_path / ACTUAL_PARENT_PROMPT_SOURCE_RELATIVE_PATH).read_text(encoding="utf-8") == run.source_snapshot[
         PARENT_PROMPT_RELATIVE_PATH
     ]
     assert (tmp_path / PARENT_DOC_RELATIVE_PATH).read_text(encoding="utf-8") == run.source_snapshot[
@@ -708,6 +711,8 @@ def test_workflow_package_to_composable_building_blocks_runs_and_publishes_candi
         "needs_rework",
         "needs_replan",
         "question",
+        "blocked",
+        "failed",
     )
     assert list(run.provider.calls[7].route_required_writes["candidate_decomposition_evaluated"]) == [
         "decomposition_verification_report",
@@ -821,7 +826,7 @@ def test_workflow_package_to_composable_building_blocks_publish_rejects_authorit
     monkeypatch,
 ) -> None:
     run = _run_successful_decomposition_workflow(tmp_path, monkeypatch, include_evidence_paths=True)
-    authoritative_prompt = tmp_path / PARENT_PROMPT_RELATIVE_PATH
+    authoritative_prompt = tmp_path / ACTUAL_PARENT_PROMPT_SOURCE_RELATIVE_PATH
     authoritative_prompt.write_text(authoritative_prompt.read_text(encoding="utf-8") + "\nDrift.\n", encoding="utf-8")
 
     with pytest.raises(
@@ -975,7 +980,9 @@ def _run_successful_decomposition_workflow(
     _install_repo_workflow_package_to_composable_building_blocks(tmp_path)
     evidence_path = _write_decomposition_evidence(tmp_path)
     source_snapshot = {
-        PARENT_PROMPT_RELATIVE_PATH: (tmp_path / PARENT_PROMPT_RELATIVE_PATH).read_text(encoding="utf-8"),
+        PARENT_PROMPT_RELATIVE_PATH: (tmp_path / ACTUAL_PARENT_PROMPT_SOURCE_RELATIVE_PATH).read_text(
+            encoding="utf-8"
+        ),
         PARENT_DOC_RELATIVE_PATH: (tmp_path / PARENT_DOC_RELATIVE_PATH).read_text(encoding="utf-8"),
     }
 

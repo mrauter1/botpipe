@@ -211,9 +211,9 @@ class WorkflowAndEvalToRefinedWorkflowPackage(Workflow):
     evaluate_session = Session()
 
     request = Artifact("{run_folder}/request.md")
-    framework_architecture_doc = Artifact("{package_folder}/../../../docs/architecture.md")
-    framework_authoring_doc = Artifact("{package_folder}/../../../docs/authoring.md")
-    workflow_instructions = Artifact("{package_folder}/../../../Workflow_Instructions.md")
+    framework_architecture_doc = Artifact("{root}/docs/architecture.md")
+    framework_authoring_doc = Artifact("{root}/docs/authoring.md")
+    workflow_instructions = Artifact("{root}/Workflow_Instructions.md")
     refinement_package_checklist = Artifact("{package_folder}/assets/refinement_package_checklist.md")
 
     invocation_contract = Artifact("{workflow_folder}/invocation_contract.json")
@@ -640,7 +640,7 @@ class WorkflowAndEvalToRefinedWorkflowPackage(Workflow):
 
 
 def _repo_root_from_context(ctx) -> Path:
-    return ctx.package_folder.resolve().parent.parent
+    return ctx.root.resolve()
 
 
 def _validate_evaluation_summary_selected_workflow(
@@ -666,7 +666,7 @@ def _write_baseline_workflow_manifest(
     surface_manifest = materialize_baseline_surface(
         workflow_folder=ctx.workflow_folder,
         repo_root=repo_root,
-        baseline_relative_paths=boundary["baseline_relative_paths"],
+        baseline_relative_paths=boundary["baseline_source_entries"],
         baseline_dir_name="baseline_workflow_surface",
         candidate_dir_name="candidate_workflow_surface",
     )

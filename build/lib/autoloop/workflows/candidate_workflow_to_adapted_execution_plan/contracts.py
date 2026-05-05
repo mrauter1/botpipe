@@ -8,7 +8,7 @@ from pydantic import BaseModel, Field
 
 from autoloop.stdlib import JsonArtifactSpec
 
-from autoloop import Route, SELF
+from autoloop import AWAIT_INPUT, FAIL, Route, SELF
 
 
 class AdaptationRequestFramingPayload(BaseModel):
@@ -79,6 +79,16 @@ VALIDATED_WORKFLOW_PARAMETERS_ARTIFACT = JsonArtifactSpec(
     ValidatedWorkflowParametersPayload,
 )
 
+_QUESTION_ROUTE = Route.to(AWAIT_INPUT, summary="Execution is awaiting user input.")
+_BLOCKED_ROUTE = Route.to(
+    AWAIT_INPUT,
+    summary="The current adaptation work item is blocked pending missing context, evidence, or approval.",
+)
+_FAILED_ROUTE = Route.to(
+    FAIL,
+    summary="The current adaptation work item cannot continue because a required assumption, artifact, or validation failed.",
+)
+
 
 FRAME_ADAPTATION_REQUEST_ROUTE_CONTRACTS = {
     "adaptation_request_framed": Route.to(
@@ -98,6 +108,9 @@ FRAME_ADAPTATION_REQUEST_ROUTE_CONTRACTS = {
         summary="The task trigger, selected workflow, or execution boundary changed materially and the adaptation request must be reframed.",
         handoff="Returns the workflow to framing because the current adaptation boundary is no longer authoritative.",
     ),
+    "question": _QUESTION_ROUTE,
+    "blocked": _BLOCKED_ROUTE,
+    "failed": _FAILED_ROUTE,
 }
 
 ANALYZE_ADAPTATION_SURFACE_ROUTE_CONTRACTS = {
@@ -118,6 +131,9 @@ ANALYZE_ADAPTATION_SURFACE_ROUTE_CONTRACTS = {
         summary="Analysis proved that the selected workflow, acceptance boundary, or execution shape changed materially and framing must be revisited.",
         handoff="Routes back to framing because the chosen workflow or acceptance boundary is no longer credible as stated.",
     ),
+    "question": _QUESTION_ROUTE,
+    "blocked": _BLOCKED_ROUTE,
+    "failed": _FAILED_ROUTE,
 }
 
 PACKAGE_ADAPTED_EXECUTION_PLAN_ROUTE_CONTRACTS = {
@@ -147,6 +163,9 @@ PACKAGE_ADAPTED_EXECUTION_PLAN_ROUTE_CONTRACTS = {
         summary="Packaging revealed that the selected workflow, adaptation boundary, or execution handoff changed materially and analysis must be revisited.",
         handoff="Routes back to analysis because the current package no longer matches the authoritative adaptation surface.",
     ),
+    "question": _QUESTION_ROUTE,
+    "blocked": _BLOCKED_ROUTE,
+    "failed": _FAILED_ROUTE,
 }
 
 

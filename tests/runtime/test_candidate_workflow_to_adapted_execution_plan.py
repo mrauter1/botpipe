@@ -111,24 +111,24 @@ def test_candidate_workflow_to_adapted_execution_plan_package_compiles_with_expl
         "failed",
     )
     assert list(compiled.route("frame_adaptation_request", "adaptation_request_framed").required_writes) == [
-        "frame_adaptation_request.adaptation_request_brief",
-        "frame_adaptation_request.adaptation_success_criteria",
+        "adaptation_request_brief",
+        "adaptation_success_criteria",
     ]
     assert frame_step.expected_output_schema is not None
 
     analysis_step = compiled.steps["analyze_adaptation_surface"]
     assert list(compiled.route("analyze_adaptation_surface", "adaptation_surface_analyzed").required_writes) == [
-        "analyze_adaptation_surface.workflow_fit_assessment",
-        "analyze_adaptation_surface.step_adaptation_matrix",
+        "workflow_fit_assessment",
+        "step_adaptation_matrix",
     ]
     assert analysis_step.expected_output_schema is not None
 
     package_step = compiled.steps["package_adapted_execution_plan"]
     assert list(compiled.route("package_adapted_execution_plan", "adapted_execution_plan_ready").required_writes) == [
-        "package_adapted_execution_plan.adapted_execution_plan",
-        "package_adapted_execution_plan.proposed_workflow_parameters",
-        "package_adapted_execution_plan.adapted_execution_summary",
-        "package_adapted_execution_plan.adapted_execution_next_action",
+        "adapted_execution_plan",
+        "proposed_workflow_parameters",
+        "adapted_execution_summary",
+        "adapted_execution_next_action",
     ]
     assert package_step.expected_output_schema is not None
     assert set(package_step.expected_output_schema["required"]) >= {
@@ -145,13 +145,13 @@ def test_candidate_workflow_to_adapted_execution_plan_package_compiles_with_expl
 
     publish_step = compiled.steps["publish_adapted_execution_plan"]
     assert publish_step.requires == (
-        "capture_selected_workflow_contract.selected_workflow_capability",
-        "analyze_adaptation_surface.workflow_fit_assessment",
-        "analyze_adaptation_surface.step_adaptation_matrix",
-        "package_adapted_execution_plan.adapted_execution_plan",
-        "package_adapted_execution_plan.proposed_workflow_parameters",
-        "package_adapted_execution_plan.adapted_execution_summary",
-        "package_adapted_execution_plan.adapted_execution_next_action",
+        "selected_workflow_capability",
+        "workflow_fit_assessment",
+        "step_adaptation_matrix",
+        "adapted_execution_plan",
+        "proposed_workflow_parameters",
+        "adapted_execution_summary",
+        "adapted_execution_next_action",
     )
 
 
@@ -826,8 +826,8 @@ def test_candidate_workflow_to_adapted_execution_plan_package_runs_and_publishes
         "package_adapted_execution_plan",
     ]
     assert list(provider.calls[1].route_required_writes["adaptation_request_framed"]) == [
-        "frame_adaptation_request.adaptation_request_brief",
-        "frame_adaptation_request.adaptation_success_criteria",
+        "adaptation_request_brief",
+        "adaptation_success_criteria",
     ]
     assert provider.calls[3].available_routes == (
         "adaptation_surface_analyzed",
@@ -838,10 +838,10 @@ def test_candidate_workflow_to_adapted_execution_plan_package_runs_and_publishes
         "failed",
     )
     assert list(provider.calls[5].route_required_writes["adapted_execution_plan_ready"]) == [
-        "package_adapted_execution_plan.adapted_execution_plan",
-        "package_adapted_execution_plan.proposed_workflow_parameters",
-        "package_adapted_execution_plan.adapted_execution_summary",
-        "package_adapted_execution_plan.adapted_execution_next_action",
+        "adapted_execution_plan",
+        "proposed_workflow_parameters",
+        "adapted_execution_summary",
+        "adapted_execution_next_action",
     ]
 
 

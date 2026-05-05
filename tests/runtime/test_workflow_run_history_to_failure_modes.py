@@ -83,6 +83,8 @@ def test_workflow_run_history_to_failure_modes_package_compiles_with_explicit_co
         "needs_rework",
         "needs_replan",
         "question",
+        "blocked",
+        "failed",
     )
     assert list(compiled.route("frame_diagnostic_scope", "diagnostic_scope_framed").required_writes) == [
         "diagnostic_scope_brief",
@@ -642,7 +644,7 @@ def test_workflow_run_history_to_failure_modes_package_runs_and_publishes_termin
                     "run_metadata": {
                         "created_at": "2026-04-23T08:00:00+00:00",
                         "error": None,
-                        "package_folder": "autoloop/workflows/release_candidate_to_go_no_go",
+                            "package_folder": "workflows/release_candidate_to_go_no_go",
                         "pending_question": "Who owns rollback approval for release 2026.07?",
                         "run_id": "run-release-paused",
                         "status": "awaiting_input",
@@ -770,7 +772,7 @@ def test_workflow_run_history_to_failure_modes_package_runs_and_publishes_termin
                     "run_metadata": {
                         "created_at": "2026-04-22T09:00:00+00:00",
                         "error": None,
-                        "package_folder": "autoloop/workflows/release_candidate_to_go_no_go",
+                            "package_folder": "workflows/release_candidate_to_go_no_go",
                         "pending_question": None,
                         "run_id": "run-release-blocked",
                         "status": "blocked",
@@ -898,7 +900,7 @@ def test_workflow_run_history_to_failure_modes_package_runs_and_publishes_termin
                     "run_metadata": {
                         "created_at": "2026-04-21T10:00:00+00:00",
                         "error": "Rollback readiness was never published.",
-                        "package_folder": "autoloop/workflows/release_candidate_to_go_no_go",
+                            "package_folder": "workflows/release_candidate_to_go_no_go",
                         "pending_question": None,
                         "run_id": "run-release-failed",
                         "status": "failed",
@@ -1188,6 +1190,8 @@ def test_workflow_run_history_to_failure_modes_package_runs_and_publishes_termin
         "needs_rework",
         "needs_replan",
         "question",
+        "blocked",
+        "failed",
     )
     assert list(provider.calls[5].route_required_writes["improvement_pressure_packaged"]) == [
         "improvement_opportunities",

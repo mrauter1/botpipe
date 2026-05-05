@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from pydantic import BaseModel, Field
 
-from autoloop import Route, SELF
+from autoloop import AWAIT_INPUT, FAIL, Route, SELF
 
 
 class InvestigationFramingPayload(BaseModel):
@@ -28,6 +28,17 @@ class InvestigationEvidencePackPayload(BaseModel):
     replan_reason: str | None = None
 
 
+_QUESTION_ROUTE = Route.to(AWAIT_INPUT, summary="Execution is awaiting user input.")
+_BLOCKED_ROUTE = Route.to(
+    AWAIT_INPUT,
+    summary="The current investigation work item is blocked pending missing context, evidence, or approval.",
+)
+_FAILED_ROUTE = Route.to(
+    FAIL,
+    summary="The current investigation work item cannot continue because a required assumption, artifact, or validation failed.",
+)
+
+
 FRAME_INVESTIGATION_ROUTE_CONTRACTS = {
     "investigation_framed": Route.to(
         "assemble_evidence_pack",
@@ -46,6 +57,9 @@ FRAME_INVESTIGATION_ROUTE_CONTRACTS = {
         summary="The investigation trigger, downstream consumer, or evidence surface changed materially and must be reframed.",
         handoff="Resets the investigation framing boundary before downstream evidence work continues.",
     ),
+    "question": _QUESTION_ROUTE,
+    "blocked": _BLOCKED_ROUTE,
+    "failed": _FAILED_ROUTE,
 }
 
 ASSEMBLE_EVIDENCE_PACK_ROUTE_CONTRACTS = {
@@ -77,6 +91,9 @@ ASSEMBLE_EVIDENCE_PACK_ROUTE_CONTRACTS = {
         summary="The investigation boundary or evidence plan changed materially enough that framing must be revisited.",
         handoff="Routes back to investigation framing because the evidence contract is no longer authoritative.",
     ),
+    "question": _QUESTION_ROUTE,
+    "blocked": _BLOCKED_ROUTE,
+    "failed": _FAILED_ROUTE,
 }
 
 

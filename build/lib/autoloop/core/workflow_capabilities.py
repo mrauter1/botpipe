@@ -153,7 +153,7 @@ def load_workflow_package_contract(root: str | Path, entry: WorkflowCatalogEntry
     """Load the main workflow class, parameters model, and compiled workflow for one catalog entry."""
 
     root_path = Path(root).resolve()
-    if entry.workflow_module is None or entry.package_module is None:
+    if entry.source_root_kind != "package" or entry.workflow_module is None or entry.package_module is None:
         resolved = _resolve_reference(root_path, str(entry.source_path))
         compiled = compile_workflow(resolved.workflow_cls)
         return WorkflowLoadedPackage(
@@ -381,6 +381,7 @@ def selected_workflow_capability_payload(entry: WorkflowCapabilityEntry) -> dict
 def selected_workflow_authoring_surface_payload(entry: WorkflowCapabilityEntry) -> dict[str, object]:
     """Return the authoritative editable selected-workflow surface payload."""
 
+    repo_root = _infer_repo_root_from_package_dir(entry.package_dir)
     runtime_test_path = _runtime_test_path(entry.test_paths)
     asset_paths = [str(path) for path in entry.asset_paths]
     prompt_paths = [str(path) for path in entry.prompt_paths]
@@ -413,20 +414,33 @@ def selected_workflow_authoring_surface_payload(entry: WorkflowCapabilityEntry) 
     )
     return {
         "asset_paths": asset_paths,
+        "asset_paths_repo_relative": _selected_workflow_repo_relative_list(repo_root, entry, entry.asset_paths),
         "doc_path": doc_path,
+        "doc_path_repo_relative": _selected_workflow_repo_relative(repo_root, entry, entry.doc_path),
         "editable_paths": editable_paths,
+        "editable_paths_repo_relative": _selected_workflow_repo_relative_list(repo_root, entry, editable_paths),
         "manifest_path": manifest_path,
+        "manifest_path_repo_relative": _selected_workflow_repo_relative(repo_root, entry, entry.manifest_path),
         "package_dir": str(entry.package_dir),
+        "package_dir_repo_relative": _selected_workflow_repo_relative(repo_root, entry, entry.package_dir),
         "package_init_path": package_init_path,
+        "package_init_path_repo_relative": _selected_workflow_repo_relative(repo_root, entry, entry.package_init_path),
         "package_name": entry.package_name,
         "params_path": params_path,
+        "params_path_repo_relative": _selected_workflow_repo_relative(repo_root, entry, entry.params_path),
         "prompt_paths": prompt_paths,
+        "prompt_paths_repo_relative": _selected_workflow_repo_relative_list(repo_root, entry, entry.prompt_paths),
         "runtime_test_path": runtime_test_path,
+        "runtime_test_path_repo_relative": _selected_workflow_repo_relative(repo_root, entry, runtime_test_path),
         "spec_paths": spec_paths,
+        "spec_paths_repo_relative": _selected_workflow_repo_relative_list(repo_root, entry, entry.spec_paths),
         "test_paths": test_paths,
+        "test_paths_repo_relative": _selected_workflow_repo_relative_list(repo_root, entry, entry.test_paths),
         "workflow_name": entry.workflow_name,
         "workflow_py_path": workflow_py_path,
+        "workflow_py_path_repo_relative": _selected_workflow_repo_relative(repo_root, entry, entry.workflow_py_path),
         "workflow_path": str(entry.workflow_path),
+        "workflow_path_repo_relative": _selected_workflow_repo_relative(repo_root, entry, entry.workflow_path),
     }
 
 
@@ -445,58 +459,7 @@ def selected_workflow_decomposition_surface_payload(
         if key not in {"package_name", "workflow_name"}
     }
     return {
-        "selected_workflow_authoring_surface": {
-            **decomposition_authoring_surface,
-            "asset_paths_repo_relative": _repo_relative_list(
-                repo_root_path,
-                decomposition_authoring_surface["asset_paths"],
-            ),
-            "doc_path_repo_relative": _optional_repo_relative(repo_root_path, decomposition_authoring_surface["doc_path"]),
-            "editable_paths_repo_relative": _repo_relative_list(
-                repo_root_path,
-                decomposition_authoring_surface["editable_paths"],
-            ),
-            "manifest_path_repo_relative": _optional_repo_relative(
-                repo_root_path,
-                decomposition_authoring_surface["manifest_path"],
-            ),
-            "package_dir_repo_relative": _optional_repo_relative(
-                repo_root_path,
-                decomposition_authoring_surface["package_dir"],
-            ),
-            "package_init_path_repo_relative": _optional_repo_relative(
-                repo_root_path,
-                decomposition_authoring_surface["package_init_path"],
-            ),
-            "params_path_repo_relative": _optional_repo_relative(
-                repo_root_path,
-                decomposition_authoring_surface["params_path"],
-            ),
-            "prompt_paths_repo_relative": _repo_relative_list(
-                repo_root_path,
-                decomposition_authoring_surface["prompt_paths"],
-            ),
-            "runtime_test_path_repo_relative": _optional_repo_relative(
-                repo_root_path,
-                decomposition_authoring_surface["runtime_test_path"],
-            ),
-            "spec_paths_repo_relative": _repo_relative_list(
-                repo_root_path,
-                decomposition_authoring_surface["spec_paths"],
-            ),
-            "test_paths_repo_relative": _repo_relative_list(
-                repo_root_path,
-                decomposition_authoring_surface["test_paths"],
-            ),
-            "workflow_py_path_repo_relative": _optional_repo_relative(
-                repo_root_path,
-                decomposition_authoring_surface["workflow_py_path"],
-            ),
-            "workflow_path_repo_relative": _optional_repo_relative(
-                repo_root_path,
-                decomposition_authoring_surface["workflow_path"],
-            ),
-        },
+        "selected_workflow_authoring_surface": decomposition_authoring_surface,
         "selected_workflow_compiled_surface": {
             "artifacts": [_artifact_capability_payload(artifact) for artifact in entry.artifacts],
             "entry_step_name": entry.entry_step_name,
@@ -528,7 +491,7 @@ def selected_workflow_decomposition_surface_payload(
 
 
 def _inspect_catalog_entry(root_path: Path, entry: WorkflowCatalogEntry) -> WorkflowCapabilityEntry:
-    if entry.workflow_module is not None and entry.package_module is not None:
+    if entry.source_root_kind == "package" and entry.workflow_module is not None and entry.package_module is not None:
         from autoloop.runtime.loader import ResolvedWorkflow, WorkflowReference
 
         loaded = load_workflow_package_contract(root_path, entry)
@@ -656,7 +619,7 @@ def _capability_entry_from_resolved(resolved, compiled: CompiledWorkflow, catalo
 def _catalog_entry_for_reference(root_path: Path, reference) -> WorkflowCatalogEntry | None:
     source_path = reference.source_path.resolve() if reference.source_path is not None else None
     manifest_path = reference.manifest_path.resolve() if reference.manifest_path is not None else None
-    for entry in discover_workflow_catalog(root_path):
+    for entry in discover_workflow_catalog(root_path, include_shadowed=True):
         if source_path is not None and entry.source_path.resolve() == source_path:
             return entry
         if manifest_path is not None and entry.manifest_path is not None and entry.manifest_path.resolve() == manifest_path:
@@ -827,6 +790,60 @@ def _optional_path_string(path: Path | None) -> str | None:
 
 def _repo_relative_list(repo_root: Path, paths: Sequence[str]) -> list[str]:
     return [_repo_relative(repo_root, path) for path in paths]
+
+
+def _selected_workflow_repo_relative_list(
+    repo_root: Path,
+    entry: WorkflowCapabilityEntry,
+    paths: Sequence[str | Path],
+) -> list[str]:
+    return [
+        repo_relative
+        for path in paths
+        if (repo_relative := _selected_workflow_repo_relative(repo_root, entry, path)) is not None
+    ]
+
+
+def _selected_workflow_repo_relative(
+    repo_root: Path,
+    entry: WorkflowCapabilityEntry,
+    path: str | Path | None,
+) -> str | None:
+    if path is None:
+        return None
+    resolved = Path(path).resolve()
+    canonical_package_root = _canonical_first_party_repo_relative_root(repo_root, entry)
+    if canonical_package_root is not None:
+        try:
+            return str(canonical_package_root / resolved.relative_to(entry.package_dir.resolve()))
+        except ValueError:
+            pass
+    return _repo_relative(repo_root, resolved)
+
+
+def _canonical_first_party_repo_relative_root(
+    repo_root: Path,
+    entry: WorkflowCapabilityEntry,
+) -> Path | None:
+    package_dir_repo_relative = _optional_repo_relative(repo_root, entry.package_dir)
+    if package_dir_repo_relative != str(Path("workflows") / entry.workflow_name):
+        return None
+    doc_path_repo_relative = _optional_repo_relative(repo_root, entry.doc_path)
+    expected_doc_repo_relative = str(Path("docs") / "workflows" / f"{entry.workflow_name}.md")
+    if doc_path_repo_relative != expected_doc_repo_relative:
+        return None
+    return Path("autoloop") / "workflows" / entry.workflow_name
+
+
+def _infer_repo_root_from_package_dir(package_dir: Path) -> Path:
+    resolved_package_dir = package_dir.resolve()
+    parts = resolved_package_dir.parts
+    for marker in (("autoloop", "workflows"), (".autoloop", "workflows"), ("workflows",)):
+        marker_length = len(marker)
+        for index in range(len(parts) - marker_length, -1, -1):
+            if parts[index : index + marker_length] == marker:
+                return Path(*parts[:index]).resolve()
+    return resolved_package_dir.parent.resolve()
 
 
 def _prompt_repo_relative(repo_root: Path, package_dir: Path, prompt_path: str | None) -> str | None:

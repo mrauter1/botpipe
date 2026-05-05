@@ -79,9 +79,9 @@ class WorkflowIdeaToWorkflowPackage(Workflow):
     evaluate_session = Session()
 
     request = Artifact("{run_folder}/request.md")
-    framework_architecture_doc = Artifact("{package_folder}/../../../docs/architecture.md")
-    framework_authoring_doc = Artifact("{package_folder}/../../../docs/authoring.md")
-    workflow_instructions = Artifact("{package_folder}/../../../Workflow_Instructions.md")
+    framework_architecture_doc = Artifact("{root}/docs/architecture.md")
+    framework_authoring_doc = Artifact("{root}/docs/authoring.md")
+    workflow_instructions = Artifact("{root}/Workflow_Instructions.md")
     core_steps_module = Artifact("{package_folder}/../../core/steps.py")
     core_validation_module = Artifact("{package_folder}/../../core/validation.py")
     core_compiler_module = Artifact("{package_folder}/../../core/compiler.py")

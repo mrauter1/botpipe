@@ -383,6 +383,8 @@ def _resolve_placeholder(expression: str, context: Context, *, placeholder_label
         current = context.run_folder
     elif root_name == "package_folder":
         current = context.package_folder
+    elif root_name == "root":
+        current = context.root
     elif root_name == "state":
         current = context.state
     elif root_name == "item":

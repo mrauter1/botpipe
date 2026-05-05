@@ -106,8 +106,8 @@ def test_workflow_builder_package_compiles_with_explicit_control_contracts(monke
         "failed",
     )
     assert list(compiled.route("frame_candidate", "candidate_selected").required_writes) == [
-        "frame_candidate.candidate_comparison",
-        "frame_candidate.selected_workflow_brief",
+        "candidate_comparison",
+        "selected_workflow_brief",
     ]
     assert compiled.route("frame_candidate", "candidate_selected").handoff == (
         "Locks the selected addition and its classification for downstream design."
@@ -121,9 +121,9 @@ def test_workflow_builder_package_compiles_with_explicit_control_contracts(monke
 
     evaluate_step = compiled.steps["evaluate_package"]
     assert list(compiled.route("evaluate_package", "evaluation_passed").required_writes) == [
-        "evaluate_package.verification_report",
-        "evaluate_package.promotion_record",
-        "evaluate_package.rollback_plan",
+        "verification_report",
+        "promotion_record",
+        "rollback_plan",
     ]
 
 
@@ -403,9 +403,9 @@ def test_workflow_builder_package_bootstrap_reads_typed_ctx_params(monkeypatch, 
 @pytest.mark.parametrize(
     ("authoring_shape", "expected_source"),
     [
-        ("single", "autoloop/workflows/release_candidate_to_go_no_go.py"),
-        ("flow_specs", "autoloop/workflows/release_candidate_to_go_no_go/flow.py"),
-        ("package", "autoloop/workflows/release_candidate_to_go_no_go/flow.py"),
+        ("single", "workflows/release_candidate_to_go_no_go.py"),
+        ("flow_specs", "workflows/release_candidate_to_go_no_go/flow.py"),
+        ("package", "workflows/release_candidate_to_go_no_go/flow.py"),
     ],
 )
 def test_workflow_builder_package_runs_and_generates_a_compilable_package(
@@ -691,8 +691,8 @@ def test_workflow_builder_package_runs_and_generates_a_compilable_package(
         "failed",
     )
     assert list(provider.calls[5].route_required_writes["package_built"]) == [
-        "build_package.generated_layout",
-        "build_package.build_report",
+        "generated_layout",
+        "build_report",
     ]
     assert provider.calls[5].routes["package_built"].handoff == (
         "Promotes the generated workflow surface to evaluation."

@@ -104,9 +104,9 @@ def test_investigation_evidence_pack_package_compiles_with_explicit_control_cont
         "failed",
     )
     assert list(compiled.routes["frame_investigation"]["investigation_framed"].required_writes) == [
-        "frame_investigation.investigation_scope_brief",
-        "frame_investigation.investigation_objectives",
-        "frame_investigation.evidence_intake_register",
+        "investigation_scope_brief",
+        "investigation_objectives",
+        "evidence_intake_register",
     ]
     assert compiled.routes["frame_investigation"]["investigation_framed"].handoff == (
         "Locks the investigation framing so evidence assembly can proceed against a fixed boundary."
@@ -123,12 +123,12 @@ def test_investigation_evidence_pack_package_compiles_with_explicit_control_cont
         "failed",
     )
     assert list(compiled.routes["assemble_evidence_pack"]["evidence_pack_ready"].required_writes) == [
-        "assemble_evidence_pack.evidence_source_inventory",
-        "assemble_evidence_pack.evidence_coverage_matrix",
-        "assemble_evidence_pack.evidence_findings",
-        "assemble_evidence_pack.evidence_gap_register",
-        "assemble_evidence_pack.evidence_pack",
-        "assemble_evidence_pack.evidence_pack_summary",
+        "evidence_source_inventory",
+        "evidence_coverage_matrix",
+        "evidence_findings",
+        "evidence_gap_register",
+        "evidence_pack",
+        "evidence_pack_summary",
     ]
     assert evidence_step.expected_output_schema is not None
 

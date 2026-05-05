@@ -8,7 +8,7 @@ from pydantic import BaseModel, Field
 
 from autoloop.stdlib import JsonArtifactSpec
 
-from autoloop import Route, SELF
+from autoloop import AWAIT_INPUT, FAIL, Route, SELF
 
 
 PortfolioPosture = Literal["direct_fit", "compose_needed", "adapt_needed", "material_gap"]
@@ -69,6 +69,16 @@ CANDIDATE_WORKFLOW_SET_SUMMARY_ARTIFACT = JsonArtifactSpec(
     CandidateWorkflowSetSummaryPayload,
 )
 
+_QUESTION_ROUTE = Route.to(AWAIT_INPUT, summary="Execution is awaiting user input.")
+_BLOCKED_ROUTE = Route.to(
+    AWAIT_INPUT,
+    summary="The current candidate-selection work item is blocked pending missing context, evidence, or approval.",
+)
+_FAILED_ROUTE = Route.to(
+    FAIL,
+    summary="The current candidate-selection work item cannot continue because a required assumption, artifact, or validation failed.",
+)
+
 
 FRAME_CANDIDATE_REQUEST_ROUTE_CONTRACTS = {
     "candidate_request_framed": Route.to(
@@ -88,6 +98,9 @@ FRAME_CANDIDATE_REQUEST_ROUTE_CONTRACTS = {
         summary="The task trigger, sponsor, or terminal outcome changed materially and the candidate-request framing must restart before credible analysis can continue.",
         handoff="Resets the framing boundary before capability-backed workflow comparison continues.",
     ),
+    "question": _QUESTION_ROUTE,
+    "blocked": _BLOCKED_ROUTE,
+    "failed": _FAILED_ROUTE,
 }
 
 ANALYZE_CANDIDATE_WORKFLOWS_ROUTE_CONTRACTS = {
@@ -108,6 +121,9 @@ ANALYZE_CANDIDATE_WORKFLOWS_ROUTE_CONTRACTS = {
         summary="The task framing, legal comparison boundary, or portfolio posture changed materially and the candidate request must be reframed.",
         handoff="Routes back to framing because the current analysis boundary is no longer authoritative.",
     ),
+    "question": _QUESTION_ROUTE,
+    "blocked": _BLOCKED_ROUTE,
+    "failed": _FAILED_ROUTE,
 }
 
 PACKAGE_CANDIDATE_WORKFLOW_SET_ROUTE_CONTRACTS = {
@@ -127,6 +143,9 @@ PACKAGE_CANDIDATE_WORKFLOW_SET_ROUTE_CONTRACTS = {
         summary="Packaging revealed that the ranked candidates, portfolio posture, or downstream handoff contract changed materially and analysis must be revisited.",
         handoff="Routes back to analysis because the current package no longer matches the authoritative candidate set.",
     ),
+    "question": _QUESTION_ROUTE,
+    "blocked": _BLOCKED_ROUTE,
+    "failed": _FAILED_ROUTE,
 }
 
 

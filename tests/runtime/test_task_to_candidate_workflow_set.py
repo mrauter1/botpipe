@@ -105,36 +105,36 @@ def test_task_to_candidate_workflow_set_package_compiles_with_explicit_control_c
         "failed",
     )
     assert list(compiled.route("frame_candidate_request", "candidate_request_framed").required_writes) == [
-        "frame_candidate_request.candidate_request_brief",
-        "frame_candidate_request.candidate_selection_criteria",
+        "candidate_request_brief",
+        "candidate_selection_criteria",
     ]
     assert frame_step.expected_output_schema is not None
 
     analysis_step = compiled.steps["analyze_candidate_workflows"]
     assert list(compiled.route("analyze_candidate_workflows", "candidate_workflows_analyzed").required_writes) == [
-        "analyze_candidate_workflows.workflow_candidate_matrix",
-        "analyze_candidate_workflows.workflow_gap_analysis",
-        "analyze_candidate_workflows.candidate_route_posture",
+        "workflow_candidate_matrix",
+        "workflow_gap_analysis",
+        "candidate_route_posture",
     ]
     assert analysis_step.expected_output_schema is not None
 
     package_step = compiled.steps["package_candidate_workflow_set"]
     assert list(compiled.route("package_candidate_workflow_set", "candidate_workflow_set_ready").required_writes) == [
-        "package_candidate_workflow_set.candidate_workflow_set",
-        "package_candidate_workflow_set.candidate_workflow_set_summary",
-        "package_candidate_workflow_set.candidate_next_action",
+        "candidate_workflow_set",
+        "candidate_workflow_set_summary",
+        "candidate_next_action",
     ]
     assert package_step.expected_output_schema is not None
 
     publish_step = compiled.steps["publish_candidate_workflow_set"]
     assert publish_step.requires == (
-        "capture_workflow_capabilities.workflow_capability_snapshot",
-        "analyze_candidate_workflows.workflow_candidate_matrix",
-        "analyze_candidate_workflows.workflow_gap_analysis",
-        "analyze_candidate_workflows.candidate_route_posture",
-        "package_candidate_workflow_set.candidate_workflow_set",
-        "package_candidate_workflow_set.candidate_workflow_set_summary",
-        "package_candidate_workflow_set.candidate_next_action",
+        "workflow_capability_snapshot",
+        "workflow_candidate_matrix",
+        "workflow_gap_analysis",
+        "candidate_route_posture",
+        "candidate_workflow_set",
+        "candidate_workflow_set_summary",
+        "candidate_next_action",
     )
 
 
@@ -735,9 +735,9 @@ def test_task_to_candidate_workflow_set_package_runs_and_publishes_terminal_cand
         "failed",
     )
     assert list(provider.calls[5].route_required_writes["candidate_workflow_set_ready"]) == [
-        "package_candidate_workflow_set.candidate_workflow_set",
-        "package_candidate_workflow_set.candidate_workflow_set_summary",
-        "package_candidate_workflow_set.candidate_next_action",
+        "candidate_workflow_set",
+        "candidate_workflow_set_summary",
+        "candidate_next_action",
     ]
     assert (run_dir / "run.json").exists()
 

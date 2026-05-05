@@ -145,9 +145,9 @@ class WorkflowToEvalSuite(Workflow):
     package_session = Session()
 
     request = Artifact("{run_folder}/request.md")
-    framework_architecture_doc = Artifact("{package_folder}/../../../docs/architecture.md")
-    framework_authoring_doc = Artifact("{package_folder}/../../../docs/authoring.md")
-    workflow_instructions = Artifact("{package_folder}/../../../Workflow_Instructions.md")
+    framework_architecture_doc = Artifact("{root}/docs/architecture.md")
+    framework_authoring_doc = Artifact("{root}/docs/authoring.md")
+    workflow_instructions = Artifact("{root}/Workflow_Instructions.md")
     eval_suite_checklist = Artifact("{package_folder}/assets/eval_suite_checklist.md")
 
     invocation_contract = Artifact("{workflow_folder}/invocation_contract.json")

@@ -107,22 +107,20 @@ def test_task_to_workflow_strategy_package_compiles_with_explicit_control_contra
         "failed",
     )
     assert list(compiled.route("frame_task", "task_framed").required_writes) == [
-        "frame_task.task_strategy_brief",
-        "frame_task.workflow_selection_criteria",
+        "task_strategy_brief",
+        "workflow_selection_criteria",
     ]
     assert frame_step.expected_output_schema is not None
 
     selection_step = compiled.steps["select_strategy"]
-    assert list(compiled.route("select_strategy", "strategy_selected").required_writes) == [
-        "select_strategy.strategy_decision"
-    ]
+    assert list(compiled.route("select_strategy", "strategy_selected").required_writes) == ["strategy_decision"]
     assert selection_step.expected_output_schema is not None
 
     package_step = compiled.steps["package_strategy"]
     assert list(compiled.route("package_strategy", "strategy_package_ready").required_writes) == [
-        "package_strategy.workflow_strategy_package",
-        "package_strategy.strategy_summary",
-        "package_strategy.strategy_next_action",
+        "workflow_strategy_package",
+        "strategy_summary",
+        "strategy_next_action",
     ]
     expected_package_payload_fields = {
         "summary",
@@ -140,17 +138,17 @@ def test_task_to_workflow_strategy_package_compiles_with_explicit_control_contra
 
     publish_step = compiled.steps["publish_strategy"]
     assert publish_step.requires == (
-        "capture_workflow_portfolio.workflow_portfolio_snapshot",
-        "build_candidate_workflow_set.workflow_candidate_matrix",
-        "build_candidate_workflow_set.workflow_gap_analysis",
-        "build_candidate_workflow_set.candidate_route_posture",
-        "build_candidate_workflow_set.candidate_workflow_set",
-        "build_candidate_workflow_set.candidate_workflow_set_summary",
-        "build_candidate_workflow_set.candidate_next_action",
-        "select_strategy.strategy_decision",
-        "package_strategy.workflow_strategy_package",
-        "package_strategy.strategy_summary",
-        "package_strategy.strategy_next_action",
+        "workflow_portfolio_snapshot",
+        "workflow_candidate_matrix",
+        "workflow_gap_analysis",
+        "candidate_route_posture",
+        "candidate_workflow_set",
+        "candidate_workflow_set_summary",
+        "candidate_next_action",
+        "strategy_decision",
+        "workflow_strategy_package",
+        "strategy_summary",
+        "strategy_next_action",
     )
 
 
@@ -941,9 +939,9 @@ def test_task_to_workflow_strategy_package_runs_and_publishes_terminal_strategy_
         "package_strategy",
     ]
     assert list(provider.calls[7].route_required_writes["candidate_workflow_set_ready"]) == [
-        "package_candidate_workflow_set.candidate_workflow_set",
-        "package_candidate_workflow_set.candidate_workflow_set_summary",
-        "package_candidate_workflow_set.candidate_next_action",
+        "candidate_workflow_set",
+        "candidate_workflow_set_summary",
+        "candidate_next_action",
     ]
     assert provider.calls[9].available_routes == (
         "strategy_selected",
@@ -954,9 +952,9 @@ def test_task_to_workflow_strategy_package_runs_and_publishes_terminal_strategy_
         "failed",
     )
     assert list(provider.calls[11].route_required_writes["strategy_package_ready"]) == [
-        "package_strategy.workflow_strategy_package",
-        "package_strategy.strategy_summary",
-        "package_strategy.strategy_next_action",
+        "workflow_strategy_package",
+        "strategy_summary",
+        "strategy_next_action",
     ]
     assert (run_dir / "run.json").exists()
 

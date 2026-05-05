@@ -6,7 +6,7 @@ from typing import Literal
 
 from pydantic import BaseModel, Field
 
-from autoloop import Route, SELF
+from autoloop import AWAIT_INPUT, FAIL, Route, SELF
 
 
 class IncidentFramingPayload(BaseModel):
@@ -48,6 +48,17 @@ class IncidentHardeningProgramPayload(BaseModel):
     replan_reason: str | None = None
 
 
+_QUESTION_ROUTE = Route.to(AWAIT_INPUT, summary="Execution is awaiting user input.")
+_BLOCKED_ROUTE = Route.to(
+    AWAIT_INPUT,
+    summary="The current incident-hardening work item is blocked pending missing context, evidence, or approval.",
+)
+_FAILED_ROUTE = Route.to(
+    FAIL,
+    summary="The current incident-hardening work item cannot continue because a required assumption, artifact, or validation failed.",
+)
+
+
 FRAME_INCIDENT_ROUTE_CONTRACTS = {
     "incident_framed": Route.to(
         "assemble_evidence_pack",
@@ -66,6 +77,9 @@ FRAME_INCIDENT_ROUTE_CONTRACTS = {
         summary="The incident boundary, trigger, or response objective changed materially and framing must restart.",
         handoff="Resets the incident framing boundary before downstream evidence work continues.",
     ),
+    "question": _QUESTION_ROUTE,
+    "blocked": _BLOCKED_ROUTE,
+    "failed": _FAILED_ROUTE,
 }
 
 ASSEMBLE_EVIDENCE_ROUTE_CONTRACTS = {
@@ -92,6 +106,9 @@ ASSEMBLE_EVIDENCE_ROUTE_CONTRACTS = {
         summary="The incident boundary or evidence plan changed materially enough that framing must be revisited.",
         handoff="Routes back to incident framing because the evidence contract is no longer authoritative.",
     ),
+    "question": _QUESTION_ROUTE,
+    "blocked": _BLOCKED_ROUTE,
+    "failed": _FAILED_ROUTE,
 }
 
 RANK_CAUSE_HYPOTHESES_ROUTE_CONTRACTS = {
@@ -117,6 +134,9 @@ RANK_CAUSE_HYPOTHESES_ROUTE_CONTRACTS = {
         summary="Analysis proved that the incident boundary or evidence surface changed materially and framing must restart.",
         handoff="Returns the workflow to incident framing because the current analysis contract is materially wrong.",
     ),
+    "question": _QUESTION_ROUTE,
+    "blocked": _BLOCKED_ROUTE,
+    "failed": _FAILED_ROUTE,
 }
 
 PREPARE_HARDENING_PROGRAM_ROUTE_CONTRACTS = {
@@ -142,6 +162,9 @@ PREPARE_HARDENING_PROGRAM_ROUTE_CONTRACTS = {
         summary="Package assembly proved the analysis or package contract changed materially and analysis must be revisited.",
         handoff="Routes back to incident analysis because the final package no longer matches the assessed hardening posture.",
     ),
+    "question": _QUESTION_ROUTE,
+    "blocked": _BLOCKED_ROUTE,
+    "failed": _FAILED_ROUTE,
 }
 
 

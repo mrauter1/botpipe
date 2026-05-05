@@ -102,6 +102,8 @@ def test_release_go_no_go_package_compiles_with_explicit_control_contracts(monke
         "needs_rework",
         "needs_replan",
         "question",
+        "blocked",
+        "failed",
     )
     assert list(compiled.route("frame_release", "release_framed").required_writes) == [
         "release_scope_brief",
@@ -742,6 +744,8 @@ def test_release_go_no_go_package_runs_and_emits_terminal_receipt(tmp_path: Path
         "needs_rework",
         "needs_replan",
         "question",
+        "blocked",
+        "failed",
     )
     assert list(provider.calls[7].route_required_writes["decision_package_ready"]) == [
         "release_decision_package",

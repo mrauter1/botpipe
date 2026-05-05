@@ -81,6 +81,8 @@ def test_workflow_to_eval_suite_package_compiles_with_explicit_control_contracts
         "needs_rework",
         "needs_replan",
         "question",
+        "blocked",
+        "failed",
     )
     assert list(compiled.route("frame_evaluation_target", "evaluation_target_framed").required_writes) == [
         "evaluation_request_brief",
@@ -965,6 +967,8 @@ def test_workflow_to_eval_suite_package_runs_and_publishes_terminal_eval_artifac
         "needs_rework",
         "needs_replan",
         "question",
+        "blocked",
+        "failed",
     )
     assert list(provider.calls[5].route_required_writes["workflow_eval_suite_ready"]) == [
         "workflow_eval_suite",

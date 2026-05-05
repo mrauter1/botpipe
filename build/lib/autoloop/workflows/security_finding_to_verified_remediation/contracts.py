@@ -6,7 +6,7 @@ from typing import Literal
 
 from pydantic import BaseModel, Field
 
-from autoloop import Route, SELF
+from autoloop import AWAIT_INPUT, FAIL, Route, SELF
 
 
 class SecurityAssessmentPayload(BaseModel):
@@ -40,6 +40,17 @@ class SecurityClosurePackagePayload(BaseModel):
     replan_reason: str | None = None
 
 
+_QUESTION_ROUTE = Route.to(AWAIT_INPUT, summary="Execution is awaiting user input.")
+_BLOCKED_ROUTE = Route.to(
+    AWAIT_INPUT,
+    summary="The current security-remediation work item is blocked pending missing context, evidence, or approval.",
+)
+_FAILED_ROUTE = Route.to(
+    FAIL,
+    summary="The current security-remediation work item cannot continue because a required assumption, artifact, or validation failed.",
+)
+
+
 ASSESS_SECURITY_FINDING_ROUTE_CONTRACTS = {
     "finding_assessed": Route.to(
         "plan_verified_remediation",
@@ -69,6 +80,9 @@ ASSESS_SECURITY_FINDING_ROUTE_CONTRACTS = {
         "compose_evidence_pack",
         summary="The evidence boundary, affected surface, or remediation framing changed materially and the evidence-pack stage must be revisited.",
     ),
+    "question": _QUESTION_ROUTE,
+    "blocked": _BLOCKED_ROUTE,
+    "failed": _FAILED_ROUTE,
 }
 
 PLAN_VERIFIED_REMEDIATION_ROUTE_CONTRACTS = {
@@ -101,6 +115,9 @@ PLAN_VERIFIED_REMEDIATION_ROUTE_CONTRACTS = {
         summary="The assessment conclusion or fix strategy changed materially enough that the security finding must be reassessed before planning continues.",
         handoff="Returns the workflow to the security-assessment step because the current remediation boundary is materially wrong.",
     ),
+    "question": _QUESTION_ROUTE,
+    "blocked": _BLOCKED_ROUTE,
+    "failed": _FAILED_ROUTE,
 }
 
 PREPARE_CLOSURE_PACKAGE_ROUTE_CONTRACTS = {
@@ -128,6 +145,9 @@ PREPARE_CLOSURE_PACKAGE_ROUTE_CONTRACTS = {
         summary="Closure packaging revealed a material change in the remediation or verification story and planning must be revisited.",
         handoff="Routes back to remediation planning because the closure package no longer matches the planned fix and proof contract.",
     ),
+    "question": _QUESTION_ROUTE,
+    "blocked": _BLOCKED_ROUTE,
+    "failed": _FAILED_ROUTE,
 }
 
 

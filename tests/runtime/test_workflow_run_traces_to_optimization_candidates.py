@@ -137,19 +137,19 @@ def test_workflow_describe_lists_parameters_and_pairs(monkeypatch) -> None:
         "failed",
     )
     assert list(compiled.route("frame", "no_eligible_trace_evidence").required_writes) == [
-        "capture_frame_context.selected_workflow_capability",
-        "capture_frame_context.selected_workflow_authoring_surface",
-        "capture_frame_context.selected_workflow_decomposition_surface",
-        "capture_frame_context.selected_workflow_source_manifest",
-        "capture_frame_context.workflow_optimization_scope",
-        "capture_frame_context.workflow_optimization_trace_corpus",
-        "capture_frame_context.excluded_run_report",
-        "capture_frame_context.workflow_failure_scenario_seeds",
+        "selected_workflow_capability",
+        "selected_workflow_authoring_surface",
+        "selected_workflow_decomposition_surface",
+        "selected_workflow_source_manifest",
+        "workflow_optimization_scope",
+        "workflow_optimization_trace_corpus",
+        "excluded_run_report",
+        "workflow_failure_scenario_seeds",
     ]
     package_step = compiled.steps["package"]
     assert list(compiled.route("package", "optimization_packet_ready").required_writes) == [
-        "package.workflow_optimization_scorecard",
-        "package.workflow_optimization_packet",
+        "workflow_optimization_scorecard",
+        "workflow_optimization_packet",
     ]
 
 

@@ -52,7 +52,7 @@ def validate_handlers(definition: Any) -> None:
         if isinstance(step, PythonStep):
             if step.handler is None:
                 raise WorkflowValidationError(f"python_step {step.name!r} is missing handler")
-            validate_callable_arity(f"python_step {step.name!r} handler", step.handler, {1})
+            validate_callable_arity(f"python_step {step.name!r} handler", step.handler, {1, 2})
 
 
 def validate_step_hooks(definition: Any) -> None:

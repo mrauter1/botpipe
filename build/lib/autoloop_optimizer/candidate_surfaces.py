@@ -39,12 +39,29 @@ def normalize_candidate_surface_boundary(
             f"{error_prefix} must define package_dir",
         )
     ).resolve()
-    try:
-        package_root_relative_path = package_dir.relative_to(repo_root).as_posix()
-    except ValueError as exc:
-        raise ValueError(f"{error_prefix} package_dir must stay under the repo root") from exc
+    package_root_relative_path = _preferred_repo_relative_path(
+        repo_root,
+        actual_path=package_dir,
+        repo_relative_path=authoring_surface.get("package_dir_repo_relative"),
+        error_message=f"{error_prefix} package_dir must stay under the repo root",
+    )
 
     baseline_relative_paths: list[str] = []
+    baseline_source_entries: list[dict[str, str]] = []
+    doc_path = _optional_path(authoring_surface.get("doc_path"))
+    doc_relative_path = _preferred_optional_repo_relative_path(
+        repo_root,
+        actual_path=doc_path,
+        repo_relative_path=authoring_surface.get("doc_path_repo_relative"),
+        error_message=f"{error_prefix} doc_path must stay under the repo root",
+    )
+    runtime_test_path = _optional_path(authoring_surface.get("runtime_test_path"))
+    runtime_test_relative_path = _preferred_optional_repo_relative_path(
+        repo_root,
+        actual_path=runtime_test_path,
+        repo_relative_path=authoring_surface.get("runtime_test_path_repo_relative"),
+        error_message=f"{error_prefix} runtime_test_path must stay under the repo root",
+    )
     for raw_path in _require_string_list(
         authoring_surface.get("editable_paths"),
         f"{error_prefix} must define non-empty editable_paths",
@@ -52,26 +69,32 @@ def normalize_candidate_surface_boundary(
         path = Path(raw_path).resolve()
         if not path.is_file():
             raise FileNotFoundError(f"{error_prefix} path does not exist: {path}")
-        try:
-            relative_path = path.relative_to(repo_root).as_posix()
-        except ValueError as exc:
-            raise ValueError(f"{error_prefix} editable_paths must stay under the repo root") from exc
+        relative_path = _candidate_surface_relative_path(
+            repo_root,
+            path=path,
+            package_dir=package_dir,
+            package_root_relative_path=package_root_relative_path,
+            doc_path=doc_path,
+            doc_relative_path=doc_relative_path,
+            runtime_test_path=runtime_test_path,
+            runtime_test_relative_path=runtime_test_relative_path,
+            error_message=f"{error_prefix} editable_paths must stay under the repo root",
+        )
         if relative_path not in baseline_relative_paths:
             baseline_relative_paths.append(relative_path)
+            baseline_source_entries.append(
+                {
+                    "relative_path": relative_path,
+                    "source_path": str(path),
+                }
+            )
 
     return {
         "package_root_relative_path": package_root_relative_path,
-        "doc_relative_path": _optional_repo_relative_path(
-            repo_root,
-            authoring_surface.get("doc_path"),
-            f"{error_prefix} doc_path must stay under the repo root",
-        ),
-        "runtime_test_relative_path": _optional_repo_relative_path(
-            repo_root,
-            authoring_surface.get("runtime_test_path"),
-            f"{error_prefix} runtime_test_path must stay under the repo root",
-        ),
+        "doc_relative_path": doc_relative_path,
+        "runtime_test_relative_path": runtime_test_relative_path,
         "baseline_relative_paths": sorted(baseline_relative_paths),
+        "baseline_source_entries": sorted(baseline_source_entries, key=lambda entry: entry["relative_path"]),
     }
 
 
@@ -79,23 +102,15 @@ def materialize_baseline_surface(
     *,
     workflow_folder: Path,
     repo_root: Path,
-    baseline_relative_paths: Sequence[str],
+    baseline_relative_paths: Sequence[str | Mapping[str, Any]],
     baseline_dir_name: str,
     candidate_dir_name: str,
 ) -> dict[str, Any]:
     """Copy the authoritative baseline surface into the workflow folder and record file metadata."""
 
-    normalized_relative_paths = _require_string_list(
-        list(baseline_relative_paths),
-        "baseline_relative_paths must define non-empty repo-relative paths",
-    )
-    normalized_relative_paths = [
-        _require_repo_relative_path(
-            relative_path,
-            "baseline_relative_paths entries must stay repo-relative",
-        )
-        for relative_path in normalized_relative_paths
-    ]
+    entries = list(baseline_relative_paths)
+    if not entries:
+        raise ValueError("baseline_relative_paths must define non-empty repo-relative paths")
     baseline_root = workflow_folder / _require_text(
         baseline_dir_name,
         "baseline_dir_name must be non-empty",
@@ -107,11 +122,32 @@ def materialize_baseline_surface(
     shutil.rmtree(baseline_root, ignore_errors=True)
     shutil.rmtree(candidate_root, ignore_errors=True)
 
+    normalized_relative_paths: list[str] = []
     files: list[dict[str, Any]] = []
-    for relative_path in normalized_relative_paths:
-        source_path = repo_root / relative_path
+    for raw_entry in entries:
+        if isinstance(raw_entry, Mapping):
+            relative_path = _require_repo_relative_path(
+                _require_text(
+                    raw_entry.get("relative_path"),
+                    "baseline_relative_paths entries must define relative_path",
+                ),
+                "baseline_relative_paths entries must stay repo-relative",
+            )
+            source_path = Path(
+                _require_text(
+                    raw_entry.get("source_path"),
+                    "baseline_relative_paths entries must define source_path",
+                )
+            ).resolve()
+        else:
+            relative_path = _require_repo_relative_path(
+                str(raw_entry),
+                "baseline_relative_paths entries must stay repo-relative",
+            )
+            source_path = (repo_root / relative_path).resolve()
         if not source_path.is_file():
             raise FileNotFoundError(f"baseline source file is missing: {source_path}")
+        normalized_relative_paths.append(relative_path)
         target_path = baseline_root / relative_path
         target_path.parent.mkdir(parents=True, exist_ok=True)
         shutil.copy2(source_path, target_path)
@@ -267,18 +303,20 @@ def validate_baseline_surface_manifest(
                 entry.get("source_path"),
                 f"{manifest_label} file entries must define non-empty source_path",
             )
-        )
+        ).resolve()
         surface_path = Path(
             _require_text(
                 entry.get("surface_path"),
                 f"{manifest_label} file entries must define non-empty surface_path",
             )
-        )
-        if source_path != repo_root / relative_path:
-            raise ValueError(f"{manifest_label} source_path entries must stay aligned to the repo root")
+        ).resolve()
+        try:
+            source_path.relative_to(repo_root)
+        except ValueError as exc:
+            raise ValueError(f"{manifest_label} source_path entries must stay under the repo root") from exc
         if surface_path != surface_root / relative_path:
             raise ValueError(f"{manifest_label} surface_path entries must stay under the copied baseline surface")
-        if not source_path.exists() or not surface_path.exists():
+        if not source_path.is_file() or not surface_path.is_file():
             raise FileNotFoundError(f"{manifest_label} file entries must point at existing files")
         expected_digest = _require_text(
             entry.get("surface_sha256"),
@@ -435,12 +473,21 @@ def validate_authoritative_surface_sources_unchanged(
         baseline_manifest,
         f"{baseline_manifest_label} must define files as a JSON array of objects with relative_path",
     ).items():
-        safe_relative_path = _require_repo_relative_path(
+        _require_repo_relative_path(
             relative_path,
             f"{baseline_manifest_label} relative_path entries must stay repo-relative",
         )
-        source_path = repo_root / safe_relative_path
-        if not source_path.exists():
+        source_path = Path(
+            _require_text(
+                entry.get("source_path"),
+                f"{baseline_manifest_label} file entries must define non-empty source_path",
+            )
+        ).resolve()
+        try:
+            source_path.relative_to(repo_root)
+        except ValueError as exc:
+            raise ValueError(f"{baseline_manifest_label} source_path entries must stay under the repo root") from exc
+        if not source_path.is_file():
             raise FileNotFoundError(f"authoritative selected workflow file is missing: {source_path}")
         current_digest = _sha256_file(source_path)
         expected_digest = _require_text(
@@ -588,6 +635,74 @@ def _optional_repo_relative_path(repo_root: Path, raw_value: Any, error_message:
         return path.relative_to(repo_root).as_posix()
     except ValueError as exc:
         raise ValueError(error_message) from exc
+
+
+def _preferred_repo_relative_path(
+    repo_root: Path,
+    *,
+    actual_path: Path,
+    repo_relative_path: Any,
+    error_message: str,
+) -> str:
+    preferred = _normalize_optional_text(repo_relative_path)
+    if preferred is not None:
+        return _require_repo_relative_path(preferred, error_message)
+    try:
+        return actual_path.resolve().relative_to(repo_root).as_posix()
+    except ValueError as exc:
+        raise ValueError(error_message) from exc
+
+
+def _preferred_optional_repo_relative_path(
+    repo_root: Path,
+    *,
+    actual_path: Path | None,
+    repo_relative_path: Any,
+    error_message: str,
+) -> str | None:
+    preferred = _normalize_optional_text(repo_relative_path)
+    if preferred is not None:
+        return _require_repo_relative_path(preferred, error_message)
+    if actual_path is None:
+        return None
+    try:
+        return actual_path.resolve().relative_to(repo_root).as_posix()
+    except ValueError as exc:
+        raise ValueError(error_message) from exc
+
+
+def _candidate_surface_relative_path(
+    repo_root: Path,
+    *,
+    path: Path,
+    package_dir: Path,
+    package_root_relative_path: str,
+    doc_path: Path | None,
+    doc_relative_path: str | None,
+    runtime_test_path: Path | None,
+    runtime_test_relative_path: str | None,
+    error_message: str,
+) -> str:
+    resolved = path.resolve()
+    try:
+        package_relative = resolved.relative_to(package_dir.resolve())
+    except ValueError:
+        package_relative = None
+    if package_relative is not None:
+        return str(Path(package_root_relative_path) / package_relative)
+    if doc_path is not None and doc_relative_path is not None and resolved == doc_path.resolve():
+        return doc_relative_path
+    if runtime_test_path is not None and runtime_test_relative_path is not None and resolved == runtime_test_path.resolve():
+        return runtime_test_relative_path
+    try:
+        return resolved.relative_to(repo_root).as_posix()
+    except ValueError as exc:
+        raise ValueError(error_message) from exc
+
+
+def _optional_path(raw_value: Any) -> Path | None:
+    normalized = _normalize_optional_text(raw_value)
+    return None if normalized is None else Path(normalized).resolve()
 
 
 def _manifest_file_map(manifest: Mapping[str, Any], error_message: str) -> dict[str, dict[str, Any]]:

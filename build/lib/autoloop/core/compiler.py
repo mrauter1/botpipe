@@ -547,13 +547,15 @@ def _compile_system_handler(step: PythonStep) -> SystemHandler:
         raise WorkflowCompilationError(f"python_step {step_name!r} is missing a handler")
 
     arity = _callable_arity(raw_handler)
-    if arity != 1:
+    if arity not in {1, 2}:
         raise WorkflowCompilationError(
-            f"handler for python_step {step_name!r} must accept exactly 1 positional argument"
+            f"handler for python_step {step_name!r} must accept exactly 1 or 2 positional arguments"
         )
 
     def handler(ctx: Context) -> Any:
-        return raw_handler(ctx)
+        if arity == 1:
+            return raw_handler(ctx)
+        return raw_handler(ctx.state, ctx)
 
     return handler
 

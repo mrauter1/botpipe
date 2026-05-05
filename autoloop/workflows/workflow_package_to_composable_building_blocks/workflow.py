@@ -221,9 +221,9 @@ class WorkflowPackageToComposableBuildingBlocks(Workflow):
     evaluate_session = Session()
 
     request = Artifact("{run_folder}/request.md")
-    framework_architecture_doc = Artifact("{package_folder}/../../../docs/architecture.md")
-    framework_authoring_doc = Artifact("{package_folder}/../../../docs/authoring.md")
-    workflow_instructions = Artifact("{package_folder}/../../../Workflow_Instructions.md")
+    framework_architecture_doc = Artifact("{root}/docs/architecture.md")
+    framework_authoring_doc = Artifact("{root}/docs/authoring.md")
+    workflow_instructions = Artifact("{root}/Workflow_Instructions.md")
     decomposition_package_checklist = Artifact("{package_folder}/assets/decomposition_package_checklist.md")
 
     invocation_contract = Artifact("{workflow_folder}/invocation_contract.json")
@@ -617,7 +617,7 @@ class WorkflowPackageToComposableBuildingBlocks(Workflow):
 
 
 def _repo_root_from_context(ctx) -> Path:
-    return ctx.package_folder.resolve().parent.parent
+    return ctx.root.resolve()
 
 
 def _decomposition_surface_boundary(
@@ -655,6 +655,7 @@ def _decomposition_surface_boundary(
         "parent_doc_relative_path": normalized_boundary["doc_relative_path"],
         "parent_runtime_test_relative_path": normalized_boundary["runtime_test_relative_path"],
         "baseline_relative_paths": normalized_boundary["baseline_relative_paths"],
+        "baseline_source_entries": normalized_boundary["baseline_source_entries"],
     }
 
 
@@ -668,10 +669,7 @@ def _write_baseline_parent_manifest(
     surface_manifest = materialize_baseline_surface(
         workflow_folder=ctx.workflow_folder,
         repo_root=repo_root,
-        baseline_relative_paths=_require_string_list(
-            boundary.get("baseline_relative_paths"),
-            "baseline boundary must define non-empty baseline_relative_paths",
-        ),
+        baseline_relative_paths=boundary["baseline_source_entries"],
         baseline_dir_name="baseline_parent_workflow_surface",
         candidate_dir_name="candidate_decomposition_surface",
     )
@@ -974,8 +972,8 @@ def _validate_building_block_index(
         )
         package_root_relative_path = _require_repo_relative_path(
             payload.get("package_root_relative_path"),
-            prefix="autoloop/workflows/",
-            error_message="candidate_building_block_index.json package_root_relative_path must stay under autoloop/workflows/",
+            prefix="workflows/",
+            error_message="candidate_building_block_index.json package_root_relative_path must stay under workflows/",
         )
         if Path(package_root_relative_path).name != package_name:
             raise ValueError(

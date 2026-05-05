@@ -106,9 +106,9 @@ def test_incident_hardening_package_compiles_with_explicit_control_contracts(mon
         "failed",
     )
     assert list(compiled.route("frame_incident", "incident_framed").required_writes) == [
-        "frame_incident.incident_scope_brief",
-        "frame_incident.response_objectives",
-        "frame_incident.evidence_intake_register",
+        "incident_scope_brief",
+        "response_objectives",
+        "evidence_intake_register",
     ]
     assert compiled.route("frame_incident", "incident_framed").handoff == (
         "Locks the incident framing so evidence assembly can proceed against a fixed scope and objective set."
@@ -117,20 +117,20 @@ def test_incident_hardening_package_compiles_with_explicit_control_contracts(mon
 
     analysis_step = compiled.steps["rank_cause_hypotheses"]
     assert list(compiled.route("rank_cause_hypotheses", "hypotheses_ranked").required_writes) == [
-        "rank_cause_hypotheses.cause_hypothesis_ranking",
-        "rank_cause_hypotheses.immediate_mitigation_plan",
-        "rank_cause_hypotheses.validation_plan",
-        "rank_cause_hypotheses.incident_summary",
+        "cause_hypothesis_ranking",
+        "immediate_mitigation_plan",
+        "validation_plan",
+        "incident_summary",
     ]
     assert analysis_step.expected_output_schema is not None
 
     package_step = compiled.steps["prepare_hardening_program"]
     assert list(compiled.route("prepare_hardening_program", "hardening_program_ready").required_writes) == [
-        "prepare_hardening_program.hardening_program",
-        "prepare_hardening_program.hardening_backlog",
-        "prepare_hardening_program.follow_up_owners",
-        "prepare_hardening_program.stakeholder_communications_draft",
-        "prepare_hardening_program.incident_resolution_package",
+        "hardening_program",
+        "hardening_backlog",
+        "follow_up_owners",
+        "stakeholder_communications_draft",
+        "incident_resolution_package",
     ]
 
 
@@ -835,11 +835,11 @@ def test_incident_hardening_package_runs_and_emits_terminal_receipt(tmp_path: Pa
         "failed",
     )
     assert list(provider.calls[7].route_required_writes["hardening_program_ready"]) == [
-        "prepare_hardening_program.hardening_program",
-        "prepare_hardening_program.hardening_backlog",
-        "prepare_hardening_program.follow_up_owners",
-        "prepare_hardening_program.stakeholder_communications_draft",
-        "prepare_hardening_program.incident_resolution_package",
+        "hardening_program",
+        "hardening_backlog",
+        "follow_up_owners",
+        "stakeholder_communications_draft",
+        "incident_resolution_package",
     ]
     assert provider.calls[7].routes["hardening_program_ready"].handoff is None
     assert (run_dir / "run.json").exists()
