@@ -1511,3 +1511,88 @@ phase_mode=single
 phase_ids=restore-workflow-resolution-contract,reconcile-optimizer-source-contracts,repair-packaged-workflow-contracts-and-proof
 explicit=True
 current_phase_index=0
+
+
+---
+run_id=run-20260505T133333Z-ef073886 | entry=session_turn | pair=implement | phase=producer | cycle=1 | attempt=1 | thread_id=019df85f-e454-7e32-a85f-f676e36c2390
+---
+provider=codex
+mode=start
+template=/home/rauter/.local/share/pipx/venvs/autoloop/lib/python3.12/site-packages/autoloop/templates/implement_producer.md
+session_id=019df85f-e454-7e32-a85f-f676e36c2390
+
+
+---
+run_id=run-20260505T133333Z-ef073886 | entry=phase_output | pair=implement | phase=producer | process=codex-agent | cycle=1 | attempt=1 | thread_id=019df85f-e454-7e32-a85f-f676e36c2390
+---
+I’m restoring the workflow-resolution contract for this phase, starting with the phase artifacts and the loader/catalog code that changed around repo-local `workflows/` support. After that I’ll reproduce the targeted failures, patch the shared resolution path centrally, and verify the named resolution suites before widening further.
+
+The phase artifacts confirm the intended split: workspace catalog stays authoritative for bare names and aliases, while explicit repo-local references keep isolated loading semantics. I’m mapping that against the actual loader/catalog implementation now and reproducing the resolution failures before editing.
+
+I’ve reproduced the five expected failures. They line up cleanly with two central issues: named precedence currently favors repo-local `workflows/`, and package-style validation/import paths are being applied to explicit repo-local directory/file/class loads that should stay isolated.
+
+The fix is narrower than it first looked. I don’t need to rework the worklist code at all; the breakage is concentrated in catalog precedence and one branch in the loader that treats repo-local catalog entries like package-module imports even when the caller used a path/class-style reference.
+
+I’m editing the catalog and loader now. The change is to separate named-resolution authority from import metadata: `.autoloop/workflows` wins mixed-root names and aliases, while repo-local catalog entries still keep `workflows.*` metadata but load through the isolated workspace namespace unless the caller intentionally used a package-module import.
+
+I hit a small patch mismatch while updating one call site. I’m re-reading the affected loader block and patching the remaining sites in place rather than forcing a broad rewrite.
+
+I’ve fixed the catalog side and the package-contract gate. I’m also hardening the direct class-reference branch so workspace classes reload through the isolated namespace instead of reusing `workflows.*` modules when that would violate the older contract.
+
+The central changes are in place. I’m running the resolution suites that define this contract first, plus the adjacent green catalog suite, before I touch any notes or widen scope.
+
+The contract suites are green. I’m checking the adjacent surfaces most likely to notice this split next: workspace invocation/context and the broader stdlib/extensions capability helpers that consume workflow inspection metadata.
+
+The regression pattern is clear now. Repo-local named fallback needs module-style loading for intra-`workflows.*` imports and stable class identity, but explicit repo-local paths/classes still need isolated loading. I’m tightening that distinction instead of treating every workspace catalog entry the same way.
+
+The remaining failures come from one overreach: I made imported class objects behave like explicit path references. That breaks repo-local named workflows that legitimately use the `workflows.*` namespace and helper seams that pass around the resolved class object. I’m narrowing that back now.
+
+I’ve narrowed the imported-class branch back to the pre-existing behavior, while keeping the path-based isolation and named repo-local module fallback split. Re-running the adjacent suites now to confirm the contract is actually coherent rather than just green on the narrow file.
+
+I’ve got two remaining compatibility seams: repo-local named module imports need to find sibling `params.py`, and the same `workflows.*` namespace must stay root-isolated across different repos. I’m reading the scaffolding helpers and the import path code together before the next patch so I only touch this once.
+
+I found the remaining root cause for the stdlib/helper failures: the loader’s repo-module import path was not evicting stale `workflows.*` modules at all. That left cross-test root leakage in place, which then broke both stable class identity and `params.py` discovery. I’m restoring that guard in the runtime loader now.
+
+The stale `workflows.*` cache issue was the missing piece. The targeted stdlib/helper failures that depended on named repo-local resolution are now green, so I’m rerunning the broader adjacent suite instead of chasing individual assertions.
+
+The resolution phase is green on its own contract and the adjacent suites it can reasonably affect. I’m doing one bounded readout of the next failure cluster now so the notes and decision log capture a clean handoff instead of stopping at “fixed some loader code.”
+
+I’ve validated the phase boundary: the workflow-resolution contract is green, the adjacent suites stay green, and the next failures now fall cleanly into the optimizer/source-manifest cluster rather than this loader/catalog contract. I’m writing that into the phase notes and decision ledger before closing out.
+
+Scope considered
+
+- Phase-local workflow resolution only: mixed-root catalog authority, repo-local named/path/class loading behavior, and capability inspection metadata.
+
+What I analyzed
+
+- [workflow_catalog.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/autoloop/core/workflow_catalog.py)
+- [loader.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/autoloop/runtime/loader.py)
+- [workflow_capabilities.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/autoloop/core/workflow_capabilities.py)
+- Targeted failures in `tests/runtime/test_workflow_reference_resolution.py`, then adjacent suites that consume the same contract.
+
+What I changed
+
+- Made effective catalog resolution prefer `.autoloop/workflows` over repo-local `workflows/` for bare names and aliases, without changing the published `workflow_search_roots(...)` ordering.
+- Split repo-local named references from explicit repo-local path/directory references in the loader:
+  - named repo-local catalog references resolve through `workflows.*` modules,
+  - explicit repo-local path and directory references still resolve through isolated `_autoloop_workspace_workflows.*` modules,
+  - installed package workflows still use the package-module contract.
+- Stopped applying package export validation to workspace/repo-local catalog entries in capability inspection.
+- Made capability lookup search `include_shadowed=True` so explicit shadowed paths keep their metadata.
+- Restored stale `workflows.*` module eviction when switching roots, so repo-local named workflow imports do not leak across workspaces.
+
+Key findings / decisions
+
+- The breakage was centralized, not workflow-by-workflow: catalog key authority and loader import mode had drifted apart.
+- Repo-local named fallback must keep `workflows.*` identity for cross-workflow imports and stable model names; isolation is only correct for explicit repo-local path/directory references.
+- Validated green:
+  - `tests/runtime/test_workflow_reference_resolution.py`
+  - `tests/runtime/test_workflow_catalog_roots.py`
+  - `tests/runtime/test_runtime_cli_metadata_integration.py`
+  - `tests/runtime/test_workspace_and_context.py`
+  - `tests/unit/test_stdlib_and_extensions.py`
+
+Open issues / next step
+
+- The next failure cluster is still `tests/unit/test_optimization_helpers.py`: 10 failures remain, centered on observability bundle validation, trace-corpus eligibility/filtering, and canonical selected-workflow source-manifest paths.
+- I did not run full `.venv/bin/python -m pytest` after this phase, and the repository is not globally green yet.

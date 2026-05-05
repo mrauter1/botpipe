@@ -153,7 +153,7 @@ def load_workflow_package_contract(root: str | Path, entry: WorkflowCatalogEntry
     """Load the main workflow class, parameters model, and compiled workflow for one catalog entry."""
 
     root_path = Path(root).resolve()
-    if entry.workflow_module is None or entry.package_module is None:
+    if entry.source_root_kind != "package" or entry.workflow_module is None or entry.package_module is None:
         resolved = _resolve_reference(root_path, str(entry.source_path))
         compiled = compile_workflow(resolved.workflow_cls)
         return WorkflowLoadedPackage(
@@ -528,7 +528,7 @@ def selected_workflow_decomposition_surface_payload(
 
 
 def _inspect_catalog_entry(root_path: Path, entry: WorkflowCatalogEntry) -> WorkflowCapabilityEntry:
-    if entry.workflow_module is not None and entry.package_module is not None:
+    if entry.source_root_kind == "package" and entry.workflow_module is not None and entry.package_module is not None:
         from autoloop.runtime.loader import ResolvedWorkflow, WorkflowReference
 
         loaded = load_workflow_package_contract(root_path, entry)
@@ -656,7 +656,7 @@ def _capability_entry_from_resolved(resolved, compiled: CompiledWorkflow, catalo
 def _catalog_entry_for_reference(root_path: Path, reference) -> WorkflowCatalogEntry | None:
     source_path = reference.source_path.resolve() if reference.source_path is not None else None
     manifest_path = reference.manifest_path.resolve() if reference.manifest_path is not None else None
-    for entry in discover_workflow_catalog(root_path):
+    for entry in discover_workflow_catalog(root_path, include_shadowed=True):
         if source_path is not None and entry.source_path.resolve() == source_path:
             return entry
         if manifest_path is not None and entry.manifest_path is not None and entry.manifest_path.resolve() == manifest_path:

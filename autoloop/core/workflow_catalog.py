@@ -402,7 +402,7 @@ def _effective_catalog(
     *,
     include_shadowed: bool,
 ) -> list[WorkflowCatalogEntry]:
-    ordered = sorted(entries, key=lambda entry: (-entry.precedence, entry.workflow_name, str(entry.source_path)))
+    ordered = sorted(entries, key=lambda entry: (-_resolution_precedence(entry), entry.workflow_name, str(entry.source_path)))
     claimed_keys: dict[str, WorkflowCatalogEntry] = {}
     effective: list[WorkflowCatalogEntry] = []
     for entry in ordered:
@@ -421,6 +421,14 @@ def _effective_catalog(
         for key in _resolution_keys(entry):
             claimed_keys[key] = entry
     return effective
+
+
+def _resolution_precedence(entry: WorkflowCatalogEntry) -> int:
+    if entry.source_root_kind == "package":
+        return 10
+    if entry.import_prefix == "workflows":
+        return 20
+    return 30
 
 
 def _resolution_keys(entry: WorkflowCatalogEntry) -> tuple[str, ...]:
