@@ -1055,3 +1055,106 @@ No remaining review blockers for `async-branch-runtime`. The reviewer-owned arti
 <loop-control>
 {"schema":"docloop.loop_control/v1","kind":"promise","promise":"COMPLETE"}
 </loop-control>
+
+
+---
+run_id=run-20260505T201926Z-7fdaad17 | entry=session_turn | pair=test | phase=producer | cycle=1 | attempt=1 | thread_id=019df9f5-ed08-7ca1-9227-242a7cdac2f6
+---
+provider=codex
+mode=resume
+template=/home/rauter/.local/share/pipx/venvs/autoloop/lib/python3.12/site-packages/autoloop/templates/test_producer.md
+session_id=019df9f5-ed08-7ca1-9227-242a7cdac2f6
+
+
+---
+run_id=run-20260505T201926Z-7fdaad17 | entry=phase_output | pair=test | phase=producer | process=codex-agent | cycle=1 | attempt=1 | thread_id=019df9f5-ed08-7ca1-9227-242a7cdac2f6
+---
+I’m treating this as a regression-hardening pass for the async branch runtime after the implementation and verifier cycles. First I’m checking the existing test strategy, the current test-phase feedback, and the branch-group tests to find any remaining coverage gap in the changed behavior rather than adding broad churn.
+
+The existing coverage already hits fan-in helper reads and the runtime event set, so I’m looking for an adjacent regression that the implementation touched but the current tests only exercise indirectly. The likely gap is ordinary downstream `_branch_groups/...` reads after the new engine-side path rerooting, so I’m reading that area before I add anything.
+
+I found one meaningful gap: the implementation reroots ordinary `_branch_groups/...` reads in the engine, but the current tests only prove the fan-in helper path indirectly. I’m adding a downstream-step regression test for that exact surface, then I’ll update the test strategy and test-phase feedback to map the coverage explicitly.
+
+The new downstream-read regression test is in and the first validation slice is already green. I’m waiting on the broader branch-runtime suite now because that’s the one most likely to expose an interaction between the new read-path assertion and the existing evidence/trace coverage.
+
+The targeted validation passed, including the new ordinary `_branch_groups/...` read path coverage. I’m doing a quick readback of the touched test and the phase artifacts so the close-out points to the exact additions and the documented gap statement stays consistent with what was actually tested.
+
+Scope considered
+
+Phase-local test hardening for `async-branch-runtime`: the changed asyncio scheduler behavior was already broadly covered, so I focused on the adjacent regression surface introduced by the workflow-folder evidence-root migration and on documenting the coverage map in the test-phase artifacts.
+
+What I analyzed
+
+I reviewed the current branch-group contract and tracing tests, the engine-side `_branch_groups/...` read rerooting, the active decisions ledger, and the empty test-phase artifacts. The main uncovered behavior was ordinary downstream reads of `_branch_groups/...` after a branch group completes; existing tests only exercised the fan-in helper path.
+
+What I changed
+
+I added [test_parallel_branch_group_exposes_workflow_scoped_evidence_to_downstream_reads](/home/rauter/autoloop_v3_bkp/autoloop_v3/tests/contract/test_branch_group_runtime.py:248), which runs a branch group without fan-in and then verifies a normal downstream prompt step receives readable refs rooted at `{workflow_folder}/_branch_groups/...`, with `exists=True` and `declared_artifact=False`.
+
+I also filled in the phase coverage map in [test_strategy.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/full-revised-standalone-spec-autoloop-v3-explici-7b9dcd08/runs/run-20260505T201926Z-7fdaad17/artifacts/test/phases/async-branch-runtime/test_strategy.md:10) and appended a concise summary of the additions to [feedback.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/full-revised-standalone-spec-autoloop-v3-explici-7b9dcd08/runs/run-20260505T201926Z-7fdaad17/artifacts/test/phases/async-branch-runtime/feedback.md:10).
+
+Key findings / decisions
+
+The useful regression boundary here is not another concurrency timing test; it is proving that the new engine-level workspace-read special case works for ordinary downstream steps, not only for `FanIn.results()` / `FanIn.context()` helpers.
+
+Flake control remains unchanged: I relied on deterministic provider-call inspection and existing manifest/status assertions rather than adding any timing-sensitive checks.
+
+Open issues / next step
+
+Validation passed:
+`.venv/bin/python -m pytest tests/contract/test_branch_group_runtime.py tests/runtime/test_runtime_tracing.py tests/strictness/test_no_compat.py -q` with `52 passed`
+and
+`.venv/bin/python -m pytest tests/unit/test_branch_group_context_sessions.py tests/unit/test_primitives_and_stores.py -q` with `54 passed`.
+
+I did not add tests for deferred branch-session overlay changes or synthetic session-id removal, because those behaviors are still explicitly out of scope for this phase.
+
+
+---
+run_id=run-20260505T201926Z-7fdaad17 | entry=session_turn | pair=test | phase=verifier | cycle=1 | attempt=1 | thread_id=019df9f5-ed08-7ca1-9227-242a7cdac2f6
+---
+provider=codex
+mode=resume
+template=/home/rauter/.local/share/pipx/venvs/autoloop/lib/python3.12/site-packages/autoloop/templates/test_verifier.md
+session_id=019df9f5-ed08-7ca1-9227-242a7cdac2f6
+
+
+---
+run_id=run-20260505T201926Z-7fdaad17 | entry=phase_output | pair=test | phase=verifier | process=codex-agent | cycle=1 | attempt=1 | thread_id=019df9f5-ed08-7ca1-9227-242a7cdac2f6
+---
+I’m auditing the async-branch-runtime test coverage against the accepted phase contract and the decision ledger. First I’m reading the current auditor artifacts, the strategy the test pass recorded, and the specific branch-runtime tests that were added or changed so I can decide whether any gaps remain.
+
+I’ve confirmed the strategy matches the phase contract at a high level. Now I’m checking the concrete tests behind each acceptance criterion, especially the fail-fast and evidence-path surfaces, to make sure the strategy isn’t overclaiming coverage or silently normalizing a behavior break.
+
+The concrete tests line up with the major acceptance criteria so far. I’m doing one last targeted scan for any strategy claim that isn’t actually backed by a test, especially around `concurrency=1` and the event-set coverage split across contract and tracing tests.
+
+The strategy’s `concurrency=1` claim is only worth keeping if there’s an actual phase test behind it, so I’m checking those two hits now. If one of them isn’t provider-backed branch-group coverage, that would be a small audit finding.
+
+I found one potential mismatch: the strategy claims `concurrency=1` async-provider safety, but the tests I’ve read so far only use `concurrency=1` for Python branches and shared-effects checks. I’m verifying whether that provider-backed case exists anywhere else before I decide whether this is a real gap or just a wording issue in the strategy.
+
+I verified the gap: there is no provider-backed `concurrency=1` branch-group test anywhere in the suite, even though that case is explicitly required by the request and the strategy currently claims it is covered. I’m recording that as a blocking audit finding and updating the criteria to match.
+
+Scope considered
+
+Phase-local audit of the `async-branch-runtime` test pass: the added and updated branch-group contract tests, runtime tracing coverage, strictness coverage, and the phase test artifacts. I kept edits limited to the active test audit artifact directory.
+
+What I analyzed
+
+I reviewed the accepted phase contract, the task-global decisions ledger, the test strategy, and the concrete tests in [test_branch_group_runtime.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/tests/contract/test_branch_group_runtime.py:248), [test_runtime_tracing.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/tests/runtime/test_runtime_tracing.py:422), and [test_no_compat.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/tests/strictness/test_no_compat.py:129). I specifically checked whether each stated acceptance criterion and each explicit runtime-test requirement from the request had a matching regression test.
+
+What I reviewed
+
+I confirmed that the suite now covers workflow-folder evidence reads, fail-fast cancellation/skips, declaration-order manifests, the required runtime event set, and strictness scanning for forbidden thread-backed primitives. I also checked the strategy claims against the actual tests to ensure the artifact was not overstating coverage.
+
+Key findings / decisions
+
+I recorded one blocking finding in [feedback.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/full-revised-standalone-spec-autoloop-v3-explici-7b9dcd08/runs/run-20260505T201926Z-7fdaad17/artifacts/test/phases/async-branch-runtime/feedback.md:10): there is still no provider-backed `parallel(..., concurrency=1)` regression test. The only `concurrency=1` cases in the suite are Python-branch scenarios at [test_branch_group_runtime.py:606](/home/rauter/autoloop_v3_bkp/autoloop_v3/tests/contract/test_branch_group_runtime.py:606) and [test_branch_group_runtime.py:711](/home/rauter/autoloop_v3_bkp/autoloop_v3/tests/contract/test_branch_group_runtime.py:711), even though the original request explicitly requires coverage that async-provider branch groups work with `concurrency=1`.
+
+I updated [criteria.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/full-revised-standalone-spec-autoloop-v3-explici-7b9dcd08/runs/run-20260505T201926Z-7fdaad17/artifacts/test/phases/async-branch-runtime/criteria.md:11) accordingly: reliability and intent remain satisfied, but coverage, regression protection, and edge/failure-path completeness are not yet complete.
+
+Open issues / next step
+
+The next test pass should add a provider-backed `parallel(..., concurrency=1)` case that proves normal completion through the async provider path and preserves branch-group semantics without any sync fallback. After that, this phase should be re-audited.
+
+<loop-control>
+{"schema":"docloop.loop_control/v1","kind":"promise","promise":"INCOMPLETE"}
+</loop-control>
