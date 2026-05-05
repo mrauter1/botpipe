@@ -1249,3 +1249,46 @@ Key findings / decisions
 Open issues / next step
 - No producer-side follow-up remains from the current reviewer findings.
 - The next step is a verifier rerun against the updated contract coverage and phase artifacts.
+
+
+---
+run_id=run-20260505T171950Z-13ce26d6 | entry=session_turn | pair=implement | phase=verifier | cycle=3 | attempt=1 | thread_id=019df95d-8fea-77f3-8730-5b37b11034f7
+---
+provider=codex
+mode=resume
+template=/home/rauter/.local/share/pipx/venvs/autoloop/lib/python3.12/site-packages/autoloop/templates/implement_verifier.md
+session_id=019df95d-8fea-77f3-8730-5b37b11034f7
+
+
+---
+run_id=run-20260505T171950Z-13ce26d6 | entry=phase_output | pair=implement | phase=verifier | process=codex-agent | cycle=3 | attempt=1 | thread_id=019df95d-8fea-77f3-8730-5b37b11034f7
+---
+I’m rechecking the updated contract intent against the latest test and artifact changes. If the phase is actually clean now, I’ll promote the criteria and record that no blocking findings remain.
+
+The latest contract and regression slices are green, and the decisions/notes now match the actual ordering guarantee. I’m updating the review artifacts to reflect that there are no remaining blocking findings in this cycle.
+
+Scope considered
+- Phase-local review only: the latest contract-test adjustments, the current implementation notes and decisions entry, and the active review artifacts for `composite-runtime-and-evidence`.
+- I did not widen scope to unrelated dirty files.
+
+What I analyzed
+- I reviewed the updated branch-group contract coverage in [tests/contract/test_branch_group_runtime.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/tests/contract/test_branch_group_runtime.py:130), the current [implementation_notes.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/autoloop-v3-explicit-branch-groups-full-revised-76d1507c/runs/run-20260505T171950Z-13ce26d6/artifacts/implement/phases/composite-runtime-and-evidence/implementation_notes.md), and the ordering clarification in [decisions.txt](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/autoloop-v3-explicit-branch-groups-full-revised-76d1507c/runs/run-20260505T171950Z-13ce26d6/decisions.txt).
+- I reran `.venv/bin/python -m pytest -q tests/contract/test_branch_group_runtime.py` and `.venv/bin/python -m pytest -q tests/unit/test_simple_surface.py -k 'branch_group or fan_in or provider_backed_branch'`.
+- I also verified the previously flaky fan-out slice had already been stress-run five times and that the updated contract now matches the persisted-order guarantee described in the request and decisions ledger.
+
+What I reviewed
+- `IMP-001` is resolved: `all_settled` now respects `success_routes`, and the added contract cases cover both the completed-non-success `partial` path and the explicit-success-routes `done` path.
+- `IMP-002` is resolved as a contract correction, not a runtime defect: the test no longer requires deterministic provider callback interleaving and now asserts the requested declaration-ordered persisted evidence instead.
+- I updated [criteria.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/autoloop-v3-explicit-branch-groups-full-revised-76d1507c/runs/run-20260505T171950Z-13ce26d6/artifacts/implement/phases/composite-runtime-and-evidence/criteria.md) to fully checked and appended the resolution follow-ups in [feedback.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/autoloop-v3-explicit-branch-groups-full-revised-76d1507c/runs/run-20260505T171950Z-13ce26d6/artifacts/implement/phases/composite-runtime-and-evidence/feedback.md).
+
+Key findings / decisions
+- No remaining blocking findings in this phase-local scope.
+- The final contract now aligns with the spec and the run-local decision: concurrent branches guarantee declaration-order manifests and context summaries, but not provider/log interleaving order between simultaneous branches.
+
+Open issues / next step
+- No phase-local review issues remain for `composite-runtime-and-evidence`.
+- This phase is ready to advance.
+
+<loop-control>
+{"schema":"docloop.loop_control/v1","kind":"promise","promise":"COMPLETE"}
+</loop-control>

@@ -1202,3 +1202,93 @@ Open issues / next step
 <loop-control>
 {"schema":"docloop.loop_control/v1","kind":"promise","promise":"INCOMPLETE"}
 </loop-control>
+
+
+---
+run_id=run-20260505T171950Z-13ce26d6 | entry=session_turn | pair=implement | phase=producer | cycle=3 | attempt=1 | thread_id=019df95d-8fea-77f3-8730-5b37b11034f7
+---
+provider=codex
+mode=resume
+template=/home/rauter/.local/share/pipx/venvs/autoloop/lib/python3.12/site-packages/autoloop/templates/implement_producer.md
+session_id=019df95d-8fea-77f3-8730-5b37b11034f7
+
+
+---
+run_id=run-20260505T171950Z-13ce26d6 | entry=phase_output | pair=implement | phase=producer | process=codex-agent | cycle=3 | attempt=1 | thread_id=019df95d-8fea-77f3-8730-5b37b11034f7
+---
+I’m deciding whether this should be fixed in the runtime or in the contract. The request only hard-requires declaration-order manifests, so I’m checking whether the current test is asserting a stronger ordering guarantee than the spec actually gives.
+
+The fix here is to narrow the contract to what the spec actually guarantees: declaration-order manifests and evidence, not thread-interleaving order inside concurrent provider execution.
+
+I’ve aligned the contract with the actual ordering guarantee. I’m rerunning the full branch-group contract file and the repeated fan-out slice to make sure the flake is gone.
+
+The flake is gone, but the new `success_routes` contract case still depended on provider call order. I’m tightening that test so the branch route comes from the prompt content instead of invocation order.
+
+I’ve made the mechanical-outcome test branch-specific instead of invocation-order-specific. I’m rerunning the full contract file and the repeated fan-out slice again.
+
+Scope considered
+- Phase-local follow-up for `IMP-002` only: the flaky branch-group contract coverage around concurrent `fan_out(...)` ordering, plus the required phase artifacts.
+- I did not modify reviewer-owned [criteria.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/autoloop-v3-explicit-branch-groups-full-revised-76d1507c/runs/run-20260505T171950Z-13ce26d6/artifacts/implement/phases/composite-runtime-and-evidence/criteria.md), and I did not pull unrelated dirty files into scope.
+
+What I analyzed
+- I re-read the new reviewer finding in [feedback.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/autoloop-v3-explicit-branch-groups-full-revised-76d1507c/runs/run-20260505T171950Z-13ce26d6/artifacts/implement/phases/composite-runtime-and-evidence/feedback.md), the phase plan, and the current-turn header in [decisions.txt](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/autoloop-v3-explicit-branch-groups-full-revised-76d1507c/runs/run-20260505T171950Z-13ce26d6/decisions.txt).
+- I checked the request/plan language again and confirmed the hard ordering guarantee is on persisted branch results and context output, not on provider callback interleaving for concurrently running branches.
+- I reproduced the flake, then verified it was the test’s invocation-order assumption rather than a persisted-order/runtime correctness defect.
+
+What I changed
+- I updated [tests/contract/test_branch_group_runtime.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/tests/contract/test_branch_group_runtime.py:139) so the fan-out contract no longer asserts prompt callback order under concurrency. It now asserts the two rendered prompts as an unordered set while keeping the declaration-order manifest and artifact assertions intact.
+- I also made the updated `all_settled` coverage branch-specific instead of invocation-order-specific by deriving the provider outcome from `request.prompt.text` rather than from call position.
+- I updated [implementation_notes.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/autoloop-v3-explicit-branch-groups-full-revised-76d1507c/runs/run-20260505T171950Z-13ce26d6/artifacts/implement/phases/composite-runtime-and-evidence/implementation_notes.md) and appended the non-obvious contract clarification under block `11` in [decisions.txt](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/autoloop-v3-explicit-branch-groups-full-revised-76d1507c/runs/run-20260505T171950Z-13ce26d6/decisions.txt).
+
+Key findings / decisions
+- The right fix here was contract tightening, not runtime serialization. The spec requires declaration-order manifests/evidence, but it does not require deterministic provider/log interleaving between simultaneously running branches.
+- Validation passed:
+  - `.venv/bin/python -m pytest -q tests/contract/test_branch_group_runtime.py`
+  - `for i in 1 2 3 4 5; do .venv/bin/python -m pytest -q tests/contract/test_branch_group_runtime.py -k fan_out_renders_branch_input_roots_artifacts_and_keeps_branch_sessions_local; done`
+
+Open issues / next step
+- No producer-side follow-up remains from the current reviewer findings.
+- The next step is a verifier rerun against the updated contract coverage and phase artifacts.
+
+
+---
+run_id=run-20260505T171950Z-13ce26d6 | entry=session_turn | pair=implement | phase=verifier | cycle=3 | attempt=1 | thread_id=019df95d-8fea-77f3-8730-5b37b11034f7
+---
+provider=codex
+mode=resume
+template=/home/rauter/.local/share/pipx/venvs/autoloop/lib/python3.12/site-packages/autoloop/templates/implement_verifier.md
+session_id=019df95d-8fea-77f3-8730-5b37b11034f7
+
+
+---
+run_id=run-20260505T171950Z-13ce26d6 | entry=phase_output | pair=implement | phase=verifier | process=codex-agent | cycle=3 | attempt=1 | thread_id=019df95d-8fea-77f3-8730-5b37b11034f7
+---
+I’m rechecking the updated contract intent against the latest test and artifact changes. If the phase is actually clean now, I’ll promote the criteria and record that no blocking findings remain.
+
+The latest contract and regression slices are green, and the decisions/notes now match the actual ordering guarantee. I’m updating the review artifacts to reflect that there are no remaining blocking findings in this cycle.
+
+Scope considered
+- Phase-local review only: the latest contract-test adjustments, the current implementation notes and decisions entry, and the active review artifacts for `composite-runtime-and-evidence`.
+- I did not widen scope to unrelated dirty files.
+
+What I analyzed
+- I reviewed the updated branch-group contract coverage in [tests/contract/test_branch_group_runtime.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/tests/contract/test_branch_group_runtime.py:130), the current [implementation_notes.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/autoloop-v3-explicit-branch-groups-full-revised-76d1507c/runs/run-20260505T171950Z-13ce26d6/artifacts/implement/phases/composite-runtime-and-evidence/implementation_notes.md), and the ordering clarification in [decisions.txt](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/autoloop-v3-explicit-branch-groups-full-revised-76d1507c/runs/run-20260505T171950Z-13ce26d6/decisions.txt).
+- I reran `.venv/bin/python -m pytest -q tests/contract/test_branch_group_runtime.py` and `.venv/bin/python -m pytest -q tests/unit/test_simple_surface.py -k 'branch_group or fan_in or provider_backed_branch'`.
+- I also verified the previously flaky fan-out slice had already been stress-run five times and that the updated contract now matches the persisted-order guarantee described in the request and decisions ledger.
+
+What I reviewed
+- `IMP-001` is resolved: `all_settled` now respects `success_routes`, and the added contract cases cover both the completed-non-success `partial` path and the explicit-success-routes `done` path.
+- `IMP-002` is resolved as a contract correction, not a runtime defect: the test no longer requires deterministic provider callback interleaving and now asserts the requested declaration-ordered persisted evidence instead.
+- I updated [criteria.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/autoloop-v3-explicit-branch-groups-full-revised-76d1507c/runs/run-20260505T171950Z-13ce26d6/artifacts/implement/phases/composite-runtime-and-evidence/criteria.md) to fully checked and appended the resolution follow-ups in [feedback.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/autoloop-v3-explicit-branch-groups-full-revised-76d1507c/runs/run-20260505T171950Z-13ce26d6/artifacts/implement/phases/composite-runtime-and-evidence/feedback.md).
+
+Key findings / decisions
+- No remaining blocking findings in this phase-local scope.
+- The final contract now aligns with the spec and the run-local decision: concurrent branches guarantee declaration-order manifests and context summaries, but not provider/log interleaving order between simultaneous branches.
+
+Open issues / next step
+- No phase-local review issues remain for `composite-runtime-and-evidence`.
+- This phase is ready to advance.
+
+<loop-control>
+{"schema":"docloop.loop_control/v1","kind":"promise","promise":"COMPLETE"}
+</loop-control>
