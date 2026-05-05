@@ -1987,3 +1987,45 @@ Updated the run-local planning artifacts for `run-20260505T192350Z-8a8a7d84` and
 The plan now directs implement/test to add the missing branch-group contract coverage in [tests/contract/test_branch_group_runtime.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/tests/contract/test_branch_group_runtime.py): real-runtime shared `ctx.state` and `ctx.values` behavior, permissive overlapping writes, and a fan-in `RequestInput` case that checkpoints at the composite branch-group step and resumes through normal downstream completion. It also constrains any fallback fix to the minimal runtime/checkpoint seam in [autoloop/core/branch_groups/runtime.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/autoloop/core/branch_groups/runtime.py) or [autoloop/core/engine.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/autoloop/core/engine.py) only if those tests fail.
 
 Artifacts updated: [plan.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/autoloop-v3-explicit-branch-groups-full-revised-76d1507c/runs/run-20260505T192350Z-8a8a7d84/artifacts/plan/plan.md), [phase_plan.yaml](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/autoloop-v3-explicit-branch-groups-full-revised-76d1507c/runs/run-20260505T192350Z-8a8a7d84/artifacts/plan/phase_plan.yaml), [feedback.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/autoloop-v3-explicit-branch-groups-full-revised-76d1507c/runs/run-20260505T192350Z-8a8a7d84/artifacts/plan/feedback.md), and [decisions.txt](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/autoloop-v3-explicit-branch-groups-full-revised-76d1507c/runs/run-20260505T192350Z-8a8a7d84/decisions.txt). I also verified `phase_plan.yaml` has a single valid `phases:` payload and that the decisions were appended only under this turn’s header.
+
+
+---
+run_id=run-20260505T192350Z-8a8a7d84 | entry=session_turn | pair=plan | phase=verifier | cycle=1 | attempt=1 | thread_id=019df998-c4db-75f2-b966-850fde667686
+---
+provider=codex
+mode=resume
+template=/home/rauter/.local/share/pipx/venvs/autoloop/lib/python3.12/site-packages/autoloop/templates/plan_verifier.md
+session_id=019df998-c4db-75f2-b966-850fde667686
+
+
+---
+run_id=run-20260505T192350Z-8a8a7d84 | entry=phase_output | pair=plan | phase=verifier | process=codex-agent | cycle=1 | attempt=1 | thread_id=019df998-c4db-75f2-b966-850fde667686
+---
+I’m auditing the authored plan against the request, the prior branch-group decisions, and the machine-readable phase contract. The main thing I’m checking now is whether `phase_plan.yaml` actually describes the implementation work, not just the planning artifacts.
+
+The main issue is confirmed: the narrative plan is narrow and mostly sound, but the machine-readable phase contract is still describing planning-file outputs instead of the actual runtime-test implementation slice. I’m validating the YAML mechanically before I record that as the blocking finding.
+
+I’ve reduced this to one material issue. The narrative plan is fine; the blocker is that the machine-readable phase contract’s acceptance criteria and deliverables are still phrased around planning artifacts instead of the actual implementation outputs that later phases must produce.
+
+Scope considered
+Run-local branch-group planning artifacts for the unresolved shared-effect and fan-in pending-input coverage only. I checked the request, the current `plan.md`, `phase_plan.yaml`, `criteria.md`, `feedback.md`, and the run-local `decisions.txt`.
+
+What I analyzed
+The request requires committed runtime/contract tests for shared `ctx.state`, shared `ctx.values`, overlapping writes, and a fan-in `RequestInput` checkpoint/resume path, with only a minimal runtime/checkpoint fix if those tests fail. I also checked the prior decisions that preserve composite-boundary checkpointing and narrow the expected implementation surface to the contract test file plus minimal runtime/engine seams.
+
+What I reviewed
+`plan.md` is directionally correct and stays narrow.
+`phase_plan.yaml` is parseable YAML and has one coherent phase.
+`criteria.md` and `feedback.md` were updated to reflect the audit state.
+`decisions.txt` is consistent with the narrative plan.
+
+Key findings / decisions
+PLAN-001 is blocking: `phase_plan.yaml` does not describe the implementation outputs of the sole execution phase. Its acceptance criteria and deliverables are still phrased around planning artifacts (`plan.md`, `phase_plan.yaml`, feedback/decisions) instead of the concrete work later phases must ship: the new contract tests in `tests/contract/test_branch_group_runtime.py`, targeted execution of that suite, and any minimal runtime/checkpoint patch if those tests fail.
+I marked `Intent Fidelity` and `Completeness` unchecked, and `Behavioral Safety`, `Technical Debt`, and `Feasibility / Compatibility` checked.
+
+Open issues / next step
+Rewrite the single phase in `phase_plan.yaml` so its acceptance criteria and deliverables describe the actual implementation slice, not the planning paperwork. After that correction, the plan should be ready to pass.
+
+<loop-control>
+{"schema":"docloop.loop_control/v1","kind":"promise","promise":"INCOMPLETE"}
+</loop-control>
