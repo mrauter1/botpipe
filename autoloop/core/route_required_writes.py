@@ -21,13 +21,33 @@ def effective_route_required_writes(
 ) -> tuple[str, ...]:
     """Return the runtime-effective required writes for one step route."""
 
-    route = compiled.routes.get(step_name, {}).get(route_tag) or compiled.global_routes.get(route_tag)
-    explicit = explicit_route_required_writes(route)
-    if explicit is not None:
-        return explicit
     step = compiled.steps.get(step_name)
     if step is None:
         return ()
+    return effective_route_required_writes_for_step(
+        compiled,
+        step=step,
+        route_tag=route_tag,
+    )
+
+
+def effective_route_required_writes_for_step(
+    compiled: Any,
+    *,
+    step: Any,
+    route_tag: str,
+) -> tuple[str, ...]:
+    """Return the runtime-effective required writes for a compiled step route."""
+
+    route_table = getattr(step, "route_table", None)
+    route = (
+        route_table.get(route_tag)
+        if route_table is not None
+        else compiled.routes.get(step.name, {}).get(route_tag) or compiled.global_routes.get(route_tag)
+    )
+    explicit = explicit_route_required_writes(route)
+    if explicit is not None:
+        return explicit
     return tuple(
         name
         for name in step.writes
@@ -68,19 +88,18 @@ def route_required_write_payload(
     """Return a serialized explicit/effective required-write payload for one route."""
 
     explicit = explicit_route_required_writes(route)
-    effective = (
-        []
-        if route is None
-        else None
-        if step_name is None and explicit is None
-        else list(
+    if route is None:
+        effective: list[str] | None = []
+    elif step_name is None:
+        effective = None if explicit is None else list(explicit)
+    else:
+        effective = list(
             effective_route_required_writes(
                 compiled,
                 step_name=step_name,
                 route_tag=route_tag,
             )
         )
-    )
     return {
         "required_writes": [] if route is None else list(route.required_writes or ()),
         "explicit_required_writes": None if explicit is None else list(explicit),

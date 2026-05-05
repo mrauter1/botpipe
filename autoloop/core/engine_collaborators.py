@@ -29,7 +29,7 @@ from .providers.models import (
     VerifierRequest,
 )
 from .providers.protocols import supports_async_llm_provider
-from .route_required_writes import explicit_route_required_writes
+from .route_required_writes import effective_route_required_writes_for_step, explicit_route_required_writes
 from .stores.protocols import PendingHandoff, PendingInput
 
 if TYPE_CHECKING:
@@ -296,7 +296,11 @@ class ProviderContractBuilder:
     def route_required_writes(self, step: "CompiledStep") -> dict[str, tuple[str, ...]]:
         visible_routes = set(self.available_routes(step))
         return {
-            route_tag: tuple(compiled_route.required_writes or ())
+            route_tag: effective_route_required_writes_for_step(
+                self._engine.compiled,
+                step=step,
+                route_tag=route_tag,
+            )
             for route_tag, compiled_route in self._engine._route_table_for_step(step).items()
             if route_tag in visible_routes
         }

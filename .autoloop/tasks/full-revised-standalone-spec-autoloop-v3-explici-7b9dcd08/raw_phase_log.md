@@ -2290,3 +2290,71 @@ phase_mode=single
 phase_ids=restore-provider-route-required-writes
 explicit=True
 current_phase_index=0
+
+
+---
+run_id=run-20260505T220513Z-1920f9e6 | entry=session_turn | pair=implement | phase=producer | cycle=1 | attempt=1 | thread_id=019dfa30-163b-78d1-ac99-1b4a505732e6
+---
+provider=codex
+mode=start
+template=/home/rauter/.local/share/pipx/venvs/autoloop/lib/python3.12/site-packages/autoloop/templates/implement_producer.md
+session_id=019dfa30-163b-78d1-ac99-1b4a505732e6
+
+
+---
+run_id=run-20260505T220513Z-1920f9e6 | entry=phase_output | pair=implement | phase=producer | process=codex-agent | cycle=1 | attempt=1 | thread_id=019dfa30-163b-78d1-ac99-1b4a505732e6
+---
+I’m tracing the provider-contract assembly around `route_required_writes`, then I’ll patch the shared builder, rerun the two canonical failures, and finish with the full suite to confirm the merge gate is green.
+
+I’ve confirmed the accepted scope and the existing decision ledger. Next I’m reading the provider-contract builder and the effective-route helper to keep the fix local and avoid touching the branch-group path.
+
+The regression is where the builder still serializes authored route metadata instead of the effective route obligation map. I’m narrowing to that method and the neighboring tests that already pin explicit-empty overrides so the patch stays surgical.
+
+I have enough context to edit now. The implementation is a narrow builder change: switch `route_required_writes()` to the shared effective-map helper, leave `routes()` untouched, then validate explicit-empty and branch-group surfaces with the planned test slice before the full run.
+
+I’m applying the code change now. The helper will gain step-aware effective-route resolution so the provider contract can expose inherited required writes without mutating the authored route metadata surface.
+
+The patch is in place. I added one focused contract assertion around the explicit-empty override so the effective provider map stays covered without changing the route metadata contract itself.
+
+I’m in the validation slice now: canonical contracts, explicit-vs-effective metadata checks, and the branch-group suite together before the full repository run.
+
+The focused suite is green. I’m running the full repository suite now to confirm the shared builder change didn’t leak into unrelated runtime or topology surfaces.
+
+The full run exposed another regression surface at roughly 39%. I’m waiting for the failure details before changing anything else so I can keep the scope anchored to the actual break.
+
+I’ve only seen one failure so far; the rest of the suite is still moving. Once pytest exits, I’ll isolate that test and either fix it or confirm it’s an unrelated pre-existing break before I finalize the phase artifacts.
+
+The one full-suite failure is still in scope: global-route topology payloads are serializing explicit required writes with an empty effective list. I’m checking the shared route payload helper next, because that path is adjacent to the provider fix and should be corrected centrally rather than patched in the serializer.
+
+I found the remaining failure in the shared route payload helper, not the builder itself: explicit global routes were being treated like step-scoped routes with no step context, which collapses their effective writes to `[]`. I’m fixing that branch centrally and then I’ll rerun the failing static-graph test plus the full suite.
+
+The helper fix is in. I’m rerunning the full suite from clean process state now; if it stays green, I’ll finish the phase notes and decision ledger with the exact validation set that passed.
+
+The rerun is clean through 50%, including the area that failed on the first pass. I’m letting the remainder finish before I touch the run artifacts.
+
+The code and validation are done. I’m writing the phase artifact notes now and recording the non-obvious shared-helper decisions so the next turn doesn’t drift back into authored-vs-effective route confusion.
+
+Scope considered
+- Shared provider-contract assembly for ordinary `step(...)` requests and verifier-side `produce_verify_step(...)` requests.
+- Adjacent shared required-write helpers and topology/static-graph payload serialization needed to keep repository-wide contracts green.
+- Phase artifacts only: updated [implementation_notes.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/full-revised-standalone-spec-autoloop-v3-explici-7b9dcd08/runs/run-20260505T220513Z-1920f9e6/artifacts/implement/phases/restore-provider-route-required-writes/implementation_notes.md:1) and appended the active block in [decisions.txt](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/full-revised-standalone-spec-autoloop-v3-explici-7b9dcd08/runs/run-20260505T220513Z-1920f9e6/decisions.txt:4).
+
+What I analyzed
+- The provider request builder in [engine_collaborators.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/autoloop/core/engine_collaborators.py:296).
+- The authored-vs-effective route helper logic in [route_required_writes.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/autoloop/core/route_required_writes.py:16).
+- Canonical contract, metadata-invariant, static-graph, and branch-group tests, plus the full suite.
+
+What I changed
+- Switched provider request `route_required_writes` to resolve through a shared step-aware effective-write helper, while leaving `routes[*].required_writes` and `routes[*].explicit_required_writes` unchanged in [engine_collaborators.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/autoloop/core/engine_collaborators.py:296).
+- Added `effective_route_required_writes_for_step(...)` and reused it from the existing helper path in [route_required_writes.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/autoloop/core/route_required_writes.py:34).
+- Fixed explicit global-route payload serialization so `effective_required_writes` stays concrete when a global route has an explicit override and no step context in [route_required_writes.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/autoloop/core/route_required_writes.py:81).
+- Added a focused regression assertion for explicit-empty route overrides in [test_engine_contracts.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/tests/contract/test_engine_contracts.py:7602).
+
+Key findings / decisions
+- The actual regression was limited to provider request assembly: it was exposing authored route metadata instead of effective route obligations.
+- Preserving branch-group behavior required centralizing the fallback logic in the shared helper rather than duplicating it in the builder.
+- The first full-suite rerun exposed one adjacent repository regression in global-route payload rendering; fixing that helper kept the suite green without changing compiled route metadata semantics.
+
+Open issues / next step
+- No open blocker in this phase.
+- Validation is green: targeted canonical/metadata/branch-group checks passed, and `./.venv/bin/python -m pytest -q` finished with `1282 passed` and no failures.
