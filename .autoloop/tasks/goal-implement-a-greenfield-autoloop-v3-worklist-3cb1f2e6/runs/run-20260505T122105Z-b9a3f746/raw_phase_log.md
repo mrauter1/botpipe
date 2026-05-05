@@ -298,3 +298,106 @@ Open issues / next step
 <loop-control>
 {"schema":"docloop.loop_control/v1","kind":"promise","promise":"INCOMPLETE"}
 </loop-control>
+
+
+---
+run_id=run-20260505T122105Z-b9a3f746 | entry=session_turn | pair=implement | phase=producer | cycle=2 | attempt=1 | thread_id=019df81b-911f-7df1-b586-291296e0c087
+---
+provider=codex
+mode=resume
+template=/home/rauter/.local/share/pipx/venvs/autoloop/lib/python3.12/site-packages/autoloop/templates/implement_producer.md
+session_id=019df81b-911f-7df1-b586-291296e0c087
+
+
+---
+run_id=run-20260505T122105Z-b9a3f746 | entry=phase_output | pair=implement | phase=producer | process=codex-agent | cycle=2 | attempt=1 | thread_id=019df81b-911f-7df1-b586-291296e0c087
+---
+I’m addressing the two verifier findings in the new stdlib source: first I’m reading the feedback and the exact save/load paths so I can fix the persistence contract and `dir_key` behavior without widening the core selector blast radius.
+
+I’m making a contained fix in `autoloop/stdlib/worklists.py`: separate read-for-load from read-for-save so model validation during save stops rewriting payload shape, and add default `dir_key` assignment for progress items. I’ll add focused tests for both cases before rerunning the suites.
+
+The fixes are in and the new unit coverage now exercises the exact review regressions: model-backed save without payload-shape drift, and default `dir_key` propagation on loaded progress items. I’m rerunning the focused suites and the direct contract checks.
+
+I’ve cleared the verifier findings. I’m updating the run notes and decision ledger with the non-obvious persistence fix so later turns don’t regress back to model-canonicalizing status-only saves.
+
+Scope considered
+
+- The verifier’s two blocking findings only, both in [autoloop/stdlib/worklists.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/autoloop/stdlib/worklists.py:237).
+- No additional repo areas were changed beyond the stdlib progress source, its focused tests, and the phase notes/decision artifacts.
+
+What I analyzed
+
+- The save path distinction between model validation for load versus model validation for status-only persistence.
+- The existing `dir_key` behavior in the generic artifact-backed source as the compatibility baseline for progress worklists.
+
+What I changed
+
+- Split the existing-payload read path so `save()` validates model-backed artifacts without replacing the raw payload with `model_dump`, which preserves the requested “status-only” mutation contract in [autoloop/stdlib/worklists.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/autoloop/stdlib/worklists.py:237).
+- Added `dir_key` derivation for progress worklist items using the same fallback rule as the core artifact-backed source in [autoloop/stdlib/worklists.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/autoloop/stdlib/worklists.py:342).
+- Added focused coverage for both regressions in [tests/unit/test_stdlib_progress_worklists.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/tests/unit/test_stdlib_progress_worklists.py:164).
+
+Key findings / decisions
+
+- The reviewer’s `IMP-001` is fixed: model-backed saves no longer backfill unrelated defaults into existing artifacts.
+- The reviewer’s `IMP-002` is fixed: progress worklist items now carry a stable `dir_key`, matching generic worklist behavior.
+- Validation passed:
+  - `.venv_phase/bin/python -m pytest tests/unit/test_worklist_selectors.py tests/unit/test_stdlib_progress_worklists.py tests/runtime/test_progress_worklists.py`
+  - `.venv_phase/bin/python -m pytest tests/contract/test_engine_contracts.py -k "selector_single_item_from_workflow_params_limits_scoped_execution or after_hook_effects_complete_and_advance_persist_status_and_exhaust or missing_artifact_backed_worklist_fails_at_first_scoped_use or artifact_backed_worklist_materializes_after_runtime_creates_source"`
+
+Open issues / next step
+
+- The unrelated adjacent suite failures in `tests/unit/test_stdlib_and_extensions.py` and `tests/runtime/test_workspace_and_context.py` remain outside this phase’s scoped worklist changes.
+- The next step is verifier re-review of the updated stdlib progress source and focused tests.
+
+
+---
+run_id=run-20260505T122105Z-b9a3f746 | entry=session_turn | pair=implement | phase=verifier | cycle=2 | attempt=1 | thread_id=019df81b-911f-7df1-b586-291296e0c087
+---
+provider=codex
+mode=resume
+template=/home/rauter/.local/share/pipx/venvs/autoloop/lib/python3.12/site-packages/autoloop/templates/implement_verifier.md
+session_id=019df81b-911f-7df1-b586-291296e0c087
+
+
+---
+run_id=run-20260505T122105Z-b9a3f746 | entry=phase_output | pair=implement | phase=verifier | process=codex-agent | cycle=2 | attempt=1 | thread_id=019df81b-911f-7df1-b586-291296e0c087
+---
+I’m re-reviewing the scoped selector/progress changes after the producer’s fixes. First I’m reading the updated stdlib source, the current review artifacts, and the focused test coverage so I can decide whether the prior blockers are actually closed before touching the criteria.
+
+The code change looks aligned with the prior blockers. I’m rerunning the focused progress/selector suites plus the direct contract subset before I mark the criteria, so the review outcome is tied to a fresh verifier pass rather than the producer’s notes.
+
+I’ve rerun the scoped suites and the direct contract checks cleanly. I’m marking the criteria complete now and appending a short cycle-2 resolution note so the feedback artifact reflects that the earlier blockers no longer reproduce.
+
+Scope considered
+
+- Phase-local re-review of the selector/progress worklist implementation, focused on the updated stdlib source and the artifacts under the active review directory.
+- I rechecked the two previously blocking stdlib findings and the direct contract surface that could have regressed.
+
+What I analyzed
+
+- The revised `ProgressJsonCollectionSource.save()` path in [autoloop/stdlib/worklists.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/autoloop/stdlib/worklists.py:237), specifically the new separation between validation and canonicalization for existing payloads.
+- The progress-item construction path in [autoloop/stdlib/worklists.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/autoloop/stdlib/worklists.py:342), specifically `dir_key` derivation versus the existing generic artifact-backed source.
+- The new focused unit coverage added for both regression scenarios in [tests/unit/test_stdlib_progress_worklists.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/tests/unit/test_stdlib_progress_worklists.py:170).
+
+What I reviewed
+
+- The updated implementation against AC-1 through AC-4.
+- Fresh verifier reruns of:
+  - `.venv_phase/bin/python -m pytest tests/unit/test_worklist_selectors.py tests/unit/test_stdlib_progress_worklists.py tests/runtime/test_progress_worklists.py`
+  - `.venv_phase/bin/python -m pytest tests/contract/test_engine_contracts.py -k "selector_single_item_from_workflow_params_limits_scoped_execution or after_hook_effects_complete_and_advance_persist_status_and_exhaust or missing_artifact_backed_worklist_fails_at_first_scoped_use or artifact_backed_worklist_materializes_after_runtime_creates_source"`
+
+Key findings / decisions
+
+- No remaining blocking findings in the scoped diff.
+- `IMP-001` is resolved: model-backed status saves now validate existing payloads without rewriting unrelated fields from `model_dump`.
+- `IMP-002` is resolved: progress worklist items now carry a stable `dir_key` with the same fallback behavior as the generic artifact-backed source.
+- I marked all criteria complete and appended a cycle-2 resolution note to the feedback artifact.
+
+Open issues / next step
+
+- No scoped review issues remain for this phase.
+- The unrelated broader workspace/catalog failures noted earlier were not part of this phase-local re-review and do not block this selector/progress slice.
+
+<loop-control>
+{"schema":"docloop.loop_control/v1","kind":"promise","promise":"COMPLETE"}
+</loop-control>
