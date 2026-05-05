@@ -1440,3 +1440,48 @@ Key findings / decisions
 Open issues / next step
 - The remaining known phase-local gap is still explicit fault-injection coverage for manifest/context write failure before fan-in.
 - The next step is auditor review of the new `fail_fast` contract coverage and the updated phase test artifacts.
+
+
+---
+run_id=run-20260505T171950Z-13ce26d6 | entry=session_turn | pair=test | phase=verifier | cycle=2 | attempt=1 | thread_id=019df95d-8fea-77f3-8730-5b37b11034f7
+---
+provider=codex
+mode=resume
+template=/home/rauter/.local/share/pipx/venvs/autoloop/lib/python3.12/site-packages/autoloop/templates/test_verifier.md
+session_id=019df95d-8fea-77f3-8730-5b37b11034f7
+
+
+---
+run_id=run-20260505T171950Z-13ce26d6 | entry=phase_output | pair=test | phase=verifier | process=codex-agent | cycle=2 | attempt=1 | thread_id=019df95d-8fea-77f3-8730-5b37b11034f7
+---
+I’m re-auditing the phase-local test surface after the new `fail_fast` coverage. The remaining question is whether the still-documented manifest/context write-failure gap is material enough to block signoff against AC-1.
+
+I’ve confirmed the `fail_fast` gap is closed. I’m running one fresh contract pass now and then I’ll record the remaining gap, which is the still-untested evidence-write failure path before fan-in/outcome resolution.
+
+The full contract file is green, and the remaining issue is now strictly coverage depth. I’m appending a new blocking audit finding for the evidence-write failure path, because that still sits in the strategy as an acknowledged hole against the composite-boundary contract.
+
+Scope considered
+- Phase-local test audit only for `composite-runtime-and-evidence`: the updated [tests/contract/test_branch_group_runtime.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/tests/contract/test_branch_group_runtime.py), the active [test_strategy.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/autoloop-v3-explicit-branch-groups-full-revised-76d1507c/runs/run-20260505T171950Z-13ce26d6/artifacts/test/phases/composite-runtime-and-evidence/test_strategy.md), the run-local [decisions.txt](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/autoloop-v3-explicit-branch-groups-full-revised-76d1507c/runs/run-20260505T171950Z-13ce26d6/decisions.txt), and the active audit artifacts.
+- I did not modify repository code/tests or any files outside the active audit artifact directory.
+
+What I analyzed
+- I re-read the updated contract file and the strategy’s remaining known gap around evidence-write failure before fan-in/outcome routing.
+- I checked the runtime touchpoints in [autoloop/core/branch_groups/runtime.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/autoloop/core/branch_groups/runtime.py), especially `write_branch_group_evidence(...)`, `branch_manifest_written`, and `fan_in_started`.
+- I reran `.venv/bin/python -m pytest -q tests/contract/test_branch_group_runtime.py`, which passed with `6 passed in 0.31s`.
+
+What I reviewed
+- `TST-001` is resolved: the suite now has deterministic `fail_fast` settlement coverage and the strategy no longer lists that as a gap.
+- The current contract remains reliable and aligned with intent. I left [criteria.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/autoloop-v3-explicit-branch-groups-full-revised-76d1507c/runs/run-20260505T171950Z-13ce26d6/artifacts/test/phases/composite-runtime-and-evidence/criteria.md) unchanged because the remaining coverage gap still blocks full signoff.
+- I appended a new blocking finding to [feedback.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/autoloop-v3-explicit-branch-groups-full-revised-76d1507c/runs/run-20260505T171950Z-13ce26d6/artifacts/test/phases/composite-runtime-and-evidence/feedback.md).
+
+Key findings / decisions
+- `TST-002` blocking: the phase-local test surface still lacks explicit fault-injection coverage for evidence-write failure before fan-in or mechanical outcome routing. The strategy itself still acknowledges that gap.
+- That omission is material because AC-1 and the request require the composite to fail before fan-in/outcome routing if `results.json` or `context.md` writing fails. A regression where evidence writing fails but `fan_in_started` still occurs, or downstream routing still happens, would currently go undetected.
+
+Open issues / next step
+- Add a deterministic test that forces `write_branch_group_evidence(...)` to fail and asserts the composite fails immediately without fan-in execution or downstream routing.
+- After that, rerun the branch-group contract slice and re-evaluate the audit criteria.
+
+<loop-control>
+{"schema":"docloop.loop_control/v1","kind":"promise","promise":"INCOMPLETE"}
+</loop-control>
