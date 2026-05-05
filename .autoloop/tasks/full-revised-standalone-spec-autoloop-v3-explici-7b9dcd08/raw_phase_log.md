@@ -1571,3 +1571,55 @@ Open issues / next step
 
 - No open phase-local blockers from the tested surfaces.
 - Validation run: `.venv/bin/python -m pytest -q tests/contract/test_branch_group_runtime.py tests/runtime/test_runtime_static_graph.py tests/runtime/test_runtime_tracing.py tests/unit/test_branch_group_context_sessions.py tests/strictness/test_no_compat.py` -> `76 passed`.
+
+
+---
+run_id=run-20260505T201926Z-7fdaad17 | entry=session_turn | pair=implement | phase=verifier | cycle=1 | attempt=1 | thread_id=019dfa12-b013-7731-be93-05caf44ed406
+---
+provider=codex
+mode=resume
+template=/home/rauter/.local/share/pipx/venvs/autoloop/lib/python3.12/site-packages/autoloop/templates/implement_verifier.md
+session_id=019dfa12-b013-7731-be93-05caf44ed406
+
+
+---
+run_id=run-20260505T201926Z-7fdaad17 | entry=phase_output | pair=implement | phase=verifier | process=codex-agent | cycle=1 | attempt=1 | thread_id=019dfa12-b013-7731-be93-05caf44ed406
+---
+I’m reviewing the phase-local implementation against the acceptance criteria and the actual diff. First I’m reading the review artifacts and rechecking the changed runtime, manifest, and topology surfaces for regressions.
+
+I’m checking one possible regression surface from the new fan-in execution id: whether internal fan-in step names are guaranteed unique enough for step-scoped tracing, or whether this can collide with ordinary step ids.
+
+The diff looks phase-conformant and the focused regression coverage is sufficient for this scope. I’m marking the criteria complete and recording that this review found no blocking or non-blocking issues.
+
+Scope considered
+
+- Phase-local review for `fan-in-outcomes-and-surface`.
+- Changed implementation in `autoloop/core/branch_groups/{context,runtime,manifest}.py` and `autoloop/runtime/static_graph.py`.
+- Review artifacts in the active phase directory, including `implementation_notes.md`, `criteria.md`, and `feedback.md`.
+
+What I analyzed
+
+- The active phase contract, acceptance criteria, implementation notes, and run-local decisions ledger.
+- The implementation diff for fan-in execution ids, branch-group context rendering, runtime event payloads, and static-graph/topology branch-group metadata.
+- The validation evidence recorded by the implementer, including the targeted pytest command covering branch-group runtime, tracing, static graph, context sessions, and strictness.
+
+What I reviewed
+
+- Intent fidelity for AC-1 through AC-5.
+- Regression risk around capture-mode routing, fan-in finalization, checkpoint/resume behavior, and additive static-graph/runtime-trace surfaces.
+- Maintainability of the new summary rendering and surface serialization changes.
+
+Key findings / decisions
+
+- No blocking findings.
+- No non-blocking findings.
+- I updated `criteria.md` to all checked and appended `feedback.md` with a no-findings review result.
+
+Open issues / next step
+
+- No open review issues in scoped changes.
+- Phase-local review is complete.
+
+<loop-control>
+{"schema":"docloop.loop_control/v1","kind":"promise","promise":"COMPLETE"}
+</loop-control>
