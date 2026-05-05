@@ -823,3 +823,126 @@ Open issues / next step
 <loop-control>
 {"schema":"docloop.loop_control/v1","kind":"promise","promise":"COMPLETE"}
 </loop-control>
+
+
+---
+run_id=run-20260505T201926Z-7fdaad17 | entry=session_turn | pair=implement | phase=producer | cycle=1 | attempt=1 | thread_id=019df9f5-ed08-7ca1-9227-242a7cdac2f6
+---
+provider=codex
+mode=start
+template=/home/rauter/.local/share/pipx/venvs/autoloop/lib/python3.12/site-packages/autoloop/templates/implement_producer.md
+session_id=019df9f5-ed08-7ca1-9227-242a7cdac2f6
+
+
+---
+run_id=run-20260505T201926Z-7fdaad17 | entry=phase_output | pair=implement | phase=producer | process=codex-agent | cycle=1 | attempt=1 | thread_id=019df9f5-ed08-7ca1-9227-242a7cdac2f6
+---
+I’m implementing the `async-branch-runtime` phase, scoped to replacing the thread-backed branch scheduler with an asyncio-native runtime and adding the required runtime tests. I’ll inspect the current branch-group subsystem, the active phase artifacts, and the async execution foundation before editing anything.
+
+I’ve got the phase plan and prior decisions. Next I’m reading the existing branch-group runtime, session/context helpers, and dispatcher/tests to isolate exactly where thread-backed behavior still exists and what the async foundation already exposed.
+
+The current runtime is already partly async at the step level, but branch scheduling is still sequential and evidence paths still root at `context.root`. I’m now reading the rest of the branch runtime tests and the tracing/static helpers so I can change the scheduler without drifting event payloads or file path contracts.
+
+I have the relevant runtime surfaces now. The concrete work is: replace `_run_branches` with task/semaphore scheduling, make `fail_fast` cancel pending/in-flight tasks while preserving ordered results, then update and extend contract/tracing tests around concurrency, cancellation, and emitted metadata.
+
+I’ve isolated the main changes. I’m editing the branch-group runtime next: replacing the sequential loop with a queue-driven asyncio scheduler, keeping branch execution capture-mode intact, and extending the tests around concurrency, fail-fast cancellation, and trace payloads.
+
+The scheduler rewrite is in place. I’m checking the runtime for edge cases now: cancellation result serialization, any queue/task deadlocks, and whether the emitted branch events still carry the same metadata shape before I move on to tests.
+
+The runtime patch is structurally correct, but there are two follow-up fixes before I run tests: a missing defensive helper from the new scheduler wrapper, and a cleanup on cancelled-branch serialization so the manifest doesn’t claim a destination that was never actually followed.
+
+I’m moving the test surface from “async path exists” to “async path actually schedules concurrently and cancels correctly.” That means new provider fixtures that block cooperatively inside `run_llm_async`, plus extra runtime assertions on declaration-order manifests and fail-fast outcomes.
+
+The runtime and tests now cover actual concurrent execution paths. I’m adding one strictness guard next so this phase fails loudly if thread-backed primitives creep back into the branch-group subsystem later.
+
+I’ve finished the code changes and the first pass of regression coverage. I’m running the branch-runtime contract, tracing, dispatcher, and strictness tests together now to catch scheduler issues and any metadata mismatches before I touch the notes or decisions.
+
+`pytest` isn’t on PATH in this workspace, so I’m rerunning the same target set via `python -m pytest`. If that environment is incomplete too, I’ll fall back to the repo’s existing runner pattern and report the gap explicitly.
+
+The repo doesn’t ship a local test runner wrapper, and this base image is missing `pytest`. I’m checking the Python environment and then I’ll install the minimal test dependency set needed to execute the targeted phase tests in-place.
+
+Two targeted regressions failed. I’m reading the failure output now and then I’ll patch only those mismatches rather than broadening the changeset.
+
+The remaining failures expose a real behavioral bug, not just test drift: cancelled provider-backed branches are being converted into ordinary workflow failures before the branch runtime sees them. I’m tracing that through the async step dispatcher now and will fix the cancellation path there instead of weakening the expectations.
+
+I found the drift point: the async step dispatcher’s retry/annotation wrappers are still treating task cancellation like an ordinary provider error. I’m patching those `except Exception` blocks to let `asyncio.CancelledError` pass through unchanged so branch-group fail-fast can record real `cancelled` results.
+
+Cancellation is still being swallowed deeper in the provider path. I’m reproducing just the fail-fast case with a one-off script so I can inspect the manifest and the exact exception shape without rerunning the whole target set blindly.
+
+The phase-targeted suite is green. I’m doing one extra regression pass on adjacent engine/session contracts because the cancellation fix touched shared async step-dispatch code, not just the branch runtime wrapper.
+
+The code is green on both the phase-targeted tests and adjacent engine/session contracts. I’m recording the two non-obvious implementation decisions that matter for later phases: lazy branch launching for `fail_fast`, and explicit `CancelledError` passthrough in async step dispatch so branch cancellations don’t get reclassified as provider failures.
+
+I’m writing the phase notes now. I’m explicitly calling out the two deliberate non-changes as well: evidence-root migration and branch-session overlay cleanup are still deferred, even though the scheduler/runtime acceptance criteria are now satisfied.
+
+I’ve finished the implementation and validation. I’m pulling exact line references for the main runtime and test changes so the close-out stays precise and easy to inspect.
+
+Scope considered
+
+Async branch-group runtime only: the dedicated branch-group subsystem, adjacent async step-dispatch cancellation paths, and the phase-local contract/tracing/strictness tests. I kept unrelated dirty files out of scope.
+
+What I analyzed
+
+I reviewed [runtime.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/autoloop/core/branch_groups/runtime.py:61), [engine_collaborators.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/autoloop/core/engine_collaborators.py:877), [test_branch_group_runtime.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/tests/contract/test_branch_group_runtime.py:76), [test_runtime_tracing.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/tests/runtime/test_runtime_tracing.py:35), the active phase plan/decisions, and the adjacent engine/session contracts that could regress from cancellation handling.
+
+What I changed
+
+- [runtime.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/autoloop/core/branch_groups/runtime.py:156) now runs branch groups with `asyncio.Task` scheduling and `asyncio.Semaphore` concurrency, launches lazily up to the concurrency limit, preserves declaration-order manifests, and implements `fail_fast` by cancelling in-flight branches while marking never-launched tails as `skipped`.
+- [runtime.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/autoloop/core/branch_groups/runtime.py:321) now records cancelled branches explicitly and centralizes branch terminal trace emission so `completed` / `needs_input` / `failed` / `cancelled` / `skipped` all share one payload shape.
+- [engine_collaborators.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/autoloop/core/engine_collaborators.py:880) now re-raises `asyncio.CancelledError` through async LLM and produce/verify execution paths instead of converting branch-task cancellation into ordinary provider failures.
+- [test_branch_group_runtime.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/tests/contract/test_branch_group_runtime.py:267) adds provider-backed parallel and fan-out concurrency coverage plus fail-fast cancellation coverage.
+- [test_runtime_tracing.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/tests/runtime/test_runtime_tracing.py:417) now covers the additive branch-group runtime event set, including `branch_scheduled`, `branch_needs_input`, `branch_cancelled`, and `branch_skipped`.
+
+Key findings / decisions
+
+- The real cancellation bug was not in the scheduler alone; async step-dispatch retry wrappers were swallowing cancellation and reclassifying it as provider failure.
+- `fail_fast` now distinguishes `cancelled` from `skipped` by launch state: running branches are cancelled best-effort, never-launched branches are skipped.
+- I recorded both of those decisions in [decisions.txt](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/full-revised-standalone-spec-autoloop-v3-explici-7b9dcd08/runs/run-20260505T201926Z-7fdaad17/decisions.txt:28) and summarized the phase in [implementation_notes.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/full-revised-standalone-spec-autoloop-v3-explici-7b9dcd08/runs/run-20260505T201926Z-7fdaad17/artifacts/implement/phases/async-branch-runtime/implementation_notes.md:9).
+
+Open issues / next step
+
+- Evidence is still written under `context.root / "_branch_groups"`; the spec’s workflow-folder evidence-root migration is still deferred.
+- Branch-session overlay cleanup is still deferred; this phase did not change synthetic session-id or parent-fallback behavior.
+- Validation run: `54 passed` for the phase-targeted suite and `175 passed` for adjacent engine/session coverage. I did not run the full repository test suite.
+
+
+---
+run_id=run-20260505T201926Z-7fdaad17 | entry=session_turn | pair=implement | phase=verifier | cycle=1 | attempt=1 | thread_id=019df9f5-ed08-7ca1-9227-242a7cdac2f6
+---
+provider=codex
+mode=resume
+template=/home/rauter/.local/share/pipx/venvs/autoloop/lib/python3.12/site-packages/autoloop/templates/implement_verifier.md
+session_id=019df9f5-ed08-7ca1-9227-242a7cdac2f6
+
+
+---
+run_id=run-20260505T201926Z-7fdaad17 | entry=phase_output | pair=implement | phase=verifier | process=codex-agent | cycle=1 | attempt=1 | thread_id=019df9f5-ed08-7ca1-9227-242a7cdac2f6
+---
+I’ve narrowed the review to the changed scheduler/runtime surfaces plus the adjacent cancellation path they touched. I’m updating the phase criteria and feedback now; the main substantive issue is that the implementation still writes branch evidence to the root-level `_branch_groups` location that the authoritative decisions explicitly superseded.
+
+I’ve finished the audit. I’m recording one blocking finding tied directly to the authoritative decisions and the touched runtime surface, then I’ll return `INCOMPLETE`.
+
+Scope considered
+
+Phase-local review of the async branch runtime changes, the adjacent async cancellation path in step dispatch, and the phase artifacts. I ignored unrelated dirty files outside the touched scheduler/runtime/test surfaces.
+
+What I analyzed
+
+I reviewed the changed runtime and dispatcher code in [runtime.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/autoloop/core/branch_groups/runtime.py:61), [engine_collaborators.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/autoloop/core/engine_collaborators.py:877), the evidence-path helper in [manifest.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/autoloop/core/branch_groups/manifest.py:10), the updated contract/tracing tests, the active implementation notes, and the authoritative decisions ledger.
+
+What I reviewed
+
+I verified the new asyncio task/semaphore scheduler, `fail_fast` launch/cancel behavior, cancellation propagation through provider-backed async execution, manifest ordering, and trace-event coverage. I also checked the implementation against the task-global decision requiring branch-group evidence to move from root-level `_branch_groups` to `{workflow_folder}/_branch_groups`.
+
+Key findings / decisions
+
+- One blocking finding was added to [feedback.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/full-revised-standalone-spec-autoloop-v3-explici-7b9dcd08/runs/run-20260505T201926Z-7fdaad17/artifacts/implement/phases/async-branch-runtime/feedback.md:9): the runtime still writes evidence under `context.root / "_branch_groups"` and the new tests now assert that superseded location.
+- [criteria.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/full-revised-standalone-spec-autoloop-v3-explici-7b9dcd08/runs/run-20260505T201926Z-7fdaad17/artifacts/implement/phases/async-branch-runtime/criteria.md:11) was updated accordingly; only maintainability/validation is checked.
+
+Open issues / next step
+
+The implementation should be revised so `branch_group_paths(...)` and per-branch raw-output storage root under `context.workflow_folder`, and the branch-group runtime/tracing tests should be updated in the same change set to assert the workflow-folder evidence paths. After that, this phase should be re-reviewed.
+
+<loop-control>
+{"schema":"docloop.loop_control/v1","kind":"promise","promise":"INCOMPLETE"}
+</loop-control>
