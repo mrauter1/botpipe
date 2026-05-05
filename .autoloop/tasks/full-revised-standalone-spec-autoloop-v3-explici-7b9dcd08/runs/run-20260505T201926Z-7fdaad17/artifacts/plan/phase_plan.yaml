@@ -38,6 +38,7 @@ phases:
       - "Add async provider protocol methods for step, producer, and verifier turns."
       - "Add async fake-provider coverage and async rendered-provider transport support."
       - "Add StepDispatcher async execution with explicit capture versus finalize routing."
+      - "Keep any remaining sync entrypoints as outer callers only; do not add new branch-group compatibility shims."
     out_of_scope:
       - "Parallel branch scheduling."
       - "Legacy sync-provider fallback inside branch groups."
@@ -66,6 +67,7 @@ phases:
       - "Schedule branches with asyncio tasks and semaphores."
       - "Implement settle=all and settle=fail_fast with cancellation, skipped results, and deterministic manifest ordering."
       - "Keep branch-group orchestration inside the dedicated subsystem and return normal step results to the engine."
+      - "Emit the full branch-group runtime event set through the existing runtime tracing sink."
     out_of_scope:
       - "Workspace isolation or conflict detection."
       - "Automatic dependency scheduling."
@@ -78,9 +80,11 @@ phases:
         text: "Async provider-backed parallel and fan-out groups run concurrently when concurrency is greater than one."
       - id: "AC-3"
         text: "Fail-fast groups stop launching new branches, cancel in-flight work best-effort, and still emit valid branch results."
+      - id: "AC-4"
+        text: "Runtime tracing records the spec-required branch-group events with additive branch, route, destination, error, and evidence-path metadata."
     deliverables:
       - "Async branch-group runtime and scheduler implementation."
-      - "Runtime tests for concurrency, fail-fast, cancellation, and declaration-order manifests."
+      - "Runtime tests for concurrency, fail-fast, cancellation, declaration-order manifests, and branch-group trace events."
     risks:
       - "Cancellation behavior may vary across provider adapters."
     rollback:
@@ -116,14 +120,16 @@ phases:
       - "Revert evidence-path changes only with matching test changes; do not restore synthetic session ids."
 
   - phase_id: "fan-in-outcomes-and-surface"
-    title: "Fan-In and Outcomes"
-    objective: "Complete capture-mode branch routing, fan-in orchestration, manifest/context shape, and public authoring semantics."
+    title: "Fan-In, Outcomes, Surface"
+    objective: "Complete capture-mode branch routing, fan-in orchestration, manifest/context shape, static graph surfaces, and checkpoint/resume semantics."
     status: "planned"
     in_scope:
       - "Capture branch route destinations and direct controls without following them."
       - "Finalize fan-in exactly once through the composite route table."
       - "Complete manifest fields, context markdown sections, helper reads, and mechanical outcome policies."
       - "Preserve owner-step-relative artifact rooting for branch and fan-in placeholders."
+      - "Update static graph and topology payloads so branch groups remain composite nodes with inspectable nested internals."
+      - "Preserve the v1 composite-boundary checkpoint/resume contract, including rerun-full-group-on-interrupt and no branch-specific resume."
     out_of_scope:
       - "Branch-level interactive resume."
       - "Child-workflow fan-in support."
@@ -136,9 +142,13 @@ phases:
         text: "Fan-in sees manifest and context metadata, then finalizes the composite route exactly once."
       - id: "AC-3"
         text: "Manifest and context outputs are deterministic and include the branch-result fields required by the spec."
+      - id: "AC-4"
+        text: "Static graph and topology outputs expose additive branch-group metadata, nested branch specs, fan-in shape, structured inputs, and exposed routes."
+      - id: "AC-5"
+        text: "Branch groups checkpoint only at the composite boundary, fan-in or composite questions resume correctly, and v1 does not add partial branch resume."
     deliverables:
       - "Completed branch manifest, context rendering, fan-in metadata, and outcome selection logic."
-      - "Runtime and contract tests for fan-in, Goto, Fail, RequestInput, and placeholder-driven artifact paths."
+      - "Runtime and contract tests for fan-in, Goto, Fail, RequestInput, placeholder-driven artifact paths, static graph payloads, and composite-boundary resume behavior."
     risks:
       - "Route-finalization changes can regress ordinary step behavior if capture and finalize paths drift."
     rollback:

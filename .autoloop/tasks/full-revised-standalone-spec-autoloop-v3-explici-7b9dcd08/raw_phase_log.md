@@ -96,3 +96,33 @@ The planner needs to revise the plan so observability/static-graph work and chec
 <loop-control>
 {"schema":"docloop.loop_control/v1","kind":"promise","promise":"INCOMPLETE"}
 </loop-control>
+
+
+---
+run_id=run-20260505T201926Z-7fdaad17 | entry=session_turn | pair=plan | phase=producer | cycle=2 | attempt=1 | thread_id=019df9cb-aa84-7e92-92f1-518274b06869
+---
+provider=codex
+mode=resume
+template=/home/rauter/.local/share/pipx/venvs/autoloop/lib/python3.12/site-packages/autoloop/templates/plan_producer.md
+session_id=019df9cb-aa84-7e92-92f1-518274b06869
+
+
+---
+run_id=run-20260505T201926Z-7fdaad17 | entry=phase_output | pair=plan | phase=producer | process=codex-agent | cycle=2 | attempt=1 | thread_id=019df9cb-aa84-7e92-92f1-518274b06869
+---
+I’m revising the plan against the verifier findings, starting with the current feedback and decisions state so I only amend the active run-local artifacts and the current decisions block.
+
+I’ve confirmed the current repo already has branch-group tracing tests and branch-group checkpoint/resume tests, so I’m revising the plan to make those surfaces first-class rather than implied.
+
+I have the concrete surfaces to fix now: `autoloop/runtime/static_graph.py`, runtime trace event payloads, and the existing branch-group checkpoint/resume contract already covered by tests. I’m updating the plan and phase decomposition to make those surfaces explicit, then I’ll append the change note and new persistent decisions.
+
+The revisions are in. I’m checking the updated sections directly to make sure the verifier gaps are now covered in both the narrative plan and the machine-readable phases, and that the new decisions stayed under the current header only.
+
+Updated [plan.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/full-revised-standalone-spec-autoloop-v3-explici-7b9dcd08/runs/run-20260505T201926Z-7fdaad17/artifacts/plan/plan.md), [phase_plan.yaml](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/full-revised-standalone-spec-autoloop-v3-explici-7b9dcd08/runs/run-20260505T201926Z-7fdaad17/artifacts/plan/phase_plan.yaml), [feedback.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/full-revised-standalone-spec-autoloop-v3-explici-7b9dcd08/runs/run-20260505T201926Z-7fdaad17/artifacts/plan/feedback.md), and the current turn block in [decisions.txt](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/full-revised-standalone-spec-autoloop-v3-explici-7b9dcd08/runs/run-20260505T201926Z-7fdaad17/decisions.txt).
+
+The revision explicitly adds:
+- branch-group runtime observability events and additive static-graph/topology payload work,
+- the composite-boundary checkpoint/resume contract, including full-group rerun and no branch-specific resume,
+- tighter wording that any retained sync entrypoint must stay an outer caller and not become a new compatibility shim.
+
+Verification: `phase_plan.yaml` still parses with `python3` and now carries explicit acceptance criteria for tracing/static-graph coverage and composite-boundary resume behavior.

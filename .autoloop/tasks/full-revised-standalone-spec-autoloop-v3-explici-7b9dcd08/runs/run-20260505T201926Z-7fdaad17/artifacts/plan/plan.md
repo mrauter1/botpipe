@@ -3,7 +3,7 @@
 ## Intent
 - Implement the supplied explicit branch-group contract as the source of truth.
 - Treat the current branch-group code as a partial prototype to refactor, not a compatibility target.
-- Preserve existing top-level workflow execution where feasible, but do not preserve thread-backed, sync-provider, or synthetic-session behavior inside branch groups.
+- Preserve existing top-level workflow entrypoints only where they remain thin outer callers; do not add new sync compatibility layers that shape branch-group internals, and do not preserve thread-backed, sync-provider, or synthetic-session behavior inside branch groups.
 
 ## Current divergence to correct
 - `autoloop/core/branch_groups/runtime.py` still uses `ThreadPoolExecutor`, `Future`, `wait`, and a lock-backed shared-values wrapper.
@@ -27,16 +27,19 @@
 3. Async branch-group runtime and scheduler.
    - Move branch scheduling to `asyncio.Task` plus `asyncio.Semaphore`.
    - Implement `settle="all"` and `settle="fail_fast"` with branch result capture, best-effort cancellation, and deterministic declaration-order manifests.
+   - Emit the full branch-group runtime event set through the existing tracing sink with branch/group metadata and evidence paths.
    - Keep branch-group orchestration in the dedicated subsystem; `engine.py` only wires the collaborator.
 4. Shared-context, session, and evidence correctness.
    - Use one shared lock-free `StateCell` and one shared mutable values mapping within each branch group.
    - Make branch bookkeeping branch-scoped and deterministic by execution id.
    - Rework `BranchSessionStoreView` so fresh branch keys are branch-execution-local, `session_id` starts as `None`, and provider-backed branch lookups do not inherit parent active sessions.
    - Move runtime-owned evidence to `{workflow_folder}/_branch_groups/<group>/...`.
-5. Fan-in, outcomes, and manifest/context completion.
+5. Fan-in, outcomes, runtime graph surfaces, and checkpoint/resume completion.
    - Capture branch routes without following destinations or running route `on_taken` hooks.
    - Finalize fan-in exactly once through the composite step route table.
    - Complete manifest/context schema, summaries, helper reads, and downstream-readable evidence paths.
+   - Update static graph and topology payloads so branch groups remain one composite node with inspectable nested internals.
+   - Preserve the v1 checkpoint contract: checkpoint at the composite boundary, rerun the full branch group after interruption, aggregate branch questions into composite/fan-in resume paths, and do not add branch-specific resume.
 6. Strictness, regression coverage, and cleanup.
    - Add compile-time, runtime, and strictness tests for every explicit spec requirement.
    - Remove leftover thread imports, lock wrappers, synthetic-session behavior, and sync-provider compatibility branches from the branch-group path.
@@ -55,10 +58,15 @@
 - `autoloop/core/engine_collaborators.py`
   - Add async one-step execution and capture/finalize route modes.
   - Keep route finalization centralized so branch capture and fan-in finalization share one implementation.
+- `autoloop/runtime/static_graph.py`
+  - Keep branch groups as one composite node while extending static graph and topology payloads with nested branch specs, fan-in metadata, structured branch inputs, and exposed routes.
+- `autoloop/runtime/tracing.py` / runtime event payloads
+  - Preserve the existing runtime tracing surface while adding the full branch-group event set and additive metadata required by the spec.
 - `autoloop/core/providers/protocols.py`
   - Add an async provider protocol; branch-group concurrency must require it.
 - `autoloop/core/branch_groups/runtime.py`
   - Replace thread-backed runtime with async scheduler/orchestrator.
+  - Preserve composite-boundary checkpoint behavior and avoid checkpointing individual branches in v1.
 - `autoloop/core/branch_groups/sessions.py`
   - Stop fabricating provider session ids and stop parent-session fallback for provider-backed fresh branches.
 - `autoloop/core/artifacts.py`
@@ -75,13 +83,17 @@
 - Land the async provider path before enabling provider-backed concurrent branch execution.
 - Keep manifest order declaration-stable even when execution order is concurrent.
 - Preserve ordinary non-branch step semantics and route finalization behavior outside branch-group capture mode.
+- Preserve the existing composite-boundary checkpoint/resume model: no mid-branch checkpointing, no branch-specific resume, and full-group rerun after interrupted branch execution.
+- Preserve additive runtime tracing and static-graph/topology payload behavior so existing observability surfaces expand rather than fork.
 - Update tests and fixtures that currently assert root-level evidence paths or synthetic branch session ids in the same phase that changes those behaviors.
 
 ## Validation plan
 - Compile-time coverage:
   - name safety, exact placeholder roots, helper placement, fresh-session enforcement, unsupported branch-step kinds, and cache-key/caching behavior.
 - Runtime coverage:
-  - async concurrency, fail-fast cancellation, capture-only branch routing, shared state/values semantics, workflow-folder evidence writes, branch-local sessions, and deterministic manifests/context docs.
+  - async concurrency, fail-fast cancellation, capture-only branch routing, shared state/values semantics, workflow-folder evidence writes, branch-local sessions, deterministic manifests/context docs, composite-boundary checkpoint/resume, and no partial branch resume.
+- Runtime surface coverage:
+  - branch-group runtime trace events and additive static-graph/topology payloads, including nested branch/fan-in metadata and stable exposed-route shape.
 - Strictness coverage:
   - fail if branch-group code imports or uses `concurrent.futures`, `ThreadPoolExecutor`, `Future`, `FIRST_COMPLETED`, `threading.RLock`, or `asyncio.to_thread`.
 
@@ -94,5 +106,9 @@
   - Control: migrate readers and tests in the same phase as the path change.
 - Route-finalization risk: fan-in and capture-mode changes can double-run `on_taken` or finalize twice.
   - Control: centralize capture/finalize routing in `StepDispatcher` and add explicit single-finalization tests.
+- Checkpoint/resume risk: async branch execution can accidentally introduce mid-group checkpoints or branch-level resume semantics that violate the v1 contract.
+  - Control: keep checkpointing at the composite boundary only and add explicit interruption, fan-in question, and resume-path tests.
+- Observability risk: runtime events or static-graph payloads can silently drift while the execution path is refactored.
+  - Control: add explicit tracing/static-graph acceptance criteria and keep payload changes additive.
 - Compile-cache risk: partial cache-key coverage can compile stale branch-group internals.
   - Control: bypass cache for branch-group workflows until full coverage is verified.
