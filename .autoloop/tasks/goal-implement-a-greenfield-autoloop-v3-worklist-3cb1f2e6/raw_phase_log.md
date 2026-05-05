@@ -2160,3 +2160,49 @@ Key findings / decisions
 Open issues / next step
 - Passed: `.venv/bin/python -m pytest tests/unit/test_optimization_helpers.py` with `31 passed`.
 - I did not rerun the broader optimizer runtime file in this turn because the test additions were unit-only and the remaining full-file failures are still the known out-of-phase packaged-workflow/runtime issues captured in the strategy artifact.
+
+
+---
+run_id=run-20260505T133333Z-ef073886 | entry=session_turn | pair=test | phase=verifier | cycle=1 | attempt=1 | thread_id=019df876-eef3-7f02-aa58-7ac4473fb3bb
+---
+provider=codex
+mode=resume
+template=/home/rauter/.local/share/pipx/venvs/autoloop/lib/python3.12/site-packages/autoloop/templates/test_verifier.md
+session_id=019df876-eef3-7f02-aa58-7ac4473fb3bb
+
+
+---
+run_id=run-20260505T133333Z-ef073886 | entry=phase_output | pair=test | phase=verifier | process=codex-agent | cycle=1 | attempt=1 | thread_id=019df876-eef3-7f02-aa58-7ac4473fb3bb
+---
+I’m auditing the new optimizer-source-contract test coverage against the phase acceptance criteria. First I’m reading the active test strategy, the current feedback, and the exact added unit coverage so I can judge whether the changed behavior is protected without normalizing any unintended regressions.
+
+The added coverage looks coherent on read. I’m rerunning the scoped unit suite and the targeted runtime mutation check so the audit outcome is backed by a fresh execution record, not only by the author’s note.
+
+The scoped tests are green and the strategy matches the implemented contract. I’m updating the audit artifacts now to mark the phase complete and note that no new coverage gaps were found.
+
+Scope considered
+- Phase-local optimizer source-contract tests in [tests/unit/test_optimization_helpers.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/tests/unit/test_optimization_helpers.py) and the targeted runtime publication seam in [tests/runtime/test_workflow_run_traces_to_optimization_candidates.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/tests/runtime/test_workflow_run_traces_to_optimization_candidates.py).
+- Active audit artifacts updated: [criteria.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/goal-implement-a-greenfield-autoloop-v3-worklist-3cb1f2e6/runs/run-20260505T133333Z-ef073886/artifacts/test/phases/reconcile-optimizer-source-contracts/criteria.md) and [feedback.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/goal-implement-a-greenfield-autoloop-v3-worklist-3cb1f2e6/runs/run-20260505T133333Z-ef073886/artifacts/test/phases/reconcile-optimizer-source-contracts/feedback.md).
+
+What I analyzed
+- The phase test strategy and the run decisions that superseded repo-root materialization with “canonical labels + actual source bytes.”
+- The added unit coverage for canonical manifest labels, non-mutation behavior, and selected-source hashing.
+- The targeted runtime mutation-check path used to validate downstream publication behavior without pulling in unrelated packaged-workflow failures.
+
+What I reviewed
+- `.venv/bin/python -m pytest tests/unit/test_optimization_helpers.py` -> `31 passed`
+- `.venv/bin/python -m pytest tests/runtime/test_workflow_run_traces_to_optimization_candidates.py -k selected_workflow_source_changed` -> `1 passed, 42 deselected`
+- The strategy artifact’s coverage map, preserved invariants, edge cases, and stated known gap.
+
+Key findings / decisions
+- No new findings in scoped audit.
+- The added tests now explicitly protect the two highest-risk regressions from this phase: accidental repo-root materialization and hashing the wrong source tree under canonical first-party labels.
+- The targeted runtime test is sufficient for this phase because the remaining full-file runtime failures are explicitly out of scope and documented as such.
+
+Open issues / next step
+- Test coverage for the active optimizer-source-contract phase is complete.
+- Broader packaged-workflow/runtime regressions remain for the downstream phase and should not be normalized into this test surface.
+
+<loop-control>
+{"schema":"docloop.loop_control/v1","kind":"promise","promise":"COMPLETE"}
+</loop-control>
