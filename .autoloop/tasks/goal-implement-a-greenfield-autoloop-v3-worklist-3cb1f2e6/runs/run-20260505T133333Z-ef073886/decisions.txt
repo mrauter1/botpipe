@@ -1,0 +1,5 @@
+<autoloop-decisions-header version="1" block_seq="1" owner="planner" phase_id="task-global" pair="plan" turn_seq="1" run_id="run-20260505T133333Z-ef073886" ts="2026-05-05T13:33:34.152405+00:00" />
+Preserve repo-local workflows/ canonical-name precedence, but keep non-conflicting lower-precedence alias keys from .autoloop/workflows/ resolvable instead of dropping the whole shadowed entry.
+Explicit repo-local file and class references must retain isolated _autoloop_workspace_workflows loading and Params lookup parity; package-export requirements apply only to intentional package-module imports.
+Plan-1 observability readers should mirror runtime migration behavior by accepting schemaless payloads via migration while still rejecting explicit unsupported schema IDs.
+Optimizer source manifests and downstream publication validators should compare against one canonical selected-workflow package-surface contract rather than whichever discovery root happened to resolve the workflow at runtime.
