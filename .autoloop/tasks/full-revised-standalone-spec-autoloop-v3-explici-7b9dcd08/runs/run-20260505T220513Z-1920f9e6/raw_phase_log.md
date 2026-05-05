@@ -87,3 +87,12 @@ No verifier blockers remain in the planning artifacts. The task is ready to move
 <loop-control>
 {"schema":"docloop.loop_control/v1","kind":"promise","promise":"COMPLETE"}
 </loop-control>
+
+
+---
+run_id=run-20260505T220513Z-1920f9e6 | entry=phase_scope_resolved
+---
+phase_mode=single
+phase_ids=restore-provider-route-required-writes
+explicit=True
+current_phase_index=0
