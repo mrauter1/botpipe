@@ -2017,3 +2017,53 @@ Validation passed:
 Open issues / next step
 
 No new phase-local test gaps remain in scope after the focused suite run.
+
+
+---
+run_id=run-20260505T201926Z-7fdaad17 | entry=session_turn | pair=test | phase=verifier | cycle=1 | attempt=1 | thread_id=019dfa1c-b1de-7ad3-bc90-31545cf131de
+---
+provider=codex
+mode=resume
+template=/home/rauter/.local/share/pipx/venvs/autoloop/lib/python3.12/site-packages/autoloop/templates/test_verifier.md
+session_id=019dfa1c-b1de-7ad3-bc90-31545cf131de
+
+
+---
+run_id=run-20260505T201926Z-7fdaad17 | entry=phase_output | pair=test | phase=verifier | process=codex-agent | cycle=1 | attempt=1 | thread_id=019dfa1c-b1de-7ad3-bc90-31545cf131de
+---
+I’m auditing the added strictness scanner test, the new evidence-write coverage, and the updated test strategy against the phase contract, then I’ll mark the audit artifacts accordingly.
+
+The added tests are coherent, deterministic, and the focused suite is green. I’m marking the audit criteria complete and appending the re-audit outcome to the test feedback artifact.
+
+Scope considered
+
+Phase-local audit of the strictness-and-cleanup test additions in `tests/strictness/test_no_compat.py`, `tests/contract/test_branch_group_runtime.py`, and the updated test-phase artifacts in `artifacts/test/phases/strictness-and-cleanup/`.
+
+What I analyzed
+
+I checked the new direct scanner regression test, the exact-path branch-group evidence write-failure tests, the updated behavior-to-test map in `test_strategy.md`, and the relevant decisions ledger entries for alignment with the phase contract.
+
+What I reviewed
+
+I re-ran the focused phase validation command from the test strategy:
+
+`./.venv/bin/python -m pytest -q tests/strictness/test_no_compat.py tests/unit/test_simple_surface.py tests/unit/test_branch_group_context_sessions.py tests/contract/test_async_step_dispatcher.py tests/contract/test_branch_group_runtime.py tests/runtime/test_runtime_tracing.py tests/runtime/test_runtime_static_graph.py tests/unit/test_validation.py`
+
+Result: `256 passed`.
+
+Key findings / decisions
+
+No blocking findings.
+
+- Coverage quality is sufficient for the changed test surface.
+- The scanner helper is now protected directly against regression in imported and aliased forbidden forms, not only via whole-tree scanning.
+- The required `results.json` vs `context.md` fan-in abort cases are covered with deterministic exact-path failure injection.
+- I marked all audit criteria complete and appended the no-findings audit note to `feedback.md`.
+
+Open issues / next step
+
+No phase-local test audit issues remain.
+
+<loop-control>
+{"schema":"docloop.loop_control/v1","kind":"promise","promise":"COMPLETE"}
+</loop-control>
