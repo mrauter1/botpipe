@@ -16,13 +16,13 @@
       "surface-hardening-and-regression-suite"
     ],
     "explicit": true,
-    "current_phase_index": 1,
-    "current_phase_id": "shared-context-and-session-scaffolding"
+    "current_phase_index": 2,
+    "current_phase_id": "composite-runtime-and-evidence"
   },
   "phase_status": {
     "authoring-and-compile-model": "completed",
-    "shared-context-and-session-scaffolding": "in_progress",
-    "composite-runtime-and-evidence": "planned",
+    "shared-context-and-session-scaffolding": "completed",
+    "composite-runtime-and-evidence": "in_progress",
     "surface-hardening-and-regression-suite": "planned"
   },
   "phase_history": [
@@ -44,6 +44,19 @@
       "run_id": "run-20260505T171950Z-13ce26d6",
       "status": "in_progress",
       "ts": "2026-05-05T17:58:22.484855+00:00"
+    },
+    {
+      "phase_id": "shared-context-and-session-scaffolding",
+      "run_id": "run-20260505T171950Z-13ce26d6",
+      "status": "completed",
+      "ts": "2026-05-05T18:19:11.139931+00:00",
+      "pair": "test"
+    },
+    {
+      "phase_id": "composite-runtime-and-evidence",
+      "run_id": "run-20260505T171950Z-13ce26d6",
+      "status": "in_progress",
+      "ts": "2026-05-05T18:19:11.141689+00:00"
     }
   ]
 }
