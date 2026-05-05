@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import json
+import shutil
 from collections import Counter, defaultdict
 from collections.abc import Mapping, Sequence
 from dataclasses import dataclass
@@ -24,6 +25,7 @@ from autoloop.core.schema_registry import (
     WORKFLOW_OPTIMIZATION_STEP_TRACE_METRICS_SCHEMA,
     WORKFLOW_OPTIMIZATION_TRACE_CORPUS_SCHEMA,
     WORKFLOW_REFINEMENT_EVIDENCE_SCHEMA,
+    migrate_schemaless_payload,
     validate_persisted_schema,
 )
 from autoloop.core.statuses import route_is_input_request, route_is_replan, route_is_rework, runtime_control_to_terminal
@@ -870,7 +872,7 @@ def write_selected_workflow_source_manifest(
 
     repo_root = ctx.root.resolve()
     package = resolve_workflow_package(repo_root, selected_workflow)
-    package_dir = package.package_dir.resolve()
+    package_dir = _canonical_selected_workflow_manifest_dir(repo_root, package.workflow_name, package.package_dir)
     editable_paths = sorted(
         path.resolve()
         for path in package_dir.rglob("*")
@@ -1124,7 +1126,44 @@ def _validate_runtime_observability_schema(path: Path, payload: Mapping[str, Any
     expected = _RUNTIME_OBSERVABILITY_SCHEMAS.get(path.name)
     if expected is None:
         return
-    validate_persisted_schema(payload, expected=expected, artifact_name=str(path))
+    validate_persisted_schema(
+        payload,
+        expected=expected,
+        artifact_name=str(path),
+        legacy_migrator=lambda value: migrate_schemaless_payload(value, expected=expected),
+    )
+
+
+def _canonical_selected_workflow_manifest_dir(
+    repo_root: Path,
+    workflow_name: str,
+    resolved_package_dir: Path,
+) -> Path:
+    canonical_source_dir = _first_party_workflow_source_dir(workflow_name)
+    if canonical_source_dir is None:
+        return resolved_package_dir.resolve()
+
+    canonical_repo_dir = (repo_root / "autoloop" / "workflows" / workflow_name).resolve()
+    if canonical_repo_dir == resolved_package_dir.resolve() or canonical_repo_dir.is_dir():
+        return canonical_repo_dir
+
+    canonical_repo_dir.parent.mkdir(parents=True, exist_ok=True)
+    shutil.copytree(
+        canonical_source_dir,
+        canonical_repo_dir,
+        dirs_exist_ok=True,
+        ignore=shutil.ignore_patterns("__pycache__", "*.pyc"),
+    )
+    return canonical_repo_dir
+
+
+def _first_party_workflow_source_dir(workflow_name: str) -> Path | None:
+    package_source_dir = (
+        Path(__file__).resolve().parents[1] / "autoloop" / "workflows" / workflow_name
+    ).resolve()
+    if not package_source_dir.is_dir():
+        return None
+    return package_source_dir
 
 
 def _git_tracking_index(records: Sequence[Mapping[str, Any]]) -> dict[int, dict[str, Any]]:
