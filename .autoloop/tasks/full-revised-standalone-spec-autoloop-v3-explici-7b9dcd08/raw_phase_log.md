@@ -2501,3 +2501,68 @@ Open issues / next step
 <loop-control>
 {"schema":"docloop.loop_control/v1","kind":"promise","promise":"COMPLETE"}
 </loop-control>
+
+
+---
+run_id=run-20260505T220513Z-1920f9e6 | entry=session_turn | pair=audit | phase=producer | cycle=1 | attempt=1 | thread_id=019dfa3b-aff8-7ca3-806f-1678398ce3c1
+---
+provider=codex
+mode=start
+template=/home/rauter/.local/share/pipx/venvs/autoloop/lib/python3.12/site-packages/autoloop/templates/audit_producer.md
+session_id=019dfa3b-aff8-7ca3-806f-1678398ce3c1
+
+
+---
+run_id=run-20260505T220513Z-1920f9e6 | entry=phase_output | pair=audit | phase=producer | process=codex-agent | cycle=1 | attempt=1 | thread_id=019dfa3b-aff8-7ca3-806f-1678398ce3c1
+---
+I’m auditing the completed run against the original request, the raw clarification log, the decisions ledger, and the final code/tests. I’ll first gather the authoritative artifacts and the current test/code evidence, then I’ll write the run-local audit files under the allowed `artifacts/audit` directory only.
+
+I’ve got the authoritative request and the run ledger. Next I’m reading the implementation and test artifacts alongside the final helper/builder code and the contract tests, so the audit can distinguish completed intent from any remaining gap instead of trusting phase summaries at face value.
+
+The current code matches the implementation narrative: provider-visible `route_required_writes` now uses the effective helper, while `routes()` still exposes authored metadata only. I’m pulling the exact assertions from the relevant tests and the existing audit placeholders next, then I’ll write the final gap assessment based on code-plus-evidence rather than summaries alone.
+
+I have enough context to assess intent fidelity. Before I write the audit artifacts, I’m verifying the final state directly with the canonical regression tests and a fresh full-suite run, because the original request’s merge gate condition is only satisfied if the current workspace still passes now, not just earlier in the log.
+
+The canonical failures are green in the current workspace. The full repository run is still in progress; once that finishes I’ll lock the gap classification and write the audit files.
+
+The full suite is progressing cleanly through the previously risky area around 39%. I’m waiting for final completion before I write anything, so the audit result reflects actual current state rather than a partial pass.
+
+The rerun is now past 50% without surfacing a regression. I’m continuing to let it finish, since the audit decision depends on the full repository gate rather than targeted confidence only.
+
+The merge-gate condition is satisfied in the current workspace: the two canonical regressions pass, and a fresh `pytest -q` run finishes cleanly at `1283 passed`. I’m collecting exact line references now so the audit report can point to the final behavior precisely, and then I’ll write the audit artifacts under `artifacts/audit`.
+
+I’m writing the audit artifacts now. The result is straightforward: no material unresolved gap remains, so the audit will record closure, a short no-follow-up revised request, and machine-readable `material_gaps_found: false`.
+
+The audit files are written. I’m doing a quick readback and JSON parse now so the verifier gets clean artifacts with no formatting or shape mistakes.
+
+The audit content is fine. One verification command used the wrong interpreter path because plain `python` is not on this shell; I’m re-running the JSON parse with the repo virtualenv so the machine-result check is explicit.
+
+Scope considered
+- The immutable request snapshot, the authoritative raw phase log, `decisions.txt`, plan/implement/test artifacts for this run, the final code in `autoloop/core/engine_collaborators.py` and `autoloop/core/route_required_writes.py`, and the relevant contract/runtime tests.
+
+What I analyzed
+- I checked that the final code restores provider-visible effective `route_required_writes` without changing authored route metadata.
+- I verified the canonical regression assertions in `tests/contract/test_canonical_runtime_contracts.py`, the explicit-empty override coverage in `tests/contract/test_engine_contracts.py`, and the explicit global-route payload coverage in `tests/runtime/test_runtime_static_graph.py`.
+- I re-ran the two originally failing canonical tests and a fresh full suite in the current workspace.
+
+What I changed
+- Wrote [gap_report.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/full-revised-standalone-spec-autoloop-v3-explici-7b9dcd08/runs/run-20260505T220513Z-1920f9e6/artifacts/audit/gap_report.md), [revised_request.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/full-revised-standalone-spec-autoloop-v3-explici-7b9dcd08/runs/run-20260505T220513Z-1920f9e6/artifacts/audit/revised_request.md), and [audit_result.json](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/full-revised-standalone-spec-autoloop-v3-explici-7b9dcd08/runs/run-20260505T220513Z-1920f9e6/artifacts/audit/audit_result.json).
+- Updated [criteria.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/full-revised-standalone-spec-autoloop-v3-explici-7b9dcd08/runs/run-20260505T220513Z-1920f9e6/artifacts/audit/criteria.md) and [feedback.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/full-revised-standalone-spec-autoloop-v3-explici-7b9dcd08/runs/run-20260505T220513Z-1920f9e6/artifacts/audit/feedback.md) to reflect a clean audit result.
+
+Key findings / decisions
+- No material unresolved gap remains.
+- The final code matches the requested contract split: `route_required_writes` is effective/provider-visible, while `routes[*].required_writes` and `routes[*].explicit_required_writes` remain authored metadata.
+- The adjacent explicit-global-route payload fix is justified by the original requirement to make the full repository suite green without breaking metadata semantics.
+- Fresh validation in the current workspace is green:
+  - `tests/contract/test_canonical_runtime_contracts.py::test_canonical_step_contract_uses_finish_and_required_writes`
+  - `tests/contract/test_canonical_runtime_contracts.py::test_canonical_produce_verify_contract_splits_phase_writes_and_verifier_routes`
+  - `./.venv/bin/python -m pytest -q` -> `1283 passed, 616 warnings in 119.60s`
+- `audit_result.json` is valid and records `"material_gaps_found": false`.
+
+Open issues / next step
+- No follow-up implementation run is required for this request.
+- Existing pytest warnings are non-blocking for this merge-gate fix and remain separate maintenance work if desired.
+
+<loop-control>
+{"schema":"docloop.loop_control/v1","kind":"promise","promise":"INCOMPLETE"}
+</loop-control>
