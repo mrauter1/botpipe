@@ -270,3 +270,52 @@ Validation run:
 Open issues / next step
 
 The next phase still needs the actual branch-group runtime: branch scheduling, branch-local session activation, manifest/context artifact writing, fan-in execution, and mechanical outcome routing. The compile model is in place for that work.
+
+
+---
+run_id=run-20260505T171950Z-13ce26d6 | entry=session_turn | pair=implement | phase=verifier | cycle=1 | attempt=1 | thread_id=019df930-00de-7970-af32-efc750f7efc4
+---
+provider=codex
+mode=resume
+template=/home/rauter/.local/share/pipx/venvs/autoloop/lib/python3.12/site-packages/autoloop/templates/implement_verifier.md
+session_id=019df930-00de-7970-af32-efc750f7efc4
+
+
+---
+run_id=run-20260505T171950Z-13ce26d6 | entry=phase_output | pair=implement | phase=verifier | process=codex-agent | cycle=1 | attempt=1 | thread_id=019df930-00de-7970-af32-efc750f7efc4
+---
+I’m reviewing the branch-group authoring/compile diff against the phase contract and the run decisions first, then I’ll update the criteria and feedback artifacts with any blocking gaps or regressions.
+
+I’ve got the artifact context. Now I’m reading the branch-group lowering and validation code directly for correctness and for any contradictions with the phase contract or the run decisions.
+
+I found a likely route-shape regression around no-fan-in composites. I’m checking it directly with a tiny compile probe against the current code before I write it up as a blocking finding.
+
+I’m reviewing the compile-model changes against the phase contract and tracing the changed lowering/route surfaces first. Next I’m updating the review artifacts with any confirmed gaps, not touching source.
+
+I’ve confirmed one compile-model regression with a direct repro: a no-`fan_in` branch group exposes `done`/`partial` but only compiles `question`/`failed` destinations. I’m checking whether there’s a second distinct issue or just the same route-materialization defect from another angle.
+
+I’ve narrowed it to one clear blocking defect tied to route lowering, not a broad architecture complaint. I’m recording that in the review artifact now and leaving the criteria in a non-passing state.
+
+Scope considered
+
+Phase-local verifier scope for `authoring-and-compile-model` only. I reviewed the branch-group authoring and compile-model changes plus adjacent lowering/route surfaces needed for regression analysis, and I only updated the active review artifact directory.
+
+What I analyzed
+
+I traced the new branch-group path through `autoloop/simple.py`, `autoloop/core/branch_groups/*`, `autoloop/core/discovery.py`, `autoloop/core/lowering.py`, `autoloop/core/compiler.py`, and `autoloop/core/steps.py`. I also checked the new unit coverage and verified the compiled route table behavior with a direct workflow repro.
+
+What I reviewed
+
+I updated [feedback.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/autoloop-v3-explicit-branch-groups-full-revised-76d1507c/runs/run-20260505T171950Z-13ce26d6/artifacts/implement/phases/authoring-and-compile-model/feedback.md) with one prioritized finding. I left [criteria.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/autoloop-v3-explicit-branch-groups-full-revised-76d1507c/runs/run-20260505T171950Z-13ce26d6/artifacts/implement/phases/authoring-and-compile-model/criteria.md) unchecked because the implementation does not yet meet the phase acceptance bar.
+
+Key findings / decisions
+
+`IMP-001` is blocking. No-`fan_in` branch groups currently advertise `done` and `partial` as available composite routes, but only compile `question` and `failed` destinations. A simple `parallel(...)` followed by a normal next step reproduces the mismatch immediately. That breaks AC-1 and leaves the compile model internally inconsistent for the mechanical-outcome path.
+
+Open issues / next step
+
+Fix the no-`fan_in` route materialization in branch-group lowering so composite steps always compile deterministic external destinations for the mechanical outcome tags they expose, then rerun the branch-group compile tests and this review.
+
+<loop-control>
+{"schema":"docloop.loop_control/v1","kind":"promise","promise":"INCOMPLETE"}
+</loop-control>
