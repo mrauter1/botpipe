@@ -54,6 +54,42 @@ class ScriptedLLMProvider:
         self.calls: list[ProviderCall] = []
 
     def run_producer(self, request: ProducerRequest) -> ProducerResponse:
+        self._record_producer_call(request)
+        value = self._pop(self._producer_turns, request)
+        if isinstance(value, ProducerResponse):
+            return value
+        if isinstance(value, str):
+            return ProducerResponse(raw_output=value)
+        raise TypeError(f"unsupported scripted producer response: {value!r}")
+
+    async def run_producer_async(self, request: ProducerRequest) -> ProducerResponse:
+        return self.run_producer(request)
+
+    def run_verifier(self, request: VerifierRequest) -> OutcomeResponse:
+        self._record_verifier_call(request)
+        value = self._pop(self._verifier_turns, request)
+        if isinstance(value, OutcomeResponse):
+            return value
+        if isinstance(value, Outcome):
+            return OutcomeResponse(outcome=value)
+        raise TypeError(f"unsupported scripted verifier response: {value!r}")
+
+    async def run_verifier_async(self, request: VerifierRequest) -> OutcomeResponse:
+        return self.run_verifier(request)
+
+    def run_llm(self, request: LLMRequest) -> OutcomeResponse:
+        self._record_llm_call(request)
+        value = self._pop(self._llm_turns, request)
+        if isinstance(value, OutcomeResponse):
+            return value
+        if isinstance(value, Outcome):
+            return OutcomeResponse(outcome=value)
+        raise TypeError(f"unsupported scripted llm response: {value!r}")
+
+    async def run_llm_async(self, request: LLMRequest) -> OutcomeResponse:
+        return self.run_llm(request)
+
+    def _record_producer_call(self, request: ProducerRequest) -> None:
         self.calls.append(
             ProviderCall(
                 "producer",
@@ -72,14 +108,8 @@ class ScriptedLLMProvider:
                 max_attempts=request.max_attempts,
             )
         )
-        value = self._pop(self._producer_turns, request)
-        if isinstance(value, ProducerResponse):
-            return value
-        if isinstance(value, str):
-            return ProducerResponse(raw_output=value)
-        raise TypeError(f"unsupported scripted producer response: {value!r}")
 
-    def run_verifier(self, request: VerifierRequest) -> OutcomeResponse:
+    def _record_verifier_call(self, request: VerifierRequest) -> None:
         self.calls.append(
             ProviderCall(
                 "verifier",
@@ -98,14 +128,8 @@ class ScriptedLLMProvider:
                 max_attempts=request.max_attempts,
             )
         )
-        value = self._pop(self._verifier_turns, request)
-        if isinstance(value, OutcomeResponse):
-            return value
-        if isinstance(value, Outcome):
-            return OutcomeResponse(outcome=value)
-        raise TypeError(f"unsupported scripted verifier response: {value!r}")
 
-    def run_llm(self, request: LLMRequest) -> OutcomeResponse:
+    def _record_llm_call(self, request: LLMRequest) -> None:
         self.calls.append(
             ProviderCall(
                 "step",
@@ -124,12 +148,6 @@ class ScriptedLLMProvider:
                 max_attempts=request.max_attempts,
             )
         )
-        value = self._pop(self._llm_turns, request)
-        if isinstance(value, OutcomeResponse):
-            return value
-        if isinstance(value, Outcome):
-            return OutcomeResponse(outcome=value)
-        raise TypeError(f"unsupported scripted llm response: {value!r}")
 
     def run_operation(self, request: OperationRequest) -> OperationResponse:
         self.calls.append(

@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import asyncio
 from dataclasses import dataclass
 
 import pytest
@@ -439,6 +440,31 @@ class _TransportStub:
         )
 
 
+@dataclass
+class _AsyncTransportStub:
+    result_text: str
+    session: SessionBinding | None = None
+    metadata: dict[str, object] | None = None
+    usage: TokenUsage | None = None
+    seen_turns: list[RenderedProviderTurn] | None = None
+
+    def __post_init__(self) -> None:
+        if self.seen_turns is None:
+            self.seen_turns = []
+        if self.metadata is None:
+            self.metadata = {"mode": "start"}
+
+    async def run_turn_async(self, turn: RenderedProviderTurn) -> ProviderTurnResult:
+        assert self.seen_turns is not None
+        self.seen_turns.append(turn)
+        return ProviderTurnResult(
+            raw_text=self.result_text,
+            session=self.session,
+            metadata=dict(self.metadata or {}),
+            usage=self.usage,
+        )
+
+
 def test_token_usage_model_accepts_partial_usage() -> None:
     usage = TokenUsage(output_tokens=12, source="codex", provider_raw={"output_tokens": 12})
 
@@ -504,6 +530,24 @@ def test_fake_provider_can_emit_usage() -> None:
     assert llm_response.usage == llm_usage
 
 
+def test_fake_provider_supports_async_turn_methods() -> None:
+    provider = ScriptedLLMProvider(llm_turns=[OutcomeResponse(outcome=parse_outcome_json('{"tag":"done"}'))])
+
+    response = asyncio.run(
+        provider.run_llm_async(
+            LLMRequest(
+                step_name="ask",
+                prompt=ResolvedPrompt(path="ask.md", text="Answer the question."),
+                context=object(),
+                artifacts=object(),
+            )
+        )
+    )
+
+    assert response.outcome.tag == "done"
+    assert provider.calls[0].kind == "step"
+
+
 def test_parse_outcome_json_defaults_missing_reason_to_empty_string() -> None:
     outcome = parse_outcome_json('{"tag":"done"}')
 
@@ -533,6 +577,37 @@ def test_rendered_llm_provider_returns_producer_response() -> None:
     assert response.usage == usage
     assert transport.seen_turns is not None
     assert transport.seen_turns[0].expected_response == "raw_text"
+
+
+def test_rendered_llm_provider_supports_async_turn_methods() -> None:
+    binding = _session_binding()
+    usage = TokenUsage(total_tokens=9, source="codex")
+    transport = _AsyncTransportStub(
+        result_text='{"tag":"done","reason":"accepted"}',
+        session=binding,
+        metadata={"mode": "resume"},
+        usage=usage,
+    )
+    provider = RenderedLLMProvider(transport)
+
+    response = asyncio.run(
+        provider.run_llm_async(
+            LLMRequest(
+                step_name="draft",
+                prompt=ResolvedPrompt(path="draft.md", text="Write the draft."),
+                context=object(),
+                artifacts=object(),
+                session=binding,
+            )
+        )
+    )
+
+    assert response.outcome.tag == "done"
+    assert response.outcome.reason == "accepted"
+    assert response.session == binding
+    assert response.usage == usage
+    assert transport.seen_turns is not None
+    assert transport.seen_turns[0].expected_response == "outcome_json"
 
 
 def test_rendered_llm_provider_parses_verifier_outcome_and_excludes_raw_output_from_prompt() -> None:

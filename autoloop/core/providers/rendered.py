@@ -2,6 +2,9 @@
 
 from __future__ import annotations
 
+import asyncio
+
+from ..errors import ProviderExecutionError
 from .models import (
     LLMRequest,
     OperationRequest,
@@ -13,7 +16,7 @@ from .models import (
     VerifierRequest,
 )
 from .parsing import parse_outcome_json
-from .protocols import ProviderTransport
+from .protocols import ProviderTransport, supports_async_provider_transport
 from .rendering import render_provider_turn
 
 
@@ -27,36 +30,31 @@ class RenderedLLMProvider:
         context = _producer_context(request)
         turn = render_provider_turn(context)
         result = self._transport.run_turn(turn)
-        return ProducerResponse(
-            raw_output=result.raw_text,
-            session=result.session,
-            metadata=result.metadata,
-            usage=result.usage,
-        )
+        return _producer_response(result)
+
+    async def run_producer_async(self, request: ProducerRequest) -> ProducerResponse:
+        result = await self._run_turn_async(_producer_context(request))
+        return _producer_response(result)
 
     def run_verifier(self, request: VerifierRequest) -> OutcomeResponse:
         context = _verifier_context(request)
         turn = render_provider_turn(context)
         result = self._transport.run_turn(turn)
-        outcome = parse_outcome_json(result.raw_text)
-        return OutcomeResponse(
-            outcome=outcome,
-            session=result.session,
-            metadata=result.metadata,
-            usage=result.usage,
-        )
+        return _outcome_response(result)
+
+    async def run_verifier_async(self, request: VerifierRequest) -> OutcomeResponse:
+        result = await self._run_turn_async(_verifier_context(request))
+        return _outcome_response(result)
 
     def run_llm(self, request: LLMRequest) -> OutcomeResponse:
         context = _llm_context(request)
         turn = render_provider_turn(context)
         result = self._transport.run_turn(turn)
-        outcome = parse_outcome_json(result.raw_text)
-        return OutcomeResponse(
-            outcome=outcome,
-            session=result.session,
-            metadata=result.metadata,
-            usage=result.usage,
-        )
+        return _outcome_response(result)
+
+    async def run_llm_async(self, request: LLMRequest) -> OutcomeResponse:
+        result = await self._run_turn_async(_llm_context(request))
+        return _outcome_response(result)
 
     def run_operation(self, request: OperationRequest) -> OperationResponse:
         context = _operation_context(request)
@@ -68,6 +66,43 @@ class RenderedLLMProvider:
             metadata=result.metadata,
             usage=result.usage,
         )
+
+    async def _run_turn_async(self, context: ProviderTurnContext):
+        turn = render_provider_turn(context)
+        if not supports_async_provider_transport(self._transport):
+            raise ProviderExecutionError(
+                f"provider transport {type(self._transport).__name__!r} does not implement async turn execution."
+            )
+        return await self._transport.run_turn_async(turn)
+
+
+def _producer_response(result) -> ProducerResponse:
+    return ProducerResponse(
+        raw_output=result.raw_text,
+        session=result.session,
+        metadata=result.metadata,
+        usage=result.usage,
+    )
+
+
+def _outcome_response(result) -> OutcomeResponse:
+    outcome = parse_outcome_json(result.raw_text)
+    return OutcomeResponse(
+        outcome=outcome,
+        session=result.session,
+        metadata=result.metadata,
+        usage=result.usage,
+    )
+
+
+def run_provider_coro_sync(awaitable):
+    """Synchronously bridge an async provider coroutine for outer sync callers."""
+
+    try:
+        asyncio.get_running_loop()
+    except RuntimeError:
+        return asyncio.run(awaitable)
+    raise RuntimeError("Synchronous provider execution cannot run inside an active event loop; use the async API.")
 
 
 def _producer_context(request: ProducerRequest) -> ProviderTurnContext:

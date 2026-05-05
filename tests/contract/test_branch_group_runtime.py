@@ -8,8 +8,10 @@ from pydantic import BaseModel
 
 from autoloop.core.branch_groups import runtime as branch_group_runtime
 from autoloop.core.engine import Engine
+from autoloop.core.errors import WorkflowExecutionError
 from autoloop.core.primitives import Event, Goto, Outcome, RequestInput
 from autoloop.core.providers.fake import ScriptedLLMProvider
+from autoloop.core.providers.models import LLMRequest, OutcomeResponse, ProducerRequest, ProducerResponse, VerifierRequest
 from autoloop.core.stores import InMemoryCheckpointStore, InMemorySessionStore
 import autoloop.simple as simple
 
@@ -27,6 +29,47 @@ def _prompt_routed_outcome(request: object) -> Outcome:
     if prompt_text == "Approved.":
         return Outcome(raw_output="approved", tag="approved")
     return Outcome(raw_output="done", tag="done")
+
+
+class _AsyncOnlyLLMProvider:
+    def __init__(self) -> None:
+        self.async_calls: list[str] = []
+
+    def run_producer(self, request: ProducerRequest) -> ProducerResponse:  # pragma: no cover - defensive
+        raise AssertionError("sync producer path should not be used")
+
+    def run_verifier(self, request: VerifierRequest) -> OutcomeResponse:  # pragma: no cover - defensive
+        raise AssertionError("sync verifier path should not be used")
+
+    def run_llm(self, request: LLMRequest) -> OutcomeResponse:  # pragma: no cover - defensive
+        raise AssertionError("sync llm path should not be used")
+
+    def run_operation(self, request: object) -> object:  # pragma: no cover - defensive
+        raise AssertionError("operation path should not be used")
+
+    async def run_producer_async(self, request: ProducerRequest) -> ProducerResponse:
+        raise AssertionError("producer path should not be used")
+
+    async def run_verifier_async(self, request: VerifierRequest) -> OutcomeResponse:
+        raise AssertionError("verifier path should not be used")
+
+    async def run_llm_async(self, request: LLMRequest) -> OutcomeResponse:
+        self.async_calls.append(request.step_name)
+        return OutcomeResponse(outcome=Outcome(raw_output="ok", tag="done"))
+
+
+class _SyncOnlyLLMProvider:
+    def run_producer(self, request: ProducerRequest) -> ProducerResponse:
+        return ProducerResponse(raw_output="draft")
+
+    def run_verifier(self, request: VerifierRequest) -> OutcomeResponse:
+        return OutcomeResponse(outcome=Outcome(raw_output="ok", tag="done"))
+
+    def run_llm(self, request: LLMRequest) -> OutcomeResponse:
+        return OutcomeResponse(outcome=Outcome(raw_output="ok", tag="done"))
+
+    def run_operation(self, request: object) -> object:  # pragma: no cover - defensive
+        raise AssertionError("operation path should not be used")
 
 
 def test_parallel_branch_group_without_fan_in_routes_question_and_writes_evidence(tmp_path: Path) -> None:
@@ -135,6 +178,66 @@ def test_parallel_branch_group_with_fan_in_routes_through_fan_in_and_exposes_hel
     assert any(str(path).endswith("_branch_groups/reviews/context.md") for path in seen["readable_paths"])
 
 
+def test_parallel_branch_group_uses_async_provider_path_for_branch_steps(tmp_path: Path) -> None:
+    class AsyncProviderWorkflow(simple.Workflow):
+        class State(BaseModel):
+            pass
+
+        reviews = simple.parallel(
+            branches={
+                "security": simple.step("Review security.", name="security_review", session=simple.Session.fresh()),
+                "cost": simple.step("Review cost.", name="cost_review", session=simple.Session.fresh()),
+            }
+        )
+        publish = simple.python_step(lambda ctx: Event("done"))
+
+    provider = _AsyncOnlyLLMProvider()
+    task_folder, run_folder = _workspace(tmp_path)
+    result = Engine(
+        AsyncProviderWorkflow,
+        provider=provider,
+        session_store=InMemorySessionStore(),
+        checkpoint_store=InMemoryCheckpointStore(),
+    ).run(
+        task_id="task-async-provider",
+        run_id="run-async-provider",
+        task_folder=task_folder,
+        run_folder=run_folder,
+        root=tmp_path,
+    )
+
+    assert result.terminal == simple.FINISH
+    assert provider.async_calls == ["security_review", "cost_review"]
+
+
+def test_parallel_branch_group_rejects_sync_only_provider_for_provider_backed_steps(tmp_path: Path) -> None:
+    class SyncOnlyWorkflow(simple.Workflow):
+        class State(BaseModel):
+            pass
+
+        reviews = simple.parallel(
+            branches={"security": simple.step("Review security.", name="security_review", session=simple.Session.fresh())}
+        )
+        publish = simple.python_step(lambda ctx: Event("done"))
+
+    task_folder, run_folder = _workspace(tmp_path)
+    engine = Engine(
+        SyncOnlyWorkflow,
+        provider=_SyncOnlyLLMProvider(),
+        session_store=InMemorySessionStore(),
+        checkpoint_store=InMemoryCheckpointStore(),
+    )
+
+    with pytest.raises(WorkflowExecutionError, match="requires async provider execution"):
+        engine.run(
+            task_id="task-sync-provider",
+            run_id="run-sync-provider",
+            task_folder=task_folder,
+            run_folder=run_folder,
+            root=tmp_path,
+        )
+
+
 def test_fan_out_renders_branch_input_roots_artifacts_and_keeps_branch_sessions_local(tmp_path: Path) -> None:
     prompts: list[str] = []
     sessions: list[str | None] = []
@@ -238,6 +341,52 @@ def test_parallel_branch_group_captures_goto_without_following_branch_destinatio
     assert reroute_branch["status"] == "completed"
     assert reroute_branch["runtime_control"] == "goto"
     assert reroute_branch["destination"] == "repair"
+
+
+def test_parallel_branch_group_capture_mode_skips_branch_route_on_taken_hooks(tmp_path: Path) -> None:
+    on_taken_calls: list[str] = []
+
+    def on_taken(ctx: object) -> None:
+        on_taken_calls.append("done")
+
+    class CaptureWorkflow(simple.Workflow):
+        class State(BaseModel):
+            pass
+
+        reviews = simple.parallel(
+            outcome="all_done",
+            branches={
+                "security": simple.python_step(
+                    lambda ctx: Event("done"),
+                    name="security_review",
+                    routes={"done": simple.Route.to("repair", on_taken=on_taken)},
+                )
+            },
+            routes={"done": "publish"},
+        )
+        publish = simple.python_step(lambda ctx: Event("done"))
+        repair = simple.python_step(lambda ctx: Event("done"))
+
+    task_folder, run_folder = _workspace(tmp_path)
+    result = Engine(
+        CaptureWorkflow,
+        provider=ScriptedLLMProvider(),
+        session_store=InMemorySessionStore(),
+        checkpoint_store=InMemoryCheckpointStore(),
+    ).run(
+        task_id="task-capture-on-taken",
+        run_id="run-capture-on-taken",
+        task_folder=task_folder,
+        run_folder=run_folder,
+        root=tmp_path,
+    )
+
+    assert result.terminal == simple.FINISH
+    assert result.history[:2] == ("reviews", "publish")
+    assert on_taken_calls == []
+    manifest = json.loads((tmp_path / "_branch_groups" / "reviews" / "results.json").read_text(encoding="utf-8"))
+    assert manifest["branches"][0]["route"] == "done"
+    assert manifest["branches"][0]["destination"] == "repair"
 
 
 def test_parallel_branch_group_fail_fast_stops_new_branch_launches_and_persists_skipped_results(tmp_path: Path) -> None:

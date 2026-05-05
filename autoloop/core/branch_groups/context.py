@@ -3,9 +3,8 @@
 from __future__ import annotations
 
 from collections.abc import Mapping
-from dataclasses import dataclass, field
+from dataclasses import dataclass
 from pathlib import Path
-from threading import RLock
 from typing import TYPE_CHECKING, Any
 
 from pydantic import BaseModel
@@ -24,13 +23,11 @@ class StateCell:
 
     value: BaseModel
     version: int = 0
-    _lock: RLock = field(default_factory=RLock, init=False, repr=False, compare=False)
 
     def set(self, value: BaseModel) -> BaseModel:
-        with self._lock:
-            self.value = value
-            self.version += 1
-            return self.value
+        self.value = value
+        self.version += 1
+        return self.value
 
 
 @dataclass(frozen=True, slots=True)

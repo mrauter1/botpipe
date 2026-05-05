@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import asyncio
 import subprocess
 
 import pytest
@@ -149,6 +150,26 @@ def _rendered_turn(
         session=session,
         expected_response=expected_response,
     )
+
+
+class _AsyncProcessStub:
+    def __init__(
+        self,
+        *,
+        stdout: str,
+        stderr: str = "",
+        returncode: int = 0,
+        seen_inputs: list[bytes | None] | None = None,
+    ) -> None:
+        self._stdout = stdout.encode("utf-8")
+        self._stderr = stderr.encode("utf-8")
+        self.returncode = returncode
+        self._seen_inputs = seen_inputs
+
+    async def communicate(self, input: bytes | None = None) -> tuple[bytes, bytes]:
+        if self._seen_inputs is not None:
+            self._seen_inputs.append(input)
+        return self._stdout, self._stderr
 
 
 def test_require_prompt_text_rejects_missing_text() -> None:
@@ -494,6 +515,46 @@ def test_codex_transport_sends_rendered_prompt_text_to_cli_stdin(
     }
 
 
+def test_codex_transport_supports_async_subprocess_execution(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    prompt_text = "# Step: produce\n\nShared runtime prompt."
+    calls: list[tuple[str, ...]] = []
+    seen_inputs: list[bytes | None] = []
+
+    async def fake_create_subprocess_exec(*command: str, **_: object) -> _AsyncProcessStub:
+        calls.append(tuple(command))
+        return _AsyncProcessStub(
+            stdout="\n".join(
+                (
+                    '{"type":"thread.started","thread_id":"codex-session-async"}',
+                    '{"type":"item.completed","item":{"type":"agent_message","text":"producer text"}}',
+                )
+            ),
+            seen_inputs=seen_inputs,
+        )
+
+    monkeypatch.setattr(codex_runtime_provider.asyncio, "create_subprocess_exec", fake_create_subprocess_exec)
+    transport = CodexTransport(
+        commands=CodexCLICommand(
+            start_command=("codex", "exec", "--json"),
+            resume_command=("codex", "exec", "resume", "--json"),
+        ),
+        model="gpt-test",
+        model_effort=None,
+    )
+
+    result = asyncio.run(
+        transport.run_turn_async(_rendered_turn(step_name="produce", prompt_text=prompt_text, session=_placeholder_session()))
+    )
+
+    assert calls == [("codex", "exec", "--json")]
+    assert seen_inputs == [prompt_text.encode("utf-8")]
+    assert result.raw_text == "producer text"
+    assert result.session is not None
+    assert result.session.session_id == "codex-session-async"
+
+
 def test_codex_transport_does_not_parse_workflow_outcome_json(monkeypatch: pytest.MonkeyPatch) -> None:
     transport = CodexTransport(
         commands=CodexCLICommand(
@@ -681,6 +742,29 @@ def test_claude_transport_sends_rendered_prompt_text_to_cli_flag(monkeypatch: py
     assert result.session is not None
     assert result.session.session_id == "claude-session-1"
     assert result.session.metadata["provider_metadata"] == {"stop_reason": "end_turn"}
+
+
+def test_claude_transport_supports_async_subprocess_execution(monkeypatch: pytest.MonkeyPatch) -> None:
+    prompt_text = "# Step: produce\n\nShared runtime prompt."
+    calls: list[tuple[str, ...]] = []
+
+    async def fake_create_subprocess_exec(*command: str, **_: object) -> _AsyncProcessStub:
+        calls.append(tuple(command))
+        return _AsyncProcessStub(
+            stdout='{"result":"producer text","session_id":"claude-session-async","stop_reason":"end_turn"}'
+        )
+
+    monkeypatch.setattr(claude_runtime_provider.asyncio, "create_subprocess_exec", fake_create_subprocess_exec)
+    transport = ClaudeTransport(config=_config(provider_name="claude").provider.claude)
+
+    result = asyncio.run(
+        transport.run_turn_async(_rendered_turn(step_name="produce", prompt_text=prompt_text, session=_placeholder_session()))
+    )
+
+    assert calls == [("claude", "-p", prompt_text, "--output-format", "json", "--model", "claude-test")]
+    assert result.raw_text == "producer text"
+    assert result.session is not None
+    assert result.session.session_id == "claude-session-async"
 
 
 def test_claude_transport_does_not_parse_workflow_outcome_json(monkeypatch: pytest.MonkeyPatch) -> None:

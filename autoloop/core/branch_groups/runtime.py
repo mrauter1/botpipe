@@ -2,11 +2,10 @@
 
 from __future__ import annotations
 
-from concurrent.futures import FIRST_COMPLETED, Future, ThreadPoolExecutor, wait
 from dataclasses import asdict
 from datetime import datetime, timezone
 from pathlib import Path
-from typing import TYPE_CHECKING, Any, Mapping
+from typing import TYPE_CHECKING, Any
 
 from pydantic import BaseModel
 
@@ -15,6 +14,7 @@ from ..context import context_runtime
 from ..engine_collaborators import StepExecutionResult, StepFinalizationRequest
 from ..errors import ProviderExecutionError, WorkflowExecutionError
 from ..primitives import AWAIT_INPUT, Event
+from ..providers.protocols import supports_async_llm_provider
 from .context import BranchMetadata, FanInMetadata, create_branch_context, create_fan_in_context
 from .manifest import branch_group_paths, build_branch_manifest, render_branch_group_context, write_branch_group_evidence
 from .outcomes import select_branch_group_outcome
@@ -27,47 +27,22 @@ if TYPE_CHECKING:
     from ..primitives import PendingHandoff
 
 
-class SynchronizedValuesDict(dict[str, Any]):
-    """Shared branch-group values mapping with coarse replacement locks."""
-
-    def __init__(self, initial: Mapping[str, Any]) -> None:
-        super().__init__(initial)
-        from threading import RLock
-
-        self._lock = RLock()
-
-    def __setitem__(self, key: str, value: Any) -> None:
-        with self._lock:
-            super().__setitem__(key, value)
-
-    def __delitem__(self, key: str) -> None:
-        with self._lock:
-            super().__delitem__(key)
-
-    def clear(self) -> None:
-        with self._lock:
-            super().clear()
-
-    def pop(self, key: str, default: Any = None) -> Any:
-        with self._lock:
-            if default is None:
-                return super().pop(key)
-            return super().pop(key, default)
-
-    def setdefault(self, key: str, default: Any = None) -> Any:
-        with self._lock:
-            return super().setdefault(key, default)
-
-    def update(self, *args: Any, **kwargs: Any) -> None:
-        with self._lock:
-            super().update(*args, **kwargs)
-
-
 class BranchGroupRuntime:
     """Runs one compiled branch-group step as a composite barrier."""
 
     def __init__(self, engine: "Engine") -> None:
         self._engine = engine
+
+    def _ensure_async_provider_support(self, spec: Any) -> None:
+        provider_backed = any(branch.step.kind in {"step", "produce_verify"} for branch in spec.branches)
+        provider_backed = provider_backed or (
+            spec.fan_in_step is not None and spec.fan_in_step.kind in {"step", "produce_verify"}
+        )
+        if provider_backed and not supports_async_llm_provider(self._engine.provider):
+            raise WorkflowExecutionError(
+                f"branch group {spec.name!r} requires async provider execution, "
+                f"but provider {type(self._engine.provider).__name__!r} does not implement async methods."
+            )
 
     def run(
         self,
@@ -91,11 +66,10 @@ class BranchGroupRuntime:
             settle=spec.settle,
         )
 
-        original_values = context._values
-        shared_values = original_values if isinstance(original_values, SynchronizedValuesDict) else SynchronizedValuesDict(original_values)
-        parent_runtime.set_values(shared_values)
+        self._ensure_async_provider_support(spec)
+        parent_runtime.set_values(context._values)
         started_at = _utc_now()
-        branch_results = self._run_branches(spec, context=context, state=state, values=shared_values)
+        branch_results = self._run_branches(spec, context=context, state=state)
         finished_at = _utc_now()
         duration_ms = _duration_ms(started_at, finished_at)
         ordered_results = [branch_results[index] for index in range(len(spec.branches))]
@@ -128,31 +102,25 @@ class BranchGroupRuntime:
             ],
         )
 
-        try:
-            if spec.fan_in_step is not None:
-                step_result = self._run_fan_in(
-                    composite_step=step,
-                    spec=spec,
-                    context=context,
-                    manifest=manifest,
-                    results_path=results_path,
-                    context_path=context_path,
-                    context_text=context_text,
-                    pending_handoffs=pending_handoffs,
-                )
-            else:
-                step_result = self._run_mechanical_outcome(
-                    composite_step=step,
-                    spec=spec,
-                    context=context,
-                    manifest=manifest,
-                    pending_handoffs=pending_handoffs,
-                )
-        finally:
-            if shared_values is not original_values:
-                original_values.clear()
-                original_values.update(shared_values)
-                parent_runtime.set_values(original_values)
+        if spec.fan_in_step is not None:
+            step_result = self._run_fan_in(
+                composite_step=step,
+                spec=spec,
+                context=context,
+                manifest=manifest,
+                results_path=results_path,
+                context_path=context_path,
+                context_text=context_text,
+                pending_handoffs=pending_handoffs,
+            )
+        else:
+            step_result = self._run_mechanical_outcome(
+                composite_step=step,
+                spec=spec,
+                context=context,
+                manifest=manifest,
+                pending_handoffs=pending_handoffs,
+            )
 
         final_route = None if step_result.finalization is None else step_result.finalization.final_route
         parent_runtime.emit_runtime_event(
@@ -177,81 +145,39 @@ class BranchGroupRuntime:
         *,
         context: "Context",
         state: BaseModel,
-        values: Mapping[str, Any],
     ) -> dict[int, dict[str, Any]]:
-        max_workers = spec.concurrency or max(1, len(spec.branches))
         results: dict[int, dict[str, Any]] = {}
-        branch_queue = list(spec.branches)
-        branch_count = len(branch_queue)
         fail_fast_triggered = False
-        active: dict[Future[dict[str, Any]], Any] = {}
-        with ThreadPoolExecutor(max_workers=max_workers, thread_name_prefix=f"branch-group-{spec.name}") as executor:
-            while branch_queue and len(active) < max_workers and not fail_fast_triggered:
-                branch = branch_queue.pop(0)
-                active[self._submit_branch(executor, spec, branch, context=context)] = branch
-            while active:
-                done, _ = wait(active.keys(), return_when=FIRST_COMPLETED)
-                for future in done:
-                    branch = active.pop(future)
-                    if future.cancelled():
-                        result = _cancelled_branch_result(spec=spec, branch=branch, context=context)
-                        context_runtime(context).emit_runtime_event(
-                            "branch_cancelled",
-                            group_name=spec.name,
-                            group_kind=spec.kind,
-                            branch_name=branch.name,
-                            branch_index=branch.index,
-                            step_name=branch.step.name,
-                            status="cancelled",
-                            reason=result["reason"],
-                            error=result["error"],
-                            artifact_paths=[],
-                        )
-                    else:
-                        result = future.result()
-                    results[branch.index] = result
-                    if spec.settle == "fail_fast" and result["status"] == "failed" and not fail_fast_triggered:
-                        fail_fast_triggered = True
-                        for queued in branch_queue:
-                            skipped_result = _skipped_branch_result(spec=spec, branch=queued, context=context)
-                            results[queued.index] = skipped_result
-                            context_runtime(context).emit_runtime_event(
-                                "branch_skipped",
-                                group_name=spec.name,
-                                group_kind=spec.kind,
-                                branch_name=queued.name,
-                                branch_index=queued.index,
-                                step_name=queued.step.name,
-                                status="skipped",
-                                reason=skipped_result["reason"],
-                                error=skipped_result["error"],
-                                artifact_paths=[],
-                            )
-                        branch_queue.clear()
-                        for running in active:
-                            running.cancel()
-                while branch_queue and len(active) < max_workers and not fail_fast_triggered:
-                    branch = branch_queue.pop(0)
-                    active[self._submit_branch(executor, spec, branch, context=context)] = branch
+        for branch in spec.branches:
+            if fail_fast_triggered:
+                skipped_result = _skipped_branch_result(spec=spec, branch=branch, context=context)
+                results[branch.index] = skipped_result
+                context_runtime(context).emit_runtime_event(
+                    "branch_skipped",
+                    group_name=spec.name,
+                    group_kind=spec.kind,
+                    branch_name=branch.name,
+                    branch_index=branch.index,
+                    step_name=branch.step.name,
+                    status="skipped",
+                    reason=skipped_result["reason"],
+                    error=skipped_result["error"],
+                    artifact_paths=[],
+                )
+                continue
+            context_runtime(context).emit_runtime_event(
+                "branch_scheduled",
+                group_name=spec.name,
+                group_kind=spec.kind,
+                branch_name=branch.name,
+                branch_index=branch.index,
+                step_name=branch.step.name,
+            )
+            result = self._execute_branch(spec, branch, context)
+            results[branch.index] = result
+            if spec.settle == "fail_fast" and result["status"] == "failed":
+                fail_fast_triggered = True
         return results
-
-    def _submit_branch(
-        self,
-        executor: ThreadPoolExecutor,
-        spec: Any,
-        branch: Any,
-        *,
-        context: "Context",
-    ) -> Future[dict[str, Any]]:
-        context_runtime(context).emit_runtime_event(
-            "branch_scheduled",
-            group_name=spec.name,
-            group_kind=spec.kind,
-            branch_name=branch.name,
-            branch_index=branch.index,
-            step_name=branch.step.name,
-        )
-        return executor.submit(self._execute_branch, spec, branch, context)
 
     def _execute_branch(self, spec: Any, branch: Any, parent_context: "Context") -> dict[str, Any]:
         compiled_step = branch.step
@@ -318,7 +244,13 @@ class BranchGroupRuntime:
         branch_dir = parent_context.root / "_branch_groups" / spec.name / "branches" / branch.name
         started_at = _utc_now()
         try:
-            step_result = self._engine.step_dispatcher.execute(compiled_step, branch_context, branch_context.state, ())
+            step_result = self._engine.step_dispatcher.execute(
+                compiled_step,
+                branch_context,
+                branch_context.state,
+                (),
+                route_mode="capture",
+            )
             result = self._branch_result_from_step_result(
                 spec=spec,
                 branch=branch,
@@ -598,7 +530,13 @@ class BranchGroupRuntime:
         runtime.set_values(context._values)
         self._engine._increment_step_runtime_state(fan_in_context._step_state)
         runtime.set_step_state_store(fan_in_context._step_state)
-        step_result = self._engine.step_dispatcher.execute(fan_in_step, fan_in_context, fan_in_context.state, ())
+        step_result = self._engine.step_dispatcher.execute(
+            fan_in_step,
+            fan_in_context,
+            fan_in_context.state,
+            (),
+            route_mode="capture",
+        )
         parent_runtime.emit_runtime_event(
             "fan_in_completed",
             group_name=spec.name,
