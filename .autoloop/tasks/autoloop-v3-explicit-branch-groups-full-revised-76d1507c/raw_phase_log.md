@@ -2281,3 +2281,63 @@ None for this phase.
 <loop-control>
 {"schema":"docloop.loop_control/v1","kind":"promise","promise":"COMPLETE"}
 </loop-control>
+
+
+---
+run_id=run-20260505T192350Z-8a8a7d84 | entry=session_turn | pair=audit | phase=producer | cycle=1 | attempt=1 | thread_id=019df9a5-a0fb-7903-81c9-21e377e9fd08
+---
+provider=codex
+mode=start
+template=/home/rauter/.local/share/pipx/venvs/autoloop/lib/python3.12/site-packages/autoloop/templates/audit_producer.md
+session_id=019df9a5-a0fb-7903-81c9-21e377e9fd08
+
+
+---
+run_id=run-20260505T192350Z-8a8a7d84 | entry=phase_output | pair=audit | phase=producer | process=codex-agent | cycle=1 | attempt=1 | thread_id=019df9a5-a0fb-7903-81c9-21e377e9fd08
+---
+I’m auditing the run-local outcome against the original request, clarifications, and the final branch-group code/tests. I’ll first read the authoritative run artifacts and identify which code paths and tests actually cover the requested branch-group runtime and checkpoint behavior.
+
+I’ve got the authoritative request and decision trail. Next I’m checking the exact implementation and test artifacts, then I’ll compare them to the current branch-group contract file and runtime code so the audit conclusions are tied to concrete evidence instead of phase summaries alone.
+
+The contract file now shows the two requested tests directly, plus the existing surrounding coverage. I’m verifying the underlying runtime seams and the targeted test run so the audit can distinguish “coverage added, no code fix needed” from an unverified claim in the phase notes.
+
+The targeted suite passed independently, and there’s no remaining runtime-file diff in the branch-group seams. I’m pulling line-precise references now so the gap report can cite the exact tests and runtime behavior that satisfy each unresolved item.
+
+I have enough to write the audit now. I’m replacing the placeholder audit artifacts with an evidence-backed gap report, a no-follow-up revised request, a matching machine result, and I’ll also mark the local audit criteria as satisfied so the verifier has a concrete artifact trail.
+
+The audit artifacts are written. I’m doing a short verification pass on the audit directory only: file contents, JSON validity, and that the conclusions stay aligned with the evidence from the request, decisions, tests, and final runtime.
+
+The only hiccup in the audit verification pass was the shell environment missing `python` on `PATH`; the repo-local virtualenv is the right entrypoint here, and I’m re-running JSON validation that way so the final result is mechanically checked.
+
+Scope considered
+
+Run-local audit of the unresolved explicit-branch-groups request only: immutable request, raw log clarifications, run decisions, plan/implement/test artifacts, final branch-group code paths, and the final contract tests.
+
+What I analyzed
+
+I checked the final coverage in `tests/contract/test_branch_group_runtime.py`, the supporting runtime/checkpoint seams in `autoloop/core/branch_groups/context.py`, `autoloop/core/branch_groups/runtime.py`, and `autoloop/core/engine.py`, the run decisions that narrowed overlapping-write and fan-in routing expectations, and independently reran `./.venv/bin/python -m pytest tests/contract/test_branch_group_runtime.py` (`10 passed`).
+
+What I changed
+
+I wrote the audit artifacts in `.autoloop/.../artifacts/audit/`:
+- `gap_report.md`
+- `revised_request.md`
+- `audit_result.json`
+- `criteria.md`
+- `feedback.md`
+
+Key findings / decisions
+
+No material unresolved gaps remain. The final codebase now has committed contract coverage for:
+- shared branch `ctx.state` propagation, shared `ctx.values` visibility, and permissive overlapping writes in `tests/contract/test_branch_group_runtime.py:301-380`
+- fan-in `RequestInput` checkpoint-at-composite-boundary and downstream resume completion in `tests/contract/test_branch_group_runtime.py:383-455`
+
+The only notable differences are justified by recorded analysis: the overlapping-write test is intentionally serialized with `concurrency=1` to prove non-rejection without asserting broader concurrent merge semantics, and downstream routing stays attached to the authored fan-in step because current lowering rejects composite routes when `fan_in` is present.
+
+Open issues / next step
+
+No follow-up implementation request is needed for this run-local scope. Audit artifacts are complete and `audit_result.json` records `material_gaps_found: false`.
+
+<loop-control>
+{"schema":"docloop.loop_control/v1","kind":"promise","promise":"INCOMPLETE"}
+</loop-control>

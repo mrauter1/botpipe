@@ -1,1 +1,1 @@
-# revised_request.md
+No follow-up implementation is required. The final codebase now includes the missing branch-group runtime/checkpoint regression coverage for shared branch effects, permissive overlapping writes, and fan-in pending-input checkpoint/resume behavior, and the targeted contract suite passes.

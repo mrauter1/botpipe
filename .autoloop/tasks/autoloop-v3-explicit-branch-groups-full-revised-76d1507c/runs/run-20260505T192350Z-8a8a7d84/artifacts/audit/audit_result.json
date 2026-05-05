@@ -1,1 +1,5 @@
-{}
+{
+  "material_gaps_found": false,
+  "summary": "No material unresolved gaps remain; the requested branch-group runtime and checkpoint regression coverage is present and the targeted contract suite passes.",
+  "revised_request_path": "/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/autoloop-v3-explicit-branch-groups-full-revised-76d1507c/runs/run-20260505T192350Z-8a8a7d84/artifacts/audit/revised_request.md"
+}
