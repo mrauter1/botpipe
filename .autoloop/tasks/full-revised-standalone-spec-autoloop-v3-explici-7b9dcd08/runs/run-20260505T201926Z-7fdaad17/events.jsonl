@@ -17,3 +17,6 @@
 {"ts": "2026-05-05T20:35:55.058560+00:00", "run_id": "run-20260505T201926Z-7fdaad17", "seq": 17, "event_type": "phase_finished", "pair": "implement", "phase": "producer", "cycle": 2, "attempt": 1, "empty_output": false, "phase_id": "contract-hardening"}
 {"ts": "2026-05-05T20:36:53.892615+00:00", "run_id": "run-20260505T201926Z-7fdaad17", "seq": 18, "event_type": "phase_finished", "pair": "implement", "phase": "verifier", "cycle": 2, "attempt": 1, "empty_output": false, "phase_id": "contract-hardening"}
 {"ts": "2026-05-05T20:36:53.964100+00:00", "run_id": "run-20260505T201926Z-7fdaad17", "seq": 19, "event_type": "pair_completed", "pair": "implement", "cycle": 2, "attempt": 1, "phase_id": "contract-hardening"}
+{"ts": "2026-05-05T20:36:54.061059+00:00", "run_id": "run-20260505T201926Z-7fdaad17", "seq": 20, "event_type": "phase_deferred", "pair": "implement", "phase_mode": "single", "phase_id": "contract-hardening", "reason": "awaiting enabled test pair completion"}
+{"ts": "2026-05-05T20:36:54.064009+00:00", "run_id": "run-20260505T201926Z-7fdaad17", "seq": 21, "event_type": "pair_started", "pair": "test", "phase_id": "contract-hardening"}
+{"ts": "2026-05-05T20:36:54.064247+00:00", "run_id": "run-20260505T201926Z-7fdaad17", "seq": 22, "event_type": "cycle_started", "pair": "test", "cycle": 1, "attempt": 1, "phase_id": "contract-hardening"}
