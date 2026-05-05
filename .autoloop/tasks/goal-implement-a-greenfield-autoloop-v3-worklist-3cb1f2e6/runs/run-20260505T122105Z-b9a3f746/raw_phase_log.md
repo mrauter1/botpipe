@@ -158,3 +158,12 @@ The planning artifacts are complete and ready for implementation against the cur
 <loop-control>
 {"schema":"docloop.loop_control/v1","kind":"promise","promise":"COMPLETE"}
 </loop-control>
+
+
+---
+run_id=run-20260505T122105Z-b9a3f746 | entry=phase_scope_resolved
+---
+phase_mode=single
+phase_ids=core-selector-semantics,stdlib-progress-worklists,runtime-validation-and-regression-checks
+explicit=True
+current_phase_index=0

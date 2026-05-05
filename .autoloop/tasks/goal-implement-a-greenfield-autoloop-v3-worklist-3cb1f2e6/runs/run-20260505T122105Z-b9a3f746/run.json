@@ -3,5 +3,32 @@
   "created_at": "2026-05-05T12:21:05.729921+00:00",
   "request_file": "/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/goal-implement-a-greenfield-autoloop-v3-worklist-3cb1f2e6/runs/run-20260505T122105Z-b9a3f746/request.md",
   "artifacts_dir": "/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/goal-implement-a-greenfield-autoloop-v3-worklist-3cb1f2e6/runs/run-20260505T122105Z-b9a3f746/artifacts",
-  "provider": "codex"
+  "provider": "codex",
+  "phase_plan_path": "/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/goal-implement-a-greenfield-autoloop-v3-worklist-3cb1f2e6/runs/run-20260505T122105Z-b9a3f746/artifacts/plan/phase_plan.yaml",
+  "phase_plan_version": 1,
+  "active_phase_selection": {
+    "run_id": "run-20260505T122105Z-b9a3f746",
+    "mode": "single",
+    "phase_ids": [
+      "core-selector-semantics",
+      "stdlib-progress-worklists",
+      "runtime-validation-and-regression-checks"
+    ],
+    "explicit": true,
+    "current_phase_index": 0,
+    "current_phase_id": "core-selector-semantics"
+  },
+  "phase_status": {
+    "core-selector-semantics": "in_progress",
+    "stdlib-progress-worklists": "planned",
+    "runtime-validation-and-regression-checks": "planned"
+  },
+  "phase_history": [
+    {
+      "phase_id": "core-selector-semantics",
+      "run_id": "run-20260505T122105Z-b9a3f746",
+      "status": "in_progress",
+      "ts": "2026-05-05T12:27:28.912250+00:00"
+    }
+  ]
 }
