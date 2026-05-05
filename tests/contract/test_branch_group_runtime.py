@@ -239,7 +239,12 @@ def test_branch_group_mechanical_outcomes_support_all_settled_and_custom_aggrega
             name="settled",
             outcome="all_settled",
             branches={
-                "blocked": simple.step("Blocked.", name="blocked_branch", session=simple.Session.fresh()),
+                "approved": simple.step(
+                    "Approved.",
+                    name="approved_branch",
+                    session=simple.Session.fresh(),
+                    routes={"approved": simple.FINISH},
+                ),
                 "done": simple.step("Done.", name="done_branch", session=simple.Session.fresh()),
             },
             routes={"done": simple.FINISH, "partial": simple.FINISH},
@@ -247,7 +252,7 @@ def test_branch_group_mechanical_outcomes_support_all_settled_and_custom_aggrega
 
     provider = ScriptedLLMProvider(
         llm_turns=[
-            Outcome(raw_output="waiting", tag="blocked"),
+            Outcome(raw_output="approved", tag="approved"),
             Outcome(raw_output="done", tag="done"),
         ]
     )
@@ -268,6 +273,48 @@ def test_branch_group_mechanical_outcomes_support_all_settled_and_custom_aggrega
     assert result.terminal == simple.FINISH
     assert result.last_event is not None
     assert result.last_event.tag == "partial"
+
+    class SuccessRoutesWorkflow(simple.Workflow):
+        class State(BaseModel):
+            pass
+
+        settled = simple.parallel(
+            name="settled_success_routes",
+            outcome="all_settled",
+            success_routes=("approved", "done"),
+            branches={
+                "approved": simple.step(
+                    "Approved.",
+                    name="approved_success_branch",
+                    session=simple.Session.fresh(),
+                    routes={"approved": simple.FINISH},
+                ),
+                "done": simple.step("Done.", name="done_success_branch", session=simple.Session.fresh()),
+            },
+            routes={"done": simple.FINISH, "partial": simple.FINISH},
+        )
+
+    success_routes_result = Engine(
+        SuccessRoutesWorkflow,
+        provider=ScriptedLLMProvider(
+            llm_turns=[
+                Outcome(raw_output="approved", tag="approved"),
+                Outcome(raw_output="done", tag="done"),
+            ]
+        ),
+        session_store=InMemorySessionStore(),
+        checkpoint_store=InMemoryCheckpointStore(),
+    ).run(
+        task_id="task-all-settled-success-routes",
+        run_id="run-all-settled-success-routes",
+        task_folder=task_folder,
+        run_folder=run_folder,
+        root=tmp_path,
+    )
+
+    assert success_routes_result.terminal == simple.FINISH
+    assert success_routes_result.last_event is not None
+    assert success_routes_result.last_event.tag == "done"
 
     class CustomOutcomeWorkflow(simple.Workflow):
         class State(BaseModel):

@@ -27,6 +27,7 @@
 - `build_branch_manifest`
 - `render_branch_group_context`
 - `select_branch_group_outcome`
+- `branch_is_success`
 - `StateCell`
 - `CompiledStep.route_table`
 - `_compile_branch_group_internal_steps`
@@ -53,6 +54,7 @@
   - Wrote `_branch_groups/<group>/results.json` and `context.md` with deterministic summaries and per-branch results.
 - Plan milestone 3 / fan-in and mechanical outcomes:
   - Routed through fan-in when present and implemented `all_done`, `all_settled`, `any_done`, and callable custom aggregators otherwise.
+  - Corrected `all_settled` to respect `success_routes` for completed-but-non-success branches and added positive/negative contract coverage for that path.
 - Plan milestone 4 dependency needed by this slice / runtime placeholders and artifact rooting:
   - Added runtime `branch.*` / `fan_in.*` placeholder resolution and fixed relative templated artifact rooting under the owning step directory.
 
@@ -88,6 +90,7 @@
 - `.venv/bin/python -m pytest -q tests/unit/test_simple_surface.py -k 'branch_group or fan_in or provider_backed_branch'`
 - `.venv/bin/python -m pytest -q tests/unit/test_branch_group_context_sessions.py`
 - `.venv/bin/python -m pytest -q tests/contract/test_engine_contracts.py -k 'provider_steps_without_explicit_session_use_default_session or declared_session_auto_opens_without_on_start or on_start_opens_sessions_before_execution or llm_step_contract_logs_outcome_raw_output_and_uses_global_route'`
+- `.venv/bin/python -m pytest -q tests/contract/test_branch_group_runtime.py -k mechanical_outcomes`
 
 ## Deduplication / Centralization
 - Local nested-step route execution is centralized in compiler-produced `CompiledStep.route_table` plus engine route lookup helpers rather than a second branch-only executor.

@@ -41,16 +41,16 @@ def _all_done(spec: Any, manifest: Mapping[str, Any]) -> Event:
         return Event("done")
     if _needs_input(branches):
         return Event("question", question=_question_summary(branches), reason="One or more branches need input.")
-    return Event("partial", reason=_partial_reason(branches))
+    return Event("partial", reason=_partial_reason(branches, success_routes=spec.success_routes))
 
 
 def _all_settled(spec: Any, manifest: Mapping[str, Any]) -> Event:
     branches = list(manifest.get("branches", ()))
     if _needs_input(branches):
         return Event("question", question=_question_summary(branches), reason="One or more branches need input.")
-    if all(branch.get("status") == "completed" and branch.get("route") not in {"failed", "blocked"} for branch in branches):
+    if all(branch_is_success(branch, success_routes=spec.success_routes) for branch in branches):
         return Event("done")
-    return Event("partial", reason=_partial_reason(branches))
+    return Event("partial", reason=_partial_reason(branches, success_routes=spec.success_routes))
 
 
 def _any_done(spec: Any, manifest: Mapping[str, Any]) -> Event:
@@ -59,7 +59,7 @@ def _any_done(spec: Any, manifest: Mapping[str, Any]) -> Event:
         return Event("done")
     if _needs_input(branches):
         return Event("question", question=_question_summary(branches), reason="No branch succeeded and input is required.")
-    return Event("partial", reason=_partial_reason(branches))
+    return Event("partial", reason=_partial_reason(branches, success_routes=spec.success_routes))
 
 
 def _needs_input(branches: list[Mapping[str, Any]]) -> bool:
@@ -75,11 +75,15 @@ def _question_summary(branches: list[Mapping[str, Any]]) -> str:
     return "\n".join(questions)
 
 
-def _partial_reason(branches: list[Mapping[str, Any]]) -> str:
+def _partial_reason(
+    branches: list[Mapping[str, Any]],
+    *,
+    success_routes: tuple[str, ...],
+) -> str:
     non_success = [
         f"{branch.get('name')}={branch.get('status')}/{branch.get('route') or branch.get('runtime_control') or 'none'}"
         for branch in branches
-        if branch.get("status") != "completed" or branch.get("route") not in {"done", "accepted"}
+        if not branch_is_success(branch, success_routes=success_routes)
     ]
     return "Branch group settled without full success: " + ", ".join(non_success)
 
