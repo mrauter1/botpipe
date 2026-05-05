@@ -779,3 +779,58 @@ Validation reran cleanly:
 Open issues / next step
 
 No known phase-local blocker remains from the reviewer feedback I addressed. The next step is verifier rerun on this phase; broader scoped item-state remapping for full branch runtime remains for the later branch runtime orchestration phase.
+
+
+---
+run_id=run-20260505T171950Z-13ce26d6 | entry=session_turn | pair=implement | phase=verifier | cycle=2 | attempt=1 | thread_id=019df94a-82ac-73e1-beb0-d1be9a6ff2df
+---
+provider=codex
+mode=resume
+template=/home/rauter/.local/share/pipx/venvs/autoloop/lib/python3.12/site-packages/autoloop/templates/implement_verifier.md
+session_id=019df94a-82ac-73e1-beb0-d1be9a6ff2df
+
+
+---
+run_id=run-20260505T171950Z-13ce26d6 | entry=phase_output | pair=implement | phase=verifier | process=codex-agent | cycle=2 | attempt=1 | thread_id=019df94a-82ac-73e1-beb0-d1be9a6ff2df
+---
+I’m re-reviewing the phase after the producer’s fix, with attention on the child-context worklist bookkeeping path that previously blocked the phase. I’m checking the updated branch-group context helper, the new regression test, and the reviewer-owned artifacts before deciding whether the slice is complete.
+
+Reviewing the cycle-2 fix against the original blocker and the phase acceptance criteria. I’m checking the child-context cloning path, the updated tests, and the current review artifacts before I update the phase verdict.
+
+The previous blocker is fixed at the child-context seam. I’m checking the surrounding `Context` and worklist runtime contracts once more to make sure the new child-local resolver doesn’t create a different regression before I close the review.
+
+I’ve narrowed the remaining risk surface to worklist selection/runtime behavior and context-bound session persistence. I’m running the targeted tests and checking the exact `Context` runtime hooks that the child resolver depends on before I mark the artifacts complete.
+
+The child-context worklist fix holds under the targeted runtime contracts I checked, and the regression coverage now hits the previously unsafe path directly. I’m updating the verifier artifacts to reflect that the original blocker is resolved and there are no remaining phase-local findings.
+
+Scope considered
+
+Phase-local re-review of the shared context and session scaffolding slice, focused on the cycle-2 fix in [autoloop/core/branch_groups/context.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/autoloop/core/branch_groups/context.py), the surrounding `Context`/worklist runtime hooks, and the active verifier artifacts.
+
+What I analyzed
+
+I rechecked the child-context cloning path, `Context.ensure_selection(...)`, runtime selection/cache hooks, and worklist runtime mutation paths to confirm the prior blocker was actually removed rather than shifted. I also verified the active implementation notes and decisions ledger stayed aligned with the fix.
+
+What I reviewed
+
+I reran targeted validation:
+- `.venv/bin/python -m pytest -q tests/unit/test_branch_group_context_sessions.py`
+- `.venv/bin/python -m pytest -q tests/contract/test_engine_contracts.py -k 'llm_retry_reuses_pre_step_session_not_failed_attempt_session or pair_retry_reuses_pre_step_session_but_keeps_attempt_local_session_chain or on_start_opens_sessions_before_execution or declared_session_auto_opens_without_on_start or provider_steps_without_explicit_session_use_default_session'`
+
+I updated the review artifacts:
+- [criteria.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/autoloop-v3-explicit-branch-groups-full-revised-76d1507c/runs/run-20260505T171950Z-13ce26d6/artifacts/implement/phases/shared-context-and-session-scaffolding/criteria.md)
+- [feedback.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/autoloop-v3-explicit-branch-groups-full-revised-76d1507c/runs/run-20260505T171950Z-13ce26d6/artifacts/implement/phases/shared-context-and-session-scaffolding/feedback.md)
+
+Key findings / decisions
+
+The original blocker `IMP-001` is resolved. Child branch/fan-in contexts now clone selection/snapshot/cache bookkeeping by value and install a child-local lazy resolver, so worklist selection and advancement stay local instead of mutating parent bookkeeping or failing due to missing resolver callbacks.
+
+No remaining blocking or non-blocking findings were identified in the scoped review surface. The phase acceptance criteria are satisfied as implemented for this slice.
+
+Open issues / next step
+
+No verifier blocker remains for this phase. The next step is to proceed to the next planned implementation phase that uses these shared context/session seams for actual branch-group runtime orchestration.
+
+<loop-control>
+{"schema":"docloop.loop_control/v1","kind":"promise","promise":"COMPLETE"}
+</loop-control>

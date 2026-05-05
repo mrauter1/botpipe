@@ -728,3 +728,109 @@ The implementation is not ready to mark complete for this phase. The next step i
 <loop-control>
 {"schema":"docloop.loop_control/v1","kind":"promise","promise":"INCOMPLETE"}
 </loop-control>
+
+
+---
+run_id=run-20260505T171950Z-13ce26d6 | entry=session_turn | pair=implement | phase=producer | cycle=2 | attempt=1 | thread_id=019df94a-82ac-73e1-beb0-d1be9a6ff2df
+---
+provider=codex
+mode=resume
+template=/home/rauter/.local/share/pipx/venvs/autoloop/lib/python3.12/site-packages/autoloop/templates/implement_producer.md
+session_id=019df94a-82ac-73e1-beb0-d1be9a6ff2df
+
+
+---
+run_id=run-20260505T171950Z-13ce26d6 | entry=phase_output | pair=implement | phase=producer | process=codex-agent | cycle=2 | attempt=1 | thread_id=019df94a-82ac-73e1-beb0-d1be9a6ff2df
+---
+I’m addressing the reviewer’s blocking finding by tracing how worklist selection state is represented and restored today. First I’m checking the `Selection` model and the engine’s worklist callback plumbing so the branch-context fix isolates bookkeeping without breaking ordinary worklist resolution.
+
+I’ve got the fix shape: centralize child-context cloning, copy worklist selection bookkeeping by value instead of by shared dict reference, and install a child-local lazy worklist resolver so branch contexts don’t depend on the parent’s resolver closure. Then I’ll add a regression test that proves branch worklist selection no longer mutates the parent context.
+
+The fix is in. I’m rerunning the focused validation, including a new regression test that exercises branch-local worklist resolution and verifies it no longer mutates the parent context’s selection bookkeeping.
+
+I’ve validated the fix. I’m recording the non-obvious part in the decisions ledger now: the parent worklist resolver callback cannot be reused because it closes over the parent context, so child contexts need their own lazy resolver and copied bookkeeping containers.
+
+Scope considered
+
+Phase-local fix for the reviewer’s blocking finding in the shared context/session scaffolding slice, limited to [autoloop/core/branch_groups/context.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/autoloop/core/branch_groups/context.py), the existing touched runtime plumbing, the phase artifacts, and focused regression tests.
+
+What I analyzed
+
+I traced how worklist selections, snapshots, cache, and resolver callbacks are stored on `Context`, how `WorklistRuntimeView` mutates selection bookkeeping, and why the parent resolver closure could not be reused for branch child contexts. I also checked the reviewer feedback, the earlier implementation notes, and the existing worklist/runtime helper paths in `engine.py` and `worklists.py`.
+
+What I changed
+
+I centralized branch/fan-in child-context cloning in [autoloop/core/branch_groups/context.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/autoloop/core/branch_groups/context.py). Child contexts now:
+- copy `_selections`, `_selection_snapshots`, and `_worklist_items_cache` by value instead of sharing the parent dictionaries
+- install a child-local lazy worklist resolver instead of depending on the parent’s resolver closure
+- keep the existing shared `StateCell`, shared values mapping, and branch/fan-in metadata behavior
+
+I added a regression test in [tests/unit/test_branch_group_context_sessions.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/tests/unit/test_branch_group_context_sessions.py) that proves branch worklist resolution and advancement stay local and do not mutate the parent context’s selection bookkeeping. I also updated [implementation_notes.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/autoloop-v3-explicit-branch-groups-full-revised-76d1507c/runs/run-20260505T171950Z-13ce26d6/artifacts/implement/phases/shared-context-and-session-scaffolding/implementation_notes.md) and appended the non-obvious resolver/bookkeeping decision under the latest decisions header.
+
+Key findings / decisions
+
+The core fix is that parent worklist resolver callbacks are not reusable for child contexts because they close over the parent context and would either mutate parent bookkeeping or leave branch lookups unavailable. The child context now resolves worklists locally and keeps selection/cache state isolated.
+
+Validation reran cleanly:
+- `.venv/bin/python -m pytest -q tests/unit/test_branch_group_context_sessions.py`
+- `.venv/bin/python -m pytest -q tests/unit/test_simple_surface.py -k 'branch_group or fan_in or provider_backed_branch'`
+- `.venv/bin/python -m pytest -q tests/contract/test_engine_contracts.py -k 'llm_retry_reuses_pre_step_session_not_failed_attempt_session or pair_retry_reuses_pre_step_session_but_keeps_attempt_local_session_chain or on_start_opens_sessions_before_execution or declared_session_auto_opens_without_on_start or provider_steps_without_explicit_session_use_default_session'`
+
+Open issues / next step
+
+No known phase-local blocker remains from the reviewer feedback I addressed. The next step is verifier rerun on this phase; broader scoped item-state remapping for full branch runtime remains for the later branch runtime orchestration phase.
+
+
+---
+run_id=run-20260505T171950Z-13ce26d6 | entry=session_turn | pair=implement | phase=verifier | cycle=2 | attempt=1 | thread_id=019df94a-82ac-73e1-beb0-d1be9a6ff2df
+---
+provider=codex
+mode=resume
+template=/home/rauter/.local/share/pipx/venvs/autoloop/lib/python3.12/site-packages/autoloop/templates/implement_verifier.md
+session_id=019df94a-82ac-73e1-beb0-d1be9a6ff2df
+
+
+---
+run_id=run-20260505T171950Z-13ce26d6 | entry=phase_output | pair=implement | phase=verifier | process=codex-agent | cycle=2 | attempt=1 | thread_id=019df94a-82ac-73e1-beb0-d1be9a6ff2df
+---
+I’m re-reviewing the phase after the producer’s fix, with attention on the child-context worklist bookkeeping path that previously blocked the phase. I’m checking the updated branch-group context helper, the new regression test, and the reviewer-owned artifacts before deciding whether the slice is complete.
+
+Reviewing the cycle-2 fix against the original blocker and the phase acceptance criteria. I’m checking the child-context cloning path, the updated tests, and the current review artifacts before I update the phase verdict.
+
+The previous blocker is fixed at the child-context seam. I’m checking the surrounding `Context` and worklist runtime contracts once more to make sure the new child-local resolver doesn’t create a different regression before I close the review.
+
+I’ve narrowed the remaining risk surface to worklist selection/runtime behavior and context-bound session persistence. I’m running the targeted tests and checking the exact `Context` runtime hooks that the child resolver depends on before I mark the artifacts complete.
+
+The child-context worklist fix holds under the targeted runtime contracts I checked, and the regression coverage now hits the previously unsafe path directly. I’m updating the verifier artifacts to reflect that the original blocker is resolved and there are no remaining phase-local findings.
+
+Scope considered
+
+Phase-local re-review of the shared context and session scaffolding slice, focused on the cycle-2 fix in [autoloop/core/branch_groups/context.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/autoloop/core/branch_groups/context.py), the surrounding `Context`/worklist runtime hooks, and the active verifier artifacts.
+
+What I analyzed
+
+I rechecked the child-context cloning path, `Context.ensure_selection(...)`, runtime selection/cache hooks, and worklist runtime mutation paths to confirm the prior blocker was actually removed rather than shifted. I also verified the active implementation notes and decisions ledger stayed aligned with the fix.
+
+What I reviewed
+
+I reran targeted validation:
+- `.venv/bin/python -m pytest -q tests/unit/test_branch_group_context_sessions.py`
+- `.venv/bin/python -m pytest -q tests/contract/test_engine_contracts.py -k 'llm_retry_reuses_pre_step_session_not_failed_attempt_session or pair_retry_reuses_pre_step_session_but_keeps_attempt_local_session_chain or on_start_opens_sessions_before_execution or declared_session_auto_opens_without_on_start or provider_steps_without_explicit_session_use_default_session'`
+
+I updated the review artifacts:
+- [criteria.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/autoloop-v3-explicit-branch-groups-full-revised-76d1507c/runs/run-20260505T171950Z-13ce26d6/artifacts/implement/phases/shared-context-and-session-scaffolding/criteria.md)
+- [feedback.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/autoloop-v3-explicit-branch-groups-full-revised-76d1507c/runs/run-20260505T171950Z-13ce26d6/artifacts/implement/phases/shared-context-and-session-scaffolding/feedback.md)
+
+Key findings / decisions
+
+The original blocker `IMP-001` is resolved. Child branch/fan-in contexts now clone selection/snapshot/cache bookkeeping by value and install a child-local lazy resolver, so worklist selection and advancement stay local instead of mutating parent bookkeeping or failing due to missing resolver callbacks.
+
+No remaining blocking or non-blocking findings were identified in the scoped review surface. The phase acceptance criteria are satisfied as implemented for this slice.
+
+Open issues / next step
+
+No verifier blocker remains for this phase. The next step is to proceed to the next planned implementation phase that uses these shared context/session seams for actual branch-group runtime orchestration.
+
+<loop-control>
+{"schema":"docloop.loop_control/v1","kind":"promise","promise":"COMPLETE"}
+</loop-control>
