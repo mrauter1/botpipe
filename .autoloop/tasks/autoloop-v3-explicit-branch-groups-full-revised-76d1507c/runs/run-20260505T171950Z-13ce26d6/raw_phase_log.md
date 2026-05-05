@@ -1828,3 +1828,116 @@ Open issues / next step
 <loop-control>
 {"schema":"docloop.loop_control/v1","kind":"promise","promise":"COMPLETE"}
 </loop-control>
+
+
+---
+run_id=run-20260505T171950Z-13ce26d6 | entry=session_turn | pair=audit | phase=producer | cycle=1 | attempt=1 | thread_id=019df993-1b8e-77e0-b967-a2f977f5faff
+---
+provider=codex
+mode=start
+template=/home/rauter/.local/share/pipx/venvs/autoloop/lib/python3.12/site-packages/autoloop/templates/audit_producer.md
+session_id=019df993-1b8e-77e0-b967-a2f977f5faff
+
+
+---
+run_id=run-20260505T171950Z-13ce26d6 | entry=phase_output | pair=audit | phase=producer | process=codex-agent | cycle=1 | attempt=1 | thread_id=019df993-1b8e-77e0-b967-a2f977f5faff
+---
+I’m auditing the final run against the original request, the raw clarification log, the decisions ledger, and the delivered code/tests. First I’ll gather the authoritative artifacts and identify the branch-group implementation surface in the repo so I can compare requested behavior to what actually shipped.
+
+I’ve got the run ledger and the implementation surface. Next I’m reading the branch-group runtime/compiler/tests directly, with emphasis on the spec-heavy areas that are easy to partially ship: branch/fan-in placeholder scope, route exposure, session rules, evidence schema, static graph, and unsupported child-workflow behavior.
+
+The repository has a lot of unrelated dirty state, so I’m keeping scope pinned to this run and the branch-group implementation/tests. I’m now reading the final phase criteria and the concrete runtime/compiler modules themselves to separate actual unresolved gaps from earlier reviewer findings that were already closed.
+
+I’m down to the comparison work now. The main risk areas are not the basics already tested, but whether the implementation quietly narrows the spec in edge cases like provider-backed operation steps, helper/placeholder scoping, and branch result bookkeeping.
+
+I’ve read the implementation and the current coverage. I’m running the focused branch-group suites now to confirm the final codebase still matches the shipped artifacts rather than relying only on earlier phase logs.
+
+The likely remaining question is whether the shared-state/shared-values/overlapping-write semantics are only unit-scaffolded or actually hold in end-to-end branch execution. I’m running a few throwaway runtime probes now; they won’t modify repo code or test files.
+
+I’ve finished the comparison. The shipped feature is broadly aligned with the request and the targeted suites pass, but I’m recording two remaining run-local gaps: the committed regression suite still omits explicit coverage for shared state/values plus overlapping writes, and it also omits the fan-in pending-input resume path that the request called out.
+
+The audit artifacts are written. I’m doing one readback now to verify the gap classification, the follow-up request scope, and the JSON payload before I close with the required loop-control block.
+
+Scope considered
+
+Immutable request snapshot, authoritative raw phase log, run-local `decisions.txt`, phase artifacts under the active run, the final branch-group code in `autoloop/core/branch_groups/*`, related compiler/discovery/context/static-graph integration points, and the committed branch-group-focused tests.
+
+What I analyzed
+
+I compared the requested v1 branch-group contract against the shipped authoring surface, compiler/lowering rules, runtime behavior, evidence artifacts, session/state plumbing, static-graph/topology output, and committed regression coverage. I also reran the focused suites:
+
+- `.venv/bin/python -m pytest -q tests/unit/test_simple_surface.py -k 'branch_group or fan_in or provider_backed_branch'`
+- `.venv/bin/python -m pytest -q tests/contract/test_branch_group_runtime.py`
+- `.venv/bin/python -m pytest -q tests/unit/test_branch_group_context_sessions.py tests/runtime/test_runtime_static_graph.py tests/runtime/test_runtime_tracing.py -k 'branch_group or fan_in or topology or static_graph'`
+
+What I changed
+
+I wrote the run-local audit artifacts:
+
+- `.autoloop/tasks/autoloop-v3-explicit-branch-groups-full-revised-76d1507c/runs/run-20260505T171950Z-13ce26d6/artifacts/audit/gap_report.md`
+- `.autoloop/tasks/autoloop-v3-explicit-branch-groups-full-revised-76d1507c/runs/run-20260505T171950Z-13ce26d6/artifacts/audit/revised_request.md`
+- `.autoloop/tasks/autoloop-v3-explicit-branch-groups-full-revised-76d1507c/runs/run-20260505T171950Z-13ce26d6/artifacts/audit/audit_result.json`
+
+Key findings / decisions
+
+The feature is broadly implemented and the focused branch-group suites pass. I did not find a material mismatch in the main shipped behavior: explicit branch-group authoring, fresh-session validation, branch-local session isolation, evidence writing, mechanical outcomes, fan-in routing, and additive topology/tracing support are all present.
+
+I did find two material unresolved gaps, both in committed regression coverage rather than obvious shipped behavior:
+
+- The committed suite does not explicitly pin the requested shared-effect semantics for real branch execution: shared `ctx.state`, shared `ctx.values`, and overlapping writes not being rejected.
+- The committed suite does not explicitly pin fan-in `RequestInput` checkpoint/resume behavior at the composite boundary.
+
+I treated a few implementation differences as justified rather than gaps: additive static-graph/topology support landed in the existing runtime graph module instead of a new branch-group graph module, persisted evidence order is guaranteed but provider/log interleaving is not, and `fail_fast` coverage intentionally uses `concurrency=1` for deterministic admission-stop assertions.
+
+Open issues / next step
+
+The next run should stay narrow and add the missing branch-group runtime/contract coverage for shared state, shared values, overlapping writes, and fan-in pending-input resume. If any of those new tests expose a real bug, the follow-up should apply only the minimal runtime/checkpoint fix needed.
+
+<loop-control>
+{"schema":"docloop.loop_control/v1","kind":"promise","promise":"INCOMPLETE"}
+</loop-control>
+
+
+---
+run_id=run-20260505T171950Z-13ce26d6 | entry=session_turn | pair=audit | phase=verifier | cycle=1 | attempt=1 | thread_id=019df993-1b8e-77e0-b967-a2f977f5faff
+---
+provider=codex
+mode=resume
+template=/home/rauter/.local/share/pipx/venvs/autoloop/lib/python3.12/site-packages/autoloop/templates/audit_verifier.md
+session_id=019df993-1b8e-77e0-b967-a2f977f5faff
+
+
+---
+run_id=run-20260505T171950Z-13ce26d6 | entry=phase_output | pair=audit | phase=verifier | process=codex-agent | cycle=1 | attempt=1 | thread_id=019df993-1b8e-77e0-b967-a2f977f5faff
+---
+I’m verifying the audit artifacts against the request, raw log, decisions, shipped branch-group code, and the current tests. First I’m reading the audit outputs and the audit criteria/feedback files, then I’ll check whether the claimed gaps are supported by the actual code and committed coverage.
+
+The audit artifact itself looks coherent. I’m now checking the one place it could overstate the gap: whether those claimed missing regressions already exist somewhere else in the test tree, or whether the fan-in resume path is already covered indirectly.
+
+I’ve confirmed the claimed gaps are not already covered elsewhere in the branch-group suite, and the revised request is narrow and actionable. I’m marking the audit complete and appending a no-findings verifier note to the audit feedback.
+
+Scope considered
+
+The run-local audit artifacts, the immutable request snapshot, the raw phase log, `decisions.txt`, the shipped branch-group code and integrations, and the current committed branch-group-focused tests.
+
+What I analyzed
+
+I checked whether the audit’s claimed unresolved gaps are actually unsupported by the codebase or only missing from committed regression coverage. I also verified that no later clarification entries changed intent and that the audit’s justified-difference section matches the recorded run decisions.
+
+What I reviewed
+
+I reviewed `gap_report.md`, `revised_request.md`, `audit_result.json`, `criteria.md`, and `feedback.md`, and cross-checked them against the branch-group runtime/compiler/tests. I confirmed the focused test coverage the producer cited and verified that the claimed missing regressions are not already present elsewhere in the branch-group suite.
+
+Key findings / decisions
+
+The audit is valid. Its two material gaps are supported by the request and the current committed coverage: explicit shared-effect runtime regressions are still unpinned, and fan-in pending-input resume is still unpinned. `revised_request.md` is narrow and actionable, and `audit_result.json` correctly reports `material_gaps_found=true`.
+
+I updated the audit verifier artifacts by checking every criteria box in `criteria.md` and appending a no-findings verifier note in `feedback.md` with stable ID `AUD-000` labeled non-blocking.
+
+Open issues / next step
+
+No blocking verifier findings remain. The audit pair is complete, and the next run can use the revised request to add the missing branch-group regression coverage.
+
+<loop-control>
+{"schema":"docloop.loop_control/v1","kind":"promise","promise":"COMPLETE"}
+</loop-control>

@@ -1896,3 +1896,48 @@ The next run should stay narrow and add the missing branch-group runtime/contrac
 <loop-control>
 {"schema":"docloop.loop_control/v1","kind":"promise","promise":"INCOMPLETE"}
 </loop-control>
+
+
+---
+run_id=run-20260505T171950Z-13ce26d6 | entry=session_turn | pair=audit | phase=verifier | cycle=1 | attempt=1 | thread_id=019df993-1b8e-77e0-b967-a2f977f5faff
+---
+provider=codex
+mode=resume
+template=/home/rauter/.local/share/pipx/venvs/autoloop/lib/python3.12/site-packages/autoloop/templates/audit_verifier.md
+session_id=019df993-1b8e-77e0-b967-a2f977f5faff
+
+
+---
+run_id=run-20260505T171950Z-13ce26d6 | entry=phase_output | pair=audit | phase=verifier | process=codex-agent | cycle=1 | attempt=1 | thread_id=019df993-1b8e-77e0-b967-a2f977f5faff
+---
+I’m verifying the audit artifacts against the request, raw log, decisions, shipped branch-group code, and the current tests. First I’m reading the audit outputs and the audit criteria/feedback files, then I’ll check whether the claimed gaps are supported by the actual code and committed coverage.
+
+The audit artifact itself looks coherent. I’m now checking the one place it could overstate the gap: whether those claimed missing regressions already exist somewhere else in the test tree, or whether the fan-in resume path is already covered indirectly.
+
+I’ve confirmed the claimed gaps are not already covered elsewhere in the branch-group suite, and the revised request is narrow and actionable. I’m marking the audit complete and appending a no-findings verifier note to the audit feedback.
+
+Scope considered
+
+The run-local audit artifacts, the immutable request snapshot, the raw phase log, `decisions.txt`, the shipped branch-group code and integrations, and the current committed branch-group-focused tests.
+
+What I analyzed
+
+I checked whether the audit’s claimed unresolved gaps are actually unsupported by the codebase or only missing from committed regression coverage. I also verified that no later clarification entries changed intent and that the audit’s justified-difference section matches the recorded run decisions.
+
+What I reviewed
+
+I reviewed `gap_report.md`, `revised_request.md`, `audit_result.json`, `criteria.md`, and `feedback.md`, and cross-checked them against the branch-group runtime/compiler/tests. I confirmed the focused test coverage the producer cited and verified that the claimed missing regressions are not already present elsewhere in the branch-group suite.
+
+Key findings / decisions
+
+The audit is valid. Its two material gaps are supported by the request and the current committed coverage: explicit shared-effect runtime regressions are still unpinned, and fan-in pending-input resume is still unpinned. `revised_request.md` is narrow and actionable, and `audit_result.json` correctly reports `material_gaps_found=true`.
+
+I updated the audit verifier artifacts by checking every criteria box in `criteria.md` and appending a no-findings verifier note in `feedback.md` with stable ID `AUD-000` labeled non-blocking.
+
+Open issues / next step
+
+No blocking verifier findings remain. The audit pair is complete, and the next run can use the revised request to add the missing branch-group regression coverage.
+
+<loop-control>
+{"schema":"docloop.loop_control/v1","kind":"promise","promise":"COMPLETE"}
+</loop-control>
