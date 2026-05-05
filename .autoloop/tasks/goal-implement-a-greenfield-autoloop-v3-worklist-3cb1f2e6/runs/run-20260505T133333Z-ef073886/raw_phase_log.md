@@ -1185,3 +1185,123 @@ No open issues for this phase.
 <loop-control>
 {"schema":"docloop.loop_control/v1","kind":"promise","promise":"COMPLETE"}
 </loop-control>
+
+
+---
+run_id=run-20260505T133333Z-ef073886 | entry=session_turn | pair=audit | phase=producer | cycle=1 | attempt=1 | thread_id=019df8c3-759e-7122-bfdc-9b0293ec710f
+---
+provider=codex
+mode=start
+template=/home/rauter/.local/share/pipx/venvs/autoloop/lib/python3.12/site-packages/autoloop/templates/audit_producer.md
+session_id=019df8c3-759e-7122-bfdc-9b0293ec710f
+
+
+---
+run_id=run-20260505T133333Z-ef073886 | entry=phase_output | pair=audit | phase=producer | process=codex-agent | cycle=1 | attempt=1 | thread_id=019df8c3-759e-7122-bfdc-9b0293ec710f
+---
+I’m auditing the completed run against the authoritative request, clarifications, decisions, artifacts, and current code/test state. I’ll first read the run ledger and audit-relevant artifacts, then verify whether the remaining compatibility regressions are still unresolved and document only run-local audit outputs.
+
+I’ve confirmed the request and decision history. Next I’m reading the later phase outputs and current audit placeholders, then I’ll verify the final repository state against the named acceptance suites instead of relying on earlier phase summaries alone.
+
+I have the plan history and placeholders. I’m pulling the rest of the phase log plus the implementation/test artifacts for the completed phases so the audit is grounded in what was actually changed and verified, not just the initial plan.
+
+I have the early packaged-workflow phase context, but not the outcome yet. I’m reading the rest of that phase and then checking the current repository/test state so the audit can distinguish finished work from remaining gaps.
+
+I’ve confirmed the packaged-workflow phase claims the repository went green. I’m now verifying that against the final run artifacts, the current relevant source files, and a small set of proof commands so the audit can distinguish real completion from artifact-only claims.
+
+I’ve confirmed the key decisions and one packaged-workflow helper regression test on the current tree. I’m running the full repository proof now; if it matches the recorded green result, the audit should close with no material follow-up work.
+
+The full-suite proof is underway. While that runs, I’m drafting the audit classification from the request, decisions, and phase artifacts so the final write-up only depends on whether this run stays green through completion.
+
+The full suite is past the historical failure clusters and still clean. I’m waiting for completion, then I’ll write the audit files as a no-follow-up result unless the tail of the run introduces a new material gap.
+
+The resolver, optimizer, and packaged-workflow acceptance suites are all green inside the live full run. I’m letting the remaining unit and integration files finish before I finalize the no-gap audit result.
+
+I’ve got enough evidence now: the live full run finished green, and the only notable delta from the phase artifact is that the pass count is `1215` rather than `1214` because a later test phase added one regression test. I’m writing the audit artifacts now as a no-follow-up result with that count difference called out explicitly.
+
+The audit artifacts are written. I’m doing a quick integrity pass on the updated markdown and JSON now, then I’ll return the required summary and loop-control block.
+
+The audit content is correct; the only integrity check miss was using `python` instead of the project interpreter for JSON formatting. I’m rerunning that validation with `.venv/bin/python` and then I’m done.
+
+Scope considered
+
+- Immutable request snapshot, authoritative raw log, `decisions.txt`, plan/implement/test artifacts for this run, relevant final source files, and the current repository test state.
+
+What I analyzed
+
+- Mixed-root workflow resolution behavior in [loader.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/autoloop/runtime/loader.py), optimizer/source-manifest behavior in [optimization.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/autoloop_optimizer/optimization.py), shared candidate-surface validation in [candidate_surfaces.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/autoloop_optimizer/candidate_surfaces.py), and shared runtime-control injection in [discovery.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/autoloop/core/discovery.py).
+- The completed phase artifacts under `artifacts/implement/phases/*` and `artifacts/test/phases/*`.
+- A live proof run on 2026-05-05: `.venv/bin/python -m pytest` -> `1215 passed, 616 warnings`.
+
+What I changed
+
+- Wrote [gap_report.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/goal-implement-a-greenfield-autoloop-v3-worklist-3cb1f2e6/runs/run-20260505T133333Z-ef073886/artifacts/audit/gap_report.md).
+- Wrote [revised_request.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/goal-implement-a-greenfield-autoloop-v3-worklist-3cb1f2e6/runs/run-20260505T133333Z-ef073886/artifacts/audit/revised_request.md).
+- Wrote [audit_result.json](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/goal-implement-a-greenfield-autoloop-v3-worklist-3cb1f2e6/runs/run-20260505T133333Z-ef073886/artifacts/audit/audit_result.json).
+- Completed [criteria.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/goal-implement-a-greenfield-autoloop-v3-worklist-3cb1f2e6/runs/run-20260505T133333Z-ef073886/artifacts/audit/criteria.md) and appended a no-findings note to [feedback.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/goal-implement-a-greenfield-autoloop-v3-worklist-3cb1f2e6/runs/run-20260505T133333Z-ef073886/artifacts/audit/feedback.md).
+
+Key findings / decisions
+
+- No material unresolved gaps remain against the request.
+- The requested regression clusters were restored, the previously green focused and adjacent suites remained green, and the repository is globally green.
+- Two notable differences were justified by later run decisions rather than left unresolved: mixed-root named resolution authority was explicitly corrected back to `.autoloop/workflows/`, and optimizer manifests now keep canonical `autoloop/workflows/...` labels while hashing actual repo-local source bytes without repo-root mutation.
+- The current full-suite total is `1215 passed`, not the earlier `1214 passed` recorded in one implementation artifact, because a later test phase added one shared regression test.
+
+Open issues / next step
+
+- No follow-up implementation run is required for this request.
+
+<loop-control>
+{"schema":"docloop.loop_control/v1","kind":"promise","promise":"INCOMPLETE"}
+</loop-control>
+
+
+---
+run_id=run-20260505T133333Z-ef073886 | entry=session_turn | pair=audit | phase=verifier | cycle=1 | attempt=1 | thread_id=019df8c3-759e-7122-bfdc-9b0293ec710f
+---
+provider=codex
+mode=resume
+template=/home/rauter/.local/share/pipx/venvs/autoloop/lib/python3.12/site-packages/autoloop/templates/audit_verifier.md
+session_id=019df8c3-759e-7122-bfdc-9b0293ec710f
+
+
+---
+run_id=run-20260505T133333Z-ef073886 | entry=phase_output | pair=audit | phase=verifier | process=codex-agent | cycle=1 | attempt=1 | thread_id=019df8c3-759e-7122-bfdc-9b0293ec710f
+---
+I’m verifying the audit artifacts against the request ledger, decisions, and the final repository proof. I’ll re-read the written audit outputs, confirm the classification is supported, then update only the audit criteria and feedback files.
+
+The audit artifacts hold up: the ledger coverage is complete, the “no follow-up” classification is supported, and the revised request is appropriate for `material_gaps_found: false`. I’m appending a verifier note and leaving the criteria fully checked.
+
+I’ve appended the verifier note. I’m doing one quick readback of the feedback file, then I’ll return the required verifier summary and `COMPLETE` loop-control block.
+
+Scope considered
+
+- The immutable request, authoritative raw log, `decisions.txt`, the audit artifacts in `artifacts/audit`, and the final repository/test state needed to verify the audit classification.
+
+What I analyzed
+
+- [gap_report.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/goal-implement-a-greenfield-autoloop-v3-worklist-3cb1f2e6/runs/run-20260505T133333Z-ef073886/artifacts/audit/gap_report.md)
+- [revised_request.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/goal-implement-a-greenfield-autoloop-v3-worklist-3cb1f2e6/runs/run-20260505T133333Z-ef073886/artifacts/audit/revised_request.md)
+- [audit_result.json](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/goal-implement-a-greenfield-autoloop-v3-worklist-3cb1f2e6/runs/run-20260505T133333Z-ef073886/artifacts/audit/audit_result.json)
+- The superseding mixed-root and optimizer/source-manifest decisions in [decisions.txt](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/goal-implement-a-greenfield-autoloop-v3-worklist-3cb1f2e6/runs/run-20260505T133333Z-ef073886/decisions.txt).
+
+What I reviewed
+
+- [criteria.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/goal-implement-a-greenfield-autoloop-v3-worklist-3cb1f2e6/runs/run-20260505T133333Z-ef073886/artifacts/audit/criteria.md): left fully checked.
+- [feedback.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/goal-implement-a-greenfield-autoloop-v3-worklist-3cb1f2e6/runs/run-20260505T133333Z-ef073886/artifacts/audit/feedback.md): appended `AUD-VFY-001`.
+- The audit’s repository-proof basis: the final full-suite run reported `1215 passed, 616 warnings`.
+
+Key findings / decisions
+
+- No blocking verifier findings.
+- The audit correctly classifies the request as complete with no material follow-up work required.
+- `audit_result.json` is accurate with `material_gaps_found: false`.
+- The report’s noted differences are justified by explicit later decisions, not missed gaps.
+
+Open issues / next step
+
+- No open audit issues remain for this run.
+
+<loop-control>
+{"schema":"docloop.loop_control/v1","kind":"promise","promise":"COMPLETE"}
+</loop-control>
