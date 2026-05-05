@@ -1116,3 +1116,54 @@ and
 `.venv/bin/python -m pytest tests/unit/test_branch_group_context_sessions.py tests/unit/test_primitives_and_stores.py -q` with `54 passed`.
 
 I did not add tests for deferred branch-session overlay changes or synthetic session-id removal, because those behaviors are still explicitly out of scope for this phase.
+
+
+---
+run_id=run-20260505T201926Z-7fdaad17 | entry=session_turn | pair=test | phase=verifier | cycle=1 | attempt=1 | thread_id=019df9f5-ed08-7ca1-9227-242a7cdac2f6
+---
+provider=codex
+mode=resume
+template=/home/rauter/.local/share/pipx/venvs/autoloop/lib/python3.12/site-packages/autoloop/templates/test_verifier.md
+session_id=019df9f5-ed08-7ca1-9227-242a7cdac2f6
+
+
+---
+run_id=run-20260505T201926Z-7fdaad17 | entry=phase_output | pair=test | phase=verifier | process=codex-agent | cycle=1 | attempt=1 | thread_id=019df9f5-ed08-7ca1-9227-242a7cdac2f6
+---
+I’m auditing the async-branch-runtime test coverage against the accepted phase contract and the decision ledger. First I’m reading the current auditor artifacts, the strategy the test pass recorded, and the specific branch-runtime tests that were added or changed so I can decide whether any gaps remain.
+
+I’ve confirmed the strategy matches the phase contract at a high level. Now I’m checking the concrete tests behind each acceptance criterion, especially the fail-fast and evidence-path surfaces, to make sure the strategy isn’t overclaiming coverage or silently normalizing a behavior break.
+
+The concrete tests line up with the major acceptance criteria so far. I’m doing one last targeted scan for any strategy claim that isn’t actually backed by a test, especially around `concurrency=1` and the event-set coverage split across contract and tracing tests.
+
+The strategy’s `concurrency=1` claim is only worth keeping if there’s an actual phase test behind it, so I’m checking those two hits now. If one of them isn’t provider-backed branch-group coverage, that would be a small audit finding.
+
+I found one potential mismatch: the strategy claims `concurrency=1` async-provider safety, but the tests I’ve read so far only use `concurrency=1` for Python branches and shared-effects checks. I’m verifying whether that provider-backed case exists anywhere else before I decide whether this is a real gap or just a wording issue in the strategy.
+
+I verified the gap: there is no provider-backed `concurrency=1` branch-group test anywhere in the suite, even though that case is explicitly required by the request and the strategy currently claims it is covered. I’m recording that as a blocking audit finding and updating the criteria to match.
+
+Scope considered
+
+Phase-local audit of the `async-branch-runtime` test pass: the added and updated branch-group contract tests, runtime tracing coverage, strictness coverage, and the phase test artifacts. I kept edits limited to the active test audit artifact directory.
+
+What I analyzed
+
+I reviewed the accepted phase contract, the task-global decisions ledger, the test strategy, and the concrete tests in [test_branch_group_runtime.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/tests/contract/test_branch_group_runtime.py:248), [test_runtime_tracing.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/tests/runtime/test_runtime_tracing.py:422), and [test_no_compat.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/tests/strictness/test_no_compat.py:129). I specifically checked whether each stated acceptance criterion and each explicit runtime-test requirement from the request had a matching regression test.
+
+What I reviewed
+
+I confirmed that the suite now covers workflow-folder evidence reads, fail-fast cancellation/skips, declaration-order manifests, the required runtime event set, and strictness scanning for forbidden thread-backed primitives. I also checked the strategy claims against the actual tests to ensure the artifact was not overstating coverage.
+
+Key findings / decisions
+
+I recorded one blocking finding in [feedback.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/full-revised-standalone-spec-autoloop-v3-explici-7b9dcd08/runs/run-20260505T201926Z-7fdaad17/artifacts/test/phases/async-branch-runtime/feedback.md:10): there is still no provider-backed `parallel(..., concurrency=1)` regression test. The only `concurrency=1` cases in the suite are Python-branch scenarios at [test_branch_group_runtime.py:606](/home/rauter/autoloop_v3_bkp/autoloop_v3/tests/contract/test_branch_group_runtime.py:606) and [test_branch_group_runtime.py:711](/home/rauter/autoloop_v3_bkp/autoloop_v3/tests/contract/test_branch_group_runtime.py:711), even though the original request explicitly requires coverage that async-provider branch groups work with `concurrency=1`.
+
+I updated [criteria.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/full-revised-standalone-spec-autoloop-v3-explici-7b9dcd08/runs/run-20260505T201926Z-7fdaad17/artifacts/test/phases/async-branch-runtime/criteria.md:11) accordingly: reliability and intent remain satisfied, but coverage, regression protection, and edge/failure-path completeness are not yet complete.
+
+Open issues / next step
+
+The next test pass should add a provider-backed `parallel(..., concurrency=1)` case that proves normal completion through the async provider path and preserves branch-group semantics without any sync fallback. After that, this phase should be re-audited.
+
+<loop-control>
+{"schema":"docloop.loop_control/v1","kind":"promise","promise":"INCOMPLETE"}
+</loop-control>
