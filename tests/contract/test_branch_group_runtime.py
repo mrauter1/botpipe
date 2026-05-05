@@ -298,6 +298,161 @@ def test_parallel_branch_group_fail_fast_stops_new_branch_launches_and_persists_
     assert manifest["branches"][2]["reason"] == "Branch was not scheduled because fail_fast stopped new branch launches."
 
 
+def test_parallel_branch_group_runtime_preserves_shared_state_values_and_overlapping_writes(tmp_path: Path) -> None:
+    overlap_path = Path("shared/review.md")
+
+    class SharedEffectsWorkflow(simple.Workflow):
+        class State(BaseModel):
+            branch_state: str | None = None
+            publish_saw_state: str | None = None
+            publish_saw_value: str | None = None
+
+        reviews = simple.parallel(
+            name="reviews",
+            concurrency=1,
+            outcome="all_done",
+            branches={
+                "state": simple.python_step(
+                    lambda ctx: (
+                        setattr(ctx, "state", ctx.state.model_copy(update={"branch_state": "set-in-branch"})),
+                        Event("done"),
+                    )[-1],
+                    name="state_branch",
+                ),
+                "values": simple.python_step(
+                    lambda ctx: (
+                        setattr(ctx.values, "shared_value", "visible-after-settlement"),
+                        Event("done"),
+                    )[-1],
+                    name="values_branch",
+                ),
+                "write_a": simple.python_step(
+                    lambda ctx: (ctx.write(overlap_path, "first branch write\n"), Event("done"))[-1],
+                    name="write_a_branch",
+                ),
+                "write_b": simple.python_step(
+                    lambda ctx: (ctx.write(overlap_path, "second branch write\n"), Event("done"))[-1],
+                    name="write_b_branch",
+                ),
+            },
+            routes={"done": "publish"},
+        )
+        publish = simple.python_step(
+            lambda ctx: (
+                setattr(
+                    ctx,
+                    "state",
+                    ctx.state.model_copy(
+                        update={
+                            "publish_saw_state": ctx.state.branch_state,
+                            "publish_saw_value": ctx.values.shared_value,
+                        }
+                    ),
+                ),
+                Event("done"),
+            )[-1],
+            routes={"done": simple.FINISH},
+        )
+
+    task_folder, run_folder = _workspace(tmp_path)
+    result = Engine(
+        SharedEffectsWorkflow,
+        provider=ScriptedLLMProvider(),
+        session_store=InMemorySessionStore(),
+        checkpoint_store=InMemoryCheckpointStore(),
+    ).run(
+        task_id="task-shared-effects",
+        run_id="run-shared-effects",
+        task_folder=task_folder,
+        run_folder=run_folder,
+        root=tmp_path,
+    )
+
+    assert result.terminal == simple.FINISH
+    assert result.state.branch_state == "set-in-branch"
+    assert result.state.publish_saw_state == "set-in-branch"
+    assert result.state.publish_saw_value == "visible-after-settlement"
+    assert (tmp_path / overlap_path).exists()
+    assert (tmp_path / overlap_path).read_text(encoding="utf-8") == "second branch write\n"
+
+    manifest = json.loads((tmp_path / "_branch_groups" / "reviews" / "results.json").read_text(encoding="utf-8"))
+    assert [branch["status"] for branch in manifest["branches"]] == ["completed", "completed", "completed", "completed"]
+
+
+def test_parallel_branch_group_fan_in_request_input_checkpoints_at_composite_boundary_and_resumes(
+    tmp_path: Path,
+) -> None:
+    class FanInRequestInputWorkflow(simple.Workflow):
+        class State(BaseModel):
+            fan_in_answer: str | None = None
+            published: bool = False
+
+        reviews = simple.parallel(
+            name="reviews",
+            branches={
+                "security": simple.python_step(lambda ctx: Event("done"), name="security_review"),
+                "cost": simple.python_step(lambda ctx: Event("done"), name="cost_review"),
+            },
+            fan_in=simple.python_step(
+                lambda ctx: RequestInput("Approve merged review summary?")
+                if ctx.input_response is None
+                else (
+                    setattr(ctx, "state", ctx.state.model_copy(update={"fan_in_answer": str(ctx.input_response)})),
+                    Event("approved"),
+                )[-1],
+                name="combine_reviews",
+                routes={"approved": "publish"},
+            ),
+        )
+        publish = simple.python_step(
+            lambda ctx: (
+                setattr(ctx, "state", ctx.state.model_copy(update={"published": True})),
+                Event("done"),
+            )[-1],
+            routes={"done": simple.FINISH},
+        )
+
+    task_folder, run_folder = _workspace(tmp_path)
+    checkpoint_store = InMemoryCheckpointStore()
+    engine = Engine(
+        FanInRequestInputWorkflow,
+        provider=ScriptedLLMProvider(),
+        session_store=InMemorySessionStore(),
+        checkpoint_store=checkpoint_store,
+    )
+
+    paused = engine.run(
+        task_id="task-fan-in-input",
+        run_id="run-fan-in-input",
+        task_folder=task_folder,
+        run_folder=run_folder,
+        root=tmp_path,
+    )
+
+    assert paused.terminal == simple.AWAIT_INPUT
+    assert paused.checkpoint is not None
+    assert paused.checkpoint.stage == "reviews"
+    assert paused.checkpoint.pending_input is not None
+    assert paused.checkpoint.pending_input.question == "Approve merged review summary?"
+    assert paused.checkpoint.pending_input.source_step == "combine_reviews"
+
+    resumed = engine.resume(
+        task_id="task-fan-in-input",
+        run_id="run-fan-in-input",
+        task_folder=task_folder,
+        run_folder=run_folder,
+        root=tmp_path,
+        answer="approved",
+    )
+
+    assert resumed.terminal == simple.FINISH
+    assert resumed.state.fan_in_answer == "approved"
+    assert resumed.state.published is True
+    assert resumed.last_event is not None
+    assert resumed.last_event.tag == "done"
+    assert checkpoint_store.load() is None
+
+
 def test_branch_group_evidence_write_failure_stops_before_fan_in_and_downstream_routing(
     monkeypatch: pytest.MonkeyPatch,
     tmp_path: Path,
