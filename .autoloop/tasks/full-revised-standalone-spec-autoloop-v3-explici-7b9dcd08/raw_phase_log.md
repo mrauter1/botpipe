@@ -54,3 +54,45 @@ Updated the planner artifacts in [plan.md](/home/rauter/autoloop_v3_bkp/autoloop
 The plan is implementation-ready and explicitly treats the current branch-group code as a prototype to replace where it conflicts with the new contract. The main recorded breaks are: remove thread-backed branch execution, require async providers for provider-backed branch groups, move evidence under `workflow_folder/_branch_groups`, eliminate synthetic branch session ids, and tighten compile-time rejection for unsupported branch step shapes.
 
 Verification: `phase_plan.yaml` parses successfully with `python3` and contains 6 ordered phases from `contract-hardening` through `strictness-and-cleanup`.
+
+
+---
+run_id=run-20260505T201926Z-7fdaad17 | entry=session_turn | pair=plan | phase=verifier | cycle=1 | attempt=1 | thread_id=019df9cb-aa84-7e92-92f1-518274b06869
+---
+provider=codex
+mode=resume
+template=/home/rauter/.local/share/pipx/venvs/autoloop/lib/python3.12/site-packages/autoloop/templates/plan_verifier.md
+session_id=019df9cb-aa84-7e92-92f1-518274b06869
+
+
+---
+run_id=run-20260505T201926Z-7fdaad17 | entry=phase_output | pair=plan | phase=verifier | process=codex-agent | cycle=1 | attempt=1 | thread_id=019df9cb-aa84-7e92-92f1-518274b06869
+---
+I’m verifying the written plan against the supplied branch-group spec, the current repository state, and the run-local decision history. I’m focusing first on missing intent coverage and any plan directions that could permit unsafe implementation shortcuts.
+
+I found two material omissions and one wording issue worth tightening. I’m updating the verifier artifacts now: criteria will stay unpassed, and the feedback log will capture the gaps with concrete correction directions.
+
+The verifier artifacts are updated. I’m doing a quick readback to confirm the checkboxes and finding IDs are exactly what later turns will consume.
+
+Scope considered
+Run-local planning artifacts, the immutable request snapshot, the current-turn decisions block, and repository areas already identified by the planner as relevant branch-group/runtime surfaces.
+
+What I analyzed
+The branch-group spec requirements against `plan.md` and `phase_plan.yaml`, with emphasis on intent fidelity, regression prevention, compatibility breaks, checkpoint/resume semantics, observability, static-graph requirements, and phase completeness. I also verified the YAML shape and runtime-owned metadata remained valid.
+
+What I reviewed
+`plan.md`, `phase_plan.yaml`, `criteria.md`, `feedback.md`, `decisions.txt`, and the raw phase log. I confirmed `phase_plan.yaml` is parseable and that required lists are populated.
+
+Key findings / decisions
+Two blocking issues were recorded in `feedback.md`.
+`PLAN-001`: the plan does not explicitly cover required branch-group observability events or static-graph representation updates.
+`PLAN-002`: the plan does not explicitly cover the required composite-boundary checkpoint/resume contract.
+One non-blocking wording issue was recorded as `PLAN-003`.
+`criteria.md` was updated to leave intent fidelity, behavioral safety, completeness, and feasibility/compatibility unchecked; only technical-debt avoidance is currently checked.
+
+Open issues / next step
+The planner needs to revise the plan so observability/static-graph work and checkpoint/resume behavior are explicit milestones with acceptance criteria and validation coverage. After that, the artifacts should be re-verified.
+
+<loop-control>
+{"schema":"docloop.loop_control/v1","kind":"promise","promise":"INCOMPLETE"}
+</loop-control>
