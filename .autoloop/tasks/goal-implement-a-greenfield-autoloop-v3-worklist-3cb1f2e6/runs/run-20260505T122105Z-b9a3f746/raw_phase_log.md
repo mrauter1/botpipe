@@ -1068,3 +1068,115 @@ Open issues / next step
 <loop-control>
 {"schema":"docloop.loop_control/v1","kind":"promise","promise":"COMPLETE"}
 </loop-control>
+
+
+---
+run_id=run-20260505T122105Z-b9a3f746 | entry=session_turn | pair=test | phase=producer | cycle=1 | attempt=1 | thread_id=019df832-c99e-72c1-904c-48decc0b2141
+---
+provider=codex
+mode=resume
+template=/home/rauter/.local/share/pipx/venvs/autoloop/lib/python3.12/site-packages/autoloop/templates/test_producer.md
+session_id=019df832-c99e-72c1-904c-48decc0b2141
+
+
+---
+run_id=run-20260505T122105Z-b9a3f746 | entry=phase_output | pair=test | phase=producer | process=codex-agent | cycle=1 | attempt=1 | thread_id=019df832-c99e-72c1-904c-48decc0b2141
+---
+I’m checking the existing runtime and adjacent regression coverage first, then I’ll add only the test delta that closes the most likely remaining gap from the repo-local workflow follow-up.
+
+There’s already broad adjacent coverage, so I’m looking for one narrow missing regression test that matches the actual bug shape. The most valuable gap is cross-root reuse of cached `workflows.*` modules, which was fixed in code but isn’t explicitly pinned by a dedicated test yet.
+
+I found two concrete behaviors worth pinning directly: repo-local manifests should discover as `workflows.*` entries with default metadata, and cached `workflows.*` modules must not leak across different repo roots in the same process. I’m adding those tests to the existing catalog/runtime regression file.
+
+One patch landed with the intended helper and one discovery test, but I need to clean up the second test stub before running anything. I’m fixing that now and then I’ll execute the targeted file.
+
+The new regression test exposed one setup mismatch in the helper, not a product issue: repo-local package entries now load through the package-contract path and therefore need an `__init__.py` re-export in the fixture. I’m aligning the helper with the actual supported package shape and rerunning.
+
+The failure is in the test fixture shape, not the runtime contract I’m trying to pin. I’m inspecting the repo-local helper/import sequence quickly so I can make the fixture match the public package-loading rules before I rerun.
+
+The mismatch comes from the fixture using `flow.py`, while the repo-local workflow path we actually stabilized is `workflow.py`. I’m aligning the helper and expectations to the real repo-local authoring shape, which also makes the new regression test representative of the fixed behavior.
+
+The repo-local fixtures used by the adjacent suite already create `workflows/__init__.py`; my minimal helper didn’t. I’m aligning it with that supported package shape so the new regression test exercises the real path rather than an underspecified namespace-package variant.
+
+The new test delta is in place and both required pytest commands still pass. I’m recording the exact behavior-to-test map and the non-obvious regression target in the phase artifacts now.
+
+Scope considered
+
+- Phase-local test work for runtime validation and regression checks, focused on the new selector/progress runtime coverage and the adjacent repo-local workflow regression surface that was fixed during implementation.
+
+What I analyzed
+
+- Existing runtime regression coverage in [tests/runtime/test_progress_worklists.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/tests/runtime/test_progress_worklists.py), [tests/runtime/test_workflow_catalog_roots.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/tests/runtime/test_workflow_catalog_roots.py), [tests/unit/test_stdlib_and_extensions.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/tests/unit/test_stdlib_and_extensions.py), [tests/unit/test_primitives_and_stores.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/tests/unit/test_primitives_and_stores.py), and [tests/runtime/test_workspace_and_context.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/tests/runtime/test_workspace_and_context.py).
+- The run-local decisions ledger and the phase artifacts [test_strategy.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/goal-implement-a-greenfield-autoloop-v3-worklist-3cb1f2e6/runs/run-20260505T122105Z-b9a3f746/artifacts/test/phases/runtime-validation-and-regression-checks/test_strategy.md) and [feedback.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/goal-implement-a-greenfield-autoloop-v3-worklist-3cb1f2e6/runs/run-20260505T122105Z-b9a3f746/artifacts/test/phases/runtime-validation-and-regression-checks/feedback.md).
+
+What I changed
+
+- Added two targeted regressions to [tests/runtime/test_workflow_catalog_roots.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/tests/runtime/test_workflow_catalog_roots.py):
+  - repo-local `<repo>/workflows` entries get `workflows.*` module names, default title/description, and repo-level runtime test discovery.
+  - cached `workflows.*` imports do not leak across different temp repo roots in the same process.
+- Updated [test_strategy.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/goal-implement-a-greenfield-autoloop-v3-worklist-3cb1f2e6/runs/run-20260505T122105Z-b9a3f746/artifacts/test/phases/runtime-validation-and-regression-checks/test_strategy.md) with a behavior-to-test coverage map.
+- Appended a concise summary to [feedback.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/goal-implement-a-greenfield-autoloop-v3-worklist-3cb1f2e6/runs/run-20260505T122105Z-b9a3f746/artifacts/test/phases/runtime-validation-and-regression-checks/feedback.md) and recorded the non-obvious test decision in [decisions.txt](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/goal-implement-a-greenfield-autoloop-v3-worklist-3cb1f2e6/runs/run-20260505T122105Z-b9a3f746/decisions.txt).
+
+Key findings / decisions
+
+- The highest-value remaining regression gap was not the core progress-worklist coverage; it was repo-local workflow import/discovery behavior across temp roots after the runtime follow-up changes.
+- The new tests are deterministic: they use temp directories and the existing module-isolation fixture to avoid cross-test contamination.
+- Validation after the additions is green:
+  - `pytest tests/runtime/test_workflow_catalog_roots.py` -> `20 passed`
+  - `pytest tests/unit/test_worklist_selectors.py tests/unit/test_stdlib_progress_worklists.py tests/runtime/test_progress_worklists.py` -> `49 passed`
+  - `pytest tests/unit/test_stdlib_and_extensions.py tests/unit/test_primitives_and_stores.py tests/runtime/test_workspace_and_context.py` -> `173 passed`
+
+Open issues / next step
+
+- No phase-local test blockers remain.
+- I did not run the full `pytest` suite beyond the focused and adjacent commands named in the request.
+
+
+---
+run_id=run-20260505T122105Z-b9a3f746 | entry=session_turn | pair=test | phase=verifier | cycle=1 | attempt=1 | thread_id=019df832-c99e-72c1-904c-48decc0b2141
+---
+provider=codex
+mode=resume
+template=/home/rauter/.local/share/pipx/venvs/autoloop/lib/python3.12/site-packages/autoloop/templates/test_verifier.md
+session_id=019df832-c99e-72c1-904c-48decc0b2141
+
+
+---
+run_id=run-20260505T122105Z-b9a3f746 | entry=phase_output | pair=test | phase=verifier | process=codex-agent | cycle=1 | attempt=1 | thread_id=019df832-c99e-72c1-904c-48decc0b2141
+---
+I’m auditing the new test delta and the required regression commands directly, then I’ll update the audit artifacts to either clear the phase or record any remaining coverage or flake risks.
+
+The new tests are scoped and deterministic on inspection. I’m rerunning the exact targeted file plus the required focused and adjacent commands once more so the audit decision is tied to observed results.
+
+The reruns are green across the new targeted file and both requested regression commands. I’m clearing the audit criteria and recording that I found no remaining blocking coverage or flake issues in the scoped test changes.
+
+Scope considered
+
+- Phase-local audit of the runtime-validation test work, focused on the new repo-local workflow regression coverage and the required selector/progress plus adjacent regression commands.
+
+What I analyzed
+
+- The updated test plan in [test_strategy.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/goal-implement-a-greenfield-autoloop-v3-worklist-3cb1f2e6/runs/run-20260505T122105Z-b9a3f746/artifacts/test/phases/runtime-validation-and-regression-checks/test_strategy.md).
+- The changed test surface in [tests/runtime/test_workflow_catalog_roots.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/tests/runtime/test_workflow_catalog_roots.py), along with the already-required runtime/unit suites it references.
+- The phase audit artifacts in [criteria.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/goal-implement-a-greenfield-autoloop-v3-worklist-3cb1f2e6/runs/run-20260505T122105Z-b9a3f746/artifacts/test/phases/runtime-validation-and-regression-checks/criteria.md) and [feedback.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/goal-implement-a-greenfield-autoloop-v3-worklist-3cb1f2e6/runs/run-20260505T122105Z-b9a3f746/artifacts/test/phases/runtime-validation-and-regression-checks/feedback.md).
+
+What I reviewed
+
+- I reran `pytest tests/runtime/test_workflow_catalog_roots.py` and observed `20 passed`.
+- I reran `pytest tests/unit/test_worklist_selectors.py tests/unit/test_stdlib_progress_worklists.py tests/runtime/test_progress_worklists.py` and observed `49 passed`.
+- I reran `pytest tests/unit/test_stdlib_and_extensions.py tests/unit/test_primitives_and_stores.py tests/runtime/test_workspace_and_context.py` and observed `173 passed`.
+
+Key findings / decisions
+
+- No blocking findings remain.
+- The added repo-local workflow tests cover the real regression shape: default manifest metadata/test-path discovery and `workflows.*` cache refresh across different temp repo roots in one process.
+- The test setup is stable: temp directories and explicit module cleanup remove the main flake risk for this surface.
+
+Open issues / next step
+
+- No phase-local audit blockers remain.
+- I did not run the full repository test suite beyond the scoped commands required by this phase.
+
+<loop-control>
+{"schema":"docloop.loop_control/v1","kind":"promise","promise":"COMPLETE"}
+</loop-control>
