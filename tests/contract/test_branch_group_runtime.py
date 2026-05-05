@@ -369,6 +369,7 @@ def test_parallel_branch_group_runtime_preserves_shared_state_values_and_overlap
     )
 
     assert result.terminal == simple.FINISH
+    assert result.history == ("reviews", "publish")
     assert result.state.branch_state == "set-in-branch"
     assert result.state.publish_saw_state == "set-in-branch"
     assert result.state.publish_saw_value == "visible-after-settlement"
@@ -446,6 +447,7 @@ def test_parallel_branch_group_fan_in_request_input_checkpoints_at_composite_bou
     )
 
     assert resumed.terminal == simple.FINISH
+    assert resumed.history == ("reviews", "publish")
     assert resumed.state.fan_in_answer == "approved"
     assert resumed.state.published is True
     assert resumed.last_event is not None
