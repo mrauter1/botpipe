@@ -9,6 +9,7 @@ from typing import Any
 from autoloop.runtime.inspection import (
     discover_workflow_catalog,
     inspect_workflow_capabilities,
+    inspect_workflow_reference,
     list_workflow_run_summaries,
     normalize_run_status,
     resolve_workflow_reference,
@@ -25,7 +26,7 @@ def write_workflow_portfolio_snapshot(
     """Write a workflow-local snapshot of the current repo workflow catalog."""
 
     repo_root = _repo_root_from_context(ctx)
-    catalog = discover_workflow_catalog(repo_root)
+    catalog = _workspace_catalog(repo_root)
     return write_workflow_json(
         ctx,
         relative_path,
@@ -51,7 +52,7 @@ def write_workflow_portfolio_health_snapshot(
     """Write a workflow-local snapshot of grouped per-workflow run health."""
 
     repo_root = _repo_root_from_context(ctx)
-    catalog = discover_workflow_catalog(repo_root)
+    catalog = _workspace_catalog(repo_root)
     selected_workflow_names = _resolve_selected_workflow_names(repo_root, workflows)
     normalized_statuses = _normalized_filters(statuses)
     selected_catalog = tuple(
@@ -97,7 +98,7 @@ def write_workflow_capability_snapshot(
     """Write a workflow-local snapshot of the current repo workflow capabilities."""
 
     repo_root = _repo_root_from_context(ctx)
-    catalog = inspect_workflow_capabilities(repo_root)
+    catalog = _workspace_capability_catalog(repo_root)
     return write_workflow_json(
         ctx,
         relative_path,
@@ -209,6 +210,14 @@ def _normalized_filters(statuses: str | Iterable[str] | None) -> list[str] | Non
 
 def _repo_root_from_context(ctx) -> Path:
     return ctx.root.resolve()
+
+
+def _workspace_catalog(repo_root: Path):
+    return tuple(entry for entry in discover_workflow_catalog(repo_root) if entry.source_root_kind == "workspace")
+
+
+def _workspace_capability_catalog(repo_root: Path):
+    return tuple(inspect_workflow_reference(repo_root, str(entry.source_path)) for entry in _workspace_catalog(repo_root))
 
 
 __all__ = [

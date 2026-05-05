@@ -786,9 +786,29 @@ def _load_isolated_python_module(source_path: Path) -> ModuleType:
 
 def _import_repo_module(module_name: str, root_path: Path) -> ModuleType:
     importlib.invalidate_caches()
+    _evict_stale_repo_workflow_modules(module_name, root_path)
     with _repo_root_on_syspath(root_path):
         with _no_bytecode_writes():
             return importlib.import_module(module_name)
+
+
+def _evict_stale_repo_workflow_modules(module_name: str, root_path: Path) -> None:
+    if module_name != "workflows" and not module_name.startswith("workflows."):
+        return
+    expected_root = (root_path / "workflows").resolve()
+    module = sys.modules.get("workflows")
+    if module is None:
+        return
+    origin = getattr(module, "__file__", None)
+    if origin is not None:
+        try:
+            if Path(origin).resolve().is_relative_to(expected_root):
+                return
+        except OSError:
+            pass
+    for cached_name in tuple(sys.modules):
+        if cached_name == "workflows" or cached_name.startswith("workflows."):
+            sys.modules.pop(cached_name, None)
 
 
 def _apply_manifest_name_override(workflow_cls: type[Any], manifest_path: Path | None) -> None:
@@ -957,7 +977,7 @@ def _resolve_catalog_entry_reference(
             f"but manifest {entry.manifest_path} declares {manifest_class_name!r}"
         )
     target_class_name = manifest_class_name or requested_class_name
-    if entry.source_root_kind == "package" and entry.package_module is not None and entry.workflow_module is not None:
+    if entry.package_module is not None and entry.workflow_module is not None:
         try:
             loaded = load_workflow_package_contract(root_path, entry)
         except WorkflowCapabilityInspectionError as exc:

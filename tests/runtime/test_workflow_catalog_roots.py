@@ -21,7 +21,9 @@ def _clear_workflow_modules() -> None:
     importlib.invalidate_caches()
     for name in list(sys.modules):
         if (
-            name == "autoloop.workflows"
+            name == "workflows"
+            or name.startswith("workflows.")
+            or name == "autoloop.workflows"
             or name.startswith("autoloop.workflows.")
             or name.startswith("_autoloop_workspace_workflows.")
         ):
@@ -162,7 +164,7 @@ class {class_name}(Workflow):
     return package_dir
 
 
-def test_workflow_search_roots_use_only_workspace_and_package_roots(
+def test_workflow_search_roots_include_repo_workspace_and_package_roots(
     tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
@@ -170,11 +172,12 @@ def test_workflow_search_roots_use_only_workspace_and_package_roots(
 
     roots = workflow_search_roots(tmp_path)
 
-    assert tuple(root.kind for root in roots) == ("workspace", "package")
-    assert roots[0].path == tmp_path / ".autoloop" / "workflows"
-    assert roots[1].path == package_root
-    assert roots[0].precedence > roots[1].precedence
-    assert all(root.path != tmp_path / "workflows" for root in roots)
+    assert tuple(root.kind for root in roots) == ("workspace", "workspace", "package")
+    assert roots[0].path == tmp_path / "workflows"
+    assert roots[0].import_prefix == "workflows"
+    assert roots[1].path == tmp_path / ".autoloop" / "workflows"
+    assert roots[2].path == package_root
+    assert roots[0].precedence > roots[1].precedence > roots[2].precedence
 
 
 def test_discover_workflow_catalog_allows_missing_search_roots(
