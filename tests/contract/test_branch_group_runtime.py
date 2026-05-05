@@ -245,6 +245,57 @@ def test_parallel_branch_group_with_fan_in_routes_through_fan_in_and_exposes_hel
     assert str(expected_context_path) in seen["readable_paths"]
 
 
+def test_parallel_branch_group_exposes_workflow_scoped_evidence_to_downstream_reads(tmp_path: Path) -> None:
+    class DownstreamReadWorkflow(simple.Workflow):
+        class State(BaseModel):
+            pass
+
+        reviews = simple.parallel(
+            branches={
+                "security": simple.python_step(lambda ctx: Event("done"), name="security_review"),
+                "cost": simple.python_step(lambda ctx: Event("done"), name="cost_review"),
+            }
+        )
+        publish = simple.step(
+            "Summarize branch evidence.",
+            name="publish",
+            reads=["_branch_groups/reviews/results.json", "_branch_groups/reviews/context.md"],
+            routes={"done": simple.FINISH},
+        )
+
+    provider = ScriptedLLMProvider(llm_turns=[Outcome(raw_output="published", tag="done")])
+    task_folder, run_folder = _workspace(tmp_path)
+    result = Engine(
+        DownstreamReadWorkflow,
+        provider=provider,
+        session_store=InMemorySessionStore(),
+        checkpoint_store=InMemoryCheckpointStore(),
+    ).run(
+        task_id="task-downstream-reads",
+        run_id="run-downstream-reads",
+        task_folder=task_folder,
+        run_folder=run_folder,
+        root=tmp_path,
+    )
+
+    assert result.terminal == simple.FINISH
+    assert len(provider.calls) == 1
+    readable_refs = provider.calls[0].readable_artifacts
+    expected_results_path = _branch_group_dir(task_folder, DownstreamReadWorkflow, "reviews") / "results.json"
+    expected_context_path = _branch_group_dir(task_folder, DownstreamReadWorkflow, "reviews") / "context.md"
+
+    assert tuple(ref.name for ref in readable_refs) == (
+        "_branch_groups/reviews/results.json",
+        "_branch_groups/reviews/context.md",
+    )
+    assert tuple(ref.path for ref in readable_refs) == (
+        str(expected_results_path),
+        str(expected_context_path),
+    )
+    assert all(ref.exists for ref in readable_refs)
+    assert all(ref.declared_artifact is False for ref in readable_refs)
+
+
 def test_parallel_branch_group_uses_async_provider_path_for_branch_steps(tmp_path: Path) -> None:
     class AsyncProviderWorkflow(simple.Workflow):
         class State(BaseModel):
