@@ -114,3 +114,47 @@ Updated the run-local planning artifacts to address the verifier findings.
 `plan.md` now explicitly documents the intentional compatibility break for existing selector-on-`all` subset selection, names it as a required selector-contract change rather than incidental fallout, and adds concrete regression handling for affected tests/consumers. `phase_plan.yaml` now makes the `.artifact` authoring surface mandatory, with `Worklist.artifact` preferred and a thin artifact-backed worklist type as the allowed fallback.
 
 I also appended the revision note to `feedback.md` and recorded the non-obvious constraints in the current turn’s block of `decisions.txt`. I did not modify verifier-owned `criteria.md` or any repository source code in this turn.
+
+
+---
+run_id=run-20260505T122105Z-b9a3f746 | entry=session_turn | pair=plan | phase=verifier | cycle=2 | attempt=1 | thread_id=019df815-baeb-7cb2-8a92-09e542cbd06c
+---
+provider=codex
+mode=resume
+template=/home/rauter/.local/share/pipx/venvs/autoloop/lib/python3.12/site-packages/autoloop/templates/plan_verifier.md
+session_id=019df815-baeb-7cb2-8a92-09e542cbd06c
+
+
+---
+run_id=run-20260505T122105Z-b9a3f746 | entry=phase_output | pair=plan | phase=verifier | process=codex-agent | cycle=2 | attempt=1 | thread_id=019df815-baeb-7cb2-8a92-09e542cbd06c
+---
+I’m re-verifying the revised plan artifacts with focus on the two previously flagged areas: the intentional `mode=all` compatibility break and the required `.artifact` authoring surface. Then I’ll update the checklist and feedback to reflect whether any blocking gaps remain.
+
+The revised plan now covers both prior gaps: the intentional selector break is explicit and bounded, and the `.artifact` interface is now required with a defined fallback. I’m marking the criteria complete and adding a closure entry to the feedback history rather than rewriting the earlier findings.
+
+Scope considered
+
+Run-local planning artifacts for the worklist implementation plan: `plan.md`, `phase_plan.yaml`, `feedback.md`, `criteria.md`, plus the authoritative request, raw log, and `decisions.txt`.
+
+What I analyzed
+
+I re-checked the revised plan against the original request, the prior verifier findings, and the explicit decisions ledger. I also revalidated `phase_plan.yaml` parsing, metadata integrity, dependency ordering, and required list population.
+
+What I reviewed
+
+I reviewed the revised compatibility handling for the intentional selector-on-`all` break, the strengthened `.artifact` authoring surface, the regression-validation plan, rollback coverage, and the machine-readable phase contract.
+
+Key findings / decisions
+
+No remaining blocking findings.
+The prior `PLAN-001` gap is resolved: the plan now explicitly treats selector-on-`all` subset selection as an intentional compatibility break required by the new core selector contract, and it names validation/update expectations for affected tests and consumers.
+The prior `PLAN-002` gap is resolved: the phase contract now makes the `.artifact` surface mandatory, with `Worklist.artifact` preferred and a thin artifact-backed worklist type as the allowed fallback.
+I updated `criteria.md` so all verification boxes are checked and appended a closure note to `feedback.md`.
+
+Open issues / next step
+
+The planning artifacts are complete and ready for implementation against the current request contract.
+
+<loop-control>
+{"schema":"docloop.loop_control/v1","kind":"promise","promise":"COMPLETE"}
+</loop-control>

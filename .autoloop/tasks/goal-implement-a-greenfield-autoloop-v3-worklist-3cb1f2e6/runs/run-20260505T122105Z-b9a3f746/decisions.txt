@@ -2,3 +2,6 @@
 Implement selector semantics inside Worklist after source loading and validation; sources remain responsible only for returning ordered items.
 Treat progress_artifact_worklist as a strict greenfield canonical path: fixed items/id/title/status fields, fixed selector mode names, and no legacy aliases or automatic board-shape detection.
 Prefer a minimal read-only Worklist.artifact property that reflects source.artifact when available instead of introducing a new wrapper type unless tests prove a property is insufficient.
+<autoloop-decisions-header version="1" block_seq="2" owner="planner" phase_id="task-global" pair="plan" turn_seq="2" run_id="run-20260505T122105Z-b9a3f746" ts="2026-05-05T12:25:17.627343+00:00" />
+The new selector contract intentionally breaks existing generic selector-on-all subset selection; affected tests and consumers must be updated deliberately rather than treated as accidental regressions.
+Generated progress worklists must expose an .artifact surface; use a direct Worklist.artifact property when practical, otherwise a thin artifact-backed worklist type, but never a tuple return.

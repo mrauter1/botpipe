@@ -2,96 +2,134 @@ version: 1
 task_id: goal-implement-a-greenfield-autoloop-v3-worklist-3cb1f2e6
 request_snapshot_ref: /home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/goal-implement-a-greenfield-autoloop-v3-worklist-3cb1f2e6/runs/run-20260505T122105Z-b9a3f746/request.md
 phases:
-  - phase_id: "core-selector-semantics"
-    title: "Extend generic worklist selectors"
-    objective: "Implement canonical all/single/up_to/from_to selection semantics in core worklists without changing source ownership or adding legacy aliases."
-    status: "planned"
-    in_scope:
-      - "Expand Selector validation and parameter shape in autoloop/core/worklists.py."
-      - "Implement ordered bound resolution, explicit-selection tracking, and contextual selector execution errors in Worklist."
-      - "Expose an artifact-backed authoring surface for generated progress worklists via Worklist.artifact when feasible, with a thin artifact-backed worklist type as the allowed fallback if direct addition is too invasive."
-      - "Document and validate the intentional break where selector-bound parameters are no longer accepted under mode=all, including current repo tests that rely on that behavior."
-    out_of_scope:
-      - "Provider, checkpoint, session, or route-internal refactors."
-      - "Any phase-specific or domain-specific selector semantics."
-      - "Legacy mode aliases or compatibility shims."
-    dependencies: []
-    acceptance_criteria:
-      - id: "AC-1"
-        text: "Generic worklists support exactly all, single, up_to, and from_to with the ordered semantics defined in the request snapshot."
-      - id: "AC-2"
-        text: "Selector validation rejects empty param names, duplicate/unknown modes, and default modes outside allowed_modes with clear failures."
-      - id: "AC-3"
-        text: "Selector execution errors include worklist name, mode, parameter name/value, and known ids when lookup fails."
-      - id: "AC-4"
-        text: "The intentional compatibility break for selector-on-all subset selection is called out explicitly, affected tests/consumers are updated deliberately, and no other generic worklist behavior drifts."
-    deliverables:
-      - "Core worklist selector plan and implementation slice in autoloop/core/worklists.py."
-      - "Unit coverage for selector semantics and validation."
-      - "An artifact-backed worklist authoring surface that exposes .artifact without returning tuples."
-    risks:
-      - "Broader selector semantics may unintentionally affect existing generic worklists if post-load behavior is not isolated."
-      - "Existing selector-on-all tests may mask an intended API break if not updated explicitly."
-      - "Selection.explicit semantics may drift from the requested contract without direct unit coverage."
-    rollback:
-      - "Revert selector helper and validation changes in autoloop/core/worklists.py while preserving existing source implementations."
-
-  - phase_id: "stdlib-progress-worklists"
-    title: "Add canonical progress JSON worklists"
-    objective: "Provide a concise stdlib progress_artifact_worklist authoring path with canonical artifact naming, canonical selector naming, strict default statuses, and fallback-backed JSON persistence."
-    status: "planned"
-    in_scope:
-      - "Add autoloop/stdlib/worklists.py with WorkStatus, WorkStatusPolicy, ProgressItem, ProgressBoard, ProgressJsonCollectionSource, and progress_artifact_worklist."
-      - "Export the new stdlib helpers from autoloop/stdlib/__init__.py."
-      - "Keep the canonical source shape fixed to items/id/title/status and require custom sources for noncanonical boards."
-    out_of_scope:
-      - "Changes to root autoloop/__init__.py in this pass."
-      - "New route helper wrappers or workflow-domain status vocabularies."
-      - "Automatic field detection or legacy board-shape adapters."
-    dependencies:
-      - "core-selector-semantics"
-    acceptance_criteria:
-      - id: "AC-1"
-        text: "progress_artifact_worklist(name, model=..., fallback=...) derives the canonical artifact path/name and canonical selector names from the worklist name."
-      - id: "AC-2"
-        text: "Default status policy supports exactly planned, in_progress, blocked, completed, and failed; skipped is opt-in only through extra_statuses."
-      - id: "AC-3"
-        text: "ProgressJsonCollectionSource loads, validates, normalizes, persists, and fallback-materializes canonical items without reordering or mutating non-status payload fields."
-    deliverables:
-      - "New stdlib worklists module and __init__ export updates."
-      - "Unit coverage for status policy, board models, load/save/fallback behavior, and default factory conventions."
-    risks:
-      - "Pydantic validation and fallback materialization may surface noisy raw errors unless wrapped carefully."
-      - "Status normalization could become too permissive if alias handling exceeds the explicit policy."
-    rollback:
-      - "Revert the stdlib module and export additions without disturbing core generic worklist behavior."
-
-  - phase_id: "runtime-validation-and-regression-checks"
-    title: "Validate runtime behavior and guard regressions"
-    objective: "Prove that scoped execution, persisted statuses, and adjacent worklist/context behavior remain correct under the new selector and stdlib progress worklist paths."
-    status: "planned"
-    in_scope:
-      - "Add runtime integration coverage for default all, single, up_to, from_to, invalid ranges, and optional skipped-policy acceptance."
-      - "Run the focused new tests plus adjacent stdlib/context/worklist regression suites named in the request."
-      - "Adjust only directly exposed integration breakpoints if a failing test proves a local compatibility fix is required."
-      - "Update or retire existing tests that intentionally relied on selector-bound params being accepted in mode=all."
-    out_of_scope:
-      - "Unrelated workflow-package rewrites or broad runtime cleanup."
-      - "Compatibility restoration for intentionally unsupported legacy aliases or board shapes."
-    dependencies:
-      - "stdlib-progress-worklists"
-    acceptance_criteria:
-      - id: "AC-1"
-        text: "Runtime execution processes the expected ordered subset for each selector mode and persists status mutations back to the progress JSON artifact."
-      - id: "AC-2"
-        text: "Invalid from_to ranges fail clearly at execution time with selector-context-rich errors."
-      - id: "AC-3"
-        text: "Focused and adjacent regression suites pass without requiring provider/session/checkpoint refactors."
-    deliverables:
-      - "Runtime integration tests for progress worklists."
-      - "Validated regression command set and any narrowly scoped compatibility follow-ups required by tests."
-    risks:
-      - "Existing topology/runtime metadata snapshots may change if selector surface formatting drifts unnecessarily."
-      - "Artifact-backed persistence may expose integration bugs outside the initial file list."
-    rollback:
-      - "Back out the new runtime tests and any minimal compatibility fix separately from the core/stdlib design if they reveal an unacceptable broader regression."
+- phase_id: core-selector-semantics
+  title: Extend generic worklist selectors
+  objective: Implement canonical all/single/up_to/from_to selection semantics in core
+    worklists without changing source ownership or adding legacy aliases.
+  status: planned
+  in_scope:
+  - Expand Selector validation and parameter shape in autoloop/core/worklists.py.
+  - Implement ordered bound resolution, explicit-selection tracking, and contextual
+    selector execution errors in Worklist.
+  - Expose an artifact-backed authoring surface for generated progress worklists via
+    Worklist.artifact when feasible, with a thin artifact-backed worklist type as
+    the allowed fallback if direct addition is too invasive.
+  - Document and validate the intentional break where selector-bound parameters are
+    no longer accepted under mode=all, including current repo tests that rely on that
+    behavior.
+  out_of_scope:
+  - Provider, checkpoint, session, or route-internal refactors.
+  - Any phase-specific or domain-specific selector semantics.
+  - Legacy mode aliases or compatibility shims.
+  dependencies: []
+  acceptance_criteria:
+  - id: AC-1
+    text: Generic worklists support exactly all, single, up_to, and from_to with the
+      ordered semantics defined in the request snapshot.
+  - id: AC-2
+    text: Selector validation rejects empty param names, duplicate/unknown modes,
+      and default modes outside allowed_modes with clear failures.
+  - id: AC-3
+    text: Selector execution errors include worklist name, mode, parameter name/value,
+      and known ids when lookup fails.
+  - id: AC-4
+    text: The intentional compatibility break for selector-on-all subset selection
+      is called out explicitly, affected tests/consumers are updated deliberately,
+      and no other generic worklist behavior drifts.
+  deliverables:
+  - Core worklist selector plan and implementation slice in autoloop/core/worklists.py.
+  - Unit coverage for selector semantics and validation.
+  - An artifact-backed worklist authoring surface that exposes .artifact without returning
+    tuples.
+  risks:
+  - Broader selector semantics may unintentionally affect existing generic worklists
+    if post-load behavior is not isolated.
+  - Existing selector-on-all tests may mask an intended API break if not updated explicitly.
+  - Selection.explicit semantics may drift from the requested contract without direct
+    unit coverage.
+  rollback:
+  - Revert selector helper and validation changes in autoloop/core/worklists.py while
+    preserving existing source implementations.
+- phase_id: stdlib-progress-worklists
+  title: Add canonical progress JSON worklists
+  objective: Provide a concise stdlib progress_artifact_worklist authoring path with
+    canonical artifact naming, canonical selector naming, strict default statuses,
+    and fallback-backed JSON persistence.
+  status: planned
+  in_scope:
+  - Add autoloop/stdlib/worklists.py with WorkStatus, WorkStatusPolicy, ProgressItem,
+    ProgressBoard, ProgressJsonCollectionSource, and progress_artifact_worklist.
+  - Export the new stdlib helpers from autoloop/stdlib/__init__.py.
+  - Keep the canonical source shape fixed to items/id/title/status and require custom
+    sources for noncanonical boards.
+  out_of_scope:
+  - Changes to root autoloop/__init__.py in this pass.
+  - New route helper wrappers or workflow-domain status vocabularies.
+  - Automatic field detection or legacy board-shape adapters.
+  dependencies:
+  - core-selector-semantics
+  acceptance_criteria:
+  - id: AC-1
+    text: progress_artifact_worklist(name, model=..., fallback=...) derives the canonical
+      artifact path/name and canonical selector names from the worklist name.
+  - id: AC-2
+    text: Default status policy supports exactly planned, in_progress, blocked, completed,
+      and failed; skipped is opt-in only through extra_statuses.
+  - id: AC-3
+    text: ProgressJsonCollectionSource loads, validates, normalizes, persists, and
+      fallback-materializes canonical items without reordering or mutating non-status
+      payload fields.
+  deliverables:
+  - New stdlib worklists module and __init__ export updates.
+  - Unit coverage for status policy, board models, load/save/fallback behavior, and
+    default factory conventions.
+  risks:
+  - Pydantic validation and fallback materialization may surface noisy raw errors
+    unless wrapped carefully.
+  - Status normalization could become too permissive if alias handling exceeds the
+    explicit policy.
+  rollback:
+  - Revert the stdlib module and export additions without disturbing core generic
+    worklist behavior.
+- phase_id: runtime-validation-and-regression-checks
+  title: Validate runtime behavior and guard regressions
+  objective: Prove that scoped execution, persisted statuses, and adjacent worklist/context
+    behavior remain correct under the new selector and stdlib progress worklist paths.
+  status: planned
+  in_scope:
+  - Add runtime integration coverage for default all, single, up_to, from_to, invalid
+    ranges, and optional skipped-policy acceptance.
+  - Run the focused new tests plus adjacent stdlib/context/worklist regression suites
+    named in the request.
+  - Adjust only directly exposed integration breakpoints if a failing test proves
+    a local compatibility fix is required.
+  - Update or retire existing tests that intentionally relied on selector-bound params
+    being accepted in mode=all.
+  out_of_scope:
+  - Unrelated workflow-package rewrites or broad runtime cleanup.
+  - Compatibility restoration for intentionally unsupported legacy aliases or board
+    shapes.
+  dependencies:
+  - stdlib-progress-worklists
+  acceptance_criteria:
+  - id: AC-1
+    text: Runtime execution processes the expected ordered subset for each selector
+      mode and persists status mutations back to the progress JSON artifact.
+  - id: AC-2
+    text: Invalid from_to ranges fail clearly at execution time with selector-context-rich
+      errors.
+  - id: AC-3
+    text: Focused and adjacent regression suites pass without requiring provider/session/checkpoint
+      refactors.
+  deliverables:
+  - Runtime integration tests for progress worklists.
+  - Validated regression command set and any narrowly scoped compatibility follow-ups
+    required by tests.
+  risks:
+  - Existing topology/runtime metadata snapshots may change if selector surface formatting
+    drifts unnecessarily.
+  - Artifact-backed persistence may expose integration bugs outside the initial file
+    list.
+  rollback:
+  - Back out the new runtime tests and any minimal compatibility fix separately from
+    the core/stdlib design if they reveal an unacceptable broader regression.
