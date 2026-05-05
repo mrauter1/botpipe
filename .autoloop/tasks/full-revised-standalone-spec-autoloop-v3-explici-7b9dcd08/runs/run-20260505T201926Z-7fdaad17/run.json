@@ -18,8 +18,8 @@
       "strictness-and-cleanup"
     ],
     "explicit": true,
-    "current_phase_index": 5,
-    "current_phase_id": "strictness-and-cleanup"
+    "current_phase_index": 6,
+    "current_phase_id": null
   },
   "phase_status": {
     "contract-hardening": "completed",
@@ -27,7 +27,7 @@
     "async-branch-runtime": "completed",
     "session-state-evidence-correctness": "completed",
     "fan-in-outcomes-and-surface": "completed",
-    "strictness-and-cleanup": "in_progress"
+    "strictness-and-cleanup": "completed"
   },
   "phase_history": [
     {
@@ -100,6 +100,13 @@
       "run_id": "run-20260505T201926Z-7fdaad17",
       "status": "in_progress",
       "ts": "2026-05-05T21:47:57.140133+00:00"
+    },
+    {
+      "phase_id": "strictness-and-cleanup",
+      "run_id": "run-20260505T201926Z-7fdaad17",
+      "status": "completed",
+      "ts": "2026-05-05T21:58:27.239501+00:00",
+      "pair": "test"
     }
   ]
 }
