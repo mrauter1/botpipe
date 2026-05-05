@@ -1956,3 +1956,52 @@ Open issues / next step
 - Passed: `.venv/bin/python -m pytest tests/unit/test_optimization_helpers.py`
 - Still failing: `.venv/bin/python -m pytest tests/runtime/test_workflow_run_traces_to_optimization_candidates.py`
 - I did not run full `.venv/bin/python -m pytest` because the targeted runtime suite still fails on the out-of-phase packaged-workflow/runtime regressions above.
+
+
+---
+run_id=run-20260505T133333Z-ef073886 | entry=session_turn | pair=implement | phase=verifier | cycle=1 | attempt=1 | thread_id=019df876-eef3-7f02-aa58-7ac4473fb3bb
+---
+provider=codex
+mode=resume
+template=/home/rauter/.local/share/pipx/venvs/autoloop/lib/python3.12/site-packages/autoloop/templates/implement_verifier.md
+session_id=019df876-eef3-7f02-aa58-7ac4473fb3bb
+
+
+---
+run_id=run-20260505T133333Z-ef073886 | entry=phase_output | pair=implement | phase=verifier | process=codex-agent | cycle=1 | attempt=1 | thread_id=019df876-eef3-7f02-aa58-7ac4473fb3bb
+---
+I’m reviewing the phase-local optimizer changes against the acceptance criteria and the run decisions. First I’m reading the criteria artifact, the implementation notes, and the exact source diff so I can judge whether the shared fix is correct and whether any blocking drift remains.
+
+The helper-layer fix itself needs a safety audit, because the new canonicalization path is now doing filesystem work under the repo root. I’m checking the optimizer runtime tests that guard against selected-workflow mutation so I can determine whether this is just a test harness artifact or a real contract violation.
+
+I found one likely blocking regression in the manifest canonicalization helper. I’m confirming it with a minimal reproduction so the review notes can cite an actual failure mode instead of only static reasoning.
+
+The helper does mutate the repo root on a plain manifest write. I’m checking the second-order behavior now: whether the manifest bytes are also coming from the wrong tree when the selected repo-local workflow copy has diverged.
+
+I have two blocking findings, both in the new manifest canonicalization helper. They’re distinct: one is an unintended repo mutation, the other is hashing the wrong source tree. I’m recording them in the verifier artifact now.
+
+Scope considered
+- Phase-local optimizer changes only: [autoloop_optimizer/optimization.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/autoloop_optimizer/optimization.py) and the active verifier artifacts under [reconcile-optimizer-source-contracts](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/goal-implement-a-greenfield-autoloop-v3-worklist-3cb1f2e6/runs/run-20260505T133333Z-ef073886/artifacts/implement/phases/reconcile-optimizer-source-contracts).
+- I used repo-wide reads only to validate the intended source-manifest contract and the existing non-mutation tests.
+
+What I analyzed
+- The run decisions and phase contract for optimizer observability migration and canonical source manifests.
+- The implementation notes and the exact helper changes in `write_selected_workflow_source_manifest()` and its new canonicalization helpers.
+- The optimizer runtime tests guarding selected-workflow mutation semantics, plus two direct reproductions of the new helper behavior.
+
+What I reviewed
+- I confirmed the schemaless observability migration change is aligned with the runtime schema-migration pattern.
+- I found two blocking regressions in the new manifest canonicalization path and appended them to [feedback.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/goal-implement-a-greenfield-autoloop-v3-worklist-3cb1f2e6/runs/run-20260505T133333Z-ef073886/artifacts/implement/phases/reconcile-optimizer-source-contracts/feedback.md).
+- I left the criteria checkboxes in [criteria.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/goal-implement-a-greenfield-autoloop-v3-worklist-3cb1f2e6/runs/run-20260505T133333Z-ef073886/artifacts/implement/phases/reconcile-optimizer-source-contracts/criteria.md) unchecked because the phase is not review-complete with blocking findings.
+
+Key findings / decisions
+- `IMP-001` blocking: manifest generation now mutates the repo root by creating `autoloop/workflows/<workflow>` during a read-only optimizer framing path.
+- `IMP-002` blocking: for first-party workflow names, the manifest hashes bytes copied from the executing checkout instead of the selected repo’s actual workflow tree, so mutation checks can miss drift in the selected source.
+
+Open issues / next step
+- Rework canonical source-manifest generation so it canonicalizes path labels without writing into the repo root and without swapping in bytes from an external checkout.
+- After that, rerun `tests/unit/test_optimization_helpers.py` and the optimizer runtime suite paths that cover selected-workflow mutation behavior.
+
+<loop-control>
+{"schema":"docloop.loop_control/v1","kind":"promise","promise":"INCOMPLETE"}
+</loop-control>
