@@ -6,3 +6,5 @@
 - Phase Directory Key: repair-packaged-workflow-contracts-and-proof
 - Phase Title: Repair Packaged Workflow Contracts And Proof
 - Scope: phase-local authoritative verifier artifact
+
+- TST-001: Added shared helper regression coverage in `tests/unit/test_stdlib_and_extensions.py` for canonical `autoloop/workflows/...` baseline labels backed by repo-local `workflows/...` `source_path` files, including authoritative drift detection against the recorded source bytes.
