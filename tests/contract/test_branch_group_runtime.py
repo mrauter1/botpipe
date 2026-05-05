@@ -656,6 +656,53 @@ def test_parallel_branch_group_captures_goto_without_following_branch_destinatio
     assert reroute_branch["destination"] == "repair"
 
 
+def test_parallel_branch_group_captures_fail_runtime_control_as_failed(tmp_path: Path) -> None:
+    class FailWorkflow(simple.Workflow):
+        class State(BaseModel):
+            pass
+
+        reviews = simple.parallel(
+            outcome="all_settled",
+            branches={
+                "stop": simple.python_step(lambda ctx: simple.Fail("stop branch"), name="stop_branch"),
+                "complete": simple.python_step(lambda ctx: Event("done"), name="complete_branch"),
+            },
+            routes={"partial": simple.FINISH, "done": simple.FINISH},
+        )
+        publish = simple.python_step(lambda ctx: Event("done"))
+
+    task_folder, run_folder = _workspace(tmp_path)
+    result = Engine(
+        FailWorkflow,
+        provider=ScriptedLLMProvider(),
+        session_store=InMemorySessionStore(),
+        checkpoint_store=InMemoryCheckpointStore(),
+    ).run(
+        task_id="task-branch-fail",
+        run_id="run-branch-fail",
+        task_folder=task_folder,
+        run_folder=run_folder,
+        root=tmp_path,
+    )
+
+    assert result.terminal == simple.FINISH
+    assert result.last_event is not None
+    assert result.last_event.tag == "partial"
+    manifest = json.loads((_branch_group_dir(task_folder, FailWorkflow, "reviews") / "results.json").read_text(encoding="utf-8"))
+    failed_branch = next(branch for branch in manifest["branches"] if branch["name"] == "stop")
+    assert failed_branch["status"] == "failed"
+    assert failed_branch["runtime_control"] == "fail"
+    assert failed_branch["route"] is None
+    assert failed_branch["destination"] == "FAIL"
+    assert failed_branch["error"] == {
+        "type": "Fail",
+        "message": "Branch returned Fail control.",
+        "failure_context": None,
+        "retry_kind": None,
+        "retry_exhausted": False,
+    }
+
+
 def test_parallel_branch_group_capture_mode_skips_branch_route_on_taken_hooks(tmp_path: Path) -> None:
     on_taken_calls: list[str] = []
 

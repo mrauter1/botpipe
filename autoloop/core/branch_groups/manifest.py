@@ -92,15 +92,6 @@ def render_branch_group_context(manifest: Mapping[str, Any]) -> str:
             "## Failure Summary",
             "",
             f"- Failed branches: {counts['failed']}",
-            "",
-            "## Needs Input Summary",
-            "",
-            f"- Branches awaiting input: {counts['needs_input']}",
-            "",
-            "## Cancellation Summary",
-            "",
-            f"- Cancelled branches: {counts['cancelled']}",
-            f"- Skipped branches: {counts['skipped']}",
         ]
     )
     if failed_branches:
@@ -110,7 +101,17 @@ def render_branch_group_context(manifest: Mapping[str, Any]) -> str:
             )
     else:
         lines.append("- None.")
-    lines.extend(["", "## Needs Input Details", ""])
+    lines.extend(
+        [
+            "",
+            "## Needs Input Summary",
+            "",
+            f"- Branches awaiting input: {counts['needs_input']}",
+            "",
+            "## Needs Input Details",
+            "",
+        ]
+    )
     if needs_input_branches:
         for branch in needs_input_branches:
             lines.append(
@@ -118,7 +119,18 @@ def render_branch_group_context(manifest: Mapping[str, Any]) -> str:
             )
     else:
         lines.append("- None.")
-    lines.extend(["", "## Cancellation Details", ""])
+    lines.extend(
+        [
+            "",
+            "## Cancellation Summary",
+            "",
+            f"- Cancelled branches: {counts['cancelled']}",
+            f"- Skipped branches: {counts['skipped']}",
+            "",
+            "## Cancellation Details",
+            "",
+        ]
+    )
     if cancelled_branches or skipped_branches:
         for branch in (*cancelled_branches, *skipped_branches):
             lines.append(f"- {branch.get('name', '')}: {branch.get('reason') or branch.get('status', '')}")
