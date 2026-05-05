@@ -1,0 +1,6 @@
+<autoloop-decisions-header version="1" block_seq="1" owner="planner" phase_id="task-global" pair="plan" turn_seq="1" run_id="run-20260505T201926Z-7fdaad17" ts="2026-05-05T20:19:26.995975+00:00" />
+Branch-group v1 intentionally replaces the current thread-backed runtime; there is no sync-provider fallback or thread-backed compatibility path inside branch groups.
+Branch-group evidence must move from root-level _branch_groups to {workflow_folder}/_branch_groups and all tests or readers must migrate in the same change set.
+Fresh branch sessions must remain branch-execution-local with session_id=None until a provider returns a real id, and provider-backed fresh branch lookups must not fall back to parent active sessions.
+If branch-group internals cannot be made compile-cache-safe quickly, workflows containing branch groups should bypass compile caching in v1 rather than risk stale compiled topology.
+Keep Engine.run stable if feasible, but route all branch-group execution through a dedicated asyncio subsystem instead of adding more logic to Engine.run or using thread-based shims.
