@@ -721,6 +721,37 @@ def test_parallel_branch_group_without_fan_in_materializes_mechanical_outcome_ro
     assert compiled.routes["assess"]["failed"].target == "FAIL"
 
 
+def test_fan_out_branch_group_preserves_branch_inputs_and_order() -> None:
+    class FanOutWorkflow(simple.Workflow):
+        class State(BaseModel):
+            pass
+
+        assess = simple.fan_out(
+            step=simple.step(
+                "Assess {branch.input.area}.",
+                name="assess_one",
+                session=simple.Session.fresh(),
+            ),
+            branches={
+                "security": {"area": "security"},
+                "performance": {"area": "performance"},
+            },
+        )
+
+    compiled = compile_workflow(FanOutWorkflow)
+
+    branch_group = compiled.steps["assess"].branch_group
+    assert branch_group is not None
+    assert branch_group.kind == "fan_out"
+    assert tuple(branch.name for branch in branch_group.branches) == ("security", "performance")
+    assert tuple(branch.index for branch in branch_group.branches) == (0, 1)
+    assert tuple(branch.input for branch in branch_group.branches) == (
+        {"area": "security"},
+        {"area": "performance"},
+    )
+    assert tuple(branch.step.name for branch in branch_group.branches) == ("assess_one", "assess_one")
+
+
 @pytest.mark.parametrize(
     "fan_in_factory",
     [
@@ -765,6 +796,18 @@ def test_branch_group_fan_in_helpers_are_rejected_outside_fan_in() -> None:
         compile_workflow(InvalidHelperWorkflow)
 
 
+def test_branch_group_fan_in_context_helper_is_rejected_outside_fan_in() -> None:
+    with pytest.raises(WorkflowValidationError, match="only valid inside fan-in"):
+
+        class InvalidContextHelperWorkflow(simple.Workflow):
+            class State(BaseModel):
+                pass
+
+            ask = simple.step("Draft.", requires=[simple.FanIn.context()])
+
+        compile_workflow(InvalidContextHelperWorkflow)
+
+
 def test_branch_placeholder_is_rejected_outside_branch_steps() -> None:
     with pytest.raises(WorkflowValidationError, match="only valid inside branch steps"):
 
@@ -775,6 +818,18 @@ def test_branch_placeholder_is_rejected_outside_branch_steps() -> None:
             ask = simple.step("Draft {branch.name}.")
 
         compile_workflow(InvalidBranchPlaceholderWorkflow)
+
+
+def test_fan_in_placeholder_is_rejected_outside_fan_in_steps() -> None:
+    with pytest.raises(WorkflowValidationError, match="only valid inside fan-in steps"):
+
+        class InvalidFanInPlaceholderWorkflow(simple.Workflow):
+            class State(BaseModel):
+                pass
+
+            ask = simple.step("Draft {fan_in.context_text}.")
+
+        compile_workflow(InvalidFanInPlaceholderWorkflow)
 
 
 def test_provider_backed_branch_steps_require_explicit_fresh_sessions_only_inside_branch_groups() -> None:
@@ -815,7 +870,54 @@ def test_provider_backed_branch_steps_require_explicit_fresh_sessions_only_insid
         compile_workflow(NonFreshSessionWorkflow)
 
 
-def test_branch_group_rejects_child_workflow_fan_in_and_non_serializable_fan_out_inputs() -> None:
+def test_branch_group_rejects_non_fresh_verifier_sessions_inside_branch_groups() -> None:
+    with pytest.raises(WorkflowValidationError, match="non-fresh verifier_session continuity 'run'"):
+
+        class InvalidVerifierSessionWorkflow(simple.Workflow):
+            class State(BaseModel):
+                pass
+
+            assess = simple.parallel(
+                branches={
+                    "a": simple.produce_verify_step(
+                        producer_prompt="Draft branch.",
+                        verifier_prompt="Verify branch.",
+                        name="branch_pair",
+                        session=simple.Session.fresh(),
+                        verifier_session=simple.Session.run(),
+                    ),
+                }
+            )
+
+        compile_workflow(InvalidVerifierSessionWorkflow)
+
+
+def test_branch_group_rejects_unsafe_names_child_workflow_fan_in_and_non_serializable_fan_out_inputs() -> None:
+    with pytest.raises(WorkflowValidationError, match="branch group name .* must be path-safe"):
+
+        class InvalidBranchGroupNameWorkflow(simple.Workflow):
+            class State(BaseModel):
+                pass
+
+            assess = simple.parallel(
+                name="../unsafe",
+                branches={"a": simple.python_step(lambda ctx: simple.Event("done"), name="branch_a")},
+            )
+
+        compile_workflow(InvalidBranchGroupNameWorkflow)
+
+    with pytest.raises(WorkflowValidationError, match="branch name .* must be path-safe"):
+
+        class InvalidBranchNameWorkflow(simple.Workflow):
+            class State(BaseModel):
+                pass
+
+            assess = simple.parallel(
+                branches={"../unsafe": simple.python_step(lambda ctx: simple.Event("done"), name="branch_a")},
+            )
+
+        compile_workflow(InvalidBranchNameWorkflow)
+
     class Child(simple.Workflow):
         class State(BaseModel):
             pass

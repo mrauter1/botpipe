@@ -416,3 +416,58 @@ This phase is review-complete. Remaining branch-group work is the later runtime 
 <loop-control>
 {"schema":"docloop.loop_control/v1","kind":"promise","promise":"COMPLETE"}
 </loop-control>
+
+
+---
+run_id=run-20260505T171950Z-13ce26d6 | entry=session_turn | pair=test | phase=producer | cycle=1 | attempt=1 | thread_id=019df930-00de-7970-af32-efc750f7efc4
+---
+provider=codex
+mode=resume
+template=/home/rauter/.local/share/pipx/venvs/autoloop/lib/python3.12/site-packages/autoloop/templates/test_producer.md
+session_id=019df930-00de-7970-af32-efc750f7efc4
+
+
+---
+run_id=run-20260505T171950Z-13ce26d6 | entry=phase_output | pair=test | phase=producer | process=codex-agent | cycle=1 | attempt=1 | thread_id=019df930-00de-7970-af32-efc750f7efc4
+---
+I’m treating this as targeted regression coverage for the new branch-group compile model, not a broad test refactor. I’ll inspect the current strategy and existing tests, identify the highest-risk gaps that remain within phase scope, then add deterministic coverage and update the test artifacts.
+
+I’ve identified the highest-risk remaining gaps: `fan_out` compile metadata, unsafe name rejection, and compile-time branch produce/verify session validation. Those are phase-scope behaviors with real regression value and no runtime dependence.
+
+I’m adding deterministic compile-time tests rather than broader integration coverage. The target is the validation and metadata edges most likely to regress: `fan_out` branch input lowering, unsafe names, verifier-session freshness, and fan-in-only references/placeholders.
+
+The new tests are in and compile. I’m waiting on the full simple-surface run now, and if that’s clean I’ll do one adjacent validation pass before writing the test strategy and feedback artifacts.
+
+The added coverage is clean. I’m recording the explicit behavior-to-test map now, along with the one non-obvious test decision: route-table assertions need to check compiled destinations, not just exposed route tags.
+
+Scope considered
+
+Phase-local test scope for `authoring-and-compile-model` only. I focused on compile-time branch-group behavior and adjacent regression risk, without broadening into runtime branch execution.
+
+What I analyzed
+
+I reviewed the current branch-group coverage in [tests/unit/test_simple_surface.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/tests/unit/test_simple_surface.py), the compile-time validators in [autoloop/core/branch_groups/validation.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/autoloop/core/branch_groups/validation.py), and the recent routing decision recorded in [decisions.txt](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/autoloop-v3-explicit-branch-groups-full-revised-76d1507c/runs/run-20260505T171950Z-13ce26d6/decisions.txt).
+
+What I changed
+
+I extended [tests/unit/test_simple_surface.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/tests/unit/test_simple_surface.py) with deterministic compile-time coverage for:
+- `fan_out(...)` branch input preservation and declaration-order metadata
+- unsafe branch-group and branch name rejection
+- `FanIn.context()` misuse outside fan-in
+- `{fan_in.*}` placeholder misuse outside fan-in
+- non-fresh `verifier_session` rejection for produce/verify branch steps
+
+I updated [test_strategy.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/autoloop-v3-explicit-branch-groups-full-revised-76d1507c/runs/run-20260505T171950Z-13ce26d6/artifacts/test/phases/authoring-and-compile-model/test_strategy.md) with an explicit behavior-to-test map, preserved invariants, edge cases, failure paths, flake notes, and known gaps. I appended a concise summary to [feedback.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/autoloop-v3-explicit-branch-groups-full-revised-76d1507c/runs/run-20260505T171950Z-13ce26d6/artifacts/test/phases/authoring-and-compile-model/feedback.md), and recorded the route-table assertion decision in `decisions.txt`.
+
+Key findings / decisions
+
+The highest-value additional regression guard was checking compiled route destinations, not just exposed route tags. That was the exact failure shape of the prior no-`fan_in` defect.
+
+Validation passed:
+- `./.venv/bin/python -m pytest tests/unit/test_simple_surface.py -q`
+- `./.venv/bin/python -m pytest tests/unit/test_validation.py -q`
+- `./.venv/bin/python -m py_compile tests/unit/test_simple_surface.py`
+
+Open issues / next step
+
+This phase still intentionally leaves runtime branch scheduling, manifest/context generation, and fan-in execution to later phases, so those remain the main uncovered surfaces.
