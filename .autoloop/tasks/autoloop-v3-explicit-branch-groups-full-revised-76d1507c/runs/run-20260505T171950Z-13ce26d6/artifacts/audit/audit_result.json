@@ -1,1 +1,5 @@
-{}
+{
+  "material_gaps_found": true,
+  "summary": "The branch-group feature is largely implemented and its focused suites pass, but committed regression coverage still misses explicit shared-effect semantics and fan-in pending-input resume behavior required by the request.",
+  "revised_request_path": "/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/autoloop-v3-explicit-branch-groups-full-revised-76d1507c/runs/run-20260505T171950Z-13ce26d6/artifacts/audit/revised_request.md"
+}
