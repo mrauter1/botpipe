@@ -20,3 +20,6 @@
 {"ts": "2026-05-05T12:41:44.855229+00:00", "run_id": "run-20260505T122105Z-b9a3f746", "seq": 20, "event_type": "phase_deferred", "pair": "implement", "phase_mode": "single", "phase_id": "core-selector-semantics", "reason": "awaiting enabled test pair completion"}
 {"ts": "2026-05-05T12:41:44.856285+00:00", "run_id": "run-20260505T122105Z-b9a3f746", "seq": 21, "event_type": "pair_started", "pair": "test", "phase_id": "core-selector-semantics"}
 {"ts": "2026-05-05T12:41:44.856367+00:00", "run_id": "run-20260505T122105Z-b9a3f746", "seq": 22, "event_type": "cycle_started", "pair": "test", "cycle": 1, "attempt": 1, "phase_id": "core-selector-semantics"}
+{"ts": "2026-05-05T12:43:11.315664+00:00", "run_id": "run-20260505T122105Z-b9a3f746", "seq": 23, "event_type": "phase_finished", "pair": "test", "phase": "producer", "cycle": 1, "attempt": 1, "empty_output": false, "phase_id": "core-selector-semantics"}
+{"ts": "2026-05-05T12:44:34.034067+00:00", "run_id": "run-20260505T122105Z-b9a3f746", "seq": 24, "event_type": "phase_finished", "pair": "test", "phase": "verifier", "cycle": 1, "attempt": 1, "empty_output": false, "phase_id": "core-selector-semantics"}
+{"ts": "2026-05-05T12:44:34.088731+00:00", "run_id": "run-20260505T122105Z-b9a3f746", "seq": 25, "event_type": "pair_completed", "pair": "test", "cycle": 1, "attempt": 1, "phase_id": "core-selector-semantics"}

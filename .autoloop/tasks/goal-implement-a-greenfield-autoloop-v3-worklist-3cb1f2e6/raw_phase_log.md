@@ -456,3 +456,54 @@ Open issues / next step
 
 - No new scoped test gaps were found in the selector/progress slice after adding the unsafe-`dir_key` regression case.
 - Broader unrelated workspace/catalog loader failures remain outside this phase-local test artifact scope.
+
+
+---
+run_id=run-20260505T122105Z-b9a3f746 | entry=session_turn | pair=test | phase=verifier | cycle=1 | attempt=1 | thread_id=019df81b-911f-7df1-b586-291296e0c087
+---
+provider=codex
+mode=resume
+template=/home/rauter/.local/share/pipx/venvs/autoloop/lib/python3.12/site-packages/autoloop/templates/test_verifier.md
+session_id=019df81b-911f-7df1-b586-291296e0c087
+
+
+---
+run_id=run-20260505T122105Z-b9a3f746 | entry=phase_output | pair=test | phase=verifier | process=codex-agent | cycle=1 | attempt=1 | thread_id=019df81b-911f-7df1-b586-291296e0c087
+---
+I’m auditing the phase-local test additions against the requested selector/progress behavior. First I’m reading the current test strategy and feedback artifacts alongside the focused unit/runtime tests so I can judge whether the changed behavior, preserved invariants, and regression edges are actually covered.
+
+Reviewing the phase-local test artifacts and focused test coverage now. I’m verifying whether the current suite actually protects the selector/progress behavior before I update the audit criteria and feedback.
+
+The focused suite is green, so I’m updating the audit artifacts now. I’m marking the criteria based on the actual coverage and appending a concise auditor conclusion with no blocking gaps found.
+
+Scope considered
+
+- Phase-local audit of the selector/progress worklist tests and the active test artifacts only.
+- I did not modify repository source or tests; only the audit-owned [criteria.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/goal-implement-a-greenfield-autoloop-v3-worklist-3cb1f2e6/runs/run-20260505T122105Z-b9a3f746/artifacts/test/phases/core-selector-semantics/criteria.md:1) and [feedback.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/goal-implement-a-greenfield-autoloop-v3-worklist-3cb1f2e6/runs/run-20260505T122105Z-b9a3f746/artifacts/test/phases/core-selector-semantics/feedback.md:1).
+
+What I analyzed
+
+- The focused test coverage in [tests/unit/test_worklist_selectors.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/tests/unit/test_worklist_selectors.py:1), [tests/unit/test_stdlib_progress_worklists.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/tests/unit/test_stdlib_progress_worklists.py:1), and [tests/runtime/test_progress_worklists.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/tests/runtime/test_progress_worklists.py:1).
+- The requested behavior map in [test_strategy.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/goal-implement-a-greenfield-autoloop-v3-worklist-3cb1f2e6/runs/run-20260505T122105Z-b9a3f746/artifacts/test/phases/core-selector-semantics/test_strategy.md:1).
+- The focused suite result from `.venv_phase/bin/python -m pytest tests/unit/test_worklist_selectors.py tests/unit/test_stdlib_progress_worklists.py tests/runtime/test_progress_worklists.py`, which passed with `47 passed`.
+
+What I reviewed
+
+- Coverage for all canonical selector modes, selector validation failures, and the explicit `mode=all` compatibility break.
+- Coverage for progress-source persistence invariants, including status-only saves and `dir_key` fallback parity.
+- Runtime determinism and opt-in policy behavior, including `skipped` support only when explicitly enabled.
+
+Key findings / decisions
+
+- No blocking audit findings.
+- I marked all audit criteria complete in [criteria.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/goal-implement-a-greenfield-autoloop-v3-worklist-3cb1f2e6/runs/run-20260505T122105Z-b9a3f746/artifacts/test/phases/core-selector-semantics/criteria.md:1).
+- I appended a non-blocking auditor note to [feedback.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/goal-implement-a-greenfield-autoloop-v3-worklist-3cb1f2e6/runs/run-20260505T122105Z-b9a3f746/artifacts/test/phases/core-selector-semantics/feedback.md:1) recording the green rerun and the main covered regression surfaces.
+
+Open issues / next step
+
+- No phase-local test audit issues remain for this selector/progress slice.
+- Any broader unrelated suite failures remain outside this audit scope.
+
+<loop-control>
+{"schema":"docloop.loop_control/v1","kind":"promise","promise":"COMPLETE"}
+</loop-control>
