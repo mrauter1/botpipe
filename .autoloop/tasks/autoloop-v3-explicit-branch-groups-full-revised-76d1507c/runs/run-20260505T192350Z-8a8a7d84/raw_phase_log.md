@@ -87,3 +87,72 @@ Rewrite the single phase in `phase_plan.yaml` so its acceptance criteria and del
 <loop-control>
 {"schema":"docloop.loop_control/v1","kind":"promise","promise":"INCOMPLETE"}
 </loop-control>
+
+
+---
+run_id=run-20260505T192350Z-8a8a7d84 | entry=session_turn | pair=plan | phase=producer | cycle=2 | attempt=1 | thread_id=019df998-c4db-75f2-b966-850fde667686
+---
+provider=codex
+mode=resume
+template=/home/rauter/.local/share/pipx/venvs/autoloop/lib/python3.12/site-packages/autoloop/templates/plan_producer.md
+session_id=019df998-c4db-75f2-b966-850fde667686
+
+
+---
+run_id=run-20260505T192350Z-8a8a7d84 | entry=phase_output | pair=plan | phase=producer | process=codex-agent | cycle=2 | attempt=1 | thread_id=019df998-c4db-75f2-b966-850fde667686
+---
+I’m addressing the verifier’s blocking feedback by tightening only the machine-readable phase contract. I’ll re-read the current plan artifacts and the latest decisions header, then rewrite `phase_plan.yaml` so its acceptance criteria and deliverables describe the actual implementation slice rather than the planning paperwork.
+
+I’m making the minimal correction now: only the phase contract’s acceptance criteria and deliverables are being rewritten to name the real implementation outputs. The narrative plan and scope stay intact because the verifier’s issue was the `phase_plan.yaml`/execution-contract mismatch, not the underlying implementation direction.
+
+The correction is in place. I’m doing one last verification pass to make sure the phase contract now points at the implementation outputs the verifier asked for, and that the new decision landed under the correct header only.
+
+Updated the run-local planning artifacts to resolve the verifier’s single blocking issue.
+
+`phase_plan.yaml` now keeps the same one-phase scope but its acceptance criteria and deliverables are aligned with the actual implementation slice: the new contract coverage in [tests/contract/test_branch_group_runtime.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/tests/contract/test_branch_group_runtime.py), targeted validation of that suite, and a minimal fallback patch in [autoloop/core/branch_groups/runtime.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/autoloop/core/branch_groups/runtime.py) or [autoloop/core/engine.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/autoloop/core/engine.py) only if those tests fail. The narrative plan in [plan.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/autoloop-v3-explicit-branch-groups-full-revised-76d1507c/runs/run-20260505T192350Z-8a8a7d84/artifacts/plan/plan.md) stayed unchanged because its scope and risk controls were already correct.
+
+I also appended the resolution note to [feedback.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/autoloop-v3-explicit-branch-groups-full-revised-76d1507c/runs/run-20260505T192350Z-8a8a7d84/artifacts/plan/feedback.md) and recorded the non-obvious constraint in [decisions.txt](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/autoloop-v3-explicit-branch-groups-full-revised-76d1507c/runs/run-20260505T192350Z-8a8a7d84/decisions.txt). I verified `phase_plan.yaml` still parses cleanly after the rewrite.
+
+
+---
+run_id=run-20260505T192350Z-8a8a7d84 | entry=session_turn | pair=plan | phase=verifier | cycle=2 | attempt=1 | thread_id=019df998-c4db-75f2-b966-850fde667686
+---
+provider=codex
+mode=resume
+template=/home/rauter/.local/share/pipx/venvs/autoloop/lib/python3.12/site-packages/autoloop/templates/plan_verifier.md
+session_id=019df998-c4db-75f2-b966-850fde667686
+
+
+---
+run_id=run-20260505T192350Z-8a8a7d84 | entry=phase_output | pair=plan | phase=verifier | process=codex-agent | cycle=2 | attempt=1 | thread_id=019df998-c4db-75f2-b966-850fde667686
+---
+I’m re-running the verification after the producer’s fix. I’m checking only the run-local planning artifacts and the changed phase contract to confirm the blocker is actually closed and that the criteria can move to all green.
+
+The blocker is gone. I’m marking the criteria all-true now and appending a closure note so the feedback history records that `PLAN-001` was resolved rather than silently disappearing.
+
+I’ve updated the gate and history. One quick pass remains to confirm the checklist is fully checked and the feedback now explicitly records closure instead of leaving the blocker dangling.
+
+Scope considered
+Run-local branch-group planning artifacts only, focused on the unresolved shared-effect and fan-in pending-input coverage request and the verifier-flagged `phase_plan.yaml` contract mismatch.
+
+What I analyzed
+I checked the request requirements against the current narrative plan, the corrected single-phase machine-readable contract, the decision history preserving composite-boundary checkpointing, and the feedback history around `PLAN-001`. I also re-validated that `phase_plan.yaml` parses and that required lists are populated.
+
+What I reviewed
+`plan.md` remains narrow and implementation-ready.
+`phase_plan.yaml` now names the real implementation outputs and validation targets.
+`feedback.md` now records both the original blocker and its resolution.
+`criteria.md` was updated so all verification criteria are accurately checked.
+`decisions.txt` is consistent with the final plan.
+
+Key findings / decisions
+No remaining blocking findings.
+`PLAN-001` is resolved: the single execution phase now requires the concrete contract-test additions, targeted suite execution, and only a minimal runtime/checkpoint patch if those tests fail.
+All five verification criteria are now satisfied.
+
+Open issues / next step
+No open planning issues remain in the current artifact set. The plan is ready for implement/test to execute the single branch-group regression coverage slice.
+
+<loop-control>
+{"schema":"docloop.loop_control/v1","kind":"promise","promise":"COMPLETE"}
+</loop-control>
