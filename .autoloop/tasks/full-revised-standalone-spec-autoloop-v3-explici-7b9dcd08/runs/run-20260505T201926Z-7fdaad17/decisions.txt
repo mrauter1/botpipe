@@ -4,3 +4,7 @@ Branch-group evidence must move from root-level _branch_groups to {workflow_fold
 Fresh branch sessions must remain branch-execution-local with session_id=None until a provider returns a real id, and provider-backed fresh branch lookups must not fall back to parent active sessions.
 If branch-group internals cannot be made compile-cache-safe quickly, workflows containing branch groups should bypass compile caching in v1 rather than risk stale compiled topology.
 Keep Engine.run stable if feasible, but route all branch-group execution through a dedicated asyncio subsystem instead of adding more logic to Engine.run or using thread-based shims.
+<autoloop-decisions-header version="1" block_seq="2" owner="planner" phase_id="task-global" pair="plan" turn_seq="2" run_id="run-20260505T201926Z-7fdaad17" ts="2026-05-05T20:24:08.589791+00:00" />
+Branch-group runtime events and additive static-graph/topology payloads are required contract surfaces in v1, not optional diagnostics, and must be planned and tested explicitly.
+Branch-group checkpointing remains at the composite boundary in v1; interruption reruns the full group and v1 does not add branch-specific resume.
+Any retained sync step-dispatch entrypoint must stay an outer caller only and must not become a new compatibility shim that shapes branch-group internals.
