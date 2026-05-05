@@ -1023,3 +1023,44 @@ and
 `.venv/bin/python -m pytest tests/contract/test_engine_contracts.py tests/unit/test_branch_group_context_sessions.py tests/unit/test_primitives_and_stores.py -q` with `223 passed`.
 
 Remaining deferred items are unchanged from the previous cycle: branch-session overlay cleanup and synthetic-session follow-up are still out of scope for this phase.
+
+
+---
+run_id=run-20260505T201926Z-7fdaad17 | entry=session_turn | pair=implement | phase=verifier | cycle=2 | attempt=1 | thread_id=019df9f5-ed08-7ca1-9227-242a7cdac2f6
+---
+provider=codex
+mode=resume
+template=/home/rauter/.local/share/pipx/venvs/autoloop/lib/python3.12/site-packages/autoloop/templates/implement_verifier.md
+session_id=019df9f5-ed08-7ca1-9227-242a7cdac2f6
+
+
+---
+run_id=run-20260505T201926Z-7fdaad17 | entry=phase_output | pair=implement | phase=verifier | process=codex-agent | cycle=2 | attempt=1 | thread_id=019df9f5-ed08-7ca1-9227-242a7cdac2f6
+---
+I’m re-reviewing the workflow-folder evidence-root follow-up and checking whether the reviewer-owned artifacts can now be closed cleanly. First I’m reading the current criteria and the relevant diffs so I can update only the phase review files.
+
+The code paths match the decision ledger now, and I’m updating the reviewer-owned artifacts to reflect that the prior blocking finding has been resolved. I’m only touching `criteria.md` and `feedback.md` in the active phase directory.
+
+Scope considered
+
+Phase-local re-review of the async branch runtime follow-up: the workflow-folder evidence-root migration, the fan-in/downstream `_branch_groups/...` read path, and the contract/runtime tests that pin those behaviors. I limited edits to the active review artifact directory.
+
+What I analyzed
+
+I checked the authoritative decision requiring `{workflow_folder}/_branch_groups/...`, then reviewed the implementation in [manifest.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/autoloop/core/branch_groups/manifest.py:10), [runtime.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/autoloop/core/branch_groups/runtime.py:97), [runtime.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/autoloop/core/branch_groups/runtime.py:305), and [engine.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/autoloop/core/engine.py:1966), plus the updated assertions in [test_runtime_tracing.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/tests/runtime/test_runtime_tracing.py:453) and the producer’s validation notes in [implementation_notes.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/full-revised-standalone-spec-autoloop-v3-explici-7b9dcd08/runs/run-20260505T201926Z-7fdaad17/artifacts/implement/phases/async-branch-runtime/implementation_notes.md:73).
+
+What I reviewed
+
+I verified that branch-group evidence is now written under the workflow folder, that relative `_branch_groups/...` reads are rerooted to `context.workflow_folder` instead of `context.root`, and that the updated runtime/contract coverage matches that layout. I also updated [criteria.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/full-revised-standalone-spec-autoloop-v3-explici-7b9dcd08/runs/run-20260505T201926Z-7fdaad17/artifacts/implement/phases/async-branch-runtime/criteria.md:11) to all checked and appended the resolution note to [feedback.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/full-revised-standalone-spec-autoloop-v3-explici-7b9dcd08/runs/run-20260505T201926Z-7fdaad17/artifacts/implement/phases/async-branch-runtime/feedback.md:10).
+
+Key findings / decisions
+
+The prior blocking finding `IMP-001` is resolved. I found no new blocking or non-blocking issues in the reviewed scope.
+
+Open issues / next step
+
+No remaining review blockers for `async-branch-runtime`. The reviewer-owned artifacts now reflect a complete pass for this phase.
+
+<loop-control>
+{"schema":"docloop.loop_control/v1","kind":"promise","promise":"COMPLETE"}
+</loop-control>

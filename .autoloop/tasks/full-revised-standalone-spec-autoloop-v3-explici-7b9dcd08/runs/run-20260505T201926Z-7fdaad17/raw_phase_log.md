@@ -946,3 +946,112 @@ The implementation should be revised so `branch_group_paths(...)` and per-branch
 <loop-control>
 {"schema":"docloop.loop_control/v1","kind":"promise","promise":"INCOMPLETE"}
 </loop-control>
+
+
+---
+run_id=run-20260505T201926Z-7fdaad17 | entry=session_turn | pair=implement | phase=producer | cycle=2 | attempt=1 | thread_id=019df9f5-ed08-7ca1-9227-242a7cdac2f6
+---
+provider=codex
+mode=resume
+template=/home/rauter/.local/share/pipx/venvs/autoloop/lib/python3.12/site-packages/autoloop/templates/implement_producer.md
+session_id=019df9f5-ed08-7ca1-9227-242a7cdac2f6
+
+
+---
+run_id=run-20260505T201926Z-7fdaad17 | entry=phase_output | pair=implement | phase=producer | process=codex-agent | cycle=2 | attempt=1 | thread_id=019df9f5-ed08-7ca1-9227-242a7cdac2f6
+---
+I’m addressing the reviewer’s blocking finding by moving branch-group evidence from the root-level `_branch_groups` namespace into the workflow folder and updating the runtime/tests that still assert the superseded path. I’ll inspect the affected path helpers and evidence consumers first, then patch the runtime and tests in one change set.
+
+The reviewer’s finding is confirmed: the runtime helper and the tests still bake in the superseded root-level evidence location. I’m checking the helper/read-path plumbing as well so the migration covers fan-in reads and downstream-readable references, not just the write side.
+
+There’s one more dependency beyond the write path itself: fan-in helper reads currently compile to `_branch_groups/...`, and the engine still resolves that relative to `context.root`. I’m fixing the read-path rooting centrally so the migration covers both runtime writes and fan-in/downstream reads in the same pass.
+
+I’ve confirmed the migration needs three coordinated changes: the evidence-path helper, the branch runtime’s raw-output root, and the workspace-read resolution used by fan-in/downstream reads. I’m editing those together now, then I’ll sweep the affected tests so they assert the workflow-folder layout instead of the old root-level one.
+
+The write-side migration is patched. I’m tightening the fan-in assertions next so the tests now verify the actual workflow-folder evidence paths, not just a suffix that would let the old root-level layout slip back in.
+
+The evidence-root migration is patched through the write path and the runtime-owned read path. I’m rerunning the branch-runtime, tracing, and the two unit tests that encode fan-in metadata paths, then I’ll do the same adjacent engine/session pass as before.
+
+One targeted regression failed after the path migration. I’m reading that failure now; it’s likely an expected-path assertion that still assumes the old runtime surface rather than a scheduler bug.
+
+I’m addressing the reviewer’s workflow-folder evidence-root finding and verifying the remaining regression surface before any further edits. First I’m checking the tracing test failure and the implementation notes so the next patch is confined to the reviewed issue.
+
+The remaining issue is confined to one stale tracing fixture reference plus the phase notes. I’m patching those now, then I’ll rerun the targeted suite and one adjacent regression slice that exercises the new workflow-folder read resolution.
+
+I’ve confirmed the runtime-side evidence paths are now consistent; the only stale code is the tracing test’s old workspace attribute and the notes still describing the pre-migration state. I’m updating both together to keep the review artifact aligned with the code.
+
+The path migration patch is in place and the two regression suites are running now. I’m waiting on the full results before I close the loop, because the engine-side `_branch_groups` read special-case touches a broader contract surface than the original reviewer comment.
+
+The tests passed after the tracing fixture was aligned with the workflow workspace. I’m doing one quick pass on the final references and notes so the close-out points at the exact code paths that changed, not just the high-level modules.
+
+Scope considered
+
+Reviewer follow-up for the async branch runtime phase only: the branch-group evidence root, fan-in/downstream `_branch_groups/...` reads, and the runtime/tracing tests that assert those paths. I kept the change inside the dedicated branch-group/runtime surface plus the phase notes artifact.
+
+What I analyzed
+
+I rechecked the reviewer finding in [feedback.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/full-revised-standalone-spec-autoloop-v3-explici-7b9dcd08/runs/run-20260505T201926Z-7fdaad17/artifacts/implement/phases/async-branch-runtime/feedback.md:9), then verified the evidence writer in [manifest.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/autoloop/core/branch_groups/manifest.py:10), the branch runtime call sites in [runtime.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/autoloop/core/branch_groups/runtime.py:97) and [runtime.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/autoloop/core/branch_groups/runtime.py:305), the workspace-read resolution path in [engine.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/autoloop/core/engine.py:1966), and the updated assertions in [test_branch_group_runtime.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/tests/contract/test_branch_group_runtime.py:36), [test_runtime_tracing.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/tests/runtime/test_runtime_tracing.py:70), [test_branch_group_context_sessions.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/tests/unit/test_branch_group_context_sessions.py:113), and [test_primitives_and_stores.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/tests/unit/test_primitives_and_stores.py:227).
+
+What I changed
+
+[manifest.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/autoloop/core/branch_groups/manifest.py:10) now roots `branch_group_paths(...)` under `workflow_folder`, and [runtime.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/autoloop/core/branch_groups/runtime.py:305) writes per-branch raw-output directories under `{workflow_folder}/_branch_groups/<group>/branches/...`.
+
+[engine.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/autoloop/core/engine.py:1970) now resolves relative `_branch_groups/...` reads against `context.workflow_folder`, which keeps existing `FanIn.results()` / `FanIn.context()` helper strings compatible with the migrated runtime-owned evidence location.
+
+I also aligned the runtime and contract tests to the workflow-folder layout, including the trace-event artifact-path assertions in [test_runtime_tracing.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/tests/runtime/test_runtime_tracing.py:453), and updated the phase notes in [implementation_notes.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/full-revised-standalone-spec-autoloop-v3-explici-7b9dcd08/runs/run-20260505T201926Z-7fdaad17/artifacts/implement/phases/async-branch-runtime/implementation_notes.md:10).
+
+Key findings / decisions
+
+The only stale piece after the first pass was the tracing test using `execution.run_workspace.workflow_dir`; the correct workflow evidence root comes from `execution.workflow_workspace.workflow_dir`, and fixing that brought the runtime-tracing assertions back in line with the spec.
+
+I kept the helper runtime paths in the compiler as relative `_branch_groups/...` strings and centralized the migration at the read/write boundaries instead: `branch_group_paths(...)` for writers and `Engine._resolve_workspace_read_path(...)` for readers. That avoids duplicating workflow-folder path construction across fan-in call sites.
+
+Open issues / next step
+
+Phase-targeted validation passed:
+`.venv/bin/python -m pytest tests/contract/test_branch_group_runtime.py tests/runtime/test_runtime_tracing.py tests/unit/test_branch_group_context_sessions.py tests/unit/test_primitives_and_stores.py tests/contract/test_async_step_dispatcher.py tests/strictness/test_no_compat.py -q` with `108 passed`
+and
+`.venv/bin/python -m pytest tests/contract/test_engine_contracts.py tests/unit/test_branch_group_context_sessions.py tests/unit/test_primitives_and_stores.py -q` with `223 passed`.
+
+Remaining deferred items are unchanged from the previous cycle: branch-session overlay cleanup and synthetic-session follow-up are still out of scope for this phase.
+
+
+---
+run_id=run-20260505T201926Z-7fdaad17 | entry=session_turn | pair=implement | phase=verifier | cycle=2 | attempt=1 | thread_id=019df9f5-ed08-7ca1-9227-242a7cdac2f6
+---
+provider=codex
+mode=resume
+template=/home/rauter/.local/share/pipx/venvs/autoloop/lib/python3.12/site-packages/autoloop/templates/implement_verifier.md
+session_id=019df9f5-ed08-7ca1-9227-242a7cdac2f6
+
+
+---
+run_id=run-20260505T201926Z-7fdaad17 | entry=phase_output | pair=implement | phase=verifier | process=codex-agent | cycle=2 | attempt=1 | thread_id=019df9f5-ed08-7ca1-9227-242a7cdac2f6
+---
+I’m re-reviewing the workflow-folder evidence-root follow-up and checking whether the reviewer-owned artifacts can now be closed cleanly. First I’m reading the current criteria and the relevant diffs so I can update only the phase review files.
+
+The code paths match the decision ledger now, and I’m updating the reviewer-owned artifacts to reflect that the prior blocking finding has been resolved. I’m only touching `criteria.md` and `feedback.md` in the active phase directory.
+
+Scope considered
+
+Phase-local re-review of the async branch runtime follow-up: the workflow-folder evidence-root migration, the fan-in/downstream `_branch_groups/...` read path, and the contract/runtime tests that pin those behaviors. I limited edits to the active review artifact directory.
+
+What I analyzed
+
+I checked the authoritative decision requiring `{workflow_folder}/_branch_groups/...`, then reviewed the implementation in [manifest.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/autoloop/core/branch_groups/manifest.py:10), [runtime.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/autoloop/core/branch_groups/runtime.py:97), [runtime.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/autoloop/core/branch_groups/runtime.py:305), and [engine.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/autoloop/core/engine.py:1966), plus the updated assertions in [test_runtime_tracing.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/tests/runtime/test_runtime_tracing.py:453) and the producer’s validation notes in [implementation_notes.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/full-revised-standalone-spec-autoloop-v3-explici-7b9dcd08/runs/run-20260505T201926Z-7fdaad17/artifacts/implement/phases/async-branch-runtime/implementation_notes.md:73).
+
+What I reviewed
+
+I verified that branch-group evidence is now written under the workflow folder, that relative `_branch_groups/...` reads are rerooted to `context.workflow_folder` instead of `context.root`, and that the updated runtime/contract coverage matches that layout. I also updated [criteria.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/full-revised-standalone-spec-autoloop-v3-explici-7b9dcd08/runs/run-20260505T201926Z-7fdaad17/artifacts/implement/phases/async-branch-runtime/criteria.md:11) to all checked and appended the resolution note to [feedback.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/full-revised-standalone-spec-autoloop-v3-explici-7b9dcd08/runs/run-20260505T201926Z-7fdaad17/artifacts/implement/phases/async-branch-runtime/feedback.md:10).
+
+Key findings / decisions
+
+The prior blocking finding `IMP-001` is resolved. I found no new blocking or non-blocking issues in the reviewed scope.
+
+Open issues / next step
+
+No remaining review blockers for `async-branch-runtime`. The reviewer-owned artifacts now reflect a complete pass for this phase.
+
+<loop-control>
+{"schema":"docloop.loop_control/v1","kind":"promise","promise":"COMPLETE"}
+</loop-control>
