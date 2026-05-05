@@ -58,3 +58,7 @@
 {"ts": "2026-05-05T21:27:25.961706+00:00", "run_id": "run-20260505T201926Z-7fdaad17", "seq": 58, "event_type": "phase_finished", "pair": "test", "phase": "producer", "cycle": 2, "attempt": 1, "empty_output": false, "phase_id": "async-branch-runtime"}
 {"ts": "2026-05-05T21:28:06.550021+00:00", "run_id": "run-20260505T201926Z-7fdaad17", "seq": 59, "event_type": "phase_finished", "pair": "test", "phase": "verifier", "cycle": 2, "attempt": 1, "empty_output": false, "phase_id": "async-branch-runtime"}
 {"ts": "2026-05-05T21:28:06.591130+00:00", "run_id": "run-20260505T201926Z-7fdaad17", "seq": 60, "event_type": "pair_completed", "pair": "test", "cycle": 2, "attempt": 1, "phase_id": "async-branch-runtime"}
+{"ts": "2026-05-05T21:28:06.687257+00:00", "run_id": "run-20260505T201926Z-7fdaad17", "seq": 61, "event_type": "phase_completed", "pair": "test", "phase_id": "async-branch-runtime", "phase_mode": "single"}
+{"ts": "2026-05-05T21:28:06.688934+00:00", "run_id": "run-20260505T201926Z-7fdaad17", "seq": 62, "event_type": "phase_started", "phase_id": "session-state-evidence-correctness", "phase_mode": "single"}
+{"ts": "2026-05-05T21:28:06.690629+00:00", "run_id": "run-20260505T201926Z-7fdaad17", "seq": 63, "event_type": "pair_started", "pair": "implement", "phase_id": "session-state-evidence-correctness"}
+{"ts": "2026-05-05T21:28:06.690764+00:00", "run_id": "run-20260505T201926Z-7fdaad17", "seq": 64, "event_type": "cycle_started", "pair": "implement", "cycle": 1, "attempt": 1, "phase_id": "session-state-evidence-correctness"}

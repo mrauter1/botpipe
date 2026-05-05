@@ -18,14 +18,14 @@
       "strictness-and-cleanup"
     ],
     "explicit": true,
-    "current_phase_index": 2,
-    "current_phase_id": "async-branch-runtime"
+    "current_phase_index": 3,
+    "current_phase_id": "session-state-evidence-correctness"
   },
   "phase_status": {
     "contract-hardening": "completed",
     "async-step-provider-foundation": "completed",
-    "async-branch-runtime": "in_progress",
-    "session-state-evidence-correctness": "planned",
+    "async-branch-runtime": "completed",
+    "session-state-evidence-correctness": "in_progress",
     "fan-in-outcomes-and-surface": "planned",
     "strictness-and-cleanup": "planned"
   },
@@ -61,6 +61,19 @@
       "run_id": "run-20260505T201926Z-7fdaad17",
       "status": "in_progress",
       "ts": "2026-05-05T21:05:36.331227+00:00"
+    },
+    {
+      "phase_id": "async-branch-runtime",
+      "run_id": "run-20260505T201926Z-7fdaad17",
+      "status": "completed",
+      "ts": "2026-05-05T21:28:06.686869+00:00",
+      "pair": "test"
+    },
+    {
+      "phase_id": "session-state-evidence-correctness",
+      "run_id": "run-20260505T201926Z-7fdaad17",
+      "status": "in_progress",
+      "ts": "2026-05-05T21:28:06.688564+00:00"
     }
   ]
 }
