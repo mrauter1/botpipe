@@ -2,35 +2,48 @@ version: 1
 task_id: full-revised-standalone-spec-autoloop-v3-explici-7b9dcd08
 request_snapshot_ref: /home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/full-revised-standalone-spec-autoloop-v3-explici-7b9dcd08/runs/run-20260505T220513Z-1920f9e6/request.md
 phases:
-  - phase_id: "restore-provider-route-required-writes"
-    title: "Restore Effective Provider Route Maps"
-    objective: "Fix the shared provider-contract builder so step and verifier requests expose effective per-route required writes without changing explicit route metadata or branch-group behavior."
-    status: "planned"
-    in_scope:
-      - "Update provider request route_required_writes generation for ordinary step execution."
-      - "Update verifier-side route_required_writes generation for produce_verify_step execution."
-      - "Preserve explicit route metadata surfaces and producer-side empty route contracts."
-      - "Validate canonical contracts, focused metadata invariants, branch-group coverage, and the full repository suite."
-    out_of_scope:
-      - "Changing compiled route normalization or route metadata storage."
-      - "Changing static-graph payload semantics beyond what the full suite already verifies."
-      - "Changing branch-group runtime control flow, evidence layout, or async scheduling behavior."
-    dependencies: []
-    acceptance_criteria:
-      - id: "AC-1"
-        text: "Provider-visible route_required_writes maps expose effective required writes for every visible route on ordinary step and verifier requests, including inherited required artifacts when no explicit override exists."
-      - id: "AC-2"
-        text: "Per-route required_writes and explicit_required_writes metadata remain unchanged, including explicit empty override behavior and producer-side empty route contracts."
-      - id: "AC-3"
-        text: "The two failing canonical contract tests pass, focused branch-group coverage remains green, and the full repository suite passes with ./.venv/bin/python -m pytest -q."
-    deliverables:
-      - "Updated implementation plan in plan.md with interface and regression controls."
-      - "A single shared-code implementation slice centered on provider-contract assembly."
-      - "A validation run covering canonical contract tests, metadata invariants, branch-group coverage, and the full repository suite."
-    risks:
-      - "A broad provider-contract change could unintentionally alter authored route metadata instead of only the effective request map."
-      - "An incorrect fallback could erase explicit empty required-write overrides."
-      - "Shared provider-path changes could regress provider-backed branch-group execution."
-    rollback:
-      - "Revert only the provider-contract builder change if downstream behavior regresses."
-      - "Leave compiled-route/static-graph and branch-group code untouched unless a separate failure proves they are involved."
+- phase_id: restore-provider-route-required-writes
+  title: Restore Effective Provider Route Maps
+  objective: Fix the shared provider-contract builder so step and verifier requests
+    expose effective per-route required writes without changing explicit route metadata
+    or branch-group behavior.
+  status: planned
+  in_scope:
+  - Update provider request route_required_writes generation for ordinary step execution.
+  - Update verifier-side route_required_writes generation for produce_verify_step
+    execution.
+  - Preserve explicit route metadata surfaces and producer-side empty route contracts.
+  - Validate canonical contracts, focused metadata invariants, branch-group coverage,
+    and the full repository suite.
+  out_of_scope:
+  - Changing compiled route normalization or route metadata storage.
+  - Changing static-graph payload semantics beyond what the full suite already verifies.
+  - Changing branch-group runtime control flow, evidence layout, or async scheduling
+    behavior.
+  dependencies: []
+  acceptance_criteria:
+  - id: AC-1
+    text: Provider-visible route_required_writes maps expose effective required writes
+      for every visible route on ordinary step and verifier requests, including inherited
+      required artifacts when no explicit override exists.
+  - id: AC-2
+    text: Per-route required_writes and explicit_required_writes metadata remain unchanged,
+      including explicit empty override behavior and producer-side empty route contracts.
+  - id: AC-3
+    text: The two failing canonical contract tests pass, focused branch-group coverage
+      remains green, and the full repository suite passes with ./.venv/bin/python
+      -m pytest -q.
+  deliverables:
+  - Updated implementation plan in plan.md with interface and regression controls.
+  - A single shared-code implementation slice centered on provider-contract assembly.
+  - A validation run covering canonical contract tests, metadata invariants, branch-group
+    coverage, and the full repository suite.
+  risks:
+  - A broad provider-contract change could unintentionally alter authored route metadata
+    instead of only the effective request map.
+  - An incorrect fallback could erase explicit empty required-write overrides.
+  - Shared provider-path changes could regress provider-backed branch-group execution.
+  rollback:
+  - Revert only the provider-contract builder change if downstream behavior regresses.
+  - Leave compiled-route/static-graph and branch-group code untouched unless a separate
+    failure proves they are involved.
