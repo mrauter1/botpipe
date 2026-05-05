@@ -1091,3 +1091,97 @@ No open issues for this phase.
 <loop-control>
 {"schema":"docloop.loop_control/v1","kind":"promise","promise":"COMPLETE"}
 </loop-control>
+
+
+---
+run_id=run-20260505T133333Z-ef073886 | entry=session_turn | pair=test | phase=producer | cycle=1 | attempt=1 | thread_id=019df886-e84a-7572-8cc5-222714f7d4ef
+---
+provider=codex
+mode=resume
+template=/home/rauter/.local/share/pipx/venvs/autoloop/lib/python3.12/site-packages/autoloop/templates/test_producer.md
+session_id=019df886-e84a-7572-8cc5-222714f7d4ef
+
+
+---
+run_id=run-20260505T133333Z-ef073886 | entry=phase_output | pair=test | phase=producer | process=codex-agent | cycle=1 | attempt=1 | thread_id=019df886-e84a-7572-8cc5-222714f7d4ef
+---
+I’m checking the existing central test coverage first so I can add only one or two focused regressions where the new shared behavior still isn’t asserted directly, instead of churning more already-updated contract snapshots.
+
+I’m checking the existing test coverage around the packaged-workflow contract repairs and the phase artifacts first, then I’ll add only the minimum regression coverage that closes any real gap.
+
+The shared candidate-surface helpers already have substantial coverage. I’m narrowing to whether they directly test the canonical-label versus actual-source-path split inside manifest validation, because that’s the highest-value remaining regression seam.
+
+I found a real gap: the helper tests cover source-entry recording and drift detection separately, but they do not directly lock in the intended split where a canonical published relative path validates against different repo-local source bytes. I’m adding one focused unit test for that seam, then I’ll update the phase test artifacts.
+
+I’m editing the unit helper coverage and the phase artifacts now. The new test stays in the shared candidate-surface helper suite so it protects the central contract instead of another workflow-specific call site.
+
+The regression test and artifact updates are in place. I’m running the focused helper slice now to prove the canonical-label/source-path contract still holds under the shared validators.
+
+Scope considered
+
+Phase-local test authoring for the packaged-workflow compatibility repair, limited to the shared candidate-surface validation seam and the required test-phase artifacts.
+
+What I analyzed
+
+I reviewed the existing helper coverage in [tests/unit/test_stdlib_and_extensions.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/tests/unit/test_stdlib_and_extensions.py), the shared implementation in [autoloop_optimizer/candidate_surfaces.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/autoloop_optimizer/candidate_surfaces.py), and the active phase artifacts [test_strategy.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/goal-implement-a-greenfield-autoloop-v3-worklist-3cb1f2e6/runs/run-20260505T133333Z-ef073886/artifacts/test/phases/repair-packaged-workflow-contracts-and-proof/test_strategy.md) and [feedback.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/goal-implement-a-greenfield-autoloop-v3-worklist-3cb1f2e6/runs/run-20260505T133333Z-ef073886/artifacts/test/phases/repair-packaged-workflow-contracts-and-proof/feedback.md). The gap was that the helpers were not directly tested against the canonical publication-label versus repo-local source-path split now used by packaged workflow refinement/decomposition flows.
+
+What I changed
+
+I added one focused regression test in [tests/unit/test_stdlib_and_extensions.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/tests/unit/test_stdlib_and_extensions.py) that proves:
+- baseline validation accepts canonical `autoloop/workflows/...` relative paths backed by repo-local `workflows/...` source files via explicit `source_path`
+- authoritative drift detection hashes the recorded `source_path` bytes while still reporting the canonical published `relative_path`
+
+I also updated [test_strategy.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/goal-implement-a-greenfield-autoloop-v3-worklist-3cb1f2e6/runs/run-20260505T133333Z-ef073886/artifacts/test/phases/repair-packaged-workflow-contracts-and-proof/test_strategy.md) with the behavior-to-coverage map and appended a concise summary entry to [feedback.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/goal-implement-a-greenfield-autoloop-v3-worklist-3cb1f2e6/runs/run-20260505T133333Z-ef073886/artifacts/test/phases/repair-packaged-workflow-contracts-and-proof/feedback.md).
+
+Key findings / decisions
+
+The highest-value remaining regression seam was centralized helper behavior, not another workflow-specific caller. The new test keeps the contract locked at the shared validation layer, which is the right place to prevent future drift between canonical package labels and actual repo-local source files.
+
+Open issues / next step
+
+Focused validation passed: `.venv/bin/python -m pytest tests/unit/test_stdlib_and_extensions.py -k "candidate_surface_helpers and (baseline_manifest or authoritative_source_drift or canonical_relative_paths)"` reported `3 passed, 95 deselected`.
+
+<loop-control>
+{"schema":"docloop.loop_control/v1","kind":"promise","promise":"COMPLETE"}
+</loop-control>
+
+
+---
+run_id=run-20260505T133333Z-ef073886 | entry=session_turn | pair=test | phase=verifier | cycle=1 | attempt=1 | thread_id=019df886-e84a-7572-8cc5-222714f7d4ef
+---
+provider=codex
+mode=resume
+template=/home/rauter/.local/share/pipx/venvs/autoloop/lib/python3.12/site-packages/autoloop/templates/test_verifier.md
+session_id=019df886-e84a-7572-8cc5-222714f7d4ef
+
+
+---
+run_id=run-20260505T133333Z-ef073886 | entry=phase_output | pair=test | phase=verifier | process=codex-agent | cycle=1 | attempt=1 | thread_id=019df886-e84a-7572-8cc5-222714f7d4ef
+---
+I’m auditing the new shared-helper regression coverage against the phase scope and the recorded decisions, then I’ll update the test audit artifacts with either findings or a clean pass.
+
+The added coverage matches the recorded packaged-workflow decisions and closes the right regression seam at the shared helper layer. I’m marking the audit criteria complete and recording a no-blocking-findings audit note.
+
+Scope considered
+
+Phase-local audit of the test additions for the packaged-workflow contract repair, limited to the changed shared-helper coverage and the active test audit artifacts.
+
+What I analyzed
+
+I reviewed the active [test_strategy.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/goal-implement-a-greenfield-autoloop-v3-worklist-3cb1f2e6/runs/run-20260505T133333Z-ef073886/artifacts/test/phases/repair-packaged-workflow-contracts-and-proof/test_strategy.md), the run [decisions.txt](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/goal-implement-a-greenfield-autoloop-v3-worklist-3cb1f2e6/runs/run-20260505T133333Z-ef073886/decisions.txt), and the new shared-helper regression test in [tests/unit/test_stdlib_and_extensions.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/tests/unit/test_stdlib_and_extensions.py).
+
+What I reviewed
+
+I checked that the new test targets the correct changed behavior: canonical `autoloop/workflows/...` publication labels remaining distinct from repo-local `workflows/...` source bytes, with drift detection still hashing the recorded `source_path`. I also verified that the coverage is deterministic, phase-relevant, and aligned with the recorded packaged-workflow decisions rather than normalizing any unconfirmed behavior break.
+
+Key findings / decisions
+
+No blocking findings. The audit criteria are now fully checked in [criteria.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/goal-implement-a-greenfield-autoloop-v3-worklist-3cb1f2e6/runs/run-20260505T133333Z-ef073886/artifacts/test/phases/repair-packaged-workflow-contracts-and-proof/criteria.md), and a no-blocking-findings audit entry was appended to [feedback.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/goal-implement-a-greenfield-autoloop-v3-worklist-3cb1f2e6/runs/run-20260505T133333Z-ef073886/artifacts/test/phases/repair-packaged-workflow-contracts-and-proof/feedback.md).
+
+Open issues / next step
+
+No open issues for this phase.
+
+<loop-control>
+{"schema":"docloop.loop_control/v1","kind":"promise","promise":"COMPLETE"}
+</loop-control>
