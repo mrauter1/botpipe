@@ -15,13 +15,13 @@
       "repair-packaged-workflow-contracts-and-proof"
     ],
     "explicit": true,
-    "current_phase_index": 1,
-    "current_phase_id": "reconcile-optimizer-source-contracts"
+    "current_phase_index": 2,
+    "current_phase_id": "repair-packaged-workflow-contracts-and-proof"
   },
   "phase_status": {
     "restore-workflow-resolution-contract": "completed",
-    "reconcile-optimizer-source-contracts": "in_progress",
-    "repair-packaged-workflow-contracts-and-proof": "planned"
+    "reconcile-optimizer-source-contracts": "completed",
+    "repair-packaged-workflow-contracts-and-proof": "in_progress"
   },
   "phase_history": [
     {
@@ -42,6 +42,19 @@
       "run_id": "run-20260505T133333Z-ef073886",
       "status": "in_progress",
       "ts": "2026-05-05T14:07:16.692539+00:00"
+    },
+    {
+      "phase_id": "reconcile-optimizer-source-contracts",
+      "run_id": "run-20260505T133333Z-ef073886",
+      "status": "completed",
+      "ts": "2026-05-05T14:24:43.393776+00:00",
+      "pair": "test"
+    },
+    {
+      "phase_id": "repair-packaged-workflow-contracts-and-proof",
+      "run_id": "run-20260505T133333Z-ef073886",
+      "status": "in_progress",
+      "ts": "2026-05-05T14:24:43.396701+00:00"
     }
   ]
 }
