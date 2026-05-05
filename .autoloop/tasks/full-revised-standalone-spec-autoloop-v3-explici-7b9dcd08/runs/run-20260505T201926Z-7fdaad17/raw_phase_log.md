@@ -1158,3 +1158,92 @@ The next test pass should add a provider-backed `parallel(..., concurrency=1)` c
 <loop-control>
 {"schema":"docloop.loop_control/v1","kind":"promise","promise":"INCOMPLETE"}
 </loop-control>
+
+
+---
+run_id=run-20260505T201926Z-7fdaad17 | entry=session_turn | pair=test | phase=producer | cycle=2 | attempt=1 | thread_id=019df9f5-ed08-7ca1-9227-242a7cdac2f6
+---
+provider=codex
+mode=resume
+template=/home/rauter/.local/share/pipx/venvs/autoloop/lib/python3.12/site-packages/autoloop/templates/test_producer.md
+session_id=019df9f5-ed08-7ca1-9227-242a7cdac2f6
+
+
+---
+run_id=run-20260505T201926Z-7fdaad17 | entry=phase_output | pair=test | phase=producer | process=codex-agent | cycle=2 | attempt=1 | thread_id=019df9f5-ed08-7ca1-9227-242a7cdac2f6
+---
+I’m addressing the auditor’s specific coverage gap rather than broadening the suite further. First I’m checking the current test-phase feedback and the nearby branch-runtime tests so I can add one provider-backed `concurrency=1` regression test that fits the existing patterns and update the strategy text to stop overclaiming.
+
+The fix is narrow: one provider-backed `concurrency=1` contract test using the existing async fake provider, plus a strategy/feedback update so the artifact stops overstating what the suite covers. I’m making that change now and then rerunning the branch-runtime contract slice.
+
+The added `concurrency=1` provider-backed regression is green, and I’m checking the adjacent tracing and strictness slice to make sure the new contract test didn’t drift the broader phase narrative or leave the strategy out of sync with the existing coverage.
+
+The targeted validation passed, including the exact edge case the auditor flagged. I’m doing a quick readback of the new test and the phase artifacts so the close-out references the final line numbers and the strategy no longer overstates or understates the covered edge cases.
+
+Scope considered
+
+Phase-local test follow-up for `async-branch-runtime`, limited to the auditor’s blocking gap: provider-backed `parallel(..., concurrency=1)` coverage and the matching strategy/feedback artifacts.
+
+What I analyzed
+
+I reviewed the auditor finding in [feedback.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/full-revised-standalone-spec-autoloop-v3-explici-7b9dcd08/runs/run-20260505T201926Z-7fdaad17/artifacts/test/phases/async-branch-runtime/feedback.md:12), the nearby provider-backed branch-runtime tests in [test_branch_group_runtime.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/tests/contract/test_branch_group_runtime.py:299), and the edge-case claim in [test_strategy.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/full-revised-standalone-spec-autoloop-v3-explici-7b9dcd08/runs/run-20260505T201926Z-7fdaad17/artifacts/test/phases/async-branch-runtime/test_strategy.md:29).
+
+What I changed
+
+I added [test_parallel_branch_group_supports_provider_backed_concurrency_one](/home/rauter/autoloop_v3_bkp/autoloop_v3/tests/contract/test_branch_group_runtime.py:331), which runs a provider-backed `parallel(...)` group with `concurrency=1`, asserts normal completion, proves the async-only fake provider is used, and verifies `max_active == 1` with declaration-order execution.
+
+I also updated [test_strategy.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/full-revised-standalone-spec-autoloop-v3-explici-7b9dcd08/runs/run-20260505T201926Z-7fdaad17/artifacts/test/phases/async-branch-runtime/test_strategy.md:31) so the edge-case coverage statement now matches the actual test inventory, and appended a concise cycle-2 note to [feedback.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/full-revised-standalone-spec-autoloop-v3-explici-7b9dcd08/runs/run-20260505T201926Z-7fdaad17/artifacts/test/phases/async-branch-runtime/feedback.md:13).
+
+Key findings / decisions
+
+I reused `_ConcurrentAsyncLLMProvider` instead of introducing a new fixture so the added test stays deterministic and checks the exact scheduler property the auditor asked for: one active provider-backed branch at a time without any sync fallback path.
+
+Open issues / next step
+
+Validation passed:
+`.venv/bin/python -m pytest tests/contract/test_branch_group_runtime.py -q` with `18 passed`
+and
+`.venv/bin/python -m pytest tests/runtime/test_runtime_tracing.py tests/strictness/test_no_compat.py -q` with `35 passed`.
+
+The next step is re-audit; I did not change any deferred branch-session coverage because that remains out of scope for this phase.
+
+
+---
+run_id=run-20260505T201926Z-7fdaad17 | entry=session_turn | pair=test | phase=verifier | cycle=2 | attempt=1 | thread_id=019df9f5-ed08-7ca1-9227-242a7cdac2f6
+---
+provider=codex
+mode=resume
+template=/home/rauter/.local/share/pipx/venvs/autoloop/lib/python3.12/site-packages/autoloop/templates/test_verifier.md
+session_id=019df9f5-ed08-7ca1-9227-242a7cdac2f6
+
+
+---
+run_id=run-20260505T201926Z-7fdaad17 | entry=phase_output | pair=test | phase=verifier | process=codex-agent | cycle=2 | attempt=1 | thread_id=019df9f5-ed08-7ca1-9227-242a7cdac2f6
+---
+I’m re-auditing the test pass after the added provider-backed `concurrency=1` coverage. First I’m checking the updated test, the current strategy wording, and the auditor artifacts so I can decide whether the prior blocking finding is fully resolved and close the phase cleanly if it is.
+
+The added test closes the exact gap the prior audit called out, and the strategy now matches the concrete inventory. I’m updating the auditor-owned artifacts to mark the prior finding resolved and to close the phase unless I find another coverage hole while doing that final writeback.
+
+Scope considered
+
+Phase-local re-audit of the `async-branch-runtime` test pass, focused on the previously missing provider-backed `parallel(..., concurrency=1)` coverage and on whether the strategy and feedback artifacts now accurately reflect the concrete test inventory.
+
+What I analyzed
+
+I reviewed the updated edge-case statement in [test_strategy.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/full-revised-standalone-spec-autoloop-v3-explici-7b9dcd08/runs/run-20260505T201926Z-7fdaad17/artifacts/test/phases/async-branch-runtime/test_strategy.md:29), the new regression test in [test_branch_group_runtime.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/tests/contract/test_branch_group_runtime.py:331), and the prior blocking finding history in [feedback.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/full-revised-standalone-spec-autoloop-v3-explici-7b9dcd08/runs/run-20260505T201926Z-7fdaad17/artifacts/test/phases/async-branch-runtime/feedback.md:12).
+
+What I reviewed
+
+I verified that the new test closes the exact gap previously called out: it is provider-backed, uses `concurrency=1`, proves the async path is used, and asserts only one branch is active at a time. I also confirmed that the strategy no longer overclaims coverage and that the existing concurrency, fail-fast, tracing, evidence-path, and strictness coverage remain aligned with the phase contract.
+
+Key findings / decisions
+
+TST-001 is resolved. I found no additional blocking or non-blocking audit findings in scope.
+
+Open issues / next step
+
+I updated [criteria.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/full-revised-standalone-spec-autoloop-v3-explici-7b9dcd08/runs/run-20260505T201926Z-7fdaad17/artifacts/test/phases/async-branch-runtime/criteria.md:11) to all checked and appended the resolution note to [feedback.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/full-revised-standalone-spec-autoloop-v3-explici-7b9dcd08/runs/run-20260505T201926Z-7fdaad17/artifacts/test/phases/async-branch-runtime/feedback.md:14). No remaining audit blockers for this phase.
+
+<loop-control>
+{"schema":"docloop.loop_control/v1","kind":"promise","promise":"COMPLETE"}
+</loop-control>

@@ -1215,3 +1215,44 @@ and
 `.venv/bin/python -m pytest tests/runtime/test_runtime_tracing.py tests/strictness/test_no_compat.py -q` with `35 passed`.
 
 The next step is re-audit; I did not change any deferred branch-session coverage because that remains out of scope for this phase.
+
+
+---
+run_id=run-20260505T201926Z-7fdaad17 | entry=session_turn | pair=test | phase=verifier | cycle=2 | attempt=1 | thread_id=019df9f5-ed08-7ca1-9227-242a7cdac2f6
+---
+provider=codex
+mode=resume
+template=/home/rauter/.local/share/pipx/venvs/autoloop/lib/python3.12/site-packages/autoloop/templates/test_verifier.md
+session_id=019df9f5-ed08-7ca1-9227-242a7cdac2f6
+
+
+---
+run_id=run-20260505T201926Z-7fdaad17 | entry=phase_output | pair=test | phase=verifier | process=codex-agent | cycle=2 | attempt=1 | thread_id=019df9f5-ed08-7ca1-9227-242a7cdac2f6
+---
+I’m re-auditing the test pass after the added provider-backed `concurrency=1` coverage. First I’m checking the updated test, the current strategy wording, and the auditor artifacts so I can decide whether the prior blocking finding is fully resolved and close the phase cleanly if it is.
+
+The added test closes the exact gap the prior audit called out, and the strategy now matches the concrete inventory. I’m updating the auditor-owned artifacts to mark the prior finding resolved and to close the phase unless I find another coverage hole while doing that final writeback.
+
+Scope considered
+
+Phase-local re-audit of the `async-branch-runtime` test pass, focused on the previously missing provider-backed `parallel(..., concurrency=1)` coverage and on whether the strategy and feedback artifacts now accurately reflect the concrete test inventory.
+
+What I analyzed
+
+I reviewed the updated edge-case statement in [test_strategy.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/full-revised-standalone-spec-autoloop-v3-explici-7b9dcd08/runs/run-20260505T201926Z-7fdaad17/artifacts/test/phases/async-branch-runtime/test_strategy.md:29), the new regression test in [test_branch_group_runtime.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/tests/contract/test_branch_group_runtime.py:331), and the prior blocking finding history in [feedback.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/full-revised-standalone-spec-autoloop-v3-explici-7b9dcd08/runs/run-20260505T201926Z-7fdaad17/artifacts/test/phases/async-branch-runtime/feedback.md:12).
+
+What I reviewed
+
+I verified that the new test closes the exact gap previously called out: it is provider-backed, uses `concurrency=1`, proves the async path is used, and asserts only one branch is active at a time. I also confirmed that the strategy no longer overclaims coverage and that the existing concurrency, fail-fast, tracing, evidence-path, and strictness coverage remain aligned with the phase contract.
+
+Key findings / decisions
+
+TST-001 is resolved. I found no additional blocking or non-blocking audit findings in scope.
+
+Open issues / next step
+
+I updated [criteria.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/full-revised-standalone-spec-autoloop-v3-explici-7b9dcd08/runs/run-20260505T201926Z-7fdaad17/artifacts/test/phases/async-branch-runtime/criteria.md:11) to all checked and appended the resolution note to [feedback.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/full-revised-standalone-spec-autoloop-v3-explici-7b9dcd08/runs/run-20260505T201926Z-7fdaad17/artifacts/test/phases/async-branch-runtime/feedback.md:14). No remaining audit blockers for this phase.
+
+<loop-control>
+{"schema":"docloop.loop_control/v1","kind":"promise","promise":"COMPLETE"}
+</loop-control>
