@@ -514,3 +514,94 @@ Add one assertion set that proves branch-group internals are not emitted as top-
 <loop-control>
 {"schema":"docloop.loop_control/v1","kind":"promise","promise":"INCOMPLETE"}
 </loop-control>
+
+
+---
+run_id=run-20260505T171950Z-13ce26d6 | entry=session_turn | pair=test | phase=producer | cycle=2 | attempt=1 | thread_id=019df930-00de-7970-af32-efc750f7efc4
+---
+provider=codex
+mode=resume
+template=/home/rauter/.local/share/pipx/venvs/autoloop/lib/python3.12/site-packages/autoloop/templates/test_producer.md
+session_id=019df930-00de-7970-af32-efc750f7efc4
+
+
+---
+run_id=run-20260505T171950Z-13ce26d6 | entry=phase_output | pair=test | phase=producer | process=codex-agent | cycle=2 | attempt=1 | thread_id=019df930-00de-7970-af32-efc750f7efc4
+---
+I’m addressing the two audit gaps directly in the compile-model test block: proving nested branch declarations stay out of the top-level compiled graph, and adding an explicit child-workflow branch-step rejection test. Then I’ll rerun the targeted compile-time suite and update the phase test artifacts.
+
+I’ve got the gaps isolated to one existing happy-path test and one missing failure-path test. I’m patching those directly so the phase coverage stays tight and deterministic instead of spreading branch-group assertions across multiple files.
+
+I’ve made the two audit-driven additions. Next I’m rerunning the simple-surface suite and compile validation so the new negative coverage is confirmed before I close out the test artifacts.
+
+The negative coverage is behaving as expected. I’m waiting on the full simple-surface run now, then I’ll close with the exact coverage delta and remaining out-of-phase gaps.
+
+Scope considered
+
+Phase-local test scope for `authoring-and-compile-model` only. I addressed the two audit-reported compile-time coverage gaps and kept the work limited to branch-group regression tests plus the required test artifacts.
+
+What I analyzed
+
+I reviewed the auditor findings in [feedback.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/autoloop-v3-explicit-branch-groups-full-revised-76d1507c/runs/run-20260505T171950Z-13ce26d6/artifacts/test/phases/authoring-and-compile-model/feedback.md), the existing branch-group block in [tests/unit/test_simple_surface.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/tests/unit/test_simple_surface.py), and the phase decisions in [decisions.txt](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/autoloop-v3-explicit-branch-groups-full-revised-76d1507c/runs/run-20260505T171950Z-13ce26d6/decisions.txt).
+
+What I changed
+
+I strengthened `test_parallel_branch_group_compiles_as_one_external_step_with_ordered_internal_specs` to assert that nested branch declarations do not appear in top-level `compiled.steps` or `compiled.routes`. I added explicit child-workflow branch-step rejection coverage inside the existing branch-group validation test block.
+
+I updated [test_strategy.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/autoloop-v3-explicit-branch-groups-full-revised-76d1507c/runs/run-20260505T171950Z-13ce26d6/artifacts/test/phases/authoring-and-compile-model/test_strategy.md) to reflect child-workflow branch-step rejection in the failure-path map, appended the added coverage summary to [feedback.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/autoloop-v3-explicit-branch-groups-full-revised-76d1507c/runs/run-20260505T171950Z-13ce26d6/artifacts/test/phases/authoring-and-compile-model/feedback.md), and recorded the top-level-absence assertion rule in `decisions.txt`.
+
+Key findings / decisions
+
+The non-obvious assertion that matters here is absence, not just presence: AC-1 can regress by compiling both the composite and the nested branch steps, so the tests now prove the nested declarations stay out of the top-level graph.
+
+Validation passed:
+- `./.venv/bin/python -m pytest tests/unit/test_simple_surface.py -q`
+- `./.venv/bin/python -m pytest tests/unit/test_validation.py -q`
+- `./.venv/bin/python -m py_compile tests/unit/test_simple_surface.py`
+
+Open issues / next step
+
+Runtime branch-group execution, manifest/context generation, and fan-in orchestration remain intentionally uncovered in this phase because they are out of scope for the authoring-and-compile-model test slice.
+
+
+---
+run_id=run-20260505T171950Z-13ce26d6 | entry=session_turn | pair=test | phase=verifier | cycle=2 | attempt=1 | thread_id=019df930-00de-7970-af32-efc750f7efc4
+---
+provider=codex
+mode=resume
+template=/home/rauter/.local/share/pipx/venvs/autoloop/lib/python3.12/site-packages/autoloop/templates/test_verifier.md
+session_id=019df930-00de-7970-af32-efc750f7efc4
+
+
+---
+run_id=run-20260505T171950Z-13ce26d6 | entry=phase_output | pair=test | phase=verifier | process=codex-agent | cycle=2 | attempt=1 | thread_id=019df930-00de-7970-af32-efc750f7efc4
+---
+I’m re-auditing the updated test coverage with focus on the two previously blocking gaps. I’ll verify the new assertions and then update only the audit artifacts to reflect the current test quality state.
+
+The previously blocking gaps are now covered directly by the test file. I’m updating the audit artifacts to reflect a clean pass and clearing the stale blocking notes so the artifact matches the current suite state.
+
+Scope considered
+
+Phase-local test audit for `authoring-and-compile-model` only. I rechecked the two previously blocking coverage gaps and the surrounding branch-group compile-time assertions.
+
+What I analyzed
+
+I reviewed the updated branch-group tests in [tests/unit/test_simple_surface.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/tests/unit/test_simple_surface.py), the current [test_strategy.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/autoloop-v3-explicit-branch-groups-full-revised-76d1507c/runs/run-20260505T171950Z-13ce26d6/artifacts/test/phases/authoring-and-compile-model/test_strategy.md), and the latest run decisions around route-table assertions and top-level branch-group exposure.
+
+What I reviewed
+
+I updated [criteria.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/autoloop-v3-explicit-branch-groups-full-revised-76d1507c/runs/run-20260505T171950Z-13ce26d6/artifacts/test/phases/authoring-and-compile-model/criteria.md) to fully checked. I updated [feedback.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/autoloop-v3-explicit-branch-groups-full-revised-76d1507c/runs/run-20260505T171950Z-13ce26d6/artifacts/test/phases/authoring-and-compile-model/feedback.md) to mark `TST-001` and `TST-002` resolved and to state that there are no active findings.
+
+Key findings / decisions
+
+No active findings remain. The suite now directly guards both previously missing risks:
+- nested branch declarations staying out of the top-level compiled workflow
+- child-workflow branch-step rejection inside branch groups
+
+Open issues / next step
+
+This test slice is audit-complete. Remaining uncovered branch-group surfaces are still the later runtime-phase concerns: scheduling, settlement, manifests/context, and fan-in execution.
+
+<loop-control>
+{"schema":"docloop.loop_control/v1","kind":"promise","promise":"COMPLETE"}
+</loop-control>

@@ -562,3 +562,46 @@ Validation passed:
 Open issues / next step
 
 Runtime branch-group execution, manifest/context generation, and fan-in orchestration remain intentionally uncovered in this phase because they are out of scope for the authoring-and-compile-model test slice.
+
+
+---
+run_id=run-20260505T171950Z-13ce26d6 | entry=session_turn | pair=test | phase=verifier | cycle=2 | attempt=1 | thread_id=019df930-00de-7970-af32-efc750f7efc4
+---
+provider=codex
+mode=resume
+template=/home/rauter/.local/share/pipx/venvs/autoloop/lib/python3.12/site-packages/autoloop/templates/test_verifier.md
+session_id=019df930-00de-7970-af32-efc750f7efc4
+
+
+---
+run_id=run-20260505T171950Z-13ce26d6 | entry=phase_output | pair=test | phase=verifier | process=codex-agent | cycle=2 | attempt=1 | thread_id=019df930-00de-7970-af32-efc750f7efc4
+---
+I’m re-auditing the updated test coverage with focus on the two previously blocking gaps. I’ll verify the new assertions and then update only the audit artifacts to reflect the current test quality state.
+
+The previously blocking gaps are now covered directly by the test file. I’m updating the audit artifacts to reflect a clean pass and clearing the stale blocking notes so the artifact matches the current suite state.
+
+Scope considered
+
+Phase-local test audit for `authoring-and-compile-model` only. I rechecked the two previously blocking coverage gaps and the surrounding branch-group compile-time assertions.
+
+What I analyzed
+
+I reviewed the updated branch-group tests in [tests/unit/test_simple_surface.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/tests/unit/test_simple_surface.py), the current [test_strategy.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/autoloop-v3-explicit-branch-groups-full-revised-76d1507c/runs/run-20260505T171950Z-13ce26d6/artifacts/test/phases/authoring-and-compile-model/test_strategy.md), and the latest run decisions around route-table assertions and top-level branch-group exposure.
+
+What I reviewed
+
+I updated [criteria.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/autoloop-v3-explicit-branch-groups-full-revised-76d1507c/runs/run-20260505T171950Z-13ce26d6/artifacts/test/phases/authoring-and-compile-model/criteria.md) to fully checked. I updated [feedback.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/autoloop-v3-explicit-branch-groups-full-revised-76d1507c/runs/run-20260505T171950Z-13ce26d6/artifacts/test/phases/authoring-and-compile-model/feedback.md) to mark `TST-001` and `TST-002` resolved and to state that there are no active findings.
+
+Key findings / decisions
+
+No active findings remain. The suite now directly guards both previously missing risks:
+- nested branch declarations staying out of the top-level compiled workflow
+- child-workflow branch-step rejection inside branch groups
+
+Open issues / next step
+
+This test slice is audit-complete. Remaining uncovered branch-group surfaces are still the later runtime-phase concerns: scheduling, settlement, manifests/context, and fan-in execution.
+
+<loop-control>
+{"schema":"docloop.loop_control/v1","kind":"promise","promise":"COMPLETE"}
+</loop-control>
