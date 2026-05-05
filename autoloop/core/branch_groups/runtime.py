@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+import asyncio
+from collections.abc import Mapping
 from dataclasses import asdict
 from datetime import datetime, timezone
 from pathlib import Path
@@ -13,7 +15,7 @@ from ..artifacts import validate_artifact_handle
 from ..context import context_runtime
 from ..engine_collaborators import StepExecutionResult, StepFinalizationRequest, run_awaitable_sync
 from ..errors import ProviderExecutionError, WorkflowExecutionError
-from ..primitives import AWAIT_INPUT, Event
+from ..primitives import Event
 from ..providers.protocols import supports_async_llm_provider
 from .context import BranchMetadata, FanInMetadata, create_branch_context, create_fan_in_context
 from .manifest import branch_group_paths, build_branch_manifest, render_branch_group_context, write_branch_group_evidence
@@ -92,7 +94,7 @@ class BranchGroupRuntime:
             duration_ms=duration_ms,
             branches=ordered_results,
         )
-        group_dir, results_path, context_path = branch_group_paths(root=context.root, group_name=spec.name)
+        _, results_path, context_path = branch_group_paths(root=context.root, group_name=spec.name)
         context_text = render_branch_group_context(manifest)
         write_branch_group_evidence(
             results_path=results_path,
@@ -158,26 +160,43 @@ class BranchGroupRuntime:
         context: "Context",
         state: BaseModel,
     ) -> dict[int, dict[str, Any]]:
+        del state
         results: dict[int, dict[str, Any]] = {}
-        fail_fast_triggered = False
-        for branch in spec.branches:
-            if fail_fast_triggered:
-                skipped_result = _skipped_branch_result(spec=spec, branch=branch, context=context)
-                results[branch.index] = skipped_result
-                context_runtime(context).emit_runtime_event(
-                    "branch_skipped",
-                    group_name=spec.name,
-                    group_kind=spec.kind,
-                    branch_name=branch.name,
-                    branch_index=branch.index,
-                    step_name=branch.step.name,
-                    status="skipped",
-                    reason=skipped_result["reason"],
-                    error=skipped_result["error"],
-                    artifact_paths=[],
+        branches = tuple(spec.branches)
+        concurrency = len(branches) if spec.concurrency is None else max(1, min(spec.concurrency, len(branches)))
+        semaphore = asyncio.Semaphore(concurrency)
+        completion_queue: asyncio.Queue[tuple[int, dict[str, Any]]] = asyncio.Queue()
+        active_tasks: dict[int, asyncio.Task[None]] = {}
+        next_branch_index = 0
+        stop_launches = False
+        parent_runtime = context_runtime(context)
+
+        async def run_branch_task(branch: Any) -> None:
+            try:
+                async with semaphore:
+                    result = await self._execute_branch(spec, branch, context)
+            except asyncio.CancelledError:
+                result = _cancelled_branch_result(spec=spec, branch=branch, context=context)
+                self._emit_branch_result_event(
+                    context=context,
+                    spec=spec,
+                    branch=branch,
+                    result=result,
+                    execution_id=None,
                 )
-                continue
-            context_runtime(context).emit_runtime_event(
+            except Exception as exc:  # pragma: no cover - defensive fallback
+                result = _unexpected_branch_failure_result(self._engine, spec=spec, branch=branch, exc=exc)
+                self._emit_branch_result_event(
+                    context=context,
+                    spec=spec,
+                    branch=branch,
+                    result=result,
+                    execution_id=None,
+                )
+            await completion_queue.put((branch.index, result))
+
+        def launch(branch: Any) -> None:
+            parent_runtime.emit_runtime_event(
                 "branch_scheduled",
                 group_name=spec.name,
                 group_kind=spec.kind,
@@ -185,10 +204,40 @@ class BranchGroupRuntime:
                 branch_index=branch.index,
                 step_name=branch.step.name,
             )
-            result = await self._execute_branch(spec, branch, context)
-            results[branch.index] = result
-            if spec.settle == "fail_fast" and result["status"] == "failed":
-                fail_fast_triggered = True
+            active_tasks[branch.index] = asyncio.create_task(
+                run_branch_task(branch),
+                name=f"branch-group:{spec.name}:{branch.name}",
+            )
+
+        while next_branch_index < len(branches) or active_tasks:
+            while next_branch_index < len(branches) and not stop_launches and len(active_tasks) < concurrency:
+                launch(branches[next_branch_index])
+                next_branch_index += 1
+            if not active_tasks:
+                break
+
+            branch_index, result = await completion_queue.get()
+            task = active_tasks.pop(branch_index, None)
+            if task is not None:
+                await asyncio.gather(task, return_exceptions=True)
+            results[branch_index] = result
+            if spec.settle == "fail_fast" and result["status"] == "failed" and not stop_launches:
+                stop_launches = True
+                for active_branch_index, active_task in active_tasks.items():
+                    if active_branch_index != branch_index:
+                        active_task.cancel()
+
+        if stop_launches:
+            for branch in branches[next_branch_index:]:
+                skipped_result = _skipped_branch_result(spec=spec, branch=branch, context=context)
+                results[branch.index] = skipped_result
+                self._emit_branch_result_event(
+                    context=context,
+                    spec=spec,
+                    branch=branch,
+                    result=skipped_result,
+                    execution_id=None,
+                )
         return results
 
     async def _execute_branch(self, spec: Any, branch: Any, parent_context: "Context") -> dict[str, Any]:
@@ -272,29 +321,29 @@ class BranchGroupRuntime:
                 branch_dir=branch_dir,
                 started_at=started_at,
             )
-            event_type = {
-                "completed": "branch_completed",
-                "failed": "branch_failed",
-                "needs_input": "branch_needs_input",
-                "cancelled": "branch_cancelled",
-                "skipped": "branch_skipped",
-            }.get(result["status"], "branch_completed")
-            runtime.emit_runtime_event(
-                event_type,
-                group_name=spec.name,
-                group_kind=spec.kind,
-                branch_name=branch.name,
-                branch_index=branch.index,
-                step_name=compiled_step.name,
+            self._emit_branch_result_event(
+                context=branch_context,
+                spec=spec,
+                branch=branch,
+                result=result,
                 execution_id=execution_id,
-                route=result.get("route"),
-                destination=result.get("destination"),
-                status=result["status"],
-                reason=result.get("reason"),
-                error=result.get("error"),
-                artifact_paths=[artifact["path"] for artifact in result["artifacts"]],
             )
             return result
+        except asyncio.CancelledError:
+            cancelled_result = _cancelled_branch_result(
+                spec=spec,
+                branch=branch,
+                context=branch_context,
+                started_at=started_at,
+            )
+            self._emit_branch_result_event(
+                context=branch_context,
+                spec=spec,
+                branch=branch,
+                result=cancelled_result,
+                execution_id=execution_id,
+            )
+            return cancelled_result
         except Exception as exc:
             failed_result = self._failed_branch_result(
                 spec=spec,
@@ -305,20 +354,46 @@ class BranchGroupRuntime:
                 started_at=started_at,
                 exc=exc,
             )
-            runtime.emit_runtime_event(
-                "branch_failed",
-                group_name=spec.name,
-                group_kind=spec.kind,
-                branch_name=branch.name,
-                branch_index=branch.index,
-                step_name=compiled_step.name,
+            self._emit_branch_result_event(
+                context=branch_context,
+                spec=spec,
+                branch=branch,
+                result=failed_result,
                 execution_id=execution_id,
-                status="failed",
-                reason=failed_result["reason"],
-                error=failed_result["error"],
-                artifact_paths=[artifact["path"] for artifact in failed_result["artifacts"]],
             )
             return failed_result
+
+    def _emit_branch_result_event(
+        self,
+        *,
+        context: "Context",
+        spec: Any,
+        branch: Any,
+        result: Mapping[str, Any],
+        execution_id: str | None,
+    ) -> None:
+        event_type = {
+            "completed": "branch_completed",
+            "failed": "branch_failed",
+            "needs_input": "branch_needs_input",
+            "cancelled": "branch_cancelled",
+            "skipped": "branch_skipped",
+        }.get(result["status"], "branch_completed")
+        context_runtime(context).emit_runtime_event(
+            event_type,
+            group_name=spec.name,
+            group_kind=spec.kind,
+            branch_name=branch.name,
+            branch_index=branch.index,
+            step_name=branch.step.name,
+            execution_id=execution_id,
+            route=result.get("route"),
+            destination=result.get("destination"),
+            status=result["status"],
+            reason=result.get("reason"),
+            error=result.get("error"),
+            artifact_paths=[artifact["path"] for artifact in result.get("artifacts", ())],
+        )
 
     def _branch_result_from_step_result(
         self,
@@ -716,8 +791,15 @@ def _branch_execution_id(context: "Context") -> str | None:
     return getattr(context, "_step_execution_id", None) if visit is None else f"{context._step_execution_id.rsplit(':', 1)[0]}:{visit}"
 
 
-def _cancelled_branch_result(*, spec: Any, branch: Any, context: "Context") -> dict[str, Any]:
-    now = _utc_now().isoformat()
+def _cancelled_branch_result(
+    *,
+    spec: Any,
+    branch: Any,
+    context: "Context",
+    started_at: datetime | None = None,
+) -> dict[str, Any]:
+    started = _utc_now() if started_at is None else started_at
+    finished = _utc_now()
     return {
         "name": branch.name,
         "index": branch.index,
@@ -725,7 +807,7 @@ def _cancelled_branch_result(*, spec: Any, branch: Any, context: "Context") -> d
         "step_name": branch.step.name,
         "status": "cancelled",
         "route": None,
-        "destination": AWAIT_INPUT,
+        "destination": None,
         "runtime_control": None,
         "reason": "Cancellation requested after fail_fast.",
         "question": None,
@@ -741,13 +823,39 @@ def _cancelled_branch_result(*, spec: Any, branch: Any, context: "Context") -> d
             "retry_kind": None,
             "retry_exhausted": False,
         },
-        "started_at": now,
-        "finished_at": now,
-        "duration_ms": 0,
+        "started_at": started.isoformat(),
+        "finished_at": finished.isoformat(),
+        "duration_ms": _duration_ms(started, finished),
         "usage": {},
         "cancellation_requested": True,
         "cancellation_completed": True,
         "cancellation_supported": True,
+    }
+
+
+def _unexpected_branch_failure_result(engine: "Engine", *, spec: Any, branch: Any, exc: Exception) -> dict[str, Any]:
+    now = _utc_now().isoformat()
+    return {
+        "name": branch.name,
+        "index": branch.index,
+        "input": branch.input,
+        "step_name": branch.step.name,
+        "status": "failed",
+        "route": None,
+        "destination": None,
+        "runtime_control": None,
+        "reason": str(exc),
+        "question": None,
+        "artifacts": [],
+        "raw_output_path": None,
+        "raw_output_paths": {},
+        "provider_session": None,
+        "provider_sessions": {},
+        "error": _serialize_exception(engine, exc),
+        "started_at": now,
+        "finished_at": now,
+        "duration_ms": 0,
+        "usage": {},
     }
 
 

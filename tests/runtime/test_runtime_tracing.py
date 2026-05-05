@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import asyncio
 import json
 from hashlib import sha256
 from pathlib import Path
@@ -10,7 +11,15 @@ from pydantic import BaseModel
 
 from autoloop.core.extensions import HookRouteRedirect, RunBinding, StepFinish, StepStart, TerminalFinish
 from autoloop.core.providers.fake import ScriptedLLMProvider
-from autoloop.core.providers.models import StepProviderUsage, TokenUsage
+from autoloop.core.providers.models import (
+    LLMRequest,
+    OutcomeResponse,
+    ProducerRequest,
+    ProducerResponse,
+    StepProviderUsage,
+    TokenUsage,
+    VerifierRequest,
+)
 from autoloop.core.primitives import Event, Outcome
 from autoloop.runtime.config import GitTrackingRuntimeConfig, RuntimeConfig, TracingRuntimeConfig
 from autoloop.runtime.runner import RunnerOptions, execute_workflow_package
@@ -21,6 +30,41 @@ from autoloop.runtime.workspace import next_observability_sequence
 
 class _State(BaseModel):
     note: str = ""
+
+
+class _TracingAsyncLLMProvider:
+    def __init__(
+        self,
+        *,
+        delays: dict[str, float] | None = None,
+        fail_steps: set[str] | None = None,
+    ) -> None:
+        self.delays = delays or {}
+        self.fail_steps = fail_steps or set()
+
+    def run_producer(self, request: ProducerRequest) -> ProducerResponse:  # pragma: no cover - defensive
+        raise AssertionError("sync producer path should not be used")
+
+    def run_verifier(self, request: VerifierRequest) -> OutcomeResponse:  # pragma: no cover - defensive
+        raise AssertionError("sync verifier path should not be used")
+
+    def run_llm(self, request: LLMRequest) -> OutcomeResponse:  # pragma: no cover - defensive
+        raise AssertionError("sync llm path should not be used")
+
+    def run_operation(self, request: object) -> object:  # pragma: no cover - defensive
+        raise AssertionError("operation path should not be used")
+
+    async def run_producer_async(self, request: ProducerRequest) -> ProducerResponse:
+        raise AssertionError("producer path should not be used")
+
+    async def run_verifier_async(self, request: VerifierRequest) -> OutcomeResponse:
+        raise AssertionError("verifier path should not be used")
+
+    async def run_llm_async(self, request: LLMRequest) -> OutcomeResponse:
+        await asyncio.sleep(self.delays.get(request.step_name, 0.01))
+        if request.step_name in self.fail_steps:
+            raise RuntimeError(f"{request.step_name} failed")
+        return OutcomeResponse(outcome=Outcome(raw_output=f"{request.step_name} ok", tag="done"))
 
 
 def _binding(run_dir: Path) -> RunBinding:
@@ -379,6 +423,7 @@ def test_runtime_trace_records_branch_group_runtime_events_with_additive_metadat
             branches={
                 "security": simple.python_step(lambda ctx: Event("done"), name="security_review"),
                 "cost": simple.python_step(lambda ctx: Event("done"), name="cost_review"),
+                "clarify": simple.python_step(lambda ctx: simple.RequestInput("Need clarification."), name="clarify_review"),
             },
             fan_in=simple.python_step(
                 lambda ctx: Event("approved"),
@@ -408,19 +453,31 @@ def test_runtime_trace_records_branch_group_runtime_events_with_additive_metadat
         if line.strip()
     ]
     branch_group_started = next(record for record in records if record["event_type"] == "branch_group_started")
+    branch_scheduled = [record for record in records if record["event_type"] == "branch_scheduled"]
     branch_started = next(record for record in records if record["event_type"] == "branch_started")
+    branch_completed = [record for record in records if record["event_type"] == "branch_completed"]
+    branch_needs_input = next(record for record in records if record["event_type"] == "branch_needs_input")
     manifest_written = next(record for record in records if record["event_type"] == "branch_manifest_written")
     fan_in_started = next(record for record in records if record["event_type"] == "fan_in_started")
+    fan_in_completed = next(record for record in records if record["event_type"] == "fan_in_completed")
     branch_group_completed = next(record for record in records if record["event_type"] == "branch_group_completed")
 
     assert branch_group_started["step_name"] == "reviews"
     assert branch_group_started["group_name"] == "reviews"
     assert branch_group_started["group_kind"] == "parallel"
-    assert branch_group_started["branch_count"] == 2
+    assert branch_group_started["branch_count"] == 3
 
-    assert branch_started["branch_name"] in {"security", "cost"}
-    assert branch_started["step_name"] in {"security_review", "cost_review"}
+    assert len(branch_scheduled) == 3
+    assert {record["branch_name"] for record in branch_scheduled} == {"security", "cost", "clarify"}
+
+    assert branch_started["branch_name"] in {"security", "cost", "clarify"}
+    assert branch_started["step_name"] in {"security_review", "cost_review", "clarify_review"}
     assert branch_started["execution_id"].startswith("reviews:")
+
+    assert len(branch_completed) == 2
+    assert {record["branch_name"] for record in branch_completed} == {"security", "cost"}
+    assert branch_needs_input["branch_name"] == "clarify"
+    assert branch_needs_input["status"] == "needs_input"
 
     assert manifest_written["step_name"] == "reviews"
     assert manifest_written["artifact_paths"] == [
@@ -434,10 +491,80 @@ def test_runtime_trace_records_branch_group_runtime_events_with_additive_metadat
         "_branch_groups/reviews/results.json",
         "_branch_groups/reviews/context.md",
     ]
+    assert fan_in_completed["route"] == "approved"
+    assert fan_in_completed["status"] == "completed"
 
     assert branch_group_completed["step_name"] == "reviews"
     assert branch_group_completed["status"] == "completed"
     assert branch_group_completed["route"] == "approved"
+
+
+def test_runtime_trace_records_fail_fast_branch_failure_cancellation_and_skip_events(tmp_path: Path) -> None:
+    class FailFastTraceWorkflow(simple.Workflow):
+        class State(BaseModel):
+            pass
+
+        reviews = simple.parallel(
+            name="reviews",
+            settle="fail_fast",
+            concurrency=3,
+            outcome="all_settled",
+            branches={
+                "explode": simple.step("Explode.", name="explode_branch", session=simple.Session.fresh()),
+                "slow_a": simple.step("Slow A.", name="slow_a_branch", session=simple.Session.fresh()),
+                "slow_b": simple.step("Slow B.", name="slow_b_branch", session=simple.Session.fresh()),
+                "later": simple.step("Later.", name="later_branch", session=simple.Session.fresh()),
+            },
+            routes={"partial": simple.FINISH, "done": simple.FINISH},
+        )
+
+    execution = execute_workflow_package(
+        FailFastTraceWorkflow,
+        provider=_TracingAsyncLLMProvider(
+            delays={
+                "explode_branch": 0.01,
+                "slow_a_branch": 0.2,
+                "slow_b_branch": 0.2,
+                "later_branch": 0.2,
+            },
+            fail_steps={"explode_branch"},
+        ),
+        options=RunnerOptions(
+            root=tmp_path,
+            task_id="task-fail-fast-trace",
+            run_id="run-fail-fast-trace",
+            message="trace fail-fast branch group events",
+            runtime_config=RuntimeConfig(git_tracking=GitTrackingRuntimeConfig(enabled=False)),
+        ),
+    )
+
+    assert execution.result.terminal == simple.FINISH
+
+    trace_path = execution.run_workspace.run_dir / "trace.jsonl"
+    records = [
+        json.loads(line)
+        for line in trace_path.read_text(encoding="utf-8").splitlines()
+        if line.strip()
+    ]
+
+    branch_failed = next(record for record in records if record["event_type"] == "branch_failed")
+    branch_cancelled = [record for record in records if record["event_type"] == "branch_cancelled"]
+    branch_skipped = next(record for record in records if record["event_type"] == "branch_skipped")
+    branch_group_completed = next(record for record in records if record["event_type"] == "branch_group_completed")
+
+    assert branch_failed["branch_name"] == "explode"
+    assert branch_failed["status"] == "failed"
+    assert branch_failed["error"]["message"]
+
+    assert {record["branch_name"] for record in branch_cancelled} == {"slow_a", "slow_b"}
+    assert all(record["status"] == "cancelled" for record in branch_cancelled)
+
+    assert branch_skipped["branch_name"] == "later"
+    assert branch_skipped["status"] == "skipped"
+    assert branch_skipped["reason"] == "Branch was not scheduled because fail_fast stopped new branch launches."
+
+    assert branch_group_completed["route"] == "partial"
+    assert branch_group_completed["status"] == "completed"
 
 
 def test_runtime_trace_can_be_disabled(tmp_path: Path) -> None:

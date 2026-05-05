@@ -877,6 +877,8 @@ class StepDispatcher:
                     verifier_raw_output=pair_result.verifier_raw_output,
                     provider_usage=pair_result.usage,
                 )
+            except asyncio.CancelledError:
+                raise
             except Exception as exc:
                 next_feedback, annotated_exc = self._engine._next_retry_feedback(step, exc, attempt=attempt)
                 if next_feedback is None:
@@ -940,6 +942,8 @@ class StepDispatcher:
                     producer_raw_output=llm_result.text,
                     provider_usage=StepProviderUsage(llm=llm_result.usage),
                 )
+            except asyncio.CancelledError:
+                raise
             except Exception as exc:
                 next_feedback, annotated_exc = self._engine._next_retry_feedback(step, exc, attempt=attempt)
                 if next_feedback is None:
@@ -992,6 +996,8 @@ class StepDispatcher:
                     ),
                 )
             )
+        except asyncio.CancelledError:
+            raise
         except Exception as exc:
             annotated_exc = exc
             if route_handoff is not None:
@@ -1140,6 +1146,8 @@ class StepDispatcher:
                     )
                 )
                 self._engine._validate_outcome(step, verifier_response.outcome)
+            except asyncio.CancelledError:
+                raise
             except Exception as exc:
                 annotated_exc = exc
                 if route_handoff is not None:
@@ -1165,6 +1173,8 @@ class StepDispatcher:
                 attempt=attempt,
                 token_usage=verifier_exec.usage,
             )
+        except asyncio.CancelledError:
+            raise
         except Exception as exc:
             annotated_exc = self._engine._annotate_execution_error(exc, pending_handoffs=consumed_pending_handoffs)
             if annotated_exc is exc:
@@ -1226,6 +1236,8 @@ class StepDispatcher:
                 )
             )
             self._engine._validate_outcome(step, response.outcome)
+        except asyncio.CancelledError:
+            raise
         except Exception as exc:
             annotated_exc = exc
             if route_handoff is not None:

@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import asyncio
 import json
 from pathlib import Path
 
@@ -70,6 +71,59 @@ class _SyncOnlyLLMProvider:
 
     def run_operation(self, request: object) -> object:  # pragma: no cover - defensive
         raise AssertionError("operation path should not be used")
+
+
+class _ConcurrentAsyncLLMProvider:
+    def __init__(
+        self,
+        *,
+        delays: dict[str, float] | None = None,
+        fail_steps: set[str] | None = None,
+    ) -> None:
+        self.delays = delays or {}
+        self.fail_steps = fail_steps or set()
+        self.started: list[str] = []
+        self.completed: list[str] = []
+        self.cancelled: list[str] = []
+        self.prompts: list[str] = []
+        self.active = 0
+        self.max_active = 0
+
+    def run_producer(self, request: ProducerRequest) -> ProducerResponse:  # pragma: no cover - defensive
+        raise AssertionError("sync producer path should not be used")
+
+    def run_verifier(self, request: VerifierRequest) -> OutcomeResponse:  # pragma: no cover - defensive
+        raise AssertionError("sync verifier path should not be used")
+
+    def run_llm(self, request: LLMRequest) -> OutcomeResponse:  # pragma: no cover - defensive
+        raise AssertionError("sync llm path should not be used")
+
+    def run_operation(self, request: object) -> object:  # pragma: no cover - defensive
+        raise AssertionError("operation path should not be used")
+
+    async def run_producer_async(self, request: ProducerRequest) -> ProducerResponse:
+        raise AssertionError("producer path should not be used")
+
+    async def run_verifier_async(self, request: VerifierRequest) -> OutcomeResponse:
+        raise AssertionError("verifier path should not be used")
+
+    async def run_llm_async(self, request: LLMRequest) -> OutcomeResponse:
+        step_name = request.step_name
+        self.started.append(step_name)
+        self.prompts.append(request.prompt.text)
+        self.active += 1
+        self.max_active = max(self.max_active, self.active)
+        try:
+            await asyncio.sleep(self.delays.get(step_name, 0.01))
+            if step_name in self.fail_steps:
+                raise RuntimeError(f"{step_name} failed")
+            self.completed.append(step_name)
+            return OutcomeResponse(outcome=Outcome(raw_output=f"{step_name} ok", tag="done"))
+        except asyncio.CancelledError:
+            self.cancelled.append(step_name)
+            raise
+        finally:
+            self.active -= 1
 
 
 def test_parallel_branch_group_without_fan_in_routes_question_and_writes_evidence(tmp_path: Path) -> None:
@@ -208,6 +262,81 @@ def test_parallel_branch_group_uses_async_provider_path_for_branch_steps(tmp_pat
 
     assert result.terminal == simple.FINISH
     assert provider.async_calls == ["security_review", "cost_review"]
+
+
+def test_parallel_branch_group_runs_provider_backed_branches_concurrently(tmp_path: Path) -> None:
+    class ConcurrentParallelWorkflow(simple.Workflow):
+        class State(BaseModel):
+            pass
+
+        reviews = simple.parallel(
+            concurrency=2,
+            branches={
+                "security": simple.step("Review security.", name="security_review", session=simple.Session.fresh()),
+                "cost": simple.step("Review cost.", name="cost_review", session=simple.Session.fresh()),
+            },
+        )
+        publish = simple.python_step(lambda ctx: Event("done"))
+
+    provider = _ConcurrentAsyncLLMProvider(
+        delays={"security_review": 0.05, "cost_review": 0.05},
+    )
+    task_folder, run_folder = _workspace(tmp_path)
+    result = Engine(
+        ConcurrentParallelWorkflow,
+        provider=provider,
+        session_store=InMemorySessionStore(),
+        checkpoint_store=InMemoryCheckpointStore(),
+    ).run(
+        task_id="task-concurrent-parallel",
+        run_id="run-concurrent-parallel",
+        task_folder=task_folder,
+        run_folder=run_folder,
+        root=tmp_path,
+    )
+
+    assert result.terminal == simple.FINISH
+    assert provider.max_active == 2
+    assert set(provider.completed) == {"security_review", "cost_review"}
+
+
+def test_fan_out_branch_group_runs_provider_backed_branches_concurrently(tmp_path: Path) -> None:
+    class ConcurrentFanOutWorkflow(simple.Workflow):
+        class State(BaseModel):
+            pass
+
+        assess = simple.fan_out(
+            concurrency=2,
+            step=simple.step(
+                "Assess area {branch.input.area}.",
+                name="assess_one",
+                session=simple.Session.fresh(),
+            ),
+            branches={
+                "security": {"area": "security"},
+                "performance": {"area": "performance"},
+            },
+        )
+        publish = simple.python_step(lambda ctx: Event("done"))
+
+    provider = _ConcurrentAsyncLLMProvider(delays={"assess_one": 0.05})
+    task_folder, run_folder = _workspace(tmp_path)
+    result = Engine(
+        ConcurrentFanOutWorkflow,
+        provider=provider,
+        session_store=InMemorySessionStore(),
+        checkpoint_store=InMemoryCheckpointStore(),
+    ).run(
+        task_id="task-concurrent-fan-out",
+        run_id="run-concurrent-fan-out",
+        task_folder=task_folder,
+        run_folder=run_folder,
+        root=tmp_path,
+    )
+
+    assert result.terminal == simple.FINISH
+    assert provider.max_active == 2
+    assert set(provider.prompts) == {"Assess area security.", "Assess area performance."}
 
 
 def test_parallel_branch_group_rejects_sync_only_provider_for_provider_backed_steps(tmp_path: Path) -> None:
@@ -445,6 +574,63 @@ def test_parallel_branch_group_fail_fast_stops_new_branch_launches_and_persists_
     assert [branch["status"] for branch in manifest["branches"]] == ["failed", "skipped", "skipped"]
     assert manifest["branches"][1]["reason"] == "Branch was not scheduled because fail_fast stopped new branch launches."
     assert manifest["branches"][2]["reason"] == "Branch was not scheduled because fail_fast stopped new branch launches."
+
+
+def test_parallel_branch_group_fail_fast_cancels_in_flight_async_branches_and_keeps_manifest_order(
+    tmp_path: Path,
+) -> None:
+    class AsyncFailFastWorkflow(simple.Workflow):
+        class State(BaseModel):
+            pass
+
+        reviews = simple.parallel(
+            name="reviews",
+            settle="fail_fast",
+            concurrency=3,
+            outcome="all_settled",
+            branches={
+                "explode": simple.step("Explode.", name="explode_branch", session=simple.Session.fresh()),
+                "slow_a": simple.step("Slow A.", name="slow_a_branch", session=simple.Session.fresh()),
+                "slow_b": simple.step("Slow B.", name="slow_b_branch", session=simple.Session.fresh()),
+                "later": simple.step("Later.", name="later_branch", session=simple.Session.fresh()),
+            },
+            routes={"partial": simple.FINISH, "done": simple.FINISH},
+        )
+
+    provider = _ConcurrentAsyncLLMProvider(
+        delays={
+            "explode_branch": 0.01,
+            "slow_a_branch": 0.2,
+            "slow_b_branch": 0.2,
+            "later_branch": 0.2,
+        },
+        fail_steps={"explode_branch"},
+    )
+    task_folder, run_folder = _workspace(tmp_path)
+    result = Engine(
+        AsyncFailFastWorkflow,
+        provider=provider,
+        session_store=InMemorySessionStore(),
+        checkpoint_store=InMemoryCheckpointStore(),
+    ).run(
+        task_id="task-fail-fast-cancel",
+        run_id="run-fail-fast-cancel",
+        task_folder=task_folder,
+        run_folder=run_folder,
+        root=tmp_path,
+    )
+
+    assert result.terminal == simple.FINISH
+    assert result.last_event is not None
+    assert result.last_event.tag == "partial"
+    assert sorted(provider.cancelled) == ["slow_a_branch", "slow_b_branch"]
+
+    manifest = json.loads((tmp_path / "_branch_groups" / "reviews" / "results.json").read_text(encoding="utf-8"))
+    assert [branch["name"] for branch in manifest["branches"]] == ["explode", "slow_a", "slow_b", "later"]
+    assert [branch["status"] for branch in manifest["branches"]] == ["failed", "cancelled", "cancelled", "skipped"]
+    assert manifest["branches"][1]["cancellation_requested"] is True
+    assert manifest["branches"][2]["cancellation_completed"] is True
+    assert manifest["branches"][3]["reason"] == "Branch was not scheduled because fail_fast stopped new branch launches."
 
 
 def test_parallel_branch_group_runtime_preserves_shared_state_values_and_overlapping_writes(tmp_path: Path) -> None:
