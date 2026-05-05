@@ -778,3 +778,57 @@ Open issues / next step
 <loop-control>
 {"schema":"docloop.loop_control/v1","kind":"promise","promise":"COMPLETE"}
 </loop-control>
+
+
+---
+run_id=run-20260505T201926Z-7fdaad17 | entry=session_turn | pair=test | phase=verifier | cycle=1 | attempt=1 | thread_id=019df9dd-89bf-7fa2-b1bc-911798ef8bf7
+---
+provider=codex
+mode=resume
+template=/home/rauter/.local/share/pipx/venvs/autoloop/lib/python3.12/site-packages/autoloop/templates/test_verifier.md
+session_id=019df9dd-89bf-7fa2-b1bc-911798ef8bf7
+
+
+---
+run_id=run-20260505T201926Z-7fdaad17 | entry=phase_output | pair=test | phase=verifier | process=codex-agent | cycle=1 | attempt=1 | thread_id=019df9dd-89bf-7fa2-b1bc-911798ef8bf7
+---
+I’m auditing the async-step/provider test additions against the phase contract. First I’m checking the changed tests and the updated strategy, then I’ll decide whether the criteria can be fully checked or whether coverage still has gaps.
+
+The strategy and the repo tests line up with the recorded decisions. I’m rerunning the focused contract files plus the wider phase suite now to make sure the added warning-path assertion is stable enough to approve.
+
+The added tests are stable and they cover the changed execution path plus the previously subtle warning regression. I’m marking the audit criteria complete and appending a short audit result note to the feedback artifact.
+
+Scope considered
+
+- Phase-local audit of the async-step/provider foundation test work: the updated contract tests, the test strategy coverage map, and the regression/stability checks around the reviewer-fixed async branch-group dispatch path.
+
+What I analyzed
+
+- Reviewed [test_async_step_dispatcher.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/tests/contract/test_async_step_dispatcher.py) and [test_branch_group_runtime.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/tests/contract/test_branch_group_runtime.py) against AC-1, AC-2, and AC-3.
+- Checked the updated [test_strategy.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/full-revised-standalone-spec-autoloop-v3-explici-7b9dcd08/runs/run-20260505T201926Z-7fdaad17/artifacts/test/phases/async-step-provider-foundation/test_strategy.md) and the run-local decisions for scope alignment.
+- Re-ran the focused contract files and the wider phase suite.
+
+What I reviewed
+
+- Updated [criteria.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/full-revised-standalone-spec-autoloop-v3-explici-7b9dcd08/runs/run-20260505T201926Z-7fdaad17/artifacts/test/phases/async-step-provider-foundation/criteria.md) to fully checked.
+- Appended an audit result note to [feedback.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/full-revised-standalone-spec-autoloop-v3-explici-7b9dcd08/runs/run-20260505T201926Z-7fdaad17/artifacts/test/phases/async-step-provider-foundation/feedback.md).
+- Verified:
+  - `.venv/bin/pytest tests/contract/test_async_step_dispatcher.py tests/contract/test_branch_group_runtime.py -q`
+  - `.venv/bin/pytest tests/unit/test_provider_boundary_core.py tests/runtime/test_runtime_providers.py tests/contract/test_branch_group_runtime.py tests/contract/test_async_step_dispatcher.py -q`
+
+Key findings / decisions
+
+- No blocking or non-blocking audit findings in reviewed scope.
+- The added tests cover the material changed behavior:
+  - direct async composite branch-group dispatch inside an active event loop,
+  - clean active-loop rejection for sync capture mode,
+  - deterministic detection of the old unawaited-coroutine warning regression via warning capture plus `gc.collect()`.
+
+Open issues / next step
+
+- No audit blockers remain for this phase.
+- The remaining gaps noted in the strategy are deferred by plan, not missing test work for this phase: real concurrent scheduler coverage, workflow-folder evidence rooting, and branch-session overlay semantics.
+
+<loop-control>
+{"schema":"docloop.loop_control/v1","kind":"promise","promise":"COMPLETE"}
+</loop-control>
