@@ -15,13 +15,13 @@
       "runtime-validation-and-regression-checks"
     ],
     "explicit": true,
-    "current_phase_index": 2,
-    "current_phase_id": "runtime-validation-and-regression-checks"
+    "current_phase_index": 3,
+    "current_phase_id": null
   },
   "phase_status": {
     "core-selector-semantics": "completed",
     "stdlib-progress-worklists": "completed",
-    "runtime-validation-and-regression-checks": "in_progress"
+    "runtime-validation-and-regression-checks": "completed"
   },
   "phase_history": [
     {
@@ -55,6 +55,13 @@
       "run_id": "run-20260505T122105Z-b9a3f746",
       "status": "in_progress",
       "ts": "2026-05-05T12:52:50.536894+00:00"
+    },
+    {
+      "phase_id": "runtime-validation-and-regression-checks",
+      "run_id": "run-20260505T122105Z-b9a3f746",
+      "status": "completed",
+      "ts": "2026-05-05T13:26:21.667327+00:00",
+      "pair": "test"
     }
   ]
 }

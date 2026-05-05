@@ -55,3 +55,6 @@
 {"ts": "2026-05-05T13:25:04.319114+00:00", "run_id": "run-20260505T122105Z-b9a3f746", "seq": 55, "event_type": "phase_finished", "pair": "test", "phase": "producer", "cycle": 1, "attempt": 1, "empty_output": false, "phase_id": "runtime-validation-and-regression-checks"}
 {"ts": "2026-05-05T13:26:21.499930+00:00", "run_id": "run-20260505T122105Z-b9a3f746", "seq": 56, "event_type": "phase_finished", "pair": "test", "phase": "verifier", "cycle": 1, "attempt": 1, "empty_output": false, "phase_id": "runtime-validation-and-regression-checks"}
 {"ts": "2026-05-05T13:26:21.567815+00:00", "run_id": "run-20260505T122105Z-b9a3f746", "seq": 57, "event_type": "pair_completed", "pair": "test", "cycle": 1, "attempt": 1, "phase_id": "runtime-validation-and-regression-checks"}
+{"ts": "2026-05-05T13:26:21.667706+00:00", "run_id": "run-20260505T122105Z-b9a3f746", "seq": 58, "event_type": "phase_completed", "pair": "test", "phase_id": "runtime-validation-and-regression-checks", "phase_mode": "single"}
+{"ts": "2026-05-05T13:26:21.669798+00:00", "run_id": "run-20260505T122105Z-b9a3f746", "seq": 59, "event_type": "pair_started", "pair": "audit", "phase_id": null}
+{"ts": "2026-05-05T13:26:21.669879+00:00", "run_id": "run-20260505T122105Z-b9a3f746", "seq": 60, "event_type": "cycle_started", "pair": "audit", "cycle": 1, "attempt": 1, "phase_id": null}
