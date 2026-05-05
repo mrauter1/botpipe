@@ -38,6 +38,7 @@
 - Missing branch `Session.fresh()` and non-fresh branch sessions fail compilation.
 - Non-fresh `verifier_session` on produce/verify branch steps fails compilation.
 - Non-serializable `fan_out(...)` branch payloads fail compilation.
+- Child-workflow branch steps remain rejected in v1.
 - Child-workflow fan-in remains rejected in v1.
 
 ## Flake Risk / Stabilization

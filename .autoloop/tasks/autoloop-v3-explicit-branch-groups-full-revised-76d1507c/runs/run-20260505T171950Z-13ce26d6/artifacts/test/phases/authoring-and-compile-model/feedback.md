@@ -8,6 +8,7 @@
 - Scope: phase-local authoritative verifier artifact
 
 - Added compile-time regression coverage for `fan_out(...)` branch input/order metadata, unsafe branch-group and branch names, `FanIn.context()` / `{fan_in.*}` misuse outside fan-in, and non-fresh `verifier_session` rejection inside branch groups. Re-ran `tests/unit/test_simple_surface.py` and adjacent compile validation coverage.
+- Extended the composite compile-shape test to prove nested branch declarations stay out of the top-level compiled workflow, and added explicit child-workflow branch-step rejection coverage for `parallel(...)`.
 
 ## Findings
 

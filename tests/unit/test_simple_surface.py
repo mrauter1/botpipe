@@ -664,7 +664,12 @@ def test_parallel_branch_group_compiles_as_one_external_step_with_ordered_intern
     compiled = compile_workflow(BranchGroupWorkflow)
 
     assert compiled.entry_step_name == "reviews"
+    assert tuple(compiled.steps) == ("reviews", "publish")
     assert compiled.steps["reviews"].kind == "branch_group"
+    assert "security_review" not in compiled.steps
+    assert "cost_review" not in compiled.steps
+    assert "security_review" not in compiled.routes
+    assert "cost_review" not in compiled.routes
     assert compiled.routes["reviews"]["done"].target == "publish"
     branch_group = compiled.steps["reviews"].branch_group
     assert branch_group is not None
@@ -923,6 +928,18 @@ def test_branch_group_rejects_unsafe_names_child_workflow_fan_in_and_non_seriali
             pass
 
         finish = simple.python_step(lambda ctx: simple.Event("done"))
+
+    with pytest.raises(WorkflowValidationError, match="child workflow branch step"):
+
+        class InvalidBranchStepWorkflow(simple.Workflow):
+            class State(BaseModel):
+                pass
+
+            assess = simple.parallel(
+                branches={"a": simple.workflow_step(Child, name="child_branch")},
+            )
+
+        compile_workflow(InvalidBranchStepWorkflow)
 
     with pytest.raises(WorkflowValidationError, match="child workflow fan-in step"):
 
