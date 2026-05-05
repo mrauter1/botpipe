@@ -1155,3 +1155,50 @@ Key findings / decisions
 Open issues / next step
 - No phase-local producer issues remain from the reviewer feedback I was given.
 - The next step is a verifier rerun against the updated outcome logic and contract coverage.
+
+
+---
+run_id=run-20260505T171950Z-13ce26d6 | entry=session_turn | pair=implement | phase=verifier | cycle=2 | attempt=1 | thread_id=019df95d-8fea-77f3-8730-5b37b11034f7
+---
+provider=codex
+mode=resume
+template=/home/rauter/.local/share/pipx/venvs/autoloop/lib/python3.12/site-packages/autoloop/templates/implement_verifier.md
+session_id=019df95d-8fea-77f3-8730-5b37b11034f7
+
+
+---
+run_id=run-20260505T171950Z-13ce26d6 | entry=phase_output | pair=implement | phase=verifier | process=codex-agent | cycle=2 | attempt=1 | thread_id=019df95d-8fea-77f3-8730-5b37b11034f7
+---
+I’m re-verifying the AC-3 fix and the updated contract coverage, then I’ll update the review artifacts if the blocking issue is actually closed.
+
+The AC-3 fix is good, but the full branch-group contract file still isn’t stable. I’m checking whether the fan-out branch-start order is genuinely nondeterministic or whether this was a one-off race.
+
+The fan-out branch-start order is genuinely flaky. I’ve reproduced it across repeated runs, so I’m recording that as a new blocking runtime issue rather than treating the earlier outcome fix as incomplete.
+
+The earlier `all_settled` issue is fixed, but there’s still one reproducible blocking problem: branch launch order is nondeterministic enough to make the branch-group contract suite flaky.
+
+Scope considered
+- Phase-local review only: the updated `all_settled` outcome logic, the refreshed branch-group contract coverage, the implementation notes and decisions entry for this turn, and the active review artifacts.
+- I did not review or absorb unrelated dirty files elsewhere in the repository.
+
+What I analyzed
+- I re-read [autoloop/core/branch_groups/outcomes.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/autoloop/core/branch_groups/outcomes.py:1), the updated mechanical-outcome test block in [tests/contract/test_branch_group_runtime.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/tests/contract/test_branch_group_runtime.py:233), [implementation_notes.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/autoloop-v3-explicit-branch-groups-full-revised-76d1507c/runs/run-20260505T171950Z-13ce26d6/artifacts/implement/phases/composite-runtime-and-evidence/implementation_notes.md), and the current-turn entry in [decisions.txt](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/autoloop-v3-explicit-branch-groups-full-revised-76d1507c/runs/run-20260505T171950Z-13ce26d6/decisions.txt).
+- I reran `.venv/bin/python -m pytest -q tests/contract/test_branch_group_runtime.py` and `.venv/bin/python -m pytest -q tests/unit/test_simple_surface.py -k 'branch_group or fan_in or provider_backed_branch'`.
+- I also reran the isolated fan-out contract multiple times to check whether the prompt-order failure was a one-off or a real race.
+
+What I reviewed
+- `IMP-001` is fixed: `all_settled` now consults `success_routes`, and the updated contract test covers both the completed-non-success `partial` case and the explicit-success-routes `done` case.
+- I kept [criteria.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/autoloop-v3-explicit-branch-groups-full-revised-76d1507c/runs/run-20260505T171950Z-13ce26d6/artifacts/implement/phases/composite-runtime-and-evidence/criteria.md) unchecked because the branch-group contract file is still flaky.
+- I appended a new blocking finding to [feedback.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/autoloop-v3-explicit-branch-groups-full-revised-76d1507c/runs/run-20260505T171950Z-13ce26d6/artifacts/implement/phases/composite-runtime-and-evidence/feedback.md).
+
+Key findings / decisions
+- `IMP-002` blocking: [autoloop/core/branch_groups/runtime.py:160](/home/rauter/autoloop_v3_bkp/autoloop_v3/autoloop/core/branch_groups/runtime.py:160) still admits concurrent fan-out branches in a way that makes provider-facing start order nondeterministic. The full `tests/contract/test_branch_group_runtime.py` file failed on rerun, and the isolated `test_fan_out_renders_branch_input_roots_artifacts_and_keeps_branch_sessions_local` case failed intermittently across repeated runs on the prompt-order assertion.
+- That is a real behavioral-safety issue, not just a test artifact: the spec says scheduling should be deterministic where practical, and the current runtime/test contract still exposes order-sensitive behavior to providers and logs.
+
+Open issues / next step
+- Fix `IMP-002` by making branch admission/start sequencing deterministic in `BranchGroupRuntime._run_branches()`, or explicitly remove that ordering guarantee from the contract if nondeterministic provider/log order is actually intended.
+- After that, rerun the full branch-group contract file and then update the review artifacts again.
+
+<loop-control>
+{"schema":"docloop.loop_control/v1","kind":"promise","promise":"INCOMPLETE"}
+</loop-control>
