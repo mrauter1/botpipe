@@ -1778,3 +1778,56 @@ Open issues / next step
 <loop-control>
 {"schema":"docloop.loop_control/v1","kind":"promise","promise":"COMPLETE"}
 </loop-control>
+
+
+---
+run_id=run-20260505T133333Z-ef073886 | entry=session_turn | pair=test | phase=producer | cycle=1 | attempt=1 | thread_id=019df85f-e454-7e32-a85f-f676e36c2390
+---
+provider=codex
+mode=resume
+template=/home/rauter/.local/share/pipx/venvs/autoloop/lib/python3.12/site-packages/autoloop/templates/test_producer.md
+session_id=019df85f-e454-7e32-a85f-f676e36c2390
+
+
+---
+run_id=run-20260505T133333Z-ef073886 | entry=phase_output | pair=test | phase=producer | process=codex-agent | cycle=1 | attempt=1 | thread_id=019df85f-e454-7e32-a85f-f676e36c2390
+---
+I’m checking the phase-local test surface and artifacts first, then I’ll add the smallest missing regression coverage for the named-vs-explicit class split and record that map in the test-phase artifacts. The goal here is to lock the contract down without expanding into optimizer or packaged-workflow suites.
+
+The current runtime suites cover the two blocking bugs, but they still don’t directly lock the named-class round-trip behavior that the marker was added for. I’m adding one focused regression test that starts from a shadowed repo-only alias and proves a later class-object resolution stays on the named `workflows.*` path instead of collapsing into either workspace authority or isolated loading.
+
+The new test is in. I’m rerunning the two workflow-resolution suites now to make sure the added round-trip assertion is deterministic and doesn’t expose any hidden marker leakage across the existing alias and shadowing cases.
+
+The added round-trip case is green, and the explicit-class suite still passes alongside it. I’m updating the test-phase artifacts now with a behavior-to-coverage map and a concise note describing the new regression lock.
+
+Scope considered
+
+- Phase-local workflow-resolution tests only: mixed-root named authority, repo-local alias fallback, explicit repo-local class isolation, and named repo-local class round-trips.
+- I did not extend into optimizer or packaged-workflow suites.
+
+What I analyzed
+
+- [test_workflow_catalog_roots.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/tests/runtime/test_workflow_catalog_roots.py)
+- [test_workflow_reference_resolution.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/tests/runtime/test_workflow_reference_resolution.py)
+- The active [test_strategy.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/goal-implement-a-greenfield-autoloop-v3-worklist-3cb1f2e6/runs/run-20260505T133333Z-ef073886/artifacts/test/phases/restore-workflow-resolution-contract/test_strategy.md), [feedback.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/goal-implement-a-greenfield-autoloop-v3-worklist-3cb1f2e6/runs/run-20260505T133333Z-ef073886/artifacts/test/phases/restore-workflow-resolution-contract/feedback.md), and the latest [decisions.txt](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/goal-implement-a-greenfield-autoloop-v3-worklist-3cb1f2e6/runs/run-20260505T133333Z-ef073886/decisions.txt) header for this test turn.
+
+What I changed
+
+- Added one focused regression test in [test_workflow_catalog_roots.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/tests/runtime/test_workflow_catalog_roots.py):
+  - `test_named_repo_local_class_round_trip_preserves_repo_module_namespace_when_name_is_shadowed`
+- Updated [test_strategy.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/goal-implement-a-greenfield-autoloop-v3-worklist-3cb1f2e6/runs/run-20260505T133333Z-ef073886/artifacts/test/phases/restore-workflow-resolution-contract/test_strategy.md) with a behavior-to-coverage map, preserved invariants, edge cases, flake controls, and known gaps.
+- Appended a concise test-phase summary to [feedback.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/goal-implement-a-greenfield-autoloop-v3-worklist-3cb1f2e6/runs/run-20260505T133333Z-ef073886/artifacts/test/phases/restore-workflow-resolution-contract/feedback.md).
+- Added one non-obvious test decision under the latest test-author header in [decisions.txt](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/goal-implement-a-greenfield-autoloop-v3-worklist-3cb1f2e6/runs/run-20260505T133333Z-ef073886/decisions.txt).
+
+Key findings / decisions
+
+- The missing regression lock was the named-class round-trip path: a repo-local workflow first resolved through a unique alias needed an explicit test proving that re-resolution from `resolved.workflow_cls` stays on `workflows.*` even when the canonical name is shadowed by `.autoloop/workflows`.
+- Verifier-facing stabilization stays deterministic through module-cache cleanup and temp workspaces.
+- Passed:
+  - `tests/runtime/test_workflow_catalog_roots.py`
+  - `tests/runtime/test_workflow_reference_resolution.py`
+
+Open issues / next step
+
+- This phase’s test surface is now explicit for the named-vs-explicit repo-local class split.
+- The remaining uncovered repository-wide failures are still outside this test phase: optimization helpers and packaged-workflow/runtime suites.
