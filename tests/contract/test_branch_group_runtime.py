@@ -1034,7 +1034,22 @@ def test_parallel_branch_group_fan_in_request_input_checkpoints_at_composite_bou
     assert checkpoint_store.load() is None
 
 
-def test_branch_group_evidence_write_failure_stops_before_fan_in_and_downstream_routing(
+def _fail_path_write(
+    monkeypatch: pytest.MonkeyPatch,
+    *,
+    target_path: Path,
+) -> None:
+    original_write_text = Path.write_text
+
+    def patched_write_text(self: Path, data: str, *args: object, **kwargs: object) -> int:
+        if self.resolve() == target_path.resolve():
+            raise OSError("disk full")
+        return original_write_text(self, data, *args, **kwargs)
+
+    monkeypatch.setattr(Path, "write_text", patched_write_text)
+
+
+def test_branch_group_results_manifest_write_failure_stops_before_fan_in_and_downstream_routing(
     monkeypatch: pytest.MonkeyPatch,
     tmp_path: Path,
 ) -> None:
@@ -1065,11 +1080,10 @@ def test_branch_group_evidence_write_failure_stops_before_fan_in_and_downstream_
         )
         publish = simple.python_step(lambda ctx: (published.append("publish"), Event("done"))[-1])
 
-    def fail_write(*args: object, **kwargs: object) -> None:
-        raise OSError("disk full")
-
-    monkeypatch.setattr(branch_group_runtime, "write_branch_group_evidence", fail_write)
     task_folder, run_folder = _workspace(tmp_path)
+    results_path = _branch_group_dir(task_folder, FanInWriteFailureWorkflow, "reviews") / "results.json"
+    context_path = _branch_group_dir(task_folder, FanInWriteFailureWorkflow, "reviews") / "context.md"
+    _fail_path_write(monkeypatch, target_path=results_path)
 
     with pytest.raises(OSError, match="disk full"):
         Engine(
@@ -1093,8 +1107,70 @@ def test_branch_group_evidence_write_failure_stops_before_fan_in_and_downstream_
 
     assert fan_in_called is False
     assert published == []
-    assert not (_branch_group_dir(task_folder, FanInWriteFailureWorkflow, "reviews") / "results.json").exists()
-    assert not (_branch_group_dir(task_folder, FanInWriteFailureWorkflow, "reviews") / "context.md").exists()
+    assert not results_path.exists()
+    assert not context_path.exists()
+
+
+def test_branch_group_context_write_failure_stops_before_fan_in_and_downstream_routing(
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path,
+) -> None:
+    fan_in_called = False
+    published: list[str] = []
+
+    def fan_in_turn(request: object) -> Outcome:
+        nonlocal fan_in_called
+        fan_in_called = True
+        return Outcome(raw_output="approved", tag="approved")
+
+    class FanInWriteFailureWorkflow(simple.Workflow):
+        class State(BaseModel):
+            pass
+
+        reviews = simple.parallel(
+            name="reviews",
+            branches={
+                "security": simple.step("Review security.", name="security_review", session=simple.Session.fresh()),
+                "cost": simple.step("Review cost.", name="cost_review", session=simple.Session.fresh()),
+            },
+            fan_in=simple.step(
+                "Summarize reviews.",
+                name="combine_reviews",
+                after=lambda ctx: published.append("fan_in") or None,
+                routes={"approved": "publish"},
+            ),
+        )
+        publish = simple.python_step(lambda ctx: (published.append("publish"), Event("done"))[-1])
+
+    task_folder, run_folder = _workspace(tmp_path)
+    results_path = _branch_group_dir(task_folder, FanInWriteFailureWorkflow, "reviews") / "results.json"
+    context_path = _branch_group_dir(task_folder, FanInWriteFailureWorkflow, "reviews") / "context.md"
+    _fail_path_write(monkeypatch, target_path=context_path)
+
+    with pytest.raises(OSError, match="disk full"):
+        Engine(
+            FanInWriteFailureWorkflow,
+            provider=ScriptedLLMProvider(
+                llm_turns=[
+                    Outcome(raw_output="security ok", tag="done"),
+                    Outcome(raw_output="cost ok", tag="done"),
+                    fan_in_turn,
+                ]
+            ),
+            session_store=InMemorySessionStore(),
+            checkpoint_store=InMemoryCheckpointStore(),
+        ).run(
+            task_id="task-fan-in-context-write-failure",
+            run_id="run-fan-in-context-write-failure",
+            task_folder=task_folder,
+            run_folder=run_folder,
+            root=tmp_path,
+        )
+
+    assert fan_in_called is False
+    assert published == []
+    assert results_path.exists()
+    assert not context_path.exists()
 
 
 def test_branch_group_evidence_write_failure_stops_before_mechanical_outcome_routing(
