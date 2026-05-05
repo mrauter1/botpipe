@@ -23,3 +23,7 @@
 {"ts": "2026-05-05T20:38:07.983632+00:00", "run_id": "run-20260505T201926Z-7fdaad17", "seq": 23, "event_type": "phase_finished", "pair": "test", "phase": "producer", "cycle": 1, "attempt": 1, "empty_output": false, "phase_id": "contract-hardening"}
 {"ts": "2026-05-05T20:38:57.928179+00:00", "run_id": "run-20260505T201926Z-7fdaad17", "seq": 24, "event_type": "phase_finished", "pair": "test", "phase": "verifier", "cycle": 1, "attempt": 1, "empty_output": false, "phase_id": "contract-hardening"}
 {"ts": "2026-05-05T20:38:57.985301+00:00", "run_id": "run-20260505T201926Z-7fdaad17", "seq": 25, "event_type": "pair_completed", "pair": "test", "cycle": 1, "attempt": 1, "phase_id": "contract-hardening"}
+{"ts": "2026-05-05T20:38:58.076684+00:00", "run_id": "run-20260505T201926Z-7fdaad17", "seq": 26, "event_type": "phase_completed", "pair": "test", "phase_id": "contract-hardening", "phase_mode": "single"}
+{"ts": "2026-05-05T20:38:58.078741+00:00", "run_id": "run-20260505T201926Z-7fdaad17", "seq": 27, "event_type": "phase_started", "phase_id": "async-step-provider-foundation", "phase_mode": "single"}
+{"ts": "2026-05-05T20:38:58.080120+00:00", "run_id": "run-20260505T201926Z-7fdaad17", "seq": 28, "event_type": "pair_started", "pair": "implement", "phase_id": "async-step-provider-foundation"}
+{"ts": "2026-05-05T20:38:58.080226+00:00", "run_id": "run-20260505T201926Z-7fdaad17", "seq": 29, "event_type": "cycle_started", "pair": "implement", "cycle": 1, "attempt": 1, "phase_id": "async-step-provider-foundation"}
