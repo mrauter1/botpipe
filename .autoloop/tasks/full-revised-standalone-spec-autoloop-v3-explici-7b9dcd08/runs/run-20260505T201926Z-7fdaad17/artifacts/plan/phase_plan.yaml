@@ -1,4 +1,173 @@
 version: 1
 task_id: full-revised-standalone-spec-autoloop-v3-explici-7b9dcd08
 request_snapshot_ref: /home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/full-revised-standalone-spec-autoloop-v3-explici-7b9dcd08/runs/run-20260505T201926Z-7fdaad17/request.md
-phases: []
+phases:
+  - phase_id: "contract-hardening"
+    title: "Contract Hardening"
+    objective: "Align authored and compiled branch-group definitions with the supplied v1 contract before enabling new runtime behavior."
+    status: "planned"
+    in_scope:
+      - "Split authored declaration models from compiled branch-group specs."
+      - "Tighten compile-time validation for exact placeholder roots, safe names, explicit fresh sessions, and unsupported branch step kinds."
+      - "Make composite route exposure come only from fan-in routes or mechanical outcome routes."
+      - "Disable or fully fix compile caching for workflows that contain branch groups."
+    out_of_scope:
+      - "Real branch concurrency."
+      - "Provider transport rewrites."
+    dependencies: []
+    acceptance_criteria:
+      - id: "AC-1"
+        text: "Branch-group compilation rejects missing or non-fresh provider sessions, scoped or child-workflow branches, invalid placeholders, and unsafe names with the spec-mandated errors."
+      - id: "AC-2"
+        text: "Compiled branch-group metadata uses dedicated compiled models and exposes only the correct external routes."
+      - id: "AC-3"
+        text: "Compile caching is either proven branch-group-safe or bypassed for branch-group workflows."
+    deliverables:
+      - "Updated branch-group declaration, lowering, validation, and compiler metadata paths."
+      - "Compile-time tests for branch-group contract enforcement."
+    risks:
+      - "Validation tightening may break current permissive tests or examples that rely on unsupported branch step shapes."
+    rollback:
+      - "Revert only branch-group compile-path changes if they destabilize unrelated workflow compilation."
+
+  - phase_id: "async-step-provider-foundation"
+    title: "Async Step Foundation"
+    objective: "Introduce native async provider and one-step execution paths required for asyncio-only branch groups."
+    status: "planned"
+    in_scope:
+      - "Add async provider protocol methods for step, producer, and verifier turns."
+      - "Add async fake-provider coverage and async rendered-provider transport support."
+      - "Add StepDispatcher async execution with explicit capture versus finalize routing."
+    out_of_scope:
+      - "Parallel branch scheduling."
+      - "Legacy sync-provider fallback inside branch groups."
+    dependencies:
+      - "contract-hardening"
+    acceptance_criteria:
+      - id: "AC-1"
+        text: "Provider-backed branch execution can call native async provider methods without thread offloading."
+      - id: "AC-2"
+        text: "One-step async execution supports hooks, artifacts, validation, and route capture without advancing the parent cursor."
+      - id: "AC-3"
+        text: "Sync-only providers fail clearly when used by provider-backed branch groups."
+    deliverables:
+      - "Async provider protocol and adapter updates."
+      - "Async step-execution collaborator path with capture/finalize modes."
+    risks:
+      - "Sync and async execution paths can diverge if route finalization logic is duplicated."
+    rollback:
+      - "Revert async provider entrypoints together with async dispatcher wiring if engine parity breaks."
+
+  - phase_id: "async-branch-runtime"
+    title: "Async Branch Runtime"
+    objective: "Replace the thread-backed branch-group runtime with an asyncio scheduler that honors settle and concurrency semantics."
+    status: "planned"
+    in_scope:
+      - "Schedule branches with asyncio tasks and semaphores."
+      - "Implement settle=all and settle=fail_fast with cancellation, skipped results, and deterministic manifest ordering."
+      - "Keep branch-group orchestration inside the dedicated subsystem and return normal step results to the engine."
+    out_of_scope:
+      - "Workspace isolation or conflict detection."
+      - "Automatic dependency scheduling."
+    dependencies:
+      - "async-step-provider-foundation"
+    acceptance_criteria:
+      - id: "AC-1"
+        text: "The branch-group subsystem contains no thread-based execution or locking primitives."
+      - id: "AC-2"
+        text: "Async provider-backed parallel and fan-out groups run concurrently when concurrency is greater than one."
+      - id: "AC-3"
+        text: "Fail-fast groups stop launching new branches, cancel in-flight work best-effort, and still emit valid branch results."
+    deliverables:
+      - "Async branch-group runtime and scheduler implementation."
+      - "Runtime tests for concurrency, fail-fast, cancellation, and declaration-order manifests."
+    risks:
+      - "Cancellation behavior may vary across provider adapters."
+    rollback:
+      - "Gate provider-backed branch groups to fail early rather than reintroducing thread-backed fallback."
+
+  - phase_id: "session-state-evidence-correctness"
+    title: "Session, State, Evidence"
+    objective: "Make shared-state semantics, branch-local sessions, and runtime-owned evidence paths match the v1 contract."
+    status: "planned"
+    in_scope:
+      - "Remove lock-backed StateCell and synchronized values wrappers from branch-group execution."
+      - "Use branch-execution-local fresh session keys with session_id=None until a provider returns a real id."
+      - "Prevent provider-backed branch session lookup from inheriting parent active sessions."
+      - "Write branch evidence under workflow_folder/_branch_groups instead of root-level _branch_groups."
+    out_of_scope:
+      - "Workspace overlays."
+      - "Automatic state or artifact merge."
+    dependencies:
+      - "async-branch-runtime"
+    acceptance_criteria:
+      - id: "AC-1"
+        text: "Two branches sharing the same Session.fresh declaration receive distinct provider contexts and do not activate parent session slots."
+      - id: "AC-2"
+        text: "Providers receive session_id=None on the first fresh branch turn and manifests only record real returned session ids."
+      - id: "AC-3"
+        text: "Branch evidence and per-branch raw outputs are written under the workflow folder."
+    deliverables:
+      - "Updated branch session overlay and shared-context semantics."
+      - "Evidence-path migration and session/state correctness tests."
+    risks:
+      - "Existing tests and tooling may still assume root-level evidence paths or synthetic session ids."
+    rollback:
+      - "Revert evidence-path changes only with matching test changes; do not restore synthetic session ids."
+
+  - phase_id: "fan-in-outcomes-and-surface"
+    title: "Fan-In and Outcomes"
+    objective: "Complete capture-mode branch routing, fan-in orchestration, manifest/context shape, and public authoring semantics."
+    status: "planned"
+    in_scope:
+      - "Capture branch route destinations and direct controls without following them."
+      - "Finalize fan-in exactly once through the composite route table."
+      - "Complete manifest fields, context markdown sections, helper reads, and mechanical outcome policies."
+      - "Preserve owner-step-relative artifact rooting for branch and fan-in placeholders."
+    out_of_scope:
+      - "Branch-level interactive resume."
+      - "Child-workflow fan-in support."
+    dependencies:
+      - "session-state-evidence-correctness"
+    acceptance_criteria:
+      - id: "AC-1"
+        text: "Branch route on_taken hooks do not run in capture mode and branch destinations are recorded but not followed."
+      - id: "AC-2"
+        text: "Fan-in sees manifest and context metadata, then finalizes the composite route exactly once."
+      - id: "AC-3"
+        text: "Manifest and context outputs are deterministic and include the branch-result fields required by the spec."
+    deliverables:
+      - "Completed branch manifest, context rendering, fan-in metadata, and outcome selection logic."
+      - "Runtime and contract tests for fan-in, Goto, Fail, RequestInput, and placeholder-driven artifact paths."
+    risks:
+      - "Route-finalization changes can regress ordinary step behavior if capture and finalize paths drift."
+    rollback:
+      - "Rollback capture-mode changes together with fan-in orchestration if composite routing becomes inconsistent."
+
+  - phase_id: "strictness-and-cleanup"
+    title: "Strictness and Cleanup"
+    objective: "Close the spec gap with strictness guards, full coverage, and removal of transitional compatibility code."
+    status: "planned"
+    in_scope:
+      - "Add strictness tests banning thread and fake-async primitives in the branch-group subsystem."
+      - "Fill the required compile-time and runtime test matrix from the supplied spec."
+      - "Remove leftover sync-provider, synthetic-session, and thread-era compatibility branches from branch-group code."
+    out_of_scope:
+      - "Future forked-session continuity support."
+      - "Worklist-derived fan-out."
+    dependencies:
+      - "fan-in-outcomes-and-surface"
+    acceptance_criteria:
+      - id: "AC-1"
+        text: "Strictness tests fail on concurrent.futures, ThreadPoolExecutor, Future, FIRST_COMPLETED, threading.RLock, and asyncio.to_thread usage in the branch-group path."
+      - id: "AC-2"
+        text: "The required compile-time and runtime tests from the spec are present and passing."
+      - id: "AC-3"
+        text: "No leftover branch-group compatibility path silently degrades to sync or sequential provider execution."
+    deliverables:
+      - "Strictness tests and completed regression matrix."
+      - "Final cleanup pass removing deprecated branch-group compatibility code."
+    risks:
+      - "Late cleanup can reveal hidden reliance on transitional behavior."
+    rollback:
+      - "Rollback only cleanup-only deletions if a previously supported non-branch workflow path regresses."
