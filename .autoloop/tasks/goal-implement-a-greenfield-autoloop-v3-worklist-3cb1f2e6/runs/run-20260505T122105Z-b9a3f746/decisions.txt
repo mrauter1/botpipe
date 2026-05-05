@@ -15,3 +15,5 @@ Progress worklist regression coverage now asserts `dir_key` fallback parity for 
 <autoloop-decisions-header version="1" block_seq="5" owner="implementer" phase_id="stdlib-progress-worklists" pair="implement" turn_seq="1" run_id="run-20260505T122105Z-b9a3f746" ts="2026-05-05T12:44:34.265238+00:00" />
 The scoped stdlib progress worklist implementation is already present in the workspace; this turn validated it instead of changing source behavior.
 Focused progress worklist suites pass under a local `.venv`, while the requested adjacent stdlib/workspace suites still fail on unrelated workflow catalog/root resolution paths outside the phase-owned worklist files.
+<autoloop-decisions-header version="1" block_seq="6" owner="test_author" phase_id="stdlib-progress-worklists" pair="test" turn_seq="1" run_id="run-20260505T122105Z-b9a3f746" ts="2026-05-05T12:51:11.718161+00:00" />
+Fallback duplicate-id regression coverage now exercises both missing-artifact entrypoints (`ensure()` and `load()`) so future refactors cannot reintroduce invalid pre-write persistence on either path.
