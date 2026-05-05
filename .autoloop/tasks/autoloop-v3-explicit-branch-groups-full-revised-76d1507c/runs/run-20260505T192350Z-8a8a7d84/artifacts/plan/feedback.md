@@ -1,1 +1,2 @@
 # Plan ↔ Plan Verifier Feedback
+- Replaced the empty plan with a single-phase implementation plan focused only on the unresolved branch-group runtime contracts: shared state/values, permissive overlapping writes, and fan-in pending-input checkpoint/resume at the composite boundary. The plan explicitly limits any follow-up code fix to `autoloop/core/branch_groups/runtime.py` or `autoloop/core/engine.py` if the new contract tests expose a defect.

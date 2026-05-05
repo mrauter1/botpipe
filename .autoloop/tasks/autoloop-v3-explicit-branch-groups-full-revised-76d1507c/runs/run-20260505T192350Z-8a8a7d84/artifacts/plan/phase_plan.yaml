@@ -1,4 +1,35 @@
 version: 1
 task_id: autoloop-v3-explicit-branch-groups-full-revised-76d1507c
 request_snapshot_ref: /home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/autoloop-v3-explicit-branch-groups-full-revised-76d1507c/runs/run-20260505T192350Z-8a8a7d84/request.md
-phases: []
+phases:
+  - phase_id: "branch-group-runtime-regression-coverage"
+    title: "Add Missing Branch-Group Runtime Contracts"
+    objective: "Add the unresolved shared-effect and fan-in pending-input regression coverage, applying only a minimal branch-group runtime/checkpoint fix if the new tests fail."
+    status: "planned"
+    in_scope:
+      - "Add real-runtime contract coverage in tests/contract/test_branch_group_runtime.py for shared ctx.state assignment, shared ctx.values mutation, and overlapping workspace writes."
+      - "Add fan-in RequestInput checkpoint/resume coverage that asserts checkpoint.stage stays on the composite branch-group step and resume reaches downstream completion."
+      - "Patch autoloop/core/branch_groups/runtime.py or autoloop/core/engine.py only if the new tests expose a runtime/checkpoint defect."
+    out_of_scope:
+      - "Compiler or simple-surface changes for branch-group declarations."
+      - "Topology, tracing, manifest-schema, or session-policy expansion beyond the failing runtime/checkpoint seam."
+      - "New merge or conflict-resolution semantics for overlapping writes."
+    dependencies: []
+    acceptance_criteria:
+      - id: AC-1
+        text: "The plan directs implement/test to add committed contract coverage that proves real branch execution preserves shared parent state updates, shared values mutations, and permissive overlapping writes."
+      - id: AC-2
+        text: "The plan directs implement/test to add a fan-in RequestInput case that checkpoints at the composite branch-group step, resumes normally, and completes downstream work after the answer is supplied."
+      - id: AC-3
+        text: "The plan constrains any code fix to the minimal branch-group runtime/checkpoint path needed to satisfy the new tests."
+    deliverables:
+      - "Updated plan.md with a single-slice implementation plan, invariants, validation, and risk controls."
+      - "Updated phase_plan.yaml with one ordered implementation phase covering the missing runtime contracts."
+      - "Appended feedback and durable decisions preserving the composite-boundary checkpoint and minimal-fix scope."
+    risks:
+      - "A fan-in pending-input regression may actually live in composite-to-engine control mapping rather than in the test surface."
+      - "Concurrent overlapping-write assertions can become flaky if they depend on final write order instead of non-rejection."
+      - "Broadening fixes past runtime/checkpoint code would re-open already-shipped branch-group scope."
+    rollback:
+      - "Revert only the newly added regression tests if the task is intentionally abandoned before code changes land."
+      - "If a runtime patch is required and proves unsafe, revert that local branch-group runtime/checkpoint change without touching compiler or topology code."
