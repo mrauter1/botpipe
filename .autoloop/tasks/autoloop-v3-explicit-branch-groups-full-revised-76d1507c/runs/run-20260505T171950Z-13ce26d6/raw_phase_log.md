@@ -1292,3 +1292,95 @@ Open issues / next step
 <loop-control>
 {"schema":"docloop.loop_control/v1","kind":"promise","promise":"COMPLETE"}
 </loop-control>
+
+
+---
+run_id=run-20260505T171950Z-13ce26d6 | entry=session_turn | pair=test | phase=producer | cycle=1 | attempt=1 | thread_id=019df95d-8fea-77f3-8730-5b37b11034f7
+---
+provider=codex
+mode=resume
+template=/home/rauter/.local/share/pipx/venvs/autoloop/lib/python3.12/site-packages/autoloop/templates/test_producer.md
+session_id=019df95d-8fea-77f3-8730-5b37b11034f7
+
+
+---
+run_id=run-20260505T171950Z-13ce26d6 | entry=phase_output | pair=test | phase=producer | process=codex-agent | cycle=1 | attempt=1 | thread_id=019df95d-8fea-77f3-8730-5b37b11034f7
+---
+I’m auditing the phase-local test surface and the existing branch-group contract coverage first, then I’ll decide whether this phase needs new assertions or just a coverage-strategy update.
+
+The runtime contract coverage is already in good shape. I’m tightening the test file a bit and then I’ll write the explicit behavior-to-test coverage map and test-phase feedback entry.
+
+I’ve finished the phase-local coverage map and stabilized the concurrent provider expectations in the contract file. I’m running the relevant slices now to make sure the authored tests behave deterministically.
+
+Scope considered
+- Phase-local test work for `composite-runtime-and-evidence` only: the branch-group contract file, the test-phase strategy/feedback artifacts, and the current test-phase decisions block.
+- I did not edit auditor-owned [criteria.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/autoloop-v3-explicit-branch-groups-full-revised-76d1507c/runs/run-20260505T171950Z-13ce26d6/artifacts/test/phases/composite-runtime-and-evidence/criteria.md).
+
+What I analyzed
+- I reviewed the current branch-group contract coverage in [tests/contract/test_branch_group_runtime.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/tests/contract/test_branch_group_runtime.py), the run-local ordering clarification in [decisions.txt](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/autoloop-v3-explicit-branch-groups-full-revised-76d1507c/runs/run-20260505T171950Z-13ce26d6/decisions.txt), and the empty test-phase artifacts in [test_strategy.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/autoloop-v3-explicit-branch-groups-full-revised-76d1507c/runs/run-20260505T171950Z-13ce26d6/artifacts/test/phases/composite-runtime-and-evidence/test_strategy.md) and [feedback.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/autoloop-v3-explicit-branch-groups-full-revised-76d1507c/runs/run-20260505T171950Z-13ce26d6/artifacts/test/phases/composite-runtime-and-evidence/feedback.md).
+- I focused on the phase’s high-risk behaviors: no-fan-in question routing, fan-in helper reads, branch `Goto` capture, branch-local fresh sessions, artifact-path rooting, and success-route-aware `all_settled` outcomes under concurrent execution.
+
+What I changed
+- I refined [tests/contract/test_branch_group_runtime.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/tests/contract/test_branch_group_runtime.py) with a shared `_prompt_routed_outcome(...)` helper so the `all_settled` assertions derive provider outcomes from prompt content instead of invocation order.
+- I populated [test_strategy.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/autoloop-v3-explicit-branch-groups-full-revised-76d1507c/runs/run-20260505T171950Z-13ce26d6/artifacts/test/phases/composite-runtime-and-evidence/test_strategy.md) with an explicit behavior-to-test map covering AC-1/2/3, preserved invariants, edge/failure cases, flake controls, and known gaps.
+- I appended a concise summary entry to [feedback.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/autoloop-v3-explicit-branch-groups-full-revised-76d1507c/runs/run-20260505T171950Z-13ce26d6/artifacts/test/phases/composite-runtime-and-evidence/feedback.md) and recorded the non-obvious stabilization decision under block `12` in [decisions.txt](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/autoloop-v3-explicit-branch-groups-full-revised-76d1507c/runs/run-20260505T171950Z-13ce26d6/decisions.txt).
+
+Key findings / decisions
+- The important stabilization choice is that concurrent branch tests should assert declaration-ordered persisted evidence, not provider callback interleaving order.
+- Validation passed:
+  - `.venv/bin/python -m pytest -q tests/contract/test_branch_group_runtime.py`
+  - `for i in 1 2 3 4 5; do .venv/bin/python -m pytest -q tests/contract/test_branch_group_runtime.py -k 'fan_out_renders_branch_input_roots_artifacts_and_keeps_branch_sessions_local or mechanical_outcomes'; done`
+
+Open issues / next step
+- Known gap: this phase-local contract file still does not explicitly fault-inject manifest/context write failures or `fail_fast` cancellation metadata.
+- The next step is auditor review of the new test strategy and the stabilized branch-group contract coverage.
+
+
+---
+run_id=run-20260505T171950Z-13ce26d6 | entry=session_turn | pair=test | phase=verifier | cycle=1 | attempt=1 | thread_id=019df95d-8fea-77f3-8730-5b37b11034f7
+---
+provider=codex
+mode=resume
+template=/home/rauter/.local/share/pipx/venvs/autoloop/lib/python3.12/site-packages/autoloop/templates/test_verifier.md
+session_id=019df95d-8fea-77f3-8730-5b37b11034f7
+
+
+---
+run_id=run-20260505T171950Z-13ce26d6 | entry=phase_output | pair=test | phase=verifier | process=codex-agent | cycle=1 | attempt=1 | thread_id=019df95d-8fea-77f3-8730-5b37b11034f7
+---
+I’m auditing the phase-local test surface against the acceptance criteria now. The first question is whether the current contract file covers the phase’s required settlement behavior, not just the happy-path routing cases.
+
+I’m finishing the phase-local test audit by checking the artifact checklists against the actual contract coverage. The remaining decision is whether the uncovered `fail_fast` settlement path is material enough to block signoff.
+
+I have enough context to close the audit. The remaining issue is coverage depth, not test flake: the current contract file still omits explicit `fail_fast` settlement assertions even though that behavior is in phase scope and acceptance.
+
+I’m updating the audit artifacts now. The criteria can be narrowed instead of left fully blank: reliability and intent look good, while coverage depth and failure-path protection remain short because `fail_fast` is still untested.
+
+The audit artifact update is in place. I’m doing one quick verification pass on the exact wording and checkbox state before closing with an `INCOMPLETE` result.
+
+Scope considered
+- Phase-local test audit only for `composite-runtime-and-evidence`: the branch-group contract file, the active [test_strategy.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/autoloop-v3-explicit-branch-groups-full-revised-76d1507c/runs/run-20260505T171950Z-13ce26d6/artifacts/test/phases/composite-runtime-and-evidence/test_strategy.md), the current run decisions, and the audit artifacts in the active test-phase directory.
+- I did not widen scope to unrelated dirty files or modify repository code/tests.
+
+What I analyzed
+- I reviewed [tests/contract/test_branch_group_runtime.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/tests/contract/test_branch_group_runtime.py), the known-gap section in [test_strategy.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/autoloop-v3-explicit-branch-groups-full-revised-76d1507c/runs/run-20260505T171950Z-13ce26d6/artifacts/test/phases/composite-runtime-and-evidence/test_strategy.md), and the latest ordering clarification in [decisions.txt](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/autoloop-v3-explicit-branch-groups-full-revised-76d1507c/runs/run-20260505T171950Z-13ce26d6/decisions.txt).
+- I ran `.venv/bin/python -m pytest -q tests/contract/test_branch_group_runtime.py`, which passed with `5 passed`.
+- I searched for settlement-path coverage with `rg -n "fail_fast|settle=|cancelled|skipped" tests/contract/test_branch_group_runtime.py tests/unit/test_simple_surface.py` and found no phase-local runtime coverage for `fail_fast`.
+
+What I reviewed
+- The authored tests now avoid the earlier concurrency flake correctly: they assert persisted evidence ordering rather than provider callback interleaving, which matches the request and decisions ledger.
+- The suite covers several high-risk paths already: no-fan-in question routing, fan-in helper exposure, fan-out branch input/artifact/session behavior, branch `Goto` capture, `all_settled` success-route handling, and custom outcome aggregation.
+- I updated [criteria.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/autoloop-v3-explicit-branch-groups-full-revised-76d1507c/runs/run-20260505T171950Z-13ce26d6/artifacts/test/phases/composite-runtime-and-evidence/criteria.md) to mark `Reliability` and `Behavioral Intent` as satisfied, while leaving the coverage and failure-path criteria unchecked.
+- I appended a blocking audit finding to [feedback.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/autoloop-v3-explicit-branch-groups-full-revised-76d1507c/runs/run-20260505T171950Z-13ce26d6/artifacts/test/phases/composite-runtime-and-evidence/feedback.md).
+
+Key findings / decisions
+- `TST-001` blocking: [tests/contract/test_branch_group_runtime.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/tests/contract/test_branch_group_runtime.py) still has no explicit `settle="fail_fast"` coverage even though the phase scope and AC-1 require settlement-policy behavior. The active [test_strategy.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/autoloop-v3-explicit-branch-groups-full-revised-76d1507c/runs/run-20260505T171950Z-13ce26d6/artifacts/test/phases/composite-runtime-and-evidence/test_strategy.md) acknowledges this gap.
+- That omission is material because a regression in branch admission stopping, cancellation requests, or persisted `cancelled` / `skipped` results could ship while the current suite still passes on the default settlement path only.
+
+Open issues / next step
+- Add a deterministic `fail_fast` contract test that proves new branches stop being scheduled after the first hard failure and that composite-boundary evidence records cancelled or skipped branches correctly.
+- A secondary gap remains around explicit manifest/context write-failure fault injection, but the missing `fail_fast` settlement coverage is the blocking issue for this audit.
+
+<loop-control>
+{"schema":"docloop.loop_control/v1","kind":"promise","promise":"INCOMPLETE"}
+</loop-control>
