@@ -255,3 +255,87 @@ None for this phase.
 <loop-control>
 {"schema":"docloop.loop_control/v1","kind":"promise","promise":"COMPLETE"}
 </loop-control>
+
+
+---
+run_id=run-20260505T192350Z-8a8a7d84 | entry=session_turn | pair=test | phase=producer | cycle=1 | attempt=1 | thread_id=019df99e-3f0e-7270-80e8-e9a2c71d1a32
+---
+provider=codex
+mode=resume
+template=/home/rauter/.local/share/pipx/venvs/autoloop/lib/python3.12/site-packages/autoloop/templates/test_producer.md
+session_id=019df99e-3f0e-7270-80e8-e9a2c71d1a32
+
+
+---
+run_id=run-20260505T192350Z-8a8a7d84 | entry=phase_output | pair=test | phase=producer | process=codex-agent | cycle=1 | attempt=1 | thread_id=019df99e-3f0e-7270-80e8-e9a2c71d1a32
+---
+I’m validating the branch-group regression coverage from the test-phase perspective now: first the active test artifacts, then the current contract tests and the targeted validation run before I update the strategy and feedback files.
+
+The new contracts already line up with the phase intent, so this pass is mainly validation and test-phase artifacting. I’m rerunning the targeted branch-group contract file now, then I’ll record the exact behavior-to-test map and stabilization notes.
+
+The targeted suite passed. I’m recording the stabilization choices and scope boundaries in the test-phase artifacts now so later turns don’t drift into stronger overlap or resume-replay semantics than this slice asked for.
+
+I’m making one small refinement to the contract tests themselves: explicit history assertions so the branch-group step-to-downstream routing remains pinned, not just the terminal state.
+
+The refinement passed. I’m syncing the artifact text with the final test shape now, including the explicit history pin for composite-step-to-downstream routing.
+
+Scope considered
+
+Phase-local test work only: the branch-group runtime contract additions in [tests/contract/test_branch_group_runtime.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/tests/contract/test_branch_group_runtime.py:301), plus the active test-phase artifacts and run-local decisions ledger.
+
+What I analyzed
+
+I reviewed the accepted scope, the current regression tests already added for shared branch effects and fan-in pending input, and the non-obvious constraints recorded in [decisions.txt](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/autoloop-v3-explicit-branch-groups-full-revised-76d1507c/runs/run-20260505T192350Z-8a8a7d84/decisions.txt:1). I also reran the targeted contract file to verify the final test shape against the real runtime path.
+
+What I changed
+
+I refined the two new contract tests to pin downstream routing history explicitly with `("reviews", "publish")` in both the shared-effects case and the fan-in resume case in [tests/contract/test_branch_group_runtime.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/tests/contract/test_branch_group_runtime.py:301). I updated the behavior-to-test coverage map in [test_strategy.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/autoloop-v3-explicit-branch-groups-full-revised-76d1507c/runs/run-20260505T192350Z-8a8a7d84/artifacts/test/phases/branch-group-runtime-regression-coverage/test_strategy.md:1), appended the test-phase summary to [feedback.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/autoloop-v3-explicit-branch-groups-full-revised-76d1507c/runs/run-20260505T192350Z-8a8a7d84/artifacts/test/phases/branch-group-runtime-regression-coverage/feedback.md:1), and recorded the stabilization/scope decisions under the current test-author header in `decisions.txt`.
+
+Key findings / decisions
+
+The coverage remains deterministic by using `concurrency=1` for the same-path overlap assertion, which proves permissive writes without inventing concurrent merge semantics. The fan-in coverage intentionally stops at composite-boundary checkpointing, `Engine.resume(...)`, and downstream completion; it does not encode replay-suppression behavior that the request did not ask for. Validation passed with `./.venv/bin/python -m pytest tests/contract/test_branch_group_runtime.py` (`10 passed`).
+
+Open issues / next step
+
+No open issues in this phase scope.
+
+
+---
+run_id=run-20260505T192350Z-8a8a7d84 | entry=session_turn | pair=test | phase=verifier | cycle=1 | attempt=1 | thread_id=019df99e-3f0e-7270-80e8-e9a2c71d1a32
+---
+provider=codex
+mode=resume
+template=/home/rauter/.local/share/pipx/venvs/autoloop/lib/python3.12/site-packages/autoloop/templates/test_verifier.md
+session_id=019df99e-3f0e-7270-80e8-e9a2c71d1a32
+
+
+---
+run_id=run-20260505T192350Z-8a8a7d84 | entry=phase_output | pair=test | phase=verifier | process=codex-agent | cycle=1 | attempt=1 | thread_id=019df99e-3f0e-7270-80e8-e9a2c71d1a32
+---
+I’m auditing the branch-group regression coverage against the test-phase criteria first, then I’ll verify the exact tests and validation evidence before I mark the audit artifacts.
+
+The strategy and decisions line up with the current test shape. I’m rerunning the targeted branch-group contract file as an independent audit pass now, then I’ll mark the audit artifacts.
+
+Scope considered
+
+Phase-local test audit only: the new branch-group regression coverage in `tests/contract/test_branch_group_runtime.py`, the active [test_strategy.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/autoloop-v3-explicit-branch-groups-full-revised-76d1507c/runs/run-20260505T192350Z-8a8a7d84/artifacts/test/phases/branch-group-runtime-regression-coverage/test_strategy.md:1), the active [feedback.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/autoloop-v3-explicit-branch-groups-full-revised-76d1507c/runs/run-20260505T192350Z-8a8a7d84/artifacts/test/phases/branch-group-runtime-regression-coverage/feedback.md:1), and the run-local decisions ledger.
+
+What I analyzed
+
+I checked the request-scoped acceptance criteria against the actual tests for shared branch effects, overlapping writes, and authored fan-in pending input. I also verified the explicit stabilization decisions around `concurrency=1`, composite-boundary checkpointing, and the intentional non-assertion of broader replay or merge semantics.
+
+What I reviewed
+
+I reviewed the two added contract tests for behavior coverage, adjacent regression protection, and flake control, then independently reran `./.venv/bin/python -m pytest tests/contract/test_branch_group_runtime.py`. The audit pass succeeded with `10 passed`.
+
+Key findings / decisions
+
+No blocking or non-blocking audit findings. The tests cover the requested runtime/checkpoint behavior at the contract level, include the material preserved invariants, and use deterministic expectations that match the recorded decisions and scoped intent.
+
+Open issues / next step
+
+None for this phase.
+
+<loop-control>
+{"schema":"docloop.loop_control/v1","kind":"promise","promise":"COMPLETE"}
+</loop-control>

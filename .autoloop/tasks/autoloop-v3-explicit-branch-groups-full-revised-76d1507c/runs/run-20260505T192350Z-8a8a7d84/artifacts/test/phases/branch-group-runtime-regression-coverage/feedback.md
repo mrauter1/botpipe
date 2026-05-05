@@ -11,3 +11,7 @@
 
 - Added/validated two branch-group contract regressions in `tests/contract/test_branch_group_runtime.py`: shared `ctx.state` replacement plus shared `ctx.values` visibility with permissive same-path writes and pinned `reviews -> publish` routing, and authored fan-in `RequestInput` checkpoint/resume at the composite boundary with resumed downstream routing pinned the same way.
 - Validation: `./.venv/bin/python -m pytest tests/contract/test_branch_group_runtime.py` (`10 passed`).
+
+## Audit Findings
+
+No blocking or non-blocking audit findings. Independent audit validation passed with `./.venv/bin/python -m pytest tests/contract/test_branch_group_runtime.py`.
