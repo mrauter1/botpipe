@@ -2405,3 +2405,54 @@ Open issues / next step
 <loop-control>
 {"schema":"docloop.loop_control/v1","kind":"promise","promise":"COMPLETE"}
 </loop-control>
+
+
+---
+run_id=run-20260505T220513Z-1920f9e6 | entry=session_turn | pair=test | phase=producer | cycle=1 | attempt=1 | thread_id=019dfa30-163b-78d1-ac99-1b4a505732e6
+---
+provider=codex
+mode=resume
+template=/home/rauter/.local/share/pipx/venvs/autoloop/lib/python3.12/site-packages/autoloop/templates/test_producer.md
+session_id=019dfa30-163b-78d1-ac99-1b4a505732e6
+
+
+---
+run_id=run-20260505T220513Z-1920f9e6 | entry=phase_output | pair=test | phase=producer | process=codex-agent | cycle=1 | attempt=1 | thread_id=019dfa30-163b-78d1-ac99-1b4a505732e6
+---
+I’m checking the existing contract coverage and the active test artifacts first, then I’ll add only the missing regression case that this phase still leaves exposed.
+
+The current coverage proves ordinary-step inheritance and explicit-empty override, but it doesn’t pin the verifier-side mixed case where an explicit empty authored route coexists with inherited control-route obligations. I’m adding that one regression test and then I’ll update the phase test strategy around it.
+
+I’ve chosen the smallest missing regression slice: verifier-side explicit-empty override with required producer and verifier artifacts. That’s the one place where this phase’s authored-vs-effective split could drift again without breaking the existing canonical tests.
+
+I’ve added the verifier-specific regression test. I’m running it with the existing ordinary-step and canonical produce/verify contract checks to confirm the new expectation matches the restored helper behavior.
+
+The new regression test is green. I’m doing one more focused preservation pass on branch-group and static-graph coverage so the test artifact can distinguish between the newly added case and the existing preserved-behavior suites it depends on.
+
+I have the final test evidence I need. I’m writing the strategy artifact with a behavior-to-coverage map and recording the one non-obvious test choice: verifier explicit-empty overrides need to coexist with inherited control-route obligations.
+
+Scope considered
+- Request-relevant contract tests for ordinary `step(...)`, verifier-side `produce_verify_step(...)`, explicit empty overrides, global-route payloads, and preserved branch-group coverage.
+- Active phase artifacts [test_strategy.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/full-revised-standalone-spec-autoloop-v3-explici-7b9dcd08/runs/run-20260505T220513Z-1920f9e6/artifacts/test/phases/restore-provider-route-required-writes/test_strategy.md:1) and [feedback.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/full-revised-standalone-spec-autoloop-v3-explici-7b9dcd08/runs/run-20260505T220513Z-1920f9e6/artifacts/test/phases/restore-provider-route-required-writes/feedback.md:1), plus the current test-author block in `decisions.txt`.
+
+What I analyzed
+- Existing canonical contract assertions in `tests/contract/test_canonical_runtime_contracts.py`.
+- The added ordinary-step explicit-empty regression in `tests/contract/test_engine_contracts.py`.
+- Remaining gap around verifier-side explicit-empty overrides with inherited control-route obligations.
+
+What I changed
+- Added [test_produce_verify_step_verifier_contract_preserves_explicit_empty_route_override](/home/rauter/autoloop_v3_bkp/autoloop_v3/tests/contract/test_engine_contracts.py:7826) to pin the mixed verifier case:
+  selected authored route stays explicitly empty, control routes still inherit effective required writes, and producer-side route contracts remain empty.
+- Updated [test_strategy.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/full-revised-standalone-spec-autoloop-v3-explici-7b9dcd08/runs/run-20260505T220513Z-1920f9e6/artifacts/test/phases/restore-provider-route-required-writes/test_strategy.md:10) with the behavior-to-test coverage map, preserved invariants, edge cases, stabilization notes, and known gaps.
+- Appended a concise summary to [feedback.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/full-revised-standalone-spec-autoloop-v3-explici-7b9dcd08/runs/run-20260505T220513Z-1920f9e6/artifacts/test/phases/restore-provider-route-required-writes/feedback.md:10) and recorded the non-obvious test decision in `decisions.txt`.
+
+Key findings / decisions
+- The material uncovered gap was verifier-side explicit-empty authored routes; existing coverage already proved ordinary-step inheritance and canonical verifier inheritance, but not their coexistence with an explicit empty selected route.
+- I kept the new test deterministic with `ScriptedLLMProvider`, in-memory stores, and direct artifact writes.
+- Validation run results:
+  `./.venv/bin/python -m pytest -q tests/contract/test_engine_contracts.py::test_produce_verify_step_verifier_contract_preserves_explicit_empty_route_override tests/contract/test_canonical_runtime_contracts.py::test_canonical_produce_verify_contract_splits_phase_writes_and_verifier_routes tests/contract/test_engine_contracts.py::test_explicit_empty_required_writes_override_skips_artifact_level_required_defaults` → `3 passed`
+  `./.venv/bin/python -m pytest -q tests/contract/test_branch_group_runtime.py tests/runtime/test_runtime_static_graph.py::test_topology_payload_keeps_explicit_global_route_required_writes_concrete` → `22 passed`
+
+Open issues / next step
+- No open blocker in this test phase.
+- Known gap is documented in `test_strategy.md`: no new branch-group-specific explicit-empty verifier assertion was added because the shared branch-group suite already passed unchanged and the helper behavior is pinned directly at the provider-contract layer.
