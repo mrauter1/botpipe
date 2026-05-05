@@ -1,0 +1,7 @@
+{
+  "run_id": "run-20260505T122105Z-b9a3f746",
+  "created_at": "2026-05-05T12:21:05.729921+00:00",
+  "request_file": "/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/goal-implement-a-greenfield-autoloop-v3-worklist-3cb1f2e6/runs/run-20260505T122105Z-b9a3f746/request.md",
+  "artifacts_dir": "/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/goal-implement-a-greenfield-autoloop-v3-worklist-3cb1f2e6/runs/run-20260505T122105Z-b9a3f746/artifacts",
+  "provider": "codex"
+}
