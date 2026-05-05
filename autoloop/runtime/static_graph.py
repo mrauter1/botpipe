@@ -364,7 +364,7 @@ def _branch_group_surface_payload(
             {
                 "name": branch.name,
                 "index": branch.index,
-                "input": _json_value(branch.input),
+                "input": branch.input,
                 "step": _internal_step_surface_payload(
                     compiled,
                     branch.step,

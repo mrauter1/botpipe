@@ -175,6 +175,47 @@ def test_branch_group_internal_shape_changes_topology_hash() -> None:
     assert compiled_a.topology_hash != compiled_b.topology_hash
 
 
+def test_branch_group_payloads_preserve_structured_fan_out_inputs(tmp_path: Path) -> None:
+    class BranchInputTopologyWorkflow(Workflow):
+        name = "branch_input_topology_demo"
+
+        class State(BaseModel):
+            pass
+
+        assess = simple.fan_out(
+            step=simple.step("Assess {branch.input.area}.", name="assess_one", session=simple.Session.fresh()),
+            branches={
+                "security": {
+                    "area": "security",
+                    "checks": ["deps", "secrets"],
+                    "critical": True,
+                }
+            },
+        )
+
+    compiled = compile_workflow(BranchInputTopologyWorkflow)
+
+    static_payload = workflow_static_step_graph_payload(compiled)
+    topology_payload = workflow_topology_payload(compiled)
+    write_static_step_graph(tmp_path, compiled)
+    write_topology_artifacts(tmp_path, compiled)
+
+    static_assess = next(step_payload for step_payload in static_payload["steps"] if step_payload["name"] == "assess")
+    topology_assess = next(step_payload for step_payload in topology_payload["steps"] if step_payload["name"] == "assess")
+    persisted_static = json.loads((tmp_path / "static_step_graph.json").read_text(encoding="utf-8"))
+    persisted_topology = json.loads((tmp_path / TOPOLOGY_FILENAME).read_text(encoding="utf-8"))
+    expected_input = {
+        "area": "security",
+        "checks": ["deps", "secrets"],
+        "critical": True,
+    }
+
+    assert static_assess["branch_group"]["branches"][0]["input"] == expected_input
+    assert topology_assess["branch_group"]["branches"][0]["input"] == expected_input
+    assert persisted_static["steps"][0]["branch_group"]["branches"][0]["input"] == expected_input
+    assert persisted_topology["steps"][0]["branch_group"]["branches"][0]["input"] == expected_input
+
+
 def test_topology_artifacts_are_written_additively_with_canonical_finish_surface(tmp_path: Path) -> None:
     compiled = compile_workflow(_StaticGraphWorkflow)
 
