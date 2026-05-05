@@ -1,1 +1,2 @@
 # Plan ↔ Plan Verifier Feedback
+- Added the first implementation-ready branch-group plan and phased decomposition after checking discovery, compiler, context, session-store, dispatcher, artifact, tracing, and topology seams. The plan explicitly calls out the two hidden prerequisite refactors: shared state-cell plumbing and context-bound branch session-store views, because the current engine stores `_state` directly and still reads/writes sessions through the engine-global store.
