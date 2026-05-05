@@ -182,6 +182,20 @@ def test_progress_source_normalizes_missing_status_to_initial(tmp_path: Path) ->
     assert items[0].dir_key == "p1"
 
 
+def test_progress_source_uses_safe_default_dir_key_for_unsafe_item_id(tmp_path: Path) -> None:
+    ctx = _context(tmp_path)
+    path = ctx.workflow_folder / "worklists" / "phase.json"
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.write_text(
+        json.dumps({"items": [{"id": "phase/1", "title": "Phase 1"}]}) + "\n",
+        encoding="utf-8",
+    )
+
+    items = ProgressJsonCollectionSource(artifact=_artifact()).load(ctx)
+
+    assert items[0].dir_key == f"_item-{'phase/1'.encode('utf-8').hex()}"
+
+
 def test_progress_source_rejects_duplicate_ids(tmp_path: Path) -> None:
     ctx = _context(tmp_path)
     path = ctx.workflow_folder / "worklists" / "phase.json"
