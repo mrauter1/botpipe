@@ -1614,3 +1614,128 @@ Open issues / next step
 <loop-control>
 {"schema":"docloop.loop_control/v1","kind":"promise","promise":"COMPLETE"}
 </loop-control>
+
+
+---
+run_id=run-20260505T201926Z-7fdaad17 | entry=session_turn | pair=test | phase=producer | cycle=1 | attempt=1 | thread_id=019dfa12-b013-7731-be93-05caf44ed406
+---
+provider=codex
+mode=resume
+template=/home/rauter/.local/share/pipx/venvs/autoloop/lib/python3.12/site-packages/autoloop/templates/test_producer.md
+session_id=019dfa12-b013-7731-be93-05caf44ed406
+
+
+---
+run_id=run-20260505T201926Z-7fdaad17 | entry=phase_output | pair=test | phase=producer | process=codex-agent | cycle=1 | attempt=1 | thread_id=019dfa12-b013-7731-be93-05caf44ed406
+---
+I’m treating this as phase-local test work for the new fan-in observability and surface additions. First I’m reading the active test artifacts and the existing branch-group test coverage to find the smallest regression tests that pin the newly added behavior.
+
+I’ve identified three concrete regressions worth pinning: fan-in execution ids in traces, additive branch-group surface fields in topology/static graph, and the new detailed context markdown sections. I’m adding focused assertions to the existing branch-group suites rather than creating new fixture-heavy tests.
+
+The new assertions are in. I’m running the affected branch-group runtime, static-graph, and tracing suites now to verify the added coverage is stable and deterministic.
+
+Three new assertions failed. I’m reading the failure details and the actual emitted payloads before adjusting the tests, rather than loosening them blindly.
+
+One of the new test ideas exposed a real mismatch: `branch_scheduled` is still not carrying the composite execution id despite the implementation notes claiming it does. I’m verifying whether that’s a real production gap or just a bad assertion before I decide whether to keep it as a failing regression test.
+
+I’ve confirmed one real contract gap and two over-specific assertions. I’m inspecting the actual emitted context text once so I can keep the meaningful coverage while only leaving the genuinely failing regression check in place.
+
+I found one legitimate implementation gap worth keeping as a failing regression test: the new failure-detail line lands under the cancellation summary block instead of the failure summary block. I’m tightening the other two tests to the actual intended surface so only the real defect remains red.
+
+The suite is where I want it: the new trace and topology coverage pass, and one targeted context-markdown assertion now exposes a real implementation defect in section ordering. I’m recording that coverage map and the current red test in the phase artifacts now.
+
+Scope considered
+
+- Phase-local test work for `fan-in-outcomes-and-surface`.
+- New implementation surfaces in branch-group runtime tracing, branch-group `context.md`, and branch-group topology/static-graph payloads.
+
+What I analyzed
+
+- The active phase contract and run-local decisions, especially the new fan-in execution-id and additive branch-group surface decisions.
+- Existing coverage in `tests/contract/test_branch_group_runtime.py`, `tests/runtime/test_runtime_static_graph.py`, and `tests/runtime/test_runtime_tracing.py`.
+- The actual emitted runtime trace payloads and rendered `context.md` to distinguish real implementation gaps from over-specific assertions.
+
+What I changed
+
+- Added context-markdown assertions in [tests/contract/test_branch_group_runtime.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/tests/contract/test_branch_group_runtime.py) for:
+  - needs-input detail sections
+  - fail-fast failure/cancellation detail rendering
+- Added additive branch-group surface assertions in [tests/runtime/test_runtime_static_graph.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/tests/runtime/test_runtime_static_graph.py) for:
+  - `outcome_policy`
+  - `has_fan_in`
+  - `default_chain_route`
+  - `rework_chain_route`
+  - both fan-in and mechanical-outcome groups
+- Added trace assertions in [tests/runtime/test_runtime_tracing.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/tests/runtime/test_runtime_tracing.py) for:
+  - fan-in `step_execution_id`
+  - branch-scheduled `step_execution_id` matching the composite step
+- Updated [test_strategy.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/full-revised-standalone-spec-autoloop-v3-explici-7b9dcd08/runs/run-20260505T201926Z-7fdaad17/artifacts/test/phases/fan-in-outcomes-and-surface/test_strategy.md), [feedback.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/full-revised-standalone-spec-autoloop-v3-explici-7b9dcd08/runs/run-20260505T201926Z-7fdaad17/artifacts/test/phases/fan-in-outcomes-and-surface/feedback.md), and appended the phase-local test decision in `decisions.txt`.
+
+Key findings / decisions
+
+- The new trace and topology/static-graph assertions are green.
+- One new targeted regression test is intentionally red and exposes a real implementation defect:
+  - in fail-fast `context.md`, the new failure-detail line is rendered after the cancellation-summary block instead of inside the failure-summary block.
+- I kept the failing assertion because it matches the intended sectioned context contract more accurately than the current implementation.
+
+Open issues / next step
+
+- Validation run: `.venv/bin/python -m pytest -q tests/contract/test_branch_group_runtime.py tests/runtime/test_runtime_static_graph.py tests/runtime/test_runtime_tracing.py`
+  - Result: `58 passed, 1 failed`
+- Remaining failing test:
+  - `tests/contract/test_branch_group_runtime.py::test_parallel_branch_group_fail_fast_cancels_in_flight_async_branches_and_keeps_manifest_order`
+- Next step is to move failure-detail rendering under the `## Failure Summary` section in `autoloop/core/branch_groups/manifest.py`, then rerun the same targeted suite.
+
+
+---
+run_id=run-20260505T201926Z-7fdaad17 | entry=session_turn | pair=test | phase=verifier | cycle=1 | attempt=1 | thread_id=019dfa12-b013-7731-be93-05caf44ed406
+---
+provider=codex
+mode=resume
+template=/home/rauter/.local/share/pipx/venvs/autoloop/lib/python3.12/site-packages/autoloop/templates/test_verifier.md
+session_id=019dfa12-b013-7731-be93-05caf44ed406
+
+
+---
+run_id=run-20260505T201926Z-7fdaad17 | entry=phase_output | pair=test | phase=verifier | process=codex-agent | cycle=1 | attempt=1 | thread_id=019dfa12-b013-7731-be93-05caf44ed406
+---
+I’m auditing the phase-local test additions and the current validation outcome, with focus on whether the new tests correctly pin the changed behavior and whether the remaining red test represents a real regression detector rather than an invalid expectation.
+
+I’m auditing the phase-local test artifacts against the new test additions and the known red regression case, then I’ll update the audit criteria and feedback only within the active test artifact directory.
+
+The audit conclusion is narrow: the new tests are aligned with the phase contract, and the lone red case is a valid regression detector rather than a bad expectation. I’m updating the audit criteria to complete and recording that no additional audit findings were identified.
+
+The audit artifacts are updated. I’m doing one quick readback to ensure the criteria are fully checked and the feedback entry is recorded exactly once before closing this turn.
+
+Scope considered
+
+- Phase-local test audit for `fan-in-outcomes-and-surface`.
+- Audit artifact updates only in the active test phase directory.
+- Changed test coverage around branch-group `context.md`, trace payloads, and static-graph/topology metadata.
+
+What I analyzed
+
+- The active phase contract, acceptance criteria, test strategy, and run-local decisions.
+- The new test coverage described by the test author and the reported targeted pytest result.
+- The known remaining red case to determine whether it reflects a bad test or a valid regression detector.
+
+What I reviewed
+
+- Coverage depth for AC-1 through AC-5.
+- Whether the tests protect intended behavior without normalizing regressions.
+- Flake risk and assertion stability for the newly added checks.
+
+Key findings / decisions
+
+- No blocking audit findings.
+- `TST-001` was recorded as non-blocking: the remaining red test is appropriate and should stay red until the implementation fixes the `context.md` section-order bug.
+- `criteria.md` was updated to fully checked because the tests are directionally correct, targeted, and regression-protective for the scoped behavior.
+
+Open issues / next step
+
+- The only open item is implementation-side: move the fail-fast failure-detail line into the `## Failure Summary` section, then rerun the targeted suite.
+- Test audit is complete.
+
+<loop-control>
+{"schema":"docloop.loop_control/v1","kind":"promise","promise":"COMPLETE"}
+</loop-control>
