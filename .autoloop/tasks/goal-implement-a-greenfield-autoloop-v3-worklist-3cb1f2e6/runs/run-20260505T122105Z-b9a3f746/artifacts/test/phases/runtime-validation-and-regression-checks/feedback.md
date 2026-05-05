@@ -6,3 +6,6 @@
 - Phase Directory Key: runtime-validation-and-regression-checks
 - Phase Title: Validate runtime behavior and guard regressions
 - Scope: phase-local authoritative verifier artifact
+
+- Added repo-local workflow regression coverage in `tests/runtime/test_workflow_catalog_roots.py` for default manifest metadata/test-path discovery and for `workflows.*` module refresh across distinct temp repo roots.
+- Revalidated the requested focused and adjacent regression commands after the test additions: `49 passed` and `173 passed`.

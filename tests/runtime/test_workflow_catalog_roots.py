@@ -95,6 +95,52 @@ class {class_name}(Workflow):
     return package_dir
 
 
+def _write_repo_flow(
+    root: Path,
+    workflow_id: str,
+    *,
+    workflow_name: str | None = None,
+    aliases: tuple[str, ...] = (),
+    manifest_text: str | None = None,
+    class_name: str = "RepoWorkflow",
+    marker: str = "default",
+    source: str | None = None,
+) -> Path:
+    workflows_root = root / "workflows"
+    workflows_root.mkdir(parents=True, exist_ok=True)
+    (workflows_root / "__init__.py").write_text("__all__ = []\n", encoding="utf-8")
+    package_dir = workflows_root / workflow_id
+    package_dir.mkdir(parents=True, exist_ok=True)
+    if manifest_text is None:
+        aliases_source = ", ".join(f'"{alias}"' for alias in aliases)
+        manifest_lines = [f'name = "{workflow_name or workflow_id}"']
+        if aliases:
+            manifest_lines.append(f"aliases = [{aliases_source}]")
+        manifest_text = "\n".join(manifest_lines) + "\n"
+    (package_dir / "workflow.toml").write_text(manifest_text, encoding="utf-8")
+    if source is None:
+        source = f"""
+from __future__ import annotations
+
+from autoloop import Workflow, python_step
+
+
+class {class_name}(Workflow):
+    name = "{workflow_name or workflow_id}"
+    marker = "{marker}"
+
+    @python_step(name="start")
+    def start(ctx):
+        return None
+""".strip()
+    (package_dir / "workflow.py").write_text(source + "\n", encoding="utf-8")
+    (package_dir / "__init__.py").write_text(
+        f"from .workflow import {class_name}\n__all__ = ['{class_name}']\n",
+        encoding="utf-8",
+    )
+    return package_dir
+
+
 def _write_workspace_single_file(root: Path, workflow_id: str, *, class_name: str = "SingleWorkflow") -> Path:
     source_path = root / ".autoloop" / "workflows" / f"{workflow_id}.py"
     source_path.parent.mkdir(parents=True, exist_ok=True)
@@ -231,6 +277,30 @@ def test_discover_workflow_catalog_returns_workspace_and_package_source_kinds(
     assert entries["single_demo"].authoring_shape == "single_file"
 
 
+def test_discover_repo_local_catalog_entries_use_workflows_namespace_defaults_and_repo_tests(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    _configure_package_root(monkeypatch, tmp_path)
+    package_dir = _write_repo_flow(tmp_path, "repo_demo", aliases=("demo_alias",))
+    runtime_test = tmp_path / "tests" / "runtime" / "test_repo_demo.py"
+    runtime_test.parent.mkdir(parents=True, exist_ok=True)
+    runtime_test.write_text("def test_repo_demo():\n    assert True\n", encoding="utf-8")
+
+    entries = {entry.workflow_name: entry for entry in discover_workflow_catalog(tmp_path)}
+    entry = entries["repo_demo"]
+
+    assert entry.source_root_kind == "workspace"
+    assert entry.package_dir == package_dir
+    assert entry.source_path == package_dir / "workflow.py"
+    assert entry.package_module == "workflows.repo_demo"
+    assert entry.workflow_module == "workflows.repo_demo.workflow"
+    assert entry.title == "Repo Demo"
+    assert entry.description == ""
+    assert entry.aliases == ("demo_alias",)
+    assert entry.test_paths == (runtime_test.resolve(),)
+
+
 def test_manifest_requires_title_and_description_even_without_aliases(tmp_path: Path) -> None:
     manifest_path = tmp_path / "workflow.toml"
     manifest_path.write_text('name = "demo"\n', encoding="utf-8")
@@ -296,6 +366,23 @@ def test_imported_package_class_resolves_shadowed_package_entry(
     assert resolved.reference.source_path == package_dir / "flow.py"
     assert resolved.reference.workflow_module == "autoloop.workflows.package_demo.flow"
 
+
+def test_repo_local_module_resolution_evicts_stale_workflows_namespace_between_roots(tmp_path: Path) -> None:
+    first_root = tmp_path / "root_one"
+    second_root = tmp_path / "root_two"
+    _write_repo_flow(first_root, "repo_demo", marker="one")
+    _write_repo_flow(second_root, "repo_demo", marker="two")
+
+    first = resolve_workflow_reference(first_root, "repo_demo")
+    second = resolve_workflow_reference(second_root, "repo_demo")
+
+    assert first.reference.package_module == "workflows.repo_demo"
+    assert second.reference.package_module == "workflows.repo_demo"
+    assert first.reference.source_path == first_root / "workflows" / "repo_demo" / "workflow.py"
+    assert second.reference.source_path == second_root / "workflows" / "repo_demo" / "workflow.py"
+    assert first.workflow_cls.marker == "one"
+    assert second.workflow_cls.marker == "two"
+    assert second.workflow_cls is not first.workflow_cls
 
 def test_same_tier_resolution_key_collisions_fail_with_paths(
     tmp_path: Path,
