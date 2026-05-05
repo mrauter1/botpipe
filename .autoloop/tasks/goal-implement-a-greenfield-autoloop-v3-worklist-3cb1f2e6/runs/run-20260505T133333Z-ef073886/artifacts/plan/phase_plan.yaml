@@ -4,7 +4,7 @@ request_snapshot_ref: /home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/g
 phases:
   - phase_id: "restore-workflow-resolution-contract"
     title: "Restore Workflow Resolution Contract"
-    objective: "Re-separate named catalog precedence from explicit path/class loading so repo-local workflows support remains without breaking alias visibility, isolated workspace namespaces, or Params lookup parity."
+    objective: "Restore the mixed-root workflow resolution contract so bare names and workspace aliases remain authoritative from .autoloop/workflows while explicit repo-local references keep repo-local workflows support and isolated Params loading parity."
     status: "planned"
     in_scope:
       - "workflow catalog shadowing and alias resolution across repo-local workflows/, .autoloop/workflows/, and installed autoloop/workflows/"
@@ -16,11 +16,11 @@ phases:
     dependencies: []
     acceptance_criteria:
       - id: "AC-1"
-        text: "tests/runtime/test_workflow_reference_resolution.py passes with canonical-name precedence preserved, workspace-catalog aliases restored, and explicit repo-local file/class references retaining isolated workspace module semantics."
+        text: "tests/runtime/test_workflow_reference_resolution.py passes with .autoloop/workflows authoritative for mixed-root bare names and aliases, and explicit repo-local file/class references retaining isolated workspace module semantics."
       - id: "AC-2"
         text: "Repo-local flow/workflow packages no longer require __init__.py workflow re-exports unless they are intentionally imported through the package-module contract."
     deliverables:
-      - "Catalog and loader changes that preserve resolution-key precedence without dropping lower-precedence alias keys"
+      - "Catalog and loader changes that preserve workspace-catalog authority for bare names while retaining explicit repo-local workflows support"
       - "Reference-loading behavior that distinguishes named catalog imports from explicit isolated loads"
     risks:
       - "Key-level shadowing changes can affect discovery/listing surfaces if runtime resolution and catalog metadata diverge."

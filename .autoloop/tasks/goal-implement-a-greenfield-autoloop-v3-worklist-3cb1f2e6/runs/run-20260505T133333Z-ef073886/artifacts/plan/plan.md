@@ -5,8 +5,8 @@ Restore full-suite compatibility after repo-local `workflows/` discovery/import 
 
 ## Current Failure Picture
 - `autoloop/core/workflow_catalog.py`, `autoloop/runtime/loader.py`, and `autoloop/core/workflow_capabilities.py` now let repo-local `workflows/` win enough resolution paths that older contracts break in two ways:
-  - repo-local flow/workflow packages are treated like package-module imports and now require `__init__.py` re-exports that older path/class contracts never required,
-  - lower-precedence `.autoloop/workflows/` aliases disappear entirely when a higher-precedence repo-local package shadows the canonical workflow name.
+  - bare workflow names and workspace-catalog aliases that previously resolved from `.autoloop/workflows/` are now captured by repo-local `workflows/` packages in mixed-root cases,
+  - repo-local flow/workflow packages reached through explicit repo-local paths are treated like package-module imports and now require `__init__.py` re-exports that older path/class contracts never required.
 - Explicit repo-local file/class references no longer preserve isolated `_autoloop_workspace_workflows...` module loading and parameter-model lookup parity.
 - `autoloop_optimizer/optimization.py` currently validates run observability bundles too strictly for the supported test/runtime contract:
   - schemaless legacy payloads are rejected instead of migrated,
@@ -26,8 +26,10 @@ Target modules:
 
 Implementation intent:
 - Keep repo-local `workflows/` support, but split named catalog precedence from explicit file/class loading behavior.
-- Change shadowing to preserve non-conflicting lower-precedence resolution keys so `.autoloop/workflows/` manifest aliases remain resolvable even when repo-local packages win the canonical workflow name.
-- Keep named canonical-name resolution precedence as repo-local `workflows/` -> `.autoloop/workflows/` -> installed `autoloop/workflows`.
+- Restore the existing mixed-root named-resolution contract:
+  - bare workflow names and workspace-catalog aliases remain authoritative from `.autoloop/workflows/` whenever that catalog owns the resolution key,
+  - repo-local `workflows/` remains available through explicit path/module/directory references and as a named fallback only when the workspace catalog does not claim the key.
+- Change shadowing to preserve lower-precedence keys by resolution key rather than dropping the whole shadowed entry, so workspace aliases survive mixed-root collisions without letting unrelated repo paths capture bare names.
 - Make explicit repo-local path references and explicit class references load through the isolated workspace namespace when that was the prior contract, including Params/spec relative-import parity.
 - Limit package-export validation (`__init__.py` re-export plus `__all__`) to intentional package-module imports, not every repo-local flow/workflow package reached through named/path resolution.
 - Preserve source metadata (`source_path`, `source_root`, `source_root_kind`, `package_dir`, module namespace) so runtime state and downstream helpers can distinguish canonical name resolution from explicit isolated loads.
@@ -69,8 +71,8 @@ Implementation intent:
   - progress-board shape remains strict `items/id/title/status`,
   - no legacy selector aliases or board-shape shims are reintroduced.
 - Workflow resolution invariants:
-  - canonical-name precedence still prefers repo-local `workflows/`,
-  - lower-precedence aliases remain discoverable when they do not conflict directly with a higher-precedence key,
+  - bare workflow names and workspace-catalog aliases keep `.autoloop/workflows/` authority when that catalog defines the key,
+  - repo-local `workflows/` remains available for explicit repo-local references and as a named fallback only when the workspace catalog does not define the key,
   - explicit repo-local file/class references preserve isolated workspace namespace behavior.
 - Optimizer invariants:
   - supported schemaless observability payloads are migrated on read,
@@ -83,7 +85,7 @@ Implementation intent:
 
 ## Compatibility / Behavior
 - No rework of the new greenfield worklist API is planned unless a failing broader suite proves a real regression in it.
-- Repo-local `workflows/` support stays in place; this work narrows where that support is allowed to change legacy resolution, manifest, and publication contracts.
+- Repo-local `workflows/` support stays in place, but not as a blanket winner for bare named workflow references when `.autoloop/workflows/` already owns the key.
 - For packaged workflows, canonical stored/publication paths should remain compatible with the existing repository contract even when execution used repo-local copied sources.
 
 ## Validation
