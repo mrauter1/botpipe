@@ -17,15 +17,15 @@ phases:
     dependencies: []
     acceptance_criteria:
       - id: AC-1
-        text: "The plan directs implement/test to add committed contract coverage that proves real branch execution preserves shared parent state updates, shared values mutations, and permissive overlapping writes."
+        text: "Committed coverage in tests/contract/test_branch_group_runtime.py proves real branch execution preserves shared ctx.state updates, shared ctx.values mutations, and permissive overlapping writes to the same workspace path."
       - id: AC-2
-        text: "The plan directs implement/test to add a fan-in RequestInput case that checkpoints at the composite branch-group step, resumes normally, and completes downstream work after the answer is supplied."
+        text: "Committed coverage adds an authored fan-in RequestInput case that stops at AWAIT_INPUT, checkpoints with checkpoint.stage equal to the composite branch-group step, resumes through Engine.resume(...), and reaches downstream completion after the answer is supplied."
       - id: AC-3
-        text: "The plan constrains any code fix to the minimal branch-group runtime/checkpoint path needed to satisfy the new tests."
+        text: "If the new regression tests fail initially, the implementation applies only the minimal branch-group runtime/checkpoint fix in autoloop/core/branch_groups/runtime.py or autoloop/core/engine.py needed to make the targeted suite pass."
     deliverables:
-      - "Updated plan.md with a single-slice implementation plan, invariants, validation, and risk controls."
-      - "Updated phase_plan.yaml with one ordered implementation phase covering the missing runtime contracts."
-      - "Appended feedback and durable decisions preserving the composite-boundary checkpoint and minimal-fix scope."
+      - "Updated tests/contract/test_branch_group_runtime.py with shared-effect runtime coverage for parent state propagation, shared values visibility, and non-rejected overlapping writes."
+      - "Updated tests/contract/test_branch_group_runtime.py with fan-in RequestInput checkpoint/resume coverage that asserts composite-boundary checkpointing and downstream completion after resume."
+      - "A targeted validation run of the updated branch-group contract suite, plus any minimal runtime/checkpoint patch in autoloop/core/branch_groups/runtime.py or autoloop/core/engine.py only if the new tests expose a defect."
     risks:
       - "A fan-in pending-input regression may actually live in composite-to-engine control mapping rather than in the test surface."
       - "Concurrent overlapping-write assertions can become flaky if they depend on final write order instead of non-rejection."
