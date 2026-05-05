@@ -3,3 +3,6 @@ Preserve repo-local workflows/ canonical-name precedence, but keep non-conflicti
 Explicit repo-local file and class references must retain isolated _autoloop_workspace_workflows loading and Params lookup parity; package-export requirements apply only to intentional package-module imports.
 Plan-1 observability readers should mirror runtime migration behavior by accepting schemaless payloads via migration while still rejecting explicit unsupported schema IDs.
 Optimizer source manifests and downstream publication validators should compare against one canonical selected-workflow package-surface contract rather than whichever discovery root happened to resolve the workflow at runtime.
+<autoloop-decisions-header version="1" block_seq="2" owner="planner" phase_id="task-global" pair="plan" turn_seq="2" run_id="run-20260505T133333Z-ef073886" ts="2026-05-05T13:39:53.883079+00:00" />
+Superseding the prior planner direction: in mixed-root cases, bare workflow names and workspace-catalog aliases must keep the existing .autoloop/workflows authority; repo-local workflows/ is an explicit-reference and named-fallback surface only when the workspace catalog does not claim the key.
+Explicit repo-local directory, file, and class references continue to own repo-local workflows/ support and must preserve isolated _autoloop_workspace_workflows loading with Params/spec parity.

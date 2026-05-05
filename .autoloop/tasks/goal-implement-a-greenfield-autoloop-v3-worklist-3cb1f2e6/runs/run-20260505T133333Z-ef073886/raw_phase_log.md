@@ -102,3 +102,82 @@ Open issues / next step
 <loop-control>
 {"schema":"docloop.loop_control/v1","kind":"promise","promise":"INCOMPLETE"}
 </loop-control>
+
+
+---
+run_id=run-20260505T133333Z-ef073886 | entry=session_turn | pair=plan | phase=producer | cycle=2 | attempt=1 | thread_id=019df858-124c-7df2-9750-8ea2d08f9fb2
+---
+provider=codex
+mode=resume
+template=/home/rauter/.local/share/pipx/venvs/autoloop/lib/python3.12/site-packages/autoloop/templates/plan_producer.md
+session_id=019df858-124c-7df2-9750-8ea2d08f9fb2
+
+
+---
+run_id=run-20260505T133333Z-ef073886 | entry=phase_output | pair=plan | phase=producer | process=codex-agent | cycle=2 | attempt=1 | thread_id=019df858-124c-7df2-9750-8ea2d08f9fb2
+---
+I’m revising the plan around the verifier’s blocking finding. First I’m tightening the Phase 1 contract against the actual mixed-root tests so the plan stops hard-coding repo-local name precedence where the older `.autoloop/workflows/` catalog contract still has to win.
+
+The failing suite is more specific than just alias restoration. I’m pulling the nearby reference-resolution cases now so the revised Phase 1 contract covers the exact mixed-root rule the tests already encode, not a vague “workspace beats repo-local sometimes” statement.
+
+I have the concrete contract now from the tests: bare names and workspace aliases stay bound to `.autoloop/workflows/` when that catalog has the key, while repo-local `workflows/` remains an explicit path/module surface and a fallback only when the workspace catalog does not claim the key. I’m rewriting Phase 1 and the machine-readable phase to that rule, then I’ll supersede the stale decision line in the current turn’s decision block.
+
+The precedence fix is written. I’m checking the exact rewritten sections and the new decision block now to make sure the superseding direction is explicit enough for the verifier and later turns.
+
+Updated the run-local planning artifacts to address `PLAN-001`.
+
+The Phase 1 contract now matches the mixed-root tests: bare workflow names and workspace aliases stay authoritative from `.autoloop/workflows/`, while repo-local `workflows/` remains an explicit path/module surface and a named fallback only when the workspace catalog does not own the key. I also appended a superseding decision under the current turn header so later turns do not follow the stale repo-local-precedence direction.
+
+Changed files:
+- [plan.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/goal-implement-a-greenfield-autoloop-v3-worklist-3cb1f2e6/runs/run-20260505T133333Z-ef073886/artifacts/plan/plan.md)
+- [phase_plan.yaml](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/goal-implement-a-greenfield-autoloop-v3-worklist-3cb1f2e6/runs/run-20260505T133333Z-ef073886/artifacts/plan/phase_plan.yaml)
+- [feedback.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/goal-implement-a-greenfield-autoloop-v3-worklist-3cb1f2e6/runs/run-20260505T133333Z-ef073886/artifacts/plan/feedback.md)
+- [decisions.txt](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/goal-implement-a-greenfield-autoloop-v3-worklist-3cb1f2e6/runs/run-20260505T133333Z-ef073886/decisions.txt)
+
+
+---
+run_id=run-20260505T133333Z-ef073886 | entry=session_turn | pair=plan | phase=verifier | cycle=2 | attempt=1 | thread_id=019df858-124c-7df2-9750-8ea2d08f9fb2
+---
+provider=codex
+mode=resume
+template=/home/rauter/.local/share/pipx/venvs/autoloop/lib/python3.12/site-packages/autoloop/templates/plan_verifier.md
+session_id=019df858-124c-7df2-9750-8ea2d08f9fb2
+
+
+---
+run_id=run-20260505T133333Z-ef073886 | entry=phase_output | pair=plan | phase=verifier | process=codex-agent | cycle=2 | attempt=1 | thread_id=019df858-124c-7df2-9750-8ea2d08f9fb2
+---
+I’m doing the re-review against the revised Phase 1 contract and the superseding decision block. If the mixed-root `.autoloop/workflows/` authority is now explicit across the narrative plan, phase YAML, and decisions history, I’ll mark the criteria complete and record the blocker as resolved.
+
+The revised plan is internally consistent again: the narrative, phase YAML, and superseding decision block now all say the same mixed-root rule. I’m marking the criteria complete and appending a short closure note for `PLAN-001` so the feedback history shows why this verifier pass can close cleanly.
+
+Scope considered
+- The run-local planning artifacts in `artifacts/plan/`
+- The immutable request snapshot and current `decisions.txt`
+- The mixed-root workflow-resolution tests and the revised Phase 1 contract
+
+What I analyzed
+- The revised Phase 1 narrative in `plan.md`
+- The updated `restore-workflow-resolution-contract` entry in `phase_plan.yaml`
+- The superseding direction added under the current planner header in `decisions.txt`
+- The closure history for `PLAN-001` in `feedback.md`
+
+What I reviewed
+- `plan.md`
+- `phase_plan.yaml`
+- `criteria.md`
+- `feedback.md`
+- `decisions.txt`
+- Request coverage for workflow-resolution, optimizer, packaged-workflow, and full-suite acceptance expectations
+
+Key findings / decisions
+- No remaining blocking findings.
+- `PLAN-001` is now resolved and recorded as such in `feedback.md`.
+- Updated `criteria.md` so all verification checkboxes are checked.
+
+Open issues / next step
+- No verifier blockers remain on the planning artifacts. The plan can proceed to implementation with the mixed-root `.autoloop/workflows/` authority explicitly preserved for bare names and aliases.
+
+<loop-control>
+{"schema":"docloop.loop_control/v1","kind":"promise","promise":"COMPLETE"}
+</loop-control>
