@@ -7,7 +7,7 @@ from typing import Any
 
 from .artifacts import Artifact
 from .errors import WorkflowValidationError
-from .steps import Step
+from .steps import BranchGroupStep, Step
 
 
 @dataclass(frozen=True, slots=True)
@@ -28,7 +28,8 @@ def collect_artifact_inventory(definition: Any) -> dict[str, ArtifactInventoryRe
     workflow_level_names_to_identity: dict[str, int] = {}
     qualified_names_to_identity: dict[str, int] = {}
     records_by_identity: dict[int, dict[str, Any]] = {}
-    steps_by_name = {step.name: step for step in definition.steps}
+    all_steps = tuple(nested_step for step in definition.steps for nested_step in _iter_inventory_steps(step))
+    steps_by_name = {step.name: step for step in all_steps}
 
     def register(
         artifact: Artifact,
@@ -95,9 +96,18 @@ def collect_artifact_inventory(definition: Any) -> dict[str, ArtifactInventoryRe
                 )
         existing_identity = qualified_names_to_identity.get(qualified_name)
         if existing_identity is not None and existing_identity != artifact_id:
+            existing_duplicate = records_by_identity.get(existing_identity)
+            if (
+                existing_duplicate is not None
+                and existing_duplicate.get("owner_step") == artifact.owner_step
+                and _artifacts_equivalent(existing_duplicate["artifact"], artifact)
+            ):
+                if producer_step is not None and producer_step not in existing_duplicate["producer_steps"]:
+                    existing_duplicate["producer_steps"].append(producer_step)
+                return
             _raise_duplicate_qualified_artifact_name_error(
                 qualified_name=qualified_name,
-                existing_record=records_by_identity.get(existing_identity),
+                existing_record=existing_duplicate,
                 conflicting_artifact=artifact,
             )
         qualified_names_to_identity[qualified_name] = artifact_id
@@ -135,16 +145,17 @@ def collect_artifact_inventory(definition: Any) -> dict[str, ArtifactInventoryRe
     for index, artifact in enumerate(definition.workflow_log_artifacts, start=1):
         register(artifact, fallback_name=f"workflow__log_{index}")
     for step in definition.steps:
-        for write_name, artifact in step.writes.items():
-            register(artifact, fallback_name=write_name, producer_step=step.name)
-        for index, artifact in enumerate(step.reads, start=1):
-            if isinstance(artifact, Artifact):
-                register(artifact, fallback_name=f"{step.name}__read_{index}")
-        for index, artifact in enumerate(step.requires, start=1):
-            if isinstance(artifact, Artifact):
-                register(artifact, fallback_name=f"{step.name}__require_{index}")
-        for index, artifact in enumerate(step.log_artifacts, start=1):
-            register(artifact, fallback_name=f"{step.name}__log_{index}")
+        for nested_step in _iter_inventory_steps(step):
+            for write_name, artifact in nested_step.writes.items():
+                register(artifact, fallback_name=write_name, producer_step=nested_step.name)
+            for index, artifact in enumerate(nested_step.reads, start=1):
+                if isinstance(artifact, Artifact):
+                    register(artifact, fallback_name=f"{nested_step.name}__read_{index}")
+            for index, artifact in enumerate(nested_step.requires, start=1):
+                if isinstance(artifact, Artifact):
+                    register(artifact, fallback_name=f"{nested_step.name}__require_{index}")
+            for index, artifact in enumerate(nested_step.log_artifacts, start=1):
+                register(artifact, fallback_name=f"{nested_step.name}__log_{index}")
 
     return {
         record["qualified_name"]: ArtifactInventoryRecord(
@@ -157,6 +168,20 @@ def collect_artifact_inventory(definition: Any) -> dict[str, ArtifactInventoryRe
         )
         for record in records_by_identity.values()
     }
+
+
+def _iter_inventory_steps(step: Step) -> tuple[Step, ...]:
+    if not isinstance(step, BranchGroupStep):
+        return (step,)
+    branch_group = getattr(step, "branch_group", None)
+    nested: list[Step] = [step]
+    if branch_group is None:
+        return tuple(nested)
+    nested.extend(branch.step for branch in getattr(branch_group, "branches", ()))
+    fan_in_step = getattr(branch_group, "fan_in_step", None)
+    if isinstance(fan_in_step, Step):
+        nested.append(fan_in_step)
+    return tuple(nested)
 
 def _raise_workflow_level_artifact_conflict_error(
     *,
@@ -206,6 +231,18 @@ def _artifact_signature(artifact: Artifact) -> str:
         schema_name = getattr(artifact.schema, "__name__", type(artifact.schema).__name__)
         parts.append(f"schema={schema_name!r}")
     return ", ".join(parts)
+
+
+def _artifacts_equivalent(left: Artifact, right: Artifact) -> bool:
+    return (
+        left.template == right.template
+        and left.kind == right.kind
+        and left.required == right.required
+        and left.name == right.name
+        and left.owner_step == right.owner_step
+        and left.qualified_name == right.qualified_name
+        and left.schema == right.schema
+    )
 
 
 def public_artifact_inventory(inventory: dict[str, ArtifactInventoryRecord]) -> dict[str, ArtifactInventoryRecord]:

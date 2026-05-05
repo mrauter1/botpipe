@@ -941,3 +941,114 @@ No audit blocker remains for this phase. The next step is to proceed to the late
 <loop-control>
 {"schema":"docloop.loop_control/v1","kind":"promise","promise":"COMPLETE"}
 </loop-control>
+
+
+---
+run_id=run-20260505T171950Z-13ce26d6 | entry=session_turn | pair=implement | phase=producer | cycle=1 | attempt=1 | thread_id=019df95d-8fea-77f3-8730-5b37b11034f7
+---
+provider=codex
+mode=start
+template=/home/rauter/.local/share/pipx/venvs/autoloop/lib/python3.12/site-packages/autoloop/templates/implement_producer.md
+session_id=019df95d-8fea-77f3-8730-5b37b11034f7
+
+
+---
+run_id=run-20260505T171950Z-13ce26d6 | entry=phase_output | pair=implement | phase=producer | process=codex-agent | cycle=1 | attempt=1 | thread_id=019df95d-8fea-77f3-8730-5b37b11034f7
+---
+I’m implementing the composite branch-group runtime phase. First I’m reading the active phase artifacts and the existing branch-group/compiler/runtime wiring to see what the earlier phases already established and where this phase needs to land.
+
+The earlier phases already wired compilation, context sharing, and session overlays. I’m checking the current dispatcher/engine/compiled-step surfaces and the branch-group models so I can add runtime execution without cutting across existing step semantics.
+
+I’ve confirmed the compile-time shape is already there: branch groups are compiled as one `CompiledStep` with embedded `BranchGroupSpec`. Next I’m tracing the single-step executor and route finalization path so the branch runtime can reuse it and capture results without advancing the outer cursor.
+
+The key constraint is clear now: `StepDispatcher.execute()` already gives the exact branch-level contract we need, including `Goto` / `Fail` / `RequestInput` normalization and route finalization without cursor advancement. I’m looking at artifact/runtime metadata next so the manifest can reflect actual writes, validation status, raw output paths, and usage without duplicating engine logic.
+
+I have the implementation seam now. The remaining work is mostly mechanical: compile internal branch/fan-in steps with local route tables, teach the single-step executor to honor those local routes, add the branch scheduler/evidence writers, then cover the composite behavior with focused runtime tests.
+
+Plan for the implementation work:
+
+1. Add the branch-group runtime modules:
+- `outcomes.py` for mechanical routing.
+- `manifest.py` for `results.json` and deterministic `context.md`.
+- `runtime.py` for scheduling, fail-fast handling, evidence writing, and fan-in orchestration.
+
+2. Teach compiled nested branch/fan-in steps to run through the existing executor:
+- compile internal branch/fan-in steps with local route tables,
+- let the dispatcher/finalizer/provider-contract path consult those local routes instead of only the top-level workflow route table.
+
+3. Wire the engine minimally:
+- instantiate `BranchGroupRuntime`,
+- dispatch `branch_group` steps into it,
+- keep checkpoint behavior only at the composite boundary.
+
+4. Finish the runtime surfaces this phase depends on:
+- runtime placeholder resolution for `branch.*` and `fan_in.*`,
+- templated artifact rooting fix for placeholder-based relative paths.
+
+5. Add focused regression coverage for:
+- no-fan-in outcome routing and evidence,
+- fan-in routing through the composite,
+- `RequestInput`/`Goto` capture without parent cursor movement,
+- fan-out placeholder rendering and artifact rooting,
+- branch-local fresh sessions not leaking into parent activation.
+
+I’m starting the edits at the compile/runtime seam: internal branch and fan-in steps need enough compiled metadata to run through the existing executor unchanged. After that I’ll add the scheduler and evidence writer on top.
+
+I’m in the runtime layer now. The next edits are the branch scheduler and evidence files themselves, plus one concurrency safeguard: state replacement goes through a shared cell lock so concurrent branches don’t race on whole-state swaps.
+
+The core wiring is in place. I’m running focused tests now to catch the inevitable compile-time and import issues before I add the new branch-group runtime coverage.
+
+The first failure is a package-init cycle: `Context` imports `branch_groups.context`, and the branch-groups package was eagerly exporting the runtime back through `__init__`. I’m trimming that export so the runtime only loads when the engine wires it.
+
+I’ve moved past the wiring stage. The next patch is the focused runtime regression file so I can validate the branch scheduler, evidence files, fan-in routing, and the branch-local session behavior together.
+
+The runtime tests are in. I’m tightening one of them before execution: the `all_settled` case should terminate cleanly and assert the composite route, not rely on a self-loop.
+
+The runtime tests exposed a real gap in the compile surface: nested branch-step artifacts were never entering the workflow artifact inventory, so branch-owned writes couldn’t resolve at runtime. I’m fixing that at the inventory layer instead of papering over it in the runtime.
+
+One failure is structural and one is just an assertion fix. The structural issue is that nested branch-step artifacts need a lookup owner in the inventory map; the assertion issue is that the workflow’s own normal chaining still reaches `repair` after `publish`, so the test should only assert that the branch `Goto` did not bypass `publish`.
+
+The last failing case is fan-out specific: each repeated branch step gets its own cloned `Artifact` object, but semantically they describe the same authored artifact declaration. I’m making the inventory deduplicate equivalent branch-internal artifacts instead of treating them as a hard conflict.
+
+The last failure is coming from a legal branch-only artifact template being resolved too early at the outer composite step. I’m making branch and fan-in placeholders stay inert until the runtime is actually inside a branch or fan-in context.
+
+The session leak test found a broader issue: inline step-level `Session.fresh()` declarations never got a compiled slot name, so the provider was effectively running without a session binding. I’m fixing that in the compiler by synthesizing deterministic session slot names for unnamed step-local sessions, including branch-internal ones.
+
+The session part is fixed. The remaining failure is just the expected artifact location: the file exists, but not where the test guessed. I’m checking the manifest path the runtime wrote so I can tighten the assertion to the actual rooted contract.
+
+The focused branch-group contract file is green. I’m running the earlier branch-model tests plus a few engine/session contract slices now to check that the synthetic inline-session naming didn’t regress ordinary step behavior.
+
+The code and focused regressions are green. I’m doing the close-out pass now: diff review, then I’ll update the phase notes and the decisions ledger with the runtime-specific constraints this implementation introduced.
+
+I’m writing the phase artifacts now. I’m also recording the three non-obvious runtime decisions that matter for later phases: local compiled route tables for nested steps, synthetic names for inline sessions, and recursive nested-artifact inventory registration.
+
+I’ve implemented the branch-group runtime path and I’m doing a final regression pass over the touched files and working tree before closing this phase.
+
+The implementation is in place; I’m narrowing the closeout to the phase-relevant files and explicitly separating that from the already-dirty repository state.
+
+I’ve confirmed the runtime, manifest/outcome modules, and the compiler/dispatcher wiring points. I’m just collecting the most relevant references for the closeout now.
+
+Scope considered
+- Phase-local composite runtime/evidence work only: composite branch execution, manifest/context evidence, fan-in and mechanical outcome routing, plus the compiler/dispatcher/context/artifact/session surfaces needed to make that runtime usable.
+- I left the repository’s unrelated dirty deletions and untracked files untouched.
+
+What I analyzed
+- I traced branch-group lowering and execution through the compiler, discovery, inventory, context/session overlay, artifact rendering, and engine dispatch/finalization paths.
+- I also read the active phase artifacts and prior shared-context notes to preserve the intended session-overlay and shared-state behavior.
+
+What I changed
+- Added the dedicated runtime subsystem in [runtime.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/autoloop/core/branch_groups/runtime.py:66), [manifest.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/autoloop/core/branch_groups/manifest.py:10), and [outcomes.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/autoloop/core/branch_groups/outcomes.py:16) for bounded branch scheduling, ordered result capture, `_branch_groups/<group>/results.json` and `context.md`, fan-in execution, and built-in/custom no-fan-in routing.
+- Wired composite dispatch into [engine_collaborators.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/autoloop/core/engine_collaborators.py:332) and [engine.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/autoloop/core/engine.py:176), keeping `engine.py` at minimal top-level wiring while branch destinations are captured and not followed.
+- Extended [compiler.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/autoloop/core/compiler.py:88) so nested branch/fan-in steps compile into local `CompiledStep` objects with local `route_table`s, `FanIn.results()/context()` resolve correctly, and inline explicit sessions get deterministic synthetic slot names.
+- Updated [inventory.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/autoloop/core/inventory.py:173), [artifacts.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/autoloop/core/artifacts.py:407), [operations.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/autoloop/core/operations.py:535), and [context.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/autoloop/core/branch_groups/context.py:22) for nested artifact discovery, branch/fan-in placeholder rendering, rooted templated artifact paths, and locked shared `StateCell` writes.
+- Added contract coverage in [test_branch_group_runtime.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/tests/contract/test_branch_group_runtime.py:23), and updated the phase [implementation_notes.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/autoloop-v3-explicit-branch-groups-full-revised-76d1507c/runs/run-20260505T171950Z-13ce26d6/artifacts/implement/phases/composite-runtime-and-evidence/implementation_notes.md:10) plus the current turn block in [decisions.txt](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/autoloop-v3-explicit-branch-groups-full-revised-76d1507c/runs/run-20260505T171950Z-13ce26d6/decisions.txt:9).
+
+Key findings / decisions
+- Reusing the existing single-step execution path for branches only worked after nested compiled steps gained their own local route tables; otherwise finalization still depended on top-level graph routes.
+- Branch-owned declared artifacts needed recursive inventory collection; without that, nested branch writes were invisible to the normal compiled artifact map.
+- Inline `Session.fresh()` inside nested authored steps needed compiler-assigned slot names, or provider-backed branch execution ended up with no real session binding.
+- Validation passed on targeted coverage: `tests/contract/test_branch_group_runtime.py` (5 tests), `tests/unit/test_simple_surface.py` filtered branch-group slice, `tests/unit/test_branch_group_context_sessions.py`, and a targeted `tests/contract/test_engine_contracts.py` slice.
+
+Open issues / next step
+- This phase is implemented. The next useful step is a broader full-suite regression run once the repository’s unrelated dirty state is stabilized.
+- The working tree still contains many pre-existing unrelated deletions/untracked files outside this phase; I did not modify or clean those up.

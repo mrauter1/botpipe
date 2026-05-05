@@ -724,6 +724,7 @@ def _lower_simple_branch_group_step(
                 allow_branch_placeholders=True,
                 allow_fan_in_placeholders=False,
             )
+            setattr(branch_step, "_branch_group_name", group_name)
             lowered_branches.append(BranchStepSpec(name=branch_name, index=index, input={}, step=branch_step))
     else:
         raw_branches = dict(getattr(declaration, "branches", {}))
@@ -754,6 +755,7 @@ def _lower_simple_branch_group_step(
                 allow_branch_placeholders=True,
                 allow_fan_in_placeholders=False,
             )
+            setattr(branch_step, "_branch_group_name", group_name)
             lowered_branches.append(BranchStepSpec(name=branch_name, index=index, input=branch_input, step=branch_step))
 
     fan_in_declaration = getattr(declaration, "fan_in", None)
@@ -788,6 +790,7 @@ def _lower_simple_branch_group_step(
             allow_branch_placeholders=False,
             allow_fan_in_placeholders=True,
         )
+        setattr(fan_in_step, "_branch_group_name", group_name)
         composite_route_tags = declared_internal_route_tags(fan_in_declaration, step=fan_in_step)
         if isinstance(fan_in_step, ProduceVerifyStep):
             default_chain_route = "accepted"

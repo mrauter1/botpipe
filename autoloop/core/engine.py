@@ -16,6 +16,7 @@ from uuid import uuid4
 from pydantic import BaseModel, TypeAdapter
 
 from .artifacts import Artifact, ArtifactHandle, ResolvedArtifacts, render_runtime_template, resolve_artifact_template
+from .branch_groups.runtime import BranchGroupRuntime
 from .compiler import CompiledRoute, CompiledStep, CompiledWorkflow, compile_workflow
 from .context import Context, context_runtime
 from .engine_collaborators import (
@@ -172,6 +173,7 @@ class Engine:
         self.operation_recorder = OperationRecorder(self)
         self.workflow_invoker = WorkflowInvoker(self)
         self.provider_contract_builder = ProviderContractBuilder(self)
+        self.branch_group_runtime = BranchGroupRuntime(self)
 
     def run(
         self,
@@ -1643,11 +1645,29 @@ class Engine:
             )
 
     def _required_output_artifacts(self, step: CompiledStep, route_tag: str) -> tuple[str, ...]:
+        if step.route_table is not None:
+            compiled_route = step.route_table.get(route_tag)
+            return () if compiled_route is None else tuple(compiled_route.required_writes or ())
         return effective_route_required_writes(
             self.compiled,
             step_name=step.name,
             route_tag=route_tag,
         )
+
+    def _route_table_for_step(self, step: CompiledStep) -> dict[str, CompiledRoute]:
+        if step.route_table is not None:
+            return dict(step.route_table)
+        route_table = dict(self.compiled.global_routes)
+        route_table.update(self.compiled.routes.get(step.name, {}))
+        return route_table
+
+    def _compiled_route_for_step(self, step: CompiledStep, route_tag: str) -> CompiledRoute:
+        if step.route_table is not None:
+            compiled_route = step.route_table.get(route_tag)
+            if compiled_route is None:
+                raise RoutingError(f"no route for step {step.name!r} and tag {route_tag!r}")
+            return compiled_route
+        return self.compiled.route(step.name, route_tag)
 
     def _should_validate_optional_output(self, handle: ArtifactHandle) -> bool:
         artifact = handle.artifact
@@ -1827,7 +1847,7 @@ class Engine:
                 resolved.text,
                 context,
                 placeholder_label=placeholder_label,
-                replace_roots=frozenset({"item", "worklist"}),
+                replace_roots=frozenset({"item", "worklist", "branch", "fan_in"}),
             ),
         )
 

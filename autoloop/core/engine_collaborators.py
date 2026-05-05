@@ -18,7 +18,7 @@ from .extensions import HookRouteRedirect
 from .operations import OperationRuntime, bind_operation_runtime, provider_configuration
 from .primitives import Event, Fail, Goto, Outcome, RequestInput
 from .providers.models import ProviderArtifactRef, ProviderReadableRef, ProviderRoute, StepProviderUsage, TokenUsage
-from .route_required_writes import effective_route_required_writes_map, explicit_route_required_writes
+from .route_required_writes import explicit_route_required_writes
 from .stores.protocols import PendingHandoff, PendingInput
 
 if TYPE_CHECKING:
@@ -279,21 +279,15 @@ class ProviderContractBuilder:
     def route_required_writes(self, step: "CompiledStep") -> dict[str, tuple[str, ...]]:
         visible_routes = set(self.available_routes(step))
         return {
-            route_tag: required_writes
-            for route_tag, required_writes in effective_route_required_writes_map(
-                self._engine.compiled,
-                step_name=step.name,
-            ).items()
+            route_tag: tuple(compiled_route.required_writes or ())
+            for route_tag, compiled_route in self._engine._route_table_for_step(step).items()
             if route_tag in visible_routes
         }
 
     def routes(self, step: "CompiledStep") -> dict[str, ProviderRoute]:
         routes: dict[str, ProviderRoute] = {}
         for route_name in self.available_routes(step):
-            compiled_route = (
-                self._engine.compiled.routes.get(step.name, {}).get(route_name)
-                or self._engine.compiled.global_routes.get(route_name)
-            )
+            compiled_route = self._engine._route_table_for_step(step).get(route_name)
             if compiled_route is None:
                 continue
             routes[route_name] = ProviderRoute(
@@ -334,6 +328,8 @@ class StepDispatcher:
         self._engine._ensure_required_artifacts(step, initial_artifacts)
         if step.kind == "produce_verify":
             return self._engine._execute_pair_step(step, context, state, pending_handoffs)
+        if step.kind == "branch_group":
+            return self._engine.branch_group_runtime.run(step, context, state, pending_handoffs)
 
         before_result = self._engine.hook_runner.run_before(step, context, state, artifacts=initial_artifacts)
         state = before_result.state
@@ -578,7 +574,7 @@ class RouteFinalizer:
         final_route: CompiledRoute
         try:
             while True:
-                final_route = self._engine.compiled.route(step.name, final_event.tag)
+                final_route = self._engine._compiled_route_for_step(step, final_event.tag)
                 runtime.set_route(
                     {
                         "tag": final_event.tag,
@@ -804,7 +800,7 @@ class HookRunner:
             runtime.set_state(state)
             runtime.set_artifacts(artifacts)
             if candidate_event is not None:
-                compiled_route = self._engine.compiled.route(step.name, candidate_event.tag)
+                compiled_route = self._engine._compiled_route_for_step(step, candidate_event.tag)
                 runtime.set_route(
                     {
                         "tag": candidate_event.tag,
@@ -1063,7 +1059,7 @@ class HookRunner:
         try:
             runtime.set_state(state)
             runtime.set_artifacts(artifacts)
-            compiled_route = self._engine.compiled.route(step.name, event.tag)
+            compiled_route = self._engine._compiled_route_for_step(step, event.tag)
             runtime.set_route(
                 {
                     "tag": event.tag,
