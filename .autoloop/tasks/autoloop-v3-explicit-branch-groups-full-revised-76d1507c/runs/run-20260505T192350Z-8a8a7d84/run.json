@@ -13,11 +13,11 @@
       "branch-group-runtime-regression-coverage"
     ],
     "explicit": true,
-    "current_phase_index": 0,
-    "current_phase_id": "branch-group-runtime-regression-coverage"
+    "current_phase_index": 1,
+    "current_phase_id": null
   },
   "phase_status": {
-    "branch-group-runtime-regression-coverage": "in_progress"
+    "branch-group-runtime-regression-coverage": "completed"
   },
   "phase_history": [
     {
@@ -25,6 +25,13 @@
       "run_id": "run-20260505T192350Z-8a8a7d84",
       "status": "in_progress",
       "ts": "2026-05-05T19:29:50.183825+00:00"
+    },
+    {
+      "phase_id": "branch-group-runtime-regression-coverage",
+      "run_id": "run-20260505T192350Z-8a8a7d84",
+      "status": "completed",
+      "ts": "2026-05-05T19:37:54.034142+00:00",
+      "pair": "test"
     }
   ]
 }
