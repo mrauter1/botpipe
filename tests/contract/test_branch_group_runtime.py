@@ -328,6 +328,43 @@ def test_parallel_branch_group_uses_async_provider_path_for_branch_steps(tmp_pat
     assert provider.async_calls == ["security_review", "cost_review"]
 
 
+def test_parallel_branch_group_supports_provider_backed_concurrency_one(tmp_path: Path) -> None:
+    class SequentialAsyncProviderWorkflow(simple.Workflow):
+        class State(BaseModel):
+            pass
+
+        reviews = simple.parallel(
+            concurrency=1,
+            branches={
+                "security": simple.step("Review security.", name="security_review", session=simple.Session.fresh()),
+                "cost": simple.step("Review cost.", name="cost_review", session=simple.Session.fresh()),
+            },
+        )
+        publish = simple.python_step(lambda ctx: Event("done"))
+
+    provider = _ConcurrentAsyncLLMProvider(
+        delays={"security_review": 0.01, "cost_review": 0.01},
+    )
+    task_folder, run_folder = _workspace(tmp_path)
+    result = Engine(
+        SequentialAsyncProviderWorkflow,
+        provider=provider,
+        session_store=InMemorySessionStore(),
+        checkpoint_store=InMemoryCheckpointStore(),
+    ).run(
+        task_id="task-sequential-async-provider",
+        run_id="run-sequential-async-provider",
+        task_folder=task_folder,
+        run_folder=run_folder,
+        root=tmp_path,
+    )
+
+    assert result.terminal == simple.FINISH
+    assert provider.max_active == 1
+    assert provider.started == ["security_review", "cost_review"]
+    assert provider.completed == ["security_review", "cost_review"]
+
+
 def test_parallel_branch_group_runs_provider_backed_branches_concurrently(tmp_path: Path) -> None:
     class ConcurrentParallelWorkflow(simple.Workflow):
         class State(BaseModel):

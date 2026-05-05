@@ -29,7 +29,7 @@
 ## Edge Cases / Failure Paths
 
 - Sync-only providers still fail for provider-backed branch groups.
-- `concurrency=1` still goes through branch-group semantics while staying async-provider-safe.
+- Provider-backed `parallel(..., concurrency=1)` stays on the async provider path and limits active branch execution to one branch at a time.
 - Downstream non-fan-in reads of `_branch_groups/...` stay readable after the workflow-folder evidence-root migration.
 
 ## Flake Control
