@@ -7,3 +7,7 @@
 {"ts": "2026-05-05T19:29:00.173206+00:00", "run_id": "run-20260505T192350Z-8a8a7d84", "seq": 7, "event_type": "phase_finished", "pair": "plan", "phase": "producer", "cycle": 2, "attempt": 1, "empty_output": false, "phase_id": null}
 {"ts": "2026-05-05T19:29:49.992065+00:00", "run_id": "run-20260505T192350Z-8a8a7d84", "seq": 8, "event_type": "phase_finished", "pair": "plan", "phase": "verifier", "cycle": 2, "attempt": 1, "empty_output": false, "phase_id": null}
 {"ts": "2026-05-05T19:29:50.072382+00:00", "run_id": "run-20260505T192350Z-8a8a7d84", "seq": 9, "event_type": "pair_completed", "pair": "plan", "cycle": 2, "attempt": 1, "phase_id": null}
+{"ts": "2026-05-05T19:29:50.183080+00:00", "run_id": "run-20260505T192350Z-8a8a7d84", "seq": 10, "event_type": "phase_scope_resolved", "phase_mode": "single", "phase_ids": ["branch-group-runtime-regression-coverage"], "explicit": true, "current_phase_index": 0}
+{"ts": "2026-05-05T19:29:50.184800+00:00", "run_id": "run-20260505T192350Z-8a8a7d84", "seq": 11, "event_type": "phase_started", "phase_id": "branch-group-runtime-regression-coverage", "phase_mode": "single"}
+{"ts": "2026-05-05T19:29:50.185741+00:00", "run_id": "run-20260505T192350Z-8a8a7d84", "seq": 12, "event_type": "pair_started", "pair": "implement", "phase_id": "branch-group-runtime-regression-coverage"}
+{"ts": "2026-05-05T19:29:50.185834+00:00", "run_id": "run-20260505T192350Z-8a8a7d84", "seq": 13, "event_type": "cycle_started", "pair": "implement", "cycle": 1, "attempt": 1, "phase_id": "branch-group-runtime-regression-coverage"}

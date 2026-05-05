@@ -156,3 +156,12 @@ No open planning issues remain in the current artifact set. The plan is ready fo
 <loop-control>
 {"schema":"docloop.loop_control/v1","kind":"promise","promise":"COMPLETE"}
 </loop-control>
+
+
+---
+run_id=run-20260505T192350Z-8a8a7d84 | entry=phase_scope_resolved
+---
+phase_mode=single
+phase_ids=branch-group-runtime-regression-coverage
+explicit=True
+current_phase_index=0
