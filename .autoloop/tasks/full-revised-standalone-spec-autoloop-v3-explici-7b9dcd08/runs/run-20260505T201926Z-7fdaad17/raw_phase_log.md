@@ -156,3 +156,12 @@ The planning artifacts are complete for this run-local cycle. The next step is i
 <loop-control>
 {"schema":"docloop.loop_control/v1","kind":"promise","promise":"COMPLETE"}
 </loop-control>
+
+
+---
+run_id=run-20260505T201926Z-7fdaad17 | entry=phase_scope_resolved
+---
+phase_mode=single
+phase_ids=contract-hardening,async-step-provider-foundation,async-branch-runtime,session-state-evidence-correctness,fan-in-outcomes-and-surface,strictness-and-cleanup
+explicit=True
+current_phase_index=0
