@@ -257,6 +257,25 @@ def test_progress_source_writes_fallback_when_missing(tmp_path: Path) -> None:
     assert payload["items"][0]["status"] == WorkStatus.planned.value
 
 
+def test_progress_source_rejects_duplicate_ids_in_fallback_before_write(tmp_path: Path) -> None:
+    ctx = _context(tmp_path)
+
+    def fallback(_ctx: Context) -> dict[str, object]:
+        return {
+            "items": [
+                {"id": "p1", "title": "Phase 1"},
+                {"id": "p1", "title": "Phase 1 again"},
+            ]
+        }
+
+    source = ProgressJsonCollectionSource(artifact=_artifact(), fallback=fallback)
+
+    with pytest.raises(WorkflowExecutionError, match=r"fallback .* duplicate item id 'p1'"):
+        source.ensure(ctx)
+
+    assert not (ctx.workflow_folder / "worklists" / "phase.json").exists()
+
+
 def test_progress_source_missing_without_fallback_fails(tmp_path: Path) -> None:
     with pytest.raises(WorkflowExecutionError, match="is missing at"):
         ProgressJsonCollectionSource(artifact=_artifact()).load(_context(tmp_path))

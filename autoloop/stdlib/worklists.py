@@ -337,11 +337,17 @@ class ProgressJsonCollectionSource(WorklistSource[Mapping[str, Any]]):
         if not isinstance(raw_items, list):
             raise WorkflowExecutionError(f"worklist fallback for artifact {path} must contain an 'items' list")
         normalized_items: list[dict[str, Any]] = []
+        seen_ids: set[str] = set()
         for entry in raw_items:
             if not isinstance(entry, Mapping):
                 raise WorkflowExecutionError(f"worklist fallback for artifact {path} has non-object entry in 'items'")
             item_payload = dict(entry)
             item_id = self._require_item_field(item_payload, "id", path=path)
+            if item_id in seen_ids:
+                raise WorkflowExecutionError(
+                    f"worklist fallback for artifact {path} contains duplicate item id {item_id!r} in 'items'"
+                )
+            seen_ids.add(item_id)
             self._require_item_field(item_payload, "title", path=path, item_id=item_id)
             item_payload["status"] = self._normalize_status(item_payload.get("status"), path=path, item_id=item_id)
             normalized_items.append(item_payload)
