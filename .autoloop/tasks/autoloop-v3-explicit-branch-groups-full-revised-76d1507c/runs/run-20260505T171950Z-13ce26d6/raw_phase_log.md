@@ -834,3 +834,110 @@ No verifier blocker remains for this phase. The next step is to proceed to the n
 <loop-control>
 {"schema":"docloop.loop_control/v1","kind":"promise","promise":"COMPLETE"}
 </loop-control>
+
+
+---
+run_id=run-20260505T171950Z-13ce26d6 | entry=session_turn | pair=test | phase=producer | cycle=1 | attempt=1 | thread_id=019df94a-82ac-73e1-beb0-d1be9a6ff2df
+---
+provider=codex
+mode=resume
+template=/home/rauter/.local/share/pipx/venvs/autoloop/lib/python3.12/site-packages/autoloop/templates/test_producer.md
+session_id=019df94a-82ac-73e1-beb0-d1be9a6ff2df
+
+
+---
+run_id=run-20260505T171950Z-13ce26d6 | entry=phase_output | pair=test | phase=producer | process=codex-agent | cycle=1 | attempt=1 | thread_id=019df94a-82ac-73e1-beb0-d1be9a6ff2df
+---
+I’m treating this as targeted regression test authoring for the shared context/session seam. First step is to inspect the current phase strategy artifacts and the existing branch-context tests so I can fill the highest-risk gaps instead of adding redundant coverage.
+
+The current suite covers state sharing, metadata access, overlay persistence, and the worklist regression. The remaining risky seam in this phase is the hook snapshot/restore path, because it also moved from the engine-global store to `context._session_store` and can silently re-activate the wrong session if it regresses.
+
+I have enough context for a concrete addition. The missing regression surface is hook snapshot/restore with a branch-local session store: selection/persistence is already covered, but a bad restore path would still leak session activation back to the parent during nested execution.
+
+I’m adding one more targeted regression test rather than broadening the suite: hook snapshot/restore is the last high-risk session seam in this phase that isn’t directly covered yet. After that I’ll update the phase strategy and feedback artifacts with the exact behavior map.
+
+I’m editing the test file now. The plan is:
+- add a hook snapshot/restore regression test for branch-local session overlays
+- document the behavior-to-test map in `test_strategy.md`
+- append a concise phase test summary to `feedback.md` so the auditor sees exactly what was added and why
+
+The new regression test is in place. I’m running the focused unit file and the adjacent engine contract slice to make sure the added expectation is stable and that I didn’t overfit the test to one code path.
+
+Scope considered
+
+Phase-local test authoring for the shared context and session scaffolding slice, focused on [tests/unit/test_branch_group_context_sessions.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/tests/unit/test_branch_group_context_sessions.py) and the active phase artifacts [test_strategy.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/autoloop-v3-explicit-branch-groups-full-revised-76d1507c/runs/run-20260505T171950Z-13ce26d6/artifacts/test/phases/shared-context-and-session-scaffolding/test_strategy.md) and [feedback.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/autoloop-v3-explicit-branch-groups-full-revised-76d1507c/runs/run-20260505T171950Z-13ce26d6/artifacts/test/phases/shared-context-and-session-scaffolding/feedback.md).
+
+What I analyzed
+
+I reviewed the phase contract, the already-added branch context/session tests, the branch-local session overlay implementation, and the engine seams that were changed to use `context._session_store`. The remaining uncovered risk in this phase was hook snapshot/restore behavior against a branch-local session overlay.
+
+What I changed
+
+I added `test_engine_hook_snapshot_and_restore_follow_branch_context_store` in [tests/unit/test_branch_group_context_sessions.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/tests/unit/test_branch_group_context_sessions.py). It verifies that hook snapshot/restore rolls a branch context back to its pre-hook active branch session without changing the parent store’s active slot.
+
+I updated [test_strategy.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/autoloop-v3-explicit-branch-groups-full-revised-76d1507c/runs/run-20260505T171950Z-13ce26d6/artifacts/test/phases/shared-context-and-session-scaffolding/test_strategy.md) with an explicit behavior-to-coverage map, preserved invariants, failure paths, and known gaps. I also appended a concise test-addition summary to [feedback.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/autoloop-v3-explicit-branch-groups-full-revised-76d1507c/runs/run-20260505T171950Z-13ce26d6/artifacts/test/phases/shared-context-and-session-scaffolding/feedback.md).
+
+Key findings / decisions
+
+The highest-value missing regression test was hook snapshot/restore, because session selection and persistence were already covered but the same context-bound session-store change also affected rollback behavior during nested execution. I did not append to `decisions.txt`; no new cross-turn test constraint was necessary beyond what is now captured in the strategy artifact.
+
+Validation passed:
+- `.venv/bin/python -m pytest -q tests/unit/test_branch_group_context_sessions.py`
+- `.venv/bin/python -m pytest -q tests/contract/test_engine_contracts.py -k 'llm_retry_reuses_pre_step_session_not_failed_attempt_session or pair_retry_reuses_pre_step_session_but_keeps_attempt_local_session_chain or on_start_opens_sessions_before_execution or declared_session_auto_opens_without_on_start or provider_steps_without_explicit_session_use_default_session'`
+
+Open issues / next step
+
+This phase’s targeted test surface is covered for the current shared context/session scaffolding scope. The next step is test-auditor review for this phase; broader branch runtime orchestration coverage remains for the later runtime phase.
+
+<loop-control>
+{"schema":"docloop.loop_control/v1","kind":"promise","promise":"COMPLETE"}
+</loop-control>
+
+
+---
+run_id=run-20260505T171950Z-13ce26d6 | entry=session_turn | pair=test | phase=verifier | cycle=1 | attempt=1 | thread_id=019df94a-82ac-73e1-beb0-d1be9a6ff2df
+---
+provider=codex
+mode=resume
+template=/home/rauter/.local/share/pipx/venvs/autoloop/lib/python3.12/site-packages/autoloop/templates/test_verifier.md
+session_id=019df94a-82ac-73e1-beb0-d1be9a6ff2df
+
+
+---
+run_id=run-20260505T171950Z-13ce26d6 | entry=phase_output | pair=test | phase=verifier | process=codex-agent | cycle=1 | attempt=1 | thread_id=019df94a-82ac-73e1-beb0-d1be9a6ff2df
+---
+Auditing the phase-local test additions against the changed runtime seams and the acceptance criteria. I’m checking the new branch-context session tests, the declared strategy map, and whether any material regression surface is still uncovered before I update the audit artifacts.
+
+The strategy and test file line up with the changed phase scope. I’m running the targeted unit file and the adjacent engine contract slice to confirm the asserted behavior is stable and that the new hook-restore regression test actually exercises the moved session-store seam.
+
+The targeted tests pass and the remaining gaps called out in the strategy are genuinely out of phase scope rather than missed regression surfaces. I’m updating the audit artifacts to mark this phase complete with no findings.
+
+Scope considered
+
+Phase-local test audit for the shared context and session scaffolding slice, limited to the active audit artifacts plus the request-relevant unit and adjacent contract tests.
+
+What I analyzed
+
+I checked the phase contract and acceptance criteria against the updated [tests/unit/test_branch_group_context_sessions.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/tests/unit/test_branch_group_context_sessions.py) and the declared coverage map in [test_strategy.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/autoloop-v3-explicit-branch-groups-full-revised-76d1507c/runs/run-20260505T171950Z-13ce26d6/artifacts/test/phases/shared-context-and-session-scaffolding/test_strategy.md). I focused on the changed seams: shared state/value behavior, branch/fan-in metadata, branch-local session overlays, context-bound engine session handling, hook snapshot/restore, and branch-local worklist bookkeeping.
+
+What I reviewed
+
+I reran the targeted validation:
+- `.venv/bin/python -m pytest -q tests/unit/test_branch_group_context_sessions.py`
+- `.venv/bin/python -m pytest -q tests/contract/test_engine_contracts.py -k 'llm_retry_reuses_pre_step_session_not_failed_attempt_session or pair_retry_reuses_pre_step_session_but_keeps_attempt_local_session_chain or on_start_opens_sessions_before_execution or declared_session_auto_opens_without_on_start or provider_steps_without_explicit_session_use_default_session'`
+
+I updated the audit artifacts:
+- [criteria.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/autoloop-v3-explicit-branch-groups-full-revised-76d1507c/runs/run-20260505T171950Z-13ce26d6/artifacts/test/phases/shared-context-and-session-scaffolding/criteria.md)
+- [feedback.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/autoloop-v3-explicit-branch-groups-full-revised-76d1507c/runs/run-20260505T171950Z-13ce26d6/artifacts/test/phases/shared-context-and-session-scaffolding/feedback.md)
+
+Key findings / decisions
+
+No blocking or non-blocking findings remain in phase-local scope. The added hook snapshot/restore test closes the main remaining session regression surface, and the existing worklist-isolation test covers the child-context bookkeeping risk that previously failed verifier review on the implementation side.
+
+Open issues / next step
+
+No audit blocker remains for this phase. The next step is to proceed to the later runtime-orchestration phase, where branch scheduling, manifest generation, and broader branch execution behavior will need their own dedicated coverage.
+
+<loop-control>
+{"schema":"docloop.loop_control/v1","kind":"promise","promise":"COMPLETE"}
+</loop-control>
