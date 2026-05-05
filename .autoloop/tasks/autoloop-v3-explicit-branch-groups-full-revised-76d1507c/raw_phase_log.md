@@ -1384,3 +1384,59 @@ Open issues / next step
 <loop-control>
 {"schema":"docloop.loop_control/v1","kind":"promise","promise":"INCOMPLETE"}
 </loop-control>
+
+
+---
+run_id=run-20260505T171950Z-13ce26d6 | entry=session_turn | pair=test | phase=producer | cycle=2 | attempt=1 | thread_id=019df95d-8fea-77f3-8730-5b37b11034f7
+---
+provider=codex
+mode=resume
+template=/home/rauter/.local/share/pipx/venvs/autoloop/lib/python3.12/site-packages/autoloop/templates/test_producer.md
+session_id=019df95d-8fea-77f3-8730-5b37b11034f7
+
+
+---
+run_id=run-20260505T171950Z-13ce26d6 | entry=phase_output | pair=test | phase=producer | process=codex-agent | cycle=2 | attempt=1 | thread_id=019df95d-8fea-77f3-8730-5b37b11034f7
+---
+I’m adding the missing settlement-path coverage now. First I’m reading the current runtime behavior around `fail_fast` so the new contract test asserts persisted evidence and scheduling semantics without depending on racey timing.
+
+I’ve confirmed the latest decisions block for this turn is open. Next I’m tracing how branch failures become `failed`, `cancelled`, and `skipped` manifest rows so the new test checks the actual persisted contract instead of internal implementation details.
+
+I’ve settled on a deterministic `fail_fast` contract: `concurrency=1`, first branch hard-fails, later branches prove they were never scheduled, and the manifest records them as `skipped`. That covers the admission-stop guarantee without pretending best-effort thread cancellation is deterministic.
+
+I’ve added the `fail_fast` contract case. I’m running the branch-group contract slice now to verify the new expectations against the actual composite runtime behavior before I touch the phase artifacts.
+
+The new contract is passing on the full file and on repeated isolated reruns so far. I’m polling the last stress run, then I’ll update the strategy, feedback, and current-turn decisions entry to reflect the exact guarantee we covered.
+
+I’ve verified the test is stable. I’m updating the phase-local artifacts now to map the new `fail_fast` coverage explicitly and to record the non-obvious choice to test deterministic skip persistence rather than nondeterministic thread cancellation.
+
+The test and phase artifacts are updated. I’m doing one final readback of the new contract block and the strategy text so the close-out reflects exactly what changed and what gap remains.
+
+Scope considered
+- Phase-local test work for `composite-runtime-and-evidence` only: [tests/contract/test_branch_group_runtime.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/tests/contract/test_branch_group_runtime.py), the active [test_strategy.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/autoloop-v3-explicit-branch-groups-full-revised-76d1507c/runs/run-20260505T171950Z-13ce26d6/artifacts/test/phases/composite-runtime-and-evidence/test_strategy.md), the phase [feedback.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/autoloop-v3-explicit-branch-groups-full-revised-76d1507c/runs/run-20260505T171950Z-13ce26d6/artifacts/test/phases/composite-runtime-and-evidence/feedback.md), and the current turn block in [decisions.txt](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/autoloop-v3-explicit-branch-groups-full-revised-76d1507c/runs/run-20260505T171950Z-13ce26d6/decisions.txt).
+- I did not edit auditor-owned [criteria.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/autoloop-v3-explicit-branch-groups-full-revised-76d1507c/runs/run-20260505T171950Z-13ce26d6/artifacts/test/phases/composite-runtime-and-evidence/criteria.md).
+
+What I analyzed
+- I traced the `fail_fast` branch-group path in [autoloop/core/branch_groups/runtime.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/autoloop/core/branch_groups/runtime.py), especially branch admission stopping and persisted `skipped` result generation.
+- I re-read the active audit finding in [feedback.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/autoloop-v3-explicit-branch-groups-full-revised-76d1507c/runs/run-20260505T171950Z-13ce26d6/artifacts/test/phases/composite-runtime-and-evidence/feedback.md) and the current ordering/settlement decisions in [decisions.txt](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/autoloop-v3-explicit-branch-groups-full-revised-76d1507c/runs/run-20260505T171950Z-13ce26d6/decisions.txt).
+- I used that to choose a deterministic contract surface: `concurrency=1` proves admission stopping and `skipped` persistence without depending on nondeterministic thread cancellation timing.
+
+What I changed
+- I added `test_parallel_branch_group_fail_fast_stops_new_branch_launches_and_persists_skipped_results(...)` to [tests/contract/test_branch_group_runtime.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/tests/contract/test_branch_group_runtime.py). It covers:
+  - `settle="fail_fast"` with `concurrency=1`
+  - first branch hard-fails
+  - later branches never execute
+  - `results.json` preserves declaration order with `["failed", "skipped", "skipped"]`
+  - the composite still resolves only at the outer boundary with `partial`
+- I updated [test_strategy.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/autoloop-v3-explicit-branch-groups-full-revised-76d1507c/runs/run-20260505T171950Z-13ce26d6/artifacts/test/phases/composite-runtime-and-evidence/test_strategy.md) to map AC-1 coverage to the new `fail_fast` case, add the corresponding failure-path entry, document the stabilization approach, and remove the old `fail_fast` known gap.
+- I appended a concise test-addition summary to [feedback.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/autoloop-v3-explicit-branch-groups-full-revised-76d1507c/runs/run-20260505T171950Z-13ce26d6/artifacts/test/phases/composite-runtime-and-evidence/feedback.md) and recorded the non-obvious deterministic test choice under block `13` in [decisions.txt](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/autoloop-v3-explicit-branch-groups-full-revised-76d1507c/runs/run-20260505T171950Z-13ce26d6/decisions.txt).
+
+Key findings / decisions
+- The stable regression surface for `fail_fast` is queued-branch admission stopping and persisted `skipped` evidence, not best-effort cancellation of already-running threadpool work.
+- Validation passed:
+  - `.venv/bin/python -m pytest -q tests/contract/test_branch_group_runtime.py`
+  - `for i in 1 2 3; do .venv/bin/python -m pytest -q tests/contract/test_branch_group_runtime.py -k fail_fast_stops_new_branch_launches_and_persists_skipped_results || exit 1; done`
+
+Open issues / next step
+- The remaining known phase-local gap is still explicit fault-injection coverage for manifest/context write failure before fan-in.
+- The next step is auditor review of the new `fail_fast` contract coverage and the updated phase test artifacts.

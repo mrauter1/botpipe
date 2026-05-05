@@ -238,6 +238,64 @@ def test_parallel_branch_group_captures_goto_without_following_branch_destinatio
     assert reroute_branch["destination"] == "repair"
 
 
+def test_parallel_branch_group_fail_fast_stops_new_branch_launches_and_persists_skipped_results(tmp_path: Path) -> None:
+    executed: list[str] = []
+
+    def fail_now(ctx: object) -> Event:
+        executed.append("explode")
+        raise RuntimeError("boom")
+
+    def finish(name: str) -> object:
+        def _finish(ctx: object) -> Event:
+            executed.append(name)
+            return Event("done")
+
+        return _finish
+
+    class FailFastWorkflow(simple.Workflow):
+        class State(BaseModel):
+            pass
+
+        reviews = simple.parallel(
+            name="reviews",
+            settle="fail_fast",
+            concurrency=1,
+            outcome="all_settled",
+            branches={
+                "explode": simple.python_step(fail_now, name="explode_branch"),
+                "later_a": simple.python_step(finish("later_a"), name="later_a_branch"),
+                "later_b": simple.python_step(finish("later_b"), name="later_b_branch"),
+            },
+            routes={"partial": simple.FINISH, "done": simple.FINISH},
+        )
+
+    task_folder, run_folder = _workspace(tmp_path)
+    result = Engine(
+        FailFastWorkflow,
+        provider=ScriptedLLMProvider(),
+        session_store=InMemorySessionStore(),
+        checkpoint_store=InMemoryCheckpointStore(),
+    ).run(
+        task_id="task-fail-fast",
+        run_id="run-fail-fast",
+        task_folder=task_folder,
+        run_folder=run_folder,
+        root=tmp_path,
+    )
+
+    assert result.terminal == simple.FINISH
+    assert result.last_event is not None
+    assert result.last_event.tag == "partial"
+    assert executed == ["explode"]
+
+    manifest = json.loads((tmp_path / "_branch_groups" / "reviews" / "results.json").read_text(encoding="utf-8"))
+    assert manifest["settle"] == "fail_fast"
+    assert [branch["name"] for branch in manifest["branches"]] == ["explode", "later_a", "later_b"]
+    assert [branch["status"] for branch in manifest["branches"]] == ["failed", "skipped", "skipped"]
+    assert manifest["branches"][1]["reason"] == "Branch was not scheduled because fail_fast stopped new branch launches."
+    assert manifest["branches"][2]["reason"] == "Branch was not scheduled because fail_fast stopped new branch launches."
+
+
 def test_branch_group_mechanical_outcomes_support_all_settled_and_custom_aggregators(tmp_path: Path) -> None:
     class OutcomeWorkflow(simple.Workflow):
         class State(BaseModel):
