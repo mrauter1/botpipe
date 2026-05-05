@@ -2059,3 +2059,49 @@ Open issues / next step
 - Passed: `.venv/bin/python -m pytest tests/unit/test_optimization_helpers.py`
 - Passed: `.venv/bin/python -m pytest tests/runtime/test_workflow_run_traces_to_optimization_candidates.py -k selected_workflow_source_changed`
 - I did not rerun the full optimizer runtime file or full repository suite in this turn; the earlier broader runtime failures were still the out-of-phase packaged-workflow issues (`blocked` / `failed` route contracts and missing `framework_architecture_doc`).
+
+
+---
+run_id=run-20260505T133333Z-ef073886 | entry=session_turn | pair=implement | phase=verifier | cycle=2 | attempt=1 | thread_id=019df876-eef3-7f02-aa58-7ac4473fb3bb
+---
+provider=codex
+mode=resume
+template=/home/rauter/.local/share/pipx/venvs/autoloop/lib/python3.12/site-packages/autoloop/templates/implement_verifier.md
+session_id=019df876-eef3-7f02-aa58-7ac4473fb3bb
+
+
+---
+run_id=run-20260505T133333Z-ef073886 | entry=phase_output | pair=implement | phase=verifier | process=codex-agent | cycle=2 | attempt=1 | thread_id=019df876-eef3-7f02-aa58-7ac4473fb3bb
+---
+I’m verifying the corrected manifest contract directly now: the scoped test suite, the targeted runtime mutation check, and a minimal reproduction that `write_selected_workflow_source_manifest()` stays read-only with respect to the repo root.
+
+I want my own clean verification record for the acceptance suite before I mark the phase complete. I’m rerunning the unit helper file once directly so the review doesn’t rely on the producer’s earlier output.
+
+The acceptance evidence is now complete for this phase: helper suite green, targeted runtime mutation check green, and the direct no-mutation reproduction is clean. I’m updating the verifier artifacts to reflect that the earlier blocking findings are resolved and no new issues remain in scope.
+
+Scope considered
+- Phase-local optimizer source-contract changes in [autoloop_optimizer/optimization.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/autoloop_optimizer/optimization.py) and the directly related tests [tests/unit/test_optimization_helpers.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/tests/unit/test_optimization_helpers.py) and [tests/runtime/test_workflow_run_traces_to_optimization_candidates.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/tests/runtime/test_workflow_run_traces_to_optimization_candidates.py).
+- Active verifier artifacts updated: [criteria.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/goal-implement-a-greenfield-autoloop-v3-worklist-3cb1f2e6/runs/run-20260505T133333Z-ef073886/artifacts/implement/phases/reconcile-optimizer-source-contracts/criteria.md) and [feedback.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/goal-implement-a-greenfield-autoloop-v3-worklist-3cb1f2e6/runs/run-20260505T133333Z-ef073886/artifacts/implement/phases/reconcile-optimizer-source-contracts/feedback.md).
+
+What I analyzed
+- The prior blocking findings around repo-root mutation and wrong-source hashing in selected-workflow source manifests.
+- The final manifest-label helpers and their interaction with `validate_selected_workflow_source_unchanged()`.
+- The updated unit/runtime tests and a direct reproduction that checks whether manifest capture creates `autoloop/workflows/...` as a side effect.
+
+What I reviewed
+- `tests/unit/test_optimization_helpers.py`: passed.
+- `tests/runtime/test_workflow_run_traces_to_optimization_candidates.py -k selected_workflow_source_changed`: passed.
+- Direct reproduction of `write_selected_workflow_source_manifest(...)`: `autoloop/workflows/release_candidate_to_go_no_go` stayed absent before and after manifest capture, so the repo-root mutation regression is resolved.
+
+Key findings / decisions
+- The corrected contract is now coherent: canonical first-party package labels are preserved in the manifest, but hashes and mutation checks operate on the selected repo’s actual workflow files.
+- The earlier blocking findings `IMP-001` and `IMP-002` no longer reproduce.
+- No new scoped findings were identified.
+
+Open issues / next step
+- This review is complete for the active phase scope and acceptance criteria.
+- Broader packaged-workflow/runtime failures remain out of phase and should be handled in the downstream packaged-workflow compatibility work, not by reopening this optimizer source-contract fix.
+
+<loop-control>
+{"schema":"docloop.loop_control/v1","kind":"promise","promise":"COMPLETE"}
+</loop-control>

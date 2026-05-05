@@ -14,3 +14,8 @@
 
 - IMP-002 `blocking` `autoloop_optimizer/optimization.py:_first_party_workflow_source_dir`, `write_selected_workflow_source_manifest`
   The manifest no longer hashes the selected repo's actual workflow bytes for first-party workflow names. After a repo-local `workflows/release_candidate_to_go_no_go/workflow.toml` drift, the new helper still copies and hashes the executing checkout's `autoloop/workflows/release_candidate_to_go_no_go` tree instead, so mutation checks can miss or misreport changes in the selected source. Minimal fix: hash the resolved workflow files from the current repo and only canonicalize the published relative-path contract. If a shared helper is needed, centralize it around "actual source bytes + canonical manifest path labels" rather than importing bytes from the installed source tree.
+
+## Cycle 2 Review Update
+
+- Prior blocking findings `IMP-001` and `IMP-002` no longer reproduce after the manifest-label / actual-source-byte fix.
+- No new findings in scoped review.
