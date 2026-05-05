@@ -488,6 +488,62 @@ class ModuleReviewWorkflow(Workflow):
     assert (run_dir / "module.json").read_text(encoding="utf-8") == "module_review"
 
 
+def test_imported_repo_local_class_references_use_workspace_isolated_module_namespace(tmp_path: Path) -> None:
+    workflows_root = tmp_path / "workflows"
+    workflows_root.mkdir(parents=True, exist_ok=True)
+    workflows_root.joinpath("__init__.py").write_text("__all__ = []\n", encoding="utf-8")
+
+    package_dir = workflows_root / "module_review"
+    package_dir.mkdir(parents=True, exist_ok=True)
+    package_dir.joinpath("specs.py").write_text(
+        """
+from pydantic import BaseModel
+
+
+class Params(BaseModel):
+    mode: str = "strict"
+""".strip()
+        + "\n",
+        encoding="utf-8",
+    )
+    package_dir.joinpath("__init__.py").write_text(
+        "from .flow import ModuleReviewWorkflow\nfrom .specs import Params\n__all__ = ['ModuleReviewWorkflow', 'Params']\n",
+        encoding="utf-8",
+    )
+    package_dir.joinpath("flow.py").write_text(
+        """
+from __future__ import annotations
+
+from autoloop import Workflow, python_step
+from .specs import Params
+
+
+class ModuleReviewWorkflow(Workflow):
+    name = "module_review"
+    Params = Params
+
+    @python_step(name="start")
+    def start(ctx):
+        return None
+""".strip()
+        + "\n",
+        encoding="utf-8",
+    )
+
+    with pytest.MonkeyPatch.context() as monkeypatch:
+        monkeypatch.syspath_prepend(str(tmp_path))
+        from workflows.module_review.flow import ModuleReviewWorkflow
+
+        resolved = resolve_workflow_reference(tmp_path, ModuleReviewWorkflow)
+
+    assert resolved.workflow_cls is not ModuleReviewWorkflow
+    assert resolved.workflow_cls.__module__.startswith("_autoloop_workspace_workflows.")
+    assert resolved.workflow_cls.__module__.endswith(".module_review.flow")
+    assert resolved.parameters_cls is not None
+    assert resolved.parameters_cls.__module__.startswith("_autoloop_workspace_workflows.")
+    assert resolved.parameters_cls.__module__.endswith(".module_review.specs")
+
+
 def test_file_reference_requires_class_name_when_multiple_workflows_exist(tmp_path: Path) -> None:
     workflow_path = tmp_path / "examples" / "ambiguous.py"
     workflow_path.parent.mkdir(parents=True, exist_ok=True)

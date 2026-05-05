@@ -384,6 +384,20 @@ def test_repo_local_module_resolution_evicts_stale_workflows_namespace_between_r
     assert second.workflow_cls.marker == "two"
     assert second.workflow_cls is not first.workflow_cls
 
+
+def test_repo_local_unique_alias_remains_resolvable_when_workspace_claims_workflow_name(tmp_path: Path) -> None:
+    _write_workspace_flow(tmp_path, "shared_demo", workflow_name="shared_demo", manifest=True)
+    repo_dir = _write_repo_flow(tmp_path, "shared_demo", workflow_name="shared_demo", aliases=("repo-only",))
+
+    resolved = resolve_workflow_reference(tmp_path, "repo-only")
+
+    assert resolved.reference.package_dir == repo_dir
+    assert resolved.reference.source_path == repo_dir / "workflow.py"
+    assert resolved.reference.workflow_name == "shared_demo"
+    assert resolved.reference.package_module == "workflows.shared_demo"
+    assert resolved.workflow_cls.__module__ == "workflows.shared_demo.workflow"
+
+
 def test_same_tier_resolution_key_collisions_fail_with_paths(
     tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,

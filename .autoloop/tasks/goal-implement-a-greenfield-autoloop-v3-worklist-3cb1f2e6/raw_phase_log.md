@@ -1647,3 +1647,76 @@ Open issues / next step
 <loop-control>
 {"schema":"docloop.loop_control/v1","kind":"promise","promise":"INCOMPLETE"}
 </loop-control>
+
+
+---
+run_id=run-20260505T133333Z-ef073886 | entry=session_turn | pair=implement | phase=producer | cycle=2 | attempt=1 | thread_id=019df85f-e454-7e32-a85f-f676e36c2390
+---
+provider=codex
+mode=resume
+template=/home/rauter/.local/share/pipx/venvs/autoloop/lib/python3.12/site-packages/autoloop/templates/implement_producer.md
+session_id=019df85f-e454-7e32-a85f-f676e36c2390
+
+
+---
+run_id=run-20260505T133333Z-ef073886 | entry=phase_output | pair=implement | phase=producer | process=codex-agent | cycle=2 | attempt=1 | thread_id=019df85f-e454-7e32-a85f-f676e36c2390
+---
+I’m addressing the reviewer’s two blocking gaps: key-level mixed-root alias fallback and explicit repo-local class-object isolation. I’ll reproduce both against the current loader/catalog code, patch them centrally, and rerun the phase and adjacent suites that previously caught regressions.
+
+The two fixes are separable. I’m taking the lower-risk route for each: key-based named lookup for mixed-root fallback, and moving the selected-workflow helper off the class-object round-trip so direct repo-local class refs can become isolated without breaking named metadata consumers.
+
+I’ve got the concrete fix path. The alias fallback bug can be solved in named lookup using the already-available shadowed entries, and the class-object gap can be solved by marking loader-produced named repo-local classes so later inspection can preserve named semantics without weakening explicit imported-class isolation.
+
+I’m addressing the two blocking review findings in the shared loader path: repo-only alias fallback across mixed roots, and isolation for direct repo-local class-object references. I’ll inspect the current loader/tests, make the smallest central fix, then rerun the focused suites that already proved the surrounding contract.
+
+The current code confirms both review points: named lookup only sees non-shadowed entries, and imported repo-local `workflows.*` classes still bypass the isolated load path. I’m narrowing the patch to loader-level key resolution plus a class marker so named round-trips stay stable without weakening explicit class isolation.
+
+I have enough context to patch now. I’m adding two regression tests first so the loader changes are forced against the exact reviewer repros, then I’ll wire the loader to use shadowed entries for key lookup and distinguish named repo-module round-trips from explicit imported class references.
+
+I’m editing the loader and focused regression tests now. The change keeps named repo-local flows identifiable through a stored catalog key, while direct imported `workflows.*` classes without that marker fall back to the isolated path loader.
+
+The patch is in. I’m running the exact regression suites around workflow resolution first, then the adjacent green suites that rely on class-round-trip inspection to catch any namespace or metadata drift.
+
+The two direct regression suites are green. I’m waiting on the larger adjacent suite pass now, since that’s where class-based inspection and runtime metadata regressions would show up if the marker/isolation split were wrong.
+
+The adjacent suites stayed green, including the stdlib helper path that round-trips `resolved.workflow_cls` back through inspection. I’m doing one more CLI metadata suite pass because shadowed-entry discovery is nearby and I changed named lookup to scan shadowed catalog entries.
+
+The code path is stable now, so I’m updating the phase artifacts with the two non-obvious implementation decisions and the focused validation record. I’m leaving broader optimization and packaged-workflow clusters untouched because they remain out of scope for this phase.
+
+Scope considered
+
+- Phase-local workflow-resolution behavior only: mixed-root named lookup, repo-local `workflows/` class loading, and adjacent metadata/inspection round-trips.
+- I did not touch optimizer normalization or packaged-workflow runtime fixes in this turn.
+
+What I analyzed
+
+- [loader.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/autoloop/runtime/loader.py)
+- [test_workflow_catalog_roots.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/tests/runtime/test_workflow_catalog_roots.py)
+- [test_workflow_reference_resolution.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/tests/runtime/test_workflow_reference_resolution.py)
+- Reviewer findings `IMP-001` and `IMP-002`, plus the active [implementation_notes.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/goal-implement-a-greenfield-autoloop-v3-worklist-3cb1f2e6/runs/run-20260505T133333Z-ef073886/artifacts/implement/phases/restore-workflow-resolution-contract/implementation_notes.md) and [decisions.txt](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/goal-implement-a-greenfield-autoloop-v3-worklist-3cb1f2e6/runs/run-20260505T133333Z-ef073886/decisions.txt).
+
+What I changed
+
+- In [loader.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/autoloop/runtime/loader.py), named workflow-key lookup now scans `discover_workflow_catalog(..., include_shadowed=True)`, so a repo-local workflow can still resolve through a unique alias even when `.autoloop/workflows` owns the canonical name.
+- Added a small marker-based split for repo-local `workflows.*` classes:
+  - classes loaded through named repo-local catalog resolution keep their claimed named key for later class-object round-trips,
+  - direct imported repo-local `workflows.*` class objects without that marker now reload through the isolated `_autoloop_workspace_workflows...` path.
+- Added regression coverage in [test_workflow_catalog_roots.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/tests/runtime/test_workflow_catalog_roots.py) and [test_workflow_reference_resolution.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/tests/runtime/test_workflow_reference_resolution.py).
+- Updated the phase artifacts in [implementation_notes.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/goal-implement-a-greenfield-autoloop-v3-worklist-3cb1f2e6/runs/run-20260505T133333Z-ef073886/artifacts/implement/phases/restore-workflow-resolution-contract/implementation_notes.md) and [decisions.txt](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/goal-implement-a-greenfield-autoloop-v3-worklist-3cb1f2e6/runs/run-20260505T133333Z-ef073886/decisions.txt).
+
+Key findings / decisions
+
+- The repo-only alias regression was safest to fix in loader key resolution, not by changing published catalog listing semantics.
+- Named repo-local workflows still need `workflows.*` identity for internal round-trips, but explicit imported class objects need isolated loading; the marker split preserves both contracts.
+- Passed:
+  - `tests/runtime/test_workflow_reference_resolution.py`
+  - `tests/runtime/test_workflow_catalog_roots.py`
+  - `tests/runtime/test_runtime_cli_metadata_integration.py`
+  - `tests/runtime/test_workspace_and_context.py`
+  - `tests/unit/test_stdlib_and_extensions.py`
+
+Open issues / next step
+
+- This phase’s two blocking reviewer findings should now be resolved.
+- I did not run the full repository suite in this turn.
+- The next remaining failure cluster is still out of phase here: `tests/unit/test_optimization_helpers.py` and the packaged-workflow/runtime suites.
