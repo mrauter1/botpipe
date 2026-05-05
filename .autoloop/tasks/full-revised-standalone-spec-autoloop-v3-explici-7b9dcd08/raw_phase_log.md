@@ -346,3 +346,50 @@ Validation passed with:
 Open issues / next step
 
 No new phase-local issues surfaced in this fix. The next step is verifier re-review against the updated feedback item and criteria.
+
+
+---
+run_id=run-20260505T201926Z-7fdaad17 | entry=session_turn | pair=implement | phase=verifier | cycle=2 | attempt=1 | thread_id=019df9d2-2c65-7691-8f27-aacfb5bd74b9
+---
+provider=codex
+mode=resume
+template=/home/rauter/.local/share/pipx/venvs/autoloop/lib/python3.12/site-packages/autoloop/templates/implement_verifier.md
+session_id=019df9d2-2c65-7691-8f27-aacfb5bd74b9
+
+
+---
+run_id=run-20260505T201926Z-7fdaad17 | entry=phase_output | pair=implement | phase=verifier | process=codex-agent | cycle=2 | attempt=1 | thread_id=019df9d2-2c65-7691-8f27-aacfb5bd74b9
+---
+I’m re-reviewing only the reviewer-identified surface plus nearby contract edges: fan-in kind validation, the updated branch-group tests, and the phase artifacts. I’ll confirm the fix behavior directly, then close or reopen criteria based on that result.
+
+The fix holds under direct repro and the updated tests. I’m marking the criteria complete and appending a short resolution note so the feedback file doesn’t leave the old blocking item looking current.
+
+The phase artifacts are updated. I’m doing a final readback of the criteria and feedback so the completion status and the written review record match exactly before I close the loop.
+
+Scope considered
+
+Phase-local `contract-hardening` only. I re-reviewed the reviewer-identified fan-in validation surface, the updated branch-group unit coverage, the implementation notes, and the run-local decisions that now supersede the earlier temporary fan-in allowance.
+
+What I analyzed
+
+I checked the current implementation in [`autoloop/core/branch_groups/validation.py`](/home/rauter/autoloop_v3_bkp/autoloop_v3/autoloop/core/branch_groups/validation.py), the updated tests in [`tests/unit/test_simple_surface.py`](/home/rauter/autoloop_v3_bkp/autoloop_v3/tests/unit/test_simple_surface.py), the phase notes in [`implementation_notes.md`](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/full-revised-standalone-spec-autoloop-v3-explici-7b9dcd08/runs/run-20260505T201926Z-7fdaad17/artifacts/implement/phases/contract-hardening/implementation_notes.md), and the superseding decision in [`decisions.txt`](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/full-revised-standalone-spec-autoloop-v3-explici-7b9dcd08/runs/run-20260505T201926Z-7fdaad17/decisions.txt). I also reran the fan-in operation compile-time repro directly.
+
+What I reviewed
+
+I updated:
+- [`criteria.md`](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/full-revised-standalone-spec-autoloop-v3-explici-7b9dcd08/runs/run-20260505T201926Z-7fdaad17/artifacts/implement/phases/contract-hardening/criteria.md)
+- [`feedback.md`](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/full-revised-standalone-spec-autoloop-v3-explici-7b9dcd08/runs/run-20260505T201926Z-7fdaad17/artifacts/implement/phases/contract-hardening/feedback.md)
+
+Key findings / decisions
+
+`IMP-001` is resolved. `validate_fan_in_step_kind()` now rejects authored `operation` fan-in declarations, the support-preserving fan-in operation test was replaced with a rejection test, and the direct repro now raises `WorkflowValidationError` as required.
+
+The phase criteria are now fully satisfied. No additional findings remain in this phase scope.
+
+Open issues / next step
+
+No open review issues remain for `contract-hardening`. This phase is ready to advance.
+
+<loop-control>
+{"schema":"docloop.loop_control/v1","kind":"promise","promise":"COMPLETE"}
+</loop-control>
