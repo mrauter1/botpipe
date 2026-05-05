@@ -12,6 +12,7 @@ from weakref import WeakKeyDictionary
 
 from pydantic import BaseModel, ConfigDict
 
+from .branch_groups.context import BranchMetadata, FanInMetadata, StateCell
 from .errors import WorkflowExecutionError
 from .mappings import normalize_mapping
 from .primitives import Event
@@ -176,6 +177,7 @@ class Context:
         run_folder: Path,
         package_folder: Path,
         state: BaseModel,
+        state_cell: StateCell | None = None,
         session_store: SessionStore,
         session_definitions: Mapping[str, Session] | None = None,
         worklists: Mapping[str, "Worklist[Any]"] | None = None,
@@ -199,6 +201,9 @@ class Context:
         item_state_store: BaseModel | dict[str, Any] | None = None,
         step_item_state_store: BaseModel | dict[str, Any] | None = None,
         runtime_event_sink: Callable[[str, Mapping[str, Any]], None] | None = None,
+        branch: BranchMetadata | None = None,
+        fan_in: FanInMetadata | None = None,
+        step_execution_id: str | None = None,
     ) -> None:
         self.root = _resolve_context_root(root=root, task_folder=task_folder, package_folder=package_folder)
         self.task_id = task_id
@@ -208,7 +213,8 @@ class Context:
         self.workflow_folder = workflow_folder
         self.run_folder = run_folder
         self.package_folder = package_folder
-        self._state = state
+        self._state_cell = state_cell or StateCell(state)
+        self._state = self._state_cell.value
         self._session_store = session_store
         self._session_definitions = normalize_mapping(session_definitions)
         self._worklists = normalize_mapping(worklists)
@@ -232,6 +238,9 @@ class Context:
         self._step_state = step_state_store if step_state_store is not None else {}
         self._item_state = item_state_store
         self._step_item_state = step_item_state_store
+        self._branch = branch
+        self._fan_in = fan_in
+        self._step_execution_id = step_execution_id
         self._history: HistoryReader | None = None
         self._worklist_items_cache: dict[str, tuple[Any, ...]] = {}
         self._runtime_event_sink = runtime_event_sink
@@ -244,11 +253,15 @@ class Context:
 
     @property
     def state(self) -> BaseModel:
-        return self._state
+        return self._state_cell.value
 
     @state.setter
     def state(self, value: BaseModel) -> None:
-        self._state = value
+        self._state = self._state_cell.set(value)
+
+    @property
+    def state_cell(self) -> StateCell:
+        return self._state_cell
 
     @property
     def answer(self) -> str | None:
@@ -277,6 +290,18 @@ class Context:
     @property
     def values(self) -> NamespaceProxy:
         return NamespaceProxy(self._values)
+
+    @property
+    def branch(self) -> NamespaceProxy:
+        if self._branch is None:
+            raise WorkflowExecutionError("branch metadata is only available during branch execution")
+        return NamespaceProxy(self._branch)
+
+    @property
+    def fan_in(self) -> NamespaceProxy:
+        if self._fan_in is None:
+            raise WorkflowExecutionError("fan_in metadata is only available during fan-in execution")
+        return NamespaceProxy(self._fan_in)
 
     @property
     def route(self) -> NamespaceProxy | None:
@@ -581,7 +606,7 @@ class _ContextRuntime:
         self._context = context
 
     def set_state(self, state: BaseModel) -> None:
-        self._context._state = state
+        self._context._state = self._context._state_cell.set(state)
 
     def set_answer(self, answer: str | None) -> None:
         self._context._answer = answer
@@ -615,6 +640,18 @@ class _ContextRuntime:
 
     def set_step_item_state_store(self, state: BaseModel | dict[str, Any] | None) -> None:
         self._context._step_item_state = state
+
+    def set_session_store(self, session_store: SessionStore) -> None:
+        self._context._session_store = session_store
+
+    def set_branch(self, branch: BranchMetadata | None) -> None:
+        self._context._branch = branch
+
+    def set_fan_in(self, fan_in: FanInMetadata | None) -> None:
+        self._context._fan_in = fan_in
+
+    def set_step_execution_id(self, step_execution_id: str | None) -> None:
+        self._context._step_execution_id = step_execution_id
 
     def set_selection(self, worklist: "Worklist[Any] | str", selection: "Selection[Any]") -> None:
         worklist_name = self._context._worklist_name(worklist)
@@ -686,10 +723,9 @@ class _ContextRuntime:
             payload["item_id"] = new_current.id
         elif previous_current is not None:
             payload["item_id"] = previous_current.id
-        step_execution_id = _step_execution_id(
-            step_name=self._context._step_name,
+        step_execution_id = _context_step_execution_id(
+            self._context,
             visit=visit,
-            scope_name=self._context._active_worklist,
             item_id=None if new_current is None else new_current.id,
         )
         if step_execution_id is not None:
@@ -736,10 +772,9 @@ class _ContextRuntime:
             payload["visit"] = visit
         if self._context._active_worklist is not None:
             payload["scope"] = self._context._active_worklist
-        step_execution_id = _step_execution_id(
-            step_name=self._context._step_name,
+        step_execution_id = _context_step_execution_id(
+            self._context,
             visit=visit,
-            scope_name=self._context._active_worklist,
             item_id=None if current is None else current.id,
         )
         if step_execution_id is not None:
@@ -763,10 +798,9 @@ class _ContextRuntime:
             event_payload["visit"] = visit
         if self._context._active_worklist is not None and "scope" not in event_payload:
             event_payload["scope"] = self._context._active_worklist
-        step_execution_id = _step_execution_id(
-            step_name=self._context._step_name,
+        step_execution_id = _context_step_execution_id(
+            self._context,
             visit=visit,
-            scope_name=self._context._active_worklist,
             item_id=event_payload.get("item_id"),
         )
         if step_execution_id is not None and "step_execution_id" not in event_payload:
@@ -828,3 +862,19 @@ def _step_execution_id(
     if scope_name is not None and item_id is not None:
         return f"{step_name}:{scope_name}:{item_id}:{visit}"
     return f"{step_name}:{visit}"
+
+
+def _context_step_execution_id(
+    context: Context,
+    *,
+    visit: int | None,
+    item_id: str | None,
+) -> str | None:
+    if context._step_execution_id is not None:
+        return context._step_execution_id if visit is None else f"{context._step_execution_id.rsplit(':', 1)[0]}:{visit}"
+    return _step_execution_id(
+        step_name=context._step_name,
+        visit=visit,
+        scope_name=context._active_worklist,
+        item_id=item_id,
+    )

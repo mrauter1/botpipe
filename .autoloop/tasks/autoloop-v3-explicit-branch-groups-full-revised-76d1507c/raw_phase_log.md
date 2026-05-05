@@ -605,3 +605,77 @@ This test slice is audit-complete. Remaining uncovered branch-group surfaces are
 <loop-control>
 {"schema":"docloop.loop_control/v1","kind":"promise","promise":"COMPLETE"}
 </loop-control>
+
+
+---
+run_id=run-20260505T171950Z-13ce26d6 | entry=session_turn | pair=implement | phase=producer | cycle=1 | attempt=1 | thread_id=019df94a-82ac-73e1-beb0-d1be9a6ff2df
+---
+provider=codex
+mode=start
+template=/home/rauter/.local/share/pipx/venvs/autoloop/lib/python3.12/site-packages/autoloop/templates/implement_producer.md
+session_id=019df94a-82ac-73e1-beb0-d1be9a6ff2df
+
+
+---
+run_id=run-20260505T171950Z-13ce26d6 | entry=phase_output | pair=implement | phase=producer | process=codex-agent | cycle=1 | attempt=1 | thread_id=019df94a-82ac-73e1-beb0-d1be9a6ff2df
+---
+I’m treating this as the phase-scoped implementation for shared context and session scaffolding. First I’m reading the phase artifacts and the existing context/session execution paths so I can make the smallest change set that satisfies this phase contract.
+
+I’ve confirmed the earlier phase already landed the authoring/compiler surface. Now I’m tracing the live state/session code paths so this phase only changes the plumbing needed for shared state cells, branch metadata, and branch-local session persistence.
+
+The branch-group scaffolding modules don’t exist yet, so I’m checking the current state/session touch points before adding them. Next I’m mapping every place that reads `ctx.state`, `ctx.values`, or the engine-global session store so the new branch-local view is wired once rather than patched piecemeal.
+
+I’ve confirmed the compiler already carries a `branch_group` payload on compiled steps. The remaining work is purely runtime scaffolding: make `Context` share a state cell and let session selection/persistence use the context’s store instead of the engine-global store, then add branch-scoped bookkeeping helpers and tests around those invariants.
+
+Plan for this phase:
+1. Add branch-group scaffolding types and context helpers: `StateCell`, branch/fan-in metadata, execution-id/bookkeeping helpers, and optional context surfaces in `autoloop/core/context.py` plus new `autoloop/core/branch_groups/context.py`.
+2. Add a branch-local session-store view in `autoloop/core/branch_groups/sessions.py` that reuses persisted bindings inside a branch but keeps parent active-slot selection deterministic.
+3. Rewire engine and operation session persistence to use the context-bound session store, then add focused tests for shared state-cell behavior, branch-local session isolation, and context-bound session selection/persistence.
+4. Update the phase implementation notes and append any non-obvious runtime decisions to the current decisions block if the code introduces them.
+
+I’ve got the change boundary. I’m editing `Context` to carry optional branch/fan-in metadata, a shared `StateCell`, and an execution-id override, then I’m adding the branch-group context/session helper modules and rewiring engine session selection to read and write through the context’s session store instead of the engine-global store.
+
+The scaffolding types are in place. I’m now switching the engine’s nested execution path to use each context’s session store view for snapshot, selection, and persistence so later branch runtime code can isolate fresh branch sessions without forking the rest of step execution.
+
+The runtime wiring is mostly done. I’m adding targeted tests now for the actual phase contracts: shared state-cell writes across contexts, branch-local session activation staying off the parent store, and branch-scoped execution IDs surfacing through the existing runtime event emitter.
+
+The code changes are in. I’m running focused validation on the new scaffolding and adjacent branch-group/session tests rather than a full suite, since this phase only touched context, engine session plumbing, and the new branch-group helper modules.
+
+`pytest` is not on PATH here, so I’m switching to `python -m pytest` for the same targeted checks.
+
+The environment only has `python3`, not `python`. I’m rerunning the same checks with that interpreter.
+
+There’s no `pytest` module in the default interpreter either. I’m checking whether this repo has a local virtualenv or runner script so I can still validate the change set instead of stopping at static edits.
+
+A local `.venv` is present, so I’m using that interpreter for the targeted test pass.
+
+The focused new tests passed. I’m doing one more regression pass against existing engine session contract tests that exercise the same selection and persistence paths I touched.
+
+The code and tests are clean. I’m finishing the phase artifacts now: appending the non-obvious runtime decisions that matter for later phases, and writing the implementation notes with the exact checklist mapping and preserved invariants for this slice.
+
+Scope considered
+
+Phase-local work for shared context and session scaffolding only: [autoloop/core/context.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/autoloop/core/context.py), [autoloop/core/engine.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/autoloop/core/engine.py), new branch-group helpers under [autoloop/core/branch_groups](/home/rauter/autoloop_v3_bkp/autoloop_v3/autoloop/core/branch_groups), and focused unit coverage in [tests/unit/test_branch_group_context_sessions.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/tests/unit/test_branch_group_context_sessions.py).
+
+What I analyzed
+
+I traced current `Context` state/value/session ownership, nested step execution in `StepDispatcher.execute()`, engine session snapshot/select/persist paths, and the earlier branch-group compile model already landed in the prior phase. I also checked the phase artifacts and existing engine session contract tests before changing runtime plumbing.
+
+What I changed
+
+I added shared-context scaffolding with `StateCell`, `BranchMetadata`, `FanInMetadata`, branch/fan-in context factories, and a branch-local `BranchSessionStoreView`. `Context.state` and `context_runtime(...).set_state(...)` now write through a shared state cell, `ctx.branch` / `ctx.fan_in` are available on branch/fan-in contexts, and runtime event emission can use branch-scoped execution-id prefixes.
+
+I rewired nested engine session behavior to use `context._session_store` for hook snapshots, session selection, verifier-session resolution, and provider-session persistence, so branch-local overlay stores can isolate fresh branch sessions from the parent active slot. I also updated the phase notes and decisions ledger.
+
+Key findings / decisions
+
+Branch-local session isolation only works cleanly if nested execution uses the context’s store rather than `Engine.session_store`; that seam is now in place without changing ordinary top-level behavior. Shared values remain one shared mutable mapping by reference in this phase; I did not add a replacement-cell or locking layer yet.
+
+Validation ran with the repo venv:
+- `.venv/bin/python -m pytest -q tests/unit/test_branch_group_context_sessions.py`
+- `.venv/bin/python -m pytest -q tests/unit/test_simple_surface.py -k 'branch_group or fan_in or provider_backed_branch'`
+- `.venv/bin/python -m pytest -q tests/contract/test_engine_contracts.py -k 'llm_retry_reuses_pre_step_session_not_failed_attempt_session or pair_retry_reuses_pre_step_session_but_keeps_attempt_local_session_chain or on_start_opens_sessions_before_execution or declared_session_auto_opens_without_on_start or provider_steps_without_explicit_session_use_default_session'`
+
+Open issues / next step
+
+No blocking issue in this phase. The next step is wiring the actual branch-group runtime to use these new context/session helpers for branch scheduling, per-branch bookkeeping stores, and fan-in execution.
