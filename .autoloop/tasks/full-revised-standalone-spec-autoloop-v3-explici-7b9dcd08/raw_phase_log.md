@@ -1809,3 +1809,53 @@ Validation passed:
 Open issues / next step
 
 No blocking branch-group issues remain from this phase slice. The focused suites passed; the only output was pre-existing Pydantic field-name warnings in unrelated workflow contract models.
+
+
+---
+run_id=run-20260505T201926Z-7fdaad17 | entry=session_turn | pair=implement | phase=verifier | cycle=1 | attempt=1 | thread_id=019dfa1c-b1de-7ad3-bc90-31545cf131de
+---
+provider=codex
+mode=resume
+template=/home/rauter/.local/share/pipx/venvs/autoloop/lib/python3.12/site-packages/autoloop/templates/implement_verifier.md
+session_id=019dfa1c-b1de-7ad3-bc90-31545cf131de
+
+
+---
+run_id=run-20260505T201926Z-7fdaad17 | entry=phase_output | pair=implement | phase=verifier | process=codex-agent | cycle=1 | attempt=1 | thread_id=019dfa1c-b1de-7ad3-bc90-31545cf131de
+---
+I’m reviewing the phase artifacts and re-running the focused validation surface before I mark the criteria and findings.
+
+I’ve got two phase-blocking review findings: one in the strictness guard itself and one in the required evidence-write coverage. I’m recording those in the verifier artifacts now.
+
+Scope considered
+
+Phase-local strictness-and-cleanup review across the changed branch-group files and required verifier artifacts: `autoloop/core/branch_groups/manifest.py`, `tests/strictness/test_no_compat.py`, `tests/contract/test_branch_group_runtime.py`, plus the phase `criteria.md`, `feedback.md`, `implementation_notes.md`, and the run `decisions.txt`.
+
+What I analyzed
+
+I reviewed the implementation diff against the phase contract and the branch-group spec, with emphasis on AC-1 through AC-3. I also checked the current evidence-write tests and the strictness scan logic for evasion paths.
+
+What I reviewed
+
+I re-ran the focused validation surface with:
+
+`./.venv/bin/python -m pytest -q tests/strictness/test_no_compat.py tests/unit/test_simple_surface.py tests/unit/test_branch_group_context_sessions.py tests/contract/test_async_step_dispatcher.py tests/contract/test_branch_group_runtime.py tests/runtime/test_runtime_tracing.py tests/runtime/test_runtime_static_graph.py tests/unit/test_validation.py`
+
+That suite passed: `249 passed`.
+
+Key findings / decisions
+
+I recorded two blocking findings in `feedback.md`.
+
+- `IMP-001` blocking: the strictness guard is still a raw token scan and misses realistic forbidden import forms like `from threading import RLock` and `from asyncio import to_thread`, so AC-1 is not fully satisfied.
+- `IMP-002` blocking: the phase still lacks the two distinct evidence-write failure tests required by the spec. Current tests only fail `write_branch_group_evidence()` before either file write, so AC-2 is still incomplete for `results.json` failure vs `context.md` failure.
+
+I updated `criteria.md` accordingly and left the checkboxes unchecked because blocking findings remain.
+
+Open issues / next step
+
+Implement the two fixes from `feedback.md`, then rerun the same focused suite. After that, the phase should be ready for a clean re-review.
+
+<loop-control>
+{"schema":"docloop.loop_control/v1","kind":"promise","promise":"INCOMPLETE"}
+</loop-control>
