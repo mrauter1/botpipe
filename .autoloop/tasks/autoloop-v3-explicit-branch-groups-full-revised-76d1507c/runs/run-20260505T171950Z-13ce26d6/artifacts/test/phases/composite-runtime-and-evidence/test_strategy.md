@@ -12,6 +12,7 @@
   - `parallel(...)` without fan-in persists `_branch_groups/<group>/results.json` and `context.md`, keeps manifest branch order declaration-stable, and only routes after branch settlement.
   - `parallel(...)` with fan-in routes through the internal fan-in step while exposing `FanIn.results()` / `FanIn.context()` helper reads and `ctx.fan_in` metadata.
   - `parallel(..., settle="fail_fast", concurrency=1)` stops scheduling queued branches after the first hard failure and persists declaration-ordered `failed` / `skipped` branch results at the composite boundary.
+  - evidence-write failure aborts the composite before fan-in execution or no-fan-in route selection, so no downstream step runs after a failed `results.json` / `context.md` write.
 - AC-2 branch result capture without parent cursor advancement:
   - branch `RequestInput` becomes branch manifest state and routes the composite to `question` only at the outer boundary.
   - branch `Goto` is recorded in manifest status/runtime-control/destination fields and does not advance the parent workflow to the branch target.
@@ -31,11 +32,13 @@
 - Mixed settled branch outcomes under `all_settled` with and without explicit `success_routes`.
 - Python-step branch hard failure handled through a custom outcome aggregator.
 - `fail_fast` settlement with a leading hard failure and queued branches that must remain unscheduled.
+- Fault-injected `_branch_groups` evidence-write failure with and without fan-in.
 
 ## Flake Controls
 - Mechanical-outcome provider responses are keyed off prompt text rather than invocation order so concurrent branch scheduling cannot swap expected route tags.
 - Fan-out prompt assertions use unordered membership for provider callback observations while manifest assertions continue to enforce declaration order.
 - `fail_fast` coverage uses `concurrency=1` so the contract asserts deterministic branch-admission stopping and persisted `skipped` results without depending on best-effort thread cancellation timing.
+- Evidence-write failure coverage monkeypatches `autoloop.core.branch_groups.runtime.write_branch_group_evidence`, the exact runtime call site that gates fan-in/outcome execution, instead of relying on filesystem-permission side effects.
 
 ## Known Gaps
-- Manifest/context write failure before fan-in remains covered indirectly by runtime behavior, not by an explicit fault-injection test here.
+- No additional phase-local gaps identified in this contract slice.

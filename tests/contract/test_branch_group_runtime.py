@@ -3,8 +3,10 @@ from __future__ import annotations
 import json
 from pathlib import Path
 
+import pytest
 from pydantic import BaseModel
 
+from autoloop.core.branch_groups import runtime as branch_group_runtime
 from autoloop.core.engine import Engine
 from autoloop.core.primitives import Event, Goto, Outcome, RequestInput
 from autoloop.core.providers.fake import ScriptedLLMProvider
@@ -294,6 +296,115 @@ def test_parallel_branch_group_fail_fast_stops_new_branch_launches_and_persists_
     assert [branch["status"] for branch in manifest["branches"]] == ["failed", "skipped", "skipped"]
     assert manifest["branches"][1]["reason"] == "Branch was not scheduled because fail_fast stopped new branch launches."
     assert manifest["branches"][2]["reason"] == "Branch was not scheduled because fail_fast stopped new branch launches."
+
+
+def test_branch_group_evidence_write_failure_stops_before_fan_in_and_downstream_routing(
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path,
+) -> None:
+    fan_in_called = False
+    published: list[str] = []
+
+    def fan_in_turn(request: object) -> Outcome:
+        nonlocal fan_in_called
+        fan_in_called = True
+        return Outcome(raw_output="approved", tag="approved")
+
+    class FanInWriteFailureWorkflow(simple.Workflow):
+        class State(BaseModel):
+            pass
+
+        reviews = simple.parallel(
+            name="reviews",
+            branches={
+                "security": simple.step("Review security.", name="security_review", session=simple.Session.fresh()),
+                "cost": simple.step("Review cost.", name="cost_review", session=simple.Session.fresh()),
+            },
+            fan_in=simple.step(
+                "Summarize reviews.",
+                name="combine_reviews",
+                after=lambda ctx: published.append("fan_in") or None,
+                routes={"approved": "publish"},
+            ),
+        )
+        publish = simple.python_step(lambda ctx: (published.append("publish"), Event("done"))[-1])
+
+    def fail_write(*args: object, **kwargs: object) -> None:
+        raise OSError("disk full")
+
+    monkeypatch.setattr(branch_group_runtime, "write_branch_group_evidence", fail_write)
+    task_folder, run_folder = _workspace(tmp_path)
+
+    with pytest.raises(OSError, match="disk full"):
+        Engine(
+            FanInWriteFailureWorkflow,
+            provider=ScriptedLLMProvider(
+                llm_turns=[
+                    Outcome(raw_output="security ok", tag="done"),
+                    Outcome(raw_output="cost ok", tag="done"),
+                    fan_in_turn,
+                ]
+            ),
+            session_store=InMemorySessionStore(),
+            checkpoint_store=InMemoryCheckpointStore(),
+        ).run(
+            task_id="task-fan-in-write-failure",
+            run_id="run-fan-in-write-failure",
+            task_folder=task_folder,
+            run_folder=run_folder,
+            root=tmp_path,
+        )
+
+    assert fan_in_called is False
+    assert published == []
+    assert not (tmp_path / "_branch_groups" / "reviews" / "results.json").exists()
+    assert not (tmp_path / "_branch_groups" / "reviews" / "context.md").exists()
+
+
+def test_branch_group_evidence_write_failure_stops_before_mechanical_outcome_routing(
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path,
+) -> None:
+    published: list[str] = []
+
+    class OutcomeWriteFailureWorkflow(simple.Workflow):
+        class State(BaseModel):
+            pass
+
+        reviews = simple.parallel(
+            name="reviews",
+            outcome="all_done",
+            branches={
+                "security": simple.python_step(lambda ctx: Event("done"), name="security_review"),
+                "cost": simple.python_step(lambda ctx: Event("done"), name="cost_review"),
+            },
+            routes={"done": "publish"},
+        )
+        publish = simple.python_step(lambda ctx: (published.append("publish"), Event("done"))[-1])
+
+    def fail_write(*args: object, **kwargs: object) -> None:
+        raise OSError("disk full")
+
+    monkeypatch.setattr(branch_group_runtime, "write_branch_group_evidence", fail_write)
+    task_folder, run_folder = _workspace(tmp_path)
+
+    with pytest.raises(OSError, match="disk full"):
+        Engine(
+            OutcomeWriteFailureWorkflow,
+            provider=ScriptedLLMProvider(),
+            session_store=InMemorySessionStore(),
+            checkpoint_store=InMemoryCheckpointStore(),
+        ).run(
+            task_id="task-outcome-write-failure",
+            run_id="run-outcome-write-failure",
+            task_folder=task_folder,
+            run_folder=run_folder,
+            root=tmp_path,
+        )
+
+    assert published == []
+    assert not (tmp_path / "_branch_groups" / "reviews" / "results.json").exists()
+    assert not (tmp_path / "_branch_groups" / "reviews" / "context.md").exists()
 
 
 def test_branch_group_mechanical_outcomes_support_all_settled_and_custom_aggregators(tmp_path: Path) -> None:
