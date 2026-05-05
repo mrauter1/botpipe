@@ -1970,3 +1970,50 @@ No blocking issues remain in this phase slice.
 <loop-control>
 {"schema":"docloop.loop_control/v1","kind":"promise","promise":"COMPLETE"}
 </loop-control>
+
+
+---
+run_id=run-20260505T201926Z-7fdaad17 | entry=session_turn | pair=test | phase=producer | cycle=1 | attempt=1 | thread_id=019dfa1c-b1de-7ad3-bc90-31545cf131de
+---
+provider=codex
+mode=resume
+template=/home/rauter/.local/share/pipx/venvs/autoloop/lib/python3.12/site-packages/autoloop/templates/test_producer.md
+session_id=019dfa1c-b1de-7ad3-bc90-31545cf131de
+
+
+---
+run_id=run-20260505T201926Z-7fdaad17 | entry=phase_output | pair=test | phase=producer | process=codex-agent | cycle=1 | attempt=1 | thread_id=019dfa1c-b1de-7ad3-bc90-31545cf131de
+---
+I’m treating this as a phase-local test follow-up: I’ll audit the new strictness and evidence-write coverage, add any missing direct regression tests in the test files themselves, then update the test strategy and test-phase feedback artifacts.
+
+I found one worthwhile gap in the tests themselves: the strictness scanner logic is only validated indirectly against the real tree. I’m adding a direct snippet-based regression test so future edits to the scanner can’t silently weaken import-form detection.
+
+The direct scanner regression test is in. I’m running the strictness file and then the full focused phase suite so the strategy artifact can point to a passing coverage map rather than intended coverage only.
+
+I have the final coverage picture now. I’m updating the test strategy with the explicit behavior map, appending the test-phase feedback summary, and recording the one non-obvious test decision in the run ledger.
+
+Scope considered
+
+Phase-local strictness-and-cleanup test work focused on [test_no_compat.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/tests/strictness/test_no_compat.py), [test_branch_group_runtime.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/tests/contract/test_branch_group_runtime.py), and the active test artifacts in `artifacts/test/phases/strictness-and-cleanup/`.
+
+What I analyzed
+
+I reviewed the final strictness scanner changes and the new evidence-write failure tests against the phase contract. The main gap I found on the test side was that the AST scanner logic was only exercised indirectly against the maintained tree, so future refactors could weaken import/alias detection without a direct regression test.
+
+What I changed
+
+I added a direct snippet-based regression test in [test_no_compat.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/tests/strictness/test_no_compat.py) that validates the forbidden-primitive scanner against imported and aliased forms like `from threading import RLock`, `import asyncio as aio; aio.to_thread`, and `from concurrent.futures import wait`.
+
+I updated [test_strategy.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/full-revised-standalone-spec-autoloop-v3-explici-7b9dcd08/runs/run-20260505T201926Z-7fdaad17/artifacts/test/phases/strictness-and-cleanup/test_strategy.md) with an explicit behavior-to-test coverage map, appended the test-phase summary to [feedback.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/full-revised-standalone-spec-autoloop-v3-explici-7b9dcd08/runs/run-20260505T201926Z-7fdaad17/artifacts/test/phases/strictness-and-cleanup/feedback.md), and recorded the non-obvious scanner-test decision under the current turn header in [decisions.txt](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/full-revised-standalone-spec-autoloop-v3-explici-7b9dcd08/runs/run-20260505T201926Z-7fdaad17/decisions.txt).
+
+Key findings / decisions
+
+The runtime coverage added in the implement turn was already good; the extra value in this test turn was pinning the strictness helper directly rather than only via tree scanning.
+
+Validation passed:
+- `./.venv/bin/python -m pytest -q tests/strictness/test_no_compat.py`
+- `./.venv/bin/python -m pytest -q tests/strictness/test_no_compat.py tests/unit/test_simple_surface.py tests/unit/test_branch_group_context_sessions.py tests/contract/test_async_step_dispatcher.py tests/contract/test_branch_group_runtime.py tests/runtime/test_runtime_tracing.py tests/runtime/test_runtime_static_graph.py tests/unit/test_validation.py`
+
+Open issues / next step
+
+No new phase-local test gaps remain in scope after the focused suite run.
