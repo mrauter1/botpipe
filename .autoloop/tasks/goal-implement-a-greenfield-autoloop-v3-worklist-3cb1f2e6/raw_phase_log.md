@@ -2105,3 +2105,58 @@ Open issues / next step
 <loop-control>
 {"schema":"docloop.loop_control/v1","kind":"promise","promise":"COMPLETE"}
 </loop-control>
+
+
+---
+run_id=run-20260505T133333Z-ef073886 | entry=session_turn | pair=test | phase=producer | cycle=1 | attempt=1 | thread_id=019df876-eef3-7f02-aa58-7ac4473fb3bb
+---
+provider=codex
+mode=resume
+template=/home/rauter/.local/share/pipx/venvs/autoloop/lib/python3.12/site-packages/autoloop/templates/test_producer.md
+session_id=019df876-eef3-7f02-aa58-7ac4473fb3bb
+
+
+---
+run_id=run-20260505T133333Z-ef073886 | entry=phase_output | pair=test | phase=producer | process=codex-agent | cycle=1 | attempt=1 | thread_id=019df876-eef3-7f02-aa58-7ac4473fb3bb
+---
+I’m treating this as phase-local regression-proofing for the optimizer manifest contract. First I’m reading the active test artifacts and the current optimizer tests so I can add focused coverage for the reviewer-found failure modes without pulling in the out-of-phase packaged-workflow runtime issues.
+
+Plan for this test turn:
+
+1. Add focused optimizer-helper tests for the two reviewer-found regression modes:
+   - canonical manifest capture must not create `autoloop/workflows/...` in the repo root,
+   - canonical first-party manifest labels must still hash the selected repo-local source bytes.
+2. Keep the existing unit/runtime assertions for mutation detection and canonical label normalization.
+3. Update the phase test strategy, append a concise feedback note, and record any non-obvious coverage decision under the new test-author decisions header.
+
+I’m adding two unit tests now. They directly encode the corrected contract so a future refactor can’t quietly reintroduce the repo-root copy or swap back to hashing the wrong tree.
+
+The new unit coverage is green. I’m recording the one non-obvious test decision now: the suite should assert canonical manifest labels and actual source bytes separately, because conflating them is what let the repo-copy regression slip in.
+
+I’ve finished the code-side coverage. The remaining work is the phase artifacts: a short behavior-to-test map and a concise feedback entry that tells the test auditor exactly what was added and why.
+
+The tests are in and the phase artifacts are updated. I’m doing one cleanup/status pass so the final change set stays limited to the new regression coverage and the required test-phase records.
+
+Scope considered
+- Phase-local optimizer source-contract coverage in [tests/unit/test_optimization_helpers.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/tests/unit/test_optimization_helpers.py).
+- Test-phase artifacts updated: [test_strategy.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/goal-implement-a-greenfield-autoloop-v3-worklist-3cb1f2e6/runs/run-20260505T133333Z-ef073886/artifacts/test/phases/reconcile-optimizer-source-contracts/test_strategy.md), [feedback.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/goal-implement-a-greenfield-autoloop-v3-worklist-3cb1f2e6/runs/run-20260505T133333Z-ef073886/artifacts/test/phases/reconcile-optimizer-source-contracts/feedback.md), and the test-author block in [decisions.txt](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/goal-implement-a-greenfield-autoloop-v3-worklist-3cb1f2e6/runs/run-20260505T133333Z-ef073886/decisions.txt).
+
+What I analyzed
+- The final selected-workflow manifest contract from the implement/verifier turns.
+- Existing optimizer-helper tests around canonical package labels, source hashing, and post-capture mutation detection.
+- The specific reviewer-found failure modes that needed durable regression coverage: repo-root materialization and wrong-source hashing.
+
+What I changed
+- Added a unit test that asserts manifest capture does not create `autoloop/workflows/...` in temp repos that only contain repo-local `workflows/...`.
+- Added a unit test that asserts canonical first-party manifest labels still hash the repo-local selected-source bytes after local drift.
+- Updated the phase test strategy with a behavior-to-coverage map and appended a concise feedback entry.
+- Recorded the non-obvious test decision that canonical labels and actual source bytes must be asserted separately.
+
+Key findings / decisions
+- The important regression seam here is the separation between canonical manifest labels and the actual source files being hashed.
+- Unit coverage now explicitly guards both sides of that contract, instead of inferring them indirectly through downstream mutation checks.
+- The added tests are deterministic and tempdir-only; no timing or environment flake surface was introduced.
+
+Open issues / next step
+- Passed: `.venv/bin/python -m pytest tests/unit/test_optimization_helpers.py` with `31 passed`.
+- I did not rerun the broader optimizer runtime file in this turn because the test additions were unit-only and the remaining full-file failures are still the known out-of-phase packaged-workflow/runtime issues captured in the strategy artifact.

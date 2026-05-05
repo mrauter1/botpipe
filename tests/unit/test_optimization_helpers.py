@@ -555,6 +555,50 @@ def test_write_selected_workflow_source_manifest_records_hashes(tmp_path: Path) 
     assert first_entry["bytes"] == len(content)
 
 
+def test_write_selected_workflow_source_manifest_does_not_materialize_canonical_repo_tree(tmp_path: Path) -> None:
+    _install_selected_workflow(tmp_path)
+    workflow_folder = tmp_path / ".autoloop" / "tasks" / "task-1" / "wf_optimizer"
+    workflow_folder.mkdir(parents=True, exist_ok=True)
+    ctx = SimpleNamespace(root=tmp_path, workflow_folder=workflow_folder)
+    canonical_dir = tmp_path / "autoloop" / "workflows" / "release_candidate_to_go_no_go"
+
+    assert canonical_dir.exists() is False
+
+    write_selected_workflow_source_manifest(
+        ctx=ctx,
+        selected_workflow="release_candidate_to_go_no_go",
+        relative_path="selected_workflow_source_manifest.json",
+    )
+
+    assert canonical_dir.exists() is False
+
+
+def test_write_selected_workflow_source_manifest_uses_repo_local_bytes_under_canonical_first_party_labels(
+    tmp_path: Path,
+) -> None:
+    _install_selected_workflow(tmp_path)
+    workflow_folder = tmp_path / ".autoloop" / "tasks" / "task-1" / "wf_optimizer"
+    workflow_folder.mkdir(parents=True, exist_ok=True)
+    ctx = SimpleNamespace(root=tmp_path, workflow_folder=workflow_folder)
+    workflow_toml = tmp_path / "workflows" / "release_candidate_to_go_no_go" / "workflow.toml"
+    workflow_toml.write_text(workflow_toml.read_text(encoding="utf-8") + "\n# repo-local drift\n", encoding="utf-8")
+
+    manifest_path = write_selected_workflow_source_manifest(
+        ctx=ctx,
+        selected_workflow="release_candidate_to_go_no_go",
+        relative_path="selected_workflow_source_manifest.json",
+    )
+    payload = json.loads(manifest_path.read_text(encoding="utf-8"))
+    entry = next(
+        item
+        for item in payload["files"]
+        if item["path"] == "autoloop/workflows/release_candidate_to_go_no_go/workflow.toml"
+    )
+
+    assert payload["package_dir"] == "autoloop/workflows/release_candidate_to_go_no_go"
+    assert entry["sha256"] == hashlib.sha256(workflow_toml.read_bytes()).hexdigest()
+
+
 def test_write_selected_workflow_source_manifest_normalizes_alias_to_canonical_workflow_name(tmp_path: Path) -> None:
     _install_selected_workflow(tmp_path)
     workflow_folder = tmp_path / ".autoloop" / "tasks" / "task-1" / "wf_optimizer"
