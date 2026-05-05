@@ -1,1 +1,2 @@
 # Plan ↔ Plan Verifier Feedback
+- Added a single-phase plan centered on the shared provider-contract builder drift: `route_required_writes` must use effective required writes, while `routes[*].required_writes` and `explicit_required_writes` stay unchanged. Included targeted validation for canonical contracts, explicit-vs-effective metadata invariants, branch-group coverage, and the full repository gate.
