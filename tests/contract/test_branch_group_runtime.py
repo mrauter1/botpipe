@@ -20,6 +20,13 @@ def _workspace(tmp_path: Path) -> tuple[Path, Path]:
     return task_folder, run_folder
 
 
+def _prompt_routed_outcome(request: object) -> Outcome:
+    prompt_text = request.prompt.text
+    if prompt_text == "Approved.":
+        return Outcome(raw_output="approved", tag="approved")
+    return Outcome(raw_output="done", tag="done")
+
+
 def test_parallel_branch_group_without_fan_in_routes_question_and_writes_evidence(tmp_path: Path) -> None:
     class ReviewWorkflow(simple.Workflow):
         class State(BaseModel):
@@ -253,14 +260,8 @@ def test_branch_group_mechanical_outcomes_support_all_settled_and_custom_aggrega
 
     provider = ScriptedLLMProvider(
         llm_turns=[
-            lambda request: Outcome(
-                raw_output="approved" if request.prompt.text == "Approved." else "done",
-                tag="approved" if request.prompt.text == "Approved." else "done",
-            ),
-            lambda request: Outcome(
-                raw_output="approved" if request.prompt.text == "Approved." else "done",
-                tag="approved" if request.prompt.text == "Approved." else "done",
-            ),
+            _prompt_routed_outcome,
+            _prompt_routed_outcome,
         ]
     )
     task_folder, run_folder = _workspace(tmp_path)
@@ -305,14 +306,8 @@ def test_branch_group_mechanical_outcomes_support_all_settled_and_custom_aggrega
         SuccessRoutesWorkflow,
         provider=ScriptedLLMProvider(
             llm_turns=[
-                lambda request: Outcome(
-                    raw_output="approved" if request.prompt.text == "Approved." else "done",
-                    tag="approved" if request.prompt.text == "Approved." else "done",
-                ),
-                lambda request: Outcome(
-                    raw_output="approved" if request.prompt.text == "Approved." else "done",
-                    tag="approved" if request.prompt.text == "Approved." else "done",
-                ),
+                _prompt_routed_outcome,
+                _prompt_routed_outcome,
             ]
         ),
         session_store=InMemorySessionStore(),
