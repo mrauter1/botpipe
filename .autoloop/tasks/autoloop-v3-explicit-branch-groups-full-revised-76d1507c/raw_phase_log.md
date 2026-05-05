@@ -1668,3 +1668,61 @@ Open issues / next step
   - `.venv/bin/pytest -q tests/unit/test_simple_surface.py -q`
   - `.venv/bin/pytest -q tests/unit/test_primitives_and_stores.py tests/runtime/test_runtime_static_graph.py tests/runtime/test_runtime_tracing.py -q`
 - Residual note: `tests/unit/test_simple_surface.py` still emits pre-existing Pydantic `schema` field-shadow warnings unrelated to this change.
+
+
+---
+run_id=run-20260505T171950Z-13ce26d6 | entry=session_turn | pair=implement | phase=verifier | cycle=1 | attempt=1 | thread_id=019df984-d58c-75e0-ad54-c818ea8e03b7
+---
+provider=codex
+mode=resume
+template=/home/rauter/.local/share/pipx/venvs/autoloop/lib/python3.12/site-packages/autoloop/templates/implement_verifier.md
+session_id=019df984-d58c-75e0-ad54-c818ea8e03b7
+
+
+---
+run_id=run-20260505T171950Z-13ce26d6 | entry=phase_output | pair=implement | phase=verifier | process=codex-agent | cycle=1 | attempt=1 | thread_id=019df984-d58c-75e0-ad54-c818ea8e03b7
+---
+I’m reviewing the surface-hardening changes against the phase contract and the recorded decisions. First I’m reading the review artifacts and the exact source diffs so I can check AC-1 and AC-2 for both behavior and regression risk.
+
+The review artifacts are empty, and the change set is living directly in the working tree rather than as a clean git diff, so I’m reviewing the current source state in place. Next I’m reading the modified helpers and the new tests together to look for hidden contract drift, not just green-path coverage.
+
+I’m down to edge cases now. I’m spot-checking the emitted graph payload itself to see whether the new nested metadata is structurally consistent, because that’s where hidden contract drift tends to show up even when the tests are green.
+
+I found one follow-up-level issue in the new topology/static-graph metadata, but nothing that blocks phase completion. I’m recording that in the verifier artifacts now and marking the phase complete with a non-blocking note.
+
+I’m verifying the reviewer artifacts against the implementation and will finish by updating the phase feedback with any findings, then I’ll close the review with the required loop-control block.
+
+The artifact checklist is already fully marked. I’m appending the one review finding I found in the additive graph payload surface, then I’ll finalize the review as complete because there are no blocking defects.
+
+I’ve pinned the issue to the exact static-graph helper and am recording it as non-blocking. After that, the review can close as complete because the phase criteria remain satisfied.
+
+Scope considered
+
+- Phase-local review for `surface-hardening-and-regression-suite`.
+- Changed branch-group placeholder/rooting, topology/static-graph, runtime-event, and regression-test surfaces, plus the phase review artifacts.
+
+What I analyzed
+
+- Implementation notes and run decisions for intended scope and non-obvious constraints.
+- Source diffs in `autoloop/core/compiler.py`, `autoloop/runtime/static_graph.py`, and `autoloop/core/branch_groups/runtime.py`.
+- The emitted static-graph/topology payload shape from compiled branch-group workflows to check the new additive metadata directly.
+
+What I reviewed
+
+- AC-1: placeholder legality/rooting behavior remained covered and no regression was evident in the reviewed implementation surface.
+- AC-2: additive branch-group metadata and runtime-event coverage were added without requiring schema-version churn.
+- Reviewer artifacts were updated: criteria remains fully checked, and feedback now contains one prioritized finding.
+
+Key findings / decisions
+
+- No blocking findings.
+- Logged one non-blocking issue: `IMP-001` in [static_graph.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/autoloop/runtime/static_graph.py:349), where additive branch-group `input` metadata is stringified with Python `repr` instead of preserved as structured JSON.
+- The phase can still be marked complete because the acceptance criteria are satisfied and the issue does not materially block correctness or safety.
+
+Open issues / next step
+
+- Optional follow-up: preserve raw `branch.input` values in the static-graph/topology payloads for better machine-readability by downstream tooling.
+
+<loop-control>
+{"schema":"docloop.loop_control/v1","kind":"promise","promise":"COMPLETE"}
+</loop-control>
