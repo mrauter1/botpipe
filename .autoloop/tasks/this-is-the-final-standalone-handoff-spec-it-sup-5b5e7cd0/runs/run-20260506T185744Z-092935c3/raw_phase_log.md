@@ -299,3 +299,66 @@ The phase should be returned for fixes. The implementer should first move the in
 <loop-control>
 {"schema":"docloop.loop_control/v1","kind":"promise","promise":"INCOMPLETE"}
 </loop-control>
+
+
+---
+run_id=run-20260506T185744Z-092935c3 | entry=session_turn | pair=implement | phase=producer | cycle=2 | attempt=1 | thread_id=019dfeae-6c3b-77c1-83d0-3af21fe7fb06
+---
+provider=codex
+mode=resume
+template=/home/rauter/.local/share/pipx/venvs/autoloop/lib/python3.12/site-packages/autoloop/templates/implement_producer.md
+session_id=019dfeae-6c3b-77c1-83d0-3af21fe7fb06
+
+
+---
+run_id=run-20260506T185744Z-092935c3 | entry=phase_output | pair=implement | phase=producer | process=codex-agent | cycle=2 | attempt=1 | thread_id=019dfeae-6c3b-77c1-83d0-3af21fe7fb06
+---
+I’m moving to the fix pass now. The main change is to make each step’s compiled route table include the effective inherited/global routes so that `available_routes`, provider-visible route lists, and compatibility labels all come from compiled metadata instead of the precompiled lowering layer.
+
+I have the scope and reviewer findings loaded. Next I’m checking exactly where the compiler still depends on lowering-time route tags and how widely `tests/unit/test_validation.py` is referenced, so I can make the fix local instead of spreading new route-authority helpers across the codebase.
+
+I found two relevant blast-radius details. `tests/unit/test_validation.py` sits in an already-dirty test tree, so I’m going to fix the reviewer’s concern narrowly instead of trying to normalize the whole repo, and `step_available_route_tags()` is still used outside the compiler in topology/validation, so I’m checking whether those callers need the same compiled-source treatment or can stay as pure precompile validation helpers.
+
+I’ve narrowed the code change to the compiler path. I’m now checking the few report helpers that count or enumerate `compiled.routes`, because once inherited GLOBAL routes live inside each step’s compiled table, any code that assumed `compiled.routes` excluded globals can start double-counting.
+
+I’ve got the implementation path. I’m editing the compiler and lowering layers now so that each step’s effective compiled route table carries inherited GLOBAL routes with step-specific visibility, and the step route lists are derived from that compiled table instead of from lowering-time tag helpers.
+
+The compiler change is in. I’m doing a second pass on the touched call chain now to remove any leftover fallback wiring that still assumes provider-visible routes depend on `compiled_global_routes`, and then I’ll update the tests to match the new effective step route table.
+
+The compiler and lowering changes compile cleanly, and the focused regression subset around the reviewer findings is passing. I’m widening to the full route-validation file now to catch any assumptions that still treat inherited GLOBAL routes as absent from a step’s compiled route table.
+
+I found one existing assertion that still assumed inherited GLOBAL routes were absent from `compiled.routes[step]`. I’m updating that expectation and adding a direct regression test for the concrete case that motivated the architecture fix: a non-provider step inheriting a GLOBAL question route must keep it runtime-legal without surfacing it to providers.
+
+The validation file is now in tracked repository state, and the full focused pytest run is still in progress. I’m polling that run and will only touch the implementation notes and decision ledger once the test surface is stable.
+
+The remaining failure is a report artifact regression, not a legality issue. The new effective step route tables are causing compile-report counts to double-count inherited GLOBAL routes, so I’m adjusting those summary counts to stay declaration-based while leaving the per-step effective route metadata intact.
+
+The report-count fix compiled cleanly and the focused suite is almost through. I’m waiting on the final pytest result before I update the notes and the run ledger.
+
+The code and test surface are stable now. I’m recording the two non-obvious implementation decisions that matter for later phases, then I’ll refresh the phase notes so the reviewer sees the final source-of-truth change and the updated validation result.
+
+Scope considered
+
+Phase `route-model-unification` only, with fixes scoped to reviewer findings `IMP-001` and `IMP-002`. I limited changes to the compiled route authority path, the affected report summary surface, the cited validation file, and the required phase artifacts.
+
+What I analyzed
+
+I traced the reviewer complaint through [autoloop/core/compiler.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/autoloop/core/compiler.py), [autoloop/core/lowering.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/autoloop/core/lowering.py), and [autoloop/runtime/static_graph.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/autoloop/runtime/static_graph.py). I also checked the worktree/index state for `tests/unit/test_validation.py` and reviewed the existing assertions in that file plus the focused static-graph tests.
+
+What I changed
+
+I changed the compiler so each step’s compiled route table now includes inherited `GLOBAL` routes compiled with the concrete step context, and `available_routes`, `runtime_control_routes`, and provider-visible route lists are now derived from that compiled step table instead of lowering-time tag helpers. I preserved inherited `GLOBAL` fallback summaries during route metadata normalization, and I updated compile-report route and hidden-route totals to stay declaration-based so inherited global routes do not get double-counted in report summaries.
+
+I also updated [tests/unit/test_validation.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/tests/unit/test_validation.py) to reflect inherited global routes appearing in per-step compiled tables and added a regression test that proves a non-provider step can inherit a `GLOBAL` question route without exposing it to providers. The file is now in tracked repository state. I refreshed [implementation_notes.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/this-is-the-final-standalone-handoff-spec-it-sup-5b5e7cd0/runs/run-20260506T185744Z-092935c3/artifacts/implement/phases/route-model-unification/implementation_notes.md) and appended the non-obvious decisions under the current turn header in [decisions.txt](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/this-is-the-final-standalone-handoff-spec-it-sup-5b5e7cd0/runs/run-20260506T185744Z-092935c3/decisions.txt).
+
+Key findings / decisions
+
+The concrete behavioral gap behind `IMP-002` was real: step-level provider visibility for inherited `GLOBAL` routes could drift because global routes were compiled without step context. The fix was to make effective per-step compiled route tables the authority and leave `compiled.global_routes` as the separate declaration/inspection surface.
+
+The compile-report count regression was a side effect of that unification, so I kept step-level inherited metadata intact and filtered inherited-global duplicates only out of the summary counts.
+
+Validation file tracking is resolved: `git ls-files --stage -- tests/unit/test_validation.py` now returns an indexed entry.
+
+Open issues / next step
+
+No known blocker remains in this phase. Validation run passed with `.venv/bin/python -m pytest -q tests/unit/test_validation.py tests/unit/test_simple_surface.py tests/runtime/test_runtime_static_graph.py`, result `190 passed, 14 warnings`. Ready for verifier re-review.
