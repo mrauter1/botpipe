@@ -597,6 +597,89 @@ def test_parallel_branch_group_leaves_manifest_provider_session_empty_without_pr
     assert all(binding.session_id is not None for binding in session_store.snapshot().bindings)
 
 
+def test_parallel_branch_group_does_not_leak_parent_active_provider_session_into_fresh_branch_sessions(
+    tmp_path: Path,
+) -> None:
+    seen_sessions: list[str | None] = []
+
+    class SessionIsolationWorkflow(simple.Workflow):
+        class State(BaseModel):
+            parent_session_after_setup: str | None = None
+            parent_session_after_reviews: str | None = None
+
+        main = simple.Session.fresh()
+        prepare = simple.python_step(
+            lambda ctx: (
+                ctx._session_store.upsert(
+                    SessionBinding(
+                        key=ctx.open_session("main").key,
+                        session_id="parent-provider-session",
+                        metadata={"provider": "codex"},
+                    )
+                ),
+                setattr(
+                    ctx,
+                    "state",
+                    ctx.state.model_copy(update={"parent_session_after_setup": ctx.get_session("main").session_id}),
+                ),
+                Event("done"),
+            )[-1]
+        )
+        reviews = simple.parallel(
+            branches={
+                "security": simple.step(
+                    "Review security.",
+                    name="security_review",
+                    session=main,
+                )
+            }
+        )
+        publish = simple.python_step(
+            lambda ctx: (
+                setattr(
+                    ctx,
+                    "state",
+                    ctx.state.model_copy(update={"parent_session_after_reviews": ctx.get_session("main").session_id}),
+                ),
+                Event("done"),
+            )[-1],
+            routes={"done": simple.FINISH},
+        )
+
+    task_folder, run_folder = _workspace(tmp_path)
+    result = Engine(
+        SessionIsolationWorkflow,
+        provider=ScriptedLLMProvider(
+            llm_turns=[
+                lambda request: (
+                    seen_sessions.append(None if request.session is None else request.session.session_id),
+                    Outcome(raw_output="ok", tag="done"),
+                )[-1]
+            ]
+        ),
+        session_store=InMemorySessionStore(),
+        checkpoint_store=InMemoryCheckpointStore(),
+    ).run(
+        task_id="task-parent-session-isolation",
+        run_id="run-parent-session-isolation",
+        task_folder=task_folder,
+        run_folder=run_folder,
+        root=tmp_path,
+    )
+
+    assert result.terminal == simple.FINISH
+    assert result.history == ("prepare", "reviews", "publish")
+    assert seen_sessions == [None]
+    assert result.state.parent_session_after_setup == "parent-provider-session"
+    assert result.state.parent_session_after_reviews == "parent-provider-session"
+    manifest = json.loads(
+        (_branch_group_dir(task_folder, SessionIsolationWorkflow, "reviews") / "results.json").read_text(encoding="utf-8")
+    )
+    branch = manifest["branches"][0]
+    assert branch["provider_session"] is None
+    assert branch["provider_sessions"] == {}
+
+
 def test_parallel_branch_group_captures_goto_without_following_branch_destination(tmp_path: Path) -> None:
     class GotoWorkflow(simple.Workflow):
         class State(BaseModel):
@@ -1011,6 +1094,49 @@ def test_parallel_branch_group_fan_in_request_input_checkpoints_at_composite_bou
     assert resumed.last_event is not None
     assert resumed.last_event.tag == "done"
     assert checkpoint_store.load() is None
+
+
+def test_parallel_branch_group_fan_in_route_on_taken_runs_once_at_composite_boundary(tmp_path: Path) -> None:
+    on_taken_calls: list[str] = []
+
+    def on_taken(ctx: object) -> None:
+        on_taken_calls.append("approved")
+
+    class FanInOnTakenWorkflow(simple.Workflow):
+        class State(BaseModel):
+            pass
+
+        reviews = simple.parallel(
+            name="reviews",
+            branches={
+                "security": simple.python_step(lambda ctx: Event("done"), name="security_review"),
+                "cost": simple.python_step(lambda ctx: Event("done"), name="cost_review"),
+            },
+            fan_in=simple.python_step(
+                lambda ctx: Event("approved"),
+                name="combine_reviews",
+                routes={"approved": simple.Route.to("publish", on_taken=on_taken)},
+            ),
+        )
+        publish = simple.python_step(lambda ctx: Event("done"), routes={"done": simple.FINISH})
+
+    task_folder, run_folder = _workspace(tmp_path)
+    result = Engine(
+        FanInOnTakenWorkflow,
+        provider=ScriptedLLMProvider(),
+        session_store=InMemorySessionStore(),
+        checkpoint_store=InMemoryCheckpointStore(),
+    ).run(
+        task_id="task-fan-in-on-taken",
+        run_id="run-fan-in-on-taken",
+        task_folder=task_folder,
+        run_folder=run_folder,
+        root=tmp_path,
+    )
+
+    assert result.terminal == simple.FINISH
+    assert result.history == ("reviews", "publish")
+    assert on_taken_calls == ["approved"]
 
 
 def _fail_path_write(

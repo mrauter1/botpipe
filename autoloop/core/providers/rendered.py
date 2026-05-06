@@ -65,9 +65,10 @@ class RenderedLLMProvider:
             asyncio.get_running_loop()
         except RuntimeError:
             return run_provider_coro_sync(self._transport.run_turn(turn))
-        # Temporary compatibility exception: sync llm()/classify() calls from
-        # sync Python steps inside the async engine need an explicit sync bridge
-        # until the operation runtime is redesigned around async execution.
+        # Temporary compatibility exception for the existing public non-parallel
+        # operation helpers only. Provider-backed branch steps, produce/verify
+        # steps, prompt steps, and provider-backed fan-in execution stay on the
+        # async transport path and must not route through this sync bridge.
         if self._operation_executor is not None:
             return self._operation_executor(turn)
         raise RuntimeError(

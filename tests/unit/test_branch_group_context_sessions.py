@@ -1,5 +1,8 @@
 from __future__ import annotations
 
+import asyncio
+from dataclasses import replace
+from datetime import datetime, timezone
 from pathlib import Path
 
 import pytest
@@ -14,7 +17,8 @@ from autoloop.core.branch_groups.context import (
 )
 from autoloop.core.branch_groups.sessions import BranchSessionStoreView
 from autoloop.core.context import Context, context_runtime
-from autoloop.core.engine import Engine
+from autoloop.core.engine import Engine, StepFinalizationRecord
+from autoloop.core.engine_collaborators import StepExecutionResult
 from autoloop.core.errors import WorkflowExecutionError
 from autoloop.core.providers.fake import ScriptedLLMProvider
 from autoloop.core.sessions import Continuity
@@ -188,6 +192,25 @@ def test_branch_session_store_view_uses_distinct_fresh_keys_per_branch_namespace
     assert parent.get_session("main") == parent_binding
 
 
+def test_branch_session_store_view_snapshot_is_branch_local_only(tmp_path: Path) -> None:
+    parent = _make_context(tmp_path)
+    parent_binding = parent.open_session("main")
+    branch_store = BranchSessionStoreView(parent._session_store, namespace="reviews.security")
+
+    snapshot = branch_store.snapshot()
+
+    assert snapshot.bindings == ()
+    assert snapshot.active_keys_by_slot == {}
+    assert parent.get_session("main") == parent_binding
+
+    branch_binding = branch_store.open("main")
+    branch_snapshot = branch_store.snapshot()
+
+    assert branch_snapshot.bindings == (branch_binding,)
+    assert branch_snapshot.active_keys_by_slot == {"main": branch_binding.key}
+    assert all(binding.key != parent_binding.key for binding in branch_snapshot.bindings)
+
+
 def test_branch_context_resolves_worklists_locally_without_mutating_parent(tmp_path: Path) -> None:
     worklist = Worklist.from_items(
         "items",
@@ -321,3 +344,156 @@ def test_engine_hook_snapshot_and_restore_follow_branch_context_store(tmp_path: 
     assert branch.get_session("main") == original_branch_binding
     assert parent.get_session("main") == parent_binding
     assert parent_store.snapshot().active_keys_by_slot["main"] == parent_binding.key
+
+
+def test_branch_result_payload_builder_does_not_double_increment_rework_count(tmp_path: Path) -> None:
+    class BranchWorkflow(simple.Workflow):
+        class State(BaseModel):
+            pass
+
+        producer = simple.Session.fresh()
+        verifier = simple.Session.fresh()
+        reviews = simple.parallel(
+            branches={
+                "security": simple.produce_verify_step(
+                    producer_prompt="Draft branch.",
+                    verifier_prompt="Verify branch.",
+                    name="review_branch",
+                    session=producer,
+                    verifier_session=verifier,
+                ),
+            }
+        )
+
+    engine = Engine(
+        BranchWorkflow,
+        provider=ScriptedLLMProvider(),
+        session_store=InMemorySessionStore(),
+        checkpoint_store=InMemoryCheckpointStore(),
+    )
+    parent = _make_context(
+        tmp_path,
+        session_store=InMemorySessionStore(),
+        session_definitions=engine.compiled.sessions,
+    )
+    group_step = engine.compiled.steps["reviews"]
+    spec = group_step.branch_group
+    assert spec is not None
+    branch = spec.branches[0]
+    step_state_store = branch.step.step_state_model()
+    step_state_store.rework_count = 1
+    branch_context = create_branch_context(
+        parent,
+        step_name=branch.step.name,
+        branch=BranchMetadata(name=branch.name, index=branch.index, group=spec.name, input=branch.input, count=1),
+        session_store=BranchSessionStoreView(parent._session_store, namespace="reviews.security"),
+        step_state_store=step_state_store,
+    )
+
+    payload = engine.branch_group_runtime._branch_result_from_step_result(
+        spec=spec,
+        branch=branch,
+        compiled_step=branch.step,
+        branch_context=branch_context,
+        step_result=StepExecutionResult(
+            state=branch_context.state,
+            destination=branch.step.name,
+            event=simple.Event("needs_rework", reason="Retry the branch."),
+            outcome=None,
+            pending_handoffs=(),
+            finalization=StepFinalizationRecord(final_route="needs_rework"),
+        ),
+        branch_dir=parent.workflow_folder / "_branch_groups" / spec.name / "branches" / branch.name,
+        started_at=datetime.now(timezone.utc),
+    )
+
+    assert payload["route"] == "needs_rework"
+    assert step_state_store.rework_count == 1
+
+
+def test_failed_branch_result_reads_provider_session_snapshot_once(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    class BranchWorkflow(simple.Workflow):
+        class State(BaseModel):
+            pass
+
+        main = simple.Session.fresh()
+        reviews = simple.parallel(
+            branches={"security": simple.step("Review security.", name="review_branch", session=main)}
+        )
+
+    engine = Engine(
+        BranchWorkflow,
+        provider=ScriptedLLMProvider(),
+        session_store=InMemorySessionStore(),
+        checkpoint_store=InMemoryCheckpointStore(),
+    )
+    parent = _make_context(
+        tmp_path,
+        session_store=InMemorySessionStore(),
+        session_definitions=engine.compiled.sessions,
+    )
+    group_step = engine.compiled.steps["reviews"]
+    spec = group_step.branch_group
+    assert spec is not None
+    branch = spec.branches[0]
+    branch_context = create_branch_context(
+        parent,
+        step_name=branch.step.name,
+        branch=BranchMetadata(name=branch.name, index=branch.index, group=spec.name, input=branch.input, count=1),
+        session_store=BranchSessionStoreView(parent._session_store, namespace="reviews.security"),
+        step_state_store=branch.step.step_state_model(),
+    )
+    calls = 0
+
+    def fake_snapshot(*args: object, **kwargs: object) -> tuple[str | None, dict[str, str]]:
+        nonlocal calls
+        calls += 1
+        return "branch-session", {"producer": "branch-session"}
+
+    monkeypatch.setattr(engine.branch_group_runtime, "_provider_session_snapshot", fake_snapshot)
+
+    payload = engine.branch_group_runtime._failed_branch_result(
+        spec=spec,
+        branch=branch,
+        compiled_step=branch.step,
+        branch_context=branch_context,
+        branch_dir=parent.workflow_folder / "_branch_groups" / spec.name / "branches" / branch.name,
+        started_at=datetime.now(timezone.utc),
+        exc=RuntimeError("boom"),
+    )
+
+    assert calls == 1
+    assert payload["provider_session"] == "branch-session"
+    assert payload["provider_sessions"] == {"producer": "branch-session"}
+
+
+def test_branch_runtime_rejects_scoped_compiled_branches_defensively(tmp_path: Path) -> None:
+    class BranchWorkflow(simple.Workflow):
+        class State(BaseModel):
+            pass
+
+        reviews = simple.parallel(
+            branches={"security": simple.python_step(lambda ctx: simple.Event("done"), name="review_branch")}
+        )
+
+    engine = Engine(
+        BranchWorkflow,
+        provider=ScriptedLLMProvider(),
+        session_store=InMemorySessionStore(),
+        checkpoint_store=InMemoryCheckpointStore(),
+    )
+    parent = _make_context(
+        tmp_path,
+        session_store=InMemorySessionStore(),
+        session_definitions=engine.compiled.sessions,
+    )
+    group_step = engine.compiled.steps["reviews"]
+    spec = group_step.branch_group
+    assert spec is not None
+    scoped_branch = replace(
+        spec.branches[0],
+        step=replace(spec.branches[0].step, scope_name="queue"),
+    )
+
+    with pytest.raises(AssertionError, match="does not support scoped branch step"):
+        asyncio.run(engine.branch_group_runtime._execute_branch(spec, scoped_branch, parent))

@@ -610,6 +610,40 @@ def test_codex_transport_supports_async_subprocess_execution(
     assert result.session.session_id == "codex-session-async"
 
 
+def test_codex_transport_run_turn_does_not_fall_back_to_subprocess_run(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    async def fake_create_subprocess_exec(*command: str, **_: object) -> _AsyncProcessStub:
+        return _AsyncProcessStub(
+            stdout="\n".join(
+                (
+                    '{"type":"thread.started","thread_id":"codex-session-async"}',
+                    '{"type":"item.completed","item":{"type":"agent_message","text":"producer text"}}',
+                )
+            ),
+        )
+
+    def fail_subprocess_run(*args: object, **kwargs: object) -> subprocess.CompletedProcess[str]:
+        raise AssertionError("provider turn execution must not use subprocess.run")
+
+    monkeypatch.setattr(codex_runtime_provider.asyncio, "create_subprocess_exec", fake_create_subprocess_exec)
+    monkeypatch.setattr(codex_runtime_provider.subprocess, "run", fail_subprocess_run)
+    transport = CodexTransport(
+        commands=CodexCLICommand(
+            start_command=("codex", "exec", "--json"),
+            resume_command=("codex", "exec", "resume", "--json"),
+        ),
+        model="gpt-test",
+        model_effort=None,
+    )
+
+    result = asyncio.run(transport.run_turn(_rendered_turn(session=_placeholder_session())))
+
+    assert result.raw_text == "producer text"
+    assert result.session is not None
+    assert result.session.session_id == "codex-session-async"
+
+
 def test_communicate_text_subprocess_terminates_then_kills_on_cancellation() -> None:
     process = _CancellableAsyncProcessStub()
 
@@ -850,6 +884,26 @@ def test_claude_transport_supports_async_subprocess_execution(monkeypatch: pytes
     )
 
     assert calls == [("claude", "-p", prompt_text, "--output-format", "json", "--model", "claude-test")]
+    assert result.raw_text == "producer text"
+    assert result.session is not None
+    assert result.session.session_id == "claude-session-async"
+
+
+def test_claude_transport_run_turn_does_not_fall_back_to_subprocess_run(monkeypatch: pytest.MonkeyPatch) -> None:
+    async def fake_create_subprocess_exec(*command: str, **_: object) -> _AsyncProcessStub:
+        return _AsyncProcessStub(
+            stdout='{"result":"producer text","session_id":"claude-session-async","stop_reason":"end_turn"}'
+        )
+
+    def fail_subprocess_run(*args: object, **kwargs: object) -> subprocess.CompletedProcess[str]:
+        raise AssertionError("provider turn execution must not use subprocess.run")
+
+    monkeypatch.setattr(claude_runtime_provider.asyncio, "create_subprocess_exec", fake_create_subprocess_exec)
+    monkeypatch.setattr(claude_runtime_provider.subprocess, "run", fail_subprocess_run)
+    transport = ClaudeTransport(config=_config(provider_name="claude").provider.claude)
+
+    result = asyncio.run(transport.run_turn(_rendered_turn(session=_placeholder_session())))
+
     assert result.raw_text == "producer text"
     assert result.session is not None
     assert result.session.session_id == "claude-session-async"

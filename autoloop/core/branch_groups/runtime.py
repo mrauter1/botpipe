@@ -41,6 +41,8 @@ class BranchGroupRuntime:
         state: BaseModel,
         pending_handoffs: tuple["PendingHandoff", ...],
     ) -> StepExecutionResult:
+        # Public sync compatibility only. All branch execution remains on run_async()
+        # so provider-backed branch/fan-in execution stays async-native.
         return run_awaitable_sync(
             lambda: self.run_async(step, context, state, pending_handoffs),
             active_loop_error="Synchronous branch-group execution cannot bridge async execution inside an active event loop.",
@@ -254,22 +256,10 @@ class BranchGroupRuntime:
         self._engine._increment_step_runtime_state(step_state_store)
         runtime.set_step_state_store(step_state_store)
         if compiled_step.scope_name is not None:
-            branch_context.ensure_selection(compiled_step.scope_name)
-        current_item_key = self._engine._current_item_state_key(branch_context, compiled_step)
-        item_states: dict[str, BaseModel | dict[str, Any]] = {}
-        step_item_states: dict[str, dict[str, BaseModel | dict[str, Any]]] = {}
-        item_state_store = self._engine._ensure_item_state_store(item_states, compiled_step, item_key=current_item_key)
-        step_item_state_store = self._engine._ensure_step_item_state_store(
-            step_item_states,
-            compiled_step,
-            item_key=current_item_key,
-        )
-        if item_state_store is not None:
-            runtime.set_item_state_store(item_state_store)
-        if step_item_state_store is not None:
-            self._engine._increment_step_runtime_state(step_item_state_store)
-            runtime.set_step_item_state_store(step_item_state_store)
-        self._engine._update_item_runtime_state_on_entry(compiled_step, branch_context, item_state_store)
+            raise AssertionError(
+                f"branch-group runtime does not support scoped branch step {compiled_step.name!r}; "
+                "compile-time validation should have rejected it."
+            )
         runtime.set_meta(
             {
                 "step": {
@@ -423,9 +413,6 @@ class BranchGroupRuntime:
         elif step_result.event is not None:
             question = step_result.event.question
             reason = step_result.event.reason
-        if step_result.event is not None:
-            self._engine._update_final_step_runtime_state(compiled_step, branch_context._step_state, step_result.event)
-            self._engine._update_final_item_runtime_state(branch_context._item_state, step_result.event)
         raw_output_path, raw_output_paths = self._write_branch_raw_outputs(
             step_result=step_result,
             branch_dir=branch_dir,
@@ -473,6 +460,7 @@ class BranchGroupRuntime:
             branch_dir=branch_dir,
             context=branch_context,
         )
+        provider_session, provider_sessions = self._provider_session_snapshot(compiled_step, branch_context)
         return {
             "name": branch.name,
             "index": branch.index,
@@ -487,8 +475,8 @@ class BranchGroupRuntime:
             "artifacts": self._collect_branch_artifacts(compiled_step, branch_context),
             "raw_output_path": raw_output_path,
             "raw_output_paths": raw_output_paths,
-            "provider_session": self._provider_session_snapshot(compiled_step, branch_context)[0],
-            "provider_sessions": self._provider_session_snapshot(compiled_step, branch_context)[1],
+            "provider_session": provider_session,
+            "provider_sessions": provider_sessions,
             "error": _serialize_exception(self._engine, exc),
             "started_at": started_at.isoformat(),
             "finished_at": finished_at.isoformat(),

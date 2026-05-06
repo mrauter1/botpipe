@@ -147,3 +147,76 @@ phase_mode=single
 phase_ids=async-branch-group-cleanup
 explicit=True
 current_phase_index=0
+
+
+---
+run_id=run-20260506T181149Z-6867fac0 | entry=session_turn | pair=implement | phase=producer | cycle=1 | attempt=1 | thread_id=019dfe82-f64a-7772-81d0-a10f25fab893
+---
+provider=codex
+mode=start
+template=/home/rauter/.local/share/pipx/venvs/autoloop/lib/python3.12/site-packages/autoloop/templates/implement_producer.md
+session_id=019dfe82-f64a-7772-81d0-a10f25fab893
+
+
+---
+run_id=run-20260506T181149Z-6867fac0 | entry=phase_output | pair=implement | phase=producer | process=codex-agent | cycle=1 | attempt=1 | thread_id=019dfe82-f64a-7772-81d0-a10f25fab893
+---
+I’m treating the request snapshot and phase artifacts as the scope boundary. First I’m reading the active feedback, plan, and the branch-group/provider code paths to identify the specific runtime and test changes required.
+
+I’ve loaded the phase plan and decision ledger. Next I’m tracing the current branch runtime, session overlay, and provider transport implementations so the edits stay local and the tests target the actual regression surfaces.
+
+The search confirms the likely hotspots: `branch_groups/runtime.py`, `branch_groups/sessions.py`, the rendered provider boundary, and the strictness/runtime tests. I’m reading those files now to line up minimal edits with the existing patterns rather than broad refactors.
+
+I’ve confirmed the current branch runtime still mutates final state in `_branch_result_from_step_result`, and the branch session view still falls back to parent snapshot/bindings. I’m reading the existing branch-group tests next so I can extend them instead of inventing a parallel test harness.
+
+I have enough structure to plan the edits now. The implementation will stay in four slices: branch runtime cleanup, branch-local session isolation, sync-bridge containment comments, and targeted regression tests for branch capture/session/provider strictness.
+
+I’ve pinned down the implementation points. Before editing, I’m checking the local worktree so I don’t trample unrelated changes and then I’ll patch the runtime, overlay, and tests in one pass.
+
+I’m at the edit point now. The code changes will remove the duplicate capture-state mutation, hard-stop scoped branch execution at runtime, strip parent-session fallback from the branch overlay, and add only the tests that directly prove those invariants.
+
+I’m patching the runtime and overlay now. After that I’ll add the regression tests for the specific invariants we touched, not a broader test reshuffle.
+
+The patches are in. I’m running the focused branch/session/provider/strictness suites now to catch any contract mismatches before I update the phase notes and decision log.
+
+`pytest` isn’t on PATH in this environment. I’m rerunning the same targeted suites through `python -m pytest` so we still verify the exact touched surfaces.
+
+The repository doesn’t have a ready local test environment, so I’m using an ephemeral `pipx` environment with `pytest` and the project dependency set needed for these targeted suites.
+
+One targeted suite failed. I’m pulling the traceback now, then I’ll fix the regression locally and rerun the exact same focused set.
+
+The failing test exposed an unrelated top-level engine behavior: new runs clear the external session store before execution. I’m rewriting that check to create the parent active session inside the workflow before the branch group runs, which is the actual branch-isolation contract the spec cares about.
+
+The touched code is green in the direct runtime/session/provider suites. I’m adding a narrow compile-time pass over the existing branch-group authoring validations so the phase notes can reference both runtime and compile-time coverage.
+
+I’m finishing the phase artifacts now: appending the non-obvious decisions to the run ledger and writing the concise implementation notes with file/symbol/checklist mapping and validation results.
+
+Scope considered
+
+- Phase-local async branch-group cleanup only: [autoloop/core/branch_groups/runtime.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/autoloop/core/branch_groups/runtime.py), [autoloop/core/branch_groups/sessions.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/autoloop/core/branch_groups/sessions.py), [autoloop/core/providers/rendered.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/autoloop/core/providers/rendered.py), and the targeted runtime/unit/strictness tests.
+- I stayed out of provider/runtime redesign, fan-in redesign, worklist fan-out, child workflow support, and unrelated dirty files.
+
+What I analyzed
+
+- Branch capture finalization ownership, branch session overlay lookup/snapshot behavior, scoped branch execution setup, retained sync operation bridge comments, provider `run_turn` subprocess paths, and the existing branch-group compile/runtime tests.
+- I also checked the run plan, feedback, implementation notes, and decision ledger before editing.
+
+What I changed
+
+- Removed duplicate final-state mutation from branch result payload construction and made failed-branch provider session snapshots single-read only.
+- Tightened `BranchSessionStoreView` to branch-local bindings/active keys only; parent session fallback is gone from `get`, `open`, and `snapshot`.
+- Replaced scoped branch runtime worklist/item-state setup with an internal assertion and removed branch item-state/step-item-state initialization.
+- Narrowed the retained sync operation bridge comment to explicit non-parallel compatibility only.
+- Added focused regression coverage in [tests/unit/test_branch_group_context_sessions.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/tests/unit/test_branch_group_context_sessions.py), [tests/contract/test_branch_group_runtime.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/tests/contract/test_branch_group_runtime.py), [tests/runtime/test_runtime_providers.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/tests/runtime/test_runtime_providers.py), and [tests/strictness/test_no_compat.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/tests/strictness/test_no_compat.py).
+- Updated the phase `implementation_notes.md` and appended the non-obvious implementation decisions to `decisions.txt`.
+
+Key findings / decisions
+
+- The main correctness bug was real: branch payload construction was duplicating capture-mode final-state updates that `RouteFinalizer.capture(...)` already owns.
+- Parent-session leakage risk was in the overlay itself, especially manifest/provider-session reads after fresh branch execution with no returned provider session id.
+- Strictness for `subprocess.run(...)` needed to stay targeted to provider turn execution; I enforced that at the `run_turn` body level so CLI `--help` probes remain allowed.
+
+Open issues / next step
+
+- Focused validation passed: `112` targeted runtime/session/provider/strictness tests plus `7` branch-group compile-time checks.
+- I did not run the full repository suite. The test environment needed temporary deps via `/tmp/autoloop-test-deps`, because `pytest` was not preinstalled in the repo environment.

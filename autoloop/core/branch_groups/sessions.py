@@ -38,28 +38,18 @@ class BranchSessionStoreView:
         return binding
 
     def snapshot(self) -> SessionSnapshot:
-        parent_snapshot = self._parent_store.snapshot()
-        bindings_by_key = {binding.key: binding for binding in parent_snapshot.bindings}
-        bindings_by_key.update(self._bindings)
-        active_keys_by_slot = dict(parent_snapshot.active_keys_by_slot)
-        active_keys_by_slot.update(self._active_keys_by_slot)
         ordered = tuple(
-            bindings_by_key[key]
-            for key in sorted(bindings_by_key, key=lambda item: (item.slot, item.domain, item.value))
+            self._bindings[key]
+            for key in sorted(self._bindings, key=lambda item: (item.slot, item.domain, item.value))
         )
-        return SessionSnapshot(bindings=ordered, active_keys_by_slot=active_keys_by_slot)
+        return SessionSnapshot(bindings=ordered, active_keys_by_slot=dict(self._active_keys_by_slot))
 
     def restore(self, snapshot: SessionSnapshot) -> None:
         self._bindings = {binding.key: binding for binding in snapshot.bindings}
         self._active_keys_by_slot = dict(snapshot.active_keys_by_slot)
 
     def _binding_for_key(self, key: SessionKey) -> SessionBinding | None:
-        binding = self._bindings.get(key)
-        if binding is not None:
-            return binding
-        if key.domain == "fresh":
-            return None
-        return self._parent_store.get(key)
+        return self._bindings.get(key)
 
     def _resolve_key(self, ref_name: str | SessionKey, *, scope: str | None, for_lookup: bool) -> SessionKey:
         if isinstance(ref_name, SessionKey):
@@ -75,9 +65,6 @@ class BranchSessionStoreView:
             active = self._active_keys_by_slot.get(ref_name)
             if active is not None:
                 return active
-            parent_active = self._parent_store.snapshot().active_keys_by_slot.get(ref_name)
-            if parent_active is not None:
-                return parent_active
         return SessionKey(slot=ref_name, domain="run", value=ref_name)
 
     def _branch_fresh_key(self, key: SessionKey) -> SessionKey:
