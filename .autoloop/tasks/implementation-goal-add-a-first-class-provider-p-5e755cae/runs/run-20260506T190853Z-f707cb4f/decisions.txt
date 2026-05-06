@@ -1,0 +1,6 @@
+<autoloop-decisions-header version="1" block_seq="1" owner="planner" phase_id="task-global" pair="plan" turn_seq="1" run_id="run-20260506T190853Z-f707cb4f" ts="2026-05-06T19:08:54.203144+00:00" />
+Centralize all policy normalization, strict validation, and capability classification in the new core policy and runtime resolver modules; provider transports should only consume resolved policy plus emitted artifacts.
+Preserve legacy provider model, effort, Claude permission_strategy, and runtime.full_auto behavior in this patch by mapping them into resolved provider_policy defaults during runtime config resolution instead of removing or repurposing the existing fields.
+Support the requested provider_policy YAML examples in environments without PyYAML by extending the narrow fallback loader for lists and null-bearing nested mappings rather than making PyYAML a hidden requirement.
+Operation-level policy inheritance and explicit llm()/classify() overrides must flow through OperationRuntime and ProviderPolicyResolver so inline operations cannot bypass the same strict envelope enforced for step-level provider turns.
+All provider policy artifacts remain run-scoped under <run_dir>/provider_policy/...; never write or mutate ~/.codex/config.toml, ~/.claude/settings.json, or other user-level provider config files during workflow execution.
