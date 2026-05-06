@@ -2214,3 +2214,65 @@ Open issues / next step
 <loop-control>
 {"schema":"docloop.loop_control/v1","kind":"promise","promise":"COMPLETE"}
 </loop-control>
+
+
+---
+run_id=run-20260506T204256Z-05282838 | entry=session_turn | pair=implement | phase=producer | cycle=1 | attempt=1 | thread_id=019dff26-874e-7040-a93f-bfbad8608da9
+---
+provider=codex
+mode=start
+template=/home/rauter/.local/share/pipx/venvs/autoloop/lib/python3.12/site-packages/autoloop/templates/implement_producer.md
+session_id=019dff26-874e-7040-a93f-bfbad8608da9
+
+
+---
+run_id=run-20260506T204256Z-05282838 | entry=phase_output | pair=implement | phase=producer | process=codex-agent | cycle=1 | attempt=1 | thread_id=019dff26-874e-7040-a93f-bfbad8608da9
+---
+I’m treating this as a phase-scoped implementation: inspect the authoritative phase artifacts, then trace the rendered-provider schema path before editing.
+
+The phase artifacts confirm two constraints that matter for implementation: keep transport changes local to existing rendered backends, and make delivery mode observable rather than implicit. I’m tracing the current rendered turn and backend request assembly next.
+
+The prior phase notes show backend code was already touched as an adjacent change, so I’m verifying whether the current tree actually satisfies the active phase contract or still needs cleanup and doc/test completion.
+
+The schema-delivery plumbing appears present already, but I still need proof against the active acceptance criteria. I’m running the focused backend suite now, then I’ll patch only the gaps that still fail or are undocumented.
+
+The focused regressions are green. The remaining work is artifact hygiene for this phase: confirm the doc language is explicit enough, then update the phase notes and decisions ledger so later turns don’t drift.
+
+I’m making one documentation hardening pass rather than changing runtime behavior: the code and tests already satisfy the backend acceptance criteria, but the docs should say explicitly that `structured_output.delivery_mode` records `native_full`, `native_simplified`, or `prompt_only`.
+
+I’ve limited the edit set to docs and phase artifacts. I’m running the docs-baseline check that is most likely to catch wording or structure regressions before I close this out.
+
+Scope considered
+
+- Active phase `backend-response-schema-delivery` only: rendered-provider schema delivery, backend observability, docs, and phase artifacts.
+- I ignored unrelated dirty files outside this phase scope.
+
+What I analyzed
+
+- Rendered-turn schema flow from `autoloop/core/engine_collaborators.py` through `autoloop/core/providers/rendered.py` into `autoloop/runtime/providers/codex.py` and `autoloop/runtime/providers/claude.py`.
+- Backend regression coverage in `tests/runtime/test_provider_backends.py`.
+- Route-enforcement regressions in `tests/contract/test_engine_contracts.py` and `tests/unit/test_validation.py`.
+- Authoritative phase artifacts and current docs in [docs/authoring.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/docs/authoring.md) and [controlroutes.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/controlroutes.md).
+
+What I changed
+
+- Hardened docs to state explicitly that `metadata["structured_output"]` records `native_full`, `native_simplified`, or `prompt_only`.
+- Filled the active phase [implementation_notes.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/this-is-the-final-standalone-handoff-spec-it-sup-5b5e7cd0/runs/run-20260506T204256Z-05282838/artifacts/implement/phases/backend-response-schema-delivery/implementation_notes.md) with the required scope, symbol, checklist, invariant, and validation details.
+- Appended the non-obvious backend observability decisions under the current header in [decisions.txt](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/this-is-the-final-standalone-handoff-spec-it-sup-5b5e7cd0/runs/run-20260506T204256Z-05282838/decisions.txt).
+
+Key findings / decisions
+
+- The runtime/backend code path already satisfies the active phase contract:
+  - Codex start turns pass the generated schema through `--output-schema`.
+  - Simplified delivery is observable as `native_simplified`.
+  - Codex resume and Claude paths record explicit `prompt_only` fallback without relaxing engine-side validation.
+- Focused regressions are green:
+  - `tests/runtime/test_provider_backends.py -k "response_schema or prompt_only_fallback or output_schema_file or simplified_schema_delivery"`
+  - `tests/contract/test_engine_contracts.py -k "invalid_custom_raw_route_payload or invalid_custom_raw_route_fields"`
+  - `tests/unit/test_validation.py -k "raw_route_payload_schema_without_jsonschema_dependency or raw_route_fields_schema_without_jsonschema_dependency or helper_default_route_fields_without_jsonschema_dependency or custom_helper_route_fields_override_without_jsonschema_dependency"`
+  - `tests/test_architecture_baseline_docs.py -k "authoring or controlroutes or route"`
+
+Open issues / next step
+
+- No blocking gaps found in this phase after validation.
+- The remaining limitation is intentional and documented: native schema delivery is currently Codex-start-only until other backend surfaces expose an equivalent schema input.
