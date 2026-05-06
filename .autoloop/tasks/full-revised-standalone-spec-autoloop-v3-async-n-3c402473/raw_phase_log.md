@@ -151,3 +151,52 @@ Key findings / decisions
 Open issues / next step
 - The temporary sync transport fallback in `RenderedLLMProvider` should be removed in the later provider/transport cutover phase.
 - Validation run: `./.venv/bin/python -m pytest tests/contract/test_async_engine_spine.py tests/contract/test_async_step_dispatcher.py tests/contract/test_engine_contracts.py::test_runtime_extensions_bind_before_workflow_extensions tests/contract/test_engine_contracts.py::test_low_level_engine_resolves_relative_file_prompts_with_filesystem_registry tests/unit/test_simple_surface.py::test_runtime_step_state_restores_built_ins_and_custom_fields_on_resume tests/unit/test_simple_surface.py::test_simple_scoped_item_state_and_step_item_state_restore_on_resume tests/unit/test_provider_boundary_core.py::test_rendered_llm_provider_supports_async_turn_methods tests/unit/test_provider_boundary_core.py::test_rendered_llm_provider_returns_producer_response -q` with `12 passed`.
+
+
+---
+run_id=run-20260506T130608Z-37f1c786 | entry=session_turn | pair=implement | phase=verifier | cycle=1 | attempt=1 | thread_id=019dfd6b-64cb-7e91-8aa2-76c766f7f1a1
+---
+provider=codex
+mode=resume
+template=/home/rauter/.local/share/pipx/venvs/autoloop/lib/python3.12/site-packages/autoloop/templates/implement_verifier.md
+session_id=019dfd6b-64cb-7e91-8aa2-76c766f7f1a1
+
+
+---
+run_id=run-20260506T130608Z-37f1c786 | entry=phase_output | pair=implement | phase=verifier | process=codex-agent | cycle=1 | attempt=1 | thread_id=019dfd6b-64cb-7e91-8aa2-76c766f7f1a1
+---
+I’m reviewing the async-engine-spine implementation against the phase contract, starting with the criteria artifact and the exact source changes in the engine, dispatcher, and rendered-provider wrapper.
+
+I found one likely regression surface and I’m verifying it directly: whether plain sync-only `LLMProvider` implementations still work for ordinary sequential `Engine.run(...)` after this phase change.
+
+I’ve confirmed the main compatibility regression with a direct repro: a provider that still satisfies the current sync `LLMProvider` protocol now fails under ordinary `Engine.run(...)`. I’m pulling exact line references now and then I’ll update the review artifacts.
+
+I’ve got one blocking compatibility regression and one non-blocking cleanup finding. I’m updating the criteria and feedback artifacts now, then I’ll close with the review summary and loop-control status.
+
+Scope considered
+- Phase-local async-engine-spine artifacts and the changed runtime files: `autoloop/core/engine.py`, `autoloop/core/engine_collaborators.py`, `autoloop/core/providers/rendered.py`, and the new contract test file.
+- I did not pull unrelated dirty files into scope.
+
+What I analyzed
+- The new `Engine.run_async(...)` / `resume_async(...)` flow and how `Engine.run(...)` / `resume(...)` now enter it.
+- The dispatcher handoff from `StepDispatcher.execute(...)` to `execute_async(...)`.
+- The current provider contract split in `autoloop/core/providers/protocols.py`.
+- The rendered-provider compatibility shim added in `RenderedLLMProvider._run_turn_async(...)`.
+
+What I reviewed
+- Whether AC-1 still holds for ordinary sequential runs under the current provider contract.
+- Whether AC-2 active-event-loop failures are clear and correctly guarded.
+- Whether the phase actually removed duplicated sync provider logic or only bypassed it.
+
+Key findings / decisions
+- `IMP-001` is blocking: ordinary sequential `Engine.run(...)` now rejects sync-only providers that still satisfy the repository’s current `LLMProvider` protocol. I verified this directly: a sync-only provider now fails with `ProviderExecutionError` because the async dispatcher hard-requires `run_*_async(...)`.
+- `IMP-002` is non-blocking: the old sync provider execution stack still sits in `engine.py` as dead duplicated logic, which leaves avoidable drift risk after this phase.
+- I updated the phase feedback artifact with both findings and left the criteria unchecked because the blocking compatibility regression means the phase is not review-complete.
+
+Open issues / next step
+- Preserve current sequential sync-provider compatibility at the dispatcher/provider boundary until the later provider-cutover phase lands, then rerun this review.
+- After that, delete the unreachable sync helper stack from `engine.py` so the async-authoritative path is also the only maintained path.
+
+<loop-control>
+{"schema":"docloop.loop_control/v1","kind":"promise","promise":"INCOMPLETE"}
+</loop-control>
