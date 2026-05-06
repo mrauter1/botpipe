@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import asyncio
 from copy import deepcopy
+import subprocess
 from typing import Any, Mapping
 
 from ...core.errors import ProviderExecutionError
@@ -190,3 +191,20 @@ async def terminate_text_subprocess(process: asyncio.subprocess.Process) -> None
     except asyncio.TimeoutError:
         process.kill()
         await process.wait()
+
+
+def run_text_subprocess(
+    command: list[str],
+    *,
+    input_text: str | None = None,
+) -> tuple[str, str, int]:
+    """Run a subprocess synchronously for explicit compatibility-only paths."""
+
+    completed = subprocess.run(
+        command,
+        input=input_text,
+        text=True,
+        capture_output=True,
+        check=False,
+    )
+    return completed.stdout, completed.stderr, completed.returncode

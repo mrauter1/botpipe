@@ -23,6 +23,7 @@ from ._common import (
     ensure_session_provider_match,
     extract_token_usage,
     format_subprocess_streams,
+    run_text_subprocess,
 )
 
 
@@ -108,45 +109,7 @@ class ClaudeTransport(ProviderTransport):
     def __init__(self, *, config: ClaudeProviderConfig) -> None:
         self._config = config
 
-    def run_operation_turn(self, turn: RenderedProviderTurn) -> ProviderTurnResult:
-        return self._run_turn_sync(turn)
-
     async def run_turn(self, turn: RenderedProviderTurn) -> ProviderTurnResult:
-        return await self._run_turn_async(turn)
-
-    def _run_turn_sync(self, turn: RenderedProviderTurn) -> ProviderTurnResult:
-        ensure_session_provider_match("claude", turn.session)
-        resume_session_id = _resumable_session_id("claude", turn.session)
-
-        command = ["claude"]
-        if resume_session_id is not None:
-            command.extend(["--resume", resume_session_id])
-        command.extend(["-p", turn.prompt_text, "--output-format", "json"])
-        if self._config.model:
-            command.extend(["--model", self._config.model])
-        if self._config.effort:
-            command.extend(["--effort", self._config.effort])
-        command.extend(claude_permission_args(self._config))
-
-        completed = subprocess.run(command, text=True, capture_output=True, check=False)
-        if completed.returncode != 0:
-            streams = format_subprocess_streams(completed.stdout, completed.stderr)
-            raise ProviderExecutionError(
-                f"provider 'claude' failed while running step {turn.step_name!r} "
-                f"(exit code {completed.returncode}): {streams}"
-            )
-
-        result_text, resolved_session_id, provider_metadata, usage = parse_claude_exec_json(completed.stdout)
-        return self._build_result(
-            turn=turn,
-            resume_session_id=resume_session_id,
-            resolved_session_id=resolved_session_id,
-            provider_metadata=provider_metadata,
-            usage=usage,
-            result_text=result_text,
-        )
-
-    async def _run_turn_async(self, turn: RenderedProviderTurn) -> ProviderTurnResult:
         ensure_session_provider_match("claude", turn.session)
         resume_session_id = _resumable_session_id("claude", turn.session)
 
@@ -174,49 +137,15 @@ class ClaudeTransport(ProviderTransport):
             )
 
         result_text, resolved_session_id, provider_metadata, usage = parse_claude_exec_json(stdout)
-        return self._build_result(
+        return _build_claude_result(
             turn=turn,
             resume_session_id=resume_session_id,
             resolved_session_id=resolved_session_id,
             provider_metadata=provider_metadata,
             usage=usage,
             result_text=result_text,
+            config=self._config,
         )
-
-    def _build_result(
-        self,
-        *,
-        turn: RenderedProviderTurn,
-        resume_session_id: str | None,
-        resolved_session_id: str | None,
-        provider_metadata: dict[str, Any],
-        usage: TokenUsage | None,
-        result_text: str,
-    ) -> ProviderTurnResult:
-        if resolved_session_id is None and resume_session_id is not None:
-            resolved_session_id = resume_session_id
-        if resolved_session_id is None and turn.session is not None:
-            raise ProviderExecutionError(
-                f"provider 'claude' did not return a resumable session_id for step {turn.step_name!r}."
-            )
-
-        binding = (
-            build_session_binding(
-                turn.session,
-                session_id=resolved_session_id,
-                provider_name="claude",
-                provider_metadata=provider_metadata,
-                model=self._config.model,
-                effort=self._config.effort,
-            )
-            if turn.session is not None and resolved_session_id is not None
-            else None
-        )
-        metadata = {
-            "mode": "resume" if resume_session_id is not None else "start",
-            "provider_metadata": dict(provider_metadata),
-        }
-        return ProviderTurnResult(raw_text=result_text, session=binding, metadata=metadata, usage=usage)
 
 
 def build_claude_transport(config: ResolvedRuntimeConfig) -> ClaudeTransport:
@@ -226,17 +155,97 @@ def build_claude_transport(config: ResolvedRuntimeConfig) -> ClaudeTransport:
     return ClaudeTransport(config=config.provider.claude)
 
 
+def build_claude_operation_executor(
+    config: ResolvedRuntimeConfig,
+) -> Callable[[RenderedProviderTurn], ProviderTurnResult]:
+    """Build the explicit sync operation executor for compatibility helpers."""
+
+    verify_claude_code_capabilities(config.provider.claude)
+    provider_config = config.provider.claude
+
+    def execute(turn: RenderedProviderTurn) -> ProviderTurnResult:
+        ensure_session_provider_match("claude", turn.session)
+        resume_session_id = _resumable_session_id("claude", turn.session)
+        command = ["claude"]
+        if resume_session_id is not None:
+            command.extend(["--resume", resume_session_id])
+        command.extend(["-p", turn.prompt_text, "--output-format", "json"])
+        if provider_config.model:
+            command.extend(["--model", provider_config.model])
+        if provider_config.effort:
+            command.extend(["--effort", provider_config.effort])
+        command.extend(claude_permission_args(provider_config))
+        stdout, stderr, returncode = run_text_subprocess(command)
+        if returncode != 0:
+            streams = format_subprocess_streams(stdout, stderr)
+            raise ProviderExecutionError(
+                f"provider 'claude' failed while running step {turn.step_name!r} "
+                f"(exit code {returncode}): {streams}"
+            )
+        result_text, resolved_session_id, provider_metadata, usage = parse_claude_exec_json(stdout)
+        return _build_claude_result(
+            turn=turn,
+            resume_session_id=resume_session_id,
+            resolved_session_id=resolved_session_id,
+            provider_metadata=provider_metadata,
+            usage=usage,
+            result_text=result_text,
+            config=provider_config,
+        )
+
+    return execute
+
+
 class ClaudeProvider(RenderedLLMProvider):
     """Compatibility semantic provider backed by ClaudeTransport."""
 
     def __init__(self, config: ResolvedRuntimeConfig) -> None:
-        super().__init__(build_claude_transport(config))
+        super().__init__(
+            build_claude_transport(config),
+            operation_executor=build_claude_operation_executor(config),
+        )
 
 
 def build_claude_provider(config: ResolvedRuntimeConfig) -> ClaudeProvider:
     """Build the compatibility Claude semantic provider wrapper."""
 
     return ClaudeProvider(config)
+
+
+def _build_claude_result(
+    *,
+    turn: RenderedProviderTurn,
+    resume_session_id: str | None,
+    resolved_session_id: str | None,
+    provider_metadata: dict[str, Any],
+    usage: TokenUsage | None,
+    result_text: str,
+    config: ClaudeProviderConfig,
+) -> ProviderTurnResult:
+    if resolved_session_id is None and resume_session_id is not None:
+        resolved_session_id = resume_session_id
+    if resolved_session_id is None and turn.session is not None:
+        raise ProviderExecutionError(
+            f"provider 'claude' did not return a resumable session_id for step {turn.step_name!r}."
+        )
+
+    binding = (
+        build_session_binding(
+            turn.session,
+            session_id=resolved_session_id,
+            provider_name="claude",
+            provider_metadata=provider_metadata,
+            model=config.model,
+            effort=config.effort,
+        )
+        if turn.session is not None and resolved_session_id is not None
+        else None
+    )
+    metadata = {
+        "mode": "resume" if resume_session_id is not None else "start",
+        "provider_metadata": dict(provider_metadata),
+    }
+    return ProviderTurnResult(raw_text=result_text, session=binding, metadata=metadata, usage=usage)
 
 
 @lru_cache(maxsize=1)

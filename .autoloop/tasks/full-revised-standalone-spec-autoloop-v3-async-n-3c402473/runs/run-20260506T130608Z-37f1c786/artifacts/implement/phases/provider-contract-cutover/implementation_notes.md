@@ -16,6 +16,7 @@
 - `autoloop/core/engine_collaborators.py`
 - `autoloop/core/branch_groups/runtime.py`
 - `autoloop/core/operations.py`
+- `autoloop/runtime/provider_backends.py`
 - `autoloop/runtime/providers/_common.py`
 - `autoloop/runtime/providers/codex.py`
 - `autoloop/runtime/providers/claude.py`
@@ -35,6 +36,7 @@
 - `validate_llm_provider(...)`
 - `validate_provider_transport(...)`
 - `RenderedLLMProvider.run_producer/run_verifier/run_llm/run_operation`
+- `RenderedLLMProvider.operation_executor`
 - `ScriptedLLMProvider.run_producer/run_verifier/run_llm/run_operation`
 - `Engine.__init__(...)`
 - `StepDispatcher._call_provider(...)`
@@ -44,14 +46,15 @@
 - `_run_operation_turn(...)`
 - `communicate_text_subprocess(...)`
 - `terminate_text_subprocess(...)`
+- `run_text_subprocess(...)`
 - `CodexTransport.run_turn(...)`
 - `ClaudeTransport.run_turn(...)`
-- `CodexTransport.run_operation_turn(...)`
-- `ClaudeTransport.run_operation_turn(...)`
+- `build_codex_operation_executor(...)`
+- `build_claude_operation_executor(...)`
 
 ## Checklist mapping
 - Plan `M2. Provider contract cutover`: completed for async-only provider/transport protocols, constructor validation, removal of async probing helpers, and dispatcher cutover to direct awaited provider calls.
-- Plan `M3. Async rendered provider and built-in transports`: partially pulled forward to keep the contract coherent; rendered provider and built-in Codex/Claude transports now expose only async workflow-turn entrypoints, with a separate non-protocol operation helper path retained for exported `llm()` / `classify()` compatibility.
+- Plan `M3. Async rendered provider and built-in transports`: partially pulled forward to keep the contract coherent; rendered provider and built-in Codex/Claude transports now expose only async workflow-turn entrypoints, with a separate explicit rendered-provider operation executor retained for exported `llm()` / `classify()` compatibility.
 - Plan `M1/M4/M5/M6`: not targeted beyond the provider-touching regression updates required to keep the narrowed phase coherent.
 
 ## Assumptions
@@ -70,16 +73,18 @@
 - Sync-only providers and sync-only transports fail during construction instead of being discovered later during execution or branch scheduling.
 - Branch-group runtime no longer probes provider async capability at runtime.
 - Built-in Codex/Claude transports now execute workflow turns only through async subprocess paths.
+- Rendered provider operation compatibility is now explicit at construction via `operation_executor=...` instead of implicit transport duck-typing.
 
 ## Known non-changes
 - `autoloop/core/operations.py` still relies on sync `run_operation(...)`; this method is no longer part of the core provider protocol and is validated locally when operation helpers are used.
-- Built-in transports still carry a sync `run_operation_turn(...)` helper strictly for `RenderedLLMProvider.run_operation(...)`; async workflow step/provider execution no longer uses that path.
+- Built-in operation-helper compatibility still uses sync subprocess execution, but that path is now centralized outside the transport protocol and wired explicitly through rendered-provider/backend construction.
 - Operation branch enablement, child-workflow branch support, and broader branch-group follow-on work remain untouched.
 - Help-surface capability probing for provider CLIs still uses `subprocess.run(...)`; only workflow turn execution was cut over.
 
 ## Expected side effects
 - Any custom test/provider object that previously implemented only sync step methods must now switch to async methods or it will fail immediately at `Engine(...)` construction.
 - Any custom transport used with `RenderedLLMProvider(...)` must now expose async `run_turn(...)`.
+- Any custom `RenderedLLMProvider(...)` used with `llm()` / `classify()` inside an active workflow loop must now pass an explicit `operation_executor=...` if it needs operation-helper compatibility.
 
 ## Validation performed
 - `python3 -m py_compile` over all touched runtime/core modules and the updated provider-focused test files.
@@ -90,3 +95,4 @@
 ## Deduplication / centralization decisions
 - Centralized constructor validation in `autoloop/core/providers/protocols.py` so `Engine(...)` and `RenderedLLMProvider(...)` share the same async-contract enforcement.
 - Centralized async subprocess cancellation handling in `autoloop/runtime/providers/_common.py` for both Codex and Claude transports.
+- Centralized the explicit compatibility-only sync subprocess helper in `autoloop/runtime/providers/_common.py` and removed undocumented transport duck-typing from `RenderedLLMProvider.run_operation(...)`.

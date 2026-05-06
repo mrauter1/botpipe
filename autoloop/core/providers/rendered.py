@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import asyncio
+from collections.abc import Callable
 from .models import (
     LLMRequest,
     OperationRequest,
@@ -16,13 +17,22 @@ from .models import (
 from .parsing import parse_outcome_json
 from .protocols import ProviderTransport, validate_provider_transport
 from .rendering import render_provider_turn
+from .turns import ProviderTurnResult
 
 
 class RenderedLLMProvider:
     """Adapt the semantic provider protocol to the rendered transport boundary."""
 
-    def __init__(self, transport: ProviderTransport) -> None:
+    def __init__(
+        self,
+        transport: ProviderTransport,
+        *,
+        operation_executor: Callable[[RenderedProviderTurn], ProviderTurnResult] | None = None,
+    ) -> None:
         self._transport = validate_provider_transport(transport)
+        if operation_executor is not None and not callable(operation_executor):
+            raise TypeError("operation_executor must be callable when provided")
+        self._operation_executor = operation_executor
 
     async def run_producer(self, request: ProducerRequest) -> ProducerResponse:
         result = await self._run_turn(_producer_context(request))
@@ -51,10 +61,16 @@ class RenderedLLMProvider:
 
     def _run_operation_turn(self, context: ProviderTurnContext):
         turn = render_provider_turn(context)
-        run_operation_turn = getattr(self._transport, "run_operation_turn", None)
-        if callable(run_operation_turn):
-            return run_operation_turn(turn)
-        return run_provider_coro_sync(self._transport.run_turn(turn))
+        if self._operation_executor is not None:
+            return self._operation_executor(turn)
+        try:
+            asyncio.get_running_loop()
+        except RuntimeError:
+            return run_provider_coro_sync(self._transport.run_turn(turn))
+        raise RuntimeError(
+            "RenderedLLMProvider requires an explicit operation_executor to support llm()/classify() "
+            "inside an active workflow event loop."
+        )
 
 
 def _producer_response(result) -> ProducerResponse:

@@ -23,6 +23,7 @@ from ._common import (
     ensure_session_provider_match,
     extract_token_usage,
     format_subprocess_streams,
+    run_text_subprocess,
 )
 
 
@@ -160,46 +161,7 @@ class CodexTransport(ProviderTransport):
         self._model = model
         self._model_effort = model_effort
 
-    def run_operation_turn(self, turn: RenderedProviderTurn) -> ProviderTurnResult:
-        return self._run_turn_sync(turn)
-
     async def run_turn(self, turn: RenderedProviderTurn) -> ProviderTurnResult:
-        return await self._run_turn_async(turn)
-
-    def _run_turn_sync(self, turn: RenderedProviderTurn) -> ProviderTurnResult:
-        ensure_session_provider_match("codex", turn.session)
-        resume_session_id = _resumable_session_id("codex", turn.session)
-
-        if resume_session_id is None:
-            command = list(self._commands.start_command)
-        else:
-            command = [*self._commands.resume_command, resume_session_id, "-"]
-
-        completed = subprocess.run(
-            command,
-            input=turn.prompt_text,
-            text=True,
-            capture_output=True,
-            check=False,
-        )
-        if completed.returncode != 0:
-            streams = format_subprocess_streams(completed.stdout, completed.stderr)
-            raise ProviderExecutionError(
-                f"provider 'codex' failed while running step {turn.step_name!r} "
-                f"(exit code {completed.returncode}): {streams}"
-            )
-
-        assistant_text, resolved_session_id, provider_metadata, usage = parse_codex_exec_json(completed.stdout)
-        return self._build_result(
-            turn=turn,
-            resume_session_id=resume_session_id,
-            resolved_session_id=resolved_session_id,
-            provider_metadata=provider_metadata,
-            usage=usage,
-            assistant_text=assistant_text,
-        )
-
-    async def _run_turn_async(self, turn: RenderedProviderTurn) -> ProviderTurnResult:
         ensure_session_provider_match("codex", turn.session)
         resume_session_id = _resumable_session_id("codex", turn.session)
 
@@ -223,49 +185,16 @@ class CodexTransport(ProviderTransport):
             )
 
         assistant_text, resolved_session_id, provider_metadata, usage = parse_codex_exec_json(stdout)
-        return self._build_result(
+        return _build_codex_result(
             turn=turn,
             resume_session_id=resume_session_id,
             resolved_session_id=resolved_session_id,
             provider_metadata=provider_metadata,
             usage=usage,
             assistant_text=assistant_text,
+            model=self._model,
+            model_effort=self._model_effort,
         )
-
-    def _build_result(
-        self,
-        *,
-        turn: RenderedProviderTurn,
-        resume_session_id: str | None,
-        resolved_session_id: str | None,
-        provider_metadata: dict[str, Any],
-        usage: TokenUsage | None,
-        assistant_text: str,
-    ) -> ProviderTurnResult:
-        if resolved_session_id is None and resume_session_id is not None:
-            resolved_session_id = resume_session_id
-        if resolved_session_id is None and turn.session is not None:
-            raise ProviderExecutionError(
-                f"provider 'codex' did not return a resumable session_id for step {turn.step_name!r}."
-            )
-
-        binding = (
-            build_session_binding(
-                turn.session,
-                session_id=resolved_session_id,
-                provider_name="codex",
-                provider_metadata=provider_metadata,
-                model=self._model,
-                effort=self._model_effort,
-            )
-            if turn.session is not None and resolved_session_id is not None
-            else None
-        )
-        metadata = {
-            "mode": "resume" if resume_session_id is not None else "start",
-            "provider_metadata": dict(provider_metadata),
-        }
-        return ProviderTurnResult(raw_text=assistant_text, session=binding, metadata=metadata, usage=usage)
 
 
 def build_codex_transport(config: ResolvedRuntimeConfig) -> CodexTransport:
@@ -278,16 +207,58 @@ def build_codex_transport(config: ResolvedRuntimeConfig) -> CodexTransport:
     )
 
 
+def build_codex_operation_executor(
+    config: ResolvedRuntimeConfig,
+    *,
+    commands: CodexCLICommand | None = None,
+) -> Callable[[RenderedProviderTurn], ProviderTurnResult]:
+    """Build the explicit sync operation executor for compatibility helpers."""
+
+    resolved_commands = commands or resolve_codex_cli_commands(config)
+    model = config.provider.codex.model
+    model_effort = config.provider.codex.model_effort
+
+    def execute(turn: RenderedProviderTurn) -> ProviderTurnResult:
+        ensure_session_provider_match("codex", turn.session)
+        resume_session_id = _resumable_session_id("codex", turn.session)
+        if resume_session_id is None:
+            command = list(resolved_commands.start_command)
+        else:
+            command = [*resolved_commands.resume_command, resume_session_id, "-"]
+        stdout, stderr, returncode = run_text_subprocess(command, input_text=turn.prompt_text)
+        if returncode != 0:
+            streams = format_subprocess_streams(stdout, stderr)
+            raise ProviderExecutionError(
+                f"provider 'codex' failed while running step {turn.step_name!r} "
+                f"(exit code {returncode}): {streams}"
+            )
+        assistant_text, resolved_session_id, provider_metadata, usage = parse_codex_exec_json(stdout)
+        return _build_codex_result(
+            turn=turn,
+            resume_session_id=resume_session_id,
+            resolved_session_id=resolved_session_id,
+            provider_metadata=provider_metadata,
+            usage=usage,
+            assistant_text=assistant_text,
+            model=model,
+            model_effort=model_effort,
+        )
+
+    return execute
+
+
 class CodexProvider(RenderedLLMProvider):
     """Compatibility semantic provider backed by CodexTransport."""
 
     def __init__(self, config: ResolvedRuntimeConfig, commands: CodexCLICommand | None = None) -> None:
+        resolved_commands = commands or resolve_codex_cli_commands(config)
         super().__init__(
             CodexTransport(
-                commands=commands or resolve_codex_cli_commands(config),
+                commands=resolved_commands,
                 model=config.provider.codex.model,
                 model_effort=config.provider.codex.model_effort,
-            )
+            ),
+            operation_executor=build_codex_operation_executor(config, commands=resolved_commands),
         )
 
 
@@ -295,6 +266,43 @@ def build_codex_provider(config: ResolvedRuntimeConfig) -> CodexProvider:
     """Build the compatibility Codex semantic provider wrapper."""
 
     return CodexProvider(config)
+
+
+def _build_codex_result(
+    *,
+    turn: RenderedProviderTurn,
+    resume_session_id: str | None,
+    resolved_session_id: str | None,
+    provider_metadata: dict[str, Any],
+    usage: TokenUsage | None,
+    assistant_text: str,
+    model: str | None,
+    model_effort: str | None,
+) -> ProviderTurnResult:
+    if resolved_session_id is None and resume_session_id is not None:
+        resolved_session_id = resume_session_id
+    if resolved_session_id is None and turn.session is not None:
+        raise ProviderExecutionError(
+            f"provider 'codex' did not return a resumable session_id for step {turn.step_name!r}."
+        )
+
+    binding = (
+        build_session_binding(
+            turn.session,
+            session_id=resolved_session_id,
+            provider_name="codex",
+            provider_metadata=provider_metadata,
+            model=model,
+            effort=model_effort,
+        )
+        if turn.session is not None and resolved_session_id is not None
+        else None
+    )
+    metadata = {
+        "mode": "resume" if resume_session_id is not None else "start",
+        "provider_metadata": dict(provider_metadata),
+    }
+    return ProviderTurnResult(raw_text=assistant_text, session=binding, metadata=metadata, usage=usage)
 
 
 @lru_cache(maxsize=1)
