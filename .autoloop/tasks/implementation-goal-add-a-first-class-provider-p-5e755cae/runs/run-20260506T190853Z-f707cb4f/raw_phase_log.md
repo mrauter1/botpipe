@@ -1035,3 +1035,59 @@ Open issues / next step
   - `./.venv/bin/python -m pytest -q tests/contract/test_engine_contracts.py -k 'operation_replay_fingerprint or operation_replay_override or llm_and_classify_step_replay_across_reruns'`
   - `./.venv/bin/python -m pytest -q tests/unit/test_simple_surface.py -k 'policy or operation_surface_singletons'`
   - `./.venv/bin/python -m pytest -q tests/unit/test_provider_boundary_core.py -k 'operation or rendered'`
+
+
+---
+run_id=run-20260506T190853Z-f707cb4f | entry=session_turn | pair=implement | phase=verifier | cycle=2 | attempt=1 | thread_id=019dfed8-551c-7c93-94aa-0e9110d8f650
+---
+provider=codex
+mode=resume
+template=/home/rauter/.local/share/pipx/venvs/autoloop/lib/python3.12/site-packages/autoloop/templates/implement_verifier.md
+session_id=019dfed8-551c-7c93-94aa-0e9110d8f650
+
+
+---
+run_id=run-20260506T190853Z-f707cb4f | entry=phase_output | pair=implement | phase=verifier | process=codex-agent | cycle=2 | attempt=1 | thread_id=019dfed8-551c-7c93-94aa-0e9110d8f650
+---
+Reviewing the updated phase now. I’m checking the two fixed seams directly in code first, then I’ll update the reviewer artifacts based on whether any blocking gap remains.
+
+The code changes match the intended fix shape. I’m checking the new regressions and one direct-engine edge case now, mainly to verify the fallback resolver doesn’t accidentally persist across runs or bypass explicit caller wiring.
+
+The targeted review passed. I don’t see a remaining blocking gap in the phase scope, so I’m converting the prior findings to resolved re-review notes and marking the criteria accordingly.
+
+Scope considered
+
+- Phase-local re-review for `policy-resolution-propagation`.
+- Focused on the two previously blocking seams: workflow-step hook policy binding and direct `Engine(...)` policy propagation.
+- Checked only request-relevant code and the updated phase tests.
+
+What I analyzed
+
+- Updated implementation in `autoloop/runtime/provider_policy_resolver.py`, `autoloop/core/engine.py`, `autoloop/core/engine_collaborators.py`, `autoloop/runtime/runner.py`, and `tests/runtime/test_provider_policy_steps.py`.
+- The current implementation notes and decisions for this phase.
+- Prior reviewer findings `IMP-001` and `IMP-002`.
+
+What I reviewed
+
+- Verified `OperationRecorder.bind_step` now resolves/rebinds policy whenever a resolver is present and restores or clears `Context._provider_policy` on exit.
+- Verified direct `Engine(...)` runs now synthesize a default resolver through the shared `create_provider_policy_resolver(...)` path when no explicit resolver is supplied.
+- Verified new regression coverage for:
+  - workflow-step hook inheritance
+  - direct-engine authored policy propagation
+- Re-ran the targeted phase suite and a small direct-engine smoke check.
+
+Key findings / decisions
+
+- `IMP-001` is fixed and downgraded to a resolved non-blocking re-review note in `feedback.md`.
+- `IMP-002` is fixed and downgraded to a resolved non-blocking re-review note in `feedback.md`.
+- No remaining blocking or non-blocking findings in the reviewed phase scope.
+- Updated `criteria.md` to all checked boxes.
+
+Open issues / next step
+
+- No open issue in this phase-local scope.
+- Ready to proceed to the next implementation phase or broader verifier pass.
+
+<loop-control>
+{"schema":"docloop.loop_control/v1","kind":"promise","promise":"COMPLETE"}
+</loop-control>
