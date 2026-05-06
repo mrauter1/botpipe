@@ -20,3 +20,7 @@
 {"ts": "2026-05-06T13:28:50.695324+00:00", "run_id": "run-20260506T130608Z-37f1c786", "seq": 20, "event_type": "phase_finished", "pair": "test", "phase": "producer", "cycle": 1, "attempt": 1, "empty_output": false, "phase_id": "async-engine-spine"}
 {"ts": "2026-05-06T13:29:37.938166+00:00", "run_id": "run-20260506T130608Z-37f1c786", "seq": 21, "event_type": "phase_finished", "pair": "test", "phase": "verifier", "cycle": 1, "attempt": 1, "empty_output": false, "phase_id": "async-engine-spine"}
 {"ts": "2026-05-06T13:29:38.002516+00:00", "run_id": "run-20260506T130608Z-37f1c786", "seq": 22, "event_type": "pair_completed", "pair": "test", "cycle": 1, "attempt": 1, "phase_id": "async-engine-spine"}
+{"ts": "2026-05-06T13:29:38.094126+00:00", "run_id": "run-20260506T130608Z-37f1c786", "seq": 23, "event_type": "phase_completed", "pair": "test", "phase_id": "async-engine-spine", "phase_mode": "single"}
+{"ts": "2026-05-06T13:29:38.096154+00:00", "run_id": "run-20260506T130608Z-37f1c786", "seq": 24, "event_type": "phase_started", "phase_id": "provider-contract-cutover", "phase_mode": "single"}
+{"ts": "2026-05-06T13:29:38.098171+00:00", "run_id": "run-20260506T130608Z-37f1c786", "seq": 25, "event_type": "pair_started", "pair": "implement", "phase_id": "provider-contract-cutover"}
+{"ts": "2026-05-06T13:29:38.098469+00:00", "run_id": "run-20260506T130608Z-37f1c786", "seq": 26, "event_type": "cycle_started", "pair": "implement", "cycle": 1, "attempt": 1, "phase_id": "provider-contract-cutover"}
