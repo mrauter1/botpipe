@@ -90,3 +90,73 @@ The producer plan needs one revision pass to add an explicit compatibility/migra
 <loop-control>
 {"schema":"docloop.loop_control/v1","kind":"promise","promise":"INCOMPLETE"}
 </loop-control>
+
+
+---
+run_id=run-20260506T185744Z-092935c3 | entry=session_turn | pair=plan | phase=producer | cycle=2 | attempt=1 | thread_id=019dfea7-3908-7413-b6ab-c1bb31bd9193
+---
+provider=codex
+mode=resume
+template=/home/rauter/.local/share/pipx/venvs/autoloop/lib/python3.12/site-packages/autoloop/templates/plan_producer.md
+session_id=019dfea7-3908-7413-b6ab-c1bb31bd9193
+
+
+---
+run_id=run-20260506T185744Z-092935c3 | entry=phase_output | pair=plan | phase=producer | process=codex-agent | cycle=2 | attempt=1 | thread_id=019dfea7-3908-7413-b6ab-c1bb31bd9193
+---
+I’m revising the plan against the verifier findings, with focus on the missing compatibility contract for persisted inspection/report artifacts and the fallback-reporting acceptance gap. First I’m re-reading the current artifacts and the latest decisions block so the fix lands cleanly without drifting scope.
+
+The fix is straightforward: make the persisted inspection/report outputs an explicit compatibility surface in the plan, and bind fallback-reporting into Phase 3 acceptance so it cannot be dropped later. I’m updating the narrative plan and phase YAML together, then I’ll append a closure note in feedback and the new decisions block.
+
+The revision is in place. I’m doing a final consistency pass to make sure the compatibility contract, fallback-reporting acceptance, feedback closure note, and decisions block all line up before handing back to the verifier.
+
+Updated [plan.md](</home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/this-is-the-final-standalone-handoff-spec-it-sup-5b5e7cd0/runs/run-20260506T185744Z-092935c3/artifacts/plan/plan.md>), [phase_plan.yaml](</home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/this-is-the-final-standalone-handoff-spec-it-sup-5b5e7cd0/runs/run-20260506T185744Z-092935c3/artifacts/plan/phase_plan.yaml>), [feedback.md](</home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/this-is-the-final-standalone-handoff-spec-it-sup-5b5e7cd0/runs/run-20260506T185744Z-092935c3/artifacts/plan/feedback.md>), and [decisions.txt](</home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/this-is-the-final-standalone-handoff-spec-it-sup-5b5e7cd0/runs/run-20260506T185744Z-092935c3/decisions.txt>) to address the verifier findings.
+
+The plan now makes persisted inspection/report artifacts an explicit compatibility surface: existing filenames stay fixed, additive payload changes are preferred, any unavoidable shape break must migrate readers/tests in the same slice, and compile-report/inspection outputs must explicitly surface simplified provider-schema fallback. I also expanded validation coverage to call out runtime tracing, optimization-helper readers, and workflow-capability snapshot consumers.
+
+
+---
+run_id=run-20260506T185744Z-092935c3 | entry=session_turn | pair=plan | phase=verifier | cycle=2 | attempt=1 | thread_id=019dfea7-3908-7413-b6ab-c1bb31bd9193
+---
+provider=codex
+mode=resume
+template=/home/rauter/.local/share/pipx/venvs/autoloop/lib/python3.12/site-packages/autoloop/templates/plan_verifier.md
+session_id=019dfea7-3908-7413-b6ab-c1bb31bd9193
+
+
+---
+run_id=run-20260506T185744Z-092935c3 | entry=phase_output | pair=plan | phase=verifier | process=codex-agent | cycle=2 | attempt=1 | thread_id=019dfea7-3908-7413-b6ab-c1bb31bd9193
+---
+I’m re-verifying the revised plan against the feedback that was raised last turn, with focus on the persisted-artifact compatibility contract and the fallback-reporting acceptance path. I’ll re-check the current plan, phase YAML, criteria, feedback continuity, and decisions ledger before deciding whether anything remains blocking.
+
+The revised plan now covers the artifact-compatibility contract and fallback-reporting path explicitly, and the phase YAML encodes both. I’m marking the checklist complete and adding a short closure note to feedback so later turns can see that the earlier findings were resolved rather than silently disappearing.
+
+The checklist and feedback closure note are updated. I’m doing one final readback to ensure the completion status is internally consistent before I close this verification pass as complete.
+
+Scope considered
+
+The revised `plan.md`, `phase_plan.yaml`, `feedback.md`, `criteria.md`, and `decisions.txt`, plus the request snapshot and the earlier verifier findings that drove this revision.
+
+What I analyzed
+
+I re-checked the narrative plan for the two previously raised gaps: persisted inspection/report artifact compatibility and explicit fallback-reporting coverage. I also revalidated the machine-readable phase file with YAML parsing and required-list checks.
+
+What I reviewed
+
+I reviewed the updated compatibility and migration notes, the Phase 3 implementation scope and acceptance criteria, the rollout/validation section, the feedback history continuity, and the decisions ledger. I confirmed that the plan now explicitly covers additive-vs-breaking handling for persisted artifacts and same-slice reader migration when a shape break is unavoidable.
+
+Key findings / decisions
+
+No remaining blocking findings.
+
+The earlier `PLAN-001` and `PLAN-002` findings are resolved by the current plan revision.
+
+`criteria.md` now accurately reflects full pass status, and `feedback.md` contains a closure note so later turns can see that the earlier findings were addressed rather than silently removed.
+
+Open issues / next step
+
+No open verification issues remain. The planning artifacts are consistent, complete enough for implementation, and ready to move forward.
+
+<loop-control>
+{"schema":"docloop.loop_control/v1","kind":"promise","promise":"COMPLETE"}
+</loop-control>
