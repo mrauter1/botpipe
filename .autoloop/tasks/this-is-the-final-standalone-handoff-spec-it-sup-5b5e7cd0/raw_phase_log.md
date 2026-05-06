@@ -362,3 +362,52 @@ Validation file tracking is resolved: `git ls-files --stage -- tests/unit/test_v
 Open issues / next step
 
 No known blocker remains in this phase. Validation run passed with `.venv/bin/python -m pytest -q tests/unit/test_validation.py tests/unit/test_simple_surface.py tests/runtime/test_runtime_static_graph.py`, result `190 passed, 14 warnings`. Ready for verifier re-review.
+
+
+---
+run_id=run-20260506T185744Z-092935c3 | entry=session_turn | pair=implement | phase=verifier | cycle=2 | attempt=1 | thread_id=019dfeae-6c3b-77c1-83d0-3af21fe7fb06
+---
+provider=codex
+mode=resume
+template=/home/rauter/.local/share/pipx/venvs/autoloop/lib/python3.12/site-packages/autoloop/templates/implement_verifier.md
+session_id=019dfeae-6c3b-77c1-83d0-3af21fe7fb06
+
+
+---
+run_id=run-20260506T185744Z-092935c3 | entry=phase_output | pair=implement | phase=verifier | process=codex-agent | cycle=2 | attempt=1 | thread_id=019dfeae-6c3b-77c1-83d0-3af21fe7fb06
+---
+I’m re-reviewing the phase against the two prior blockers and the current source tree. I’m verifying that the route lists now come from compiled step metadata, that the validation file is in tracked repo state, and that no adjacent regressions were introduced in the static-graph/reporting surfaces.
+
+The review artifacts are up to date. I’m confirming the implementation details directly in the source and rerunning the focused suite, mainly to verify that the prior blockers are resolved rather than just re-described in the notes.
+
+The core compiler path now clearly derives all step route lists from the compiled route table. I’m checking the remaining source slices that changed behavior for inherited GLOBAL routes while the focused suite finishes, mainly to make sure there isn’t a second source of truth hiding in the route normalization or compile-report summaries.
+
+The focused suite passed cleanly, the validation file is tracked, and the compiler now derives the step route lists from compiled effective route tables. I’m closing the review artifacts now: all criteria can be checked, and I’m appending a final non-blocking review note that the prior blockers are resolved.
+
+Scope considered
+
+Phase `route-model-unification` only. I reviewed the active phase artifacts, the updated implementation notes and decisions ledger, the changed route-compilation code paths, and the focused regression surface the implementer used to address the prior blockers.
+
+What I analyzed
+
+I verified `tests/unit/test_validation.py` is now in tracked repository state, checked [autoloop/core/compiler.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/autoloop/core/compiler.py) to confirm `available_routes`, `runtime_control_routes`, and provider-visible route lists now derive from effective compiled step route tables, checked [autoloop/core/lowering.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/autoloop/core/lowering.py) for inherited `GLOBAL` summary preservation, and checked [autoloop/runtime/static_graph.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/autoloop/runtime/static_graph.py) for the compile-report counting regression fix. I also reran `.venv/bin/python -m pytest -q tests/unit/test_validation.py tests/unit/test_simple_surface.py tests/runtime/test_runtime_static_graph.py`.
+
+What I reviewed
+
+I updated [criteria.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/this-is-the-final-standalone-handoff-spec-it-sup-5b5e7cd0/runs/run-20260506T185744Z-092935c3/artifacts/implement/phases/route-model-unification/criteria.md) to mark all review criteria satisfied and appended a re-review status note to [feedback.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/this-is-the-final-standalone-handoff-spec-it-sup-5b5e7cd0/runs/run-20260506T185744Z-092935c3/artifacts/implement/phases/route-model-unification/feedback.md).
+
+Key findings / decisions
+
+No new blocking findings remain.
+
+The prior blockers are resolved. `tests/unit/test_validation.py` is tracked, and the compiler now uses compiled effective step route tables as the source for step legality and provider visibility metadata, which satisfies AC-1 and preserves AC-2 behavior.
+
+The focused verification suite passed: `190 passed, 14 warnings`. The warnings are the same pre-existing Pydantic field-name shadow warnings noted by the implementer.
+
+Open issues / next step
+
+No open issue in this phase. This review is complete.
+
+<loop-control>
+{"schema":"docloop.loop_control/v1","kind":"promise","promise":"COMPLETE"}
+</loop-control>

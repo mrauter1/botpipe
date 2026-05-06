@@ -14,3 +14,4 @@ Strict workspace path validation treats any relative policy path whose canonical
 <autoloop-decisions-header version="1" block_seq="4" owner="implementer" phase_id="policy-core" pair="implement" turn_seq="2" run_id="run-20260506T190853Z-f707cb4f" ts="2026-05-06T19:26:38.343142+00:00" />
 Because this phase exposes no explicit strict-policy escape hatch for empty limited network mode, WorkspaceNetworkPolicy now rejects mode='limited' when allow_domains is empty instead of silently constructing an ambiguous limited policy.
 ProviderPolicy convenience helpers that mutate nested model state must round-trip through ProviderPolicy.model_validate(...) before returning so invalid literal values cannot leak into later merge, fingerprint, or emission phases.
+<autoloop-decisions-header version="1" block_seq="5" owner="test_author" phase_id="policy-core" pair="test" turn_seq="1" run_id="run-20260506T190853Z-f707cb4f" ts="2026-05-06T19:29:12.164366+00:00" />
