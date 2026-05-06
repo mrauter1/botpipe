@@ -129,15 +129,17 @@ class ClaudeTransport(ProviderTransport):
     async def run_turn(self, turn: RenderedProviderTurn) -> ProviderTurnResult:
         ensure_session_provider_match("claude", turn.session)
         resume_session_id = _resumable_session_id("claude", turn.session)
-        emission, command, model, effort = _prepare_turn_command(
+        emission, command_args, model, effort = _prepare_turn_command(
             turn,
             config=self._config,
             emitter=self._emitter,
             validation=self._validation,
         )
+        command = ["claude"]
         if resume_session_id is not None:
             command.extend(["--resume", resume_session_id])
         command.extend(["-p", turn.prompt_text, "--output-format", "json"])
+        command.extend(command_args)
 
         process = await asyncio.create_subprocess_exec(
             *command,
@@ -189,15 +191,17 @@ def build_claude_operation_executor(
     def execute(turn: RenderedProviderTurn) -> ProviderTurnResult:
         ensure_session_provider_match("claude", turn.session)
         resume_session_id = _resumable_session_id("claude", turn.session)
-        emission, command, model, effort = _prepare_turn_command(
+        emission, command_args, model, effort = _prepare_turn_command(
             turn,
             config=provider_config,
             emitter=ClaudePolicyEmitter(),
             validation=config.provider_policy.validation,
         )
+        command = ["claude"]
         if resume_session_id is not None:
             command.extend(["--resume", resume_session_id])
         command.extend(["-p", turn.prompt_text, "--output-format", "json"])
+        command.extend(command_args)
         stdout, stderr, returncode = run_text_subprocess(
             command,
             env=merge_subprocess_env(None if emission is None else emission.env),
@@ -337,7 +341,7 @@ def _prepare_turn_command(
     validation: ProviderPolicyValidationConfig,
 ) -> tuple[ProviderPolicyEmission | None, list[str], str | None, str | None]:
     emission = _emit_turn_policy(emitter, turn, validation=validation)
-    command = ["claude"]
+    command: list[str] = []
     model = config.model
     effort = config.effort
     if turn.policy is not None:

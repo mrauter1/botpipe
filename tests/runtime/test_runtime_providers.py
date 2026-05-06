@@ -44,6 +44,7 @@ from autoloop.runtime.providers.claude import (
     parse_claude_exec_json,
     verify_claude_code_capabilities,
 )
+from autoloop.runtime.providers.claude_policy import ClaudeCapabilities
 import autoloop.runtime.providers.claude as claude_runtime_provider
 from autoloop.runtime.providers.codex import (
     CodexCLICommand,
@@ -577,6 +578,18 @@ def test_verify_claude_code_capabilities_rejects_missing_required_flag(monkeypat
         verify_claude_code_capabilities()
 
 
+def test_verify_claude_code_capabilities_rejects_missing_settings_flag(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setattr(claude_runtime_provider.shutil, "which", lambda name: "/usr/bin/claude")
+    monkeypatch.setattr(
+        claude_runtime_provider.subprocess,
+        "run",
+        lambda command, **_: _completed(args=command, stdout="--print\n-p\n--output-format\n--resume\n--model\n"),
+    )
+
+    with pytest.raises(ConfigError, match=r"provider 'claude' requires '--settings' support"):
+        verify_claude_code_capabilities()
+
+
 def test_verify_claude_code_capabilities_rejects_missing_allowed_tools_when_strategy_selected(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
@@ -1080,6 +1093,176 @@ def test_codex_operation_executor_uses_policy_env_and_metadata(
     assert seen and seen[0][0] == ("codex", "exec", "--json", "--model", "gpt-test")
     assert seen[0][1] is not None
     assert seen[0][1]["CODEX_HOME"] == str(tmp_path / "provider_policy" / "operate__visit-1" / "codex")
+    assert result.metadata["provider_metadata"]["policy"]["capability_report_file"].endswith("capability_report.json")
+
+
+def test_claude_transport_emits_run_scoped_policy_artifacts_and_metadata(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    prompt_text = "# Step: produce\n\nShared runtime prompt."
+    calls: list[tuple[str, ...]] = []
+    seen_events: list[tuple[str, dict[str, object]]] = []
+
+    async def fake_create_subprocess_exec(*command: str, **_: object) -> _AsyncProcessStub:
+        calls.append(tuple(command))
+        return _AsyncProcessStub(
+            stdout='{"result":"producer text","session_id":"claude-session-policy","stop_reason":"end_turn"}',
+        )
+
+    monkeypatch.setattr(claude_runtime_provider.asyncio, "create_subprocess_exec", fake_create_subprocess_exec)
+    transport = ClaudeTransport(config=_config(provider_name="claude").provider.claude)
+    policy = ProviderPolicy(
+        permissions=PermissionPolicy(mode="full_auto_sandboxed"),
+        sandbox=SandboxPolicy(
+            mode="workspace_write",
+            workspace=WorkspacePolicy(
+                filesystem=WorkspaceFilesystemPolicy(allow_write=(".", "./build")),
+            ),
+        ),
+    )
+
+    result = asyncio.run(
+        transport.run_turn(
+            _rendered_turn(
+                step_name="produce",
+                prompt_text=prompt_text,
+                session=_placeholder_session(),
+                policy=policy,
+                run_folder=tmp_path,
+                step_execution_id="produce:1",
+                runtime_event_sink=lambda event_type, payload: seen_events.append((event_type, dict(payload))),
+            )
+        )
+    )
+
+    settings_path = tmp_path / "provider_policy" / "produce__visit-1" / "claude" / "settings.json"
+    assert settings_path.exists()
+    assert calls == [
+        (
+            "claude",
+            "-p",
+            prompt_text,
+            "--output-format",
+            "json",
+            "--settings",
+            str(settings_path),
+            "--model",
+            "claude-test",
+        )
+    ]
+    assert result.metadata["provider_metadata"]["policy"]["effective_policy_file"] == str(
+        settings_path.parent / "effective_policy.json"
+    )
+    assert result.metadata["provider_metadata"]["policy"]["capability_report_file"] == str(
+        settings_path.parent / "capability_report.json"
+    )
+    assert [event for event, _payload in seen_events] == [
+        "provider_policy_emitted",
+        "provider_policy_capability_report",
+    ]
+
+
+def test_claude_transport_marks_capability_loss_when_native_filesystem_support_is_missing(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    async def fake_create_subprocess_exec(*_command: str, **_kwargs: object) -> _AsyncProcessStub:
+        return _AsyncProcessStub(
+            stdout='{"result":"producer text","session_id":"claude-session-policy","stop_reason":"end_turn"}',
+        )
+
+    monkeypatch.setattr(claude_runtime_provider.asyncio, "create_subprocess_exec", fake_create_subprocess_exec)
+    transport = ClaudeTransport(
+        config=_config(provider_name="claude").provider.claude,
+        validation=ProviderPolicyValidationConfig(lossy_mapping="warn"),
+        capabilities=ClaudeCapabilities(supports_sandbox_filesystem=False),
+    )
+    policy = ProviderPolicy(
+        sandbox=SandboxPolicy(
+            workspace=WorkspacePolicy(
+                filesystem=WorkspaceFilesystemPolicy(allow_write=(".", "./dist")),
+            ),
+        ),
+    )
+
+    result = asyncio.run(
+        transport.run_turn(
+            _rendered_turn(
+                step_name="produce",
+                prompt_text="# Step: produce\n\nShared runtime prompt.",
+                session=_placeholder_session(),
+                policy=policy,
+                run_folder=tmp_path,
+                step_execution_id="produce:1",
+            )
+        )
+    )
+
+    report_path = Path(result.metadata["provider_metadata"]["policy"]["capability_report_file"])
+    report = json.loads(report_path.read_text(encoding="utf-8"))
+
+    assert report["decision"] == "warn"
+    assert report["lossy"] == [
+        "sandbox.filesystem native enforcement unavailable; emitted Read/Edit permission rules only",
+    ]
+    assert report["effective_enforcement"]["write_roots"] == []
+
+
+def test_claude_operation_executor_uses_policy_settings_and_metadata(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    seen: list[tuple[tuple[str, ...], dict[str, str] | None]] = []
+
+    def fake_run_text_subprocess(
+        command: list[str],
+        *,
+        input_text: str | None = None,
+        env=None,
+    ) -> tuple[str, str, int]:
+        seen.append((tuple(command), None if env is None else dict(env)))
+        return ('{"result":"operation text","session_id":"claude-session-op","stop_reason":"done"}', "", 0)
+
+    monkeypatch.setattr(claude_runtime_provider.shutil, "which", lambda name: "/usr/bin/claude")
+    monkeypatch.setattr(
+        claude_runtime_provider.subprocess,
+        "run",
+        lambda command, **_: _completed(args=command, stdout=CLAUDE_HEADLESS_HELP),
+    )
+    monkeypatch.setattr(claude_runtime_provider, "run_text_subprocess", fake_run_text_subprocess)
+    executor = claude_runtime_provider.build_claude_operation_executor(_config(provider_name="claude"))
+    policy = ProviderPolicy(
+        permissions=PermissionPolicy(mode="full_auto_sandboxed"),
+        sandbox=SandboxPolicy(
+            workspace=WorkspacePolicy(
+                filesystem=WorkspaceFilesystemPolicy(allow_write=(".", "./dist")),
+            )
+        ),
+    )
+
+    result = executor(
+        _rendered_turn(
+            step_name="operate",
+            turn_kind="operation",
+            policy=policy,
+            run_folder=tmp_path,
+            step_execution_id="operate:1",
+        )
+    )
+
+    settings_path = tmp_path / "provider_policy" / "operate__visit-1" / "claude" / "settings.json"
+    assert seen and seen[0][0] == (
+        "claude",
+        "-p",
+        "prompt",
+        "--output-format",
+        "json",
+        "--settings",
+        str(settings_path),
+        "--model",
+        "claude-test",
+    )
     assert result.metadata["provider_metadata"]["policy"]["capability_report_file"].endswith("capability_report.json")
 
 

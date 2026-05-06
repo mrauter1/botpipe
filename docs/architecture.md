@@ -143,6 +143,28 @@ provider:
   model_effort: high
   claude:
     permission_strategy: inherit
+provider_policy:
+  default:
+    permissions:
+      mode: full_auto_sandboxed
+      disable_dangerous_bypass: true
+    sandbox:
+      enabled: true
+      required: true
+      mode: workspace_write
+      workspace:
+        filesystem:
+          allow_read: ["."]
+          allow_write: [".", "./build", "./dist"]
+          deny_read: ["./.env", "./secrets/**"]
+          deny_write: ["/etc", "/usr/local/bin"]
+        network:
+          enabled: true
+          mode: full
+  strict:
+    sandbox:
+      required: true
+      allowed_modes: ["read_only", "workspace_write"]
 runtime:
   max_steps: 100
 ```
@@ -152,6 +174,7 @@ Contract:
 - `provider.name` selects the built-in backend, currently `codex` or `claude`
 - `provider.model` and `provider.model_effort` are generic typed overrides that target the selected provider
 - provider-specific blocks such as `provider.codex.*` and `provider.claude.*` remain typed config, not ad-hoc loader strings
+- `provider_policy.default` merges on top of the runtime-owned system policy baseline; `provider_policy.strict` validates the fully resolved per-turn policy
 - CLI overrides use `--provider`, `--model`, and `--model-effort`
 - provider construction is framework-owned and resolved from the typed provider name
 

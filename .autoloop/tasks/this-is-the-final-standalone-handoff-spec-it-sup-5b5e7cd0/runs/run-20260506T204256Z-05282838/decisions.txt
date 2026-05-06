@@ -6,3 +6,4 @@ Structured-output delivery mode must be observable in backend metadata or reques
 <autoloop-decisions-header version="1" block_seq="2" owner="planner" phase_id="task-global" pair="plan" turn_seq="2" run_id="run-20260506T204256Z-05282838" ts="2026-05-06T20:47:57.006022+00:00" />
 Helper-route compatibility under missing jsonschema must be covered explicitly: helper-generated default question/blocked/failed route-fields contracts stay allowed only when the handwritten engine validation is semantically equivalent, while custom helper overrides still fail closed.
 Unsupported-backend structured-output fallback must be a required documented behavior in docs/authoring.md and controlroutes.md, not just an implicit test or metadata convention.
+<autoloop-decisions-header version="1" block_seq="3" owner="implementer" phase_id="route-contract-enforcement" pair="implement" turn_seq="1" run_id="run-20260506T204256Z-05282838" ts="2026-05-06T20:50:32.367715+00:00" />

@@ -324,7 +324,7 @@ class ClaudePolicyEmitter:
             payload["env"] = dict(policy.env.set)
 
         effective = EffectiveEnforcementReport(
-            sandbox_mode=policy.sandbox.mode if policy.sandbox.enabled else "danger_full_access",
+            sandbox_mode=policy.sandbox.mode if policy.sandbox.enabled else None,
             write_roots=tuple(filesystem.allow_write) if native_filesystem and policy.sandbox.mode != "read_only" else (),
             read_roots=tuple(filesystem.allow_read) if native_filesystem else (),
             deny_read_enforced=True if native_filesystem and filesystem.deny_read else (False if filesystem.deny_read else None),

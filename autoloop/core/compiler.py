@@ -991,6 +991,7 @@ def _compile_route(
     route_fields_schema, route_fields_validator = _compile_route_contract(
         route.route_fields_schema,
         owner=f"route {tag!r} from {source_step!r} route_fields_schema",
+        allow_missing_jsonschema_fallback=route._handwritten_route_fields_validation_equivalent,
     )
     provider_visibility = _effective_provider_visibility(
         step,
@@ -1081,6 +1082,7 @@ def _compile_route_contract(
     spec: Any | None,
     *,
     owner: str,
+    allow_missing_jsonschema_fallback: bool = False,
 ) -> tuple[dict[str, Any] | None, PayloadValidator | None]:
     if spec is None:
         return None, None
@@ -1089,7 +1091,7 @@ def _compile_route_contract(
         try:
             return compile_expected_output_contract(schema)
         except WorkflowValidationError as exc:
-            if "optional jsonschema dependency" in str(exc):
+            if allow_missing_jsonschema_fallback and "optional jsonschema dependency" in str(exc):
                 return schema, None
             raise WorkflowCompilationError(f"{owner} is invalid: {exc}") from exc
     try:

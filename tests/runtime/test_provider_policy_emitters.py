@@ -19,6 +19,7 @@ from autoloop.core.provider_policy import (
     WorkspacePolicy,
     merge_provider_policies,
 )
+from autoloop.runtime.providers.claude_policy import ClaudeCapabilities, ClaudePolicyEmitter
 from autoloop.runtime.providers.codex_policy import CodexPolicyEmitter
 
 
@@ -29,6 +30,23 @@ def _emit(
     validation: ProviderPolicyValidationConfig | None = None,
 ):
     emitter = CodexPolicyEmitter()
+    return emitter.emit(
+        policy,
+        run_dir=tmp_path,
+        step_key="implement__visit-1",
+        validation=validation or ProviderPolicyValidationConfig(),
+        step_name="implement",
+    )
+
+
+def _emit_claude(
+    tmp_path: Path,
+    policy: ProviderPolicy,
+    *,
+    validation: ProviderPolicyValidationConfig | None = None,
+    capabilities: ClaudeCapabilities | None = None,
+):
+    emitter = ClaudePolicyEmitter(capabilities=capabilities)
     return emitter.emit(
         policy,
         run_dir=tmp_path,
@@ -201,3 +219,132 @@ def test_codex_emitter_uses_warn_mode_for_lossy_read_only_allow_write(tmp_path: 
     assert emission.capability_report.lossy == (
         "sandbox.mode='read_only' ignores filesystem.allow_write in Codex",
     )
+
+
+def test_claude_emitter_maps_allow_write_and_disable_bypass(tmp_path: Path) -> None:
+    policy = merge_provider_policies(
+        SYSTEM_DEFAULT_PROVIDER_POLICY,
+        ProviderPolicyOverride(
+            model={"default": "claude-sonnet-4-6"},
+            sandbox=SandboxPolicy(
+                workspace=WorkspacePolicy(
+                    filesystem=WorkspaceFilesystemPolicy(allow_write=(".", "./build", "./dist")),
+                )
+            ),
+        ),
+    )
+
+    emission = _emit_claude(tmp_path, policy)
+    settings_path = emission.config_files["settings"]
+    settings = json.loads(settings_path.read_text(encoding="utf-8"))
+
+    assert settings_path == tmp_path / "provider_policy" / "implement__visit-1" / "claude" / "settings.json"
+    assert settings["model"] == "claude-sonnet-4-6"
+    assert settings["permissions"]["defaultMode"] == "auto"
+    assert settings["permissions"]["disableBypassPermissionsMode"] == "disable"
+    assert settings["sandbox"]["filesystem"]["allowWrite"] == [".", "./build", "./dist"]
+    assert settings["sandbox"]["enabled"] is True
+    assert emission.cli_args == ("--settings", str(settings_path))
+
+
+def test_claude_emitter_maps_deny_read_and_deny_write_to_sandbox_and_permission_rules(tmp_path: Path) -> None:
+    policy = merge_provider_policies(
+        SYSTEM_DEFAULT_PROVIDER_POLICY,
+        ProviderPolicyOverride(
+            sandbox=SandboxPolicy(
+                workspace=WorkspacePolicy(
+                    filesystem=WorkspaceFilesystemPolicy(
+                        deny_read=("./.env",),
+                        deny_write=("/etc",),
+                    ),
+                )
+            )
+        ),
+    )
+
+    emission = _emit_claude(tmp_path, policy)
+    settings = json.loads(emission.config_files["settings"].read_text(encoding="utf-8"))
+
+    assert settings["sandbox"]["filesystem"]["denyRead"] == ["./.env"]
+    assert settings["sandbox"]["filesystem"]["denyWrite"] == ["/etc"]
+    assert "Read(./.env)" in settings["permissions"]["deny"]
+    assert "Edit(//etc)" in settings["permissions"]["deny"]
+
+
+def test_claude_emitter_maps_network_domains(tmp_path: Path) -> None:
+    policy = merge_provider_policies(
+        SYSTEM_DEFAULT_PROVIDER_POLICY,
+        ProviderPolicyOverride(
+            sandbox=SandboxPolicy(
+                workspace=WorkspacePolicy(
+                    network=WorkspaceNetworkPolicy(
+                        mode="limited",
+                        allow_domains=("github.com", "*.npmjs.org"),
+                        deny_domains=("example.com",),
+                    ),
+                )
+            )
+        ),
+    )
+
+    emission = _emit_claude(tmp_path, policy)
+    settings = json.loads(emission.config_files["settings"].read_text(encoding="utf-8"))
+
+    assert settings["sandbox"]["network"]["allowedDomains"] == ["github.com", "*.npmjs.org"]
+    assert settings["sandbox"]["network"]["deniedDomains"] == ["example.com"]
+    assert "WebFetch(domain:github.com)" in settings["permissions"]["allow"]
+    assert "WebFetch(domain:example.com)" in settings["permissions"]["deny"]
+
+
+def test_claude_emitter_marks_filesystem_capability_lossy_when_native_support_is_missing(tmp_path: Path) -> None:
+    policy = merge_provider_policies(
+        SYSTEM_DEFAULT_PROVIDER_POLICY,
+        ProviderPolicyOverride(
+            sandbox=SandboxPolicy(
+                workspace=WorkspacePolicy(
+                    filesystem=WorkspaceFilesystemPolicy(
+                        allow_write=(".", "./dist"),
+                        deny_read=("./.env",),
+                    ),
+                )
+            )
+        ),
+    )
+
+    emission = _emit_claude(
+        tmp_path,
+        policy,
+        validation=ProviderPolicyValidationConfig(lossy_mapping="warn"),
+        capabilities=ClaudeCapabilities(supports_sandbox_filesystem=False),
+    )
+    settings = json.loads(emission.config_files["settings"].read_text(encoding="utf-8"))
+
+    assert emission.capability_report.decision == "warn"
+    assert emission.capability_report.lossy == (
+        "sandbox.filesystem native enforcement unavailable; emitted Read/Edit permission rules only",
+    )
+    assert settings["permissions"]["allow"].count("Edit(./dist)") == 1
+    assert settings["permissions"]["deny"].count("Read(./.env)") == 1
+    assert emission.capability_report.effective_enforcement.write_roots == ()
+    assert "filesystem" not in settings.get("sandbox", {})
+
+
+def test_claude_emitter_raises_when_lossy_mapping_is_fail(tmp_path: Path) -> None:
+    policy = merge_provider_policies(
+        SYSTEM_DEFAULT_PROVIDER_POLICY,
+        ProviderPolicyOverride(
+            sandbox=SandboxPolicy(
+                workspace=WorkspacePolicy(
+                    filesystem=WorkspaceFilesystemPolicy(allow_write=(".", "./dist")),
+                )
+            )
+        ),
+    )
+
+    with pytest.raises(ProviderExecutionError, match="provider policy capability validation failed"):
+        _emit_claude(
+            tmp_path,
+            policy,
+            validation=ProviderPolicyValidationConfig(lossy_mapping="fail"),
+            capabilities=ClaudeCapabilities(supports_sandbox_filesystem=False),
+        )

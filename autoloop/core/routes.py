@@ -95,6 +95,7 @@ class Route:
     preset_kind: RoutePresetKind = "custom"
     is_disabled: bool = False
     payload_schema_mode: Literal["inherit", "none", "explicit"] = field(init=False, default="inherit")
+    _handwritten_route_fields_validation_equivalent: bool = field(default=False, repr=False)
 
     def __post_init__(self) -> None:
         object.__setattr__(self, "summary", _normalize_optional_text(self.summary, field_name="summary"))
@@ -386,6 +387,7 @@ class Route:
             payload_schema=payload_schema,
             route_fields_schema=_route_question_fields_schema() if route_fields_schema is None else route_fields_schema,
             preset_kind="question",
+            _handwritten_route_fields_validation_equivalent=route_fields_schema is None,
         )
 
     @staticmethod
@@ -410,6 +412,7 @@ class Route:
             payload_schema=payload_schema,
             route_fields_schema=_route_reason_fields_schema() if route_fields_schema is None else route_fields_schema,
             preset_kind="blocked",
+            _handwritten_route_fields_validation_equivalent=route_fields_schema is None,
         )
 
     @staticmethod
@@ -434,6 +437,7 @@ class Route:
             payload_schema=payload_schema,
             route_fields_schema=_route_reason_fields_schema() if route_fields_schema is None else route_fields_schema,
             preset_kind="failed",
+            _handwritten_route_fields_validation_equivalent=route_fields_schema is None,
         )
 
     @staticmethod
