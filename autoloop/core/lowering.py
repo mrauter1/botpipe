@@ -142,7 +142,16 @@ def normalize_step_route_metadata(
                 inventory=inventory,
             )
         )
-        summary = route.summary or step_metadata.summary or _fallback_route_summary(step.name, route_name, route.target)
+        summary_source = (
+            definition.global_route_sentinel
+            if resolved.inheritance_source == "global"
+            else step.name
+        )
+        summary = route.summary or step_metadata.summary or _fallback_route_summary(
+            summary_source,
+            route_name,
+            route.target,
+        )
         handoff = route.handoff or step_metadata.handoff
         normalized_routes[route_name] = replace(
             route,

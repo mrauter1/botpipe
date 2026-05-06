@@ -227,3 +227,47 @@ Validation passed with `.venv/bin/python -m pytest -q tests/unit/test_provider_p
 Open issues / next step
 
 This phase is complete at the core-domain level. The next step is phase 2: wire `provider_policy` into runtime config resolution so the explicit system-default layer, legacy field mapping, and strict unknown-key validation all flow through the existing config merge path.
+
+
+---
+run_id=run-20260506T190853Z-f707cb4f | entry=session_turn | pair=implement | phase=verifier | cycle=1 | attempt=1 | thread_id=019dfeb8-62d9-7162-bd36-563fb3056ac9
+---
+provider=codex
+mode=resume
+template=/home/rauter/.local/share/pipx/venvs/autoloop/lib/python3.12/site-packages/autoloop/templates/implement_verifier.md
+session_id=019dfeb8-62d9-7162-bd36-563fb3056ac9
+
+
+---
+run_id=run-20260506T190853Z-f707cb4f | entry=phase_output | pair=implement | phase=verifier | process=codex-agent | cycle=1 | attempt=1 | thread_id=019dfeb8-62d9-7162-bd36-563fb3056ac9
+---
+I’m reviewing only the `policy-core` phase artifacts and the request-relevant implementation surface: the core policy module, its unit file, and the phase notes/criteria. I’ll verify intent fidelity first, then update the criteria and feedback with concrete findings only if they materially affect this phase’s acceptance criteria.
+
+I’ve identified two likely correctness gaps in the core API and I’m verifying them directly in the interpreter before I write findings: one around unvalidated convenience-method updates, and one around the requested `limited` network-mode constraint.
+
+I’ve confirmed the review is not clean. The remaining issues are both in-scope and blocking: one lets the convenience API manufacture invalid policy objects, and the other leaves an explicitly requested network-policy invariant unenforced. I’m recording both in the verifier artifacts now.
+
+Scope considered
+
+Phase-local `policy-core` review only: [autoloop/core/provider_policy.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/autoloop/core/provider_policy.py), [tests/unit/test_provider_policy.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/tests/unit/test_provider_policy.py), the implementation notes, the criteria artifact, and the run-local decisions ledger.
+
+What I analyzed
+
+I checked the phase contract against the core policy module’s actual behavior, verified the recorded decisions, and spot-checked the suspicious code paths directly in the interpreter. I specifically tested the public convenience API and the requested `WorkspaceNetworkPolicy(mode="limited")` constraint because both affect phase-level correctness rather than just later runtime integration.
+
+What I reviewed
+
+I updated [criteria.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/implementation-goal-add-a-first-class-provider-p-5e755cae/runs/run-20260506T190853Z-f707cb4f/artifacts/implement/phases/policy-core/criteria.md) to keep all boxes unchecked for this pass, and appended two blocking findings to [feedback.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/implementation-goal-add-a-first-class-provider-p-5e755cae/runs/run-20260506T190853Z-f707cb4f/artifacts/implement/phases/policy-core/feedback.md):
+`IMP-001` on unvalidated `with_model_effort()` output and `IMP-002` on the unenforced empty-`limited` network mode.
+
+Key findings / decisions
+
+`IMP-001` is blocking because `ProviderPolicy.with_model_effort()` uses `model_copy(update=...)` and can manufacture invalid policy objects such as `model.effort='bogus'` without any validation failure. `IMP-002` is blocking because the request explicitly requires limited network mode to have at least one allowed domain, but both model construction and strict validation currently accept `mode='limited'` with `allow_domains=()`.
+
+Open issues / next step
+
+The implementation is not review-complete for this phase. The next step is to revalidate public convenience helpers through the core model constructors and to enforce the empty-`limited` network-mode rule in one central validation seam, then add focused unit coverage for both cases.
+
+<loop-control>
+{"schema":"docloop.loop_control/v1","kind":"promise","promise":"INCOMPLETE"}
+</loop-control>

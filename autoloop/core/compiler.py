@@ -31,8 +31,6 @@ from .lowering import (
     normalize_step_route_metadata,
     resolve_step_routes,
     step_authored_route_tags,
-    step_available_route_tags,
-    step_runtime_control_route_tags,
 )
 from .primitives import AWAIT_INPUT, FAIL, FINISH, GLOBAL, SELF
 from .prompts import PromptSpec
@@ -211,7 +209,7 @@ def compile_workflow(workflow_cls: type[Any]) -> CompiledWorkflow:
         if definition.default_session_name in definition.sessions_by_name
         else False,
         worklists=dict(definition.worklists_by_name),
-        steps=_compile_steps(definition, inventory, compiled_routes, compiled_global_routes),
+        steps=_compile_steps(definition, inventory, compiled_routes),
         routes=compiled_routes,
         global_routes=compiled_global_routes,
         artifacts=_compile_public_artifacts(inventory),
@@ -230,25 +228,24 @@ def _compile_steps(
     definition: WorkflowDefinition,
     inventory: dict[str, ArtifactInventoryRecord],
     compiled_routes: dict[str, dict[str, CompiledRoute]],
-    compiled_global_routes: dict[str, CompiledRoute],
 ) -> dict[str, CompiledStep]:
     compiled_steps: dict[str, CompiledStep] = {}
     for step in definition.steps:
-        available_routes = step_available_route_tags(definition, step)
+        route_table = compiled_routes.get(step.name, {})
+        available_routes = _compiled_available_route_tags(step, route_table)
         authored_routes = step_authored_route_tags(definition, step)
-        runtime_control_routes = step_runtime_control_route_tags(definition, step)
-        provider_visible_routes_interactive = _provider_visible_route_tags(
-            step,
+        runtime_control_routes = _compiled_runtime_control_route_tags(
             available_routes,
-            compiled_routes=compiled_routes,
-            compiled_global_routes=compiled_global_routes,
+            route_table=route_table,
+        )
+        provider_visible_routes_interactive = _provider_visible_route_tags(
+            available_routes,
+            route_table=route_table,
             policy="interactive",
         )
         provider_visible_routes_full_auto = _provider_visible_route_tags(
-            step,
             available_routes,
-            compiled_routes=compiled_routes,
-            compiled_global_routes=compiled_global_routes,
+            route_table=route_table,
             policy="full_auto",
         )
         expected_output_schema, expected_output_validator = _compile_expected_output_contract(step)
@@ -565,21 +562,44 @@ def _compile_steps(
 
 
 def _provider_visible_route_tags(
-    step: Step,
     available_routes: tuple[str, ...],
     *,
-    compiled_routes: dict[str, dict[str, CompiledRoute]],
-    compiled_global_routes: dict[str, CompiledRoute],
+    route_table: Mapping[str, CompiledRoute],
     policy: str,
 ) -> tuple[str, ...]:
     visible: list[str] = []
     for route_tag in available_routes:
-        route = compiled_routes.get(step.name, {}).get(route_tag) or compiled_global_routes.get(route_tag)
+        route = route_table.get(route_tag)
         if route is None:
             continue
         if _compiled_route_visible_for_policy(route, policy=policy):
             visible.append(route_tag)
     return tuple(visible)
+
+
+def _compiled_available_route_tags(
+    step: Step,
+    route_table: Mapping[str, CompiledRoute],
+) -> tuple[str, ...]:
+    resolved = tuple(tag for tag, route in route_table.items() if not route.disabled)
+    composite_tags = getattr(step, "composite_route_tags", None)
+    if composite_tags:
+        composite_order = [tag for tag in composite_tags if tag in resolved]
+        extras = [tag for tag in resolved if tag not in composite_tags]
+        return tuple((*composite_order, *extras))
+    return resolved
+
+
+def _compiled_runtime_control_route_tags(
+    available_routes: tuple[str, ...],
+    *,
+    route_table: Mapping[str, CompiledRoute],
+) -> tuple[str, ...]:
+    return tuple(
+        route_tag
+        for route_tag in available_routes
+        if route_table.get(route_tag) is not None and route_table[route_tag].is_runtime_control
+    )
 
 
 def _compiled_route_visible_for_policy(route: CompiledRoute, *, policy: str) -> bool:
@@ -659,12 +679,10 @@ def _compile_branch_group_internal_step(
         runtime_control_routes_by_step={step.name: _internal_step_runtime_control_routes(step)},
     )
     compiled_routes = _compile_routes(internal_definition)
-    compiled_global_routes = _compile_global_routes(internal_definition)
     compiled_step = _compile_steps(
         internal_definition,
         inventory,
         compiled_routes,
-        compiled_global_routes,
     )[step.name]
     return replace(compiled_step, route_table=dict(compiled_routes.get(step.name, {})))
 
@@ -898,12 +916,10 @@ def _compile_routes(definition: WorkflowDefinition) -> dict[str, dict[str, Compi
     for step in definition.steps:
         compiled_step_routes: dict[str, CompiledRoute] = {}
         for resolved in resolve_step_routes(definition, step):
-            if resolved.inheritance_source == "global":
-                continue
             normalized_route = route_metadata[step.name].get(resolved.tag, resolved.route)
             compiled_step_routes[resolved.tag] = _compile_route(
                 step,
-                step.name,
+                GLOBAL if resolved.inheritance_source == "global" else step.name,
                 resolved.tag,
                 normalized_route,
                 inheritance_source=resolved.inheritance_source,
