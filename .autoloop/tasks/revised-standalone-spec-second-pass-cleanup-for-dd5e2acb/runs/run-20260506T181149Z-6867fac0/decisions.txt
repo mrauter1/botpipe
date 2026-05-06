@@ -9,3 +9,5 @@ The canonical phase contract must gate completion on unchanged public non-parall
 BranchSessionStoreView now snapshots and resolves branch-local bindings only; parent active-session fallback is intentionally removed from get/open/snapshot to prevent branch manifest/provider-session leaks.
 BranchGroupRuntime now treats compiled scoped branches as an internal assertion failure and removes branch item-state/step-item-state initialization instead of keeping partial scoped/worklist runtime support.
 Provider-turn strictness for this pass is enforced against runtime transport run_turn bodies only so explicit CLI help probing via subprocess.run remains allowed outside provider turn execution.
+<autoloop-decisions-header version="1" block_seq="4" owner="implementer" phase_id="async-branch-group-cleanup" pair="implement" turn_seq="2" run_id="run-20260506T181149Z-6867fac0" ts="2026-05-06T18:30:17.674038+00:00" />
+Provider-turn strictness scanning now resolves forbidden primitives through a shared label helper across Call, Attribute, and Name nodes so direct-import executor forms are rejected the same way as attribute-based forms inside run_turn.

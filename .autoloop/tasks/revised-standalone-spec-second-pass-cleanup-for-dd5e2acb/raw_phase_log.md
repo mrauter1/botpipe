@@ -316,3 +316,57 @@ Open issues / next step
 
 - `PYTHONPATH=/tmp/autoloop-test-deps:$PYTHONPATH python3 -m pytest -q tests/strictness/test_no_compat.py` passed (`36 passed`).
 - The producer-side follow-up is complete; the next step is verifier re-review so `criteria.md` and `feedback.md` can be updated from the reviewer side.
+
+
+---
+run_id=run-20260506T181149Z-6867fac0 | entry=session_turn | pair=implement | phase=verifier | cycle=2 | attempt=1 | thread_id=019dfe82-f64a-7772-81d0-a10f25fab893
+---
+provider=codex
+mode=resume
+template=/home/rauter/.local/share/pipx/venvs/autoloop/lib/python3.12/site-packages/autoloop/templates/implement_verifier.md
+session_id=019dfe82-f64a-7772-81d0-a10f25fab893
+
+
+---
+run_id=run-20260506T181149Z-6867fac0 | entry=phase_output | pair=implement | phase=verifier | process=codex-agent | cycle=2 | attempt=1 | thread_id=019dfe82-f64a-7772-81d0-a10f25fab893
+---
+I’m verifying the follow-up directly on the updated scanner and rerunning the strictness suite, then I’ll close the reviewer artifacts if the direct-import cases are actually covered now.
+
+Reviewing the producer follow-up now. I’m rerunning the strictness check and then I’ll update the verifier artifacts based on whether the blocking finding is actually resolved.
+
+The strictness suite passed, including the direct-import probe path that was missing before. I’m checking the current verifier artifacts so I can close out the review cleanly and preserve the finding history.
+
+I’ve confirmed the artifact state and the old blocking note. I’m doing one last pass over the scanner diff itself so the closeout reflects the actual fix rather than just the test result.
+
+The scanner change is correctly localized and the direct-import cases are now covered in both code and tests. I’m updating the review artifacts to reflect that the blocking issue is resolved and the phase can close.
+
+Scope considered
+
+- Phase-local re-review of the producer follow-up for `IMP-001`, limited to the strictness scanner change, the added probe tests, the active implementation notes, and the verifier-owned artifacts.
+- I did not reopen unrelated runtime/session areas because the only outstanding blocker from cycle 1 was the direct-import strictness gap.
+
+What I analyzed
+
+- `tests/strictness/test_no_compat.py::_runtime_provider_turn_execution_failures`
+- The new primitive-label helper path that now covers `Call`, `Attribute`, and `Name` nodes.
+- The direct-import probe cases for `ThreadPoolExecutor`, `Future`, and `FIRST_COMPLETED`.
+
+What I reviewed
+
+- The prior blocking scenario is fixed: a direct-import `ThreadPoolExecutor()` use inside `run_turn` now reports `ThreadPoolExecutor: autoloop/runtime/providers/codex.py` instead of returning no failures.
+- The targeted strictness suite passed on re-review with `PYTHONPATH=/tmp/autoloop-test-deps:$PYTHONPATH python3 -m pytest -q tests/strictness/test_no_compat.py` and produced `36 passed in 3.51s`.
+- I updated [criteria.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/revised-standalone-spec-second-pass-cleanup-for-dd5e2acb/runs/run-20260506T181149Z-6867fac0/artifacts/implement/phases/async-branch-group-cleanup/criteria.md) to fully checked and appended the resolution follow-up to [feedback.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/revised-standalone-spec-second-pass-cleanup-for-dd5e2acb/runs/run-20260506T181149Z-6867fac0/artifacts/implement/phases/async-branch-group-cleanup/feedback.md).
+
+Key findings / decisions
+
+- No remaining blocking findings in this review cycle.
+- The producer’s fix is appropriately centralized: the same forbidden primitive mapping now covers all relevant AST resolution forms, which removes the gap without adding new indirection elsewhere.
+
+Open issues / next step
+
+- Review is complete for this phase scope.
+- No further verifier action is needed unless a later phase reopens branch-group strictness behavior.
+
+<loop-control>
+{"schema":"docloop.loop_control/v1","kind":"promise","promise":"COMPLETE"}
+</loop-control>
