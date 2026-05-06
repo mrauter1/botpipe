@@ -448,3 +448,52 @@ I updated the phase artifacts in [implementation_notes.md](/home/rauter/autoloop
 
 **Open issues / next step**
 `python3 -m py_compile` passed for the touched source and test files. Full test execution was not possible here because `pytest` is not installed, and runtime smoke execution was blocked because `pydantic` is not installed in this environment. The next step is to run the provider-focused pytest set in a fully provisioned environment and then continue with the later transport/session/branch-group phases.
+
+
+---
+run_id=run-20260506T130608Z-37f1c786 | entry=session_turn | pair=implement | phase=verifier | cycle=1 | attempt=1 | thread_id=019dfd7a-d4d6-7373-93d8-1421e8ce9184
+---
+provider=codex
+mode=resume
+template=/home/rauter/.local/share/pipx/venvs/autoloop/lib/python3.12/site-packages/autoloop/templates/implement_verifier.md
+session_id=019dfd7a-d4d6-7373-93d8-1421e8ce9184
+
+
+---
+run_id=run-20260506T130608Z-37f1c786 | entry=phase_output | pair=implement | phase=verifier | process=codex-agent | cycle=1 | attempt=1 | thread_id=019dfd7a-d4d6-7373-93d8-1421e8ce9184
+---
+I’m auditing the provider-contract cutover against the phase contract now. First I’m reading the current review artifacts and the touched provider/runtime code so I can update criteria accurately and decide whether there are any blocking regressions or spec mismatches.
+
+I’ve narrowed the review to the remaining risk surfaces: constructor-time validation behavior, the operation-helper compatibility path, and whether the async-only cutover still preserves the public sequential helper behavior for non-built-in rendered providers. I’m reading those exact call paths and the operation-related contract tests now.
+
+I’ve got one clear compatibility break and one clear spec conflict. I’m pulling exact symbol references now and then I’ll update the criteria/feedback artifacts with blocking findings rather than soft comments so the next implement turn has an unambiguous fix target.
+
+I’ve finished the audit. The review result is not a soft “needs more tests”; there are two blocking contract regressions, so I’m recording them directly in the phase feedback and leaving the criteria unchecked pending a fix turn.
+
+Scope considered
+
+Phase-local provider-contract-cutover only: provider/transport contracts, rendered/fake providers, engine/dispatcher/branch-runtime validation paths, the built-in Codex/Claude transports, the operation-helper compatibility path, the run-local decisions ledger, and the active review artifacts.
+
+What I analyzed
+
+I read the active criteria, feedback, implementation notes, and decisions artifacts, then audited the changed call paths in `autoloop/core/providers/protocols.py`, `rendered.py`, `operations.py`, `engine.py`, `engine_collaborators.py`, `branch_groups/runtime.py`, and the built-in transports in `autoloop/runtime/providers/codex.py` and `claude.py`. I also checked the rendered-operation helper scenario in `tests/contract/test_engine_contracts.py` because that is the public compatibility surface the phase explicitly preserved.
+
+What I reviewed
+
+I updated [criteria.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/full-revised-standalone-spec-autoloop-v3-async-n-3c402473/runs/run-20260506T130608Z-37f1c786/artifacts/implement/phases/provider-contract-cutover/criteria.md) and appended two blocking findings to [feedback.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/full-revised-standalone-spec-autoloop-v3-async-n-3c402473/runs/run-20260506T130608Z-37f1c786/artifacts/implement/phases/provider-contract-cutover/feedback.md).
+
+Key findings / decisions
+
+Two blocking issues remain.
+
+`IMP-001`: `RenderedLLMProvider.run_operation(...)` now preserves `llm()` / `classify()` only for transports with an undocumented sync `run_operation_turn(...)` hook. Async-only custom transports that satisfy the new public `ProviderTransport` contract will still fail inside the active event loop.
+
+`IMP-002`: the new built-in `run_operation_turn(...)` helpers in the Codex and Claude transports reintroduce sync `subprocess.run(...)` transport execution, which conflicts with the async-native transport requirements in the request.
+
+Open issues / next step
+
+This phase should return to implement. The next change needs to make the operation-helper compatibility boundary explicit and centralized, without depending on undocumented transport duck-typing and without reviving sync transport execution in the built-in backends.
+
+<loop-control>
+{"schema":"docloop.loop_control/v1","kind":"promise","promise":"INCOMPLETE"}
+</loop-control>
