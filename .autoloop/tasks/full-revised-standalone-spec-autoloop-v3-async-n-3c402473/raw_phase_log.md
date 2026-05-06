@@ -1655,3 +1655,60 @@ No phase-local test blockers remain. The scoped coverage map and validation resu
 <loop-control>
 {"schema":"docloop.loop_control/v1","kind":"promise","promise":"COMPLETE"}
 </loop-control>
+
+
+---
+run_id=run-20260506T130608Z-37f1c786 | entry=session_turn | pair=test | phase=verifier | cycle=1 | attempt=1 | thread_id=019dfda5-e0f5-7281-9112-ce1ad235f7e2
+---
+provider=codex
+mode=resume
+template=/home/rauter/.local/share/pipx/venvs/autoloop/lib/python3.12/site-packages/autoloop/templates/test_verifier.md
+session_id=019dfda5-e0f5-7281-9112-ce1ad235f7e2
+
+
+---
+run_id=run-20260506T130608Z-37f1c786 | entry=phase_output | pair=test | phase=verifier | process=codex-agent | cycle=1 | attempt=1 | thread_id=019dfda5-e0f5-7281-9112-ce1ad235f7e2
+---
+I’m auditing the scoped test diff first, then I’ll rerun the focused slices the test turn claims so the criteria and feedback reflect actual regression protection rather than just the strategy note.
+
+The added test is narrowly scoped and deterministic. I’m rerunning the focused slices now to confirm the new exact-root guard doesn’t mask broader validation behavior or introduce flake risk.
+
+The scoped tests passed as claimed, and the new case closes the only obvious placeholder-root gap. I’m marking the audit artifacts complete with an explicit no-blockers note so the feedback file has a stable review record.
+
+Scope considered
+
+Phase-local `compiler-surface-and-graph-alignment` test scope only: the added `tests/unit/test_simple_surface.py` regression case, the active `test_strategy.md` and `feedback.md` artifacts, and the existing focused branch-group artifact-rooting and static-graph coverage. I excluded unrelated runtime and provider surfaces.
+
+What I analyzed
+
+I checked the scoped test diff against the phase contract and the decision ledger. The main question was whether the new test meaningfully closes a regression gap or just duplicates existing coverage. Existing tests already covered exact-root matching for `branch.*`; the new `fan_inish.*` case is the matching regression guard for `fan_in.*`.
+
+What I reviewed
+
+I reran the focused slices the test turn cited:
+- `./.venv/bin/python -m pytest -q tests/unit/test_simple_surface.py -k 'branch_group or FanIn or branch_placeholder or fan_in_placeholder or compile_cache'`
+- `./.venv/bin/python -m pytest -q tests/unit/test_primitives_and_stores.py -k 'branch_placeholders_under_owner_step_root or fan_in_placeholders_under_owner_step_root'`
+- `./.venv/bin/python -m pytest -q tests/runtime/test_runtime_static_graph.py -k 'branch_group or topology_hash'`
+
+Observed results:
+- `19 passed, 62 deselected`
+- `2 passed, 46 deselected`
+- `4 passed, 13 deselected`
+
+I updated:
+- [criteria.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/full-revised-standalone-spec-autoloop-v3-async-n-3c402473/runs/run-20260506T130608Z-37f1c786/artifacts/test/phases/compiler-surface-and-graph-alignment/criteria.md)
+- [feedback.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/full-revised-standalone-spec-autoloop-v3-async-n-3c402473/runs/run-20260506T130608Z-37f1c786/artifacts/test/phases/compiler-surface-and-graph-alignment/feedback.md)
+
+Key findings / decisions
+
+No blocking audit findings.
+
+The added test is appropriately scoped, deterministic, and materially improves regression protection for the exact-root placeholder rule by covering the `fan_in` side of the contract. The strategy artifact also matches the actual validation run and does not normalize any unconfirmed behavior break.
+
+Open issues / next step
+
+No phase-local test blockers remain. The audit artifacts now record an explicit no-blockers closeout.
+
+<loop-control>
+{"schema":"docloop.loop_control/v1","kind":"promise","promise":"COMPLETE"}
+</loop-control>
