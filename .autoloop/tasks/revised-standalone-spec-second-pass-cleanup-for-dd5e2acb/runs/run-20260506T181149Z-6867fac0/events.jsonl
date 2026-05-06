@@ -26,3 +26,6 @@
 {"ts": "2026-05-06T18:36:32.723949+00:00", "run_id": "run-20260506T181149Z-6867fac0", "seq": 26, "event_type": "phase_completed", "pair": "test", "phase_id": "async-branch-group-cleanup", "phase_mode": "single"}
 {"ts": "2026-05-06T18:36:32.726543+00:00", "run_id": "run-20260506T181149Z-6867fac0", "seq": 27, "event_type": "pair_started", "pair": "audit", "phase_id": null}
 {"ts": "2026-05-06T18:36:32.726749+00:00", "run_id": "run-20260506T181149Z-6867fac0", "seq": 28, "event_type": "cycle_started", "pair": "audit", "cycle": 1, "attempt": 1, "phase_id": null}
+{"ts": "2026-05-06T18:39:25.277038+00:00", "run_id": "run-20260506T181149Z-6867fac0", "seq": 29, "event_type": "phase_finished", "pair": "audit", "phase": "producer", "cycle": 1, "attempt": 1, "empty_output": false, "phase_id": null}
+{"ts": "2026-05-06T18:40:39.727881+00:00", "run_id": "run-20260506T181149Z-6867fac0", "seq": 30, "event_type": "phase_finished", "pair": "audit", "phase": "verifier", "cycle": 1, "attempt": 1, "empty_output": false, "phase_id": null}
+{"ts": "2026-05-06T18:40:39.775986+00:00", "run_id": "run-20260506T181149Z-6867fac0", "seq": 31, "event_type": "pair_completed", "pair": "audit", "cycle": 1, "attempt": 1, "phase_id": null}
