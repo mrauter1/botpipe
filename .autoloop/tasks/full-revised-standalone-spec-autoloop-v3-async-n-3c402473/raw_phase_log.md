@@ -552,3 +552,64 @@ The built-in transport protocol surface is back to async-only. Sync operation co
 Open issues / next step
 
 `python3 -m py_compile` passed for the touched runtime/provider files after the fix. I did not run pytest because `pytest` is not installed in this environment. The next step is to rerun the phase review so the updated explicit operation boundary can be checked against `IMP-001` and `IMP-002`.
+
+
+---
+run_id=run-20260506T130608Z-37f1c786 | entry=session_turn | pair=implement | phase=verifier | cycle=2 | attempt=1 | thread_id=019dfd7a-d4d6-7373-93d8-1421e8ce9184
+---
+provider=codex
+mode=resume
+template=/home/rauter/.local/share/pipx/venvs/autoloop/lib/python3.12/site-packages/autoloop/templates/implement_verifier.md
+session_id=019dfd7a-d4d6-7373-93d8-1421e8ce9184
+
+
+---
+run_id=run-20260506T130608Z-37f1c786 | entry=phase_output | pair=implement | phase=verifier | process=codex-agent | cycle=2 | attempt=1 | thread_id=019dfd7a-d4d6-7373-93d8-1421e8ce9184
+---
+I’m reviewing the follow-up changes against the prior blocking findings now. I’m checking whether the rendered-provider operation boundary is now explicit and whether the async transport contract is clean again before I touch the criteria or feedback artifacts.
+
+I’m re-checking the two blocking findings against the updated provider/transport path, then I’ll update the phase review artifacts to either clear or restate them precisely.
+
+The operation compatibility boundary moved, but I still need to verify whether it stays inside the phase contract and whether any regression remains for the exported helper surface.
+
+I found one likely remaining regression surface: the helper compatibility path is explicit now, but I need to confirm whether it still revives sync provider subprocess execution under a different layer.
+
+The core provider contract is clean. The remaining question is whether the compatibility-only operation path is still an unacceptable sync execution path under the spec, even though it sits outside the transport protocol now.
+
+I found a second area to check: backend resolution now requires an operation-executor builder as part of the built-in provider factory, so I’m checking whether the test and construction assumptions were updated consistently.
+
+The provider-backend test suite still has at least one stale assumption around backend builder patching. I’m checking whether that is just test fallout or evidence of a real constructor contract mismatch.
+
+There’s also a validation gap: several runtime provider tests still patch `subprocess.run` even though `run_turn(...)` now uses `asyncio.create_subprocess_exec(...)`. I’m confirming the exact break points before I write the review.
+
+I’ve got the review outcome: one earlier finding is resolved, but there are still blocking issues in the compatibility execution path and in the provider test suite coverage. I’m updating the phase artifacts now.
+
+The review artifacts are updated. I’m doing a quick final pass on the appended findings to keep the final summary tight and aligned with the phase gate.
+
+Scope considered
+
+Phase-local `provider-contract-cutover` only: the updated provider/transport cutover code, the explicit operation-compatibility path, the built-in Codex/Claude backend wiring, the provider-focused tests, and the active verifier artifacts.
+
+What I analyzed
+
+I re-checked the revised implementation in `autoloop/core/providers/rendered.py`, `autoloop/runtime/provider_backends.py`, `autoloop/runtime/providers/_common.py`, `autoloop/runtime/providers/codex.py`, `autoloop/runtime/providers/claude.py`, `autoloop/core/operations.py`, `tests/runtime/test_provider_backends.py`, `tests/runtime/test_runtime_providers.py`, and the run-local `decisions.txt` plus `implementation_notes.md`.
+
+What I reviewed
+
+I updated [criteria.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/full-revised-standalone-spec-autoloop-v3-async-n-3c402473/runs/run-20260506T130608Z-37f1c786/artifacts/implement/phases/provider-contract-cutover/criteria.md) and appended the current review outcome to [feedback.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/full-revised-standalone-spec-autoloop-v3-async-n-3c402473/runs/run-20260506T130608Z-37f1c786/artifacts/implement/phases/provider-contract-cutover/feedback.md).
+
+Key findings / decisions
+
+`IMP-001` is resolved. The rendered-provider helper boundary is explicit now and no longer depends on undocumented transport duck-typing.
+
+`IMP-002` remains blocking. The built-in `operation_executor` path still runs provider subprocesses synchronously through `run_text_subprocess(...)` and `subprocess.run(...)`, so `llm()` / `classify()` inside workflow Python steps still execute provider work through a sync subprocess path. That still conflicts with the spec’s async-native provider execution requirements.
+
+`IMP-003` is newly blocking. The provider test suite was not updated coherently with the async transport cutover: `resolve_provider_backend(...)` tests now miss the new operation-executor builder dependency, and several Codex/Claude transport tests still patch `subprocess.run` even though `run_turn(...)` now uses `asyncio.create_subprocess_exec(...)`.
+
+Open issues / next step
+
+This phase should return to implement. The next pass needs to remove the remaining sync provider subprocess compatibility path or get explicit product clarification for that intentional exception, and it needs to update the provider/backend tests so the async transport cutover is actually validated.
+
+<loop-control>
+{"schema":"docloop.loop_control/v1","kind":"promise","promise":"INCOMPLETE"}
+</loop-control>
