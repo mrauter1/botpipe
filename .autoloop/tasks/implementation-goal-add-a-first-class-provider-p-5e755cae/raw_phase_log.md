@@ -392,3 +392,44 @@ The main coverage decision was to test both the narrow public entrypoints and th
 Open issues / next step
 
 Validation passed with `.venv/bin/python -m pytest -q tests/unit/test_provider_policy.py` (`14 passed`). No additional in-phase test gaps remain beyond the already acknowledged out-of-scope runtime/config/emitter work for later phases.
+
+
+---
+run_id=run-20260506T190853Z-f707cb4f | entry=session_turn | pair=test | phase=verifier | cycle=1 | attempt=1 | thread_id=019dfeb8-62d9-7162-bd36-563fb3056ac9
+---
+provider=codex
+mode=resume
+template=/home/rauter/.local/share/pipx/venvs/autoloop/lib/python3.12/site-packages/autoloop/templates/test_verifier.md
+session_id=019dfeb8-62d9-7162-bd36-563fb3056ac9
+
+
+---
+run_id=run-20260506T190853Z-f707cb4f | entry=phase_output | pair=test | phase=verifier | process=codex-agent | cycle=1 | attempt=1 | thread_id=019dfeb8-62d9-7162-bd36-563fb3056ac9
+---
+I’m auditing the `policy-core` test surface only: the unit file, the phase-local test strategy, and the recent regression additions. I’ll verify that the changed behaviors are covered with stable, deterministic assertions before I decide whether the audit criteria can be marked complete.
+
+The audit looks clean. The focused suite covers the changed validation surfaces from both direct and top-level entrypoints, exercises failure and preserved-behavior paths, and stays deterministic. I’m marking the test criteria complete and appending a short audit note so the artifact records that no additional findings remain.
+
+Scope considered
+
+The `policy-core` test phase only: [tests/unit/test_provider_policy.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/tests/unit/test_provider_policy.py), the phase-local [test_strategy.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/implementation-goal-add-a-first-class-provider-p-5e755cae/runs/run-20260506T190853Z-f707cb4f/artifacts/test/phases/policy-core/test_strategy.md), the run-local decisions ledger, and the focused test execution result.
+
+What I analyzed
+
+I checked the changed validation behavior against the current unit file and the strategy artifact, with emphasis on the two recent regression fixes: empty `limited` network mode rejection and `with_model_effort()` validation. I also verified that the tests exercise both narrow public entrypoints and the top-level `ProviderPolicy` path, as recorded in the decisions ledger.
+
+What I reviewed
+
+I confirmed the suite covers system defaults, merge semantics, strict failure paths, strict non-mutating injection, fingerprint stability, empty limited-network rejection through both constructor layers, and both failure and happy-path behavior for `with_model_effort()`. I reran `.venv/bin/python -m pytest -q tests/unit/test_provider_policy.py`, which passed with `14 passed in 0.26s`, then updated [criteria.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/implementation-goal-add-a-first-class-provider-p-5e755cae/runs/run-20260506T190853Z-f707cb4f/artifacts/test/phases/policy-core/criteria.md) to fully checked and appended the clean audit result to [feedback.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/implementation-goal-add-a-first-class-provider-p-5e755cae/runs/run-20260506T190853Z-f707cb4f/artifacts/test/phases/policy-core/feedback.md).
+
+Key findings / decisions
+
+No additional blocking or non-blocking audit findings remain in the active test scope. The current unit coverage is appropriately targeted, deterministic, and aligned with the phase-local behavior and preserved invariants.
+
+Open issues / next step
+
+No open issues remain for the `policy-core` test phase. The test audit is complete.
+
+<loop-control>
+{"schema":"docloop.loop_control/v1","kind":"promise","promise":"COMPLETE"}
+</loop-control>
