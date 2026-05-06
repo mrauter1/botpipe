@@ -1987,3 +1987,77 @@ Open issues / next step
 <loop-control>
 {"schema":"docloop.loop_control/v1","kind":"promise","promise":"INCOMPLETE"}
 </loop-control>
+
+
+---
+run_id=run-20260506T204256Z-05282838 | entry=session_turn | pair=implement | phase=producer | cycle=2 | attempt=1 | thread_id=019dff0e-7daf-7a32-806b-ba0f9ef79fd1
+---
+provider=codex
+mode=resume
+template=/home/rauter/.local/share/pipx/venvs/autoloop/lib/python3.12/site-packages/autoloop/templates/implement_producer.md
+session_id=019dff0e-7daf-7a32-806b-ba0f9ef79fd1
+
+
+---
+run_id=run-20260506T204256Z-05282838 | entry=phase_output | pair=implement | phase=producer | process=codex-agent | cycle=2 | attempt=1 | thread_id=019dff0e-7daf-7a32-806b-ba0f9ef79fd1
+---
+I’m addressing the reviewer’s blocking issue first: the runtime regression coverage needs to live in tracked repository state, not only in the untracked contract test file. I’m locating the best already-tracked test module to absorb those four raw-route runtime cases, then I’ll remove the public underscore bookkeeping parameter if I can do it without widening scope.
+
+I’m addressing the reviewer’s blocking finding first: the runtime regression coverage needs to live in tracked repo state, not an untracked file. I’m checking the current test placement and the implementation notes, then I’ll move the coverage into an existing tracked module and update the phase artifacts accordingly.
+
+The main gap is straightforward: the engine-contract regressions were written correctly but landed in an untracked path. I’m checking the closest tracked runtime test modules and the current route helper shape so I can fix the blocker with the smallest safe patch and decide whether the API-leak cleanup is worth folding in now.
+
+I found a clean way to handle the non-blocking API debt without widening scope: keep the marker as internal state on `Route`, but stop accepting it through `Route.to(...)`. I’m going to fold that in while moving the runtime regression tests into a tracked runtime module, then I’ll delete the stray untracked test file and refresh the notes/decision ledger.
+
+The reviewer’s blocker can be cleared by tracking the contract test file, but I’m not stopping there because the unchecked technical-debt box will likely linger otherwise. I’m tightening the helper marker to a non-init internal field and leaving the test coverage in its dedicated contract module, then I’ll stage that file so the runtime regressions are actually part of repo state.
+
+I’m editing the route helper surface now: the helper-default fallback marker will stay internal to `Route` instead of flowing through the public constructor. After that I’ll update the decision log and notes, then stage the dedicated contract test file and rerun the focused checks.
+
+I’ve removed the internal compiler flag from the public `Route.to(...)` signature. Next I’m recording that decision, clarifying the notes that the dedicated contract suite is intentionally kept as tracked coverage, and then I’ll rerun the focused slices plus fix the file’s tracked state.
+
+The helper-default compatibility test exposed a real regression from the API cleanup: one of the route normalization paths rebuilds `Route` objects and drops the internal marker. I’m tracing that normalization path now and will patch it so the marker survives without re-exposing it publicly.
+
+I found the regression source: route-resolution code rebuilds `Route` instances with `replace(...)` or a fresh constructor, and that strips any non-init internal fields. I’m patching those copy paths to preserve the helper-default marker so the compatibility fallback keeps working without re-exposing the flag.
+
+The internal marker was getting stripped in three separate route-copy sites, not just one. I’m centralizing that copy behavior into a small route-local helper so every internal `Route` clone preserves the fallback classification consistently; that keeps the API cleanup and the helper-default compatibility path both correct.
+
+The first cleanup patch surfaced a deeper copy-path issue, and that’s now fixed centrally. I’m rerunning the missing-`jsonschema` and runtime contract slices again, plus the backend schema-delivery slice, so the notes reflect the post-fix state rather than the earlier failing intermediate run.
+
+The focused slices are green again. I’m doing the last artifact cleanup now so the phase notes match the actual final code: route-copy preservation is now centralized, `discovery.py` and `lowering.py` are part of the touched surface, and the tracked contract suite is called out explicitly.
+
+I’ve got the code and tests in place; I’m doing one last sanity check on git state because the reviewer’s blocker was specifically about tracked coverage, not just passing local tests. After that I’ll close this turn with the exact phase summary.
+
+Scope considered
+
+- Reviewer feedback in [feedback.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/this-is-the-final-standalone-handoff-spec-it-sup-5b5e7cd0/runs/run-20260506T204256Z-05282838/artifacts/implement/phases/route-contract-enforcement/feedback.md), specifically `IMP-001` and `IMP-002`.
+- Route helper/compiler normalization paths that can affect helper-default route-fields fallback behavior.
+- Phase artifacts [implementation_notes.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/this-is-the-final-standalone-handoff-spec-it-sup-5b5e7cd0/runs/run-20260506T204256Z-05282838/artifacts/implement/phases/route-contract-enforcement/implementation_notes.md) and [decisions.txt](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/this-is-the-final-standalone-handoff-spec-it-sup-5b5e7cd0/runs/run-20260506T204256Z-05282838/decisions.txt).
+
+What I analyzed
+
+- The untracked/track-state concern around `tests/contract/test_engine_contracts.py`.
+- `Route` construction and copy/normalization paths in [routes.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/autoloop/core/routes.py), [discovery.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/autoloop/core/discovery.py), [lowering.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/autoloop/core/lowering.py), and [compiler.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/autoloop/core/compiler.py).
+- The focused regression slices the phase already relies on.
+
+What I changed
+
+- Removed the helper-default fallback marker from the public `Route.to(...)` signature in [routes.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/autoloop/core/routes.py).
+- Kept that marker as internal `Route` state and added `_replace_route(...)` so internal route rewrites preserve it consistently across discovery/lowering/compiler.
+- Updated helper presets `Route.question()`, `Route.blocked()`, and `Route.failed()` to set the marker privately after construction.
+- Ensured the dedicated AC-3 contract suite at `tests/contract/test_engine_contracts.py` is in tracked git state.
+- Updated [implementation_notes.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/this-is-the-final-standalone-handoff-spec-it-sup-5b5e7cd0/runs/run-20260506T204256Z-05282838/artifacts/implement/phases/route-contract-enforcement/implementation_notes.md) and [decisions.txt](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/this-is-the-final-standalone-handoff-spec-it-sup-5b5e7cd0/runs/run-20260506T204256Z-05282838/decisions.txt) to reflect the final implementation.
+
+Key findings / decisions
+
+- The initial API cleanup regressed helper-default missing-`jsonschema` compatibility because route normalization used `replace(...)` and dropped non-init internal fields.
+- Centralizing route copies through `_replace_route(...)` fixed that regression without reopening the public constructor surface.
+- `tests/contract/test_engine_contracts.py` now resolves the reviewer’s tracked-coverage concern.
+
+Open issues / next step
+
+- Focused validation passed:
+  - `python3 -m compileall autoloop/core/routes.py autoloop/core/discovery.py autoloop/core/lowering.py autoloop/core/compiler.py tests/contract/test_engine_contracts.py`
+  - `.venv/bin/python -m pytest tests/unit/test_validation.py -k "raw_route_payload_schema_without_jsonschema_dependency or raw_route_fields_schema_without_jsonschema_dependency or helper_default_route_fields_without_jsonschema_dependency or custom_helper_route_fields_override_without_jsonschema_dependency"`
+  - `.venv/bin/python -m pytest tests/contract/test_engine_contracts.py -k "invalid_custom_raw_route_payload or invalid_custom_raw_route_fields"`
+  - `.venv/bin/python -m pytest tests/runtime/test_provider_backends.py -k "response_schema or prompt_only_fallback or output_schema_file or simplified_schema_delivery"`
+- I did not run the full test suite.
