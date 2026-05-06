@@ -3,3 +3,4 @@ Treat compiled route construction in discovery/compiler as the only enforcement 
 Keep `_compiled_provider_visibility(...)` generic for non-`question` routes so explicit visible and hidden `blocked` / `failed` behave exactly like any other authored route.
 Preserve packaged workflow routes that explicitly author `_BLOCKED_ROUTE` or `_FAILED_ROUTE`; only remove expectations that depended on framework injection.
 Do not broaden this change to unrelated branch-group composite route semantics or runtime status/reporting uses of the words `blocked` and `failed`.
+<autoloop-decisions-header version="1" block_seq="2" owner="implementer" phase_id="route-compilation-contract" pair="implement" turn_seq="1" run_id="run-20260506T140151Z-c56b8e14" ts="2026-05-06T14:07:15.775824+00:00" />
