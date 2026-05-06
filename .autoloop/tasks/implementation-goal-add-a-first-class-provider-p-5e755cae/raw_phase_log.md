@@ -1337,3 +1337,63 @@ Fix `CodexPolicyEmitter.emit()` so `effective_enforcement.read_roots` reflects o
 <loop-control>
 {"schema":"docloop.loop_control/v1","kind":"promise","promise":"INCOMPLETE"}
 </loop-control>
+
+
+---
+run_id=run-20260506T190853Z-f707cb4f | entry=session_turn | pair=implement | phase=producer | cycle=2 | attempt=1 | thread_id=019dfef0-6177-7931-97e7-51ce31250dd7
+---
+provider=codex
+mode=resume
+template=/home/rauter/.local/share/pipx/venvs/autoloop/lib/python3.12/site-packages/autoloop/templates/implement_producer.md
+session_id=019dfef0-6177-7931-97e7-51ce31250dd7
+
+
+---
+run_id=run-20260506T190853Z-f707cb4f | entry=phase_output | pair=implement | phase=producer | process=codex-agent | cycle=2 | attempt=1 | thread_id=019dfef0-6177-7931-97e7-51ce31250dd7
+---
+The reviewer flagged one concrete Codex emitter bug: the capability report claims narrowed read roots are effectively enforced even when the emitter also marks that mapping as unsafe. I’m checking the feedback, current emitter logic, and nearby tests first, then I’ll patch the report semantics and extend coverage.
+
+I have enough context to patch this narrowly.
+
+Plan:
+1. Change the Codex capability report so `effective_enforcement.read_roots` only reflects read restrictions Codex actually enforces, instead of echoing the requested policy when narrowing is unsupported.
+2. Add emitter coverage that asserts the report stays empty/unknown on narrowed `allow_read` while the unsafe classification still triggers.
+3. Update the phase notes and, if needed, record the new reporting rule in the current decisions block so later provider phases don’t reintroduce the same mistake.
+
+I’m editing the emitter and the focused Codex emitter tests now. The change is intentionally local: report semantics only, plus coverage that locks the corrected behavior in place.
+
+The code change is in place. I’m running the focused emitter and runtime provider tests next so the report semantics change is verified both at artifact level and through the Codex execution path.
+
+The compile check passed, but the prior test venv path from the notes does not exist in this workspace snapshot. I’m locating the available test interpreter now rather than assuming the same path still holds.
+
+The system Python does not have `pytest`. I’m checking for a repo-local virtualenv or tool wrapper so I can still run the targeted suite instead of stopping at static verification.
+
+A repo-local `.venv` is available, so I can run the same focused pytest path cleanly from the workspace instead of relying on the missing interpreter path from the earlier notes.
+
+The focused suite is still running. I’m polling for the final result, then I’ll update the implementation notes and the current decisions block with the corrected capability-report rule.
+
+I’m updating the run-local notes now. I’m keeping the phase notes cumulative, but I’m adding the reviewer-fix detail and the exact validation I ran in this turn so the next verifier has a clean ledger.
+
+The fix and notes are written. I’m doing one last pass over the exact diff and the updated notes artifact so the close-out reflects the real scope of this turn, not stale phase-wide wording.
+
+Scope considered
+
+Phase-local `policy-codex` only: the reviewer-reported mismatch in Codex capability reporting, the emitter implementation, the focused emitter tests, and the adjacent Codex runtime-provider regression surface.
+
+What I analyzed
+
+I reviewed the blocking feedback in [feedback.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/implementation-goal-add-a-first-class-provider-p-5e755cae/runs/run-20260506T190853Z-f707cb4f/artifacts/implement/phases/policy-codex/feedback.md), the current `effective_enforcement.read_roots` population in [codex_policy.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/autoloop/runtime/providers/codex_policy.py), the existing unsafe-expansion classification for narrowed `allow_read`, and the current emitter/runtime-provider tests.
+
+What I changed
+
+I changed [codex_policy.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/autoloop/runtime/providers/codex_policy.py) so Codex capability reports no longer echo requested `allow_read` roots as effective enforcement. `effective_enforcement.read_roots` is now left empty because Codex has no read-root enforcement surface.
+
+I added focused coverage in [test_provider_policy_emitters.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/tests/runtime/test_provider_policy_emitters.py) that runs the narrowed-`allow_read` case in `unsafe_expansion="warn"` mode and asserts the report still flags the unsafe mapping while reporting no enforced read roots. I also updated [implementation_notes.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/implementation-goal-add-a-first-class-provider-p-5e755cae/runs/run-20260506T190853Z-f707cb4f/artifacts/implement/phases/policy-codex/implementation_notes.md) and appended the non-obvious reporting rule to the current turn block in [decisions.txt](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/implementation-goal-add-a-first-class-provider-p-5e755cae/runs/run-20260506T190853Z-f707cb4f/decisions.txt).
+
+Key findings / decisions
+
+The fix is intentionally narrow: requested `allow_read` roots still remain visible in `effective_policy.json`, but the capability report now only describes enforcement Codex can actually provide. That keeps the unsafe-expansion diagnostic and removes the misleading effective-enforcement claim the reviewer flagged.
+
+Open issues / next step
+
+Validation passed with `python3 -m py_compile autoloop/runtime/providers/codex_policy.py tests/runtime/test_provider_policy_emitters.py` and `.venv/bin/python -m pytest tests/runtime/test_provider_policy_emitters.py tests/runtime/test_runtime_providers.py -q` (`58 passed`). The next step is verifier re-review of this phase.

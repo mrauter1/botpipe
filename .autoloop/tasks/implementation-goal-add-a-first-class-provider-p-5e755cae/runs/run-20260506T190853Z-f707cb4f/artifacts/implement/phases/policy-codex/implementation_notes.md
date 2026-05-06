@@ -9,27 +9,11 @@
 
 ## Files Changed
 - `autoloop/runtime/providers/codex_policy.py`
-- `autoloop/runtime/providers/codex.py`
-- `autoloop/runtime/providers/_common.py`
-- `autoloop/core/providers/rendering.py`
-- `autoloop/core/providers/turns.py`
 - `tests/runtime/test_provider_policy_emitters.py`
-- `tests/runtime/test_runtime_providers.py`
-- `tests/runtime/test_provider_backends.py`
-- `autoloop/runtime/config.py`
 
 ## Symbols Touched
-- `RenderedProviderTurn`
-- `render_provider_turn_with_policy()`
-- `run_text_subprocess()`
-- `merge_subprocess_env()`
-- `build_policy_step_key()`
 - `CodexPolicyEmitter.emit()`
-- `CodexTransport.run_turn()`
-- `build_codex_transport()`
-- `build_codex_operation_executor()`
-- `resolve_codex_cli_commands()`
-- `_merge_provider_policy_config()`
+- `ProviderPolicyCapabilityReport.effective_enforcement.read_roots`
 
 ## Checklist Mapping
 - Plan milestone 4 / phase AC-1:
@@ -37,9 +21,7 @@
 - Plan milestone 4 / phase AC-2:
   Codex capability classification now runs before execution, writes target-scoped reports, emits runtime events, and threads policy metadata into provider results/session metadata.
 - Regression control:
-  Added focused emitter tests, transport tests, and backend command-resolution coverage.
-- Intentional adjacent fix:
-  `autoloop/runtime/config.py` now aliases legacy Claude `model_effort=max` to policy `xhigh` only for the provider-policy mirror path so existing provider-backend compatibility tests still pass.
+  Added focused emitter coverage for the reviewer-reported `read_roots` enforcement mismatch and reran the focused Codex emitter/runtime provider suite.
 
 ## Assumptions
 - Codex CLI honors `$CODEX_HOME/config.toml`; the run-scoped policy directory is therefore the safest non-mutating config seam for this phase.
@@ -55,6 +37,7 @@
 - Codex approval/sandbox mode is now driven by emitted per-turn policy artifacts instead of a hard-coded full-auto CLI flag.
 - Provider metadata now includes policy artifact paths and the resolved policy fingerprint when a turn carries policy.
 - Runtime emits `provider_policy_emitted` and `provider_policy_capability_report` for Codex turns with policy.
+- Codex capability reports no longer echo requested `allow_read` roots as effective enforcement when Codex cannot actually enforce read-root narrowing.
 
 ## Known Non-Changes
 - Claude emission and transport wiring remain untouched in this phase.
@@ -65,10 +48,10 @@
 - Capability validation may now fail a Codex turn before subprocess spawn when unsupported/lossy/unsafe mappings are configured to fail.
 
 ## Validation Performed
-- `python3 -m py_compile autoloop/runtime/providers/codex.py autoloop/runtime/providers/codex_policy.py autoloop/core/providers/rendering.py autoloop/core/providers/turns.py autoloop/runtime/providers/_common.py`
-- `.autoloop-test-venv/bin/python -m pytest tests/runtime/test_provider_policy_emitters.py tests/runtime/test_runtime_providers.py tests/runtime/test_provider_backends.py -q`
-  Result: `97 passed`
+- `python3 -m py_compile autoloop/runtime/providers/codex_policy.py tests/runtime/test_provider_policy_emitters.py`
+- `.venv/bin/python -m pytest tests/runtime/test_provider_policy_emitters.py tests/runtime/test_runtime_providers.py -q`
+  Result: `58 passed`
 
 ## Deduplication / Centralization
 - Centralized Codex artifact emission and capability classification in `codex_policy.py`.
-- Centralized stable step-key and subprocess env helpers in `_common.py`.
+- Centralized the corrected Codex read-root reporting rule in the emitter so downstream transports and traces consume one authoritative capability report.

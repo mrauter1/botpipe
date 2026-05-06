@@ -117,7 +117,9 @@ class CodexPolicyEmitter:
             effective_enforcement=EffectiveEnforcementReport(
                 sandbox_mode=str(config_payload.get("sandbox_mode")) if config_payload.get("sandbox_mode") else None,
                 write_roots=tuple(config_payload.get("sandbox_workspace_write", {}).get("writable_roots", ())),
-                read_roots=policy.sandbox.workspace.filesystem.allow_read,
+                # Codex does not expose a read-root enforcement surface, so capability
+                # reports must not echo requested allow_read roots as enforced state.
+                read_roots=(),
                 deny_read_enforced=False if policy.sandbox.workspace.filesystem.deny_read else None,
                 deny_write_enforced=False if policy.sandbox.workspace.filesystem.deny_write else None,
                 network_domain_filter_enforced=False

@@ -153,6 +153,33 @@ def test_codex_emitter_raises_for_unsafe_expansion_when_read_roots_are_narrowed(
         _emit(tmp_path, policy)
 
 
+def test_codex_emitter_does_not_claim_read_root_enforcement_for_narrowed_allow_read(tmp_path: Path) -> None:
+    policy = merge_provider_policies(
+        SYSTEM_DEFAULT_PROVIDER_POLICY,
+        ProviderPolicyOverride(
+            sandbox=SandboxPolicy(
+                workspace=WorkspacePolicy(
+                    filesystem=WorkspaceFilesystemPolicy(allow_read=("./src",)),
+                )
+            )
+        ),
+    )
+
+    emission = _emit(
+        tmp_path,
+        policy,
+        validation=ProviderPolicyValidationConfig(unsafe_expansion="warn"),
+    )
+
+    assert emission.capability_report.decision == "warn"
+    assert emission.capability_report.unsafe_expansions == (
+        "sandbox.workspace.filesystem.allow_read cannot be narrowed by Codex",
+    )
+    assert emission.capability_report.effective_enforcement.read_roots == ()
+    report = json.loads(emission.config_files["capability_report"].read_text(encoding="utf-8"))
+    assert report["effective_enforcement"]["read_roots"] == []
+
+
 def test_codex_emitter_uses_warn_mode_for_lossy_read_only_allow_write(tmp_path: Path) -> None:
     policy = ProviderPolicy(
         permissions=PermissionPolicy(mode="ask"),
