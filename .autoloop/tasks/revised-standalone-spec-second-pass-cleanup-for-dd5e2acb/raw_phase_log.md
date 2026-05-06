@@ -479,3 +479,64 @@ Open issues / next step
 <loop-control>
 {"schema":"docloop.loop_control/v1","kind":"promise","promise":"COMPLETE"}
 </loop-control>
+
+
+---
+run_id=run-20260506T181149Z-6867fac0 | entry=session_turn | pair=audit | phase=producer | cycle=1 | attempt=1 | thread_id=019dfe93-d108-7ae1-8fff-563d48f67c1e
+---
+provider=codex
+mode=start
+template=/home/rauter/.local/share/pipx/venvs/autoloop/lib/python3.12/site-packages/autoloop/templates/audit_producer.md
+session_id=019dfe93-d108-7ae1-8fff-563d48f67c1e
+
+
+---
+run_id=run-20260506T181149Z-6867fac0 | entry=phase_output | pair=audit | phase=producer | process=codex-agent | cycle=1 | attempt=1 | thread_id=019dfe93-d108-7ae1-8fff-563d48f67c1e
+---
+I’m auditing the completed run against the authoritative request, raw log, decisions, artifacts, tests, and current codebase, then I’ll write the audit artifacts under the run-local `artifacts/audit` directory only.
+
+I’ve confirmed the run history includes a late verifier finding and follow-up decision. Now I’m reading the implementation, test, and verifier artifacts together with the final code/test surfaces to decide whether any material gap remains.
+
+The artifact layout is phase-scoped rather than flat `implement/` and `test/`. I’m drilling into those files now, along with the exact code and tests changed for this run, so the audit is based on the final concrete state.
+
+I have the phase artifacts. Next I’m checking the later raw-log entries and the exact changed code/test snippets that matter for intent fidelity, especially around the strictness fix and the final targeted test results.
+
+I have the core implementation and test evidence now. I’m doing one more pass over the compile-time/provider validation coverage and the current audit stubs before I write the final gap report and follow-up request.
+
+I’m closing the last evidence gap now by sampling the compile-time and provider-boundary tests that carry the request’s explicit validation requirements, rather than relying only on the phase notes.
+
+I’ve finished the comparison. The remaining work is just writing the audit artifacts: the evidence-backed gap report, a no-follow-up revised request, and the machine result JSON under `artifacts/audit`.
+
+The audit artifacts are written. I’m doing a final readback of those three files now to ensure the gap classification and machine result are internally consistent before I close the turn.
+
+Scope considered
+
+- The immutable request, authoritative raw log, `decisions.txt`, run-local plan/implement/test artifacts, the final branch-group/provider code paths, and the targeted compile/runtime/provider/strictness tests.
+- I kept scope run-local and did not modify repository source, tests, or non-audit artifacts.
+
+What I analyzed
+
+- `autoloop/core/branch_groups/runtime.py`, `autoloop/core/branch_groups/sessions.py`, `autoloop/core/providers/rendered.py`, `autoloop/runtime/providers/codex.py`, `autoloop/runtime/providers/claude.py`.
+- `tests/unit/test_branch_group_context_sessions.py`, `tests/contract/test_branch_group_runtime.py`, `tests/unit/test_simple_surface.py`, `tests/unit/test_provider_boundary_core.py`, `tests/runtime/test_runtime_providers.py`, `tests/strictness/test_no_compat.py`.
+- The run-local artifact trail showing the strictness follow-up closure and targeted test results (`115 passed`, `7 passed`, and the strictness subset `36 passed`).
+
+What I changed
+
+- Wrote [gap_report.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/revised-standalone-spec-second-pass-cleanup-for-dd5e2acb/runs/run-20260506T181149Z-6867fac0/artifacts/audit/gap_report.md).
+- Wrote [revised_request.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/revised-standalone-spec-second-pass-cleanup-for-dd5e2acb/runs/run-20260506T181149Z-6867fac0/artifacts/audit/revised_request.md).
+- Wrote [audit_result.json](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/revised-standalone-spec-second-pass-cleanup-for-dd5e2acb/runs/run-20260506T181149Z-6867fac0/artifacts/audit/audit_result.json).
+
+Key findings / decisions
+
+- No material unresolved gaps found.
+- The final code and tests satisfy the requested cleanup: duplicate branch final-state mutation is removed, `BranchSessionStoreView` is branch-local only, scoped branch runtime is assertion-only, the sync operation bridge is contained to non-parallel compatibility, provider turn execution remains async-subprocess based, capture-only semantics remain intact, fan-in finalizes once, and evidence write failures stop fan-in/outcomes.
+- Differences from a broader interpretation are justified by the request and decisions ledger: `subprocess.run(...)` remains allowed for explicit CLI probing only, the sync operation bridge remains only for public non-parallel compatibility, and validation stayed targeted rather than full-suite.
+
+Open issues / next step
+
+- No follow-up implementation run is required for this request.
+- Any next run would be optional confidence work, such as a wider repository test sweep, not missing requested behavior.
+
+<loop-control>
+{"schema":"docloop.loop_control/v1","kind":"promise","promise":"INCOMPLETE"}
+</loop-control>
