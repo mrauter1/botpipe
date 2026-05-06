@@ -1296,3 +1296,59 @@ There is one unrelated out-of-phase failure in the broader provider suite:
 Current result: `wait_calls == 2`, expected `1`.
 
 If you want, the next pass should target that provider transport cancellation regression under the transport/provider phase rather than branch-group runtime.
+
+
+---
+run_id=run-20260506T130608Z-37f1c786 | entry=session_turn | pair=implement | phase=verifier | cycle=1 | attempt=1 | thread_id=019dfd9f-bbf6-7821-ac9d-d60ede6331fb
+---
+provider=codex
+mode=resume
+template=/home/rauter/.local/share/pipx/venvs/autoloop/lib/python3.12/site-packages/autoloop/templates/implement_verifier.md
+session_id=019dfd9f-bbf6-7821-ac9d-d60ede6331fb
+
+
+---
+run_id=run-20260506T130608Z-37f1c786 | entry=phase_output | pair=implement | phase=verifier | process=codex-agent | cycle=1 | attempt=1 | thread_id=019dfd9f-bbf6-7821-ac9d-d60ede6331fb
+---
+I’m reviewing the phase-local implementation and artifacts against the branch-group runtime/session contract. First I’m reading the current criteria, feedback, implementation notes, and the phase-relevant runtime/session modules before I update the review artifacts.
+
+The implementation notes claim this phase is a no-op closeout, so I’m verifying that claim directly with the phase-local branch-group and session suites before I mark criteria. After that I’ll write the review artifacts with either no scoped findings or concrete blockers.
+
+The phase-local suites are green, and the current branch-group runtime/session code matches the scoped acceptance criteria. I’m marking the review artifacts now; unless something turns up in the final test poll, this will be a complete review with no scoped findings.
+
+Scope considered
+
+Phase-local branch-group runtime/session scope only: the active review artifacts, current `autoloop/core/branch_groups/*` behavior, adjacent context/dispatcher interactions needed to verify AC-1 through AC-3, and the cited run-local decisions. I did not treat unrelated dirty files as part of this review.
+
+What I analyzed
+
+I read the active criteria, feedback, implementation notes, and run decisions, then inspected the request-relevant runtime/session code in `autoloop/core/branch_groups/runtime.py`, `sessions.py`, and related context wiring. I also checked that the implementation notes’ no-op closeout claim matched the actual code and test state.
+
+What I reviewed
+
+I ran:
+- `./.venv/bin/pytest -q tests/contract/test_branch_group_runtime.py tests/runtime/test_runtime_tracing.py tests/runtime/test_runtime_static_graph.py tests/unit/test_simple_surface.py tests/unit/test_primitives_and_stores.py tests/unit/test_branch_group_context_sessions.py`
+
+Result:
+- `195 passed, 14 warnings`
+
+I updated:
+- [criteria.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/full-revised-standalone-spec-autoloop-v3-async-n-3c402473/runs/run-20260506T130608Z-37f1c786/artifacts/implement/phases/branch-group-runtime-and-sessions/criteria.md)
+- [feedback.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/full-revised-standalone-spec-autoloop-v3-async-n-3c402473/runs/run-20260506T130608Z-37f1c786/artifacts/implement/phases/branch-group-runtime-and-sessions/feedback.md)
+
+Key findings / decisions
+
+No scoped blocking findings. The current branch-group runtime/session implementation satisfies the accepted phase contract:
+- provider-backed branches await the async dispatcher in capture mode without runtime async-support probing
+- fresh branch sessions stay execution-local, start with `session_id=None`, keep parent activation isolated, and record only provider-returned ids
+- branch evidence stays under `workflow_folder/_branch_groups`, and fan-in finalizes the composite route once
+
+I marked all criteria as passed and recorded one non-blocking review note stating there are no scoped implementation findings.
+
+Open issues / next step
+
+There is still an out-of-phase provider transport regression noted in the implementation notes (`tests/runtime/test_runtime_providers.py::test_communicate_text_subprocess_terminates_then_kills_on_cancellation`), but it is not attributable to this branch-group runtime/session phase and does not block this review.
+
+<loop-control>
+{"schema":"docloop.loop_control/v1","kind":"promise","promise":"COMPLETE"}
+</loop-control>

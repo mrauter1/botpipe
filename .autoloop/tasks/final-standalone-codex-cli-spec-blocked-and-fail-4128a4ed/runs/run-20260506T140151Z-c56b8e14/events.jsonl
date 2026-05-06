@@ -8,3 +8,4 @@
 {"ts": "2026-05-06T14:07:15.673098+00:00", "run_id": "run-20260506T140151Z-c56b8e14", "seq": 8, "event_type": "phase_started", "phase_id": "route-compilation-contract", "phase_mode": "single"}
 {"ts": "2026-05-06T14:07:15.674238+00:00", "run_id": "run-20260506T140151Z-c56b8e14", "seq": 9, "event_type": "pair_started", "pair": "implement", "phase_id": "route-compilation-contract"}
 {"ts": "2026-05-06T14:07:15.674313+00:00", "run_id": "run-20260506T140151Z-c56b8e14", "seq": 10, "event_type": "cycle_started", "pair": "implement", "cycle": 1, "attempt": 1, "phase_id": "route-compilation-contract"}
+{"ts": "2026-05-06T14:13:15.744868+00:00", "run_id": "run-20260506T140151Z-c56b8e14", "seq": 11, "event_type": "phase_finished", "pair": "implement", "phase": "producer", "cycle": 1, "attempt": 1, "empty_output": false, "phase_id": "route-compilation-contract"}

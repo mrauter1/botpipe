@@ -104,3 +104,81 @@ phase_mode=single
 phase_ids=route-compilation-contract,provider-and-surface-regressions,workflow-doc-and-suite-alignment
 explicit=True
 current_phase_index=0
+
+
+---
+run_id=run-20260506T140151Z-c56b8e14 | entry=session_turn | pair=implement | phase=producer | cycle=1 | attempt=1 | thread_id=019dfd9d-4787-73c0-b538-1a138db4f2b2
+---
+provider=codex
+mode=start
+template=/home/rauter/.local/share/pipx/venvs/autoloop/lib/python3.12/site-packages/autoloop/templates/implement_producer.md
+session_id=019dfd9d-4787-73c0-b538-1a138db4f2b2
+
+
+---
+run_id=run-20260506T140151Z-c56b8e14 | entry=phase_output | pair=implement | phase=producer | process=codex-agent | cycle=1 | attempt=1 | thread_id=019dfd9d-4787-73c0-b538-1a138db4f2b2
+---
+I’m implementing the route-compilation contract for provider-backed steps. I’ll inspect the phase artifacts and the compiler/discovery code paths first, then make the smallest changes that move `blocked` and `failed` out of framework defaults while preserving `question` behavior.
+
+I have the execution plan and the current decision ledger. Next I’m tracing the exact injection points and the tests that currently assume implicit `blocked` and `failed`, so the code and assertions move together.
+
+The worktree is dirty in many unrelated places, so I’m keeping scope tight to `autoloop/core`, route-contract tests, and the phase artifacts. I’m reading the exact compiler/discovery branches and the highest-signal failing expectations before editing.
+
+The current contract is implemented in exactly the places the request called out: discovery injects `blocked`/`failed`, and the internal compiler helpers do the same. I’m now checking which tests already cover explicit authored routes so I can preserve those and only rewrite defaults.
+
+There are already explicit authored-route tests, which is useful: I can preserve those and tighten the defaults instead of inventing a new path. I’m checking the canonical runtime contract tests now because they exercise provider-facing compiled routes directly.
+
+I’ve confirmed there are separate explicit-route tests already in place, and there are also many snapshot-style assertions that will shift once the compiled tables change. Before editing, I’m checking the provider-visibility helper to make sure I don’t accidentally reintroduce special handling there.
+
+I’ve finished the read-through. The code change is small: remove `blocked`/`failed` injection from discovery and the internal compiler helpers, leave provider visibility generic, then update the compile and static-graph assertions that currently encode the old defaults.
+
+The compiler/discovery change is in place. I’m running the route-contract and static-graph buckets now to see which expectations need to move, rather than guessing at every downstream assertion.
+
+`pytest` isn’t on PATH here, so I’m switching to the repo’s Python entrypoint instead of assuming the shell environment. After that I’ll update the exact assertions that move.
+
+There’s no active test runner in this shell environment either: `python3` exists, but `pytest` is not installed. I’m proceeding by updating the known contract assertions from the code search results, then I’ll do a syntax-level verification pass and call out the environment gap explicitly.
+
+I’ve got the main assertion deltas mapped now. Most default-step tests simply lose `blocked`/`failed`; a smaller set of package/snapshot tests keep those routes visible because they’re explicitly authored, but their `runtime_control_routes` still has to shrink to `question` only.
+
+I found two more engine-contract assertions tied to the same default behavior. One is the full-auto default path and definitely loses `blocked`/`failed`; the other is a verifier-contract test that I’m checking for explicit authored routes before I touch it.
+
+I’m editing the assertions now. The rule I’m applying is narrow: remove implicit `blocked`/`failed` from defaults, but where workflows explicitly author those tags, keep them legal and provider-visible while flipping them to non-runtime-control routes.
+
+A few more assertion surfaces still encode the old default route table indirectly through required-write maps. I’m cleaning those up too so the compiled routes remain the single source of truth everywhere.
+
+The code and assertion edits are aligned now. I’m doing a syntax-level verification pass on the touched Python files next, since the environment still lacks `pytest`.
+
+The targeted search is clean now for the old implicit-route expectations. I’m documenting the non-obvious contract decisions in the run artifacts next, then I’ll summarize the verification limits from this environment.
+
+I’m updating the phase artifacts now. I’m recording that explicit authored `blocked`/`failed` remain intact in packaged workflow snapshots, with only their runtime-control classification changing, and I’m noting that this turn stayed within the active route-compilation phase scope.
+
+I’m doing one last sanity check on the actual source diffs because the worktree is noisy and I want to be sure the compiler edits are present alongside the test updates before I hand this off.
+
+Scope considered
+
+- Active phase scope only: route compilation and downstream compile-derived assertions.
+- Code paths: [discovery.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/autoloop/core/discovery.py), [compiler.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/autoloop/core/compiler.py), and compile/static-graph/provider-contract tests plus the phase artifacts.
+
+What I analyzed
+
+- `_inject_control_routes(...)`, `_internal_step_runtime_routes(...)`, and `_internal_step_runtime_control_routes(...)`.
+- Test surfaces that encoded the old implicit defaults: [test_validation.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/tests/unit/test_validation.py), [test_simple_surface.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/tests/unit/test_simple_surface.py), [test_canonical_runtime_contracts.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/tests/contract/test_canonical_runtime_contracts.py), [test_engine_contracts.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/tests/contract/test_engine_contracts.py), [test_runtime_static_graph.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/tests/runtime/test_runtime_static_graph.py), [test_workspace_and_context.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/tests/runtime/test_workspace_and_context.py), and packaged-workflow snapshots in [test_stdlib_and_extensions.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/tests/unit/test_stdlib_and_extensions.py).
+
+What I changed
+
+- Removed framework injection of implicit `blocked` and `failed` in discovery and internal compilation; `question` is now the only injected runtime-control route.
+- Updated default-step tests so prompt and produce/verify steps no longer compile or expose implicit `blocked`/`failed`, and `control_routes=False` yields no runtime-control routes.
+- Kept explicit authored `blocked`/`failed` expectations where workflows already opt in, but changed their compiled metadata so they are ordinary authored routes, not runtime-control routes.
+- Updated phase artifacts: [implementation_notes.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/final-standalone-codex-cli-spec-blocked-and-fail-4128a4ed/runs/run-20260506T140151Z-c56b8e14/artifacts/implement/phases/route-compilation-contract/implementation_notes.md) and [decisions.txt](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/final-standalone-codex-cli-spec-blocked-and-fail-4128a4ed/runs/run-20260506T140151Z-c56b8e14/decisions.txt).
+
+Key findings / decisions
+
+- The contract change is correctly enforced at compilation time, not by prompt filtering.
+- Explicit packaged-workflow `blocked`/`failed` routes were preserved; only `runtime_control_routes` and per-route `is_runtime_control` changed.
+- `_compiled_provider_visibility(...)` was left generic for non-`question` routes.
+
+Open issues / next step
+
+- Syntax verification passed with `python3 -m py_compile` on all touched Python files.
+- I could not run `pytest` here because the environment does not have `pytest` installed.
+- Docs and the broader negative-provider/exhaustion additions from the full request were not implemented in this phase-scoped turn; the next phase should run the full test suite in a provisioned environment and finish the remaining contract coverage/documentation work.
