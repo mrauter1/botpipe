@@ -50,6 +50,24 @@ class _AsyncOnlyLLMProvider:
         return OutcomeResponse(outcome=Outcome(raw_output="ok", tag="done"))
 
 
+class _SyncOnlyLLMProvider:
+    def __init__(self) -> None:
+        self.sync_calls: list[str] = []
+
+    def run_producer(self, request: ProducerRequest) -> ProducerResponse:  # pragma: no cover - defensive
+        raise AssertionError("producer path should not be used")
+
+    def run_verifier(self, request: VerifierRequest) -> OutcomeResponse:  # pragma: no cover - defensive
+        raise AssertionError("verifier path should not be used")
+
+    def run_llm(self, request: LLMRequest) -> OutcomeResponse:
+        self.sync_calls.append(request.step_name)
+        return OutcomeResponse(outcome=Outcome(raw_output="ok", tag="done"))
+
+    def run_operation(self, request: object) -> object:  # pragma: no cover - defensive
+        raise AssertionError("operation path should not be used")
+
+
 def test_engine_run_async_is_the_sequential_execution_core(tmp_path: Path) -> None:
     class AsyncWorkflow(simple.Workflow):
         class State(BaseModel):
@@ -115,6 +133,36 @@ def test_engine_sync_wrappers_reject_active_event_loop_without_running_coroutine
         assert not any("never awaited" in str(warning.message) for warning in caught)
 
     asyncio.run(run_in_loop())
+
+
+def test_engine_run_async_preserves_sequential_sync_provider_compatibility(tmp_path: Path) -> None:
+    class SyncProviderWorkflow(simple.Workflow):
+        class State(BaseModel):
+            pass
+
+        review = simple.step("Review the artifact.", name="review", routes={"done": simple.FINISH})
+
+    task_folder, run_folder = _workspace(tmp_path)
+    provider = _SyncOnlyLLMProvider()
+    engine = Engine(
+        SyncProviderWorkflow,
+        provider=provider,
+        session_store=InMemorySessionStore(),
+        checkpoint_store=InMemoryCheckpointStore(),
+    )
+
+    result = asyncio.run(
+        engine.run_async(
+            task_id="task-sync-provider",
+            run_id="run-sync-provider",
+            task_folder=task_folder,
+            run_folder=run_folder,
+            root=tmp_path,
+        )
+    )
+
+    assert result.terminal == simple.FINISH
+    assert provider.sync_calls == ["review"]
 
 
 def test_engine_run_wrapper_executes_async_core_for_sequential_workflows(tmp_path: Path) -> None:

@@ -200,3 +200,55 @@ Open issues / next step
 <loop-control>
 {"schema":"docloop.loop_control/v1","kind":"promise","promise":"INCOMPLETE"}
 </loop-control>
+
+
+---
+run_id=run-20260506T130608Z-37f1c786 | entry=session_turn | pair=implement | phase=producer | cycle=2 | attempt=1 | thread_id=019dfd6b-64cb-7e91-8aa2-76c766f7f1a1
+---
+provider=codex
+mode=resume
+template=/home/rauter/.local/share/pipx/venvs/autoloop/lib/python3.12/site-packages/autoloop/templates/implement_producer.md
+session_id=019dfd6b-64cb-7e91-8aa2-76c766f7f1a1
+
+
+---
+run_id=run-20260506T130608Z-37f1c786 | entry=phase_output | pair=implement | phase=producer | process=codex-agent | cycle=2 | attempt=1 | thread_id=019dfd6b-64cb-7e91-8aa2-76c766f7f1a1
+---
+I’m addressing the reviewer’s two points together: first I’m tracing the current sync-only provider path so ordinary sequential `Engine.run(...)` keeps working, then I’ll remove the now-dead duplicated sync helper stack once that compatibility is preserved through a single dispatcher-owned path.
+
+The cleanest fix is narrower than restoring old engine behavior: keep one step-execution implementation in `StepDispatcher.execute_async(...)`, but let that single path call the current sync provider methods only for ordinary `route_mode="finalize"` execution until the later provider cutover lands. After that, I can delete the dead sync engine helpers instead of preserving them.
+
+I’ve narrowed the fix to one boundary: the dispatcher’s provider call sites. That lets me restore ordinary sync-provider compatibility for `route_mode="finalize"` without putting sync execution back into `engine.py`, and then I can safely delete the orphaned sync helper stack.
+
+The duplicated engine sync stack is out now. I’m cleaning the remaining import fallout and then I’ll rerun the focused contract tests plus the direct sync-only-provider repro that the reviewer called out.
+
+I’ve added a regression test for the sync-only provider case the reviewer reproduced. Next I’m rerunning the focused suite, including the branch-group sync-only-provider contract to confirm the sequential fallback didn’t weaken the async-only branch path.
+
+I’ve resolved the blocking regression without reviving sync engine execution: the dispatcher now owns the temporary sequential sync-provider compatibility, and the old sync engine helper stack is gone. I’m updating the phase notes to reflect that centralization and the added regression coverage.
+
+The blocking regression is fixed and the dead sync engine path is removed. I’m collecting the final file references and validation results now, then I’ll close out with the phase-local summary.
+
+I’m recording the one non-obvious compatibility rule from this fix in the run decisions ledger, because later provider-cutover work will drift if that boundary is only implicit in the code.
+
+Scope considered
+- Phase-local async-engine-spine files only: [engine.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/autoloop/core/engine.py:177), [engine_collaborators.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/autoloop/core/engine_collaborators.py:329), [rendered.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/autoloop/core/providers/rendered.py:21), and [test_async_engine_spine.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/tests/contract/test_async_engine_spine.py:53).
+- I used the reviewer feedback and current decisions/implementation notes as the authoritative phase artifacts.
+
+What I analyzed
+- The reviewer’s blocking regression: `Engine.run(...)` had moved ordinary sequential workflows onto `execute_async(...)`, which rejected sync-only providers that still satisfy the current `LLMProvider` protocol.
+- The reviewer’s non-blocking debt: the old sync provider execution stack in `engine.py` had become dead duplicated logic after the async spine change.
+
+What I changed
+- Kept the async engine core and sync wrapper entrypoints in [engine.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/autoloop/core/engine.py:177), but removed the obsolete sync provider execution helper stack from that file.
+- Added dispatcher-owned temporary compatibility in [engine_collaborators.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/autoloop/core/engine_collaborators.py:458): `StepDispatcher._call_provider(...)` now preserves current sync `LLMProvider` behavior only for ordinary `route_mode="finalize"` execution, while capture/branch execution still requires async provider methods.
+- Added a regression test for the sync-only sequential-provider case in [test_async_engine_spine.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/tests/contract/test_async_engine_spine.py:138).
+- Updated the phase [implementation_notes.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/full-revised-standalone-spec-autoloop-v3-async-n-3c402473/runs/run-20260506T130608Z-37f1c786/artifacts/implement/phases/async-engine-spine/implementation_notes.md:1) and appended the non-obvious compatibility boundary to [decisions.txt](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/full-revised-standalone-spec-autoloop-v3-async-n-3c402473/runs/run-20260506T130608Z-37f1c786/decisions.txt:1).
+
+Key findings / decisions
+- The reviewer’s blocking sync-provider regression is fixed without restoring sync engine internals.
+- The reviewer’s duplicated-sync-logic finding is addressed by deleting the dead sync helper stack from `engine.py`.
+- The remaining temporary compatibility rule is explicit now: sequential finalize-mode execution may use current sync providers from inside the dispatcher path, but branch/capture execution remains async-only.
+
+Open issues / next step
+- Reviewer-owned artifacts still contain the prior findings and need a fresh verifier pass to clear them.
+- The temporary sync transport fallback in `RenderedLLMProvider` remains deferred to the later provider-transport cutover phase.

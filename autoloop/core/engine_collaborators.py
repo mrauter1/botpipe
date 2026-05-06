@@ -455,13 +455,21 @@ class StepDispatcher:
             return self._engine.route_finalizer.capture(request)
         return self._engine.route_finalizer.finalize(request)
 
-    def _require_async_provider(self):
+    async def _call_provider(
+        self,
+        *,
+        route_mode: RouteMode,
+        async_call: Callable[[Any], Awaitable[_T]],
+        sync_call: Callable[[Any], _T],
+    ) -> _T:
         provider = self._engine.provider
-        if not supports_async_llm_provider(provider):
+        if supports_async_llm_provider(provider):
+            return await async_call(provider)
+        if route_mode != "finalize":
             raise ProviderExecutionError(
                 f"provider {type(provider).__name__!r} does not implement async step execution methods."
             )
-        return provider
+        return sync_call(provider)
 
     def _execute_workflow_step_for_mode(
         self,
@@ -635,6 +643,7 @@ class StepDispatcher:
                     state,
                     artifacts,
                     baseline_session,
+                    route_mode=route_mode,
                     attempt=attempt,
                     max_attempts=max_attempts,
                     retry_feedback=retry_feedback,
@@ -754,6 +763,7 @@ class StepDispatcher:
                     context,
                     artifacts,
                     baseline_session,
+                    route_mode=route_mode,
                     attempt=attempt,
                     max_attempts=max_attempts,
                     retry_feedback=retry_feedback,
@@ -806,6 +816,7 @@ class StepDispatcher:
         artifacts: ResolvedArtifacts,
         session: "SessionBinding | None",
         *,
+        route_mode: RouteMode,
         attempt: int,
         max_attempts: int,
         retry_feedback: str | None,
@@ -813,7 +824,6 @@ class StepDispatcher:
         consumed_pending_handoffs: tuple["PendingHandoff", ...],
         restorable_pending_handoffs: tuple["PendingHandoff", ...],
     ) -> PairProviderResult:
-        provider = self._require_async_provider()
         producer_prompt = self._engine._resolve_prompt(step.producer_prompt, context=context)
         self._engine._emit_provider_attempt_event(
             "provider_attempt_started",
@@ -823,23 +833,26 @@ class StepDispatcher:
             attempt=attempt,
         )
         try:
-            producer_response = await provider.run_producer_async(
-                ProducerRequest(
-                    step_name=step.name,
-                    producer_prompt=producer_prompt,
+            producer_request = ProducerRequest(
+                step_name=step.name,
+                producer_prompt=producer_prompt,
+                context=context,
+                artifacts=artifacts,
+                session=session,
+                **self._engine.provider_contract_builder.pair_producer_contract(
+                    step,
                     context=context,
                     artifacts=artifacts,
-                    session=session,
-                    **self._engine.provider_contract_builder.pair_producer_contract(
-                        step,
-                        context=context,
-                        artifacts=artifacts,
-                        attempt=attempt,
-                        max_attempts=max_attempts,
-                        retry_feedback=retry_feedback,
-                        route_handoff=route_handoff,
-                    ),
-                )
+                    attempt=attempt,
+                    max_attempts=max_attempts,
+                    retry_feedback=retry_feedback,
+                    route_handoff=route_handoff,
+                ),
+            )
+            producer_response = await self._call_provider(
+                route_mode=route_mode,
+                async_call=lambda provider: provider.run_producer_async(producer_request),
+                sync_call=lambda provider: provider.run_producer(producer_request),
             )
         except asyncio.CancelledError:
             raise
@@ -971,24 +984,27 @@ class StepDispatcher:
                 attempt=attempt,
             )
             try:
-                verifier_response = await provider.run_verifier_async(
-                    VerifierRequest(
-                        step_name=step.name,
-                        verifier_prompt=verifier_prompt,
-                        producer_raw_output=producer_exec.text,
+                verifier_request = VerifierRequest(
+                    step_name=step.name,
+                    verifier_prompt=verifier_prompt,
+                    producer_raw_output=producer_exec.text,
+                    context=context,
+                    artifacts=review_artifacts,
+                    session=verifier_session,
+                    **self._engine.provider_contract_builder.pair_verifier_contract(
+                        step,
                         context=context,
                         artifacts=review_artifacts,
-                        session=verifier_session,
-                        **self._engine.provider_contract_builder.pair_verifier_contract(
-                            step,
-                            context=context,
-                            artifacts=review_artifacts,
-                            attempt=attempt,
-                            max_attempts=max_attempts,
-                            retry_feedback=retry_feedback,
-                            route_handoff=route_handoff,
-                        ),
-                    )
+                        attempt=attempt,
+                        max_attempts=max_attempts,
+                        retry_feedback=retry_feedback,
+                        route_handoff=route_handoff,
+                    ),
+                )
+                verifier_response = await self._call_provider(
+                    route_mode=route_mode,
+                    async_call=lambda provider: provider.run_verifier_async(verifier_request),
+                    sync_call=lambda provider: provider.run_verifier(verifier_request),
                 )
                 self._engine._validate_outcome(step, verifier_response.outcome)
             except asyncio.CancelledError:
@@ -1045,6 +1061,7 @@ class StepDispatcher:
         artifacts: ResolvedArtifacts,
         session: "SessionBinding | None",
         *,
+        route_mode: RouteMode,
         attempt: int,
         max_attempts: int,
         retry_feedback: str | None,
@@ -1052,7 +1069,6 @@ class StepDispatcher:
         consumed_pending_handoffs: tuple["PendingHandoff", ...],
         restorable_pending_handoffs: tuple["PendingHandoff", ...],
     ) -> ProviderExecResult:
-        provider = self._require_async_provider()
         prompt = self._engine._resolve_prompt(step.producer_prompt, context=context)
         self._engine._emit_provider_attempt_event(
             "provider_attempt_started",
@@ -1062,23 +1078,26 @@ class StepDispatcher:
             attempt=attempt,
         )
         try:
-            response = await provider.run_llm_async(
-                LLMRequest(
-                    step_name=step.name,
-                    prompt=prompt,
+            llm_request = LLMRequest(
+                step_name=step.name,
+                prompt=prompt,
+                context=context,
+                artifacts=artifacts,
+                session=session,
+                **self._engine.provider_contract_builder.control_contract(
+                    step,
                     context=context,
                     artifacts=artifacts,
-                    session=session,
-                    **self._engine.provider_contract_builder.control_contract(
-                        step,
-                        context=context,
-                        artifacts=artifacts,
-                        attempt=attempt,
-                        max_attempts=max_attempts,
-                        retry_feedback=retry_feedback,
-                        route_handoff=route_handoff,
-                    ),
-                )
+                    attempt=attempt,
+                    max_attempts=max_attempts,
+                    retry_feedback=retry_feedback,
+                    route_handoff=route_handoff,
+                ),
+            )
+            response = await self._call_provider(
+                route_mode=route_mode,
+                async_call=lambda provider: provider.run_llm_async(llm_request),
+                sync_call=lambda provider: provider.run_llm(llm_request),
             )
             self._engine._validate_outcome(step, response.outcome)
         except asyncio.CancelledError:
