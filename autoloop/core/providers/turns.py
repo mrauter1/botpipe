@@ -25,6 +25,7 @@ class RenderedProviderTurn:
     expected_response: ExpectedProviderResponse
     policy: ResolvedProviderPolicy | None = None
     run_folder: Path | None = None
+    workspace_root: Path | None = None
     step_execution_id: str | None = None
     runtime_event_sink: Callable[[str, Mapping[str, Any]], None] | None = None
     response_schema: dict[str, Any] | None = None

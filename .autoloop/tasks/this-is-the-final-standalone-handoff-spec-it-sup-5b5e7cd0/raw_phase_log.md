@@ -1831,3 +1831,110 @@ phase_mode=single
 phase_ids=route-contract-enforcement,backend-response-schema-delivery
 explicit=True
 current_phase_index=0
+
+
+---
+run_id=run-20260506T204256Z-05282838 | entry=session_turn | pair=implement | phase=producer | cycle=1 | attempt=1 | thread_id=019dff0e-7daf-7a32-806b-ba0f9ef79fd1
+---
+provider=codex
+mode=start
+template=/home/rauter/.local/share/pipx/venvs/autoloop/lib/python3.12/site-packages/autoloop/templates/implement_producer.md
+session_id=019dff0e-7daf-7a32-806b-ba0f9ef79fd1
+
+
+---
+run_id=run-20260506T204256Z-05282838 | entry=phase_output | pair=implement | phase=producer | process=codex-agent | cycle=1 | attempt=1 | thread_id=019dff0e-7daf-7a32-806b-ba0f9ef79fd1
+---
+I’m starting with the phase artifacts and the route-schema/compiler/runtime paths that control route contract validation and provider schema handoff. Then I’ll trace the existing tests around helper routes, raw JSON Schema contracts, and structured-output transports before editing anything.
+
+The plan splits cleanly into two paths: fail-closed compiler/runtime validation, and backend schema delivery/observability. I’m locating the exact compiler, engine, rendered-provider, backend, and test touchpoints now so the edits stay local instead of spreading through unrelated workflow code.
+
+There’s a very dirty worktree, mostly outside this phase, so I’m keeping scope to the route/compiler/runtime/docs/test files already implicated by the request. Next I’m reading the specific functions that currently decide when validators are compiled and whether backend transports ever see the generated response schema.
+
+The first pass shows the compiler currently compiles every explicit route schema the same way, while the engine still has handwritten compatibility checks for helper presets. I need the exact contract around those handwritten checks and the current backend metadata shape before editing, so I’m drilling into the remaining surrounding functions and existing backend tests.
+
+I’ve confirmed the main failure mode: `_compile_route_contract()` explicitly swallows missing `jsonschema` for raw mappings, and the helper-route handwritten validation in the engine is the only reason question/blocked/failed still behave at runtime. The next step is to add a precise compiler-level distinction between helper-default route-fields contracts and custom raw mappings, then wire provider schema delivery metadata into the Codex/Claude transports and their tests.
+
+I’ve reached the backend decision point: the code doesn’t currently pass schemas anywhere, so I need to verify whether the installed CLI surfaces expose any native schema/config path before I choose between true native delivery and an explicit prompt-only fallback. I’m checking the local `codex` and `claude` help surfaces now because that capability is environment-specific.
+
+Plan:
+1. Tighten route contract compilation so raw custom route schemas either produce validators or fail closed, while preserving the handwritten helper-default route-fields path only for semantically equivalent helper defaults.
+2. Add regression coverage for missing-`jsonschema` compile behavior and for invalid custom payload/route-fields outcomes through both scripted and rendered providers.
+3. Pass provider response schemas into backend transports where supported, record explicit structured-output delivery metadata for native/simplified/prompt-only modes, and add backend tests.
+4. Update the phase notes and decision ledger with the non-obvious compatibility boundaries and validation performed.
+
+I have enough context to edit. I’m changing the route helpers/compiler first so only helper-default question/blocked/failed route-fields can use the existing handwritten fallback when `jsonschema` is absent, while every custom raw route payload or route-fields mapping fails closed instead of silently degrading.
+
+The helper/classifier change is in, but it exposed one internal seam in `Route.to(...)` that still needs the private marker threaded through. I’m patching that next, then I’ll add the missing-`jsonschema` tests before touching the transport layer.
+
+I’m moving into the regression coverage now. The compile-path tests will lock the fail-closed behavior down before I touch backend plumbing, so if the transport work later shifts anything unexpectedly we still have a precise boundary around route contract enforcement.
+
+I’ve locked the compile-path behavior; now I’m adding engine-level regressions that exercise the actual outcome-validation path for both fake/scripted and rendered providers. These are the tests that prove invalid custom raw payload and route-fields data still gets rejected after parse, regardless of transport style.
+
+I’m editing the transport layer now. The native delivery path will be Codex `start` via `--output-schema`, while resume-mode Codex and Claude will record an explicit prompt-only fallback so the runtime can tell the difference between real backend schema delivery and prompt guidance only.
+
+The transport implementation is in. I’m adding backend-facing tests against the actual command/request surface and the returned metadata so we can prove three distinct cases: native full delivery, native simplified delivery, and prompt-only fallback when the backend cannot accept a schema.
+
+The last functional piece is documentation: I’m updating the authoring/runtime contract to make the delivery modes explicit so future changes don’t silently regress back to prompt-only behavior without anyone noticing.
+
+I’ve finished the code paths and docs. I’m running focused tests on the new compile-time failures, runtime route validation regressions, and backend schema-delivery metadata so I can catch integration issues before touching the run artifacts.
+
+`pytest` isn’t on PATH in this environment, so I’m rerunning through `python -m pytest`. If the environment still blocks that, I’ll at least validate syntax with `python -m compileall` and note the test runner limitation explicitly.
+
+The shell only has `python3`, not `python`. I’m switching to `python3 -m pytest`, and if the repo dependencies are incomplete I’ll fall back to a syntax-only compile pass so we still get some validation signal.
+
+`pytest` is unavailable, but the Python runtime is usable. I’m running a direct assertion script against the new compiler behavior, runtime route validation, and transport command/metadata assembly so we still get functional verification instead of syntax-only checks.
+
+The system Python is missing repo dependencies like `pydantic`, so end-to-end execution isn’t possible with the ambient interpreter. I’m checking whether the repository already has a project-local virtualenv or runner before I stop at syntax-level validation.
+
+There is a project-local `.venv`. I’m rerunning the focused test set inside that interpreter so we get real execution coverage instead of guessing from the ambient system Python.
+
+The validation and backend transport tests are green. The engine-contract slice is still running; I’m waiting on that before I update the phase notes and close the loop.
+
+The engine regression failures are real, but they’re environmental rather than logic regressions: this `.venv` doesn’t have `jsonschema`, so raw-schema routes now correctly fail at compile time. I’m adapting those runtime tests to install a tiny fake validator via monkeypatch so they still exercise the runtime enforcement path in a controlled “validator available” environment.
+
+The remaining engine failures are just test harness setup: the rendered-provider path needs resolvable prompt text, unlike the scripted fake provider. I’m switching those two rendered regression workflows to inline prompt text so the failures stay focused on payload and route-fields validation.
+
+I’m at the artifact update stage now. I’m recording the non-obvious compatibility decisions and the exact validation performed so later turns don’t drift on the helper-route exception, the backend fallback contract, or the fact that this repo’s default `.venv` does not include the optional `jsonschema` package.
+
+The code and artifacts are updated. I’m doing one last focused validation pass after the final test-harness fixes so the recorded results in the notes match the current tree exactly.
+
+One backend test still had a harness mismatch: Claude’s executor now passes `cwd` through the subprocess helper, so the test stub needs to accept it. I’m fixing that stub and rerunning just the backend slice.
+
+The focused validation is green now. I’m doing a final diff skim of the files in scope so the close-out reflects the actual blast radius and any notable side effects, then I’ll summarize with the required headings.
+
+Scope considered
+
+- Route contract compilation and runtime enforcement for raw route `payload_schema` / `route_fields_schema`.
+- Rendered-provider backend delivery of generated response schemas and explicit fallback metadata.
+- Phase artifacts: `decisions.txt` and `implementation_notes.md`.
+
+What I analyzed
+
+- Compiler route-contract lowering in [compiler.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/autoloop/core/compiler.py) and helper route construction in [routes.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/autoloop/core/routes.py).
+- Engine-side outcome validation in [engine.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/autoloop/core/engine.py).
+- Rendered transport/backends in [codex.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/autoloop/runtime/providers/codex.py), [claude.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/autoloop/runtime/providers/claude.py), and [_common.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/autoloop/runtime/providers/_common.py).
+- Existing validation, engine, and backend tests plus the active plan and phase notes.
+
+What I changed
+
+- Tightened route contract compilation so custom raw route `payload_schema` and `route_fields_schema` mappings now fail closed when `jsonschema` is unavailable instead of silently degrading to metadata-only.
+- Preserved the missing-`jsonschema` compatibility path only for default `Route.question()`, `Route.blocked()`, and `Route.failed()` route-fields contracts by marking the helper-default path explicitly in [routes.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/autoloop/core/routes.py).
+- Wired Codex native schema delivery through `codex exec --output-schema` for start turns, writing the delivered schema into run-scoped files and recording `native_full` / `native_simplified` metadata.
+- Added explicit `prompt_only` structured-output fallback metadata for unsupported surfaces, including Codex resume turns and Claude turns.
+- Added regression coverage in [test_validation.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/tests/unit/test_validation.py), [test_engine_contracts.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/tests/contract/test_engine_contracts.py), and [test_provider_backends.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/tests/runtime/test_provider_backends.py).
+- Updated [docs/authoring.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/docs/authoring.md) and [controlroutes.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/controlroutes.md), plus the phase [implementation_notes.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/this-is-the-final-standalone-handoff-spec-it-sup-5b5e7cd0/runs/run-20260506T204256Z-05282838/artifacts/implement/phases/route-contract-enforcement/implementation_notes.md) and [decisions.txt](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/this-is-the-final-standalone-handoff-spec-it-sup-5b5e7cd0/runs/run-20260506T204256Z-05282838/decisions.txt).
+
+Key findings / decisions
+
+- The repo’s `.venv` does not include the optional `jsonschema` package, so raw-schema routes now correctly compile-fail by default; runtime enforcement tests use a fake validator seam to cover the “validator available” path without weakening product behavior.
+- Native backend schema delivery is currently available only on Codex start turns from the observed CLI surface; Codex resume and Claude are documented and tested as prompt-only fallback paths.
+- Legacy `ControlRoutes(question=...)` lowering and legacy top-level `question` / `reason` parsing were left intact.
+
+Open issues / next step
+
+- Focused validation passed:
+  - `.venv/bin/python -m pytest tests/unit/test_validation.py -k "raw_route_payload_schema_without_jsonschema_dependency or raw_route_fields_schema_without_jsonschema_dependency or helper_default_route_fields_without_jsonschema_dependency or custom_helper_route_fields_override_without_jsonschema_dependency"`
+  - `.venv/bin/python -m pytest tests/contract/test_engine_contracts.py -k "invalid_custom_raw_route_payload or invalid_custom_raw_route_fields"`
+  - `.venv/bin/python -m pytest tests/runtime/test_provider_backends.py -k "response_schema or prompt_only_fallback or output_schema_file or simplified_schema_delivery"`
+- I did not run the full suite.

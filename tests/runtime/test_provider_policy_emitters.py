@@ -45,6 +45,7 @@ def _emit_claude(
     *,
     validation: ProviderPolicyValidationConfig | None = None,
     capabilities: ClaudeCapabilities | None = None,
+    workspace_root: Path | None = None,
 ):
     emitter = ClaudePolicyEmitter(capabilities=capabilities)
     return emitter.emit(
@@ -53,6 +54,7 @@ def _emit_claude(
         step_key="implement__visit-1",
         validation=validation or ProviderPolicyValidationConfig(),
         step_name="implement",
+        workspace_root=workspace_root,
     )
 
 
@@ -222,6 +224,8 @@ def test_codex_emitter_uses_warn_mode_for_lossy_read_only_allow_write(tmp_path: 
 
 
 def test_claude_emitter_maps_allow_write_and_disable_bypass(tmp_path: Path) -> None:
+    workspace_root = tmp_path / "workspace"
+    workspace_root.mkdir()
     policy = merge_provider_policies(
         SYSTEM_DEFAULT_PROVIDER_POLICY,
         ProviderPolicyOverride(
@@ -234,7 +238,7 @@ def test_claude_emitter_maps_allow_write_and_disable_bypass(tmp_path: Path) -> N
         ),
     )
 
-    emission = _emit_claude(tmp_path, policy)
+    emission = _emit_claude(tmp_path, policy, workspace_root=workspace_root)
     settings_path = emission.config_files["settings"]
     settings = json.loads(settings_path.read_text(encoding="utf-8"))
 
@@ -242,9 +246,15 @@ def test_claude_emitter_maps_allow_write_and_disable_bypass(tmp_path: Path) -> N
     assert settings["model"] == "claude-sonnet-4-6"
     assert settings["permissions"]["defaultMode"] == "auto"
     assert settings["permissions"]["disableBypassPermissionsMode"] == "disable"
-    assert settings["sandbox"]["filesystem"]["allowWrite"] == [".", "./build", "./dist"]
+    assert settings["sandbox"]["filesystem"]["allowWrite"] == [
+        str(workspace_root.resolve()),
+        str((workspace_root / "build").resolve()),
+        str((workspace_root / "dist").resolve()),
+    ]
     assert settings["sandbox"]["enabled"] is True
-    assert emission.cli_args == ("--settings", str(settings_path))
+    assert emission.cli_args == ("--settings", str(settings_path), "--add-dir", str(workspace_root.resolve()))
+    assert emission.env["CLAUDE_CONFIG_DIR"] == str(tmp_path / "provider_policy" / "claude_runtime")
+    assert emission.env["CLAUDE_CODE_ADDITIONAL_DIRECTORIES_CLAUDE_MD"] == "1"
 
 
 def test_claude_emitter_maps_deny_read_and_deny_write_to_sandbox_and_permission_rules(tmp_path: Path) -> None:
@@ -297,6 +307,8 @@ def test_claude_emitter_maps_network_domains(tmp_path: Path) -> None:
 
 
 def test_claude_emitter_marks_filesystem_capability_lossy_when_native_support_is_missing(tmp_path: Path) -> None:
+    workspace_root = tmp_path / "workspace"
+    workspace_root.mkdir()
     policy = merge_provider_policies(
         SYSTEM_DEFAULT_PROVIDER_POLICY,
         ProviderPolicyOverride(
@@ -316,6 +328,7 @@ def test_claude_emitter_marks_filesystem_capability_lossy_when_native_support_is
         policy,
         validation=ProviderPolicyValidationConfig(lossy_mapping="warn"),
         capabilities=ClaudeCapabilities(supports_sandbox_filesystem=False),
+        workspace_root=workspace_root,
     )
     settings = json.loads(emission.config_files["settings"].read_text(encoding="utf-8"))
 
@@ -323,10 +336,30 @@ def test_claude_emitter_marks_filesystem_capability_lossy_when_native_support_is
     assert emission.capability_report.lossy == (
         "sandbox.filesystem native enforcement unavailable; emitted Read/Edit permission rules only",
     )
-    assert settings["permissions"]["allow"].count("Edit(./dist)") == 1
-    assert settings["permissions"]["deny"].count("Read(./.env)") == 1
+    assert settings["permissions"]["allow"].count(f"Edit(//{(workspace_root / 'dist').resolve().as_posix().lstrip('/')})") == 1
+    assert settings["permissions"]["deny"].count(
+        f"Read(//{(workspace_root / '.env').resolve().as_posix().lstrip('/')})"
+    ) == 1
     assert emission.capability_report.effective_enforcement.write_roots == ()
     assert "filesystem" not in settings.get("sandbox", {})
+
+
+def test_claude_emitter_marks_default_workspace_write_lossy_when_native_support_is_missing(tmp_path: Path) -> None:
+    workspace_root = tmp_path / "workspace"
+    workspace_root.mkdir()
+
+    emission = _emit_claude(
+        tmp_path,
+        SYSTEM_DEFAULT_PROVIDER_POLICY,
+        validation=ProviderPolicyValidationConfig(lossy_mapping="warn"),
+        capabilities=ClaudeCapabilities(supports_sandbox_filesystem=False),
+        workspace_root=workspace_root,
+    )
+
+    assert emission.capability_report.decision == "warn"
+    assert emission.capability_report.lossy == (
+        "sandbox.filesystem native enforcement unavailable; emitted Read/Edit permission rules only",
+    )
 
 
 def test_claude_emitter_raises_when_lossy_mapping_is_fail(tmp_path: Path) -> None:

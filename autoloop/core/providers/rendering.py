@@ -87,6 +87,7 @@ def render_provider_turn_with_policy(
         session=context.session,
         policy=context.policy,
         run_folder=_context_run_folder(context.context),
+        workspace_root=_context_workspace_root(context.context),
         step_execution_id=_context_step_execution_id(context.context),
         runtime_event_sink=_context_runtime_event_sink(context.context),
         expected_response="raw_text" if context.turn_kind in {"producer", "operation"} else "outcome_json",
@@ -99,6 +100,13 @@ def _context_run_folder(context: object) -> Path | None:
     run_folder = getattr(context, "run_folder", None)
     if isinstance(run_folder, Path):
         return run_folder
+    return None
+
+
+def _context_workspace_root(context: object) -> Path | None:
+    workspace_root = getattr(context, "root", None)
+    if isinstance(workspace_root, Path):
+        return workspace_root
     return None
 
 

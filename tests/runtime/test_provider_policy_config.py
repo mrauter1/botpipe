@@ -335,6 +335,32 @@ def test_runtime_full_auto_maps_to_full_auto_sandboxed_when_policy_mode_is_not_e
     assert resolved.provider_policy.default.permissions.mode == "full_auto_sandboxed"
 
 
+def test_resolve_runtime_config_maps_legacy_claude_bypass_into_provider_policy(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    config_root = tmp_path / "repo"
+    config_root.mkdir()
+    (config_root / "autoloop.yaml").write_text(
+        "provider:\n"
+        "  name: claude\n"
+        "  claude:\n"
+        "    permission_strategy: bypass\n",
+        encoding="utf-8",
+    )
+    monkeypatch.setattr(runtime_config, "user_config_dir", lambda: tmp_path / "missing-user-config")
+
+    resolved = resolve_runtime_config(config_root, _runtime_args())
+
+    assert resolved.provider.claude.permission_strategy == "bypass"
+    assert resolved.provider_policy.default.permissions.mode == "full_auto_unsandboxed"
+    assert resolved.provider_policy.default.permissions.allow_dangerous_bypass is True
+    assert resolved.provider_policy.default.permissions.disable_dangerous_bypass is False
+    assert resolved.provider_policy.default.sandbox.enabled is False
+    assert resolved.provider_policy.default.sandbox.required is False
+    assert resolved.provider_policy.default.sandbox.mode == "danger_full_access"
+
+
 def test_explicit_policy_mode_beats_legacy_full_auto_mapping(
     tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,
@@ -355,6 +381,32 @@ def test_explicit_policy_mode_beats_legacy_full_auto_mapping(
     resolved = resolve_runtime_config(config_root, _runtime_args())
 
     assert resolved.provider_policy.default.permissions.mode == "ask"
+
+
+def test_explicit_policy_fields_beat_legacy_claude_bypass_mapping(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    config_root = tmp_path / "repo"
+    config_root.mkdir()
+    (config_root / "autoloop.yaml").write_text(
+        "provider:\n"
+        "  name: claude\n"
+        "  claude:\n"
+        "    permission_strategy: bypass\n"
+        "provider_policy:\n"
+        "  default:\n"
+        "    permissions:\n"
+        "      mode: ask\n",
+        encoding="utf-8",
+    )
+    monkeypatch.setattr(runtime_config, "user_config_dir", lambda: tmp_path / "missing-user-config")
+
+    resolved = resolve_runtime_config(config_root, _runtime_args())
+
+    assert resolved.provider.claude.permission_strategy == "bypass"
+    assert resolved.provider_policy.default.permissions.mode == "ask"
+    assert resolved.provider_policy.default.permissions.allow_dangerous_bypass is False
 
 
 def test_policy_validation_cli_overrides_replace_config_validation_modes(

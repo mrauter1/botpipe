@@ -156,6 +156,10 @@ Runtime behavior:
 - author workflows with step-local `routes={...}`; `transitions` is not part of the canonical authoring surface
 - `retry_policy` controls provider-attributable retries and defaults to `ProviderRetryPolicy(max_attempts=3)` on provider-backed steps
 - the rendered Runtime Step Contract can also include resolved-target route handoff text and retry feedback when the engine supplies them
+- native backend structured output is best-effort and transport-specific:
+  - Codex `exec` start turns receive the generated provider response schema through `--output-schema`
+  - if the generated schema was simplified to stay within provider limits, that simplified schema is the one delivered natively and runtime metadata records the simplified delivery mode
+  - backends or command surfaces without native schema support fall back to prompt-only guidance, but engine-side route legality, payload validation, and route-fields validation remain strict after parse
 
 Canonical provider outcomes always route through:
 

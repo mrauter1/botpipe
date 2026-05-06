@@ -74,6 +74,23 @@ def _webfetch_rule(domain: str) -> str:
     return f"WebFetch(domain:{domain})"
 
 
+def _resolve_workspace_policy_path(path: str, workspace_root: Path) -> str:
+    raw_path = Path(path)
+    candidate = raw_path if raw_path.is_absolute() else workspace_root / raw_path
+    return str(candidate.resolve(strict=False))
+
+
+def _filesystem_entries_for_emission(
+    entries: tuple[str, ...],
+    *,
+    workspace_root: Path | None,
+) -> tuple[str, ...]:
+    if workspace_root is None:
+        return entries
+    resolved_root = workspace_root.resolve(strict=False)
+    return tuple(_resolve_workspace_policy_path(entry, resolved_root) for entry in entries)
+
+
 class ClaudePolicyEmitter:
     """Emit Claude Code settings and capability artifacts for one resolved policy."""
 
@@ -92,15 +109,26 @@ class ClaudePolicyEmitter:
         step_key: str,
         validation: ProviderPolicyValidationConfig,
         step_name: str | None = None,
+        workspace_root: Path | None = None,
     ) -> ProviderPolicyEmission:
         policy_root = run_dir / "provider_policy" / step_key / "claude"
         policy_root.mkdir(parents=True, exist_ok=True)
         settings_path = policy_root / "settings.json"
         effective_policy_path = policy_root / "effective_policy.json"
         capability_report_path = policy_root / "capability_report.json"
+        runtime_home = run_dir / "provider_policy" / "claude_runtime"
+        runtime_home.mkdir(parents=True, exist_ok=True)
 
-        settings_payload, cli_args, unsupported, lossy, unsafe, effective = self._build_settings_payload(policy)
-        cli_args = ["--settings", str(settings_path), *cli_args]
+        settings_payload, cli_args, unsupported, lossy, unsafe, effective = self._build_settings_payload(
+            policy,
+            workspace_root=workspace_root,
+        )
+        cli_args = [
+            "--settings",
+            str(settings_path),
+            *(["--add-dir", str(workspace_root.resolve(strict=False))] if workspace_root is not None else []),
+            *cli_args,
+        ]
         _json_dump(settings_path, settings_payload)
 
         fingerprint = policy_fingerprint(policy)
@@ -142,7 +170,7 @@ class ClaudePolicyEmitter:
                 "capability_report": capability_report_path,
             },
             cli_args=tuple(cli_args),
-            env={},
+            env=_claude_runtime_env(runtime_home, workspace_root=workspace_root),
             capability_report=report,
         )
         _raise_for_capability_failure(emission)
@@ -151,6 +179,8 @@ class ClaudePolicyEmitter:
     def _build_settings_payload(
         self,
         policy: ResolvedProviderPolicy,
+        *,
+        workspace_root: Path | None,
     ) -> tuple[dict[str, Any], list[str], list[str], list[str], list[str], EffectiveEnforcementReport]:
         unsupported: list[str] = []
         lossy: list[str] = []
@@ -260,31 +290,28 @@ class ClaudePolicyEmitter:
             sandbox_payload["allowUnsandboxedCommands"] = False
 
         filesystem = policy.sandbox.workspace.filesystem
+        emitted_allow_read = _filesystem_entries_for_emission(filesystem.allow_read, workspace_root=workspace_root)
+        emitted_allow_write = _filesystem_entries_for_emission(filesystem.allow_write, workspace_root=workspace_root)
+        emitted_deny_read = _filesystem_entries_for_emission(filesystem.deny_read, workspace_root=workspace_root)
+        emitted_deny_write = _filesystem_entries_for_emission(filesystem.deny_write, workspace_root=workspace_root)
         native_filesystem = self._capabilities.supports_sandbox_filesystem and bool(sandbox_payload.get("enabled"))
         if native_filesystem:
-            filesystem_payload["allowRead"] = list(filesystem.allow_read)
+            filesystem_payload["allowRead"] = list(emitted_allow_read)
             if policy.sandbox.mode != "read_only":
-                filesystem_payload["allowWrite"] = list(filesystem.allow_write)
-            if filesystem.deny_read:
-                filesystem_payload["denyRead"] = list(filesystem.deny_read)
-            if filesystem.deny_write:
-                filesystem_payload["denyWrite"] = list(filesystem.deny_write)
+                filesystem_payload["allowWrite"] = list(emitted_allow_write)
+            if emitted_deny_read:
+                filesystem_payload["denyRead"] = list(emitted_deny_read)
+            if emitted_deny_write:
+                filesystem_payload["denyWrite"] = list(emitted_deny_write)
         else:
-            if any(
-                (
-                    filesystem.allow_read != (".",),
-                    filesystem.allow_write != (".",),
-                    filesystem.deny_read,
-                    filesystem.deny_write,
-                )
-            ):
+            if bool(sandbox_payload.get("enabled")) and not self._capabilities.supports_sandbox_filesystem:
                 lossy.append("sandbox.filesystem native enforcement unavailable; emitted Read/Edit permission rules only")
-            _extend_unique(permission_allow, [_read_rule(path) for path in filesystem.allow_read])
+            _extend_unique(permission_allow, [_read_rule(path) for path in emitted_allow_read])
             if policy.sandbox.mode != "read_only":
-                _extend_unique(permission_allow, [_edit_rule(path) for path in filesystem.allow_write])
+                _extend_unique(permission_allow, [_edit_rule(path) for path in emitted_allow_write])
 
-        _extend_unique(permission_deny, [_read_rule(path) for path in filesystem.deny_read])
-        _extend_unique(permission_deny, [_edit_rule(path) for path in filesystem.deny_write])
+        _extend_unique(permission_deny, [_read_rule(path) for path in emitted_deny_read])
+        _extend_unique(permission_deny, [_edit_rule(path) for path in emitted_deny_write])
 
         network = policy.sandbox.workspace.network
         if policy.sandbox.workspace.network.allow_local_binding:
@@ -325,8 +352,8 @@ class ClaudePolicyEmitter:
 
         effective = EffectiveEnforcementReport(
             sandbox_mode=policy.sandbox.mode if policy.sandbox.enabled else None,
-            write_roots=tuple(filesystem.allow_write) if native_filesystem and policy.sandbox.mode != "read_only" else (),
-            read_roots=tuple(filesystem.allow_read) if native_filesystem else (),
+            write_roots=tuple(emitted_allow_write) if native_filesystem and policy.sandbox.mode != "read_only" else (),
+            read_roots=tuple(emitted_allow_read) if native_filesystem else (),
             deny_read_enforced=True if native_filesystem and filesystem.deny_read else (False if filesystem.deny_read else None),
             deny_write_enforced=True
             if native_filesystem and filesystem.deny_write
@@ -339,6 +366,15 @@ class ClaudePolicyEmitter:
             else (False if policy.permissions.disable_dangerous_bypass else None),
         )
         return payload, cli_args, unsupported, lossy, unsafe, effective
+
+
+def _claude_runtime_env(runtime_home: Path, *, workspace_root: Path | None) -> dict[str, str]:
+    env = {
+        "CLAUDE_CONFIG_DIR": str(runtime_home),
+    }
+    if workspace_root is not None:
+        env["CLAUDE_CODE_ADDITIONAL_DIRECTORIES_CLAUDE_MD"] = "1"
+    return env
 
 
 def _redacted_policy_payload(policy: ResolvedProviderPolicy) -> dict[str, Any]:

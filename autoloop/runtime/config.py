@@ -15,6 +15,7 @@ from autoloop.core.provider_policy import (
     ProviderPolicy,
     ProviderPolicyOverride,
     ProviderPolicyValidationConfig,
+    SandboxPolicy,
     StrictProviderPolicy,
     SYSTEM_DEFAULT_PROVIDER_POLICY,
     merge_provider_policies,
@@ -696,6 +697,36 @@ def _merge_provider_policy_config(
             default_policy,
             ProviderPolicyOverride(permissions=PermissionPolicy(mode="full_auto_sandboxed")),
         )
+    if (
+        provider.name == "claude"
+        and provider.claude.permission_strategy == "bypass"
+        and not _policy_layers_set_any_field(
+            layers,
+            (
+                ("permissions", "mode"),
+                ("permissions", "allow_dangerous_bypass"),
+                ("permissions", "disable_dangerous_bypass"),
+                ("sandbox", "enabled"),
+                ("sandbox", "required"),
+                ("sandbox", "mode"),
+            ),
+        )
+    ):
+        default_policy = merge_provider_policies(
+            default_policy,
+            ProviderPolicyOverride(
+                permissions=PermissionPolicy(
+                    mode="full_auto_unsandboxed",
+                    allow_dangerous_bypass=True,
+                    disable_dangerous_bypass=False,
+                ),
+                sandbox=SandboxPolicy(
+                    enabled=False,
+                    required=False,
+                    mode="danger_full_access",
+                ),
+            ),
+        )
 
     strict_payload: dict[str, Any] | None = None
     for layer in layers:
@@ -978,6 +1009,17 @@ def _policy_override_sets_field(
             return False
         current = getattr(current, part)
     return True
+
+
+def _policy_layers_set_any_field(
+    layers: tuple[ProviderPolicyRuntimeConfigOverride, ...],
+    paths: tuple[tuple[str, ...], ...],
+) -> bool:
+    for layer in layers:
+        for path in paths:
+            if _policy_override_sets_field(layer.default, path):
+                return True
+    return False
 
 
 def _deep_merge_dicts(base: dict[str, Any], update: dict[str, Any]) -> dict[str, Any]:

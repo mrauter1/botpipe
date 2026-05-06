@@ -1,258 +1,967 @@
-## Final standalone Codex CLI spec: `blocked` and `failed` are explicit opt-in provider routes
+This is the final standalone handoff spec. It supersedes the mixed current implementation where provider output still has special top-level `question` / `reason` behavior while route selection comes from `Outcome.tag`. 
+
+## Standalone spec: route helpers, route schemas, GLOBAL defaults, and structured provider outcomes
 
 * **Objective**
 
-  * Change the latest pasted implementation so `blocked` and `failed` are **not** default provider-selectable routes.
-  * `question` is the **only** framework-injected provider runtime-control route.
-  * `blocked` and `failed` are ordinary authored route tags:
+  * Make all provider outcome behavior route-table driven.
+  * Treat `question`, `blocked`, and `failed` as conventional route helper presets, not as a separate control-route subsystem.
+  * Represent route-dependent provider fields through selected-route schema.
+  * Preserve normal route behavior for all routes:
 
-    * absent by default
-    * invalid when undeclared
-    * provider-visible only when explicitly declared and visible
-    * never classified as `runtime_control_routes`
-  * Treat this as a greenfield contract. Update implementation, tests, snapshots, and docs to match this behavior.
+    * route target resolution
+    * `after` hooks
+    * `on_taken` hooks
+    * route redirects
+    * handoffs
+    * required writes
+    * artifact validation
+    * static graph metadata
+    * compile-report metadata
+  * Keep the compiled route table as the single source of truth for:
 
-* **Core route model**
+    * provider legality
+    * runtime route legality
+    * route schema
+    * route visibility
+    * execution behavior
 
-  * `question`
+* **Core invariant**
 
-    * Framework-owned runtime-control route.
-    * May be injected automatically for provider-backed steps when question handling is enabled.
-    * Defaults to `AWAIT_INPUT`.
-    * Requires a non-empty `question` payload when selected by a provider.
-    * Existing full-auto behavior must remain unchanged.
-  * `blocked`
+  * Everything is a route.
+  * Route helpers define conventional defaults.
+  * GLOBAL defines workflow-wide route defaults.
+  * Step-local routes override GLOBAL routes by tag.
+  * Step-local `Route.disabled()` suppresses inherited GLOBAL routes.
+  * Provider-visible compiled routes determine which tags a provider may return.
+  * Runtime and hook route legality are determined by compiled available routes.
+  * Provider output route selection is always `outcome.tag`.
+  * `outcome.payload` is business/domain structured output.
+  * `outcome.route_fields` is selected-route metadata.
+  * Existing route finalization remains the execution path after a provider outcome is parsed and validated.
 
-    * Ordinary authored route tag.
-    * Never injected by the framework.
-    * Never valid or provider-visible unless explicitly declared.
-    * Does not require a `reason` field.
-    * May target `AWAIT_INPUT`, `FINISH`, another step, or any valid author-selected destination.
-  * `failed`
+* **Non-goals**
 
-    * Ordinary authored route tag.
-    * Never injected by the framework.
-    * Never valid or provider-visible unless explicitly declared.
-    * Does not require a `reason` field.
-    * May target `FAIL`, another step, or any valid author-selected destination.
-  * `blocked` and `failed` must **never** appear in `runtime_control_routes`, even when explicitly declared.
+  * Do not redesign route finalization.
+  * Do not make `payload` participate in route selection.
+  * Do not replace existing step-level output schema validation.
+  * Do not require every route to declare a route-specific payload schema.
+  * Do not remove legacy top-level `question` / `reason` parsing in the first migration patch.
+  * Do not introduce `ControlRoutes(question=..., blocked=..., failed=...)` as the primary architecture.
+  * Do not create a second “control route” mechanism parallel to the route table.
 
-* **Author opt-in contract**
+* **Legacy `ControlRoutes` policy**
 
-  * Authors opt in by declaring routes explicitly, for example:
+  * Treat existing `ControlRoutes` as legacy compatibility.
+  * New route-helper/GLOBAL route definitions are the preferred authoring model.
+  * During migration, `ControlRoutes(question="auto")` may be translated internally into an inherited `Route.question()` default.
+  * Do not extend `ControlRoutes` with `blocked` or `failed`.
+  * Mark `ControlRoutes` as deprecated once route helper defaults are available.
+  * Long-term authoring should express provider control behavior through routes:
 
-    * `routes={"blocked": AWAIT_INPUT}`
-    * `routes={"failed": FAIL}`
-    * `routes={"blocked": Route(target=AWAIT_INPUT, summary="...")}`
-    * `routes={"failed": Route(target=FAIL, summary="...")}`
-  * Step-local and global route declarations both count as explicit opt-in.
-  * Provider visibility follows the route’s normal `provider_visible` flag.
-  * Hidden explicit routes remain deterministic runtime routes but are not provider-selectable:
+    ```python
+    transitions = {
+        GLOBAL: {
+            "question": Route.question(),
+            "blocked": Route.blocked(),
+            "failed": Route.failed(),
+        }
+    }
+    ```
 
-    * `Route(target=AWAIT_INPUT, provider_visible=False)`
-    * `Route(target=FAIL, provider_visible=False)`
-  * `control_routes=True`, default `ControlRoutes(...)`, and `ControlRoutes(question=...)` must not imply `blocked` or `failed`.
-  * `control_routes=False` disables `question` and still must not add `blocked` or `failed`.
+* **Route metadata**
 
-* **Compiled route source of truth**
+  * Extend route metadata conceptually to include:
 
-  * Fix the behavior at route construction / compilation time.
-  * Do not solve this by filtering `blocked` and `failed` out of provider prompts after they have already been compiled.
-  * The compiled route table is authoritative for:
+    * `target`
+    * `summary`
+    * `required_writes`
+    * `handoff`
+    * `on_taken`
+    * `provider_visibility`
+    * `payload_schema`
+    * `route_fields_schema`
+    * `preset` / `kind` for inspection only, such as `"question"`, `"blocked"`, `"failed"`, `"custom"`, `"hidden"`, or `"disabled"`
+    * inheritance source metadata:
 
-    * valid runtime routes
-    * authored routes
-    * provider-visible routes
-    * provider prompt route guidance
-    * static graph output
-    * topology hashes
-    * compile reports
-    * illegal-route retry validation
-    * runtime finalization
-  * If `blocked` or `failed` are absent from the compiled route table, provider output selecting either tag must follow the existing illegal-route retry/failure path.
-  * If `blocked` or `failed` are present but hidden with `provider_visible=False`, provider output selecting them must also be rejected as not allowed for the provider.
+      * step-local
+      * GLOBAL
+      * framework default profile
+    * disabled/suppressed marker for inherited route removal
+  * Route helper presets must compile to ordinary route definitions.
+  * Helper presets must not bypass normal route finalization.
 
-* **Implementation changes**
+* **Provider visibility**
 
-  * In `autoloop/core/discovery.py::_inject_control_routes(...)`:
+  * Replace boolean-only provider visibility with normalized visibility modes:
 
-    * Keep `question` injection.
-    * Remove all default injection of:
+    * `"hidden"`: route exists, provider cannot select it.
+    * `"interactive_only"`: provider may select it only when human interaction / pausing is allowed.
+    * `"always"`: provider may select it in both interactive and full-auto modes.
+  * Backward-compatible normalization:
 
-      * `blocked -> AWAIT_INPUT`
-      * `failed -> FAIL`
-    * Remove all additions of `blocked` and `failed` to `runtime_control_routes_by_step`.
-    * Expected default result:
+    * `provider_visible=False` → `"hidden"`
+    * `provider_visible=True` → `"always"`
+  * Provider-visible route lists are derived from compiled routes:
 
-      * provider-backed step with question enabled: `runtime_control_routes == ("question",)`
-      * provider-backed step with `control_routes=False`: `runtime_control_routes == ()`
-  * In `autoloop/core/compiler.py::_internal_step_runtime_routes(...)`:
+    * interactive mode includes `"interactive_only"` and `"always"`
+    * full-auto mode includes `"always"` only
+    * hidden routes are excluded
+    * disabled routes are excluded
+  * Provider output selecting a hidden, disabled, absent, or full-auto-hidden route is an illegal route.
 
-    * Keep internal semantic defaults such as:
+* **Payload schema sentinel API**
 
-      * prompt step: `done`
-      * produce/verify step: `accepted`, `needs_rework`
-    * Keep `question` injection when enabled.
-    * Remove `routes.setdefault("blocked", AWAIT_INPUT)`.
-    * Remove `routes.setdefault("failed", FAIL)`.
-  * In `autoloop/core/compiler.py::_internal_step_runtime_control_routes(...)`:
+  * Do not use `None` ambiguously for payload schema inheritance.
+  * Define explicit route payload schema sentinel values or helper constructors:
 
-    * Keep `question` when enabled.
-    * Remove all logic appending or returning `blocked` or `failed`.
-  * Do not special-case `_compiled_provider_visibility(...)` for `blocked` or `failed`.
+    * `Route.inherit_payload_schema()`
+    * `Route.no_payload_schema()`
+  * Semantics:
 
-    * Explicit visible `blocked` / `failed` should behave like any other visible authored route.
-    * Explicit hidden `blocked` / `failed` should behave like any other hidden authored route.
-  * Do not remove explicit `_BLOCKED_ROUTE` or `_FAILED_ROUTE` declarations inside packaged workflows. Those are author opt-ins.
+    * `Route.inherit_payload_schema()`
 
-* **Provider behavior**
+      * use step-level `expected_output_schema` if present
+      * default for route helpers
+    * `Route.no_payload_schema()`
 
-  * Default provider-visible route lists must not include `blocked` or `failed`.
-  * Default rendered provider prompts must not mention `blocked` or `failed` as selectable routes.
-  * Scripted provider and rendered provider paths must enforce the same route legality rules.
-  * Provider output `{"tag": "blocked"}` without an explicit provider-visible `blocked` route is illegal.
-  * Provider output `{"tag": "failed"}` without an explicit provider-visible `failed` route is illegal.
-  * With retries remaining, illegal `blocked` / `failed` selections must use the existing illegal-route retry feedback path, including the existing “selected route was not allowed” style message.
-  * With retries exhausted, illegal `blocked` / `failed` selections must follow the existing illegal-route exhaustion path, including provider-attributable failure context.
+      * no payload schema validation for this route
+    * concrete Pydantic model / JSON schema
 
-* **Full-auto behavior**
+      * validate this route’s `outcome.payload` against that schema
+  * Route-specific payload schema overrides step-level schema.
+  * Route-specific payload schema does not merge with step-level schema unless a future merge mode is explicitly designed.
 
-  * Preserve existing `question` behavior:
+* **Route helper API**
 
-    * default `question`: visible in interactive mode, hidden in full-auto
-    * `ControlRoutes(question="always")`: visible in full-auto
-    * `control_routes=False`: absent
-  * `blocked` and `failed` have no special full-auto behavior:
+  * Add route helper constructors on `Route`.
+  * Proposed signatures:
 
-    * absent when undeclared
-    * visible if explicitly declared and provider-visible
-    * hidden if explicitly declared with `provider_visible=False`
+    ```python
+    Route.question(
+        target=AWAIT_INPUT,
+        *,
+        summary: str | None = None,
+        provider_visibility: Literal["hidden", "interactive_only", "always"] = "interactive_only",
+        payload_schema=Route.inherit_payload_schema(),
+        route_fields_schema=None,
+        required_writes: Sequence[str] = (),
+        handoff: str | None = None,
+        on_taken: Callable | None = None,
+    )
 
-* **Payload validation**
+    Route.blocked(
+        target=AWAIT_INPUT,
+        *,
+        summary: str | None = None,
+        provider_visibility: Literal["hidden", "interactive_only", "always"] = "interactive_only",
+        payload_schema=Route.inherit_payload_schema(),
+        route_fields_schema=None,
+        required_writes: Sequence[str] = (),
+        handoff: str | None = None,
+        on_taken: Callable | None = None,
+    )
 
-  * Keep `question` strict: provider-selected `question` requires a non-empty `question` field.
-  * Keep explicit `blocked` and `failed` lenient: no required `reason` field.
-  * Do not add framework-level `reason` requirements for `blocked` or `failed`.
-  * Do not treat `blocked` as a synonym for `question`.
-  * Do not treat `failed` as a synonym for provider execution failure. It is just an authored route tag unless the runtime itself fails.
+    Route.failed(
+        target=FAIL,
+        *,
+        summary: str | None = None,
+        provider_visibility: Literal["hidden", "interactive_only", "always"] = "always",
+        payload_schema=Route.inherit_payload_schema(),
+        route_fields_schema=None,
+        required_writes: Sequence[str] = (),
+        handoff: str | None = None,
+        on_taken: Callable | None = None,
+    )
 
-* **Compile-time tests**
+    Route.hidden(
+        target,
+        *,
+        summary: str | None = None,
+        payload_schema=Route.inherit_payload_schema(),
+        route_fields_schema=None,
+        required_writes: Sequence[str] = (),
+        handoff: str | None = None,
+        on_taken: Callable | None = None,
+    )
 
-  * Update default `PromptStep` tests:
+    Route.disabled()
+    ```
 
-    * `runtime_control_routes == ("question",)`
-    * route table includes authored semantic routes plus `question`
-    * route table does not include `blocked`
-    * route table does not include `failed`
-    * interactive provider-visible routes do not include `blocked` or `failed`
-    * full-auto provider-visible routes do not include `blocked` or `failed`
-  * Update default `ProduceVerifyStep` tests:
+* **Route helper defaults**
 
-    * route table includes `accepted`, `needs_rework`, and `question`
-    * route table does not include `blocked`
-    * route table does not include `failed`
-    * `runtime_control_routes == ("question",)`
-  * Update `control_routes=False` tests:
+  * `Route.question(...)`
 
-    * no `question`
-    * no `blocked`
-    * no `failed`
-    * `runtime_control_routes == ()`
-  * Update `ControlRoutes(question="always")` tests:
+    * default target: `AWAIT_INPUT`
+    * default provider visibility: `"interactive_only"`
+    * default route-fields schema:
 
-    * `question` remains full-auto-visible
-    * `blocked` and `failed` remain absent unless explicitly declared
+      * `questions: list[str]`
 
-* **Explicit opt-in tests**
+        * required
+        * minimum one item
+        * each item must be a non-empty string
+      * `reason: str | null`
 
-  * Add or preserve tests where a step explicitly declares:
+        * required in strict generated schemas as nullable
+        * semantically optional
+    * default payload schema: inherit step-level payload schema
+    * default summary: clarification / user-input request
+    * preset metadata: `"question"`
+  * `Route.blocked(...)`
 
-    * `routes={"blocked": AWAIT_INPUT}`
-    * `routes={"failed": FAIL}`
-  * Assert:
+    * default target: `AWAIT_INPUT`
+    * default provider visibility: `"interactive_only"`
+    * default route-fields schema:
 
-    * `blocked` and `failed` compile as authored routes
-    * `blocked` and `failed` do not appear in `runtime_control_routes`
-    * visible explicit routes appear in provider-visible route lists
-    * scripted provider output `blocked` succeeds
-    * scripted provider output `failed` succeeds
-    * rendered provider output `{"tag": "blocked"}` succeeds
-    * rendered provider output `{"tag": "failed"}` succeeds
-    * no `reason` field is required
-  * Add hidden explicit-route tests:
+      * `reason: str | null`
 
-    * hidden `blocked` / `failed` appear in route tables as authored hidden routes
-    * hidden `blocked` / `failed` do not appear in provider-visible route lists
-    * provider output selecting hidden `blocked` / `failed` is rejected as not allowed
-  * Add equivalent explicit-route coverage for `ProduceVerifyStep` verifier responses.
+        * required in strict generated schemas as nullable
+        * semantically optional
+    * default payload schema: inherit step-level payload schema
+    * default summary: blocker / cannot proceed without external input
+    * preset metadata: `"blocked"`
+  * `Route.failed(...)`
 
-* **Negative provider tests**
+    * default target: `FAIL`
+    * default provider visibility: `"always"`
+    * default route-fields schema:
 
-  * Add scripted-provider tests:
+      * `reason: str | null`
 
-    * default `PromptStep`, provider returns undeclared `blocked`, retry occurs, then valid route succeeds
-    * default `PromptStep`, provider returns undeclared `failed`, retry occurs, then valid route succeeds
-    * default `ProduceVerifyStep`, verifier returns undeclared `blocked`, retry occurs, then valid route succeeds
-    * default `ProduceVerifyStep`, verifier returns undeclared `failed`, retry occurs, then valid route succeeds
-  * Add rendered-provider tests:
+        * required in strict generated schemas as nullable
+        * semantically optional
+    * default payload schema: inherit step-level payload schema
+    * default summary: terminal or unrecoverable failure
+    * preset metadata: `"failed"`
+  * `Route.hidden(...)`
 
-    * initial rendered prompt does not list `blocked` or `failed`
-    * provider returns `{"tag": "blocked"}` or `{"tag": "failed"}`
-    * retry prompt contains existing illegal-route feedback
-    * subsequent valid route succeeds
-  * Add exhaustion tests:
+    * route exists for hooks/runtime
+    * provider visibility is `"hidden"`
+  * `Route.disabled()`
 
-    * undeclared `blocked` with no retries follows existing illegal-route exhaustion behavior
-    * undeclared `failed` with no retries follows existing illegal-route exhaustion behavior
-    * failure context remains provider-attributable under the existing mechanism
+    * suppresses an inherited GLOBAL/default route
+    * route is absent from compiled available routes for that step
+    * provider cannot select it
+    * hooks/runtime cannot select it
 
-* **Static graph, topology, and compile report tests**
+* **Helper semantics are metadata-based, not tag-name-based**
 
-  * Update static graph snapshots and assertions so default provider-backed steps do not show `blocked` or `failed`.
-  * Update compile reports so default provider-backed steps do not list implicit `blocked` or `failed`.
-  * Update topology expectations and hashes as needed.
-  * Add an assertion that a default provider-backed step’s compile report and static graph payload do not mention `blocked` or `failed` anywhere except unrelated authored/domain data.
-  * Preserve tests showing explicit hidden global routes appear in route tables / static graph metadata as hidden authored routes.
+  * A route is question-style because the route definition was created by `Route.question()` or carries equivalent route-fields schema metadata.
 
-* **Packaged workflow tests**
+  * It is not question-style merely because the tag is `"question"`.
 
-  * Do not bulk-remove explicit `blocked` or `failed` routes from packaged workflows.
-  * For each packaged workflow expectation involving `blocked` or `failed`:
+  * This must work:
 
-    * if the route is explicitly declared, keep the expectation
-    * if the route was only framework-injected, remove the expectation
-  * Add assertions distinguishing explicit workflow-authored `blocked` / `failed` routes from framework defaults.
-  * Do not add explicit `blocked` / `failed` to workflows only to preserve old framework behavior. Add them only where the workflow genuinely wants providers to select them.
+    ```python
+    routes = {
+        "clarify": Route.question()
+    }
+    ```
+
+  * Provider output:
+
+    ```json
+    {
+      "outcome": {
+        "tag": "clarify",
+        "payload": {},
+        "route_fields": {
+          "questions": ["Which cloud region should I target?"],
+          "reason": null
+        }
+      }
+    }
+    ```
+
+  * Compatibility may temporarily preserve tag-based validation for legacy `"question"` routes, but the target design derives behavior from route metadata.
+
+* **GLOBAL route defaults**
+
+  * GLOBAL may define provider-facing workflow defaults:
+
+    ```python
+    transitions = {
+        GLOBAL: {
+            "question": Route.question(),
+            "blocked": Route.blocked(),
+            "failed": Route.failed(),
+        }
+    }
+    ```
+
+  * GLOBAL broadness is a feature:
+
+    * a visible GLOBAL `failed` route means every provider-backed step may select `failed`
+    * a visible GLOBAL `blocked` route means every provider-backed step may select `blocked`
+    * a visible GLOBAL `question` route means every provider-backed step may select `question`
+
+  * This is acceptable because GLOBAL routes are explicit, inspectable, and overridable.
+
+* **Route resolution precedence**
+
+  * Resolve routes by precedence:
+
+    * step-local routes first
+    * explicit workflow GLOBAL routes second
+    * framework default route profile third, if one exists
+  * Step-local route with the same tag replaces inherited route.
+  * Step-local `Route.disabled()` suppresses inherited route before available/provider-visible route lists are computed.
+  * Suppressed routes must not appear in runtime available routes for that step.
+  * No implicit merge unless explicitly implemented and documented.
+
+* **Step-local override examples**
+
+  * Override failed target:
+
+    ```python
+    routes = {
+        "failed": Route.failed(target=diagnose_failure)
+    }
+    ```
+
+  * Suppress inherited failed route:
+
+    ```python
+    routes = {
+        "failed": Route.disabled()
+    }
+    ```
+
+  * Keep blocked runtime-valid but hide from providers:
+
+    ```python
+    routes = {
+        "blocked": Route.blocked(provider_visibility="hidden")
+    }
+    ```
+
+  * Override question route with custom target:
+
+    ```python
+    routes = {
+        "question": Route.question(target=clarification_router)
+    }
+    ```
+
+* **Payload schema semantics**
+
+  * `payload` is the business/domain output.
+  * Existing step-level `expected_output_schema` remains valid.
+  * Route-level payload schema is optional.
+  * Resolution order:
+
+    * route-specific payload schema if concrete schema is set
+    * otherwise step-level expected output schema if payload schema is inherited and a step schema exists
+    * otherwise object-only validation
+  * Route payload schemas validate provider outcomes only.
+  * Plain hook-returned `Event`s validate route legality and Event fields, not provider payload schemas.
+  * If hooks later support returning `Outcome`, the same payload and route-fields schema path may apply to hook-produced outcomes.
+
+* **Route-fields schema semantics**
+
+  * `route_fields` is selected-route metadata.
+  * `route_fields` is separate from business payload.
+  * Route helpers define default `route_fields_schema`.
+  * Custom routes may define custom `route_fields_schema`.
+  * If no route-fields schema is declared:
+
+    * canonical internal representation uses `route_fields={}`
+    * generated strict schemas still require `route_fields`
+    * branch schema for that route should require `route_fields` as an empty object
+  * `route_fields` should be used for:
+
+    * clarification questions
+    * blocker reason
+    * failure reason
+    * route-specific diagnostic metadata
+    * route-specific explanation fields
+
+* **Canonical provider response**
+
+  * Preferred provider output shape:
+
+    ```json
+    {
+      "outcome": {
+        "tag": "<one provider-visible route>",
+        "payload": {},
+        "route_fields": {}
+      }
+    }
+    ```
+
+  * `outcome.tag`
+
+    * required
+    * string
+    * route selection
+    * must equal one provider-visible compiled route tag
+
+  * `outcome.payload`
+
+    * required in generated strict schemas
+    * object
+    * business/domain output
+    * validates against selected route payload schema or step fallback schema
+
+  * `outcome.route_fields`
+
+    * required in generated strict schemas
+    * object
+    * selected-route metadata
+    * validates against selected route-fields schema
+
+  * Parser may accept omitted `payload` and normalize to `{}` only in legacy/non-strict mode.
+
+  * Parser may accept omitted `route_fields` and normalize to `{}` only in legacy/non-strict mode.
+
+* **Generated provider schema**
+
+  * Generate a root object schema.
+
+  * Do not use top-level `anyOf` or `oneOf`.
+
+  * Root schema contains required property `outcome`.
+
+  * `outcome` contains a nested `anyOf` branch per provider-visible route.
+
+  * Each route branch contains:
+
+    * `tag` with `const: "<route-tag>"`
+    * `payload` schema for the selected route
+    * `route_fields` schema for the selected route
+
+  * Each strict branch requires:
+
+    * `tag`
+    * `payload`
+    * `route_fields`
+
+  * Use `additionalProperties: false` for:
+
+    * root object
+    * outcome branch objects
+    * route-fields objects
+
+  * For unconstrained payloads, use:
+
+    ```json
+    {
+      "type": "object",
+      "additionalProperties": true
+    }
+    ```
+
+  * Avoid:
+
+    * dynamically named fields such as `question_route_fields`
+    * top-level `anyOf`
+    * top-level `oneOf`
+    * `if` / `then` / `else`
+    * route names embedded into field names
+
+  * Use nullable required fields for optional values in strict structured-output environments:
+
+    * `reason: ["string", "null"]`
+
+  * Backend delivery modes must stay explicit:
+
+    * structured-output-capable backends should receive the generated provider schema natively
+    * if provider limits force schema simplification, the simplified schema may be delivered instead but that simplified delivery must remain observable in runtime metadata
+    * unsupported backends may fall back to prompt-only guidance, but that fallback must not weaken post-parse route legality, payload validation, or route-fields validation
+
+* **Generated schema example**
+
+  * Example with `question` and `blocked` visible:
+
+    ```json
+    {
+      "type": "object",
+      "properties": {
+        "outcome": {
+          "anyOf": [
+            {
+              "type": "object",
+              "properties": {
+                "tag": { "const": "question" },
+                "payload": {
+                  "type": "object",
+                  "additionalProperties": true
+                },
+                "route_fields": {
+                  "type": "object",
+                  "properties": {
+                    "questions": {
+                      "type": "array",
+                      "items": {
+                        "type": "string",
+                        "minLength": 1
+                      },
+                      "minItems": 1
+                    },
+                    "reason": {
+                      "type": ["string", "null"]
+                    }
+                  },
+                  "required": ["questions", "reason"],
+                  "additionalProperties": false
+                }
+              },
+              "required": ["tag", "payload", "route_fields"],
+              "additionalProperties": false
+            },
+            {
+              "type": "object",
+              "properties": {
+                "tag": { "const": "blocked" },
+                "payload": {
+                  "type": "object",
+                  "additionalProperties": true
+                },
+                "route_fields": {
+                  "type": "object",
+                  "properties": {
+                    "reason": {
+                      "type": ["string", "null"]
+                    }
+                  },
+                  "required": ["reason"],
+                  "additionalProperties": false
+                }
+              },
+              "required": ["tag", "payload", "route_fields"],
+              "additionalProperties": false
+            }
+          ]
+        }
+      },
+      "required": ["outcome"],
+      "additionalProperties": false
+    }
+    ```
+
+* **Large-schema fallback**
+
+  * If a route-discriminated generated schema exceeds provider schema limits or becomes too large:
+
+    * fall back to a simpler provider schema:
+
+      * `outcome.tag` enum over provider-visible routes
+      * `outcome.payload` object
+      * `outcome.route_fields` object
+    * enforce full route-specific validation after parsing
+  * The fallback must not weaken runtime validation.
+  * It only relaxes provider-side constrained generation.
+  * Compile reports should indicate when simplified provider schema fallback was used.
+
+* **Parsing and normalization**
+
+  * Parse canonical shape:
+
+    ```json
+    {
+      "outcome": {
+        "tag": "...",
+        "payload": {},
+        "route_fields": {}
+      }
+    }
+    ```
+
+  * Normalize to runtime `Outcome`:
+
+    * `Outcome.tag = outcome.tag`
+    * `Outcome.payload = outcome.payload`
+    * `Outcome.route_fields = outcome.route_fields`
+
+  * Add `Outcome.route_fields`.
+
+  * Keep compatibility accessors or mirrored fields:
+
+    * `Outcome.reason`
+    * `Outcome.question`
+
+  * `Outcome.reason` derives from `route_fields.reason` when present.
+
+  * `Outcome.question` derives from question-style `route_fields.questions`.
+
+  * If `questions` is a list:
+
+    * canonical representation remains list
+    * legacy `Outcome.question` / `Event.question` is a readable string projection
+    * recommended projection is Markdown bullets
+
+  * Example projection:
+
+    ```text
+    - Which deployment environment should I use?
+    - Is downtime acceptable?
+    ```
+
+* **Legacy provider output compatibility**
+
+  * Temporarily accept legacy shape:
+
+    ```json
+    {
+      "tag": "question",
+      "question": "...",
+      "reason": "...",
+      "payload": {}
+    }
+    ```
+
+  * Normalize it to canonical shape:
+
+    ```json
+    {
+      "outcome": {
+        "tag": "question",
+        "payload": {},
+        "route_fields": {
+          "questions": ["..."],
+          "reason": "..."
+        }
+      }
+    }
+    ```
+
+  * Prefer canonical `route_fields` when both canonical and legacy fields are present.
+
+  * Rendered provider prompts should teach only canonical shape.
+
+  * Legacy top-level `question` and `reason` should be documented as deprecated after migration.
+
+* **Runtime event conversion**
+
+  * Route selection:
+
+    * `Event.tag` comes from `Outcome.tag`
+  * Event reason:
+
+    * `Event.reason` comes from `Outcome.route_fields.reason` when present
+  * Event question:
+
+    * for question-style routes, `Event.question` comes from projected `Outcome.route_fields.questions`
+  * `Outcome.payload` is not route selection.
+  * `Outcome.route_fields` is not route selection.
+  * Route finalization looks up the compiled route by `Event.tag`.
+  * Existing runtime context remains:
+
+    * `ctx.route`
+    * `ctx.event`
+    * `ctx.outcome`
+    * `ctx.outcome.payload`
+  * Add:
+
+    * `ctx.outcome.route_fields`
+  * Existing hooks that read `ctx.outcome.payload` continue to work.
+
+* **Validation sequence**
+
+  * Validate provider response envelope:
+
+    * valid JSON
+    * root object
+    * required or normalized `outcome`
+    * required or normalized `tag`
+    * required or normalized `payload`
+    * required or normalized `route_fields`
+  * Validate route legality:
+
+    * selected tag is provider-visible for current interaction policy
+  * Validate payload:
+
+    * selected route’s payload schema if explicit
+    * otherwise step-level expected output schema if inherited and present
+    * otherwise object-only validation
+  * Validate route fields:
+
+    * selected route’s route-fields schema
+  * Normalize to `Outcome`.
+  * Convert to `Event`.
+  * Run existing after hooks.
+  * Run normal route finalization.
+  * Run artifact guard / required-write validation as today.
+
+* **Error kinds**
+
+  * Bad JSON:
+
+    * `malformed_provider_output`
+  * Missing `outcome` or invalid envelope shape:
+
+    * `malformed_provider_output`
+  * Missing `tag`:
+
+    * `malformed_provider_output`
+  * `tag` not provider-visible:
+
+    * `illegal_route`
+  * `payload` not object:
+
+    * `invalid_payload`
+  * `payload` fails selected payload schema:
+
+    * `invalid_payload`
+  * `route_fields` not object:
+
+    * `invalid_payload`
+  * `route_fields` fails selected route-fields schema:
+
+    * `invalid_payload`
+  * question-style route selected with empty or missing `questions`:
+
+    * `invalid_payload`
+  * All provider-attributable validation failures should continue through existing retry feedback and retry exhaustion machinery.
+
+* **Provider prompt behavior**
+
+  * Render the canonical provider response format.
+  * Include only provider-visible routes under the current interaction policy.
+  * For each visible route, include:
+
+    * route tag
+    * route summary
+    * route target description, if appropriate
+    * required writes
+    * payload schema
+    * route-fields schema
+  * Explain:
+
+    * `tag` chooses one route
+    * `payload` is domain/business output
+    * `route_fields` contains metadata for the selected route only
+  * Do not list hidden routes.
+  * Do not list disabled routes.
+  * Do not teach legacy top-level `question` / `reason`.
+
+* **Compile reports**
+
+  * Compile reports should show whether a route is:
+
+    * step-local
+    * inherited from GLOBAL
+    * inherited from framework defaults
+    * suppressed/disabled
+  * Compile reports should show:
+
+    * all available routes
+    * provider-visible interactive routes
+    * provider-visible full-auto routes
+    * per-route payload schema
+    * per-route route-fields schema
+    * schema fallback status if simplified schema generation is used
+
+* **Static graph**
+
+  * Static graph should show:
+
+    * route tag
+    * target
+    * summary
+    * provider visibility
+    * payload schema source/name/fingerprint
+    * route-fields schema source/name/fingerprint
+    * helper preset kind
+    * inherited vs step-local
+    * suppressed/disabled state
+    * required writes
+    * handoff
+    * hook identity
+  * Static graph should not infer helper behavior from tag names alone.
+  * Static graph should reflect compiled route metadata exactly.
+
+* **Topology hash**
+
+  * Topology hash must include:
+
+    * route tag
+    * route target
+    * provider visibility
+    * payload schema fingerprint / inheritance mode
+    * route-fields schema fingerprint
+    * preset kind
+    * required writes
+    * handoff text
+    * route hook identity
+    * disabled/suppressed status
+    * inheritance source if relevant
+  * Changing a route schema must change topology hash.
+  * Changing provider visibility must change topology hash.
+  * Changing step-local override/suppression must change topology hash.
+
+* **Provider backend compatibility**
+
+  * Structured-output capable providers should receive the generated schema.
+  * Providers with strict JSON Schema subsets should receive the root-object-with-nested-`anyOf` form.
+  * If a backend cannot support the route-discriminated schema due to size or complexity:
+
+    * use simplified schema fallback
+    * enforce full validation post-parse
+  * Scripted/fake providers must validate returned `Outcome` against the same route legality, payload schema, and route-fields schema as rendered providers.
+
+* **Implementation touchpoints**
+
+  * `Route` model / route normalization:
+
+    * add helper constructors
+    * add provider visibility normalization
+    * add payload schema mode
+    * add route-fields schema
+    * add disabled/suppressed route representation
+  * Compiler/discovery:
+
+    * implement GLOBAL inheritance and step-local suppression
+    * compile route helper metadata into `CompiledRoute`
+    * preserve route table as source of truth
+  * Provider request generation:
+
+    * generate canonical provider schema from provider-visible compiled routes
+    * include route schemas in provider contracts
+  * Provider parsing:
+
+    * parse canonical envelope
+    * support legacy envelope
+    * normalize to `Outcome`
+  * Engine validation:
+
+    * validate provider route legality
+    * validate payload schema
+    * validate route-fields schema
+  * Runtime context:
+
+    * expose `ctx.outcome.route_fields`
+    * preserve `ctx.outcome.payload`
+    * preserve compatibility `ctx.outcome.question` and `ctx.outcome.reason`
+  * Static graph / compile report / topology hash:
+
+    * include route schema metadata and inheritance/suppression state
+
+* **Testing: route helper defaults**
+
+  * Test `Route.question()`:
+
+    * target is `AWAIT_INPUT`
+    * provider visibility is `"interactive_only"`
+    * route-fields schema requires non-empty `questions`
+    * nullable `reason`
+  * Test `Route.blocked()`:
+
+    * target is `AWAIT_INPUT`
+    * provider visibility is `"interactive_only"`
+    * route-fields schema includes nullable `reason`
+  * Test `Route.failed()`:
+
+    * target is `FAIL`
+    * provider visibility is `"always"`
+    * route-fields schema includes nullable `reason`
+  * Test helper override of:
+
+    * target
+    * provider visibility
+    * payload schema
+    * route-fields schema
+    * handoff
+    * required writes
+    * `on_taken`
+
+* **Testing: GLOBAL and step overrides**
+
+  * GLOBAL route defaults are inherited by provider-backed steps.
+  * Step-local route with same tag overrides GLOBAL.
+  * Step-local `Route.disabled()` suppresses inherited route.
+  * Step-local hidden route remains runtime-valid but not provider-visible.
+  * Visible GLOBAL `failed` makes `failed` provider-visible globally unless overridden/suppressed.
+  * Step override can change `failed` target from `FAIL` to a recovery step.
+
+* **Testing: provider schema generation**
+
+  * Generated root schema is an object with required `outcome`.
+  * `outcome` uses nested `anyOf` branches for visible routes.
+  * Hidden routes are excluded.
+  * Interactive-only routes are excluded from full-auto schema.
+  * Disabled routes are excluded.
+  * Each branch has route-specific `tag.const`.
+  * Each branch has correct payload schema.
+  * Each branch has correct route-fields schema.
+  * Large-schema fallback still post-validates route-specific fields.
+
+* **Testing: parsing and validation**
+
+  * Canonical valid output parses.
+  * Legacy output parses and normalizes.
+  * Missing `outcome` fails as malformed provider output.
+  * Unknown route tag fails as illegal route.
+  * Hidden route tag fails as illegal route.
+  * Question-style route with missing/empty questions fails invalid payload.
+  * Blocked route with `reason: null` passes.
+  * Failed route with `reason: null` passes.
+  * Payload schema failure triggers invalid payload.
+  * Route-fields schema failure triggers invalid payload.
+  * Retry feedback paths remain correct.
+
+* **Testing: runtime behavior**
+
+  * Provider-selected route still flows through normal after hooks.
+  * After hook can redirect to another route.
+  * `on_taken` hook runs for helper routes.
+  * Required writes are enforced for helper routes.
+  * Handoffs are scheduled for helper routes.
+  * Artifact guard behavior is unchanged.
+  * `ctx.outcome.payload` is available in hooks.
+  * `ctx.outcome.route_fields` is available in hooks.
+  * `ctx.event.question` is projected from `route_fields.questions`.
+  * `ctx.event.reason` is projected from `route_fields.reason`.
+
+* **Migration requirements**
+
+  * Keep accepting legacy top-level `tag`, `payload`, `question`, `reason` during transition.
+  * Emit canonical `Outcome.route_fields` internally.
+  * Keep compatibility accessors for `Outcome.question` and `Outcome.reason`.
+  * Update rendered prompts to canonical `outcome` wrapper.
+  * Update docs to prefer route helpers over `ControlRoutes`.
+  * Mark legacy top-level route-dependent fields as deprecated after migration.
 
 * **Documentation updates**
 
-  * Update docs, prompt templates, architecture notes, and baseline docs to say:
+  * Document:
 
-    * “The only default provider runtime-control route is `question` when enabled.”
-    * “`blocked` and `failed` are ordinary authored routes.”
-    * “Declare `blocked` or `failed` explicitly if providers may select them.”
-    * “Unlisted provider route tags are invalid.”
-  * Remove wording implying `blocked` or `failed` are:
+    * Everything is a route.
+    * Route helpers define conventional defaults.
+    * GLOBAL defines workflow defaults.
+    * Step-local routes override GLOBAL.
+    * `Route.disabled()` suppresses inherited routes.
+    * `provider_visibility="interactive_only"` means provider-visible in interactive mode but not in full-auto.
+    * `payload` is domain output.
+    * `route_fields` is selected-route metadata.
+    * `Route.question()` requires `route_fields.questions`.
+    * `Route.blocked()` and `Route.failed()` use nullable `route_fields.reason`.
+  * Remove or de-emphasize:
 
-    * reserved default routes
-    * automatically injected routes
-    * always-valid provider control routes
-    * provider-visible by default
-  * Keep examples showing explicit opt-in usage.
+    * separate control-route terminology
+    * top-level `question` / `reason` as the preferred provider output
+    * default implicit `blocked` / `failed` injection
 
 * **Acceptance criteria**
 
-  * Default `PromptStep` never compiles `blocked` or `failed`.
-  * Default `ProduceVerifyStep` never compiles `blocked` or `failed`.
-  * Default provider-visible route lists never contain `blocked` or `failed`.
-  * Default rendered provider prompts never list `blocked` or `failed`.
-  * `runtime_control_routes` contains `question` only when question control is enabled.
-  * `blocked` and `failed` never appear in `runtime_control_routes`, even when explicitly declared.
-  * Provider output selecting undeclared `blocked` or `failed` is illegal.
-  * Provider output selecting hidden explicit `blocked` or `failed` is illegal.
-  * Explicit visible `blocked` and `failed` routes work for scripted and rendered providers.
-  * Explicit `blocked` and `failed` routes do not require `reason`.
-  * `question` behavior is unchanged.
-  * Static graph, topology, compile reports, tests, and docs all reflect the new route contract.
-  * Full test suite passes after implementation and test updates.
+  * Provider output uses or normalizes to:
 
+    * `outcome.tag`
+    * `outcome.payload`
+    * `outcome.route_fields`
+  * Route selection is always `outcome.tag`.
+  * Business payload validation uses route payload schema or step fallback schema.
+  * Route metadata validation uses selected route-fields schema.
+  * `Route.question()` enforces non-empty questions through route schema.
+  * `Route.blocked()` and `Route.failed()` provide conventional nullable reason fields.
+  * `Route.failed()` defaults to provider visibility `"always"`.
+  * GLOBAL route defaults work.
+  * Step-local overrides work.
+  * Step-local suppression works.
+  * Hidden routes are runtime-valid but not provider-selectable.
+  * Disabled routes are absent.
+  * Full-auto provider schemas exclude interactive-only routes.
+  * Existing route finalization and hooks remain normal.
+  * Static graph, compile report, topology hash, provider prompts, parser, and tests all reflect route-schema metadata.

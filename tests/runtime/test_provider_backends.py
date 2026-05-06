@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import argparse
+import json
 import subprocess
 from dataclasses import replace
 from pathlib import Path
@@ -9,6 +10,7 @@ import pytest
 
 from autoloop.core.providers.rendered import RenderedLLMProvider
 from autoloop.core.providers.turns import ProviderTurnResult, RenderedProviderTurn
+from autoloop.core.stores.protocols import SessionBinding
 from autoloop.runtime import cli
 from autoloop.runtime import providers as runtime_providers
 from autoloop.runtime.providers.claude import ClaudeProvider, ClaudeTransport, build_claude_provider
@@ -29,7 +31,7 @@ from autoloop.runtime.provider_backends import resolve_provider_backend
 import autoloop.runtime.provider_backends as provider_backends
 
 
-CLAUDE_HEADLESS_HELP = "--print\n-p\n--output-format\n--resume\n--model\n--settings\n"
+CLAUDE_HEADLESS_HELP = "--print\n-p\n--output-format\n--resume\n--model\n--settings\n--add-dir\n"
 
 
 class _StubTransport:
@@ -77,6 +79,40 @@ def _completed(*, args: list[str], stdout: str = "", stderr: str = "", returncod
     return subprocess.CompletedProcess(args=args, returncode=returncode, stdout=stdout, stderr=stderr)
 
 
+def _outcome_turn(
+    *,
+    tmp_path: Path,
+    session: SessionBinding | None = None,
+    response_schema_simplified: bool = False,
+) -> RenderedProviderTurn:
+    return RenderedProviderTurn(
+        step_name="review",
+        turn_kind="step",
+        prompt_text="Return a routed outcome.",
+        session=session,
+        expected_response="outcome_json",
+        run_folder=tmp_path,
+        response_schema={
+            "type": "object",
+            "properties": {
+                "outcome": {
+                    "type": "object",
+                    "properties": {
+                        "tag": {"const": "done"},
+                        "payload": {"type": "object", "additionalProperties": False},
+                        "route_fields": {"type": "object", "additionalProperties": False},
+                    },
+                    "required": ["tag", "payload", "route_fields"],
+                    "additionalProperties": False,
+                }
+            },
+            "required": ["outcome"],
+            "additionalProperties": False,
+        },
+        response_schema_simplified=response_schema_simplified,
+    )
+
+
 def test_resolve_provider_backend_dispatches_by_provider_name(monkeypatch: pytest.MonkeyPatch) -> None:
     seen: list[str] = []
     codex_transport = _StubTransport()
@@ -114,6 +150,183 @@ def test_resolve_provider_backend_dispatches_by_provider_name(monkeypatch: pytes
     assert isinstance(claude_provider, RenderedLLMProvider)
     assert claude_provider._transport is claude_transport
     assert seen == ["codex", "claude"]
+
+
+def test_codex_backend_delivers_full_response_schema_via_output_schema_file(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    captured: dict[str, object] = {}
+
+    monkeypatch.setattr(
+        codex_runtime_provider,
+        "_probe_codex_exec_surface",
+        lambda: codex_runtime_provider._CodexExecSurface(
+            start_help="--json\n--output-schema\n-m, --model <MODEL>\n",
+            resume_help="--json\n-m, --model <MODEL>\n",
+        ),
+    )
+
+    def fake_run_text_subprocess(command: list[str], *, input_text=None, env=None):
+        captured["command"] = list(command)
+        captured["input_text"] = input_text
+        captured["env"] = dict(env or {})
+        return (
+            '{"type":"thread.started","thread_id":"thread-1"}\n'
+            '{"type":"item.completed","item":{"type":"agent_message","text":"{\\"outcome\\":{\\"tag\\":\\"done\\",\\"payload\\":{},\\"route_fields\\":{}}}"}}',
+            "",
+            0,
+        )
+
+    monkeypatch.setattr(codex_runtime_provider, "run_text_subprocess", fake_run_text_subprocess)
+
+    executor = codex_runtime_provider.build_codex_operation_executor(
+        _resolved_config("codex"),
+        commands=CodexCLICommand(
+            start_command=("codex", "exec", "--json"),
+            resume_command=("codex", "exec", "resume", "--json"),
+        ),
+    )
+    turn = _outcome_turn(tmp_path=tmp_path)
+
+    result = executor(turn)
+
+    command = captured["command"]
+    assert isinstance(command, list)
+    assert "--output-schema" in command
+    schema_path = Path(command[command.index("--output-schema") + 1])
+    assert json.loads(schema_path.read_text(encoding="utf-8")) == turn.response_schema
+    assert result.metadata["structured_output"] == {
+        "provider": "codex",
+        "delivery_mode": "native_full",
+        "schema_path": str(schema_path),
+    }
+
+
+def test_codex_backend_records_simplified_schema_delivery(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    captured: dict[str, object] = {}
+
+    monkeypatch.setattr(
+        codex_runtime_provider,
+        "_probe_codex_exec_surface",
+        lambda: codex_runtime_provider._CodexExecSurface(
+            start_help="--json\n--output-schema\n-m, --model <MODEL>\n",
+            resume_help="--json\n-m, --model <MODEL>\n",
+        ),
+    )
+
+    def fake_run_text_subprocess(command: list[str], *, input_text=None, env=None):
+        captured["command"] = list(command)
+        return (
+            '{"type":"thread.started","thread_id":"thread-1"}\n'
+            '{"type":"item.completed","item":{"type":"agent_message","text":"{\\"outcome\\":{\\"tag\\":\\"done\\",\\"payload\\":{},\\"route_fields\\":{}}}"}}',
+            "",
+            0,
+        )
+
+    monkeypatch.setattr(codex_runtime_provider, "run_text_subprocess", fake_run_text_subprocess)
+
+    executor = codex_runtime_provider.build_codex_operation_executor(
+        _resolved_config("codex"),
+        commands=CodexCLICommand(
+            start_command=("codex", "exec", "--json"),
+            resume_command=("codex", "exec", "resume", "--json"),
+        ),
+    )
+    result = executor(_outcome_turn(tmp_path=tmp_path, response_schema_simplified=True))
+
+    command = captured["command"]
+    assert isinstance(command, list)
+    assert "--output-schema" in command
+    assert result.metadata["structured_output"]["delivery_mode"] == "native_simplified"
+
+
+def test_codex_backend_records_prompt_only_fallback_when_resume_lacks_output_schema(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    captured: dict[str, object] = {}
+
+    monkeypatch.setattr(
+        codex_runtime_provider,
+        "_probe_codex_exec_surface",
+        lambda: codex_runtime_provider._CodexExecSurface(
+            start_help="--json\n--output-schema\n-m, --model <MODEL>\n",
+            resume_help="--json\n-m, --model <MODEL>\n",
+        ),
+    )
+
+    def fake_run_text_subprocess(command: list[str], *, input_text=None, env=None):
+        captured["command"] = list(command)
+        return (
+            '{"type":"item.completed","item":{"type":"agent_message","text":"{\\"outcome\\":{\\"tag\\":\\"done\\",\\"payload\\":{},\\"route_fields\\":{}}}"}}',
+            "",
+            0,
+        )
+
+    monkeypatch.setattr(codex_runtime_provider, "run_text_subprocess", fake_run_text_subprocess)
+
+    executor = codex_runtime_provider.build_codex_operation_executor(
+        _resolved_config("codex"),
+        commands=CodexCLICommand(
+            start_command=("codex", "exec", "--json"),
+            resume_command=("codex", "exec", "resume", "--json"),
+        ),
+    )
+    turn = _outcome_turn(
+        tmp_path=tmp_path,
+        session=SessionBinding(ref_name="default", session_id="thread-1", provider="codex", metadata={"provider": "codex"}),
+    )
+
+    result = executor(turn)
+
+    command = captured["command"]
+    assert isinstance(command, list)
+    assert "--output-schema" not in command
+    assert result.metadata["structured_output"] == {
+        "provider": "codex",
+        "delivery_mode": "prompt_only",
+        "reason": "resume_command_does_not_support_output_schema",
+    }
+
+
+def test_claude_backend_records_prompt_only_fallback_for_response_schema(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    captured: dict[str, object] = {}
+
+    monkeypatch.setattr(claude_runtime_provider, "verify_claude_code_capabilities", lambda config=None: None)
+
+    def fake_run_text_subprocess(command: list[str], *, input_text=None, env=None, cwd=None):
+        captured["command"] = list(command)
+        return (
+            json.dumps(
+                {
+                    "result": '{"outcome":{"tag":"done","payload":{},"route_fields":{}}}',
+                    "session_id": "session-1",
+                }
+            ),
+            "",
+            0,
+        )
+
+    monkeypatch.setattr(claude_runtime_provider, "run_text_subprocess", fake_run_text_subprocess)
+
+    executor = claude_runtime_provider.build_claude_operation_executor(_resolved_config("claude"))
+    result = executor(_outcome_turn(tmp_path=tmp_path))
+
+    command = captured["command"]
+    assert isinstance(command, list)
+    assert "--output-schema" not in command
+    assert result.metadata["structured_output"] == {
+        "provider": "claude",
+        "delivery_mode": "prompt_only",
+        "reason": "backend_does_not_support_output_schema",
+    }
 
 
 def test_resolve_provider_backend_rejects_sync_transport_builder_output(
@@ -482,7 +695,7 @@ def test_resolve_provider_backend_rejects_claude_effort_when_cli_does_not_suppor
         "run",
         lambda command, **_: _completed(
             args=command,
-            stdout="--print\n-p\n--output-format\n--resume\n--model\n--settings\n--allowedTools\n--dangerously-skip-permissions\n",
+            stdout="--print\n-p\n--output-format\n--resume\n--model\n--settings\n--add-dir\n--allowedTools\n--dangerously-skip-permissions\n",
         ),
     )
     config = replace(

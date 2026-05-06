@@ -28,6 +28,7 @@ from ._common import (
     format_subprocess_streams,
     merge_subprocess_env,
     run_text_subprocess,
+    structured_output_metadata,
 )
 from .claude_policy import ClaudeCapabilities, ClaudePolicyEmitter
 
@@ -67,6 +68,10 @@ class _ClaudeHelpSurface:
     @property
     def supports_settings(self) -> bool:
         return "--settings" in self.help_text
+
+    @property
+    def supports_add_dir(self) -> bool:
+        return "--add-dir" in self.help_text
 
 
 def verify_claude_code_capabilities(config: ClaudeProviderConfig | None = None) -> None:
@@ -135,6 +140,8 @@ class ClaudeTransport(ProviderTransport):
             emitter=self._emitter,
             validation=self._validation,
         )
+        structured_output = _structured_output_fallback(turn)
+        subprocess_env, subprocess_cwd = _claude_subprocess_options(turn, emission)
         command = ["claude"]
         if resume_session_id is not None:
             command.extend(["--resume", resume_session_id])
@@ -145,7 +152,8 @@ class ClaudeTransport(ProviderTransport):
             *command,
             stdout=asyncio.subprocess.PIPE,
             stderr=asyncio.subprocess.PIPE,
-            env=merge_subprocess_env(None if emission is None else emission.env),
+            env=subprocess_env,
+            cwd=str(subprocess_cwd) if subprocess_cwd is not None else None,
         )
         stdout, stderr = await communicate_text_subprocess(process)
         if process.returncode != 0:
@@ -167,6 +175,7 @@ class ClaudeTransport(ProviderTransport):
             result_text=result_text,
             model=model,
             effort=effort,
+            structured_output=structured_output,
         )
 
 
@@ -197,6 +206,8 @@ def build_claude_operation_executor(
             emitter=ClaudePolicyEmitter(),
             validation=config.provider_policy.validation,
         )
+        structured_output = _structured_output_fallback(turn)
+        subprocess_env, subprocess_cwd = _claude_subprocess_options(turn, emission)
         command = ["claude"]
         if resume_session_id is not None:
             command.extend(["--resume", resume_session_id])
@@ -204,7 +215,8 @@ def build_claude_operation_executor(
         command.extend(command_args)
         stdout, stderr, returncode = run_text_subprocess(
             command,
-            env=merge_subprocess_env(None if emission is None else emission.env),
+            env=subprocess_env,
+            cwd=subprocess_cwd,
         )
         if returncode != 0:
             streams = format_subprocess_streams(stdout, stderr)
@@ -224,6 +236,7 @@ def build_claude_operation_executor(
             result_text=result_text,
             model=model,
             effort=effort,
+            structured_output=structured_output,
         )
 
     return execute
@@ -255,6 +268,7 @@ def _build_claude_result(
     result_text: str,
     model: str | None,
     effort: str | None,
+    structured_output: dict[str, Any] | None,
 ) -> ProviderTurnResult:
     if resolved_session_id is None and resume_session_id is not None:
         resolved_session_id = resume_session_id
@@ -279,7 +293,19 @@ def _build_claude_result(
         "mode": "resume" if resume_session_id is not None else "start",
         "provider_metadata": dict(provider_metadata),
     }
+    if structured_output is not None:
+        metadata["structured_output"] = dict(structured_output)
     return ProviderTurnResult(raw_text=result_text, session=binding, metadata=metadata, usage=usage)
+
+
+def _structured_output_fallback(turn: RenderedProviderTurn) -> dict[str, Any] | None:
+    if turn.response_schema is None:
+        return None
+    return structured_output_metadata(
+        provider_name="claude",
+        delivery_mode="prompt_only",
+        reason="backend_does_not_support_output_schema",
+    )
 
 
 @lru_cache(maxsize=1)
@@ -310,6 +336,8 @@ def _validate_claude_surface(surface: _ClaudeHelpSurface, config: ClaudeProvider
         raise ConfigError("provider 'claude' requires '--model' support, but the flag is unavailable.")
     if not surface.supports_settings:
         raise ConfigError("provider 'claude' requires '--settings' support, but the flag is unavailable.")
+    if not surface.supports_add_dir:
+        raise ConfigError("provider 'claude' requires '--add-dir' support, but the flag is unavailable.")
     permission_strategy = config.permission_strategy if config is not None else None
     if permission_strategy == "allow_core_tools" and not surface.supports_allowed_tools:
         raise ConfigError("provider 'claude' requires '--allowedTools' support, but the flag is unavailable.")
@@ -380,6 +408,7 @@ def _emit_turn_policy(
             step_key=step_key,
             validation=validation,
             step_name=turn.step_name,
+            workspace_root=turn.workspace_root,
         )
     except ProviderExecutionError:
         _emit_policy_event(
@@ -445,3 +474,14 @@ def _emit_policy_event(turn: RenderedProviderTurn, event_type: str, **fields: ob
         payload["step_execution_id"] = turn.step_execution_id
     payload.update(fields)
     turn.runtime_event_sink(event_type, payload)
+
+
+def _claude_subprocess_options(
+    turn: RenderedProviderTurn,
+    emission: ProviderPolicyEmission | None,
+) -> tuple[dict[str, str], Path | None]:
+    cwd: Path | None = None
+    if emission is not None and turn.run_folder is not None and turn.workspace_root is not None:
+        cwd = turn.run_folder / "provider_policy" / "claude_runtime" / "launch"
+        cwd.mkdir(parents=True, exist_ok=True)
+    return merge_subprocess_env(None if emission is None else emission.env), cwd

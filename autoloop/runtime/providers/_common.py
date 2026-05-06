@@ -214,6 +214,7 @@ def run_text_subprocess(
     *,
     input_text: str | None = None,
     env: Mapping[str, str] | None = None,
+    cwd: Path | None = None,
 ) -> tuple[str, str, int]:
     """Run a subprocess synchronously for explicit compatibility-only paths."""
 
@@ -224,6 +225,7 @@ def run_text_subprocess(
         capture_output=True,
         check=False,
         env=None if env is None else dict(env),
+        cwd=str(cwd) if cwd is not None else None,
     )
     return completed.stdout, completed.stderr, completed.returncode
 
@@ -258,6 +260,26 @@ def build_policy_step_key(step_name: str, *, step_execution_id: str | None = Non
     if visit:
         sections.append(f"visit-{_safe_step_key_component(visit)}")
     return "__".join(section for section in sections if section)
+
+
+def structured_output_metadata(
+    *,
+    provider_name: str,
+    delivery_mode: str,
+    reason: str | None = None,
+    schema_path: str | None = None,
+) -> dict[str, Any]:
+    """Build stable structured-output delivery metadata."""
+
+    payload: dict[str, Any] = {
+        "provider": provider_name,
+        "delivery_mode": delivery_mode,
+    }
+    if reason is not None:
+        payload["reason"] = reason
+    if schema_path is not None:
+        payload["schema_path"] = schema_path
+    return payload
 
 
 def _safe_step_key_component(value: str) -> str:

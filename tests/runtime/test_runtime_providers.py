@@ -58,9 +58,9 @@ import autoloop.runtime.providers.codex as codex_runtime_provider
 
 CODEX_START_HELP = "--json\n-m, --model <MODEL>\n--dangerously-bypass-approvals-and-sandbox\n"
 CODEX_RESUME_HELP = "--json\n-m, --model <MODEL>\n--dangerously-bypass-approvals-and-sandbox\n"
-CLAUDE_HEADLESS_HELP = "--print\n-p\n--output-format\n--resume\n--model\n--settings\n"
+CLAUDE_HEADLESS_HELP = "--print\n-p\n--output-format\n--resume\n--model\n--settings\n--add-dir\n"
 CLAUDE_HELP = (
-    "--print\n-p\n--output-format\n--resume\n--model\n--settings\n"
+    "--print\n-p\n--output-format\n--resume\n--model\n--settings\n--add-dir\n"
     "--allowedTools\n--dangerously-skip-permissions\n"
 )
 
@@ -160,6 +160,7 @@ def _rendered_turn(
     expected_response: str = "raw_text",
     policy: ProviderPolicy | None = None,
     run_folder: Path | None = None,
+    workspace_root: Path | None = None,
     step_execution_id: str | None = None,
     runtime_event_sink=None,
 ) -> RenderedProviderTurn:
@@ -171,6 +172,7 @@ def _rendered_turn(
         expected_response=expected_response,
         policy=policy,
         run_folder=run_folder,
+        workspace_root=workspace_root,
         step_execution_id=step_execution_id,
         runtime_event_sink=runtime_event_sink,
     )
@@ -1102,10 +1104,18 @@ def test_claude_transport_emits_run_scoped_policy_artifacts_and_metadata(
 ) -> None:
     prompt_text = "# Step: produce\n\nShared runtime prompt."
     calls: list[tuple[str, ...]] = []
+    seen_envs: list[dict[str, str] | None] = []
+    seen_cwds: list[str | None] = []
     seen_events: list[tuple[str, dict[str, object]]] = []
+    workspace_root = tmp_path / "workspace"
+    workspace_root.mkdir()
 
-    async def fake_create_subprocess_exec(*command: str, **_: object) -> _AsyncProcessStub:
+    async def fake_create_subprocess_exec(*command: str, **kwargs: object) -> _AsyncProcessStub:
         calls.append(tuple(command))
+        env = kwargs.get("env")
+        seen_envs.append(dict(env) if isinstance(env, dict) else None)
+        cwd = kwargs.get("cwd")
+        seen_cwds.append(None if cwd is None else str(cwd))
         return _AsyncProcessStub(
             stdout='{"result":"producer text","session_id":"claude-session-policy","stop_reason":"end_turn"}',
         )
@@ -1130,6 +1140,7 @@ def test_claude_transport_emits_run_scoped_policy_artifacts_and_metadata(
                 session=_placeholder_session(),
                 policy=policy,
                 run_folder=tmp_path,
+                workspace_root=workspace_root,
                 step_execution_id="produce:1",
                 runtime_event_sink=lambda event_type, payload: seen_events.append((event_type, dict(payload))),
             )
@@ -1147,10 +1158,16 @@ def test_claude_transport_emits_run_scoped_policy_artifacts_and_metadata(
             "json",
             "--settings",
             str(settings_path),
+            "--add-dir",
+            str(workspace_root.resolve()),
             "--model",
             "claude-test",
         )
     ]
+    assert seen_envs and seen_envs[0] is not None
+    assert seen_envs[0]["CLAUDE_CONFIG_DIR"] == str(tmp_path / "provider_policy" / "claude_runtime")
+    assert seen_envs[0]["CLAUDE_CODE_ADDITIONAL_DIRECTORIES_CLAUDE_MD"] == "1"
+    assert seen_cwds == [str(tmp_path / "provider_policy" / "claude_runtime" / "launch")]
     assert result.metadata["provider_metadata"]["policy"]["effective_policy_file"] == str(
         settings_path.parent / "effective_policy.json"
     )
@@ -1167,6 +1184,9 @@ def test_claude_transport_marks_capability_loss_when_native_filesystem_support_i
     tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
+    workspace_root = tmp_path / "workspace"
+    workspace_root.mkdir()
+
     async def fake_create_subprocess_exec(*_command: str, **_kwargs: object) -> _AsyncProcessStub:
         return _AsyncProcessStub(
             stdout='{"result":"producer text","session_id":"claude-session-policy","stop_reason":"end_turn"}',
@@ -1194,6 +1214,7 @@ def test_claude_transport_marks_capability_loss_when_native_filesystem_support_i
                 session=_placeholder_session(),
                 policy=policy,
                 run_folder=tmp_path,
+                workspace_root=workspace_root,
                 step_execution_id="produce:1",
             )
         )
@@ -1213,15 +1234,18 @@ def test_claude_operation_executor_uses_policy_settings_and_metadata(
     tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    seen: list[tuple[tuple[str, ...], dict[str, str] | None]] = []
+    seen: list[tuple[tuple[str, ...], dict[str, str] | None, str | None]] = []
+    workspace_root = tmp_path / "workspace"
+    workspace_root.mkdir()
 
     def fake_run_text_subprocess(
         command: list[str],
         *,
         input_text: str | None = None,
         env=None,
+        cwd: Path | None = None,
     ) -> tuple[str, str, int]:
-        seen.append((tuple(command), None if env is None else dict(env)))
+        seen.append((tuple(command), None if env is None else dict(env), None if cwd is None else str(cwd)))
         return ('{"result":"operation text","session_id":"claude-session-op","stop_reason":"done"}', "", 0)
 
     monkeypatch.setattr(claude_runtime_provider.shutil, "which", lambda name: "/usr/bin/claude")
@@ -1247,6 +1271,7 @@ def test_claude_operation_executor_uses_policy_settings_and_metadata(
             turn_kind="operation",
             policy=policy,
             run_folder=tmp_path,
+            workspace_root=workspace_root,
             step_execution_id="operate:1",
         )
     )
@@ -1260,9 +1285,15 @@ def test_claude_operation_executor_uses_policy_settings_and_metadata(
         "json",
         "--settings",
         str(settings_path),
+        "--add-dir",
+        str(workspace_root.resolve()),
         "--model",
         "claude-test",
     )
+    assert seen[0][1] is not None
+    assert seen[0][1]["CLAUDE_CONFIG_DIR"] == str(tmp_path / "provider_policy" / "claude_runtime")
+    assert seen[0][1]["CLAUDE_CODE_ADDITIONAL_DIRECTORIES_CLAUDE_MD"] == "1"
+    assert seen[0][2] == str(tmp_path / "provider_policy" / "claude_runtime" / "launch")
     assert result.metadata["provider_metadata"]["policy"]["capability_report_file"].endswith("capability_report.json")
 
 
