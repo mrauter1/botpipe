@@ -45,8 +45,8 @@
 
 ## Routes
 
-- Treat `question` as the only default runtime control route; use it only when a true intent gap or missing hard constraint blocks safe progress.
-- If this workflow authors `blocked` or `failed`, treat them as ordinary application routes rather than framework defaults.
+- Treat helper routes only when the runtime contract exposes them for this step; use `question` only use it only when a true intent gap or missing hard constraint blocks safe progress.
+- Treat helper routes as ordinary compiled routes with conventional defaults rather than a separate control-routing subsystem.
 
 ### Route selection rules
 - Choose `hardening_program_ready` only if the final package is complete, cites the assessed posture correctly, and the communications draft is consistent with the incident package and summary.

@@ -44,8 +44,8 @@
 
 ## Routes
 
-- Treat `question` as the only default runtime control route; use it only when a true intent gap or missing hard constraint blocks safe progress.
-- If this workflow authors `blocked` or `failed`, treat them as ordinary application routes rather than framework defaults.
+- Treat helper routes only when the runtime contract exposes them for this step; use `question` only use it only when a true intent gap or missing hard constraint blocks safe progress.
+- Treat helper routes as ordinary compiled routes with conventional defaults rather than a separate control-routing subsystem.
 
 ### Route selection rules
 - Choose `assessment_ready` only if the recommendation is explicit, the risk register is coherent, the machine-readable summary is valid and aligned to the prose assessment, and the assessment clearly explains how blockers influence the decision.

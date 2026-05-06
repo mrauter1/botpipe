@@ -100,11 +100,14 @@ Supported `pairs` subsets must be ordered prefixes only.
 
 ### Route grammar
 
-Runtime control route:
+Helper routes:
 - `question` when provider questions are allowed by the interaction policy
+- question routes use `outcome.route_fields.questions`; blocked and failed routes use nullable `outcome.route_fields.reason`
 
 Application routes:
-- ordinary application routes rather than framework defaults
+- workflow-specific routes such as `input_prepared`, `workflow_selected`, `optimization_candidates_ranked`, and `package_ready`
+
+Treat helper routes as ordinary compiled routes with conventional defaults rather than a separate control-routing subsystem
 
 ## Step-local optimization phase
 

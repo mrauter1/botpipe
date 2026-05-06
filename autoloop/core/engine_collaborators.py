@@ -122,7 +122,7 @@ RouteMode = Literal["capture", "finalize"]
 
 @dataclass(frozen=True, slots=True)
 class PairProviderResult:
-    producer_raw_output: str
+    producer_raw_output: str | None
     verifier_raw_output: str | None
     outcome: Any | None
     producer_session: "SessionBinding | None"
@@ -700,8 +700,7 @@ class StepDispatcher:
                             state=pair_result.state or context.state,
                             artifacts=self._engine._resolve_artifacts(context),
                             candidate_event=pair_result.short_circuit_event,
-                            candidate_route=pair_result.short_circuit_event.tag,
-                            candidate_route_present=True,
+                            candidate_route_present=False,
                             after_subject=pair_result.short_circuit_event,
                             pending_handoffs=remaining_pending_handoffs,
                             error_cls=ProviderExecutionError,
@@ -840,6 +839,50 @@ class StepDispatcher:
         consumed_pending_handoffs: tuple["PendingHandoff", ...],
         restorable_pending_handoffs: tuple["PendingHandoff", ...],
     ) -> PairProviderResult:
+        runtime = context_runtime(context)
+        before_producer_result = self._engine.hook_runner.run_before(
+            step,
+            context,
+            state,
+            artifacts=artifacts,
+            hook=step.before_producer_hook,
+            hook_phase="before_producer",
+        )
+        producer_state = before_producer_result.state
+        runtime.set_state(producer_state)
+        runtime.set_artifacts(self._engine._resolve_artifacts(context))
+        if before_producer_result.control is not None:
+            direct_control = self._engine._normalize_direct_runtime_control(
+                step=step,
+                context=context,
+                control=before_producer_result.control,
+                hook_name=getattr(step.before_producer_hook, "__name__", type(step.before_producer_hook).__name__),
+                hook_phase="before_producer",
+            )
+            return PairProviderResult(
+                producer_raw_output=None,
+                verifier_raw_output=None,
+                outcome=None,
+                producer_session=session,
+                verifier_session=None,
+                usage=StepProviderUsage(),
+                state=producer_state,
+                direct_control=direct_control,
+            )
+        if before_producer_result.event is not None:
+            return PairProviderResult(
+                producer_raw_output=None,
+                verifier_raw_output=None,
+                outcome=None,
+                producer_session=session,
+                verifier_session=None,
+                usage=StepProviderUsage(),
+                state=producer_state,
+                short_circuit_event=before_producer_result.event,
+                source_hook=getattr(step.before_producer_hook, "__name__", type(step.before_producer_hook).__name__),
+                source_phase="before_producer",
+            )
+
         producer_prompt = self._engine._resolve_prompt(step.producer_prompt, context=context)
         self._engine._emit_provider_attempt_event(
             "provider_attempt_started",
@@ -899,7 +942,7 @@ class StepDispatcher:
         after_producer_result = self._engine.hook_runner.run_after(
             step,
             context,
-            state=state,
+            state=producer_state,
             artifacts=self._engine._resolve_artifacts(context),
             subject=producer_exec.text,
             candidate_event=None,

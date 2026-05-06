@@ -4,6 +4,9 @@ from __future__ import annotations
 
 import asyncio
 from copy import deepcopy
+import os
+import re
+from pathlib import Path
 import subprocess
 from typing import Any, Mapping
 
@@ -11,6 +14,9 @@ from ...core.errors import ProviderExecutionError
 from ...core.providers.models import TokenUsage
 from ...core.prompts import ResolvedPrompt
 from ...core.stores.protocols import SessionBinding
+
+
+_SAFE_STEP_KEY_PATTERN = re.compile(r"[^A-Za-z0-9_.-]+")
 
 
 def require_prompt_text(prompt: ResolvedPrompt, provider_name: str, step_name: str) -> str:
@@ -207,6 +213,7 @@ def run_text_subprocess(
     command: list[str],
     *,
     input_text: str | None = None,
+    env: Mapping[str, str] | None = None,
 ) -> tuple[str, str, int]:
     """Run a subprocess synchronously for explicit compatibility-only paths."""
 
@@ -216,5 +223,44 @@ def run_text_subprocess(
         text=True,
         capture_output=True,
         check=False,
+        env=None if env is None else dict(env),
     )
     return completed.stdout, completed.stderr, completed.returncode
+
+
+def merge_subprocess_env(overrides: Mapping[str, str] | None = None) -> dict[str, str]:
+    """Merge subprocess environment overrides over the ambient environment."""
+
+    env = dict(os.environ)
+    if overrides:
+        env.update({str(key): str(value) for key, value in overrides.items()})
+    return env
+
+
+def build_policy_step_key(step_name: str, *, step_execution_id: str | None = None) -> str:
+    """Build the stable run-scoped step key for provider policy artifacts."""
+
+    base_step = step_name
+    scope_name: str | None = None
+    item_id: str | None = None
+    visit: str | None = None
+    if step_execution_id:
+        parts = [part for part in step_execution_id.split(":") if part]
+        if len(parts) == 2:
+            base_step, visit = parts
+        elif len(parts) >= 4:
+            base_step, scope_name, item_id, visit = parts[0], parts[1], parts[2], parts[3]
+    sections = [_safe_step_key_component(base_step or step_name)]
+    if scope_name:
+        sections.append(f"scope-{_safe_step_key_component(scope_name)}")
+    if item_id:
+        sections.append(f"item-{_safe_step_key_component(item_id)}")
+    if visit:
+        sections.append(f"visit-{_safe_step_key_component(visit)}")
+    return "__".join(section for section in sections if section)
+
+
+def _safe_step_key_component(value: str) -> str:
+    normalized = _SAFE_STEP_KEY_PATTERN.sub("-", value.strip())
+    normalized = normalized.strip("._-")
+    return normalized or "step"

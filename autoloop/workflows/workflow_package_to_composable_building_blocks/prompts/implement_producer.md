@@ -66,14 +66,14 @@
 
 ## Routes
 
-- Treat `question` as the only default runtime control route; use it only when a true intent gap or missing hard constraint blocks safe progress.
-- If this workflow authors `blocked` or `failed`, treat them as ordinary application routes rather than framework defaults.
+- Treat helper routes only when the runtime contract exposes them for this step; use `question` only use it only when a true intent gap or missing hard constraint blocks safe progress.
+- Treat helper routes as ordinary compiled routes with conventional defaults rather than a separate control-routing subsystem.
 
 ### Route guidance for the verifier
 - `candidate_decomposition_built`: the candidate surface, declared building-block index, and build artifacts are explicit enough for evaluation.
 - `needs_rework`: the same implementation boundary still holds, but the candidate files or build artifacts need local repair.
 - `needs_replan`: implementation exposed a material change to the selected workflow boundary, declared package set, or accepted plan.
-- Treat `question` as the only default runtime control route; use it only for true intent gaps, missing prerequisites, or irreconcilable contradictions.
+- Treat helper routes only when the runtime contract exposes them for this step; use `question` only use it only for true intent gaps, missing prerequisites, or irreconcilable contradictions.
 
 ## Out Of Scope
 

@@ -19,8 +19,9 @@ Keep the common runtime contract wording aligned with the active workflow prompt
 ## Route Surface
 
 - route metadata supplies route summaries and any route-specific required writes.
-- `question` is the only default runtime control route, and provider contracts hide it in full-auto mode.
-- If a workflow authors `blocked` or `failed`, treat them as ordinary application routes rather than framework defaults.
+- treat helper routes as ordinary compiled routes with conventional defaults rather than a separate control-routing subsystem.
+- default `question` and `blocked` helper routes are interactive-only; default `failed` remains provider-visible in full-auto mode unless the workflow overrides or suppresses it.
+- use `outcome.route_fields.questions` for question routes and nullable `outcome.route_fields.reason` for blocked or failed routes.
 
 ## Verifier Payloads
 

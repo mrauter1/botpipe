@@ -2,8 +2,10 @@
 
 from __future__ import annotations
 
+from collections.abc import Callable
 from dataclasses import dataclass
 import json
+from pathlib import Path
 from typing import Any, Literal, Mapping, Sequence
 
 from ..errors import ProviderExecutionError
@@ -84,10 +86,30 @@ def render_provider_turn_with_policy(
         prompt_text=rendered_prompt,
         session=context.session,
         policy=context.policy,
+        run_folder=_context_run_folder(context.context),
+        step_execution_id=_context_step_execution_id(context.context),
+        runtime_event_sink=_context_runtime_event_sink(context.context),
         expected_response="raw_text" if context.turn_kind in {"producer", "operation"} else "outcome_json",
         response_schema=None if context.turn_kind in {"producer", "operation"} else _response_schema_payload(context),
         response_schema_simplified=context.response_schema_simplified if context.turn_kind not in {"producer", "operation"} else False,
     )
+
+
+def _context_run_folder(context: object) -> Path | None:
+    run_folder = getattr(context, "run_folder", None)
+    if isinstance(run_folder, Path):
+        return run_folder
+    return None
+
+
+def _context_step_execution_id(context: object) -> str | None:
+    value = getattr(context, "_step_execution_id", None)
+    return value if isinstance(value, str) and value else None
+
+
+def _context_runtime_event_sink(context: object) -> Callable[[str, Mapping[str, Any]], None] | None:
+    sink = getattr(context, "_runtime_event_sink", None)
+    return sink if callable(sink) else None
 
 
 def _markdown_table(headers: Sequence[str], rows: Sequence[Sequence[str]]) -> str:

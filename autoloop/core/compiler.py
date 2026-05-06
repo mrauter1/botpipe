@@ -383,6 +383,7 @@ def _compile_steps(
                 step_item_state_model=step_item_state_model,
                 step_item_state_fields=step_item_state_fields,
                 provider_policy=_validated_compiled_policy(step.provider_policy, owner=f"step {step.name!r}"),
+                route_table=dict(route_table),
             )
         elif isinstance(step, PromptStep):
             compiled_steps[step.name] = CompiledStep(
@@ -425,6 +426,7 @@ def _compile_steps(
                 step_item_state_model=step_item_state_model,
                 step_item_state_fields=step_item_state_fields,
                 provider_policy=_validated_compiled_policy(step.provider_policy, owner=f"step {step.name!r}"),
+                route_table=dict(route_table),
             )
         elif isinstance(step, PythonStep):
             compiled_steps[step.name] = CompiledStep(
@@ -471,6 +473,7 @@ def _compile_steps(
                 step_item_state_model=step_item_state_model,
                 step_item_state_fields=step_item_state_fields,
                 provider_policy=_validated_compiled_policy(step.provider_policy, owner=f"step {step.name!r}"),
+                route_table=dict(route_table),
             )
         elif isinstance(step, ChildWorkflowStep):
             compiled_steps[step.name] = CompiledStep(
@@ -517,6 +520,7 @@ def _compile_steps(
                 step_item_state_model=step_item_state_model,
                 step_item_state_fields=step_item_state_fields,
                 provider_policy=_validated_compiled_policy(step.provider_policy, owner=f"step {step.name!r}"),
+                route_table=dict(route_table),
             )
         elif isinstance(step, BranchGroupStep):
             compiled_branch_group = _compile_branch_group_internal_steps(
@@ -565,6 +569,7 @@ def _compile_steps(
                 step_item_state_fields=(),
                 provider_policy=_validated_compiled_policy(step.provider_policy, owner=f"step {step.name!r}"),
                 branch_group=compiled_branch_group,
+                route_table=dict(route_table),
             )
         else:
             raise WorkflowCompilationError(f"unsupported step type {type(step)!r}")

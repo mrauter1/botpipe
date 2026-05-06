@@ -70,14 +70,14 @@
 
 ## Routes
 
-- Treat `question` as the only default runtime control route; use it only when a true intent gap or missing hard constraint blocks safe progress.
-- If this workflow authors `blocked` or `failed`, treat them as ordinary application routes rather than framework defaults.
+- Treat helper routes only when the runtime contract exposes them for this step; use `question` only use it only when a true intent gap or missing hard constraint blocks safe progress.
+- Treat helper routes as ordinary compiled routes with conventional defaults rather than a separate control-routing subsystem.
 
 ### Route guidance for the verifier
 - `design_accepted`: the design is implementation-ready.
 - `needs_rework`: the same design boundary holds, but the spec or prompt matrix needs local correction.
 - `needs_replan`: the chosen addition or authoring boundary changed materially.
-- Treat `question` as the only default runtime control route; use it only for genuine missing intent, blocked prerequisites, or unrecoverable contradictions.
+- Treat helper routes only when the runtime contract exposes them for this step; use `question` only use it only for genuine missing intent, blocked prerequisites, or unrecoverable contradictions.
 
 ## Out Of Scope
 

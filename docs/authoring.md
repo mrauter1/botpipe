@@ -118,7 +118,7 @@ When the same parameter bundle appears in more than one workflow, prefer shared 
 
 ## Step Control Contracts
 
-Provider-backed simple steps may declare structured control contracts directly on `step(...)` and `produce_verify_step(...)`. The runtime renders those declarations into one shared human-readable Runtime Step Contract before CLI-backed providers run.
+Provider-backed simple steps may declare structured output contracts directly on `step(...)` and `produce_verify_step(...)`. The runtime renders those declarations into one shared human-readable Runtime Step Contract before CLI-backed providers run.
 
 ```python
 from pydantic import BaseModel
@@ -147,13 +147,33 @@ review = step(
 Runtime behavior:
 
 - `control_schema` defines the JSON-schema-like contract for `Outcome.payload`
-- `available_routes` is derived mechanically in a stable order: authored step-local routes first, authored global routes next, and internal runtime-control routes last
-- step-local `Route.to(...)` metadata carries optional per-route summary, handoff, and selected-route output metadata for legal routes only
+- everything is a route: route legality, provider visibility, payload validation, and route-field validation all come from the compiled route table
+- `GLOBAL` may define workflow-wide helper-route defaults such as `question`, `blocked`, and `failed`
+- step-local routes override inherited `GLOBAL` routes by tag, and `Route.disabled()` suppresses an inherited route
+- step-local `Route.to(...)` metadata carries optional per-route summary, handoff, payload-schema overrides, and selected-route output metadata for legal routes only
 - `required_writes` is the normalized selected-route output obligation map derived from explicit `Route(...)` metadata or inferred empty tuples
 - route metadata is authored on `Route(...)` when the workflow needs to override inferred summaries or declare route-specific `required_writes`
 - author workflows with step-local `routes={...}`; `transitions` is not part of the canonical authoring surface
 - `retry_policy` controls provider-attributable retries and defaults to `ProviderRetryPolicy(max_attempts=3)` on provider-backed steps
 - the rendered Runtime Step Contract can also include resolved-target route handoff text and retry feedback when the engine supplies them
+
+Canonical provider outcomes always route through:
+
+```json
+{
+  "outcome": {
+    "tag": "done",
+    "payload": {},
+    "route_fields": {}
+  }
+}
+```
+
+- `outcome.tag` selects the compiled route
+- `outcome.payload` is the business or domain output
+- `outcome.route_fields` carries selected-route metadata such as clarification questions or failure reasons
+- `Route.question()` requires `outcome.route_fields.questions`
+- `Route.blocked()` and `Route.failed()` use nullable `outcome.route_fields.reason`
 
 ## Static And Runtime Validation
 
@@ -240,7 +260,7 @@ class ApprovalWorkflow(Workflow):
             "done": Route.to("publish"),
             "human_escalation": Route.to(
                 "publish",
-                provider_visible=False,
+                provider_visibility="hidden",
                 on_taken=on_hidden_escalation,
             ),
         },
@@ -258,7 +278,8 @@ Key rules:
 - `Fail(...)` terminates with `FAIL` and preserves the current state/session snapshot
 - plain hook-returned strings always mean route tags, never step targets
 - use `Route.to(..., on_taken=...)` for route-local chaining
-- use `provider_visible=False` for hidden SOP routes that workflow hooks may select but providers must not see
+- use `provider_visibility="hidden"` for hidden SOP routes that workflow hooks may select but providers must not see
+- boolean `provider_visible=False` still normalizes to hidden visibility during compatibility mode, but new authoring should prefer `provider_visibility`
 
 ## Runtime Config And Provider Selection
 
@@ -521,13 +542,15 @@ Use `Route.to(...)`, `Route.finish(...)`, `Route.await_input(...)`, and `Route.f
 
 `Handoff(...)` adds source-step-to-target-step text that the runtime delivers only to the resolved provider-mediated target step. Dynamic handoff text may also be returned through `Event(tag="needs_rework", handoff="...")`. Handoffs are text-only and the current Runtime Step Contract remains authoritative.
 
-Default provider-control policy is narrow:
+Route-helper defaults are route-table driven:
 
-- `question` is the only default runtime control route
-- the default `question` route is provider-visible only when the engine is not running full-auto
-- `blocked` and `failed` are never injected by default
-- explicit application routes named `blocked` or `failed` remain legal ordinary routes
-- provider transport failures, malformed output, illegal routes, and missing or invalid required artifacts stay runtime-owned failures rather than provider-selected `failed` outcomes
+- workflows may define workflow-wide defaults under `GLOBAL`, for example `Route.question()`, `Route.blocked()`, and `Route.failed()`
+- default `question` and `blocked` helper routes are `interactive_only`
+- default `failed` helper routes are provider-visible in both interactive and full-auto mode
+- explicit step-local routes override inherited defaults by tag
+- `Route.disabled()` suppresses an inherited route entirely
+- hidden routes stay runtime-valid but provider-invisible
+- provider transport failures, malformed output, illegal routes, and missing or invalid required artifacts stay runtime-owned failures rather than provider-selected routes
 
 ## Worklists And Scoped Steps
 

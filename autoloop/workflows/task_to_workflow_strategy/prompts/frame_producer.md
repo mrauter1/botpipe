@@ -57,14 +57,14 @@
 
 ## Routes
 
-- Treat `question` as the only default runtime control route; use it only when a true intent gap or missing hard constraint blocks safe progress.
-- If this workflow authors `blocked` or `failed`, treat them as ordinary application routes rather than framework defaults.
+- Treat helper routes only when the runtime contract exposes them for this step; use `question` only use it only when a true intent gap or missing hard constraint blocks safe progress.
+- Treat helper routes as ordinary compiled routes with conventional defaults rather than a separate control-routing subsystem.
 
 ### Route guidance for the verifier
 - `task_framed`: the task boundary, sponsor, terminal outcome, and selection criteria are explicit enough for portfolio comparison.
 - `needs_rework`: the same framing boundary still holds, but the brief or criteria need local repair.
 - `needs_replan`: the trigger, sponsor, or terminal outcome changed materially and framing must restart.
-- Treat `question` as the only default runtime control route; use it only for genuine intent gaps, missing prerequisites, or irreconcilable contradictions.
+- Treat helper routes only when the runtime contract exposes them for this step; use `question` only use it only for genuine intent gaps, missing prerequisites, or irreconcilable contradictions.
 
 ## Out Of Scope
 

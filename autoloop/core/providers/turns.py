@@ -3,6 +3,8 @@
 from __future__ import annotations
 
 from dataclasses import dataclass, field
+from pathlib import Path
+from collections.abc import Callable, Mapping
 from typing import Any, Literal
 
 from ..provider_policy import ResolvedProviderPolicy
@@ -22,6 +24,9 @@ class RenderedProviderTurn:
     session: SessionBinding | None
     expected_response: ExpectedProviderResponse
     policy: ResolvedProviderPolicy | None = None
+    run_folder: Path | None = None
+    step_execution_id: str | None = None
+    runtime_event_sink: Callable[[str, Mapping[str, Any]], None] | None = None
     response_schema: dict[str, Any] | None = None
     response_schema_simplified: bool = False
 

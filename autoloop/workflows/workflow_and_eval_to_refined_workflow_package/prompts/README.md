@@ -32,9 +32,10 @@
 
 ## Route Surface
 
-Runtime control route:
+Helper routes:
 
 - `question` when provider questions are allowed by the interaction policy
+- question routes use `outcome.route_fields.questions`; blocked and failed routes use nullable `outcome.route_fields.reason`
 
 Application routes:
 
@@ -48,7 +49,7 @@ Application routes:
 - `needs_rework`
 - `needs_replan`
 
-If this workflow authors `blocked` or `failed`, treat them as ordinary application routes rather than framework defaults.
+Treat helper routes as ordinary compiled routes with conventional defaults rather than a separate control-routing subsystem.
 
 ## Verifier Payloads
 

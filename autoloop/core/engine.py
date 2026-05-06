@@ -1140,9 +1140,6 @@ class Engine:
             )
 
     def _required_output_artifacts(self, step: CompiledStep, route_tag: str) -> tuple[str, ...]:
-        if step.route_table is not None:
-            compiled_route = step.route_table.get(route_tag)
-            return () if compiled_route is None else tuple(compiled_route.required_writes or ())
         return effective_route_required_writes(
             self.compiled,
             step_name=step.name,

@@ -99,13 +99,14 @@ Non-negotiable architectural principles
    The real outputs are files.
    Provider prose is control metadata, not the primary deliverable.
 
-4. Reserved routes are always explicit.
-   Reserved routes are:
+4. Helper routes are always explicit routes.
+   Helper routes commonly include:
    - question
    - blocked
    - failed
 
-   Application routes must be explicitly defined per step.
+   Treat them as ordinary route-table entries with conventional defaults, not as a parallel control-routing subsystem.
+   Application routes must still be explicitly defined per step.
 
 5. Verification is structural, not optional.
    For any non-trivial quality-sensitive task, the workflow should explicitly enforce producer/verifier behavior.
@@ -200,7 +201,7 @@ The workflow must define, explicitly and concretely:
    - authoritative precedence when multiple artifacts exist
 
 6. Route grammar
-   - reserved routes
+   - helper routes and compatibility routes
    - application routes
    - exact semantics of each route
    - when each route is legal
@@ -246,7 +247,7 @@ Within the current step contract, the provider should decide:
 - how to implement the work
 - how to gather evidence
 - whether success has truly been achieved for this step
-- whether the correct route is success, needs_rework, needs_replan, question, blocked, or failed according to the step contract
+- whether the correct route is success, needs_rework, needs_replan, question, blocked, failed, or another step-declared route according to the compiled step contract
 
 The provider should be free in cognition, but bounded in contract.
 
@@ -323,7 +324,7 @@ For every step you design, the rendered prompt template should contain, in expli
 8. Route instructions
    - available application routes
    - when to use each route
-   - when to use reserved routes
+   - when to use helper routes such as question, blocked, or failed when they are available for the step
    - how to distinguish needs_rework from needs_replan
 
 9. Constraints
@@ -349,8 +350,9 @@ The runtime may inject these machine-readable fields into the rendered step prom
 
 The runtime may also:
 - validate returned output against expected_output_schema
+- validate outcome.route_fields against the selected route schema
 - reject illegal routes
-- apply reserved-route handling
+- apply helper-route handling
 - enforce retry, timeout, and resume policies
 
 Do not invent broader provider-facing packet layers.
