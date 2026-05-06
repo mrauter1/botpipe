@@ -84,6 +84,7 @@ def _outcome_turn(
     tmp_path: Path,
     session: SessionBinding | None = None,
     response_schema_simplified: bool = False,
+    response_schema: dict[str, object] | None = None,
 ) -> RenderedProviderTurn:
     return RenderedProviderTurn(
         step_name="review",
@@ -92,7 +93,8 @@ def _outcome_turn(
         session=session,
         expected_response="outcome_json",
         run_folder=tmp_path,
-        response_schema={
+        response_schema=response_schema
+        or {
             "type": "object",
             "properties": {
                 "outcome": {
@@ -208,6 +210,23 @@ def test_codex_backend_records_simplified_schema_delivery(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     captured: dict[str, object] = {}
+    simplified_schema = {
+        "type": "object",
+        "properties": {
+            "outcome": {
+                "type": "object",
+                "properties": {
+                    "tag": {"enum": ["done", "question"]},
+                    "payload": {"type": "object", "additionalProperties": True},
+                    "route_fields": {"type": "object", "additionalProperties": True},
+                },
+                "required": ["tag", "payload", "route_fields"],
+                "additionalProperties": False,
+            }
+        },
+        "required": ["outcome"],
+        "additionalProperties": False,
+    }
 
     monkeypatch.setattr(
         codex_runtime_provider,
@@ -236,11 +255,19 @@ def test_codex_backend_records_simplified_schema_delivery(
             resume_command=("codex", "exec", "resume", "--json"),
         ),
     )
-    result = executor(_outcome_turn(tmp_path=tmp_path, response_schema_simplified=True))
+    turn = _outcome_turn(
+        tmp_path=tmp_path,
+        response_schema_simplified=True,
+        response_schema=simplified_schema,
+    )
+    result = executor(turn)
 
     command = captured["command"]
     assert isinstance(command, list)
     assert "--output-schema" in command
+    schema_path = Path(command[command.index("--output-schema") + 1])
+    assert json.loads(schema_path.read_text(encoding="utf-8")) == simplified_schema
+    assert json.loads(schema_path.read_text(encoding="utf-8")) == turn.response_schema
     assert result.metadata["structured_output"]["delivery_mode"] == "native_simplified"
 
 

@@ -6,3 +6,5 @@
 - Phase Directory Key: backend-response-schema-delivery
 - Phase Title: Backend Schema Delivery
 - Scope: phase-local authoritative verifier artifact
+
+- Added focused coverage hardening in `tests/runtime/test_provider_backends.py` so the simplified-schema path now asserts the backend-facing `--output-schema` file contains the distinct simplified schema payload, not just the `native_simplified` metadata flag.
