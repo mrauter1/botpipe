@@ -1621,3 +1621,56 @@ A follow-up implementation run is needed. The revised request now focuses only o
 <loop-control>
 {"schema":"docloop.loop_control/v1","kind":"promise","promise":"INCOMPLETE"}
 </loop-control>
+
+
+---
+run_id=run-20260506T185744Z-092935c3 | entry=session_turn | pair=audit | phase=verifier | cycle=1 | attempt=1 | thread_id=019dff00-14cc-72f0-b2c9-ae9d2f45a1dc
+---
+provider=codex
+mode=resume
+template=/home/rauter/.local/share/pipx/venvs/autoloop/lib/python3.12/site-packages/autoloop/templates/audit_verifier.md
+session_id=019dff00-14cc-72f0-b2c9-ae9d2f45a1dc
+
+
+---
+run_id=run-20260506T185744Z-092935c3 | entry=phase_output | pair=audit | phase=verifier | process=codex-agent | cycle=1 | attempt=1 | thread_id=019dff00-14cc-72f0-b2c9-ae9d2f45a1dc
+---
+I’m verifying the audit artifacts against the request ledger, final code paths, and the audit’s own evidence trail. First I’m re-reading the audit files and spot-checking the two reported gaps directly so I can decide whether the criteria should stay fully checked or whether feedback needs a blocking finding.
+
+The audit artifacts are internally consistent so far. I’m doing two direct code-path confirmations now: one for the transport schema gap and one for the raw JSON-schema validator gap, since those are the only claims that would make this audit blocking if they were overstated.
+
+The two reported gaps check out exactly as written, and the revised request is narrowly scoped to them. I’m recording a clean verification pass in the audit feedback and leaving the criteria fully checked.
+
+Scope considered
+
+The immutable request snapshot, the authoritative raw phase log, the decisions ledger, the audit artifacts, and the final code/test surfaces needed to confirm the audit’s two reported gaps.
+
+What I analyzed
+
+I re-read `gap_report.md`, `revised_request.md`, `audit_result.json`, `criteria.md`, and `feedback.md`, then spot-checked the provider-contract builder, rendered provider boundary, Codex/Claude transports, and route-schema compilation/runtime validation path. I also re-ran a live probe showing `route_fields_validator` is `None` and an invalid scripted provider outcome still reaches `FINISH` when `jsonschema` is unavailable.
+
+What I reviewed
+
+I reviewed whether the audit:
+- covered the full intent ledger and relevant run artifacts
+- classified differences versus unresolved gaps correctly
+- supported its claims with concrete code/test evidence
+- produced a revised request that can drive the next run directly
+- wrote valid and accurate machine-readable output
+
+Key findings / decisions
+
+- No blocking issues found in the audit artifacts.
+- The two reported material gaps are real:
+  - generated `response_schema` is built and forwarded through provider request objects, but current runtime transports only use `turn.prompt_text`
+  - raw JSON-schema route contracts can lose runtime validation entirely when `jsonschema` is unavailable
+- `criteria.md` is accurate with all boxes checked.
+- I appended one non-blocking verification note to `feedback.md`.
+
+Open issues / next step
+
+No audit-artifact fixes are required. The audit is complete and the revised request is appropriate for the next implementation run.
+
+<loop-control>
+{"schema":"docloop.loop_control/v1","kind":"promise","promise":"COMPLETE"}
+</loop-control>

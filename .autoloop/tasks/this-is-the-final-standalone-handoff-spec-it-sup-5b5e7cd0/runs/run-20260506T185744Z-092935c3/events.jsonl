@@ -74,3 +74,6 @@
 {"ts": "2026-05-06T20:34:47.952285+00:00", "run_id": "run-20260506T185744Z-092935c3", "seq": 74, "event_type": "phase_completed", "pair": "test", "phase_id": "tests-and-docs-migration", "phase_mode": "single"}
 {"ts": "2026-05-06T20:34:47.956788+00:00", "run_id": "run-20260506T185744Z-092935c3", "seq": 75, "event_type": "pair_started", "pair": "audit", "phase_id": null}
 {"ts": "2026-05-06T20:34:47.957195+00:00", "run_id": "run-20260506T185744Z-092935c3", "seq": 76, "event_type": "cycle_started", "pair": "audit", "cycle": 1, "attempt": 1, "phase_id": null}
+{"ts": "2026-05-06T20:41:58.520254+00:00", "run_id": "run-20260506T185744Z-092935c3", "seq": 77, "event_type": "phase_finished", "pair": "audit", "phase": "producer", "cycle": 1, "attempt": 1, "empty_output": false, "phase_id": null}
+{"ts": "2026-05-06T20:42:56.565647+00:00", "run_id": "run-20260506T185744Z-092935c3", "seq": 78, "event_type": "phase_finished", "pair": "audit", "phase": "verifier", "cycle": 1, "attempt": 1, "empty_output": false, "phase_id": null}
+{"ts": "2026-05-06T20:42:56.647487+00:00", "run_id": "run-20260506T185744Z-092935c3", "seq": 79, "event_type": "pair_completed", "pair": "audit", "cycle": 1, "attempt": 1, "phase_id": null}
