@@ -39,3 +39,41 @@ Updated the run-local planning artifacts: [plan.md](/home/rauter/autoloop_v3_bkp
 The plan is intentionally a single implementation phase. It is anchored to the actual code surfaces in `autoloop/core/branch_groups/runtime.py`, `autoloop/core/branch_groups/sessions.py`, `autoloop/core/providers/rendered.py`, the runtime transports, and the existing branch-group/provider/strictness test suites. It explicitly covers the duplicate final-state mutation fix, branch-local session isolation, scoped-runtime assertion cleanup, operation-bridge containment, capture/fan-in invariants, evidence-write gating, and the required compile/runtime/provider/strictness regression matrix.
 
 I did not run pytest in this planner turn; I only validated the written artifacts by reading them back for consistency.
+
+
+---
+run_id=run-20260506T181149Z-6867fac0 | entry=session_turn | pair=plan | phase=verifier | cycle=1 | attempt=1 | thread_id=019dfe7d-33cb-7730-aeea-13afe55ada76
+---
+provider=codex
+mode=resume
+template=/home/rauter/.local/share/pipx/venvs/autoloop/lib/python3.12/site-packages/autoloop/templates/plan_verifier.md
+session_id=019dfe7d-33cb-7730-aeea-13afe55ada76
+
+
+---
+run_id=run-20260506T181149Z-6867fac0 | entry=phase_output | pair=plan | phase=verifier | process=codex-agent | cycle=1 | attempt=1 | thread_id=019dfe7d-33cb-7730-aeea-13afe55ada76
+---
+I’m updating the verifier artifacts now. The main issue is intent coverage: the plan is directionally sound, but its explicit validation contract leaves out several user-mandated preserved-behavior tests and one public-API compatibility acceptance gate.
+
+The verifier findings are written. I’m doing a quick readback of the updated checklist and feedback so the blocking status matches the actual artifact state.
+
+Scope considered
+Run-local plan verification for the async-native branch-group cleanup pass, using the immutable request snapshot, current `plan.md`, `phase_plan.yaml`, `criteria.md`, `feedback.md`, and the current-turn `decisions.txt` block.
+
+What I analyzed
+I compared the authored plan against the request’s mandatory fixes, preserved invariants, required compile/runtime/provider/strictness tests, and the explicit public non-parallel API compatibility constraints. I also checked the machine-readable phase contract for YAML validity, runtime-owned metadata preservation, coherent scope, and acceptance-criteria coverage.
+
+What I reviewed
+I reviewed [plan.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/revised-standalone-spec-second-pass-cleanup-for-dd5e2acb/runs/run-20260506T181149Z-6867fac0/artifacts/plan/plan.md), [phase_plan.yaml](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/revised-standalone-spec-second-pass-cleanup-for-dd5e2acb/runs/run-20260506T181149Z-6867fac0/artifacts/plan/phase_plan.yaml), [criteria.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/revised-standalone-spec-second-pass-cleanup-for-dd5e2acb/runs/run-20260506T181149Z-6867fac0/artifacts/plan/criteria.md), [feedback.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/revised-standalone-spec-second-pass-cleanup-for-dd5e2acb/runs/run-20260506T181149Z-6867fac0/artifacts/plan/feedback.md), and [decisions.txt](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/revised-standalone-spec-second-pass-cleanup-for-dd5e2acb/runs/run-20260506T181149Z-6867fac0/decisions.txt). I updated `criteria.md` and appended verifier findings to `feedback.md`.
+
+Key findings / decisions
+Two blocking findings were recorded.
+`PLAN-001`: the plan’s explicit validation contract omits several request-mandated preserved-behavior checks, so intent fidelity and behavioral safety are not yet satisfied.
+`PLAN-002`: the machine-readable phase contract does not explicitly gate completion on the required public non-parallel API compatibility and outer-wrapper-only sync behavior.
+
+Open issues / next step
+The planner should revise `plan.md` and `phase_plan.yaml` to add the missing required regression coverage and a machine-readable compatibility acceptance criterion, then resubmit for verification.
+
+<loop-control>
+{"schema":"docloop.loop_control/v1","kind":"promise","promise":"INCOMPLETE"}
+</loop-control>
