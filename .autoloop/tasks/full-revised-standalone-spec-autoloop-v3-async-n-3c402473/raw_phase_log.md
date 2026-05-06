@@ -1891,3 +1891,54 @@ Open issues / next step
 
 - No remaining code changes are queued in this phase.
 - Reviewer-owned [criteria.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/full-revised-standalone-spec-autoloop-v3-async-n-3c402473/runs/run-20260506T130608Z-37f1c786/artifacts/implement/phases/test-and-strictness-hardening/criteria.md) and [feedback.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/full-revised-standalone-spec-autoloop-v3-async-n-3c402473/runs/run-20260506T130608Z-37f1c786/artifacts/implement/phases/test-and-strictness-hardening/feedback.md) still reflect the prior blocking review and need verifier rerun to clear them.
+
+
+---
+run_id=run-20260506T130608Z-37f1c786 | entry=session_turn | pair=implement | phase=verifier | cycle=2 | attempt=1 | thread_id=019dfdab-cbed-71e2-9b3b-61be29aeb301
+---
+provider=codex
+mode=resume
+template=/home/rauter/.local/share/pipx/venvs/autoloop/lib/python3.12/site-packages/autoloop/templates/implement_verifier.md
+session_id=019dfdab-cbed-71e2-9b3b-61be29aeb301
+
+
+---
+run_id=run-20260506T130608Z-37f1c786 | entry=phase_output | pair=implement | phase=verifier | process=codex-agent | cycle=2 | attempt=1 | thread_id=019dfdab-cbed-71e2-9b3b-61be29aeb301
+---
+I’m re-reviewing the phase-local test changes against the prior blockers and the updated validation evidence. I’ll verify the new strictness boundary, the test adjustments, and the recorded matrix result before I touch the review artifacts.
+
+The rerun review didn’t uncover any new blockers. I’m marking the criteria complete and appending a short re-review resolution note so the feedback artifact shows that the earlier blockers were cleared rather than silently disappearing.
+
+I’m checking the active review artifacts and the final producer changes so I can close this verification turn cleanly.
+
+Scope considered
+
+- Phase-local re-review of the `test-and-strictness-hardening` implementation and the active review artifacts only.
+- Request-relevant code paths were limited to the updated strictness, unit, runtime, and contract tests plus the implementation notes needed to verify the claimed validation matrix.
+
+What I analyzed
+
+- The producer’s follow-up changes in `tests/strictness/test_no_compat.py`, `tests/unit/test_provider_boundary_core.py`, `tests/runtime/test_runtime_providers.py`, `tests/runtime/test_provider_backends.py`, and `tests/contract/test_async_engine_spine.py`.
+- The active [implementation_notes.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/full-revised-standalone-spec-autoloop-v3-async-n-3c402473/runs/run-20260506T130608Z-37f1c786/artifacts/implement/phases/test-and-strictness-hardening/implementation_notes.md), [criteria.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/full-revised-standalone-spec-autoloop-v3-async-n-3c402473/runs/run-20260506T130608Z-37f1c786/artifacts/implement/phases/test-and-strictness-hardening/criteria.md), [feedback.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/full-revised-standalone-spec-autoloop-v3-async-n-3c402473/runs/run-20260506T130608Z-37f1c786/artifacts/implement/phases/test-and-strictness-hardening/feedback.md), and the run-local decisions ledger.
+
+What I reviewed
+
+- Whether IMP-001 was actually closed by extending the rendered-provider strictness rule beyond only the top-level async entrypoints.
+- Whether IMP-002 was actually closed by recording and running a passing validation matrix consistent with AC-2.
+- Whether the follow-up edits preserved the explicit narrow `llm()` / `classify()` compatibility exception without reopening general sync provider/transport paths.
+
+Key findings / decisions
+
+- No blocking findings remain.
+- `criteria.md` now accurately shows all review gates satisfied.
+- `feedback.md` now records both prior blocking findings as resolved and adds no new findings.
+- The re-review supports `COMPLETE`: the strictness gap around `_run_turn(...)` is closed, and the phase artifacts now include a concrete passing pytest matrix (`381 passed, 15 warnings in 5.59s`).
+
+Open issues / next step
+
+- No phase-local review issues remain.
+- This phase can advance from verification.
+
+<loop-control>
+{"schema":"docloop.loop_control/v1","kind":"promise","promise":"COMPLETE"}
+</loop-control>
