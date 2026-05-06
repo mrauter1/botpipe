@@ -1683,3 +1683,39 @@ workspace=/home/rauter/autoloop_v3_bkp/autoloop_v3
 pairs=plan,implement,test,audit
 request_file=/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/this-is-the-final-standalone-handoff-spec-it-sup-5b5e7cd0/runs/run-20260506T204256Z-05282838/request.md
 session_mode=persistent
+
+
+---
+run_id=run-20260506T204256Z-05282838 | entry=session_turn | pair=plan | phase=producer | cycle=1 | attempt=1 | thread_id=019dff07-8be8-7403-85db-f40ae08ce678
+---
+provider=codex
+mode=start
+template=/home/rauter/.local/share/pipx/venvs/autoloop/lib/python3.12/site-packages/autoloop/templates/plan_producer.md
+session_id=019dff07-8be8-7403-85db-f40ae08ce678
+
+
+---
+run_id=run-20260506T204256Z-05282838 | entry=phase_output | pair=plan | phase=producer | process=codex-agent | cycle=1 | attempt=1 | thread_id=019dff07-8be8-7403-85db-f40ae08ce678
+---
+I’m treating this as a run-local planning turn: first I’ll read the authoritative request/log artifacts and the route-schema/backend code paths they refer to, then I’ll update the plan artifacts with an implementation-ready slice that stays inside the stated migration scope.
+
+I’ve confirmed there are no clarifications beyond the initial request and the plan artifacts are effectively blank. Next I’m tracing the compiler/runtime path for `payload_schema`, `route_fields_schema`, and provider `response_schema` so the plan names the exact modules and regression surfaces.
+
+The key gap is visible in the code: compiler currently converts missing-`jsonschema` route contracts into `schema + None validator`, and engine only enforces route contracts when a validator exists. I’m checking the provider transport boundary now to see exactly where `response_schema` is present in framework objects but dropped before backend calls.
+
+I’ve traced both sides now. The provider contract builder already generates canonical discriminated schemas, and `RenderedProviderTurn` can carry them, but the built-in CLI transports never consume that field. The plan needs one slice for hard runtime enforcement of raw route schemas and one for explicitly plumbing/recording provider-side schema delivery with tests around both.
+
+I have enough context to write the artifacts. The plan will stay narrow: fail closed only where raw route mappings would otherwise lose enforcement, preserve helper/legacy compatibility, and make backend schema delivery observable instead of implicit.
+
+The plan artifacts are written. I’m doing one verification pass now for coherence: ordered phase dependencies, preserved runtime-owned YAML keys, and whether the decisions capture only the non-obvious guardrails later turns will need.
+
+Updated the run-local planning artifacts:
+
+- [plan.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/this-is-the-final-standalone-handoff-spec-it-sup-5b5e7cd0/runs/run-20260506T204256Z-05282838/artifacts/plan/plan.md)
+- [phase_plan.yaml](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/this-is-the-final-standalone-handoff-spec-it-sup-5b5e7cd0/runs/run-20260506T204256Z-05282838/artifacts/plan/phase_plan.yaml)
+- [feedback.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/this-is-the-final-standalone-handoff-spec-it-sup-5b5e7cd0/runs/run-20260506T204256Z-05282838/artifacts/plan/feedback.md)
+- [decisions.txt](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/this-is-the-final-standalone-handoff-spec-it-sup-5b5e7cd0/runs/run-20260506T204256Z-05282838/decisions.txt)
+
+The plan is split into two ordered phases: first, fail-closed enforcement for custom raw route `payload_schema` / `route_fields_schema` without silently dropping validation; second, wiring `response_schema` into structured-output-capable backends with explicit recorded fallback for unsupported ones. It also preserves the `ControlRoutes(question=...)` and legacy top-level `question` / `reason` compatibility paths, and makes the helper-route compatibility caveat explicit so builtin question/blocked/failed behavior is not broken accidentally.
+
+I did not run tests or change implementation code on this turn; this was a planning-only update.

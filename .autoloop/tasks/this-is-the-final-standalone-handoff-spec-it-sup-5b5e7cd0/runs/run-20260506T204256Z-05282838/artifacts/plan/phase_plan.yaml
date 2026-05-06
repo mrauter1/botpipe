@@ -1,4 +1,58 @@
 version: 1
 task_id: this-is-the-final-standalone-handoff-spec-it-sup-5b5e7cd0
 request_snapshot_ref: /home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/this-is-the-final-standalone-handoff-spec-it-sup-5b5e7cd0/runs/run-20260506T204256Z-05282838/request.md
-phases: []
+phases:
+  - phase_id: "route-contract-enforcement"
+    title: "Fail-Closed Route Contracts"
+    objective: "Ensure custom raw route payload and route-fields schema mappings never downgrade to metadata-only enforcement."
+    status: "planned"
+    in_scope:
+      - "Tighten compiled-route contract handling for raw route payload_schema and route_fields_schema mappings."
+      - "Preserve helper-route compatibility only where existing handwritten engine validation is semantically equivalent."
+      - "Add compile-time and runtime regression coverage for scripted and rendered providers."
+    out_of_scope:
+      - "Changing artifact schema, pending-input schema, or unrelated workflow validation behavior."
+      - "Changing legacy question/reason compatibility parsing beyond what is required to preserve current behavior."
+    dependencies: []
+    acceptance_criteria:
+      - id: "AC-1"
+        text: "Custom raw route payload_schema mappings either compile with a runtime validator or fail compilation with a clear optional-dependency error."
+      - id: "AC-2"
+        text: "Custom raw route route_fields_schema mappings either compile with a runtime validator or fail compilation with a clear optional-dependency error."
+      - id: "AC-3"
+        text: "Regression tests show invalid custom route payloads and route-fields are rejected for both scripted/fake and rendered providers."
+    deliverables:
+      - "Compiler and engine changes that remove silent metadata-only weakening for custom route contracts."
+      - "Validation and engine regression tests covering missing jsonschema and invalid route outcomes."
+    risks:
+      - "Over-broad fail-closed handling could break helper question/blocked/failed routes that currently rely on builtin validation."
+    rollback:
+      - "Revert only the contract-classification change if helper-route compatibility regresses, while keeping silent weakening disabled by replacing it with explicit validation or explicit compile failure."
+  - phase_id: "backend-response-schema-delivery"
+    title: "Backend Schema Delivery"
+    objective: "Pass generated provider response schemas into structured-output-capable backends and record explicit fallback when native delivery is unavailable."
+    status: "planned"
+    in_scope:
+      - "Use RenderedProviderTurn.response_schema and response_schema_simplified as the backend-facing structured-output contract."
+      - "Add backend-specific schema delivery or explicit fallback recording in built-in rendered-provider transports."
+      - "Add backend coverage for full canonical schema delivery, simplified-schema delivery, and unsupported-backend fallback recording."
+    out_of_scope:
+      - "A provider protocol redesign or new abstraction layer beyond existing rendered transport boundaries."
+      - "Relaxing runtime route legality, payload validation, or route-fields validation."
+    dependencies:
+      - "route-contract-enforcement"
+    acceptance_criteria:
+      - id: "AC-1"
+        text: "Structured-output-capable backend paths receive the generated provider response schema from the rendered turn instead of relying on prompt text alone."
+      - id: "AC-2"
+        text: "If schema simplification is required, the simplified schema is what the backend receives and that mode is observable in tests."
+      - id: "AC-3"
+        text: "Unsupported backend paths keep prompt-only generation but record an explicit structured-output fallback mode without weakening engine-side validation."
+    deliverables:
+      - "Rendered-provider backend plumbing for schema delivery or explicit fallback recording."
+      - "Runtime backend regression tests and any minimal documentation updates needed to describe supported versus fallback behavior."
+    risks:
+      - "Backend capability detection may diverge from real provider support if request assembly bypasses existing capability probes."
+      - "Schema-delivery metadata may become inconsistent across built-in backends if naming is not standardized."
+    rollback:
+      - "Disable backend-native schema delivery per transport while keeping metadata fallback and engine-side validation intact if provider integration proves unstable."
