@@ -2389,3 +2389,60 @@ Open issues / next step
 
 - No blocking gaps remain in the active test scope.
 - Known gap is documented in `test_strategy.md`: there is still no synthetic test for a future Codex resume surface that genuinely supports `--output-schema`, because current product decisions keep resume prompt-only.
+
+
+---
+run_id=run-20260506T204256Z-05282838 | entry=session_turn | pair=test | phase=verifier | cycle=1 | attempt=1 | thread_id=019dff26-874e-7040-a93f-bfbad8608da9
+---
+provider=codex
+mode=resume
+template=/home/rauter/.local/share/pipx/venvs/autoloop/lib/python3.12/site-packages/autoloop/templates/test_verifier.md
+session_id=019dff26-874e-7040-a93f-bfbad8608da9
+
+
+---
+run_id=run-20260506T204256Z-05282838 | entry=phase_output | pair=test | phase=verifier | process=codex-agent | cycle=1 | attempt=1 | thread_id=019dff26-874e-7040-a93f-bfbad8608da9
+---
+I’m auditing only the active backend-schema-delivery test scope: the new or tightened regressions, the stated strategy, and whether they actually protect the requested behavior without flake or blind spots.
+
+The strengthened test is pointed at the right regression surface. I’m re-running the focused backend and docs slices now so the audit reflects actual execution, not just static review.
+
+The focused executions are green and I don’t see a material coverage omission in the active phase scope. I’m marking the audit complete and recording a no-findings result in the test audit artifact.
+
+Scope considered
+
+- Active test-audit scope for `backend-response-schema-delivery` only.
+- Backend schema-delivery regressions, fallback coverage, test strategy, and the phase audit artifacts.
+
+What I analyzed
+
+- [tests/runtime/test_provider_backends.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/tests/runtime/test_provider_backends.py)
+- [test_strategy.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/this-is-the-final-standalone-handoff-spec-it-sup-5b5e7cd0/runs/run-20260506T204256Z-05282838/artifacts/test/phases/backend-response-schema-delivery/test_strategy.md)
+- [feedback.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/this-is-the-final-standalone-handoff-spec-it-sup-5b5e7cd0/runs/run-20260506T204256Z-05282838/artifacts/test/phases/backend-response-schema-delivery/feedback.md)
+- [decisions.txt](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/this-is-the-final-standalone-handoff-spec-it-sup-5b5e7cd0/runs/run-20260506T204256Z-05282838/decisions.txt)
+
+What I reviewed
+
+- AC-1 full-schema native delivery coverage.
+- AC-2 simplified-schema content coverage, not just metadata coverage.
+- AC-3 prompt-only fallback coverage for Codex resume and Claude.
+- AC-4 documentation/invariant coverage through the docs baseline slice.
+- Focused executions:
+  - `.venv/bin/python -m pytest tests/runtime/test_provider_backends.py -k "response_schema or prompt_only_fallback or output_schema_file or simplified_schema_delivery"`
+  - `.venv/bin/python -m pytest tests/test_architecture_baseline_docs.py -k "authoring or controlroutes or route"`
+
+Key findings / decisions
+
+- No blocking findings.
+- The strengthened simplified-schema test now closes the material regression gap by asserting the delivered `--output-schema` file contents, not only the `native_simplified` flag.
+- I updated the active audit artifacts:
+  - checked all boxes in `criteria.md`
+  - appended a no-findings audit entry to `feedback.md`
+
+Open issues / next step
+
+- No open audit issues in the active phase scope.
+
+<loop-control>
+{"schema":"docloop.loop_control/v1","kind":"promise","promise":"COMPLETE"}
+</loop-control>

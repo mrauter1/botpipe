@@ -657,3 +657,117 @@ Open issues / next step
 <loop-control>
 {"schema":"docloop.loop_control/v1","kind":"promise","promise":"COMPLETE"}
 </loop-control>
+
+
+---
+run_id=run-20260506T204256Z-05282838 | entry=session_turn | pair=test | phase=producer | cycle=1 | attempt=1 | thread_id=019dff26-874e-7040-a93f-bfbad8608da9
+---
+provider=codex
+mode=resume
+template=/home/rauter/.local/share/pipx/venvs/autoloop/lib/python3.12/site-packages/autoloop/templates/test_producer.md
+session_id=019dff26-874e-7040-a93f-bfbad8608da9
+
+
+---
+run_id=run-20260506T204256Z-05282838 | entry=phase_output | pair=test | phase=producer | process=codex-agent | cycle=1 | attempt=1 | thread_id=019dff26-874e-7040-a93f-bfbad8608da9
+---
+I’m treating this as a phase-scoped hardening pass for test coverage. First I’m checking the existing backend tests and the active test artifacts to see whether there’s any acceptance-criteria gap to close rather than adding redundant churn.
+
+There’s one real coverage gap worth fixing: the simplified-schema backend test proves the delivery mode, but not that the backend actually receives the simplified schema payload. I’m tightening that test instead of adding a broader new suite.
+
+I’ve tightened the only weak assertion path in the backend suite. Next I’m running the focused provider regression selection and then I’ll write the phase test artifacts with the exact coverage map.
+
+The focused suite is green. I’m updating the phase artifacts now and I’ll preserve one non-obvious test decision in the run ledger: the simplified-path regression uses a distinct schema payload so the test proves the delivered file contents, not just the metadata flag.
+
+I’ve updated the phase artifacts and recorded the only non-obvious test decision. One last validation pass on the provider suite and the docs-baseline slice is enough to close this phase cleanly.
+
+Scope considered
+
+- Active test-phase scope for `backend-response-schema-delivery` only.
+- Backend schema-delivery regressions, preserved fallback behavior, and the required phase artifacts.
+
+What I analyzed
+
+- Existing backend tests in [tests/runtime/test_provider_backends.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/tests/runtime/test_provider_backends.py).
+- Current docs language in [docs/authoring.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/docs/authoring.md) and [controlroutes.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/controlroutes.md).
+- Phase artifacts [test_strategy.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/this-is-the-final-standalone-handoff-spec-it-sup-5b5e7cd0/runs/run-20260506T204256Z-05282838/artifacts/test/phases/backend-response-schema-delivery/test_strategy.md), [feedback.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/this-is-the-final-standalone-handoff-spec-it-sup-5b5e7cd0/runs/run-20260506T204256Z-05282838/artifacts/test/phases/backend-response-schema-delivery/feedback.md), and [decisions.txt](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/this-is-the-final-standalone-handoff-spec-it-sup-5b5e7cd0/runs/run-20260506T204256Z-05282838/decisions.txt).
+
+What I changed
+
+- Strengthened `test_codex_backend_records_simplified_schema_delivery` so it now uses a distinct simplified schema payload and asserts the backend-facing `--output-schema` file contains that exact payload.
+- Extended `_outcome_turn(...)` to accept an injected test schema so full and simplified delivery paths can be distinguished cleanly.
+- Filled `test_strategy.md` with an AC-to-test coverage map, invariants, edge cases, stability notes, and known gaps.
+- Appended a concise summary entry to the phase `feedback.md`.
+- Appended one non-obvious test decision under the current test-author header in `decisions.txt`.
+
+Key findings / decisions
+
+- The only worthwhile coverage gap was AC-2 depth: the prior test proved `native_simplified` metadata, but not the actual delivered schema contents.
+- The tightened regression now proves both:
+  - the simplified path still writes the schema file passed through `RenderedProviderTurn.response_schema`
+  - the metadata remains `native_simplified`
+- Validation passed:
+  - `.venv/bin/python -m pytest tests/runtime/test_provider_backends.py -k "response_schema or prompt_only_fallback or output_schema_file or simplified_schema_delivery"`
+  - `.venv/bin/python -m pytest tests/test_architecture_baseline_docs.py -k "authoring or controlroutes or route"`
+
+Open issues / next step
+
+- No blocking gaps remain in the active test scope.
+- Known gap is documented in `test_strategy.md`: there is still no synthetic test for a future Codex resume surface that genuinely supports `--output-schema`, because current product decisions keep resume prompt-only.
+
+
+---
+run_id=run-20260506T204256Z-05282838 | entry=session_turn | pair=test | phase=verifier | cycle=1 | attempt=1 | thread_id=019dff26-874e-7040-a93f-bfbad8608da9
+---
+provider=codex
+mode=resume
+template=/home/rauter/.local/share/pipx/venvs/autoloop/lib/python3.12/site-packages/autoloop/templates/test_verifier.md
+session_id=019dff26-874e-7040-a93f-bfbad8608da9
+
+
+---
+run_id=run-20260506T204256Z-05282838 | entry=phase_output | pair=test | phase=verifier | process=codex-agent | cycle=1 | attempt=1 | thread_id=019dff26-874e-7040-a93f-bfbad8608da9
+---
+I’m auditing only the active backend-schema-delivery test scope: the new or tightened regressions, the stated strategy, and whether they actually protect the requested behavior without flake or blind spots.
+
+The strengthened test is pointed at the right regression surface. I’m re-running the focused backend and docs slices now so the audit reflects actual execution, not just static review.
+
+The focused executions are green and I don’t see a material coverage omission in the active phase scope. I’m marking the audit complete and recording a no-findings result in the test audit artifact.
+
+Scope considered
+
+- Active test-audit scope for `backend-response-schema-delivery` only.
+- Backend schema-delivery regressions, fallback coverage, test strategy, and the phase audit artifacts.
+
+What I analyzed
+
+- [tests/runtime/test_provider_backends.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/tests/runtime/test_provider_backends.py)
+- [test_strategy.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/this-is-the-final-standalone-handoff-spec-it-sup-5b5e7cd0/runs/run-20260506T204256Z-05282838/artifacts/test/phases/backend-response-schema-delivery/test_strategy.md)
+- [feedback.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/this-is-the-final-standalone-handoff-spec-it-sup-5b5e7cd0/runs/run-20260506T204256Z-05282838/artifacts/test/phases/backend-response-schema-delivery/feedback.md)
+- [decisions.txt](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/this-is-the-final-standalone-handoff-spec-it-sup-5b5e7cd0/runs/run-20260506T204256Z-05282838/decisions.txt)
+
+What I reviewed
+
+- AC-1 full-schema native delivery coverage.
+- AC-2 simplified-schema content coverage, not just metadata coverage.
+- AC-3 prompt-only fallback coverage for Codex resume and Claude.
+- AC-4 documentation/invariant coverage through the docs baseline slice.
+- Focused executions:
+  - `.venv/bin/python -m pytest tests/runtime/test_provider_backends.py -k "response_schema or prompt_only_fallback or output_schema_file or simplified_schema_delivery"`
+  - `.venv/bin/python -m pytest tests/test_architecture_baseline_docs.py -k "authoring or controlroutes or route"`
+
+Key findings / decisions
+
+- No blocking findings.
+- The strengthened simplified-schema test now closes the material regression gap by asserting the delivered `--output-schema` file contents, not only the `native_simplified` flag.
+- I updated the active audit artifacts:
+  - checked all boxes in `criteria.md`
+  - appended a no-findings audit entry to `feedback.md`
+
+Open issues / next step
+
+- No open audit issues in the active phase scope.
+
+<loop-control>
+{"schema":"docloop.loop_control/v1","kind":"promise","promise":"COMPLETE"}
+</loop-control>
