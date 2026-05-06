@@ -2,91 +2,134 @@ version: 1
 task_id: final-standalone-codex-cli-spec-blocked-and-fail-4128a4ed
 request_snapshot_ref: /home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/final-standalone-codex-cli-spec-blocked-and-fail-4128a4ed/runs/run-20260506T140151Z-c56b8e14/request.md
 phases:
-  - phase_id: "route-compilation-contract"
-    title: "Route Compilation Contract"
-    objective: "Remove implicit provider-selectable `blocked` and `failed` routes from workflow compilation while preserving existing `question` behavior."
-    status: "planned"
-    in_scope:
-      - "Update `autoloop/core/discovery.py::_inject_control_routes(...)` so only `question` is framework-injected."
-      - "Update `autoloop/core/compiler.py::_internal_step_runtime_routes(...)` and `_internal_step_runtime_control_routes(...)` to stop adding implicit `blocked` and `failed`."
-      - "Keep explicit authored `blocked` and `failed` routes legal, provider-visible only through normal route metadata, and never part of `runtime_control_routes`."
-      - "Preserve full-auto `question` visibility semantics and `control_routes=False` behavior."
-    out_of_scope:
-      - "Do not add prompt-level filtering as a substitute for compilation changes."
-      - "Do not change branch-group composite route semantics unrelated to provider-backed step injection."
-      - "Do not remove explicit `_BLOCKED_ROUTE` or `_FAILED_ROUTE` declarations from packaged workflows."
-    dependencies: []
-    acceptance_criteria:
-      - id: "AC-1"
-        text: "Default `PromptStep` and `ProduceVerifyStep` compile without `blocked` or `failed` in route tables and with `runtime_control_routes` equal to `(\"question\",)` only when question control is enabled."
-      - id: "AC-2"
-        text: "Explicit visible or hidden `blocked` and `failed` routes compile as authored routes and never as runtime-control routes."
-      - id: "AC-3"
-        text: "No special handling is introduced in provider-visibility compilation for explicit `blocked` or `failed` routes."
-    deliverables:
-      - "Compiler and discovery changes that make compiled route tables the single source of truth for legality and visibility."
-      - "Updated compile-level assertions for default, full-auto, and `control_routes=False` step contracts."
-    risks:
-      - "Simple-authoring and class-authoring compilation could diverge if only one path is updated."
-      - "Hidden explicit routes could remain visible if compiled visibility is bypassed."
-    rollback:
-      - "Revert route-injection changes in discovery/compiler if default `question` behavior regresses."
-      - "Use targeted contract tests to isolate whether failures come from compilation or downstream expectations before broader rollback."
-  - phase_id: "provider-and-surface-regressions"
-    title: "Provider And Surface Regressions"
-    objective: "Align provider behavior, static artifacts, and regression tests with the new compiled-route contract."
-    status: "planned"
-    in_scope:
-      - "Update scripted and rendered provider tests for undeclared and hidden `blocked` and `failed` selections, including retry recovery and retry exhaustion."
-      - "Update canonical provider contract expectations, route-required-writes views, static graph payloads, topology payloads, compile reports, and reference-resolution tests."
-      - "Refresh topology hashes and route/static snapshots that currently depend on implicit `blocked` and `failed`."
-    out_of_scope:
-      - "Do not change retry-feedback wording or provider failure attribution mechanics unless a test proves they no longer match the existing path."
-      - "Do not change runtime status reporting for explicit `blocked` or `failed` events."
-    dependencies:
-      - "route-compilation-contract"
-    acceptance_criteria:
-      - id: "AC-1"
-        text: "Default provider-visible route lists and rendered prompts do not include implicit `blocked` or `failed`."
-      - id: "AC-2"
-        text: "Provider output selecting undeclared or hidden `blocked` or `failed` is rejected through the existing illegal-route retry and exhaustion paths."
-      - id: "AC-3"
-        text: "Static graph, topology, compile report, and capability/reference inspection outputs reflect only compiled authored routes plus `question` runtime control where applicable."
-    deliverables:
-      - "Updated contract/runtime tests covering legal explicit opt-in and illegal undeclared or hidden route selections."
-      - "Refreshed static artifact and topology expectations derived from compiled routes."
-    risks:
-      - "Snapshot and hash updates may mask a real route-contract regression if not paired with focused assertions."
-      - "Route-required-writes expectations may change indirectly when visible routes change."
-    rollback:
-      - "Revert only expectation refreshes that overreach unrelated surfaces; keep focused assertions that prove the contract."
-      - "Use targeted test subsets to separate engine/provider failures from static artifact expectation drift."
-  - phase_id: "workflow-doc-and-suite-alignment"
-    title: "Workflow Docs And Suite Alignment"
-    objective: "Align packaged workflow expectations and documentation with explicit authored `blocked` and `failed` routes only."
-    status: "planned"
-    in_scope:
-      - "Update packaged workflow tests so explicit authored `blocked` and `failed` expectations remain, while framework-injected defaults are removed."
-      - "Update docs, workflow prompt READMEs, and architecture/authoring notes to describe `question` as the only default runtime-control route."
-      - "Run targeted regression suites and then the full test suite to confirm topology, prompt, and package-level consistency."
-    out_of_scope:
-      - "Do not add explicit `blocked` or `failed` routes to packaged workflows solely to preserve prior default behavior."
-      - "Do not broaden documentation edits to unrelated runtime failure/status concepts that also use the words `blocked` or `failed`."
-    dependencies:
-      - "provider-and-surface-regressions"
-    acceptance_criteria:
-      - id: "AC-1"
-        text: "Packaged workflow expectations distinguish explicit authored `blocked` and `failed` routes from removed framework defaults."
-      - id: "AC-2"
-        text: "Documentation consistently states that undeclared provider route tags are invalid and that `blocked` and `failed` require explicit declaration."
-      - id: "AC-3"
-        text: "The full test suite passes after the implementation and expectation updates."
-    deliverables:
-      - "Updated packaged workflow tests and prompt/doc references aligned to the new route contract."
-      - "Completed validation evidence from targeted and full-suite test runs."
-    risks:
-      - "Workflow docs may already be partially updated, so edits can become inconsistent if only some prompt/readme surfaces are touched."
-      - "Full-suite failures may expose hidden assumptions outside the obvious contract tests."
-    rollback:
-      - "Revert documentation-only drift independently from code changes if validation fails."
-      - "If full-suite regressions are unrelated, isolate and revert only the packaged workflow expectation updates that exceeded the requested behavior break."
+- phase_id: route-compilation-contract
+  title: Route Compilation Contract
+  objective: Remove implicit provider-selectable `blocked` and `failed` routes from
+    workflow compilation while preserving existing `question` behavior.
+  status: planned
+  in_scope:
+  - Update `autoloop/core/discovery.py::_inject_control_routes(...)` so only `question`
+    is framework-injected.
+  - Update `autoloop/core/compiler.py::_internal_step_runtime_routes(...)` and `_internal_step_runtime_control_routes(...)`
+    to stop adding implicit `blocked` and `failed`.
+  - Keep explicit authored `blocked` and `failed` routes legal, provider-visible only
+    through normal route metadata, and never part of `runtime_control_routes`.
+  - Preserve full-auto `question` visibility semantics and `control_routes=False`
+    behavior.
+  out_of_scope:
+  - Do not add prompt-level filtering as a substitute for compilation changes.
+  - Do not change branch-group composite route semantics unrelated to provider-backed
+    step injection.
+  - Do not remove explicit `_BLOCKED_ROUTE` or `_FAILED_ROUTE` declarations from packaged
+    workflows.
+  dependencies: []
+  acceptance_criteria:
+  - id: AC-1
+    text: Default `PromptStep` and `ProduceVerifyStep` compile without `blocked` or
+      `failed` in route tables and with `runtime_control_routes` equal to `("question",)`
+      only when question control is enabled.
+  - id: AC-2
+    text: Explicit visible or hidden `blocked` and `failed` routes compile as authored
+      routes and never as runtime-control routes.
+  - id: AC-3
+    text: No special handling is introduced in provider-visibility compilation for
+      explicit `blocked` or `failed` routes.
+  deliverables:
+  - Compiler and discovery changes that make compiled route tables the single source
+    of truth for legality and visibility.
+  - Updated compile-level assertions for default, full-auto, and `control_routes=False`
+    step contracts.
+  risks:
+  - Simple-authoring and class-authoring compilation could diverge if only one path
+    is updated.
+  - Hidden explicit routes could remain visible if compiled visibility is bypassed.
+  rollback:
+  - Revert route-injection changes in discovery/compiler if default `question` behavior
+    regresses.
+  - Use targeted contract tests to isolate whether failures come from compilation
+    or downstream expectations before broader rollback.
+- phase_id: provider-and-surface-regressions
+  title: Provider And Surface Regressions
+  objective: Align provider behavior, static artifacts, and regression tests with
+    the new compiled-route contract.
+  status: planned
+  in_scope:
+  - Update scripted and rendered provider tests for undeclared and hidden `blocked`
+    and `failed` selections, including retry recovery and retry exhaustion.
+  - Update canonical provider contract expectations, route-required-writes views,
+    static graph payloads, topology payloads, compile reports, and reference-resolution
+    tests.
+  - Refresh topology hashes and route/static snapshots that currently depend on implicit
+    `blocked` and `failed`.
+  out_of_scope:
+  - Do not change retry-feedback wording or provider failure attribution mechanics
+    unless a test proves they no longer match the existing path.
+  - Do not change runtime status reporting for explicit `blocked` or `failed` events.
+  dependencies:
+  - route-compilation-contract
+  acceptance_criteria:
+  - id: AC-1
+    text: Default provider-visible route lists and rendered prompts do not include
+      implicit `blocked` or `failed`.
+  - id: AC-2
+    text: Provider output selecting undeclared or hidden `blocked` or `failed` is
+      rejected through the existing illegal-route retry and exhaustion paths.
+  - id: AC-3
+    text: Static graph, topology, compile report, and capability/reference inspection
+      outputs reflect only compiled authored routes plus `question` runtime control
+      where applicable.
+  deliverables:
+  - Updated contract/runtime tests covering legal explicit opt-in and illegal undeclared
+    or hidden route selections.
+  - Refreshed static artifact and topology expectations derived from compiled routes.
+  risks:
+  - Snapshot and hash updates may mask a real route-contract regression if not paired
+    with focused assertions.
+  - Route-required-writes expectations may change indirectly when visible routes change.
+  rollback:
+  - Revert only expectation refreshes that overreach unrelated surfaces; keep focused
+    assertions that prove the contract.
+  - Use targeted test subsets to separate engine/provider failures from static artifact
+    expectation drift.
+- phase_id: workflow-doc-and-suite-alignment
+  title: Workflow Docs And Suite Alignment
+  objective: Align packaged workflow expectations and documentation with explicit
+    authored `blocked` and `failed` routes only.
+  status: planned
+  in_scope:
+  - Update packaged workflow tests so explicit authored `blocked` and `failed` expectations
+    remain, while framework-injected defaults are removed.
+  - Update docs, workflow prompt READMEs, and architecture/authoring notes to describe
+    `question` as the only default runtime-control route.
+  - Run targeted regression suites and then the full test suite to confirm topology,
+    prompt, and package-level consistency.
+  out_of_scope:
+  - Do not add explicit `blocked` or `failed` routes to packaged workflows solely
+    to preserve prior default behavior.
+  - Do not broaden documentation edits to unrelated runtime failure/status concepts
+    that also use the words `blocked` or `failed`.
+  dependencies:
+  - provider-and-surface-regressions
+  acceptance_criteria:
+  - id: AC-1
+    text: Packaged workflow expectations distinguish explicit authored `blocked` and
+      `failed` routes from removed framework defaults.
+  - id: AC-2
+    text: Documentation consistently states that undeclared provider route tags are
+      invalid and that `blocked` and `failed` require explicit declaration.
+  - id: AC-3
+    text: The full test suite passes after the implementation and expectation updates.
+  deliverables:
+  - Updated packaged workflow tests and prompt/doc references aligned to the new route
+    contract.
+  - Completed validation evidence from targeted and full-suite test runs.
+  risks:
+  - Workflow docs may already be partially updated, so edits can become inconsistent
+    if only some prompt/readme surfaces are touched.
+  - Full-suite failures may expose hidden assumptions outside the obvious contract
+    tests.
+  rollback:
+  - Revert documentation-only drift independently from code changes if validation
+    fails.
+  - If full-suite regressions are unrelated, isolate and revert only the packaged
+    workflow expectation updates that exceeded the requested behavior break.

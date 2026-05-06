@@ -1,3 +1,4 @@
 # Plan ↔ Plan Verifier Feedback
 
 - 2026-05-06: Replaced the empty plan with an implementation-ready three-phase plan covering compiler/discovery route injection changes, provider/static-surface regression updates, and packaged workflow plus documentation alignment because the contract change propagates through compiled route tables, provider visibility, topology artifacts, and workflow-package expectations.
+- PLAN-000 | non-blocking | Verifier result: no blocking findings. The plan covers the requested compilation-time contract change, preserves the explicit `question` behavior and generic non-`question` provider visibility contract, includes rollback and full-suite validation, and scopes packaged-workflow updates to explicit-versus-implicit route expectations rather than unrelated `blocked` / `failed` status semantics.
