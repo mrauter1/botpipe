@@ -220,3 +220,52 @@ Open issues / next step
 
 - Focused validation passed: `112` targeted runtime/session/provider/strictness tests plus `7` branch-group compile-time checks.
 - I did not run the full repository suite. The test environment needed temporary deps via `/tmp/autoloop-test-deps`, because `pytest` was not preinstalled in the repo environment.
+
+
+---
+run_id=run-20260506T181149Z-6867fac0 | entry=session_turn | pair=implement | phase=verifier | cycle=1 | attempt=1 | thread_id=019dfe82-f64a-7772-81d0-a10f25fab893
+---
+provider=codex
+mode=resume
+template=/home/rauter/.local/share/pipx/venvs/autoloop/lib/python3.12/site-packages/autoloop/templates/implement_verifier.md
+session_id=019dfe82-f64a-7772-81d0-a10f25fab893
+
+
+---
+run_id=run-20260506T181149Z-6867fac0 | entry=phase_output | pair=implement | phase=verifier | process=codex-agent | cycle=1 | attempt=1 | thread_id=019dfe82-f64a-7772-81d0-a10f25fab893
+---
+I’m reviewing the phase-local changes against the request, plan, and decisions ledger first, then I’ll update `criteria.md` and append prioritized findings to `feedback.md` based on the actual diff and regression risk.
+
+I’ve loaded the review artifacts and decisions. Next I’m reading the touched source and tests directly to check for silent regressions, missing required coverage, or any contradiction with the phase contract.
+
+I found one likely gap in the new strictness coverage and I’m validating it with a minimal probe so the review finding is concrete rather than speculative.
+
+The review gap is confirmed: the new provider-turn strictness scanner misses directly imported `ThreadPoolExecutor()` usage inside `run_turn`, so the phase is not complete yet. I’m updating the verifier artifacts accordingly.
+
+Scope considered
+
+- Phase-local review of the async branch-group cleanup diff, the active implementation notes, the run decisions ledger, and the verifier artifacts only.
+- Source review focused on `autoloop/core/branch_groups/*`, `autoloop/core/providers/rendered.py`, and the added regression/strictness tests.
+
+What I analyzed
+
+- Branch result finalization ownership, branch-local session overlay behavior, scoped branch runtime handling, retained sync operation bridge comments, and the new provider-turn strictness coverage.
+- I also validated the new strictness scanner with a minimal probe to check whether it really catches forbidden provider turn execution primitives.
+
+What I reviewed
+
+- The implementation satisfies the main runtime/session cleanup intent: duplicate capture-mode final-state mutation is removed, failed-branch provider session snapshots are single-read, scoped branch runtime worklist/item-state setup is gone, and branch session fallback to parent active bindings is removed.
+- The added tests cover the main behavioral regressions, but the new strictness scanner is incomplete for one of the required forbidden-provider-execution patterns.
+
+Key findings / decisions
+
+- `IMP-001` is blocking: `tests/strictness/test_no_compat.py::_runtime_provider_turn_execution_failures` misses directly imported executor primitives inside `run_turn`. A concrete probe using `from concurrent.futures import ThreadPoolExecutor` and `return ThreadPoolExecutor()` in `run_turn` returns no failures, so the required strictness coverage can still pass after reintroducing a forbidden thread-backed fallback.
+
+Open issues / next step
+
+- Extend `_runtime_provider_turn_execution_failures(...)` so resolved call names ending in `.ThreadPoolExecutor`, `.Future`, and `.FIRST_COMPLETED` are flagged, not just attribute access forms.
+- Add probe tests for those direct-import call patterns, then rerun the targeted strictness/runtime suites and update the verifier artifacts to complete the phase.
+
+<loop-control>
+{"schema":"docloop.loop_control/v1","kind":"promise","promise":"INCOMPLETE"}
+</loop-control>
