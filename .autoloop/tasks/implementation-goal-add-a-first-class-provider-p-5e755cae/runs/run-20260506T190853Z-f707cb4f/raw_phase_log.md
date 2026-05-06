@@ -1724,3 +1724,46 @@ Validation passed:
 Open issues / next step
 
 The three blocking reviewer findings are addressed and the focused regression suites passed. The next step is the verifier pass against the updated phase artifacts.
+
+
+---
+run_id=run-20260506T190853Z-f707cb4f | entry=session_turn | pair=implement | phase=verifier | cycle=2 | attempt=1 | thread_id=019dff06-56f8-7ec3-9792-9244e6c94bf8
+---
+provider=codex
+mode=resume
+template=/home/rauter/.local/share/pipx/venvs/autoloop/lib/python3.12/site-packages/autoloop/templates/implement_verifier.md
+session_id=019dff06-56f8-7ec3-9792-9244e6c94bf8
+
+
+---
+run_id=run-20260506T190853Z-f707cb4f | entry=phase_output | pair=implement | phase=verifier | process=codex-agent | cycle=2 | attempt=1 | thread_id=019dff06-56f8-7ec3-9792-9244e6c94bf8
+---
+I’m reviewing the final Claude-policy delta against the three prior blocking findings and the phase acceptance criteria. First I’m reading the active review artifacts and the exact diff surface so I can decide whether anything still blocks completion.
+
+The reviewer findings appear addressed at a high level. I’m doing one more pass on the exact line-level seams that could still hide a regression: Claude launch isolation, legacy bypass mapping, and the fallback capability-report logic.
+
+I don’t see a remaining blocker in the phase-local Claude policy path. I’m marking the criteria complete and recording that the three prior blocking findings were resolved with no new findings in this review pass.
+
+Scope considered
+
+Phase-local review of the final Claude policy regression fixes in the changed provider/config/rendering seams and the focused test surface. I stayed within the active phase scope and only updated the reviewer-owned artifacts in the active review directory.
+
+What I analyzed
+
+I re-checked the three prior blocking findings against the current implementation: Claude settings isolation, legacy `provider.claude.permission_strategy=bypass` compatibility, and the degraded-filesystem lossy capability report path. I also verified the adjacent propagation seam for `workspace_root`, the sync/async subprocess wiring, the updated phase notes, and the recorded decisions.
+
+What I reviewed
+
+I updated [criteria.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/implementation-goal-add-a-first-class-provider-p-5e755cae/runs/run-20260506T190853Z-f707cb4f/artifacts/implement/phases/policy-claude-regression/criteria.md) to fully checked, and I appended a cycle-2 review note to [feedback.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/implementation-goal-add-a-first-class-provider-p-5e755cae/runs/run-20260506T190853Z-f707cb4f/artifacts/implement/phases/policy-claude-regression/feedback.md) stating that `IMP-001` through `IMP-003` are resolved with no new findings.
+
+Key findings / decisions
+
+No blocking findings remain in the active phase scope. The revised Claude path now isolates ambient settings with a run-owned `CLAUDE_CONFIG_DIR` plus isolated launch `cwd` and `--add-dir`, preserves legacy `bypass` behavior through central policy-resolution mapping instead of transport branching, and emits the required lossy warning when native filesystem enforcement is unavailable even for the default workspace-write sandbox.
+
+Open issues / next step
+
+No open blocking issues for this phase. Review artifacts are complete.
+
+<loop-control>
+{"schema":"docloop.loop_control/v1","kind":"promise","promise":"COMPLETE"}
+</loop-control>
