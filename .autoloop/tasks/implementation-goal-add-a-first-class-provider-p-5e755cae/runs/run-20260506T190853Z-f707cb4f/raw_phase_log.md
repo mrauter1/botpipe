@@ -433,3 +433,140 @@ No open issues remain for the `policy-core` test phase. The test audit is comple
 <loop-control>
 {"schema":"docloop.loop_control/v1","kind":"promise","promise":"COMPLETE"}
 </loop-control>
+
+
+---
+run_id=run-20260506T190853Z-f707cb4f | entry=session_turn | pair=implement | phase=producer | cycle=1 | attempt=1 | thread_id=019dfec5-f589-7cb2-ab20-e8f25f37fa06
+---
+provider=codex
+mode=start
+template=/home/rauter/.local/share/pipx/venvs/autoloop/lib/python3.12/site-packages/autoloop/templates/implement_producer.md
+session_id=019dfec5-f589-7cb2-ab20-e8f25f37fa06
+
+
+---
+run_id=run-20260506T190853Z-f707cb4f | entry=phase_output | pair=implement | phase=producer | process=codex-agent | cycle=1 | attempt=1 | thread_id=019dfec5-f589-7cb2-ab20-e8f25f37fa06
+---
+I’m working the `policy-config-authoring` phase: runtime config, CLI policy parsing, and workflow or step authoring surfaces. First I’m reading the phase artifacts and current config or step code paths so I can make the scoped changes without pulling transport work in early.
+
+The phase artifacts don’t add extra reviewer constraints beyond the execution contract, and the prior phase already fixed a few core-policy semantics I need to preserve. I’m checking the current implementation state in `provider_policy`, config loading, and step helpers next so I can wire this phase onto the existing core layer instead of reworking it.
+
+I’ve confirmed the phase boundary: the repo already has the core policy module, but config and authoring surfaces still don’t know about it. Next I’m reading the CLI and workflow discovery seams so I can add `provider_policy` and `policy=` without accidentally breaking compile-time behavior or the narrow YAML fallback.
+
+I have enough context now. I’m going to make the phase-scoped changes in three slices: `runtime/config.py` plus CLI and fallback YAML support, `core/steps.py` plus `simple.py` and simple lowering for `policy=` surfaces, then focused tests for config resolution and authoring retention.
+
+I’m editing `runtime/config.py` first. This will add a resolved `provider_policy` config object, parse provider-policy layers without weakening unknown-key checks, and keep legacy provider or `full_auto` inputs mapped into the resolved default policy instead of replacing the old fields.
+
+The config layer is wired. I’m adding the CLI flags now and then I’ll carry `policy=` through the core and simple step surfaces so authored policies survive lowering instead of getting dropped before later phases can resolve them.
+
+I’m editing the authoring surfaces next. The goal here is narrow: store workflow and step policy objects on declarations and lowered core steps now, without dragging policy resolution or compile-time fingerprinting into this phase.
+
+I’m on the test slice now. I’m adding focused coverage for the new config merge behavior and fallback YAML parsing first, then a small authoring regression to prove the `policy=` objects stay attached after simple-lowering.
+
+The implementation is in place for this phase slice. I’m running the focused tests now to catch any contract drift in config parsing, CLI help, and simple authoring before I touch the run notes.
+
+The environment doesn’t expose `pytest` or `python` directly, so I’m retrying with `python3 -m ...`. If that also fails, I’ll still do a static pass on the touched files and note the validation gap explicitly.
+
+`python3` is available and the touched files compile, but `pytest` is not installed in this shell. I’m checking whether the repo has a local test runner or virtualenv I can use before I close the phase with a partial validation note.
+
+The first test run exposed an import-cycle regression from one of the authoring changes, not a policy-config failure. I’m backing that import out in the core workflow base and rerunning the focused suite; the class-level `policy` slot can stay untyped there without losing behavior.
+
+The runtime-config and authoring edits are in. Test collection is still blocked by an import-cycle in this environment’s package import path, so I’m doing a final source review and then I’ll record the exact validation status and the few non-obvious decisions in the phase notes rather than pretending the pytest pass happened.
+
+I’m recording the non-obvious merge rules and the actual validation status in the run artifacts now. That keeps later phases from accidentally overriding the legacy-field precedence or assuming this phase already solved runtime resolver or transport work.
+
+Scope considered
+
+- Phase-local `policy-config-authoring` only: runtime config and CLI parsing, fallback YAML loading, and workflow or step authoring surfaces.
+- I kept transport, emitter, resolver, replay, and compiled-policy work out of scope for this turn.
+
+What I analyzed
+
+- [autoloop/runtime/config.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/autoloop/runtime/config.py)
+- [autoloop/runtime/cli.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/autoloop/runtime/cli.py)
+- [autoloop/core/steps.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/autoloop/core/steps.py)
+- [autoloop/simple.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/autoloop/simple.py)
+- [autoloop/core/discovery.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/autoloop/core/discovery.py)
+- Existing runtime config tests and simple-surface tests to preserve current merge and lowering behavior.
+
+What I changed
+
+- Added resolved provider-policy runtime config support in [autoloop/runtime/config.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/autoloop/runtime/config.py): `ProviderPolicyRuntimeConfig`, layer overrides, `provider_policy` parsing, legacy model or effort and `runtime.full_auto` mapping, CLI validation override merging, and `--policy-file` support.
+- Extended the narrow no-PyYAML loader to parse inline lists and `null`, which is enough for the requested `provider_policy` examples.
+- Added CLI flags in [autoloop/runtime/cli.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/autoloop/runtime/cli.py): `--policy-file`, `--policy-validation-unsupported`, `--policy-validation-lossy`, and `--policy-validation-unsafe-expansion`.
+- Added step-level policy retention in [autoloop/core/steps.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/autoloop/core/steps.py) and [autoloop/simple.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/autoloop/simple.py), including `python_step(policy=...)` documentation that the policy only applies to nested provider calls.
+- Preserved authored simple-step policies through lowering in [autoloop/core/discovery.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/autoloop/core/discovery.py).
+- Added focused coverage in [tests/runtime/test_provider_policy_config.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/tests/runtime/test_provider_policy_config.py), plus small assertions in [tests/runtime/test_package_cli.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/tests/runtime/test_package_cli.py) and [tests/unit/test_simple_surface.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/tests/unit/test_simple_surface.py).
+
+Key findings / decisions
+
+- Legacy provider model, effort, and `runtime.full_auto` now fill `provider_policy.default` only when the corresponding policy field was not explicitly set in any merged `provider_policy` layer.
+- `--policy-file` accepts either a full runtime-config document or a root-level `provider_policy` payload.
+- I left `core.Workflow.policy` as an untyped slot to avoid deepening an import-time cycle in `autoloop.core.__init__`.
+- I updated the authoritative phase notes and appended the non-obvious decisions to the current run’s `decisions.txt`.
+
+Open issues / next step
+
+- `python3 -m py_compile` passed on the touched files.
+- Targeted pytest execution could not complete: `.venv/bin/python -m pytest ...` fails during collection in this environment because importing `autoloop` hits an existing circular import path through `autoloop.core.primitives` and `autoloop.core.providers.__init__`.
+- Next phase can build on this config and authoring layer for compiler and resolver work once that import-cycle blocker is cleared or reproduced independently.
+
+
+---
+run_id=run-20260506T190853Z-f707cb4f | entry=session_turn | pair=implement | phase=verifier | cycle=1 | attempt=1 | thread_id=019dfec5-f589-7cb2-ab20-e8f25f37fa06
+---
+provider=codex
+mode=resume
+template=/home/rauter/.local/share/pipx/venvs/autoloop/lib/python3.12/site-packages/autoloop/templates/implement_verifier.md
+session_id=019dfec5-f589-7cb2-ab20-e8f25f37fa06
+
+
+---
+run_id=run-20260506T190853Z-f707cb4f | entry=phase_output | pair=implement | phase=verifier | process=codex-agent | cycle=1 | attempt=1 | thread_id=019dfec5-f589-7cb2-ab20-e8f25f37fa06
+---
+I’m reviewing the phase-local implementation against the authoring and config contract first: criteria, decisions, changed files, and the new tests. Then I’ll update the phase artifacts with concrete blocking or non-blocking findings only.
+
+I’ve got the artifact context. Now I’m reading the changed config and authoring code in detail, especially the merge semantics and fallback YAML loader, because that’s where this phase can silently break compatibility even if the new tests look reasonable.
+
+The config path looks structurally coherent so far. I’m checking one broader dependency now: whether workflow-level `policy` is actually retained anywhere beyond the bare class attribute, because this phase promised authoring support rather than just a placeholder field.
+
+I’ve got two material gaps that block sign-off: one in strict config validation and one in workflow-level authoring retention. I’m recording those in the phase feedback now and leaving the criteria boxes unchecked accordingly.
+
+Scope considered
+
+- Phase-local `policy-config-authoring` changes only.
+- Reviewed the active artifacts, run decisions, changed runtime config and CLI code, step and simple authoring surfaces, simple-step lowering, and the new tests.
+
+What I analyzed
+
+- [autoloop/runtime/config.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/autoloop/runtime/config.py)
+- [autoloop/runtime/cli.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/autoloop/runtime/cli.py)
+- [autoloop/core/steps.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/autoloop/core/steps.py)
+- [autoloop/simple.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/autoloop/simple.py)
+- [autoloop/core/discovery.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/autoloop/core/discovery.py)
+- [tests/runtime/test_provider_policy_config.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/tests/runtime/test_provider_policy_config.py)
+- [tests/unit/test_simple_surface.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/tests/unit/test_simple_surface.py)
+
+What I reviewed
+
+- Provider-policy layer parsing, legacy-field mapping, and merge semantics against the phase contract.
+- Narrow YAML fallback support for the requested list and `null` shapes.
+- Step-level and workflow-level policy authoring retention through the existing simple authoring pipeline.
+- Review artifacts were updated in:
+  - [feedback.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/implementation-goal-add-a-first-class-provider-p-5e755cae/runs/run-20260506T190853Z-f707cb4f/artifacts/implement/phases/policy-config-authoring/feedback.md)
+  - [criteria.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/implementation-goal-add-a-first-class-provider-p-5e755cae/runs/run-20260506T190853Z-f707cb4f/artifacts/implement/phases/policy-config-authoring/criteria.md)
+
+Key findings / decisions
+
+- Found 2 blocking issues and recorded them as `IMP-001` and `IMP-002`.
+- `IMP-001`: the new config override model silently accepts `provider_policy.default: null` and `provider_policy.validation: null`, which weakens strict config validation and can mask operator mistakes.
+- `IMP-002`: workflow-level `policy` is only a bare class attribute and is not retained in discovered authoring metadata, so the requested workflow-level authoring feature is incomplete in the normal pipeline.
+
+Open issues / next step
+
+- Fix the two blocking findings, then rerun the focused review.
+- Criteria boxes remain unchecked because correctness and behavioral safety are not yet satisfied for this phase.
+
+<loop-control>
+{"schema":"docloop.loop_control/v1","kind":"promise","promise":"INCOMPLETE"}
+</loop-control>
