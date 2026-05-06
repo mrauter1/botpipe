@@ -767,3 +767,46 @@ Focused validation passed:
 `./.venv-autoloop/bin/python -m pytest -q tests/contract/test_engine_contracts.py -k 'rendered_provider_invalid_question_retries_and_recovers or rendered_provider_canonical_question_route_does_not_fall_back_to_legacy_question or question_route_requires_question_field'`
 
 No additional test changes are pending in this turn.
+
+
+---
+run_id=run-20260506T185744Z-092935c3 | entry=session_turn | pair=test | phase=verifier | cycle=1 | attempt=1 | thread_id=019dfec6-9730-7fc1-aee3-d97159086b13
+---
+provider=codex
+mode=resume
+template=/home/rauter/.local/share/pipx/venvs/autoloop/lib/python3.12/site-packages/autoloop/templates/test_verifier.md
+session_id=019dfec6-9730-7fc1-aee3-d97159086b13
+
+
+---
+run_id=run-20260506T185744Z-092935c3 | entry=phase_output | pair=test | phase=verifier | process=codex-agent | cycle=1 | attempt=1 | thread_id=019dfec6-9730-7fc1-aee3-d97159086b13
+---
+I’m auditing the new provider-outcome contract tests for coverage depth and regression protection, especially around canonical-over-legacy precedence and retry behavior. I’ll verify the added parser and engine tests against the test strategy and then update only the audit artifacts.
+
+The new tests line up with the decisions ledger and they cover the highest-risk precedence regression. I’m doing one focused execution check on the exact new parser and engine cases, then I’ll close out the audit artifacts if they stay green.
+
+The focused executions passed, and I did not find a remaining coverage or flake-risk gap in this phase slice. I’m marking the audit criteria complete and appending a concise no-findings audit result to the test feedback artifact.
+
+Scope considered
+
+Phase-local test-audit scope for `provider-outcome-contract`, centered on the newly added canonical-envelope precedence tests and the associated test strategy and feedback artifacts.
+
+What I analyzed
+
+I reviewed the active test strategy, the run-local decisions for canonical-over-legacy precedence, the new parser regression in `tests/runtime/test_runtime_providers.py`, and the new engine retry/validation regression in `tests/contract/test_engine_contracts.py`.
+
+What I reviewed
+
+I checked that the added tests cover both parser-level projection behavior and engine-level invalid-payload retry behavior, that they align with the decisions ledger, and that they use deterministic in-memory fixtures. I also re-ran the focused new test slices, which passed.
+
+Key findings / decisions
+
+I found no blocking or non-blocking audit issues in this slice. The tests now lock the important regression boundary: a canonical `outcome` envelope remains authoritative even when stray legacy top-level `question` / `reason` fields are present, and invalid canonical question payloads still trigger `invalid_payload` retry behavior instead of silently succeeding.
+
+Open issues / next step
+
+No open test-audit issues remain for this phase slice. I updated the audit criteria to complete and appended a concise no-findings audit result to the phase feedback artifact.
+
+<loop-control>
+{"schema":"docloop.loop_control/v1","kind":"promise","promise":"COMPLETE"}
+</loop-control>

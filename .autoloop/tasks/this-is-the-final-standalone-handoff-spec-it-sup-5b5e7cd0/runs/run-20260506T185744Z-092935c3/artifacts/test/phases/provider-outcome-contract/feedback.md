@@ -8,3 +8,5 @@
 - Scope: phase-local authoritative verifier artifact
 
 - Added parser and engine regression coverage for canonical-envelope precedence: canonical `route_fields.reason = null` still suppresses legacy top-level `reason`, and canonical `question` routes with missing `route_fields.questions` remain invalid even if a legacy top-level `question` is present. Validated with focused runtime-provider and engine-contract pytest slices.
+
+- Audit C1: no blocking or non-blocking findings. The added tests match the run-local decisions, cover canonical precedence at parser and engine levels, exercise the invalid-payload retry path, and use deterministic in-memory fixtures without new flake risk.
