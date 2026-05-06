@@ -2276,3 +2276,59 @@ Open issues / next step
 
 - No blocking gaps found in this phase after validation.
 - The remaining limitation is intentional and documented: native schema delivery is currently Codex-start-only until other backend surfaces expose an equivalent schema input.
+
+
+---
+run_id=run-20260506T204256Z-05282838 | entry=session_turn | pair=implement | phase=verifier | cycle=1 | attempt=1 | thread_id=019dff26-874e-7040-a93f-bfbad8608da9
+---
+provider=codex
+mode=resume
+template=/home/rauter/.local/share/pipx/venvs/autoloop/lib/python3.12/site-packages/autoloop/templates/implement_verifier.md
+session_id=019dff26-874e-7040-a93f-bfbad8608da9
+
+
+---
+run_id=run-20260506T204256Z-05282838 | entry=phase_output | pair=implement | phase=verifier | process=codex-agent | cycle=1 | attempt=1 | thread_id=019dff26-874e-7040-a93f-bfbad8608da9
+---
+I’m reviewing only the active backend-schema-delivery scope: the rendered backend plumbing, its regressions, and the phase artifacts. First I’m pulling the current phase diff and review artifacts so I can mark criteria against the actual implementation.
+
+The code path matches the phase decisions closely enough that I’m now checking for silent contradictions and regression gaps rather than re-litigating the transport design. I haven’t found a material mismatch so far; next I’m recording the review result in the phase artifacts.
+
+I’ve finished the review pass. There’s no blocking issue in the active phase scope, so I’m marking criteria complete and recording a no-findings result in the reviewer artifact.
+
+Scope considered
+
+- Active phase `backend-response-schema-delivery` only: rendered-provider schema delivery, fallback recording, backend regression coverage, and the required docs/artifacts.
+- Unrelated dirty files were excluded from review.
+
+What I analyzed
+
+- Phase artifacts: `criteria.md`, `feedback.md`, `implementation_notes.md`, and `decisions.txt`.
+- Runtime backend code in `autoloop/runtime/providers/_common.py`, `codex.py`, and `claude.py`.
+- Phase tests and doc surfaces relevant to the acceptance criteria.
+
+What I reviewed
+
+- Codex native schema delivery through `--output-schema`.
+- Simplified-schema observability via `metadata["structured_output"]`.
+- Prompt-only fallback recording for unsupported backend paths.
+- Documentation coverage in `docs/authoring.md` and `controlroutes.md`.
+- Validation runs:
+  - `tests/runtime/test_provider_backends.py -k "response_schema or prompt_only_fallback or output_schema_file or simplified_schema_delivery"`
+  - `tests/test_architecture_baseline_docs.py -k "authoring or controlroutes or route"`
+
+Key findings / decisions
+
+- No blocking findings.
+- The implementation matches AC-1 through AC-4 in the reviewed scope.
+- I updated the active review artifacts:
+  - marked all criteria boxes complete in `criteria.md`
+  - appended a no-findings review entry to `feedback.md`
+
+Open issues / next step
+
+- No open review issues in this phase scope.
+
+<loop-control>
+{"schema":"docloop.loop_control/v1","kind":"promise","promise":"COMPLETE"}
+</loop-control>
