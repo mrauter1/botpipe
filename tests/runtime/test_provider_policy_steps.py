@@ -252,6 +252,52 @@ def test_workflow_step_policy_applies_to_inline_operations_in_hooks(tmp_path: Pa
     assert provider.calls[0].policy.permissions.mode == "ask"
 
 
+def test_workflow_step_hook_does_not_inherit_stale_policy_from_previous_step(tmp_path: Path) -> None:
+    workflow_policy = ProviderPolicy(
+        permissions=PermissionPolicy(mode="full_auto_sandboxed"),
+    )
+    first_step_policy = ProviderPolicy(permissions=PermissionPolicy(mode="ask"))
+
+    class ChildWorkflow(simple.Workflow):
+        @simple.python_step
+        def noop(_ctx):
+            return None
+
+    def before_launch(_ctx):
+        simple.llm("Hook operation.")
+        return Event("done")
+
+    launch_step = simple.workflow_step(
+        ChildWorkflow,
+        message="Run child workflow.",
+        routes={"done": simple.FINISH},
+    )
+    launch_step.before = before_launch
+
+    class ParentWorkflow(simple.Workflow):
+        policy = workflow_policy
+        draft = simple.step("Draft.", routes={"done": "launch"}, policy=first_step_policy)
+        launch = launch_step
+
+    provider = ScriptedLLMProvider(
+        llm_turns=[Outcome(raw_output='{"tag":"done"}', tag="done")],
+        operation_turns=["hook result"],
+    )
+    execution = _run_with_runner(
+        tmp_path,
+        ParentWorkflow,
+        provider,
+        task_id="workflow-step-hook-cleanup",
+    )
+
+    assert execution.result.terminal == FINISH
+    assert [call.kind for call in provider.calls] == ["step", "operation"]
+    assert provider.calls[0].policy is not None
+    assert provider.calls[1].policy is not None
+    assert provider.calls[0].policy.permissions.mode == "ask"
+    assert provider.calls[1].policy.permissions.mode == "full_auto_sandboxed"
+
+
 def test_strict_policy_rejects_unsafe_step_and_inline_overrides_with_same_violation(tmp_path: Path) -> None:
     strict = StrictProviderPolicy(
         sandbox=StrictSandboxPolicy(allowed_modes=("read_only", "workspace_write")),
