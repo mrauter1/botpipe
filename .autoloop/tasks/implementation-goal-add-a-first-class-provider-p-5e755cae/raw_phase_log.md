@@ -1397,3 +1397,44 @@ The fix is intentionally narrow: requested `allow_read` roots still remain visib
 Open issues / next step
 
 Validation passed with `python3 -m py_compile autoloop/runtime/providers/codex_policy.py tests/runtime/test_provider_policy_emitters.py` and `.venv/bin/python -m pytest tests/runtime/test_provider_policy_emitters.py tests/runtime/test_runtime_providers.py -q` (`58 passed`). The next step is verifier re-review of this phase.
+
+
+---
+run_id=run-20260506T190853Z-f707cb4f | entry=session_turn | pair=implement | phase=verifier | cycle=2 | attempt=1 | thread_id=019dfef0-6177-7931-97e7-51ce31250dd7
+---
+provider=codex
+mode=resume
+template=/home/rauter/.local/share/pipx/venvs/autoloop/lib/python3.12/site-packages/autoloop/templates/implement_verifier.md
+session_id=019dfef0-6177-7931-97e7-51ce31250dd7
+
+
+---
+run_id=run-20260506T190853Z-f707cb4f | entry=phase_output | pair=implement | phase=verifier | process=codex-agent | cycle=2 | attempt=1 | thread_id=019dfef0-6177-7931-97e7-51ce31250dd7
+---
+Re-reviewing the narrowed Codex fix against the original phase contract and the prior blocking finding. I’m checking the emitter semantics, the added regression test, the updated notes, and whether any adjacent transport behavior changed unintentionally.
+
+The original blocking issue is fixed and the added test covers the exact contradictory report shape that was missing before. I’m updating the review artifacts to mark this phase complete and to record that `IMP-001` was verified resolved in this pass.
+
+Scope considered
+
+Phase-local `policy-codex` only: the reviewer-reported `read_roots` capability-report mismatch, the narrow emitter fix, the added emitter regression test, and the focused runtime-provider validation recorded in the implementation notes.
+
+What I analyzed
+
+I checked the updated `CodexPolicyEmitter.emit()` logic in `autoloop/runtime/providers/codex_policy.py`, the new narrowed-`allow_read` warn-mode test in `tests/runtime/test_provider_policy_emitters.py`, the current implementation notes, and the phase feedback/criteria artifacts. I also verified that the fix stays aligned with the run-local decisions about Codex capability reporting and target-scoped artifacts.
+
+What I reviewed
+
+I verified that the prior blocking finding is resolved: the capability report no longer claims requested narrowed `allow_read` roots as effective enforcement, while still classifying the mapping as unsafe when Codex cannot enforce it. I also verified that the new test locks in that exact behavior and that the focused validation run in the notes covers both emitter and runtime-provider surfaces.
+
+Key findings / decisions
+
+No remaining phase-local findings. `IMP-001` is fixed and the added regression test covers the previously contradictory report shape directly, so the phase now satisfies the requested Codex-emission behavior and the reviewer-raised safety concern.
+
+Open issues / next step
+
+No open issues in this phase-local scope. Review artifacts were updated to mark the phase complete.
+
+<loop-control>
+{"schema":"docloop.loop_control/v1","kind":"promise","promise":"COMPLETE"}
+</loop-control>
