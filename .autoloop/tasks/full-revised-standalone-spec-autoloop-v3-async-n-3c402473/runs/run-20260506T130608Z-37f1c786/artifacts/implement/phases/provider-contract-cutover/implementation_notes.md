@@ -54,11 +54,12 @@
 
 ## Checklist mapping
 - Plan `M2. Provider contract cutover`: completed for async-only provider/transport protocols, constructor validation, removal of async probing helpers, and dispatcher cutover to direct awaited provider calls.
-- Plan `M3. Async rendered provider and built-in transports`: partially pulled forward to keep the contract coherent; rendered provider and built-in Codex/Claude transports now expose only async workflow-turn entrypoints, with a separate explicit rendered-provider operation executor retained for exported `llm()` / `classify()` compatibility.
+- Plan `M3. Async rendered provider and built-in transports`: partially pulled forward to keep the contract coherent; rendered provider and built-in Codex/Claude transports now expose only async workflow-turn entrypoints, with a separate explicit rendered-provider operation executor retained as the temporary active-loop compatibility exception for exported `llm()` / `classify()`.
 - Plan `M1/M4/M5/M6`: not targeted beyond the provider-touching regression updates required to keep the narrowed phase coherent.
 
 ## Assumptions
 - Phase-local acceptance allows retaining `run_operation(...)` as a non-protocol compatibility boundary until a later operation-runtime rewrite lands.
+- The clarification recorded in the raw log explicitly allows a temporary narrow sync exception for `llm()` / `classify()` compatibility inside synchronous Python-step execution under the async engine.
 - Constructor-time rejection of sync-only providers is the intended replacement for the temporary sequential sync-provider fallback introduced in the prior phase.
 
 ## Preserved invariants
@@ -73,21 +74,22 @@
 - Sync-only providers and sync-only transports fail during construction instead of being discovered later during execution or branch scheduling.
 - Branch-group runtime no longer probes provider async capability at runtime.
 - Built-in Codex/Claude transports now execute workflow turns only through async subprocess paths.
-- Rendered provider operation compatibility is now explicit at construction via `operation_executor=...` instead of implicit transport duck-typing.
+- Rendered provider operation compatibility is now explicit at construction via `operation_executor=...` instead of implicit transport duck-typing, and the sync bridge is used only when `run_operation(...)` is invoked from an already-active event loop.
 
 ## Known non-changes
 - `autoloop/core/operations.py` still relies on sync `run_operation(...)`; this method is no longer part of the core provider protocol and is validated locally when operation helpers are used.
-- Built-in operation-helper compatibility still uses sync subprocess execution, but that path is now centralized outside the transport protocol and wired explicitly through rendered-provider/backend construction.
+- Built-in operation-helper compatibility still uses sync subprocess execution, but that path is now centralized outside the transport protocol, wired explicitly through rendered-provider/backend construction, and limited to active-loop helper execution rather than all sync operation calls.
 - Operation branch enablement, child-workflow branch support, and broader branch-group follow-on work remain untouched.
 - Help-surface capability probing for provider CLIs still uses `subprocess.run(...)`; only workflow turn execution was cut over.
 
 ## Expected side effects
 - Any custom test/provider object that previously implemented only sync step methods must now switch to async methods or it will fail immediately at `Engine(...)` construction.
 - Any custom transport used with `RenderedLLMProvider(...)` must now expose async `run_turn(...)`.
+- Built-in rendered providers now prefer the async transport path for sync helper calls made outside an active event loop; the explicit sync operation executor is reserved for active-loop helper compatibility.
 - Any custom `RenderedLLMProvider(...)` used with `llm()` / `classify()` inside an active workflow loop must now pass an explicit `operation_executor=...` if it needs operation-helper compatibility.
 
 ## Validation performed
-- `python3 -m py_compile` over all touched runtime/core modules and the updated provider-focused test files.
+- `python3 -m py_compile` over the touched runtime/core modules plus `tests/runtime/test_provider_backends.py`, `tests/runtime/test_runtime_providers.py`, and `tests/unit/test_provider_boundary_core.py`.
 - Repository grep verification that `AsyncLLMProvider`, `AsyncProviderTransport`, `supports_async_llm_provider(...)`, `supports_async_provider_transport(...)`, `run_llm_async(...)`, `run_producer_async(...)`, `run_verifier_async(...)`, and `run_turn_async(...)` no longer appear in runtime code.
 - Full pytest execution could not be run in this environment because `pytest` is not installed.
 - Runtime smoke execution could not be run in this environment because `pydantic` is not installed.
@@ -95,4 +97,4 @@
 ## Deduplication / centralization decisions
 - Centralized constructor validation in `autoloop/core/providers/protocols.py` so `Engine(...)` and `RenderedLLMProvider(...)` share the same async-contract enforcement.
 - Centralized async subprocess cancellation handling in `autoloop/runtime/providers/_common.py` for both Codex and Claude transports.
-- Centralized the explicit compatibility-only sync subprocess helper in `autoloop/runtime/providers/_common.py` and removed undocumented transport duck-typing from `RenderedLLMProvider.run_operation(...)`.
+- Centralized the explicit compatibility-only sync subprocess helper in `autoloop/runtime/providers/_common.py`, removed undocumented transport duck-typing from `RenderedLLMProvider.run_operation(...)`, and narrowed the sync compatibility exception to active-loop helper execution only.

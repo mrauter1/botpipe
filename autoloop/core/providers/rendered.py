@@ -61,12 +61,15 @@ class RenderedLLMProvider:
 
     def _run_operation_turn(self, context: ProviderTurnContext):
         turn = render_provider_turn(context)
-        if self._operation_executor is not None:
-            return self._operation_executor(turn)
         try:
             asyncio.get_running_loop()
         except RuntimeError:
             return run_provider_coro_sync(self._transport.run_turn(turn))
+        # Temporary compatibility exception: sync llm()/classify() calls from
+        # sync Python steps inside the async engine need an explicit sync bridge
+        # until the operation runtime is redesigned around async execution.
+        if self._operation_executor is not None:
+            return self._operation_executor(turn)
         raise RuntimeError(
             "RenderedLLMProvider requires an explicit operation_executor to support llm()/classify() "
             "inside an active workflow event loop."

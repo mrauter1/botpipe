@@ -698,3 +698,27 @@ def test_rendered_llm_provider_runs_value_operation_as_raw_text() -> None:
     assert transport.seen_turns is not None
     assert transport.seen_turns[0].turn_kind == "operation"
     assert transport.seen_turns[0].expected_response == "raw_text"
+
+
+def test_rendered_llm_provider_prefers_async_transport_for_sync_operations_outside_active_loop() -> None:
+    transport = _TransportStub(result_text='{"summary":"ready"}')
+
+    def fail_if_called(turn: RenderedProviderTurn) -> ProviderTurnResult:  # pragma: no cover - defensive
+        raise AssertionError("operation_executor should only be used inside an active event loop")
+
+    provider = RenderedLLMProvider(transport, operation_executor=fail_if_called)
+
+    response = provider.run_operation(
+        OperationRequest(
+            step_name="summary",
+            prompt=ResolvedPrompt(path="summary.md", text="Summarize the report."),
+            context=None,
+            session=None,
+            operation_kind="llm",
+            return_schema={"type": "object", "properties": {"summary": {"type": "string"}}},
+        )
+    )
+
+    assert response.raw_output == '{"summary":"ready"}'
+    assert transport.seen_turns is not None
+    assert transport.seen_turns[0].turn_kind == "operation"

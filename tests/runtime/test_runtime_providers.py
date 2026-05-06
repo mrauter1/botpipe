@@ -467,30 +467,28 @@ def test_verify_claude_code_capabilities_rejects_missing_allowed_tools_when_stra
 def test_codex_transport_sends_rendered_prompt_text_to_cli_stdin(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    monkeypatch.setattr(codex_runtime_provider.shutil, "which", lambda name: "/usr/bin/codex")
-    calls: list[list[str]] = []
+    calls: list[tuple[str, ...]] = []
     prompt_text = "# Step: produce\n\nShared runtime prompt."
+    seen_inputs: list[bytes | None] = []
 
-    def fake_run(command: list[str], **kwargs: object) -> subprocess.CompletedProcess[str]:
-        calls.append(command)
-        if command == ["codex", "exec", "--help"]:
-            return _completed(args=command, stdout=CODEX_START_HELP)
-        if command == ["codex", "exec", "resume", "--help"]:
-            return _completed(args=command, stdout=CODEX_RESUME_HELP)
-        assert kwargs["input"] == prompt_text
-        return _completed(
-            args=command,
+    async def fake_create_subprocess_exec(*command: str, **_: object) -> _AsyncProcessStub:
+        calls.append(tuple(command))
+        return _AsyncProcessStub(
             stdout="\n".join(
                 (
                     '{"type":"thread.started","thread_id":"codex-session-1"}',
                     '{"type":"item.completed","item":{"type":"agent_message","text":"producer text"}}',
                 )
             ),
+            seen_inputs=seen_inputs,
         )
 
-    monkeypatch.setattr(codex_runtime_provider.subprocess, "run", fake_run)
+    monkeypatch.setattr(codex_runtime_provider.asyncio, "create_subprocess_exec", fake_create_subprocess_exec)
     transport = CodexTransport(
-        commands=resolve_codex_cli_commands(_config(provider_name="codex")),
+        commands=CodexCLICommand(
+            start_command=("codex", "exec", "--json", "--dangerously-bypass-approvals-and-sandbox", "--model", "gpt-test"),
+            resume_command=("codex", "exec", "resume", "--json"),
+        ),
         model="gpt-test",
         model_effort=None,
     )
@@ -499,14 +497,8 @@ def test_codex_transport_sends_rendered_prompt_text_to_cli_stdin(
         transport.run_turn(_rendered_turn(step_name="produce", prompt_text=prompt_text, session=_placeholder_session()))
     )
 
-    assert calls[-1] == [
-        "codex",
-        "exec",
-        "--json",
-        "--dangerously-bypass-approvals-and-sandbox",
-        "--model",
-        "gpt-test",
-    ]
+    assert calls == [("codex", "exec", "--json", "--dangerously-bypass-approvals-and-sandbox", "--model", "gpt-test")]
+    assert seen_inputs == [prompt_text.encode("utf-8")]
     assert result.raw_text == "producer text"
     assert result.session is not None
     assert result.session.session_id == "codex-session-1"
@@ -566,14 +558,12 @@ def test_codex_transport_does_not_parse_workflow_outcome_json(monkeypatch: pytes
         model="gpt-test",
         model_effort=None,
     )
-    monkeypatch.setattr(
-        codex_runtime_provider.subprocess,
-        "run",
-        lambda command, **_: _completed(
-            args=command,
+    async def fake_create_subprocess_exec(*command: str, **_: object) -> _AsyncProcessStub:
+        return _AsyncProcessStub(
             stdout='{"type":"item.completed","item":{"type":"agent_message","text":"{\\"tag\\":\\"done\\"}"}}',
-        ),
-    )
+        )
+
+    monkeypatch.setattr(codex_runtime_provider.asyncio, "create_subprocess_exec", fake_create_subprocess_exec)
 
     result = asyncio.run(
         transport.run_turn(_rendered_turn(step_name="verify", turn_kind="verifier", expected_response="outcome_json"))
@@ -593,11 +583,8 @@ def test_rendered_llm_provider_returns_producer_response_with_codex_transport(
         model="gpt-test",
         model_effort=None,
     )
-    monkeypatch.setattr(
-        codex_runtime_provider.subprocess,
-        "run",
-        lambda command, **_: _completed(
-            args=command,
+    async def fake_create_subprocess_exec(*command: str, **_: object) -> _AsyncProcessStub:
+        return _AsyncProcessStub(
             stdout="\n".join(
                 (
                     '{"type":"thread.started","thread_id":"codex-session-2"}',
@@ -605,8 +592,9 @@ def test_rendered_llm_provider_returns_producer_response_with_codex_transport(
                     '{"type":"item.completed","item":{"type":"agent_message","text":"producer text"}}',
                 )
             ),
-        ),
-    )
+        )
+
+    monkeypatch.setattr(codex_runtime_provider.asyncio, "create_subprocess_exec", fake_create_subprocess_exec)
     provider = RenderedLLMProvider(transport)
 
     response = asyncio.run(provider.run_producer(_producer_request(session=_placeholder_session())))
@@ -629,34 +617,26 @@ def test_rendered_llm_provider_returns_producer_response_with_codex_transport(
 def test_rendered_llm_provider_parses_codex_verifier_outcome_in_core(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    monkeypatch.setattr(codex_runtime_provider.shutil, "which", lambda name: "/usr/bin/codex")
+    seen_inputs: list[bytes | None] = []
 
-    def fake_run(command: list[str], **kwargs: object) -> subprocess.CompletedProcess[str]:
-        if command == ["codex", "exec", "--help"]:
-            return _completed(args=command, stdout=CODEX_START_HELP)
-        if command == ["codex", "exec", "resume", "--help"]:
-            return _completed(args=command, stdout=CODEX_RESUME_HELP)
-        rendered_prompt = str(kwargs["input"])
-        assert "# Step: verify" in rendered_prompt
-        assert "## Runtime Step Contract" in rendered_prompt
-        assert "### Required inputs" in rendered_prompt
-        assert "### Control response" in rendered_prompt
-        assert "<producer_raw_output>" not in rendered_prompt
-        assert "producer output" not in rendered_prompt
-        return _completed(
-            args=command,
+    async def fake_create_subprocess_exec(*command: str, **_: object) -> _AsyncProcessStub:
+        return _AsyncProcessStub(
             stdout="\n".join(
                 (
                     '{"type":"thread.started","thread_id":"codex-session-3"}',
                     '{"type":"item.completed","item":{"type":"agent_message","text":"{\\"tag\\":\\"pair_ok\\",\\"reason\\":\\"accepted\\",\\"payload\\":{\\"summary\\":\\"ok\\"}}"}}',
                 )
             ),
+            seen_inputs=seen_inputs,
         )
 
-    monkeypatch.setattr(codex_runtime_provider.subprocess, "run", fake_run)
+    monkeypatch.setattr(codex_runtime_provider.asyncio, "create_subprocess_exec", fake_create_subprocess_exec)
     provider = RenderedLLMProvider(
         CodexTransport(
-            commands=resolve_codex_cli_commands(_config(provider_name="codex")),
+            commands=CodexCLICommand(
+                start_command=("codex", "exec", "--json"),
+                resume_command=("codex", "exec", "resume", "--json"),
+            ),
             model="gpt-test",
             model_effort=None,
         )
@@ -664,6 +644,13 @@ def test_rendered_llm_provider_parses_codex_verifier_outcome_in_core(
 
     response = asyncio.run(provider.run_verifier(_verifier_request(session=_placeholder_session())))
 
+    rendered_prompt = (seen_inputs[0] or b"").decode("utf-8")
+    assert "# Step: verify" in rendered_prompt
+    assert "## Runtime Step Contract" in rendered_prompt
+    assert "### Required inputs" in rendered_prompt
+    assert "### Control response" in rendered_prompt
+    assert "<producer_raw_output>" not in rendered_prompt
+    assert "producer output" not in rendered_prompt
     assert response.outcome.tag == "pair_ok"
     assert response.outcome.reason == "accepted"
     assert response.outcome.payload == {"summary": "ok"}
@@ -680,11 +667,10 @@ def test_codex_transport_rejects_unusable_jsonl(monkeypatch: pytest.MonkeyPatch)
         model="gpt-test",
         model_effort=None,
     )
-    monkeypatch.setattr(
-        codex_runtime_provider.subprocess,
-        "run",
-        lambda command, **_: _completed(args=command, stdout="not-json\n"),
-    )
+    async def fake_create_subprocess_exec(*command: str, **_: object) -> _AsyncProcessStub:
+        return _AsyncProcessStub(stdout="not-json\n")
+
+    monkeypatch.setattr(codex_runtime_provider.asyncio, "create_subprocess_exec", fake_create_subprocess_exec)
 
     with pytest.raises(ProviderExecutionError, match="unusable JSONL output"):
         asyncio.run(transport.run_turn(_rendered_turn(session=_placeholder_session())))
@@ -699,11 +685,10 @@ def test_codex_transport_raises_on_non_zero_exit(monkeypatch: pytest.MonkeyPatch
         model="gpt-test",
         model_effort=None,
     )
-    monkeypatch.setattr(
-        codex_runtime_provider.subprocess,
-        "run",
-        lambda command, **_: _completed(args=command, stdout="oops", stderr="bad", returncode=7),
-    )
+    async def fake_create_subprocess_exec(*command: str, **_: object) -> _AsyncProcessStub:
+        return _AsyncProcessStub(stdout="oops", stderr="bad", returncode=7)
+
+    monkeypatch.setattr(codex_runtime_provider.asyncio, "create_subprocess_exec", fake_create_subprocess_exec)
 
     with pytest.raises(ProviderExecutionError, match=r"exit code 7"):
         asyncio.run(transport.run_turn(_rendered_turn(session=_placeholder_session())))
@@ -725,23 +710,22 @@ def test_codex_transport_rejects_cross_provider_resume() -> None:
 
 def test_claude_transport_sends_rendered_prompt_text_to_cli_flag(monkeypatch: pytest.MonkeyPatch) -> None:
     prompt_text = "# Step: produce\n\nShared runtime prompt."
-    calls: list[list[str]] = []
+    calls: list[tuple[str, ...]] = []
 
-    def fake_run(command: list[str], **_: object) -> subprocess.CompletedProcess[str]:
-        calls.append(command)
-        return _completed(
-            args=command,
+    async def fake_create_subprocess_exec(*command: str, **_: object) -> _AsyncProcessStub:
+        calls.append(tuple(command))
+        return _AsyncProcessStub(
             stdout='{"result":"producer text","session_id":"claude-session-1","stop_reason":"end_turn"}',
         )
 
-    monkeypatch.setattr(claude_runtime_provider.subprocess, "run", fake_run)
+    monkeypatch.setattr(claude_runtime_provider.asyncio, "create_subprocess_exec", fake_create_subprocess_exec)
     transport = ClaudeTransport(config=_config(provider_name="claude").provider.claude)
 
     result = asyncio.run(
         transport.run_turn(_rendered_turn(step_name="produce", prompt_text=prompt_text, session=_placeholder_session()))
     )
 
-    assert calls[-1] == ["claude", "-p", prompt_text, "--output-format", "json", "--model", "claude-test"]
+    assert calls == [("claude", "-p", prompt_text, "--output-format", "json", "--model", "claude-test")]
     assert result.raw_text == "producer text"
     assert result.session is not None
     assert result.session.session_id == "claude-session-1"
@@ -772,11 +756,10 @@ def test_claude_transport_supports_async_subprocess_execution(monkeypatch: pytes
 
 
 def test_claude_transport_does_not_parse_workflow_outcome_json(monkeypatch: pytest.MonkeyPatch) -> None:
-    monkeypatch.setattr(
-        claude_runtime_provider.subprocess,
-        "run",
-        lambda command, **_: _completed(args=command, stdout='{"result":"{\\"tag\\":\\"done\\"}"}'),
-    )
+    async def fake_create_subprocess_exec(*command: str, **_: object) -> _AsyncProcessStub:
+        return _AsyncProcessStub(stdout='{"result":"{\\"tag\\":\\"done\\"}"}')
+
+    monkeypatch.setattr(claude_runtime_provider.asyncio, "create_subprocess_exec", fake_create_subprocess_exec)
     transport = ClaudeTransport(config=_config(provider_name="claude").provider.claude)
 
     result = asyncio.run(
@@ -790,35 +773,34 @@ def test_rendered_llm_provider_parses_claude_llm_outcome_in_core(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     resumable = _provider_session("claude", session_id="claude-session-existing")
-    calls: list[list[str]] = []
+    calls: list[tuple[str, ...]] = []
 
-    def fake_run(command: list[str], **_: object) -> subprocess.CompletedProcess[str]:
-        calls.append(command)
-        return _completed(
-            args=command,
+    async def fake_create_subprocess_exec(*command: str, **_: object) -> _AsyncProcessStub:
+        calls.append(tuple(command))
+        return _AsyncProcessStub(
             stdout='{"result":"{\\"tag\\":\\"done\\",\\"reason\\":\\"completed\\"}","usage":{"prompt_tokens":8,"completion_tokens":3,"total_tokens":11},"stop_reason":"done"}',
         )
 
-    monkeypatch.setattr(claude_runtime_provider.subprocess, "run", fake_run)
+    monkeypatch.setattr(claude_runtime_provider.asyncio, "create_subprocess_exec", fake_create_subprocess_exec)
     provider = RenderedLLMProvider(
         ClaudeTransport(config=_config(provider_name="claude", claude_permission_strategy="allow_core_tools").provider.claude)
     )
 
     response = asyncio.run(provider.run_llm(_llm_request(session=resumable)))
 
-    assert calls[-1][:4] == ["claude", "--resume", "claude-session-existing", "-p"]
+    assert calls[-1][:4] == ("claude", "--resume", "claude-session-existing", "-p")
     rendered_prompt = calls[-1][4]
     assert "# Step: ask" in rendered_prompt
     assert "## Runtime Step Contract" in rendered_prompt
     assert "<producer_raw_output>" not in rendered_prompt
-    assert calls[-1][5:] == [
+    assert calls[-1][5:] == (
         "--output-format",
         "json",
         "--model",
         "claude-test",
         "--allowedTools",
         "Read,Write,Edit,Glob,Grep,Bash",
-    ]
+    )
     assert response.outcome.tag == "done"
     assert response.outcome.reason == "completed"
     assert response.session is not None
@@ -836,11 +818,10 @@ def test_rendered_llm_provider_parses_claude_llm_outcome_in_core(
 
 
 def test_claude_transport_rejects_malformed_json(monkeypatch: pytest.MonkeyPatch) -> None:
-    monkeypatch.setattr(
-        claude_runtime_provider.subprocess,
-        "run",
-        lambda command, **_: _completed(args=command, stdout="{bad-json}"),
-    )
+    async def fake_create_subprocess_exec(*command: str, **_: object) -> _AsyncProcessStub:
+        return _AsyncProcessStub(stdout="{bad-json}")
+
+    monkeypatch.setattr(claude_runtime_provider.asyncio, "create_subprocess_exec", fake_create_subprocess_exec)
     transport = ClaudeTransport(config=_config(provider_name="claude").provider.claude)
 
     with pytest.raises(ProviderExecutionError, match="malformed JSON output"):
@@ -848,11 +829,10 @@ def test_claude_transport_rejects_malformed_json(monkeypatch: pytest.MonkeyPatch
 
 
 def test_claude_transport_raises_on_non_zero_exit(monkeypatch: pytest.MonkeyPatch) -> None:
-    monkeypatch.setattr(
-        claude_runtime_provider.subprocess,
-        "run",
-        lambda command, **_: _completed(args=command, stdout="oops", stderr="bad", returncode=3),
-    )
+    async def fake_create_subprocess_exec(*command: str, **_: object) -> _AsyncProcessStub:
+        return _AsyncProcessStub(stdout="oops", stderr="bad", returncode=3)
+
+    monkeypatch.setattr(claude_runtime_provider.asyncio, "create_subprocess_exec", fake_create_subprocess_exec)
     transport = ClaudeTransport(config=_config(provider_name="claude").provider.claude)
 
     with pytest.raises(ProviderExecutionError, match=r"exit code 3"):

@@ -77,6 +77,9 @@ def test_resolve_provider_backend_dispatches_by_provider_name(monkeypatch: pytes
     codex_transport = _StubTransport()
     claude_transport = _StubTransport()
 
+    def operation_executor(turn: RenderedProviderTurn) -> ProviderTurnResult:
+        return ProviderTurnResult(raw_text="operation")
+
     monkeypatch.setitem(
         provider_backends._BACKEND_BUILDERS,
         "codex",
@@ -86,6 +89,16 @@ def test_resolve_provider_backend_dispatches_by_provider_name(monkeypatch: pytes
         provider_backends._BACKEND_BUILDERS,
         "claude",
         lambda config: seen.append(config.provider.name) or claude_transport,
+    )
+    monkeypatch.setitem(
+        provider_backends._OPERATION_EXECUTOR_BUILDERS,
+        "codex",
+        lambda config: operation_executor,
+    )
+    monkeypatch.setitem(
+        provider_backends._OPERATION_EXECUTOR_BUILDERS,
+        "claude",
+        lambda config: operation_executor,
     )
 
     codex_provider = resolve_provider_backend(config=_resolved_config("codex"))
