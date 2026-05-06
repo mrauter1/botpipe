@@ -1,13 +1,21 @@
 from __future__ import annotations
 
 import asyncio
+import json
 from pathlib import Path
 import subprocess
 
 import pytest
 
 from autoloop.core.errors import ProviderExecutionError
-from autoloop.core.provider_policy import PermissionPolicy, ProviderPolicy, SandboxPolicy, WorkspaceFilesystemPolicy, WorkspacePolicy
+from autoloop.core.provider_policy import (
+    PermissionPolicy,
+    ProviderPolicy,
+    ProviderPolicyValidationConfig,
+    SandboxPolicy,
+    WorkspaceFilesystemPolicy,
+    WorkspacePolicy,
+)
 from autoloop.core.prompts import ResolvedPrompt
 from autoloop.core.providers.models import LLMRequest, ProducerRequest, TokenUsage, VerifierRequest
 from autoloop.core.providers.parsing import parse_outcome_json
@@ -964,6 +972,61 @@ def test_codex_transport_emits_run_scoped_policy_artifacts_and_metadata(
         "provider_policy_emitted",
         "provider_policy_capability_report",
     ]
+
+
+def test_codex_transport_capability_report_keeps_narrowed_read_roots_unenforced(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    async def fake_create_subprocess_exec(*_command: str, **_kwargs: object) -> _AsyncProcessStub:
+        return _AsyncProcessStub(
+            stdout="\n".join(
+                (
+                    '{"type":"thread.started","thread_id":"codex-session-policy"}',
+                    '{"type":"item.completed","item":{"type":"agent_message","text":"producer text"}}',
+                )
+            ),
+        )
+
+    monkeypatch.setattr(codex_runtime_provider.asyncio, "create_subprocess_exec", fake_create_subprocess_exec)
+    transport = CodexTransport(
+        commands=CodexCLICommand(
+            start_command=("codex", "exec", "--json"),
+            resume_command=("codex", "exec", "resume", "--json"),
+        ),
+        model="gpt-test",
+        model_effort=None,
+        validation=ProviderPolicyValidationConfig(unsafe_expansion="warn"),
+    )
+    policy = ProviderPolicy(
+        sandbox=SandboxPolicy(
+            workspace=WorkspacePolicy(
+                filesystem=WorkspaceFilesystemPolicy(allow_read=("./src",)),
+            ),
+        ),
+    )
+
+    result = asyncio.run(
+        transport.run_turn(
+            _rendered_turn(
+                step_name="produce",
+                prompt_text="# Step: produce\n\nShared runtime prompt.",
+                session=_placeholder_session(),
+                policy=policy,
+                run_folder=tmp_path,
+                step_execution_id="produce:1",
+            )
+        )
+    )
+
+    report_path = Path(result.metadata["provider_metadata"]["policy"]["capability_report_file"])
+    report = json.loads(report_path.read_text(encoding="utf-8"))
+
+    assert report["decision"] == "warn"
+    assert report["unsafe_expansions"] == [
+        "sandbox.workspace.filesystem.allow_read cannot be narrowed by Codex",
+    ]
+    assert report["effective_enforcement"]["read_roots"] == []
 
 
 def test_codex_operation_executor_uses_policy_env_and_metadata(
