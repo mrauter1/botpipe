@@ -5,7 +5,7 @@ from __future__ import annotations
 import inspect
 import re
 from collections.abc import Mapping, Sequence
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 from pathlib import Path
 from typing import Any
 
@@ -83,6 +83,7 @@ class WorkflowDefinition:
     extensions: tuple[Any, ...]
     authored_transitions: dict[Step | str, dict[str, Any]]
     transitions: dict[Step | str, dict[str, Any]]
+    framework_default_transitions_by_step: dict[str, dict[str, Any]]
     runtime_control_routes_by_step: dict[str, tuple[str, ...]]
 
     @property
@@ -266,13 +267,15 @@ def describe_workflow_class(workflow_cls: type[Any]) -> WorkflowDefinition:
         transitions = _lower_simple_transition_table(transitions, {})
 
     authored_transitions: dict[Step | str, dict[str, Any]] = {}
+    framework_default_transitions_by_step: dict[str, dict[str, Any]] = {}
     runtime_control_routes_by_step: dict[str, tuple[str, ...]] = {}
     if isinstance(transitions, dict):
         authored_transitions = _resolve_named_transition_targets(transitions, steps_by_name)
-        transitions, runtime_control_routes_by_step = _inject_control_routes(
+        framework_default_transitions_by_step, runtime_control_routes_by_step = _lower_control_route_defaults(
             authored_transitions,
             tuple(steps),
         )
+        transitions = authored_transitions
 
     entry = _resolve_named_entry(entry, steps_by_name)
     ordered_steps = tuple(sorted(steps, key=lambda step: step_order.get(id(step), step._order)))
@@ -304,6 +307,7 @@ def describe_workflow_class(workflow_cls: type[Any]) -> WorkflowDefinition:
         extensions=extensions,
         authored_transitions=authored_transitions,
         transitions=transitions,
+        framework_default_transitions_by_step=framework_default_transitions_by_step,
         runtime_control_routes_by_step=runtime_control_routes_by_step,
     )
 
@@ -1539,17 +1543,12 @@ def _resolve_transition_source(source: Step | str, steps_by_name: Mapping[str, S
 
 def _resolve_transition_destination(destination: object, *, source: Step | str, steps_by_name: Mapping[str, Step]) -> object:
     if isinstance(destination, Route):
+        if destination.disabled:
+            return destination
         target = _resolve_transition_destination(destination.target, source=source, steps_by_name=steps_by_name)
         if target is destination.target:
             return destination
-        return Route(
-            target=target,
-            summary=destination.summary,
-            required_writes=destination.required_writes,
-            handoff=destination.handoff,
-            on_taken=destination.on_taken,
-            provider_visible=destination.provider_visible,
-        )
+        return replace(destination, target=target)
     if destination == SELF:
         return source if isinstance(source, Step) else destination
     if isinstance(destination, str) and destination not in {FINISH, AWAIT_INPUT, FAIL}:
@@ -1574,23 +1573,23 @@ def _merge_transition_tables(base: Mapping[Step | str, Mapping[str, object]], ex
     return merged
 
 
-def _inject_control_routes(
+def _lower_control_route_defaults(
     transitions: Mapping[Step | str, Mapping[str, object]],
     steps: Sequence[Step],
 ) -> tuple[dict[Step | str, dict[str, object]], dict[str, tuple[str, ...]]]:
-    injected: dict[Step | str, dict[str, object]] = {source: dict(route_map) for source, route_map in transitions.items()}
+    framework_defaults_by_step: dict[str, dict[str, object]] = {}
     runtime_control_routes_by_step: dict[str, tuple[str, ...]] = {}
-    global_routes = transitions.get(GLOBAL, {})
     for step in steps:
-        step_routes = injected.setdefault(step, {})
+        default_routes: dict[str, object] = {}
         runtime_routes: list[str] = []
         question_mode = getattr(getattr(step, "control_routes", None), "question", "never")
         if question_mode != "never":
-            if "question" not in step_routes and "question" not in global_routes:
-                step_routes["question"] = AWAIT_INPUT
+            provider_visibility = "always" if question_mode == "always" else "interactive_only"
+            default_routes["question"] = Route.question(provider_visibility=provider_visibility)
             runtime_routes.append("question")
+        framework_defaults_by_step[step.name] = default_routes
         runtime_control_routes_by_step[step.name] = tuple(runtime_routes)
-    return injected, runtime_control_routes_by_step
+    return framework_defaults_by_step, runtime_control_routes_by_step
 
 
 def _route_signature(destination: object) -> tuple[object, str | None, tuple[str, ...], str | None, object | None]:
@@ -1602,6 +1601,10 @@ def _route_signature(destination: object) -> tuple[object, str | None, tuple[str
         None if route.required_writes is None else tuple(route.required_writes),
         route.handoff,
         route.on_taken,
+        route.provider_visibility,
+        route.payload_schema_mode,
+        route.preset_kind,
+        route.disabled,
     )
 
 

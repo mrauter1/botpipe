@@ -24,9 +24,11 @@ from .extensions import WorkflowExtension
 from .errors import RoutingError, WorkflowCompilationError
 from .inventory import ArtifactInventoryRecord, collect_artifact_inventory, public_artifact_inventory, resolve_artifact_reference, resolve_optional_read_reference
 from .lowering import (
+    ResolvedRouteSpec,
     _fallback_route_summary,
     compile_expected_output_contract,
     normalize_step_route_metadata,
+    resolve_step_routes,
     step_authored_route_tags,
     step_available_route_tags,
     step_runtime_control_route_tags,
@@ -99,14 +101,23 @@ class CompiledRoute:
 
     source_step: str
     tag: str
-    target: str
+    target: str | None
     summary: str | None = None
     required_writes: tuple[str, ...] = ()
     handoff: str | None = None
     on_taken: object | None = None
+    provider_visibility: str = "always"
     provider_visible: bool = True
     provider_visible_interactive: bool = True
     provider_visible_full_auto: bool = True
+    payload_schema_mode: str = "inherit"
+    payload_schema: dict[str, Any] | None = None
+    payload_validator: PayloadValidator | None = None
+    route_fields_schema: dict[str, Any] | None = None
+    route_fields_validator: PayloadValidator | None = None
+    preset_kind: str = "custom"
+    inheritance_source: str = "step_local"
+    disabled: bool = False
     is_runtime_control: bool = False
     _required_writes_explicit: bool = False
 
@@ -148,9 +159,12 @@ class CompiledWorkflow:
 
     def route(self, step_name: str, tag: str) -> CompiledRoute:
         compiled_route = self.routes.get(step_name, {}).get(tag)
-        if compiled_route is None:
-            compiled_route = self.global_routes.get(tag)
-        if compiled_route is None:
+        if compiled_route is not None:
+            if compiled_route.disabled:
+                raise RoutingError(f"no route for step {step_name!r} and tag {tag!r}")
+            return compiled_route
+        compiled_route = self.global_routes.get(tag)
+        if compiled_route is None or compiled_route.disabled:
             raise RoutingError(f"no route for step {step_name!r} and tag {tag!r}")
         return compiled_route
 
