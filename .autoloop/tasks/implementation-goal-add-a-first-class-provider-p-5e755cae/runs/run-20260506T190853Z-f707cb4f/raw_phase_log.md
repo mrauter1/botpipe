@@ -643,3 +643,63 @@ Open issues / next step
   - `.venv/bin/python -m pytest tests/runtime/test_provider_policy_config.py tests/unit/test_simple_surface.py -q`
 - Pytest finished with only pre-existing warnings about `schema` field shadowing in exported workflow fixture models.
 - Next step is verifier re-review for the same phase artifacts.
+
+
+---
+run_id=run-20260506T190853Z-f707cb4f | entry=session_turn | pair=implement | phase=verifier | cycle=2 | attempt=1 | thread_id=019dfec5-f589-7cb2-ab20-e8f25f37fa06
+---
+provider=codex
+mode=resume
+template=/home/rauter/.local/share/pipx/venvs/autoloop/lib/python3.12/site-packages/autoloop/templates/implement_verifier.md
+session_id=019dfec5-f589-7cb2-ab20-e8f25f37fa06
+
+
+---
+run_id=run-20260506T190853Z-f707cb4f | entry=phase_output | pair=implement | phase=verifier | process=codex-agent | cycle=2 | attempt=1 | thread_id=019dfec5-f589-7cb2-ab20-e8f25f37fa06
+---
+I’m re-reviewing the two previously blocking areas plus the phase acceptance criteria: config null-handling, no-config default semantics, and workflow-level policy retention through discovery. I’ll update the phase review artifacts after I confirm there are no remaining blocking regressions in the touched surface.
+
+I’ve confirmed the prior blockers are fixed in the actual code path and covered by targeted tests. I’m updating the phase review artifacts to mark the phase complete and to note that this pass found no new findings.
+
+The review artifacts are updated. I’m doing one quick check that the criteria are fully checked and the follow-up note is present, then I’ll close the verifier turn as complete.
+
+Scope considered
+
+- Phase-local `policy-config-authoring` only.
+- Reviewed the previously blocking config and workflow-authoring seams plus the targeted tests and reviewer artifacts.
+
+What I analyzed
+
+- [autoloop/runtime/config.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/autoloop/runtime/config.py)
+- [autoloop/core/discovery.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/autoloop/core/discovery.py)
+- [autoloop/core/compiler.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/autoloop/core/compiler.py)
+- [tests/runtime/test_provider_policy_config.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/tests/runtime/test_provider_policy_config.py)
+- [tests/unit/test_simple_surface.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/tests/unit/test_simple_surface.py)
+- [implementation_notes.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/implementation-goal-add-a-first-class-provider-p-5e755cae/runs/run-20260506T190853Z-f707cb4f/artifacts/implement/phases/policy-config-authoring/implementation_notes.md)
+- [decisions.txt](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/implementation-goal-add-a-first-class-provider-p-5e755cae/runs/run-20260506T190853Z-f707cb4f/decisions.txt)
+
+What I reviewed
+
+- `provider_policy.default` / `provider_policy.validation` explicit-null handling and strict-config behavior.
+- No-config resolution semantics against `SYSTEM_DEFAULT_PROVIDER_POLICY` while preserving legacy provider inputs.
+- Workflow-level `policy` retention and type validation through `WorkflowDefinition`.
+- Internal compiler reconstruction to ensure the new workflow-policy seam is not dropped.
+- Targeted validation coverage and public helper signature updates.
+
+Key findings / decisions
+
+- No new findings in this pass.
+- `IMP-001` is resolved: explicit `provider_policy.default: null` and `provider_policy.validation: null` now fail at parse time, while `strict: null` remains allowed.
+- `IMP-002` is resolved: workflow-level `policy` is retained on `WorkflowDefinition.workflow_policy`, validated as a concrete `ProviderPolicy`, and preserved through the internal compiler seam.
+- I updated the review artifacts:
+  - [criteria.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/implementation-goal-add-a-first-class-provider-p-5e755cae/runs/run-20260506T190853Z-f707cb4f/artifacts/implement/phases/policy-config-authoring/criteria.md)
+  - [feedback.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/implementation-goal-add-a-first-class-provider-p-5e755cae/runs/run-20260506T190853Z-f707cb4f/artifacts/implement/phases/policy-config-authoring/feedback.md)
+
+Open issues / next step
+
+- No blocking issues remain for this phase.
+- The targeted validation reported by the implementer is consistent with the reviewed code shape; only pre-existing warnings remain in the test run output.
+
+<loop-control>
+{"schema":"docloop.loop_control/v1","kind":"promise","promise":"COMPLETE"}
+</loop-control>
