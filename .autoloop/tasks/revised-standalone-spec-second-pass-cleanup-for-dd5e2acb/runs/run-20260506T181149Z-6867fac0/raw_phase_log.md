@@ -138,3 +138,12 @@ No further planning changes are required on this run-local pass. The plan is rea
 <loop-control>
 {"schema":"docloop.loop_control/v1","kind":"promise","promise":"COMPLETE"}
 </loop-control>
+
+
+---
+run_id=run-20260506T181149Z-6867fac0 | entry=phase_scope_resolved
+---
+phase_mode=single
+phase_ids=async-branch-group-cleanup
+explicit=True
+current_phase_index=0
