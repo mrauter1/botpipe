@@ -24,3 +24,4 @@ Core Workflow keeps an untyped class-level policy slot while step and declaratio
 Explicit provider_policy.default: null and provider_policy.validation: null are rejected at parse time; omission remains the only supported way to inherit default and validation policy layers.
 WorkflowDefinition.workflow_policy is the canonical retained workflow-level policy seam for later compiler and runtime phases, and authored Workflow.policy values must be concrete ProviderPolicy instances.
 Legacy provider model and effort fields mirror into provider_policy.default only when explicitly provided by config or CLI inputs, so unconfigured runs preserve the SYSTEM_DEFAULT_PROVIDER_POLICY baseline.
+<autoloop-decisions-header version="1" block_seq="8" owner="test_author" phase_id="policy-config-authoring" pair="test" turn_seq="1" run_id="run-20260506T190853Z-f707cb4f" ts="2026-05-06T19:48:41.568787+00:00" />

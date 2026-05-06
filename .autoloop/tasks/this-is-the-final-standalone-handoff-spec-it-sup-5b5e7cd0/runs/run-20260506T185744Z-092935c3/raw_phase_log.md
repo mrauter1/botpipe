@@ -679,3 +679,44 @@ Focused validation passed:
 `./.venv-autoloop/bin/python -m pytest -q tests/unit/test_provider_boundary_core.py -k 'render_provider_turn_renders_markdown_contract_without_raw_output or render_provider_turn_excludes_hidden_routes_from_prompt_contract'`
 
 No further code changes are pending in this turn; the next step is verifier re-review against `IMP-001`.
+
+
+---
+run_id=run-20260506T185744Z-092935c3 | entry=session_turn | pair=implement | phase=verifier | cycle=2 | attempt=1 | thread_id=019dfec6-9730-7fc1-aee3-d97159086b13
+---
+provider=codex
+mode=resume
+template=/home/rauter/.local/share/pipx/venvs/autoloop/lib/python3.12/site-packages/autoloop/templates/implement_verifier.md
+session_id=019dfec6-9730-7fc1-aee3-d97159086b13
+
+
+---
+run_id=run-20260506T185744Z-092935c3 | entry=phase_output | pair=implement | phase=verifier | process=codex-agent | cycle=2 | attempt=1 | thread_id=019dfec6-9730-7fc1-aee3-d97159086b13
+---
+I’m re-reviewing the narrow parser fix against the original blocking finding and the phase contract. I’ll confirm the canonical-over-legacy precedence behavior in code and tests, then update only the review artifacts.
+
+The parser now matches the decisions ledger and the spec’s precedence rule, and the added regression covers the previously broken `reason: null` case. I’m marking the review complete in the phase artifacts and recording that the original blocking finding is resolved.
+
+Scope considered
+
+Phase-local verifier scope for `provider-outcome-contract`, limited to the parser fix for canonical-over-legacy precedence, its regression coverage, and the active review artifacts.
+
+What I analyzed
+
+I checked the authoritative feedback, decisions ledger, implementation notes, the updated canonical parsing branch in `autoloop/core/providers/parsing.py`, and the new runtime-provider regression covering canonical `route_fields.reason = null` alongside a stray legacy top-level `reason`.
+
+What I reviewed
+
+I reviewed the updated code in `autoloop/core/providers/parsing.py`, the targeted tests in `tests/runtime/test_runtime_providers.py`, the phase notes in `implementation_notes.md`, and the current turn’s decision entry. I also re-ran the targeted parser precedence tests, which passed.
+
+Key findings / decisions
+
+`IMP-001` is resolved. The parser now ignores top-level legacy `question` / `reason` whenever a canonical `outcome` envelope is present, which matches the spec and the run-local decision for canonical precedence. I found no additional blocking or non-blocking issues in this review slice, so I marked all criteria complete and recorded the re-review result in `feedback.md`.
+
+Open issues / next step
+
+No open verifier issues remain for this phase slice. The review artifacts are updated, and the phase can proceed from the verifier side.
+
+<loop-control>
+{"schema":"docloop.loop_control/v1","kind":"promise","promise":"COMPLETE"}
+</loop-control>
