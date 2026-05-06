@@ -1454,3 +1454,53 @@ Open issues / next step
 <loop-control>
 {"schema":"docloop.loop_control/v1","kind":"promise","promise":"COMPLETE"}
 </loop-control>
+
+
+---
+run_id=run-20260506T185744Z-092935c3 | entry=session_turn | pair=test | phase=producer | cycle=1 | attempt=1 | thread_id=019dfeed-ec76-7aa0-818d-b53b7259845b
+---
+provider=codex
+mode=resume
+template=/home/rauter/.local/share/pipx/venvs/autoloop/lib/python3.12/site-packages/autoloop/templates/test_producer.md
+session_id=019dfeed-ec76-7aa0-818d-b53b7259845b
+
+
+---
+run_id=run-20260506T185744Z-092935c3 | entry=phase_output | pair=test | phase=producer | process=codex-agent | cycle=1 | attempt=1 | thread_id=019dfeed-ec76-7aa0-818d-b53b7259845b
+---
+This turn is test-phase hardening for the same `tests-and-docs-migration` slice. I’m checking the current docs regression coverage and the phase test artifacts, then I’ll add only the extra assertions needed to lock the compatibility note more precisely.
+
+I found one worthwhile hardening gap: the new Workflow Instructions test checks the compatibility note only generically. I’m tightening it to require the exact `ControlRoutes(question=...)` and top-level `question` / `reason` language, then I’ll record the coverage map and test-phase summary artifacts.
+
+The extra assertion is in place. I’m running the docs suite now to confirm the stricter wording check matches the current instruction text before I close the test turn.
+
+Scope considered
+
+- Phase-local test hardening for `tests-and-docs-migration`.
+- Shared docs/prompt-contract coverage only, centered on the new compatibility-only route guidance.
+
+What I analyzed
+
+- Existing docs regression coverage in [tests/test_architecture_baseline_docs.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/tests/test_architecture_baseline_docs.py:258).
+- Current shared wording in `Workflow_Instructions.md` and the mirrored note in `docs/authoring.md`.
+- The empty phase test artifacts: [test_strategy.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/this-is-the-final-standalone-handoff-spec-it-sup-5b5e7cd0/runs/run-20260506T185744Z-092935c3/artifacts/test/phases/tests-and-docs-migration/test_strategy.md) and [feedback.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/this-is-the-final-standalone-handoff-spec-it-sup-5b5e7cd0/runs/run-20260506T185744Z-092935c3/artifacts/test/phases/tests-and-docs-migration/feedback.md).
+- The latest test-author header in [decisions.txt](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/this-is-the-final-standalone-handoff-spec-it-sup-5b5e7cd0/runs/run-20260506T185744Z-092935c3/decisions.txt).
+
+What I changed
+
+- Tightened [tests/test_architecture_baseline_docs.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/tests/test_architecture_baseline_docs.py:258) so `test_workflow_instructions_freeze_runtime_contract_vocabulary()` now requires the exact compatibility-only sentence naming `ControlRoutes(question=...)` and legacy top-level `question` / `reason`, not just generic compatibility wording.
+- Filled in [test_strategy.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/this-is-the-final-standalone-handoff-spec-it-sup-5b5e7cd0/runs/run-20260506T185744Z-092935c3/artifacts/test/phases/tests-and-docs-migration/test_strategy.md) with a behavior-to-coverage map, preserved invariants, failure paths, flake notes, and known gaps.
+- Appended a concise test-addition summary to [feedback.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/this-is-the-final-standalone-handoff-spec-it-sup-5b5e7cd0/runs/run-20260506T185744Z-092935c3/artifacts/test/phases/tests-and-docs-migration/feedback.md).
+- Recorded the non-obvious test-hardening decision under the current test-author header in [decisions.txt](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/this-is-the-final-standalone-handoff-spec-it-sup-5b5e7cd0/runs/run-20260506T185744Z-092935c3/decisions.txt).
+
+Key findings / decisions
+
+- The useful remaining gap was precision, not breadth: the docs suite already checked the new route-helper model, but it did not force the exact `ControlRoutes(question=...)` and top-level `question` / `reason` compatibility-only wording in the shared instruction file.
+- Validation performed:
+  - `./.venv/bin/python -m pytest -q tests/test_architecture_baseline_docs.py`
+  - Result: `15 passed`
+
+Open issues / next step
+
+- No open test-author blockers remain in this slice.
+- Next step is the test-phase verifier/auditor pass over the updated test file and phase artifacts.

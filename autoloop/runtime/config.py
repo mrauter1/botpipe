@@ -687,7 +687,7 @@ def _merge_provider_policy_config(
     if legacy_effort is not None and not any(_policy_override_sets_field(layer.default, ("model", "effort")) for layer in layers):
         default_policy = merge_provider_policies(
             default_policy,
-            ProviderPolicyOverride(model=ModelPolicy(effort=legacy_effort)),
+            ProviderPolicyOverride(model=ModelPolicy(effort=_policy_effort_alias(legacy_effort))),
         )
     if runtime.full_auto and not any(
         _policy_override_sets_field(layer.default, ("permissions", "mode")) for layer in layers
@@ -897,6 +897,10 @@ def _apply_generic_provider_overrides(
             claude_effort = model_effort
         return codex_model, codex_effort, claude_model, claude_effort
     raise ConfigError(f"provider.name must be one of: {', '.join(sorted(SUPPORTED_PROVIDER_NAMES))}.")
+
+
+def _policy_effort_alias(value: str) -> str:
+    return _LEGACY_POLICY_EFFORT_ALIASES.get(value, value)
 
 
 def _optional_permission_strategy(raw_value: object, label: str, source: Path) -> str | None:
