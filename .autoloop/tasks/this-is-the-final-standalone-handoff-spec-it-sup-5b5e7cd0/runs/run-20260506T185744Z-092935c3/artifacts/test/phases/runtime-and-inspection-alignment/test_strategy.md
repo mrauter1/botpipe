@@ -25,6 +25,9 @@
     - Forces simplified provider-schema fallback deterministically.
     - Confirms `provider_response_contracts` surfaces `schema_simplified`.
     - Confirms `compile_report.md` renders the fallback state.
+  - `tests/unit/test_stdlib_and_extensions.py::test_selected_workflow_inspection_payloads_surface_simplified_provider_schema_fallback`
+    - Forces the same fallback path on selected-workflow capability and decomposition inspection payloads.
+    - Confirms `workflow_capabilities` inspection surfaces propagate `schema_simplified`, fingerprints, and schema sizing metadata under fallback.
   - Extended selected-workflow payload assertions to keep additive snapshot compatibility under the existing artifact shapes.
 
 ## Edge Cases And Failure Paths

@@ -1062,3 +1062,57 @@ Open issues / next step
 <loop-control>
 {"schema":"docloop.loop_control/v1","kind":"promise","promise":"INCOMPLETE"}
 </loop-control>
+
+
+---
+run_id=run-20260506T185744Z-092935c3 | entry=session_turn | pair=test | phase=producer | cycle=2 | attempt=1 | thread_id=019dfed8-b85e-7423-bfab-6f1b074286d3
+---
+provider=codex
+mode=resume
+template=/home/rauter/.local/share/pipx/venvs/autoloop/lib/python3.12/site-packages/autoloop/templates/test_producer.md
+session_id=019dfed8-b85e-7423-bfab-6f1b074286d3
+
+
+---
+run_id=run-20260506T185744Z-092935c3 | entry=phase_output | pair=test | phase=producer | process=codex-agent | cycle=2 | attempt=1 | thread_id=019dfed8-b85e-7423-bfab-6f1b074286d3
+---
+The auditor’s gap is specific and actionable: the forced fallback path needs to be exercised on the selected-workflow inspection payloads too, not just the static-graph artifacts. I’m wiring that into the unit snapshot suite and then I’ll refresh the phase strategy/feedback to show the blocker is addressed.
+
+The fix is a dedicated selected-workflow inspection test with the same forced-fallback mechanism, but applied before `inspect_workflow_reference()` so the duplicated `workflow_capabilities` path is actually exercised. I’m patching that now.
+
+The missing inspection fallback case is in place. I’m doing a quick syntax pass on the touched test file and then I’ll close the turn with the updated coverage summary.
+
+Scope considered
+
+- Phase-local test follow-up for `runtime-and-inspection-alignment`.
+- Focused only on the auditor’s blocking gap: forced simplified-schema fallback coverage for selected-workflow inspection payloads.
+
+What I analyzed
+
+- The auditor finding in [feedback.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/this-is-the-final-standalone-handoff-spec-it-sup-5b5e7cd0/runs/run-20260506T185744Z-092935c3/artifacts/test/phases/runtime-and-inspection-alignment/feedback.md).
+- The selected-workflow inspection path in `autoloop/core/workflow_capabilities.py` and its use of the shared route-reporting schema builder.
+- The existing selected-workflow payload assertions in [tests/unit/test_stdlib_and_extensions.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/tests/unit/test_stdlib_and_extensions.py).
+
+What I changed
+
+- Added `test_selected_workflow_inspection_payloads_surface_simplified_provider_schema_fallback` to [tests/unit/test_stdlib_and_extensions.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/tests/unit/test_stdlib_and_extensions.py).
+- The new test monkeypatches `autoloop.core.route_reporting.build_provider_outcome_schema` before `inspect_workflow_reference()` so the `workflow_capabilities` path is exercised under forced fallback, then asserts `schema_simplified`, `schema_fingerprint`, and `schema_chars` on both:
+  - `selected_workflow_capability_payload()`
+  - `selected_workflow_decomposition_surface_payload()`
+- Updated [test_strategy.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/this-is-the-final-standalone-handoff-spec-it-sup-5b5e7cd0/runs/run-20260506T185744Z-092935c3/artifacts/test/phases/runtime-and-inspection-alignment/test_strategy.md), appended a follow-up note to [feedback.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/this-is-the-final-standalone-handoff-spec-it-sup-5b5e7cd0/runs/run-20260506T185744Z-092935c3/artifacts/test/phases/runtime-and-inspection-alignment/feedback.md), and recorded the non-obvious test decision under the new turn header in [decisions.txt](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/this-is-the-final-standalone-handoff-spec-it-sup-5b5e7cd0/runs/run-20260506T185744Z-092935c3/decisions.txt).
+
+Key findings / decisions
+
+- The key fix was to patch before `inspect_workflow_reference()`; patching only during payload rendering would miss the duplicated inspection path the auditor called out.
+- Syntax validation passed with `python3 -m py_compile tests/unit/test_stdlib_and_extensions.py`.
+
+Open issues / next step
+
+- `pytest` is still unavailable in this environment, so execution of the focused suites remains deferred.
+- Next step when the test toolchain is available:
+  - `tests/runtime/test_runtime_static_graph.py`
+  - `tests/unit/test_stdlib_and_extensions.py`
+
+<loop-control>
+{"schema":"docloop.loop_control/v1","kind":"promise","promise":"COMPLETE"}
+</loop-control>
