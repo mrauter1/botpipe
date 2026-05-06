@@ -1290,3 +1290,50 @@ Codex can no longer keep a hard-coded full-auto CLI flag if per-turn policy is a
 Open issues / next step
 
 Focused verification passed: `97` tests passed across `tests/runtime/test_provider_policy_emitters.py`, `tests/runtime/test_runtime_providers.py`, and `tests/runtime/test_provider_backends.py`. Claude emission/integration remains for the next phase.
+
+
+---
+run_id=run-20260506T190853Z-f707cb4f | entry=session_turn | pair=implement | phase=verifier | cycle=1 | attempt=1 | thread_id=019dfef0-6177-7931-97e7-51ce31250dd7
+---
+provider=codex
+mode=resume
+template=/home/rauter/.local/share/pipx/venvs/autoloop/lib/python3.12/site-packages/autoloop/templates/implement_verifier.md
+session_id=019dfef0-6177-7931-97e7-51ce31250dd7
+
+
+---
+run_id=run-20260506T190853Z-f707cb4f | entry=phase_output | pair=implement | phase=verifier | process=codex-agent | cycle=1 | attempt=1 | thread_id=019dfef0-6177-7931-97e7-51ce31250dd7
+---
+I’m auditing the `policy-codex` implementation against the phase contract and the current source, then I’ll update `criteria.md` and append any findings to `feedback.md`. I’m starting with the review artifacts and the Codex policy/transport code paths that were touched.
+
+Reviewing the Codex policy emission changes against the phase contract and adjacent regression surfaces. I’m checking the implementation notes, decisions ledger, touched provider code, and the targeted tests before I update the review artifacts.
+
+I’ve isolated one concrete correctness issue in the capability-report path and I’m checking whether it also leaks into transport-level behavior or test expectations before I finalize the review notes.
+
+I’ve confirmed the main issue is in the emitter’s own effective-enforcement report, not just a test gap. I’m checking the surrounding event-path handling once so any secondary note I add is concrete rather than speculative.
+
+I’ve finished the audit. The remaining issue is a concrete blocking correctness problem in the Codex capability report, so I’m recording that in the reviewer artifacts and leaving the phase incomplete.
+
+Scope considered
+
+Phase-local `policy-codex` only: Codex policy emission, run-scoped artifact writing, validation/capability reporting, transport wiring, runtime metadata/tracing, and the targeted regression tests and notes.
+
+What I analyzed
+
+I reviewed the active phase contract, `implementation_notes.md`, the current run decisions ledger, `autoloop/runtime/providers/codex_policy.py`, the Codex transport changes in `autoloop/runtime/providers/codex.py`, and the added runtime/emitter tests covering policy artifacts and subprocess env wiring.
+
+What I reviewed
+
+I checked the implementation against AC-1 and AC-2, with emphasis on whether the generated capability report accurately describes what Codex actually enforces. I also verified that the review artifacts were updated: `criteria.md` remains unchecked and now records that blocking findings remain, and `feedback.md` now contains one prioritized blocking finding.
+
+Key findings / decisions
+
+One blocking issue remains. The Codex emitter reports narrowed `allow_read` roots as part of `effective_enforcement.read_roots` even though the same emitter treats narrowed `allow_read` as an unsafe expansion because Codex cannot enforce it. That makes the capability report internally contradictory and can mislead operators or downstream tooling into believing Codex enforced a read restriction it did not.
+
+Open issues / next step
+
+Fix `CodexPolicyEmitter.emit()` so `effective_enforcement.read_roots` reflects only actual Codex enforcement, or stays empty/unknown when narrowing cannot be enforced, then rerun the targeted emitter and runtime provider tests and resubmit this phase for review.
+
+<loop-control>
+{"schema":"docloop.loop_control/v1","kind":"promise","promise":"INCOMPLETE"}
+</loop-control>
