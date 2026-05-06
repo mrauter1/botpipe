@@ -1822,3 +1822,12 @@ The planning artifacts are consistent, concrete, and ready to hand off to implem
 <loop-control>
 {"schema":"docloop.loop_control/v1","kind":"promise","promise":"COMPLETE"}
 </loop-control>
+
+
+---
+run_id=run-20260506T204256Z-05282838 | entry=phase_scope_resolved
+---
+phase_mode=single
+phase_ids=route-contract-enforcement,backend-response-schema-delivery
+explicit=True
+current_phase_index=0
