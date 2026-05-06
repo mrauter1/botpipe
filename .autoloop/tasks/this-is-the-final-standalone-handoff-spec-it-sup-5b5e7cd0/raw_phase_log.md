@@ -505,3 +505,84 @@ No open issue for this test-audit phase. The known gaps called out in the strate
 <loop-control>
 {"schema":"docloop.loop_control/v1","kind":"promise","promise":"COMPLETE"}
 </loop-control>
+
+
+---
+run_id=run-20260506T185744Z-092935c3 | entry=session_turn | pair=implement | phase=producer | cycle=1 | attempt=1 | thread_id=019dfec6-9730-7fc1-aee3-d97159086b13
+---
+provider=codex
+mode=start
+template=/home/rauter/.local/share/pipx/venvs/autoloop/lib/python3.12/site-packages/autoloop/templates/implement_producer.md
+session_id=019dfec6-9730-7fc1-aee3-d97159086b13
+
+
+---
+run_id=run-20260506T185744Z-092935c3 | entry=phase_output | pair=implement | phase=producer | process=codex-agent | cycle=1 | attempt=1 | thread_id=019dfec6-9730-7fc1-aee3-d97159086b13
+---
+I’m treating this as the provider-outcome-contract phase: I’ll inspect the phase artifacts, the current route/provider pipeline, and the prior route-model changes before editing.
+
+I’ve confirmed phase artifacts and there are unrelated dirty files in the worktree, so I’m keeping scope on the route/provider path only. Next I’m tracing the current compiled-route metadata, provider rendering/parsing, and engine validation seams.
+
+I’ve identified the active surfaces. I’m reading the route model, provider contract generation, parser, and engine validator together so the change lands on one path instead of leaving a hybrid.
+
+The current state is exactly the hybrid the spec forbids: prompts still teach top-level `tag/question/reason`, parsing still hard-codes `question`, and engine validation still falls back to step-level payload only. I’m tracing the provider transport boundary now to add canonical route-driven schema and validation without changing route finalization.
+
+I have enough context to edit. The change will stay on the provider boundary and runtime validation path: outcome model, provider contract building/rendering, parser normalization, engine validation, and focused regression tests.
+
+I’m updating the shared provider/outcome primitives first so the parser, renderer, and engine can all use the same canonical contract. After that I’ll wire validation and add regression coverage around hidden/full-auto routes and route-fields failures.
+
+The shared contract helpers are in place. I’m wiring them into request construction and prompt rendering next so every provider-facing step gets the same compiled-route-derived schema and route metadata.
+
+The provider requests now carry compiled-route payload and route-fields schemas. I’m switching parsing and engine validation to the canonical `outcome` envelope so those schemas are actually enforced instead of just rendered.
+
+The core path is wired, but I need a cleanup pass now: there are a couple of likely syntax/normalization edges from the patch, and I’m reading those before running tests so I don’t chase avoidable failures.
+
+I hit one environment detail: this repo doesn’t have `python` on PATH, only `python3`. I’m fixing the small syntax issue and then running `python3 -m py_compile` plus the focused test slice.
+
+I’ve cleared syntax. I’m running the focused unit slice first to catch contract mismatches before I touch the broader engine tests.
+
+The environment is the same as before on tooling too: `pytest` isn’t on PATH, so I’m switching to `python3 -m pytest` for the validation pass.
+
+The system interpreter has neither `pydantic` nor `pytest`, so I can’t execute the repo tests against it. I’m creating an isolated local venv with the minimal test dependencies to validate the provider-path changes without touching the user’s global Python.
+
+The venv is ready. I’m installing only `pydantic`, `pytest`, and `jsonschema` there so the route-schema validation path is exercised in the same environment the code now assumes.
+
+The first test run exposed a real integration issue, not a behavior bug: importing the shared outcome helper from `autoloop.core.providers` pulls the provider package too early and creates a circular import with `Outcome`. I’m moving that helper to `autoloop.core` so the provider boundary can depend on primitives, not the other way around.
+
+The unit slice is almost green. The only failures are compatibility assertions on a section heading, so I’m restoring the existing `### Control response` heading while keeping the canonical `outcome` content underneath.
+
+The remaining failing behavior is a real compatibility gap: direct scripted `Outcome(question=...)` objects should still normalize through the new route-fields path during migration. I’m fixing that legacy normalization in engine validation, and I’m also updating the prompt/retry assertions to the canonical `outcome.route_fields` wording.
+
+The engine-side compatibility fix worked; the contract subset now passes. I only have a local test-file indentation mistake to clean up before rerunning the full focused slice.
+
+The compatibility assertions are aligned now. I’m rerunning the full focused provider slice plus the engine contract subset to confirm the canonical envelope and legacy normalization both hold under execution.
+
+I want one broader pass over the existing invalid-payload and question-route engine tests, because those are the most likely regression surface after moving question handling into `route_fields`.
+
+I found one more compatibility edge: plain authored `blocked` and `failed` routes still need legacy optional-reason handling during migration, even when they weren’t authored through `Route.blocked()`/`Route.failed()`. I’m widening that normalization path and updating the one remaining prompt assertion to the canonical wording.
+
+The execution path is green on the targeted subsets. I’m adding a small parsing regression test pair now so the canonical `outcome.route_fields` envelope and canonical-over-legacy precedence are locked in explicitly.
+
+I’m on the final bookkeeping pass now: collecting the touched surface, writing the phase notes, and recording the non-obvious compatibility decisions so later turns don’t drift back into the hybrid model.
+
+I’ve finished the code and the targeted validation. I’m writing down the two compatibility decisions that matter for future turns: direct scripted outcomes still normalize legacy `question/reason` into `route_fields`, and plain authored `blocked/failed` tags keep nullable-reason compatibility during the migration.
+
+Scope considered
+
+Phase-local provider outcome contract work in the route/provider path only: [autoloop/core/engine.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/autoloop/core/engine.py), [autoloop/core/providers/rendering.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/autoloop/core/providers/rendering.py), [tests/runtime/test_runtime_providers.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/tests/runtime/test_runtime_providers.py), [tests/unit/test_provider_boundary_core.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/tests/unit/test_provider_boundary_core.py), [tests/unit/test_provider_retries.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/tests/unit/test_provider_retries.py), and [tests/contract/test_engine_contracts.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/tests/contract/test_engine_contracts.py).
+
+What I analyzed
+
+I traced the compiled-route metadata path into provider contract building, rendered prompt generation, provider JSON parsing, and engine-side legality/payload validation. I also checked the migration-sensitive cases: legacy top-level `question`/`reason`, hidden/full-auto-illegal routes, and direct scripted `Outcome(...)` objects.
+
+What I changed
+
+Provider prompts now teach the canonical envelope only: `outcome.tag`, `outcome.payload`, and `outcome.route_fields`, with route-specific payload/route-fields guidance rendered in the contract. Engine validation now normalizes legacy direct `Outcome(question=..., reason=...)` inputs into `route_fields` before compiled-route validation, so scripted and rendered providers go through the same legality path. I also added parsing regressions for canonical envelopes and canonical-over-legacy precedence, and updated the focused provider/engine tests to assert the new `route_fields` wording.
+
+Key findings / decisions
+
+Direct/scripted legacy outcomes needed explicit normalization in `Engine._validate_outcome`; otherwise existing question-route tests retried until exhaustion. Plain authored `blocked`/`failed` tags also needed nullable-reason compatibility preserved during migration, even when not authored through helper presets. I kept the existing `### Control response` section heading for compatibility, but the body now teaches only the canonical outcome envelope.
+
+Open issues / next step
+
+Transport-side structured schema enforcement is still not wired into the CLI providers; runtime validation remains authoritative for this phase. I did not run the entire repository test suite, but the targeted validation passed with `./.venv-autoloop/bin/python -m pytest` over the provider boundary slice and the relevant engine contract subsets.

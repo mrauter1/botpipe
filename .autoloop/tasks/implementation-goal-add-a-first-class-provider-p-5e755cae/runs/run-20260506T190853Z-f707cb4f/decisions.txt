@@ -20,3 +20,4 @@ Regression coverage for the recent policy-core fixes intentionally exercises bot
 Legacy provider model, effort, and runtime.full_auto inputs now populate provider_policy.default only when the corresponding provider_policy field was not explicitly set in any merged provider_policy layer.
 The new --policy-file runtime layer accepts either a full runtime-config document or a root-level provider_policy payload; root-level policy payloads are wrapped as a provider_policy-only merge layer.
 Core Workflow keeps an untyped class-level policy slot while step and declaration surfaces validate concrete ProviderPolicy or ProviderPolicyOverride objects, avoiding an import-time cycle in autoloop.core.__init__.
+<autoloop-decisions-header version="1" block_seq="7" owner="implementer" phase_id="policy-config-authoring" pair="implement" turn_seq="2" run_id="run-20260506T190853Z-f707cb4f" ts="2026-05-06T19:43:02.051880+00:00" />
