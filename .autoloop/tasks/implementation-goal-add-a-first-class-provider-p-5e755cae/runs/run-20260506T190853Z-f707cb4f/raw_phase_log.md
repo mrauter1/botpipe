@@ -1438,3 +1438,91 @@ No open issues in this phase-local scope. Review artifacts were updated to mark 
 <loop-control>
 {"schema":"docloop.loop_control/v1","kind":"promise","promise":"COMPLETE"}
 </loop-control>
+
+
+---
+run_id=run-20260506T190853Z-f707cb4f | entry=session_turn | pair=test | phase=producer | cycle=1 | attempt=1 | thread_id=019dfef0-6177-7931-97e7-51ce31250dd7
+---
+provider=codex
+mode=resume
+template=/home/rauter/.local/share/pipx/venvs/autoloop/lib/python3.12/site-packages/autoloop/templates/test_producer.md
+session_id=019dfef0-6177-7931-97e7-51ce31250dd7
+
+
+---
+run_id=run-20260506T190853Z-f707cb4f | entry=phase_output | pair=test | phase=producer | process=codex-agent | cycle=1 | attempt=1 | thread_id=019dfef0-6177-7931-97e7-51ce31250dd7
+---
+I’m treating this as focused regression authoring for `policy-codex`: check what the implementation and review already cover, then add any missing transport-level test that would catch the same class of bug through the real Codex execution seam, and update the test artifacts accordingly.
+
+There is already direct emitter coverage for the fixed report field, but the runtime-provider tests currently stop at env and metadata paths. I’m extending that to assert the actual emitted capability report content through the transport seam so a future regression in turn emission wiring is caught too.
+
+I’ve picked the missing seam: direct emitter coverage exists, but the async transport path still didn’t assert the emitted capability report contents. I’m adding one transport-level regression test plus the phase test artifacts and a run-local test decision so the coverage intent is explicit.
+
+The new repo test is in place, along with the phase test artifacts. I’m running the focused emitter and runtime-provider suite now, then I’ll append the test-coverage decision under this turn’s ledger header if the run passes.
+
+The focused suite is still running. I’m polling for the final result, then I’ll write the single non-obvious coverage decision into the current test turn block in `decisions.txt`.
+
+The targeted suite passed. I’m appending the test-intent decision now so later phases keep both the direct-emitter and transport-emitted capability-report checks aligned for the narrowed-read-root case.
+
+Scope considered
+
+Phase-local `policy-codex` only: Codex policy emission tests, transport wiring tests, and the phase test artifacts `test_strategy.md` and `feedback.md`.
+
+What I analyzed
+
+I reviewed the existing Codex emitter tests, the runtime-provider transport tests, the current run decisions for Codex policy reporting, and the gap left after the implementation fix: direct emitter coverage existed for narrowed `allow_read`, but the async transport path did not yet assert the emitted capability report contents.
+
+What I changed
+
+I added a transport-level regression test in [tests/runtime/test_runtime_providers.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/tests/runtime/test_runtime_providers.py) that runs a narrowed-`allow_read` Codex turn with `unsafe_expansion="warn"` and asserts the emitted `capability_report.json` still warns while leaving `effective_enforcement.read_roots` empty.
+
+I updated [test_strategy.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/implementation-goal-add-a-first-class-provider-p-5e755cae/runs/run-20260506T190853Z-f707cb4f/artifacts/test/phases/policy-codex/test_strategy.md) with an explicit behavior-to-test coverage map, preserved invariants, edge cases, failure paths, and known gaps. I also appended a concise cycle summary to [feedback.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/implementation-goal-add-a-first-class-provider-p-5e755cae/runs/run-20260506T190853Z-f707cb4f/artifacts/test/phases/policy-codex/feedback.md) and recorded the non-obvious cross-seam coverage rule in [decisions.txt](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/implementation-goal-add-a-first-class-provider-p-5e755cae/runs/run-20260506T190853Z-f707cb4f/decisions.txt).
+
+Key findings / decisions
+
+The highest-value regression risk in this phase was drift between direct emitter semantics and runtime-emitted artifact semantics. Coverage now checks both seams for narrowed read-root policies, so a future change cannot silently reintroduce the same capability-report contradiction only through transport integration.
+
+Open issues / next step
+
+Focused validation passed with `python3 -m py_compile tests/runtime/test_runtime_providers.py` and `.venv/bin/python -m pytest tests/runtime/test_provider_policy_emitters.py tests/runtime/test_runtime_providers.py -q` (`59 passed`). No additional phase-local test gaps were identified beyond the stated known scope gaps in `test_strategy.md`.
+
+
+---
+run_id=run-20260506T190853Z-f707cb4f | entry=session_turn | pair=test | phase=verifier | cycle=1 | attempt=1 | thread_id=019dfef0-6177-7931-97e7-51ce31250dd7
+---
+provider=codex
+mode=resume
+template=/home/rauter/.local/share/pipx/venvs/autoloop/lib/python3.12/site-packages/autoloop/templates/test_verifier.md
+session_id=019dfef0-6177-7931-97e7-51ce31250dd7
+
+
+---
+run_id=run-20260506T190853Z-f707cb4f | entry=phase_output | pair=test | phase=verifier | process=codex-agent | cycle=1 | attempt=1 | thread_id=019dfef0-6177-7931-97e7-51ce31250dd7
+---
+Auditing the phase-local test changes for `policy-codex`: I’m checking the new transport-level regression test, the updated coverage map, and whether the test set now protects the changed Codex capability-report behavior without adding flake risk or silently normalizing regressions.
+
+The added test closes the meaningful seam that was still unprotected, and the strategy artifact now maps behaviors to concrete tests with the right scope caveats. I’m marking the audit artifacts complete with no findings.
+
+Scope considered
+
+Phase-local `policy-codex` test scope only: the added transport-level Codex regression test, the existing direct-emitter tests it complements, the updated `test_strategy.md`, and the current run-local decisions for Codex capability-report semantics.
+
+What I analyzed
+
+I reviewed the changed test in `tests/runtime/test_runtime_providers.py`, the related emitter tests in `tests/runtime/test_provider_policy_emitters.py`, the phase-local strategy and feedback artifacts, and the relevant `decisions.txt` entries covering run-scoped Codex emission and the requirement that narrowed `allow_read` must remain visible as unsafe while not being reported as enforced.
+
+What I reviewed
+
+I verified that the new async transport test exercises the exact previously risky seam: runtime-emitted `capability_report.json` content, not just emitter return objects or metadata paths. I also verified that the overall test set now covers happy-path emission, unsupported/fail and warn modes, unsafe narrowed read roots, and stable run-scoped env/path behavior without relying on timing, network, or real Codex binaries. The strategy artifact accurately maps these behaviors and documents the intentional Claude/out-of-scope gap.
+
+Key findings / decisions
+
+No audit findings. The changed Codex capability-report behavior is now protected at both the direct emitter layer and the async transport integration seam, which is the material regression surface for this phase.
+
+Open issues / next step
+
+No open phase-local test issues. Audit artifacts were updated to mark the test phase complete.
+
+<loop-control>
+{"schema":"docloop.loop_control/v1","kind":"promise","promise":"COMPLETE"}
+</loop-control>
