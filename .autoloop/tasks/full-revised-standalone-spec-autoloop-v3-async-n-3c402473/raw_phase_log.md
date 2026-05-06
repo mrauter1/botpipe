@@ -1603,3 +1603,55 @@ No phase-local blockers remain. Review artifacts are complete and marked accordi
 <loop-control>
 {"schema":"docloop.loop_control/v1","kind":"promise","promise":"COMPLETE"}
 </loop-control>
+
+
+---
+run_id=run-20260506T130608Z-37f1c786 | entry=session_turn | pair=test | phase=producer | cycle=1 | attempt=1 | thread_id=019dfda5-e0f5-7281-9112-ce1ad235f7e2
+---
+provider=codex
+mode=resume
+template=/home/rauter/.local/share/pipx/venvs/autoloop/lib/python3.12/site-packages/autoloop/templates/test_producer.md
+session_id=019dfda5-e0f5-7281-9112-ce1ad235f7e2
+
+
+---
+run_id=run-20260506T130608Z-37f1c786 | entry=phase_output | pair=test | phase=producer | process=codex-agent | cycle=1 | attempt=1 | thread_id=019dfda5-e0f5-7281-9112-ce1ad235f7e2
+---
+I’m checking the existing test coverage against the phase contract first. If there’s a real gap, I’ll add a focused regression test; if the phase is already covered end-to-end, I’ll keep this to an artifact-only closeout and document why.
+
+I found one worthwhile regression gap: existing tests prove exact-root matching for `branch.*`, but not for `fan_in.*`. I’m adding that narrow check and then I’ll refresh the phase test artifacts with the updated coverage map and results.
+
+The new test is in place. I’m rerunning the same focused slices the implementation turn used so the test artifact can report results against the exact scoped contract.
+
+Scope considered
+
+Phase-local `compiler-surface-and-graph-alignment` only: existing branch-group surface/validation/artifact/static-graph tests plus the active test artifacts. I stayed out of unrelated dirty files and broader runtime coverage.
+
+What I analyzed
+
+I checked the current test coverage against the phase contract and found one narrow gap: existing tests already proved exact-root matching for `branch.*`, but not for `fan_in.*`. The rest of the scoped behavior already had direct coverage in `tests/unit/test_simple_surface.py`, `tests/unit/test_primitives_and_stores.py`, and `tests/runtime/test_runtime_static_graph.py`.
+
+What I changed
+
+I added one focused regression test in [tests/unit/test_simple_surface.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/tests/unit/test_simple_surface.py) to assert `fan_in` placeholder validation matches the root token exactly, so `{fan_inish.context_text}` falls through to normal unknown-reference validation instead of being misclassified as a fan-in placeholder.
+
+I also updated:
+- [test_strategy.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/full-revised-standalone-spec-autoloop-v3-async-n-3c402473/runs/run-20260506T130608Z-37f1c786/artifacts/test/phases/compiler-surface-and-graph-alignment/test_strategy.md)
+- [feedback.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/full-revised-standalone-spec-autoloop-v3-async-n-3c402473/runs/run-20260506T130608Z-37f1c786/artifacts/test/phases/compiler-surface-and-graph-alignment/feedback.md)
+
+Key findings / decisions
+
+The phase already had strong scoped coverage; the only worthwhile addition was the `fan_in` exact-root regression guard.
+
+Validation passed:
+- `./.venv/bin/python -m pytest -q tests/unit/test_simple_surface.py -k 'branch_group or FanIn or branch_placeholder or fan_in_placeholder or compile_cache'` -> `19 passed, 62 deselected`
+- `./.venv/bin/python -m pytest -q tests/unit/test_primitives_and_stores.py -k 'branch_placeholders_under_owner_step_root or fan_in_placeholders_under_owner_step_root'` -> `2 passed, 46 deselected`
+- `./.venv/bin/python -m pytest -q tests/runtime/test_runtime_static_graph.py -k 'branch_group or topology_hash'` -> `4 passed, 13 deselected`
+
+Open issues / next step
+
+No phase-local test blockers remain. The scoped coverage map and validation results are now recorded in the active test artifacts.
+
+<loop-control>
+{"schema":"docloop.loop_control/v1","kind":"promise","promise":"COMPLETE"}
+</loop-control>

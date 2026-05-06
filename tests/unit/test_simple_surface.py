@@ -1073,6 +1073,18 @@ def test_branch_group_placeholder_root_matching_is_exact() -> None:
         compile_workflow(InvalidExactRootWorkflow)
 
 
+def test_fan_in_placeholder_root_matching_is_exact() -> None:
+    with pytest.raises(WorkflowValidationError, match="references unknown step 'fan_inish'"):
+
+        class InvalidFanInExactRootWorkflow(simple.Workflow):
+            class State(BaseModel):
+                pass
+
+            ask = simple.step("Draft {fan_inish.context_text}.")
+
+        compile_workflow(InvalidFanInExactRootWorkflow)
+
+
 def test_simple_workflow_injects_canonical_default_routes_by_step_kind() -> None:
     class ChildWorkflow(simple.Workflow):
         finish = simple.step(prompt="Finish child.")
