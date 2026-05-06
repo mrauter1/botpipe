@@ -85,3 +85,68 @@ The planning artifacts need one revision that adds the missing public operation-
 <loop-control>
 {"schema":"docloop.loop_control/v1","kind":"promise","promise":"INCOMPLETE"}
 </loop-control>
+
+
+---
+run_id=run-20260506T190853Z-f707cb4f | entry=session_turn | pair=plan | phase=producer | cycle=2 | attempt=1 | thread_id=019dfeb1-7045-7c31-a3fa-96397d885237
+---
+provider=codex
+mode=resume
+template=/home/rauter/.local/share/pipx/venvs/autoloop/lib/python3.12/site-packages/autoloop/templates/plan_producer.md
+session_id=019dfeb1-7045-7c31-a3fa-96397d885237
+
+
+---
+run_id=run-20260506T190853Z-f707cb4f | entry=phase_output | pair=plan | phase=producer | process=codex-agent | cycle=2 | attempt=1 | thread_id=019dfeb1-7045-7c31-a3fa-96397d885237
+---
+I’m revising the plan against the verifier’s blocking findings only: make the public operation-policy API and the emitted artifact or metadata contract explicit, then tighten the ownership seam so later turns don’t scatter the wiring.
+
+I’ve got the exact corrections: make the public inline-operation API explicit, lock the per-target run-directory contract, and name the single runtime handoff seam so `runner`/`engine_collaborators` own resolution while `provider_backends` stays a selector.
+
+The revision is in place. I’m doing one quick pass now to make sure the new operation-policy and artifact-contract details are reflected consistently in both the narrative plan and the phase YAML.
+
+Updated [plan.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/implementation-goal-add-a-first-class-provider-p-5e755cae/runs/run-20260506T190853Z-f707cb4f/artifacts/plan/plan.md), [phase_plan.yaml](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/implementation-goal-add-a-first-class-provider-p-5e755cae/runs/run-20260506T190853Z-f707cb4f/artifacts/plan/phase_plan.yaml), [feedback.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/implementation-goal-add-a-first-class-provider-p-5e755cae/runs/run-20260506T190853Z-f707cb4f/artifacts/plan/feedback.md), and the current turn block in [decisions.txt](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/implementation-goal-add-a-first-class-provider-p-5e755cae/runs/run-20260506T190853Z-f707cb4f/decisions.txt).
+
+This revision makes the verifier’s blocking gaps explicit: the public `llm_call(..., policy=...)` / `classify_call(..., policy=...)` and `OperationRuntime.policy` contract is now called out in the plan and phase criteria, the authoritative emitted-file layout and `provider_metadata["policy"]` payload are now defined under `<run_dir>/provider_policy/<step-key>/<target>/`, and the runtime ownership seam is now fixed so `runner` hands policy into one resolver path while `provider_backends` stays selector-only.
+
+I re-validated `phase_plan.yaml` after the edit; it still parses and its required phase lists are non-empty.
+
+
+---
+run_id=run-20260506T190853Z-f707cb4f | entry=session_turn | pair=plan | phase=verifier | cycle=2 | attempt=1 | thread_id=019dfeb1-7045-7c31-a3fa-96397d885237
+---
+provider=codex
+mode=resume
+template=/home/rauter/.local/share/pipx/venvs/autoloop/lib/python3.12/site-packages/autoloop/templates/plan_verifier.md
+session_id=019dfeb1-7045-7c31-a3fa-96397d885237
+
+
+---
+run_id=run-20260506T190853Z-f707cb4f | entry=phase_output | pair=plan | phase=verifier | process=codex-agent | cycle=2 | attempt=1 | thread_id=019dfeb1-7045-7c31-a3fa-96397d885237
+---
+I’m doing the final verification pass now against the revised plan and current decisions block. The remaining question is whether anything material is still only implied rather than implementation-contract explicit.
+
+The revised plan now covers the previously missing public APIs, emission contract, and wiring seam directly. I’m marking the criteria accordingly and appending a closure note so the feedback history shows the blocking items were resolved rather than silently disappearing.
+
+Scope considered
+The immutable request snapshot, raw-log clarification history, planner decision blocks, the revised `plan.md`, `phase_plan.yaml`, `feedback.md`, and the verifier checklist.
+
+What I analyzed
+I rechecked the previously blocking gaps against the revised plan: the public inline-operation `policy=` API, the target-scoped emitted artifact and metadata contract, the runner-to-runtime ownership seam, compatibility and rollback notes, and the machine phase decomposition.
+
+What I reviewed
+I verified `phase_plan.yaml` parses as YAML, preserves the runtime-owned metadata, and keeps dependency ordering valid with non-empty required lists. I also reviewed the revised plan text against the decisions log and updated the checklist and feedback history.
+
+Key findings / decisions
+The cycle-2 revision resolves the prior blockers.
+The plan now explicitly covers `llm_call(..., policy=...)`, `classify_call(..., policy=...)`, `OperationRuntime.policy`, and matching replay or strict-validation obligations.
+The plan now defines the authoritative `<run_dir>/provider_policy/<step-key>/<target>/...` contract, `provider_metadata["policy"]` payload, and policy trace event fields.
+The runtime ownership seam is now explicit: `runner` hands policy into one resolver path, `engine_collaborators` and operation binding consume it, and `provider_backends` remains selector-only.
+All checklist criteria are now true, and I found no remaining blocking or non-blocking issues.
+
+Open issues / next step
+No remaining plan issues. The planning artifacts are complete for this turn.
+
+<loop-control>
+{"schema":"docloop.loop_control/v1","kind":"promise","promise":"COMPLETE"}
+</loop-control>

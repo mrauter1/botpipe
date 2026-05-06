@@ -5,6 +5,7 @@ from __future__ import annotations
 import hashlib
 import inspect
 import json
+from copy import deepcopy
 from dataclasses import dataclass, replace
 from pathlib import Path
 from typing import Any, Callable, Mapping
@@ -21,7 +22,7 @@ from .branch_groups.models import (
 from .context import Context
 from .discovery import WorkflowDefinition, get_workflow_definition
 from .extensions import WorkflowExtension
-from .errors import RoutingError, WorkflowCompilationError
+from .errors import RoutingError, WorkflowCompilationError, WorkflowValidationError
 from .inventory import ArtifactInventoryRecord, collect_artifact_inventory, public_artifact_inventory, resolve_artifact_reference, resolve_optional_read_reference
 from .lowering import (
     ResolvedRouteSpec,
@@ -1051,6 +1052,14 @@ def _compile_route_contract(
 ) -> tuple[dict[str, Any] | None, PayloadValidator | None]:
     if spec is None:
         return None, None
+    if isinstance(spec, Mapping):
+        schema = deepcopy(dict(spec))
+        try:
+            return compile_expected_output_contract(schema)
+        except WorkflowValidationError as exc:
+            if "optional jsonschema dependency" in str(exc):
+                return schema, None
+            raise WorkflowCompilationError(f"{owner} is invalid: {exc}") from exc
     try:
         return compile_expected_output_contract(spec)
     except WorkflowValidationError as exc:
