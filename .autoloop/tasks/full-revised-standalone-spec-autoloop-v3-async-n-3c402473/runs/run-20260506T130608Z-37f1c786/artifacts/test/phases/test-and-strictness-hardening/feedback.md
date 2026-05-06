@@ -6,3 +6,7 @@
 - Phase Directory Key: test-and-strictness-hardening
 - Phase Title: Test and strictness hardening
 - Scope: phase-local authoritative verifier artifact
+
+## Producer update
+
+- Added strictness scanner self-tests in `tests/strictness/test_no_compat.py` to catch helper-level rendered-provider sync bridging, preserve the explicit operation-only exception, and catch sync or legacy-async transport entrypoint regressions in synthetic transport modules.

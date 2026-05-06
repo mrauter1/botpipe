@@ -1942,3 +1942,68 @@ Open issues / next step
 <loop-control>
 {"schema":"docloop.loop_control/v1","kind":"promise","promise":"COMPLETE"}
 </loop-control>
+
+
+---
+run_id=run-20260506T130608Z-37f1c786 | entry=session_turn | pair=test | phase=producer | cycle=1 | attempt=1 | thread_id=019dfdab-cbed-71e2-9b3b-61be29aeb301
+---
+provider=codex
+mode=resume
+template=/home/rauter/.local/share/pipx/venvs/autoloop/lib/python3.12/site-packages/autoloop/templates/test_producer.md
+session_id=019dfdab-cbed-71e2-9b3b-61be29aeb301
+
+
+---
+run_id=run-20260506T130608Z-37f1c786 | entry=phase_output | pair=test | phase=producer | process=codex-agent | cycle=1 | attempt=1 | thread_id=019dfdab-cbed-71e2-9b3b-61be29aeb301
+---
+I’m reviewing the existing async-native test coverage and the phase-local test artifacts first so I can decide whether any additional repo test edits are still needed.
+
+I’ve confirmed the test-phase artifacts are still empty. Next I’m checking the existing strictness/runtime suites for any remaining low-risk coverage gap I can close rather than just re-documenting prior implement work.
+
+A good low-risk gap is the strictness scanner itself: the repo now relies on `_rendered_provider_async_bridge_failures(...)`, but I haven’t seen a self-test that proves it catches helper-level sync bridging while still allowing the explicit operation-only path.
+
+I found a concrete gap in the strictness suite itself: the scanner logic now enforces part of AC-1, but it wasn’t self-tested against helper-level sync bridging or sync transport entrypoint regressions. I’m adding focused scanner tests and then I’ll update the phase artifacts to map that coverage explicitly.
+
+I’ve added focused self-tests around the strictness scanners. Next I’m recording the behavior-to-test map and the non-obvious test decision so later turns don’t lose why these scanner tests matter.
+
+I’ve finished the repo and artifact edits. I’m running the strictness file first, then the same phase-local pytest matrix used in the implementation phase so this turn has its own validation evidence.
+
+The new strictness self-tests exposed a mismatch in my expected failure strings, not a product-code regression. I’m reading the exact pytest failure output now and will adjust the assertions before rerunning the matrix.
+
+The broad matrix is green. I’m only correcting the new scanner self-test expectations now, then I’ll rerun the strictness file and one combined matrix command so the final report has clean numbers.
+
+Scope considered
+
+- Phase-local `test-and-strictness-hardening` work only.
+- Request-relevant strictness, runtime, unit, and contract test surfaces, plus the active test-phase artifacts.
+
+What I analyzed
+
+- Existing async-native coverage in `tests/strictness/test_no_compat.py`, `tests/unit/test_provider_boundary_core.py`, `tests/runtime/test_provider_backends.py`, `tests/runtime/test_runtime_providers.py`, `tests/runtime/test_runtime_static_graph.py`, `tests/contract/test_async_engine_spine.py`, and `tests/contract/test_branch_group_runtime.py`.
+- The run-local decisions ledger, especially the clarified narrow `llm()` / `classify()` compatibility exception and the local `.venv` pytest runner decision.
+- The empty phase-local [test_strategy.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/full-revised-standalone-spec-autoloop-v3-async-n-3c402473/runs/run-20260506T130608Z-37f1c786/artifacts/test/phases/test-and-strictness-hardening/test_strategy.md) and [feedback.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/full-revised-standalone-spec-autoloop-v3-async-n-3c402473/runs/run-20260506T130608Z-37f1c786/artifacts/test/phases/test-and-strictness-hardening/feedback.md).
+
+What I changed
+
+- Added strictness scanner self-tests in [tests/strictness/test_no_compat.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/tests/strictness/test_no_compat.py) that:
+  - catch helper-level rendered-provider sync bridging on `_run_turn(...)` and async entrypoints,
+  - preserve the explicit operation-only exception on `run_operation(...)` / `_run_operation_turn(...)`,
+  - catch sync `run_turn(...)` and legacy `run_turn_async(...)` transport regressions in synthetic modules.
+- Expanded [test_strategy.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/full-revised-standalone-spec-autoloop-v3-async-n-3c402473/runs/run-20260506T130608Z-37f1c786/artifacts/test/phases/test-and-strictness-hardening/test_strategy.md) with an explicit behavior-to-test coverage map, preserved invariants, edge cases, flake controls, and known gaps.
+- Appended a concise producer update to [feedback.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/full-revised-standalone-spec-autoloop-v3-async-n-3c402473/runs/run-20260506T130608Z-37f1c786/artifacts/test/phases/test-and-strictness-hardening/feedback.md).
+- Appended the non-obvious scanner-self-test rationale under the current turn header in [decisions.txt](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/full-revised-standalone-spec-autoloop-v3-async-n-3c402473/runs/run-20260506T130608Z-37f1c786/decisions.txt).
+
+Key findings / decisions
+
+- The main remaining low-risk gap was not product coverage but scanner coverage: AC-1 depended on helper functions in the strictness suite, and those helpers were not themselves regression-tested.
+- The explicit sync compatibility exception remains tightly scoped in tests to `run_operation(...)` / `_run_operation_turn(...)`; the new tests do not normalize any broader sync provider or transport surface.
+- Validation passed with the workspace runner:
+  - `.venv/bin/python -m pytest -q tests/strictness/test_no_compat.py`
+  - Result: `29 passed in 2.86s`
+  - `.venv/bin/python -m pytest -q tests/strictness/test_no_compat.py tests/unit/test_provider_boundary_core.py tests/runtime/test_provider_backends.py tests/runtime/test_runtime_providers.py tests/runtime/test_runtime_static_graph.py tests/runtime/test_runtime_tracing.py tests/contract/test_async_engine_spine.py tests/contract/test_async_step_dispatcher.py tests/contract/test_branch_group_runtime.py tests/unit/test_branch_group_context_sessions.py tests/unit/test_simple_surface.py tests/unit/test_validation.py`
+  - Result: `387 passed, 15 warnings in 5.50s`
+
+Open issues / next step
+
+- No new product-code issues were found in this phase-local pass.
+- Residual warnings are unchanged from the existing suite and were not introduced by this turn’s scanner tests.
