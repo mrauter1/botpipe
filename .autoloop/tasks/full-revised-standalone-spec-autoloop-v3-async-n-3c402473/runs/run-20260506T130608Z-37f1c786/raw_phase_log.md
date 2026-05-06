@@ -84,3 +84,12 @@ No open verification blockers. The plan artifacts are complete and ready for imp
 <loop-control>
 {"schema":"docloop.loop_control/v1","kind":"promise","promise":"COMPLETE"}
 </loop-control>
+
+
+---
+run_id=run-20260506T130608Z-37f1c786 | entry=phase_scope_resolved
+---
+phase_mode=single
+phase_ids=async-engine-spine,provider-contract-cutover,async-transports-and-rendered-provider,branch-group-runtime-and-sessions,compiler-surface-and-graph-alignment,test-and-strictness-hardening
+explicit=True
+current_phase_index=0
