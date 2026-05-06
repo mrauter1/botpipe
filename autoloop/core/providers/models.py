@@ -57,10 +57,15 @@ class StepProviderUsage:
 @dataclass(frozen=True, slots=True)
 class ProviderRoute:
     summary: str | None = None
+    target: str | None = None
     required_writes: tuple[str, ...] = ()
     explicit_required_writes: tuple[str, ...] | None = None
     handoff: str | None = None
     provider_visible: bool = True
+    provider_visibility: str = "always"
+    payload_schema: dict[str, Any] | None = None
+    route_fields_schema: dict[str, Any] | None = None
+    preset_kind: str = "custom"
 
 
 @dataclass(frozen=True, slots=True)
@@ -83,6 +88,8 @@ class ProviderTurnContext:
     required_artifacts: tuple[ProviderArtifactRef, ...] = ()
     writable_artifacts: tuple[ProviderArtifactRef, ...] = ()
     route_required_writes: Mapping[str, tuple[str, ...]] = field(default_factory=dict)
+    response_schema: Mapping[str, Any] | None = None
+    response_schema_simplified: bool = False
     retry_feedback: str | None = None
     route_handoff: str | None = None
     attempt: int = 1
@@ -103,6 +110,8 @@ class ProducerRequest:
     required_artifacts: tuple[ProviderArtifactRef, ...] = ()
     writable_artifacts: tuple[ProviderArtifactRef, ...] = ()
     route_required_writes: Mapping[str, tuple[str, ...]] = field(default_factory=dict)
+    response_schema: Mapping[str, Any] | None = None
+    response_schema_simplified: bool = False
     retry_feedback: str | None = None
     route_handoff: str | None = None
     attempt: int = 1
@@ -124,6 +133,8 @@ class VerifierRequest:
     required_artifacts: tuple[ProviderArtifactRef, ...] = ()
     writable_artifacts: tuple[ProviderArtifactRef, ...] = ()
     route_required_writes: Mapping[str, tuple[str, ...]] = field(default_factory=dict)
+    response_schema: Mapping[str, Any] | None = None
+    response_schema_simplified: bool = False
     retry_feedback: str | None = None
     route_handoff: str | None = None
     attempt: int = 1
@@ -144,6 +155,8 @@ class LLMRequest:
     required_artifacts: tuple[ProviderArtifactRef, ...] = ()
     writable_artifacts: tuple[ProviderArtifactRef, ...] = ()
     route_required_writes: Mapping[str, tuple[str, ...]] = field(default_factory=dict)
+    response_schema: Mapping[str, Any] | None = None
+    response_schema_simplified: bool = False
     retry_feedback: str | None = None
     route_handoff: str | None = None
     attempt: int = 1

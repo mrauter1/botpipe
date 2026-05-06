@@ -3,10 +3,11 @@
 from __future__ import annotations
 
 from dataclasses import dataclass, field
-from typing import Any
+from typing import Any, Mapping
 
 from pydantic import BaseModel
 
+from .outcome_contract import project_questions_markdown
 from .stores.protocols import CheckpointPayload, PendingHandoff
 
 FINISH = "FINISH"
@@ -121,6 +122,24 @@ class Outcome:
     clarification: str | None = None
     question: str | None = None
     payload: dict[str, Any] = field(default_factory=dict)
+    route_fields: dict[str, Any] = field(default_factory=dict)
+
+    def __post_init__(self) -> None:
+        if isinstance(self.payload, Mapping) and not isinstance(self.payload, dict):
+            object.__setattr__(self, "payload", dict(self.payload))
+        if isinstance(self.route_fields, Mapping) and not isinstance(self.route_fields, dict):
+            object.__setattr__(self, "route_fields", dict(self.route_fields))
+        route_fields = self.route_fields if isinstance(self.route_fields, dict) else None
+        if route_fields is None:
+            return
+        projected_question = project_questions_markdown(route_fields.get("questions"))
+        if projected_question is not None:
+            object.__setattr__(self, "question", projected_question)
+        route_reason = route_fields.get("reason")
+        if isinstance(route_reason, str):
+            object.__setattr__(self, "reason", route_reason)
+        elif route_reason is None and "reason" in route_fields and self.reason == "":
+            object.__setattr__(self, "reason", "")
 
 
 Checkpoint = CheckpointPayload

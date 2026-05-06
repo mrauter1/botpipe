@@ -12,11 +12,13 @@ from ..primitives import Outcome
 
 
 _JSON_FENCE_RE = re.compile(r"\A```json\s*\n(?P<body>[\s\S]*?)\n?```\s*\Z")
-_OUTCOME_OPTIONAL_FIELDS = {"clarification", "payload", "question", "reason"}
+_LEGACY_OPTIONAL_FIELDS = {"clarification", "payload", "question", "reason"}
+_CANONICAL_OUTCOME_FIELDS = {"tag", "payload", "route_fields"}
+_CANONICAL_TOP_LEVEL_FIELDS = {"outcome", "tag", *_LEGACY_OPTIONAL_FIELDS}
 
 
 def parse_outcome_json(text: str) -> Outcome:
-    """Parse a strict provider outcome JSON object."""
+    """Parse canonical or legacy provider outcome JSON."""
 
     candidate = text.strip()
     match = _JSON_FENCE_RE.fullmatch(candidate)
@@ -26,27 +28,45 @@ def parse_outcome_json(text: str) -> Outcome:
     try:
         payload = json.loads(candidate)
     except json.JSONDecodeError as exc:
-        raise ProviderExecutionError(f"provider returned malformed outcome JSON: {exc.msg}") from exc
+        raise _malformed_provider_output(f"provider returned malformed outcome JSON: {exc.msg}") from exc
 
     if not isinstance(payload, dict):
-        raise ProviderExecutionError("provider outcome JSON must be an object.")
+        raise _malformed_provider_output("provider outcome JSON must be an object.")
 
-    unknown = sorted(set(payload) - {"tag", *_OUTCOME_OPTIONAL_FIELDS})
+    unknown = sorted(set(payload) - _CANONICAL_TOP_LEVEL_FIELDS)
     if unknown:
         rendered = ", ".join(unknown)
-        raise ProviderExecutionError(f"provider outcome JSON contains unsupported keys: {rendered}.")
+        raise _malformed_provider_output(f"provider outcome JSON contains unsupported keys: {rendered}.")
 
-    tag = payload.get("tag")
-    if not isinstance(tag, str) or not tag:
-        raise ProviderExecutionError("provider outcome JSON must contain a non-empty string 'tag'.")
-
-    parsed_payload = payload.get("payload", {})
-    if not isinstance(parsed_payload, dict):
-        raise ProviderExecutionError("provider outcome JSON field 'payload' must be an object when provided.")
-
-    reason = _optional_string_field(payload, "reason") or ""
-    clarification = _optional_string_field(payload, "clarification")
-    question = _required_question_field(payload, tag=tag)
+    canonical_outcome = payload.get("outcome")
+    if canonical_outcome is not None:
+        if not isinstance(canonical_outcome, dict):
+            raise _malformed_provider_output("provider outcome JSON field 'outcome' must be an object.")
+        inner_unknown = sorted(set(canonical_outcome) - _CANONICAL_OUTCOME_FIELDS)
+        if inner_unknown:
+            rendered = ", ".join(inner_unknown)
+            raise _malformed_provider_output(
+                f"provider outcome JSON field 'outcome' contains unsupported keys: {rendered}."
+            )
+        tag = canonical_outcome.get("tag")
+        if not isinstance(tag, str) or not tag:
+            raise _malformed_provider_output(
+                "provider outcome JSON must contain a non-empty string 'outcome.tag'."
+            )
+        parsed_payload = _optional_object_field(canonical_outcome, "payload", default={})
+        route_fields = _optional_object_field(canonical_outcome, "route_fields", default={})
+        clarification = _optional_string_field(payload, "clarification")
+        reason = _optional_string_field(payload, "reason") or ""
+        question = _optional_string_field(payload, "question")
+    else:
+        tag = payload.get("tag")
+        if not isinstance(tag, str) or not tag:
+            raise _malformed_provider_output("provider outcome JSON must contain a non-empty string 'tag'.")
+        parsed_payload = _optional_object_field(payload, "payload", default={})
+        clarification = _optional_string_field(payload, "clarification")
+        question = _optional_string_field(payload, "question")
+        reason = _optional_string_field(payload, "reason") or ""
+        route_fields = _legacy_route_fields(tag=tag, question=question, reason=reason)
 
     return Outcome(
         raw_output=text,
@@ -55,6 +75,7 @@ def parse_outcome_json(text: str) -> Outcome:
         clarification=clarification,
         question=question,
         payload=deepcopy(parsed_payload),
+        route_fields=deepcopy(route_fields),
     )
 
 
@@ -67,30 +88,56 @@ def _optional_string_field(payload: dict[str, Any], key: str) -> str | None:
     return value
 
 
-def _required_string_field(payload: dict[str, Any], key: str) -> str:
-    value = payload.get(key)
-    if not isinstance(value, str) or not value.strip():
-        raise ProviderExecutionError(f"provider outcome JSON must contain a non-empty string {key!r}.")
+def _optional_object_field(payload: dict[str, Any], key: str, *, default: dict[str, Any]) -> dict[str, Any]:
+    value = payload.get(key, default)
+    if not isinstance(value, dict):
+        raise ProviderExecutionError(
+            f"provider outcome JSON field {key!r} must be an object when provided.",
+            failure_context=FailureContext(
+                kind="invalid_payload",
+                step_name="",
+                provider_attributable=True,
+                details={"error": f"{key} must be an object"},
+            ),
+            retry_kind="invalid_payload",
+        )
     return value
 
 
-def _required_question_field(payload: dict[str, Any], *, tag: str) -> str | None:
-    if tag != "question":
-        return _optional_string_field(payload, "question")
-    value = payload.get("question")
-    if isinstance(value, str) and value.strip():
-        return value
-    raise ProviderExecutionError(
-        "provider returned question route without a non-empty question",
+def _legacy_route_fields(*, tag: str, question: str | None, reason: str) -> dict[str, Any]:
+    route_fields: dict[str, Any] = {}
+    if tag == "question":
+        if not isinstance(question, str) or not question.strip():
+            raise ProviderExecutionError(
+                "provider returned question route without a non-empty question",
+                failure_context=FailureContext(
+                    kind="invalid_payload",
+                    step_name="",
+                    candidate_route="question",
+                    provider_attributable=True,
+                    details={
+                        "route": "question",
+                        "error": "question route requires a non-empty question field",
+                    },
+                ),
+                retry_kind="invalid_payload",
+            )
+        route_fields["questions"] = [question.strip()]
+        route_fields["reason"] = reason or None
+        return route_fields
+    if tag in {"blocked", "failed"}:
+        route_fields["reason"] = reason or None
+    return route_fields
+
+
+def _malformed_provider_output(message: str) -> ProviderExecutionError:
+    return ProviderExecutionError(
+        message,
         failure_context=FailureContext(
-            kind="invalid_payload",
+            kind="malformed_provider_output",
             step_name="",
-            candidate_route="question",
             provider_attributable=True,
-            details={
-                "route": "question",
-                "error": "question route requires a non-empty question field",
-            },
+            details={"error": message},
         ),
-        retry_kind="invalid_payload",
+        retry_kind="malformed_provider_output",
     )

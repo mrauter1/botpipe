@@ -17,6 +17,11 @@ from .effects import Effects, WorklistEffect
 from .errors import FailureContext, ProviderExecutionError, WorkflowExecutionError
 from .extensions import HookRouteRedirect
 from .operations import OperationRuntime, bind_operation_runtime, provider_configuration
+from .outcome_contract import (
+    build_provider_outcome_schema,
+    payload_schema_for_route,
+    route_fields_schema_for_route,
+)
 from .primitives import Event, Fail, Goto, Outcome, RequestInput
 from .providers.models import (
     LLMRequest,
@@ -159,14 +164,21 @@ class ProviderContractBuilder:
         retry_feedback: str | None,
         route_handoff: str | None,
     ) -> dict[str, Any]:
+        routes = self.routes(step)
+        response_schema, response_schema_simplified = build_provider_outcome_schema(
+            routes=routes,
+            expected_output_schema=step.expected_output_schema,
+        )
         return {
             "expected_output_schema": deepcopy(step.expected_output_schema),
             "available_routes": self.available_routes(step),
-            "routes": deepcopy(self.routes(step)),
+            "routes": deepcopy(routes),
             "readable_artifacts": self.readable_refs(step.reads, artifacts, context=context),
             "required_artifacts": self.artifact_refs(step.requires, artifacts),
             "writable_artifacts": self.artifact_refs(step.writes, artifacts),
             "route_required_writes": self.route_required_writes(step),
+            "response_schema": response_schema,
+            "response_schema_simplified": response_schema_simplified,
             "retry_feedback": retry_feedback,
             "route_handoff": route_handoff,
             "attempt": attempt,
@@ -192,6 +204,8 @@ class ProviderContractBuilder:
             "required_artifacts": self.artifact_refs(step.producer_requires, artifacts),
             "writable_artifacts": self.artifact_refs(step.producer_writes, artifacts),
             "route_required_writes": {},
+            "response_schema": None,
+            "response_schema_simplified": False,
             "retry_feedback": retry_feedback,
             "route_handoff": route_handoff,
             "attempt": attempt,
@@ -211,14 +225,21 @@ class ProviderContractBuilder:
     ) -> dict[str, Any]:
         readable_names = tuple(dict.fromkeys(step.verifier_reads))
         writable_names = step.verifier_writes or step.writes
+        routes = self.routes(step)
+        response_schema, response_schema_simplified = build_provider_outcome_schema(
+            routes=routes,
+            expected_output_schema=step.expected_output_schema,
+        )
         return {
             "expected_output_schema": deepcopy(step.expected_output_schema),
             "available_routes": self.available_routes(step),
-            "routes": deepcopy(self.routes(step)),
+            "routes": deepcopy(routes),
             "readable_artifacts": self.readable_refs(readable_names, artifacts, context=context),
             "required_artifacts": self.artifact_refs(step.verifier_requires, artifacts),
             "writable_artifacts": self.artifact_refs(writable_names, artifacts),
             "route_required_writes": self.route_required_writes(step),
+            "response_schema": response_schema,
+            "response_schema_simplified": response_schema_simplified,
             "retry_feedback": retry_feedback,
             "route_handoff": route_handoff,
             "attempt": attempt,
@@ -312,10 +333,18 @@ class ProviderContractBuilder:
                 continue
             routes[route_name] = ProviderRoute(
                 summary=compiled_route.summary,
+                target=compiled_route.target,
                 required_writes=tuple(compiled_route.required_writes or ()),
                 explicit_required_writes=explicit_route_required_writes(compiled_route),
                 handoff=compiled_route.handoff,
                 provider_visible=True,
+                provider_visibility=compiled_route.provider_visibility,
+                payload_schema=payload_schema_for_route(
+                    compiled_route,
+                    expected_output_schema=step.expected_output_schema,
+                ),
+                route_fields_schema=route_fields_schema_for_route(compiled_route),
+                preset_kind=compiled_route.preset_kind,
             )
         return routes
 
@@ -690,11 +719,7 @@ class StepDispatcher:
                 self._engine._persist_session(pair_result.producer_session, context=context)
                 self._engine._persist_session(pair_result.verifier_session, context=context)
                 assert pair_result.outcome is not None
-                final_event = Event(
-                    pair_result.outcome.tag,
-                    reason=pair_result.outcome.reason,
-                    question=pair_result.outcome.question,
-                )
+                final_event = self._engine._event_from_outcome(step, pair_result.outcome)
                 finalization = self._complete_route(
                     route_mode=route_mode,
                     request=StepFinalizationRequest(
@@ -762,7 +787,7 @@ class StepDispatcher:
                     restorable_pending_handoffs=pending_handoffs,
                 )
                 assert llm_result.outcome is not None
-                final_event = Event(llm_result.outcome.tag, reason=llm_result.outcome.reason, question=llm_result.outcome.question)
+                final_event = self._engine._event_from_outcome(step, llm_result.outcome)
                 finalization = self._complete_route(
                     route_mode=route_mode,
                     request=StepFinalizationRequest(

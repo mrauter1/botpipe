@@ -62,6 +62,25 @@ def build_arg_parser() -> argparse.ArgumentParser:
     )
     mutate.add_argument("--model", help="Provider model override.")
     mutate.add_argument("--model-effort", dest="model_effort", help="Provider reasoning-effort override.")
+    mutate.add_argument("--policy-file", type=Path, help="Merge provider policy overrides from the given YAML file.")
+    mutate.add_argument(
+        "--policy-validation-unsupported",
+        choices=("fail", "warn", "ignore"),
+        dest="policy_validation_unsupported",
+        help="Override handling for provider policy features the target provider does not support.",
+    )
+    mutate.add_argument(
+        "--policy-validation-lossy",
+        choices=("fail", "warn", "ignore"),
+        dest="policy_validation_lossy",
+        help="Override handling for lossy provider policy mappings.",
+    )
+    mutate.add_argument(
+        "--policy-validation-unsafe-expansion",
+        choices=("fail", "warn", "ignore"),
+        dest="policy_validation_unsafe_expansion",
+        help="Override handling for unsafe provider policy expansions.",
+    )
     mutate.add_argument("--max-steps", type=int, help="Maximum workflow steps to execute before failing.")
     mutate.add_argument("--no-git", action="store_true", help="Disable runtime git tracking for this command.")
     mutate.add_argument(

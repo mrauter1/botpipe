@@ -13,6 +13,7 @@ from autoloop.core.branch_groups.declarations import FanIn
 from autoloop.core.context import context_runtime
 from autoloop.core.effects import Effects, WorklistEffect
 from autoloop.core.operations import OperationStepSpec, classify_call, execute_step_operation, llm_call
+from autoloop.core.provider_policy import ProviderPolicy, ProviderPolicyOverride
 from autoloop.core.primitives import AWAIT_INPUT, Event, FAIL, FINISH, Goto, Outcome, RequestInput, SELF, Fail
 from autoloop.core.prompts import Prompt
 from autoloop.core.routes import Route
@@ -25,6 +26,7 @@ from autoloop.core.worklists import Worklist
 
 PromptInput = str | Path | Prompt
 RouteMapping = Mapping[str, Route | object]
+ProviderPolicyInput = ProviderPolicy | ProviderPolicyOverride | None
 
 
 class EmptyState(BaseModel):
@@ -41,6 +43,7 @@ class Workflow:
     extensions: tuple[object, ...] = ()
     Params = EmptyParams
     State = EmptyState
+    policy: ProviderPolicy | None = None
 
 
 @dataclass(frozen=True, slots=True)
@@ -152,6 +155,7 @@ class StepDeclaration(_NamedDeclaration):
         retry: Any | None = None,
         session: Any | None = None,
         control_routes: ControlRoutes | bool = True,
+        policy: ProviderPolicyInput = None,
     ) -> None:
         super().__init__(name=name)
         self.prompt = _normalize_simple_prompt(prompt)
@@ -166,6 +170,7 @@ class StepDeclaration(_NamedDeclaration):
         self.control_schema = control_schema
         self.retry = retry
         self.session = session
+        self.policy = _normalize_provider_policy(policy)
         self.control_routes = normalize_control_routes(
             control_routes,
             default=ControlRoutes(question="auto"),
@@ -203,6 +208,7 @@ class ProduceVerifyStepDeclaration(_NamedDeclaration):
         session: Any | None = None,
         verifier_session: Any | None = None,
         control_routes: ControlRoutes | bool = True,
+        policy: ProviderPolicyInput = None,
     ) -> None:
         super().__init__(name=name)
         self.producer_prompt = _normalize_simple_prompt(producer_prompt)
@@ -225,6 +231,7 @@ class ProduceVerifyStepDeclaration(_NamedDeclaration):
         self.retry = retry
         self.session = session
         self.verifier_session = verifier_session
+        self.policy = _normalize_provider_policy(policy)
         self.control_routes = normalize_control_routes(
             control_routes,
             default=ControlRoutes(question="auto"),
@@ -232,7 +239,11 @@ class ProduceVerifyStepDeclaration(_NamedDeclaration):
 
 
 class PythonStepDeclaration(_NamedDeclaration):
-    """Simple python-step declaration lowered during workflow definition discovery."""
+    """Simple python-step declaration lowered during workflow definition discovery.
+
+    The optional provider policy applies only to provider-backed operations called
+    inside the handler. It does not sandbox the Python code itself.
+    """
 
     kind = "python"
 
@@ -248,6 +259,7 @@ class PythonStepDeclaration(_NamedDeclaration):
         before: Any | None = None,
         after: Any | None = None,
         control_routes: ControlRoutes | bool = True,
+        policy: ProviderPolicyInput = None,
     ) -> None:
         super().__init__(name=name)
         self.fn = fn
@@ -257,6 +269,7 @@ class PythonStepDeclaration(_NamedDeclaration):
         self.routes = dict(routes or {})
         self.before = before
         self.after = after
+        self.policy = _normalize_provider_policy(policy)
         self.control_routes = normalize_control_routes(
             control_routes,
             default=ControlRoutes(question="never"),
@@ -284,6 +297,7 @@ class _WorkflowStepDeclaration(_NamedDeclaration):
         before: Any | None = None,
         after: Any | None = None,
         control_routes: ControlRoutes | bool = True,
+        policy: ProviderPolicyInput = None,
     ) -> None:
         super().__init__(name=name)
         self.workflow = workflow
@@ -297,6 +311,7 @@ class _WorkflowStepDeclaration(_NamedDeclaration):
         self.routes = dict(routes or {})
         self.before = before
         self.after = after
+        self.policy = _normalize_provider_policy(policy)
         self.control_routes = normalize_control_routes(
             control_routes,
             default=ControlRoutes(question="never"),
@@ -469,6 +484,7 @@ def step(
     retry: Any | None = None,
     session: Any | None = None,
     control_routes: ControlRoutes | bool = True,
+    policy: ProviderPolicyInput = None,
 ) -> StepDeclaration:
     return StepDeclaration(
         prompt,
@@ -485,6 +501,7 @@ def step(
         retry=retry,
         session=session,
         control_routes=control_routes,
+        policy=policy,
     )
 
 
@@ -512,6 +529,7 @@ def produce_verify_step(
     session: Any | None = None,
     verifier_session: Any | None = None,
     control_routes: ControlRoutes | bool = True,
+    policy: ProviderPolicyInput = None,
 ) -> ProduceVerifyStepDeclaration:
     return ProduceVerifyStepDeclaration(
         producer_prompt,
@@ -536,6 +554,7 @@ def produce_verify_step(
         session=session,
         verifier_session=verifier_session,
         control_routes=control_routes,
+        policy=policy,
     )
 
 
@@ -550,6 +569,7 @@ def python_step(
     before: Any | None = None,
     after: Any | None = None,
     control_routes: ControlRoutes | bool = True,
+    policy: ProviderPolicyInput = None,
 ) -> PythonStepDeclaration | Any:
     if fn is None:
         def decorator(inner: Any) -> PythonStepDeclaration:
@@ -563,6 +583,7 @@ def python_step(
                 before=before,
                 after=after,
                 control_routes=control_routes,
+                policy=policy,
             )
 
         return decorator
@@ -576,6 +597,7 @@ def python_step(
         before=before,
         after=after,
         control_routes=control_routes,
+        policy=policy,
     )
 
 
@@ -670,6 +692,7 @@ def workflow_step(
     before: Any | None = None,
     after: Any | None = None,
     control_routes: ControlRoutes | bool = True,
+    policy: ProviderPolicyInput = None,
 ) -> _WorkflowStepDeclaration:
     return _WorkflowStepDeclaration(
         workflow,
@@ -685,6 +708,7 @@ def workflow_step(
         before=before,
         after=after,
         control_routes=control_routes,
+        policy=policy,
     )
 
 
@@ -754,6 +778,12 @@ def _artifact_reference_name(reference: Artifact | ArtifactSpec) -> str:
     if not isinstance(name, str) or not name.strip():
         raise ValueError("validation_step feedback artifacts must have a stable name")
     return name.strip()
+
+
+def _normalize_provider_policy(policy: ProviderPolicyInput) -> ProviderPolicyInput:
+    if policy is None or isinstance(policy, (ProviderPolicy, ProviderPolicyOverride)):
+        return policy
+    raise TypeError("policy must be a ProviderPolicy, ProviderPolicyOverride, or None")
 
 
 def _normalize_simple_prompt(prompt: PromptInput) -> Prompt:

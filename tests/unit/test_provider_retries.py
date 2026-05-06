@@ -69,7 +69,7 @@ def test_build_retry_feedback_formats_specialized_retry_messages(error: Exceptio
     assert f"Problem:\n- {expected_problem}" in feedback
     assert "Action required:" in feedback
     assert "- Use only an allowed route." in feedback
-    assert "- If selecting `question`, include a non-empty top-level `question`." in feedback
+    assert "- If selecting a question-style route, include non-empty `outcome.route_fields.questions`." in feedback
     assert "- If selecting `blocked` or `failed`, include a concise non-empty `reason`." not in feedback
     assert "- Write all artifacts required by the selected route." in feedback
 

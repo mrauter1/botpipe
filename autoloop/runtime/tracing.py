@@ -309,6 +309,8 @@ class RuntimeTraceWriter:
         payload: dict[str, object] = {"tag": outcome.tag}
         if outcome.payload:
             payload["payload"] = outcome.payload
+        if outcome.route_fields:
+            payload["route_fields"] = outcome.route_fields
         if outcome.reason:
             payload["reason"] = outcome.reason
         if outcome.question is not None:

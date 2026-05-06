@@ -595,6 +595,7 @@ def _lower_one_simple_seed(
             after=getattr(declaration, "after", None),
             item_state=step_item_state_model,
             control_routes=getattr(declaration, "control_routes", None),
+            provider_policy=getattr(declaration, "policy", None),
         )
     elif seed.kind == "operation":
         step = PythonStep(
@@ -631,6 +632,7 @@ def _lower_one_simple_seed(
             after_verifier=getattr(declaration, "after_verifier", None),
             item_state=step_item_state_model,
             control_routes=getattr(declaration, "control_routes", None),
+            provider_policy=getattr(declaration, "policy", None),
         )
     elif seed.kind in {"system", "python"}:
         step = PythonStep(
@@ -643,6 +645,7 @@ def _lower_one_simple_seed(
             before=getattr(declaration, "before", None),
             after=getattr(declaration, "after", None),
             control_routes=getattr(declaration, "control_routes", None),
+            provider_policy=getattr(declaration, "policy", None),
         )
     elif seed.kind == "workflow":
         step = ChildWorkflowStep(
@@ -659,6 +662,7 @@ def _lower_one_simple_seed(
             before=getattr(declaration, "before", None),
             after=getattr(declaration, "after", None),
             control_routes=getattr(declaration, "control_routes", None),
+            provider_policy=getattr(declaration, "policy", None),
         )
     else:
         raise WorkflowValidationError(f"unsupported simple step kind {seed.kind!r}")

@@ -21,6 +21,7 @@ from autoloop.core.discovery import get_workflow_definition
 from autoloop.core.engine import Engine
 from autoloop.core.errors import WorkflowExecutionError, WorkflowValidationError
 from autoloop.core.providers.fake import ScriptedLLMProvider
+from autoloop.core.provider_policy import PermissionPolicy, ProviderPolicy, ProviderPolicyOverride
 from autoloop.core.stores import InMemoryCheckpointStore, InMemorySessionStore
 from autoloop.runtime.loader import discover_workflow_packages
 
@@ -587,6 +588,25 @@ def test_simple_declarations_store_only_canonical_write_fields() -> None:
     assert hasattr(step_decl, "writes")
     assert hasattr(pair_decl, "writes")
     assert hasattr(pair_decl, "verifier_writes")
+
+
+def test_simple_policy_authoring_surfaces_preserve_policy_objects_on_declarations_and_lowered_steps() -> None:
+    workflow_policy = ProviderPolicy(permissions=PermissionPolicy(mode="full_auto_sandboxed"))
+    step_policy = ProviderPolicyOverride(permissions=PermissionPolicy(mode="ask"))
+
+    class PolicyWorkflow(simple.Workflow):
+        policy = workflow_policy
+        draft = simple.step("Draft the note.", policy=step_policy)
+
+        @simple.python_step(policy=step_policy)
+        def publish(_ctx):
+            return simple.Event("done")
+
+    definition = get_workflow_definition(PolicyWorkflow)
+
+    assert PolicyWorkflow.policy is workflow_policy
+    assert definition.steps_by_name["draft"].provider_policy is step_policy
+    assert definition.steps_by_name["publish"].provider_policy is step_policy
 
 
 def test_simple_workflow_compiles_with_pydantic_state_params_and_produce_verify_step() -> None:

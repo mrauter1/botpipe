@@ -234,6 +234,10 @@ def test_cli_mutating_command_help_exposes_provider_and_hides_provider_factory(c
         assert excinfo.value.code == 0
         help_text = capsys.readouterr().out
         assert "--provider" in help_text
+        assert "--policy-file" in help_text
+        assert "--policy-validation-unsupported" in help_text
+        assert "--policy-validation-lossy" in help_text
+        assert "--policy-validation-unsafe-expansion" in help_text
         assert "--no-git" in help_text
         assert "--git-commit-policy" in help_text
         assert "--no-trace" in help_text

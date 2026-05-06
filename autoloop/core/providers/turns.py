@@ -20,6 +20,8 @@ class RenderedProviderTurn:
     prompt_text: str
     session: SessionBinding | None
     expected_response: ExpectedProviderResponse
+    response_schema: dict[str, Any] | None = None
+    response_schema_simplified: bool = False
 
 
 @dataclass(frozen=True, slots=True)

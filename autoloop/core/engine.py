@@ -51,6 +51,11 @@ from .errors import (
     replace_execution_error,
 )
 from .operations import serialize_context_values
+from .outcome_contract import (
+    is_question_style_route,
+    normalize_route_fields_for_route,
+    project_questions_markdown,
+)
 from .primitives import AWAIT_INPUT, Checkpoint, Event, FAIL, FINISH, Fail, Goto, Outcome, PendingHandoff, RequestInput
 from .prompts import Prompt, PromptRegistry, ResolvedPrompt
 from .providers.models import (
@@ -1333,6 +1338,30 @@ class Engine:
                 ),
                 retry_kind="malformed_provider_output",
             )
+        if not isinstance(outcome.payload, dict):
+            raise ProviderExecutionError(
+                f"provider returned non-object payload for step {step.name!r} route {outcome.tag!r}",
+                failure_context=FailureContext(
+                    kind="invalid_payload",
+                    step_name=step.name,
+                    candidate_route=outcome.tag,
+                    provider_attributable=True,
+                    details={"step": step.name, "route": outcome.tag, "error": "payload must be an object"},
+                ),
+                retry_kind="invalid_payload",
+            )
+        if not isinstance(outcome.route_fields, dict):
+            raise ProviderExecutionError(
+                f"provider returned non-object route_fields for step {step.name!r} route {outcome.tag!r}",
+                failure_context=FailureContext(
+                    kind="invalid_payload",
+                    step_name=step.name,
+                    candidate_route=outcome.tag,
+                    provider_attributable=True,
+                    details={"step": step.name, "route": outcome.tag, "error": "route_fields must be an object"},
+                ),
+                retry_kind="invalid_payload",
+            )
         provider_available_routes = self._provider_available_routes_for_step(step)
         if outcome.tag not in provider_available_routes:
             legal_routes = ", ".join(provider_available_routes) or "<none>"
@@ -1348,10 +1377,36 @@ class Engine:
                 ),
                 retry_kind="illegal_route",
             )
-        if outcome.tag == "question" and (not isinstance(outcome.question, str) or not outcome.question.strip()):
+        compiled_route = self._route_table_for_step(step).get(outcome.tag)
+        if compiled_route is None:
             raise ProviderExecutionError(
-                f"provider returned question route without a non-empty question for step {step.name!r}"
-                ,
+                f"provider returned route {outcome.tag!r} without compiled metadata for step {step.name!r}",
+                failure_context=FailureContext(
+                    kind="illegal_route",
+                    step_name=step.name,
+                    candidate_route=outcome.tag,
+                    provider_attributable=True,
+                    details={"step": step.name, "route": outcome.tag, "error": "route is not compiled for this step"},
+                ),
+                retry_kind="illegal_route",
+            )
+        legacy_route_fields = dict(outcome.route_fields)
+        if is_question_style_route(compiled_route, tag=outcome.tag) and "questions" not in legacy_route_fields:
+            if isinstance(outcome.question, str) and outcome.question.strip():
+                legacy_route_fields["questions"] = [outcome.question.strip()]
+        if compiled_route.preset_kind in {"question", "blocked", "failed"} and "reason" not in legacy_route_fields:
+            legacy_route_fields["reason"] = outcome.reason or None
+        normalized_route_fields = normalize_route_fields_for_route(compiled_route, legacy_route_fields)
+        if normalized_route_fields != outcome.route_fields:
+            object.__setattr__(outcome, "route_fields", normalized_route_fields)
+            object.__setattr__(outcome, "question", project_questions_markdown(normalized_route_fields.get("questions")))
+            route_reason = normalized_route_fields.get("reason")
+            object.__setattr__(outcome, "reason", route_reason if isinstance(route_reason, str) else "")
+        if is_question_style_route(compiled_route, tag=outcome.tag) and (
+            not isinstance(outcome.question, str) or not outcome.question.strip()
+        ):
+            raise ProviderExecutionError(
+                f"provider returned question route without a non-empty question for step {step.name!r}",
                 failure_context=FailureContext(
                     kind="invalid_payload",
                     step_name=step.name,
@@ -1365,10 +1420,15 @@ class Engine:
                 ),
                 retry_kind="invalid_payload",
             )
-        if step.expected_output_validator is None:
-            return
+        payload_validator = None
+        if compiled_route.payload_schema_mode == "explicit":
+            payload_validator = compiled_route.payload_validator
+        elif compiled_route.payload_schema_mode == "inherit":
+            payload_validator = step.expected_output_validator
         try:
-            step.expected_output_validator(outcome.payload)
+            if payload_validator is not None:
+                payload_validator(outcome.payload)
+            self._validate_outcome_route_fields(step, compiled_route, outcome)
         except Exception as exc:
             raise ProviderExecutionError(
                 f"provider returned invalid payload for step {step.name!r} route {outcome.tag!r}: {exc}",
@@ -1381,6 +1441,34 @@ class Engine:
                 ),
                 retry_kind="invalid_payload",
             ) from exc
+
+    def _validate_outcome_route_fields(
+        self,
+        step: CompiledStep,
+        route: CompiledRoute,
+        outcome: Outcome,
+    ) -> None:
+        if route.route_fields_validator is not None:
+            route.route_fields_validator(outcome.route_fields)
+            return
+        if is_question_style_route(route, tag=outcome.tag):
+            questions = outcome.route_fields.get("questions")
+            if not isinstance(questions, list) or not questions:
+                raise ValueError("question route requires a non-empty route_fields.questions list")
+            for question in questions:
+                if not isinstance(question, str) or not question.strip():
+                    raise ValueError("question route requires non-empty strings in route_fields.questions")
+            reason = outcome.route_fields.get("reason")
+            if reason is not None and not isinstance(reason, str):
+                raise ValueError("question route route_fields.reason must be a string or null")
+            return
+        if route.preset_kind in {"blocked", "failed"}:
+            reason = outcome.route_fields.get("reason")
+            if reason is not None and not isinstance(reason, str):
+                raise ValueError(f"{route.preset_kind} route route_fields.reason must be a string or null")
+            return
+        if route.route_fields_schema is None and outcome.route_fields:
+            raise ValueError("route does not declare route_fields metadata")
 
     def _validate_event(
         self,
@@ -1413,7 +1501,10 @@ class Engine:
                     retry_kind="illegal_route",
                 )
             raise error_cls(message)
-        if event.tag == "question" and (not isinstance(event.question, str) or not event.question.strip()):
+        compiled_route = self._route_table_for_step(step).get(event.tag)
+        if compiled_route is not None and is_question_style_route(compiled_route, tag=event.tag) and (
+            not isinstance(event.question, str) or not event.question.strip()
+        ):
             message = f"step {step.name!r} produced question route without a non-empty question"
             if provider_attributable:
                 raise ProviderExecutionError(
@@ -2342,7 +2433,17 @@ class Engine:
             clarification=outcome.clarification,
             question=outcome.question,
             payload=deepcopy(outcome.payload),
+            route_fields=deepcopy(outcome.route_fields),
         )
+
+    def _event_from_outcome(self, step: CompiledStep, outcome: Outcome) -> Event:
+        compiled_route = self._route_table_for_step(step).get(outcome.tag)
+        question = outcome.question
+        if compiled_route is not None and is_question_style_route(compiled_route, tag=outcome.tag):
+            question = project_questions_markdown(outcome.route_fields.get("questions"))
+        reason_value = outcome.route_fields.get("reason") if isinstance(outcome.route_fields, dict) else None
+        reason = reason_value if isinstance(reason_value, str) else outcome.reason
+        return Event(outcome.tag, reason=reason, question=question)
 
     def _clone_state(self, state: BaseModel | None) -> BaseModel | None:
         if state is None:
