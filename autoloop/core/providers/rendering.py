@@ -83,6 +83,7 @@ def render_provider_turn_with_policy(
         turn_kind=context.turn_kind,
         prompt_text=rendered_prompt,
         session=context.session,
+        policy=context.policy,
         expected_response="raw_text" if context.turn_kind in {"producer", "operation"} else "outcome_json",
         response_schema=None if context.turn_kind in {"producer", "operation"} else _response_schema_payload(context),
         response_schema_simplified=context.response_schema_simplified if context.turn_kind not in {"producer", "operation"} else False,

@@ -5,6 +5,7 @@ from __future__ import annotations
 from dataclasses import dataclass, field
 from typing import Any, Literal
 
+from ..provider_policy import ResolvedProviderPolicy
 from .models import TokenUsage
 from ..stores import SessionBinding
 
@@ -20,6 +21,7 @@ class RenderedProviderTurn:
     prompt_text: str
     session: SessionBinding | None
     expected_response: ExpectedProviderResponse
+    policy: ResolvedProviderPolicy | None = None
     response_schema: dict[str, Any] | None = None
     response_schema_simplified: bool = False
 

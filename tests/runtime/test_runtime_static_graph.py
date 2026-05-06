@@ -74,9 +74,12 @@ def test_static_step_graph_includes_step_kind_prompts_routes_and_artifact_names(
     assert assessment["log_artifacts"] == []
     assert "assessment_ready" in assessment["available_routes"]
     assert assessment["authored_routes"] == ["assessment_ready"]
+    assert assessment["compiled_route_tags"] == ["assessment_ready", "question"]
+    assert assessment["suppressed_route_tags"] == []
     assert assessment["runtime_control_routes"] == ["question"]
     assert assessment["provider_visible_routes_interactive"] == ["assessment_ready", "question"]
     assert assessment["provider_visible_routes_full_auto"] == ["assessment_ready"]
+    assert assessment["provider_response_contracts"]["interactive"]["schema_simplified"] is False
     assert finish["kind"] == "python"
     assert finish["prompt"] is None
     assert finish["producer_prompt"] is None
@@ -95,9 +98,13 @@ def test_static_step_graph_includes_route_metadata_and_schema_presence(tmp_path:
     assert assessment["routes"]["question"]["is_runtime_control"] is True
     assert assessment["routes"]["question"]["provider_visible_interactive"] is True
     assert assessment["routes"]["question"]["provider_visible_full_auto"] is False
+    assert assessment["routes"]["question"]["payload_contract"]["mode"] == "inherit"
+    assert assessment["routes"]["question"]["route_fields_contract"]["source"] == "route"
+    assert assessment["compiled_routes"]["question"]["available"] is True
     assert assessment["has_expected_output_schema"] is True
     assert payload["terminals"] == ["FINISH", "AWAIT_INPUT", "FAIL"]
     assert assessment["runtime_control_hook_locations"] == []
+    assert assessment["route_hook_locations"] == []
 
 
 def test_branch_group_payloads_are_additive_in_static_graph_and_topology() -> None:
@@ -293,6 +300,7 @@ def test_topology_payload_exposes_canonical_writes_and_required_writes() -> None
     assert assessment["routes"][0]["required_writes"] == []
     assert assessment["routes"][0]["provider_visible"] is True
     assert any(route["tag"] == "question" and route["is_runtime_control"] for route in assessment["routes"])
+    assert any(route["tag"] == "question" and route["route_fields_contract"]["source"] == "route" for route in assessment["compiled_routes"])
     assert finish["routes"][0]["target"] == "FINISH"
     assert payload["source_hash"] == compiled.source_hash
     assert payload["topology_hash"] == compiled.topology_hash
@@ -326,8 +334,10 @@ def test_topology_payload_and_route_table_preserve_explicit_vs_effective_require
     write_topology_artifacts(tmp_path, compiled)
     route_table = (tmp_path / ROUTE_TABLE_FILENAME).read_text(encoding="utf-8")
 
-    assert "| publish | done | authored | FINISH | true | true | inherit | publish.report |" in route_table
-    assert "| publish | skip | authored | FINISH | true | true | none (explicit) | - |" in route_table
+    assert "| publish | done | custom | step_local | FINISH | always | available |" in route_table
+    assert "| publish | skip | custom | step_local | FINISH | always | available |" in route_table
+    assert "inherit | publish.report |" in route_table
+    assert "none (explicit) | - |" in route_table
 
 
 def test_topology_payload_marks_hidden_routes_and_mermaid_route_table_keep_them(tmp_path: Path) -> None:
@@ -352,8 +362,8 @@ def test_topology_payload_marks_hidden_routes_and_mermaid_route_table_keep_them(
     route_table = (tmp_path / ROUTE_TABLE_FILENAME).read_text(encoding="utf-8")
     mermaid = (tmp_path / "topology.mmd").read_text(encoding="utf-8")
 
-    assert "| publish | human_escalation | authored | FINISH | false | false | inherit | - |" in route_table
-    assert "publish -- human_escalation [authored, hidden] --> FINISH" in mermaid
+    assert "| publish | human_escalation | custom | step_local | FINISH | hidden | available |" in route_table
+    assert "publish -- human_escalation [custom, step_local, hidden] --> FINISH" in mermaid
 
 
 def test_topology_artifacts_include_state_surfaces_runtime_control_hook_locations_and_compile_report_details(
@@ -420,6 +430,7 @@ def test_topology_artifacts_include_state_surfaces_runtime_control_hook_location
         {"hook": "after", "callable": "after_review"},
         {"hook": "on_taken", "callable": "on_hidden_taken", "route": "human_escalation", "source_step": "review"},
     ]
+    assert review_topology["route_hook_locations"] == review_topology["runtime_control_hook_locations"]
 
     write_topology_artifacts(tmp_path, compiled)
     compile_report = (tmp_path / "compile_report.md").read_text(encoding="utf-8")
@@ -428,13 +439,16 @@ def test_topology_artifacts_include_state_surfaces_runtime_control_hook_location
     assert "- terminals: `FINISH`, `AWAIT_INPUT`, `FAIL`" in compile_report
     assert "## Step Route Views" in compile_report
     assert (
-        "- `review`: authored=`done`, `human_escalation`; runtime_control=`question`; "
-        "provider_visible_interactive=`done`, `question`; "
-        "provider_visible_full_auto=`done`"
+        "- `review`: compiled=`done`, `human_escalation`, `question`; available=`done`, `human_escalation`, `question`; "
+        "suppressed=none; provider_visible_interactive=`done`, `question`; "
+        "provider_visible_full_auto=`done`; provider_schema_fallback(interactive/full_auto)=`False`/`False`; "
+        "legacy_authored=`done`, `human_escalation`; legacy_runtime_control=`question`"
     ) in compile_report
-    assert "## Runtime-Control Hook Locations" in compile_report
+    assert "## Route Contracts" in compile_report
+    assert "## Route Hook Locations" in compile_report
     assert "`review`: before:before_review, after:after_review, on_taken:human_escalation" in compile_report
-    assert "| review | human_escalation | authored | FINISH | false | false | inherit | - | - | on_hidden_taken |" in route_table
+    assert "| review | human_escalation | custom | step_local | FINISH | hidden | available |" in route_table
+    assert "| - | on_hidden_taken |" in route_table
 
 
 def test_route_table_mermaid_and_compile_report_distinguish_runtime_control_routes(tmp_path: Path) -> None:
@@ -445,12 +459,13 @@ def test_route_table_mermaid_and_compile_report_distinguish_runtime_control_rout
     mermaid = (tmp_path / "topology.mmd").read_text(encoding="utf-8")
     compile_report = (tmp_path / "compile_report.md").read_text(encoding="utf-8")
 
-    assert "| assessment | question | runtime-control | AWAIT_INPUT | true | false | none (explicit) | - | - | - |" in route_table
-    assert "assessment -- question [runtime-control, interactive-only] --> AWAIT_INPUT" in mermaid
+    assert "| assessment | question | question | framework_default | AWAIT_INPUT | interactive_only | available |" in route_table
+    assert "assessment -- question [question, framework_default, interactive_only] --> AWAIT_INPUT" in mermaid
     assert (
-        "- `assessment`: authored=`assessment_ready`; runtime_control=`question`; "
-        "provider_visible_interactive=`assessment_ready`, `question`; "
-        "provider_visible_full_auto=`assessment_ready`"
+        "- `assessment`: compiled=`assessment_ready`, `question`; available=`assessment_ready`, `question`; "
+        "suppressed=none; provider_visible_interactive=`assessment_ready`, `question`; "
+        "provider_visible_full_auto=`assessment_ready`; provider_schema_fallback(interactive/full_auto)=`False`/`False`; "
+        "legacy_authored=`assessment_ready`; legacy_runtime_control=`question`"
     ) in compile_report
 
 
@@ -535,9 +550,10 @@ def test_route_table_and_compile_report_include_hidden_global_routes(tmp_path: P
     route_table = (tmp_path / ROUTE_TABLE_FILENAME).read_text(encoding="utf-8")
     compile_report = (tmp_path / "compile_report.md").read_text(encoding="utf-8")
 
-    assert "| GLOBAL | blocked | authored | AWAIT_INPUT | false | false | inherit | - | - | - |" in route_table
+    assert "| GLOBAL | blocked | custom | global | AWAIT_INPUT | hidden | available |" in route_table
     assert "- routes: `3`" in compile_report
     assert "- hidden routes: `1`" in compile_report
+    assert "- suppressed routes: `0`" in compile_report
 
 
 def test_static_graph_schema_uses_registry_constant() -> None:

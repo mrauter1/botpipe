@@ -33,6 +33,7 @@ class ProviderCall:
     route_required_writes: dict[str, tuple[str, ...]] = field(default_factory=dict)
     retry_feedback: str | None = None
     route_handoff: str | None = None
+    policy: Any | None = None
     attempt: int = 1
     max_attempts: int = 3
     operation_kind: str | None = None
@@ -99,6 +100,7 @@ class ScriptedLLMProvider:
                 route_required_writes=deepcopy(dict(request.route_required_writes)),
                 retry_feedback=request.retry_feedback,
                 route_handoff=request.route_handoff,
+                policy=deepcopy(request.policy),
                 attempt=request.attempt,
                 max_attempts=request.max_attempts,
             )
@@ -120,6 +122,7 @@ class ScriptedLLMProvider:
                 route_required_writes=deepcopy(dict(request.route_required_writes)),
                 retry_feedback=request.retry_feedback,
                 route_handoff=request.route_handoff,
+                policy=deepcopy(request.policy),
                 attempt=request.attempt,
                 max_attempts=request.max_attempts,
             )
@@ -141,6 +144,7 @@ class ScriptedLLMProvider:
                 route_required_writes=deepcopy(dict(request.route_required_writes)),
                 retry_feedback=request.retry_feedback,
                 route_handoff=request.route_handoff,
+                policy=deepcopy(request.policy),
                 attempt=request.attempt,
                 max_attempts=request.max_attempts,
             )
@@ -155,6 +159,7 @@ class ScriptedLLMProvider:
                 session=deepcopy(request.session),
                 expected_output_schema=deepcopy(request.return_schema) if request.return_schema is not None else None,
                 retry_feedback=request.retry_feedback,
+                policy=deepcopy(request.policy),
                 attempt=request.attempt,
                 max_attempts=request.max_attempts,
                 operation_kind=request.operation_kind,

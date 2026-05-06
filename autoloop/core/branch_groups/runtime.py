@@ -283,13 +283,20 @@ class BranchGroupRuntime:
         branch_dir = parent_context.workflow_folder / "_branch_groups" / spec.name / "branches" / branch.name
         started_at = _utc_now()
         try:
-            step_result = await self._engine.step_dispatcher.execute_async(
-                compiled_step,
-                branch_context,
-                branch_context.state,
-                (),
-                route_mode="capture",
-            )
+            with self._engine.operation_recorder.bind_step(
+                step=compiled_step,
+                context=branch_context,
+                run_folder=branch_context.run_folder,
+                step_name=compiled_step.name,
+                step_visit=self._engine._step_runtime_visits(step_state_store),
+            ):
+                step_result = await self._engine.step_dispatcher.execute_async(
+                    compiled_step,
+                    branch_context,
+                    branch_context.state,
+                    (),
+                    route_mode="capture",
+                )
             result = self._branch_result_from_step_result(
                 spec=spec,
                 branch=branch,
@@ -592,13 +599,20 @@ class BranchGroupRuntime:
                 _relative_to_root(context_path, context=context),
             ],
         )
-        step_result = await self._engine.step_dispatcher.execute_async(
-            fan_in_step,
-            fan_in_context,
-            fan_in_context.state,
-            (),
-            route_mode="capture",
-        )
+        with self._engine.operation_recorder.bind_step(
+            step=fan_in_step,
+            context=fan_in_context,
+            run_folder=fan_in_context.run_folder,
+            step_name=fan_in_step.name,
+            step_visit=self._engine._step_runtime_visits(fan_in_context._step_state),
+        ):
+            step_result = await self._engine.step_dispatcher.execute_async(
+                fan_in_step,
+                fan_in_context,
+                fan_in_context.state,
+                (),
+                route_mode="capture",
+            )
         runtime.emit_runtime_event(
             "fan_in_completed",
             group_name=spec.name,

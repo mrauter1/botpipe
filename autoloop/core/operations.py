@@ -10,7 +10,7 @@ import inspect
 import json
 from pathlib import Path
 import re
-from typing import Any, Callable, Literal, Mapping, Sequence
+from typing import TYPE_CHECKING, Any, Callable, Literal, Mapping, Sequence
 
 from pydantic import BaseModel, TypeAdapter
 
@@ -22,11 +22,21 @@ from .errors import (
 )
 from .artifacts import render_runtime_template
 from .mappings import normalize_mapping
+from .provider_policy import (
+    ProviderPolicy,
+    ProviderPolicyOverride,
+    ResolvedProviderPolicy,
+    merge_provider_policies,
+    policy_fingerprint,
+)
 from .prompts import Prompt, PromptRegistry, ResolvedPrompt, resolve_prompt_reference
 from .providers.models import OperationRequest, OperationResponse
 from .schema_registry import OPERATION_REPLAY_SCHEMA, validate_persisted_schema
 from .sessions import DEFAULT_SESSION_NAME
 from .stores.protocols import SessionBinding
+
+if TYPE_CHECKING:
+    from autoloop.runtime.provider_policy_resolver import ProviderPolicyResolver
 
 
 _JSON_FENCE_RE = re.compile(r"\A```(?:json)?\s*\n(?P<body>[\s\S]*?)\n?```\s*\Z")
@@ -50,6 +60,8 @@ class OperationRuntime:
     step_visit: int | None = None
     default_session_name: str = DEFAULT_SESSION_NAME
     replay_mismatch_behavior: Literal["warn", "fail"] = "warn"
+    policy: ResolvedProviderPolicy | None = None
+    provider_policy_resolver: "ProviderPolicyResolver | None" = None
     occurrence_counts: dict[str, int] = field(default_factory=dict)
     event_sink: Callable[[str, Mapping[str, Any]], None] | None = None
 
@@ -73,6 +85,7 @@ def llm_call(
     context: Context | None = None,
     run_folder: Path | None = None,
     callsite: str | None = None,
+    policy: ProviderPolicy | ProviderPolicyOverride | None = None,
 ) -> Any:
     runtime = _resolve_runtime(
         provider=provider,
@@ -84,6 +97,7 @@ def llm_call(
         runtime,
         spec=OperationStepSpec(operation_kind="llm", prompt=prompt, returns=returns, retry=retry),
         callsite=callsite,
+        explicit_policy=policy,
     )
 
 
@@ -97,6 +111,7 @@ def classify_call(
     context: Context | None = None,
     run_folder: Path | None = None,
     callsite: str | None = None,
+    policy: ProviderPolicy | ProviderPolicyOverride | None = None,
 ) -> str:
     normalized_choices = _normalize_choices(choices)
     runtime = _resolve_runtime(
@@ -109,6 +124,7 @@ def classify_call(
         runtime,
         spec=OperationStepSpec(operation_kind="classify", prompt=prompt, choices=normalized_choices, retry=retry),
         callsite=callsite,
+        explicit_policy=policy,
     )
 
 
@@ -129,6 +145,8 @@ def execute_step_operation(ctx: Context, *, step_name: str, spec: OperationStepS
         step_visit=_step_visit(ctx),
         default_session_name=runtime.default_session_name,
         replay_mismatch_behavior=runtime.replay_mismatch_behavior,
+        policy=runtime.policy,
+        provider_policy_resolver=runtime.provider_policy_resolver,
         occurrence_counts=runtime.occurrence_counts,
         event_sink=runtime.event_sink,
     )
@@ -183,6 +201,8 @@ def _resolve_runtime(
             step_visit=ambient.step_visit,
             default_session_name=ambient.default_session_name,
             replay_mismatch_behavior=ambient.replay_mismatch_behavior,
+            policy=ambient.policy,
+            provider_policy_resolver=ambient.provider_policy_resolver,
             occurrence_counts=ambient.occurrence_counts,
             event_sink=ambient.event_sink,
         )
@@ -200,6 +220,8 @@ def _resolve_runtime(
         step_name=None,
         step_visit=_step_visit(context),
         replay_mismatch_behavior="warn",
+        policy=None if context is None else getattr(context, "_provider_policy", None),
+        provider_policy_resolver=None,
         event_sink=None,
     )
 
@@ -209,10 +231,12 @@ def _run_operation(
     *,
     spec: OperationStepSpec,
     callsite: str | None,
+    explicit_policy: ProviderPolicy | ProviderPolicyOverride | None = None,
 ) -> Any:
     max_attempts = _normalize_retry(retry=spec.retry)
     resolved_prompt = _resolve_prompt(spec.prompt, runtime=runtime)
     session = _resolve_session(runtime)
+    resolved_policy = _resolve_effective_operation_policy(runtime, explicit_policy=explicit_policy)
     callsite_id = callsite or _discover_callsite()
     occurrence = _next_occurrence(runtime, spec.operation_kind)
     replay_key = _operation_replay_key(runtime, spec.operation_kind, occurrence)
@@ -223,6 +247,7 @@ def _run_operation(
         session=session,
         callsite=callsite_id,
         occurrence=occurrence,
+        policy=resolved_policy,
     )
     replay_path = _operation_replay_path(runtime.run_folder)
     replay_store = _load_replay_store(replay_path)
@@ -256,6 +281,7 @@ def _run_operation(
                     return_schema=_return_schema(spec.returns) if spec.operation_kind == "llm" else None,
                     choices=spec.choices,
                     retry_feedback=retry_feedback,
+                    policy=resolved_policy,
                     attempt=attempt,
                     max_attempts=max_attempts,
                 ),
@@ -504,6 +530,72 @@ def _record_context_value(ctx: Context, *, step_name: str, value: Any) -> None:
         ctx._values[step_name] = serialized
 
 
+def _resolve_effective_operation_policy(
+    runtime: OperationRuntime,
+    *,
+    explicit_policy: ProviderPolicy | ProviderPolicyOverride | None,
+) -> ResolvedProviderPolicy | None:
+    resolver = runtime.provider_policy_resolver
+    if resolver is not None and runtime.context is not None:
+        try:
+            resolved = resolver.resolve_for_operation(runtime.context, explicit_policy=explicit_policy)
+        except WorkflowExecutionError:
+            _emit_operation_policy_event(
+                runtime,
+                "provider_policy_violation",
+                policy=None,
+                explicit_policy=explicit_policy,
+            )
+            raise
+        _emit_operation_policy_event(
+            runtime,
+            "provider_policy_resolved",
+            policy=resolved,
+            explicit_policy=explicit_policy,
+        )
+        return resolved
+    if explicit_policy is None:
+        return runtime.policy
+    base_policy = runtime.policy or ProviderPolicy()
+    return explicit_policy if isinstance(explicit_policy, ProviderPolicy) and runtime.policy is None else merge_provider_policies(
+        base_policy,
+        explicit_policy,
+    )
+
+
+def _emit_operation_policy_event(
+    runtime: OperationRuntime,
+    event_type: str,
+    *,
+    policy: ResolvedProviderPolicy | None,
+    explicit_policy: ProviderPolicy | ProviderPolicyOverride | None,
+) -> None:
+    if runtime.event_sink is None:
+        return
+    payload: dict[str, Any] = {
+        "step_name": runtime.step_name or "<operation>",
+        "turn_kind": "operation",
+        "explicit_policy": explicit_policy is not None,
+    }
+    if runtime.step_visit is not None:
+        payload["visit"] = runtime.step_visit
+    if runtime.context is not None:
+        scope_name, item_id = _operation_scope_item(runtime.context)
+        payload["step_execution_id"] = _operation_step_execution_id(
+            step_name=runtime.step_name or "<operation>",
+            visit=runtime.step_visit,
+            scope_name=scope_name,
+            item_id=item_id,
+        )
+        if scope_name is not None:
+            payload["scope"] = scope_name
+        if item_id is not None:
+            payload["item_id"] = item_id
+    if policy is not None:
+        payload["policy_fingerprint"] = policy_fingerprint(policy)
+    runtime.event_sink(event_type, payload)
+
+
 def _resolve_prompt(prompt: Prompt | str, *, runtime: OperationRuntime) -> ResolvedPrompt:
     prompt = _normalize_operation_prompt(prompt)
     registry = runtime.prompt_registry
@@ -606,6 +698,7 @@ def _operation_fingerprint(
     session: SessionBinding | None,
     callsite: str,
     occurrence: int,
+    policy: ResolvedProviderPolicy | None,
 ) -> str:
     payload = {
         "workflow_name": runtime.workflow_name,
@@ -623,6 +716,7 @@ def _operation_fingerprint(
         "scope_item_id": _scope_item_id(runtime.context),
         "occurrence_index": occurrence,
         "provider_configuration": _provider_configuration(runtime),
+        "provider_policy_fingerprint": None if policy is None else policy_fingerprint(policy),
     }
     return _sha256_json(payload)
 

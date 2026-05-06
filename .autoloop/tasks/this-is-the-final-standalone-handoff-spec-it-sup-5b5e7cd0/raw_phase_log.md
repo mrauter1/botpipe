@@ -810,3 +810,75 @@ No open test-audit issues remain for this phase slice. I updated the audit crite
 <loop-control>
 {"schema":"docloop.loop_control/v1","kind":"promise","promise":"COMPLETE"}
 </loop-control>
+
+
+---
+run_id=run-20260506T185744Z-092935c3 | entry=session_turn | pair=implement | phase=producer | cycle=1 | attempt=1 | thread_id=019dfed8-b85e-7423-bfab-6f1b074286d3
+---
+provider=codex
+mode=start
+template=/home/rauter/.local/share/pipx/venvs/autoloop/lib/python3.12/site-packages/autoloop/templates/implement_producer.md
+session_id=019dfed8-b85e-7423-bfab-6f1b074286d3
+
+
+---
+run_id=run-20260506T185744Z-092935c3 | entry=phase_output | pair=implement | phase=producer | process=codex-agent | cycle=1 | attempt=1 | thread_id=019dfed8-b85e-7423-bfab-6f1b074286d3
+---
+I’m treating this as the `runtime-and-inspection-alignment` phase: first I’ll read the phase artifacts and inspect the runtime/reporting code paths touched by the prior route-model and provider-outcome work before editing anything.
+
+The prior phases already moved route legality and provider contracts onto compiled-route metadata. I’m narrowing on the remaining gap: runtime event projection plus every reporting surface that still describes routes through legacy control-route views instead of the compiled metadata itself.
+
+I have the main surfaces. Next I’m checking the exact projection and reporting functions so the change lands on the current contracts rather than adding a second metadata format.
+
+The inspection/reporting layer still exposes `runtime_control` and `authored` as primary categories. I’m switching those surfaces to exact compiled-route metadata, but I’ll keep compatibility fields additively where readers already consume them.
+
+Plan:
+1. Align runtime projection paths so `Outcome.route_fields` drives `Event.question`/`Event.reason`, including child-workflow result mapping and persisted/trace compatibility fields.
+2. Refactor static graph, topology, compile report, route table, and workflow capability payloads to emit exact compiled-route metadata with additive compatibility fields.
+3. Add provider-schema-fallback reporting on inspection surfaces and compile report.
+4. Update regression tests for runtime projection and reporting contracts, then run the focused suites for touched areas.
+
+I’ve got a concrete edit set now: one small metadata helper, then targeted changes in `engine`, `static_graph`, and `workflow_capabilities`, followed by test updates around the persisted inspection outputs.
+
+I’m in the capability payload now. The shape stays additive, but I’m adding compiled-route and schema-contract detail so the capability snapshot stops flattening everything down to target-only maps.
+
+I’ve finished the core code edits and I’m running the focused reporting suite now to catch shape mismatches before I touch the snapshot expectations.
+
+`pytest` isn’t installed in this environment, so I’m switching to syntax/import validation plus a couple of focused runtime probes against the touched modules.
+
+I’m on the test expectations now. Most failures are text-contract changes in `route_table.md` and `compile_report.md`, so I’m making those assertions less brittle and pinning the new metadata fields instead.
+
+The code is syntactically clean. I’m doing the final bookkeeping now: recording the non-obvious compatibility decisions for later turns and summarizing the exact files and contracts touched in the phase notes.
+
+Scope considered
+
+- Phase-local `runtime-and-inspection-alignment` scope only: runtime outcome/event projection, child-workflow pause mapping, static graph/topology/reporting, workflow capability inspection, topology-hash metadata, and the phase artifacts under [implementation_notes.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/this-is-the-final-standalone-handoff-spec-it-sup-5b5e7cd0/runs/run-20260506T185744Z-092935c3/artifacts/implement/phases/runtime-and-inspection-alignment/implementation_notes.md) and [decisions.txt](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/this-is-the-final-standalone-handoff-spec-it-sup-5b5e7cd0/runs/run-20260506T185744Z-092935c3/decisions.txt).
+- I stayed off route-finalizer redesign and provider prompt/parsing changes outside the reporting/runtime-alignment slice.
+
+What I analyzed
+
+- Runtime projection in [autoloop/core/engine.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/autoloop/core/engine.py) around `Outcome -> Event` conversion and child-workflow result mapping.
+- Inspection/reporting surfaces in [autoloop/runtime/static_graph.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/autoloop/runtime/static_graph.py), [autoloop/core/workflow_capabilities.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/autoloop/core/workflow_capabilities.py), and topology hashing in [autoloop/core/compiler.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/autoloop/core/compiler.py).
+- Regression expectations in [tests/runtime/test_runtime_static_graph.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/tests/runtime/test_runtime_static_graph.py) and [tests/contract/test_engine_contracts.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/tests/contract/test_engine_contracts.py).
+
+What I changed
+
+- Added [autoloop/core/route_reporting.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/autoloop/core/route_reporting.py) to centralize effective payload/route-fields schema metadata, schema fingerprints, and provider-response schema fallback summaries.
+- Updated [autoloop/core/engine.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/autoloop/core/engine.py) so child workflow `AWAIT_INPUT` results map to parent `question` routing from projected `Event.question`, not only from a literal child tag of `"question"`.
+- Expanded [autoloop/runtime/static_graph.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/autoloop/runtime/static_graph.py) and [autoloop/core/workflow_capabilities.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/autoloop/core/workflow_capabilities.py) with additive `compiled_routes`, `compiled_global_routes`, suppressed-route tags, schema-contract metadata, route hook locations, and provider-schema-fallback reporting while keeping legacy compatibility fields.
+- Updated [autoloop/core/compiler.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/autoloop/core/compiler.py) topology-hash payloads to include explicit payload/route-fields schema fingerprint metadata.
+- Adjusted the targeted tests to pin the new reporting contract and added a child-workflow regression for custom question-style routes.
+
+Key findings / decisions
+
+- The main runtime gap was child-workflow pause handling: a custom question-style child route could lose question semantics at the parent boundary because mapping was tag-name-based.
+- I kept `runtime_control_routes` and `runtime_control_hook_locations` as derived compatibility fields, but the authoritative inspection surface is now compiled-route metadata plus schema contracts/fallback summaries.
+- Human-readable artifacts now describe routes by preset/source/visibility/state instead of authored-vs-runtime-control as the primary lens.
+
+Open issues / next step
+
+- Validation completed with `python3 -m py_compile` on the touched source and test files.
+- `pytest` could not be run here because `pytest` is not installed in this environment; the next step is to run the focused suites once the test toolchain is available:
+  `tests/runtime/test_runtime_static_graph.py`
+  `tests/contract/test_engine_contracts.py`
+  any workflow-capability snapshot tests that consume the additive JSON payloads.

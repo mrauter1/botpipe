@@ -823,6 +823,7 @@ class LLMOperation:
         prompt_registry: Any | None = None,
         context: Any | None = None,
         run_folder: Path | None = None,
+        policy: ProviderPolicyInput = None,
     ) -> Any:
         normalized_prompt = _normalize_simple_prompt(prompt)
         return llm_call(
@@ -833,6 +834,7 @@ class LLMOperation:
             prompt_registry=prompt_registry,
             context=context,
             run_folder=run_folder,
+            policy=policy,
         )
 
     def step(
@@ -872,6 +874,7 @@ class ClassifyOperation:
         prompt_registry: Any | None = None,
         context: Any | None = None,
         run_folder: Path | None = None,
+        policy: ProviderPolicyInput = None,
     ) -> str:
         normalized_prompt = _normalize_simple_prompt(prompt)
         return classify_call(
@@ -882,6 +885,7 @@ class ClassifyOperation:
             prompt_registry=prompt_registry,
             context=context,
             run_folder=run_folder,
+            policy=policy,
         )
 
     def step(

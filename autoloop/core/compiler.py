@@ -34,7 +34,9 @@ from .lowering import (
 )
 from .primitives import AWAIT_INPUT, FAIL, FINISH, GLOBAL, SELF
 from .prompts import PromptSpec
+from .provider_policy import ProviderPolicy, ProviderPolicyOverride, policy_fingerprint
 from .providers.retries import ProviderRetryPolicy
+from .route_reporting import payload_contract_for_route, route_fields_contract_for_route
 from .route_required_writes import route_required_write_payload
 from .routes import Route, normalize_route_spec
 from .sessions import Continuity, DEFAULT_SESSION_NAME
@@ -90,6 +92,7 @@ class CompiledStep:
     step_state_fields: tuple[str, ...]
     step_item_state_model: type[BaseModel] | None
     step_item_state_fields: tuple[str, ...]
+    provider_policy: ProviderPolicy | ProviderPolicyOverride | None = None
     branch_group: Any | None = None
     route_table: dict[str, "CompiledRoute"] | None = None
 
@@ -143,6 +146,7 @@ class CompiledWorkflow:
     artifacts: dict[str, CompiledArtifact]
     artifacts_by_qualified_name: dict[str, CompiledArtifact]
     extensions: tuple[WorkflowExtension, ...]
+    provider_policy: ProviderPolicy | None
     source_hash: str | None
     topology_hash: str
 
@@ -215,6 +219,7 @@ def compile_workflow(workflow_cls: type[Any]) -> CompiledWorkflow:
         artifacts=_compile_public_artifacts(inventory),
         artifacts_by_qualified_name=_compile_artifacts_by_qualified_name(inventory),
         extensions=definition.extensions,
+        provider_policy=_validated_compiled_policy(definition.workflow_policy, owner="workflow"),
         source_hash=source_hash,
         topology_hash="",
     )
@@ -377,6 +382,7 @@ def _compile_steps(
                 step_state_fields=step_state_fields,
                 step_item_state_model=step_item_state_model,
                 step_item_state_fields=step_item_state_fields,
+                provider_policy=_validated_compiled_policy(step.provider_policy, owner=f"step {step.name!r}"),
             )
         elif isinstance(step, PromptStep):
             compiled_steps[step.name] = CompiledStep(
@@ -418,6 +424,7 @@ def _compile_steps(
                 step_state_fields=step_state_fields,
                 step_item_state_model=step_item_state_model,
                 step_item_state_fields=step_item_state_fields,
+                provider_policy=_validated_compiled_policy(step.provider_policy, owner=f"step {step.name!r}"),
             )
         elif isinstance(step, PythonStep):
             compiled_steps[step.name] = CompiledStep(
@@ -463,6 +470,7 @@ def _compile_steps(
                 step_state_fields=step_state_fields,
                 step_item_state_model=step_item_state_model,
                 step_item_state_fields=step_item_state_fields,
+                provider_policy=_validated_compiled_policy(step.provider_policy, owner=f"step {step.name!r}"),
             )
         elif isinstance(step, ChildWorkflowStep):
             compiled_steps[step.name] = CompiledStep(
@@ -508,6 +516,7 @@ def _compile_steps(
                 step_state_fields=step_state_fields,
                 step_item_state_model=step_item_state_model,
                 step_item_state_fields=step_item_state_fields,
+                provider_policy=_validated_compiled_policy(step.provider_policy, owner=f"step {step.name!r}"),
             )
         elif isinstance(step, BranchGroupStep):
             compiled_branch_group = _compile_branch_group_internal_steps(
@@ -554,6 +563,7 @@ def _compile_steps(
                 step_state_fields=step_state_fields,
                 step_item_state_model=None,
                 step_item_state_fields=(),
+                provider_policy=_validated_compiled_policy(step.provider_policy, owner=f"step {step.name!r}"),
                 branch_group=compiled_branch_group,
             )
         else:
@@ -1235,6 +1245,7 @@ def _workflow_compile_cache_key(
         "parameter_fields": sorted(getattr(definition.parameters_cls, "model_fields", {}).keys())
         if definition.parameters_cls is not None
         else [],
+        "workflow_policy_fingerprint": _policy_input_fingerprint(definition.workflow_policy),
         "steps": [
             {
                 "name": step.name,
@@ -1252,6 +1263,7 @@ def _workflow_compile_cache_key(
                 "control_routes": {
                     "question": getattr(getattr(step, "control_routes", None), "question", None),
                 },
+                "provider_policy_fingerprint": _policy_input_fingerprint(getattr(step, "provider_policy", None)),
             }
             for step in definition.steps
         ],
@@ -1349,6 +1361,7 @@ def _topology_hash_payload(compiled: CompiledWorkflow) -> dict[str, Any]:
         "workflow_name": compiled.workflow_name,
         "entry_step_name": compiled.entry_step_name,
         "global_session": compiled.default_session_name,
+        "workflow_policy_fingerprint": _policy_input_fingerprint(compiled.provider_policy),
         "steps": [_topology_hash_step_payload(step) for step in compiled.steps.values()],
         "worklists": {
             name: {
@@ -1362,57 +1375,25 @@ def _topology_hash_payload(compiled: CompiledWorkflow) -> dict[str, Any]:
         },
         "routes": {
             step_name: {
-                tag: {
-                    "target": route.target,
-                    "summary": route.summary,
-                    **route_required_write_payload(
-                        compiled,
-                        step_name=step_name,
-                        route_tag=tag,
-                        route=route,
-                    ),
-                    "handoff": route.handoff,
-                    "on_taken": _callable_name(route.on_taken),
-                    "provider_visibility": route.provider_visibility,
-                    "provider_visible": route.provider_visible,
-                    "provider_visible_interactive": route.provider_visible_interactive,
-                    "provider_visible_full_auto": route.provider_visible_full_auto,
-                    "payload_schema_mode": route.payload_schema_mode,
-                    "payload_schema": route.payload_schema,
-                    "route_fields_schema": route.route_fields_schema,
-                    "preset_kind": route.preset_kind,
-                    "inheritance_source": route.inheritance_source,
-                    "disabled": route.disabled,
-                    "is_runtime_control": route.is_runtime_control,
-                }
+                tag: _topology_hash_route_payload(
+                    compiled,
+                    step_name=step_name,
+                    route_tag=tag,
+                    route=route,
+                    expected_output_schema=compiled.steps[step_name].expected_output_schema,
+                )
                 for tag, route in routes.items()
             }
             for step_name, routes in compiled.routes.items()
         },
         "global_routes": {
-            tag: {
-                "target": route.target,
-                "summary": route.summary,
-                **route_required_write_payload(
-                    compiled,
-                    step_name=None,
-                    route_tag=tag,
-                    route=route,
-                ),
-                "handoff": route.handoff,
-                "on_taken": _callable_name(route.on_taken),
-                "provider_visibility": route.provider_visibility,
-                "provider_visible": route.provider_visible,
-                "provider_visible_interactive": route.provider_visible_interactive,
-                "provider_visible_full_auto": route.provider_visible_full_auto,
-                "payload_schema_mode": route.payload_schema_mode,
-                "payload_schema": route.payload_schema,
-                "route_fields_schema": route.route_fields_schema,
-                "preset_kind": route.preset_kind,
-                "inheritance_source": route.inheritance_source,
-                "disabled": route.disabled,
-                "is_runtime_control": route.is_runtime_control,
-            }
+            tag: _topology_hash_route_payload(
+                compiled,
+                step_name=None,
+                route_tag=tag,
+                route=route,
+                expected_output_schema=None,
+            )
             for tag, route in compiled.global_routes.items()
         },
         "workflow_state_fields": sorted(getattr(compiled.state_cls, "model_fields", {}).keys()),
@@ -1453,6 +1434,7 @@ def _topology_hash_step_payload(step: CompiledStep) -> dict[str, Any]:
         "after_producer_hook": _callable_name(step.after_producer_hook),
         "before_verifier_hook": _callable_name(step.before_verifier_hook),
         "after_verifier_hook": _callable_name(step.after_verifier_hook),
+        "provider_policy_fingerprint": _policy_input_fingerprint(step.provider_policy),
         "prompt_refs": [
             _topology_json_value(reference)
             for reference in getattr(step.step, "simple_prompt_references", ())
@@ -1460,29 +1442,72 @@ def _topology_hash_step_payload(step: CompiledStep) -> dict[str, Any]:
     }
     if step.route_table:
         payload["route_table"] = {
-            tag: {
-                "target": route.target,
-                "summary": route.summary,
-                "required_writes": list(route.required_writes),
-                "handoff": route.handoff,
-                "on_taken": _callable_name(route.on_taken),
-                "provider_visibility": route.provider_visibility,
-                "provider_visible": route.provider_visible,
-                "provider_visible_interactive": route.provider_visible_interactive,
-                "provider_visible_full_auto": route.provider_visible_full_auto,
-                "payload_schema_mode": route.payload_schema_mode,
-                "payload_schema": route.payload_schema,
-                "route_fields_schema": route.route_fields_schema,
-                "preset_kind": route.preset_kind,
-                "inheritance_source": route.inheritance_source,
-                "disabled": route.disabled,
-                "is_runtime_control": route.is_runtime_control,
-            }
+            tag: _topology_hash_route_payload(
+                None,
+                step_name=step.name,
+                route_tag=tag,
+                route=route,
+                expected_output_schema=step.expected_output_schema,
+                use_effective_required_writes=False,
+            )
             for tag, route in step.route_table.items()
         }
     if step.branch_group is not None:
         payload["branch_group"] = _topology_hash_branch_group_payload(step.branch_group)
     return payload
+
+
+def _topology_hash_route_payload(
+    compiled: CompiledWorkflow | None,
+    *,
+    step_name: str | None,
+    route_tag: str,
+    route: CompiledRoute,
+    expected_output_schema: Mapping[str, Any] | None,
+    use_effective_required_writes: bool = True,
+) -> dict[str, Any]:
+    payload_contract = payload_contract_for_route(
+        route,
+        expected_output_schema=expected_output_schema,
+    )
+    route_fields_contract = route_fields_contract_for_route(route)
+    if use_effective_required_writes:
+        required_write_payload = route_required_write_payload(
+            compiled,
+            step_name=step_name,
+            route_tag=route_tag,
+            route=route,
+        )
+    else:
+        required_write_payload = {
+            "required_writes": list(route.required_writes),
+            "explicit_required_writes": list(route.required_writes) if route._required_writes_explicit else None,
+            "effective_required_writes": None,
+        }
+    return {
+        "target": route.target,
+        "summary": route.summary,
+        **required_write_payload,
+        "handoff": route.handoff,
+        "on_taken": _callable_name(route.on_taken),
+        "provider_visibility": route.provider_visibility,
+        "provider_visible": route.provider_visible,
+        "provider_visible_interactive": route.provider_visible_interactive,
+        "provider_visible_full_auto": route.provider_visible_full_auto,
+        "payload_schema_mode": route.payload_schema_mode,
+        "payload_schema": route.payload_schema,
+        "payload_schema_source": payload_contract["source"],
+        "payload_schema_name": payload_contract["name"],
+        "payload_schema_fingerprint": payload_contract["fingerprint"],
+        "route_fields_schema": route.route_fields_schema,
+        "route_fields_schema_source": route_fields_contract["source"],
+        "route_fields_schema_name": route_fields_contract["name"],
+        "route_fields_schema_fingerprint": route_fields_contract["fingerprint"],
+        "preset_kind": route.preset_kind,
+        "inheritance_source": route.inheritance_source,
+        "disabled": route.disabled,
+        "is_runtime_control": route.is_runtime_control,
+    }
 
 
 def _topology_hash_branch_group_payload(spec: Any) -> dict[str, Any]:
@@ -1535,6 +1560,7 @@ def _with_topology_hash(compiled: CompiledWorkflow) -> CompiledWorkflow:
         artifacts=compiled.artifacts,
         artifacts_by_qualified_name=compiled.artifacts_by_qualified_name,
         extensions=compiled.extensions,
+        provider_policy=compiled.provider_policy,
         source_hash=compiled.source_hash,
         topology_hash=topology_hash,
     )
@@ -1544,6 +1570,53 @@ def _callable_name(value: object | None) -> str | None:
     if value is None:
         return None
     return getattr(value, "__name__", type(value).__name__)
+
+
+def _policy_input_payload(
+    policy: ProviderPolicy | ProviderPolicyOverride | None,
+) -> dict[str, Any] | None:
+    if policy is None:
+        return None
+    return {
+        "kind": "policy" if isinstance(policy, ProviderPolicy) else "override",
+        "payload": policy.model_dump(mode="json", warnings=False),
+    }
+
+
+def _policy_input_fingerprint(policy: ProviderPolicy | ProviderPolicyOverride | None) -> str | None:
+    if policy is None:
+        return None
+    if isinstance(policy, ProviderPolicy):
+        return policy_fingerprint(policy)
+    payload = _policy_input_payload(policy)
+    return hashlib.sha256(
+        json.dumps(
+            payload,
+            sort_keys=True,
+            separators=(",", ":"),
+            default=_topology_json_value,
+        ).encode("utf-8")
+    ).hexdigest()
+
+
+def _validated_compiled_policy(
+    policy: ProviderPolicy | ProviderPolicyOverride | None,
+    *,
+    owner: str,
+) -> ProviderPolicy | ProviderPolicyOverride | None:
+    payload = _policy_input_payload(policy)
+    if payload is None:
+        return None
+    try:
+        json.dumps(
+            payload,
+            sort_keys=True,
+            separators=(",", ":"),
+            default=_topology_json_value,
+        )
+    except TypeError as exc:
+        raise WorkflowCompilationError(f"{owner} provider policy must be JSON-serializable: {exc}") from exc
+    return policy
 
 
 def _topology_json_value(value: object) -> object:

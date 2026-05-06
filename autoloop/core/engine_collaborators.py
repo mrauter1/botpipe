@@ -22,6 +22,7 @@ from .outcome_contract import (
     payload_schema_for_route,
     route_fields_schema_for_route,
 )
+from .provider_policy import ProviderPolicyError, policy_fingerprint
 from .primitives import Event, Fail, Goto, Outcome, RequestInput
 from .providers.models import (
     LLMRequest,
@@ -854,6 +855,7 @@ class StepDispatcher:
                 context=context,
                 artifacts=artifacts,
                 session=session,
+                policy=_context_provider_policy(context),
                 **self._engine.provider_contract_builder.pair_producer_contract(
                     step,
                     context=context,
@@ -1004,6 +1006,7 @@ class StepDispatcher:
                     context=context,
                     artifacts=review_artifacts,
                     session=verifier_session,
+                    policy=_context_provider_policy(context),
                     **self._engine.provider_contract_builder.pair_verifier_contract(
                         step,
                         context=context,
@@ -1095,6 +1098,7 @@ class StepDispatcher:
                 context=context,
                 artifacts=artifacts,
                 session=session,
+                policy=_context_provider_policy(context),
                 **self._engine.provider_contract_builder.control_contract(
                     step,
                     context=context,
@@ -2008,11 +2012,28 @@ class OperationRecorder:
     def bind_step(
         self,
         *,
+        step: "CompiledStep",
         context: "Context",
         run_folder: "Path",
         step_name: str,
         step_visit: int,
     ):
+        resolved_policy = None
+        if self._engine.provider_policy_resolver is not None and _step_uses_provider_policy(step):
+            try:
+                resolved_policy = self._engine.provider_policy_resolver.resolve_for_step(step)
+            except ProviderPolicyError as exc:
+                context_runtime(context).emit_runtime_event(
+                    "provider_policy_violation",
+                    policy_fingerprint=None,
+                    error_message=str(exc),
+                )
+                raise
+            context._provider_policy = resolved_policy
+            context_runtime(context).emit_runtime_event(
+                "provider_policy_resolved",
+                policy_fingerprint=policy_fingerprint(resolved_policy),
+            )
         with bind_operation_runtime(
             OperationRuntime(
                 provider=self._engine.provider,
@@ -2030,10 +2051,20 @@ class OperationRecorder:
                 step_visit=step_visit,
                 default_session_name=self._engine.compiled.default_session_name,
                 replay_mismatch_behavior=self._engine.operation_replay_mismatch_behavior,
+                policy=resolved_policy,
+                provider_policy_resolver=self._engine.provider_policy_resolver,
                 event_sink=self._engine.runtime_event_sink,
             )
         ) as runtime:
             yield runtime
+
+
+def _context_provider_policy(context: "Context") -> object | None:
+    return getattr(context, "_provider_policy", None)
+
+
+def _step_uses_provider_policy(step: "CompiledStep") -> bool:
+    return step.kind in {"produce_verify", "step", "python", "operation"}
 
 
 class WorkflowInvoker:

@@ -6,6 +6,7 @@ from dataclasses import dataclass, field
 from typing import TYPE_CHECKING, Any, Literal, Mapping
 
 from ..primitives import Outcome
+from ..provider_policy import ResolvedProviderPolicy
 from ..prompts import ResolvedPrompt
 from ..stores.protocols import SessionBinding
 
@@ -92,6 +93,7 @@ class ProviderTurnContext:
     response_schema_simplified: bool = False
     retry_feedback: str | None = None
     route_handoff: str | None = None
+    policy: ResolvedProviderPolicy | None = None
     attempt: int = 1
     max_attempts: int = 3
 
@@ -114,6 +116,7 @@ class ProducerRequest:
     response_schema_simplified: bool = False
     retry_feedback: str | None = None
     route_handoff: str | None = None
+    policy: ResolvedProviderPolicy | None = None
     attempt: int = 1
     max_attempts: int = 3
 
@@ -137,6 +140,7 @@ class VerifierRequest:
     response_schema_simplified: bool = False
     retry_feedback: str | None = None
     route_handoff: str | None = None
+    policy: ResolvedProviderPolicy | None = None
     attempt: int = 1
     max_attempts: int = 3
 
@@ -159,6 +163,7 @@ class LLMRequest:
     response_schema_simplified: bool = False
     retry_feedback: str | None = None
     route_handoff: str | None = None
+    policy: ResolvedProviderPolicy | None = None
     attempt: int = 1
     max_attempts: int = 3
 
@@ -173,6 +178,7 @@ class OperationRequest:
     return_schema: Mapping[str, Any] | None = None
     choices: tuple[str, ...] = ()
     retry_feedback: str | None = None
+    policy: ResolvedProviderPolicy | None = None
     attempt: int = 1
     max_attempts: int = 3
 

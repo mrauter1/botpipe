@@ -351,6 +351,7 @@ def _handle_run(args: argparse.Namespace, *, provider_factory: Callable[..., Any
             max_steps=config.runtime.max_steps,
             workflow_params=workflow_params,
             runtime_config=config.runtime,
+            provider_policy_config=config.provider_policy,
         ),
     )
     _emit_json(_run_summary_payload(execution))
@@ -383,6 +384,7 @@ def _handle_resume(args: argparse.Namespace, *, provider_factory: Callable[..., 
             resume=True,
             max_steps=config.runtime.max_steps,
             runtime_config=config.runtime,
+            provider_policy_config=config.provider_policy,
         ),
     )
     _emit_json(_run_summary_payload(execution))
@@ -416,6 +418,7 @@ def _handle_answer(args: argparse.Namespace, *, provider_factory: Callable[..., 
             answer=args.answer,
             max_steps=config.runtime.max_steps,
             runtime_config=config.runtime,
+            provider_policy_config=config.provider_policy,
         ),
     )
     _emit_json(_run_summary_payload(execution))

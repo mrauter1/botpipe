@@ -23,7 +23,14 @@ from autoloop.core.providers.protocols import LLMProvider
 from autoloop.core.schema_registry import RUN_METADATA_SCHEMA, WORKFLOW_TOPOLOGY_SCHEMA, migrate_schemaless_payload, validate_persisted_schema
 from autoloop.core.statuses import terminal_to_run_status
 from autoloop.extensions.session_paths import extract_session_path_strategy
-from .config import ConfigError, DEFAULT_MAX_STEPS, RuntimeConfig
+from .config import (
+    ConfigError,
+    DEFAULT_MAX_STEPS,
+    ProviderConfig,
+    ProviderPolicyRuntimeConfig,
+    ResolvedRuntimeConfig,
+    RuntimeConfig,
+)
 from .events import EventLogger
 from .git_tracking import RuntimeGitTracker
 from .loader import (
@@ -35,6 +42,7 @@ from .loader import (
 )
 from .observability import BoundRuntimeObservability
 from .prompts import FilesystemPromptRegistry
+from .provider_policy_resolver import ProviderPolicyResolver
 from .stores.filesystem import FilesystemCheckpointStore, FilesystemSessionStore
 from .static_graph import (
     ARTIFACT_CONTRACTS_FILENAME,
@@ -89,6 +97,7 @@ class RunnerOptions:
     parent_run: RunWorkspace | None = None
     record_task_message: bool = True
     runtime_config: RuntimeConfig = field(default_factory=RuntimeConfig)
+    provider_policy_config: ProviderPolicyRuntimeConfig = field(default_factory=ProviderPolicyRuntimeConfig)
 
 
 @dataclass(frozen=True, slots=True)
@@ -260,6 +269,15 @@ def _execute_compiled_workflow(
         prepared.logger.emit(event_type, **payload)
         trace_writer.runtime_event(event_type=event_type, **payload)
 
+    provider_policy_resolver = ProviderPolicyResolver(
+        config=ResolvedRuntimeConfig(
+            provider=ProviderConfig(),
+            runtime=options.runtime_config,
+            provider_policy=options.provider_policy_config,
+        ),
+        workflow_policy=prepared.compiled.provider_policy,
+        workspace_root=prepared.task_workspace.root,
+    )
     engine = Engine(
         prepared.compiled,
         provider=provider,
@@ -275,6 +293,7 @@ def _execute_compiled_workflow(
         ),
         hook_event_sink=emit_hook_event,
         runtime_event_sink=emit_runtime_event,
+        provider_policy_resolver=provider_policy_resolver,
     )
     workflow_invoker = _build_workflow_invoker(
         provider=provider,

@@ -125,6 +125,7 @@ def _producer_context(request: ProducerRequest) -> ProviderTurnContext:
         response_schema_simplified=request.response_schema_simplified,
         retry_feedback=request.retry_feedback,
         route_handoff=request.route_handoff,
+        policy=request.policy,
         attempt=request.attempt,
         max_attempts=request.max_attempts,
     )
@@ -149,6 +150,7 @@ def _verifier_context(request: VerifierRequest) -> ProviderTurnContext:
         response_schema_simplified=request.response_schema_simplified,
         retry_feedback=request.retry_feedback,
         route_handoff=request.route_handoff,
+        policy=request.policy,
         attempt=request.attempt,
         max_attempts=request.max_attempts,
     )
@@ -173,6 +175,7 @@ def _llm_context(request: LLMRequest) -> ProviderTurnContext:
         response_schema_simplified=request.response_schema_simplified,
         retry_feedback=request.retry_feedback,
         route_handoff=request.route_handoff,
+        policy=request.policy,
         attempt=request.attempt,
         max_attempts=request.max_attempts,
     )
@@ -197,6 +200,7 @@ def _operation_context(request: OperationRequest) -> ProviderTurnContext:
         response_schema_simplified=False,
         retry_feedback=request.retry_feedback,
         route_handoff=None,
+        policy=request.policy,
         attempt=request.attempt,
         max_attempts=request.max_attempts,
     )

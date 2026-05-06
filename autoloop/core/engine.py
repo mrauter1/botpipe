@@ -10,7 +10,7 @@ import importlib
 import inspect
 import json
 from pathlib import Path
-from typing import Any, Callable, Literal, Mapping
+from typing import TYPE_CHECKING, Any, Callable, Literal, Mapping
 from uuid import uuid4
 
 from pydantic import BaseModel, TypeAdapter
@@ -81,6 +81,9 @@ from .stores.protocols import (
 from .statuses import route_is_replan, route_is_rework
 from .steps import ChildWorkflowStep
 from .worklists import Selection, SelectionSnapshot
+
+if TYPE_CHECKING:
+    from autoloop.runtime.provider_policy_resolver import ProviderPolicyResolver
 
 
 @dataclass(frozen=True, slots=True)
@@ -156,6 +159,7 @@ class Engine:
         runtime_extension_factories: Sequence[Callable[[RunBinding], BoundWorkflowExtension]] = (),
         hook_event_sink: Callable[[str, Mapping[str, Any]], None] | None = None,
         runtime_event_sink: Callable[[str, Mapping[str, Any]], None] | None = None,
+        provider_policy_resolver: "ProviderPolicyResolver | None" = None,
     ) -> None:
         self.compiled = workflow if isinstance(workflow, CompiledWorkflow) else compile_workflow(workflow)
         self.provider = validate_llm_provider(provider)
@@ -167,6 +171,7 @@ class Engine:
         self.runtime_extension_factories = tuple(runtime_extension_factories)
         self.hook_event_sink = hook_event_sink
         self.runtime_event_sink = runtime_event_sink
+        self.provider_policy_resolver = provider_policy_resolver
         self.step_dispatcher = StepDispatcher(self)
         self.route_finalizer = RouteFinalizer(self)
         self.hook_runner = HookRunner(self)
@@ -473,6 +478,7 @@ class Engine:
                 state_before = self._clone_state(state)
                 try:
                     with self.operation_recorder.bind_step(
+                        step=step,
                         context=context,
                         run_folder=run_folder,
                         step_name=step.name,
@@ -2388,7 +2394,7 @@ class Engine:
             )
             reason = last_event.reason if isinstance(last_event, Event) and last_event.reason else "Child workflow failed."
             return Event("failed", reason=reason)
-        if terminal == AWAIT_INPUT and isinstance(last_event, Event) and last_event.tag == "question":
+        if terminal == AWAIT_INPUT and isinstance(last_event, Event) and isinstance(last_event.question, str) and last_event.question.strip():
             return Event("question", reason=last_event.reason, question=last_event.question)
         if terminal == AWAIT_INPUT and isinstance(pending_question, str) and pending_question:
             reason = last_event.reason if isinstance(last_event, Event) else ""
