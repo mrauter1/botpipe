@@ -1496,7 +1496,7 @@ def _lower_simple_destination(destination: object, simple_step_map: Mapping[obje
         target = _lower_simple_target(destination.target, simple_step_map)
         if target is destination.target:
             return destination
-        return Route(
+        lowered = Route(
             target=target,
             summary=destination.summary,
             required_writes=destination.required_writes,
@@ -1504,6 +1504,12 @@ def _lower_simple_destination(destination: object, simple_step_map: Mapping[obje
             on_taken=destination.on_taken,
             provider_visible=destination.provider_visible,
         )
+        object.__setattr__(
+            lowered,
+            "_handwritten_route_fields_validation_equivalent",
+            destination._handwritten_route_fields_validation_equivalent,
+        )
+        return lowered
     return _lower_simple_target(destination, simple_step_map)
 
 
@@ -1565,7 +1571,13 @@ def _resolve_transition_destination(destination: object, *, source: Step | str, 
         target = _resolve_transition_destination(destination.target, source=source, steps_by_name=steps_by_name)
         if target is destination.target:
             return destination
-        return replace(destination, target=target)
+        resolved = replace(destination, target=target)
+        object.__setattr__(
+            resolved,
+            "_handwritten_route_fields_validation_equivalent",
+            destination._handwritten_route_fields_validation_equivalent,
+        )
+        return resolved
     if destination == SELF:
         return source if isinstance(source, Step) else destination
     if isinstance(destination, str) and destination not in {FINISH, AWAIT_INPUT, FAIL}:

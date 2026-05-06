@@ -1306,6 +1306,62 @@ def test_claude_transport_preserves_legacy_bypass_for_policy_backed_turns(
     ]
 
 
+def test_claude_transport_does_not_reapply_legacy_bypass_when_explicit_policy_is_safe(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    calls: list[tuple[str, ...]] = []
+    workspace_root = tmp_path / "workspace"
+    workspace_root.mkdir()
+
+    async def fake_create_subprocess_exec(*command: str, **_: object) -> _AsyncProcessStub:
+        calls.append(tuple(command))
+        return _AsyncProcessStub(
+            stdout='{"result":"producer text","session_id":"claude-session-safe","stop_reason":"end_turn"}',
+        )
+
+    monkeypatch.setattr(claude_runtime_provider.asyncio, "create_subprocess_exec", fake_create_subprocess_exec)
+    transport = ClaudeTransport(config=_config(provider_name="claude", claude_permission_strategy="bypass").provider.claude)
+    policy = ProviderPolicy(
+        permissions=PermissionPolicy(mode="ask"),
+        sandbox=SandboxPolicy(
+            enabled=True,
+            required=True,
+            mode="workspace_write",
+        ),
+    )
+
+    asyncio.run(
+        transport.run_turn(
+            _rendered_turn(
+                step_name="produce",
+                prompt_text="# Step: produce\n\nShared runtime prompt.",
+                session=_placeholder_session(),
+                policy=policy,
+                run_folder=tmp_path,
+                workspace_root=workspace_root,
+                step_execution_id="produce:1",
+            )
+        )
+    )
+
+    assert calls == [
+        (
+            "claude",
+            "-p",
+            "# Step: produce\n\nShared runtime prompt.",
+            "--output-format",
+            "json",
+            "--settings",
+            str(tmp_path / "provider_policy" / "produce__visit-1" / "claude" / "settings.json"),
+            "--add-dir",
+            str(workspace_root.resolve()),
+            "--model",
+            "claude-test",
+        )
+    ]
+
+
 def test_claude_operation_executor_uses_policy_settings_and_metadata(
     tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,

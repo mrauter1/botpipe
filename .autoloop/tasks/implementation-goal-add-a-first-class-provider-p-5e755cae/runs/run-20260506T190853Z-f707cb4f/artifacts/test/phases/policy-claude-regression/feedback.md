@@ -14,6 +14,13 @@
   - `.venv/bin/python -m pytest tests/runtime/test_runtime_providers.py tests/runtime/test_provider_policy_emitters.py tests/runtime/test_provider_policy_config.py tests/runtime/test_provider_backends.py -q`
   - `.venv/bin/python -m pytest tests/runtime/test_provider_policy_steps.py -q`
 
+## Cycle 2 Summary
+
+- Added the missing runtime negative-path coverage for legacy Claude `permission_strategy=bypass`: a policy-backed turn with an explicit safe policy now asserts that the emitted command omits `--dangerously-skip-permissions`.
+- Confirmed the focused Claude/provider batch with:
+  - `.venv/bin/python -m pytest tests/runtime/test_runtime_providers.py tests/runtime/test_provider_policy_emitters.py tests/runtime/test_provider_policy_config.py tests/runtime/test_provider_backends.py -q`
+- Re-ran `tests/runtime/test_provider_policy_steps.py -q` and observed unrelated ambient failures caused by the missing optional `jsonschema` dependency during route-contract compilation; no step-policy test or fixture changes were made in this turn.
+
 ## Findings
 
 - `TST-001` `blocking` [tests/runtime/test_runtime_providers.py, tests/runtime/test_provider_policy_config.py]

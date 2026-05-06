@@ -1861,3 +1861,51 @@ The test phase is not complete. The next test-author turn should add one runtime
 <loop-control>
 {"schema":"docloop.loop_control/v1","kind":"promise","promise":"INCOMPLETE"}
 </loop-control>
+
+
+---
+run_id=run-20260506T190853Z-f707cb4f | entry=session_turn | pair=test | phase=producer | cycle=2 | attempt=1 | thread_id=019dff06-56f8-7ec3-9792-9244e6c94bf8
+---
+provider=codex
+mode=resume
+template=/home/rauter/.local/share/pipx/venvs/autoloop/lib/python3.12/site-packages/autoloop/templates/test_producer.md
+session_id=019dff06-56f8-7ec3-9792-9244e6c94bf8
+
+
+---
+run_id=run-20260506T190853Z-f707cb4f | entry=phase_output | pair=test | phase=producer | process=codex-agent | cycle=2 | attempt=1 | thread_id=019dff06-56f8-7ec3-9792-9244e6c94bf8
+---
+I’m addressing the single test-audit gap now. The missing piece is narrow: a runtime-provider test that proves legacy Claude `bypass` does not leak back into the emitted command when an explicit safe policy owns the turn.
+
+The fix is straightforward. I’m adding a second transport-level bypass test that uses a safe explicit policy with `permission_strategy=bypass` still configured, and it will assert that the emitted Claude command stays safe and omits the dangerous bypass flag.
+
+I’ve added the missing negative-path test and updated the phase artifacts. I’m rerunning the focused Claude provider/runtime suites so the test-phase handoff reflects the fixed coverage gap, not just the edited assertions.
+
+The new runtime-provider batch is still running, but the adjacent policy-step sweep failed immediately. I’m pulling the exact failures now; they likely reflect an existing nearby regression surface that this test turn exposed, and I need to separate that from the new Claude coverage change before I decide the next move.
+
+The added Claude coverage is good, but the adjacent step-policy suite is not green in this environment. I’m updating the phase artifacts so they don’t falsely imply a fully green adjacent sweep when the failure is actually an ambient `jsonschema` dependency issue outside this narrow test addition.
+
+Scope considered
+
+Phase-local test refinement for the Claude policy regression sweep, limited to the runtime/provider test surface and the active test-phase artifacts.
+
+What I analyzed
+
+I traced the auditor’s blocking gap to one missing negative runtime path: a policy-backed Claude turn with legacy `permission_strategy=bypass` still configured, but with an explicit safe policy that must suppress the dangerous bypass flag. I also rechecked the focused Claude suites after adding that test.
+
+What I changed
+
+I added `test_claude_transport_does_not_reapply_legacy_bypass_when_explicit_policy_is_safe` to [tests/runtime/test_runtime_providers.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/tests/runtime/test_runtime_providers.py). It exercises the exact transport seam the auditor flagged and asserts that `--dangerously-skip-permissions` is omitted when an explicit safe policy owns the turn even if legacy Claude `bypass` remains configured.
+
+I updated [test_strategy.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/implementation-goal-add-a-first-class-provider-p-5e755cae/runs/run-20260506T190853Z-f707cb4f/artifacts/test/phases/policy-claude-regression/test_strategy.md) to map that new negative runtime coverage, and I appended the cycle-2 summary to [feedback.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/implementation-goal-add-a-first-class-provider-p-5e755cae/runs/run-20260506T190853Z-f707cb4f/artifacts/test/phases/policy-claude-regression/feedback.md).
+
+Key findings / decisions
+
+Focused Claude/provider validation passed:
+- `.venv/bin/python -m pytest tests/runtime/test_runtime_providers.py tests/runtime/test_provider_policy_emitters.py tests/runtime/test_provider_policy_config.py tests/runtime/test_provider_backends.py -q`
+
+An adjacent rerun of `tests/runtime/test_provider_policy_steps.py -q` failed, but the failures were unrelated to this new Claude coverage: they come from the missing optional `jsonschema` dependency during route-contract compilation. I documented that as an environment gap rather than broadening this turn into unrelated fixture or dependency repair.
+
+Open issues / next step
+
+The auditor’s specific Claude coverage gap is addressed. The remaining open issue is the unrelated ambient `jsonschema` failure in `tests/runtime/test_provider_policy_steps.py`, which would need a separate scoped follow-up if that suite must be green in this environment.

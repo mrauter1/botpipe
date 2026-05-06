@@ -33,6 +33,7 @@
     - `test_explicit_policy_fields_beat_legacy_claude_bypass_mapping`
   - `tests/runtime/test_runtime_providers.py`
     - `test_claude_transport_preserves_legacy_bypass_for_policy_backed_turns`
+    - `test_claude_transport_does_not_reapply_legacy_bypass_when_explicit_policy_is_safe`
 - Preserved invariants and adjacent regressions:
   - `tests/runtime/test_provider_backends.py`
   - `tests/runtime/test_provider_policy_steps.py`
@@ -53,3 +54,4 @@
 
 - No live-Claude integration test exists for managed enterprise settings precedence; this phase intentionally keeps coverage at the fake CLI surface.
 - Additional-directory `CLAUDE.md` loading is validated indirectly through emitted env/cwd/CLI args rather than a real Claude process.
+- The adjacent `tests/runtime/test_provider_policy_steps.py` suite currently fails in this environment because the optional `jsonschema` dependency is unavailable during route-contract compilation; this turn did not broaden into unrelated dependency or fixture repair work.
