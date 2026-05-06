@@ -1779,3 +1779,53 @@ Open issues / next step
   `tests/unit/test_provider_boundary_core.py`
   `tests/runtime/test_provider_backends.py`
 - The rest of the phase coverage remains unexecuted in this workspace for the same environment reason.
+
+
+---
+run_id=run-20260506T130608Z-37f1c786 | entry=session_turn | pair=implement | phase=verifier | cycle=1 | attempt=1 | thread_id=019dfdab-cbed-71e2-9b3b-61be29aeb301
+---
+provider=codex
+mode=resume
+template=/home/rauter/.local/share/pipx/venvs/autoloop/lib/python3.12/site-packages/autoloop/templates/implement_verifier.md
+session_id=019dfdab-cbed-71e2-9b3b-61be29aeb301
+
+
+---
+run_id=run-20260506T130608Z-37f1c786 | entry=phase_output | pair=implement | phase=verifier | process=codex-agent | cycle=1 | attempt=1 | thread_id=019dfdab-cbed-71e2-9b3b-61be29aeb301
+---
+I’m reviewing only the phase-local test and artifact changes, with repo-wide reads limited to dependency and regression analysis. First I’m comparing the implementation against the phase criteria, the decision ledger, and the specific tests that were touched or newly relied on.
+
+I’ve finished the substantive review. There are two blocking issues: one is a real AC-1 coverage hole in the new strictness scanner, and the other is that the required validation matrix still wasn’t executed, so AC-2 is not actually demonstrated. I’m recording both now and leaving the criteria boxes unchecked.
+
+The criteria state is still “all unchecked”, which is accurate with the blocking findings above. I’m adding a short reviewer status note so the artifact reflects an explicit review outcome rather than just a default template state.
+
+Scope considered
+
+- Phase-local review of the touched test files and the active review artifacts only.
+- Repo-wide reads were limited to the provider, rendered-provider, runtime-provider, and backend paths needed to judge the new test coverage.
+
+What I analyzed
+
+- The implementation diff for `tests/strictness/test_no_compat.py`, `tests/unit/test_provider_boundary_core.py`, and `tests/runtime/test_provider_backends.py`.
+- The active phase criteria, feedback, implementation notes, and the run-local decisions ledger for the preserved `llm()` / `classify()` compatibility exception.
+
+What I reviewed
+
+- Whether the new tests actually enforce AC-1 against sync provider/transport regressions and async-support probe reintroduction.
+- Whether the phase now demonstrates AC-2 with a real passing validation matrix, not just static inspection.
+
+Key findings / decisions
+
+- I appended two blocking findings to `feedback.md`.
+- I left all criteria checkboxes unchecked and added a reviewer status note in `criteria.md`.
+- The first blocker is a real strictness hole: the new rendered-provider scan only checks direct async method bodies, so a sync bridge moved into `_run_turn()` or another awaited helper would evade the new AC-1 guard.
+- The second blocker is validation: the phase notes explicitly say no pytest-backed matrix was run, so the required “passing validation matrix” deliverable is still unmet.
+
+Open issues / next step
+
+- Tighten the rendered-provider strictness scan so it forbids sync bridging anywhere on the non-operation async path, not just in the top-level async methods.
+- Run and record the targeted pytest matrix, or the repo’s supported equivalent runner, so AC-2 is actually demonstrated.
+
+<loop-control>
+{"schema":"docloop.loop_control/v1","kind":"promise","promise":"INCOMPLETE"}
+</loop-control>
