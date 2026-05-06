@@ -17,3 +17,7 @@
 {"ts": "2026-05-06T14:16:20.916253+00:00", "run_id": "run-20260506T140151Z-c56b8e14", "seq": 17, "event_type": "phase_finished", "pair": "test", "phase": "producer", "cycle": 1, "attempt": 1, "empty_output": false, "phase_id": "route-compilation-contract"}
 {"ts": "2026-05-06T14:17:12.628686+00:00", "run_id": "run-20260506T140151Z-c56b8e14", "seq": 18, "event_type": "phase_finished", "pair": "test", "phase": "verifier", "cycle": 1, "attempt": 1, "empty_output": false, "phase_id": "route-compilation-contract"}
 {"ts": "2026-05-06T14:17:12.677103+00:00", "run_id": "run-20260506T140151Z-c56b8e14", "seq": 19, "event_type": "pair_completed", "pair": "test", "cycle": 1, "attempt": 1, "phase_id": "route-compilation-contract"}
+{"ts": "2026-05-06T14:17:12.774555+00:00", "run_id": "run-20260506T140151Z-c56b8e14", "seq": 20, "event_type": "phase_completed", "pair": "test", "phase_id": "route-compilation-contract", "phase_mode": "single"}
+{"ts": "2026-05-06T14:17:12.776669+00:00", "run_id": "run-20260506T140151Z-c56b8e14", "seq": 21, "event_type": "phase_started", "phase_id": "provider-and-surface-regressions", "phase_mode": "single"}
+{"ts": "2026-05-06T14:17:12.777613+00:00", "run_id": "run-20260506T140151Z-c56b8e14", "seq": 22, "event_type": "pair_started", "pair": "implement", "phase_id": "provider-and-surface-regressions"}
+{"ts": "2026-05-06T14:17:12.777701+00:00", "run_id": "run-20260506T140151Z-c56b8e14", "seq": 23, "event_type": "cycle_started", "pair": "implement", "cycle": 1, "attempt": 1, "phase_id": "provider-and-surface-regressions"}
