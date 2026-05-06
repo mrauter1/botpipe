@@ -9,7 +9,7 @@ from pydantic import BaseModel
 
 import autoloop.simple as simple
 from autoloop.core.engine import Engine
-from autoloop.core.primitives import Event, Outcome
+from autoloop.core.primitives import Event, Outcome, RequestInput
 from autoloop.core.providers.fake import ScriptedLLMProvider
 from autoloop.core.providers.models import LLMRequest, OutcomeResponse, ProducerRequest, ProducerResponse, VerifierRequest
 from autoloop.core.stores import InMemoryCheckpointStore, InMemorySessionStore
@@ -163,6 +163,54 @@ def test_engine_run_async_preserves_sequential_sync_provider_compatibility(tmp_p
 
     assert result.terminal == simple.FINISH
     assert provider.sync_calls == ["review"]
+
+
+def test_engine_resume_async_uses_async_core_after_pending_input(tmp_path: Path) -> None:
+    class ResumeWorkflow(simple.Workflow):
+        class State(BaseModel):
+            answer: str | None = None
+
+        @staticmethod
+        def _ask(ctx):
+            if ctx.input_response is None:
+                return RequestInput("Approve the review?")
+            ctx.state = ctx.state.model_copy(update={"answer": str(ctx.input_response)})
+            return Event("done")
+
+        ask = simple.python_step(_ask, name="ask", routes={"done": simple.Route.to("review")})
+        review = simple.step("Review the artifact.", name="review", routes={"done": simple.FINISH})
+
+    task_folder, run_folder = _workspace(tmp_path)
+    provider = _AsyncOnlyLLMProvider()
+    engine = Engine(
+        ResumeWorkflow,
+        provider=provider,
+        session_store=InMemorySessionStore(),
+        checkpoint_store=InMemoryCheckpointStore(),
+    )
+
+    first = engine.run(
+        task_id="task-resume-async",
+        run_id="run-resume-async",
+        task_folder=task_folder,
+        run_folder=run_folder,
+        root=tmp_path,
+    )
+    resumed = asyncio.run(
+        engine.resume_async(
+            task_id="task-resume-async",
+            run_id="run-resume-async",
+            task_folder=task_folder,
+            run_folder=run_folder,
+            root=tmp_path,
+            answer="yes",
+        )
+    )
+
+    assert first.terminal == simple.AWAIT_INPUT
+    assert resumed.terminal == simple.FINISH
+    assert resumed.state.answer == "yes"
+    assert provider.async_calls == ["review"]
 
 
 def test_engine_run_wrapper_executes_async_core_for_sequential_workflows(tmp_path: Path) -> None:
