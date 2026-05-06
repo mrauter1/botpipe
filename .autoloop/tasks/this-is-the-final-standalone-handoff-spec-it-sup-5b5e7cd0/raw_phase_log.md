@@ -2165,3 +2165,52 @@ Open issues / next step
   - `.venv/bin/python -m pytest tests/unit/test_validation.py -k "raw_route_payload_schema_without_jsonschema_dependency or raw_route_fields_schema_without_jsonschema_dependency or helper_default_route_fields_without_jsonschema_dependency or custom_helper_route_fields_override_without_jsonschema_dependency"`
   - `.venv/bin/python -m pytest tests/contract/test_engine_contracts.py -k "invalid_custom_raw_route_payload or invalid_custom_raw_route_fields"`
 - I did not run the full suite.
+
+
+---
+run_id=run-20260506T204256Z-05282838 | entry=session_turn | pair=test | phase=verifier | cycle=1 | attempt=1 | thread_id=019dff0e-7daf-7a32-806b-ba0f9ef79fd1
+---
+provider=codex
+mode=resume
+template=/home/rauter/.local/share/pipx/venvs/autoloop/lib/python3.12/site-packages/autoloop/templates/test_verifier.md
+session_id=019dff0e-7daf-7a32-806b-ba0f9ef79fd1
+
+
+---
+run_id=run-20260506T204256Z-05282838 | entry=phase_output | pair=test | phase=verifier | process=codex-agent | cycle=1 | attempt=1 | thread_id=019dff0e-7daf-7a32-806b-ba0f9ef79fd1
+---
+I’m auditing the test additions and the test strategy against the phase acceptance criteria. I’m starting with the current test-audit artifacts, then I’ll verify the added named-target helper-route regression test is actually covering the adjacent marker-loss risk without widening expectations beyond confirmed behavior.
+
+The added test is narrow and useful: it covers the exact adjacent regression surface that the implementation actually hit, without inventing new behavior expectations. I don’t see a material coverage or reliability gap left for this phase, so I’m marking the audit artifacts complete and recording that there are no new findings.
+
+Scope considered
+
+- Test changes in [tests/unit/test_validation.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/tests/unit/test_validation.py) and existing request-relevant runtime contract coverage in `tests/contract/test_engine_contracts.py`.
+- Test-phase artifacts [test_strategy.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/this-is-the-final-standalone-handoff-spec-it-sup-5b5e7cd0/runs/run-20260506T204256Z-05282838/artifacts/test/phases/route-contract-enforcement/test_strategy.md), [criteria.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/this-is-the-final-standalone-handoff-spec-it-sup-5b5e7cd0/runs/run-20260506T204256Z-05282838/artifacts/test/phases/route-contract-enforcement/criteria.md), and [feedback.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/this-is-the-final-standalone-handoff-spec-it-sup-5b5e7cd0/runs/run-20260506T204256Z-05282838/artifacts/test/phases/route-contract-enforcement/feedback.md).
+
+What I analyzed
+
+- The AC-1 through AC-4 coverage map in the test strategy.
+- The newly added helper-default named-target regression test and the surrounding missing-`jsonschema` tests.
+- Flake controls and whether the tests encode any behavior narrowing beyond confirmed intent.
+
+What I reviewed
+
+- The named-target helper-route test is deterministic and targets a real adjacent regression surface: internal route-copy normalization dropping helper-default fallback classification.
+- The existing unit and contract tests together cover compile-fail behavior, helper-default compatibility, custom-helper override failure, and scripted/rendered runtime rejection paths.
+- The updated strategy accurately documents preserved invariants, edge cases, and stabilization choices.
+
+Key findings / decisions
+
+- No new findings.
+- Coverage is appropriately layered: compiler/validation tests for fail-closed and compatibility behavior, contract tests for runtime enforcement.
+- Reliability is acceptable because the suite uses monkeypatching and in-process fakes instead of external services, timing, or environment-sensitive state.
+
+Open issues / next step
+
+- I updated the test audit criteria to fully checked and appended a no-new-findings audit note to feedback.
+- No blocking test gaps remain for this phase.
+
+<loop-control>
+{"schema":"docloop.loop_control/v1","kind":"promise","promise":"COMPLETE"}
+</loop-control>

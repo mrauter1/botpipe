@@ -8,3 +8,4 @@
 - Scope: phase-local authoritative verifier artifact
 
 - Added one focused regression test in `tests/unit/test_validation.py` for helper-default route-fields fallback after named-target route resolution, and documented the full AC-to-test coverage map plus stabilization notes in `test_strategy.md`.
+- Cycle 1 audit: no new findings. The added named-target helper-route test materially improves adjacent regression protection for internal route-copy normalization, and the strategy now maps AC-1 through AC-4 plus flake controls clearly.
