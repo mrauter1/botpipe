@@ -554,6 +554,50 @@ def test_fake_provider_supports_async_turn_methods() -> None:
     assert provider.calls[0].kind == "step"
 
 
+def test_fake_provider_records_session_binding_for_async_turns() -> None:
+    binding = _session_binding("branch-session-1")
+    provider = ScriptedLLMProvider(llm_turns=[OutcomeResponse(outcome=parse_outcome_json('{"tag":"done"}'))])
+
+    asyncio.run(
+        provider.run_llm(
+            LLMRequest(
+                step_name="ask",
+                prompt=ResolvedPrompt(path="ask.md", text="Answer the question."),
+                context=object(),
+                artifacts=object(),
+                session=binding,
+            )
+        )
+    )
+
+    assert provider.calls[0].session == binding
+    assert provider.calls[0].session is not binding
+
+
+def test_fake_provider_awaits_async_scripted_turn_callbacks() -> None:
+    async def scripted_turn(request: LLMRequest) -> OutcomeResponse:
+        await asyncio.sleep(0)
+        return OutcomeResponse(
+            outcome=parse_outcome_json(f'{{"tag":"done","payload":{{"step":"{request.step_name}"}}}}')
+        )
+
+    provider = ScriptedLLMProvider(llm_turns=[scripted_turn])
+
+    response = asyncio.run(
+        provider.run_llm(
+            LLMRequest(
+                step_name="ask",
+                prompt=ResolvedPrompt(path="ask.md", text="Answer the question."),
+                context=object(),
+                artifacts=object(),
+            )
+        )
+    )
+
+    assert response.outcome.tag == "done"
+    assert response.outcome.payload == {"step": "ask"}
+
+
 def test_parse_outcome_json_defaults_missing_reason_to_empty_string() -> None:
     outcome = parse_outcome_json('{"tag":"done"}')
 

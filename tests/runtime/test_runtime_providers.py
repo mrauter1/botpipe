@@ -22,6 +22,7 @@ from autoloop.runtime.config import (
 )
 from autoloop.runtime.providers._common import (
     build_session_binding,
+    communicate_text_subprocess,
     ensure_session_provider_match,
     format_subprocess_streams,
     require_prompt_text,
@@ -170,6 +171,38 @@ class _AsyncProcessStub:
         if self._seen_inputs is not None:
             self._seen_inputs.append(input)
         return self._stdout, self._stderr
+
+
+class _CancellableAsyncProcessStub:
+    def __init__(self) -> None:
+        self.returncode: int | None = None
+        self.terminate_calls = 0
+        self.kill_calls = 0
+        self.wait_calls = 0
+        self.seen_inputs: list[bytes | None] = []
+        self._wait_released = asyncio.Event()
+
+    async def communicate(self, input: bytes | None = None) -> tuple[bytes, bytes]:
+        self.seen_inputs.append(input)
+        try:
+            await asyncio.Future()
+        except asyncio.CancelledError:
+            raise
+
+    def terminate(self) -> None:
+        self.terminate_calls += 1
+
+    def kill(self) -> None:
+        self.kill_calls += 1
+        self.returncode = -9
+        self._wait_released.set()
+
+    async def wait(self) -> int:
+        self.wait_calls += 1
+        await self._wait_released.wait()
+        if self.returncode is None:
+            self.returncode = -15
+        return self.returncode
 
 
 def test_require_prompt_text_rejects_missing_text() -> None:
@@ -547,6 +580,24 @@ def test_codex_transport_supports_async_subprocess_execution(
     assert result.raw_text == "producer text"
     assert result.session is not None
     assert result.session.session_id == "codex-session-async"
+
+
+def test_communicate_text_subprocess_terminates_then_kills_on_cancellation() -> None:
+    process = _CancellableAsyncProcessStub()
+
+    async def cancel_mid_communicate() -> None:
+        task = asyncio.create_task(communicate_text_subprocess(process, input_text="payload"))
+        await asyncio.sleep(0)
+        task.cancel()
+        with pytest.raises(asyncio.CancelledError):
+            await task
+
+    asyncio.run(cancel_mid_communicate())
+
+    assert process.seen_inputs == [b"payload"]
+    assert process.terminate_calls == 1
+    assert process.kill_calls == 1
+    assert process.wait_calls == 1
 
 
 def test_codex_transport_does_not_parse_workflow_outcome_json(monkeypatch: pytest.MonkeyPatch) -> None:
