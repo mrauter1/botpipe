@@ -11,3 +11,6 @@
 {"ts": "2026-05-06T19:16:29.373987+00:00", "run_id": "run-20260506T190853Z-f707cb4f", "seq": 11, "event_type": "phase_started", "phase_id": "policy-core", "phase_mode": "single"}
 {"ts": "2026-05-06T19:16:29.375107+00:00", "run_id": "run-20260506T190853Z-f707cb4f", "seq": 12, "event_type": "pair_started", "pair": "implement", "phase_id": "policy-core"}
 {"ts": "2026-05-06T19:16:29.375185+00:00", "run_id": "run-20260506T190853Z-f707cb4f", "seq": 13, "event_type": "cycle_started", "pair": "implement", "cycle": 1, "attempt": 1, "phase_id": "policy-core"}
+{"ts": "2026-05-06T19:24:47.727482+00:00", "run_id": "run-20260506T190853Z-f707cb4f", "seq": 14, "event_type": "phase_finished", "pair": "implement", "phase": "producer", "cycle": 1, "attempt": 1, "empty_output": false, "phase_id": "policy-core"}
+{"ts": "2026-05-06T19:26:36.087769+00:00", "run_id": "run-20260506T190853Z-f707cb4f", "seq": 15, "event_type": "phase_finished", "pair": "implement", "phase": "verifier", "cycle": 1, "attempt": 1, "empty_output": false, "phase_id": "policy-core"}
+{"ts": "2026-05-06T19:26:38.245962+00:00", "run_id": "run-20260506T190853Z-f707cb4f", "seq": 16, "event_type": "cycle_started", "pair": "implement", "cycle": 2, "attempt": 1, "phase_id": "policy-core"}
