@@ -226,17 +226,17 @@ def test_workflow_step_policy_applies_to_inline_operations_in_hooks(tmp_path: Pa
         simple.llm("Hook operation.")
         return Event("done")
 
-    launch = simple.workflow_step(
+    launch_step = simple.workflow_step(
         ChildWorkflow,
         message="Run child workflow.",
         routes={"done": simple.FINISH},
         policy=step_policy,
     )
-    launch.before = before_launch
+    launch_step.before = before_launch
 
     class ParentWorkflow(simple.Workflow):
         policy = workflow_policy
-        launch = launch
+        launch = launch_step
 
     provider = ScriptedLLMProvider(operation_turns=["hook result"])
     execution = _run_with_runner(
