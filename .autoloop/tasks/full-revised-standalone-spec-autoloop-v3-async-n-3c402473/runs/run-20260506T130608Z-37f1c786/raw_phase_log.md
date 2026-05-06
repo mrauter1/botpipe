@@ -613,3 +613,76 @@ This phase should return to implement. The next pass needs to remove the remaini
 <loop-control>
 {"schema":"docloop.loop_control/v1","kind":"promise","promise":"INCOMPLETE"}
 </loop-control>
+
+
+---
+run_id=run-20260506T130608Z-37f1c786 | entry=session_turn | pair=implement | phase=producer | cycle=3 | attempt=1 | thread_id=019dfd7a-d4d6-7373-93d8-1421e8ce9184
+---
+provider=codex
+mode=resume
+template=/home/rauter/.local/share/pipx/venvs/autoloop/lib/python3.12/site-packages/autoloop/templates/implement_producer.md
+session_id=019dfd7a-d4d6-7373-93d8-1421e8ce9184
+
+
+---
+run_id=run-20260506T130608Z-37f1c786 | entry=phase_output | pair=implement | phase=producer | process=codex-agent | cycle=3 | attempt=1 | thread_id=019dfd7a-d4d6-7373-93d8-1421e8ce9184
+---
+Scope considered
+
+Phase-local `provider-contract-cutover` only. I focused on the remaining blocker around `llm()` / `classify()` compatibility inside synchronous Python steps, the reviewer feedback for `IMP-002` and `IMP-003`, and the operation/runtime call path needed to resolve them safely.
+
+What I analyzed
+
+I traced the helper path through `autoloop/core/operations.py`, `autoloop/core/providers/rendered.py`, and the built-in Codex/Claude backend wiring. I also re-checked the active review feedback and the run-local decisions ledger to determine whether the remaining blocker can be resolved without violating either the async-native provider requirement or the compatibility requirement for exported sequential helpers.
+
+What I changed
+
+No files changed. I stopped before editing because the remaining blocker exposes a direct intent conflict that needs explicit confirmation.
+
+Key findings / decisions
+
+The unresolved issue is not just an implementation detail. `llm()` and `classify()` are synchronous helpers callable from synchronous Python steps, while the spec also forbids sync provider execution, sync provider subprocess execution, threads, and thread-backed fallbacks. Inside `run_async(...)`, a synchronous helper running inside a synchronous Python step has no safe way to await provider work without either:
+1. keeping a sync compatibility path, or
+2. introducing a user-visible behavior break.
+
+That means resolving `IMP-002` strictly as written requires a product decision, not just another local refactor.
+
+Open issues / next step
+
+I need explicit direction on whether helper compatibility or strict async-native provider execution wins for this phase.
+
+<loop-control>
+{"schema":"docloop.loop_control/v1","kind":"question","question":"WARNING: The remaining blocker exposes a spec conflict. `llm()` / `classify()` are synchronous helpers callable from synchronous Python steps, but the spec also forbids sync provider execution, sync provider subprocess execution, threads, and thread-backed fallbacks. Inside `run_async(...)`, there is no way for a synchronous helper in a synchronous Python step to await provider work without either blocking on a sync compatibility path or changing user-visible behavior.\n1) Should I preserve current helper behavior by keeping a narrowly scoped sync compatibility execution path for `llm()` / `classify()` until a later operation-runtime redesign lands? Answer YES or NO.\nBest supposition: YES.\n2) If NO, should I instead make `llm()` / `classify()` fail clearly when used from synchronous Python steps under an active workflow event loop, and document that compatibility break in the phase artifacts? Answer YES or NO.\nBest supposition: NO unless you explicitly accept the behavior break.","best_supposition":"Preserve `llm()` / `classify()` with a temporary explicit sync compatibility path until operation runtime is redesigned."}
+</loop-control>
+
+
+---
+run_id=run-20260506T130608Z-37f1c786 | entry=clarification | pair=implement | phase=producer | cycle=3 | attempt=1 | source=auto
+---
+Question:
+WARNING: The remaining blocker exposes a spec conflict. `llm()` / `classify()` are synchronous helpers callable from synchronous Python steps, but the spec also forbids sync provider execution, sync provider subprocess execution, threads, and thread-backed fallbacks. Inside `run_async(...)`, there is no way for a synchronous helper in a synchronous Python step to await provider work without either blocking on a sync compatibility path or changing user-visible behavior.
+1) Should I preserve current helper behavior by keeping a narrowly scoped sync compatibility execution path for `llm()` / `classify()` until a later operation-runtime redesign lands? Answer YES or NO.
+Best supposition: YES.
+2) If NO, should I instead make `llm()` / `classify()` fail clearly when used from synchronous Python steps under an active workflow event loop, and document that compatibility break in the phase artifacts? Answer YES or NO.
+Best supposition: NO unless you explicitly accept the behavior break.
+
+Answer:
+I’m checking the repo and the phase log to see whether prior decisions already resolved this conflict, then I’ll answer against the written spec rather than the implementation drift.
+
+I found the exact conflict point in the phase log: the current code already reached the “either keep a narrow sync exception or accept a break” fork. I’m reading the helper implementation now to make sure the answer matches the actual public surface, not just the spec prose.
+
+1) YES.
+
+Safest explicit assumption from the repo artifacts is to preserve current `llm()` / `classify()` behavior temporarily with a narrowly scoped compatibility path. The strongest repo-context reasons are:
+- the request keeps the public non-parallel authoring surface stable, including `python_step(...)`, synchronous Python step functions, and ordinary sequential workflow behavior;
+- the raw phase log already identifies this as the remaining spec conflict and repeatedly treats helper compatibility as intentional until a later operation-runtime redesign;
+- without threads or an async helper API redesign, a synchronous helper invoked inside a synchronous Python step under `run_async(...)` has no compliant way to await async provider work.
+
+That means this should be treated as a temporary, explicit exception boundary, not as a general return to sync provider internals:
+- limit it to `llm()` / `classify()` from synchronous Python-step execution;
+- do not reintroduce sync provider protocol methods, sync transport protocol methods, branch-runtime sync paths, or thread-backed fallbacks;
+- document it in the phase artifacts as a temporary spec exception pending operation-runtime redesign.
+
+2) NO.
+
+Do not take the behavior break unless you are explicitly choosing to revise the public compatibility requirement.

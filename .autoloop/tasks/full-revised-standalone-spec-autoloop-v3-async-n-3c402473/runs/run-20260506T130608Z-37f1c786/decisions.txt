@@ -16,3 +16,29 @@ Rendered-provider operation compatibility now uses an explicit `operation_execut
 <autoloop-decisions-header version="1" block_seq="5" owner="implementer" phase_id="provider-contract-cutover" pair="implement" turn_seq="2" run_id="run-20260506T130608Z-37f1c786" ts="2026-05-06T13:41:50.578976+00:00" />
 `RenderedLLMProvider` no longer relies on undocumented transport methods for `llm()`/`classify()` compatibility; operation support inside an active workflow loop is now explicit via `operation_executor=...`, with a clear runtime error when omitted.
 Built-in Codex/Claude operation compatibility is now wired in backend/provider builders rather than transport protocol implementations, keeping `ProviderTransport.run_turn(...)` as the sole documented transport entrypoint.
+<autoloop-decisions-header version="1" block_seq="6" owner="runtime" phase_id="provider-contract-cutover" pair="implement" turn_seq="3" run_id="run-20260506T130608Z-37f1c786" ts="2026-05-06T13:52:03.020390+00:00" entry="questions" qa_seq="1" />
+WARNING: The remaining blocker exposes a spec conflict. `llm()` / `classify()` are synchronous helpers callable from synchronous Python steps, but the spec also forbids sync provider execution, sync provider subprocess execution, threads, and thread-backed fallbacks. Inside `run_async(...)`, there is no way for a synchronous helper in a synchronous Python step to await provider work without either blocking on a sync compatibility path or changing user-visible behavior.
+1) Should I preserve current helper behavior by keeping a narrowly scoped sync compatibility execution path for `llm()` / `classify()` until a later operation-runtime redesign lands? Answer YES or NO.
+Best supposition: YES.
+2) If NO, should I instead make `llm()` / `classify()` fail clearly when used from synchronous Python steps under an active workflow event loop, and document that compatibility break in the phase artifacts? Answer YES or NO.
+Best supposition: NO unless you explicitly accept the behavior break.
+<autoloop-decisions-header version="1" block_seq="7" owner="runtime" phase_id="provider-contract-cutover" pair="implement" turn_seq="3" run_id="run-20260506T130608Z-37f1c786" ts="2026-05-06T13:52:03.021754+00:00" entry="answers" qa_seq="1" source="auto" />
+I’m checking the repo and the phase log to see whether prior decisions already resolved this conflict, then I’ll answer against the written spec rather than the implementation drift.
+
+I found the exact conflict point in the phase log: the current code already reached the “either keep a narrow sync exception or accept a break” fork. I’m reading the helper implementation now to make sure the answer matches the actual public surface, not just the spec prose.
+
+1) YES.
+
+Safest explicit assumption from the repo artifacts is to preserve current `llm()` / `classify()` behavior temporarily with a narrowly scoped compatibility path. The strongest repo-context reasons are:
+- the request keeps the public non-parallel authoring surface stable, including `python_step(...)`, synchronous Python step functions, and ordinary sequential workflow behavior;
+- the raw phase log already identifies this as the remaining spec conflict and repeatedly treats helper compatibility as intentional until a later operation-runtime redesign;
+- without threads or an async helper API redesign, a synchronous helper invoked inside a synchronous Python step under `run_async(...)` has no compliant way to await async provider work.
+
+That means this should be treated as a temporary, explicit exception boundary, not as a general return to sync provider internals:
+- limit it to `llm()` / `classify()` from synchronous Python-step execution;
+- do not reintroduce sync provider protocol methods, sync transport protocol methods, branch-runtime sync paths, or thread-backed fallbacks;
+- document it in the phase artifacts as a temporary spec exception pending operation-runtime redesign.
+
+2) NO.
+
+Do not take the behavior break unless you are explicitly choosing to revise the public compatibility requirement.
