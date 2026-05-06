@@ -185,12 +185,22 @@ async def terminate_text_subprocess(process: asyncio.subprocess.Process) -> None
 
     if process.returncode is not None:
         return
-    process.terminate()
+    try:
+        process.terminate()
+    except ProcessLookupError:
+        pass
     try:
         await asyncio.wait_for(process.wait(), timeout=1.0)
+        return
     except asyncio.TimeoutError:
+        pass
+    if process.returncode is not None:
+        return
+    try:
         process.kill()
-        await process.wait()
+    except ProcessLookupError:
+        return
+    await process.wait()
 
 
 def run_text_subprocess(

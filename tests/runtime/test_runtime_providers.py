@@ -26,6 +26,7 @@ from autoloop.runtime.providers._common import (
     ensure_session_provider_match,
     format_subprocess_streams,
     require_prompt_text,
+    terminate_text_subprocess,
 )
 from autoloop.runtime.providers.claude import (
     ClaudeTransport,
@@ -202,6 +203,33 @@ class _CancellableAsyncProcessStub:
         await self._wait_released.wait()
         if self.returncode is None:
             self.returncode = -15
+        return self.returncode
+
+
+class _LookupRacyProcessStub:
+    def __init__(self, *, raise_on_kill: bool = False) -> None:
+        self.returncode: int | None = None
+        self.raise_on_kill = raise_on_kill
+        self.terminate_calls = 0
+        self.kill_calls = 0
+        self.wait_calls = 0
+
+    def terminate(self) -> None:
+        self.terminate_calls += 1
+        if not self.raise_on_kill:
+            raise ProcessLookupError
+
+    def kill(self) -> None:
+        self.kill_calls += 1
+        if self.raise_on_kill:
+            raise ProcessLookupError
+        self.returncode = -9
+
+    async def wait(self) -> int:
+        self.wait_calls += 1
+        if self.raise_on_kill and self.wait_calls == 1:
+            raise asyncio.TimeoutError
+        self.returncode = 0 if self.returncode is None else self.returncode
         return self.returncode
 
 
@@ -595,6 +623,27 @@ def test_communicate_text_subprocess_terminates_then_kills_on_cancellation() -> 
     asyncio.run(cancel_mid_communicate())
 
     assert process.seen_inputs == [b"payload"]
+    assert process.terminate_calls == 1
+    assert process.kill_calls == 1
+    assert process.wait_calls == 1
+
+
+def test_terminate_text_subprocess_ignores_process_lookup_race_during_terminate() -> None:
+    process = _LookupRacyProcessStub()
+
+    asyncio.run(terminate_text_subprocess(process))
+
+    assert process.terminate_calls == 1
+    assert process.kill_calls == 0
+    assert process.wait_calls == 1
+    assert process.returncode == 0
+
+
+def test_terminate_text_subprocess_ignores_process_lookup_race_during_kill() -> None:
+    process = _LookupRacyProcessStub(raise_on_kill=True)
+
+    asyncio.run(terminate_text_subprocess(process))
+
     assert process.terminate_calls == 1
     assert process.kill_calls == 1
     assert process.wait_calls == 1
