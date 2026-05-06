@@ -737,8 +737,14 @@ def _compile_report_text(compiled: CompiledWorkflow) -> str:
         1
         for routes in compiled.routes.values()
         for route in routes.values()
-        if not route.provider_visible
+        if route.inheritance_source != "global" and not route.provider_visible
     ) + sum(1 for route in compiled.global_routes.values() if not route.provider_visible)
+    declared_route_count = sum(
+        1
+        for routes in compiled.routes.values()
+        for route in routes.values()
+        if route.inheritance_source != "global"
+    ) + len(compiled.global_routes)
     runtime_control_hooks = [
         f"`{step.name}`: " + ", ".join(
             (
@@ -761,7 +767,7 @@ def _compile_report_text(compiled: CompiledWorkflow) -> str:
             f"- topology hash: `{compiled.topology_hash}`",
             f"- terminals: `{FINISH}`, `{AWAIT_INPUT}`, `{FAIL}`",
             f"- steps: `{len(compiled.steps)}`",
-            f"- routes: `{sum(len(routes) for routes in compiled.routes.values()) + len(compiled.global_routes)}`",
+            f"- routes: `{declared_route_count}`",
             f"- hidden routes: `{hidden_route_count}`",
             f"- artifacts: `{len(compiled.artifacts_by_qualified_name)}`",
             f"- sessions: `{len(compiled.sessions)}`",

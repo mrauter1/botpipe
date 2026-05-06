@@ -177,11 +177,15 @@ class WorkspaceNetworkPolicy(_PolicyModel):
 
     @model_validator(mode="after")
     def _normalize_mode(self) -> "WorkspaceNetworkPolicy":
+        updates: dict[str, Any] = {}
         if self.mode == "none" and self.enabled:
-            return self.model_copy(update={"enabled": False})
+            updates["enabled"] = False
         if not self.enabled and self.mode != "none":
-            return self.model_copy(update={"mode": "none"})
-        return self
+            updates["mode"] = "none"
+        candidate = self if not updates else self.model_copy(update=updates)
+        if candidate.mode == "limited" and not candidate.allow_domains:
+            raise ValueError("workspace.network.mode='limited' requires at least one allow_domains entry")
+        return candidate
 
 
 class WorkspacePolicy(_PolicyModel):
@@ -334,17 +338,30 @@ class ProviderPolicy(_PolicyModel):
 
     def with_model_effort(self, effort: str) -> "ProviderPolicy":
         updated_model = self.model.model_copy(update={"effort": effort})
-        return self.model_copy(update={"model": updated_model})
+        return self._validated_policy_update(model=updated_model)
 
     def _with_filesystem(self, filesystem: WorkspaceFilesystemPolicy) -> "ProviderPolicy":
         workspace = self.sandbox.workspace.model_copy(update={"filesystem": filesystem})
         sandbox = self.sandbox.model_copy(update={"workspace": workspace})
-        return self.model_copy(update={"sandbox": sandbox})
+        return self._validated_policy_update(sandbox=sandbox)
 
     def _with_network(self, network: WorkspaceNetworkPolicy) -> "ProviderPolicy":
         workspace = self.sandbox.workspace.model_copy(update={"network": network})
         sandbox = self.sandbox.model_copy(update={"workspace": workspace})
-        return self.model_copy(update={"sandbox": sandbox})
+        return self._validated_policy_update(sandbox=sandbox)
+
+    def _validated_policy_update(
+        self,
+        *,
+        model: ModelPolicy | None = None,
+        sandbox: SandboxPolicy | None = None,
+    ) -> "ProviderPolicy":
+        payload = self.model_dump(mode="python", warnings=False)
+        if model is not None:
+            payload["model"] = model.model_dump(mode="python", warnings=False)
+        if sandbox is not None:
+            payload["sandbox"] = sandbox.model_dump(mode="python", warnings=False)
+        return ProviderPolicy.model_validate(payload)
 
 
 class ProviderPolicyOverride(_PolicyModel):

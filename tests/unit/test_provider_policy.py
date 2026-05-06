@@ -3,6 +3,7 @@ from __future__ import annotations
 from pathlib import Path
 
 import pytest
+from pydantic import ValidationError
 
 from autoloop.core.provider_policy import (
     SYSTEM_DEFAULT_PROVIDER_POLICY,
@@ -91,6 +92,16 @@ def test_merge_provider_policies_applies_scalar_union_and_replace_rules() -> Non
             "writable_roots": [".", "./dist"],
         }
     }
+
+
+def test_workspace_network_policy_rejects_empty_limited_mode() -> None:
+    with pytest.raises(ValidationError, match="workspace.network.mode='limited' requires at least one allow_domains entry"):
+        WorkspaceNetworkPolicy(mode="limited")
+
+
+def test_with_model_effort_revalidates_literal_values() -> None:
+    with pytest.raises(ValidationError, match="effort"):
+        ProviderPolicy().with_model_effort("bogus")
 
 
 def test_strict_policy_rejects_danger_full_access() -> None:
