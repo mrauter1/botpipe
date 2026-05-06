@@ -58,14 +58,20 @@ class WorkflowArtifactCapability:
 class WorkflowRouteCapability:
     """Normalized compiled-route capability summary."""
 
-    target: str
+    target: str | None
     summary: str | None
     required_writes: tuple[str, ...]
     handoff: str | None
     on_taken: str | None
+    provider_visibility: str
     provider_visible: bool
     provider_visible_interactive: bool
     provider_visible_full_auto: bool
+    payload_schema_mode: str
+    route_fields_schema: dict[str, Any] | None
+    preset_kind: str
+    inheritance_source: str
+    disabled: bool
     is_runtime_control: bool
 
 
@@ -346,9 +352,15 @@ def workflow_capability_payload(entry: WorkflowCapabilityEntry) -> dict[str, obj
                         "required_writes": list(route.required_writes or ()),
                         "handoff": route.handoff,
                         "on_taken": route.on_taken,
+                        "provider_visibility": route.provider_visibility,
                         "provider_visible": route.provider_visible,
                         "provider_visible_interactive": route.provider_visible_interactive,
                         "provider_visible_full_auto": route.provider_visible_full_auto,
+                        "payload_schema_mode": route.payload_schema_mode,
+                        "route_fields_schema": route.route_fields_schema,
+                        "preset_kind": route.preset_kind,
+                        "inheritance_source": route.inheritance_source,
+                        "disabled": route.disabled,
                         "is_runtime_control": route.is_runtime_control,
                     }
                     for route_name, route in step.routes.items()
@@ -662,9 +674,15 @@ def _compiled_routes(
             required_writes=tuple(route.required_writes or ()),
             handoff=route.handoff,
             on_taken=getattr(route.on_taken, "__name__", None),
+            provider_visibility=route.provider_visibility,
             provider_visible=route.provider_visible,
             provider_visible_interactive=route.provider_visible_interactive,
             provider_visible_full_auto=route.provider_visible_full_auto,
+            payload_schema_mode=route.payload_schema_mode,
+            route_fields_schema=route.route_fields_schema,
+            preset_kind=route.preset_kind,
+            inheritance_source=route.inheritance_source,
+            disabled=route.disabled,
             is_runtime_control=route.is_runtime_control,
         )
     return routes
@@ -750,9 +768,15 @@ def _compiled_step_payload(
                 "required_writes": list(route.required_writes or ()),
                 "handoff": route.handoff,
                 "on_taken": route.on_taken,
+                "provider_visibility": route.provider_visibility,
                 "provider_visible": route.provider_visible,
                 "provider_visible_interactive": route.provider_visible_interactive,
                 "provider_visible_full_auto": route.provider_visible_full_auto,
+                "payload_schema_mode": route.payload_schema_mode,
+                "route_fields_schema": route.route_fields_schema,
+                "preset_kind": route.preset_kind,
+                "inheritance_source": route.inheritance_source,
+                "disabled": route.disabled,
                 "is_runtime_control": route.is_runtime_control,
             }
             for route_name, route in step.routes.items()

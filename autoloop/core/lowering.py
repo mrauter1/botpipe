@@ -35,7 +35,13 @@ def outcome_middleware_name(definition: Any) -> str | None:
 def step_available_route_tags(definition: Any, step: Step) -> tuple[str, ...]:
     """Return the ordered legal route tags for a step."""
 
-    return tuple(spec.tag for spec in resolve_step_routes(definition, step) if not spec.route.is_disabled)
+    resolved = tuple(spec.tag for spec in resolve_step_routes(definition, step) if not spec.route.is_disabled)
+    composite_tags = getattr(step, "composite_route_tags", None)
+    if composite_tags:
+        composite_order = [tag for tag in composite_tags if tag in resolved]
+        extras = [tag for tag in resolved if tag not in composite_tags]
+        return tuple((*composite_order, *extras))
+    return resolved
 
 
 def step_authored_route_tags(definition: Any, step: Step) -> tuple[str, ...]:
@@ -239,8 +245,6 @@ def definition_default_route_summaries() -> dict[str, str]:
         "needs_rework": "Verifier requested local repair within the same work boundary.",
         "needs_replan": "The current work boundary appears incorrect and replanning is needed.",
         "question": "Execution is awaiting user input.",
-        "blocked": "Execution cannot continue until an external blocker is resolved.",
-        "failed": "Execution cannot continue because the route represents failure.",
     }
 
 

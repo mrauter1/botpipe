@@ -445,7 +445,7 @@ def test_route_table_mermaid_and_compile_report_distinguish_runtime_control_rout
     mermaid = (tmp_path / "topology.mmd").read_text(encoding="utf-8")
     compile_report = (tmp_path / "compile_report.md").read_text(encoding="utf-8")
 
-    assert "| assessment | question | runtime-control | AWAIT_INPUT | true | false | inherit | - | - | - |" in route_table
+    assert "| assessment | question | runtime-control | AWAIT_INPUT | true | false | none (explicit) | - | - | - |" in route_table
     assert "assessment -- question [runtime-control, interactive-only] --> AWAIT_INPUT" in mermaid
     assert (
         "- `assessment`: authored=`assessment_ready`; runtime_control=`question`; "

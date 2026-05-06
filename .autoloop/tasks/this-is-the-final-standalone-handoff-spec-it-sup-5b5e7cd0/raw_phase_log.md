@@ -169,3 +169,84 @@ phase_mode=single
 phase_ids=route-model-unification,provider-outcome-contract,runtime-and-inspection-alignment,tests-and-docs-migration
 explicit=True
 current_phase_index=0
+
+
+---
+run_id=run-20260506T185744Z-092935c3 | entry=session_turn | pair=implement | phase=producer | cycle=1 | attempt=1 | thread_id=019dfeae-6c3b-77c1-83d0-3af21fe7fb06
+---
+provider=codex
+mode=start
+template=/home/rauter/.local/share/pipx/venvs/autoloop/lib/python3.12/site-packages/autoloop/templates/implement_producer.md
+session_id=019dfeae-6c3b-77c1-83d0-3af21fe7fb06
+
+
+---
+run_id=run-20260506T185744Z-092935c3 | entry=phase_output | pair=implement | phase=producer | process=codex-agent | cycle=1 | attempt=1 | thread_id=019dfeae-6c3b-77c1-83d0-3af21fe7fb06
+---
+I’m implementing the route-model unification phase only: compiled route metadata, GLOBAL inheritance and suppression, and legacy `ControlRoutes(question=...)` lowering. First I’m reading the phase artifacts and the existing route/compiler code to locate the current legality and injection paths before editing.
+
+The worktree is already noisy, including prior deletions and moved test paths, so I’m keeping scope to the active route/compiler modules and phase artifacts. Next I’m locating the live route model and the current control-route injection path to replace it cleanly instead of layering a second mechanism.
+
+I’ve confirmed the split authority the spec wants removed: discovery stores `runtime_control_routes_by_step`, lowering merges authored and injected tags, and compiler exposes both route tables and runtime-control lists. I’m reading the step/control-route declarations and route consumers now so the metadata expansion lands once and flows through existing reporting paths.
+
+The current surface is narrower than the spec but consistent enough to refactor: `Route` is the single authoring object already, while `ControlRoutes` and `runtime_control_routes_by_step` are the extra layer to collapse. I’m drilling into discovery and validation next to see where GLOBAL routes, simple authoring, and branch-group internals need the same precedence and suppression rules.
+
+The main compiler seam is clear now: discovery resolves the authored transition table, then mutates it with `_inject_control_routes`, and everything downstream learns legality from that mixed table plus sidecar flags. I’m now tracing the exact route-reporting and test expectations so I can replace that authority path without breaking consumers that still read capability and static-graph payloads.
+
+Plan for this slice:
+1. Expand `Route` and `CompiledRoute` metadata so helper presets, visibility modes, payload-schema mode, route-fields schema, inheritance source, and disabled suppression exist in the model.
+2. Replace control-route injection with precedence-based route resolution from step-local routes, explicit `GLOBAL`, and compatibility framework defaults from `ControlRoutes(question=...)`.
+3. Update compiler consumers and targeted tests so `available_routes`, provider-visible route lists, and legacy `runtime_control_routes` become derived views from compiled route metadata instead of a second authority path.
+
+I have enough context to start editing. I’m changing the route declaration model first so the compiler can carry one normalized notion of helper preset, visibility, payload-schema mode, route-fields schema, and disabled suppression before I rewire resolution and tests around it.
+
+The route declaration surface is expanded; next I’m swapping discovery and lowering over to precedence-based resolution so control-route compatibility becomes a framework-default route source instead of injected topology. After that I’ll patch the compiler and targeted tests to use the derived views.
+
+The resolution layer is now precedence-based and no longer mutates the transition table. I’m patching the compiler next so compiled step/global routes carry inheritance, suppression, and helper metadata, while legacy `runtime_control_routes` stays as a derived compatibility view only.
+
+I found one compatibility wrinkle while wiring the compiler: the new helper defaults intentionally make helper routes first-class metadata, which means legacy compatibility views like `runtime_control_routes` remain, but now as derived labels over compiled routes. I’m cleaning up a few constructor and reporting edges next, then I’ll run the focused tests and adjust the compatibility expectations that changed by design.
+
+I’m at the validation point for the core slice now. First pass is a narrow test run over route compilation and static-graph surfaces so I can catch constructor or metadata mismatches before I update artifacts and the phase notes.
+
+`pytest` is not on the shell path here, so I’m switching to `python -m pytest` and, before that, a cheap import/compile smoke test to catch syntax issues in the touched modules.
+
+The environment only has `python3`, not `python` or bare `pytest`. I’m rerunning the smoke and focused test commands with that interpreter so I can get actual failure signals instead of shell misses.
+
+The code compiles, but the container does not have `pytest` installed, so I can’t run the repository tests directly from this shell. I’m doing a local import/compile smoke pass instead and then I’ll add the targeted regression tests plus artifact notes, with the missing-test limitation called out explicitly.
+
+There is a local virtualenv in the repo, so I’m checking that next rather than assuming the base interpreter is representative. If it has `pytest`, I can still run the focused suites against the actual project environment.
+
+A constructor invariant is misfiring in `Route.__post_init__`, so I’m inspecting the generated field ordering rather than guessing. The failure is happening on a normal `Route.to(...)`, which means the dataclass normalization branch is treating a non-disabled route as disabled.
+
+The failure is from a Python namespace collision, not the route logic itself: the `disabled` dataclass field got overwritten by the `Route.disabled()` helper method, so every route instance sees a truthy function there. I’m renaming the internal boolean to `is_disabled` and patching the callers, which should clear the false-positive constructor failures cleanly.
+
+The constructor issue is fixed; the remaining failures are now behavioral mismatches in the validation and simple-surface expectations. I’m collecting the exact assertions next so I can decide which are true regressions versus compatibility expectations that need to shift to the new compiled-route semantics.
+
+The current failures are mostly from an environment-sensitive path: route helper default schemas are raw JSON Schema dicts, and the existing compiler helper tries to build a runtime validator through the optional `jsonschema` dependency. For this phase I only need the compiled metadata carried, so I’m making route-schema compilation degrade to “store schema, no validator” when that optional package isn’t present.
+
+The core compile path is working again; the remaining mismatch I’ve confirmed is intentional metadata drift: helper-lowered `question` routes now carry explicit empty `required_writes`, so the old route-table expectation of `inherit` is no longer correct. I’m rerunning the broader focused suites now to separate those intentional expectation updates from real regressions.
+
+One remaining runtime behavior issue is real: branch-group composite route order should still come from the branch-group declaration, and my first pass let precedence resolution reorder those tags. I’m restoring composite-tag ordering in the lowerer, and I’m also undoing an overreach where raw `blocked` and `failed` tags were getting helper-style fallback summaries just from their names.
+
+The focused validation and static-graph suites are green now. I’m waiting on the broader simple-surface suite to finish, and if that stays clean I’ll update the phase artifacts and the run decision log with the compatibility decisions that matter for later phases.
+
+The main behavioral slice is stable, so I’m using the remaining time on additive inspection metadata. That keeps workflow-capability and static-graph payloads aligned with the new compiled route model instead of making later phases re-discover helper kind and inheritance from ad hoc signals.
+
+I’ve finished the code and test slice. The last housekeeping step is recording the non-obvious compatibility decisions for later phases, then I’ll update the phase implementation notes with the exact files, symbols, validation, and intentional non-changes.
+
+I’ve updated the run artifacts and notes. I’m doing one last diff summary pass now so the close-out is accurate about scope, touched files, and the exact validation signal from this phase.
+
+**Scope considered**
+Phase `route-model-unification` only: compiled route metadata, precedence-based route resolution, `ControlRoutes(question=...)` compatibility lowering, additive inspection metadata, and focused regression coverage. Main code paths were [autoloop/core/routes.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/autoloop/core/routes.py), [autoloop/core/discovery.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/autoloop/core/discovery.py), [autoloop/core/lowering.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/autoloop/core/lowering.py), [autoloop/core/compiler.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/autoloop/core/compiler.py), [autoloop/core/topology.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/autoloop/core/topology.py), [autoloop/core/workflow_capabilities.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/autoloop/core/workflow_capabilities.py), and [autoloop/runtime/static_graph.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/autoloop/runtime/static_graph.py).
+
+**What I analyzed**
+I traced the old split authority from discovery-time `_inject_control_routes()` through lowering, compiler legality lists, workflow-capability payloads, and static-graph/report outputs. I also checked branch-group/internal-step compilation and current tests that still asserted legacy `runtime_control_routes` and route-table/report text.
+
+**What I changed**
+`Route` now supports helper presets (`question`, `blocked`, `failed`, `hidden`, `disabled`), normalized `provider_visibility`, payload-schema mode sentinels, route-fields schema metadata, and disabled suppression. Discovery no longer injects control routes into `transitions`; instead it lowers legacy `ControlRoutes(question=...)` into per-step framework-default `Route.question()` entries. Lowering/compiler now resolve routes by precedence `step-local -> GLOBAL -> framework-default`, derive `available_routes` and provider-visible route lists from compiled metadata only, and keep `runtime_control_routes` / `is_runtime_control` as derived compatibility labels. I also added additive route metadata to capability/static-graph payloads and updated focused tests in [tests/unit/test_validation.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/tests/unit/test_validation.py), [tests/unit/test_simple_surface.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/tests/unit/test_simple_surface.py), and [tests/runtime/test_runtime_static_graph.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/tests/runtime/test_runtime_static_graph.py).
+
+**Key findings / decisions**
+Compatibility-lowered `question` routes now behave as ordinary compiled helper routes, so they carry explicit empty `required_writes` and the route table reports `none (explicit)` instead of inherited writes. Raw authored `blocked` / `failed` tags were intentionally left on generic fallback summaries unless authored through helper constructors, to avoid inferring helper behavior from tag names alone. Because the local environment may lack `jsonschema`, built-in helper route-field schemas are preserved in compiled metadata even when runtime validator construction is unavailable; compilation does not fail on that optional dependency alone. I recorded those decisions in the run ledger and updated [implementation_notes.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/this-is-the-final-standalone-handoff-spec-it-sup-5b5e7cd0/runs/run-20260506T185744Z-092935c3/artifacts/implement/phases/route-model-unification/implementation_notes.md:1).
+
+**Open issues / next step**
+No blocker remains in this phase. Validation run: `.venv/bin/python -m pytest -q tests/unit/test_validation.py tests/unit/test_simple_surface.py tests/runtime/test_runtime_static_graph.py` passed with `189 passed`; the only output was pre-existing warning noise from workflow contract fixtures. The next phase should consume the new compiled metadata for provider schema generation, canonical `outcome.route_fields` parsing, and runtime `Outcome`/`Event` projection.
