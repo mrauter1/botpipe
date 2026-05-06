@@ -1352,3 +1352,62 @@ There is still an out-of-phase provider transport regression noted in the implem
 <loop-control>
 {"schema":"docloop.loop_control/v1","kind":"promise","promise":"COMPLETE"}
 </loop-control>
+
+
+---
+run_id=run-20260506T130608Z-37f1c786 | entry=session_turn | pair=test | phase=producer | cycle=1 | attempt=1 | thread_id=019dfd9f-bbf6-7821-ac9d-d60ede6331fb
+---
+provider=codex
+mode=resume
+template=/home/rauter/.local/share/pipx/venvs/autoloop/lib/python3.12/site-packages/autoloop/templates/test_producer.md
+session_id=019dfd9f-bbf6-7821-ac9d-d60ede6331fb
+
+
+---
+run_id=run-20260506T130608Z-37f1c786 | entry=phase_output | pair=test | phase=producer | process=codex-agent | cycle=1 | attempt=1 | thread_id=019dfd9f-bbf6-7821-ac9d-d60ede6331fb
+---
+I’m treating this as a phase-scoped test pass for branch-group runtime and sessions. First I’m reading the active test artifacts and the current branch-group/session tests to find any coverage gaps that are still worth closing with deterministic tests.
+
+The existing suites already cover most of the contract, but AC-2 still has one useful unasserted detail: two branches reusing the same `Session.fresh()` declaration should resolve to distinct branch-scoped fresh keys, not just distinct returned provider session ids. I’m adding that as a deterministic regression check rather than inventing a new fixture stack.
+
+I’ve chosen a small coverage increase rather than broad churn: one integration assertion on actual branch-runtime provider sessions, plus one direct unit test on branch-store key isolation. That closes the only meaningful AC-2 detail that wasn’t explicitly asserted yet.
+
+I’ve made two narrow test changes and nothing else: one contract assertion on branch-runtime fresh-key identity, and one unit test on branch-store namespace isolation. I’m running only the touched suites plus the phase-local branch-group bundle now to make sure the added coverage is deterministic.
+
+The touched tests passed cleanly, so I’m letting the full phase-local bundle finish before I update the test artifacts. If that stays green, I’ll record the exact coverage map and the stabilization choices for the new assertions.
+
+The test bundle is green. I hit a small patch-context mismatch while updating the phase artifacts, so I’m re-reading the exact file headers and then I’ll apply the strategy/feedback updates cleanly.
+
+Scope considered
+
+Phase-local branch-group runtime/session test scope only: existing branch-group contract tests, dedicated session/context unit tests, and the active test artifacts. I did not broaden into out-of-phase provider transport failures beyond noting them as known gaps.
+
+What I analyzed
+
+I reviewed the active phase contract, test strategy/feedback artifacts, run decisions, and the current coverage in `tests/contract/test_branch_group_runtime.py` and `tests/unit/test_branch_group_context_sessions.py`. The main remaining gap against AC-2 was that branch-local fresh sessions were checked for `session_id=None` and parent isolation, but not explicitly for distinct fresh-key identity across branch executions sharing the same `Session.fresh()` declaration.
+
+What I changed
+
+I updated:
+- [tests/contract/test_branch_group_runtime.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/tests/contract/test_branch_group_runtime.py)
+- [tests/unit/test_branch_group_context_sessions.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/tests/unit/test_branch_group_context_sessions.py)
+- [test_strategy.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/full-revised-standalone-spec-autoloop-v3-async-n-3c402473/runs/run-20260506T130608Z-37f1c786/artifacts/test/phases/branch-group-runtime-and-sessions/test_strategy.md)
+- [feedback.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/full-revised-standalone-spec-autoloop-v3-async-n-3c402473/runs/run-20260506T130608Z-37f1c786/artifacts/test/phases/branch-group-runtime-and-sessions/feedback.md)
+
+Test additions:
+- strengthened the existing fan-out contract test to assert distinct branch-scoped fresh key values with the expected `group:branch:index:` prefixes
+- added a direct `BranchSessionStoreView` unit test proving two branch namespaces allocate distinct fresh keys while keeping parent activation isolated
+
+Key findings / decisions
+
+The added coverage is deterministic because it inspects namespace prefixes and key inequality rather than relying on call order. Validation passed:
+- `./.venv/bin/pytest -q tests/contract/test_branch_group_runtime.py tests/unit/test_branch_group_context_sessions.py`
+- `./.venv/bin/pytest -q tests/contract/test_branch_group_runtime.py tests/runtime/test_runtime_tracing.py tests/runtime/test_runtime_static_graph.py tests/unit/test_simple_surface.py tests/unit/test_primitives_and_stores.py tests/unit/test_branch_group_context_sessions.py`
+
+Result:
+- `28 passed`
+- `196 passed, 14 warnings`
+
+Open issues / next step
+
+No phase-local test blockers remain. The only known gap left in artifacts is the out-of-phase provider transport cancellation regression already noted by implement/review; I did not expand coverage there in this phase.
