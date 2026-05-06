@@ -39,3 +39,7 @@
 {"ts": "2026-05-06T19:50:38.063782+00:00", "run_id": "run-20260506T190853Z-f707cb4f", "seq": 39, "event_type": "phase_finished", "pair": "test", "phase": "producer", "cycle": 1, "attempt": 1, "empty_output": false, "phase_id": "policy-config-authoring"}
 {"ts": "2026-05-06T19:51:22.759345+00:00", "run_id": "run-20260506T190853Z-f707cb4f", "seq": 40, "event_type": "phase_finished", "pair": "test", "phase": "verifier", "cycle": 1, "attempt": 1, "empty_output": false, "phase_id": "policy-config-authoring"}
 {"ts": "2026-05-06T19:51:22.855534+00:00", "run_id": "run-20260506T190853Z-f707cb4f", "seq": 41, "event_type": "pair_completed", "pair": "test", "cycle": 1, "attempt": 1, "phase_id": "policy-config-authoring"}
+{"ts": "2026-05-06T19:51:22.985195+00:00", "run_id": "run-20260506T190853Z-f707cb4f", "seq": 42, "event_type": "phase_completed", "pair": "test", "phase_id": "policy-config-authoring", "phase_mode": "single"}
+{"ts": "2026-05-06T19:51:22.987584+00:00", "run_id": "run-20260506T190853Z-f707cb4f", "seq": 43, "event_type": "phase_started", "phase_id": "policy-resolution-propagation", "phase_mode": "single"}
+{"ts": "2026-05-06T19:51:22.989891+00:00", "run_id": "run-20260506T190853Z-f707cb4f", "seq": 44, "event_type": "pair_started", "pair": "implement", "phase_id": "policy-resolution-propagation"}
+{"ts": "2026-05-06T19:51:22.990092+00:00", "run_id": "run-20260506T190853Z-f707cb4f", "seq": 45, "event_type": "cycle_started", "pair": "implement", "cycle": 1, "attempt": 1, "phase_id": "policy-resolution-propagation"}
