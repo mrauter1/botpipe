@@ -21,6 +21,7 @@
 
 ## Symbols touched
 - `Route._handwritten_route_fields_validation_equivalent`
+- `_with_handwritten_route_fields_validation_equivalent(...)`
 - `Route.question()`
 - `Route.blocked()`
 - `Route.failed()`
@@ -70,6 +71,7 @@
 ## Expected side effects
 - Runs that author custom raw route schemas now require the optional `jsonschema` dependency at compile time.
 - Codex native structured-output turns may leave run-scoped schema files under `provider_response_schemas/codex/`.
+- The dedicated runtime contract regressions now rely on `tests/contract/test_engine_contracts.py` remaining tracked in git state instead of being recreated ad hoc in an untracked worktree file.
 
 ## Validation performed
 - `python3 -m compileall autoloop/core/routes.py autoloop/core/compiler.py autoloop/runtime/providers/_common.py autoloop/runtime/providers/codex.py autoloop/runtime/providers/claude.py tests/unit/test_validation.py tests/contract/test_engine_contracts.py tests/runtime/test_provider_backends.py`
@@ -79,3 +81,4 @@
 
 ## Deduplication / centralization
 - Shared structured-output delivery metadata was centralized in `autoloop/runtime/providers/_common.py` so Codex and Claude fallbacks report one stable metadata shape.
+- Helper-route compatibility bookkeeping now stays inside `autoloop/core/routes.py` rather than leaking a compiler flag through the public `Route.to(...)` constructor signature.

@@ -79,6 +79,11 @@ def _normalize_required_writes(value: Iterable[str]) -> tuple[str, ...]:
     return tuple(normalized)
 
 
+def _with_handwritten_route_fields_validation_equivalent(route: "Route", *, enabled: bool) -> "Route":
+    object.__setattr__(route, "_handwritten_route_fields_validation_equivalent", enabled)
+    return route
+
+
 @dataclass(frozen=True, slots=True)
 class Route:
     """Explicit route target plus optional metadata and route-local hook."""
@@ -95,7 +100,7 @@ class Route:
     preset_kind: RoutePresetKind = "custom"
     is_disabled: bool = False
     payload_schema_mode: Literal["inherit", "none", "explicit"] = field(init=False, default="inherit")
-    _handwritten_route_fields_validation_equivalent: bool = field(default=False, repr=False)
+    _handwritten_route_fields_validation_equivalent: bool = field(init=False, default=False, repr=False)
 
     def __post_init__(self) -> None:
         object.__setattr__(self, "summary", _normalize_optional_text(self.summary, field_name="summary"))
@@ -142,7 +147,6 @@ class Route:
         payload_schema: object = _INHERIT_PAYLOAD_SCHEMA,
         route_fields_schema: Any | None = None,
         preset_kind: RoutePresetKind = "custom",
-        _handwritten_route_fields_validation_equivalent: bool = False,
     ) -> "Route":
         return Route(
             target=target,
@@ -155,7 +159,6 @@ class Route:
             payload_schema=payload_schema,
             route_fields_schema=route_fields_schema,
             preset_kind=preset_kind,
-            _handwritten_route_fields_validation_equivalent=_handwritten_route_fields_validation_equivalent,
         )
 
     @staticmethod
@@ -379,17 +382,19 @@ class Route:
         handoff: str | None = None,
         on_taken: object | None = None,
     ) -> "Route":
-        return Route.to(
-            target,
-            summary=summary or "Clarification or user-input request.",
-            required_writes=required_writes,
-            handoff=handoff,
-            on_taken=on_taken,
-            provider_visibility=provider_visibility,
-            payload_schema=payload_schema,
-            route_fields_schema=_route_question_fields_schema() if route_fields_schema is None else route_fields_schema,
-            preset_kind="question",
-            _handwritten_route_fields_validation_equivalent=route_fields_schema is None,
+        return _with_handwritten_route_fields_validation_equivalent(
+            Route.to(
+                target,
+                summary=summary or "Clarification or user-input request.",
+                required_writes=required_writes,
+                handoff=handoff,
+                on_taken=on_taken,
+                provider_visibility=provider_visibility,
+                payload_schema=payload_schema,
+                route_fields_schema=_route_question_fields_schema() if route_fields_schema is None else route_fields_schema,
+                preset_kind="question",
+            ),
+            enabled=route_fields_schema is None,
         )
 
     @staticmethod
@@ -404,17 +409,19 @@ class Route:
         handoff: str | None = None,
         on_taken: object | None = None,
     ) -> "Route":
-        return Route.to(
-            target,
-            summary=summary or "Blocked pending external input or intervention.",
-            required_writes=required_writes,
-            handoff=handoff,
-            on_taken=on_taken,
-            provider_visibility=provider_visibility,
-            payload_schema=payload_schema,
-            route_fields_schema=_route_reason_fields_schema() if route_fields_schema is None else route_fields_schema,
-            preset_kind="blocked",
-            _handwritten_route_fields_validation_equivalent=route_fields_schema is None,
+        return _with_handwritten_route_fields_validation_equivalent(
+            Route.to(
+                target,
+                summary=summary or "Blocked pending external input or intervention.",
+                required_writes=required_writes,
+                handoff=handoff,
+                on_taken=on_taken,
+                provider_visibility=provider_visibility,
+                payload_schema=payload_schema,
+                route_fields_schema=_route_reason_fields_schema() if route_fields_schema is None else route_fields_schema,
+                preset_kind="blocked",
+            ),
+            enabled=route_fields_schema is None,
         )
 
     @staticmethod
@@ -429,17 +436,19 @@ class Route:
         handoff: str | None = None,
         on_taken: object | None = None,
     ) -> "Route":
-        return Route.to(
-            target,
-            summary=summary or "Terminal or unrecoverable failure.",
-            required_writes=required_writes,
-            handoff=handoff,
-            on_taken=on_taken,
-            provider_visibility=provider_visibility,
-            payload_schema=payload_schema,
-            route_fields_schema=_route_reason_fields_schema() if route_fields_schema is None else route_fields_schema,
-            preset_kind="failed",
-            _handwritten_route_fields_validation_equivalent=route_fields_schema is None,
+        return _with_handwritten_route_fields_validation_equivalent(
+            Route.to(
+                target,
+                summary=summary or "Terminal or unrecoverable failure.",
+                required_writes=required_writes,
+                handoff=handoff,
+                on_taken=on_taken,
+                provider_visibility=provider_visibility,
+                payload_schema=payload_schema,
+                route_fields_schema=_route_reason_fields_schema() if route_fields_schema is None else route_fields_schema,
+                preset_kind="failed",
+            ),
+            enabled=route_fields_schema is None,
         )
 
     @staticmethod

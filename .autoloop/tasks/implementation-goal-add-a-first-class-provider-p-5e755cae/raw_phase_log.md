@@ -1820,3 +1820,44 @@ Validation passed:
 Open issues / next step
 
 No open test-author blockers in the phase-local scope. The next step is the test-phase verifier pass against the updated test artifacts and the focused runtime suites.
+
+
+---
+run_id=run-20260506T190853Z-f707cb4f | entry=session_turn | pair=test | phase=verifier | cycle=1 | attempt=1 | thread_id=019dff06-56f8-7ec3-9792-9244e6c94bf8
+---
+provider=codex
+mode=resume
+template=/home/rauter/.local/share/pipx/venvs/autoloop/lib/python3.12/site-packages/autoloop/templates/test_verifier.md
+session_id=019dff06-56f8-7ec3-9792-9244e6c94bf8
+
+
+---
+run_id=run-20260506T190853Z-f707cb4f | entry=phase_output | pair=test | phase=verifier | process=codex-agent | cycle=1 | attempt=1 | thread_id=019dff06-56f8-7ec3-9792-9244e6c94bf8
+---
+I’m auditing the phase-local test additions against the final Claude policy behavior and the active strategy artifact. I’ll first read the current audit artifacts and the exact test diffs so I can decide whether any coverage or reliability gap remains.
+
+I found one material coverage gap in the new Claude regression suite: it proves legacy bypass is preserved, but not that explicit policy still suppresses bypass at the transport seam. I’m recording that as a blocking audit finding because that exact seam regressed earlier and the current negative test only covers config resolution, not emitted CLI behavior.
+
+Scope considered
+
+Phase-local audit of the added Claude regression tests and the updated test-strategy artifacts, focused on the final policy-emission, transport, and compatibility behaviors from this phase.
+
+What I analyzed
+
+I checked the new runtime/emitter/config/provider-backend coverage against the phase acceptance criteria, the latest implementation decisions, and the specific regression seam that previously broke legacy Claude `bypass` handling.
+
+What I reviewed
+
+I updated [criteria.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/implementation-goal-add-a-first-class-provider-p-5e755cae/runs/run-20260506T190853Z-f707cb4f/artifacts/test/phases/policy-claude-regression/criteria.md) and appended one blocking audit finding to [feedback.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/implementation-goal-add-a-first-class-provider-p-5e755cae/runs/run-20260506T190853Z-f707cb4f/artifacts/test/phases/policy-claude-regression/feedback.md).
+
+Key findings / decisions
+
+`TST-001` blocking: the new suite covers the positive runtime path for legacy `bypass` and the negative config path where explicit policy beats the compatibility mapping, but it still misses the negative runtime path at the actual transport seam. A future change could again emit `--dangerously-skip-permissions` from `config.permission_strategy=bypass` even when an explicit safe policy is being executed, and the current tests would not catch it because the existing negative assertion stops at config resolution.
+
+Open issues / next step
+
+The test phase is not complete. The next test-author turn should add one runtime-provider test that combines `permission_strategy=bypass` with an explicit safe policy and asserts the emitted Claude command does not contain `--dangerously-skip-permissions`.
+
+<loop-control>
+{"schema":"docloop.loop_control/v1","kind":"promise","promise":"INCOMPLETE"}
+</loop-control>
