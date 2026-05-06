@@ -2061,3 +2061,57 @@ Open issues / next step
   - `.venv/bin/python -m pytest tests/contract/test_engine_contracts.py -k "invalid_custom_raw_route_payload or invalid_custom_raw_route_fields"`
   - `.venv/bin/python -m pytest tests/runtime/test_provider_backends.py -k "response_schema or prompt_only_fallback or output_schema_file or simplified_schema_delivery"`
 - I did not run the full test suite.
+
+
+---
+run_id=run-20260506T204256Z-05282838 | entry=session_turn | pair=implement | phase=verifier | cycle=2 | attempt=1 | thread_id=019dff0e-7daf-7a32-806b-ba0f9ef79fd1
+---
+provider=codex
+mode=resume
+template=/home/rauter/.local/share/pipx/venvs/autoloop/lib/python3.12/site-packages/autoloop/templates/implement_verifier.md
+session_id=019dff0e-7daf-7a32-806b-ba0f9ef79fd1
+
+
+---
+run_id=run-20260506T204256Z-05282838 | entry=phase_output | pair=implement | phase=verifier | process=codex-agent | cycle=2 | attempt=1 | thread_id=019dff0e-7daf-7a32-806b-ba0f9ef79fd1
+---
+I’m re-reviewing the producer changes against the phase criteria and the earlier findings. I’m checking the current route-copy behavior, the tracked-state of the contract suite, and the reviewer-owned artifacts before I update the criteria and close the phase.
+
+The producer resolved both earlier findings from what I can see in git state. I’m reading the current route helper/copy paths directly now to make sure the private marker preservation is coherent and doesn’t introduce a new regression before I clear the remaining criteria boxes.
+
+The internal route-copy paths look coherent now: the helper-default classification is preserved anywhere a `Route` is normalized or retargeted, and the public constructor surface is back to its original shape. I’m updating the reviewer artifacts to reflect that the earlier blocking and non-blocking findings are resolved and that the phase now satisfies the acceptance criteria.
+
+Scope considered
+
+- Producer changes in `autoloop/core/routes.py`, `autoloop/core/discovery.py`, `autoloop/core/lowering.py`, `autoloop/core/compiler.py`, and the route-contract regression tests.
+- Reviewer-owned artifacts [criteria.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/this-is-the-final-standalone-handoff-spec-it-sup-5b5e7cd0/runs/run-20260506T204256Z-05282838/artifacts/implement/phases/route-contract-enforcement/criteria.md) and [feedback.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/this-is-the-final-standalone-handoff-spec-it-sup-5b5e7cd0/runs/run-20260506T204256Z-05282838/artifacts/implement/phases/route-contract-enforcement/feedback.md).
+- The implementation notes and run decisions for intent and non-obvious constraints.
+
+What I analyzed
+
+- The prior blocking concern around `tests/contract/test_engine_contracts.py` not being tracked.
+- The route helper marker lifecycle after the producer removed it from the public `Route.to(...)` API.
+- Internal route copy/normalization paths that could drop non-init route state.
+
+What I reviewed
+
+- `tests/contract/test_engine_contracts.py` is now tracked in git state.
+- `Route._handwritten_route_fields_validation_equivalent` is now non-init internal state again.
+- Marker preservation is centralized via `autoloop/core/routes.py::_replace_route(...)` and used in discovery, lowering, and compiler copy paths.
+- The producer’s focused validation evidence remains aligned with AC-1 through AC-4.
+
+Key findings / decisions
+
+- No new findings.
+- `IMP-001` is resolved because the AC-3 contract suite is now tracked.
+- `IMP-002` is resolved because the internal helper marker no longer leaks through the public route authoring constructor surface.
+- I updated the phase criteria to fully checked and appended the resolution note to feedback.
+
+Open issues / next step
+
+- No blocking issues remain for this phase.
+- Full-suite validation was not re-run in this review; the focused route-contract and backend slices are sufficient for this phase gate.
+
+<loop-control>
+{"schema":"docloop.loop_control/v1","kind":"promise","promise":"COMPLETE"}
+</loop-control>
