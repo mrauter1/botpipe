@@ -1956,3 +1956,121 @@ No open audit blockers for this phase. The test-phase artifacts are complete.
 <loop-control>
 {"schema":"docloop.loop_control/v1","kind":"promise","promise":"COMPLETE"}
 </loop-control>
+
+
+---
+run_id=run-20260506T190853Z-f707cb4f | entry=session_turn | pair=audit | phase=producer | cycle=1 | attempt=1 | thread_id=019dff23-d72d-7e83-90ef-19867362bc3f
+---
+provider=codex
+mode=start
+template=/home/rauter/.local/share/pipx/venvs/autoloop/lib/python3.12/site-packages/autoloop/templates/audit_producer.md
+session_id=019dff23-d72d-7e83-90ef-19867362bc3f
+
+
+---
+run_id=run-20260506T190853Z-f707cb4f | entry=phase_output | pair=audit | phase=producer | process=codex-agent | cycle=1 | attempt=1 | thread_id=019dff23-d72d-7e83-90ef-19867362bc3f
+---
+I’m auditing the completed run against the original request, clarifications, implementation artifacts, tests, and final codebase. I’ll read the authoritative run files first, then verify what actually shipped before writing the audit artifacts.
+
+I’ve loaded the request, raw ledger, and decisions. Next I’m reading the implementation and test artifacts alongside the final provider-policy code paths so I can distinguish shipped behavior from run-local assumptions.
+
+The phase artifacts suggest the main surface is implemented, but I need the code and tests themselves to confirm there aren’t still request-level gaps hiding behind local phase closure notes. I’m pulling the provider-policy modules, resolver/transport seams, and the targeted tests now.
+
+I’m at the point where the audit depends on the code, not the artifacts. I’m reading the implementation seams that are most likely to hide request mismatches: runtime config merge, policy resolution, emitter layout/capabilities, tracing hooks, and replay/topology participation.
+
+I’ve verified the implementation seams. I’m running the focused provider-policy regression suite now, including tracing and transport tests, so the audit can distinguish a missing feature from a missing verification claim.
+
+The focused suite is still running. Once that finishes, I’ll reconcile the test result with the remaining request items and decide whether any gaps are real implementation misses or just out-of-scope differences already justified in the ledger.
+
+The implementation itself looks complete against the main contract, and the focused suite passed cleanly. I’m checking a few last request-level edges now: whether any requested behavior is still only implied, whether any requested file or contract was intentionally satisfied through an equivalent seam, and whether any remaining mismatch is material enough to require a follow-up run.
+
+I have the audit conclusion. There are no material request-level gaps left after reconciling the code, the run ledger, and the focused regression suite. I’m writing the audit artifacts now, including the justified differences that explain why a few requested file-path or seam expectations were satisfied through equivalent implementations instead of literal file edits.
+
+The audit artifacts are written. I’m doing a final verification pass on the audit files themselves so the result reflects the repository state cleanly and the machine-readable JSON is valid.
+
+Scope considered
+
+Immutable request snapshot, authoritative raw phase log, run decisions ledger, run-local plan and phase artifacts, final provider-policy implementation seams, and the focused regression suite.
+
+What I analyzed
+
+Compared the requested provider-policy contract against the shipped code in `autoloop/core/provider_policy.py`, runtime config and resolver wiring, workflow/step authoring surfaces, operation propagation, Codex and Claude emitters/transports, backend dispatch, and runtime event plumbing. Re-ran:
+`./.venv/bin/python -m pytest -q tests/unit/test_provider_policy.py tests/runtime/test_provider_policy_config.py tests/runtime/test_provider_policy_steps.py tests/runtime/test_provider_policy_emitters.py tests/runtime/test_runtime_providers.py tests/runtime/test_provider_backends.py tests/runtime/test_runtime_tracing.py`
+Result: `180 passed in 2.38s`.
+
+What I changed
+
+Updated the audit artifacts only:
+- `.autoloop/tasks/implementation-goal-add-a-first-class-provider-p-5e755cae/runs/run-20260506T190853Z-f707cb4f/artifacts/audit/gap_report.md`
+- `.autoloop/tasks/implementation-goal-add-a-first-class-provider-p-5e755cae/runs/run-20260506T190853Z-f707cb4f/artifacts/audit/revised_request.md`
+- `.autoloop/tasks/implementation-goal-add-a-first-class-provider-p-5e755cae/runs/run-20260506T190853Z-f707cb4f/artifacts/audit/audit_result.json`
+- `.autoloop/tasks/implementation-goal-add-a-first-class-provider-p-5e755cae/runs/run-20260506T190853Z-f707cb4f/artifacts/audit/criteria.md`
+
+Key findings / decisions
+
+No material unresolved gaps remain. The requested first-class provider policy layer is implemented across core policy models, runtime/config merging, workflow and step authoring, compile-time metadata, per-turn resolution, inline operation overrides, provider-specific emission for Codex and Claude, capability reports, transport wiring, and replay/topology fingerprinting.
+
+A few differences were justified by run decisions and implementation analysis rather than representing gaps:
+- emitted policy artifacts are target-scoped under `<run_dir>/provider_policy/<step-key>/<target>/...`
+- `provider_backends` stayed selector-only while policy ownership remained centralized in the resolver/emitter seams
+- Codex capability reports do not claim narrowed read-root enforcement when Codex cannot enforce it
+- Claude policy-backed execution isolates settings in run-owned state instead of mutating user/project settings
+
+Open issues / next step
+
+No follow-up implementation run is required. The revised request states that the remaining deferred areas are the original non-goals, not unresolved intent gaps.
+
+<loop-control>
+{"schema":"docloop.loop_control/v1","kind":"promise","promise":"INCOMPLETE"}
+</loop-control>
+
+
+---
+run_id=run-20260506T190853Z-f707cb4f | entry=session_turn | pair=audit | phase=verifier | cycle=1 | attempt=1 | thread_id=019dff23-d72d-7e83-90ef-19867362bc3f
+---
+provider=codex
+mode=resume
+template=/home/rauter/.local/share/pipx/venvs/autoloop/lib/python3.12/site-packages/autoloop/templates/audit_verifier.md
+session_id=019dff23-d72d-7e83-90ef-19867362bc3f
+
+
+---
+run_id=run-20260506T190853Z-f707cb4f | entry=phase_output | pair=audit | phase=verifier | process=codex-agent | cycle=1 | attempt=1 | thread_id=019dff23-d72d-7e83-90ef-19867362bc3f
+---
+I’m verifying the audit artifacts against the request ledger, decisions, final code, and the focused regression evidence before I touch the audit files. I’ll confirm whether “no material gaps” is actually supported or whether the audit missed a real follow-up item.
+
+The audit holds up against the code, decisions, and regression evidence. I’m recording the verifier outcome in the audit feedback now and leaving the criteria fully checked.
+
+Scope considered
+
+The immutable request snapshot, authoritative raw phase log, decisions ledger, final audit artifacts, the final provider-policy implementation seams, and the focused regression evidence.
+
+What I analyzed
+
+I verified that the audit’s `material_gaps_found=false` conclusion is supported by the shipped code and tests. I checked the same request-critical seams the audit cited: core policy models, runtime config and resolver wiring, workflow/step policy propagation, operation replay participation, provider emitters/transports, backend dispatch, and runtime event emission.
+
+What I reviewed
+
+Reviewed:
+- `artifacts/audit/gap_report.md`
+- `artifacts/audit/revised_request.md`
+- `artifacts/audit/audit_result.json`
+- `artifacts/audit/criteria.md`
+- `artifacts/audit/feedback.md`
+- `decisions.txt`
+
+I also confirmed the focused regression evidence remains consistent with the audit conclusion, including the re-run targeted suite result of `180 passed`.
+
+Key findings / decisions
+
+The audit is valid. I found no blocking or non-blocking defects in the gap classification, the justified-differences section, the no-follow-up revised request, or the machine-readable result.
+
+Criteria remain fully checked. I appended a verifier outcome entry to `artifacts/audit/feedback.md` as `AUD-000`.
+
+Open issues / next step
+
+No audit corrections are required. This verifier turn is complete.
+
+<loop-control>
+{"schema":"docloop.loop_control/v1","kind":"promise","promise":"COMPLETE"}
+</loop-control>

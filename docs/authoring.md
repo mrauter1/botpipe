@@ -160,6 +160,7 @@ Runtime behavior:
   - Codex `exec` start turns receive the generated provider response schema through `--output-schema`
   - if the generated schema was simplified to stay within provider limits, that simplified schema is the one delivered natively and runtime metadata records the simplified delivery mode
   - backends or command surfaces without native schema support fall back to prompt-only guidance, but engine-side route legality, payload validation, and route-fields validation remain strict after parse
+  - runtime provider metadata records the delivery mode under `metadata["structured_output"]` as `native_full`, `native_simplified`, or `prompt_only`
 
 Canonical provider outcomes always route through:
 

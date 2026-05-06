@@ -470,6 +470,7 @@ This is the final standalone handoff spec. It supersedes the mixed current imple
     * structured-output-capable backends should receive the generated provider schema natively
     * if provider limits force schema simplification, the simplified schema may be delivered instead but that simplified delivery must remain observable in runtime metadata
     * unsupported backends may fall back to prompt-only guidance, but that fallback must not weaken post-parse route legality, payload validation, or route-fields validation
+    * runtime/backend metadata should record one of `native_full`, `native_simplified`, or `prompt_only` for the selected delivery path
 
 * **Generated schema example**
 
