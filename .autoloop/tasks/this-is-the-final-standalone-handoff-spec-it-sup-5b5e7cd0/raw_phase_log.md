@@ -411,3 +411,48 @@ No open issue in this phase. This review is complete.
 <loop-control>
 {"schema":"docloop.loop_control/v1","kind":"promise","promise":"COMPLETE"}
 </loop-control>
+
+
+---
+run_id=run-20260506T185744Z-092935c3 | entry=session_turn | pair=test | phase=producer | cycle=1 | attempt=1 | thread_id=019dfeae-6c3b-77c1-83d0-3af21fe7fb06
+---
+provider=codex
+mode=resume
+template=/home/rauter/.local/share/pipx/venvs/autoloop/lib/python3.12/site-packages/autoloop/templates/test_producer.md
+session_id=019dfeae-6c3b-77c1-83d0-3af21fe7fb06
+
+
+---
+run_id=run-20260506T185744Z-092935c3 | entry=phase_output | pair=test | phase=producer | process=codex-agent | cycle=1 | attempt=1 | thread_id=019dfeae-6c3b-77c1-83d0-3af21fe7fb06
+---
+I’m focusing on the route-model regression surface only. First I’m reading the active test artifacts and the current route-model tests to see which acceptance-criteria behaviors are already covered and where the remaining gaps are before I add or refine any tests.
+
+The current test surface already covers most of the phase well. The main remaining regression seam I found is the compile-report summary math that changed when inherited GLOBAL routes moved into per-step compiled tables, so I’m tightening that test now and then I’ll document the final behavior-to-coverage map in the test artifact files.
+
+I’ve tightened the one remaining report-summary regression check and updated the phase test artifacts. I’m running the focused route-model suite again to make sure the new assertion matches the stabilized compile-report behavior rather than just the current implementation.
+
+The suite is nearly done and the artifact files are updated. I’m just waiting for the final pytest result so I can close this turn with the exact validated coverage set and any remaining gaps.
+
+Scope considered
+
+Phase `route-model-unification` only. I stayed on the changed route-model test surface: compiled route authority, GLOBAL inheritance/suppression behavior, compatibility-derived `question` routes, and the static-graph/compile-report summaries affected by inherited GLOBAL routes.
+
+What I analyzed
+
+I reviewed the existing route-model coverage in [tests/unit/test_validation.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/tests/unit/test_validation.py), [tests/runtime/test_runtime_static_graph.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/tests/runtime/test_runtime_static_graph.py), and [tests/unit/test_simple_surface.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/tests/unit/test_simple_surface.py). I also checked the active session file, the run decisions ledger, and the current implementation/test notes to map AC-1 and AC-2 onto concrete regression checks.
+
+What I changed
+
+I tightened [tests/runtime/test_runtime_static_graph.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/tests/runtime/test_runtime_static_graph.py) so `test_route_table_and_compile_report_include_hidden_global_routes` now also asserts declaration-based route totals in `compile_report.md`, which protects the new summary-count behavior after inherited GLOBAL routes moved into per-step compiled tables.
+
+I updated [test_strategy.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/this-is-the-final-standalone-handoff-spec-it-sup-5b5e7cd0/runs/run-20260506T185744Z-092935c3/artifacts/test/phases/route-model-unification/test_strategy.md) with an explicit behavior-to-coverage map and appended a concise test-addition summary to [feedback.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/this-is-the-final-standalone-handoff-spec-it-sup-5b5e7cd0/runs/run-20260506T185744Z-092935c3/artifacts/test/phases/route-model-unification/feedback.md).
+
+Key findings / decisions
+
+The route-model phase already had strong functional coverage from the implementation pass. The highest-value remaining regression seam was report-summary math, so I added an assertion that would fail if inherited GLOBAL routes started inflating compile-report route totals again.
+
+The focused suite passed: `.venv/bin/python -m pytest -q tests/unit/test_validation.py tests/unit/test_simple_surface.py tests/runtime/test_runtime_static_graph.py` with `190 passed, 14 warnings`. The warnings are the same pre-existing Pydantic field-name shadow warnings from workflow contract fixtures.
+
+Open issues / next step
+
+No open test-author blocker remains in this phase. The remaining known gaps are intentional later-phase items: canonical `outcome.route_fields` parsing, provider schema generation, and runtime `Outcome.route_fields` projection.
