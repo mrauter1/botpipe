@@ -44,3 +44,4 @@ Legacy Claude `model_effort=max` is normalized to provider-policy `model.effort=
 Codex capability reports leave effective_enforcement.read_roots empty because Codex exposes no read-root enforcement surface; requested allow_read roots remain visible only in effective_policy.json and unsafe-expansion diagnostics.
 <autoloop-decisions-header version="1" block_seq="14" owner="test_author" phase_id="policy-codex" pair="test" turn_seq="1" run_id="run-20260506T190853Z-f707cb4f" ts="2026-05-06T20:39:41.892872+00:00" />
 Policy-codex regression coverage intentionally checks narrowed `allow_read` semantics both at the direct emitter layer and through the async Codex transport path so capability-report content cannot drift between emission and runtime wiring.
+<autoloop-decisions-header version="1" block_seq="15" owner="implementer" phase_id="policy-claude-regression" pair="implement" turn_seq="1" run_id="run-20260506T190853Z-f707cb4f" ts="2026-05-06T20:41:38.230881+00:00" />

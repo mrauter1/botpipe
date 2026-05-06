@@ -1,4 +1,3 @@
-{}
 {
   "material_gaps_found": true,
   "summary": "The route-helper migration is mostly implemented, but backend schema delivery and guaranteed runtime enforcement of raw route JSON-schema contracts are still incomplete.",
