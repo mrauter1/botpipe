@@ -972,3 +972,66 @@ Open issues / next step
 <loop-control>
 {"schema":"docloop.loop_control/v1","kind":"promise","promise":"INCOMPLETE"}
 </loop-control>
+
+
+---
+run_id=run-20260506T190853Z-f707cb4f | entry=session_turn | pair=implement | phase=producer | cycle=2 | attempt=1 | thread_id=019dfed8-551c-7c93-94aa-0e9110d8f650
+---
+provider=codex
+mode=resume
+template=/home/rauter/.local/share/pipx/venvs/autoloop/lib/python3.12/site-packages/autoloop/templates/implement_producer.md
+session_id=019dfed8-551c-7c93-94aa-0e9110d8f650
+
+
+---
+run_id=run-20260506T190853Z-f707cb4f | entry=phase_output | pair=implement | phase=producer | process=codex-agent | cycle=2 | attempt=1 | thread_id=019dfed8-551c-7c93-94aa-0e9110d8f650
+---
+Reviewer found two real gaps in this phase: workflow-step policy binding is incomplete, and direct `Engine(...)` runs require an internal resolver to make authored policy work at all. I’m fixing both at the binding seam first, then I’ll add focused regressions for workflow-step hooks and direct-engine policy propagation.
+
+I’ve got the two fixes scoped. The remaining design choice is where to synthesize the fallback resolver for direct `Engine(...)` runs; I’m checking the existing run-context root logic so I can reuse the same workspace-root semantics instead of inventing a parallel rule.
+
+I have the edit plan. I’m centralizing fallback resolver construction in `provider_policy_resolver.py`, then I’ll remove the step-kind hole and add cleanup so per-step context policy cannot leak across steps.
+
+The core change is in place. I’m adding the two missing regressions now: one for workflow-step hook inheritance and one for plain `Engine(...)` usage without manually wiring a resolver.
+
+The new tests are in. I’m running the phase suite plus a couple of adjacent contract surfaces now to catch import churn and make sure the fallback resolver path didn’t disturb replay behavior.
+
+The fixes are holding under the phase suite and adjacent replay/provider-boundary tests. I’m updating the run-local notes and decisions now so the next verifier sees the new resolver fallback and per-step policy rebinding rules explicitly.
+
+Scope considered
+
+- Phase-local fix for `policy-resolution-propagation` only.
+- Addressed the two reviewer findings in the policy binding/resolver seam and added focused regression coverage.
+- Left provider emission, CLI mapping, and other later-phase policy work untouched.
+
+What I analyzed
+
+- Reviewer feedback in [feedback.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/implementation-goal-add-a-first-class-provider-p-5e755cae/runs/run-20260506T190853Z-f707cb4f/artifacts/implement/phases/policy-resolution-propagation/feedback.md).
+- Current resolver and runtime seams in [provider_policy_resolver.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/autoloop/runtime/provider_policy_resolver.py), [engine.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/autoloop/core/engine.py), [engine_collaborators.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/autoloop/core/engine_collaborators.py), and [runner.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/autoloop/runtime/runner.py).
+- Existing phase tests in [test_provider_policy_steps.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/tests/runtime/test_provider_policy_steps.py) plus adjacent replay/provider-boundary coverage.
+
+What I changed
+
+- Added `create_provider_policy_resolver(...)` in [provider_policy_resolver.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/autoloop/runtime/provider_policy_resolver.py) and switched [runner.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/autoloop/runtime/runner.py) to use it, so resolver construction is shared instead of duplicated.
+- Updated [engine.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/autoloop/core/engine.py) so direct `Engine(...)` runs synthesize a default resolver when none is supplied, using the same workflow-policy/default-runtime shape as the runner path.
+- Updated [engine_collaborators.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/autoloop/core/engine_collaborators.py) so step policy is resolved for every executing step when a resolver is present, and `Context._provider_policy` is restored/cleared on exit to prevent stale-policy leakage.
+- Extended [test_provider_policy_steps.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/tests/runtime/test_provider_policy_steps.py) with:
+  - workflow-step hook inheritance coverage
+  - direct-engine authored policy propagation coverage
+- Updated [implementation_notes.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/implementation-goal-add-a-first-class-provider-p-5e755cae/runs/run-20260506T190853Z-f707cb4f/artifacts/implement/phases/policy-resolution-propagation/implementation_notes.md) and appended the non-obvious resolver/binding decisions to [decisions.txt](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/implementation-goal-add-a-first-class-provider-p-5e755cae/runs/run-20260506T190853Z-f707cb4f/decisions.txt).
+
+Key findings / decisions
+
+- The safe central fix was to make resolver construction shared and make per-step binding unconditional when a resolver exists, rather than patching only `workflow` steps.
+- Direct `Engine(...)` remains compatible with explicit caller-supplied resolvers; the fallback only activates when none was provided.
+- Per-step context policy now has explicit cleanup semantics, so later steps and workflow-step hooks cannot inherit stale policy state.
+
+Open issues / next step
+
+- No phase-local blocker remains from the reviewer findings.
+- Validation run:
+  - `./.venv/bin/python -m py_compile autoloop/runtime/provider_policy_resolver.py autoloop/runtime/runner.py autoloop/core/engine.py autoloop/core/engine_collaborators.py tests/runtime/test_provider_policy_steps.py`
+  - `./.venv/bin/python -m pytest -q tests/runtime/test_provider_policy_steps.py`
+  - `./.venv/bin/python -m pytest -q tests/contract/test_engine_contracts.py -k 'operation_replay_fingerprint or operation_replay_override or llm_and_classify_step_replay_across_reruns'`
+  - `./.venv/bin/python -m pytest -q tests/unit/test_simple_surface.py -k 'policy or operation_surface_singletons'`
+  - `./.venv/bin/python -m pytest -q tests/unit/test_provider_boundary_core.py -k 'operation or rendered'`

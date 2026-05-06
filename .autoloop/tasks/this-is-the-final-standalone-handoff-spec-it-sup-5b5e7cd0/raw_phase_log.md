@@ -1116,3 +1116,57 @@ Open issues / next step
 <loop-control>
 {"schema":"docloop.loop_control/v1","kind":"promise","promise":"COMPLETE"}
 </loop-control>
+
+
+---
+run_id=run-20260506T185744Z-092935c3 | entry=session_turn | pair=test | phase=verifier | cycle=2 | attempt=1 | thread_id=019dfed8-b85e-7423-bfab-6f1b074286d3
+---
+provider=codex
+mode=resume
+template=/home/rauter/.local/share/pipx/venvs/autoloop/lib/python3.12/site-packages/autoloop/templates/test_verifier.md
+session_id=019dfed8-b85e-7423-bfab-6f1b074286d3
+
+
+---
+run_id=run-20260506T185744Z-092935c3 | entry=phase_output | pair=test | phase=verifier | process=codex-agent | cycle=2 | attempt=1 | thread_id=019dfed8-b85e-7423-bfab-6f1b074286d3
+---
+I’m re-auditing the fallback path specifically on the selected-workflow inspection surfaces now. The key check is whether the new test actually patches before `inspect_workflow_reference()` so it hits the duplicated `workflow_capabilities` path rather than only the final payload renderer.
+
+The new inspection-fallback test hits the right path and closes the explicit AC-3 gap. I’m marking the audit complete and appending a short resolution note so the previous blocking finding is clearly superseded in the phase feedback.
+
+Scope considered
+
+- Phase-local test re-audit for `runtime-and-inspection-alignment`.
+- Focused on the updated selected-workflow inspection fallback coverage, the phase strategy, and the active audit artifacts.
+
+What I analyzed
+
+- The follow-up test added in `tests/unit/test_stdlib_and_extensions.py`.
+- The phase strategy mapping for AC-3.
+- The relevant reporting path in `autoloop/core/workflow_capabilities.py` as exercised through `inspect_workflow_reference()`.
+
+What I reviewed
+
+- That the new fallback test patches `autoloop.core.route_reporting.build_provider_outcome_schema` before `inspect_workflow_reference()`, so it covers the duplicated inspection path rather than only the final payload render.
+- That both selected-workflow inspection surfaces now assert fallback metadata under `schema_simplified=True`:
+  - `selected_workflow_capability_payload()`
+  - `selected_workflow_decomposition_surface_payload()`
+- That the phase strategy and feedback now reflect the added coverage accurately.
+
+Key findings / decisions
+
+- No remaining blocking findings.
+- No remaining non-blocking findings.
+- Updated [criteria.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/this-is-the-final-standalone-handoff-spec-it-sup-5b5e7cd0/runs/run-20260506T185744Z-092935c3/artifacts/test/phases/runtime-and-inspection-alignment/criteria.md) to fully checked.
+- Appended a resolution note to [feedback.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/this-is-the-final-standalone-handoff-spec-it-sup-5b5e7cd0/runs/run-20260506T185744Z-092935c3/artifacts/test/phases/runtime-and-inspection-alignment/feedback.md) clarifying that `TST-001` is addressed.
+
+Open issues / next step
+
+- The only remaining limitation is environment-side: `pytest` is still unavailable here, so the focused suites remain syntax-checked rather than executed.
+- If the toolchain becomes available, the next run should execute:
+  - `tests/runtime/test_runtime_static_graph.py`
+  - `tests/unit/test_stdlib_and_extensions.py`
+
+<loop-control>
+{"schema":"docloop.loop_control/v1","kind":"promise","promise":"COMPLETE"}
+</loop-control>
