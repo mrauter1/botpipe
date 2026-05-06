@@ -14,3 +14,7 @@ Check these boxes (`- [x]`) only when true.
 - [ ] **Compatibility / Safety**: No material compatibility, security, data-integrity, or operational regressions were introduced.
 - [ ] **Technical Debt / Simplicity**: Changes avoid unnecessary indirection, duplicated logic, scattered ownership, over-engineering, and unrelated refactors.
 - [ ] **Maintainability / Validation**: Diffs are cohesive, follow repository conventions, and are supported by appropriate validation, documentation, or notes where needed.
+
+## Review Status
+
+- Blocking findings remain in `feedback.md`; boxes are intentionally left unchecked for this review pass.
