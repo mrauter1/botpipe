@@ -1,4 +1,41 @@
 version: 1
 task_id: revised-standalone-spec-second-pass-cleanup-for-dd5e2acb
 request_snapshot_ref: /home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/revised-standalone-spec-second-pass-cleanup-for-dd5e2acb/runs/run-20260506T181149Z-6867fac0/request.md
-phases: []
+phases:
+  - phase_id: "async-branch-group-cleanup"
+    title: "Async Branch-Group Cleanup"
+    objective: "Apply the merge-blocking branch-group correctness fixes and targeted regression coverage without redesigning the async provider/runtime architecture or changing public non-parallel APIs."
+    status: "planned"
+    in_scope:
+      - "Remove duplicate capture-mode final-state mutation from branch result construction and keep RouteFinalizer.capture as the single owner of capture finalization state updates."
+      - "Make BranchSessionStoreView branch-local only, preserve fresh branch sessions at session_id=None until the provider returns a real id, and keep parent active session state unchanged."
+      - "Remove or assertion-guard unreachable scoped/worklist branch runtime handling and keep branch execution/fan-in on async capture-mode paths only."
+      - "Contain the sync operation bridge to existing non-parallel compatibility and add compile/runtime/provider/strictness tests for capture semantics, session isolation, evidence gating, and async provider-turn execution."
+    out_of_scope:
+      - "Provider architecture redesign or sync-provider fallback reintroduction."
+      - "Thread-backed execution, worklist fan-out, child workflow branch/fan-in support, or workspace isolation."
+      - "Fan-in redesign, branch state merge policy, or async local filesystem conversion."
+      - "Compile-cache redesign beyond the existing safe bypass for branch-group workflows."
+    dependencies: []
+    acceptance_criteria:
+      - id: "AC-1"
+        text: "BranchGroupRuntime branch result construction is observational only, failed-branch session snapshots are read once, and produce/verify branch rework counting is validated to happen exactly once."
+      - id: "AC-2"
+        text: "BranchSessionStoreView no longer falls back to parent active sessions or exposes parent bindings through snapshot, and branch-fresh provider requests begin with session_id=None while parent active bindings remain unchanged."
+      - id: "AC-3"
+        text: "Scoped branch runtime worklist/item-state initialization is removed or replaced with an internal assertion, while compile-time rejection of scoped, child-workflow, and operation branch/fan-in steps remains covered."
+      - id: "AC-4"
+        text: "Branch capture mode continues to record routes and direct controls without following destinations or running route on_taken hooks, and fan-in observable finalization side effects occur exactly once at the composite boundary."
+      - id: "AC-5"
+        text: "Provider turn execution paths remain async-native with asyncio.create_subprocess_exec, run_operation does not leak into provider-backed branches or fan-in, and strictness coverage still allows explicit CLI capability probing via subprocess.run."
+    deliverables:
+      - "Localized runtime/session overlay patches in the existing branch-group and provider boundary modules."
+      - "Targeted compile-time, runtime, provider, and strictness regression tests covering the mandatory fixes from the request snapshot."
+      - "Inline comments or documentation clarifying that retained sync bridges exist only for public non-parallel compatibility."
+    risks:
+      - "Session overlay tightening may surface hidden reliance on parent active bindings in branch flows."
+      - "Fan-in exact-once cleanup may regress composite route finalization if nested and outer finalizers are not kept clearly separated."
+      - "Strictness assertions may overreach if they scan capability-probe code instead of provider turn execution surfaces."
+    rollback:
+      - "Revert branch-group runtime and BranchSessionStoreView changes together if parent-session behavior or composite routing regresses."
+      - "Retain the new regression tests to preserve the intended invariants during any follow-up implementation adjustment."
