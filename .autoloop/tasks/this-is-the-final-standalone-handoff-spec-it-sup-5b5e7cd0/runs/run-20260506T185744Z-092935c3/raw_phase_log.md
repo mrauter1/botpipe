@@ -160,3 +160,12 @@ No open verification issues remain. The planning artifacts are consistent, compl
 <loop-control>
 {"schema":"docloop.loop_control/v1","kind":"promise","promise":"COMPLETE"}
 </loop-control>
+
+
+---
+run_id=run-20260506T185744Z-092935c3 | entry=phase_scope_resolved
+---
+phase_mode=single
+phase_ids=route-model-unification,provider-outcome-contract,runtime-and-inspection-alignment,tests-and-docs-migration
+explicit=True
+current_phase_index=0
