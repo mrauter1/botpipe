@@ -1215,3 +1215,78 @@ Open issues / next step
 <loop-control>
 {"schema":"docloop.loop_control/v1","kind":"promise","promise":"COMPLETE"}
 </loop-control>
+
+
+---
+run_id=run-20260506T190853Z-f707cb4f | entry=session_turn | pair=implement | phase=producer | cycle=1 | attempt=1 | thread_id=019dfef0-6177-7931-97e7-51ce31250dd7
+---
+provider=codex
+mode=start
+template=/home/rauter/.local/share/pipx/venvs/autoloop/lib/python3.12/site-packages/autoloop/templates/implement_producer.md
+session_id=019dfef0-6177-7931-97e7-51ce31250dd7
+
+
+---
+run_id=run-20260506T190853Z-f707cb4f | entry=phase_output | pair=implement | phase=producer | process=codex-agent | cycle=1 | attempt=1 | thread_id=019dfef0-6177-7931-97e7-51ce31250dd7
+---
+I’m implementing the `policy-codex` phase only: Codex policy emission, transport wiring, metadata/tracing, and tests. First I’m reading the phase artifacts and the current Codex/provider-policy code paths to anchor the change against the existing seams.
+
+The phase artifacts are mostly scaffolding, so I’m treating the existing code as the real contract now. Next I’m reading the current policy/resolution modules, the Codex transport, and the relevant tests to see what was already wired in prior phases and what remains for emission/execution.
+
+I’ve confirmed policy resolution already exists and the Codex transport is still pre-policy. Now I’m tracing how runtime events and provider metadata are built so the new emission step can fit without widening unrelated surfaces.
+
+The remaining gap is context needed for run-scoped emission: the current rendered turn only carries `step_name` and `policy`. I’m checking where request objects are constructed so I can add the smallest metadata seam needed for stable `<run_dir>/provider_policy/<step-key>/...` output and trace payloads.
+
+I need one exact provider-surface detail before I lock the transport wiring: how Codex CLI consumes a project config file during execution. I’m checking the official Codex/OpenAI docs now so the emitted `config.toml` path is passed in a way that matches the real CLI surface rather than an invented flag.
+
+I have the transport shape now. The minimal seam is: enrich `RenderedProviderTurn` with run/step execution metadata and event sink derived from `Context`, then let Codex transport emit target-scoped artifacts and trace its own capability decision before spawning the CLI. Next I’m editing the shared turn model, adding the new Codex emitter, and rewiring the transport/executor paths around it.
+
+I found one non-obvious compatibility point: the old Codex transport always forced a full-auto CLI flag. That conflicts with the new per-turn policy layer, so I’m removing that unconditional flag and letting the emitted run-scoped policy drive approval/sandbox instead. I’m updating the backend expectations and adding explicit transport coverage for the new `CODEX_HOME`-based config emission path.
+
+The first patch failed on context drift in `codex.py`, so I’m applying the changes in smaller pieces against the live file contents. I’m not changing the approach; just tightening the edits so they match the current tree exactly.
+
+I hit one more seam that mattered for correctness: validation mode lives in runtime config, but the transport didn’t receive it. I’m threading `provider_policy.validation` into the Codex transport/executor now so `unsupported/warn/fail` and `lossy/unsafe` decisions actually honor the configured runtime policy instead of always using defaults.
+
+I found a backward-compatibility regression while wiring the emitter: if I removed all model flags, unconfigured Codex runs would stop honoring Autoloop’s existing model default. I’m fixing that by keeping model/model-effort as fallback CLI overrides when the resolved per-turn policy doesn’t specify them, while still moving approval/sandbox control to the emitted run-scoped policy.
+
+The main code path is patched. I’m doing a focused verification pass now: read the new emitter/transport tests for obvious mistakes, run the policy and provider test slices, and then I’ll update the phase notes and decisions with the non-obvious behavior that changed.
+
+I spotted one more observability gap: when capability validation fails before spawn, the emitter already writes the report, but the transport wasn’t tracing that failure path. I’m catching that specific pre-spawn failure now so the runtime still records the emitted-file paths and a `decision=fail` event before the exception propagates.
+
+I found an edge case in the unsandboxed path: because `disable_dangerous_bypass` defaults to `True`, treating that flag as an unconditional Codex emission failure would make a valid explicit unsandboxed override fail for the wrong reason. I’m dropping that extra rejection and letting the actual unsandboxed gate remain `mode + allow_dangerous_bypass`, which is the user’s requested safety boundary here.
+
+The environment doesn’t have `python`; switching to `python3` for verification. I’m running the focused provider-policy/provider-runtime slices now and will fix anything that falls out before I write the phase notes.
+
+`pytest` isn’t installed in this shell image. I’m avoiding a surprise environment mutation for now; I’ll do a quick static sanity pass, then decide whether the test signal is worth a local install versus reporting the gap explicitly.
+
+The host blocks system-wide `pip install`, so I’m using an isolated repo-local virtualenv for the verification pass instead of mutating the base image. That keeps the implementation clean and still lets me execute the focused tests.
+
+Collection failed only because the isolated venv didn’t have the repo’s runtime dependency set yet. I’m adding the minimal missing dependency (`pydantic`) into the throwaway venv and rerunning the focused slices rather than widening the environment more than necessary.
+
+The focused runtime/provider slice is mostly green: `95` passed, `2` failed. Both failures are in pre-existing provider-backend compatibility tests for legacy CLI `model_effort="max"` on Claude, and the break is now obvious: the runtime-policy mirror path is trying to stuff that legacy value directly into the normalized policy enum. I’m fixing that compatibility bridge next so the old CLI surface and the new policy layer can coexist cleanly.
+
+The two remaining failures are a pure compatibility bridge issue, not a Codex transport issue: legacy Claude CLI still accepts `model_effort="max"`, but the normalized provider policy does not. I’m normalizing that one legacy effort into the policy space now so the old CLI contract continues to pass through while the new policy layer stays typed.
+
+The targeted test slice is green now: `97 passed`. I’m doing a final hygiene pass on the repo-local verification artifacts and then I’ll update the phase notes/decisions with the specific compatibility choices that came out of the work.
+
+Scope considered
+
+Phase-local `policy-codex` only: Codex policy emission, run-scoped artifact writing, validation/capability reporting, transport + sync operation wiring, runtime event emission, and focused regression coverage. I made one adjacent compatibility fix in `autoloop/runtime/config.py` so existing provider-backend tests still pass with legacy Claude `model_effort="max"`.
+
+What I analyzed
+
+I traced the existing seams across `provider_policy.py`, `provider_policy_resolver.py`, `core/providers/{models,rendering,turns}.py`, `runtime/providers/codex.py`, `_common.py`, and the provider/runtime test suites. I also verified the Codex config-loading seam and used run-scoped `CODEX_HOME` as the non-mutating provider config path.
+
+What I changed
+
+Added `autoloop/runtime/providers/codex_policy.py` with `CodexPolicyEmitter`, TOML/JSON artifact emission, capability classification, and failure gating. Extended rendered turns to carry `run_folder`, `step_execution_id`, and `runtime_event_sink`, then wired Codex transport and sync operation execution to emit per-turn policy artifacts under `<run_dir>/provider_policy/<step-key>/codex/`, merge `CODEX_HOME` into subprocess env, attach policy metadata to provider results, and emit `provider_policy_emitted` / `provider_policy_capability_report`.
+
+I also added focused coverage in `tests/runtime/test_provider_policy_emitters.py`, extended `tests/runtime/test_runtime_providers.py` for emitted env/metadata behavior, and updated `tests/runtime/test_provider_backends.py` for the new command-resolution contract. The config compatibility bridge now aliases legacy Claude `max` to normalized policy `xhigh` only for provider-policy mirroring.
+
+Key findings / decisions
+
+Codex can no longer keep a hard-coded full-auto CLI flag if per-turn policy is authoritative; approval/sandbox now come from the emitted run-scoped policy file, while legacy model/model-effort remain fallback CLI flags only when the resolved policy does not set them. The stable Codex artifact seam is `CODEX_HOME=<run_dir>/provider_policy/<step-key>/codex`, which avoids mutating any user-level config and keeps capability reports target-scoped and reproducible.
+
+Open issues / next step
+
+Focused verification passed: `97` tests passed across `tests/runtime/test_provider_policy_emitters.py`, `tests/runtime/test_runtime_providers.py`, and `tests/runtime/test_provider_backends.py`. Claude emission/integration remains for the next phase.

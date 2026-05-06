@@ -59,3 +59,4 @@
 {"ts": "2026-05-06T20:17:38.991267+00:00", "run_id": "run-20260506T190853Z-f707cb4f", "seq": 59, "event_type": "phase_started", "phase_id": "policy-codex", "phase_mode": "single"}
 {"ts": "2026-05-06T20:17:38.992800+00:00", "run_id": "run-20260506T190853Z-f707cb4f", "seq": 60, "event_type": "pair_started", "pair": "implement", "phase_id": "policy-codex"}
 {"ts": "2026-05-06T20:17:38.992884+00:00", "run_id": "run-20260506T190853Z-f707cb4f", "seq": 61, "event_type": "cycle_started", "pair": "implement", "cycle": 1, "attempt": 1, "phase_id": "policy-codex"}
+{"ts": "2026-05-06T20:34:44.511876+00:00", "run_id": "run-20260506T190853Z-f707cb4f", "seq": 62, "event_type": "phase_finished", "pair": "implement", "phase": "producer", "cycle": 1, "attempt": 1, "empty_output": false, "phase_id": "policy-codex"}

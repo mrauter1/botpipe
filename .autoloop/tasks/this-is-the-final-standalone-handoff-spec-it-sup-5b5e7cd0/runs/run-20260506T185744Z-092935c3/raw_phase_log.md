@@ -1504,3 +1504,55 @@ Open issues / next step
 
 - No open test-author blockers remain in this slice.
 - Next step is the test-phase verifier/auditor pass over the updated test file and phase artifacts.
+
+
+---
+run_id=run-20260506T185744Z-092935c3 | entry=session_turn | pair=test | phase=verifier | cycle=1 | attempt=1 | thread_id=019dfeed-ec76-7aa0-818d-b53b7259845b
+---
+provider=codex
+mode=resume
+template=/home/rauter/.local/share/pipx/venvs/autoloop/lib/python3.12/site-packages/autoloop/templates/test_verifier.md
+session_id=019dfeed-ec76-7aa0-818d-b53b7259845b
+
+
+---
+run_id=run-20260506T185744Z-092935c3 | entry=phase_output | pair=test | phase=verifier | process=codex-agent | cycle=1 | attempt=1 | thread_id=019dfeed-ec76-7aa0-818d-b53b7259845b
+---
+I’m auditing the test additions for this phase-local slice: the tightened docs regression, the new test strategy map, and whether the coverage now pins the compatibility-only wording without adding flake or masking regressions.
+
+The added test is sound: it now pins the exact compatibility-only sentence, keeps the reserved-route phrases forbidden, and stays deterministic. I’m marking the audit complete and recording that no additional test findings remain.
+
+Scope considered
+
+- Phase-local test-audit scope for `tests-and-docs-migration`.
+- The newly tightened docs regression in `tests/test_architecture_baseline_docs.py` plus the matching test strategy and feedback artifacts.
+
+What I analyzed
+
+- The active audit artifacts: [criteria.md](</home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/this-is-the-final-standalone-handoff-spec-it-sup-5b5e7cd0/runs/run-20260506T185744Z-092935c3/artifacts/test/phases/tests-and-docs-migration/criteria.md>), [feedback.md](</home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/this-is-the-final-standalone-handoff-spec-it-sup-5b5e7cd0/runs/run-20260506T185744Z-092935c3/artifacts/test/phases/tests-and-docs-migration/feedback.md>), and [test_strategy.md](</home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/this-is-the-final-standalone-handoff-spec-it-sup-5b5e7cd0/runs/run-20260506T185744Z-092935c3/artifacts/test/phases/tests-and-docs-migration/test_strategy.md>).
+- The current assertion body in [tests/test_architecture_baseline_docs.py](</home/rauter/autoloop_v3_bkp/autoloop_v3/tests/test_architecture_baseline_docs.py:258>).
+- The latest phase-local decisions entry about exact compatibility-note coverage.
+- Targeted validation output from `./.venv/bin/python -m pytest -q tests/test_architecture_baseline_docs.py`.
+
+What I reviewed
+
+- Confirmed the docs test now requires the exact sentence naming `ControlRoutes(question=...)` and legacy top-level `question` / `reason` as compatibility-only migration surfaces.
+- Confirmed the same test still forbids the stale reserved-route phrases, so it catches both weakening and regression.
+- Confirmed the strategy artifact accurately maps behavior covered, preserved invariants, failure paths, flake posture, and known gaps.
+- Re-ran the targeted docs suite successfully:
+  - `15 passed in 0.04s`
+
+Key findings / decisions
+
+- No blocking or non-blocking audit findings.
+- The added assertion improves regression protection materially without adding flake risk because it is a deterministic file-content check.
+- I updated [criteria.md](</home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/this-is-the-final-standalone-handoff-spec-it-sup-5b5e7cd0/runs/run-20260506T185744Z-092935c3/artifacts/test/phases/tests-and-docs-migration/criteria.md>) to all checked and appended the audit resolution note to [feedback.md](</home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/this-is-the-final-standalone-handoff-spec-it-sup-5b5e7cd0/runs/run-20260506T185744Z-092935c3/artifacts/test/phases/tests-and-docs-migration/feedback.md>).
+
+Open issues / next step
+
+- No open issues remain in this phase-local test audit slice.
+- Test-phase audit is complete.
+
+<loop-control>
+{"schema":"docloop.loop_control/v1","kind":"promise","promise":"COMPLETE"}
+</loop-control>
