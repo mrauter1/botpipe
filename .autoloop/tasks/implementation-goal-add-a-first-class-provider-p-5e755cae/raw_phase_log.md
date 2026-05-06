@@ -1654,3 +1654,73 @@ The phase is not review-complete. The next implementation turn should fix the th
 <loop-control>
 {"schema":"docloop.loop_control/v1","kind":"promise","promise":"INCOMPLETE"}
 </loop-control>
+
+
+---
+run_id=run-20260506T190853Z-f707cb4f | entry=session_turn | pair=implement | phase=producer | cycle=2 | attempt=1 | thread_id=019dff06-56f8-7ec3-9792-9244e6c94bf8
+---
+provider=codex
+mode=resume
+template=/home/rauter/.local/share/pipx/venvs/autoloop/lib/python3.12/site-packages/autoloop/templates/implement_producer.md
+session_id=019dff06-56f8-7ec3-9792-9244e6c94bf8
+
+
+---
+run_id=run-20260506T190853Z-f707cb4f | entry=phase_output | pair=implement | phase=producer | process=codex-agent | cycle=2 | attempt=1 | thread_id=019dff06-56f8-7ec3-9792-9244e6c94bf8
+---
+The main fix seam is now clear: `--settings` alone is insufficient because Claude merges ambient settings. I’m tracing where the rendered turn can safely learn the actual workspace root so I can launch Claude from an isolated runtime-owned directory and give it the workspace via `--add-dir`, instead of trying to fight the merge behavior in-place.
+
+I’m addressing the three blocking Claude regressions now. First I’m re-reading the reviewer findings and the current Claude/config seams so I can fix the compatibility and isolation issues without broadening scope.
+
+The reviewer’s two real pressure points are compatibility mapping and isolation from ambient Claude settings. I’m tracing both through config resolution and turn construction before I touch code so the fix lands in one seam rather than scattered conditionals.
+
+The cleanest place to isolate Claude is probably turn rendering plus transport, because that lets the emitter stay declarative and keeps runtime resolution authoritative. I’m checking whether the rendered turn already carries enough workspace identity or if I need one additional field for that.
+
+I have a viable isolation seam now: Claude’s own docs confirm `CLAUDE_CONFIG_DIR` relocates the user config root, and `--add-dir` grants workspace access without loading most project config from that added directory. I’m switching the transport to a run-owned launch directory so policy-backed turns stop inheriting ambient repo or user settings.
+
+I’ve narrowed the concrete change set. Before editing I’m checking the subprocess helpers and the existing test doubles, because the Claude isolation fix needs one new runtime-controlled `cwd` seam and I want that to stay surgical.
+
+I’ve confirmed the subprocess seam is small: one helper and the Claude transport call sites. I’m checking one path-normalization detail before editing, because the isolated Claude launch directory means provider filesystem paths can no longer stay relative to the process cwd.
+
+I have enough context to edit. I’m starting with the narrow transport seam: rendered-turn workspace identity and subprocess `cwd`, because those two pieces let the Claude fix stay isolated to the provider path instead of leaking into workflow logic.
+
+I’ve finished the code edits for the three findings. Next I’m running the focused Claude policy/config/runtime suites so any compatibility break shows up before I touch the phase notes.
+
+The focused suites are mostly green so far; I’m waiting on the full pytest result and then I’ll do the run-artifact updates with the exact validation set that passed.
+
+I’m doing one extra regression sweep on the adjacent policy-step path because I changed the rendered turn shape. That should catch any propagation issue before I update the implementation notes.
+
+The code path is validated now. I’m updating the phase notes and the run decision ledger with the two non-obvious implementation choices here: the Claude launch isolation seam and the centralized legacy bypass mapping.
+
+I’m updating the phase artifact now. The earlier note about plain `--settings` is no longer true after the isolation fix, so I’m rewriting the notes to match the final cumulative implementation instead of appending a contradictory delta.
+
+Scope considered
+
+Phase-local Claude policy regression fixes only: [autoloop/runtime/providers/claude.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/autoloop/runtime/providers/claude.py), [autoloop/runtime/providers/claude_policy.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/autoloop/runtime/providers/claude_policy.py), the narrow propagation seams in [autoloop/runtime/config.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/autoloop/runtime/config.py), [autoloop/core/providers/rendering.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/autoloop/core/providers/rendering.py), [autoloop/core/providers/turns.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/autoloop/core/providers/turns.py), [autoloop/runtime/providers/_common.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/autoloop/runtime/providers/_common.py), and the focused runtime/provider tests plus phase artifacts.
+
+What I analyzed
+
+I traced the three blocking findings through the actual seams that owned them: Claude settings isolation, legacy `permission_strategy=bypass` compatibility, and capability-report lossiness for degraded filesystem support. I also verified the Claude-side behavior against the current docs for settings precedence, `CLAUDE_CONFIG_DIR`, and `--add-dir` behavior: [configuration](https://code.claude.com/docs/en/configuration), [permissions](https://code.claude.com/docs/en/permissions), [claude directory](https://code.claude.com/docs/en/claude-directory).
+
+What I changed
+
+I fixed the Claude isolation regression by making policy-backed Claude turns run from a run-owned launch directory with a run-owned `CLAUDE_CONFIG_DIR`, while adding the real workspace through `--add-dir`. The emitter now writes workspace-rooted filesystem paths for those isolated launches, sets `CLAUDE_CODE_ADDITIONAL_DIRECTORIES_CLAUDE_MD=1` so project `CLAUDE.md` and rules still load, and keeps target-scoped `settings.json`/`effective_policy.json`/`capability_report.json` under the run directory.
+
+I fixed the compatibility regression by mirroring legacy `provider.claude.permission_strategy=bypass` into the resolved default provider policy during config resolution, but only when newer explicit policy fields do not already own those permission/sandbox knobs. That keeps old Claude configs working without letting transport logic silently override explicit policy or strict validation.
+
+I fixed the capability-report gap by marking filesystem fallback as lossy whenever sandboxed filesystem enforcement is expected but Claude native filesystem settings are unavailable, including the default workspace-write case. I updated the focused tests to cover the isolated launch env/cwd, workspace-rooted emission, central bypass mapping, and the default-fallback lossy warning. I also updated [implementation_notes.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/implementation-goal-add-a-first-class-provider-p-5e755cae/runs/run-20260506T190853Z-f707cb4f/artifacts/implement/phases/policy-claude-regression/implementation_notes.md) and appended the non-obvious decisions under the current turn header in [decisions.txt](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/implementation-goal-add-a-first-class-provider-p-5e755cae/runs/run-20260506T190853Z-f707cb4f/decisions.txt).
+
+Key findings / decisions
+
+Claude settings isolation now uses a combined seam, not plain `--settings`: run-owned `CLAUDE_CONFIG_DIR`, run-owned launch `cwd`, and `--add-dir <workspace_root>`. That closes the reviewer’s ambient user/project settings leak without losing session continuity.
+
+Legacy Claude `bypass` compatibility is now centralized in runtime policy resolution instead of being conditionally smuggled back in at transport time. Explicit `provider_policy` fields still win.
+
+Validation passed:
+- `.venv/bin/python -m pytest tests/runtime/test_provider_policy_emitters.py tests/runtime/test_runtime_providers.py tests/runtime/test_provider_policy_config.py tests/runtime/test_provider_backends.py -q`
+- `.venv/bin/python -m pytest tests/runtime/test_provider_policy_steps.py -q`
+- `python3 -m compileall autoloop/runtime/providers/claude.py autoloop/runtime/providers/claude_policy.py autoloop/runtime/config.py autoloop/core/providers/rendering.py autoloop/core/providers/turns.py autoloop/runtime/providers/_common.py`
+
+Open issues / next step
+
+The three blocking reviewer findings are addressed and the focused regression suites passed. The next step is the verifier pass against the updated phase artifacts.
