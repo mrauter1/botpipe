@@ -2057,3 +2057,128 @@ Open issues / next step
 <loop-control>
 {"schema":"docloop.loop_control/v1","kind":"promise","promise":"COMPLETE"}
 </loop-control>
+
+
+---
+run_id=run-20260506T130608Z-37f1c786 | entry=session_turn | pair=audit | phase=producer | cycle=1 | attempt=1 | thread_id=019dfdba-685b-7803-b677-f108e96a524a
+---
+provider=codex
+mode=start
+template=/home/rauter/.local/share/pipx/venvs/autoloop/lib/python3.12/site-packages/autoloop/templates/audit_producer.md
+session_id=019dfdba-685b-7803-b677-f108e96a524a
+
+
+---
+run_id=run-20260506T130608Z-37f1c786 | entry=phase_output | pair=audit | phase=producer | process=codex-agent | cycle=1 | attempt=1 | thread_id=019dfdba-685b-7803-b677-f108e96a524a
+---
+I’m auditing the run-local implementation against the original spec, the authoritative log, and the produced artifacts. First I’m loading the request, clarification/decision ledgers, and the existing audit artifacts, then I’ll trace the implemented code and tests for the branch-group and async-provider areas.
+
+The run ledger shows one explicit clarification that materially narrows the spec: `llm()` / `classify()` keep a temporary sync compatibility exception inside synchronous Python-step execution. I’m pulling the implementation/test artifacts and the relevant runtime files now to separate that justified deviation from any remaining unapproved gaps.
+
+I’ve confirmed the audit artifacts are still blank, so the next pass is evidence collection. I’m searching the phase feedback for any unresolved verifier failures, then I’ll read the provider, transport, engine, and branch-group modules directly to confirm whether the remaining deviations are real code gaps or just documented exceptions.
+
+The core runtime pieces line up with most of the contract: async-only provider and transport protocols, async engine spine, capture-mode branch execution, shared state/value/session overlays, and branch evidence under `_branch_groups`. I’m checking the remaining high-risk surfaces now: backend builders and transports, compile-cache/static-graph behavior, and the strictness/runtime tests that are supposed to lock those guarantees in.
+
+I’ve reached the main judgment point. The one explicit spec deviation is still the helper-only sync bridge for `llm()` / `classify()` via `operation_executor`, and the rest now comes down to whether public surface and test coverage actually match the contract in the tree rather than just in phase notes.
+
+The public authoring surface is present and the focused validation suite is running from the repo venv. I’m waiting on the test bundle because that’s the cleanest way to decide whether any remaining audit gap is in behavior or only in documentation/spec interpretation.
+
+The focused suite passed cleanly: `264 passed` across the async engine, provider boundary, branch-group runtime, static-graph, strictness, and runtime transport/backend slices. I’m collecting exact file/line evidence now and then I’ll write the audit artifacts; at this point the likely outcome is “no material follow-up implementation required,” with the helper-only sync bridge called out as an explicit clarified exception rather than an unresolved gap.
+
+I’ve finished the classification: no material unresolved implementation gap remains after accounting for the authoritative clarification about helper compatibility. I’m writing the audit report, the no-follow-up revised request, the machine result, and marking the audit criteria complete now.
+
+The audit artifacts are written. I’m doing a quick readback and JSON parse so the verifier doesn’t get tripped up by formatting or a mismatch between the report and the machine result.
+
+The JSON artifact had stale content at the top from the scaffold, so the parse check correctly failed. I’m replacing that file with a clean single JSON object and re-running the parse.
+
+Scope considered
+
+- Authoritative intent inputs: `request.md`, `raw_phase_log.md`, and `decisions.txt` for run `run-20260506T130608Z-37f1c786`.
+- Run-local plan/implement/test artifacts under `.autoloop/.../artifacts`.
+- Final code and tests covering async providers, transports, engine/dispatcher, branch groups, static graph, and strictness.
+
+What I analyzed
+
+- Verified the final tree against the async-only provider/transport contract, async engine spine, branch-group runtime/session behavior, compile-cache handling, and public additive APIs.
+- Re-ran a focused validation bundle from the repo venv:
+  `./.venv/bin/python -m pytest tests/strictness/test_no_compat.py tests/contract/test_async_engine_spine.py tests/contract/test_branch_group_runtime.py tests/runtime/test_provider_backends.py tests/runtime/test_runtime_providers.py tests/runtime/test_runtime_static_graph.py tests/unit/test_provider_boundary_core.py tests/unit/test_simple_surface.py -q`
+  Result: `264 passed, 15 warnings`.
+
+What I changed
+
+- Wrote [gap_report.md](</home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/full-revised-standalone-spec-autoloop-v3-async-n-3c402473/runs/run-20260506T130608Z-37f1c786/artifacts/audit/gap_report.md>).
+- Wrote [revised_request.md](</home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/full-revised-standalone-spec-autoloop-v3-async-n-3c402473/runs/run-20260506T130608Z-37f1c786/artifacts/audit/revised_request.md>).
+- Wrote [audit_result.json](</home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/full-revised-standalone-spec-autoloop-v3-async-n-3c402473/runs/run-20260506T130608Z-37f1c786/artifacts/audit/audit_result.json>) and validated that it parses.
+- Marked [criteria.md](</home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/full-revised-standalone-spec-autoloop-v3-async-n-3c402473/runs/run-20260506T130608Z-37f1c786/artifacts/audit/criteria.md>) complete.
+
+Key findings / decisions
+
+- No material unresolved implementation gaps remain.
+- The one remaining deviation from the original absolute async-only spec is the helper-only sync bridge for `llm()` / `classify()` inside synchronous Python-step execution under an active workflow loop.
+- That deviation is justified by the authoritative clarification recorded in the raw log and `decisions.txt`; it is implemented as an explicit, narrow compatibility exception rather than an accidental fallback.
+- Branch-group compile-cache bypass remains acceptable and justified by the spec’s own fallback allowance for v1.
+
+Open issues / next step
+
+- No follow-up implementation run is required for this request.
+- Residual test warnings remain non-blocking; they did not indicate a material spec gap in this audit.
+
+<loop-control>
+{"schema":"docloop.loop_control/v1","kind":"promise","promise":"INCOMPLETE"}
+</loop-control>
+
+
+---
+run_id=run-20260506T130608Z-37f1c786 | entry=session_turn | pair=audit | phase=verifier | cycle=1 | attempt=1 | thread_id=019dfdba-685b-7803-b677-f108e96a524a
+---
+provider=codex
+mode=resume
+template=/home/rauter/.local/share/pipx/venvs/autoloop/lib/python3.12/site-packages/autoloop/templates/audit_verifier.md
+session_id=019dfdba-685b-7803-b677-f108e96a524a
+
+
+---
+run_id=run-20260506T130608Z-37f1c786 | entry=phase_output | pair=audit | phase=verifier | process=codex-agent | cycle=1 | attempt=1 | thread_id=019dfdba-685b-7803-b677-f108e96a524a
+---
+I’m verifying the produced audit against the request, clarifications, decisions, the final tree, and the audit artifacts themselves. First I’m reading the completed audit files and the authoritative decision entries that justify the only remaining spec deviation.
+
+The main classification checks out so far: the audit’s no-gap conclusion depends entirely on whether block 8 is treated as authoritative, and it is. I’m doing a final consistency pass on the criteria and feedback artifacts, then I’ll either append a no-findings verifier note or record the exact audit-quality defect.
+
+I did not find an audit-quality defect that changes the outcome. I’m appending a single verifier note to the feedback file to record that the artifacts are internally consistent and that the no-follow-up conclusion is adequately supported.
+
+The verifier note is appended. I’m doing a last readback of the feedback artifact and then I’ll close with `COMPLETE`, since the criteria remain accurate and I didn’t find a blocking audit defect.
+
+Scope considered
+
+- Audit artifacts in `.autoloop/.../artifacts/audit`, plus the authoritative `request.md`, `raw_phase_log.md`, and `decisions.txt`.
+- Final code and focused test evidence relevant to async providers, transports, engine/dispatcher flow, and branch-group behavior.
+
+What I analyzed
+
+- Verified that the audit’s no-gap conclusion is supported by the authoritative clarification that explicitly preserves the narrow `llm()` / `classify()` sync compatibility path.
+- Re-checked the code/test surfaces the audit relies on: async-only provider and transport protocols, explicit `operation_executor` compatibility boundary, async CLI transports, and strictness/runtime coverage.
+
+What I reviewed
+
+- [gap_report.md](</home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/full-revised-standalone-spec-autoloop-v3-async-n-3c402473/runs/run-20260506T130608Z-37f1c786/artifacts/audit/gap_report.md>)
+- [revised_request.md](</home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/full-revised-standalone-spec-autoloop-v3-async-n-3c402473/runs/run-20260506T130608Z-37f1c786/artifacts/audit/revised_request.md>)
+- [audit_result.json](</home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/full-revised-standalone-spec-autoloop-v3-async-n-3c402473/runs/run-20260506T130608Z-37f1c786/artifacts/audit/audit_result.json>)
+- [criteria.md](</home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/full-revised-standalone-spec-autoloop-v3-async-n-3c402473/runs/run-20260506T130608Z-37f1c786/artifacts/audit/criteria.md>)
+- [feedback.md](</home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/full-revised-standalone-spec-autoloop-v3-async-n-3c402473/runs/run-20260506T130608Z-37f1c786/artifacts/audit/feedback.md>)
+
+Key findings / decisions
+
+- No blocking audit-quality findings.
+- The criteria remain accurately checked.
+- Appended one verifier note to `feedback.md`:
+  - `AUD-000` `non-blocking` No audit-quality findings.
+- `audit_result.json` is valid and consistent with `revised_request.md` and the supporting report.
+
+Open issues / next step
+
+- No open verifier issues.
+- Audit verification is complete.
+
+<loop-control>
+{"schema":"docloop.loop_control/v1","kind":"promise","promise":"COMPLETE"}
+</loop-control>

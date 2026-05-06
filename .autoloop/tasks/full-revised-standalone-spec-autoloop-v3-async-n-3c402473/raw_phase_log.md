@@ -2126,3 +2126,59 @@ Open issues / next step
 <loop-control>
 {"schema":"docloop.loop_control/v1","kind":"promise","promise":"INCOMPLETE"}
 </loop-control>
+
+
+---
+run_id=run-20260506T130608Z-37f1c786 | entry=session_turn | pair=audit | phase=verifier | cycle=1 | attempt=1 | thread_id=019dfdba-685b-7803-b677-f108e96a524a
+---
+provider=codex
+mode=resume
+template=/home/rauter/.local/share/pipx/venvs/autoloop/lib/python3.12/site-packages/autoloop/templates/audit_verifier.md
+session_id=019dfdba-685b-7803-b677-f108e96a524a
+
+
+---
+run_id=run-20260506T130608Z-37f1c786 | entry=phase_output | pair=audit | phase=verifier | process=codex-agent | cycle=1 | attempt=1 | thread_id=019dfdba-685b-7803-b677-f108e96a524a
+---
+I’m verifying the produced audit against the request, clarifications, decisions, the final tree, and the audit artifacts themselves. First I’m reading the completed audit files and the authoritative decision entries that justify the only remaining spec deviation.
+
+The main classification checks out so far: the audit’s no-gap conclusion depends entirely on whether block 8 is treated as authoritative, and it is. I’m doing a final consistency pass on the criteria and feedback artifacts, then I’ll either append a no-findings verifier note or record the exact audit-quality defect.
+
+I did not find an audit-quality defect that changes the outcome. I’m appending a single verifier note to the feedback file to record that the artifacts are internally consistent and that the no-follow-up conclusion is adequately supported.
+
+The verifier note is appended. I’m doing a last readback of the feedback artifact and then I’ll close with `COMPLETE`, since the criteria remain accurate and I didn’t find a blocking audit defect.
+
+Scope considered
+
+- Audit artifacts in `.autoloop/.../artifacts/audit`, plus the authoritative `request.md`, `raw_phase_log.md`, and `decisions.txt`.
+- Final code and focused test evidence relevant to async providers, transports, engine/dispatcher flow, and branch-group behavior.
+
+What I analyzed
+
+- Verified that the audit’s no-gap conclusion is supported by the authoritative clarification that explicitly preserves the narrow `llm()` / `classify()` sync compatibility path.
+- Re-checked the code/test surfaces the audit relies on: async-only provider and transport protocols, explicit `operation_executor` compatibility boundary, async CLI transports, and strictness/runtime coverage.
+
+What I reviewed
+
+- [gap_report.md](</home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/full-revised-standalone-spec-autoloop-v3-async-n-3c402473/runs/run-20260506T130608Z-37f1c786/artifacts/audit/gap_report.md>)
+- [revised_request.md](</home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/full-revised-standalone-spec-autoloop-v3-async-n-3c402473/runs/run-20260506T130608Z-37f1c786/artifacts/audit/revised_request.md>)
+- [audit_result.json](</home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/full-revised-standalone-spec-autoloop-v3-async-n-3c402473/runs/run-20260506T130608Z-37f1c786/artifacts/audit/audit_result.json>)
+- [criteria.md](</home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/full-revised-standalone-spec-autoloop-v3-async-n-3c402473/runs/run-20260506T130608Z-37f1c786/artifacts/audit/criteria.md>)
+- [feedback.md](</home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/full-revised-standalone-spec-autoloop-v3-async-n-3c402473/runs/run-20260506T130608Z-37f1c786/artifacts/audit/feedback.md>)
+
+Key findings / decisions
+
+- No blocking audit-quality findings.
+- The criteria remain accurately checked.
+- Appended one verifier note to `feedback.md`:
+  - `AUD-000` `non-blocking` No audit-quality findings.
+- `audit_result.json` is valid and consistent with `revised_request.md` and the supporting report.
+
+Open issues / next step
+
+- No open verifier issues.
+- Audit verification is complete.
+
+<loop-control>
+{"schema":"docloop.loop_control/v1","kind":"promise","promise":"COMPLETE"}
+</loop-control>
