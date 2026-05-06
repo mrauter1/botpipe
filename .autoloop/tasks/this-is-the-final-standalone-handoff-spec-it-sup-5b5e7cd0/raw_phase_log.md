@@ -250,3 +250,52 @@ Compatibility-lowered `question` routes now behave as ordinary compiled helper r
 
 **Open issues / next step**
 No blocker remains in this phase. Validation run: `.venv/bin/python -m pytest -q tests/unit/test_validation.py tests/unit/test_simple_surface.py tests/runtime/test_runtime_static_graph.py` passed with `189 passed`; the only output was pre-existing warning noise from workflow contract fixtures. The next phase should consume the new compiled metadata for provider schema generation, canonical `outcome.route_fields` parsing, and runtime `Outcome`/`Event` projection.
+
+
+---
+run_id=run-20260506T185744Z-092935c3 | entry=session_turn | pair=implement | phase=verifier | cycle=1 | attempt=1 | thread_id=019dfeae-6c3b-77c1-83d0-3af21fe7fb06
+---
+provider=codex
+mode=resume
+template=/home/rauter/.local/share/pipx/venvs/autoloop/lib/python3.12/site-packages/autoloop/templates/implement_verifier.md
+session_id=019dfeae-6c3b-77c1-83d0-3af21fe7fb06
+
+
+---
+run_id=run-20260506T185744Z-092935c3 | entry=phase_output | pair=implement | phase=verifier | process=codex-agent | cycle=1 | attempt=1 | thread_id=019dfeae-6c3b-77c1-83d0-3af21fe7fb06
+---
+I’m reviewing the phase-local route-model unification changes against the acceptance criteria and the implementation notes first, then I’ll inspect the request-relevant diffs for correctness and regression risk before writing findings into the review artifacts.
+
+I’m validating the implemented phase against the active review artifacts and the actual tracked diff. I’ve already identified one likely deliverable issue around test coverage persistence, and I’m checking whether there are any additional correctness or regression risks before I update the review files.
+
+The tracked diff is effectively clean for the core source files, so I’m reviewing the current repository state rather than a large working-tree patch. I’m checking the implemented route model directly against the phase acceptance criteria and the recorded implementation notes.
+
+I’ve confirmed the main architectural path is present in the source tree. The remaining review question is whether the claimed regression coverage is actually part of the deliverable, because right now one of the cited test files is outside tracked source control.
+
+I’ve finished the review pass. There are two blocking issues: one is a deliverable problem with the cited regression test file not being tracked at all, and the other is that route legality still comes from the precompiled lowering layer in part, so the phase does not fully reach the requested single-source-of-truth architecture.
+
+Scope considered
+
+Phase `route-model-unification` only. I reviewed the authoritative phase artifacts, the run decisions ledger, the implementation notes, the current repository state for the route-model files, and the claimed validation files.
+
+What I analyzed
+
+I checked the route helper model in [autoloop/core/routes.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/autoloop/core/routes.py), route resolution in [autoloop/core/lowering.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/autoloop/core/lowering.py), compiler step/route assembly in [autoloop/core/compiler.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/autoloop/core/compiler.py), compatibility lowering in [autoloop/core/discovery.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/autoloop/core/discovery.py), and the additive metadata surfaces in [autoloop/core/workflow_capabilities.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/autoloop/core/workflow_capabilities.py) and [autoloop/runtime/static_graph.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/autoloop/runtime/static_graph.py). I also verified the worktree state for `tests/unit/test_validation.py`.
+
+What I reviewed
+
+I updated [criteria.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/this-is-the-final-standalone-handoff-spec-it-sup-5b5e7cd0/runs/run-20260506T185744Z-092935c3/artifacts/implement/phases/route-model-unification/criteria.md) and appended blocking findings to [feedback.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/this-is-the-final-standalone-handoff-spec-it-sup-5b5e7cd0/runs/run-20260506T185744Z-092935c3/artifacts/implement/phases/route-model-unification/feedback.md).
+
+Key findings / decisions
+
+`IMP-001` blocking: `tests/unit/test_validation.py` is untracked in the worktree, so the claimed regression coverage is not reliably part of the deliverable.
+
+`IMP-002` blocking: `CompiledStep.available_routes` and `CompiledStep.runtime_control_routes` are still derived from `resolve_step_routes()` in lowering rather than from a single compiled effective route table, so AC-1’s single-source-of-truth requirement is not fully met and legality metadata remains duplicated.
+
+Open issues / next step
+
+The phase should be returned for fixes. The implementer should first move the intended validation coverage into tracked repository state, then centralize step route legality derivation on compiled effective routes and rerun the focused validation pass.
+
+<loop-control>
+{"schema":"docloop.loop_control/v1","kind":"promise","promise":"INCOMPLETE"}
+</loop-control>
