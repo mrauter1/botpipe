@@ -1938,3 +1938,52 @@ Open issues / next step
   - `.venv/bin/python -m pytest tests/contract/test_engine_contracts.py -k "invalid_custom_raw_route_payload or invalid_custom_raw_route_fields"`
   - `.venv/bin/python -m pytest tests/runtime/test_provider_backends.py -k "response_schema or prompt_only_fallback or output_schema_file or simplified_schema_delivery"`
 - I did not run the full suite.
+
+
+---
+run_id=run-20260506T204256Z-05282838 | entry=session_turn | pair=implement | phase=verifier | cycle=1 | attempt=1 | thread_id=019dff0e-7daf-7a32-806b-ba0f9ef79fd1
+---
+provider=codex
+mode=resume
+template=/home/rauter/.local/share/pipx/venvs/autoloop/lib/python3.12/site-packages/autoloop/templates/implement_verifier.md
+session_id=019dff0e-7daf-7a32-806b-ba0f9ef79fd1
+
+
+---
+run_id=run-20260506T204256Z-05282838 | entry=phase_output | pair=implement | phase=verifier | process=codex-agent | cycle=1 | attempt=1 | thread_id=019dff0e-7daf-7a32-806b-ba0f9ef79fd1
+---
+I’m down to the review call now. I’m checking the phase criteria and the active feedback artifact against the actual code and test surfaces, then I’ll record only the findings that materially affect the scoped acceptance criteria or the safety of the adjacent backend work.
+
+Scope considered
+
+- Request-scoped route contract enforcement changes in `autoloop/core/routes.py` and `autoloop/core/compiler.py`.
+- Adjacent runtime transport work in `autoloop/runtime/providers/_common.py`, `codex.py`, and `claude.py` because it was implemented in the same turn and can affect the same user request.
+- Regression coverage in `tests/unit/test_validation.py`, `tests/runtime/test_provider_backends.py`, and `tests/contract/test_engine_contracts.py`.
+- Active review artifacts: `criteria.md`, `feedback.md`, `implementation_notes.md`, and `decisions.txt`.
+
+What I analyzed
+
+- The helper-route fallback gating and raw-schema compile path.
+- The backend structured-output delivery/fallback metadata path.
+- The focused pytest evidence the implementer recorded and the tracked/untracked state of the new tests.
+
+What I reviewed
+
+- Criteria were updated to reflect that behavioral and compatibility safety look good, but correctness/validation closure is not complete.
+- Feedback was appended with one blocking and one non-blocking finding.
+- The blocking issue is durability of the new AC-3 runtime regression coverage: the added `tests/contract/test_engine_contracts.py` file is still untracked.
+
+Key findings / decisions
+
+- `IMP-001` blocking: required runtime regression coverage for AC-3 currently lives in an untracked file, so it is not safely part of the repository handoff.
+- `IMP-002` non-blocking: the helper-default fallback marker is threaded through the public `Route.to(...)` authoring surface as an internal underscore parameter, which is avoidable API debt.
+- I did not find a separate blocking correctness bug in the fail-closed compiler logic or the backend schema-delivery metadata path.
+
+Open issues / next step
+
+- Add the new runtime regression coverage to tracked repository state, then re-run the focused engine-contract test slice.
+- After that, this phase should be ready to re-review quickly.
+
+<loop-control>
+{"schema":"docloop.loop_control/v1","kind":"promise","promise":"INCOMPLETE"}
+</loop-control>

@@ -17,3 +17,7 @@
 
 - `IMP-003` `blocking` [autoloop/runtime/providers/claude_policy.py:262-284]
   AC-1 requires lossy warnings when native sandbox filesystem support is unavailable, but the current lossy check only fires when filesystem settings differ from the default `allow_read=["."]` / `allow_write=["."]` shape or add deny rules. Under a degraded Claude capability profile with the default workspace-write sandbox, the emitter falls back to permission rules while still reporting `decision="ok"`, so operators get no warning even though OS-level filesystem enforcement is missing. Minimal fix: whenever sandboxed filesystem enforcement is expected and `supports_sandbox_filesystem=False`, emit a lossy capability finding for the fallback path, including the default workspace-write case.
+
+## Cycle 2 Review
+
+- No new findings. `IMP-001`, `IMP-002`, and `IMP-003` are resolved by the current implementation: policy-backed Claude turns now run under a run-owned isolation seam, legacy `provider.claude.permission_strategy=bypass` is mirrored during runtime policy resolution instead of being dropped in transport wiring, and degraded native filesystem support now produces the required lossy capability warning even for the default workspace-write sandbox.

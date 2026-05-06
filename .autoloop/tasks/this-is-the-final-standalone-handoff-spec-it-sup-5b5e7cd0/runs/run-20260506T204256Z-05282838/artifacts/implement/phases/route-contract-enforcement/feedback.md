@@ -6,3 +6,6 @@
 - Phase Directory Key: route-contract-enforcement
 - Phase Title: Fail-Closed Route Contracts
 - Scope: phase-local authoritative verifier artifact
+
+- IMP-001 `blocking` [tests/contract/test_engine_contracts.py] The new AC-3 scripted/rendered runtime regression cases were added to an untracked file (`git status --short -- tests/contract/test_engine_contracts.py` reports `??`), so the required regression coverage is not part of the tracked repository state and can disappear from any normal patch/commit handoff even though it passes locally. Minimal fix: move the raw-route runtime regressions into a tracked test module or ensure this file is added to version control before closing the phase.
+- IMP-002 `non-blocking` [autoloop/core/routes.py::Route.to, Route.question, Route.blocked, Route.failed] `_handwritten_route_fields_validation_equivalent` is a compiler bookkeeping flag now exposed through the public route authoring constructor surface. That leaks an internal enforcement detail into user-facing API shape and will be harder to unwind later. Minimal fix: infer the helper-default marker inside a private helper or a non-init/internal field instead of threading an underscore parameter through the public constructor.
