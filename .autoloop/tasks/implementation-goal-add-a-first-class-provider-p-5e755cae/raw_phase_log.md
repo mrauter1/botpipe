@@ -43,3 +43,45 @@ Updated the planning artifacts in [plan.md](/home/rauter/autoloop_v3_bkp/autoloo
 The plan is implementation-ready and split into five ordered phases: core policy domain, config and authoring, resolution and propagation, Codex emission, and Claude emission with regression sweep. It explicitly preserves existing backend dispatch and legacy provider config behavior, centralizes policy logic in new core and resolver modules, and treats no-PyYAML `provider_policy` parsing support as a required compatibility task.
 
 I verified the written artifacts and corrected one scaffold issue in `phase_plan.yaml` where the initial empty `phases` key had been duplicated.
+
+
+---
+run_id=run-20260506T190853Z-f707cb4f | entry=session_turn | pair=plan | phase=verifier | cycle=1 | attempt=1 | thread_id=019dfeb1-7045-7c31-a3fa-96397d885237
+---
+provider=codex
+mode=resume
+template=/home/rauter/.local/share/pipx/venvs/autoloop/lib/python3.12/site-packages/autoloop/templates/plan_verifier.md
+session_id=019dfeb1-7045-7c31-a3fa-96397d885237
+
+
+---
+run_id=run-20260506T190853Z-f707cb4f | entry=phase_output | pair=plan | phase=verifier | process=codex-agent | cycle=1 | attempt=1 | thread_id=019dfeb1-7045-7c31-a3fa-96397d885237
+---
+I’m auditing the plan artifacts against the request snapshot, repository seams, and the planner’s decision log, then I’ll update the checklist and feedback with any concrete gaps or risks.
+
+I’m checking the machine phase file structurally and then I’m deciding whether the remaining gaps are material intent-coverage problems or just detail level. The main risk so far is that some explicit user contracts are only implied in the narrative plan instead of called out as required interfaces.
+
+I’ve narrowed this to two blocking gaps and one debt-risk note. The plan is directionally solid, but it still leaves a couple of explicit user contracts under-specified enough that later phases could pass locally while missing acceptance behavior.
+
+Scope considered
+Authoritative request snapshot, raw log clarifications, planner decisions, `plan.md`, `phase_plan.yaml`, `criteria.md`, and feedback continuity.
+
+What I analyzed
+Mapped the requested contracts against the plan’s milestones and interfaces, with focus on explicit public APIs, runtime propagation seams, emitted artifact layout, compatibility constraints, and regression surfaces around config, replay, tracing, and provider execution.
+
+What I reviewed
+Verified `phase_plan.yaml` parses as YAML and that required `in_scope` and `deliverables` entries are non-empty. Reviewed the plan narrative against the decisions log and checked whether the machine phase contract preserves the same boundaries and intent.
+
+Key findings / decisions
+`phase_plan.yaml` is structurally valid after the producer fixed the duplicate `phases` key.
+`PLAN-001` is blocking: the plan does not explicitly require the public `llm_call(..., policy=...)`, `classify_call(..., policy=...)`, and `OperationRuntime.policy` contracts even though they are explicit user requirements.
+`PLAN-002` is blocking: the plan leaves the run-scoped emission layout, step-key construction, emission object fields, and provider metadata payload too implicit for an acceptance-critical contract.
+`PLAN-003` is non-blocking: the plan should name the single runtime ownership seam for injecting `ResolvedRuntimeConfig.provider_policy` to reduce scattered wiring risk.
+All criteria remain unchecked because the current plan is directionally sound but still incomplete on explicit intent coverage and operational contract detail.
+
+Open issues / next step
+The planning artifacts need one revision that adds the missing public operation-policy interfaces and the exact emitted artifact/metadata contract, then re-verification can likely close this turn.
+
+<loop-control>
+{"schema":"docloop.loop_control/v1","kind":"promise","promise":"INCOMPLETE"}
+</loop-control>

@@ -453,6 +453,7 @@ class Route:
             required_writes=required_writes,
             handoff=handoff,
             on_taken=on_taken,
+            provider_visible=False,
             provider_visibility="hidden",
             payload_schema=payload_schema,
             route_fields_schema=route_fields_schema,
@@ -503,10 +504,6 @@ def _normalize_provider_visibility(
         return "always" if provider_visible else "hidden"
     if provider_visibility not in {"hidden", "interactive_only", "always"}:
         raise ValueError(f"unsupported provider_visibility {provider_visibility!r}")
-    if provider_visible is False and provider_visibility != "hidden":
-        raise ValueError("provider_visible=False conflicts with non-hidden provider_visibility")
-    if provider_visible is True and provider_visibility == "hidden":
-        raise ValueError("provider_visible=True conflicts with provider_visibility='hidden'")
     return provider_visibility
 
 
