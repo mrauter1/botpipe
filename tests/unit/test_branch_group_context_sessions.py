@@ -143,6 +143,8 @@ def test_branch_session_store_view_keeps_activation_local_to_branch(tmp_path: Pa
         session_store=branch_store,
     )
 
+    assert branch_store.get("main") is None
+    assert branch.get_session("main") is None
     assert branch.get_session("main", continuity=Continuity.fresh()) is None
     fresh_binding = branch.open_session("main", continuity=Continuity.fresh())
     assert branch.get_session("main") == fresh_binding
