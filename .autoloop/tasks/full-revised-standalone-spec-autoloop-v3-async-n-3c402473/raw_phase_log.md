@@ -1829,3 +1829,65 @@ Open issues / next step
 <loop-control>
 {"schema":"docloop.loop_control/v1","kind":"promise","promise":"INCOMPLETE"}
 </loop-control>
+
+
+---
+run_id=run-20260506T130608Z-37f1c786 | entry=session_turn | pair=implement | phase=producer | cycle=2 | attempt=1 | thread_id=019dfdab-cbed-71e2-9b3b-61be29aeb301
+---
+provider=codex
+mode=resume
+template=/home/rauter/.local/share/pipx/venvs/autoloop/lib/python3.12/site-packages/autoloop/templates/implement_producer.md
+session_id=019dfdab-cbed-71e2-9b3b-61be29aeb301
+
+
+---
+run_id=run-20260506T130608Z-37f1c786 | entry=phase_output | pair=implement | phase=producer | process=codex-agent | cycle=2 | attempt=1 | thread_id=019dfdab-cbed-71e2-9b3b-61be29aeb301
+---
+I’m addressing the two reviewer blockers directly: first the rendered-provider strictness hole, then the missing validation matrix. I’m checking the current test helper logic and what runnable test environment exists in this workspace before I edit anything.
+
+I found a local `.venv`, so I can actually run the phase matrix here. I’m fixing the rendered-provider strictness helper first, then I’ll run the targeted strictness, unit, contract, and runtime slices that map to the merge gate.
+
+I’ve confirmed the rendered-provider shape. The safe fix is to treat `run_provider_coro_sync(...)` as allowed only on the `run_operation(...)` path and to scan `_run_turn(...)` alongside the top-level async entrypoints.
+
+I’ve patched the strictness hole. Next I’m running the phase-relevant matrix through the local virtualenv so the artifact can record an actual passing test set instead of just static inspection.
+
+The matrix is running and has already hit at least one failure. I’m pulling the full pytest output now so I can distinguish whether it’s from my new changes or an existing unrelated regression before deciding the next edit.
+
+The first failure is from my new strictness scan tripping over literal forbidden token names in a negative assertion, so I’m de-literalizing those test strings. The other two failures are phase-relevant test issues: one overconstrained cancellation expectation and one missing `pytest` import in the async-engine contract file.
+
+The fixes are in. I’m rerunning the same merge-gate slice now to verify the reviewer blockers are actually closed and to capture a real passing matrix for the phase notes.
+
+The targeted matrix passed, so I’m updating the phase notes to replace the earlier “static-only” limitation with the actual commands and results, and I’m recording the non-obvious scanner boundary in the decisions ledger so later turns don’t reopen the same hole.
+
+The code-side work is complete. I’m doing one last read of the updated phase notes and the exact diffs so the close-out is consistent with what actually changed and what was validated.
+
+Scope considered
+
+- Phase-local `test-and-strictness-hardening` work only.
+- Changed test surfaces plus the request-relevant provider, rendered-provider, backend, and runtime-provider paths needed to resolve the reviewer findings.
+
+What I analyzed
+
+- Reviewer findings in [feedback.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/full-revised-standalone-spec-autoloop-v3-async-n-3c402473/runs/run-20260506T130608Z-37f1c786/artifacts/implement/phases/test-and-strictness-hardening/feedback.md), especially the rendered-provider strictness gap and the missing validation matrix.
+- The non-operation/provider-bridge boundary in [rendered.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/autoloop/core/providers/rendered.py), the new strictness helper in [test_no_compat.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/tests/strictness/test_no_compat.py), and the relevant runtime/contract tests.
+
+What I changed
+
+- Tightened [tests/strictness/test_no_compat.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/tests/strictness/test_no_compat.py) so sync bridges are only legal on `run_operation(...)` / `_run_operation_turn(...)`; `_run_turn(...)` and the async provider entrypoints are now part of the forbidden non-operation surface.
+- Fixed the false-positive strictness interaction in [tests/unit/test_provider_boundary_core.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/tests/unit/test_provider_boundary_core.py) by de-literalizing the forbidden legacy method names used in negative assertions.
+- Relaxed the overconstrained cancellation assertion in [tests/runtime/test_runtime_providers.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/tests/runtime/test_runtime_providers.py) to assert the behavior that matters rather than an internal `wait()` count.
+- Added the missing `pytest` import in [tests/contract/test_async_engine_spine.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/tests/contract/test_async_engine_spine.py).
+- Updated [implementation_notes.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/full-revised-standalone-spec-autoloop-v3-async-n-3c402473/runs/run-20260506T130608Z-37f1c786/artifacts/implement/phases/test-and-strictness-hardening/implementation_notes.md) with the final file list and validation results, and appended the non-obvious scanner/runner decisions to [decisions.txt](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/full-revised-standalone-spec-autoloop-v3-async-n-3c402473/runs/run-20260506T130608Z-37f1c786/decisions.txt).
+
+Key findings / decisions
+
+- The reviewer’s IMP-001 hole was real: scanning only the top-level async provider methods was not enough. The strictness rule now treats the entire non-operation rendered-provider path as the protected surface.
+- The workspace has a usable local runner at `.venv/bin/python -m pytest`, even though bare `pytest` and the system Python environment were insufficient earlier.
+- Validation passed with:
+  `.venv/bin/python -m pytest -q tests/strictness/test_no_compat.py tests/unit/test_provider_boundary_core.py tests/runtime/test_provider_backends.py tests/runtime/test_runtime_providers.py tests/runtime/test_runtime_static_graph.py tests/runtime/test_runtime_tracing.py tests/contract/test_async_engine_spine.py tests/contract/test_async_step_dispatcher.py tests/contract/test_branch_group_runtime.py tests/unit/test_branch_group_context_sessions.py tests/unit/test_simple_surface.py tests/unit/test_validation.py`
+  Result: `381 passed, 15 warnings in 5.59s`.
+
+Open issues / next step
+
+- No remaining code changes are queued in this phase.
+- Reviewer-owned [criteria.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/full-revised-standalone-spec-autoloop-v3-async-n-3c402473/runs/run-20260506T130608Z-37f1c786/artifacts/implement/phases/test-and-strictness-hardening/criteria.md) and [feedback.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/full-revised-standalone-spec-autoloop-v3-async-n-3c402473/runs/run-20260506T130608Z-37f1c786/artifacts/implement/phases/test-and-strictness-hardening/feedback.md) still reflect the prior blocking review and need verifier rerun to clear them.

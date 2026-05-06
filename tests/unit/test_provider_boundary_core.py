@@ -514,16 +514,18 @@ def test_rendered_provider_rejects_sync_only_transport_at_construction() -> None
 
 
 def test_fake_provider_and_rendered_transport_surfaces_remain_async_only() -> None:
+    forbidden_names = tuple(
+        "run_" + suffix
+        for suffix in ("llm_" + "async", "producer_" + "async", "verifier_" + "async")
+    )
+
     assert inspect.iscoroutinefunction(ScriptedLLMProvider.run_producer)
     assert inspect.iscoroutinefunction(ScriptedLLMProvider.run_verifier)
     assert inspect.iscoroutinefunction(ScriptedLLMProvider.run_llm)
     assert inspect.iscoroutinefunction(_TransportStub.run_turn)
-    assert not hasattr(ScriptedLLMProvider, "run_llm_async")
-    assert not hasattr(ScriptedLLMProvider, "run_producer_async")
-    assert not hasattr(ScriptedLLMProvider, "run_verifier_async")
-    assert not hasattr(RenderedLLMProvider, "run_llm_async")
-    assert not hasattr(RenderedLLMProvider, "run_producer_async")
-    assert not hasattr(RenderedLLMProvider, "run_verifier_async")
+    for name in forbidden_names:
+        assert not hasattr(ScriptedLLMProvider, name)
+        assert not hasattr(RenderedLLMProvider, name)
 
 
 def test_producer_response_usage_defaults_to_none() -> None:

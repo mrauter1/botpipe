@@ -5,6 +5,7 @@ import gc
 import warnings
 from pathlib import Path
 
+import pytest
 from pydantic import BaseModel
 
 import autoloop.simple as simple

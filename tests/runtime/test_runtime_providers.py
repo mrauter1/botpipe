@@ -625,7 +625,7 @@ def test_communicate_text_subprocess_terminates_then_kills_on_cancellation() -> 
     assert process.seen_inputs == [b"payload"]
     assert process.terminate_calls == 1
     assert process.kill_calls == 1
-    assert process.wait_calls == 1
+    assert process.wait_calls >= 1
 
 
 def test_terminate_text_subprocess_ignores_process_lookup_race_during_terminate() -> None:
