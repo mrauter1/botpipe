@@ -675,9 +675,6 @@ def _internal_step_runtime_routes(
     question_mode = getattr(getattr(step, "control_routes", None), "question", "never")
     if question_mode != "never" and "question" not in routes:
         routes["question"] = AWAIT_INPUT
-    if isinstance(step, (PromptStep, ProduceVerifyStep)):
-        routes.setdefault("blocked", AWAIT_INPUT)
-        routes.setdefault("failed", FAIL)
     return routes
 
 
@@ -686,8 +683,6 @@ def _internal_step_runtime_control_routes(step: Step) -> tuple[str, ...]:
     question_mode = getattr(getattr(step, "control_routes", None), "question", "never")
     if question_mode != "never":
         runtime_routes.append("question")
-    if isinstance(step, (PromptStep, ProduceVerifyStep)):
-        runtime_routes.extend(("blocked", "failed"))
     return tuple(runtime_routes)
 
 

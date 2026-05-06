@@ -598,6 +598,26 @@ def test_fake_provider_awaits_async_scripted_turn_callbacks() -> None:
     assert response.outcome.payload == {"step": "ask"}
 
 
+def test_fake_provider_rejects_awaitable_sync_operation_responses() -> None:
+    async def scripted_operation(_: OperationRequest) -> str:
+        await asyncio.sleep(0)
+        return '{"summary":"ready"}'
+
+    provider = ScriptedLLMProvider(operation_turns=[scripted_operation])
+
+    with pytest.raises(TypeError, match="must not be awaitable"):
+        provider.run_operation(
+            OperationRequest(
+                step_name="summary",
+                prompt=ResolvedPrompt(path="summary.md", text="Summarize the report."),
+                context=None,
+                session=None,
+                operation_kind="llm",
+                return_schema={"type": "object", "properties": {"summary": {"type": "string"}}},
+            )
+        )
+
+
 def test_parse_outcome_json_defaults_missing_reason_to_empty_string() -> None:
     outcome = parse_outcome_json('{"tag":"done"}')
 

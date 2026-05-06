@@ -1122,3 +1122,56 @@ Open issues / next step
 <loop-control>
 {"schema":"docloop.loop_control/v1","kind":"promise","promise":"COMPLETE"}
 </loop-control>
+
+
+---
+run_id=run-20260506T130608Z-37f1c786 | entry=session_turn | pair=test | phase=producer | cycle=1 | attempt=1 | thread_id=019dfd95-df97-7bb1-9546-0a54a718f9eb
+---
+provider=codex
+mode=resume
+template=/home/rauter/.local/share/pipx/venvs/autoloop/lib/python3.12/site-packages/autoloop/templates/test_producer.md
+session_id=019dfd95-df97-7bb1-9546-0a54a718f9eb
+
+
+---
+run_id=run-20260506T130608Z-37f1c786 | entry=phase_output | pair=test | phase=producer | process=codex-agent | cycle=1 | attempt=1 | thread_id=019dfd95-df97-7bb1-9546-0a54a718f9eb
+---
+I’m handling the test phase for `async-transports-and-rendered-provider`. First I’m reading the active test artifacts and the current provider/runtime test coverage so I can map what’s already covered and add only the missing regression checks.
+
+I found one missing regression check in the new fake-provider surface: the sync `run_operation(...)` compatibility path now rejects awaitables, but nothing asserts that contract yet. I’m adding that failure-path test, then I’ll update the phase test strategy and the test feedback artifact with the exact coverage map.
+
+The repo test change is in. I’m updating the phase test artifacts now so the behavior-to-test map matches the actual coverage, including the preserved sync-helper exception boundary and the centralized cancellation-race checks.
+
+I’ve updated the repo test and the phase test artifacts. I’m doing a syntax-level check on the changed Python test file now, then I’ll close with the coverage summary and the remaining environmental gap.
+
+Scope considered
+
+- Phase-local test work for `async-transports-and-rendered-provider`.
+- Request-relevant provider/runtime tests, the fake-provider boundary tests, and the active test artifacts only.
+- No unrelated worktree content was touched.
+
+What I analyzed
+
+- [tests/runtime/test_runtime_providers.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/tests/runtime/test_runtime_providers.py)
+- [tests/unit/test_provider_boundary_core.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/tests/unit/test_provider_boundary_core.py)
+- [test_strategy.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/full-revised-standalone-spec-autoloop-v3-async-n-3c402473/runs/run-20260506T130608Z-37f1c786/artifacts/test/phases/async-transports-and-rendered-provider/test_strategy.md)
+- [feedback.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/full-revised-standalone-spec-autoloop-v3-async-n-3c402473/runs/run-20260506T130608Z-37f1c786/artifacts/test/phases/async-transports-and-rendered-provider/feedback.md)
+- The active turn header in [decisions.txt](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/full-revised-standalone-spec-autoloop-v3-async-n-3c402473/runs/run-20260506T130608Z-37f1c786/decisions.txt).
+
+What I changed
+
+- Added [test_fake_provider_rejects_awaitable_sync_operation_responses](/home/rauter/autoloop_v3_bkp/autoloop_v3/tests/unit/test_provider_boundary_core.py:599) to lock down the preserved sync `run_operation(...)` compatibility path and ensure awaitable scripted responses fail clearly instead of being silently normalized.
+- Updated [test_strategy.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/full-revised-standalone-spec-autoloop-v3-async-n-3c402473/runs/run-20260506T130608Z-37f1c786/artifacts/test/phases/async-transports-and-rendered-provider/test_strategy.md) with a behavior-to-test coverage map for rendered-provider async execution, built-in async transports, centralized cancellation handling, and fake-provider async/session behavior.
+- Appended a concise summary to [feedback.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/full-revised-standalone-spec-autoloop-v3-async-n-3c402473/runs/run-20260506T130608Z-37f1c786/artifacts/test/phases/async-transports-and-rendered-provider/feedback.md) and recorded the non-obvious test-centralization decision in the current turn block of `decisions.txt`.
+
+Key findings / decisions
+
+- The main missing failure-path coverage was the new fake-provider sync-operation guard; that is now explicitly tested.
+- Cancellation-race coverage remains centralized at the shared `_common.py` helper layer rather than duplicated across transport-specific tests.
+- The preserved `llm()` / `classify()` sync exception is still treated as narrow and explicit in test expectations.
+
+Open issues / next step
+
+- `python3 -m py_compile tests/unit/test_provider_boundary_core.py` passed.
+- `pytest` is not installed in this environment, so the authored tests and strategy were syntax-checked but not executed here.
+- The next step is the verifier pass over the updated test artifact and repo test delta.

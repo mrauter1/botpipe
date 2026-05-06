@@ -1589,12 +1589,6 @@ def _inject_control_routes(
             if "question" not in step_routes and "question" not in global_routes:
                 step_routes["question"] = AWAIT_INPUT
             runtime_routes.append("question")
-        if isinstance(step, (PromptStep, ProduceVerifyStep)):
-            if "blocked" not in step_routes and "blocked" not in global_routes:
-                step_routes["blocked"] = AWAIT_INPUT
-            if "failed" not in step_routes and "failed" not in global_routes:
-                step_routes["failed"] = FAIL
-            runtime_routes.extend(("blocked", "failed"))
         runtime_control_routes_by_step[step.name] = tuple(runtime_routes)
     return injected, runtime_control_routes_by_step
 
