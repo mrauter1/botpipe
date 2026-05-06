@@ -586,3 +586,48 @@ Direct/scripted legacy outcomes needed explicit normalization in `Engine._valida
 Open issues / next step
 
 Transport-side structured schema enforcement is still not wired into the CLI providers; runtime validation remains authoritative for this phase. I did not run the entire repository test suite, but the targeted validation passed with `./.venv-autoloop/bin/python -m pytest` over the provider boundary slice and the relevant engine contract subsets.
+
+
+---
+run_id=run-20260506T185744Z-092935c3 | entry=session_turn | pair=implement | phase=verifier | cycle=1 | attempt=1 | thread_id=019dfec6-9730-7fc1-aee3-d97159086b13
+---
+provider=codex
+mode=resume
+template=/home/rauter/.local/share/pipx/venvs/autoloop/lib/python3.12/site-packages/autoloop/templates/implement_verifier.md
+session_id=019dfec6-9730-7fc1-aee3-d97159086b13
+
+
+---
+run_id=run-20260506T185744Z-092935c3 | entry=phase_output | pair=implement | phase=verifier | process=codex-agent | cycle=1 | attempt=1 | thread_id=019dfec6-9730-7fc1-aee3-d97159086b13
+---
+I’m reviewing the provider outcome contract slice against the phase criteria and the current code state, then I’ll update the phase artifacts with any blocking gaps or confirm completion if the implementation holds.
+
+I’m verifying the provider-outcome-contract implementation against the phase contract and will update only the active review artifacts. I’m checking the changed parser/rendering path plus the criteria and feedback files before recording findings.
+
+The parser is the highest-risk area here because the spec mixes canonical precedence and migration compatibility. I’m checking whether the new tests actually cover the canonical-over-legacy edge cases the phase requires, then I’ll record the review outcome in the verifier artifacts.
+
+I found a material compatibility gap in canonical parsing rather than a broad architectural problem. I’m recording that as a blocking verifier finding now; the criteria remain unresolved because canonical-over-legacy precedence is part of the phase contract.
+
+Scope considered
+
+Phase-local verifier scope for `provider-outcome-contract`, limited to the provider outcome parsing/rendering/validation path and the active review artifacts.
+
+What I analyzed
+
+I reviewed the phase contract, implementation notes, decisions ledger, and the changed code paths that govern canonical outcome envelopes, legacy compatibility, and compiled-route validation.
+
+What I reviewed
+
+I inspected `autoloop/core/providers/parsing.py`, `autoloop/core/providers/rendering.py`, `autoloop/core/engine.py`, `autoloop/core/primitives.py`, and the targeted tests in `tests/runtime/test_runtime_providers.py` plus adjacent provider-boundary coverage. I updated `feedback.md`; `criteria.md` remains unresolved because a blocking issue is still open.
+
+Key findings / decisions
+
+I recorded one blocking finding, `IMP-001`. The parser still lets a legacy top-level `reason` survive when a canonical `outcome.route_fields.reason` is present as `null`, which violates the required rule that canonical `route_fields` must win whenever both canonical and legacy fields are present.
+
+Open issues / next step
+
+Normalize canonical-envelope inputs entirely from `outcome.route_fields` whenever `outcome` exists, ignore top-level legacy `question` / `reason` in that branch, add a regression test for canonical `reason: null` plus legacy top-level `reason`, and then re-run the focused provider parsing and engine validation tests.
+
+<loop-control>
+{"schema":"docloop.loop_control/v1","kind":"promise","promise":"INCOMPLETE"}
+</loop-control>

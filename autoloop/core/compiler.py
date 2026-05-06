@@ -662,6 +662,7 @@ def _compile_branch_group_internal_step(
     internal_definition = WorkflowDefinition(
         workflow_cls=definition.workflow_cls,
         workflow_name=definition.workflow_name,
+        workflow_policy=definition.workflow_policy,
         state_cls=definition.state_cls,
         parameters_cls=definition.parameters_cls,
         entry=step,

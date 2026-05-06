@@ -489,6 +489,7 @@ def resolve_runtime_config(root: Path, args: argparse.Namespace) -> ResolvedRunt
             global_layer.provider_policy,
             local_layer.provider_policy,
             policy_layer.provider_policy,
+            provider_layers=(global_layer.provider, local_layer.provider, policy_layer.provider),
             provider=provider,
             runtime=runtime,
             args=args,
@@ -649,6 +650,10 @@ def _parse_provider_policy_config(
     payload: dict[str, Any],
     source: Path,
 ) -> ProviderPolicyRuntimeConfigOverride:
+    if "default" in payload and payload["default"] is None:
+        raise ConfigError(f"{source}: provider_policy.default must be a mapping when provided.")
+    if "validation" in payload and payload["validation"] is None:
+        raise ConfigError(f"{source}: provider_policy.validation must be a mapping when provided.")
     try:
         return ProviderPolicyRuntimeConfigOverride.model_validate(payload)
     except ValidationError as exc:
@@ -657,6 +662,7 @@ def _parse_provider_policy_config(
 
 def _merge_provider_policy_config(
     *layers: ProviderPolicyRuntimeConfigOverride,
+    provider_layers: tuple[ProviderConfigOverride, ...],
     provider: ProviderConfig,
     runtime: RuntimeConfig,
     args: argparse.Namespace,
@@ -666,12 +672,11 @@ def _merge_provider_policy_config(
         *(layer.default for layer in layers if layer.default is not None),
     )
 
-    if provider.name == "codex":
-        legacy_model = provider.codex.model
-        legacy_effort = provider.codex.model_effort
-    else:
-        legacy_model = provider.claude.model
-        legacy_effort = provider.claude.effort
+    legacy_model, legacy_effort = _resolve_explicit_legacy_provider_model_overrides(
+        *provider_layers,
+        provider_name=provider.name,
+        args=args,
+    )
 
     if legacy_model is not None and not any(_policy_override_sets_field(layer.default, ("model", "default")) for layer in layers):
         default_policy = merge_provider_policies(
@@ -727,6 +732,55 @@ def _merge_provider_policy_config(
         strict=strict,
         validation=validation,
     )
+
+
+def _resolve_explicit_legacy_provider_model_overrides(
+    *layers: ProviderConfigOverride,
+    provider_name: str,
+    args: argparse.Namespace,
+) -> tuple[str | None, str | None]:
+    codex_model: str | None = None
+    codex_effort: str | None = None
+    claude_model: str | None = None
+    claude_effort: str | None = None
+
+    for layer in cast(tuple[ProviderConfigOverride, ...], layers):
+        if layer.codex.model is not None:
+            codex_model = layer.codex.model
+        if layer.codex.model_effort is not None:
+            codex_effort = layer.codex.model_effort
+        if layer.claude.model is not None:
+            claude_model = layer.claude.model
+        if layer.claude.effort is not None:
+            claude_effort = layer.claude.effort
+
+        codex_model, codex_effort, claude_model, claude_effort = _apply_generic_provider_overrides(
+            provider_name=provider_name,
+            model=layer.model,
+            model_effort=layer.model_effort,
+            codex_model=codex_model,
+            codex_effort=codex_effort,
+            claude_model=claude_model,
+            claude_effort=claude_effort,
+        )
+
+    cli_model = getattr(args, "model", None)
+    cli_model_effort = getattr(args, "model_effort", None)
+    codex_model, codex_effort, claude_model, claude_effort = _apply_generic_provider_overrides(
+        provider_name=provider_name,
+        model=cli_model.strip() if isinstance(cli_model, str) and cli_model.strip() else None,
+        model_effort=cli_model_effort.strip()
+        if isinstance(cli_model_effort, str) and cli_model_effort.strip()
+        else None,
+        codex_model=codex_model,
+        codex_effort=codex_effort,
+        claude_model=claude_model,
+        claude_effort=claude_effort,
+    )
+
+    if provider_name == "codex":
+        return codex_model, codex_effort
+    return claude_model, claude_effort
 
 
 def _reject_unknown_keys(source: Path, label: str, payload: dict[str, Any], allowed: set[str]) -> None:

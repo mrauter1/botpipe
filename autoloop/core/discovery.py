@@ -34,6 +34,7 @@ from .descriptors import (
 from .errors import WorkflowValidationError
 from .primitives import AWAIT_INPUT, FAIL, FINISH, GLOBAL, SELF
 from .prompts import resolve_prompt_reference
+from .provider_policy import ProviderPolicy
 from .providers.retries import ProviderRetryPolicy
 from .routes import Route, normalize_route_spec
 from .sessions import DEFAULT_SESSION_NAME
@@ -70,6 +71,7 @@ class _EmptyWorkflowState(BaseModel):
 class WorkflowDefinition:
     workflow_cls: type[Any]
     workflow_name: str
+    workflow_policy: ProviderPolicy | None
     state_cls: type[BaseModel]
     parameters_cls: type[BaseModel] | None
     entry: Step
@@ -158,6 +160,7 @@ def get_workflow_definition(workflow_cls: type[Any]) -> WorkflowDefinition:
 
 def describe_workflow_class(workflow_cls: type[Any]) -> WorkflowDefinition:
     _validate_simple_authoring_models(workflow_cls)
+    workflow_policy = _validate_workflow_policy(workflow_cls)
     state_cls = effective_state_model(workflow_cls, fallback_model=_EmptyWorkflowState)
     parameters_cls = effective_parameters_model(workflow_cls)
     entry = getattr(workflow_cls, "entry", None)
@@ -294,6 +297,7 @@ def describe_workflow_class(workflow_cls: type[Any]) -> WorkflowDefinition:
     return WorkflowDefinition(
         workflow_cls=workflow_cls,
         workflow_name=workflow_name,
+        workflow_policy=workflow_policy,
         state_cls=state_cls,
         parameters_cls=parameters_cls,
         entry=entry,
@@ -346,6 +350,15 @@ def _validate_simple_authoring_models(workflow_cls: type[Any]) -> None:
     raw_params = getattr(workflow_cls, "Params", None)
     if raw_params is not None and (not inspect.isclass(raw_params) or not issubclass(raw_params, BaseModel)):
         raise WorkflowValidationError(f"{workflow_cls.__name__}.Params must inherit from pydantic.BaseModel")
+
+
+def _validate_workflow_policy(workflow_cls: type[Any]) -> ProviderPolicy | None:
+    workflow_policy = getattr(workflow_cls, "policy", None)
+    if workflow_policy is None:
+        return None
+    if not isinstance(workflow_policy, ProviderPolicy):
+        raise WorkflowValidationError(f"{workflow_cls.__name__}.policy must be a ProviderPolicy")
+    return workflow_policy
 
 
 def _snake_case_workflow_name(name: str) -> str:

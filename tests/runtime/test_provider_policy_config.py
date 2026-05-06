@@ -197,6 +197,22 @@ def test_resolve_runtime_config_reports_invalid_policy_enum_with_field_path(tmp_
         )
 
 
+def test_resolve_runtime_config_rejects_null_default_policy_override(tmp_path: Path) -> None:
+    with pytest.raises(ConfigError, match=r"provider_policy\.default must be a mapping when provided"):
+        runtime_config.parse_runtime_config(
+            {"provider_policy": {"default": None}},
+            tmp_path / "autoloop.yaml",
+        )
+
+
+def test_resolve_runtime_config_rejects_null_validation_override(tmp_path: Path) -> None:
+    with pytest.raises(ConfigError, match=r"provider_policy\.validation must be a mapping when provided"):
+        runtime_config.parse_runtime_config(
+            {"provider_policy": {"validation": None}},
+            tmp_path / "autoloop.yaml",
+        )
+
+
 def test_resolve_runtime_config_maps_legacy_provider_model_and_effort_into_provider_policy(
     tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,

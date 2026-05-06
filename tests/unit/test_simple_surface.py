@@ -605,8 +605,18 @@ def test_simple_policy_authoring_surfaces_preserve_policy_objects_on_declaration
     definition = get_workflow_definition(PolicyWorkflow)
 
     assert PolicyWorkflow.policy is workflow_policy
+    assert definition.workflow_policy is workflow_policy
     assert definition.steps_by_name["draft"].provider_policy is step_policy
     assert definition.steps_by_name["publish"].provider_policy is step_policy
+
+
+def test_simple_workflow_policy_must_be_a_provider_policy() -> None:
+    class InvalidPolicyWorkflow(simple.Workflow):
+        policy = "ask"
+        draft = simple.step("Draft the note.")
+
+    with pytest.raises(WorkflowValidationError, match=r"InvalidPolicyWorkflow\.policy must be a ProviderPolicy"):
+        get_workflow_definition(InvalidPolicyWorkflow)
 
 
 def test_simple_workflow_compiles_with_pydantic_state_params_and_produce_verify_step() -> None:
