@@ -16,12 +16,12 @@
       "tests-and-docs-migration"
     ],
     "explicit": true,
-    "current_phase_index": 0,
-    "current_phase_id": "route-model-unification"
+    "current_phase_index": 1,
+    "current_phase_id": "provider-outcome-contract"
   },
   "phase_status": {
-    "route-model-unification": "in_progress",
-    "provider-outcome-contract": "planned",
+    "route-model-unification": "completed",
+    "provider-outcome-contract": "in_progress",
     "runtime-and-inspection-alignment": "planned",
     "tests-and-docs-migration": "planned"
   },
@@ -31,6 +31,19 @@
       "run_id": "run-20260506T185744Z-092935c3",
       "status": "in_progress",
       "ts": "2026-05-06T19:05:36.458097+00:00"
+    },
+    {
+      "phase_id": "route-model-unification",
+      "run_id": "run-20260506T185744Z-092935c3",
+      "status": "completed",
+      "ts": "2026-05-06T19:32:00.268548+00:00",
+      "pair": "test"
+    },
+    {
+      "phase_id": "provider-outcome-contract",
+      "run_id": "run-20260506T185744Z-092935c3",
+      "status": "in_progress",
+      "ts": "2026-05-06T19:32:00.271593+00:00"
     }
   ]
 }
