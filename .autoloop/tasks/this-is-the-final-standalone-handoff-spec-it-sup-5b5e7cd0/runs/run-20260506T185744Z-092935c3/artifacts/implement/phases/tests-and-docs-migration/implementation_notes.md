@@ -20,11 +20,13 @@
 - `StepDispatcher._execute_pair_step_async()`
 - `StepDispatcher._run_pair_step_async()`
 - `Engine._required_output_artifacts()`
-- Prompt/doc route wording around helper routes, `GLOBAL`, `provider_visibility`, and `outcome.route_fields`
+- `test_workflow_instructions_freeze_runtime_contract_vocabulary()`
+- Prompt/doc route wording around helper routes, `GLOBAL`, `provider_visibility`, `outcome.route_fields`, and compatibility-only `ControlRoutes` / top-level `question` / `reason` notes
 
 ## Checklist mapping
 
 - Phase 4 tests: updated contract/reporting assertions for provider-attempt events, pair-hook short-circuits, child-workflow `AWAIT_INPUT` fallback, and question-route required-write expectations.
+- Phase 4 tests: extended docs regression coverage so `Workflow_Instructions.md` must keep the canonical helper-route wording and compatibility-only `ControlRoutes` / top-level `question` / `reason` note.
 - Phase 4 docs: updated authoring, architecture, workflow instructions, workflow prompt READMEs, prompt bodies, and workflow package docs to prefer route helpers and canonical `outcome.route_fields`.
 - No checklist items intentionally deferred in this phase.
 
@@ -45,6 +47,7 @@
 - Inspection/reporting surfaces now expose per-step compiled route tables and provider-schema fallback metadata through `CompiledStep.route_table`.
 - Pair-step `before_producer` hooks now execute before the producer call and may short-circuit cleanly with route events or direct controls.
 - Docs and prompts now describe helper routes as ordinary compiled routes, prefer `provider_visibility="hidden"`, and teach `outcome.tag` / `outcome.payload` / `outcome.route_fields`.
+- The shared workflow instruction contract and authoring docs now explicitly mark `ControlRoutes(question=...)` and top-level `question` / `reason` provider fields as compatibility-only during migration.
 
 ## Known non-changes
 
@@ -60,7 +63,9 @@
 
 - `./.venv/bin/python -m pytest -q tests/runtime/test_runtime_static_graph.py tests/contract/test_engine_contracts.py tests/test_architecture_baseline_docs.py`
 - `./.venv/bin/python -m pytest -q tests/unit/test_validation.py tests/unit/test_provider_boundary_core.py tests/runtime/test_runtime_static_graph.py tests/contract/test_engine_contracts.py tests/test_architecture_baseline_docs.py`
+- `./.venv/bin/python -m pytest -q tests/test_architecture_baseline_docs.py`
 
 ## Deduplication / centralization
 
 - Used narrow bulk text replacements for repeated workflow prompt/doc phrases instead of hand-editing the same route wording dozens of times.
+- Centralized the compatibility-only route guidance in `Workflow_Instructions.md` and locked it into the shared docs regression suite instead of relying on duplicated workflow-package wording alone.

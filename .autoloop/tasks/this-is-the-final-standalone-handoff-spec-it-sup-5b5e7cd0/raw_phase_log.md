@@ -1332,3 +1332,66 @@ Open issues / next step
 <loop-control>
 {"schema":"docloop.loop_control/v1","kind":"promise","promise":"INCOMPLETE"}
 </loop-control>
+
+
+---
+run_id=run-20260506T185744Z-092935c3 | entry=session_turn | pair=implement | phase=producer | cycle=2 | attempt=1 | thread_id=019dfeed-ec76-7aa0-818d-b53b7259845b
+---
+provider=codex
+mode=resume
+template=/home/rauter/.local/share/pipx/venvs/autoloop/lib/python3.12/site-packages/autoloop/templates/implement_producer.md
+session_id=019dfeed-ec76-7aa0-818d-b53b7259845b
+
+
+---
+run_id=run-20260506T185744Z-092935c3 | entry=phase_output | pair=implement | phase=producer | process=codex-agent | cycle=2 | attempt=1 | thread_id=019dfeed-ec76-7aa0-818d-b53b7259845b
+---
+This turn is scoped to the reviewer’s `IMP-001`: align the shared workflow instruction contract with the canonical route-helper model and add regression coverage so that wording cannot drift again. I’m reading the active feedback, plan checklist, and the current instruction/doc tests before editing.
+
+I have the reviewer’s target and the current notes. Next I’m reading the exact instruction sections and the docs test file so I can make the smallest fix that updates both the wording and the guardrails.
+
+I’m going a bit broader than the single file now, because AC-2 is about the docs model as a whole. I’m checking where the compatibility-only note belongs so the public docs and the shared prompt contract say the same thing, and I’ll put the regression test on that shared source.
+
+I have the edit shape now: remove the stale reserved-route wording from `Workflow_Instructions.md`, add explicit compatibility-only notes for `ControlRoutes` and top-level `question` / `reason`, mirror that note in `docs/authoring.md`, and extend the docs regression test to lock those phrases in.
+
+The wording changes are in place. I’m checking the exact rendered text against the new regression assertions, then I’ll run the docs test slice and update the run notes and decisions ledger.
+
+I’m only touching docs and their regression guardrails in this slice, so I’m validating the docs suite directly rather than re-running unrelated engine coverage. After that I’ll update the phase notes and ledger.
+
+I’ve verified the new wording against the docs suite. I’m recording the non-obvious guardrail decision in the run ledger and then I’ll fold this turn’s scope, validation, and checklist mapping into the phase implementation notes.
+
+The fix is complete and validated. I’m doing one final diff skim over the touched docs/test files to make sure the wording is coherent end-to-end before I close out the turn.
+
+Scope considered
+
+- Phase-local `tests-and-docs-migration` follow-up only.
+- Reviewer finding `IMP-001` on shared prompt-contract wording and missing regression coverage.
+
+What I analyzed
+
+- Active feedback, plan, implementation notes, and run decisions ledger.
+- The stale sections in [Workflow_Instructions.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/Workflow_Instructions.md:203) and [Workflow_Instructions.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/Workflow_Instructions.md:398).
+- Existing docs guardrails in [tests/test_architecture_baseline_docs.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/tests/test_architecture_baseline_docs.py:258).
+- The public authoring doc section that teaches canonical provider outcomes in [docs/authoring.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/docs/authoring.md:172).
+
+What I changed
+
+- Rewrote the shared route guidance in [Workflow_Instructions.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/Workflow_Instructions.md:203) and [Workflow_Instructions.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/Workflow_Instructions.md:398) to:
+  - teach helper routes as ordinary compiled routes
+  - place route metadata under `outcome.route_fields`
+  - explicitly mark `ControlRoutes(question=...)` and top-level `question` / `reason` as deprecated compatibility-only migration surfaces
+- Added the same compatibility-only note to [docs/authoring.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/docs/authoring.md:172).
+- Extended [tests/test_architecture_baseline_docs.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/tests/test_architecture_baseline_docs.py:148) and [tests/test_architecture_baseline_docs.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/tests/test_architecture_baseline_docs.py:258) so the shared instruction file must keep the canonical route-helper wording and must not reintroduce the stale reserved-route phrases.
+- Updated the phase [implementation_notes.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/this-is-the-final-standalone-handoff-spec-it-sup-5b5e7cd0/runs/run-20260506T185744Z-092935c3/artifacts/implement/phases/tests-and-docs-migration/implementation_notes.md) and appended the non-obvious guardrail decision under the latest header in [decisions.txt](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/this-is-the-final-standalone-handoff-spec-it-sup-5b5e7cd0/runs/run-20260506T185744Z-092935c3/decisions.txt).
+
+Key findings / decisions
+
+- The reviewer gap was real: the runtime/docs migration was mostly done, but the central instruction contract still preserved pre-migration route language.
+- I kept the fix narrow and centralized on `Workflow_Instructions.md` plus one explicit authoring-doc compatibility note, then locked that shared wording into the docs regression suite.
+- Validation performed:
+  - `./.venv/bin/python -m pytest -q tests/test_architecture_baseline_docs.py`
+
+Open issues / next step
+
+- No open implementation blockers remain in this slice.
+- Next step is verifier re-review of `tests-and-docs-migration`, with focus on resolving `IMP-001`.

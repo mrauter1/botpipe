@@ -261,8 +261,6 @@ class CodexPolicyEmitter:
             unsupported.append("permission allow/ask/deny rules are not supported by Codex policy emission")
         if policy.tools.allow or policy.tools.ask or policy.tools.deny:
             unsupported.append("tool allow/ask/deny rules are not supported by Codex policy emission")
-        if policy.permissions.disable_dangerous_bypass and policy.permissions.allow_dangerous_bypass:
-            unsupported.append("disable_dangerous_bypass cannot be enforced alongside dangerous bypass in Codex")
         if policy.instructions.files or policy.instructions.inline or policy.instructions.output_style:
             unsupported.append("instruction policy fields are not supported by Codex policy emission")
         if policy.telemetry.enabled or policy.telemetry.exporter or policy.telemetry.headers:

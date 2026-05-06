@@ -201,8 +201,8 @@ The workflow must define, explicitly and concretely:
    - authoritative precedence when multiple artifacts exist
 
 6. Route grammar
-   - helper routes and compatibility routes
-   - application routes
+   - helper routes and application routes
+   - compatibility notes for deprecated `ControlRoutes` / top-level `question` / `reason`
    - exact semantics of each route
    - when each route is legal
    - what evidence is required for each route
@@ -395,16 +395,19 @@ The control result should be minimal and structured, for example:
 - feedback when required
 - references to artifacts written
 - evidence references or check summaries
-- blocker/failure/question fields only when applicable
+- selected-route metadata under `outcome.route_fields` only when the chosen route schema requires it
 
 Do not treat long free-form prose as the primary control interface.
 
 Route doctrine
 
-Reserved routes are always:
-- question
-- blocked
-- failed
+Everything is a route.
+
+Helper routes such as `question`, `blocked`, and `failed` are ordinary compiled routes with conventional defaults. They are only legal when the current step contract exposes them.
+
+Question-style route metadata belongs in `outcome.route_fields.questions`. Blocked and failed reasons belong in nullable `outcome.route_fields.reason`.
+
+`ControlRoutes(question=...)` and legacy top-level `question` / `reason` provider fields are deprecated compatibility-only surfaces during migration. Prefer route helpers and canonical `outcome.tag` / `outcome.payload` / `outcome.route_fields`.
 
 Application routes must be explicit per step, for example:
 - planned

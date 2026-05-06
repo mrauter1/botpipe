@@ -12,7 +12,7 @@ from functools import lru_cache
 from typing import Any
 
 from ...core.errors import ProviderExecutionError
-from ...core.provider_policy import ProviderPolicyEmission, ProviderPolicyValidationConfig
+from ...core.provider_policy import ProviderPolicyEmission, ProviderPolicyValidationConfig, policy_fingerprint
 from ...core.providers.models import TokenUsage
 from ...core.providers.protocols import ProviderTransport
 from ...core.providers.rendered import RenderedLLMProvider
@@ -398,13 +398,14 @@ def _prepare_turn_command(
     if turn.policy is not None:
         model = turn.policy.model.default or model
         model_effort = turn.policy.model.effort or model_effort
+    if emission is not None and emission.cli_args:
+        command = (*command, *emission.cli_args)
     if turn.policy is None or turn.policy.model.default is None:
         if fallback_model:
             command = (*command, "--model", fallback_model)
+    if turn.policy is None or turn.policy.model.effort is None:
         if fallback_model_effort:
             command = (*command, "--model-effort", fallback_model_effort)
-    elif emission is not None and emission.cli_args:
-        command = (*command, *emission.cli_args)
     return emission, command, model, model_effort
 
 
@@ -417,13 +418,35 @@ def _emit_turn_policy(
     if turn.policy is None or turn.run_folder is None:
         return None
     step_key = build_policy_step_key(turn.step_name, step_execution_id=turn.step_execution_id)
-    emission = emitter.emit(
-        turn.policy,
-        run_dir=turn.run_folder,
-        step_key=step_key,
-        validation=validation,
-        step_name=turn.step_name,
-    )
+    effective_policy_path = turn.run_folder / "provider_policy" / step_key / "codex" / "effective_policy.json"
+    capability_report_path = turn.run_folder / "provider_policy" / step_key / "codex" / "capability_report.json"
+    try:
+        emission = emitter.emit(
+            turn.policy,
+            run_dir=turn.run_folder,
+            step_key=step_key,
+            validation=validation,
+            step_name=turn.step_name,
+        )
+    except ProviderExecutionError:
+        _emit_policy_event(
+            turn,
+            "provider_policy_emitted",
+            provider_target="codex",
+            policy_fingerprint=None if turn.policy is None else policy_fingerprint(turn.policy),
+            decision="fail",
+            effective_policy_path=str(effective_policy_path),
+            capability_report_path=str(capability_report_path),
+        )
+        _emit_policy_event(
+            turn,
+            "provider_policy_capability_report",
+            provider_target="codex",
+            policy_fingerprint=None if turn.policy is None else policy_fingerprint(turn.policy),
+            decision="fail",
+            capability_report_path=str(capability_report_path),
+        )
+        raise
     _emit_policy_event(
         turn,
         "provider_policy_emitted",

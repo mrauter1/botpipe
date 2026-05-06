@@ -174,6 +174,7 @@ Canonical provider outcomes always route through:
 - `outcome.route_fields` carries selected-route metadata such as clarification questions or failure reasons
 - `Route.question()` requires `outcome.route_fields.questions`
 - `Route.blocked()` and `Route.failed()` use nullable `outcome.route_fields.reason`
+- `ControlRoutes(question=...)` and legacy top-level `question` / `reason` provider fields remain compatibility-only during migration; new authoring should prefer route helpers and canonical `outcome.route_fields`
 
 ## Static And Runtime Validation
 

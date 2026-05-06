@@ -613,7 +613,7 @@ def test_codex_transport_sends_rendered_prompt_text_to_cli_stdin(
         transport.run_turn(_rendered_turn(step_name="produce", prompt_text=prompt_text, session=_placeholder_session()))
     )
 
-    assert calls == [("codex", "exec", "--json")]
+    assert calls == [("codex", "exec", "--json", "--model", "gpt-test")]
     assert seen_inputs == [prompt_text.encode("utf-8")]
     assert result.raw_text == "producer text"
     assert result.session is not None
@@ -658,7 +658,7 @@ def test_codex_transport_supports_async_subprocess_execution(
         transport.run_turn(_rendered_turn(step_name="produce", prompt_text=prompt_text, session=_placeholder_session()))
     )
 
-    assert calls == [("codex", "exec", "--json")]
+    assert calls == [("codex", "exec", "--json", "--model", "gpt-test")]
     assert seen_inputs == [prompt_text.encode("utf-8")]
     assert result.raw_text == "producer text"
     assert result.session is not None
@@ -952,7 +952,7 @@ def test_codex_transport_emits_run_scoped_policy_artifacts_and_metadata(
         )
     )
 
-    assert calls == [("codex", "exec", "--json")]
+    assert calls == [("codex", "exec", "--json", "--model", "gpt-test")]
     assert seen_envs and seen_envs[0] is not None
     codex_home = Path(seen_envs[0]["CODEX_HOME"])
     assert codex_home == tmp_path / "provider_policy" / "produce__visit-1" / "codex"
@@ -1011,7 +1011,7 @@ def test_codex_operation_executor_uses_policy_env_and_metadata(
         )
     )
 
-    assert seen and seen[0][0] == ("codex", "exec", "--json")
+    assert seen and seen[0][0] == ("codex", "exec", "--json", "--model", "gpt-test")
     assert seen[0][1] is not None
     assert seen[0][1]["CODEX_HOME"] == str(tmp_path / "provider_policy" / "operate__visit-1" / "codex")
     assert result.metadata["provider_metadata"]["policy"]["capability_report_file"].endswith("capability_report.json")
