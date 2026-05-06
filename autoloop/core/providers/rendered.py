@@ -3,8 +3,6 @@
 from __future__ import annotations
 
 import asyncio
-
-from ..errors import ProviderExecutionError
 from .models import (
     LLMRequest,
     OperationRequest,
@@ -70,9 +68,7 @@ class RenderedLLMProvider:
     async def _run_turn_async(self, context: ProviderTurnContext):
         turn = render_provider_turn(context)
         if not supports_async_provider_transport(self._transport):
-            raise ProviderExecutionError(
-                f"provider transport {type(self._transport).__name__!r} does not implement async turn execution."
-            )
+            return self._transport.run_turn(turn)
         return await self._transport.run_turn_async(turn)
 
 

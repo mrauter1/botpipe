@@ -35,6 +35,7 @@ from .engine_collaborators import (
     StepFinalizationRequest,
     StepDispatcher,
     WorkflowInvoker,
+    run_awaitable_sync,
 )
 from .extensions import BoundWorkflowExtension, HookRouteRedirect, RunBinding, StepFinish, StepStart, TerminalFinish
 from .errors import (
@@ -176,6 +177,46 @@ class Engine:
         self.branch_group_runtime = BranchGroupRuntime(self)
 
     def run(
+        self,
+        *,
+        task_id: str,
+        run_id: str,
+        task_folder: Path,
+        workflow_folder: Path | None = None,
+        run_folder: Path,
+        package_folder: Path | None = None,
+        root: Path | None = None,
+        params: BaseModel | None = None,
+        workflow_params: Mapping[str, Any] | None = None,
+        workflow_input: BaseModel | None = None,
+        workflow_invoker: Callable[..., Any] | None = None,
+        initial_state: BaseModel | None = None,
+        resume: bool = False,
+        answer: str | None = None,
+        max_steps: int = 100,
+    ) -> RunResult:
+        return run_awaitable_sync(
+            lambda: self.run_async(
+                task_id=task_id,
+                run_id=run_id,
+                task_folder=task_folder,
+                workflow_folder=workflow_folder,
+                run_folder=run_folder,
+                package_folder=package_folder,
+                root=root,
+                params=params,
+                workflow_params=workflow_params,
+                workflow_input=workflow_input,
+                workflow_invoker=workflow_invoker,
+                initial_state=initial_state,
+                resume=resume,
+                answer=answer,
+                max_steps=max_steps,
+            ),
+            active_loop_error="Synchronous engine execution cannot bridge async execution inside an active event loop.",
+        )
+
+    async def run_async(
         self,
         *,
         task_id: str,
@@ -434,7 +475,7 @@ class Engine:
                         step_name=step.name,
                         step_visit=self._step_execution_visit(step, step_state_store, step_item_state_store),
                     ):
-                        step_result = self.step_dispatcher.execute(step, context, state, pending_handoffs)
+                        step_result = await self.step_dispatcher.execute_async(step, context, state, pending_handoffs)
                         state = step_result.state
                         destination = step_result.destination
                         last_event = step_result.event
@@ -693,7 +734,43 @@ class Engine:
         answer: str | None = None,
         max_steps: int = 100,
     ) -> RunResult:
-        return self.run(
+        return run_awaitable_sync(
+            lambda: self.resume_async(
+                task_id=task_id,
+                run_id=run_id,
+                task_folder=task_folder,
+                workflow_folder=workflow_folder,
+                run_folder=run_folder,
+                package_folder=package_folder,
+                root=root,
+                params=params,
+                workflow_params=workflow_params,
+                workflow_input=workflow_input,
+                workflow_invoker=workflow_invoker,
+                answer=answer,
+                max_steps=max_steps,
+            ),
+            active_loop_error="Synchronous engine execution cannot bridge async execution inside an active event loop.",
+        )
+
+    async def resume_async(
+        self,
+        *,
+        task_id: str,
+        run_id: str,
+        task_folder: Path,
+        workflow_folder: Path | None = None,
+        run_folder: Path,
+        package_folder: Path | None = None,
+        root: Path | None = None,
+        params: BaseModel | None = None,
+        workflow_params: Mapping[str, Any] | None = None,
+        workflow_input: BaseModel | None = None,
+        workflow_invoker: Callable[..., Any] | None = None,
+        answer: str | None = None,
+        max_steps: int = 100,
+    ) -> RunResult:
+        return await self.run_async(
             task_id=task_id,
             run_id=run_id,
             task_folder=task_folder,
