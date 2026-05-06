@@ -18,14 +18,14 @@
       "test-and-strictness-hardening"
     ],
     "explicit": true,
-    "current_phase_index": 2,
-    "current_phase_id": "async-transports-and-rendered-provider"
+    "current_phase_index": 3,
+    "current_phase_id": "branch-group-runtime-and-sessions"
   },
   "phase_status": {
     "async-engine-spine": "completed",
     "provider-contract-cutover": "completed",
-    "async-transports-and-rendered-provider": "in_progress",
-    "branch-group-runtime-and-sessions": "planned",
+    "async-transports-and-rendered-provider": "completed",
+    "branch-group-runtime-and-sessions": "in_progress",
     "compiler-surface-and-graph-alignment": "planned",
     "test-and-strictness-hardening": "planned"
   },
@@ -61,6 +61,19 @@
       "run_id": "run-20260506T130608Z-37f1c786",
       "status": "in_progress",
       "ts": "2026-05-06T13:59:10.405801+00:00"
+    },
+    {
+      "phase_id": "async-transports-and-rendered-provider",
+      "run_id": "run-20260506T130608Z-37f1c786",
+      "status": "completed",
+      "ts": "2026-05-06T14:09:56.541796+00:00",
+      "pair": "test"
+    },
+    {
+      "phase_id": "branch-group-runtime-and-sessions",
+      "run_id": "run-20260506T130608Z-37f1c786",
+      "status": "in_progress",
+      "ts": "2026-05-06T14:09:56.544343+00:00"
     }
   ]
 }
