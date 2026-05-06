@@ -299,3 +299,98 @@ Open issues / next step
 <loop-control>
 {"schema":"docloop.loop_control/v1","kind":"promise","promise":"COMPLETE"}
 </loop-control>
+
+
+---
+run_id=run-20260506T130608Z-37f1c786 | entry=session_turn | pair=test | phase=producer | cycle=1 | attempt=1 | thread_id=019dfd6b-64cb-7e91-8aa2-76c766f7f1a1
+---
+provider=codex
+mode=resume
+template=/home/rauter/.local/share/pipx/venvs/autoloop/lib/python3.12/site-packages/autoloop/templates/test_producer.md
+session_id=019dfd6b-64cb-7e91-8aa2-76c766f7f1a1
+
+
+---
+run_id=run-20260506T130608Z-37f1c786 | entry=phase_output | pair=test | phase=producer | process=codex-agent | cycle=1 | attempt=1 | thread_id=019dfd6b-64cb-7e91-8aa2-76c766f7f1a1
+---
+I’m handling the test phase around the async-engine-spine changes that already landed: first I’m reading the current test artifacts and the changed runtime/tests to see what coverage still needs to be formalized or added.
+
+The current test file covers `run_async`, `run`, and the active-loop guard, but not the direct `resume_async(...)` core that this phase also delivered. I’m adding one focused resume test that exercises a real pause/resume path and then finishes on a provider-backed step.
+
+I’ve added direct `resume_async(...)` coverage. Next I’m running the focused suite again so the test artifact reflects actual executed coverage, not just intended coverage.
+
+The code coverage is in place and green. I’m writing the phase test strategy as an explicit behavior map now, plus a short feedback summary and one test-decision note about why branch async-only enforcement is covered through the existing branch-group contract test rather than duplicated in this phase file.
+
+The test artifacts are updated and the focused suite is green. I’m collecting the final references for the added `resume_async(...)` coverage and the strategy map, then I’ll close out the phase-local test summary.
+
+Scope considered
+- Phase-local async-engine-spine testing only: [test_async_engine_spine.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/tests/contract/test_async_engine_spine.py:71), the existing adjacent contract smoke tests, and the active phase artifacts [test_strategy.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/full-revised-standalone-spec-autoloop-v3-async-n-3c402473/runs/run-20260506T130608Z-37f1c786/artifacts/test/phases/async-engine-spine/test_strategy.md:1) and [feedback.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/full-revised-standalone-spec-autoloop-v3-async-n-3c402473/runs/run-20260506T130608Z-37f1c786/artifacts/test/phases/async-engine-spine/feedback.md:1).
+- I stayed out of unrelated repo changes.
+
+What I analyzed
+- The landed engine/dispatcher behavior around `run_async(...)`, `resume_async(...)`, sync wrapper active-loop rejection, and the temporary finalize-mode sync-provider compatibility.
+- Existing test coverage already present from the implementation pass, especially the branch-group sync-only-provider rejection contract that guards the async-only branch path.
+
+What I changed
+- Added direct `resume_async(...)` coverage in [test_async_engine_spine.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/tests/contract/test_async_engine_spine.py:168) using a real pending-input checkpoint followed by a provider-backed async step.
+- Kept and formalized phase-local coverage for:
+  - `run_async(...)` async-provider execution at [line 71](/home/rauter/autoloop_v3_bkp/autoloop_v3/tests/contract/test_async_engine_spine.py:71)
+  - sync wrapper active-loop failure at [line 101](/home/rauter/autoloop_v3_bkp/autoloop_v3/tests/contract/test_async_engine_spine.py:101)
+  - sequential sync-provider compatibility at [line 138](/home/rauter/autoloop_v3_bkp/autoloop_v3/tests/contract/test_async_engine_spine.py:138)
+  - sync wrapper use of the async core at [line 216](/home/rauter/autoloop_v3_bkp/autoloop_v3/tests/contract/test_async_engine_spine.py:216)
+- Updated the phase [test_strategy.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/full-revised-standalone-spec-autoloop-v3-async-n-3c402473/runs/run-20260506T130608Z-37f1c786/artifacts/test/phases/async-engine-spine/test_strategy.md:1) with an explicit behavior-to-test map, preserved invariants, edge/failure paths, stabilization notes, and known gaps.
+- Appended a concise execution summary to the phase [feedback.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/full-revised-standalone-spec-autoloop-v3-async-n-3c402473/runs/run-20260506T130608Z-37f1c786/artifacts/test/phases/async-engine-spine/feedback.md:1).
+- Recorded the non-obvious test boundary choice in [decisions.txt](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/full-revised-standalone-spec-autoloop-v3-async-n-3c402473/runs/run-20260506T130608Z-37f1c786/decisions.txt:1).
+
+Key findings / decisions
+- I did not duplicate branch-runtime fixtures in the phase-local file; the existing branch-group contract test remains the source of truth for “sync-provider compatibility must not leak into capture/branch execution.”
+- The phase-local file now covers both new async engine entrypoints directly: `run_async(...)` and `resume_async(...)`.
+
+Open issues / next step
+- No blocker in this phase-local test scope.
+- Known gaps are documented in the strategy: CLI/runner coverage remains indirect here, and transport async-native conversion remains out of phase.
+- Focused validation passed: `15 passed` across the targeted async-engine-spine and adjacent regression tests.
+
+
+---
+run_id=run-20260506T130608Z-37f1c786 | entry=session_turn | pair=test | phase=verifier | cycle=1 | attempt=1 | thread_id=019dfd6b-64cb-7e91-8aa2-76c766f7f1a1
+---
+provider=codex
+mode=resume
+template=/home/rauter/.local/share/pipx/venvs/autoloop/lib/python3.12/site-packages/autoloop/templates/test_verifier.md
+session_id=019dfd6b-64cb-7e91-8aa2-76c766f7f1a1
+
+
+---
+run_id=run-20260506T130608Z-37f1c786 | entry=phase_output | pair=test | phase=verifier | process=codex-agent | cycle=1 | attempt=1 | thread_id=019dfd6b-64cb-7e91-8aa2-76c766f7f1a1
+---
+I’m auditing the async-engine-spine test coverage against the phase contract and the run decisions, starting with the auditor-owned criteria and the exact tests/strategy the test author added.
+
+The test scope looks complete for this phase: the added coverage matches the changed behavior, the preserved invariants are explicitly exercised, and the branch-runtime boundary is still guarded. I’m marking the auditor criteria complete and appending a no-findings audit outcome note.
+
+Scope considered
+- Phase-local async-engine-spine test work only: [test_async_engine_spine.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/tests/contract/test_async_engine_spine.py:71), the reused branch-group contract coverage, and the active test artifacts [test_strategy.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/full-revised-standalone-spec-autoloop-v3-async-n-3c402473/runs/run-20260506T130608Z-37f1c786/artifacts/test/phases/async-engine-spine/test_strategy.md:1) and [feedback.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/full-revised-standalone-spec-autoloop-v3-async-n-3c402473/runs/run-20260506T130608Z-37f1c786/artifacts/test/phases/async-engine-spine/feedback.md:1).
+- I used the run decisions ledger to verify the intended sync-provider compatibility boundary and the branch/capture async-only invariant.
+
+What I analyzed
+- Coverage for the changed top-level engine entrypoints: `run_async(...)`, `resume_async(...)`, and the sync wrapper active-loop failure behavior.
+- Coverage for the preserved sequential sync-provider compatibility introduced at the dispatcher boundary.
+- Coverage for the adjacent invariant that sync-provider compatibility must not leak into branch/capture execution.
+
+What I reviewed
+- The new phase-local contract tests for async-only providers, sync-only providers, active-loop failures, and direct `resume_async(...)` checkpoint flow.
+- The existing reused branch-group contract test that still rejects sync-only providers for provider-backed branch execution.
+- The strategy’s stabilization notes and known-gap statements against the actual test set and the phase scope.
+
+Key findings / decisions
+- No blocking or non-blocking audit findings in this phase scope.
+- The test set covers the changed behavior and the material preserved invariants with deterministic fixtures and stable environment assumptions.
+- I marked all audit criteria complete and appended a no-findings audit outcome note to the phase feedback artifact.
+
+Open issues / next step
+- No blocker remains for this test phase.
+- The documented known gaps remain phase-appropriate: CLI/runner coverage is indirect here, and provider transport async-native conversion is intentionally out of scope for async-engine-spine.
+
+<loop-control>
+{"schema":"docloop.loop_control/v1","kind":"promise","promise":"COMPLETE"}
+</loop-control>
