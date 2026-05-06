@@ -312,3 +312,44 @@ The important phase-local decision is that there is no explicit escape hatch yet
 Open issues / next step
 
 The reviewer’s two blocking findings are addressed. Validation passed with `.venv/bin/python -m pytest -q tests/unit/test_provider_policy.py` (`12 passed`). The next step is to hand this back to the verifier for a clean re-review of the same phase.
+
+
+---
+run_id=run-20260506T190853Z-f707cb4f | entry=session_turn | pair=implement | phase=verifier | cycle=2 | attempt=1 | thread_id=019dfeb8-62d9-7162-bd36-563fb3056ac9
+---
+provider=codex
+mode=resume
+template=/home/rauter/.local/share/pipx/venvs/autoloop/lib/python3.12/site-packages/autoloop/templates/implement_verifier.md
+session_id=019dfeb8-62d9-7162-bd36-563fb3056ac9
+
+
+---
+run_id=run-20260506T190853Z-f707cb4f | entry=phase_output | pair=implement | phase=verifier | process=codex-agent | cycle=2 | attempt=1 | thread_id=019dfeb8-62d9-7162-bd36-563fb3056ac9
+---
+I’m re-reviewing the same phase after the producer’s fixes. I’ll verify the two previously blocking paths directly in the updated source and focused unit suite, then I’ll either clear the criteria or append only any remaining findings.
+
+The focused re-review is clean: both previously blocking paths now behave as requested, and the updated unit file covers them. I’m closing the review artifacts by marking the criteria complete and appending a short re-review resolution note so the earlier blocking entries aren’t left ambiguous.
+
+Scope considered
+
+Phase-local `policy-core` re-review only: [autoloop/core/provider_policy.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/autoloop/core/provider_policy.py), [tests/unit/test_provider_policy.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/tests/unit/test_provider_policy.py), the implementation notes, the criteria artifact, and the run-local decisions ledger.
+
+What I analyzed
+
+I rechecked the two previously blocking behaviors directly in the updated core module: empty `WorkspaceNetworkPolicy(mode="limited")` handling and `ProviderPolicy.with_model_effort()` validation. I also verified the producer’s new decisions are consistent with the phase scope and do not drift from the request.
+
+What I reviewed
+
+I confirmed the updated source now rejects empty limited network policies at the model layer, revalidates convenience-helper output through `ProviderPolicy.model_validate(...)`, and adds focused unit coverage for both cases. I reran `.venv/bin/python -m pytest -q tests/unit/test_provider_policy.py`, which passed with `12 passed in 0.28s`, then updated [criteria.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/implementation-goal-add-a-first-class-provider-p-5e755cae/runs/run-20260506T190853Z-f707cb4f/artifacts/implement/phases/policy-core/criteria.md) to fully checked and appended a re-review resolution note to [feedback.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/implementation-goal-add-a-first-class-provider-p-5e755cae/runs/run-20260506T190853Z-f707cb4f/artifacts/implement/phases/policy-core/feedback.md).
+
+Key findings / decisions
+
+The prior blocking findings `IMP-001` and `IMP-002` are resolved. No additional blocking or non-blocking findings were identified within the active phase scope.
+
+Open issues / next step
+
+No open issues remain for `policy-core`. This phase is review-complete and ready to advance to the next planned phase.
+
+<loop-control>
+{"schema":"docloop.loop_control/v1","kind":"promise","promise":"COMPLETE"}
+</loop-control>
