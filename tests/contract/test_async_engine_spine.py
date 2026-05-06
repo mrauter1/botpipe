@@ -27,27 +27,18 @@ class _AsyncOnlyLLMProvider:
     def __init__(self) -> None:
         self.async_calls: list[str] = []
 
-    def run_producer(self, request: ProducerRequest) -> ProducerResponse:  # pragma: no cover - defensive
+    async def run_producer(self, request: ProducerRequest) -> ProducerResponse:
         raise AssertionError("sync producer path should not be used")
 
-    def run_verifier(self, request: VerifierRequest) -> OutcomeResponse:  # pragma: no cover - defensive
+    async def run_verifier(self, request: VerifierRequest) -> OutcomeResponse:
         raise AssertionError("sync verifier path should not be used")
 
-    def run_llm(self, request: LLMRequest) -> OutcomeResponse:  # pragma: no cover - defensive
-        raise AssertionError("sync llm path should not be used")
+    async def run_llm(self, request: LLMRequest) -> OutcomeResponse:
+        self.async_calls.append(request.step_name)
+        return OutcomeResponse(outcome=Outcome(raw_output="ok", tag="done"))
 
     def run_operation(self, request: object) -> object:  # pragma: no cover - defensive
         raise AssertionError("operation path should not be used")
-
-    async def run_producer_async(self, request: ProducerRequest) -> ProducerResponse:
-        raise AssertionError("producer path should not be used")
-
-    async def run_verifier_async(self, request: VerifierRequest) -> OutcomeResponse:
-        raise AssertionError("verifier path should not be used")
-
-    async def run_llm_async(self, request: LLMRequest) -> OutcomeResponse:
-        self.async_calls.append(request.step_name)
-        return OutcomeResponse(outcome=Outcome(raw_output="ok", tag="done"))
 
 
 class _SyncOnlyLLMProvider:
@@ -135,34 +126,20 @@ def test_engine_sync_wrappers_reject_active_event_loop_without_running_coroutine
     asyncio.run(run_in_loop())
 
 
-def test_engine_run_async_preserves_sequential_sync_provider_compatibility(tmp_path: Path) -> None:
+def test_engine_rejects_sync_only_provider_during_construction() -> None:
     class SyncProviderWorkflow(simple.Workflow):
         class State(BaseModel):
             pass
 
         review = simple.step("Review the artifact.", name="review", routes={"done": simple.FINISH})
 
-    task_folder, run_folder = _workspace(tmp_path)
-    provider = _SyncOnlyLLMProvider()
-    engine = Engine(
-        SyncProviderWorkflow,
-        provider=provider,
-        session_store=InMemorySessionStore(),
-        checkpoint_store=InMemoryCheckpointStore(),
-    )
-
-    result = asyncio.run(
-        engine.run_async(
-            task_id="task-sync-provider",
-            run_id="run-sync-provider",
-            task_folder=task_folder,
-            run_folder=run_folder,
-            root=tmp_path,
+    with pytest.raises(TypeError, match="must be async coroutine functions"):
+        Engine(
+            SyncProviderWorkflow,
+            provider=_SyncOnlyLLMProvider(),
+            session_store=InMemorySessionStore(),
+            checkpoint_store=InMemoryCheckpointStore(),
         )
-    )
-
-    assert result.terminal == simple.FINISH
-    assert provider.sync_calls == ["review"]
 
 
 def test_engine_resume_async_uses_async_core_after_pending_input(tmp_path: Path) -> None:

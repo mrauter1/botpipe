@@ -48,27 +48,18 @@ class _AsyncOnlyLLMProvider:
     def __init__(self) -> None:
         self.async_calls: list[str] = []
 
-    def run_producer(self, request: ProducerRequest) -> ProducerResponse:  # pragma: no cover - defensive
+    async def run_producer(self, request: ProducerRequest) -> ProducerResponse:
         raise AssertionError("sync producer path should not be used")
 
-    def run_verifier(self, request: VerifierRequest) -> OutcomeResponse:  # pragma: no cover - defensive
+    async def run_verifier(self, request: VerifierRequest) -> OutcomeResponse:
         raise AssertionError("sync verifier path should not be used")
 
-    def run_llm(self, request: LLMRequest) -> OutcomeResponse:  # pragma: no cover - defensive
-        raise AssertionError("sync llm path should not be used")
+    async def run_llm(self, request: LLMRequest) -> OutcomeResponse:
+        self.async_calls.append(request.step_name)
+        return OutcomeResponse(outcome=Outcome(raw_output="ok", tag="done"))
 
     def run_operation(self, request: object) -> object:  # pragma: no cover - defensive
         raise AssertionError("operation path should not be used")
-
-    async def run_producer_async(self, request: ProducerRequest) -> ProducerResponse:
-        raise AssertionError("producer path should not be used")
-
-    async def run_verifier_async(self, request: VerifierRequest) -> OutcomeResponse:
-        raise AssertionError("verifier path should not be used")
-
-    async def run_llm_async(self, request: LLMRequest) -> OutcomeResponse:
-        self.async_calls.append(request.step_name)
-        return OutcomeResponse(outcome=Outcome(raw_output="ok", tag="done"))
 
 
 class _SyncOnlyLLMProvider:
@@ -101,25 +92,13 @@ class _ConcurrentAsyncLLMProvider:
         self.active = 0
         self.max_active = 0
 
-    def run_producer(self, request: ProducerRequest) -> ProducerResponse:  # pragma: no cover - defensive
+    async def run_producer(self, request: ProducerRequest) -> ProducerResponse:
         raise AssertionError("sync producer path should not be used")
 
-    def run_verifier(self, request: VerifierRequest) -> OutcomeResponse:  # pragma: no cover - defensive
+    async def run_verifier(self, request: VerifierRequest) -> OutcomeResponse:
         raise AssertionError("sync verifier path should not be used")
 
-    def run_llm(self, request: LLMRequest) -> OutcomeResponse:  # pragma: no cover - defensive
-        raise AssertionError("sync llm path should not be used")
-
-    def run_operation(self, request: object) -> object:  # pragma: no cover - defensive
-        raise AssertionError("operation path should not be used")
-
-    async def run_producer_async(self, request: ProducerRequest) -> ProducerResponse:
-        raise AssertionError("producer path should not be used")
-
-    async def run_verifier_async(self, request: VerifierRequest) -> OutcomeResponse:
-        raise AssertionError("verifier path should not be used")
-
-    async def run_llm_async(self, request: LLMRequest) -> OutcomeResponse:
+    async def run_llm(self, request: LLMRequest) -> OutcomeResponse:
         step_name = request.step_name
         self.started.append(step_name)
         self.prompts.append(request.prompt.text)
@@ -136,6 +115,9 @@ class _ConcurrentAsyncLLMProvider:
             raise
         finally:
             self.active -= 1
+
+    def run_operation(self, request: object) -> object:  # pragma: no cover - defensive
+        raise AssertionError("operation path should not be used")
 
 
 def test_parallel_branch_group_without_fan_in_routes_question_and_writes_evidence(tmp_path: Path) -> None:
@@ -454,21 +436,12 @@ def test_parallel_branch_group_rejects_sync_only_provider_for_provider_backed_st
         )
         publish = simple.python_step(lambda ctx: Event("done"))
 
-    task_folder, run_folder = _workspace(tmp_path)
-    engine = Engine(
-        SyncOnlyWorkflow,
-        provider=_SyncOnlyLLMProvider(),
-        session_store=InMemorySessionStore(),
-        checkpoint_store=InMemoryCheckpointStore(),
-    )
-
-    with pytest.raises(WorkflowExecutionError, match="requires async provider execution"):
-        engine.run(
-            task_id="task-sync-provider",
-            run_id="run-sync-provider",
-            task_folder=task_folder,
-            run_folder=run_folder,
-            root=tmp_path,
+    with pytest.raises(TypeError, match="must be async coroutine functions"):
+        Engine(
+            SyncOnlyWorkflow,
+            provider=_SyncOnlyLLMProvider(),
+            session_store=InMemorySessionStore(),
+            checkpoint_store=InMemoryCheckpointStore(),
         )
 
 

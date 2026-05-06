@@ -53,7 +53,7 @@ class ScriptedLLMProvider:
         self._operation_turns = deque(operation_turns or ())
         self.calls: list[ProviderCall] = []
 
-    def run_producer(self, request: ProducerRequest) -> ProducerResponse:
+    async def run_producer(self, request: ProducerRequest) -> ProducerResponse:
         self._record_producer_call(request)
         value = self._pop(self._producer_turns, request)
         if isinstance(value, ProducerResponse):
@@ -62,10 +62,7 @@ class ScriptedLLMProvider:
             return ProducerResponse(raw_output=value)
         raise TypeError(f"unsupported scripted producer response: {value!r}")
 
-    async def run_producer_async(self, request: ProducerRequest) -> ProducerResponse:
-        return self.run_producer(request)
-
-    def run_verifier(self, request: VerifierRequest) -> OutcomeResponse:
+    async def run_verifier(self, request: VerifierRequest) -> OutcomeResponse:
         self._record_verifier_call(request)
         value = self._pop(self._verifier_turns, request)
         if isinstance(value, OutcomeResponse):
@@ -74,10 +71,7 @@ class ScriptedLLMProvider:
             return OutcomeResponse(outcome=value)
         raise TypeError(f"unsupported scripted verifier response: {value!r}")
 
-    async def run_verifier_async(self, request: VerifierRequest) -> OutcomeResponse:
-        return self.run_verifier(request)
-
-    def run_llm(self, request: LLMRequest) -> OutcomeResponse:
+    async def run_llm(self, request: LLMRequest) -> OutcomeResponse:
         self._record_llm_call(request)
         value = self._pop(self._llm_turns, request)
         if isinstance(value, OutcomeResponse):
@@ -85,9 +79,6 @@ class ScriptedLLMProvider:
         if isinstance(value, Outcome):
             return OutcomeResponse(outcome=value)
         raise TypeError(f"unsupported scripted llm response: {value!r}")
-
-    async def run_llm_async(self, request: LLMRequest) -> OutcomeResponse:
-        return self.run_llm(request)
 
     def _record_producer_call(self, request: ProducerRequest) -> None:
         self.calls.append(

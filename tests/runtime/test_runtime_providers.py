@@ -495,7 +495,9 @@ def test_codex_transport_sends_rendered_prompt_text_to_cli_stdin(
         model_effort=None,
     )
 
-    result = transport.run_turn(_rendered_turn(step_name="produce", prompt_text=prompt_text, session=_placeholder_session()))
+    result = asyncio.run(
+        transport.run_turn(_rendered_turn(step_name="produce", prompt_text=prompt_text, session=_placeholder_session()))
+    )
 
     assert calls[-1] == [
         "codex",
@@ -545,7 +547,7 @@ def test_codex_transport_supports_async_subprocess_execution(
     )
 
     result = asyncio.run(
-        transport.run_turn_async(_rendered_turn(step_name="produce", prompt_text=prompt_text, session=_placeholder_session()))
+        transport.run_turn(_rendered_turn(step_name="produce", prompt_text=prompt_text, session=_placeholder_session()))
     )
 
     assert calls == [("codex", "exec", "--json")]
@@ -573,8 +575,8 @@ def test_codex_transport_does_not_parse_workflow_outcome_json(monkeypatch: pytes
         ),
     )
 
-    result = transport.run_turn(
-        _rendered_turn(step_name="verify", turn_kind="verifier", expected_response="outcome_json")
+    result = asyncio.run(
+        transport.run_turn(_rendered_turn(step_name="verify", turn_kind="verifier", expected_response="outcome_json"))
     )
 
     assert result.raw_text == '{"tag":"done"}'
@@ -607,7 +609,7 @@ def test_rendered_llm_provider_returns_producer_response_with_codex_transport(
     )
     provider = RenderedLLMProvider(transport)
 
-    response = provider.run_producer(_producer_request(session=_placeholder_session()))
+    response = asyncio.run(provider.run_producer(_producer_request(session=_placeholder_session())))
 
     assert response.raw_output == "producer text"
     assert response.session is not None
@@ -660,7 +662,7 @@ def test_rendered_llm_provider_parses_codex_verifier_outcome_in_core(
         )
     )
 
-    response = provider.run_verifier(_verifier_request(session=_placeholder_session()))
+    response = asyncio.run(provider.run_verifier(_verifier_request(session=_placeholder_session())))
 
     assert response.outcome.tag == "pair_ok"
     assert response.outcome.reason == "accepted"
@@ -685,7 +687,7 @@ def test_codex_transport_rejects_unusable_jsonl(monkeypatch: pytest.MonkeyPatch)
     )
 
     with pytest.raises(ProviderExecutionError, match="unusable JSONL output"):
-        transport.run_turn(_rendered_turn(session=_placeholder_session()))
+        asyncio.run(transport.run_turn(_rendered_turn(session=_placeholder_session())))
 
 
 def test_codex_transport_raises_on_non_zero_exit(monkeypatch: pytest.MonkeyPatch) -> None:
@@ -704,7 +706,7 @@ def test_codex_transport_raises_on_non_zero_exit(monkeypatch: pytest.MonkeyPatch
     )
 
     with pytest.raises(ProviderExecutionError, match=r"exit code 7"):
-        transport.run_turn(_rendered_turn(session=_placeholder_session()))
+        asyncio.run(transport.run_turn(_rendered_turn(session=_placeholder_session())))
 
 
 def test_codex_transport_rejects_cross_provider_resume() -> None:
@@ -718,7 +720,7 @@ def test_codex_transport_rejects_cross_provider_resume() -> None:
     )
 
     with pytest.raises(ProviderExecutionError, match="resuming across providers is forbidden"):
-        transport.run_turn(_rendered_turn(session=_provider_session("claude")))
+        asyncio.run(transport.run_turn(_rendered_turn(session=_provider_session("claude"))))
 
 
 def test_claude_transport_sends_rendered_prompt_text_to_cli_flag(monkeypatch: pytest.MonkeyPatch) -> None:
@@ -735,7 +737,9 @@ def test_claude_transport_sends_rendered_prompt_text_to_cli_flag(monkeypatch: py
     monkeypatch.setattr(claude_runtime_provider.subprocess, "run", fake_run)
     transport = ClaudeTransport(config=_config(provider_name="claude").provider.claude)
 
-    result = transport.run_turn(_rendered_turn(step_name="produce", prompt_text=prompt_text, session=_placeholder_session()))
+    result = asyncio.run(
+        transport.run_turn(_rendered_turn(step_name="produce", prompt_text=prompt_text, session=_placeholder_session()))
+    )
 
     assert calls[-1] == ["claude", "-p", prompt_text, "--output-format", "json", "--model", "claude-test"]
     assert result.raw_text == "producer text"
@@ -758,7 +762,7 @@ def test_claude_transport_supports_async_subprocess_execution(monkeypatch: pytes
     transport = ClaudeTransport(config=_config(provider_name="claude").provider.claude)
 
     result = asyncio.run(
-        transport.run_turn_async(_rendered_turn(step_name="produce", prompt_text=prompt_text, session=_placeholder_session()))
+        transport.run_turn(_rendered_turn(step_name="produce", prompt_text=prompt_text, session=_placeholder_session()))
     )
 
     assert calls == [("claude", "-p", prompt_text, "--output-format", "json", "--model", "claude-test")]
@@ -775,8 +779,8 @@ def test_claude_transport_does_not_parse_workflow_outcome_json(monkeypatch: pyte
     )
     transport = ClaudeTransport(config=_config(provider_name="claude").provider.claude)
 
-    result = transport.run_turn(
-        _rendered_turn(step_name="ask", turn_kind="llm", expected_response="outcome_json")
+    result = asyncio.run(
+        transport.run_turn(_rendered_turn(step_name="ask", turn_kind="llm", expected_response="outcome_json"))
     )
 
     assert result.raw_text == '{"tag":"done"}'
@@ -800,7 +804,7 @@ def test_rendered_llm_provider_parses_claude_llm_outcome_in_core(
         ClaudeTransport(config=_config(provider_name="claude", claude_permission_strategy="allow_core_tools").provider.claude)
     )
 
-    response = provider.run_llm(_llm_request(session=resumable))
+    response = asyncio.run(provider.run_llm(_llm_request(session=resumable)))
 
     assert calls[-1][:4] == ["claude", "--resume", "claude-session-existing", "-p"]
     rendered_prompt = calls[-1][4]
@@ -840,7 +844,7 @@ def test_claude_transport_rejects_malformed_json(monkeypatch: pytest.MonkeyPatch
     transport = ClaudeTransport(config=_config(provider_name="claude").provider.claude)
 
     with pytest.raises(ProviderExecutionError, match="malformed JSON output"):
-        transport.run_turn(_rendered_turn(session=_placeholder_session()))
+        asyncio.run(transport.run_turn(_rendered_turn(session=_placeholder_session())))
 
 
 def test_claude_transport_raises_on_non_zero_exit(monkeypatch: pytest.MonkeyPatch) -> None:
@@ -852,11 +856,11 @@ def test_claude_transport_raises_on_non_zero_exit(monkeypatch: pytest.MonkeyPatc
     transport = ClaudeTransport(config=_config(provider_name="claude").provider.claude)
 
     with pytest.raises(ProviderExecutionError, match=r"exit code 3"):
-        transport.run_turn(_rendered_turn(session=_placeholder_session()))
+        asyncio.run(transport.run_turn(_rendered_turn(session=_placeholder_session())))
 
 
 def test_claude_transport_rejects_cross_provider_resume() -> None:
     transport = ClaudeTransport(config=_config(provider_name="claude").provider.claude)
 
     with pytest.raises(ProviderExecutionError, match="resuming across providers is forbidden"):
-        transport.run_turn(_rendered_turn(session=_provider_session("codex")))
+        asyncio.run(transport.run_turn(_rendered_turn(session=_provider_session("codex"))))

@@ -16,7 +16,6 @@ from ..context import context_runtime
 from ..engine_collaborators import StepExecutionResult, StepFinalizationRequest, run_awaitable_sync
 from ..errors import ProviderExecutionError, WorkflowExecutionError
 from ..primitives import Event
-from ..providers.protocols import supports_async_llm_provider
 from .context import BranchMetadata, FanInMetadata, create_branch_context, create_fan_in_context
 from .manifest import branch_group_paths, build_branch_manifest, render_branch_group_context, write_branch_group_evidence
 from .outcomes import select_branch_group_outcome
@@ -34,17 +33,6 @@ class BranchGroupRuntime:
 
     def __init__(self, engine: "Engine") -> None:
         self._engine = engine
-
-    def _ensure_async_provider_support(self, spec: Any) -> None:
-        provider_backed = any(branch.step.kind in {"step", "produce_verify"} for branch in spec.branches)
-        provider_backed = provider_backed or (
-            spec.fan_in_step is not None and spec.fan_in_step.kind in {"step", "produce_verify"}
-        )
-        if provider_backed and not supports_async_llm_provider(self._engine.provider):
-            raise WorkflowExecutionError(
-                f"branch group {spec.name!r} requires async provider execution, "
-                f"but provider {type(self._engine.provider).__name__!r} does not implement async methods."
-            )
 
     def run(
         self,
@@ -80,7 +68,6 @@ class BranchGroupRuntime:
             settle=spec.settle,
         )
 
-        self._ensure_async_provider_support(spec)
         parent_runtime.set_values(context._values)
         started_at = _utc_now()
         branch_results = await self._run_branches(spec, context=context, state=state)

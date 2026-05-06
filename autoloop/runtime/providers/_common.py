@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import asyncio
 from copy import deepcopy
 from typing import Any, Mapping
 
@@ -160,3 +161,32 @@ def _coerce_int(value: Any) -> int | None:
     if isinstance(value, int):
         return value
     return None
+
+
+async def communicate_text_subprocess(
+    process: asyncio.subprocess.Process,
+    *,
+    input_text: str | None = None,
+) -> tuple[str, str]:
+    """Communicate with a subprocess and clean it up correctly on cancellation."""
+
+    try:
+        stdin_payload = None if input_text is None else input_text.encode("utf-8")
+        stdout_bytes, stderr_bytes = await process.communicate(stdin_payload)
+    except asyncio.CancelledError:
+        await terminate_text_subprocess(process)
+        raise
+    return stdout_bytes.decode("utf-8"), stderr_bytes.decode("utf-8")
+
+
+async def terminate_text_subprocess(process: asyncio.subprocess.Process) -> None:
+    """Terminate, then kill, a subprocess that is still running."""
+
+    if process.returncode is not None:
+        return
+    process.terminate()
+    try:
+        await asyncio.wait_for(process.wait(), timeout=1.0)
+    except asyncio.TimeoutError:
+        process.kill()
+        await process.wait()

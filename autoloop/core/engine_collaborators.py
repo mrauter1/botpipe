@@ -28,7 +28,6 @@ from .providers.models import (
     TokenUsage,
     VerifierRequest,
 )
-from .providers.protocols import supports_async_llm_provider
 from .route_required_writes import effective_route_required_writes_for_step, explicit_route_required_writes
 from .stores.protocols import PendingHandoff, PendingInput
 
@@ -458,18 +457,9 @@ class StepDispatcher:
     async def _call_provider(
         self,
         *,
-        route_mode: RouteMode,
-        async_call: Callable[[Any], Awaitable[_T]],
-        sync_call: Callable[[Any], _T],
+        call: Callable[[Any], Awaitable[_T]],
     ) -> _T:
-        provider = self._engine.provider
-        if supports_async_llm_provider(provider):
-            return await async_call(provider)
-        if route_mode != "finalize":
-            raise ProviderExecutionError(
-                f"provider {type(provider).__name__!r} does not implement async step execution methods."
-            )
-        return sync_call(provider)
+        return await call(self._engine.provider)
 
     def _execute_workflow_step_for_mode(
         self,
@@ -850,9 +840,7 @@ class StepDispatcher:
                 ),
             )
             producer_response = await self._call_provider(
-                route_mode=route_mode,
-                async_call=lambda provider: provider.run_producer_async(producer_request),
-                sync_call=lambda provider: provider.run_producer(producer_request),
+                call=lambda provider: provider.run_producer(producer_request),
             )
         except asyncio.CancelledError:
             raise
@@ -1002,9 +990,7 @@ class StepDispatcher:
                     ),
                 )
                 verifier_response = await self._call_provider(
-                    route_mode=route_mode,
-                    async_call=lambda provider: provider.run_verifier_async(verifier_request),
-                    sync_call=lambda provider: provider.run_verifier(verifier_request),
+                    call=lambda provider: provider.run_verifier(verifier_request),
                 )
                 self._engine._validate_outcome(step, verifier_response.outcome)
             except asyncio.CancelledError:
@@ -1095,9 +1081,7 @@ class StepDispatcher:
                 ),
             )
             response = await self._call_provider(
-                route_mode=route_mode,
-                async_call=lambda provider: provider.run_llm_async(llm_request),
-                sync_call=lambda provider: provider.run_llm(llm_request),
+                call=lambda provider: provider.run_llm(llm_request),
             )
             self._engine._validate_outcome(step, response.outcome)
         except asyncio.CancelledError:

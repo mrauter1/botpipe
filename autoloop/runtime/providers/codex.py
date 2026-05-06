@@ -19,6 +19,7 @@ from ...core.stores.protocols import SessionBinding
 from ..config import ConfigError, ResolvedRuntimeConfig
 from ._common import (
     build_session_binding,
+    communicate_text_subprocess,
     ensure_session_provider_match,
     extract_token_usage,
     format_subprocess_streams,
@@ -159,7 +160,13 @@ class CodexTransport(ProviderTransport):
         self._model = model
         self._model_effort = model_effort
 
-    def run_turn(self, turn: RenderedProviderTurn) -> ProviderTurnResult:
+    def run_operation_turn(self, turn: RenderedProviderTurn) -> ProviderTurnResult:
+        return self._run_turn_sync(turn)
+
+    async def run_turn(self, turn: RenderedProviderTurn) -> ProviderTurnResult:
+        return await self._run_turn_async(turn)
+
+    def _run_turn_sync(self, turn: RenderedProviderTurn) -> ProviderTurnResult:
         ensure_session_provider_match("codex", turn.session)
         resume_session_id = _resumable_session_id("codex", turn.session)
 
@@ -183,32 +190,16 @@ class CodexTransport(ProviderTransport):
             )
 
         assistant_text, resolved_session_id, provider_metadata, usage = parse_codex_exec_json(completed.stdout)
-        if resolved_session_id is None and resume_session_id is not None:
-            resolved_session_id = resume_session_id
-        if resolved_session_id is None and turn.session is not None:
-            raise ProviderExecutionError(
-                f"provider 'codex' did not return a resumable session_id for step {turn.step_name!r}."
-            )
-
-        binding = (
-            build_session_binding(
-                turn.session,
-                session_id=resolved_session_id,
-                provider_name="codex",
-                provider_metadata=provider_metadata,
-                model=self._model,
-                effort=self._model_effort,
-            )
-            if turn.session is not None and resolved_session_id is not None
-            else None
+        return self._build_result(
+            turn=turn,
+            resume_session_id=resume_session_id,
+            resolved_session_id=resolved_session_id,
+            provider_metadata=provider_metadata,
+            usage=usage,
+            assistant_text=assistant_text,
         )
-        metadata = {
-            "mode": "resume" if resume_session_id is not None else "start",
-            "provider_metadata": dict(provider_metadata),
-        }
-        return ProviderTurnResult(raw_text=assistant_text, session=binding, metadata=metadata, usage=usage)
 
-    async def run_turn_async(self, turn: RenderedProviderTurn) -> ProviderTurnResult:
+    async def _run_turn_async(self, turn: RenderedProviderTurn) -> ProviderTurnResult:
         ensure_session_provider_match("codex", turn.session)
         resume_session_id = _resumable_session_id("codex", turn.session)
 
@@ -223,9 +214,7 @@ class CodexTransport(ProviderTransport):
             stdout=asyncio.subprocess.PIPE,
             stderr=asyncio.subprocess.PIPE,
         )
-        stdout_bytes, stderr_bytes = await process.communicate(turn.prompt_text.encode("utf-8"))
-        stdout = stdout_bytes.decode("utf-8")
-        stderr = stderr_bytes.decode("utf-8")
+        stdout, stderr = await communicate_text_subprocess(process, input_text=turn.prompt_text)
         if process.returncode != 0:
             streams = format_subprocess_streams(stdout, stderr)
             raise ProviderExecutionError(
@@ -234,6 +223,25 @@ class CodexTransport(ProviderTransport):
             )
 
         assistant_text, resolved_session_id, provider_metadata, usage = parse_codex_exec_json(stdout)
+        return self._build_result(
+            turn=turn,
+            resume_session_id=resume_session_id,
+            resolved_session_id=resolved_session_id,
+            provider_metadata=provider_metadata,
+            usage=usage,
+            assistant_text=assistant_text,
+        )
+
+    def _build_result(
+        self,
+        *,
+        turn: RenderedProviderTurn,
+        resume_session_id: str | None,
+        resolved_session_id: str | None,
+        provider_metadata: dict[str, Any],
+        usage: TokenUsage | None,
+        assistant_text: str,
+    ) -> ProviderTurnResult:
         if resolved_session_id is None and resume_session_id is not None:
             resolved_session_id = resume_session_id
         if resolved_session_id is None and turn.session is not None:

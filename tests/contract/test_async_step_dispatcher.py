@@ -59,27 +59,18 @@ class _AsyncOnlyLLMProvider:
     def __init__(self) -> None:
         self.async_calls: list[str] = []
 
-    def run_producer(self, request: ProducerRequest) -> ProducerResponse:  # pragma: no cover - defensive
+    async def run_producer(self, request: ProducerRequest) -> ProducerResponse:
         raise AssertionError("sync producer path should not be used")
 
-    def run_verifier(self, request: VerifierRequest) -> OutcomeResponse:  # pragma: no cover - defensive
+    async def run_verifier(self, request: VerifierRequest) -> OutcomeResponse:
         raise AssertionError("sync verifier path should not be used")
 
-    def run_llm(self, request: LLMRequest) -> OutcomeResponse:  # pragma: no cover - defensive
-        raise AssertionError("sync llm path should not be used")
+    async def run_llm(self, request: LLMRequest) -> OutcomeResponse:
+        self.async_calls.append(request.step_name)
+        return OutcomeResponse(outcome=Outcome(raw_output="ok", tag="done"))
 
     def run_operation(self, request: object) -> object:  # pragma: no cover - defensive
         raise AssertionError("operation path should not be used")
-
-    async def run_producer_async(self, request: ProducerRequest) -> ProducerResponse:
-        raise AssertionError("producer path should not be used")
-
-    async def run_verifier_async(self, request: VerifierRequest) -> OutcomeResponse:
-        raise AssertionError("verifier path should not be used")
-
-    async def run_llm_async(self, request: LLMRequest) -> OutcomeResponse:
-        self.async_calls.append(request.step_name)
-        return OutcomeResponse(outcome=Outcome(raw_output="ok", tag="done"))
 
 
 def test_step_dispatcher_execute_async_capture_runs_hooks_and_skips_route_on_taken(tmp_path: Path) -> None:

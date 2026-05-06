@@ -2,67 +2,72 @@
 
 from __future__ import annotations
 
-from typing import Protocol, TypeGuard, runtime_checkable
+import inspect
+from typing import Protocol, cast, runtime_checkable
 
-from .models import LLMRequest, OperationRequest, OperationResponse, OutcomeResponse, ProducerRequest, ProducerResponse, VerifierRequest
+from .models import LLMRequest, OutcomeResponse, ProducerRequest, ProducerResponse, VerifierRequest
 from .turns import ProviderTurnResult, RenderedProviderTurn
 
 
+@runtime_checkable
 class LLMProvider(Protocol):
     """Provider interface for all workflow turn kinds."""
 
-    def run_producer(self, request: ProducerRequest) -> ProducerResponse:
+    async def run_producer(self, request: ProducerRequest) -> ProducerResponse:
         """Execute a producer turn."""
 
-    def run_verifier(self, request: VerifierRequest) -> OutcomeResponse:
+    async def run_verifier(self, request: VerifierRequest) -> OutcomeResponse:
         """Execute a verifier turn."""
 
-    def run_llm(self, request: LLMRequest) -> OutcomeResponse:
-        """Execute a single LLM turn."""
-
-    def run_operation(self, request: OperationRequest) -> OperationResponse:
-        """Execute a value-returning operation turn."""
-
-
-@runtime_checkable
-class AsyncLLMProvider(Protocol):
-    """Async provider interface for provider-backed branch execution."""
-
-    async def run_producer_async(self, request: ProducerRequest) -> ProducerResponse:
-        """Execute a producer turn asynchronously."""
-
-    async def run_verifier_async(self, request: VerifierRequest) -> OutcomeResponse:
-        """Execute a verifier turn asynchronously."""
-
-    async def run_llm_async(self, request: LLMRequest) -> OutcomeResponse:
+    async def run_llm(self, request: LLMRequest) -> OutcomeResponse:
         """Execute a single LLM turn asynchronously."""
 
 
+@runtime_checkable
 class ProviderTransport(Protocol):
     """Lower-level transport interface for rendered provider turns."""
 
-    def run_turn(self, turn: RenderedProviderTurn) -> ProviderTurnResult:
-        """Execute one rendered provider turn."""
-
-
-@runtime_checkable
-class AsyncProviderTransport(Protocol):
-    """Async lower-level transport interface for rendered provider turns."""
-
-    async def run_turn_async(self, turn: RenderedProviderTurn) -> ProviderTurnResult:
+    async def run_turn(self, turn: RenderedProviderTurn) -> ProviderTurnResult:
         """Execute one rendered provider turn asynchronously."""
 
 
-def supports_async_llm_provider(provider: object) -> TypeGuard[AsyncLLMProvider]:
-    """Return True when the provider exposes the async turn surface."""
+def validate_llm_provider(provider: object) -> LLMProvider:
+    """Validate and return an async-native provider."""
 
-    return all(
-        callable(getattr(provider, attr, None))
-        for attr in ("run_producer_async", "run_verifier_async", "run_llm_async")
+    _validate_async_methods(
+        provider,
+        method_names=("run_producer", "run_verifier", "run_llm"),
+        subject="provider",
     )
+    return cast(LLMProvider, provider)
 
 
-def supports_async_provider_transport(transport: object) -> TypeGuard[AsyncProviderTransport]:
-    """Return True when the transport exposes the async turn surface."""
+def validate_provider_transport(transport: object) -> ProviderTransport:
+    """Validate and return an async-native transport."""
 
-    return callable(getattr(transport, "run_turn_async", None))
+    _validate_async_methods(
+        transport,
+        method_names=("run_turn",),
+        subject="provider transport",
+    )
+    return cast(ProviderTransport, transport)
+
+
+def _validate_async_methods(
+    value: object,
+    *,
+    method_names: tuple[str, ...],
+    subject: str,
+) -> None:
+    missing = [name for name in method_names if not callable(getattr(value, name, None))]
+    if missing:
+        raise TypeError(
+            f"invalid {subject} {type(value).__name__!r}: missing required method(s): {', '.join(missing)}"
+        )
+
+    non_async = [name for name in method_names if not inspect.iscoroutinefunction(getattr(value, name))]
+    if non_async:
+        raise TypeError(
+            f"invalid {subject} {type(value).__name__!r}: method(s) must be async coroutine functions: "
+            f"{', '.join(non_async)}"
+        )

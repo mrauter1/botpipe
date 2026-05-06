@@ -14,7 +14,7 @@ from .models import (
     VerifierRequest,
 )
 from .parsing import parse_outcome_json
-from .protocols import ProviderTransport, supports_async_provider_transport
+from .protocols import ProviderTransport, validate_provider_transport
 from .rendering import render_provider_turn
 
 
@@ -22,42 +22,22 @@ class RenderedLLMProvider:
     """Adapt the semantic provider protocol to the rendered transport boundary."""
 
     def __init__(self, transport: ProviderTransport) -> None:
-        self._transport = transport
+        self._transport = validate_provider_transport(transport)
 
-    def run_producer(self, request: ProducerRequest) -> ProducerResponse:
-        context = _producer_context(request)
-        turn = render_provider_turn(context)
-        result = self._transport.run_turn(turn)
+    async def run_producer(self, request: ProducerRequest) -> ProducerResponse:
+        result = await self._run_turn(_producer_context(request))
         return _producer_response(result)
 
-    async def run_producer_async(self, request: ProducerRequest) -> ProducerResponse:
-        result = await self._run_turn_async(_producer_context(request))
-        return _producer_response(result)
-
-    def run_verifier(self, request: VerifierRequest) -> OutcomeResponse:
-        context = _verifier_context(request)
-        turn = render_provider_turn(context)
-        result = self._transport.run_turn(turn)
+    async def run_verifier(self, request: VerifierRequest) -> OutcomeResponse:
+        result = await self._run_turn(_verifier_context(request))
         return _outcome_response(result)
 
-    async def run_verifier_async(self, request: VerifierRequest) -> OutcomeResponse:
-        result = await self._run_turn_async(_verifier_context(request))
-        return _outcome_response(result)
-
-    def run_llm(self, request: LLMRequest) -> OutcomeResponse:
-        context = _llm_context(request)
-        turn = render_provider_turn(context)
-        result = self._transport.run_turn(turn)
-        return _outcome_response(result)
-
-    async def run_llm_async(self, request: LLMRequest) -> OutcomeResponse:
-        result = await self._run_turn_async(_llm_context(request))
+    async def run_llm(self, request: LLMRequest) -> OutcomeResponse:
+        result = await self._run_turn(_llm_context(request))
         return _outcome_response(result)
 
     def run_operation(self, request: OperationRequest) -> OperationResponse:
-        context = _operation_context(request)
-        turn = render_provider_turn(context)
-        result = self._transport.run_turn(turn)
+        result = self._run_operation_turn(_operation_context(request))
         return OperationResponse(
             raw_output=result.raw_text,
             session=result.session,
@@ -65,11 +45,16 @@ class RenderedLLMProvider:
             usage=result.usage,
         )
 
-    async def _run_turn_async(self, context: ProviderTurnContext):
+    async def _run_turn(self, context: ProviderTurnContext):
         turn = render_provider_turn(context)
-        if not supports_async_provider_transport(self._transport):
-            return self._transport.run_turn(turn)
-        return await self._transport.run_turn_async(turn)
+        return await self._transport.run_turn(turn)
+
+    def _run_operation_turn(self, context: ProviderTurnContext):
+        turn = render_provider_turn(context)
+        run_operation_turn = getattr(self._transport, "run_operation_turn", None)
+        if callable(run_operation_turn):
+            return run_operation_turn(turn)
+        return run_provider_coro_sync(self._transport.run_turn(turn))
 
 
 def _producer_response(result) -> ProducerResponse:

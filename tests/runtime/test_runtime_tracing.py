@@ -42,29 +42,20 @@ class _TracingAsyncLLMProvider:
         self.delays = delays or {}
         self.fail_steps = fail_steps or set()
 
-    def run_producer(self, request: ProducerRequest) -> ProducerResponse:  # pragma: no cover - defensive
+    async def run_producer(self, request: ProducerRequest) -> ProducerResponse:
         raise AssertionError("sync producer path should not be used")
 
-    def run_verifier(self, request: VerifierRequest) -> OutcomeResponse:  # pragma: no cover - defensive
+    async def run_verifier(self, request: VerifierRequest) -> OutcomeResponse:
         raise AssertionError("sync verifier path should not be used")
 
-    def run_llm(self, request: LLMRequest) -> OutcomeResponse:  # pragma: no cover - defensive
-        raise AssertionError("sync llm path should not be used")
-
-    def run_operation(self, request: object) -> object:  # pragma: no cover - defensive
-        raise AssertionError("operation path should not be used")
-
-    async def run_producer_async(self, request: ProducerRequest) -> ProducerResponse:
-        raise AssertionError("producer path should not be used")
-
-    async def run_verifier_async(self, request: VerifierRequest) -> OutcomeResponse:
-        raise AssertionError("verifier path should not be used")
-
-    async def run_llm_async(self, request: LLMRequest) -> OutcomeResponse:
+    async def run_llm(self, request: LLMRequest) -> OutcomeResponse:
         await asyncio.sleep(self.delays.get(request.step_name, 0.01))
         if request.step_name in self.fail_steps:
             raise RuntimeError(f"{request.step_name} failed")
         return OutcomeResponse(outcome=Outcome(raw_output=f"{request.step_name} ok", tag="done"))
+
+    def run_operation(self, request: object) -> object:  # pragma: no cover - defensive
+        raise AssertionError("operation path should not be used")
 
 
 def _branch_group_artifact_paths(*, root: Path, workflow_dir: Path, group_name: str) -> list[str]:

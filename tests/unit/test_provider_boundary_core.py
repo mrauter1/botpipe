@@ -429,7 +429,7 @@ class _TransportStub:
         if self.metadata is None:
             self.metadata = {"mode": "start"}
 
-    def run_turn(self, turn: RenderedProviderTurn) -> ProviderTurnResult:
+    async def run_turn(self, turn: RenderedProviderTurn) -> ProviderTurnResult:
         assert self.seen_turns is not None
         self.seen_turns.append(turn)
         return ProviderTurnResult(
@@ -454,7 +454,7 @@ class _AsyncTransportStub:
         if self.metadata is None:
             self.metadata = {"mode": "start"}
 
-    async def run_turn_async(self, turn: RenderedProviderTurn) -> ProviderTurnResult:
+    async def run_turn(self, turn: RenderedProviderTurn) -> ProviderTurnResult:
         assert self.seen_turns is not None
         self.seen_turns.append(turn)
         return ProviderTurnResult(
@@ -499,29 +499,35 @@ def test_fake_provider_can_emit_usage() -> None:
         llm_turns=[OutcomeResponse(outcome=parse_outcome_json('{"tag":"done","reason":"answered"}'), usage=llm_usage)],
     )
 
-    producer_response = provider.run_producer(
-        ProducerRequest(
-            step_name="draft",
-            producer_prompt=ResolvedPrompt(path="draft.md", text="Write a draft."),
-            context=object(),
-            artifacts=object(),
+    producer_response = asyncio.run(
+        provider.run_producer(
+            ProducerRequest(
+                step_name="draft",
+                producer_prompt=ResolvedPrompt(path="draft.md", text="Write a draft."),
+                context=object(),
+                artifacts=object(),
+            )
         )
     )
-    verifier_response = provider.run_verifier(
-        VerifierRequest(
-            step_name="verify",
-            verifier_prompt=ResolvedPrompt(path="verify.md", text="Verify the draft."),
-            producer_raw_output="draft",
-            context=object(),
-            artifacts=object(),
+    verifier_response = asyncio.run(
+        provider.run_verifier(
+            VerifierRequest(
+                step_name="verify",
+                verifier_prompt=ResolvedPrompt(path="verify.md", text="Verify the draft."),
+                producer_raw_output="draft",
+                context=object(),
+                artifacts=object(),
+            )
         )
     )
-    llm_response = provider.run_llm(
-        LLMRequest(
-            step_name="ask",
-            prompt=ResolvedPrompt(path="ask.md", text="Answer the question."),
-            context=object(),
-            artifacts=object(),
+    llm_response = asyncio.run(
+        provider.run_llm(
+            LLMRequest(
+                step_name="ask",
+                prompt=ResolvedPrompt(path="ask.md", text="Answer the question."),
+                context=object(),
+                artifacts=object(),
+            )
         )
     )
 
@@ -534,7 +540,7 @@ def test_fake_provider_supports_async_turn_methods() -> None:
     provider = ScriptedLLMProvider(llm_turns=[OutcomeResponse(outcome=parse_outcome_json('{"tag":"done"}'))])
 
     response = asyncio.run(
-        provider.run_llm_async(
+        provider.run_llm(
             LLMRequest(
                 step_name="ask",
                 prompt=ResolvedPrompt(path="ask.md", text="Answer the question."),
@@ -560,14 +566,16 @@ def test_rendered_llm_provider_returns_producer_response() -> None:
     transport = _TransportStub(result_text="producer text", session=binding, metadata={"mode": "resume"}, usage=usage)
     provider = RenderedLLMProvider(transport)
 
-    response = provider.run_producer(
-        ProducerRequest(
-            step_name="draft",
-            producer_prompt=ResolvedPrompt(path="draft.md", text="Write the draft."),
-            context=object(),
-            artifacts=object(),
-            session=binding,
-            required_artifacts=(_artifact_ref("brief", path="/tmp/brief.md"),),
+    response = asyncio.run(
+        provider.run_producer(
+            ProducerRequest(
+                step_name="draft",
+                producer_prompt=ResolvedPrompt(path="draft.md", text="Write the draft."),
+                context=object(),
+                artifacts=object(),
+                session=binding,
+                required_artifacts=(_artifact_ref("brief", path="/tmp/brief.md"),),
+            )
         )
     )
 
@@ -591,7 +599,7 @@ def test_rendered_llm_provider_supports_async_turn_methods() -> None:
     provider = RenderedLLMProvider(transport)
 
     response = asyncio.run(
-        provider.run_llm_async(
+        provider.run_llm(
             LLMRequest(
                 step_name="draft",
                 prompt=ResolvedPrompt(path="draft.md", text="Write the draft."),
@@ -618,15 +626,17 @@ def test_rendered_llm_provider_parses_verifier_outcome_and_excludes_raw_output_f
     )
     provider = RenderedLLMProvider(transport)
 
-    response = provider.run_verifier(
-        VerifierRequest(
-            step_name="verify",
-            verifier_prompt=ResolvedPrompt(path="verify.md", text="Verify the package."),
-            producer_raw_output="producer raw output that must stay out of the prompt",
-            context=object(),
-            artifacts=object(),
-            session=None,
-            route_handoff="Tighten the package and keep the route legal.",
+    response = asyncio.run(
+        provider.run_verifier(
+            VerifierRequest(
+                step_name="verify",
+                verifier_prompt=ResolvedPrompt(path="verify.md", text="Verify the package."),
+                producer_raw_output="producer raw output that must stay out of the prompt",
+                context=object(),
+                artifacts=object(),
+                session=None,
+                route_handoff="Tighten the package and keep the route legal.",
+            )
         )
     )
 
@@ -649,13 +659,15 @@ def test_rendered_llm_provider_parses_llm_outcome() -> None:
     )
     provider = RenderedLLMProvider(transport)
 
-    response = provider.run_llm(
-        LLMRequest(
-            step_name="analyze",
-            prompt=ResolvedPrompt(path="analyze.md", text="Analyze the request."),
-            context=object(),
-            artifacts=object(),
-            session=None,
+    response = asyncio.run(
+        provider.run_llm(
+            LLMRequest(
+                step_name="analyze",
+                prompt=ResolvedPrompt(path="analyze.md", text="Analyze the request."),
+                context=object(),
+                artifacts=object(),
+                session=None,
+            )
         )
     )
 

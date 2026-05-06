@@ -23,8 +23,7 @@ from .errors import (
 from .artifacts import render_runtime_template
 from .mappings import normalize_mapping
 from .prompts import Prompt, PromptRegistry, ResolvedPrompt, resolve_prompt_reference
-from .providers.models import OperationRequest
-from .providers.protocols import LLMProvider
+from .providers.models import OperationRequest, OperationResponse
 from .schema_registry import OPERATION_REPLAY_SCHEMA, validate_persisted_schema
 from .sessions import DEFAULT_SESSION_NAME
 from .stores.protocols import SessionBinding
@@ -39,7 +38,7 @@ _CURRENT_OPERATION_RUNTIME: ContextVar["OperationRuntime | None"] = ContextVar(
 
 @dataclass(slots=True)
 class OperationRuntime:
-    provider: LLMProvider
+    provider: object
     provider_configuration: Mapping[str, Any] | None = None
     prompt_registry: PromptRegistry | None = None
     context: Context | None = None
@@ -69,7 +68,7 @@ def llm_call(
     *,
     returns: Any = str,
     retry: int = 3,
-    provider: LLMProvider | None = None,
+    provider: object | None = None,
     prompt_registry: PromptRegistry | None = None,
     context: Context | None = None,
     run_folder: Path | None = None,
@@ -93,7 +92,7 @@ def classify_call(
     *,
     choices: Sequence[str],
     retry: int = 3,
-    provider: LLMProvider | None = None,
+    provider: object | None = None,
     prompt_registry: PromptRegistry | None = None,
     context: Context | None = None,
     run_folder: Path | None = None,
@@ -157,7 +156,7 @@ def serialize_context_values(values: Mapping[str, Any]) -> dict[str, Any]:
 
 def _resolve_runtime(
     *,
-    provider: LLMProvider | None,
+    provider: object | None,
     prompt_registry: PromptRegistry | None,
     context: Context | None,
     run_folder: Path | None,
@@ -246,7 +245,8 @@ def _run_operation(
                 operation_kind=spec.operation_kind,
                 attempt=attempt,
             )
-            response = runtime.provider.run_operation(
+            response = _run_operation_turn(
+                runtime.provider,
                 OperationRequest(
                     step_name=runtime.step_name or "<operation>",
                     prompt=resolved_prompt,
@@ -258,7 +258,7 @@ def _run_operation(
                     retry_feedback=retry_feedback,
                     attempt=attempt,
                     max_attempts=max_attempts,
-                )
+                ),
             )
             value = _parse_operation_value(spec=spec, raw_output=response.raw_output)
             _emit_operation_attempt_event(
@@ -815,7 +815,7 @@ def _provider_configuration(runtime: OperationRuntime) -> dict[str, Any]:
     return provider_configuration(runtime.provider, default_session_name=runtime.default_session_name)
 
 
-def provider_configuration(provider: LLMProvider, *, default_session_name: str) -> dict[str, Any]:
+def provider_configuration(provider: object, *, default_session_name: str) -> dict[str, Any]:
     payload: dict[str, Any] = {
         "provider_module": type(provider).__module__,
         "provider_type": type(provider).__qualname__,
@@ -828,6 +828,21 @@ def provider_configuration(provider: LLMProvider, *, default_session_name: str) 
     if provider_payload:
         payload["provider"] = provider_payload
     return payload
+
+
+def _run_operation_turn(provider: object, request: OperationRequest) -> OperationResponse:
+    run_operation = getattr(provider, "run_operation", None)
+    if not callable(run_operation):
+        raise TypeError(
+            f"provider {type(provider).__name__!r} does not support sync operation execution required by llm()/classify()."
+        )
+    response = run_operation(request)
+    if not isinstance(response, OperationResponse):
+        raise TypeError(
+            f"provider {type(provider).__name__!r} returned {type(response).__name__!r} for run_operation(); "
+            "expected OperationResponse."
+        )
+    return response
 
 
 def _configuration_payload(value: Any) -> dict[str, Any]:

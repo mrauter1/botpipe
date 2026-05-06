@@ -33,7 +33,7 @@ CLAUDE_HEADLESS_HELP = "--print\n-p\n--output-format\n--resume\n--model\n"
 
 
 class _StubTransport:
-    def run_turn(self, turn: RenderedProviderTurn) -> ProviderTurnResult:  # pragma: no cover - defensive
+    async def run_turn(self, turn: RenderedProviderTurn) -> ProviderTurnResult:  # pragma: no cover - defensive
         raise AssertionError(f"unexpected turn call: {turn!r}")
 
 

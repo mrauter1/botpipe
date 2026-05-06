@@ -53,13 +53,13 @@ def _isolate_generated_workflow_modules():
 
 
 class _UnusedProvider:
-    def run_producer(self, request):  # pragma: no cover - defensive
+    async def run_producer(self, request):  # pragma: no cover - defensive
         raise AssertionError(f"producer should not run for system-only workflow: {request!r}")
 
-    def run_verifier(self, request):  # pragma: no cover - defensive
+    async def run_verifier(self, request):  # pragma: no cover - defensive
         raise AssertionError(f"verifier should not run for system-only workflow: {request!r}")
 
-    def run_llm(self, request):  # pragma: no cover - defensive
+    async def run_llm(self, request):  # pragma: no cover - defensive
         raise AssertionError(f"llm should not run for system-only workflow: {request!r}")
 
 

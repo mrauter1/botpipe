@@ -60,7 +60,7 @@ from .providers.models import (
     StepProviderUsage,
     VerifierRequest,
 )
-from .providers.protocols import LLMProvider
+from .providers.protocols import LLMProvider, validate_llm_provider
 from .providers.retries import ProviderRetryPolicy, build_retry_feedback
 from .route_required_writes import (
     effective_route_required_writes,
@@ -153,7 +153,7 @@ class Engine:
         runtime_event_sink: Callable[[str, Mapping[str, Any]], None] | None = None,
     ) -> None:
         self.compiled = workflow if isinstance(workflow, CompiledWorkflow) else compile_workflow(workflow)
-        self.provider = provider
+        self.provider = validate_llm_provider(provider)
         self.session_store = session_store
         self.checkpoint_store = checkpoint_store
         self.prompt_registry = prompt_registry
