@@ -1411,3 +1411,62 @@ Result:
 Open issues / next step
 
 No phase-local test blockers remain. The only known gap left in artifacts is the out-of-phase provider transport cancellation regression already noted by implement/review; I did not expand coverage there in this phase.
+
+
+---
+run_id=run-20260506T130608Z-37f1c786 | entry=session_turn | pair=test | phase=verifier | cycle=1 | attempt=1 | thread_id=019dfd9f-bbf6-7821-ac9d-d60ede6331fb
+---
+provider=codex
+mode=resume
+template=/home/rauter/.local/share/pipx/venvs/autoloop/lib/python3.12/site-packages/autoloop/templates/test_verifier.md
+session_id=019dfd9f-bbf6-7821-ac9d-d60ede6331fb
+
+
+---
+run_id=run-20260506T130608Z-37f1c786 | entry=phase_output | pair=test | phase=verifier | process=codex-agent | cycle=1 | attempt=1 | thread_id=019dfd9f-bbf6-7821-ac9d-d60ede6331fb
+---
+I’m auditing the phase-local branch-group runtime/session tests against the accepted contract and the latest decisions. First I’m reading the current audit artifacts and the touched tests, then I’ll confirm the new coverage by rerunning the phase-local test bundle before I mark criteria.
+
+The new AC-2 assertions are exactly where they should be: one integration-level check in the fan-out runtime path and one direct unit-level namespace isolation check. I’m rerunning the same phase-local bundle the test author reported so I can mark the audit artifacts from observed results, not just the notes.
+
+The targeted rerun is green; I’m just waiting on the full phase-local bundle to finish. If that stays green, I’ll close the audit as complete and record that there are no blocking coverage or reliability gaps in this phase.
+
+The full phase-local bundle passed, including the new AC-2 assertions. I’m marking the audit artifacts now; unless I find a mismatch while writing them, this will close as complete with no blocking audit findings.
+
+Scope considered
+
+Phase-local branch-group runtime/session test scope only: the active audit artifacts, the updated AC-2 assertions in the touched tests, the existing phase-local branch-group coverage, and the authoritative run decisions. I did not treat the unrelated provider transport regression as part of this audit.
+
+What I analyzed
+
+I reviewed the updated test strategy and feedback artifacts, then inspected the concrete test changes in `tests/contract/test_branch_group_runtime.py` and `tests/unit/test_branch_group_context_sessions.py`. I checked the new assertions against the phase contract, especially AC-2’s requirements around fresh-session locality, `session_id=None` first turns, parent-session isolation, and distinct branch execution identity.
+
+What I reviewed
+
+I reran:
+- `./.venv/bin/pytest -q tests/contract/test_branch_group_runtime.py tests/unit/test_branch_group_context_sessions.py`
+- `./.venv/bin/pytest -q tests/contract/test_branch_group_runtime.py tests/runtime/test_runtime_tracing.py tests/runtime/test_runtime_static_graph.py tests/unit/test_simple_surface.py tests/unit/test_primitives_and_stores.py tests/unit/test_branch_group_context_sessions.py`
+
+Observed results:
+- `28 passed`
+- `196 passed, 14 warnings`
+
+I updated:
+- [criteria.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/full-revised-standalone-spec-autoloop-v3-async-n-3c402473/runs/run-20260506T130608Z-37f1c786/artifacts/test/phases/branch-group-runtime-and-sessions/criteria.md)
+- [feedback.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/full-revised-standalone-spec-autoloop-v3-async-n-3c402473/runs/run-20260506T130608Z-37f1c786/artifacts/test/phases/branch-group-runtime-and-sessions/feedback.md)
+
+Key findings / decisions
+
+No blocking audit findings. The added AC-2 coverage is appropriate at both levels:
+- contract level: verifies runtime-created fresh session keys are branch-scoped and distinct across branches sharing the same `Session.fresh()` declaration
+- unit level: verifies `BranchSessionStoreView` allocates distinct fresh keys per branch namespace while keeping parent activation isolated
+
+The new assertions are stable because they inspect namespace prefixes and inequality rather than relying on branch execution order.
+
+Open issues / next step
+
+No phase-local test blockers remain. The out-of-phase provider transport cancellation issue remains documented elsewhere, but it does not weaken this phase’s branch-group runtime/session regression protection.
+
+<loop-control>
+{"schema":"docloop.loop_control/v1","kind":"promise","promise":"COMPLETE"}
+</loop-control>

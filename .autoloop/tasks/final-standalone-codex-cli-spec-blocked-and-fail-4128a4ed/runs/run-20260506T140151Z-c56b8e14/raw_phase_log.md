@@ -240,3 +240,53 @@ Open issues / next step
 <loop-control>
 {"schema":"docloop.loop_control/v1","kind":"promise","promise":"COMPLETE"}
 </loop-control>
+
+
+---
+run_id=run-20260506T140151Z-c56b8e14 | entry=session_turn | pair=test | phase=producer | cycle=1 | attempt=1 | thread_id=019dfd9d-4787-73c0-b538-1a138db4f2b2
+---
+provider=codex
+mode=resume
+template=/home/rauter/.local/share/pipx/venvs/autoloop/lib/python3.12/site-packages/autoloop/templates/test_producer.md
+session_id=019dfd9d-4787-73c0-b538-1a138db4f2b2
+
+
+---
+run_id=run-20260506T140151Z-c56b8e14 | entry=phase_output | pair=test | phase=producer | process=codex-agent | cycle=1 | attempt=1 | thread_id=019dfd9d-4787-73c0-b538-1a138db4f2b2
+---
+I’m authoring the phase-scoped test coverage now. I’ll inspect the current strategy artifact and the existing route-contract tests, then add the smallest missing assertions around explicit visible and hidden `blocked`/`failed` compilation behavior.
+
+The test artifacts are mostly placeholders, and the decisions ledger already has a fresh test-author header. I’m reading the compile-level route tests around authored `blocked`/`failed` next so I can add focused coverage for explicit visible and hidden routes without broadening scope.
+
+I’ve identified the gap worth closing in this phase: there are compile-level checks for defaults, but not a focused compile-time assertion that explicit visible and hidden `blocked`/`failed` routes stay authored-only on provider-backed steps. I’m adding that now.
+
+I’ve added the missing compile-level assertions and updated the test artifacts. I’m recording the one non-obvious coverage decision in the run ledger, then I’ll do a syntax pass on the touched test file and artifact updates.
+
+Scope considered
+
+- Phase-local test work only for the route-compilation contract.
+- Focused on compile-time/default-route behavior plus authored-route metadata for explicit `blocked` / `failed`.
+
+What I analyzed
+
+- Existing compile-level assertions in [test_validation.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/tests/unit/test_validation.py), [test_simple_surface.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/tests/unit/test_simple_surface.py), and [test_runtime_static_graph.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/tests/runtime/test_runtime_static_graph.py).
+- Phase artifacts and decisions in [test_strategy.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/final-standalone-codex-cli-spec-blocked-and-fail-4128a4ed/runs/run-20260506T140151Z-c56b8e14/artifacts/test/phases/route-compilation-contract/test_strategy.md), [feedback.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/final-standalone-codex-cli-spec-blocked-and-fail-4128a4ed/runs/run-20260506T140151Z-c56b8e14/artifacts/test/phases/route-compilation-contract/feedback.md), and the run [decisions.txt](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/final-standalone-codex-cli-spec-blocked-and-fail-4128a4ed/runs/run-20260506T140151Z-c56b8e14/decisions.txt).
+
+What I changed
+
+- Added two compile-level tests in [test_validation.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/tests/unit/test_validation.py):
+  - `test_explicit_prompt_blocked_and_failed_routes_remain_authored_only`
+  - `test_explicit_produce_verify_blocked_and_failed_routes_remain_authored_only`
+- Those tests assert that explicit visible/hidden `blocked` and `failed` remain authored routes, follow normal provider visibility, and never enter `runtime_control_routes`.
+- Updated [test_strategy.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/final-standalone-codex-cli-spec-blocked-and-fail-4128a4ed/runs/run-20260506T140151Z-c56b8e14/artifacts/test/phases/route-compilation-contract/test_strategy.md) with a behavior-to-test coverage map and appended a concise summary to [feedback.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/final-standalone-codex-cli-spec-blocked-and-fail-4128a4ed/runs/run-20260506T140151Z-c56b8e14/artifacts/test/phases/route-compilation-contract/feedback.md).
+
+Key findings / decisions
+
+- The missing high-signal gap was compile-level coverage for explicit hidden/visible `blocked` / `failed`; runtime-path tests already existed, but this phase benefits from direct metadata assertions.
+- I recorded that decision under the existing test-author block in the run ledger.
+- Syntax validation passed for the touched Python test file with `python3 -m py_compile tests/unit/test_validation.py`.
+
+Open issues / next step
+
+- `pytest` is still unavailable in this shell environment, so I could not execute the updated tests here.
+- Later runtime-focused phases should still add the broader undeclared-route retry/exhaustion coverage from the full request.
