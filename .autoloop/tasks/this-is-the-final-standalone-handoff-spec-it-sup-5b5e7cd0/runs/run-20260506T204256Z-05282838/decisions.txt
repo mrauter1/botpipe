@@ -1,0 +1,5 @@
+<autoloop-decisions-header version="1" block_seq="1" owner="planner" phase_id="task-global" pair="plan" turn_seq="1" run_id="run-20260506T204256Z-05282838" ts="2026-05-06T20:42:57.314029+00:00" />
+Custom raw route payload_schema and custom route_fields_schema mappings must fail closed when jsonschema-backed runtime validation cannot be compiled; silent metadata-only weakening is not acceptable.
+Builtin helper question/blocked/failed route-fields behavior should stay compatible only where existing handwritten engine validation is semantically equivalent to the effective route contract.
+Provider-side structured-output fallback may relax generation guidance only; route legality, payload validation, and route-fields validation remain mandatory post-parse.
+Structured-output delivery mode must be observable in backend metadata or request assertions so tests can distinguish full schema delivery, simplified-schema delivery, and prompt-only fallback.
