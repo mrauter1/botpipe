@@ -17,15 +17,15 @@
       "policy-claude-regression"
     ],
     "explicit": true,
-    "current_phase_index": 4,
-    "current_phase_id": "policy-claude-regression"
+    "current_phase_index": 5,
+    "current_phase_id": null
   },
   "phase_status": {
     "policy-core": "completed",
     "policy-config-authoring": "completed",
     "policy-resolution-propagation": "completed",
     "policy-codex": "completed",
-    "policy-claude-regression": "in_progress"
+    "policy-claude-regression": "completed"
   },
   "phase_history": [
     {
@@ -85,6 +85,13 @@
       "run_id": "run-20260506T190853Z-f707cb4f",
       "status": "in_progress",
       "ts": "2026-05-06T20:41:38.106335+00:00"
+    },
+    {
+      "phase_id": "policy-claude-regression",
+      "run_id": "run-20260506T190853Z-f707cb4f",
+      "status": "completed",
+      "ts": "2026-05-06T21:13:51.360977+00:00",
+      "pair": "test"
     }
   ]
 }
