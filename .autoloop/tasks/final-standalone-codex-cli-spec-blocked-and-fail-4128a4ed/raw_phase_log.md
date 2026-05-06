@@ -290,3 +290,55 @@ Open issues / next step
 
 - `pytest` is still unavailable in this shell environment, so I could not execute the updated tests here.
 - Later runtime-focused phases should still add the broader undeclared-route retry/exhaustion coverage from the full request.
+
+
+---
+run_id=run-20260506T140151Z-c56b8e14 | entry=session_turn | pair=test | phase=verifier | cycle=1 | attempt=1 | thread_id=019dfd9d-4787-73c0-b538-1a138db4f2b2
+---
+provider=codex
+mode=resume
+template=/home/rauter/.local/share/pipx/venvs/autoloop/lib/python3.12/site-packages/autoloop/templates/test_verifier.md
+session_id=019dfd9d-4787-73c0-b538-1a138db4f2b2
+
+
+---
+run_id=run-20260506T140151Z-c56b8e14 | entry=phase_output | pair=test | phase=verifier | process=codex-agent | cycle=1 | attempt=1 | thread_id=019dfd9d-4787-73c0-b538-1a138db4f2b2
+---
+I’m auditing the phase-scoped test coverage against the route-compilation contract. I’ll review the active test artifacts, the new assertions, and the surrounding compile/runtime tests to determine whether any material regression risk remains uncovered.
+
+I’ve got the strategy and current feedback. Next I’m reading the exact added tests and the adjacent compile-level assertions to check for missed edge cases or test expectations that would silently normalize the wrong contract.
+
+The added tests are targeted correctly: they exercise default injection removal, `control_routes=False`, full-auto `question`, and explicit visible/hidden authored-route metadata across both provider-backed step kinds. I’m updating the audit artifacts as a clean pass.
+
+Scope considered
+
+- Phase-local test audit only for the route-compilation contract.
+- Reviewed the updated tests, the active test strategy artifact, and the run-local decisions that constrain this phase.
+
+What I analyzed
+
+- New compile-level assertions in [test_validation.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/tests/unit/test_validation.py:839).
+- Preserved default/full-auto/control-route coverage in [test_validation.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/tests/unit/test_validation.py:120), [test_simple_surface.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/tests/unit/test_simple_surface.py:1093), and [test_runtime_static_graph.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/tests/runtime/test_runtime_static_graph.py:74).
+- Test artifacts in [test_strategy.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/final-standalone-codex-cli-spec-blocked-and-fail-4128a4ed/runs/run-20260506T140151Z-c56b8e14/artifacts/test/phases/route-compilation-contract/test_strategy.md), [feedback.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/final-standalone-codex-cli-spec-blocked-and-fail-4128a4ed/runs/run-20260506T140151Z-c56b8e14/artifacts/test/phases/route-compilation-contract/feedback.md), and the run [decisions.txt](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/final-standalone-codex-cli-spec-blocked-and-fail-4128a4ed/runs/run-20260506T140151Z-c56b8e14/decisions.txt).
+
+What I reviewed
+
+- Whether AC-1 is covered for default prompt/produce-verify steps, full-auto `question`, and `control_routes=False`.
+- Whether AC-2 is covered for explicit visible and hidden `blocked` / `failed` routes remaining authored-only and excluded from `runtime_control_routes`.
+- Whether AC-3 is covered through generic provider-visibility behavior rather than route-name special casing.
+- Whether the tests stay deterministic and avoid broadening into out-of-scope runtime retry/exhaustion behavior.
+
+Key findings / decisions
+
+- No blocking findings.
+- No non-blocking findings.
+- The added compile-level tests close the main phase-local gap by asserting explicit visible/hidden `blocked` / `failed` behavior directly on both `PromptStep` and `ProduceVerifyStep`.
+
+Open issues / next step
+
+- No test-audit follow-up is required in this phase.
+- Runtime retry/exhaustion coverage for undeclared provider-selected `blocked` / `failed` remains appropriately deferred to later runtime-focused work.
+
+<loop-control>
+{"schema":"docloop.loop_control/v1","kind":"promise","promise":"COMPLETE"}
+</loop-control>

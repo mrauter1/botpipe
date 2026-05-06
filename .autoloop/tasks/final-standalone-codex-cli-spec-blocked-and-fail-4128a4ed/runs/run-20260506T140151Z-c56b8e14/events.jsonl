@@ -15,3 +15,5 @@
 {"ts": "2026-05-06T14:14:45.870101+00:00", "run_id": "run-20260506T140151Z-c56b8e14", "seq": 15, "event_type": "pair_started", "pair": "test", "phase_id": "route-compilation-contract"}
 {"ts": "2026-05-06T14:14:45.870228+00:00", "run_id": "run-20260506T140151Z-c56b8e14", "seq": 16, "event_type": "cycle_started", "pair": "test", "cycle": 1, "attempt": 1, "phase_id": "route-compilation-contract"}
 {"ts": "2026-05-06T14:16:20.916253+00:00", "run_id": "run-20260506T140151Z-c56b8e14", "seq": 17, "event_type": "phase_finished", "pair": "test", "phase": "producer", "cycle": 1, "attempt": 1, "empty_output": false, "phase_id": "route-compilation-contract"}
+{"ts": "2026-05-06T14:17:12.628686+00:00", "run_id": "run-20260506T140151Z-c56b8e14", "seq": 18, "event_type": "phase_finished", "pair": "test", "phase": "verifier", "cycle": 1, "attempt": 1, "empty_output": false, "phase_id": "route-compilation-contract"}
+{"ts": "2026-05-06T14:17:12.677103+00:00", "run_id": "run-20260506T140151Z-c56b8e14", "seq": 19, "event_type": "pair_completed", "pair": "test", "cycle": 1, "attempt": 1, "phase_id": "route-compilation-contract"}
