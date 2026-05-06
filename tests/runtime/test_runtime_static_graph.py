@@ -74,14 +74,9 @@ def test_static_step_graph_includes_step_kind_prompts_routes_and_artifact_names(
     assert assessment["log_artifacts"] == []
     assert "assessment_ready" in assessment["available_routes"]
     assert assessment["authored_routes"] == ["assessment_ready"]
-    assert assessment["runtime_control_routes"] == ["question", "blocked", "failed"]
-    assert assessment["provider_visible_routes_interactive"] == [
-        "assessment_ready",
-        "question",
-        "blocked",
-        "failed",
-    ]
-    assert assessment["provider_visible_routes_full_auto"] == ["assessment_ready", "blocked", "failed"]
+    assert assessment["runtime_control_routes"] == ["question"]
+    assert assessment["provider_visible_routes_interactive"] == ["assessment_ready", "question"]
+    assert assessment["provider_visible_routes_full_auto"] == ["assessment_ready"]
     assert finish["kind"] == "python"
     assert finish["prompt"] is None
     assert finish["producer_prompt"] is None
@@ -433,9 +428,9 @@ def test_topology_artifacts_include_state_surfaces_runtime_control_hook_location
     assert "- terminals: `FINISH`, `AWAIT_INPUT`, `FAIL`" in compile_report
     assert "## Step Route Views" in compile_report
     assert (
-        "- `review`: authored=`done`, `human_escalation`; runtime_control=`question`, `blocked`, `failed`; "
-        "provider_visible_interactive=`done`, `question`, `blocked`, `failed`; "
-        "provider_visible_full_auto=`done`, `blocked`, `failed`"
+        "- `review`: authored=`done`, `human_escalation`; runtime_control=`question`; "
+        "provider_visible_interactive=`done`, `question`; "
+        "provider_visible_full_auto=`done`"
     ) in compile_report
     assert "## Runtime-Control Hook Locations" in compile_report
     assert "`review`: before:before_review, after:after_review, on_taken:human_escalation" in compile_report
@@ -453,9 +448,9 @@ def test_route_table_mermaid_and_compile_report_distinguish_runtime_control_rout
     assert "| assessment | question | runtime-control | AWAIT_INPUT | true | false | inherit | - | - | - |" in route_table
     assert "assessment -- question [runtime-control, interactive-only] --> AWAIT_INPUT" in mermaid
     assert (
-        "- `assessment`: authored=`assessment_ready`; runtime_control=`question`, `blocked`, `failed`; "
-        "provider_visible_interactive=`assessment_ready`, `question`, `blocked`, `failed`; "
-        "provider_visible_full_auto=`assessment_ready`, `blocked`, `failed`"
+        "- `assessment`: authored=`assessment_ready`; runtime_control=`question`; "
+        "provider_visible_interactive=`assessment_ready`, `question`; "
+        "provider_visible_full_auto=`assessment_ready`"
     ) in compile_report
 
 

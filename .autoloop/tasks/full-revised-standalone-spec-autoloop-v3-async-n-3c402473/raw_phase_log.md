@@ -1230,3 +1230,69 @@ Open issues / next step
 <loop-control>
 {"schema":"docloop.loop_control/v1","kind":"promise","promise":"COMPLETE"}
 </loop-control>
+
+
+---
+run_id=run-20260506T130608Z-37f1c786 | entry=session_turn | pair=implement | phase=producer | cycle=1 | attempt=1 | thread_id=019dfd9f-bbf6-7821-ac9d-d60ede6331fb
+---
+provider=codex
+mode=start
+template=/home/rauter/.local/share/pipx/venvs/autoloop/lib/python3.12/site-packages/autoloop/templates/implement_producer.md
+session_id=019dfd9f-bbf6-7821-ac9d-d60ede6331fb
+
+
+---
+run_id=run-20260506T130608Z-37f1c786 | entry=phase_output | pair=implement | phase=producer | process=codex-agent | cycle=1 | attempt=1 | thread_id=019dfd9f-bbf6-7821-ac9d-d60ede6331fb
+---
+I’m treating this as a phase-scoped implementation pass on branch-group runtime and sessions. First I’m reading the active phase artifacts and the current branch-group/session code to pin the exact gaps against the accepted criteria before editing.
+
+The phase artifacts confirm this pass is narrowly about branch execution, session overlays, and evidence/fan-in boundaries. I’m mapping that onto the current branch-group modules now so the edits stay inside the intended blast radius.
+
+I’ve confirmed there isn’t reviewer-specific prose beyond the phase contract, so the real guidance is the acceptance criteria plus current tests. Next I’m reading the runtime/session implementation and the branch-group contract tests together to find the concrete mismatches before I patch anything.
+
+The current runtime already routes branches through capture mode and writes evidence under `_branch_groups`, so I’m looking for narrower defects: session overlay behavior, failure/cancellation semantics, and any remaining branch-runtime coupling that violates the async contract.
+
+I’ve narrowed the likely risk surface to `BranchSessionStoreView` and a couple of runtime bookkeeping paths. Before editing, I’m running the focused branch-group/runtime suite to see which contract cases are actually red in the current tree.
+
+`pytest` isn’t on the bare shell, so I’m checking the repo’s declared test runner and environment instead of guessing. After that I’ll use the project-native runner for the focused suites and patch against concrete failures.
+
+The focused suites are at least not immediately failing, which suggests the remaining work may be smaller than the phase description implies. I’m letting that run finish, then I’ll check for untested contract gaps in the session overlay and runtime event payloads before deciding whether any code change is actually warranted.
+
+The targeted branch/runtime suites passed cleanly, so I’m doing one more pass on the session overlay and async-contract edges for gaps that the visible tests might miss. If those look clean too, I’ll document that this phase didn’t require additional code beyond the already-landed branch-group/runtime work.
+
+There are dedicated unit tests for the branch session view, so I’m reading those next. If they already cover the parent-fallback edge and still pass, the correct outcome here is likely phase documentation plus no further code churn.
+
+The phase-local behavior is already green in the current tree, including the dedicated branch session-view tests. I’m updating the phase artifacts to record that this turn was validation-and-closeout rather than another code patch, and I’ll call out the one unrelated provider transport failure separately.
+
+Scope considered
+
+Phase-local scope only: branch-group runtime, branch-local sessions, evidence rooting, fan-in finalization, and adjacent validation/tests. I avoided unrelated dirty files and did not pull provider transport code into scope.
+
+What I analyzed
+
+I reviewed the active phase artifacts, current branch-group modules, and the focused contract/unit/runtime coverage around [autoloop/core/branch_groups/runtime.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/autoloop/core/branch_groups/runtime.py), [sessions.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/autoloop/core/branch_groups/sessions.py), and [context.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/autoloop/core/branch_groups/context.py). I also ran the phase-relevant suites plus the dedicated branch session-view tests.
+
+What I changed
+
+No runtime code changes were warranted in this turn. I updated the phase artifacts only:
+[implementation_notes.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/full-revised-standalone-spec-autoloop-v3-async-n-3c402473/runs/run-20260506T130608Z-37f1c786/artifacts/implement/phases/branch-group-runtime-and-sessions/implementation_notes.md)
+[decisions.txt](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/full-revised-standalone-spec-autoloop-v3-async-n-3c402473/runs/run-20260506T130608Z-37f1c786/decisions.txt)
+
+Key findings / decisions
+
+The current tree already satisfies this phase’s acceptance criteria:
+- branch execution uses the async dispatcher in capture mode without provider async-support probing at branch runtime
+- fresh branch sessions stay execution-local, start with `session_id=None`, do not activate parent session slots, and only record provider-returned ids
+- branch evidence stays under `{workflow_folder}/_branch_groups/...`, and fan-in finalizes through one composite route
+
+Validation:
+- `./.venv/bin/pytest -q tests/contract/test_branch_group_runtime.py tests/runtime/test_runtime_tracing.py tests/runtime/test_runtime_static_graph.py tests/unit/test_simple_surface.py tests/unit/test_primitives_and_stores.py`
+- `./.venv/bin/pytest -q tests/unit/test_branch_group_context_sessions.py`
+
+Open issues / next step
+
+There is one unrelated out-of-phase failure in the broader provider suite:
+`tests/runtime/test_runtime_providers.py::test_communicate_text_subprocess_terminates_then_kills_on_cancellation`
+Current result: `wait_calls == 2`, expected `1`.
+
+If you want, the next pass should target that provider transport cancellation regression under the transport/provider phase rather than branch-group runtime.

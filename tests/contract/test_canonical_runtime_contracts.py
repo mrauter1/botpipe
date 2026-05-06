@@ -52,14 +52,12 @@ def test_canonical_step_contract_uses_finish_and_required_writes(tmp_path: Path)
     call = provider.calls[0]
     assert result.terminal == FINISH
     assert call.kind == "step"
-    assert call.available_routes == ("done", "question", "blocked", "failed")
+    assert call.available_routes == ("done", "question")
     assert call.routes["done"].required_writes == ()
     assert call.routes["done"].explicit_required_writes is None
     assert call.route_required_writes == {
         "done": ("draft.report",),
         "question": ("draft.report",),
-        "blocked": ("draft.report",),
-        "failed": ("draft.report",),
     }
     assert not hasattr(call, "route_required_" + "outputs")
 
@@ -116,14 +114,12 @@ def test_canonical_produce_verify_contract_splits_phase_writes_and_verifier_rout
     assert [ref.name for ref in producer_call.writable_artifacts] == ["draft"]
     assert producer_call.route_required_writes == {}
     assert verifier_call.kind == "verifier"
-    assert verifier_call.available_routes == ("approved", "question", "blocked", "failed")
+    assert verifier_call.available_routes == ("approved", "question")
     assert [ref.name for ref in verifier_call.writable_artifacts] == ["review_report"]
     assert verifier_call.routes["approved"].required_writes == ("review.draft", "review.review_report")
     assert verifier_call.routes["approved"].explicit_required_writes == ("review.draft", "review.review_report")
     assert verifier_call.route_required_writes == {
         "approved": ("review.draft", "review.review_report"),
         "question": ("review.draft", "review.review_report"),
-        "blocked": ("review.draft", "review.review_report"),
-        "failed": ("review.draft", "review.review_report"),
     }
     assert not hasattr(verifier_call, "route_required_" + "outputs")

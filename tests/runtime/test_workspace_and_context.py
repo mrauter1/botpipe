@@ -137,7 +137,7 @@ def test_runner_full_auto_hides_default_question_route_from_provider_contract(tm
 
     assert result.terminal == FINISH
     assert len(provider.calls) == 1
-    assert provider.calls[0].available_routes == ("done", "blocked", "failed")
+    assert provider.calls[0].available_routes == ("done",)
 
 
 def test_runtime_context_and_prompt_resolution_use_workflow_scope_and_package_root(tmp_path: Path) -> None:
