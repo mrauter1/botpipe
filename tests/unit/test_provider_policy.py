@@ -99,9 +99,29 @@ def test_workspace_network_policy_rejects_empty_limited_mode() -> None:
         WorkspaceNetworkPolicy(mode="limited")
 
 
+def test_provider_policy_rejects_empty_limited_network_mode() -> None:
+    with pytest.raises(ValidationError, match="workspace.network.mode='limited' requires at least one allow_domains entry"):
+        ProviderPolicy(
+            sandbox=SandboxPolicy(
+                workspace=WorkspacePolicy(
+                    network=WorkspaceNetworkPolicy(mode="limited"),
+                )
+            )
+        )
+
+
 def test_with_model_effort_revalidates_literal_values() -> None:
     with pytest.raises(ValidationError, match="effort"):
         ProviderPolicy().with_model_effort("bogus")
+
+
+def test_with_model_effort_returns_updated_policy_without_mutating_original() -> None:
+    policy = ProviderPolicy()
+
+    updated = policy.with_model_effort("high")
+
+    assert policy.model.effort is None
+    assert updated.model.effort == "high"
 
 
 def test_strict_policy_rejects_danger_full_access() -> None:

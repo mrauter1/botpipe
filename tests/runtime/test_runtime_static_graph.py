@@ -536,6 +536,7 @@ def test_route_table_and_compile_report_include_hidden_global_routes(tmp_path: P
     compile_report = (tmp_path / "compile_report.md").read_text(encoding="utf-8")
 
     assert "| GLOBAL | blocked | authored | AWAIT_INPUT | false | false | inherit | - | - | - |" in route_table
+    assert "- routes: `3`" in compile_report
     assert "- hidden routes: `1`" in compile_report
 
 

@@ -353,3 +353,42 @@ No open issues remain for `policy-core`. This phase is review-complete and ready
 <loop-control>
 {"schema":"docloop.loop_control/v1","kind":"promise","promise":"COMPLETE"}
 </loop-control>
+
+
+---
+run_id=run-20260506T190853Z-f707cb4f | entry=session_turn | pair=test | phase=producer | cycle=1 | attempt=1 | thread_id=019dfeb8-62d9-7162-bd36-563fb3056ac9
+---
+provider=codex
+mode=resume
+template=/home/rauter/.local/share/pipx/venvs/autoloop/lib/python3.12/site-packages/autoloop/templates/test_producer.md
+session_id=019dfeb8-62d9-7162-bd36-563fb3056ac9
+
+
+---
+run_id=run-20260506T190853Z-f707cb4f | entry=phase_output | pair=test | phase=producer | process=codex-agent | cycle=1 | attempt=1 | thread_id=019dfeb8-62d9-7162-bd36-563fb3056ac9
+---
+I’m treating this as a focused regression-hardening pass for the completed `policy-core` implementation. I’ll inspect the existing unit file and the test-phase artifacts, then add only the coverage that materially strengthens the changed behaviors without expanding into later runtime/provider phases.
+
+The existing unit file already covers the two failure paths that were just fixed, but it still lacks the corresponding happy-path and full-policy regression checks. I’m adding those now so the suite catches both direct-model and top-level policy construction regressions instead of only the narrowest entrypoints.
+
+The focused suite is green with the added regression cases. I’m recording the coverage map and a short audit trail now so the test-phase artifacts explicitly show which behaviors are covered, which edge cases are intentional, and where the remaining gaps are outside this phase.
+
+Scope considered
+
+The `policy-core` phase test surface only: [tests/unit/test_provider_policy.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/tests/unit/test_provider_policy.py), the changed validation paths in [autoloop/core/provider_policy.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/autoloop/core/provider_policy.py), and the phase-local test artifacts.
+
+What I analyzed
+
+I reviewed the current unit file against the completed implementation and the run-local decisions ledger, with attention to the recent fixes for empty `limited` network mode and `with_model_effort()` revalidation. I looked for missing happy-path and top-level entrypoint coverage rather than broadening into later runtime/provider phases.
+
+What I changed
+
+I expanded [test_provider_policy.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/tests/unit/test_provider_policy.py) with two additional regression tests: one that rejects empty `limited` mode through full `ProviderPolicy` construction, and one that verifies `with_model_effort("high")` succeeds without mutating the original policy while the invalid-literal failure path remains covered. I updated [test_strategy.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/implementation-goal-add-a-first-class-provider-p-5e755cae/runs/run-20260506T190853Z-f707cb4f/artifacts/test/phases/policy-core/test_strategy.md) with an explicit behavior-to-test coverage map, appended a concise summary to [feedback.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/implementation-goal-add-a-first-class-provider-p-5e755cae/runs/run-20260506T190853Z-f707cb4f/artifacts/test/phases/policy-core/feedback.md), and recorded the non-obvious coverage decision in [decisions.txt](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/implementation-goal-add-a-first-class-provider-p-5e755cae/runs/run-20260506T190853Z-f707cb4f/decisions.txt).
+
+Key findings / decisions
+
+The main coverage decision was to test both the narrow public entrypoints and the top-level `ProviderPolicy` path for the same validation invariants, because the recent bug existed in one surface and could easily reappear in another. This keeps the phase-local suite focused while still guarding the highest-risk regression shape.
+
+Open issues / next step
+
+Validation passed with `.venv/bin/python -m pytest -q tests/unit/test_provider_policy.py` (`14 passed`). No additional in-phase test gaps remain beyond the already acknowledged out-of-scope runtime/config/emitter work for later phases.
