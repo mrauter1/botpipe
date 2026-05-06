@@ -21,3 +21,4 @@
 {"ts": "2026-05-06T14:17:12.776669+00:00", "run_id": "run-20260506T140151Z-c56b8e14", "seq": 21, "event_type": "phase_started", "phase_id": "provider-and-surface-regressions", "phase_mode": "single"}
 {"ts": "2026-05-06T14:17:12.777613+00:00", "run_id": "run-20260506T140151Z-c56b8e14", "seq": 22, "event_type": "pair_started", "pair": "implement", "phase_id": "provider-and-surface-regressions"}
 {"ts": "2026-05-06T14:17:12.777701+00:00", "run_id": "run-20260506T140151Z-c56b8e14", "seq": 23, "event_type": "cycle_started", "pair": "implement", "cycle": 1, "attempt": 1, "phase_id": "provider-and-surface-regressions"}
+{"ts": "2026-05-06T14:19:50.157138+00:00", "run_id": "run-20260506T140151Z-c56b8e14", "seq": 24, "event_type": "run_finished", "status": "interrupted", "exit_code": 130, "followup_run_id": null, "parent_run_id": null, "followup_depth": 0}
