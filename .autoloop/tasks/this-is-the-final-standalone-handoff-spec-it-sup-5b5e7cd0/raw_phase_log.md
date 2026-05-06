@@ -2115,3 +2115,53 @@ Open issues / next step
 <loop-control>
 {"schema":"docloop.loop_control/v1","kind":"promise","promise":"COMPLETE"}
 </loop-control>
+
+
+---
+run_id=run-20260506T204256Z-05282838 | entry=session_turn | pair=test | phase=producer | cycle=1 | attempt=1 | thread_id=019dff0e-7daf-7a32-806b-ba0f9ef79fd1
+---
+provider=codex
+mode=resume
+template=/home/rauter/.local/share/pipx/venvs/autoloop/lib/python3.12/site-packages/autoloop/templates/test_producer.md
+session_id=019dff0e-7daf-7a32-806b-ba0f9ef79fd1
+
+
+---
+run_id=run-20260506T204256Z-05282838 | entry=phase_output | pair=test | phase=producer | process=codex-agent | cycle=1 | attempt=1 | thread_id=019dff0e-7daf-7a32-806b-ba0f9ef79fd1
+---
+I’m checking the existing test artifacts and the current regression coverage first. If the current repo tests already cover the acceptance criteria, I’ll add only the smallest missing test refinement and document the exact behavior-to-test mapping rather than churning unrelated files.
+
+I found one worthwhile gap to harden: the current missing-`jsonschema` helper-default test proves the metadata-normalization path, but not the adjacent route-retargeting path that previously dropped the internal helper marker. I’m adding one deterministic compile-time test for helper routes with a named target, then I’ll record that coverage in the test strategy and test-phase feedback.
+
+I’ve added the only extra repo test I thought was worth the turn: it locks in the helper-default fallback through the named-target route rewrite path that previously caused the marker-loss regression. I’m running the focused validation and contract slices now so the test artifact can reference actual post-change results.
+
+Scope considered
+
+- Request-scoped route-contract enforcement coverage in [tests/unit/test_validation.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/tests/unit/test_validation.py) and [tests/contract/test_engine_contracts.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/tests/contract/test_engine_contracts.py).
+- Test-phase artifacts [test_strategy.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/this-is-the-final-standalone-handoff-spec-it-sup-5b5e7cd0/runs/run-20260506T204256Z-05282838/artifacts/test/phases/route-contract-enforcement/test_strategy.md) and [feedback.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/this-is-the-final-standalone-handoff-spec-it-sup-5b5e7cd0/runs/run-20260506T204256Z-05282838/artifacts/test/phases/route-contract-enforcement/feedback.md).
+- Adjacent risk from helper-default route normalization/copy paths that had already shown up during implementation.
+
+What I analyzed
+
+- The existing missing-`jsonschema` tests for helper-default routes versus custom helper overrides.
+- The runtime contract regressions already present for scripted and rendered providers.
+- Whether there was a coverage gap around helper-default routes surviving named-target resolution and internal route rewrites.
+
+What I changed
+
+- Added `test_validation_allows_helper_default_route_fields_without_jsonschema_dependency_after_named_target_resolution` to [tests/unit/test_validation.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/tests/unit/test_validation.py).
+- Updated [test_strategy.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/this-is-the-final-standalone-handoff-spec-it-sup-5b5e7cd0/runs/run-20260506T204256Z-05282838/artifacts/test/phases/route-contract-enforcement/test_strategy.md) with an explicit AC-to-test coverage map, preserved invariants, edge cases, flake controls, and known gaps.
+- Appended a concise summary entry to [feedback.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/this-is-the-final-standalone-handoff-spec-it-sup-5b5e7cd0/runs/run-20260506T204256Z-05282838/artifacts/test/phases/route-contract-enforcement/feedback.md).
+
+Key findings / decisions
+
+- The meaningful remaining test hardening was the named-target helper-route path, because that path exercises route rewriting where the internal fallback marker could previously be lost.
+- I did not add broader new fixtures or duplicate the existing engine/backend regressions; the current suite already covers AC-3 and the implementation-phase backend checks adequately for this phase.
+
+Open issues / next step
+
+- Focused validation passed:
+  - `python3 -m compileall tests/unit/test_validation.py`
+  - `.venv/bin/python -m pytest tests/unit/test_validation.py -k "raw_route_payload_schema_without_jsonschema_dependency or raw_route_fields_schema_without_jsonschema_dependency or helper_default_route_fields_without_jsonschema_dependency or custom_helper_route_fields_override_without_jsonschema_dependency"`
+  - `.venv/bin/python -m pytest tests/contract/test_engine_contracts.py -k "invalid_custom_raw_route_payload or invalid_custom_raw_route_fields"`
+- I did not run the full suite.

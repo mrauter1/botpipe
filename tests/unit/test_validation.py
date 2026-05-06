@@ -1538,6 +1538,28 @@ def test_validation_allows_helper_default_route_fields_without_jsonschema_depend
     assert compiled.route("ask", "failed").route_fields_validator is None
 
 
+def test_validation_allows_helper_default_route_fields_without_jsonschema_dependency_after_named_target_resolution(monkeypatch):
+    _patch_missing_jsonschema(monkeypatch)
+
+    class HelperDefaultRouteFieldsNamedTargetWorkflow(Workflow):
+        class State(BaseModel):
+            pass
+
+        ask = PromptStep(name="ask", producer="ask.md")
+        followup = PythonStep(name="followup", handler=lambda ctx: Event("done"))
+        entry = ask
+        transitions = {
+            ask: {"done": FINISH},
+            followup: {"done": FINISH},
+            GLOBAL: {"question": Route.question(target="followup")},
+        }
+
+    compiled = compile_workflow(HelperDefaultRouteFieldsNamedTargetWorkflow)
+
+    assert compiled.route("ask", "question").target == "followup"
+    assert compiled.route("ask", "question").route_fields_validator is None
+
+
 def test_validation_rejects_custom_helper_route_fields_override_without_jsonschema_dependency(monkeypatch):
     raw_schema = {
         "type": "object",
