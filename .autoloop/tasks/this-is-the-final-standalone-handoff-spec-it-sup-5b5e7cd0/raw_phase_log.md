@@ -1395,3 +1395,62 @@ Open issues / next step
 
 - No open implementation blockers remain in this slice.
 - Next step is verifier re-review of `tests-and-docs-migration`, with focus on resolving `IMP-001`.
+
+
+---
+run_id=run-20260506T185744Z-092935c3 | entry=session_turn | pair=implement | phase=verifier | cycle=2 | attempt=1 | thread_id=019dfeed-ec76-7aa0-818d-b53b7259845b
+---
+provider=codex
+mode=resume
+template=/home/rauter/.local/share/pipx/venvs/autoloop/lib/python3.12/site-packages/autoloop/templates/implement_verifier.md
+session_id=019dfeed-ec76-7aa0-818d-b53b7259845b
+
+
+---
+run_id=run-20260506T185744Z-092935c3 | entry=phase_output | pair=implement | phase=verifier | process=codex-agent | cycle=2 | attempt=1 | thread_id=019dfeed-ec76-7aa0-818d-b53b7259845b
+---
+I’m re-reviewing the `IMP-001` follow-up only: shared instruction wording, the new docs regression coverage, and whether the implementation notes and decisions stay aligned with the fix.
+
+I have the review artifacts and notes. Next I’m verifying the exact wording in the shared instruction file and the new assertions in the docs suite, then I’ll decide whether `IMP-001` is fully resolved.
+
+The reviewer finding is resolved: the shared instruction contract now teaches the canonical route-helper model, the compatibility-only note is explicit in both the central instruction file and the authoring doc, and the docs suite now guards that wording. I’m updating the review artifacts to reflect a complete pass.
+
+Scope considered
+
+- Phase-local re-review for `tests-and-docs-migration`.
+- Reviewer follow-up scope only: `IMP-001`, the shared workflow instruction contract, the mirrored authoring-doc note, and the added docs regression coverage.
+
+What I analyzed
+
+- The active review artifacts: [criteria.md](</home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/this-is-the-final-standalone-handoff-spec-it-sup-5b5e7cd0/runs/run-20260506T185744Z-092935c3/artifacts/implement/phases/tests-and-docs-migration/criteria.md>), [feedback.md](</home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/this-is-the-final-standalone-handoff-spec-it-sup-5b5e7cd0/runs/run-20260506T185744Z-092935c3/artifacts/implement/phases/tests-and-docs-migration/feedback.md>), [implementation_notes.md](</home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/this-is-the-final-standalone-handoff-spec-it-sup-5b5e7cd0/runs/run-20260506T185744Z-092935c3/artifacts/implement/phases/tests-and-docs-migration/implementation_notes.md>), and the latest decisions block in `decisions.txt`.
+- The updated route-guidance sections in [Workflow_Instructions.md](</home/rauter/autoloop_v3_bkp/autoloop_v3/Workflow_Instructions.md:203>) and [Workflow_Instructions.md](</home/rauter/autoloop_v3_bkp/autoloop_v3/Workflow_Instructions.md:389>).
+- The new compatibility note in [docs/authoring.md](</home/rauter/autoloop_v3_bkp/autoloop_v3/docs/authoring.md:172>).
+- The new assertions in [tests/test_architecture_baseline_docs.py](</home/rauter/autoloop_v3_bkp/autoloop_v3/tests/test_architecture_baseline_docs.py:258>).
+
+What I reviewed
+
+- Confirmed the central instruction file now:
+  - teaches “everything is a route”
+  - treats helper routes as ordinary compiled routes
+  - moves route-specific metadata to `outcome.route_fields`
+  - explicitly marks `ControlRoutes(question=...)` and top-level `question` / `reason` as deprecated compatibility-only migration surfaces
+- Confirmed the authoring doc mirrors that compatibility-only note.
+- Confirmed the docs regression suite now asserts both the required canonical wording and the removal of the stale reserved-route phrases.
+- Re-ran the targeted validation:
+  - `./.venv/bin/python -m pytest -q tests/test_architecture_baseline_docs.py`
+  - Result: `15 passed`
+
+Key findings / decisions
+
+- `IMP-001` is resolved.
+- No new blocking or non-blocking findings were identified in this re-review.
+- I updated [criteria.md](</home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/this-is-the-final-standalone-handoff-spec-it-sup-5b5e7cd0/runs/run-20260506T185744Z-092935c3/artifacts/implement/phases/tests-and-docs-migration/criteria.md>) to all checked and appended the re-review resolution note to [feedback.md](</home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/this-is-the-final-standalone-handoff-spec-it-sup-5b5e7cd0/runs/run-20260506T185744Z-092935c3/artifacts/implement/phases/tests-and-docs-migration/feedback.md>).
+
+Open issues / next step
+
+- No open issues in this phase-local review slice.
+- This phase is ready to close as complete from the verifier side.
+
+<loop-control>
+{"schema":"docloop.loop_control/v1","kind":"promise","promise":"COMPLETE"}
+</loop-control>

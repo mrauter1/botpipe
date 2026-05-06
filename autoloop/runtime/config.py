@@ -38,6 +38,7 @@ SUPPORTED_GIT_COMMIT_POLICIES = frozenset({"off", "run", "step"})
 SUPPORTED_EXTENSION_FAILURE_POLICIES = frozenset({"propagate", "record_and_continue"})
 SUPPORTED_REPLAY_MISMATCH_BEHAVIORS = frozenset({"warn", "fail"})
 SUPPORTED_RESUME_TOPOLOGY_MISMATCH_BEHAVIORS = frozenset({"warn", "fail"})
+_LEGACY_POLICY_EFFORT_ALIASES = {"max": "xhigh"}
 
 
 class ConfigError(ValueError):
