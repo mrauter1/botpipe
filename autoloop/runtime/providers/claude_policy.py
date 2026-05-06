@@ -100,6 +100,7 @@ class ClaudePolicyEmitter:
         capability_report_path = policy_root / "capability_report.json"
 
         settings_payload, cli_args, unsupported, lossy, unsafe, effective = self._build_settings_payload(policy)
+        cli_args = ["--settings", str(settings_path), *cli_args]
         _json_dump(settings_path, settings_payload)
 
         fingerprint = policy_fingerprint(policy)
@@ -150,7 +151,7 @@ class ClaudePolicyEmitter:
     def _build_settings_payload(
         self,
         policy: ResolvedProviderPolicy,
-    ) -> tuple[dict[str, Any], list[str], list[str], list[str], EffectiveEnforcementReport]:
+    ) -> tuple[dict[str, Any], list[str], list[str], list[str], list[str], EffectiveEnforcementReport]:
         unsupported: list[str] = []
         lossy: list[str] = []
         unsafe: list[str] = []
@@ -185,7 +186,7 @@ class ClaudePolicyEmitter:
         sandbox_payload = dict(payload.get("sandbox", {}))
         filesystem_payload = dict(sandbox_payload.get("filesystem", {}))
         network_payload = dict(sandbox_payload.get("network", {}))
-        cli_args = ["--settings", "<settings-file>"]
+        cli_args: list[str] = []
 
         permission_allow = list(permissions_payload.get("allow", []))
         permission_ask = list(permissions_payload.get("ask", []))
@@ -290,12 +291,16 @@ class ClaudePolicyEmitter:
             network_payload["allowLocalBinding"] = True
         native_network = self._capabilities.supports_sandbox_network_domains and bool(sandbox_payload.get("enabled"))
         if native_network:
-            if network.allow_domains:
+            if network.mode in {"none", "limited"}:
+                network_payload["allowedDomains"] = list(network.allow_domains)
+            elif network.allow_domains:
                 network_payload["allowedDomains"] = list(network.allow_domains)
             if network.deny_domains:
                 network_payload["deniedDomains"] = list(network.deny_domains)
         else:
-            if network.allow_domains or network.deny_domains:
+            if network.mode == "none":
+                lossy.append("sandbox.network.mode='none' could not be enforced natively by Claude capabilities")
+            elif network.allow_domains or network.deny_domains:
                 lossy.append("sandbox.network domain enforcement unavailable; emitted WebFetch permission rules only")
         _extend_unique(permission_allow, [_webfetch_rule(domain) for domain in network.allow_domains])
         _extend_unique(permission_deny, [_webfetch_rule(domain) for domain in network.deny_domains])

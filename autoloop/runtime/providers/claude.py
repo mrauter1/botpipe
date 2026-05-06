@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import asyncio
+from collections.abc import Callable
 import json
 import shutil
 import subprocess
@@ -11,6 +12,7 @@ from functools import lru_cache
 from typing import Any
 
 from ...core.errors import ProviderExecutionError
+from ...core.provider_policy import ProviderPolicyEmission, ProviderPolicyValidationConfig, policy_fingerprint
 from ...core.providers.models import TokenUsage
 from ...core.providers.protocols import ProviderTransport
 from ...core.providers.rendered import RenderedLLMProvider
@@ -18,13 +20,16 @@ from ...core.providers.turns import ProviderTurnResult, RenderedProviderTurn
 from ...core.stores.protocols import SessionBinding
 from ..config import ClaudeProviderConfig, ConfigError, ResolvedRuntimeConfig
 from ._common import (
+    build_policy_step_key,
     build_session_binding,
     communicate_text_subprocess,
     ensure_session_provider_match,
     extract_token_usage,
     format_subprocess_streams,
+    merge_subprocess_env,
     run_text_subprocess,
 )
+from .claude_policy import ClaudeCapabilities, ClaudePolicyEmitter
 
 
 @dataclass(frozen=True, slots=True)
@@ -58,6 +63,10 @@ class _ClaudeHelpSurface:
     @property
     def supports_effort(self) -> bool:
         return "--effort" in self.help_text
+
+    @property
+    def supports_settings(self) -> bool:
+        return "--settings" in self.help_text
 
 
 def verify_claude_code_capabilities(config: ClaudeProviderConfig | None = None) -> None:
@@ -106,27 +115,35 @@ def parse_claude_exec_json(raw_stdout: str) -> tuple[str, str | None, dict[str, 
 class ClaudeTransport(ProviderTransport):
     """Transport-only Claude CLI executor."""
 
-    def __init__(self, *, config: ClaudeProviderConfig) -> None:
+    def __init__(
+        self,
+        *,
+        config: ClaudeProviderConfig,
+        validation: ProviderPolicyValidationConfig | None = None,
+        capabilities: ClaudeCapabilities | None = None,
+    ) -> None:
         self._config = config
+        self._validation = validation or ProviderPolicyValidationConfig()
+        self._emitter = ClaudePolicyEmitter(capabilities=capabilities)
 
     async def run_turn(self, turn: RenderedProviderTurn) -> ProviderTurnResult:
         ensure_session_provider_match("claude", turn.session)
         resume_session_id = _resumable_session_id("claude", turn.session)
-
-        command = ["claude"]
+        emission, command, model, effort = _prepare_turn_command(
+            turn,
+            config=self._config,
+            emitter=self._emitter,
+            validation=self._validation,
+        )
         if resume_session_id is not None:
             command.extend(["--resume", resume_session_id])
         command.extend(["-p", turn.prompt_text, "--output-format", "json"])
-        if self._config.model:
-            command.extend(["--model", self._config.model])
-        if self._config.effort:
-            command.extend(["--effort", self._config.effort])
-        command.extend(claude_permission_args(self._config))
 
         process = await asyncio.create_subprocess_exec(
             *command,
             stdout=asyncio.subprocess.PIPE,
             stderr=asyncio.subprocess.PIPE,
+            env=merge_subprocess_env(None if emission is None else emission.env),
         )
         stdout, stderr = await communicate_text_subprocess(process)
         if process.returncode != 0:
@@ -137,6 +154,8 @@ class ClaudeTransport(ProviderTransport):
             )
 
         result_text, resolved_session_id, provider_metadata, usage = parse_claude_exec_json(stdout)
+        if emission is not None:
+            provider_metadata = _with_policy_metadata(provider_metadata, emission=emission)
         return _build_claude_result(
             turn=turn,
             resume_session_id=resume_session_id,
@@ -144,7 +163,8 @@ class ClaudeTransport(ProviderTransport):
             provider_metadata=provider_metadata,
             usage=usage,
             result_text=result_text,
-            config=self._config,
+            model=model,
+            effort=effort,
         )
 
 
@@ -152,7 +172,10 @@ def build_claude_transport(config: ResolvedRuntimeConfig) -> ClaudeTransport:
     """Build the Claude runtime transport."""
 
     verify_claude_code_capabilities(config.provider.claude)
-    return ClaudeTransport(config=config.provider.claude)
+    return ClaudeTransport(
+        config=config.provider.claude,
+        validation=config.provider_policy.validation,
+    )
 
 
 def build_claude_operation_executor(
@@ -166,16 +189,19 @@ def build_claude_operation_executor(
     def execute(turn: RenderedProviderTurn) -> ProviderTurnResult:
         ensure_session_provider_match("claude", turn.session)
         resume_session_id = _resumable_session_id("claude", turn.session)
-        command = ["claude"]
+        emission, command, model, effort = _prepare_turn_command(
+            turn,
+            config=provider_config,
+            emitter=ClaudePolicyEmitter(),
+            validation=config.provider_policy.validation,
+        )
         if resume_session_id is not None:
             command.extend(["--resume", resume_session_id])
         command.extend(["-p", turn.prompt_text, "--output-format", "json"])
-        if provider_config.model:
-            command.extend(["--model", provider_config.model])
-        if provider_config.effort:
-            command.extend(["--effort", provider_config.effort])
-        command.extend(claude_permission_args(provider_config))
-        stdout, stderr, returncode = run_text_subprocess(command)
+        stdout, stderr, returncode = run_text_subprocess(
+            command,
+            env=merge_subprocess_env(None if emission is None else emission.env),
+        )
         if returncode != 0:
             streams = format_subprocess_streams(stdout, stderr)
             raise ProviderExecutionError(
@@ -183,6 +209,8 @@ def build_claude_operation_executor(
                 f"(exit code {returncode}): {streams}"
             )
         result_text, resolved_session_id, provider_metadata, usage = parse_claude_exec_json(stdout)
+        if emission is not None:
+            provider_metadata = _with_policy_metadata(provider_metadata, emission=emission)
         return _build_claude_result(
             turn=turn,
             resume_session_id=resume_session_id,
@@ -190,7 +218,8 @@ def build_claude_operation_executor(
             provider_metadata=provider_metadata,
             usage=usage,
             result_text=result_text,
-            config=provider_config,
+            model=model,
+            effort=effort,
         )
 
     return execute
@@ -220,7 +249,8 @@ def _build_claude_result(
     provider_metadata: dict[str, Any],
     usage: TokenUsage | None,
     result_text: str,
-    config: ClaudeProviderConfig,
+    model: str | None,
+    effort: str | None,
 ) -> ProviderTurnResult:
     if resolved_session_id is None and resume_session_id is not None:
         resolved_session_id = resume_session_id
@@ -235,8 +265,8 @@ def _build_claude_result(
             session_id=resolved_session_id,
             provider_name="claude",
             provider_metadata=provider_metadata,
-            model=config.model,
-            effort=config.effort,
+            model=model,
+            effort=effort,
         )
         if turn.session is not None and resolved_session_id is not None
         else None
@@ -274,6 +304,8 @@ def _validate_claude_surface(surface: _ClaudeHelpSurface, config: ClaudeProvider
         raise ConfigError("provider 'claude' requires '--resume' support, but the flag is unavailable.")
     if not surface.supports_model:
         raise ConfigError("provider 'claude' requires '--model' support, but the flag is unavailable.")
+    if not surface.supports_settings:
+        raise ConfigError("provider 'claude' requires '--settings' support, but the flag is unavailable.")
     permission_strategy = config.permission_strategy if config is not None else None
     if permission_strategy == "allow_core_tools" and not surface.supports_allowed_tools:
         raise ConfigError("provider 'claude' requires '--allowedTools' support, but the flag is unavailable.")
@@ -295,3 +327,115 @@ def _resumable_session_id(provider_name: str, session: SessionBinding | None) ->
     if seen_provider == provider_name and session.session_id:
         return session.session_id
     return None
+
+
+def _prepare_turn_command(
+    turn: RenderedProviderTurn,
+    *,
+    config: ClaudeProviderConfig,
+    emitter: ClaudePolicyEmitter,
+    validation: ProviderPolicyValidationConfig,
+) -> tuple[ProviderPolicyEmission | None, list[str], str | None, str | None]:
+    emission = _emit_turn_policy(emitter, turn, validation=validation)
+    command = ["claude"]
+    model = config.model
+    effort = config.effort
+    if turn.policy is not None:
+        model = turn.policy.model.default or model
+        effort = turn.policy.model.effort or effort
+    if emission is not None and emission.cli_args:
+        command.extend(emission.cli_args)
+    if turn.policy is None or turn.policy.model.default is None:
+        if config.model:
+            command.extend(["--model", config.model])
+    if turn.policy is None or turn.policy.model.effort is None:
+        if config.effort:
+            command.extend(["--effort", config.effort])
+    if emission is None:
+        command.extend(claude_permission_args(config))
+    return emission, command, model, effort
+
+
+def _emit_turn_policy(
+    emitter: ClaudePolicyEmitter,
+    turn: RenderedProviderTurn,
+    *,
+    validation: ProviderPolicyValidationConfig,
+) -> ProviderPolicyEmission | None:
+    if turn.policy is None or turn.run_folder is None:
+        return None
+    step_key = build_policy_step_key(turn.step_name, step_execution_id=turn.step_execution_id)
+    effective_policy_path = turn.run_folder / "provider_policy" / step_key / "claude" / "effective_policy.json"
+    capability_report_path = turn.run_folder / "provider_policy" / step_key / "claude" / "capability_report.json"
+    try:
+        emission = emitter.emit(
+            turn.policy,
+            run_dir=turn.run_folder,
+            step_key=step_key,
+            validation=validation,
+            step_name=turn.step_name,
+        )
+    except ProviderExecutionError:
+        _emit_policy_event(
+            turn,
+            "provider_policy_emitted",
+            provider_target="claude",
+            policy_fingerprint=None if turn.policy is None else policy_fingerprint(turn.policy),
+            decision="fail",
+            effective_policy_path=str(effective_policy_path),
+            capability_report_path=str(capability_report_path),
+        )
+        _emit_policy_event(
+            turn,
+            "provider_policy_capability_report",
+            provider_target="claude",
+            policy_fingerprint=None if turn.policy is None else policy_fingerprint(turn.policy),
+            decision="fail",
+            capability_report_path=str(capability_report_path),
+        )
+        raise
+    _emit_policy_event(
+        turn,
+        "provider_policy_emitted",
+        provider_target="claude",
+        policy_fingerprint=emission.capability_report.policy_fingerprint,
+        decision=emission.capability_report.decision,
+        effective_policy_path=str(emission.config_files["effective_policy"]),
+        capability_report_path=str(emission.config_files["capability_report"]),
+    )
+    _emit_policy_event(
+        turn,
+        "provider_policy_capability_report",
+        provider_target="claude",
+        policy_fingerprint=emission.capability_report.policy_fingerprint,
+        decision=emission.capability_report.decision,
+        capability_report_path=str(emission.config_files["capability_report"]),
+    )
+    return emission
+
+
+def _with_policy_metadata(
+    provider_metadata: dict[str, Any],
+    *,
+    emission: ProviderPolicyEmission,
+) -> dict[str, Any]:
+    metadata = dict(provider_metadata)
+    metadata["policy"] = {
+        "effective_policy_file": str(emission.config_files["effective_policy"]),
+        "capability_report_file": str(emission.config_files["capability_report"]),
+        "policy_fingerprint": emission.capability_report.policy_fingerprint,
+    }
+    return metadata
+
+
+def _emit_policy_event(turn: RenderedProviderTurn, event_type: str, **fields: object) -> None:
+    if turn.runtime_event_sink is None:
+        return
+    payload: dict[str, object] = {
+        "step_name": turn.step_name,
+        "turn_kind": turn.turn_kind,
+    }
+    if turn.step_execution_id is not None:
+        payload["step_execution_id"] = turn.step_execution_id
+    payload.update(fields)
+    turn.runtime_event_sink(event_type, payload)

@@ -21,9 +21,11 @@ phases:
         text: "Custom raw route route_fields_schema mappings either compile with a runtime validator or fail compilation with a clear optional-dependency error."
       - id: "AC-3"
         text: "Regression tests show invalid custom route payloads and route-fields are rejected for both scripted/fake and rendered providers."
+      - id: "AC-4"
+        text: "Missing-jsonschema coverage proves helper-generated default question/blocked/failed route-fields contracts remain compatible, while custom helper overrides still fail closed when runtime validation cannot be compiled."
     deliverables:
       - "Compiler and engine changes that remove silent metadata-only weakening for custom route contracts."
-      - "Validation and engine regression tests covering missing jsonschema and invalid route outcomes."
+      - "Validation and engine regression tests covering missing jsonschema, helper-default-versus-custom-override classification, and invalid route outcomes."
     risks:
       - "Over-broad fail-closed handling could break helper question/blocked/failed routes that currently rely on builtin validation."
     rollback:
@@ -48,9 +50,12 @@ phases:
         text: "If schema simplification is required, the simplified schema is what the backend receives and that mode is observable in tests."
       - id: "AC-3"
         text: "Unsupported backend paths keep prompt-only generation but record an explicit structured-output fallback mode without weakening engine-side validation."
+      - id: "AC-4"
+        text: "Authoritative docs explicitly describe native-schema delivery, simplified-schema delivery, and unsupported-backend prompt-only fallback, including the invariant that fallback never weakens engine-side validation."
     deliverables:
       - "Rendered-provider backend plumbing for schema delivery or explicit fallback recording."
-      - "Runtime backend regression tests and any minimal documentation updates needed to describe supported versus fallback behavior."
+      - "Runtime backend regression tests covering native delivery, simplified delivery, and prompt-only fallback."
+      - "Required documentation updates in docs/authoring.md and controlroutes.md describing supported versus fallback behavior and strict post-parse validation invariants."
     risks:
       - "Backend capability detection may diverge from real provider support if request assembly bypasses existing capability probes."
       - "Schema-delivery metadata may become inconsistent across built-in backends if naming is not standardized."
