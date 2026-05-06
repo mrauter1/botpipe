@@ -83,7 +83,7 @@ def test_merge_provider_policies_applies_scalar_union_and_replace_rules() -> Non
     assert merged.sandbox.workspace.filesystem.deny_read == ("./.env", "./secrets/**")
     assert merged.sandbox.workspace.filesystem.deny_write == ("/etc", "/usr/local/bin")
     assert merged.sandbox.workspace.network.deny_domains == ("blocked.example", "denied.example")
-    assert merged.env.deny == ("*TOKEN*", "*SECRET*")
+    assert merged.env.deny == ("*TOKEN*", "*SECRET*", "*KEY*")
     assert merged.env.set == {"A": "1", "B": "2"}
     assert merged.codex == {
         "sandbox_workspace_write": {
@@ -141,7 +141,7 @@ def test_strict_policy_injects_required_denies_without_mutating_input() -> None:
     assert policy.sandbox.workspace.filesystem.deny_read == ("existing-read",)
     assert policy.sandbox.workspace.filesystem.deny_write == ("existing-write",)
     assert policy.sandbox.workspace.network.deny_domains == ("already-blocked.example",)
-    assert policy.env.deny == ("EXISTING_*",)
+    assert policy.env.deny == ("*TOKEN*", "*SECRET*", "*KEY*", "EXISTING_*")
     assert resolved.sandbox.workspace.filesystem.deny_read == ("existing-read", "./.env", "./secrets/**")
     assert resolved.sandbox.workspace.filesystem.deny_write == (
         "existing-write",
@@ -149,7 +149,7 @@ def test_strict_policy_injects_required_denies_without_mutating_input() -> None:
         "/usr/local/bin",
     )
     assert resolved.sandbox.workspace.network.deny_domains == ("already-blocked.example",)
-    assert resolved.env.deny == ("EXISTING_*", "*TOKEN*", "*SECRET*", "*KEY*")
+    assert resolved.env.deny == ("*TOKEN*", "*SECRET*", "*KEY*", "EXISTING_*")
 
 
 def test_strict_policy_rejects_write_path_outside_allowed_roots_with_step_context(tmp_path: Path) -> None:

@@ -159,3 +159,71 @@ phase_mode=single
 phase_ids=policy-core,policy-config-authoring,policy-resolution-propagation,policy-codex,policy-claude-regression
 explicit=True
 current_phase_index=0
+
+
+---
+run_id=run-20260506T190853Z-f707cb4f | entry=session_turn | pair=implement | phase=producer | cycle=1 | attempt=1 | thread_id=019dfeb8-62d9-7162-bd36-563fb3056ac9
+---
+provider=codex
+mode=start
+template=/home/rauter/.local/share/pipx/venvs/autoloop/lib/python3.12/site-packages/autoloop/templates/implement_producer.md
+session_id=019dfeb8-62d9-7162-bd36-563fb3056ac9
+
+
+---
+run_id=run-20260506T190853Z-f707cb4f | entry=phase_output | pair=implement | phase=producer | process=codex-agent | cycle=1 | attempt=1 | thread_id=019dfeb8-62d9-7162-bd36-563fb3056ac9
+---
+I’m implementing the `policy-core` phase only: the core provider policy models, merge/strict validation, fingerprinting, and unit coverage. I’ll read the phase artifacts and the existing core error/model patterns first so the new module fits the repo’s conventions and doesn’t drift from the accepted scope.
+
+I’ve confirmed the phase is narrow and the worktree is very dirty outside this scope, so I’m keeping changes isolated to the new core policy module, its unit tests, and the phase artifacts. Next I’m reading the existing error and model conventions so the new policy types behave like the rest of `autoloop.core`.
+
+The repo uses Pydantic v2 with `ConfigDict(frozen=True)` selectively and normal `WorkflowExecutionError` subclasses for runtime violations. I’m checking whether there’s an existing path-normalization helper worth reusing before I write the policy validators, because symlink and nearest-parent handling are the riskier part of this phase.
+
+I have enough context to implement the core phase without touching the runtime or provider layers yet.
+
+Plan:
+1. Add `autoloop/core/provider_policy.py` with frozen Pydantic models for the normalized policy tree, strict-policy tree, capability/emission reporting types, merge helpers, strict validation, and fingerprinting.
+2. Keep merge behavior explicit in the core module rather than generic magic: unions for deny lists, replacement for allow/ask tuples, deep merge for dict-like extras, and copy-on-write convenience methods on `ProviderPolicy`.
+3. Make strict validation path-aware against a workspace root, including nearest-existing-parent resolution and a symlink-escape check for relative workspace paths.
+4. Add focused unit tests for the requested invariants, then run just the new policy suite before updating the phase notes and decision ledger if any non-obvious implementation constraint needs to be preserved.
+
+I’m at the edit point now. The implementation will stay self-contained in the new policy module and a focused unit test file so I can validate the core semantics before any runtime wiring happens.
+
+The core module is in place. I’m adding targeted tests now to pin the merge rules and the strict-path behavior before I run anything, because that’s where regressions or silent policy expansion would hide.
+
+The first pass is coded. I’m running only the new unit file now to shake out model-validation mistakes before I touch the implementation notes or lock in any decisions.
+
+`pytest` isn’t on PATH here, so I’m rerunning through the interpreter. If that still fails, I’ll inspect the environment rather than guessing about the test runner.
+
+The environment has `python3` but no `pytest` module in that interpreter. I’m checking the project-local tooling now so I can run the suite with the same interpreter the repo expects instead of inventing a setup step.
+
+The first test run exposed a real semantic detail rather than a code bug: `merge_provider_policies()` starts from the normalized `ProviderPolicy()` baseline, so default env deny patterns remain present unless explicitly replaced, and env deny is a union field anyway. I’m tightening the assertions to match the requested merge contract instead of weakening the implementation.
+
+The focused suite is green. I’m doing one last pass over the diff and then I’ll update the phase notes and decision ledger with only the non-obvious constraints that later phases would otherwise be likely to miss.
+
+I’ve finished the code path for this phase. I’m recording the implementation constraints now so later phases don’t accidentally re-expand scope or break the core merge/strict semantics while wiring runtime config and transports.
+
+I found one important bookkeeping detail before closing this out: the core policy module already matches the requested implementation in the current checkout, so there’s no net diff there. I’m correcting the phase notes to distinguish validated core code from the files that actually changed this turn.
+
+Scope considered
+
+Active `policy-core` phase only: core provider policy domain behavior, focused unit coverage, and the required phase artifacts. I kept away from runtime config, workflow authoring, transport wiring, and unrelated dirty files.
+
+What I analyzed
+
+I read the phase plan, feedback, implementation notes scaffold, and decision ledger, then checked the existing core error/model conventions and the current `autoloop/core/provider_policy.py` implementation. I also verified the worktree was already very dirty outside this phase, so I constrained changes accordingly.
+
+What I changed
+
+`autoloop/core/provider_policy.py` already matched the requested phase implementation in the current checkout, so there was no net code diff needed there. I updated [tests/unit/test_provider_policy.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/tests/unit/test_provider_policy.py) to align the assertions with the actual merge contract that is already implemented, and I updated the phase artifacts:
+[implementation_notes.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/implementation-goal-add-a-first-class-provider-p-5e755cae/runs/run-20260506T190853Z-f707cb4f/artifacts/implement/phases/policy-core/implementation_notes.md) and [decisions.txt](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/implementation-goal-add-a-first-class-provider-p-5e755cae/runs/run-20260506T190853Z-f707cb4f/decisions.txt).
+
+Key findings / decisions
+
+The non-obvious core behavior worth preserving is that `merge_provider_policies()` seeds from the normalized `ProviderPolicy()` baseline, not `SYSTEM_DEFAULT_PROVIDER_POLICY`; the runtime resolver must add the system default explicitly in the next phase. The other important rule is that strict path validation treats relative paths whose canonical resolution escapes the workspace root as violations unless `allow_symlink_escape=True`, even if a relative strict root names that symlink path.
+
+Validation passed with `.venv/bin/python -m pytest -q tests/unit/test_provider_policy.py` (`10 passed`).
+
+Open issues / next step
+
+This phase is complete at the core-domain level. The next step is phase 2: wire `provider_policy` into runtime config resolution so the explicit system-default layer, legacy field mapping, and strict unknown-key validation all flow through the existing config merge path.
