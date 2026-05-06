@@ -906,3 +906,69 @@ Validation
 - `./.venv/bin/python -m pytest -q tests/unit/test_simple_surface.py -k 'policy or operation_surface_singletons'`
 - `./.venv/bin/python -m pytest -q tests/unit/test_provider_boundary_core.py -k 'operation or rendered'`
 - `./.venv/bin/python -m pytest -q tests/contract/test_engine_contracts.py -k 'operation_replay_fingerprint or operation_replay_override'`
+
+
+---
+run_id=run-20260506T190853Z-f707cb4f | entry=session_turn | pair=implement | phase=verifier | cycle=1 | attempt=1 | thread_id=019dfed8-551c-7c93-94aa-0e9110d8f650
+---
+provider=codex
+mode=resume
+template=/home/rauter/.local/share/pipx/venvs/autoloop/lib/python3.12/site-packages/autoloop/templates/implement_verifier.md
+session_id=019dfed8-551c-7c93-94aa-0e9110d8f650
+
+
+---
+run_id=run-20260506T190853Z-f707cb4f | entry=phase_output | pair=implement | phase=verifier | process=codex-agent | cycle=1 | attempt=1 | thread_id=019dfed8-551c-7c93-94aa-0e9110d8f650
+---
+I’m auditing the phase diff against the acceptance criteria and the phase artifacts first, then I’ll verify the runtime seams and regression surfaces that could fail despite the focused test pass.
+
+Reviewing the phase-local implementation now. I’m checking the changed seams against the phase contract first, then I’ll update `criteria.md` and `feedback.md` based on concrete findings.
+
+The repo is dirty far outside this task, so I’m narrowing strictly to the phase-deliverable files and their immediate regression seams. Next I’m reading the actual diffs and the new tests to see whether the propagation path is complete and safe.
+
+The file set is tracked, but plain `git diff` wasn’t enough in this workspace state. I’m diffing explicitly against `HEAD` now and then checking the runtime seams where a missing binding would show up.
+
+I have the main propagation path in view now. I’m checking the hash/fingerprint participation and looking for gaps where workflow or step policy can disappear on nonstandard execution paths.
+
+Two risk areas stand out now: policy is only bound for a subset of step kinds, and direct `Engine(...)` runs appear to skip authored policy resolution entirely unless the caller manually wires a resolver. I’m confirming both with minimal repros before I write findings.
+
+The `Engine(...)` repro confirms authored policy is inert without a manually supplied resolver. I’m validating the second gap with a short-circuited `workflow_step` hook so the child workflow itself doesn’t obscure the step-level policy behavior.
+
+The main defects are confirmed. I’m recording them now in phase feedback: one is a real step-kind propagation hole, and the other is a public-entrypoint gap where authored policy does nothing unless callers discover and wire an internal resolver themselves.
+
+Scope considered
+
+- Phase-local review only for `policy-resolution-propagation`.
+- Reviewed the deliverable seams named in the phase contract: compiled metadata, resolver wiring, operation/runtime propagation, replay fingerprints, and branch/fan-in binding paths.
+- Ignored unrelated dirty repo state outside dependency/regression analysis.
+
+What I analyzed
+
+- Reviewer artifacts: `criteria.md`, `feedback.md`, `implementation_notes.md`.
+- Runtime/code seams: `autoloop/runtime/provider_policy_resolver.py`, `autoloop/core/compiler.py`, `autoloop/core/operations.py`, `autoloop/core/engine.py`, `autoloop/core/engine_collaborators.py`, `autoloop/core/branch_groups/runtime.py`, provider request/rendered-turn models, runner/CLI handoff.
+- Tests: `tests/runtime/test_provider_policy_steps.py`.
+- Targeted repros with `./.venv/bin/python` plus a verification run of `./.venv/bin/python -m pytest -q tests/runtime/test_provider_policy_steps.py`.
+
+What I reviewed
+
+- Confirmed the new resolver exists and that topology hashes / replay fingerprints include policy fingerprints on the covered paths.
+- Verified the added phase test file passes.
+- Reproduced two uncovered gaps:
+  1. `workflow_step(..., policy=...)` does not bind step policy for inline provider calls in hooks because `step.kind == "workflow"` is excluded from `_step_uses_provider_policy()`.
+  2. Direct `Engine(...)` execution leaves authored workflow/step policy inert unless the caller manually passes a `ProviderPolicyResolver`.
+
+Key findings / decisions
+
+- Logged `IMP-001` as `blocking` in `feedback.md`: workflow-step policy propagation is incomplete and can resolve against workflow defaults or stale prior-step policy.
+- Logged `IMP-002` as `blocking` in `feedback.md`: direct `Engine(...)` callers do not get first-class authored policy behavior unless they know to wire an internal resolver manually.
+- Left all `criteria.md` boxes unchecked. With these blocking gaps, the phase does not satisfy AC-1 safely across the declared public/runtime surfaces.
+
+Open issues / next step
+
+- Fix `OperationRecorder.bind_step` policy binding so it covers all hook-capable/provider-capable step kinds, at minimum `workflow`, and make the context-bound policy explicitly rebound/cleared per step.
+- Add a default resolver path for direct `Engine(...)` construction, or a shared resolver factory used by both runner and engine entrypoints.
+- Add regression tests for both cases before re-review.
+
+<loop-control>
+{"schema":"docloop.loop_control/v1","kind":"promise","promise":"INCOMPLETE"}
+</loop-control>
