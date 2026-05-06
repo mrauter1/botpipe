@@ -771,3 +771,126 @@ Open issues / next step
 <loop-control>
 {"schema":"docloop.loop_control/v1","kind":"promise","promise":"COMPLETE"}
 </loop-control>
+
+
+---
+run_id=run-20260506T204256Z-05282838 | entry=session_turn | pair=audit | phase=producer | cycle=1 | attempt=1 | thread_id=019dff2b-36c8-7993-8f4c-528ef2ce9754
+---
+provider=codex
+mode=start
+template=/home/rauter/.local/share/pipx/venvs/autoloop/lib/python3.12/site-packages/autoloop/templates/audit_producer.md
+session_id=019dff2b-36c8-7993-8f4c-528ef2ce9754
+
+
+---
+run_id=run-20260506T204256Z-05282838 | entry=phase_output | pair=audit | phase=producer | process=codex-agent | cycle=1 | attempt=1 | thread_id=019dff2b-36c8-7993-8f4c-528ef2ce9754
+---
+I’m auditing the completed run against the original request, clarifications, decisions, artifacts, and final codebase. I’ll first read the authoritative run files and the implementation/test outputs, then trace the current route-schema and transport behavior in code before writing the audit artifacts.
+
+I’ve got the run history and decisions. Now I’m checking the implementation and test artifacts against the current tree so the audit reflects what actually landed, not just what earlier phases reported.
+
+I’ve confirmed the run touched the intended surfaces and the tree is otherwise very noisy. I’m narrowing to the specific files that implement route-schema enforcement, backend schema delivery, and the new regressions so I can judge remaining gaps precisely.
+
+I have the implementation notes and symbol map. Next I’m reading the actual compiler, engine, and provider code paths around those symbols so I can verify the behavior directly rather than relying on artifact summaries.
+
+The direct code path matches the implementation notes so far: compiler now fails closed except for helper-default route-fields, and provider metadata explicitly records delivery mode. I’m checking the new tests and the rendered-provider schema plumbing next to see whether any requirement is still under-tested or only partially wired.
+
+I’ve verified the new tests themselves. I’m doing one targeted status and file sweep now to confirm the final tree state for just the scoped files, and to check whether there are any in-scope omissions like another backend or transport surface that still drops `response_schema`.
+
+I have enough context to make the audit call, but I want one independent verification pass rather than relying only on the recorded test output. I’m rerunning the focused route-contract and backend slices exactly in the repo `.venv` now.
+
+The focused tests passed independently, and I don’t see a remaining request-level gap in the scoped code paths. I’m writing the audit artifacts now: a no-gap report, a no-follow-up revised request, and the audit result JSON.
+
+The audit artifacts are written. I’m doing a quick readback of the three files to make sure the conclusions and JSON payload are internally consistent before I close with the required summary block.
+
+Scope considered
+
+Run-local audit of the final codebase, request, raw phase log, decisions ledger, implement/test artifacts, and the scoped route-schema/backend files tied to this handoff.
+
+What I analyzed
+
+- Original request in `request.md` and authoritative chronology in `raw_phase_log.md`.
+- Recorded non-obvious constraints in `decisions.txt`.
+- Final behavior in `autoloop/core/compiler.py`, `autoloop/core/routes.py`, `autoloop/core/discovery.py`, `autoloop/core/lowering.py`, `autoloop/core/engine.py`, `autoloop/runtime/providers/_common.py`, `autoloop/runtime/providers/codex.py`, and `autoloop/runtime/providers/claude.py`.
+- Regression coverage in `tests/unit/test_validation.py`, `tests/contract/test_engine_contracts.py`, and `tests/runtime/test_provider_backends.py`.
+- Independent focused verification:
+  - `.venv/bin/python -m pytest tests/unit/test_validation.py -k "raw_route_payload_schema_without_jsonschema_dependency or raw_route_fields_schema_without_jsonschema_dependency or helper_default_route_fields_without_jsonschema_dependency or custom_helper_route_fields_override_without_jsonschema_dependency"`
+  - `.venv/bin/python -m pytest tests/contract/test_engine_contracts.py -k "invalid_custom_raw_route_payload or invalid_custom_raw_route_fields"`
+  - `.venv/bin/python -m pytest tests/runtime/test_provider_backends.py -k "response_schema or prompt_only_fallback or output_schema_file or simplified_schema_delivery"`
+
+What I changed
+
+- Wrote [gap_report.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/this-is-the-final-standalone-handoff-spec-it-sup-5b5e7cd0/runs/run-20260506T204256Z-05282838/artifacts/audit/gap_report.md).
+- Wrote [revised_request.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/this-is-the-final-standalone-handoff-spec-it-sup-5b5e7cd0/runs/run-20260506T204256Z-05282838/artifacts/audit/revised_request.md).
+- Wrote [audit_result.json](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/this-is-the-final-standalone-handoff-spec-it-sup-5b5e7cd0/runs/run-20260506T204256Z-05282838/artifacts/audit/audit_result.json).
+
+Key findings / decisions
+
+- No material unresolved gaps remain.
+- Custom raw route `payload_schema` and `route_fields_schema` mappings now fail closed when `jsonschema` is unavailable, with helper-default question/blocked/failed route-fields remaining the only justified handwritten fallback path.
+- Provider response-schema delivery is wired for supported Codex start turns, and unsupported surfaces record explicit `prompt_only` fallback metadata without weakening post-parse validation.
+- The only notable justified differences are:
+  - native schema delivery is limited to observed supported CLI surfaces
+  - runtime raw-schema contract tests use a fake validator seam because the repo `.venv` does not ship `jsonschema`
+
+Open issues / next step
+
+No follow-up implementation run is required for this request.
+
+<loop-control>
+{"schema":"docloop.loop_control/v1","kind":"promise","promise":"INCOMPLETE"}
+</loop-control>
+
+
+---
+run_id=run-20260506T204256Z-05282838 | entry=session_turn | pair=audit | phase=verifier | cycle=1 | attempt=1 | thread_id=019dff2b-36c8-7993-8f4c-528ef2ce9754
+---
+provider=codex
+mode=resume
+template=/home/rauter/.local/share/pipx/venvs/autoloop/lib/python3.12/site-packages/autoloop/templates/audit_verifier.md
+session_id=019dff2b-36c8-7993-8f4c-528ef2ce9754
+
+
+---
+run_id=run-20260506T204256Z-05282838 | entry=phase_output | pair=audit | phase=verifier | process=codex-agent | cycle=1 | attempt=1 | thread_id=019dff2b-36c8-7993-8f4c-528ef2ce9754
+---
+I’m verifying the audit artifacts against the request, decisions, final code, and focused tests. I’ll first read the current audit criteria/feedback and the produced gap report trio, then update the audit artifacts to reflect whether the no-gap conclusion is actually supported.
+
+I don’t see a misclassified gap or a broken revised request. I’m making one last verification pass on the focused code/test surfaces behind the no-gap conclusion, then I’ll mark the audit criteria and append the verifier result to feedback.
+
+The audit is holding up under direct code and test inspection. I’m marking the criteria complete and appending a concise verifier note to feedback so the artifact trail shows that no audit defects were found.
+
+The verifier artifacts are updated. I’m reading back the criteria and feedback once to confirm they match the `COMPLETE` outcome before I close.
+
+Scope considered
+
+Run-local verification of the audit artifacts against the immutable request, authoritative raw log, run decisions, final codebase, focused regression tests, and the audit artifact set under the active audit directory.
+
+What I analyzed
+
+- `request.md`, `raw_phase_log.md`, and `decisions.txt`.
+- Produced audit artifacts: `gap_report.md`, `revised_request.md`, and `audit_result.json`.
+- Final implementation surfaces in `autoloop/core/compiler.py`, `autoloop/core/routes.py`, `autoloop/core/discovery.py`, `autoloop/core/lowering.py`, `autoloop/core/engine.py`, `autoloop/runtime/providers/_common.py`, `autoloop/runtime/providers/codex.py`, and `autoloop/runtime/providers/claude.py`.
+- Focused regression coverage in `tests/unit/test_validation.py`, `tests/contract/test_engine_contracts.py`, and `tests/runtime/test_provider_backends.py`.
+
+What I reviewed
+
+- The audit’s no-gap conclusion against the actual route-contract fail-closed logic, helper-route compatibility path, provider schema-delivery path, and explicit fallback metadata/docs.
+- The supporting focused pytest evidence for raw-schema compile failures, scripted/rendered runtime enforcement, and backend schema delivery / fallback behavior.
+- Audit artifact consistency: `material_gaps_found=false`, revised request stating no follow-up work, and evidence-backed justification in the gap report.
+
+Key findings / decisions
+
+- No blocking or non-blocking audit defects were found.
+- The audit accurately classifies the remaining differences as justified:
+  - helper-default handwritten fallback is the only allowed missing-`jsonschema` exception
+  - Codex start turns are the only currently supported native schema-delivery surface, with explicit `prompt_only` fallback for unsupported surfaces
+- I updated `criteria.md` to fully checked and appended `AUD-000` to `feedback.md` documenting that the audit is valid.
+
+Open issues / next step
+
+No open audit issues remain. The audit artifacts are consistent and complete.
+
+<loop-control>
+{"schema":"docloop.loop_control/v1","kind":"promise","promise":"COMPLETE"}
+</loop-control>

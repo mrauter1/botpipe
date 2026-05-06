@@ -39,3 +39,6 @@
 {"ts": "2026-05-06T21:21:54.597780+00:00", "run_id": "run-20260506T204256Z-05282838", "seq": 39, "event_type": "phase_completed", "pair": "test", "phase_id": "backend-response-schema-delivery", "phase_mode": "single"}
 {"ts": "2026-05-06T21:21:54.601697+00:00", "run_id": "run-20260506T204256Z-05282838", "seq": 40, "event_type": "pair_started", "pair": "audit", "phase_id": null}
 {"ts": "2026-05-06T21:21:54.601898+00:00", "run_id": "run-20260506T204256Z-05282838", "seq": 41, "event_type": "cycle_started", "pair": "audit", "cycle": 1, "attempt": 1, "phase_id": null}
+{"ts": "2026-05-06T21:24:08.967661+00:00", "run_id": "run-20260506T204256Z-05282838", "seq": 42, "event_type": "phase_finished", "pair": "audit", "phase": "producer", "cycle": 1, "attempt": 1, "empty_output": false, "phase_id": null}
+{"ts": "2026-05-06T21:25:05.509891+00:00", "run_id": "run-20260506T204256Z-05282838", "seq": 43, "event_type": "phase_finished", "pair": "audit", "phase": "verifier", "cycle": 1, "attempt": 1, "empty_output": false, "phase_id": null}
+{"ts": "2026-05-06T21:25:05.566378+00:00", "run_id": "run-20260506T204256Z-05282838", "seq": 44, "event_type": "pair_completed", "pair": "audit", "cycle": 1, "attempt": 1, "phase_id": null}
