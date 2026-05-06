@@ -1,4 +1,107 @@
 version: 1
 task_id: this-is-the-final-standalone-handoff-spec-it-sup-5b5e7cd0
 request_snapshot_ref: /home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/this-is-the-final-standalone-handoff-spec-it-sup-5b5e7cd0/runs/run-20260506T185744Z-092935c3/request.md
-phases: []
+phases:
+  - phase_id: "route-model-unification"
+    title: "Unify Route Metadata"
+    objective: "Replace injected runtime-control route handling with one compiled route model that supports helpers, GLOBAL inheritance, suppression, visibility modes, and route schemas."
+    status: "planned"
+    in_scope:
+      - "Extend Route and CompiledRoute with helper preset metadata, normalized provider visibility, payload-schema mode, route-fields schema, and suppression support."
+      - "Replace discovery/compiler runtime-control injection as the legality source with compiled route resolution using step-local, GLOBAL, and framework-default precedence."
+      - "Lower legacy ControlRoutes(question=...) into compatibility-only default Route.question() inheritance without adding blocked/failed controls."
+    out_of_scope:
+      - "Changing route finalization ordering or hook execution semantics."
+      - "Removing legacy provider parsing compatibility in the first migration patch."
+    dependencies: []
+    acceptance_criteria:
+      - id: "AC-1"
+        text: "Compiled routes become the only source for available routes, provider-visible routes, helper preset kind, visibility mode, and inheritance or suppression state."
+      - id: "AC-2"
+        text: "Step-local Route.disabled() suppresses inherited routes before runtime and provider-visible route lists are computed."
+    deliverables:
+      - "Compiled route metadata model and compiler/lowering updates."
+      - "Compatibility lowering path for ControlRoutes(question=...)."
+    risks:
+      - "Leaving runtime_control_routes active as a second legality path would create mixed route authority."
+      - "Branch-group internal-step compilation could drift if it keeps separate route lowering."
+    rollback:
+      - "Revert to the pre-change route compilation path only if compiled-route metadata cannot fully replace injected route legality in one slice."
+  - phase_id: "provider-outcome-contract"
+    title: "Canonical Provider Outcomes"
+    objective: "Move provider prompts, schemas, parsing, and validation to the canonical outcome envelope backed by selected-route payload and route-fields schemas."
+    status: "planned"
+    in_scope:
+      - "Generate provider schemas from provider-visible compiled routes, including nested-anyOf branches and simplified fallback when needed."
+      - "Parse canonical outcome envelopes and legacy top-level tag/payload/question/reason shapes into Outcome with route_fields."
+      - "Validate provider route legality, payload schema, and route-fields schema from compiled selected-route metadata with existing retry machinery."
+    out_of_scope:
+      - "Redesigning fake/scripted provider interfaces beyond making them honor the new compiled-route validation path."
+      - "Changing business payload semantics so payload participates in route selection."
+    dependencies:
+      - "route-model-unification"
+    acceptance_criteria:
+      - id: "AC-1"
+        text: "Provider prompts teach only outcome.tag, outcome.payload, and outcome.route_fields, while legacy input shapes remain accepted during migration."
+      - id: "AC-2"
+        text: "Illegal hidden, disabled, absent, or full-auto-hidden routes fail as illegal_route and route-specific payload or route-fields failures fail as invalid_payload."
+    deliverables:
+      - "Provider rendering, schema generation, parsing, and engine validation updates."
+      - "Outcome model updated with route_fields and compatibility projections."
+    risks:
+      - "Schema-generation fallback could silently weaken validation if post-parse selected-route checks are not preserved."
+      - "Partial migration could desynchronize direct Outcome objects from rendered-provider JSON behavior."
+    rollback:
+      - "Revert provider contract changes together with Outcome parsing and validation changes; do not keep mixed canonical and legacy prompt contracts."
+  - phase_id: "runtime-and-inspection-alignment"
+    title: "Align Runtime And Reporting"
+    objective: "Project route_fields into runtime events and align static graph, compile report, workflow capability inspection, and topology hash with compiled route metadata."
+    status: "planned"
+    in_scope:
+      - "Expose ctx.outcome.route_fields and preserve ctx.outcome.payload plus compatibility reason/question projections."
+      - "Update event projection, trace or checkpoint payloads, and child-workflow-adjacent bookkeeping impacted by Outcome shape changes."
+      - "Replace authored-versus-runtime-control reporting with exact compiled route metadata including visibility mode, schema fingerprints, preset kind, inheritance source, and suppression state."
+    out_of_scope:
+      - "Changing route-finalizer behavior for after hooks, on_taken hooks, handoffs, redirects, or required-write enforcement."
+      - "Broad workflow behavior redesign unrelated to route metadata."
+    dependencies:
+      - "provider-outcome-contract"
+    acceptance_criteria:
+      - id: "AC-1"
+        text: "Runtime contexts and projected Events use selected-route metadata rather than tag-name-only question handling."
+      - id: "AC-2"
+        text: "Static graph, compile report, workflow capability inspection, and topology hash reflect compiled route metadata exactly and change when route schemas or visibility change."
+    deliverables:
+      - "Runtime projection updates for Outcome.route_fields."
+      - "Inspection, compile-report, route-table, and topology-hash/reporting updates."
+    risks:
+      - "Stale inspection fields could hide behavior drift even if runtime legality is correct."
+      - "Outcome shape changes can break checkpoint or trace consumers if cloning and serialization paths are missed."
+    rollback:
+      - "Revert reporting and runtime projection changes with the provider contract slice if route-field projection cannot be made consistent across engine and inspection surfaces."
+  - phase_id: "tests-and-docs-migration"
+    title: "Migrate Tests And Docs"
+    objective: "Update regression coverage and public documentation to the route-helper and structured-outcome model while preserving documented compatibility notes."
+    status: "planned"
+    in_scope:
+      - "Add or update tests for helper defaults, GLOBAL inheritance, suppression, provider schema generation, parsing parity, route-fields validation, and reporting/hash changes."
+      - "Update docs and prompt guidance to teach everything-is-a-route, GLOBAL defaults, payload versus route_fields, and ControlRoutes deprecation."
+      - "Adjust existing tests that currently assert runtime_control_routes, top-level question/reason prompts, or boolean-only provider visibility."
+    out_of_scope:
+      - "Introducing new authoring subsystems beyond the route helper and compatibility surfaces already required by the spec."
+      - "Retiring legacy top-level provider parsing in the same patch."
+    dependencies:
+      - "runtime-and-inspection-alignment"
+    acceptance_criteria:
+      - id: "AC-1"
+        text: "Regression suites cover direct Outcome objects, rendered-provider JSON, helper-route execution behavior, and full-auto route visibility rules."
+      - id: "AC-2"
+        text: "Docs prefer route helpers and canonical outcome.route_fields while explicitly marking ControlRoutes and top-level question/reason as compatibility-only."
+    deliverables:
+      - "Updated unit, contract, and runtime tests."
+      - "Documentation and prompt-contract updates aligned with the standalone spec."
+    risks:
+      - "Old tests and docs can reintroduce the split control-route model even if code is correct."
+      - "Widespread assertion churn can hide genuine regressions unless parity coverage is added first."
+    rollback:
+      - "Revert doc and test wording together only if the implementation slice is backed out; do not leave tests encoding stale control-route terminology after the code changes."
