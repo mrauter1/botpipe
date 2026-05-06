@@ -11,3 +11,5 @@ BranchGroupRuntime now treats compiled scoped branches as an internal assertion 
 Provider-turn strictness for this pass is enforced against runtime transport run_turn bodies only so explicit CLI help probing via subprocess.run remains allowed outside provider turn execution.
 <autoloop-decisions-header version="1" block_seq="4" owner="implementer" phase_id="async-branch-group-cleanup" pair="implement" turn_seq="2" run_id="run-20260506T181149Z-6867fac0" ts="2026-05-06T18:30:17.674038+00:00" />
 Provider-turn strictness scanning now resolves forbidden primitives through a shared label helper across Call, Attribute, and Name nodes so direct-import executor forms are rejected the same way as attribute-based forms inside run_turn.
+<autoloop-decisions-header version="1" block_seq="5" owner="test_author" phase_id="async-branch-group-cleanup" pair="test" turn_seq="1" run_id="run-20260506T181149Z-6867fac0" ts="2026-05-06T18:33:07.287851+00:00" />
+Added explicit default-lookup coverage for BranchSessionStoreView before any branch-local binding exists so a regression to parent active-session fallback fails even when fresh-session-only assertions still pass.

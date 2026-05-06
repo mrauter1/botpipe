@@ -370,3 +370,112 @@ Open issues / next step
 <loop-control>
 {"schema":"docloop.loop_control/v1","kind":"promise","promise":"COMPLETE"}
 </loop-control>
+
+
+---
+run_id=run-20260506T181149Z-6867fac0 | entry=session_turn | pair=test | phase=producer | cycle=1 | attempt=1 | thread_id=019dfe82-f64a-7772-81d0-a10f25fab893
+---
+provider=codex
+mode=resume
+template=/home/rauter/.local/share/pipx/venvs/autoloop/lib/python3.12/site-packages/autoloop/templates/test_producer.md
+session_id=019dfe82-f64a-7772-81d0-a10f25fab893
+
+
+---
+run_id=run-20260506T181149Z-6867fac0 | entry=phase_output | pair=test | phase=producer | process=codex-agent | cycle=1 | attempt=1 | thread_id=019dfe82-f64a-7772-81d0-a10f25fab893
+---
+I’m auditing the current test coverage against the phase contract, then I’ll add any missing regression tests and update the phase test artifacts with the exact behavior-to-test mapping.
+
+The implementation already landed most of the core regression tests, so I’m checking for any uncovered requirement edges before I touch the repository. The branch-session snapshot contract is the main remaining place where a focused assertion may still be worthwhile.
+
+I found one real edge the existing tests only covered partially: default branch session lookup before any branch-local binding exists. I’m tightening that unit test now, then I’ll run the focused coverage and update the test artifacts and decision ledger.
+
+The focused unit and strictness coverage is running cleanly so far. While that finishes, I’m writing the behavior-to-test map and documenting the one extra branch-local lookup assertion I added.
+
+The focused suite passed. I’m recording the exact coverage map, the small extra regression assertion, and the non-obvious test intent so later turns don’t quietly drop this default-lookup edge.
+
+Scope considered
+
+- Phase-local test work for async branch-group cleanup only.
+- I focused on the changed branch-session isolation and strictness surfaces, plus the required phase test artifacts.
+
+What I analyzed
+
+- Existing regression coverage in `tests/unit/test_branch_group_context_sessions.py`, `tests/contract/test_branch_group_runtime.py`, `tests/runtime/test_runtime_providers.py`, `tests/strictness/test_no_compat.py`, and `tests/unit/test_simple_surface.py`.
+- The active implementation notes, current run decisions, and the empty test-phase artifacts that needed the behavior-to-test map.
+
+What I changed
+
+- Tightened `tests/unit/test_branch_group_context_sessions.py` so branch-local default lookup is asserted before any branch binding exists:
+  `branch_store.get("main") is None` and `branch.get_session("main") is None` now fail if parent active-session fallback ever comes back.
+- Updated [test_strategy.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/revised-standalone-spec-second-pass-cleanup-for-dd5e2acb/runs/run-20260506T181149Z-6867fac0/artifacts/test/phases/async-branch-group-cleanup/test_strategy.md) with an explicit AC-to-test coverage map, edge cases, failure paths, and known gaps.
+- Appended a concise test-phase summary to [feedback.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/revised-standalone-spec-second-pass-cleanup-for-dd5e2acb/runs/run-20260506T181149Z-6867fac0/artifacts/test/phases/async-branch-group-cleanup/feedback.md).
+- Appended the non-obvious default-lookup coverage decision under the current test-author header in `decisions.txt`.
+
+Key findings / decisions
+
+- Most mandatory coverage was already present from the implementation pass; the meaningful remaining edge was default branch lookup before any branch-local binding exists.
+- That edge matters because a regression could leak the parent active session through `get()` while still leaving fresh-session-specific assertions green.
+
+Open issues / next step
+
+- Focused validation passed:
+  `PYTHONPATH=/tmp/autoloop-test-deps:$PYTHONPATH python3 -m pytest -q tests/unit/test_branch_group_context_sessions.py tests/strictness/test_no_compat.py`
+  Result: `47 passed in 3.51s`.
+- I did not run the full repository suite; the next step is test-phase verification against the updated artifacts and focused coverage.
+
+
+---
+run_id=run-20260506T181149Z-6867fac0 | entry=session_turn | pair=test | phase=verifier | cycle=1 | attempt=1 | thread_id=019dfe82-f64a-7772-81d0-a10f25fab893
+---
+provider=codex
+mode=resume
+template=/home/rauter/.local/share/pipx/venvs/autoloop/lib/python3.12/site-packages/autoloop/templates/test_verifier.md
+session_id=019dfe82-f64a-7772-81d0-a10f25fab893
+
+
+---
+run_id=run-20260506T181149Z-6867fac0 | entry=phase_output | pair=test | phase=verifier | process=codex-agent | cycle=1 | attempt=1 | thread_id=019dfe82-f64a-7772-81d0-a10f25fab893
+---
+I’m auditing the phase test coverage against the acceptance criteria first, then I’ll verify the focused suites and update the audit artifacts to match what the tests actually protect.
+
+The strategy claims coverage beyond the one added assertion, so I’m re-running the same targeted suites the implementation notes rely on instead of only trusting the artifact text.
+
+The compile-time surface checks are green. I’m waiting on the larger branch-group/runtime/provider/strictness suite now so the audit can reflect real coverage rather than a partial spot-check.
+
+The targeted suites passed end to end, and the added default-lookup assertion closes the only material edge I still saw in the phase test coverage. I’m updating the audit artifacts to mark the phase complete and preserve the validation evidence.
+
+Scope considered
+
+- Phase-local audit of the async branch-group cleanup test work only.
+- I reviewed the updated repository tests, the phase `test_strategy.md`, the test-phase `feedback.md`, and the run decisions that constrain allowed behavior.
+
+What I analyzed
+
+- Coverage claims in [test_strategy.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/revised-standalone-spec-second-pass-cleanup-for-dd5e2acb/runs/run-20260506T181149Z-6867fac0/artifacts/test/phases/async-branch-group-cleanup/test_strategy.md) against the phase acceptance criteria and decision ledger.
+- The changed branch-session isolation assertions in `tests/unit/test_branch_group_context_sessions.py`.
+- The broader targeted regression surfaces in `tests/contract/test_branch_group_runtime.py`, `tests/runtime/test_runtime_providers.py`, `tests/strictness/test_no_compat.py`, and the explicit compile-time checks in `tests/unit/test_simple_surface.py`.
+
+What I reviewed
+
+- The added default branch lookup assertion is meaningful: it now catches a parent active-session fallback regression before any branch-local binding exists, which was the last material edge not explicitly asserted in the unit layer.
+- The coverage map is consistent with the request scope and with the implementation/test decisions already recorded for this run.
+- Audit reruns passed:
+  `PYTHONPATH=/tmp/autoloop-test-deps:$PYTHONPATH python3 -m pytest -q tests/unit/test_branch_group_context_sessions.py tests/contract/test_branch_group_runtime.py tests/runtime/test_runtime_providers.py tests/strictness/test_no_compat.py`
+  Result: `115 passed in 4.87s`
+  `PYTHONPATH=/tmp/autoloop-test-deps:$PYTHONPATH python3 -m pytest -q tests/unit/test_simple_surface.py::test_provider_backed_branch_steps_require_explicit_fresh_sessions_only_inside_branch_groups tests/unit/test_simple_surface.py::test_branch_group_rejects_non_fresh_verifier_sessions_inside_branch_groups tests/unit/test_simple_surface.py::test_branch_group_rejects_unsafe_names_child_workflow_fan_in_and_non_serializable_fan_out_inputs tests/unit/test_simple_surface.py::test_branch_group_rejects_operation_fan_in_steps tests/unit/test_simple_surface.py::test_branch_group_fan_in_helpers_are_rejected_outside_fan_in tests/unit/test_simple_surface.py::test_fan_in_placeholder_is_rejected_outside_fan_in_steps`
+  Result: `7 passed in 0.34s`
+
+Key findings / decisions
+
+- No blocking audit findings.
+- I updated [criteria.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/revised-standalone-spec-second-pass-cleanup-for-dd5e2acb/runs/run-20260506T181149Z-6867fac0/artifacts/test/phases/async-branch-group-cleanup/criteria.md) to fully checked and appended `TST-001` to [feedback.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/revised-standalone-spec-second-pass-cleanup-for-dd5e2acb/runs/run-20260506T181149Z-6867fac0/artifacts/test/phases/async-branch-group-cleanup/feedback.md) as a non-blocking audit note.
+
+Open issues / next step
+
+- Test-phase audit is complete for this scope.
+- No further action is needed unless a later phase changes the branch-session overlay or provider-turn strictness surfaces again.
+
+<loop-control>
+{"schema":"docloop.loop_control/v1","kind":"promise","promise":"COMPLETE"}
+</loop-control>
