@@ -182,3 +182,61 @@ Open issues / next step
 - Syntax verification passed with `python3 -m py_compile` on all touched Python files.
 - I could not run `pytest` here because the environment does not have `pytest` installed.
 - Docs and the broader negative-provider/exhaustion additions from the full request were not implemented in this phase-scoped turn; the next phase should run the full test suite in a provisioned environment and finish the remaining contract coverage/documentation work.
+
+
+---
+run_id=run-20260506T140151Z-c56b8e14 | entry=session_turn | pair=implement | phase=verifier | cycle=1 | attempt=1 | thread_id=019dfd9d-4787-73c0-b538-1a138db4f2b2
+---
+provider=codex
+mode=resume
+template=/home/rauter/.local/share/pipx/venvs/autoloop/lib/python3.12/site-packages/autoloop/templates/implement_verifier.md
+session_id=019dfd9d-4787-73c0-b538-1a138db4f2b2
+
+
+---
+run_id=run-20260506T140151Z-c56b8e14 | entry=phase_output | pair=implement | phase=verifier | process=codex-agent | cycle=1 | attempt=1 | thread_id=019dfd9d-4787-73c0-b538-1a138db4f2b2
+---
+I’m reviewing the phase-scoped implementation against the route-compilation contract. I’ll inspect the active review artifacts, the recorded decisions, and the exact source/test deltas to determine whether the phase acceptance criteria are actually met.
+
+I’ve got the review artifacts and implementation notes. Next I’m checking the exact source deltas and then scanning the repo for stale default-route assumptions that would indicate the phase is not actually complete, even if the core helpers changed.
+
+The repo-wide search for the old default-route expectation patterns came back clean, which is a good sign. I’m now spot-checking the explicit-route and hidden-route coverage to confirm the new behavior is exercised, not just the old assertions removed.
+
+There is already explicit-route coverage for successful `blocked`/`failed` selections. I’m checking whether the implementation also leaves hidden explicit routes non-provider-selectable, since that is part of the compile contract and easy to regress if the metadata classification changed.
+
+I’m not seeing stale default-route assertions anymore. I’m doing one last source search for any remaining framework-side `blocked`/`failed` injection or special-casing outside the intended discovery/compiler hooks before I decide whether there are blocking findings.
+
+I’m at the decision point now. I’m not finding a phase-scoped correctness or regression issue in the compiler changes, and the stale expectation scan is clean, so I’m updating the review artifacts as a clean pass with no findings.
+
+Scope considered
+
+- Phase-local review only: route compilation, compiled-route metadata, and compile-derived tests/artifacts for `blocked` / `failed` versus `question`.
+- Authoritative inputs reviewed: request snapshot, active phase contract, decisions ledger, implementation notes, and the modified source/test files.
+
+What I analyzed
+
+- Compiler/discovery hooks: `autoloop/core/discovery.py::_inject_control_routes`, `autoloop/core/compiler.py::_internal_step_runtime_routes`, `_internal_step_runtime_control_routes`, and `_compiled_provider_visibility(...)`.
+- Downstream compile-derived assertions in `tests/unit/test_validation.py`, `tests/unit/test_simple_surface.py`, `tests/contract/test_canonical_runtime_contracts.py`, `tests/contract/test_engine_contracts.py`, `tests/runtime/test_runtime_static_graph.py`, `tests/runtime/test_workspace_and_context.py`, and `tests/unit/test_stdlib_and_extensions.py`.
+- Review artifacts in the active phase directory.
+
+What I reviewed
+
+- Verified that implicit framework injection of `blocked` / `failed` was removed at compilation time and not replaced with prompt-layer filtering.
+- Verified that explicit authored `blocked` / `failed` routes remain preserved in compiled/package/static-graph expectations while no longer being classified as runtime-control routes.
+- Searched the repo for stale old-contract assertions and did not find remaining phase-relevant matches.
+- Confirmed the phase artifacts were updated and then marked criteria and feedback accordingly.
+
+Key findings / decisions
+
+- No blocking findings.
+- No non-blocking findings.
+- Phase acceptance criteria are satisfied for the scoped route-compilation contract.
+
+Open issues / next step
+
+- No phase-scoped code review follow-up is required from this verifier pass.
+- Broader docs and later-phase provider-negative-path work remain outside this phase’s review scope.
+
+<loop-control>
+{"schema":"docloop.loop_control/v1","kind":"promise","promise":"COMPLETE"}
+</loop-control>

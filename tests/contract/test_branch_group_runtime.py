@@ -448,6 +448,7 @@ def test_parallel_branch_group_rejects_sync_only_provider_for_provider_backed_st
 def test_fan_out_renders_branch_input_roots_artifacts_and_keeps_branch_sessions_local(tmp_path: Path) -> None:
     prompts: list[str] = []
     sessions: list[str | None] = []
+    session_keys_by_branch: dict[str, str] = {}
     returned_sessions: list[str] = []
 
     class FanOutWorkflow(simple.Workflow):
@@ -474,6 +475,7 @@ def test_fan_out_renders_branch_input_roots_artifacts_and_keeps_branch_sessions_
             lambda request: (
                 prompts.append(request.prompt.text),
                 sessions.append(None if request.session is None else request.session.session_id),
+                session_keys_by_branch.__setitem__(request.context.branch.name, request.session.key.value),
                 returned_sessions.append(f"provider-session-{request.context.branch.name}"),
                 OutcomeResponse(
                     outcome=Outcome(raw_output="ok", tag="done"),
@@ -486,6 +488,7 @@ def test_fan_out_renders_branch_input_roots_artifacts_and_keeps_branch_sessions_
             lambda request: (
                 prompts.append(request.prompt.text),
                 sessions.append(None if request.session is None else request.session.session_id),
+                session_keys_by_branch.__setitem__(request.context.branch.name, request.session.key.value),
                 returned_sessions.append(f"provider-session-{request.context.branch.name}"),
                 OutcomeResponse(
                     outcome=Outcome(raw_output="ok", tag="done"),
@@ -516,6 +519,9 @@ def test_fan_out_renders_branch_input_roots_artifacts_and_keeps_branch_sessions_
     assert len(prompts) == 2
     assert set(prompts) == {"Assess area security.", "Assess area performance."}
     assert sessions == [None, None]
+    assert session_keys_by_branch["security"].startswith("assess:security:0:")
+    assert session_keys_by_branch["performance"].startswith("assess:performance:1:")
+    assert session_keys_by_branch["security"] != session_keys_by_branch["performance"]
     parent_snapshot = session_store.snapshot()
     assert all(binding.session_id not in returned_sessions for binding in parent_snapshot.bindings)
     security_report = task_folder / "wf_fan_out_workflow" / "assess_one" / "reports" / "security.md"

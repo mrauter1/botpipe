@@ -156,6 +156,38 @@ def test_branch_session_store_view_keeps_activation_local_to_branch(tmp_path: Pa
     assert parent.get_session("main").session_id == parent_binding.session_id
 
 
+def test_branch_session_store_view_uses_distinct_fresh_keys_per_branch_namespace(tmp_path: Path) -> None:
+    parent = _make_context(tmp_path)
+    parent_binding = parent.open_session("main")
+
+    security_branch = create_branch_context(
+        parent,
+        step_name="assess",
+        branch=BranchMetadata(name="security", index=0, group="reviews", input={}, count=2),
+        session_store=BranchSessionStoreView(parent._session_store, namespace="reviews:security:0"),
+    )
+    performance_branch = create_branch_context(
+        parent,
+        step_name="assess",
+        branch=BranchMetadata(name="performance", index=1, group="reviews", input={}, count=2),
+        session_store=BranchSessionStoreView(parent._session_store, namespace="reviews:performance:1"),
+    )
+
+    security_binding = security_branch.open_session("main", continuity=Continuity.fresh())
+    performance_binding = performance_branch.open_session("main", continuity=Continuity.fresh())
+
+    assert security_binding.session_id is None
+    assert performance_binding.session_id is None
+    assert security_binding.key.domain == "fresh"
+    assert performance_binding.key.domain == "fresh"
+    assert security_binding.key.value.startswith("reviews:security:0:")
+    assert performance_binding.key.value.startswith("reviews:performance:1:")
+    assert security_binding.key != performance_binding.key
+    assert security_branch.get_session("main") == security_binding
+    assert performance_branch.get_session("main") == performance_binding
+    assert parent.get_session("main") == parent_binding
+
+
 def test_branch_context_resolves_worklists_locally_without_mutating_parent(tmp_path: Path) -> None:
     worklist = Worklist.from_items(
         "items",
