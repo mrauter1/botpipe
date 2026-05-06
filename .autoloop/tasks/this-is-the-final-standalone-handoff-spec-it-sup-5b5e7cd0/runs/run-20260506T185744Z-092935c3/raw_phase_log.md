@@ -456,3 +456,52 @@ The focused suite passed: `.venv/bin/python -m pytest -q tests/unit/test_validat
 Open issues / next step
 
 No open test-author blocker remains in this phase. The remaining known gaps are intentional later-phase items: canonical `outcome.route_fields` parsing, provider schema generation, and runtime `Outcome.route_fields` projection.
+
+
+---
+run_id=run-20260506T185744Z-092935c3 | entry=session_turn | pair=test | phase=verifier | cycle=1 | attempt=1 | thread_id=019dfeae-6c3b-77c1-83d0-3af21fe7fb06
+---
+provider=codex
+mode=resume
+template=/home/rauter/.local/share/pipx/venvs/autoloop/lib/python3.12/site-packages/autoloop/templates/test_verifier.md
+session_id=019dfeae-6c3b-77c1-83d0-3af21fe7fb06
+
+
+---
+run_id=run-20260506T185744Z-092935c3 | entry=phase_output | pair=test | phase=verifier | process=codex-agent | cycle=1 | attempt=1 | thread_id=019dfeae-6c3b-77c1-83d0-3af21fe7fb06
+---
+I’m auditing the route-model test additions and the stated coverage map against the actual changed behavior. I’m checking that the tests cover the new compiled-route authority path, preserved compatibility views, and the static-graph/reporting regression seam without silently normalizing any unconfirmed behavior change.
+
+The artifact map is coherent. I’m checking the concrete tests the strategy cites and rerunning the focused suite once so the audit is based on the exercised coverage, not only on the written strategy summary.
+
+The cited tests line up with the strategy, and they cover the concrete regression seams introduced by the phase. I’m waiting on the last pytest result, then I’ll finalize the audit artifacts unless it exposes a missed edge or reliability issue.
+
+The focused suite passed and I didn’t find a missing material regression seam in the changed test surface. I’m marking the audit criteria complete and appending a concise audit-pass note so the artifact trail shows that the current test map is sufficient for this phase.
+
+Scope considered
+
+Phase `route-model-unification` test artifacts and their cited repository tests only. I focused on the changed route-model behaviors: compiled route-table authority, inherited `GLOBAL` visibility, suppression via `Route.disabled()`, and the compile-report/static-graph summary seam.
+
+What I analyzed
+
+I reviewed [test_strategy.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/this-is-the-final-standalone-handoff-spec-it-sup-5b5e7cd0/runs/run-20260506T185744Z-092935c3/artifacts/test/phases/route-model-unification/test_strategy.md), the run decisions ledger, and the concrete tests in [tests/unit/test_validation.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/tests/unit/test_validation.py) and [tests/runtime/test_runtime_static_graph.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/tests/runtime/test_runtime_static_graph.py). I also reran `.venv/bin/python -m pytest -q tests/unit/test_validation.py tests/unit/test_simple_surface.py tests/runtime/test_runtime_static_graph.py`.
+
+What I reviewed
+
+I updated [criteria.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/this-is-the-final-standalone-handoff-spec-it-sup-5b5e7cd0/runs/run-20260506T185744Z-092935c3/artifacts/test/phases/route-model-unification/criteria.md) to mark the audit complete and appended a concise audit-pass note to [feedback.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/this-is-the-final-standalone-handoff-spec-it-sup-5b5e7cd0/runs/run-20260506T185744Z-092935c3/artifacts/test/phases/route-model-unification/feedback.md).
+
+Key findings / decisions
+
+No blocking audit findings remain.
+
+The current test surface is aligned with phase scope and decisions. It covers the material changed behaviors and preserved invariants for this phase: compiled step-route authority, inherited `GLOBAL` route visibility differences between provider-backed and non-provider steps, suppressed inherited routes, and declaration-based compile-report counts.
+
+The focused suite passed: `190 passed, 14 warnings`. The warnings are pre-existing Pydantic field-name shadow warnings from workflow contract fixtures, not flake signals in the added route-model tests.
+
+Open issues / next step
+
+No open issue for this test-audit phase. The known gaps called out in the strategy are appropriate later-phase concerns, not missing coverage for this phase.
+
+<loop-control>
+{"schema":"docloop.loop_control/v1","kind":"promise","promise":"COMPLETE"}
+</loop-control>

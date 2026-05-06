@@ -21,3 +21,5 @@
 {"ts": "2026-05-06T19:29:35.459495+00:00", "run_id": "run-20260506T185744Z-092935c3", "seq": 21, "event_type": "pair_started", "pair": "test", "phase_id": "route-model-unification"}
 {"ts": "2026-05-06T19:29:35.459600+00:00", "run_id": "run-20260506T185744Z-092935c3", "seq": 22, "event_type": "cycle_started", "pair": "test", "cycle": 1, "attempt": 1, "phase_id": "route-model-unification"}
 {"ts": "2026-05-06T19:30:56.636593+00:00", "run_id": "run-20260506T185744Z-092935c3", "seq": 23, "event_type": "phase_finished", "pair": "test", "phase": "producer", "cycle": 1, "attempt": 1, "empty_output": false, "phase_id": "route-model-unification"}
+{"ts": "2026-05-06T19:32:00.123245+00:00", "run_id": "run-20260506T185744Z-092935c3", "seq": 24, "event_type": "phase_finished", "pair": "test", "phase": "verifier", "cycle": 1, "attempt": 1, "empty_output": false, "phase_id": "route-model-unification"}
+{"ts": "2026-05-06T19:32:00.173271+00:00", "run_id": "run-20260506T185744Z-092935c3", "seq": 25, "event_type": "pair_completed", "pair": "test", "cycle": 1, "attempt": 1, "phase_id": "route-model-unification"}
