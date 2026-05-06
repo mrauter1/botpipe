@@ -65,3 +65,6 @@
 {"ts": "2026-05-06T20:38:59.746477+00:00", "run_id": "run-20260506T190853Z-f707cb4f", "seq": 65, "event_type": "phase_finished", "pair": "implement", "phase": "producer", "cycle": 2, "attempt": 1, "empty_output": false, "phase_id": "policy-codex"}
 {"ts": "2026-05-06T20:39:41.573060+00:00", "run_id": "run-20260506T190853Z-f707cb4f", "seq": 66, "event_type": "phase_finished", "pair": "implement", "phase": "verifier", "cycle": 2, "attempt": 1, "empty_output": false, "phase_id": "policy-codex"}
 {"ts": "2026-05-06T20:39:41.648285+00:00", "run_id": "run-20260506T190853Z-f707cb4f", "seq": 67, "event_type": "pair_completed", "pair": "implement", "cycle": 2, "attempt": 1, "phase_id": "policy-codex"}
+{"ts": "2026-05-06T20:39:41.765955+00:00", "run_id": "run-20260506T190853Z-f707cb4f", "seq": 68, "event_type": "phase_deferred", "pair": "implement", "phase_mode": "single", "phase_id": "policy-codex", "reason": "awaiting enabled test pair completion"}
+{"ts": "2026-05-06T20:39:41.768426+00:00", "run_id": "run-20260506T190853Z-f707cb4f", "seq": 69, "event_type": "pair_started", "pair": "test", "phase_id": "policy-codex"}
+{"ts": "2026-05-06T20:39:41.768572+00:00", "run_id": "run-20260506T190853Z-f707cb4f", "seq": 70, "event_type": "cycle_started", "pair": "test", "cycle": 1, "attempt": 1, "phase_id": "policy-codex"}
