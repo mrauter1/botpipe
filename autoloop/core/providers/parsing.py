@@ -56,8 +56,8 @@ def parse_outcome_json(text: str) -> Outcome:
         parsed_payload = _optional_object_field(canonical_outcome, "payload", default={})
         route_fields = _optional_object_field(canonical_outcome, "route_fields", default={})
         clarification = _optional_string_field(payload, "clarification")
-        reason = _optional_string_field(payload, "reason") or ""
-        question = _optional_string_field(payload, "question")
+        reason = ""
+        question = None
     else:
         tag = payload.get("tag")
         if not isinstance(tag, str) or not tag:

@@ -320,6 +320,16 @@ def test_parse_outcome_json_prefers_canonical_route_fields_over_legacy_top_level
     assert outcome.reason == "canonical"
 
 
+def test_parse_outcome_json_ignores_legacy_reason_when_canonical_reason_is_null() -> None:
+    outcome = parse_outcome_json(
+        '{"outcome":{"tag":"question","payload":{},"route_fields":{"questions":["Canonical?"],"reason":null}},"reason":"legacy"}'
+    )
+
+    assert outcome.route_fields == {"questions": ["Canonical?"], "reason": None}
+    assert outcome.question == "Canonical?"
+    assert outcome.reason == ""
+
+
 def test_parse_outcome_json_accepts_fenced_json_block() -> None:
     raw = '```json\n{"tag":"question","question":"Proceed?"}\n```'
 

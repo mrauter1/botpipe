@@ -570,3 +570,76 @@ Open issues / next step
 <loop-control>
 {"schema":"docloop.loop_control/v1","kind":"promise","promise":"INCOMPLETE"}
 </loop-control>
+
+
+---
+run_id=run-20260506T190853Z-f707cb4f | entry=session_turn | pair=implement | phase=producer | cycle=2 | attempt=1 | thread_id=019dfec5-f589-7cb2-ab20-e8f25f37fa06
+---
+provider=codex
+mode=resume
+template=/home/rauter/.local/share/pipx/venvs/autoloop/lib/python3.12/site-packages/autoloop/templates/implement_producer.md
+session_id=019dfec5-f589-7cb2-ab20-e8f25f37fa06
+
+
+---
+run_id=run-20260506T190853Z-f707cb4f | entry=phase_output | pair=implement | phase=producer | process=codex-agent | cycle=2 | attempt=1 | thread_id=019dfec5-f589-7cb2-ab20-e8f25f37fa06
+---
+I’m addressing the reviewer’s two blocking findings: strict null-handling in provider-policy config, and workflow-level policy retention through discovery metadata. I’ll verify the existing seams first, then patch the smallest set of files needed to make those behaviors explicit and testable.
+
+I’m addressing the two blocking review findings: explicit `null` acceptance in `provider_policy` overrides and missing workflow-level policy retention. I’m re-reading the affected config and discovery surfaces first, then I’ll patch the smallest central seams and extend the targeted tests.
+
+I’ve confirmed the workflow policy never survives `describe_workflow_class`, and the null-override hole is at config parse time, not merge time. I’m patching those two central seams now and then tightening the targeted tests around them.
+
+I’ve isolated the exact seams: `provider_policy` null rejection belongs in `_parse_provider_policy_config()`, and workflow-level policy belongs on `WorkflowDefinition`, with validation in discovery so later phases have one canonical source. I’m editing those now, then I’ll add regression tests for both failure modes.
+
+I’m editing the central parse and discovery seams now. After that I’ll run the narrow validations again and update the phase notes with the exact behavioral correction.
+
+The targeted tests are executing now and I’ve already hit failures inside the touched surface, which is useful. I’m pulling the traceback next and will fix the regressions before updating the phase notes.
+
+The first failing test exposed an actual semantic mismatch, not just a stale assertion: no-config runs should keep the system policy baseline and only mirror legacy model or effort fields when those were explicitly supplied. I’m tightening that mapping now and then I’ll re-run the focused tests.
+
+I fixed the workflow metadata retention and adjusted the legacy model mapping so system defaults stay intact for unconfigured runs. I’m re-running the focused checks now to make sure the fix is behavioral, not just test-shaped.
+
+The remaining failure was just a canonical-signature guard that needed to acknowledge the new public `policy=` parameter on the helper surfaces. I’ve updated that expectation and I’m running the focused suite one more time.
+
+The focused suite is green now. I’m updating the run artifacts with the two reviewer fixes, the explicit-no-config semantics for legacy model mirroring, and the validation results before I close the turn.
+
+I’m recording the non-obvious semantics from these fixes in the run ledger: explicit `null` is now invalid for `default` and `validation`, workflow-level policy has a canonical retained seam, and implicit provider defaults no longer contaminate the system policy baseline. Then I’ll close with the focused validation results.
+
+Scope considered
+
+- Phase-local `policy-config-authoring` only.
+- I stayed within runtime config and authoring surfaces plus the minimum downstream seam needed to retain workflow policy metadata: [autoloop/runtime/config.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/autoloop/runtime/config.py), [autoloop/core/discovery.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/autoloop/core/discovery.py), [autoloop/core/compiler.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/autoloop/core/compiler.py), and the targeted tests and phase artifacts.
+
+What I analyzed
+
+- The blocking verifier findings in [feedback.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/implementation-goal-add-a-first-class-provider-p-5e755cae/runs/run-20260506T190853Z-f707cb4f/artifacts/implement/phases/policy-config-authoring/feedback.md).
+- The `provider_policy` parse and merge path in [autoloop/runtime/config.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/autoloop/runtime/config.py).
+- Workflow discovery and canonical workflow metadata in [autoloop/core/discovery.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/autoloop/core/discovery.py).
+- The internal `WorkflowDefinition(...)` construction in [autoloop/core/compiler.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/autoloop/core/compiler.py).
+- The existing authoring-surface and config tests in [tests/runtime/test_provider_policy_config.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/tests/runtime/test_provider_policy_config.py) and [tests/unit/test_simple_surface.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/tests/unit/test_simple_surface.py).
+
+What I changed
+
+- In [autoloop/runtime/config.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/autoloop/runtime/config.py), I made explicit `provider_policy.default: null` and `provider_policy.validation: null` fail fast at parse time while still allowing `strict: null`.
+- In the same file, I narrowed legacy model and effort mirroring so `provider_policy.default.model.*` is populated only from explicit config or CLI inputs, not from implicit provider defaults. That preserves the system policy baseline for no-config runs.
+- In [autoloop/core/discovery.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/autoloop/core/discovery.py), I added `WorkflowDefinition.workflow_policy` and validated `Workflow.policy` as a concrete `ProviderPolicy`.
+- In [autoloop/core/compiler.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/autoloop/core/compiler.py), I propagated `workflow_policy` through the internal one-step `WorkflowDefinition(...)` path so later phases see one canonical workflow-level policy seam.
+- I extended [tests/runtime/test_provider_policy_config.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/tests/runtime/test_provider_policy_config.py) with explicit-null rejection coverage.
+- I extended [tests/unit/test_simple_surface.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/tests/unit/test_simple_surface.py) to assert `definition.workflow_policy`, reject invalid workflow policy types, and acknowledge the new public `policy` parameter on simple helper signatures.
+- I updated [implementation_notes.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/implementation-goal-add-a-first-class-provider-p-5e755cae/runs/run-20260506T190853Z-f707cb4f/artifacts/implement/phases/policy-config-authoring/implementation_notes.md) and appended the non-obvious semantics for this turn under the latest header in [decisions.txt](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/implementation-goal-add-a-first-class-provider-p-5e755cae/runs/run-20260506T190853Z-f707cb4f/decisions.txt).
+
+Key findings / decisions
+
+- The verifier’s `IMP-001` and `IMP-002` issues were both real and required code changes rather than test-only updates.
+- The correct boundary for rejecting explicit `null` is config parse time, not merge time.
+- The correct workflow-level source of truth is retained metadata on `WorkflowDefinition`, not the raw class attribute alone.
+- No-config runs now keep the requested `SYSTEM_DEFAULT_PROVIDER_POLICY` baseline while still mirroring explicit legacy provider model or effort inputs into policy defaults.
+
+Open issues / next step
+
+- Focused validation passed:
+  - `python3 -m py_compile autoloop/runtime/config.py autoloop/core/discovery.py autoloop/core/compiler.py tests/runtime/test_provider_policy_config.py tests/unit/test_simple_surface.py`
+  - `.venv/bin/python -m pytest tests/runtime/test_provider_policy_config.py tests/unit/test_simple_surface.py -q`
+- Pytest finished with only pre-existing warnings about `schema` field shadowing in exported workflow fixture models.
+- Next step is verifier re-review for the same phase artifacts.

@@ -365,6 +365,7 @@ def test_canonical_simple_signatures_expose_only_canonical_argument_names() -> N
         "retry",
         "session",
         "control_routes",
+        "policy",
     )
     assert tuple(inspect.signature(simple.produce_verify_step).parameters) == (
         "producer_prompt",
@@ -389,6 +390,7 @@ def test_canonical_simple_signatures_expose_only_canonical_argument_names() -> N
         "session",
         "verifier_session",
         "control_routes",
+        "policy",
     )
     assert tuple(inspect.signature(simple.python_step).parameters) == (
         "fn",
@@ -400,6 +402,7 @@ def test_canonical_simple_signatures_expose_only_canonical_argument_names() -> N
         "before",
         "after",
         "control_routes",
+        "policy",
     )
     assert tuple(inspect.signature(simple.parallel).parameters) == (
         "branches",
