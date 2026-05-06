@@ -2,164 +2,216 @@ version: 1
 task_id: full-revised-standalone-spec-autoloop-v3-async-n-3c402473
 request_snapshot_ref: /home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/full-revised-standalone-spec-autoloop-v3-async-n-3c402473/runs/run-20260506T130608Z-37f1c786/request.md
 phases:
-  - phase_id: "async-engine-spine"
-    title: "Async engine spine"
-    objective: "Make engine execution async-first while preserving existing sync runtime entrypoints as outer shells only."
-    status: "planned"
-    in_scope:
-      - "Add Engine.run_async(...) and Engine.resume_async(...) as the single execution core."
-      - "Convert Engine.run(...) and Engine.resume(...) into asyncio.run(...) wrappers with clear active-event-loop failures."
-      - "Make StepDispatcher.execute_async(...) the authoritative provider-backed execution path and remove duplicated sync provider logic."
-    out_of_scope:
-      - "Provider transport protocol removal."
-      - "Branch-group manifest/schema expansion beyond what the async engine path needs."
-    dependencies: []
-    acceptance_criteria:
-      - id: "AC-1"
-        text: "Sequential workflows still run through existing Engine.run(...), CLI, and runner entrypoints, but provider-backed execution no longer depends on sync engine internals."
-      - id: "AC-2"
-        text: "Calling the sync runtime shell from an active event loop fails clearly instead of silently bridging async execution."
-    deliverables:
-      - "Async engine core in autoloop/core/engine.py with sync wrapper entrypoints preserved."
-      - "Async-authoritative step dispatcher wiring in autoloop/core/engine_collaborators.py."
-    risks:
-      - "Engine/run loop edits can regress checkpoint, extension, or resume behavior if sync and async paths diverge."
-    rollback:
-      - "Revert the async engine core as one slice rather than restoring sync provider execution helpers piecemeal."
-
-  - phase_id: "provider-contract-cutover"
-    title: "Provider contract cutover"
-    objective: "Remove dual sync/async provider contracts and make provider validation fail before runtime execution starts."
-    status: "planned"
-    in_scope:
-      - "Replace LLMProvider and ProviderTransport with async-only protocols."
-      - "Delete AsyncLLMProvider, AsyncProviderTransport, and async-capability probing helpers."
-      - "Preserve exported sequential llm(...) and classify(...) helpers by migrating their internals away from sync provider protocol methods."
-    out_of_scope:
-      - "Operation branch enablement."
-      - "Child-workflow branch support."
-    dependencies:
-      - "async-engine-spine"
-    acceptance_criteria:
-      - id: "AC-1"
-        text: "Core provider protocols expose only async run_llm(...), run_producer(...), run_verifier(...), and async run_turn(...)."
-      - id: "AC-2"
-        text: "Invalid providers and transports fail during construction instead of being discovered inside branch-group execution."
-    deliverables:
-      - "Updated provider protocols and validation paths in autoloop/core/providers/protocols.py and related constructors."
-      - "A compatibility-safe plan for autoloop/core/operations.py that does not reintroduce sync provider protocol methods."
-    risks:
-      - "Sequential operation helpers currently rely on run_operation(...) and can become accidental regressions during protocol removal."
-    rollback:
-      - "Revert the full protocol cutover if sequential helper compatibility cannot be preserved without reintroducing sync provider execution."
-
-  - phase_id: "async-transports-and-rendered-provider"
-    title: "Async transports and rendered provider"
-    objective: "Convert the rendered provider and built-in CLI transports to the async-native contract."
-    status: "planned"
-    in_scope:
-      - "Make RenderedLLMProvider async-only and await transport.run_turn(...)."
-      - "Convert Codex and Claude transports to async-only subprocess execution with cancellation handling."
-      - "Return validated async-native providers from backend builders and remove compatibility wrappers that preserve sync execution."
-      - "Convert the fake provider to the async-native contract with deterministic scripted responses and session recording."
-    out_of_scope:
-      - "Branch-group scheduling refactors outside what transport conversion requires."
-      - "Compile-time placeholder and static-graph adjustments."
-    dependencies:
-      - "provider-contract-cutover"
-    acceptance_criteria:
-      - id: "AC-1"
-        text: "Rendered provider methods and built-in transports expose only async execution methods and no _async suffix variants."
-      - id: "AC-2"
-        text: "Built-in CLI transports use asyncio.create_subprocess_exec(...) for turn execution and support cancellation without subprocess.run(...) turn execution."
-    deliverables:
-      - "Async-only rendered provider implementation in autoloop/core/providers/rendered.py."
-      - "Async-native Codex and Claude transports plus backend builder updates under autoloop/runtime/providers/ and autoloop/runtime/provider_backends.py."
-      - "Async-native scripted fake provider in autoloop/core/providers/fake.py."
-    risks:
-      - "CLI subprocess cancellation and session-resume semantics can drift from current Codex/Claude parsing behavior."
-    rollback:
-      - "Revert transport and rendered-provider changes together if async subprocess behavior does not preserve current parsing and session semantics."
-
-  - phase_id: "branch-group-runtime-and-sessions"
-    title: "Branch-group runtime and sessions"
-    objective: "Align explicit branch-group execution, scheduling, and branch-local session behavior with the async-native contract."
-    status: "planned"
-    in_scope:
-      - "Remove provider async-support probing from branch-group runtime."
-      - "Keep branch scheduling and cancellation async-native, extracting scheduler ownership if runtime.py becomes too broad."
-      - "Tighten branch-local fresh-session keys, parent-session isolation, and provider-session persistence rules."
-      - "Preserve captured-route semantics, deterministic manifest ordering, shared state cell behavior, and fan-in finalization rules."
-    out_of_scope:
-      - "Worklist-derived fan-out."
-      - "Operation branch support."
-      - "Child-workflow branches or child-workflow fan-in."
-    dependencies:
-      - "async-transports-and-rendered-provider"
-    acceptance_criteria:
-      - id: "AC-1"
-        text: "Provider-backed branch execution simply awaits the async provider contract and never probes for async support at runtime."
-      - id: "AC-2"
-        text: "Fresh branch sessions are execution-local, start with session_id=None, do not activate parent session slots, and record only provider-returned session ids."
-      - id: "AC-3"
-        text: "Branch evidence remains rooted under workflow_folder/_branch_groups and fan-in finalizes the composite route exactly once."
-    deliverables:
-      - "Updated branch-group runtime/session/context modules under autoloop/core/branch_groups/."
-      - "Optional scheduler extraction if needed to keep engine.py and runtime.py ownership narrow."
-    risks:
-      - "Session overlay changes can leak parent bindings or break branch manifest provider-session evidence."
-    rollback:
-      - "Revert branch-group runtime/session changes as one slice instead of restoring runtime async probing or synthetic session behavior."
-
-  - phase_id: "compiler-surface-and-graph-alignment"
-    title: "Compiler, surface, and graph alignment"
-    objective: "Keep the public authoring surface stable while aligning discovery, validation, artifacts, compile cache, and graph payloads to the requested semantics."
-    status: "planned"
-    in_scope:
-      - "Preserve simple.parallel(...), simple.fan_out(...), and FanIn helper exports."
-      - "Align branch-group validation, lowering, discovery, compiler metadata, and placeholder rooting rules with the spec."
-      - "Keep branch-group compile-cache behavior as bypass in v1 unless a complete branch-group cache key is implemented with tests."
-      - "Update static-graph/topology payload ownership as needed without changing their additive public shape."
-    out_of_scope:
-      - "Unrelated workflow graph redesign."
-      - "Implicit parallelism derived from reads, writes, or route topology."
-    dependencies:
-      - "branch-group-runtime-and-sessions"
-    acceptance_criteria:
-      - id: "AC-1"
-        text: "Public non-parallel authoring APIs and CLI invocation shape remain stable while branch-group validation matches the new contract."
-      - id: "AC-2"
-        text: "Templated branch and fan-in artifact paths resolve under normal workflow roots, and branch-group graph payloads remain additive and deterministic."
-    deliverables:
-      - "Compiler/discovery/validation/artifact updates across autoloop/core and simple surface exports."
-      - "Static-graph/topology payload updates in autoloop/runtime/static_graph.py and extracted branch-group helpers if needed."
-    risks:
-      - "Placeholder, artifact-rooting, or compile-cache edits can cause subtle authoring regressions outside the new branch-group paths."
-    rollback:
-      - "Revert branch-group-specific compiler and graph changes together; keep compile-cache bypass rather than shipping a partial cache key."
-
-  - phase_id: "test-and-strictness-hardening"
-    title: "Test and strictness hardening"
-    objective: "Make the new async-native contract enforceable with provider, runtime, compile-time, and strictness coverage."
-    status: "planned"
-    in_scope:
-      - "Rewrite contract, runtime, unit, and strictness tests that currently encode sync provider or _async compatibility surfaces."
-      - "Add assertions for forbidden sync provider methods, forbidden sync transport methods, forbidden async-support probes, and forbidden thread-backed primitives."
-      - "Cover async transport cancellation, branch-group sessions, fan-in/evidence failure paths, static-graph payloads, and sequential runtime parity."
-    out_of_scope:
-      - "New product behavior beyond the requested async-native cutover."
-      - "Performance tuning beyond correctness and contract coverage."
-    dependencies:
-      - "compiler-surface-and-graph-alignment"
-    acceptance_criteria:
-      - id: "AC-1"
-        text: "Strictness tests fail if sync provider/transport surfaces, provider async wrappers over sync code, async-support probes, or forbidden thread primitives are reintroduced."
-      - id: "AC-2"
-        text: "Runtime, compile-time, provider, and contract suites cover the requested merge gate semantics for sequential workflows and explicit branch groups."
-    deliverables:
-      - "Updated tests under tests/contract, tests/runtime, tests/unit, and tests/strictness."
-      - "A passing validation matrix aligned with the spec merge gate."
-    risks:
-      - "Stale compatibility tests can mask regressions if not updated at the same time as the implementation cutover."
-    rollback:
-      - "Revert incomplete test migrations together with the implementation slice they validate; do not keep mismatched legacy compatibility assertions."
+- phase_id: async-engine-spine
+  title: Async engine spine
+  objective: Make engine execution async-first while preserving existing sync runtime
+    entrypoints as outer shells only.
+  status: planned
+  in_scope:
+  - Add Engine.run_async(...) and Engine.resume_async(...) as the single execution
+    core.
+  - Convert Engine.run(...) and Engine.resume(...) into asyncio.run(...) wrappers
+    with clear active-event-loop failures.
+  - Make StepDispatcher.execute_async(...) the authoritative provider-backed execution
+    path and remove duplicated sync provider logic.
+  out_of_scope:
+  - Provider transport protocol removal.
+  - Branch-group manifest/schema expansion beyond what the async engine path needs.
+  dependencies: []
+  acceptance_criteria:
+  - id: AC-1
+    text: Sequential workflows still run through existing Engine.run(...), CLI, and
+      runner entrypoints, but provider-backed execution no longer depends on sync
+      engine internals.
+  - id: AC-2
+    text: Calling the sync runtime shell from an active event loop fails clearly instead
+      of silently bridging async execution.
+  deliverables:
+  - Async engine core in autoloop/core/engine.py with sync wrapper entrypoints preserved.
+  - Async-authoritative step dispatcher wiring in autoloop/core/engine_collaborators.py.
+  risks:
+  - Engine/run loop edits can regress checkpoint, extension, or resume behavior if
+    sync and async paths diverge.
+  rollback:
+  - Revert the async engine core as one slice rather than restoring sync provider
+    execution helpers piecemeal.
+- phase_id: provider-contract-cutover
+  title: Provider contract cutover
+  objective: Remove dual sync/async provider contracts and make provider validation
+    fail before runtime execution starts.
+  status: planned
+  in_scope:
+  - Replace LLMProvider and ProviderTransport with async-only protocols.
+  - Delete AsyncLLMProvider, AsyncProviderTransport, and async-capability probing
+    helpers.
+  - Preserve exported sequential llm(...) and classify(...) helpers by migrating their
+    internals away from sync provider protocol methods.
+  out_of_scope:
+  - Operation branch enablement.
+  - Child-workflow branch support.
+  dependencies:
+  - async-engine-spine
+  acceptance_criteria:
+  - id: AC-1
+    text: Core provider protocols expose only async run_llm(...), run_producer(...),
+      run_verifier(...), and async run_turn(...).
+  - id: AC-2
+    text: Invalid providers and transports fail during construction instead of being
+      discovered inside branch-group execution.
+  deliverables:
+  - Updated provider protocols and validation paths in autoloop/core/providers/protocols.py
+    and related constructors.
+  - A compatibility-safe plan for autoloop/core/operations.py that does not reintroduce
+    sync provider protocol methods.
+  risks:
+  - Sequential operation helpers currently rely on run_operation(...) and can become
+    accidental regressions during protocol removal.
+  rollback:
+  - Revert the full protocol cutover if sequential helper compatibility cannot be
+    preserved without reintroducing sync provider execution.
+- phase_id: async-transports-and-rendered-provider
+  title: Async transports and rendered provider
+  objective: Convert the rendered provider and built-in CLI transports to the async-native
+    contract.
+  status: planned
+  in_scope:
+  - Make RenderedLLMProvider async-only and await transport.run_turn(...).
+  - Convert Codex and Claude transports to async-only subprocess execution with cancellation
+    handling.
+  - Return validated async-native providers from backend builders and remove compatibility
+    wrappers that preserve sync execution.
+  - Convert the fake provider to the async-native contract with deterministic scripted
+    responses and session recording.
+  out_of_scope:
+  - Branch-group scheduling refactors outside what transport conversion requires.
+  - Compile-time placeholder and static-graph adjustments.
+  dependencies:
+  - provider-contract-cutover
+  acceptance_criteria:
+  - id: AC-1
+    text: Rendered provider methods and built-in transports expose only async execution
+      methods and no _async suffix variants.
+  - id: AC-2
+    text: Built-in CLI transports use asyncio.create_subprocess_exec(...) for turn
+      execution and support cancellation without subprocess.run(...) turn execution.
+  deliverables:
+  - Async-only rendered provider implementation in autoloop/core/providers/rendered.py.
+  - Async-native Codex and Claude transports plus backend builder updates under autoloop/runtime/providers/
+    and autoloop/runtime/provider_backends.py.
+  - Async-native scripted fake provider in autoloop/core/providers/fake.py.
+  risks:
+  - CLI subprocess cancellation and session-resume semantics can drift from current
+    Codex/Claude parsing behavior.
+  rollback:
+  - Revert transport and rendered-provider changes together if async subprocess behavior
+    does not preserve current parsing and session semantics.
+- phase_id: branch-group-runtime-and-sessions
+  title: Branch-group runtime and sessions
+  objective: Align explicit branch-group execution, scheduling, and branch-local session
+    behavior with the async-native contract.
+  status: planned
+  in_scope:
+  - Remove provider async-support probing from branch-group runtime.
+  - Keep branch scheduling and cancellation async-native, extracting scheduler ownership
+    if runtime.py becomes too broad.
+  - Tighten branch-local fresh-session keys, parent-session isolation, and provider-session
+    persistence rules.
+  - Preserve captured-route semantics, deterministic manifest ordering, shared state
+    cell behavior, and fan-in finalization rules.
+  out_of_scope:
+  - Worklist-derived fan-out.
+  - Operation branch support.
+  - Child-workflow branches or child-workflow fan-in.
+  dependencies:
+  - async-transports-and-rendered-provider
+  acceptance_criteria:
+  - id: AC-1
+    text: Provider-backed branch execution simply awaits the async provider contract
+      and never probes for async support at runtime.
+  - id: AC-2
+    text: Fresh branch sessions are execution-local, start with session_id=None, do
+      not activate parent session slots, and record only provider-returned session
+      ids.
+  - id: AC-3
+    text: Branch evidence remains rooted under workflow_folder/_branch_groups and
+      fan-in finalizes the composite route exactly once.
+  deliverables:
+  - Updated branch-group runtime/session/context modules under autoloop/core/branch_groups/.
+  - Optional scheduler extraction if needed to keep engine.py and runtime.py ownership
+    narrow.
+  risks:
+  - Session overlay changes can leak parent bindings or break branch manifest provider-session
+    evidence.
+  rollback:
+  - Revert branch-group runtime/session changes as one slice instead of restoring
+    runtime async probing or synthetic session behavior.
+- phase_id: compiler-surface-and-graph-alignment
+  title: Compiler, surface, and graph alignment
+  objective: Keep the public authoring surface stable while aligning discovery, validation,
+    artifacts, compile cache, and graph payloads to the requested semantics.
+  status: planned
+  in_scope:
+  - Preserve simple.parallel(...), simple.fan_out(...), and FanIn helper exports.
+  - Align branch-group validation, lowering, discovery, compiler metadata, and placeholder
+    rooting rules with the spec.
+  - Keep branch-group compile-cache behavior as bypass in v1 unless a complete branch-group
+    cache key is implemented with tests.
+  - Update static-graph/topology payload ownership as needed without changing their
+    additive public shape.
+  out_of_scope:
+  - Unrelated workflow graph redesign.
+  - Implicit parallelism derived from reads, writes, or route topology.
+  dependencies:
+  - branch-group-runtime-and-sessions
+  acceptance_criteria:
+  - id: AC-1
+    text: Public non-parallel authoring APIs and CLI invocation shape remain stable
+      while branch-group validation matches the new contract.
+  - id: AC-2
+    text: Templated branch and fan-in artifact paths resolve under normal workflow
+      roots, and branch-group graph payloads remain additive and deterministic.
+  deliverables:
+  - Compiler/discovery/validation/artifact updates across autoloop/core and simple
+    surface exports.
+  - Static-graph/topology payload updates in autoloop/runtime/static_graph.py and
+    extracted branch-group helpers if needed.
+  risks:
+  - Placeholder, artifact-rooting, or compile-cache edits can cause subtle authoring
+    regressions outside the new branch-group paths.
+  rollback:
+  - Revert branch-group-specific compiler and graph changes together; keep compile-cache
+    bypass rather than shipping a partial cache key.
+- phase_id: test-and-strictness-hardening
+  title: Test and strictness hardening
+  objective: Make the new async-native contract enforceable with provider, runtime,
+    compile-time, and strictness coverage.
+  status: planned
+  in_scope:
+  - Rewrite contract, runtime, unit, and strictness tests that currently encode sync
+    provider or _async compatibility surfaces.
+  - Add assertions for forbidden sync provider methods, forbidden sync transport methods,
+    forbidden async-support probes, and forbidden thread-backed primitives.
+  - Cover async transport cancellation, branch-group sessions, fan-in/evidence failure
+    paths, static-graph payloads, and sequential runtime parity.
+  out_of_scope:
+  - New product behavior beyond the requested async-native cutover.
+  - Performance tuning beyond correctness and contract coverage.
+  dependencies:
+  - compiler-surface-and-graph-alignment
+  acceptance_criteria:
+  - id: AC-1
+    text: Strictness tests fail if sync provider/transport surfaces, provider async
+      wrappers over sync code, async-support probes, or forbidden thread primitives
+      are reintroduced.
+  - id: AC-2
+    text: Runtime, compile-time, provider, and contract suites cover the requested
+      merge gate semantics for sequential workflows and explicit branch groups.
+  deliverables:
+  - Updated tests under tests/contract, tests/runtime, tests/unit, and tests/strictness.
+  - A passing validation matrix aligned with the spec merge gate.
+  risks:
+  - Stale compatibility tests can mask regressions if not updated at the same time
+    as the implementation cutover.
+  rollback:
+  - Revert incomplete test migrations together with the implementation slice they
+    validate; do not keep mismatched legacy compatibility assertions.

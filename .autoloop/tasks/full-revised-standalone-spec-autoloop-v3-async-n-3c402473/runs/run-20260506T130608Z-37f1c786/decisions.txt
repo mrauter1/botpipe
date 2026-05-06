@@ -1,0 +1,4 @@
+<autoloop-decisions-header version="1" block_seq="1" owner="planner" phase_id="task-global" pair="plan" turn_seq="1" run_id="run-20260506T130608Z-37f1c786" ts="2026-05-06T13:06:09.042967+00:00" />
+Treat exported sequential `llm(...)` and `classify(...)` helpers as compatibility-sensitive during the provider cutover even though the spec only explicitly lists other public non-parallel APIs.
+Keep compile-cache bypass for workflows containing branch groups in v1 unless a full branch-group cache key lands with matching coverage.
+`Engine.run(...)` and `Engine.resume(...)` remain public only as sync shells over async internals and must fail clearly inside an active event loop rather than reviving sync provider execution.
