@@ -1607,3 +1607,50 @@ Validation run:
 **Open issues / next step**
 
 In-phase work is complete and the focused suites passed. The remaining sensible next step is a broader end-to-end runtime sweep if you want extra confidence beyond the provider-policy and provider-runtime surfaces.
+
+
+---
+run_id=run-20260506T190853Z-f707cb4f | entry=session_turn | pair=implement | phase=verifier | cycle=1 | attempt=1 | thread_id=019dff06-56f8-7ec3-9792-9244e6c94bf8
+---
+provider=codex
+mode=resume
+template=/home/rauter/.local/share/pipx/venvs/autoloop/lib/python3.12/site-packages/autoloop/templates/implement_verifier.md
+session_id=019dff06-56f8-7ec3-9792-9244e6c94bf8
+
+
+---
+run_id=run-20260506T190853Z-f707cb4f | entry=phase_output | pair=implement | phase=verifier | process=codex-agent | cycle=1 | attempt=1 | thread_id=019dff06-56f8-7ec3-9792-9244e6c94bf8
+---
+I’m reviewing the Claude-emission phase against the phase contract and the recorded implementation notes. First I’m reading the criteria and feedback artifacts, then I’ll audit the changed runtime/provider files and the targeted tests for correctness and regression risk before I mark the review artifacts.
+
+I’ve found one material enforcement problem and I’m confirming a second compatibility regression now against the actual code paths, not just the notes. I’m checking the exact line references in the Claude transport/emitter so the review feedback can point to the smallest viable fix seam.
+
+I’ve confirmed three blocking issues: one enforcement hole from `--settings` merge behavior, one explicit backward-compatibility regression for legacy `permission_strategy=bypass`, and one acceptance-criteria miss in the lossy capability reporting for degraded Claude filesystem support. I’m recording those now and marking the criteria accordingly.
+
+Scope considered
+
+Phase-local review of the Claude policy emission work: `autoloop/runtime/providers/claude.py`, `autoloop/runtime/providers/claude_policy.py`, the targeted runtime/provider tests, the active implementation notes, and the run-local decisions ledger. I did not expand into unrelated dirty files.
+
+What I analyzed
+
+I checked the changed Claude transport/emitter behavior against the accepted phase contract, the backward-compatibility requirements in the request snapshot, and the recorded decisions for policy ownership and run-scoped artifact handling. I also reviewed the targeted regression tests to see which compatibility and enforcement cases were actually covered.
+
+What I reviewed
+
+I updated [criteria.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/implementation-goal-add-a-first-class-provider-p-5e755cae/runs/run-20260506T190853Z-f707cb4f/artifacts/implement/phases/policy-claude-regression/criteria.md) and appended three blocking findings to [feedback.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/implementation-goal-add-a-first-class-provider-p-5e755cae/runs/run-20260506T190853Z-f707cb4f/artifacts/implement/phases/policy-claude-regression/feedback.md).
+
+Key findings / decisions
+
+`IMP-001` blocking: the new `--settings` seam is not isolated from ambient Claude config layers, so project/user Claude settings can widen permissions beyond the already-validated strict envelope.
+
+`IMP-002` blocking: legacy `provider.claude.permission_strategy=bypass` no longer works on normal policy-backed turns, which contradicts the explicit backward-compatibility requirement.
+
+`IMP-003` blocking: the Claude capability report misses the required lossy warning when native filesystem sandbox support is unavailable but the policy is still relying on the default workspace-write filesystem envelope.
+
+Open issues / next step
+
+The phase is not review-complete. The next implementation turn should fix the three blocking issues above, then re-run the focused Claude provider/policy suites and update the review artifacts again.
+
+<loop-control>
+{"schema":"docloop.loop_control/v1","kind":"promise","promise":"INCOMPLETE"}
+</loop-control>

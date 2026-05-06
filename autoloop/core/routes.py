@@ -142,6 +142,7 @@ class Route:
         payload_schema: object = _INHERIT_PAYLOAD_SCHEMA,
         route_fields_schema: Any | None = None,
         preset_kind: RoutePresetKind = "custom",
+        _handwritten_route_fields_validation_equivalent: bool = False,
     ) -> "Route":
         return Route(
             target=target,
@@ -154,6 +155,7 @@ class Route:
             payload_schema=payload_schema,
             route_fields_schema=route_fields_schema,
             preset_kind=preset_kind,
+            _handwritten_route_fields_validation_equivalent=_handwritten_route_fields_validation_equivalent,
         )
 
     @staticmethod

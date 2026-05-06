@@ -6,7 +6,7 @@ from pydantic import BaseModel, Field
 from autoloop.core.compiler import compile_workflow
 from autoloop.core.artifacts import Artifact
 from autoloop.core.effects import Effects, WorklistEffect
-from autoloop.core.errors import RoutingError, WorkflowValidationError
+from autoloop.core.errors import RoutingError, WorkflowCompilationError, WorkflowValidationError
 from autoloop.core.extensions import RunBinding
 from autoloop.core.primitives import Event, Goto
 from autoloop.core.providers.retries import ProviderRetryPolicy
@@ -56,6 +56,21 @@ def _chain_hooks(*hooks):
         return None
 
     return chained
+
+
+def _patch_missing_jsonschema(monkeypatch: pytest.MonkeyPatch) -> None:
+    import builtins
+
+    real_import = builtins.__import__
+
+    def fake_import(name, globals=None, locals=None, fromlist=(), level=0):
+        if name == "jsonschema":
+            raise ModuleNotFoundError("No module named 'jsonschema'")
+        return real_import(name, globals, locals, fromlist, level)
+
+    monkeypatch.setattr(builtins, "__import__", fake_import)
+
+
 def test_validation_allows_missing_state_with_empty_fallback_model():
     def _missingstateworkflow_on_begin(ctx):
         return Event('done')
@@ -416,8 +431,6 @@ def test_validation_rejects_unsupported_artifact_schema_type():
 
 
 def test_validation_rejects_raw_artifact_schema_without_jsonschema_dependency(monkeypatch):
-    import builtins
-
     raw_schema = {
         "type": "object",
         "properties": {
@@ -427,14 +440,7 @@ def test_validation_rejects_raw_artifact_schema_without_jsonschema_dependency(mo
         "additionalProperties": False,
     }
 
-    real_import = builtins.__import__
-
-    def fake_import(name, globals=None, locals=None, fromlist=(), level=0):
-        if name == "jsonschema":
-            raise ModuleNotFoundError("No module named 'jsonschema'")
-        return real_import(name, globals, locals, fromlist, level)
-
-    monkeypatch.setattr(builtins, "__import__", fake_import)
+    _patch_missing_jsonschema(monkeypatch)
     report_artifact = Artifact.json("{run_folder}/report.json", schema=raw_schema)
 
     with pytest.raises(WorkflowValidationError, match="optional jsonschema dependency"):
@@ -1427,8 +1433,6 @@ def test_compiled_workflow_artifact_items_distinguish_alias_and_authoritative_in
 
 
 def test_validation_rejects_raw_json_schema_output_contract_without_jsonschema_dependency(monkeypatch):
-    import builtins
-
     raw_schema = {
         "type": "object",
         "properties": {
@@ -1438,14 +1442,7 @@ def test_validation_rejects_raw_json_schema_output_contract_without_jsonschema_d
         "additionalProperties": False,
     }
 
-    real_import = builtins.__import__
-
-    def fake_import(name, globals=None, locals=None, fromlist=(), level=0):
-        if name == "jsonschema":
-            raise ModuleNotFoundError("No module named 'jsonschema'")
-        return real_import(name, globals, locals, fromlist, level)
-
-    monkeypatch.setattr(builtins, "__import__", fake_import)
+    _patch_missing_jsonschema(monkeypatch)
 
     with pytest.raises(WorkflowValidationError, match="optional jsonschema dependency"):
 
@@ -1466,6 +1463,108 @@ def test_validation_rejects_raw_json_schema_output_contract_without_jsonschema_d
             transitions = {ask: {"done": FINISH}}
 
         RawSchemaWorkflow.ask.after = _chain_hooks(_rawschemaworkflow_on_ask, RawSchemaWorkflow.ask.after)
+
+
+def test_validation_rejects_raw_route_payload_schema_without_jsonschema_dependency(monkeypatch):
+    raw_schema = {
+        "type": "object",
+        "properties": {"summary": {"type": "string"}},
+        "required": ["summary"],
+        "additionalProperties": False,
+    }
+
+    _patch_missing_jsonschema(monkeypatch)
+
+    class RawRoutePayloadSchemaWorkflow(Workflow):
+        class State(BaseModel):
+            pass
+
+        ask = PromptStep(name="ask", producer="ask.md")
+        entry = ask
+        transitions = {
+            ask: {
+                "done": Route.finish(payload_schema=raw_schema),
+            }
+        }
+
+    with pytest.raises(WorkflowCompilationError, match="optional jsonschema dependency"):
+        compile_workflow(RawRoutePayloadSchemaWorkflow)
+
+
+def test_validation_rejects_raw_route_fields_schema_without_jsonschema_dependency(monkeypatch):
+    raw_schema = {
+        "type": "object",
+        "properties": {"reason": {"type": "string"}},
+        "required": ["reason"],
+        "additionalProperties": False,
+    }
+
+    _patch_missing_jsonschema(monkeypatch)
+
+    class RawRouteFieldsSchemaWorkflow(Workflow):
+        class State(BaseModel):
+            pass
+
+        ask = PromptStep(name="ask", producer="ask.md")
+        entry = ask
+        transitions = {
+            ask: {
+                "done": Route.finish(route_fields_schema=raw_schema),
+            }
+        }
+
+    with pytest.raises(WorkflowCompilationError, match="optional jsonschema dependency"):
+        compile_workflow(RawRouteFieldsSchemaWorkflow)
+
+
+def test_validation_allows_helper_default_route_fields_without_jsonschema_dependency(monkeypatch):
+    _patch_missing_jsonschema(monkeypatch)
+
+    class HelperDefaultRouteFieldsWorkflow(Workflow):
+        class State(BaseModel):
+            pass
+
+        ask = PromptStep(name="ask", producer="ask.md")
+        entry = ask
+        transitions = {
+            ask: {"done": FINISH},
+            GLOBAL: {"question": Route.question(), "blocked": Route.blocked(), "failed": Route.failed()},
+        }
+
+    compiled = compile_workflow(HelperDefaultRouteFieldsWorkflow)
+
+    assert compiled.route("ask", "question").route_fields_validator is None
+    assert compiled.route("ask", "blocked").route_fields_validator is None
+    assert compiled.route("ask", "failed").route_fields_validator is None
+
+
+def test_validation_rejects_custom_helper_route_fields_override_without_jsonschema_dependency(monkeypatch):
+    raw_schema = {
+        "type": "object",
+        "properties": {
+            "questions": {"type": "array", "items": {"type": "string"}, "minItems": 1},
+            "reason": {"type": ["string", "null"]},
+            "severity": {"type": "string"},
+        },
+        "required": ["questions", "reason", "severity"],
+        "additionalProperties": False,
+    }
+
+    _patch_missing_jsonschema(monkeypatch)
+
+    class CustomHelperRouteFieldsWorkflow(Workflow):
+        class State(BaseModel):
+            pass
+
+        ask = PromptStep(name="ask", producer="ask.md")
+        entry = ask
+        transitions = {
+            ask: {"done": FINISH},
+            GLOBAL: {"question": Route.question(route_fields_schema=raw_schema)},
+        }
+
+    with pytest.raises(WorkflowCompilationError, match="optional jsonschema dependency"):
+        compile_workflow(CustomHelperRouteFieldsWorkflow)
 
 
 
