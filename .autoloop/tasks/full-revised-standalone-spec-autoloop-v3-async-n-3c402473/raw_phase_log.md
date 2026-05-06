@@ -1020,3 +1020,54 @@ Open issues / next step
 <loop-control>
 {"schema":"docloop.loop_control/v1","kind":"promise","promise":"INCOMPLETE"}
 </loop-control>
+
+
+---
+run_id=run-20260506T130608Z-37f1c786 | entry=session_turn | pair=implement | phase=producer | cycle=2 | attempt=1 | thread_id=019dfd95-df97-7bb1-9546-0a54a718f9eb
+---
+provider=codex
+mode=resume
+template=/home/rauter/.local/share/pipx/venvs/autoloop/lib/python3.12/site-packages/autoloop/templates/implement_producer.md
+session_id=019dfd95-df97-7bb1-9546-0a54a718f9eb
+
+
+---
+run_id=run-20260506T130608Z-37f1c786 | entry=phase_output | pair=implement | phase=producer | process=codex-agent | cycle=2 | attempt=1 | thread_id=019dfd95-df97-7bb1-9546-0a54a718f9eb
+---
+I’m addressing the reviewer’s blocking cancellation finding only. First I’m reading the exact feedback and the shared subprocess helper call sites, then I’ll patch the central helper and update the phase notes with the fix and validation.
+
+I’ve confirmed the fix belongs entirely in the shared helper. I’m patching `_common.py` to swallow the signal-race path without changing the normal termination flow, and I’m adding focused helper tests for both `terminate()` and `kill()` `ProcessLookupError` races.
+
+The helper and regression tests are patched. I’m doing syntax-level verification on the touched files now, then I’ll update the implementation notes and this turn’s decision block with the central cancellation fix.
+
+I’ve got the fix compiled cleanly. I’m updating the phase notes to reflect the new central helper change and adding one line to the turn’s decision block so later turns don’t regress the shared cancellation behavior back into per-transport special cases.
+
+Scope considered
+
+- Phase-local fix for reviewer finding `IMP-001` only.
+- Shared async subprocess cancellation helper plus its focused runtime tests and phase notes.
+- No unrelated dirty files were touched.
+
+What I analyzed
+
+- [feedback.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/full-revised-standalone-spec-autoloop-v3-async-n-3c402473/runs/run-20260506T130608Z-37f1c786/artifacts/implement/phases/async-transports-and-rendered-provider/feedback.md)
+- [autoloop/runtime/providers/_common.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/autoloop/runtime/providers/_common.py:183)
+- [tests/runtime/test_runtime_providers.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/tests/runtime/test_runtime_providers.py:589)
+- The current implementation notes and turn-local decisions header.
+
+What I changed
+
+- Hardened [autoloop/runtime/providers/_common.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/autoloop/runtime/providers/_common.py:183) so `terminate_text_subprocess(...)` catches `ProcessLookupError` around `terminate()` and `kill()`, then preserves the shared cancellation flow instead of leaking the race.
+- Added focused regression coverage in [tests/runtime/test_runtime_providers.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/tests/runtime/test_runtime_providers.py:605) for `ProcessLookupError` races during both terminate and kill paths.
+- Updated [implementation_notes.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/full-revised-standalone-spec-autoloop-v3-async-n-3c402473/runs/run-20260506T130608Z-37f1c786/artifacts/implement/phases/async-transports-and-rendered-provider/implementation_notes.md) and appended the non-obvious centralization decision under the current turn header in [decisions.txt](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/full-revised-standalone-spec-autoloop-v3-async-n-3c402473/runs/run-20260506T130608Z-37f1c786/decisions.txt).
+
+Key findings / decisions
+
+- The fix stays fully centralized in the shared helper used by both Codex and Claude; no per-transport special cases were introduced.
+- Normal termination behavior is unchanged; only the already-exited-child race now degrades cleanly instead of surfacing `ProcessLookupError`.
+- Validation available in this environment was limited to syntax-level checks.
+
+Open issues / next step
+
+- `python3 -m py_compile autoloop/runtime/providers/_common.py tests/runtime/test_runtime_providers.py` passed.
+- `pytest` is still unavailable in this shell, so the next step is a verifier rerun and, if available later, executing the targeted runtime/provider tests.

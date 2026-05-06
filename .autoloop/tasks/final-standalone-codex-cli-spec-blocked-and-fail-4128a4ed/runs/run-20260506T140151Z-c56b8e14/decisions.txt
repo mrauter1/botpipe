@@ -1,1 +1,5 @@
 <autoloop-decisions-header version="1" block_seq="1" owner="planner" phase_id="task-global" pair="plan" turn_seq="1" run_id="run-20260506T140151Z-c56b8e14" ts="2026-05-06T14:01:52.020837+00:00" />
+Treat compiled route construction in discovery/compiler as the only enforcement point for implicit versus explicit `blocked` and `failed`; do not repair this contract by filtering provider prompts after compilation.
+Keep `_compiled_provider_visibility(...)` generic for non-`question` routes so explicit visible and hidden `blocked` / `failed` behave exactly like any other authored route.
+Preserve packaged workflow routes that explicitly author `_BLOCKED_ROUTE` or `_FAILED_ROUTE`; only remove expectations that depended on framework injection.
+Do not broaden this change to unrelated branch-group composite route semantics or runtime status/reporting uses of the words `blocked` and `failed`.
