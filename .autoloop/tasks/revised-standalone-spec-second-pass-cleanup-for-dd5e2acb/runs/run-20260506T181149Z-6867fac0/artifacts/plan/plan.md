@@ -41,7 +41,8 @@ This should ship as one coherent implementation phase with small edits concentra
   - explicit fresh provider branch session passes;
   - non-fresh verifier session fails;
   - scoped branch/fan-in, child workflow branch/fan-in, and operation branch/fan-in fail;
-  - invalid branch/fan-in placeholder usage and unsafe names fail.
+  - branch placeholder misuse, `FanIn.results()` misuse, `FanIn.context()` misuse, and other invalid branch/fan-in placeholder usage fail;
+  - unsafe branch-group and branch names fail.
 - Runtime coverage:
   - branch result construction does not double-update final step/item state;
   - produce/verify branch `needs_rework` increments `rework_count` exactly once;
@@ -49,8 +50,13 @@ This should ship as one coherent implementation phase with small edits concentra
   - fresh branch provider requests start with `session_id=None`;
   - parent active sessions remain unchanged after branch execution;
   - distinct branches using the same authored `Session.fresh()` declaration get distinct branch-local session contexts;
+  - a branch `RequestInput` without fan-in maps the composite outcome to `question` exactly once;
   - capture mode records `Goto`, `RequestInput`, and `Fail` without following destinations or running `on_taken`;
   - fan-in finalizes exactly once at the composite boundary;
+  - same-file writes from branches remain allowed;
+  - branch state assignment still updates the shared state cell and branch values mutation still updates the shared values mapping;
+  - manifest branch order follows declaration order and branch context markdown stays deterministic;
+  - branch evidence stays under `workflow_folder/_branch_groups/...`;
   - evidence write failures prevent fan-in and mechanical outcomes.
 - Strictness/provider coverage:
   - branch-group runtime avoids forbidden thread-backed primitives;
@@ -66,6 +72,12 @@ This should ship as one coherent implementation phase with small edits concentra
 - Public authoring/runtime entrypoints remain unchanged for ordinary workflows; only internal async-native execution paths are tightened.
 - Existing branch evidence paths stay under `{workflow_folder}/_branch_groups/<group_name>/`.
 
+## Compatibility Gate
+- Existing non-parallel authoring APIs remain unchanged: `Workflow`, `step(...)`, `llm(...)`, `produce_verify_step(...)`, `python_step(...)`, `workflow_step(...)`, `Session`, `Session.fresh()`, `Session.run()`, route declarations, artifact declarations, and CLI/run entrypoints.
+- `Engine.run(...)` remains only an outer synchronous wrapper around `Engine.run_async(...)`.
+- `Engine.run(...)` and `BranchGroupRuntime.run(...)` must not reintroduce internal sync-provider execution, thread-backed fallbacks, or branch-local sync bridges.
+- Phase completion requires these compatibility expectations to stay explicit in the regression contract, not just in the narrative description.
+
 ## Regression Risks And Controls
 - Duplicate final-state mutation currently risks double-counting `rework_count`/`replan_count`.
   - Control: remove the duplicate writes and add targeted produce/verify branch coverage.
@@ -77,7 +89,7 @@ This should ship as one coherent implementation phase with small edits concentra
   - Control: keep AST/static checks targeted to branch-group runtime and runtime transport turn execution surfaces.
 
 ## Validation Order
-1. Run branch-group unit/contract coverage around session overlays, capture semantics, fan-in, evidence failures, and shared-state behavior.
+1. Run branch-group unit/contract coverage around session overlays, capture semantics, composite `question` mapping, same-file writes, shared-state/value behavior, manifest ordering, deterministic context markdown, evidence location, fan-in, and evidence failures.
 2. Run provider boundary and runtime provider suites covering async transport execution and operation-bridge containment.
 3. Run strictness scans to confirm no forbidden branch-group/provider execution primitives are reintroduced.
 4. If any public non-parallel behavior changes are detected, treat that as a regression unless explicitly required by the authoritative request.

@@ -77,3 +77,26 @@ The planner should revise `plan.md` and `phase_plan.yaml` to add the missing req
 <loop-control>
 {"schema":"docloop.loop_control/v1","kind":"promise","promise":"INCOMPLETE"}
 </loop-control>
+
+
+---
+run_id=run-20260506T181149Z-6867fac0 | entry=session_turn | pair=plan | phase=producer | cycle=2 | attempt=1 | thread_id=019dfe7d-33cb-7730-aeea-13afe55ada76
+---
+provider=codex
+mode=resume
+template=/home/rauter/.local/share/pipx/venvs/autoloop/lib/python3.12/site-packages/autoloop/templates/plan_producer.md
+session_id=019dfe7d-33cb-7730-aeea-13afe55ada76
+
+
+---
+run_id=run-20260506T181149Z-6867fac0 | entry=phase_output | pair=plan | phase=producer | process=codex-agent | cycle=2 | attempt=1 | thread_id=019dfe7d-33cb-7730-aeea-13afe55ada76
+---
+I’m reconciling the verifier’s blocking findings against the current plan artifacts first, then I’ll make only the missing plan/phase-contract adjustments needed to close those gaps.
+
+I’m tightening the plan and the machine-readable phase contract now. The changes are limited to the missing preserved-behavior test coverage and the explicit public-API compatibility acceptance gate the verifier called out.
+
+The verifier gaps are closed in the artifacts. I’m reading back the updated sections once so the next verification pass sees the preserved-behavior checks and the compatibility gate explicitly in both the narrative and the phase contract.
+
+Updated [plan.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/revised-standalone-spec-second-pass-cleanup-for-dd5e2acb/runs/run-20260506T181149Z-6867fac0/artifacts/plan/plan.md), [phase_plan.yaml](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/revised-standalone-spec-second-pass-cleanup-for-dd5e2acb/runs/run-20260506T181149Z-6867fac0/artifacts/plan/phase_plan.yaml), [feedback.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/revised-standalone-spec-second-pass-cleanup-for-dd5e2acb/runs/run-20260506T181149Z-6867fac0/artifacts/plan/feedback.md), and the current-turn block in [decisions.txt](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/revised-standalone-spec-second-pass-cleanup-for-dd5e2acb/runs/run-20260506T181149Z-6867fac0/decisions.txt).
+
+This revision closes the verifier’s two blocking gaps. The plan now explicitly covers the omitted preserved-behavior regression checks (`question` routing without fan-in, same-file writes, shared state/value visibility, manifest order, deterministic context markdown, evidence path, and explicit `FanIn` misuse), and the machine-readable phase contract now gates completion on unchanged public non-parallel APIs plus `Engine.run(...)` / `BranchGroupRuntime.run(...)` remaining outer sync wrappers only. I did not modify [criteria.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/revised-standalone-spec-second-pass-cleanup-for-dd5e2acb/runs/run-20260506T181149Z-6867fac0/artifacts/plan/criteria.md), since it is verifier-owned.
