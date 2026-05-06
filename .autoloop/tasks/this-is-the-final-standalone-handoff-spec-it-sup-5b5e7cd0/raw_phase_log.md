@@ -631,3 +631,51 @@ Normalize canonical-envelope inputs entirely from `outcome.route_fields` wheneve
 <loop-control>
 {"schema":"docloop.loop_control/v1","kind":"promise","promise":"INCOMPLETE"}
 </loop-control>
+
+
+---
+run_id=run-20260506T185744Z-092935c3 | entry=session_turn | pair=implement | phase=producer | cycle=2 | attempt=1 | thread_id=019dfec6-9730-7fc1-aee3-d97159086b13
+---
+provider=codex
+mode=resume
+template=/home/rauter/.local/share/pipx/venvs/autoloop/lib/python3.12/site-packages/autoloop/templates/implement_producer.md
+session_id=019dfec6-9730-7fc1-aee3-d97159086b13
+
+
+---
+run_id=run-20260506T185744Z-092935c3 | entry=phase_output | pair=implement | phase=producer | process=codex-agent | cycle=2 | attempt=1 | thread_id=019dfec6-9730-7fc1-aee3-d97159086b13
+---
+I’m addressing the verifier’s blocking parser finding in the provider outcome migration path. I’ll inspect the feedback, decisions, plan mapping, and the parsing/tests around canonical-over-legacy precedence before editing anything.
+
+I have the failure isolated: canonical-envelope parsing still reads legacy top-level `reason` in the same branch where the spec says those fields should be ignored. I’m fixing that in `parse_outcome_json()`, adding the missing null-reason regression, then I’ll rerun focused parsing tests and update the phase notes and decisions ledger.
+
+The code change is narrow: canonical-envelope inputs now stop consulting legacy top-level `question` / `reason`, so compatibility projections come only from `route_fields`. I’m running focused parsing regressions first, then I’ll update the implementation notes and the current decisions block with the non-obvious precedence rule.
+
+The parser regression passed. One follow-up test command was malformed because the `-k` expression used assertion text instead of test names, so I’m rerunning that slice with valid selectors and then I’ll update the notes cleanly.
+
+The functional fix is in place and the targeted regressions are green. I’m now writing down the precedence rule in this turn’s decisions block and tightening the implementation notes so later turns don’t drift back into mixing canonical and legacy fields.
+
+Scope considered
+
+Phase-local provider outcome contract work only, focused on the verifier’s blocking finding in canonical outcome parsing plus the matching runtime-provider regression coverage and phase-local notes/decision artifacts.
+
+What I analyzed
+
+I reviewed the verifier feedback in [feedback.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/this-is-the-final-standalone-handoff-spec-it-sup-5b5e7cd0/runs/run-20260506T185744Z-092935c3/artifacts/implement/phases/provider-outcome-contract/feedback.md), the current parsing path in [parsing.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/autoloop/core/providers/parsing.py), the existing canonical-precedence tests in [test_runtime_providers.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/tests/runtime/test_runtime_providers.py), and the active decisions and implementation notes for this phase.
+
+What I changed
+
+I fixed [parse_outcome_json()](/home/rauter/autoloop_v3_bkp/autoloop_v3/autoloop/core/providers/parsing.py) so canonical `outcome` envelopes no longer read top-level legacy `question` / `reason`; compatibility projections now come only from `outcome.route_fields` in that branch. I added a regression in [test_runtime_providers.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/tests/runtime/test_runtime_providers.py) covering the previously broken case where `route_fields.reason` is `null` but a stray legacy top-level `reason` is present. I also updated [implementation_notes.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/this-is-the-final-standalone-handoff-spec-it-sup-5b5e7cd0/runs/run-20260506T185744Z-092935c3/artifacts/implement/phases/provider-outcome-contract/implementation_notes.md) and appended the non-obvious precedence rule under the current turn header in [decisions.txt](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/this-is-the-final-standalone-handoff-spec-it-sup-5b5e7cd0/runs/run-20260506T185744Z-092935c3/decisions.txt).
+
+Key findings / decisions
+
+Canonical-over-legacy precedence needed to be enforced at parse time, not left to `Outcome.__post_init__`, because `route_fields.reason = null` must suppress a legacy top-level `reason` instead of letting it leak through. I kept the fix local to canonical parsing so legacy top-level-only inputs remain accepted during migration.
+
+Open issues / next step
+
+Focused validation passed:
+`./.venv-autoloop/bin/python -m pytest -q tests/runtime/test_runtime_providers.py -k 'parse_outcome_json'`
+`./.venv-autoloop/bin/python -m pytest -q tests/contract/test_engine_contracts.py -k 'provider_invalid_question_retries_and_recovers or rendered_provider_invalid_question_retries_and_recovers or question_route_requires_question_field'`
+`./.venv-autoloop/bin/python -m pytest -q tests/unit/test_provider_boundary_core.py -k 'render_provider_turn_renders_markdown_contract_without_raw_output or render_provider_turn_excludes_hidden_routes_from_prompt_contract'`
+
+No further code changes are pending in this turn; the next step is verifier re-review against `IMP-001`.
