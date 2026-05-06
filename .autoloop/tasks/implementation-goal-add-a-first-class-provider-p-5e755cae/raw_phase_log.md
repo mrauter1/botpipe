@@ -510,3 +510,63 @@ Open issues / next step
 - `python3 -m py_compile` passed on the touched files.
 - Targeted pytest execution could not complete: `.venv/bin/python -m pytest ...` fails during collection in this environment because importing `autoloop` hits an existing circular import path through `autoloop.core.primitives` and `autoloop.core.providers.__init__`.
 - Next phase can build on this config and authoring layer for compiler and resolver work once that import-cycle blocker is cleared or reproduced independently.
+
+
+---
+run_id=run-20260506T190853Z-f707cb4f | entry=session_turn | pair=implement | phase=verifier | cycle=1 | attempt=1 | thread_id=019dfec5-f589-7cb2-ab20-e8f25f37fa06
+---
+provider=codex
+mode=resume
+template=/home/rauter/.local/share/pipx/venvs/autoloop/lib/python3.12/site-packages/autoloop/templates/implement_verifier.md
+session_id=019dfec5-f589-7cb2-ab20-e8f25f37fa06
+
+
+---
+run_id=run-20260506T190853Z-f707cb4f | entry=phase_output | pair=implement | phase=verifier | process=codex-agent | cycle=1 | attempt=1 | thread_id=019dfec5-f589-7cb2-ab20-e8f25f37fa06
+---
+I’m reviewing the phase-local implementation against the authoring and config contract first: criteria, decisions, changed files, and the new tests. Then I’ll update the phase artifacts with concrete blocking or non-blocking findings only.
+
+I’ve got the artifact context. Now I’m reading the changed config and authoring code in detail, especially the merge semantics and fallback YAML loader, because that’s where this phase can silently break compatibility even if the new tests look reasonable.
+
+The config path looks structurally coherent so far. I’m checking one broader dependency now: whether workflow-level `policy` is actually retained anywhere beyond the bare class attribute, because this phase promised authoring support rather than just a placeholder field.
+
+I’ve got two material gaps that block sign-off: one in strict config validation and one in workflow-level authoring retention. I’m recording those in the phase feedback now and leaving the criteria boxes unchecked accordingly.
+
+Scope considered
+
+- Phase-local `policy-config-authoring` changes only.
+- Reviewed the active artifacts, run decisions, changed runtime config and CLI code, step and simple authoring surfaces, simple-step lowering, and the new tests.
+
+What I analyzed
+
+- [autoloop/runtime/config.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/autoloop/runtime/config.py)
+- [autoloop/runtime/cli.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/autoloop/runtime/cli.py)
+- [autoloop/core/steps.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/autoloop/core/steps.py)
+- [autoloop/simple.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/autoloop/simple.py)
+- [autoloop/core/discovery.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/autoloop/core/discovery.py)
+- [tests/runtime/test_provider_policy_config.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/tests/runtime/test_provider_policy_config.py)
+- [tests/unit/test_simple_surface.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/tests/unit/test_simple_surface.py)
+
+What I reviewed
+
+- Provider-policy layer parsing, legacy-field mapping, and merge semantics against the phase contract.
+- Narrow YAML fallback support for the requested list and `null` shapes.
+- Step-level and workflow-level policy authoring retention through the existing simple authoring pipeline.
+- Review artifacts were updated in:
+  - [feedback.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/implementation-goal-add-a-first-class-provider-p-5e755cae/runs/run-20260506T190853Z-f707cb4f/artifacts/implement/phases/policy-config-authoring/feedback.md)
+  - [criteria.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/implementation-goal-add-a-first-class-provider-p-5e755cae/runs/run-20260506T190853Z-f707cb4f/artifacts/implement/phases/policy-config-authoring/criteria.md)
+
+Key findings / decisions
+
+- Found 2 blocking issues and recorded them as `IMP-001` and `IMP-002`.
+- `IMP-001`: the new config override model silently accepts `provider_policy.default: null` and `provider_policy.validation: null`, which weakens strict config validation and can mask operator mistakes.
+- `IMP-002`: workflow-level `policy` is only a bare class attribute and is not retained in discovered authoring metadata, so the requested workflow-level authoring feature is incomplete in the normal pipeline.
+
+Open issues / next step
+
+- Fix the two blocking findings, then rerun the focused review.
+- Criteria boxes remain unchecked because correctness and behavioral safety are not yet satisfied for this phase.
+
+<loop-control>
+{"schema":"docloop.loop_control/v1","kind":"promise","promise":"INCOMPLETE"}
+</loop-control>

@@ -1394,7 +1394,7 @@ class Engine:
         if is_question_style_route(compiled_route, tag=outcome.tag) and "questions" not in legacy_route_fields:
             if isinstance(outcome.question, str) and outcome.question.strip():
                 legacy_route_fields["questions"] = [outcome.question.strip()]
-        if compiled_route.preset_kind in {"question", "blocked", "failed"} and "reason" not in legacy_route_fields:
+        if (compiled_route.preset_kind in {"question", "blocked", "failed"} or outcome.tag in {"blocked", "failed"}) and "reason" not in legacy_route_fields:
             legacy_route_fields["reason"] = outcome.reason or None
         normalized_route_fields = normalize_route_fields_for_route(compiled_route, legacy_route_fields)
         if normalized_route_fields != outcome.route_fields:
@@ -1462,7 +1462,7 @@ class Engine:
             if reason is not None and not isinstance(reason, str):
                 raise ValueError("question route route_fields.reason must be a string or null")
             return
-        if route.preset_kind in {"blocked", "failed"}:
+        if route.preset_kind in {"blocked", "failed"} or outcome.tag in {"blocked", "failed"}:
             reason = outcome.route_fields.get("reason")
             if reason is not None and not isinstance(reason, str):
                 raise ValueError(f"{route.preset_kind} route route_fields.reason must be a string or null")

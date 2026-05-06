@@ -295,6 +295,31 @@ def test_parse_outcome_json_accepts_plain_object() -> None:
     assert outcome.raw_output == '{"tag":"done","payload":{"x":1}}'
 
 
+def test_parse_outcome_json_accepts_canonical_outcome_envelope() -> None:
+    raw = (
+        '{"outcome":{"tag":"question","payload":{},"route_fields":{"questions":["Proceed?"],"reason":null}}}'
+    )
+
+    outcome = parse_outcome_json(raw)
+
+    assert outcome.tag == "question"
+    assert outcome.payload == {}
+    assert outcome.route_fields == {"questions": ["Proceed?"], "reason": None}
+    assert outcome.question == "Proceed?"
+    assert outcome.reason == ""
+    assert outcome.raw_output == raw
+
+
+def test_parse_outcome_json_prefers_canonical_route_fields_over_legacy_top_level_fields() -> None:
+    outcome = parse_outcome_json(
+        '{"outcome":{"tag":"question","payload":{},"route_fields":{"questions":["Canonical?"],"reason":"canonical"}},"question":"Legacy?","reason":"legacy"}'
+    )
+
+    assert outcome.route_fields == {"questions": ["Canonical?"], "reason": "canonical"}
+    assert outcome.question == "Canonical?"
+    assert outcome.reason == "canonical"
+
+
 def test_parse_outcome_json_accepts_fenced_json_block() -> None:
     raw = '```json\n{"tag":"question","question":"Proceed?"}\n```'
 

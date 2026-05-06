@@ -174,17 +174,17 @@ def test_render_provider_turn_renders_markdown_contract_without_raw_output() -> 
     assert "### Declared artifacts this step may write" in turn.prompt_text
     assert "not an exclusive allow-list" in turn.prompt_text
     assert "### Available routes" in turn.prompt_text
-        assert "Explicit required writes" in turn.prompt_text
-        assert "Effective required writes" in turn.prompt_text
-        assert "### Control response" in turn.prompt_text
-        assert '"outcome": {' in turn.prompt_text
-        assert '"tag": "<one available route>"' in turn.prompt_text
-        assert '"payload": {}' in turn.prompt_text
-        assert '"route_fields": {}' in turn.prompt_text
-        assert "For question-style routes, include a non-empty `outcome.route_fields.questions` list." in turn.prompt_text
-        assert "Route helper reasons belong in `outcome.route_fields.reason`" in turn.prompt_text
-        assert "If the selected route is `blocked` or `failed`" not in turn.prompt_text
-        assert "#### Required outcome structure" in turn.prompt_text
+    assert "Explicit required writes" in turn.prompt_text
+    assert "Effective required writes" in turn.prompt_text
+    assert "### Control response" in turn.prompt_text
+    assert '"outcome": {' in turn.prompt_text
+    assert '"tag": "<one available route>"' in turn.prompt_text
+    assert '"payload": {}' in turn.prompt_text
+    assert '"route_fields": {}' in turn.prompt_text
+    assert "For question-style routes, include a non-empty `outcome.route_fields.questions` list." in turn.prompt_text
+    assert "Route helper reasons belong in `outcome.route_fields.reason`" in turn.prompt_text
+    assert "If the selected route is `blocked` or `failed`" not in turn.prompt_text
+    assert "#### Required outcome structure" in turn.prompt_text
     assert "previous_decision" in turn.prompt_text
     assert "workspace path; missing at runtime" in turn.prompt_text
     assert "declared artifact; present at runtime" in turn.prompt_text

@@ -439,6 +439,8 @@ def _route_payload_schema(context: ProviderTurnContext, route: str) -> dict[str,
             return dict(schema)
     elif info is not None and isinstance(info.payload_schema, Mapping):
         return dict(info.payload_schema)
+    if isinstance(context.expected_output_schema, Mapping):
+        return dict(context.expected_output_schema)
     return {"type": "object", "additionalProperties": True}
 
 
