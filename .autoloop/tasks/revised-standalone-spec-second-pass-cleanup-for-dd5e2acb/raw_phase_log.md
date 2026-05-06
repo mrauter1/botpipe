@@ -269,3 +269,50 @@ Open issues / next step
 <loop-control>
 {"schema":"docloop.loop_control/v1","kind":"promise","promise":"INCOMPLETE"}
 </loop-control>
+
+
+---
+run_id=run-20260506T181149Z-6867fac0 | entry=session_turn | pair=implement | phase=producer | cycle=2 | attempt=1 | thread_id=019dfe82-f64a-7772-81d0-a10f25fab893
+---
+provider=codex
+mode=resume
+template=/home/rauter/.local/share/pipx/venvs/autoloop/lib/python3.12/site-packages/autoloop/templates/implement_producer.md
+session_id=019dfe82-f64a-7772-81d0-a10f25fab893
+
+
+---
+run_id=run-20260506T181149Z-6867fac0 | entry=phase_output | pair=implement | phase=producer | process=codex-agent | cycle=2 | attempt=1 | thread_id=019dfe82-f64a-7772-81d0-a10f25fab893
+---
+I’m addressing the reviewer’s strictness gap only. First I’m reading the recorded finding and the current scanner/tests so I can patch the narrow missed case without widening scope.
+
+I’ve isolated the miss: the scanner only inspects call/attribute forms and skips directly imported names. I’m patching the strictness helper to normalize name, call, and attribute references through one label resolver, then I’ll add probe tests for the direct-import executor forms.
+
+The fix is in. I’m rerunning the strictness suite first, since that’s the only behavior changed this turn, and then I’ll refresh the implementation notes and decision ledger with the direct-import coverage detail.
+
+The strictness suite is green with the direct-import cases covered. I’m recording that narrow follow-up in the run ledger and implementation notes, then I’ll close the phase from the producer side.
+
+Scope considered
+
+- Reviewer feedback `IMP-001` only, plus the strictness scanner and probe tests in [tests/strictness/test_no_compat.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/tests/strictness/test_no_compat.py).
+- I kept source/runtime scope unchanged and did not touch reviewer-owned artifacts.
+
+What I analyzed
+
+- The failing reviewer case in `_runtime_provider_turn_execution_failures(...)`.
+- How the scanner handled `Call` and `Attribute` nodes, and why directly imported names like `ThreadPoolExecutor()` and `FIRST_COMPLETED` were slipping through.
+
+What I changed
+
+- Added `_provider_turn_execution_primitive_label(...)` and routed `Call`, `Attribute`, and `Name` handling through it so direct-import executor primitives are flagged the same way as attribute-based forms inside `run_turn`.
+- Added direct-import probe tests for `ThreadPoolExecutor`, `Future`, and `FIRST_COMPLETED`.
+- Updated the phase `implementation_notes.md` and appended the non-obvious scanner decision under the current run header in `decisions.txt`.
+
+Key findings / decisions
+
+- The reviewer finding was valid: the original scanner missed imported-name forms because it only matched executor primitives through attribute suffix checks.
+- Centralizing the primitive-to-label mapping avoided scattering the same forbidden-symbol logic across three AST branches.
+
+Open issues / next step
+
+- `PYTHONPATH=/tmp/autoloop-test-deps:$PYTHONPATH python3 -m pytest -q tests/strictness/test_no_compat.py` passed (`36 passed`).
+- The producer-side follow-up is complete; the next step is verifier re-review so `criteria.md` and `feedback.md` can be updated from the reviewer side.

@@ -28,6 +28,7 @@
 - `BranchSessionStoreView._resolve_key`
 - `RenderedLLMProvider._run_operation_turn`
 - strictness scanner helpers for runtime provider turn execution
+- `_provider_turn_execution_primitive_label`
 
 ## Checklist mapping
 - Workstream 1 / AC-1: removed duplicate capture-mode final-state mutation from branch result payload building; failed branch results now read provider session snapshots once.
@@ -60,7 +61,9 @@
 ## Validation performed
 - `PYTHONPATH=/tmp/autoloop-test-deps:$PYTHONPATH python3 -m pytest -q tests/unit/test_branch_group_context_sessions.py tests/contract/test_branch_group_runtime.py tests/runtime/test_runtime_providers.py tests/strictness/test_no_compat.py`
 - `PYTHONPATH=/tmp/autoloop-test-deps:$PYTHONPATH python3 -m pytest -q tests/unit/test_simple_surface.py::test_provider_backed_branch_steps_require_explicit_fresh_sessions_only_inside_branch_groups tests/unit/test_simple_surface.py::test_branch_group_rejects_non_fresh_verifier_sessions_inside_branch_groups tests/unit/test_simple_surface.py::test_branch_group_rejects_unsafe_names_child_workflow_fan_in_and_non_serializable_fan_out_inputs tests/unit/test_simple_surface.py::test_branch_group_rejects_operation_fan_in_steps tests/unit/test_simple_surface.py::test_branch_group_fan_in_helpers_are_rejected_outside_fan_in tests/unit/test_simple_surface.py::test_fan_in_placeholder_is_rejected_outside_fan_in_steps`
+- `PYTHONPATH=/tmp/autoloop-test-deps:$PYTHONPATH python3 -m pytest -q tests/strictness/test_no_compat.py`
 
 ## Deduplication / centralization decisions
 - Kept failed-branch provider session snapshot collection in one local tuple assignment instead of repeated reads.
 - Added one targeted strictness scanner for provider `run_turn` bodies rather than broadening existing repo-wide subprocess restrictions.
+- Normalized provider-turn primitive detection through one label helper so direct-import and attribute forms stay covered by the same strictness rule.
