@@ -6,3 +6,5 @@
 - Phase Directory Key: runtime-and-inspection-alignment
 - Phase Title: Align Runtime And Reporting
 - Scope: phase-local authoritative verifier artifact
+
+- Added focused coverage for simplified provider-schema fallback reporting, topology-hash sensitivity to route visibility/schema metadata, and selected-workflow capability/decomposition payload exposure of compiled route contracts and inheritance details.

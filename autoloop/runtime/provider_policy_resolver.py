@@ -15,7 +15,12 @@ from autoloop.core.provider_policy import (
     validate_against_strict_policy,
 )
 
-from .config import ResolvedRuntimeConfig
+from .config import (
+    ProviderConfig,
+    ProviderPolicyRuntimeConfig,
+    ResolvedRuntimeConfig,
+    RuntimeConfig,
+)
 
 
 class ProviderPolicyResolver:
@@ -79,3 +84,24 @@ class ProviderPolicyResolver:
             step_name=step_name,
             workspace_root=self._workspace_root,
         )
+
+
+def create_provider_policy_resolver(
+    *,
+    workflow_policy: ProviderPolicy | None,
+    workspace_root: Path,
+    provider_policy: ProviderPolicyRuntimeConfig | None = None,
+    runtime: RuntimeConfig | None = None,
+    provider: ProviderConfig | None = None,
+) -> ProviderPolicyResolver:
+    """Build a resolver from the resolved-or-default runtime policy inputs."""
+
+    return ProviderPolicyResolver(
+        config=ResolvedRuntimeConfig(
+            provider=provider or ProviderConfig(),
+            runtime=runtime or RuntimeConfig(),
+            provider_policy=provider_policy or ProviderPolicyRuntimeConfig(),
+        ),
+        workflow_policy=workflow_policy,
+        workspace_root=workspace_root,
+    )

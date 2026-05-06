@@ -4,6 +4,7 @@ import json
 from pathlib import Path
 
 import autoloop.simple as simple
+import autoloop.core.route_reporting as route_reporting_helpers
 from pydantic import BaseModel
 
 from autoloop import AWAIT_INPUT, FINISH, Md, Prompt, Route, StateVar, Workflow, Worklist, produce_verify_step, python_step, step
@@ -215,6 +216,60 @@ def test_branch_group_internal_shape_changes_topology_hash() -> None:
 
     assert compiled_a.workflow_name == compiled_b.workflow_name == "branch_hash_demo"
     assert compiled_a.topology_hash != compiled_b.topology_hash
+
+
+def test_route_visibility_and_route_schema_changes_change_topology_hash() -> None:
+    class VisibilityHashWorkflowA(Workflow):
+        name = "route_hash_demo"
+
+        review = step(
+            prompt=Prompt.inline("Review the draft."),
+            routes={
+                "done": FINISH,
+                "audit": Route.to(FINISH, provider_visibility="always"),
+            },
+        )
+
+    class VisibilityHashWorkflowB(Workflow):
+        name = "route_hash_demo"
+
+        review = step(
+            prompt=Prompt.inline("Review the draft."),
+            routes={
+                "done": FINISH,
+                "audit": Route.to(FINISH, provider_visibility="hidden"),
+            },
+        )
+
+    class SchemaHashWorkflow(Workflow):
+        name = "route_hash_demo"
+
+        review = step(
+            prompt=Prompt.inline("Review the draft."),
+            routes={
+                "done": FINISH,
+                "audit": Route.to(
+                    FINISH,
+                    provider_visibility="always",
+                    route_fields_schema={
+                        "type": "object",
+                        "properties": {
+                            "reason": {"type": ["string", "null"]},
+                        },
+                        "required": ["reason"],
+                        "additionalProperties": False,
+                    },
+                ),
+            },
+        )
+
+    compiled_visibility_a = compile_workflow(VisibilityHashWorkflowA)
+    compiled_visibility_b = compile_workflow(VisibilityHashWorkflowB)
+    compiled_schema = compile_workflow(SchemaHashWorkflow)
+
+    assert compiled_visibility_a.workflow_name == compiled_visibility_b.workflow_name == compiled_schema.workflow_name
+    assert compiled_visibility_a.topology_hash != compiled_visibility_b.topology_hash
+    assert compiled_visibility_a.topology_hash != compiled_schema.topology_hash
 
 
 def test_branch_group_payloads_preserve_structured_fan_out_inputs(tmp_path: Path) -> None:
@@ -449,6 +504,49 @@ def test_topology_artifacts_include_state_surfaces_runtime_control_hook_location
     assert "`review`: before:before_review, after:after_review, on_taken:human_escalation" in compile_report
     assert "| review | human_escalation | custom | step_local | FINISH | hidden | available |" in route_table
     assert "| - | on_hidden_taken |" in route_table
+
+
+def test_static_graph_and_compile_report_surface_simplified_provider_schema_fallback(
+    tmp_path: Path,
+    monkeypatch,
+) -> None:
+    fallback_schema = {
+        "type": "object",
+        "properties": {
+            "outcome": {
+                "type": "object",
+                "properties": {
+                    "tag": {"type": "string"},
+                    "payload": {"type": "object", "additionalProperties": True},
+                    "route_fields": {"type": "object", "additionalProperties": True},
+                },
+                "required": ["tag", "payload", "route_fields"],
+                "additionalProperties": False,
+            }
+        },
+        "required": ["outcome"],
+        "additionalProperties": False,
+    }
+
+    def _force_simplified_schema(*, routes, expected_output_schema, max_chars=12_000):
+        return fallback_schema, True
+
+    monkeypatch.setattr(route_reporting_helpers, "build_provider_outcome_schema", _force_simplified_schema)
+
+    compiled = compile_workflow(_StaticGraphWorkflow)
+
+    static_payload = workflow_static_step_graph_payload(compiled)
+    assessment = next(step_payload for step_payload in static_payload["steps"] if step_payload["name"] == "assessment")
+
+    assert assessment["provider_response_contracts"]["interactive"]["schema_simplified"] is True
+    assert assessment["provider_response_contracts"]["interactive"]["schema_fingerprint"] is not None
+    assert assessment["provider_response_contracts"]["interactive"]["schema_chars"] > 0
+    assert assessment["provider_response_contracts"]["full_auto"]["schema_simplified"] is True
+
+    write_topology_artifacts(tmp_path, compiled)
+    compile_report = (tmp_path / "compile_report.md").read_text(encoding="utf-8")
+
+    assert "provider_schema_fallback(interactive/full_auto)=`True`/`True`" in compile_report
 
 
 def test_route_table_mermaid_and_compile_report_distinguish_runtime_control_routes(tmp_path: Path) -> None:

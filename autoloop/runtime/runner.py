@@ -28,7 +28,6 @@ from .config import (
     DEFAULT_MAX_STEPS,
     ProviderConfig,
     ProviderPolicyRuntimeConfig,
-    ResolvedRuntimeConfig,
     RuntimeConfig,
 )
 from .events import EventLogger
@@ -42,7 +41,7 @@ from .loader import (
 )
 from .observability import BoundRuntimeObservability
 from .prompts import FilesystemPromptRegistry
-from .provider_policy_resolver import ProviderPolicyResolver
+from .provider_policy_resolver import create_provider_policy_resolver
 from .stores.filesystem import FilesystemCheckpointStore, FilesystemSessionStore
 from .static_graph import (
     ARTIFACT_CONTRACTS_FILENAME,
@@ -269,14 +268,12 @@ def _execute_compiled_workflow(
         prepared.logger.emit(event_type, **payload)
         trace_writer.runtime_event(event_type=event_type, **payload)
 
-    provider_policy_resolver = ProviderPolicyResolver(
-        config=ResolvedRuntimeConfig(
-            provider=ProviderConfig(),
-            runtime=options.runtime_config,
-            provider_policy=options.provider_policy_config,
-        ),
+    provider_policy_resolver = create_provider_policy_resolver(
         workflow_policy=prepared.compiled.provider_policy,
         workspace_root=prepared.task_workspace.root,
+        provider_policy=options.provider_policy_config,
+        runtime=options.runtime_config,
+        provider=ProviderConfig(),
     )
     engine = Engine(
         prepared.compiled,
