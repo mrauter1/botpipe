@@ -36,3 +36,4 @@
 {"ts": "2026-05-06T19:48:49.439307+00:00", "run_id": "run-20260506T185744Z-092935c3", "seq": 36, "event_type": "phase_deferred", "pair": "implement", "phase_mode": "single", "phase_id": "provider-outcome-contract", "reason": "awaiting enabled test pair completion"}
 {"ts": "2026-05-06T19:48:49.440895+00:00", "run_id": "run-20260506T185744Z-092935c3", "seq": 37, "event_type": "pair_started", "pair": "test", "phase_id": "provider-outcome-contract"}
 {"ts": "2026-05-06T19:48:49.441168+00:00", "run_id": "run-20260506T185744Z-092935c3", "seq": 38, "event_type": "cycle_started", "pair": "test", "cycle": 1, "attempt": 1, "phase_id": "provider-outcome-contract"}
+{"ts": "2026-05-06T19:50:46.288395+00:00", "run_id": "run-20260506T185744Z-092935c3", "seq": 39, "event_type": "phase_finished", "pair": "test", "phase": "producer", "cycle": 1, "attempt": 1, "empty_output": false, "phase_id": "provider-outcome-contract"}

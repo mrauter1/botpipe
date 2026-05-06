@@ -720,3 +720,50 @@ No open verifier issues remain for this phase slice. The review artifacts are up
 <loop-control>
 {"schema":"docloop.loop_control/v1","kind":"promise","promise":"COMPLETE"}
 </loop-control>
+
+
+---
+run_id=run-20260506T185744Z-092935c3 | entry=session_turn | pair=test | phase=producer | cycle=1 | attempt=1 | thread_id=019dfec6-9730-7fc1-aee3-d97159086b13
+---
+provider=codex
+mode=resume
+template=/home/rauter/.local/share/pipx/venvs/autoloop/lib/python3.12/site-packages/autoloop/templates/test_producer.md
+session_id=019dfec6-9730-7fc1-aee3-d97159086b13
+
+
+---
+run_id=run-20260506T185744Z-092935c3 | entry=phase_output | pair=test | phase=producer | process=codex-agent | cycle=1 | attempt=1 | thread_id=019dfec6-9730-7fc1-aee3-d97159086b13
+---
+I’m authoring the test-phase coverage for the provider outcome contract, focused on the canonical-envelope parsing and validation behaviors that just changed. I’ll inspect the active test artifacts, the latest decisions, and the current provider tests to identify the remaining regression gaps before adding tests.
+
+The remaining gap is failure-path coverage for canonical precedence: the suite proves canonical fields win when they exist, but it does not yet prove that a stray legacy top-level `question` cannot rescue an invalid canonical `route_fields` object. I’m looking at the existing engine-contract patterns now so I can add that without inventing new fixtures.
+
+I found one worthwhile regression gap to close: canonical `outcome` envelopes should stay invalid when `route_fields.questions` is missing, even if a legacy top-level `question` is present. I’m adding parser-level and engine-level coverage for that path, then I’ll update the test strategy and test feedback artifacts.
+
+The new parser regression is passing. The engine-contract slice is still running, and once that clears I’ll write the coverage map and concise test feedback summary.
+
+The core regression is covered end to end now: parser precedence and engine validation both prove that legacy top-level `question` cannot rescue an invalid canonical `route_fields` object. I’m recording that coverage in the test artifacts and the current turn’s decision block so later turns don’t quietly weaken it.
+
+Scope considered
+
+Phase-local test coverage for `provider-outcome-contract`, focused on canonical outcome parsing precedence and the adjacent engine retry/validation path for question-style routes.
+
+What I analyzed
+
+I reviewed the active phase contract, the latest implementer/verifier decisions in [decisions.txt](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/this-is-the-final-standalone-handoff-spec-it-sup-5b5e7cd0/runs/run-20260506T185744Z-092935c3/decisions.txt), the existing parser regressions in [test_runtime_providers.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/tests/runtime/test_runtime_providers.py), and the rendered-provider retry patterns in [test_engine_contracts.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/tests/contract/test_engine_contracts.py).
+
+What I changed
+
+I added a parser regression in [test_runtime_providers.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/tests/runtime/test_runtime_providers.py) proving that a canonical `outcome` envelope with empty `route_fields` does not project a stray legacy top-level `question`. I also added an engine contract test in [test_engine_contracts.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/tests/contract/test_engine_contracts.py) proving that a rendered provider still gets `invalid_payload` retry feedback when canonical `route_fields.questions` is missing, even if a legacy top-level `question` is present, and that recovery succeeds on the next valid canonical response. I updated [test_strategy.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/this-is-the-final-standalone-handoff-spec-it-sup-5b5e7cd0/runs/run-20260506T185744Z-092935c3/artifacts/test/phases/provider-outcome-contract/test_strategy.md), appended a concise summary to [feedback.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/this-is-the-final-standalone-handoff-spec-it-sup-5b5e7cd0/runs/run-20260506T185744Z-092935c3/artifacts/test/phases/provider-outcome-contract/feedback.md), and recorded the non-obvious coverage decision under this turn’s header in `decisions.txt`.
+
+Key findings / decisions
+
+The important regression to lock down was not just “canonical wins when present,” but “legacy top-level `question` must not rescue an invalid canonical `route_fields` payload.” The added tests now cover that at both parser and engine levels, using deterministic in-memory stubs only.
+
+Open issues / next step
+
+Focused validation passed:
+`./.venv-autoloop/bin/python -m pytest -q tests/runtime/test_runtime_providers.py -k 'parse_outcome_json_prefers_canonical_route_fields_over_legacy_top_level_fields or parse_outcome_json_ignores_legacy_reason_when_canonical_reason_is_null or parse_outcome_json_does_not_project_legacy_question_for_canonical_route_fields'`
+`./.venv-autoloop/bin/python -m pytest -q tests/contract/test_engine_contracts.py -k 'rendered_provider_invalid_question_retries_and_recovers or rendered_provider_canonical_question_route_does_not_fall_back_to_legacy_question or question_route_requires_question_field'`
+
+No additional test changes are pending in this turn.

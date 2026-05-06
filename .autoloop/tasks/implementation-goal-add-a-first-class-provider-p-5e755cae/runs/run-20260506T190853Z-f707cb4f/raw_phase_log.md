@@ -766,3 +766,59 @@ Open issues / next step
   - `.venv/bin/python -m pytest tests/runtime/test_provider_policy_config.py -q`
 - Result: `16 passed in 0.39s`.
 - No additional test-phase blockers found in this scope.
+
+
+---
+run_id=run-20260506T190853Z-f707cb4f | entry=session_turn | pair=test | phase=verifier | cycle=1 | attempt=1 | thread_id=019dfec5-f589-7cb2-ab20-e8f25f37fa06
+---
+provider=codex
+mode=resume
+template=/home/rauter/.local/share/pipx/venvs/autoloop/lib/python3.12/site-packages/autoloop/templates/test_verifier.md
+session_id=019dfec5-f589-7cb2-ab20-e8f25f37fa06
+
+
+---
+run_id=run-20260506T190853Z-f707cb4f | entry=phase_output | pair=test | phase=verifier | process=codex-agent | cycle=1 | attempt=1 | thread_id=019dfec5-f589-7cb2-ab20-e8f25f37fa06
+---
+I’m auditing the new runtime-config regression tests and the phase test strategy against the accepted scope. The main check is whether the suite now protects the explicit-only mirroring rule and the null-shape distinctions without normalizing any unconfirmed behavior break.
+
+The focused suite looks materially complete for this phase: it covers the new parse distinctions, the explicit-only mirroring rule, and the out-of-scope boundaries are documented rather than silently skipped. I’m marking the audit artifacts complete and noting that I found no new gaps in this pass.
+
+I’ve updated the audit artifacts. I’m doing one quick verification that the criteria are fully checked and the no-findings audit note is present, then I’ll close the test-auditor turn as complete.
+
+Scope considered
+
+- Phase-local `policy-config-authoring` test audit only.
+- I reviewed the new runtime-config regression tests, the phase test strategy, and the audit artifacts.
+
+What I analyzed
+
+- [tests/runtime/test_provider_policy_config.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/tests/runtime/test_provider_policy_config.py)
+- [test_strategy.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/implementation-goal-add-a-first-class-provider-p-5e755cae/runs/run-20260506T190853Z-f707cb4f/artifacts/test/phases/policy-config-authoring/test_strategy.md)
+- [feedback.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/implementation-goal-add-a-first-class-provider-p-5e755cae/runs/run-20260506T190853Z-f707cb4f/artifacts/test/phases/policy-config-authoring/feedback.md)
+- The current run decisions in [decisions.txt](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/implementation-goal-add-a-first-class-provider-p-5e755cae/runs/run-20260506T190853Z-f707cb4f/decisions.txt)
+
+What I reviewed
+
+- Coverage for no-config resolution preserving `SYSTEM_DEFAULT_PROVIDER_POLICY`.
+- Coverage for explicit-only legacy model and effort mirroring into `provider_policy.default`.
+- Coverage for both supported `--policy-file` entry shapes.
+- Coverage for explicit-null rejection of `provider_policy.default` and `provider_policy.validation`, and the allowed `provider_policy.strict: null` reset path.
+- Test determinism and whether any assertions normalize an unconfirmed behavior break.
+
+Key findings / decisions
+
+- No new findings in this pass.
+- The added tests cover the highest-risk phase-local regressions and align with the current implementation and recorded decisions.
+- I updated the audit artifacts:
+  - [criteria.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/implementation-goal-add-a-first-class-provider-p-5e755cae/runs/run-20260506T190853Z-f707cb4f/artifacts/test/phases/policy-config-authoring/criteria.md)
+  - [feedback.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/implementation-goal-add-a-first-class-provider-p-5e755cae/runs/run-20260506T190853Z-f707cb4f/artifacts/test/phases/policy-config-authoring/feedback.md)
+
+Open issues / next step
+
+- No blocking test-audit issues remain for this phase.
+- The focused runtime-config suite reported by the test author is consistent with the reviewed coverage shape and risk profile.
+
+<loop-control>
+{"schema":"docloop.loop_control/v1","kind":"promise","promise":"COMPLETE"}
+</loop-control>
