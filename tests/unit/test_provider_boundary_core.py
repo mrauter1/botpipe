@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import asyncio
+import inspect
 from dataclasses import dataclass
 
 import pytest
@@ -22,6 +23,7 @@ from autoloop.core.providers.models import (
 )
 from autoloop.core.providers.fake import ScriptedLLMProvider
 from autoloop.core.providers.parsing import parse_outcome_json
+from autoloop.core.providers.protocols import validate_llm_provider, validate_provider_transport
 from autoloop.core.providers.rendered import RenderedLLMProvider
 from autoloop.core.providers.rendering import ProviderPromptRenderPolicy, render_provider_turn_with_policy
 from autoloop.core.providers.rendering import render_provider_turn
@@ -465,6 +467,25 @@ class _AsyncTransportStub:
         )
 
 
+@dataclass
+class _SyncTransportStub:
+    result_text: str
+
+    def run_turn(self, turn: RenderedProviderTurn) -> ProviderTurnResult:
+        return ProviderTurnResult(raw_text=self.result_text)
+
+
+class _SyncProviderStub:
+    def run_producer(self, request: ProducerRequest) -> ProducerResponse:
+        return ProducerResponse(raw_output="draft")
+
+    def run_verifier(self, request: VerifierRequest) -> OutcomeResponse:
+        return OutcomeResponse(outcome=parse_outcome_json('{"tag":"done"}'))
+
+    def run_llm(self, request: LLMRequest) -> OutcomeResponse:
+        return OutcomeResponse(outcome=parse_outcome_json('{"tag":"done"}'))
+
+
 def test_token_usage_model_accepts_partial_usage() -> None:
     usage = TokenUsage(output_tokens=12, source="codex", provider_raw={"output_tokens": 12})
 
@@ -475,6 +496,34 @@ def test_token_usage_model_accepts_partial_usage() -> None:
     assert usage.reasoning_tokens is None
     assert usage.source == "codex"
     assert usage.provider_raw == {"output_tokens": 12}
+
+
+def test_provider_validation_rejects_sync_only_provider_methods() -> None:
+    with pytest.raises(TypeError, match="must be async coroutine functions"):
+        validate_llm_provider(_SyncProviderStub())
+
+
+def test_transport_validation_rejects_sync_only_run_turn() -> None:
+    with pytest.raises(TypeError, match="must be async coroutine functions"):
+        validate_provider_transport(_SyncTransportStub(result_text="sync"))
+
+
+def test_rendered_provider_rejects_sync_only_transport_at_construction() -> None:
+    with pytest.raises(TypeError, match="must be async coroutine functions"):
+        RenderedLLMProvider(_SyncTransportStub(result_text="sync"))
+
+
+def test_fake_provider_and_rendered_transport_surfaces_remain_async_only() -> None:
+    assert inspect.iscoroutinefunction(ScriptedLLMProvider.run_producer)
+    assert inspect.iscoroutinefunction(ScriptedLLMProvider.run_verifier)
+    assert inspect.iscoroutinefunction(ScriptedLLMProvider.run_llm)
+    assert inspect.iscoroutinefunction(_TransportStub.run_turn)
+    assert not hasattr(ScriptedLLMProvider, "run_llm_async")
+    assert not hasattr(ScriptedLLMProvider, "run_producer_async")
+    assert not hasattr(ScriptedLLMProvider, "run_verifier_async")
+    assert not hasattr(RenderedLLMProvider, "run_llm_async")
+    assert not hasattr(RenderedLLMProvider, "run_producer_async")
+    assert not hasattr(RenderedLLMProvider, "run_verifier_async")
 
 
 def test_producer_response_usage_defaults_to_none() -> None:

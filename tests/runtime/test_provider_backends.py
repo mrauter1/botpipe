@@ -37,6 +37,11 @@ class _StubTransport:
         raise AssertionError(f"unexpected turn call: {turn!r}")
 
 
+class _SyncOnlyTransport:
+    def run_turn(self, turn: RenderedProviderTurn) -> ProviderTurnResult:  # pragma: no cover - defensive
+        return ProviderTurnResult(raw_text="sync")
+
+
 def _resolved_config(provider_name: str = "codex") -> ResolvedRuntimeConfig:
     return ResolvedRuntimeConfig(
         provider=ProviderConfig(
@@ -109,6 +114,24 @@ def test_resolve_provider_backend_dispatches_by_provider_name(monkeypatch: pytes
     assert isinstance(claude_provider, RenderedLLMProvider)
     assert claude_provider._transport is claude_transport
     assert seen == ["codex", "claude"]
+
+
+def test_resolve_provider_backend_rejects_sync_transport_builder_output(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setitem(
+        provider_backends._BACKEND_BUILDERS,
+        "codex",
+        lambda config: _SyncOnlyTransport(),
+    )
+    monkeypatch.setitem(
+        provider_backends._OPERATION_EXECUTOR_BUILDERS,
+        "codex",
+        lambda config: (lambda turn: ProviderTurnResult(raw_text="operation")),
+    )
+
+    with pytest.raises(TypeError, match="provider transport .* async coroutine functions"):
+        resolve_provider_backend(config=_resolved_config("codex"))
 
 
 def test_resolve_provider_backend_rejects_module_function_provider_names() -> None:

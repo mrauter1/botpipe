@@ -1712,3 +1712,70 @@ No phase-local test blockers remain. The audit artifacts now record an explicit 
 <loop-control>
 {"schema":"docloop.loop_control/v1","kind":"promise","promise":"COMPLETE"}
 </loop-control>
+
+
+---
+run_id=run-20260506T130608Z-37f1c786 | entry=session_turn | pair=implement | phase=producer | cycle=1 | attempt=1 | thread_id=019dfdab-cbed-71e2-9b3b-61be29aeb301
+---
+provider=codex
+mode=start
+template=/home/rauter/.local/share/pipx/venvs/autoloop/lib/python3.12/site-packages/autoloop/templates/implement_producer.md
+session_id=019dfdab-cbed-71e2-9b3b-61be29aeb301
+
+
+---
+run_id=run-20260506T130608Z-37f1c786 | entry=phase_output | pair=implement | phase=producer | process=codex-agent | cycle=1 | attempt=1 | thread_id=019dfdab-cbed-71e2-9b3b-61be29aeb301
+---
+I’m treating this as the `test-and-strictness-hardening` phase. First I’m reading the active phase artifacts and the current test/runtime surfaces to identify the exact gaps before I edit anything.
+
+I’ve confirmed the active phase artifacts are mostly blank, so the real work is in the code and current tests. The worktree is dirty in many unrelated areas, so I’m constraining scope to the current `autoloop` package and the phase-local artifacts only.
+
+The grep confirmed this phase is mostly about tightening tests around the new provider contract and the async transports. I’m reading the current strictness and provider/runtime tests now, then I’ll run a focused subset to see which assertions no longer match the code.
+
+I have enough context to probe the current gap set. Next I’m running the contract, provider, runtime-provider, validation, and strictness slices that map directly to this phase’s acceptance criteria.
+
+The environment doesn’t have a `pytest` shell entrypoint, so I’m switching to `python -m pytest`. I’ve also confirmed the runtime still contains the temporary sync operation bridge and sync CLI capability probes, which means the test hardening needs to distinguish those compatibility exceptions from forbidden transport paths.
+
+The runtime code is aligned with the async-native core, but there are still explicit sync-only compatibility islands for operation helpers and CLI help probing. I’m now verifying which tests need to be updated around those boundaries rather than changing runtime behavior outside this phase.
+
+I can’t execute the pytest suite in this environment because neither `pytest` nor the Python package is installed. I’m switching to static alignment: reading the existing test inventory against the phase acceptance criteria and patching the gaps directly.
+
+I’ve isolated the likely gaps to test coverage rather than runtime logic: async-only protocol/transport surface enforcement, no legacy `_async` or async-probe helpers, and early rejection of invalid provider transports during backend construction. I’m patching those tests now, then I’ll update the phase notes and decisions ledger to record the compatibility boundary I preserved.
+
+I’m editing three test files plus the phase notes now. The changes are scoped to strictness and provider/backend coverage, with one explicit decision recorded: strictness scans treat the preserved `llm()` / `classify()` sync bridge as a narrow compatibility exception and keep transport prohibitions focused on async entrypoints.
+
+The code edits are in place. I’m documenting the exact scope, preserved exception boundary, and the validation limitation now so later turns don’t drift or assume the test suite was executed here.
+
+I found one low-signal cleanup in the strictness patch: an unused constant from an earlier draft. I’m removing that so the test file stays tight and easier to maintain.
+
+The environment still can’t run pytest, but it does have `python3`, so I’m at least checking syntax on the edited test files and artifacts before closing this phase.
+
+Scope considered
+
+- Phase-local `test-and-strictness-hardening` work only: provider/transport contract tests, backend-construction tests, and the phase artifacts.
+
+What I analyzed
+
+- Async-only provider and transport boundaries in [tests/strictness/test_no_compat.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/tests/strictness/test_no_compat.py), [tests/unit/test_provider_boundary_core.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/tests/unit/test_provider_boundary_core.py), [tests/runtime/test_provider_backends.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/tests/runtime/test_provider_backends.py), plus the current provider/runtime codepaths in `autoloop/core/providers/*` and `autoloop/runtime/providers/*`.
+- The active phase notes and the current turn’s decision ledger entry.
+
+What I changed
+
+- Added strictness coverage for async-only provider/transport protocols, forbidden legacy provider `_async` / `supports_async_*` surfaces, rendered-provider async entrypoints that must not bridge through sync helpers, and runtime transport modules that must expose async `run_turn(...)` only.
+- Added unit coverage that rejects sync-only providers/transports at validation and rendered-provider construction boundaries.
+- Added backend coverage that rejects a sync `run_turn(...)` transport during provider resolution, before runtime execution starts.
+- Updated [implementation_notes.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/full-revised-standalone-spec-autoloop-v3-async-n-3c402473/runs/run-20260506T130608Z-37f1c786/artifacts/implement/phases/test-and-strictness-hardening/implementation_notes.md) and appended the non-obvious phase decisions to [decisions.txt](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/full-revised-standalone-spec-autoloop-v3-async-n-3c402473/runs/run-20260506T130608Z-37f1c786/decisions.txt).
+
+Key findings / decisions
+
+- The preserved `llm()` / `classify()` sync bridge remains a narrow compatibility exception only; strictness now targets async provider/transport contracts without treating that explicit operation boundary as a general regression.
+- Invalid sync transports are now covered as construction-time failures, which keeps transport contract violations out of sequential and branch-group runtime paths.
+- I could not run pytest here because the environment lacks a usable pytest installation. I did run `python3 -m py_compile` on the edited test files successfully.
+
+Open issues / next step
+
+- Run the targeted pytest matrix in an environment with `pytest` installed:
+  `tests/strictness/test_no_compat.py`
+  `tests/unit/test_provider_boundary_core.py`
+  `tests/runtime/test_provider_backends.py`
+- The rest of the phase coverage remains unexecuted in this workspace for the same environment reason.
