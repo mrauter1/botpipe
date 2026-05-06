@@ -4,14 +4,14 @@ from __future__ import annotations
 
 from collections.abc import Callable, Mapping
 from copy import deepcopy
-from dataclasses import dataclass, replace
+from dataclasses import dataclass
 from typing import Any
 
 from pydantic import TypeAdapter
 
 from .errors import WorkflowValidationError
 from .inventory import ArtifactInventoryRecord, resolve_artifact_reference
-from .routes import Route, normalize_route_spec
+from .routes import Route, _replace_route, normalize_route_spec
 from .steps import Step
 
 
@@ -153,7 +153,7 @@ def normalize_step_route_metadata(
             route.target,
         )
         handoff = route.handoff or step_metadata.handoff
-        normalized_routes[route_name] = replace(
+        normalized_routes[route_name] = _replace_route(
             route,
             summary=summary,
             required_writes=required_writes,

@@ -1909,3 +1909,50 @@ An adjacent rerun of `tests/runtime/test_provider_policy_steps.py -q` failed, bu
 Open issues / next step
 
 The auditor’s specific Claude coverage gap is addressed. The remaining open issue is the unrelated ambient `jsonschema` failure in `tests/runtime/test_provider_policy_steps.py`, which would need a separate scoped follow-up if that suite must be green in this environment.
+
+
+---
+run_id=run-20260506T190853Z-f707cb4f | entry=session_turn | pair=test | phase=verifier | cycle=2 | attempt=1 | thread_id=019dff06-56f8-7ec3-9792-9244e6c94bf8
+---
+provider=codex
+mode=resume
+template=/home/rauter/.local/share/pipx/venvs/autoloop/lib/python3.12/site-packages/autoloop/templates/test_verifier.md
+session_id=019dff06-56f8-7ec3-9792-9244e6c94bf8
+
+
+---
+run_id=run-20260506T190853Z-f707cb4f | entry=phase_output | pair=test | phase=verifier | process=codex-agent | cycle=2 | attempt=1 | thread_id=019dff06-56f8-7ec3-9792-9244e6c94bf8
+---
+I’m rechecking the phase now that the runtime-negative bypass test exists. The remaining question is whether the still-failing adjacent step-policy suite leaves the phase incomplete, because the phase contract asked for completed runtime policy coverage, not just the narrow Claude transport slice.
+
+I’m checking the updated phase-local test artifacts and the current runtime policy test surface to decide whether the remaining `jsonschema` failure is a blocking phase-level gap or an acceptable environment limitation.
+
+I’ve confirmed the added negative bypass runtime test is present. I’m doing one last spot-check of the adjacent failing suite so the audit finding is anchored in current evidence rather than prior notes.
+
+The adjacent runtime policy steps suite is green now, so the prior environment concern is gone. I’m updating the audit artifacts to close out `TST-001` and mark the phase complete.
+
+Scope considered
+
+Phase-local audit of the finalized Claude regression tests and the active test-phase artifacts for `policy-claude-regression`, including the adjacent runtime policy steps suite because it was called out as preserved-invariant coverage in the strategy.
+
+What I analyzed
+
+I re-checked the previously blocking legacy-Claude-bypass regression seam, verified the new negative runtime transport test exists at the right layer, and reran the adjacent `tests/runtime/test_provider_policy_steps.py` suite to confirm whether the earlier `jsonschema` concern was still real.
+
+What I reviewed
+
+I updated [criteria.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/implementation-goal-add-a-first-class-provider-p-5e755cae/runs/run-20260506T190853Z-f707cb4f/artifacts/test/phases/policy-claude-regression/criteria.md) to fully checked and appended a cycle-2 audit closure note to [feedback.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/implementation-goal-add-a-first-class-provider-p-5e755cae/runs/run-20260506T190853Z-f707cb4f/artifacts/test/phases/policy-claude-regression/feedback.md).
+
+Key findings / decisions
+
+`TST-001` is resolved. The added `test_claude_transport_does_not_reapply_legacy_bypass_when_explicit_policy_is_safe` now guards the exact runtime transport seam that previously lacked negative-path coverage.
+
+The adjacent preserved-invariant suite is also green in the current environment: `.venv/bin/python -m pytest tests/runtime/test_provider_policy_steps.py -q` returned `9 passed in 0.73s`. No blocking coverage or reliability findings remain in the active phase scope.
+
+Open issues / next step
+
+No open audit blockers for this phase. The test-phase artifacts are complete.
+
+<loop-control>
+{"schema":"docloop.loop_control/v1","kind":"promise","promise":"COMPLETE"}
+</loop-control>

@@ -38,7 +38,7 @@ from .provider_policy import ProviderPolicy, ProviderPolicyOverride, policy_fing
 from .providers.retries import ProviderRetryPolicy
 from .route_reporting import payload_contract_for_route, route_fields_contract_for_route
 from .route_required_writes import route_required_write_payload
-from .routes import Route, normalize_route_spec
+from .routes import Route, _replace_route, normalize_route_spec
 from .sessions import Continuity, DEFAULT_SESSION_NAME
 from .step_state import build_step_item_state_model, build_step_state_model
 from .steps import BranchGroupStep, PromptStep, ProduceVerifyStep, Session, Step, PythonStep, ChildWorkflowStep
@@ -788,7 +788,7 @@ def _lower_internal_route_destination(
             destination_names=destination_names,
             current_step_name=current_step_name,
         )
-        return replace(destination, target=lowered_target)
+        return _replace_route(destination, target=lowered_target)
     return _lower_internal_route_target(
         destination,
         destination_names=destination_names,

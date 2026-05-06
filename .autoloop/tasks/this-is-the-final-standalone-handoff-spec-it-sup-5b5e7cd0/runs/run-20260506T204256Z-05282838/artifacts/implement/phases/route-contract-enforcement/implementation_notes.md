@@ -9,6 +9,8 @@
 
 ## Files changed
 - `autoloop/core/routes.py`
+- `autoloop/core/discovery.py`
+- `autoloop/core/lowering.py`
 - `autoloop/core/compiler.py`
 - `autoloop/runtime/providers/_common.py`
 - `autoloop/runtime/providers/codex.py`
@@ -22,9 +24,13 @@
 ## Symbols touched
 - `Route._handwritten_route_fields_validation_equivalent`
 - `_with_handwritten_route_fields_validation_equivalent(...)`
+- `_replace_route(...)`
 - `Route.question()`
 - `Route.blocked()`
 - `Route.failed()`
+- `_lower_simple_destination(...)`
+- `_resolve_transition_destination(...)`
+- `normalize_step_route_metadata(...)`
 - `_compile_route_contract(...)`
 - `structured_output_metadata(...)`
 - `_CodexExecSurface.start_supports_output_schema`
@@ -74,7 +80,7 @@
 - The dedicated runtime contract regressions now rely on `tests/contract/test_engine_contracts.py` remaining tracked in git state instead of being recreated ad hoc in an untracked worktree file.
 
 ## Validation performed
-- `python3 -m compileall autoloop/core/routes.py autoloop/core/compiler.py autoloop/runtime/providers/_common.py autoloop/runtime/providers/codex.py autoloop/runtime/providers/claude.py tests/unit/test_validation.py tests/contract/test_engine_contracts.py tests/runtime/test_provider_backends.py`
+- `python3 -m compileall autoloop/core/routes.py autoloop/core/discovery.py autoloop/core/lowering.py autoloop/core/compiler.py autoloop/runtime/providers/_common.py autoloop/runtime/providers/codex.py autoloop/runtime/providers/claude.py tests/contract/test_engine_contracts.py`
 - `.venv/bin/python -m pytest tests/unit/test_validation.py -k "raw_route_payload_schema_without_jsonschema_dependency or raw_route_fields_schema_without_jsonschema_dependency or helper_default_route_fields_without_jsonschema_dependency or custom_helper_route_fields_override_without_jsonschema_dependency"`
 - `.venv/bin/python -m pytest tests/contract/test_engine_contracts.py -k "invalid_custom_raw_route_payload or invalid_custom_raw_route_fields"`
 - `.venv/bin/python -m pytest tests/runtime/test_provider_backends.py -k "response_schema or prompt_only_fallback or output_schema_file or simplified_schema_delivery"`
@@ -82,3 +88,4 @@
 ## Deduplication / centralization
 - Shared structured-output delivery metadata was centralized in `autoloop/runtime/providers/_common.py` so Codex and Claude fallbacks report one stable metadata shape.
 - Helper-route compatibility bookkeeping now stays inside `autoloop/core/routes.py` rather than leaking a compiler flag through the public `Route.to(...)` constructor signature.
+- Internal `Route` copy paths now share `_replace_route(...)` so helper-default route fallback classification survives discovery/lowering/compiler rewrites.

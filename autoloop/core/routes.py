@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from dataclasses import dataclass, field
+from dataclasses import dataclass, field, replace
 from typing import Any, Iterable, Literal
 
 from .effects import Effects, WorklistEffect
@@ -82,6 +82,16 @@ def _normalize_required_writes(value: Iterable[str]) -> tuple[str, ...]:
 def _with_handwritten_route_fields_validation_equivalent(route: "Route", *, enabled: bool) -> "Route":
     object.__setattr__(route, "_handwritten_route_fields_validation_equivalent", enabled)
     return route
+
+
+def _replace_route(route: "Route", /, **changes: object) -> "Route":
+    updated = replace(route, **changes)
+    object.__setattr__(
+        updated,
+        "_handwritten_route_fields_validation_equivalent",
+        route._handwritten_route_fields_validation_equivalent,
+    )
+    return updated
 
 
 @dataclass(frozen=True, slots=True)

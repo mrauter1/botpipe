@@ -5,7 +5,7 @@ from __future__ import annotations
 import inspect
 import re
 from collections.abc import Mapping, Sequence
-from dataclasses import dataclass, replace
+from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
 
@@ -36,7 +36,7 @@ from .primitives import AWAIT_INPUT, FAIL, FINISH, GLOBAL, SELF
 from .prompts import resolve_prompt_reference
 from .provider_policy import ProviderPolicy
 from .providers.retries import ProviderRetryPolicy
-from .routes import Route, normalize_route_spec
+from .routes import Route, _replace_route, normalize_route_spec
 from .sessions import DEFAULT_SESSION_NAME
 from .step_state import build_step_item_state_model, build_step_state_model
 from .steps import BranchGroupStep, ChildWorkflowStep, ProduceVerifyStep, PromptStep, PythonStep, Session, Step
@@ -1496,20 +1496,7 @@ def _lower_simple_destination(destination: object, simple_step_map: Mapping[obje
         target = _lower_simple_target(destination.target, simple_step_map)
         if target is destination.target:
             return destination
-        lowered = Route(
-            target=target,
-            summary=destination.summary,
-            required_writes=destination.required_writes,
-            handoff=destination.handoff,
-            on_taken=destination.on_taken,
-            provider_visible=destination.provider_visible,
-        )
-        object.__setattr__(
-            lowered,
-            "_handwritten_route_fields_validation_equivalent",
-            destination._handwritten_route_fields_validation_equivalent,
-        )
-        return lowered
+        return _replace_route(destination, target=target)
     return _lower_simple_target(destination, simple_step_map)
 
 
@@ -1571,13 +1558,7 @@ def _resolve_transition_destination(destination: object, *, source: Step | str, 
         target = _resolve_transition_destination(destination.target, source=source, steps_by_name=steps_by_name)
         if target is destination.target:
             return destination
-        resolved = replace(destination, target=target)
-        object.__setattr__(
-            resolved,
-            "_handwritten_route_fields_validation_equivalent",
-            destination._handwritten_route_fields_validation_equivalent,
-        )
-        return resolved
+        return _replace_route(destination, target=target)
     if destination == SELF:
         return source if isinstance(source, Step) else destination
     if isinstance(destination, str) and destination not in {FINISH, AWAIT_INPUT, FAIL}:
