@@ -794,3 +794,48 @@ The phase review is complete. Full `pytest` execution still was not available in
 <loop-control>
 {"schema":"docloop.loop_control/v1","kind":"promise","promise":"COMPLETE"}
 </loop-control>
+
+
+---
+run_id=run-20260506T130608Z-37f1c786 | entry=session_turn | pair=test | phase=producer | cycle=1 | attempt=1 | thread_id=019dfd7a-d4d6-7373-93d8-1421e8ce9184
+---
+provider=codex
+mode=resume
+template=/home/rauter/.local/share/pipx/venvs/autoloop/lib/python3.12/site-packages/autoloop/templates/test_producer.md
+session_id=019dfd7a-d4d6-7373-93d8-1421e8ce9184
+
+
+---
+run_id=run-20260506T130608Z-37f1c786 | entry=phase_output | pair=test | phase=producer | process=codex-agent | cycle=1 | attempt=1 | thread_id=019dfd7a-d4d6-7373-93d8-1421e8ce9184
+---
+I’m reviewing the provider-cutover tests against the clarified compatibility exception, then I’ll add any missing focused coverage and update the phase test artifacts with an explicit behavior-to-test map.
+
+I found the current gap: there is coverage for the positive helper path with an explicit operation executor and for the narrowed outside-loop behavior, but I don’t see a direct regression test for the active-loop failure path when a rendered provider omits that executor. I’m adding that and then I’ll write the strategy map around it.
+
+I found a clean contract-level gap and I’m filling it: a rendered provider without `operation_executor` should fail clearly when `llm()` / `classify()` are invoked from a synchronous Python step under the async engine. After that I’ll write the behavior-to-test map and test-phase feedback.
+
+I’ve added the missing failure-path contract test. I’m updating the test-phase artifacts now with the coverage map and the non-obvious test decisions so later turns don’t drift on the clarified exception boundary.
+
+The repo test change and phase artifacts are in place. I’m running a quick syntax check on the touched contract test and then I’ll close out with the coverage summary and validation limits.
+
+Scope considered
+
+Phase-local `provider-contract-cutover` test coverage only: the clarified `llm()` / `classify()` compatibility exception, rendered-provider helper behavior, backend-builder isolation, and the async subprocess transport tests.
+
+What I analyzed
+
+I reviewed the clarified decisions in [decisions.txt](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/full-revised-standalone-spec-autoloop-v3-async-n-3c402473/runs/run-20260506T130608Z-37f1c786/decisions.txt), the updated provider/runtime tests, and the remaining gap around rendered providers that omit `operation_executor=...` inside synchronous Python-step helper execution under the async engine.
+
+What I changed
+
+I added a focused contract test in [tests/contract/test_engine_contracts.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/tests/contract/test_engine_contracts.py) that asserts a rendered provider without `operation_executor=...` fails clearly in the active-loop helper path and does not execute any transport turns.
+
+I updated [test_strategy.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/full-revised-standalone-spec-autoloop-v3-async-n-3c402473/runs/run-20260506T130608Z-37f1c786/artifacts/test/phases/provider-contract-cutover/test_strategy.md) with an explicit behavior-to-test coverage map, edge/failure-path coverage, stabilization notes, and known gaps. I also appended a concise summary to [feedback.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/full-revised-standalone-spec-autoloop-v3-async-n-3c402473/runs/run-20260506T130608Z-37f1c786/artifacts/test/phases/provider-contract-cutover/feedback.md) and recorded the non-obvious test decision under the current turn header in `decisions.txt`.
+
+Key findings / decisions
+
+The main added guardrail is now explicit in tests: the temporary sync compatibility exception is a narrow contract, not a silent fallback. Positive coverage already existed for rendered providers with an explicit operation executor and for the outside-loop async transport preference; this new test closes the active-loop failure-path gap.
+
+Open issues / next step
+
+`python3 -m py_compile tests/contract/test_engine_contracts.py` passed. I could not run `pytest` here because it is not installed in this environment. The next step is the test-phase verifier/auditor pass against the updated repo tests and the new `test_strategy.md` coverage map.
