@@ -150,3 +150,12 @@ No remaining plan issues. The planning artifacts are complete for this turn.
 <loop-control>
 {"schema":"docloop.loop_control/v1","kind":"promise","promise":"COMPLETE"}
 </loop-control>
+
+
+---
+run_id=run-20260506T190853Z-f707cb4f | entry=phase_scope_resolved
+---
+phase_mode=single
+phase_ids=policy-core,policy-config-authoring,policy-resolution-propagation,policy-codex,policy-claude-regression
+explicit=True
+current_phase_index=0

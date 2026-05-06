@@ -3,5 +3,36 @@
   "created_at": "2026-05-06T19:08:53.999099+00:00",
   "request_file": "/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/implementation-goal-add-a-first-class-provider-p-5e755cae/runs/run-20260506T190853Z-f707cb4f/request.md",
   "artifacts_dir": "/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/implementation-goal-add-a-first-class-provider-p-5e755cae/runs/run-20260506T190853Z-f707cb4f/artifacts",
-  "provider": "codex"
+  "provider": "codex",
+  "phase_plan_path": "/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/implementation-goal-add-a-first-class-provider-p-5e755cae/runs/run-20260506T190853Z-f707cb4f/artifacts/plan/phase_plan.yaml",
+  "phase_plan_version": 1,
+  "active_phase_selection": {
+    "run_id": "run-20260506T190853Z-f707cb4f",
+    "mode": "single",
+    "phase_ids": [
+      "policy-core",
+      "policy-config-authoring",
+      "policy-resolution-propagation",
+      "policy-codex",
+      "policy-claude-regression"
+    ],
+    "explicit": true,
+    "current_phase_index": 0,
+    "current_phase_id": "policy-core"
+  },
+  "phase_status": {
+    "policy-core": "in_progress",
+    "policy-config-authoring": "planned",
+    "policy-resolution-propagation": "planned",
+    "policy-codex": "planned",
+    "policy-claude-regression": "planned"
+  },
+  "phase_history": [
+    {
+      "phase_id": "policy-core",
+      "run_id": "run-20260506T190853Z-f707cb4f",
+      "status": "in_progress",
+      "ts": "2026-05-06T19:16:29.373220+00:00"
+    }
+  ]
 }

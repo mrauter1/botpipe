@@ -7,3 +7,7 @@
 {"ts": "2026-05-06T19:15:38.882426+00:00", "run_id": "run-20260506T190853Z-f707cb4f", "seq": 7, "event_type": "phase_finished", "pair": "plan", "phase": "producer", "cycle": 2, "attempt": 1, "empty_output": false, "phase_id": null}
 {"ts": "2026-05-06T19:16:29.175703+00:00", "run_id": "run-20260506T190853Z-f707cb4f", "seq": 8, "event_type": "phase_finished", "pair": "plan", "phase": "verifier", "cycle": 2, "attempt": 1, "empty_output": false, "phase_id": null}
 {"ts": "2026-05-06T19:16:29.249561+00:00", "run_id": "run-20260506T190853Z-f707cb4f", "seq": 9, "event_type": "pair_completed", "pair": "plan", "cycle": 2, "attempt": 1, "phase_id": null}
+{"ts": "2026-05-06T19:16:29.372238+00:00", "run_id": "run-20260506T190853Z-f707cb4f", "seq": 10, "event_type": "phase_scope_resolved", "phase_mode": "single", "phase_ids": ["policy-core", "policy-config-authoring", "policy-resolution-propagation", "policy-codex", "policy-claude-regression"], "explicit": true, "current_phase_index": 0}
+{"ts": "2026-05-06T19:16:29.373987+00:00", "run_id": "run-20260506T190853Z-f707cb4f", "seq": 11, "event_type": "phase_started", "phase_id": "policy-core", "phase_mode": "single"}
+{"ts": "2026-05-06T19:16:29.375107+00:00", "run_id": "run-20260506T190853Z-f707cb4f", "seq": 12, "event_type": "pair_started", "pair": "implement", "phase_id": "policy-core"}
+{"ts": "2026-05-06T19:16:29.375185+00:00", "run_id": "run-20260506T190853Z-f707cb4f", "seq": 13, "event_type": "cycle_started", "pair": "implement", "cycle": 1, "attempt": 1, "phase_id": "policy-core"}
