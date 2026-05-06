@@ -14,12 +14,12 @@
       "backend-response-schema-delivery"
     ],
     "explicit": true,
-    "current_phase_index": 1,
-    "current_phase_id": "backend-response-schema-delivery"
+    "current_phase_index": 2,
+    "current_phase_id": null
   },
   "phase_status": {
     "route-contract-enforcement": "completed",
-    "backend-response-schema-delivery": "in_progress"
+    "backend-response-schema-delivery": "completed"
   },
   "phase_history": [
     {
@@ -40,6 +40,13 @@
       "run_id": "run-20260506T204256Z-05282838",
       "status": "in_progress",
       "ts": "2026-05-06T21:16:47.622334+00:00"
+    },
+    {
+      "phase_id": "backend-response-schema-delivery",
+      "run_id": "run-20260506T204256Z-05282838",
+      "status": "completed",
+      "ts": "2026-05-06T21:21:54.597119+00:00",
+      "pair": "test"
     }
   ]
 }
