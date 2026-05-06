@@ -18,8 +18,8 @@
       "test-and-strictness-hardening"
     ],
     "explicit": true,
-    "current_phase_index": 5,
-    "current_phase_id": "test-and-strictness-hardening"
+    "current_phase_index": 6,
+    "current_phase_id": null
   },
   "phase_status": {
     "async-engine-spine": "completed",
@@ -27,7 +27,7 @@
     "async-transports-and-rendered-provider": "completed",
     "branch-group-runtime-and-sessions": "completed",
     "compiler-surface-and-graph-alignment": "completed",
-    "test-and-strictness-hardening": "in_progress"
+    "test-and-strictness-hardening": "completed"
   },
   "phase_history": [
     {
@@ -100,6 +100,13 @@
       "run_id": "run-20260506T130608Z-37f1c786",
       "status": "in_progress",
       "ts": "2026-05-06T14:23:07.031571+00:00"
+    },
+    {
+      "phase_id": "test-and-strictness-hardening",
+      "run_id": "run-20260506T130608Z-37f1c786",
+      "status": "completed",
+      "ts": "2026-05-06T14:39:04.653667+00:00",
+      "pair": "test"
     }
   ]
 }
