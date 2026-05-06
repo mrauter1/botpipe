@@ -71,3 +71,7 @@
 {"ts": "2026-05-06T20:40:59.679201+00:00", "run_id": "run-20260506T190853Z-f707cb4f", "seq": 71, "event_type": "phase_finished", "pair": "test", "phase": "producer", "cycle": 1, "attempt": 1, "empty_output": false, "phase_id": "policy-codex"}
 {"ts": "2026-05-06T20:41:37.915277+00:00", "run_id": "run-20260506T190853Z-f707cb4f", "seq": 72, "event_type": "phase_finished", "pair": "test", "phase": "verifier", "cycle": 1, "attempt": 1, "empty_output": false, "phase_id": "policy-codex"}
 {"ts": "2026-05-06T20:41:37.991876+00:00", "run_id": "run-20260506T190853Z-f707cb4f", "seq": 73, "event_type": "pair_completed", "pair": "test", "cycle": 1, "attempt": 1, "phase_id": "policy-codex"}
+{"ts": "2026-05-06T20:41:38.104848+00:00", "run_id": "run-20260506T190853Z-f707cb4f", "seq": 74, "event_type": "phase_completed", "pair": "test", "phase_id": "policy-codex", "phase_mode": "single"}
+{"ts": "2026-05-06T20:41:38.106870+00:00", "run_id": "run-20260506T190853Z-f707cb4f", "seq": 75, "event_type": "phase_started", "phase_id": "policy-claude-regression", "phase_mode": "single"}
+{"ts": "2026-05-06T20:41:38.108200+00:00", "run_id": "run-20260506T190853Z-f707cb4f", "seq": 76, "event_type": "pair_started", "pair": "implement", "phase_id": "policy-claude-regression"}
+{"ts": "2026-05-06T20:41:38.108337+00:00", "run_id": "run-20260506T190853Z-f707cb4f", "seq": 77, "event_type": "cycle_started", "pair": "implement", "cycle": 1, "attempt": 1, "phase_id": "policy-claude-regression"}
