@@ -2,3 +2,6 @@
 Treat this cleanup as one coherent implementation phase; keep decomposition inside the plan document instead of splitting runtime fixes and test hardening into separate rollout phases.
 `subprocess.run(...)` remains acceptable only for explicit CLI capability probing, and strictness coverage for this pass must target provider turn execution and branch-group runtime surfaces rather than repo-wide subprocess usage.
 Keep the implementation local to the existing branch-group runtime/session overlay and provider boundary modules; do not add compatibility shims, provider fallbacks, or architecture-level abstractions in this pass.
+<autoloop-decisions-header version="1" block_seq="2" owner="planner" phase_id="task-global" pair="plan" turn_seq="2" run_id="run-20260506T181149Z-6867fac0" ts="2026-05-06T18:16:17.534646+00:00" />
+Phase completion must explicitly retain regression coverage for composite question routing without fan-in, same-file branch writes, shared state/value visibility, manifest declaration ordering, deterministic branch context markdown, evidence under workflow_folder, and explicit FanIn helper misuse.
+The canonical phase contract must gate completion on unchanged public non-parallel authoring/runtime APIs and on Engine.run plus BranchGroupRuntime.run remaining outer sync wrappers only, with no internal sync-provider or thread fallback.
