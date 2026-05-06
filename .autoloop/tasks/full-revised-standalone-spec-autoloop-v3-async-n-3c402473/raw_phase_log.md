@@ -1470,3 +1470,74 @@ No phase-local test blockers remain. The out-of-phase provider transport cancell
 <loop-control>
 {"schema":"docloop.loop_control/v1","kind":"promise","promise":"COMPLETE"}
 </loop-control>
+
+
+---
+run_id=run-20260506T130608Z-37f1c786 | entry=session_turn | pair=implement | phase=producer | cycle=1 | attempt=1 | thread_id=019dfda5-e0f5-7281-9112-ce1ad235f7e2
+---
+provider=codex
+mode=start
+template=/home/rauter/.local/share/pipx/venvs/autoloop/lib/python3.12/site-packages/autoloop/templates/implement_producer.md
+session_id=019dfda5-e0f5-7281-9112-ce1ad235f7e2
+
+
+---
+run_id=run-20260506T130608Z-37f1c786 | entry=phase_output | pair=implement | phase=producer | process=codex-agent | cycle=1 | attempt=1 | thread_id=019dfda5-e0f5-7281-9112-ce1ad235f7e2
+---
+I’m starting with the active phase artifacts and the compiler/graph code paths they mention, then I’ll narrow edits to the discovery, validation, artifact-rooting, compile-cache, and static-graph surfaces for branch groups.
+
+The phase artifacts are mostly stubs, so I’m reading the existing branch-group discovery/compiler/static-graph implementations directly and checking current tests before deciding whether this is a surgical fix set or a no-op closeout.
+
+I’ve confirmed the main branch-group machinery exists already. Next I’m checking whether artifact-template rooting and graph payload ownership actually match the spec, because that is the most likely place this phase still needs code rather than documentation.
+
+The code paths I checked already line up with most of the phase contract, so I’m moving to targeted regression tests now. If those stay green, this turn will likely be a no-code closeout with phase notes rather than churning stable internals.
+
+The test environment doesn’t have `pytest` on `PATH`, so I’m checking the local runner setup before I continue. I want to avoid inventing a harness when the repo probably already defines one.
+
+This environment also lacks `python` on `PATH`. I’m switching to the installed interpreter name and re-running the focused checks instead of assuming a toolchain alias.
+
+The system interpreter is present, but this shell environment is missing project deps as well, so I can’t execute the Python checks directly yet. I’m looking for the repo’s virtualenv or local launcher instead of modifying the environment.
+
+I found the project virtualenv. I’m running the phase-specific test slices through that interpreter now so the validation reflects the actual repo environment, not the bare system shell.
+
+The phase-specific tests are green, and the existing compiler/discovery/artifact/static-graph code already matches the scoped contract. I’m recording that explicitly in the phase notes and decision ledger instead of forcing unnecessary source edits.
+
+I’ve only updated the phase artifacts and decision ledger. I’m doing one last read on those two files so the closeout can state clearly that this was an intentional validation-only turn, not an omitted implementation.
+
+Scope considered
+
+Phase-local `compiler-surface-and-graph-alignment` only: the active artifacts plus the existing branch-group surface, discovery, validation, compiler, artifact, and static-graph code paths. I did not pull unrelated dirty files into scope.
+
+What I analyzed
+
+I reviewed the current implementations in `autoloop/simple.py`, `autoloop/core/discovery.py`, `autoloop/core/branch_groups/validation.py`, `autoloop/core/compiler.py`, `autoloop/core/artifacts.py`, and `autoloop/runtime/static_graph.py`, then checked the existing phase-relevant tests for branch-group validation, artifact rooting, compile-cache bypass, and additive topology/static-graph payloads.
+
+What I changed
+
+No production code changes were necessary.
+
+I updated the phase artifacts to record the validation-only closeout:
+- [implementation_notes.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/full-revised-standalone-spec-autoloop-v3-async-n-3c402473/runs/run-20260506T130608Z-37f1c786/artifacts/implement/phases/compiler-surface-and-graph-alignment/implementation_notes.md)
+- [decisions.txt](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/full-revised-standalone-spec-autoloop-v3-async-n-3c402473/runs/run-20260506T130608Z-37f1c786/decisions.txt)
+
+Key findings / decisions
+
+The current working tree already satisfies this phase’s scoped contract:
+- public `parallel(...)`, `fan_out(...)`, and `FanIn` exports are already in place;
+- branch-group validation already enforces exact placeholder-root matching, path-safe names, fresh-session requirements, and child/scoped/operation rejection;
+- branch-group workflows already bypass compile cache in v1;
+- templated branch and fan-in artifacts already resolve under normal owner-step workflow roots;
+- branch-group topology/static-graph payloads are already additive and deterministic.
+
+Validation performed:
+- `./.venv/bin/python -m pytest -q tests/unit/test_simple_surface.py -k 'branch_group or FanIn or branch_placeholder or fan_in_placeholder or compile_cache'`
+- `./.venv/bin/python -m pytest -q tests/unit/test_primitives_and_stores.py -k 'branch_placeholders_under_owner_step_root or fan_in_placeholders_under_owner_step_root'`
+- `./.venv/bin/python -m pytest -q tests/runtime/test_runtime_static_graph.py -k 'branch_group or topology_hash'`
+
+Open issues / next step
+
+No phase-local blockers remain. This closes as an intentional no-code, validation-backed phase turn.
+
+<loop-control>
+{"schema":"docloop.loop_control/v1","kind":"promise","promise":"COMPLETE"}
+</loop-control>
