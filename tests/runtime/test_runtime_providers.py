@@ -592,6 +592,21 @@ def test_verify_claude_code_capabilities_rejects_missing_settings_flag(monkeypat
         verify_claude_code_capabilities()
 
 
+def test_verify_claude_code_capabilities_rejects_missing_add_dir_flag(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setattr(claude_runtime_provider.shutil, "which", lambda name: "/usr/bin/claude")
+    monkeypatch.setattr(
+        claude_runtime_provider.subprocess,
+        "run",
+        lambda command, **_: _completed(
+            args=command,
+            stdout="--print\n-p\n--output-format\n--resume\n--model\n--settings\n",
+        ),
+    )
+
+    with pytest.raises(ConfigError, match=r"provider 'claude' requires '--add-dir' support"):
+        verify_claude_code_capabilities()
+
+
 def test_verify_claude_code_capabilities_rejects_missing_allowed_tools_when_strategy_selected(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
@@ -1228,6 +1243,67 @@ def test_claude_transport_marks_capability_loss_when_native_filesystem_support_i
         "sandbox.filesystem native enforcement unavailable; emitted Read/Edit permission rules only",
     ]
     assert report["effective_enforcement"]["write_roots"] == []
+
+
+def test_claude_transport_preserves_legacy_bypass_for_policy_backed_turns(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    calls: list[tuple[str, ...]] = []
+    workspace_root = tmp_path / "workspace"
+    workspace_root.mkdir()
+
+    async def fake_create_subprocess_exec(*command: str, **_: object) -> _AsyncProcessStub:
+        calls.append(tuple(command))
+        return _AsyncProcessStub(
+            stdout='{"result":"producer text","session_id":"claude-session-bypass","stop_reason":"end_turn"}',
+        )
+
+    monkeypatch.setattr(claude_runtime_provider.asyncio, "create_subprocess_exec", fake_create_subprocess_exec)
+    transport = ClaudeTransport(config=_config(provider_name="claude", claude_permission_strategy="bypass").provider.claude)
+    policy = ProviderPolicy(
+        permissions=PermissionPolicy(
+            mode="full_auto_unsandboxed",
+            allow_dangerous_bypass=True,
+            disable_dangerous_bypass=False,
+        ),
+        sandbox=SandboxPolicy(
+            enabled=False,
+            required=False,
+            mode="danger_full_access",
+        ),
+    )
+
+    asyncio.run(
+        transport.run_turn(
+            _rendered_turn(
+                step_name="produce",
+                prompt_text="# Step: produce\n\nShared runtime prompt.",
+                session=_placeholder_session(),
+                policy=policy,
+                run_folder=tmp_path,
+                workspace_root=workspace_root,
+                step_execution_id="produce:1",
+            )
+        )
+    )
+
+    assert calls == [
+        (
+            "claude",
+            "-p",
+            "# Step: produce\n\nShared runtime prompt.",
+            "--output-format",
+            "json",
+            "--settings",
+            str(tmp_path / "provider_policy" / "produce__visit-1" / "claude" / "settings.json"),
+            "--add-dir",
+            str(workspace_root.resolve()),
+            "--dangerously-skip-permissions",
+            "--model",
+            "claude-test",
+        )
+    ]
 
 
 def test_claude_operation_executor_uses_policy_settings_and_metadata(

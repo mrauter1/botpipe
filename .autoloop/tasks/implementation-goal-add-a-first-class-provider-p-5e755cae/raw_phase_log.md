@@ -1767,3 +1767,56 @@ No open blocking issues for this phase. Review artifacts are complete.
 <loop-control>
 {"schema":"docloop.loop_control/v1","kind":"promise","promise":"COMPLETE"}
 </loop-control>
+
+
+---
+run_id=run-20260506T190853Z-f707cb4f | entry=session_turn | pair=test | phase=producer | cycle=1 | attempt=1 | thread_id=019dff06-56f8-7ec3-9792-9244e6c94bf8
+---
+provider=codex
+mode=resume
+template=/home/rauter/.local/share/pipx/venvs/autoloop/lib/python3.12/site-packages/autoloop/templates/test_producer.md
+session_id=019dff06-56f8-7ec3-9792-9244e6c94bf8
+
+
+---
+run_id=run-20260506T190853Z-f707cb4f | entry=phase_output | pair=test | phase=producer | process=codex-agent | cycle=1 | attempt=1 | thread_id=019dff06-56f8-7ec3-9792-9244e6c94bf8
+---
+I’m treating this as a phase-local regression sweep for the final Claude policy changes. First I’m checking the existing phase test artifacts and the current runtime test coverage so I can add only the missing cases instead of churning already-good tests.
+
+I found two narrow additions worth making: one capability-gating test for the new `--add-dir` requirement, and one policy-backed Claude transport test that proves legacy bypass still reaches the CLI in the emitted path instead of being silently dropped again.
+
+I’ve added the two missing regression tests. I’m running the focused provider/runtime suites now so the phase artifact updates only describe passing coverage.
+
+The adjacent policy-step sweep passed. I’m waiting on the broader focused provider/runtime batch and then I’ll update the test-phase artifacts with the final behavior-to-coverage map.
+
+I have the final passing set. I’m writing the phase test strategy as a behavior-to-coverage map and a short feedback note that names the new regression tests and the exact suites they passed in.
+
+Scope considered
+
+Phase-local test coverage for the finalized Claude policy regression work: the Claude runtime/provider tests, provider-policy emitter/config tests, and the active test-phase artifacts.
+
+What I analyzed
+
+I checked the current coverage against the final implementation and the phase acceptance criteria, with focus on the two remaining high-value gaps after the implement/verifier loop: the new `--add-dir` capability requirement and the policy-backed preservation of legacy Claude `permission_strategy=bypass`.
+
+What I changed
+
+I added two focused tests in [tests/runtime/test_runtime_providers.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/tests/runtime/test_runtime_providers.py):
+- `test_verify_claude_code_capabilities_rejects_missing_add_dir_flag`
+- `test_claude_transport_preserves_legacy_bypass_for_policy_backed_turns`
+
+I updated [test_strategy.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/implementation-goal-add-a-first-class-provider-p-5e755cae/runs/run-20260506T190853Z-f707cb4f/artifacts/test/phases/policy-claude-regression/test_strategy.md) with a behavior-to-coverage map, edge/failure paths, stabilization notes, and known gaps, and I appended the passing test summary to [feedback.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/implementation-goal-add-a-first-class-provider-p-5e755cae/runs/run-20260506T190853Z-f707cb4f/artifacts/test/phases/policy-claude-regression/feedback.md).
+
+Key findings / decisions
+
+The added tests close the last meaningful regression gaps for this phase:
+- the runtime now fails deterministically if Claude lacks `--add-dir`
+- the earlier legacy-bypass regression is covered at the emitted transport-command path, not just at config resolution
+
+Validation passed:
+- `.venv/bin/python -m pytest tests/runtime/test_runtime_providers.py tests/runtime/test_provider_policy_emitters.py tests/runtime/test_provider_policy_config.py tests/runtime/test_provider_backends.py -q`
+- `.venv/bin/python -m pytest tests/runtime/test_provider_policy_steps.py -q`
+
+Open issues / next step
+
+No open test-author blockers in the phase-local scope. The next step is the test-phase verifier pass against the updated test artifacts and the focused runtime suites.
