@@ -2007,3 +2007,53 @@ Open issues / next step
 
 - No new product-code issues were found in this phase-local pass.
 - Residual warnings are unchanged from the existing suite and were not introduced by this turn’s scanner tests.
+
+
+---
+run_id=run-20260506T130608Z-37f1c786 | entry=session_turn | pair=test | phase=verifier | cycle=1 | attempt=1 | thread_id=019dfdab-cbed-71e2-9b3b-61be29aeb301
+---
+provider=codex
+mode=resume
+template=/home/rauter/.local/share/pipx/venvs/autoloop/lib/python3.12/site-packages/autoloop/templates/test_verifier.md
+session_id=019dfdab-cbed-71e2-9b3b-61be29aeb301
+
+
+---
+run_id=run-20260506T130608Z-37f1c786 | entry=phase_output | pair=test | phase=verifier | process=codex-agent | cycle=1 | attempt=1 | thread_id=019dfdab-cbed-71e2-9b3b-61be29aeb301
+---
+I’m reviewing the new strictness scanner tests and the phase-local test artifacts first, then I’ll decide whether there are any real coverage or flake gaps before I touch the audit files.
+
+The new tests are targeted and deterministic, and they close a real regression-detection gap in the strictness suite itself. I’m updating the audit artifacts now with a clean pass and no blocking findings.
+
+Scope considered
+
+- Phase-local audit of `test-and-strictness-hardening` only.
+- The changed strictness test file, the producer’s phase-local test artifacts, and the validation results recorded for the targeted matrix.
+
+What I analyzed
+
+- The new scanner self-tests in `tests/strictness/test_no_compat.py`.
+- The coverage map and stated invariants in [test_strategy.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/full-revised-standalone-spec-autoloop-v3-async-n-3c402473/runs/run-20260506T130608Z-37f1c786/artifacts/test/phases/test-and-strictness-hardening/test_strategy.md).
+- The run-local decisions around the narrow `llm()` / `classify()` compatibility exception and the `.venv` pytest runner.
+
+What I reviewed
+
+- Whether the added tests actually improve AC-1 regression detection instead of only restating existing tree scans.
+- Whether the tests preserve the confirmed behavior boundary by allowing sync bridging only on the explicit operation path.
+- Whether the new tests are deterministic and avoid repo-layout or timing flake.
+
+Key findings / decisions
+
+- No blocking findings.
+- The new synthetic-module scanner tests close a real regression-detection gap: future changes to the strictness helper logic can now fail even if the maintained tree temporarily remains clean.
+- The tests respect the confirmed intent by preserving the explicit operation-only exception instead of broadening sync compatibility.
+- The phase-local audit artifacts were updated to reflect a clean pass.
+
+Open issues / next step
+
+- No audit issues remain for this phase.
+- This test phase can advance.
+
+<loop-control>
+{"schema":"docloop.loop_control/v1","kind":"promise","promise":"COMPLETE"}
+</loop-control>
