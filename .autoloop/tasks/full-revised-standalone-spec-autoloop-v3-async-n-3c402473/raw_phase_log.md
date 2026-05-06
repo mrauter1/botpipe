@@ -252,3 +252,50 @@ Key findings / decisions
 Open issues / next step
 - Reviewer-owned artifacts still contain the prior findings and need a fresh verifier pass to clear them.
 - The temporary sync transport fallback in `RenderedLLMProvider` remains deferred to the later provider-transport cutover phase.
+
+
+---
+run_id=run-20260506T130608Z-37f1c786 | entry=session_turn | pair=implement | phase=verifier | cycle=2 | attempt=1 | thread_id=019dfd6b-64cb-7e91-8aa2-76c766f7f1a1
+---
+provider=codex
+mode=resume
+template=/home/rauter/.local/share/pipx/venvs/autoloop/lib/python3.12/site-packages/autoloop/templates/implement_verifier.md
+session_id=019dfd6b-64cb-7e91-8aa2-76c766f7f1a1
+
+
+---
+run_id=run-20260506T130608Z-37f1c786 | entry=phase_output | pair=implement | phase=verifier | process=codex-agent | cycle=2 | attempt=1 | thread_id=019dfd6b-64cb-7e91-8aa2-76c766f7f1a1
+---
+I’m re-reviewing the updated async-engine-spine diff against the reviewer findings and the phase contract, starting with the changed dispatcher/provider boundary and the remaining compatibility behavior around sequential sync providers.
+
+The implementation notes and decisions line up with the intended fix. I’m reading the actual dispatcher and engine code now to verify the sync-provider fallback is constrained to sequential finalize-mode and that the dead engine path is really gone.
+
+The focused regression pass is clean, and the two prior findings are actually resolved in the code. I’m marking the criteria complete and appending a short re-review resolution note to the feedback artifact so the history stays explicit.
+
+Scope considered
+- Phase-local async-engine-spine changes in `autoloop/core/engine.py`, `autoloop/core/engine_collaborators.py`, `autoloop/core/providers/rendered.py`, and the focused contract test additions.
+- The reviewer-owned artifacts in the active phase directory, plus the current implementation notes and run decisions ledger.
+
+What I analyzed
+- The dispatcher/provider boundary after the fix for sync-only sequential providers.
+- The top-level engine loop to confirm `Engine.run(...)` and `Engine.resume(...)` remain thin sync shells over async internals.
+- The prior duplicated sync helper path in `engine.py` to confirm it was actually removed.
+
+What I reviewed
+- AC-1: ordinary sequential workflows still run through existing public entrypoints, and provider-backed sequential execution no longer depends on sync engine internals.
+- AC-2: sync runtime wrappers still fail clearly under an active event loop.
+- Regression coverage: sync-only sequential providers, async-only providers, branch-group rejection of sync-only providers, runner-adjacent engine smoke tests, and targeted provider/rendered-provider tests.
+
+Key findings / decisions
+- No remaining findings in this phase scope.
+- `IMP-001` is resolved: sequential sync-only providers are preserved only at the dispatcher/provider boundary via `StepDispatcher._call_provider(...)`, while capture/branch execution remains async-only.
+- `IMP-002` is resolved: the dead sync provider execution helper stack was removed from `engine.py`.
+- I marked all criteria complete and appended a re-review resolution note in the feedback artifact.
+
+Open issues / next step
+- No blocker remains for this phase.
+- The temporary rendered-provider sync transport fallback is still deferred to the later provider-transport phase, which matches the current phase scope.
+
+<loop-control>
+{"schema":"docloop.loop_control/v1","kind":"promise","promise":"COMPLETE"}
+</loop-control>

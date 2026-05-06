@@ -20,3 +20,9 @@
 - Concrete issue: after `Engine.run_async(...)` and `StepDispatcher.execute(...)` were switched to the async-authoritative path, the old sync provider execution helpers (`_execute_pair_step`, `_execute_llm_step`, `_execute_workflow_step`, and their lower-level sync helpers) remain in place but are no longer on the main execution path.
 - Technical-debt risk: this leaves a large duplicated implementation body in `engine.py` that future provider/runtime changes can drift against, even though the phase intent was to remove duplicated sync provider logic.
 - Minimal fix direction: delete the unreachable sync helper stack or fold any still-needed shared logic into dispatcher-owned helpers so there is only one maintained provider-backed execution implementation.
+
+## Re-review update
+
+- Cycle 2 re-review: `IMP-001` is resolved. Sequential sync-only providers now remain valid for ordinary `route_mode="finalize"` execution through `StepDispatcher._call_provider(...)`, while capture/branch execution stays async-only.
+- Cycle 2 re-review: `IMP-002` is resolved. The dead sync provider execution helper stack was removed from `engine.py`.
+- No remaining findings in this phase scope after targeted validation.
