@@ -99,6 +99,10 @@ Implementation intent:
   - `Event.question` projected from question-style `route_fields.questions`
 - Expose `ctx.outcome.route_fields` everywhere hooks/runtime already expose `ctx.outcome.payload`, and thread it through cloning, trace payloads, finalization records, and extension-visible context snapshots.
 - Preserve existing route finalizer, `after`, `on_taken`, redirect, handoff scheduling, required-write enforcement, and artifact guard behavior.
+- Treat persisted inspection/report outputs as a compatibility surface:
+  - keep existing filenames and runtime-owned artifact roles for `static_step_graph.json`, `topology.json`, `route_table.md`, `compile_report.md`, and workflow-capability snapshots
+  - prefer additive field changes and derived compatibility fields over structural replacement when existing readers already consume those payloads
+  - if any route-shape change cannot remain additive, land the consumer/test migration in the same slice and call the break out explicitly in the implementation change
 - Update static graph, compile report, route table, workflow-capability inspection, and topology hash to reflect compiled route metadata exactly:
   - provider visibility mode
   - payload schema source/fingerprint
@@ -109,6 +113,7 @@ Implementation intent:
   - required writes
   - handoff
   - hook identity
+- Surface provider-schema fallback status anywhere the spec requires reporting it, at minimum in compile report output and inspection/static-graph payloads that summarize provider route contracts.
 - Remove separate control-route terminology from reporting and docs; if temporary compatibility fields remain, they must be derived views only and not a second legality mechanism.
 - Preserve child-workflow mapping and other non-provider route-finalization behavior unless required by the compiled-route legality changes.
 
@@ -169,6 +174,11 @@ Implementation intent:
 - Keep `ControlRoutes(question=...)` as compatibility-only lowering into the framework default `Route.question()` profile; do not extend it with blocked/failed configuration.
 - Keep existing step-level `expected_output_schema` semantics as the default payload-schema fallback when a route inherits payload validation.
 - Preserve normal route-finalization ordering and route-local `on_taken` behavior; do not introduce a parallel control-route execution path.
+- Persisted inspection/report artifacts are part of the compatibility surface:
+  - keep current filenames and top-level runtime artifact identities
+  - prefer additive payload changes for static graph, topology, route table, compile report summaries, and workflow capability snapshots
+  - where an additive shape is impossible, treat the change as an intentional persisted-artifact contract update and migrate downstream readers/tests in the same phase instead of leaving staggered breakage
+- Checkpoint/trace payload additions for `Outcome.route_fields` should remain backward-tolerant: old checkpoints and readers must continue to work when route-fields-specific data is absent, while new traces may add fields without removing the legacy projections in the first patch.
 
 ## Regression-risk notes
 - The largest failure mode is hybrid legality: if injected runtime-control data and compiled route metadata both survive as active authorities, provider legality and runtime legality will drift.
@@ -184,6 +194,12 @@ Implementation intent:
   - validation/compiler unit tests
   - engine contract tests covering provider routing and child workflow mapping
   - runtime static-graph/topology tests
+  - runtime tracing and optimization-helper tests that read `static_step_graph.json` / topology artifacts
+  - workflow-capability snapshot consumers such as `task_to_candidate_workflow_set`
   - simple-surface tests
   - workflow-package tests that currently assert question/blocked/failed route contracts
+- Validate the persisted artifact contract explicitly:
+  - confirm additive readers still parse static graph/topology/capability outputs when legacy fields remain present
+  - if a non-additive route-shape change is required, update the reader/test surface in the same change and document the intended break in release notes / migration notes for the patch
+- Verify compile-report and inspection outputs when simplified provider-schema fallback is used so the reporting requirement cannot regress silently.
 - Roll back by reverting to the prior route-compilation path only if the new tests expose an unavoidable compatibility break. Do not keep a long-lived hybrid where compiled routes and runtime-control injection both determine legality.

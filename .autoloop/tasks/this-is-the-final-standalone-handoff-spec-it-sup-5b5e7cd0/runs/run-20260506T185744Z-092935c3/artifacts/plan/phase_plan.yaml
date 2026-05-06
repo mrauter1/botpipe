@@ -61,6 +61,7 @@ phases:
       - "Expose ctx.outcome.route_fields and preserve ctx.outcome.payload plus compatibility reason/question projections."
       - "Update event projection, trace or checkpoint payloads, and child-workflow-adjacent bookkeeping impacted by Outcome shape changes."
       - "Replace authored-versus-runtime-control reporting with exact compiled route metadata including visibility mode, schema fingerprints, preset kind, inheritance source, and suppression state."
+      - "Keep persisted inspection/report artifacts on an explicit compatibility path by preserving filenames and preferring additive payload changes, with same-slice reader migration if any shape break is unavoidable."
     out_of_scope:
       - "Changing route-finalizer behavior for after hooks, on_taken hooks, handoffs, redirects, or required-write enforcement."
       - "Broad workflow behavior redesign unrelated to route metadata."
@@ -71,9 +72,11 @@ phases:
         text: "Runtime contexts and projected Events use selected-route metadata rather than tag-name-only question handling."
       - id: "AC-2"
         text: "Static graph, compile report, workflow capability inspection, and topology hash reflect compiled route metadata exactly and change when route schemas or visibility change."
+      - id: "AC-3"
+        text: "Compile-report and inspection outputs explicitly indicate simplified provider-schema fallback when it is used, and persisted artifact readers are either preserved additively or migrated in the same phase."
     deliverables:
       - "Runtime projection updates for Outcome.route_fields."
-      - "Inspection, compile-report, route-table, and topology-hash/reporting updates."
+      - "Inspection, compile-report, route-table, topology-hash/reporting, and persisted-reader compatibility updates."
     risks:
       - "Stale inspection fields could hide behavior drift even if runtime legality is correct."
       - "Outcome shape changes can break checkpoint or trace consumers if cloning and serialization paths are missed."
