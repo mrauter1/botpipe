@@ -95,3 +95,12 @@ No open verification issues. The implementation phase can proceed using the curr
 <loop-control>
 {"schema":"docloop.loop_control/v1","kind":"promise","promise":"COMPLETE"}
 </loop-control>
+
+
+---
+run_id=run-20260506T140151Z-c56b8e14 | entry=phase_scope_resolved
+---
+phase_mode=single
+phase_ids=route-compilation-contract,provider-and-surface-regressions,workflow-doc-and-suite-alignment
+explicit=True
+current_phase_index=0
