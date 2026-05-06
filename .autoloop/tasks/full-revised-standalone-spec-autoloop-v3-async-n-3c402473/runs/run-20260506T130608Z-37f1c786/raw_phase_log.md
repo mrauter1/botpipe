@@ -884,3 +884,139 @@ The documented environment gap remains execution-only: `pytest` is unavailable h
 <loop-control>
 {"schema":"docloop.loop_control/v1","kind":"promise","promise":"COMPLETE"}
 </loop-control>
+
+
+---
+run_id=run-20260506T130608Z-37f1c786 | entry=session_turn | pair=implement | phase=producer | cycle=1 | attempt=1 | thread_id=019dfd95-df97-7bb1-9546-0a54a718f9eb
+---
+provider=codex
+mode=start
+template=/home/rauter/.local/share/pipx/venvs/autoloop/lib/python3.12/site-packages/autoloop/templates/implement_producer.md
+session_id=019dfd95-df97-7bb1-9546-0a54a718f9eb
+
+
+---
+run_id=run-20260506T130608Z-37f1c786 | entry=phase_output | pair=implement | phase=producer | process=codex-agent | cycle=1 | attempt=1 | thread_id=019dfd95-df97-7bb1-9546-0a54a718f9eb
+---
+I’m implementing the `async-transports-and-rendered-provider` phase only. First I’m reading the active phase artifacts and the current provider/transport code paths to pin down the required edits and the likely regression surfaces.
+
+The earlier phases already cut the public protocol over; this phase looks like it still has compatibility leftovers around rendered-provider operation execution and the CLI backend builders. I’m reading the concrete transport and fake-provider implementations now, then I’ll patch the remaining sync path and update the phase notes/ledger.
+
+The transports are already mostly async for normal turns. The remaining conflict is narrower: explicit sync operation executors still live in the built-in provider modules, and the fake provider still records operations through a sync-only method. I’m checking the shared subprocess helpers and the current tests before I cut that down.
+
+I’ve narrowed the likely code changes: keep the temporary `run_operation(...)` escape hatch, but make sure the documented provider/transport surfaces are fully async-native and cover subprocess cancellation explicitly. I’m checking whether the backend exports and provider classes still carry unnecessary compatibility scaffolding before editing.
+
+I’ve got enough context to edit safely. Plan:
+1. Tighten the runtime provider modules so the async transport path is the only documented transport execution path, while keeping the already-approved helper-only `run_operation(...)` exception explicit.
+2. Harden the fake provider and runtime transport tests around cancellation/session recording where the current code is thin.
+3. Run the targeted provider/backend/unit tests, then update the phase notes and this turn’s decisions block with any non-obvious constraints that remain.
+
+I haven’t found a phase blocker in the existing async turn path; the gaps are mostly coverage and a thin fake-provider surface. I’m running the targeted provider tests once before editing so I can see whether I’m fixing a real failure or hardening an already-green path.
+
+`pytest` isn’t installed in this shell, so I can’t use the normal test command as-is. I’m checking whether `python3 -m pytest` is available; if not, I’ll still patch and do at least syntax-level verification, and I’ll call out the missing test runner explicitly.
+
+I’m editing the fake-provider boundary and the transport tests now. The code change is narrow: preserve the approved helper-only sync exception, but make the async fake provider usable for real async scheduling tests and add explicit cancellation coverage for the subprocess helper path.
+
+The edits are in. Before I touch the phase notes, I’m doing syntax-level verification on the changed modules and tests since the environment still lacks `pytest`.
+
+The transport/provider source itself didn’t need another semantic rewrite in this turn; the repo already had the async-only `run_turn(...)` surface from the earlier phase work. I’m doing one last repo check for deprecated provider/transport method names, then I’ll write the phase notes and append the non-obvious decisions for this turn.
+
+I’m updating the phase artifacts now. I’m only recording decisions that would be easy to lose later: the fake provider is now branch-session-observable, and cancellation coverage is anchored at the shared async subprocess helper rather than duplicated per transport.
+
+Scope considered
+
+- Phase-local scope for `async-transports-and-rendered-provider`.
+- Runtime provider/transport surfaces, fake provider behavior, and phase artifacts only.
+- I did not absorb unrelated dirty files in the worktree.
+
+What I analyzed
+
+- [autoloop/core/providers/rendered.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/autoloop/core/providers/rendered.py)
+- [autoloop/core/providers/fake.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/autoloop/core/providers/fake.py)
+- [autoloop/runtime/providers/codex.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/autoloop/runtime/providers/codex.py)
+- [autoloop/runtime/providers/claude.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/autoloop/runtime/providers/claude.py)
+- [autoloop/runtime/providers/_common.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/autoloop/runtime/providers/_common.py)
+- [autoloop/runtime/provider_backends.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/autoloop/runtime/provider_backends.py)
+- Targeted provider/backend/unit tests and the active phase artifacts.
+
+What I changed
+
+- Updated [autoloop/core/providers/fake.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/autoloop/core/providers/fake.py) so `ScriptedLLMProvider`:
+  - records the inbound `SessionBinding` on each scripted call,
+  - awaits async scripted callbacks for `run_producer`, `run_verifier`, and `run_llm`,
+  - rejects awaitables on the sync-only `run_operation(...)` compatibility path.
+- Added unit coverage in [tests/unit/test_provider_boundary_core.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/tests/unit/test_provider_boundary_core.py) for fake-provider session recording and awaited scripted callbacks.
+- Added cancellation coverage in [tests/runtime/test_runtime_providers.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/tests/runtime/test_runtime_providers.py) for `communicate_text_subprocess(...)`, asserting terminate/kill cleanup on cancellation.
+- Updated the phase notes and appended this turn’s decisions in the authoritative artifact files.
+
+Key findings / decisions
+
+- The built-in Codex/Claude turn path was already on async-only `run_turn(...)`; no further semantic rewrite was needed in those transport modules this turn.
+- Deprecated `_async` provider/transport method names are absent in the repo-wide provider/runtime surfaces I checked.
+- `subprocess.run(...)` remains only in the explicit compatibility/help-probe paths, not in async provider turn execution.
+- The approved narrow `llm()` / `classify()` sync exception remains preserved; I did not widen it.
+
+Open issues / next step
+
+- Validation was limited to `python3 -m py_compile` and repo checks because `pytest` is not installed in this environment.
+- Phase notes were updated at [implementation_notes.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/full-revised-standalone-spec-autoloop-v3-async-n-3c402473/runs/run-20260506T130608Z-37f1c786/artifacts/implement/phases/async-transports-and-rendered-provider/implementation_notes.md) and decisions at [decisions.txt](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/full-revised-standalone-spec-autoloop-v3-async-n-3c402473/runs/run-20260506T130608Z-37f1c786/decisions.txt).
+- Next useful step is to run the targeted pytest files once the test runner is available.
+
+
+---
+run_id=run-20260506T130608Z-37f1c786 | entry=session_turn | pair=implement | phase=verifier | cycle=1 | attempt=1 | thread_id=019dfd95-df97-7bb1-9546-0a54a718f9eb
+---
+provider=codex
+mode=resume
+template=/home/rauter/.local/share/pipx/venvs/autoloop/lib/python3.12/site-packages/autoloop/templates/implement_verifier.md
+session_id=019dfd95-df97-7bb1-9546-0a54a718f9eb
+
+
+---
+run_id=run-20260506T130608Z-37f1c786 | entry=phase_output | pair=implement | phase=verifier | process=codex-agent | cycle=1 | attempt=1 | thread_id=019dfd95-df97-7bb1-9546-0a54a718f9eb
+---
+I’m reviewing the phase-local provider/transport implementation against the active criteria and the run decisions first. Then I’ll update the reviewer artifacts with exact checkbox status and any blocking findings.
+
+The targeted diff command came back empty for the runtime/provider files, so I’m reviewing the current file contents directly rather than assuming the worktree diff is reliable in this repo state. Next I’m checking the rendered provider, backend builders, and fake provider against the acceptance criteria line by line.
+
+I found one concrete cancellation-path reliability issue in the shared subprocess helper, and I’m verifying it’s not already mitigated elsewhere before I mark the phase status. After that I’ll update the criteria and feedback with a single prioritized finding if it holds.
+
+I’ve confirmed the cancellation helper still has an uncaught race on `terminate()/kill()`. I’m marking the phase incomplete on that basis and writing one blocking finding with the minimal central fix path in the shared helper.
+
+Scope considered
+
+- Phase-local review for `async-transports-and-rendered-provider`.
+- Reviewed the active reviewer artifacts, implementation notes, run decisions, and the request-relevant provider/transport files.
+- Stayed out of unrelated dirty worktree content.
+
+What I analyzed
+
+- [autoloop/core/providers/rendered.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/autoloop/core/providers/rendered.py)
+- [autoloop/runtime/provider_backends.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/autoloop/runtime/provider_backends.py)
+- [autoloop/runtime/providers/codex.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/autoloop/runtime/providers/codex.py)
+- [autoloop/runtime/providers/claude.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/autoloop/runtime/providers/claude.py)
+- [autoloop/runtime/providers/_common.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/autoloop/runtime/providers/_common.py)
+- [autoloop/core/providers/fake.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/autoloop/core/providers/fake.py)
+- The phase artifacts at [criteria.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/full-revised-standalone-spec-autoloop-v3-async-n-3c402473/runs/run-20260506T130608Z-37f1c786/artifacts/implement/phases/async-transports-and-rendered-provider/criteria.md) and [feedback.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/full-revised-standalone-spec-autoloop-v3-async-n-3c402473/runs/run-20260506T130608Z-37f1c786/artifacts/implement/phases/async-transports-and-rendered-provider/feedback.md).
+
+What I reviewed
+
+- Async-only rendered-provider surface and absence of `_async` provider/transport variants.
+- Built-in Codex/Claude transport execution path and shared cancellation helper ownership.
+- Backend-builder wiring relative to the clarified `llm()` / `classify()` sync exception.
+- Fake-provider async scripting/session-recording changes and the added tests/notes.
+
+Key findings / decisions
+
+- I recorded one blocking finding: [IMP-001](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/full-revised-standalone-spec-autoloop-v3-async-n-3c402473/runs/run-20260506T130608Z-37f1c786/artifacts/implement/phases/async-transports-and-rendered-provider/feedback.md:10).
+- The shared cancellation helper in [autoloop/runtime/providers/_common.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/autoloop/runtime/providers/_common.py:183) can raise `ProcessLookupError` during cancellation races, so the phase does not yet satisfy clean cancellation handling.
+- I updated the review artifacts accordingly; `criteria.md` remains not fully checked because of that blocking reliability gap.
+
+Open issues / next step
+
+- Fix `terminate_text_subprocess(...)` centrally to swallow `ProcessLookupError` around `terminate()` / `kill()` and preserve cancellation semantics for both CLI transports.
+- Re-run the provider/runtime tests after that fix when a pytest-capable environment is available.
+
+<loop-control>
+{"schema":"docloop.loop_control/v1","kind":"promise","promise":"INCOMPLETE"}
+</loop-control>
