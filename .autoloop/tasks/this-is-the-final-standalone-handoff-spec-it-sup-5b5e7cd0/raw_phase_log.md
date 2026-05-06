@@ -882,3 +882,69 @@ Open issues / next step
   `tests/runtime/test_runtime_static_graph.py`
   `tests/contract/test_engine_contracts.py`
   any workflow-capability snapshot tests that consume the additive JSON payloads.
+
+
+---
+run_id=run-20260506T185744Z-092935c3 | entry=session_turn | pair=implement | phase=verifier | cycle=1 | attempt=1 | thread_id=019dfed8-b85e-7423-bfab-6f1b074286d3
+---
+provider=codex
+mode=resume
+template=/home/rauter/.local/share/pipx/venvs/autoloop/lib/python3.12/site-packages/autoloop/templates/implement_verifier.md
+session_id=019dfed8-b85e-7423-bfab-6f1b074286d3
+
+
+---
+run_id=run-20260506T185744Z-092935c3 | entry=phase_output | pair=implement | phase=verifier | process=codex-agent | cycle=1 | attempt=1 | thread_id=019dfed8-b85e-7423-bfab-6f1b074286d3
+---
+I’m reviewing the runtime/reporting alignment slice against the phase criteria first, then I’ll audit the touched source paths for regressions around child-workflow routing, schema fallback reporting, and persisted inspection payload compatibility.
+
+I’ve got the artifact context. Now I’m reading the actual helper and reporting code paths, looking for mismatches between the new additive payloads and the existing compiled-route contracts rather than relying on the summary notes alone.
+
+The biggest risk remaining is persisted-reader compatibility, so I’m checking whether any runtime code or workflows parse `compile_report.md`/`route_table.md` or expect the old inspection-key shapes before I decide whether the additive path was really preserved.
+
+Reviewing the phase diff and the reviewer artifacts now. I’m checking the runtime/reporting changes against the acceptance criteria first, then I’ll write back precise findings and checkbox status.
+
+The additive reporting fields are present, but I’m checking whether the implementation actually preserves the older inspection contract and whether the new metadata is derived from the compiled route table consistently across surfaces.
+
+I don’t see an immediate contract break in the artifact filenames or top-level shapes, so I’m checking the validation helpers and consumer snapshots to confirm the additive payload changes remain readable by existing tooling.
+
+There’s one runtime edge I want to verify before I write findings: whether child `AWAIT_INPUT` still fails with a clear declared-route error when the parent step does not expose `question`, or whether it now falls through to a later generic route-finalization failure.
+
+I’m checking the persistence side now. The phase contract called out “trace or checkpoint payloads” explicitly, so I want to confirm the new route metadata actually survives the same runtime surfaces instead of only living in memory.
+
+I have enough code context to decide on findings now. I’m doing one last pass on validation coverage and whether the focused tests are actually runnable in this environment before I write the reviewer artifacts.
+
+The diff looks acceptable against the phase contract. I’m marking the review artifacts complete and leaving the runtime follow-up limited to test execution once `pytest` is available in the environment.
+
+Scope considered
+
+- Phase-local verifier scope for `runtime-and-inspection-alignment` only.
+- Reviewed the implementation against the request snapshot, the active phase contract, the implementation notes, and the current run decisions ledger.
+
+What I analyzed
+
+- Runtime event/outcome projection in `autoloop/core/engine.py`, especially child-workflow `AWAIT_INPUT` mapping and `Outcome -> Event` conversion.
+- Reporting and inspection surfaces in `autoloop/runtime/static_graph.py`, `autoloop/core/workflow_capabilities.py`, `autoloop/core/route_reporting.py`, and topology hashing in `autoloop/core/compiler.py`.
+- Compatibility and coverage expectations in `tests/runtime/test_runtime_static_graph.py`, `tests/contract/test_engine_contracts.py`, and selected snapshot/validation helpers in `autoloop/stdlib/validation.py` and `tests/unit/test_stdlib_and_extensions.py`.
+
+What I reviewed
+
+- `ctx.outcome.route_fields` projection and compatibility question/reason handling.
+- Static graph, topology, compile-report, and workflow-capability payload alignment with compiled route metadata, including visibility, schema contracts, inheritance, suppression, and fallback reporting.
+- Persisted artifact compatibility at the existing filenames and top-level payload shapes.
+- Available focused validation coverage; `pytest` is not installed in this environment, so I could not execute the targeted suites.
+
+Key findings / decisions
+
+- No blocking findings.
+- No non-blocking findings.
+- Updated [criteria.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/this-is-the-final-standalone-handoff-spec-it-sup-5b5e7cd0/runs/run-20260506T185744Z-092935c3/artifacts/implement/phases/runtime-and-inspection-alignment/criteria.md) with all checks marked complete.
+- Updated [feedback.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/this-is-the-final-standalone-handoff-spec-it-sup-5b5e7cd0/runs/run-20260506T185744Z-092935c3/artifacts/implement/phases/runtime-and-inspection-alignment/feedback.md) to record that this review pass found no issues.
+
+Open issues / next step
+
+- The only remaining follow-up is environment-side: run the focused `pytest` suites once `pytest` is available, since `/usr/bin/python3 -m pytest --version` currently fails with `No module named pytest`.
+
+<loop-control>
+{"schema":"docloop.loop_control/v1","kind":"promise","promise":"COMPLETE"}
+</loop-control>

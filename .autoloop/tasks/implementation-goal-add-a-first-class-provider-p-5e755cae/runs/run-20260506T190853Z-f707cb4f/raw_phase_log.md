@@ -822,3 +822,87 @@ Open issues / next step
 <loop-control>
 {"schema":"docloop.loop_control/v1","kind":"promise","promise":"COMPLETE"}
 </loop-control>
+
+
+---
+run_id=run-20260506T190853Z-f707cb4f | entry=session_turn | pair=implement | phase=producer | cycle=1 | attempt=1 | thread_id=019dfed8-551c-7c93-94aa-0e9110d8f650
+---
+provider=codex
+mode=start
+template=/home/rauter/.local/share/pipx/venvs/autoloop/lib/python3.12/site-packages/autoloop/templates/implement_producer.md
+session_id=019dfed8-551c-7c93-94aa-0e9110d8f650
+
+
+---
+run_id=run-20260506T190853Z-f707cb4f | entry=phase_output | pair=implement | phase=producer | process=codex-agent | cycle=1 | attempt=1 | thread_id=019dfed8-551c-7c93-94aa-0e9110d8f650
+---
+I’m implementing the phase-scoped policy resolution and propagation work. First I’m reading the active phase artifacts and the current provider/runtime/compiler paths to pin down the exact seams before editing.
+
+The planning artifacts are aligned with the phase contract. I’m reading the compiler, step, operation, runner, and provider model paths now to map where policy already landed from earlier phases and where propagation is still missing.
+
+Some authoring surface work is already present, but compiler metadata, request propagation, and operation runtime are still mostly policy-unaware. I’m tracing existing policy references across runtime and tests to avoid duplicating seams.
+
+I’ve confirmed config parsing is already in place from earlier phases. The next pass is the execution seams: compiled metadata, engine collaborator request building, and operation replay hashing.
+
+There’s a subtle runtime concern here: inline `llm()/classify()` calls inside branch-group internal steps may use a different execution path than top-level step dispatch. I’m checking that seam before editing so the resolver doesn’t land only for the happy path.
+
+I’ve got the execution seam mapped now. I’m editing the compiler, runtime binding, provider request models, and operation replay path together so the policy object resolves once per step, propagates consistently, and changes both topology and replay fingerprints.
+
+The core propagation edits are in. I’m running a quick static pass over the changed seams before I add the new phase tests, because there are a few dataclass and import-order spots that can break immediately if they’re off by one field.
+
+The code composes conceptually; I’m doing a syntax pass now and then I’ll add targeted runtime tests for inheritance, overrides, strict rejection, topology hash, and replay fingerprint changes.
+
+I’m adding a focused runtime test file now. It covers the phase contract directly: workflow and step inheritance, reusable policy objects, inline-operation overrides, strict rejection on both paths, topology hash sensitivity, and replay-fingerprint sensitivity.
+
+The new tests are in place. I’m running the focused policy-steps suite now; if anything fails, I’ll adjust the seam rather than papering over it because most of the risk here is mismatch between top-level step execution and inline-operation execution.
+
+`pytest` isn’t installed in this environment, so I can’t run the suite through the normal harness. I’m running the new test functions directly under `python3` instead to get executable coverage on the new seams before I finalize.
+
+A local virtualenv exists in the repo, so I’m switching to that interpreter for validation instead of the bare system Python.
+
+Two failures were just bad test fixtures, not runtime behavior. I’ve fixed those and I’m rerunning the focused suite.
+
+The focused phase tests pass. I’m running a small adjacent regression sweep now against the touched surfaces: simple authoring, provider boundary models, and the existing operation-replay contracts.
+
+The local regressions on simple authoring and provider boundary code passed. I’m waiting on the existing engine replay-contract subset, since that’s the place most likely to catch accidental fingerprint or runtime-binding drift.
+
+The code and targeted regressions are clean. I’m writing the phase notes and decision ledger entries now so the next phase inherits the exact seams and the branch-group nuance instead of rediscovering them.
+
+Scope considered
+
+- Phase-local policy resolution and propagation only: compiled metadata, runtime resolver, provider request/rendered-turn propagation, inline `llm()/classify()` overrides, replay/topology fingerprints, and branch/fan-in parity for the same binding seam.
+- Out of scope stayed out: provider-specific emission/config files, capability reports, transport CLI arg mapping.
+
+What I analyzed
+
+- `autoloop/core/compiler.py`, `autoloop/core/operations.py`, `autoloop/core/providers/*`, `autoloop/core/engine*.py`, `autoloop/core/branch_groups/runtime.py`, `autoloop/runtime/runner.py`, `autoloop/runtime/cli.py`.
+- Existing policy-core and policy-config artifacts plus current replay/topology/provider-boundary tests to preserve behavior and catch regressions.
+
+What I changed
+
+- Added [autoloop/runtime/provider_policy_resolver.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/autoloop/runtime/provider_policy_resolver.py) to resolve effective policy for steps and inline operations.
+- Extended [autoloop/core/compiler.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/autoloop/core/compiler.py) so `CompiledWorkflow` and `CompiledStep` retain authored policy metadata and policy fingerprints now participate in compile cache/topology hash.
+- Propagated resolved policy through [autoloop/core/providers/models.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/autoloop/core/providers/models.py), [rendered.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/autoloop/core/providers/rendered.py), [rendering.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/autoloop/core/providers/rendering.py), and [turns.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/autoloop/core/providers/turns.py).
+- Extended [autoloop/core/operations.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/autoloop/core/operations.py) with additive `policy=` overrides, `OperationRuntime.policy`, resolver-aware inline resolution, and policy fingerprints in operation replay fingerprints.
+- Bound resolved step policy once per executing step in [autoloop/core/engine_collaborators.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/autoloop/core/engine_collaborators.py) and passed it into provider requests and inline operations.
+- Threaded the same binding seam through top-level engine execution in [autoloop/core/engine.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/autoloop/core/engine.py) and internal branch/fan-in execution in [autoloop/core/branch_groups/runtime.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/autoloop/core/branch_groups/runtime.py).
+- Added runner handoff for runtime policy config in [autoloop/runtime/runner.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/autoloop/runtime/runner.py) and [autoloop/runtime/cli.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/autoloop/runtime/cli.py).
+- Added focused coverage in [tests/runtime/test_provider_policy_steps.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/tests/runtime/test_provider_policy_steps.py).
+
+Key findings / decisions
+
+- The safe single seam was the operation-recorder binding, not provider transports. That let step-level provider turns and inline operations share one resolved policy object.
+- Branch-group internal steps were a real regression surface: they bypassed the top-level binding path, so I routed branch and fan-in execution through the same recorder seam.
+- Runner previously dropped provider-policy config after CLI resolution. I added a narrow `RunnerOptions.provider_policy_config` handoff instead of widening backend selection logic.
+
+Open issues / next step
+
+- No known blocker in this phase.
+- Next phase should consume the already-resolved policy in provider emitters/transports and persist run-scoped policy artifacts.
+
+Validation
+
+- `./.venv/bin/python -m pytest -q tests/runtime/test_provider_policy_steps.py`
+- `./.venv/bin/python -m pytest -q tests/unit/test_simple_surface.py -k 'policy or operation_surface_singletons'`
+- `./.venv/bin/python -m pytest -q tests/unit/test_provider_boundary_core.py -k 'operation or rendered'`
+- `./.venv/bin/python -m pytest -q tests/contract/test_engine_contracts.py -k 'operation_replay_fingerprint or operation_replay_override'`
