@@ -2018,8 +2018,9 @@ class OperationRecorder:
         step_name: str,
         step_visit: int,
     ):
+        previous_policy = getattr(context, "_provider_policy", _MISSING_PROVIDER_POLICY)
         resolved_policy = None
-        if self._engine.provider_policy_resolver is not None and _step_uses_provider_policy(step):
+        if self._engine.provider_policy_resolver is not None:
             try:
                 resolved_policy = self._engine.provider_policy_resolver.resolve_for_step(step)
             except ProviderPolicyError as exc:
@@ -2034,37 +2035,45 @@ class OperationRecorder:
                 "provider_policy_resolved",
                 policy_fingerprint=policy_fingerprint(resolved_policy),
             )
-        with bind_operation_runtime(
-            OperationRuntime(
-                provider=self._engine.provider,
-                provider_configuration=provider_configuration(
-                    self._engine.provider,
+        try:
+            with bind_operation_runtime(
+                OperationRuntime(
+                    provider=self._engine.provider,
+                    provider_configuration=provider_configuration(
+                        self._engine.provider,
+                        default_session_name=self._engine.compiled.default_session_name,
+                    ),
+                    prompt_registry=self._engine.prompt_registry,
+                    context=context,
+                    run_folder=run_folder,
+                    workflow_name=self._engine.compiled.workflow_name,
+                    topology_hash=self._engine.compiled.topology_hash,
+                    source_hash=self._engine.compiled.source_hash,
+                    step_name=step_name,
+                    step_visit=step_visit,
                     default_session_name=self._engine.compiled.default_session_name,
-                ),
-                prompt_registry=self._engine.prompt_registry,
-                context=context,
-                run_folder=run_folder,
-                workflow_name=self._engine.compiled.workflow_name,
-                topology_hash=self._engine.compiled.topology_hash,
-                source_hash=self._engine.compiled.source_hash,
-                step_name=step_name,
-                step_visit=step_visit,
-                default_session_name=self._engine.compiled.default_session_name,
-                replay_mismatch_behavior=self._engine.operation_replay_mismatch_behavior,
-                policy=resolved_policy,
-                provider_policy_resolver=self._engine.provider_policy_resolver,
-                event_sink=self._engine.runtime_event_sink,
-            )
-        ) as runtime:
-            yield runtime
+                    replay_mismatch_behavior=self._engine.operation_replay_mismatch_behavior,
+                    policy=resolved_policy,
+                    provider_policy_resolver=self._engine.provider_policy_resolver,
+                    event_sink=self._engine.runtime_event_sink,
+                )
+            ) as runtime:
+                yield runtime
+        finally:
+            if previous_policy is _MISSING_PROVIDER_POLICY:
+                try:
+                    delattr(context, "_provider_policy")
+                except AttributeError:
+                    pass
+            else:
+                context._provider_policy = previous_policy
 
 
 def _context_provider_policy(context: "Context") -> object | None:
     return getattr(context, "_provider_policy", None)
 
 
-def _step_uses_provider_policy(step: "CompiledStep") -> bool:
-    return step.kind in {"produce_verify", "step", "python", "operation"}
+_MISSING_PROVIDER_POLICY = object()
 
 
 class WorkflowInvoker:

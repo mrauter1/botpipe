@@ -1012,3 +1012,53 @@ Open issues / next step
 <loop-control>
 {"schema":"docloop.loop_control/v1","kind":"promise","promise":"COMPLETE"}
 </loop-control>
+
+
+---
+run_id=run-20260506T185744Z-092935c3 | entry=session_turn | pair=test | phase=verifier | cycle=1 | attempt=1 | thread_id=019dfed8-b85e-7423-bfab-6f1b074286d3
+---
+provider=codex
+mode=resume
+template=/home/rauter/.local/share/pipx/venvs/autoloop/lib/python3.12/site-packages/autoloop/templates/test_verifier.md
+session_id=019dfed8-b85e-7423-bfab-6f1b074286d3
+
+
+---
+run_id=run-20260506T185744Z-092935c3 | entry=phase_output | pair=test | phase=verifier | process=codex-agent | cycle=1 | attempt=1 | thread_id=019dfed8-b85e-7423-bfab-6f1b074286d3
+---
+I’m auditing the new test coverage against the exact phase acceptance criteria now. The main thing I’m checking is whether the fallback-reporting path is covered across every inspection surface that now owns duplicated contract logic, not just the static-graph artifact.
+
+The gap is specific now: the new fallback-path test only exercises `static_graph`/`compile_report`, while the phase also changed `workflow_capabilities`/selected-workflow inspection payloads to surface the same fallback metadata. Because that is a named acceptance criterion and a separate reporting surface, I’m recording it as a blocking coverage miss.
+
+Scope considered
+
+- Phase-local test audit for `runtime-and-inspection-alignment`.
+- Focused on the newly added tests in `tests/runtime/test_runtime_static_graph.py` and `tests/unit/test_stdlib_and_extensions.py`, plus the updated phase artifacts in the active test directory.
+
+What I analyzed
+
+- The phase contract and acceptance criteria, especially AC-2 and AC-3.
+- The new fallback-reporting coverage, topology-hash coverage, and selected-workflow inspection assertions.
+- The changed reporting surfaces in `autoloop/runtime/static_graph.py` and `autoloop/core/workflow_capabilities.py`, using the current decisions ledger to check intended testing strategy.
+
+What I reviewed
+
+- Deterministic fallback-path testing via monkeypatched `build_provider_outcome_schema`.
+- Coverage for topology-hash changes when route visibility/schema metadata changes.
+- Coverage for selected-workflow capability and decomposition payloads exposing compiled route metadata.
+- Whether the new tests cover the fallback-reporting path across every changed inspection surface, not only the static-graph artifacts.
+
+Key findings / decisions
+
+- Recorded one blocking finding in [feedback.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/this-is-the-final-standalone-handoff-spec-it-sup-5b5e7cd0/runs/run-20260506T185744Z-092935c3/artifacts/test/phases/runtime-and-inspection-alignment/feedback.md): `TST-001`.
+- Updated [criteria.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/this-is-the-final-standalone-handoff-spec-it-sup-5b5e7cd0/runs/run-20260506T185744Z-092935c3/artifacts/test/phases/runtime-and-inspection-alignment/criteria.md) to leave coverage/regression/edge-case boxes unchecked.
+- The blocking gap is that the forced simplified-schema fallback is only tested for `workflow_static_step_graph_payload()` and `compile_report.md`; the phase also changed selected-workflow inspection payloads in `autoloop/core/workflow_capabilities.py`, but those tests only assert `schema_simplified is False`, so a regression that fails to surface `True` there would pass.
+
+Open issues / next step
+
+- Add a deterministic forced-fallback test for `selected_workflow_capability_payload()` and `selected_workflow_decomposition_surface_payload()`, reusing the same monkeypatched schema-builder approach already documented in `decisions.txt`.
+- After that, rerun the audit; the rest of the added coverage looks directionally correct and stable.
+
+<loop-control>
+{"schema":"docloop.loop_control/v1","kind":"promise","promise":"INCOMPLETE"}
+</loop-control>

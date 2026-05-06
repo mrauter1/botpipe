@@ -8,7 +8,7 @@ from pydantic import BaseModel
 import autoloop.simple as simple
 from autoloop.core.compiler import compile_workflow
 from autoloop.core.engine import Engine
-from autoloop.core.primitives import FINISH, Outcome
+from autoloop.core.primitives import FINISH, Event, Outcome
 from autoloop.core.provider_policy import (
     PermissionPolicy,
     ProviderPolicy,
@@ -211,6 +211,47 @@ def test_python_step_policy_affects_inline_operations_and_explicit_override_wins
     assert execution.result.state.verdict == "ship"
 
 
+def test_workflow_step_policy_applies_to_inline_operations_in_hooks(tmp_path: Path) -> None:
+    workflow_policy = ProviderPolicy(
+        permissions=PermissionPolicy(mode="full_auto_sandboxed"),
+    )
+    step_policy = ProviderPolicy(permissions=PermissionPolicy(mode="ask"))
+
+    class ChildWorkflow(simple.Workflow):
+        @simple.python_step
+        def noop(_ctx):
+            return None
+
+    def before_launch(_ctx):
+        simple.llm("Hook operation.")
+        return Event("done")
+
+    launch = simple.workflow_step(
+        ChildWorkflow,
+        message="Run child workflow.",
+        routes={"done": simple.FINISH},
+        policy=step_policy,
+    )
+    launch.before = before_launch
+
+    class ParentWorkflow(simple.Workflow):
+        policy = workflow_policy
+        launch = launch
+
+    provider = ScriptedLLMProvider(operation_turns=["hook result"])
+    execution = _run_with_runner(
+        tmp_path,
+        ParentWorkflow,
+        provider,
+        task_id="workflow-step-hook-policy",
+    )
+
+    assert execution.result.terminal == FINISH
+    assert [call.kind for call in provider.calls] == ["operation"]
+    assert provider.calls[0].policy is not None
+    assert provider.calls[0].policy.permissions.mode == "ask"
+
+
 def test_strict_policy_rejects_unsafe_step_and_inline_overrides_with_same_violation(tmp_path: Path) -> None:
     strict = StrictProviderPolicy(
         sandbox=StrictSandboxPolicy(allowed_modes=("read_only", "workspace_write")),
@@ -327,3 +368,37 @@ def test_operation_replay_fingerprint_changes_when_policy_changes(tmp_path: Path
     assert result.state.summary == "first result"
     assert runtime_events[-1][0] == "operation_replay_fingerprint_mismatch"
     assert runtime_events[-1][1]["behavior"] == "warn"
+
+
+def test_direct_engine_run_propagates_authored_workflow_policy_without_manual_resolver(tmp_path: Path) -> None:
+    workflow_policy = ProviderPolicy(permissions=PermissionPolicy(mode="ask"))
+
+    class DirectEngineWorkflow(simple.Workflow):
+        policy = workflow_policy
+        draft = simple.step("Draft.", routes={"done": simple.FINISH})
+
+    task_folder = tmp_path / "task"
+    run_folder = tmp_path / "run"
+    task_folder.mkdir(parents=True, exist_ok=True)
+    run_folder.mkdir(parents=True, exist_ok=True)
+    provider = ScriptedLLMProvider(
+        llm_turns=[Outcome(raw_output='{"tag":"done"}', tag="done")]
+    )
+
+    result = Engine(
+        DirectEngineWorkflow,
+        provider=provider,
+        session_store=InMemorySessionStore(),
+        checkpoint_store=InMemoryCheckpointStore(),
+    ).run(
+        task_id="direct-engine-policy",
+        run_id="run-direct-engine-policy",
+        task_folder=task_folder,
+        run_folder=run_folder,
+        root=tmp_path,
+    )
+
+    assert result.terminal == FINISH
+    assert [call.kind for call in provider.calls] == ["step"]
+    assert provider.calls[0].policy is not None
+    assert provider.calls[0].policy.permissions.mode == "ask"

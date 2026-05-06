@@ -18,7 +18,7 @@ from pydantic import BaseModel, TypeAdapter
 from .artifacts import Artifact, ArtifactHandle, ResolvedArtifacts, render_runtime_template, resolve_artifact_template
 from .branch_groups.runtime import BranchGroupRuntime
 from .compiler import CompiledRoute, CompiledStep, CompiledWorkflow, compile_workflow
-from .context import Context, context_runtime
+from .context import Context, _resolve_context_root, context_runtime
 from .engine_collaborators import (
     ArtifactGuard,
     CheckpointManager,
@@ -245,6 +245,18 @@ class Engine:
     ) -> RunResult:
         resolved_workflow_folder = workflow_folder or task_folder / f"wf_{self.compiled.workflow_name}"
         resolved_package_folder = package_folder or (root.resolve() if root is not None else task_folder)
+        previous_provider_policy_resolver = self.provider_policy_resolver
+        if previous_provider_policy_resolver is None:
+            from autoloop.runtime.provider_policy_resolver import create_provider_policy_resolver
+
+            self.provider_policy_resolver = create_provider_policy_resolver(
+                workflow_policy=self.compiled.provider_policy,
+                workspace_root=_resolve_context_root(
+                    root=root,
+                    task_folder=task_folder,
+                    package_folder=resolved_package_folder,
+                ),
+            )
         workflow_instance = self.compiled.workflow_cls()
         binding = self._build_run_binding(
             task_id=task_id,
@@ -725,6 +737,8 @@ class Engine:
                 if fatal_error is not None:
                     raise fatal_error from exc
             raise
+        finally:
+            self.provider_policy_resolver = previous_provider_policy_resolver
 
     def resume(
         self,
