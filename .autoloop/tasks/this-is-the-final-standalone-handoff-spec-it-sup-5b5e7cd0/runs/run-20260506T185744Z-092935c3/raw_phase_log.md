@@ -1170,3 +1170,165 @@ Open issues / next step
 <loop-control>
 {"schema":"docloop.loop_control/v1","kind":"promise","promise":"COMPLETE"}
 </loop-control>
+
+
+---
+run_id=run-20260506T185744Z-092935c3 | entry=session_turn | pair=implement | phase=producer | cycle=1 | attempt=1 | thread_id=019dfeed-ec76-7aa0-818d-b53b7259845b
+---
+provider=codex
+mode=start
+template=/home/rauter/.local/share/pipx/venvs/autoloop/lib/python3.12/site-packages/autoloop/templates/implement_producer.md
+session_id=019dfeed-ec76-7aa0-818d-b53b7259845b
+
+
+---
+run_id=run-20260506T185744Z-092935c3 | entry=phase_output | pair=implement | phase=producer | process=codex-agent | cycle=1 | attempt=1 | thread_id=019dfeed-ec76-7aa0-818d-b53b7259845b
+---
+I’m treating this as the tests-and-docs migration phase only. First I’m reading the phase artifacts, current repo state, and the route/provider test and doc surfaces that the previous phases likely changed.
+
+The worktree is dirty in many unrelated paths, including broad renames. I’m ignoring that blast radius and focusing on the current `tests/`, docs, and route/provider surfaces that match this phase.
+
+I’ve confirmed the core code already has the new route metadata and canonical outcome contract. The remaining work is mostly stale tests and docs that still talk in `ControlRoutes`, `provider_visible`, or top-level `question`/`reason` terms.
+
+I’m narrowing to the highest-signal regressions: validation tests still assert injected control-route behavior, and the doc guard tests still encode the old “question is the only default runtime control route” language. Next I’m checking the current doc text before patching both sides together.
+
+`pytest` is not on the shell PATH here, so I’m switching to `python -m pytest` and using the failing subset to get exact breakpoints before editing.
+
+The targeted subset is running now. There are multiple failures concentrated after the route/provider migrations, which is enough to patch against instead of guessing from the old assertions.
+
+The failures split cleanly into two groups: stale expectations about reporting payload shape, and a smaller set where I need to verify whether the runtime behavior or the test assumption is wrong. I’m inspecting the actual compiled/report payloads and finalization records now.
+
+I’ve verified a few of the mismatches already: some are definitely stale assertions against additive compatibility fields that are now intentionally empty, and some contract tests are asserting old transition bookkeeping that the current runtime no longer uses. I’m checking exact emitted values so the updates are precise rather than broad.
+
+I’ve got the concrete edit list now. I’m patching two small runtime regressions first, then I’ll update the contract tests and the public docs/prompt wording against the canonical route-helper and `outcome.route_fields` model.
+
+I’ve patched the runtime side. Next I’m updating the stale assertions: pair-step short-circuit bookkeeping, provider-attempt event ordering, child workflow fallback mapping, and the verifier contract’s question-route required-write expectations.
+
+I’m switching to the public-facing surface now. The docs still teach the old “question-only default control route” story, so I’m rewriting those sections to match the compiled-route model and then tightening the doc tests around that wording.
+
+The shared READMEs are updated. I’m doing one safe bulk wording pass across the prompt bodies now because dozens of workflow prompts still repeat the old “question is the only default route” sentence verbatim.
+
+The remaining prompt/doc churn is repetitive, so I’m applying narrow bulk replacements for the exact legacy phrases rather than hand-editing dozens of workflow files. The goal is only to remove the old route-control wording, not to rewrite workflow-specific guidance wholesale.
+
+The patched subset is running now. This pass should tell me whether the reporting fix and before-producer hook path resolved the contract regressions, and whether the doc guards are consistent with the new wording.
+
+The route-table reporting fix exposed one older assumption in artifact validation: the engine was reading only explicit route writes once `step.route_table` existed. I’m correcting that now so compiled step metadata and artifact enforcement stay consistent.
+
+The contract/reporting/doc subset is clean now. I’m doing one broader pass with the main validation and provider-boundary suites for this phase so I don’t leave a stale assertion or regression in the adjacent surfaces.
+
+I’ve finished the code and doc changes. I’m recording the non-obvious outcomes in the run ledger and phase notes now so later turns don’t drift on the reporting and pair-hook semantics that changed here.
+
+Scope considered
+
+- Phase-local `tests-and-docs-migration` work only: adjacent reporting/runtime regressions that blocked the phase, regression tests, public docs, workflow-package docs, and prompt wording.
+
+What I analyzed
+
+- Phase artifacts, plan, and decisions ledger.
+- Current route/provider implementation, especially compiled route reporting and pair-step hook execution.
+- Failing contract/static-graph/doc tests against the post-migration code.
+- Public docs and prompt files still using the old question-only control-route wording.
+
+What I changed
+
+- Fixed two runtime/reporting regressions:
+  - populated `CompiledStep.route_table` during compilation so static graph/topology/compile-report/provider-schema reporting read real compiled routes
+  - added `before_producer` execution for pair steps and kept hook-originated pair short-circuit events with `candidate_route=None`
+- Restored artifact validation behavior to keep using effective required writes even when `route_table` is present.
+- Updated contract tests for:
+  - `provider_policy_resolved` event ordering
+  - child-workflow `AWAIT_INPUT` fallback mapping
+  - question-route required-write expectations under helper-route defaults
+- Updated docs and prompt guidance to teach:
+  - everything is a route
+  - `GLOBAL` helper-route defaults
+  - `outcome.tag` / `outcome.payload` / `outcome.route_fields`
+  - `provider_visibility="hidden"` as the preferred hidden-route authoring surface
+- Reworded repeated workflow prompt/doc phrases in `autoloop/workflows/*/prompts/*.md`, `autoloop/workflows/*/prompts/README.md`, and `docs/workflows/*.md` to remove the old question-only control-route framing.
+
+Key findings / decisions
+
+- The empty `compiled_routes` / `compiled_route_tags` reporting output was a real regression, not a stale test.
+- Pair-step `before_producer` hooks were compiled but never executed; that is now fixed.
+- Helper-route question defaults should not inherit artifact-level required writes in provider contracts; only effective route validation at runtime enforces those when appropriate.
+- I recorded the non-obvious reporting and pair-hook decisions in the run `decisions.txt` and updated the phase `implementation_notes.md`.
+
+Open issues / next step
+
+- Targeted verification passed:
+  - `tests/runtime/test_runtime_static_graph.py`
+  - `tests/contract/test_engine_contracts.py`
+  - `tests/test_architecture_baseline_docs.py`
+  - `tests/unit/test_validation.py`
+  - `tests/unit/test_provider_boundary_core.py`
+- Result: `328 passed`, with 1 pre-existing warning in `tests/unit/test_provider_boundary_core.py` about an intentionally un-awaited coroutine fixture.
+
+
+---
+run_id=run-20260506T185744Z-092935c3 | entry=session_turn | pair=implement | phase=verifier | cycle=1 | attempt=1 | thread_id=019dfeed-ec76-7aa0-818d-b53b7259845b
+---
+provider=codex
+mode=resume
+template=/home/rauter/.local/share/pipx/venvs/autoloop/lib/python3.12/site-packages/autoloop/templates/implement_verifier.md
+session_id=019dfeed-ec76-7aa0-818d-b53b7259845b
+
+
+---
+run_id=run-20260506T185744Z-092935c3 | entry=phase_output | pair=implement | phase=verifier | process=codex-agent | cycle=1 | attempt=1 | thread_id=019dfeed-ec76-7aa0-818d-b53b7259845b
+---
+I’m reviewing the phase-local implementation against the request, criteria, and run decisions first, then I’ll update the reviewer artifacts with either blocking findings or a clean pass.
+
+I’m auditing the changed runtime, test, and doc surfaces against the phase criteria, then I’ll record the review outcome in the phase artifacts only.
+
+The runtime fixes are small enough to review directly, so I’m checking the exact code paths that changed and then I’ll verify the phase criteria against the touched tests and docs.
+
+The producer committed their work, so I’m reviewing the resulting code in place rather than a working-tree diff. I’m checking the exact compiler and engine branches that were called out in the implementation notes.
+
+I’m checking the migration-specific doc requirement now: the phase is not just about mentioning the new model, it also has to explicitly demote the old ControlRoutes and top-level `question`/`reason` shape to compatibility-only status.
+
+The doc pass is where the main gap appears so far. I’m confirming whether the old `ControlRoutes` and top-level `question` / `reason` compatibility story is actually documented anywhere, because AC-2 requires that explicitly, not just omission of the old wording.
+
+I found stale prompt-contract wording in `Workflow_Instructions.md`; I’m checking whether that’s isolated or repeated elsewhere before I write the finding so the fix direction stays precise.
+
+I have one material issue: the central workflow instruction contract still teaches reserved/control-route behavior and route-specific top-level fields, which conflicts with the new canonical `outcome.route_fields` model. I’m doing one last pass for anything else at the same severity, then I’ll write the review artifacts.
+
+The targeted tests pass, but they also confirm the validation gap: the doc regression suite never checks the central `Workflow_Instructions.md` wording that still conflicts with the new provider contract. I’m recording that as the blocking issue.
+
+I’m writing the review artifact now. The code-path fixes look sound, but the shared workflow instruction contract still contradicts the migrated route-helper/provider-output model, so this pass is `INCOMPLETE`.
+
+Scope considered
+
+- Phase-local review for `tests-and-docs-migration`.
+- Touched runtime/compiler fixes, updated tests, and documentation/prompt-contract surfaces relevant to the standalone route-helper spec.
+
+What I analyzed
+
+- Active phase artifacts: `criteria.md`, `feedback.md`, `implementation_notes.md`.
+- Run-local decisions ledger for the latest non-obvious implementation decisions.
+- Current compiled-step/runtime code in `autoloop/core/compiler.py`, `autoloop/core/engine.py`, and `autoloop/core/engine_collaborators.py`.
+- Changed regression surfaces in `tests/contract/test_engine_contracts.py`, `tests/test_architecture_baseline_docs.py`, `docs/authoring.md`, `docs/architecture.md`, and `Workflow_Instructions.md`.
+
+What I reviewed
+
+- Confirmed the runtime fixes are present:
+  - compiled steps now carry `route_table`
+  - pair steps now execute `before_producer`
+  - artifact validation still resolves effective required writes
+- Verified targeted tests pass:
+  - `./.venv/bin/python -m pytest -q tests/test_architecture_baseline_docs.py tests/contract/test_engine_contracts.py -q`
+- Audited the shared prompt-contract wording in `Workflow_Instructions.md` against AC-2 and the standalone spec.
+
+Key findings / decisions
+
+- `IMP-001` is blocking and was appended to [feedback.md](</home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/this-is-the-final-standalone-handoff-spec-it-sup-5b5e7cd0/runs/run-20260506T185744Z-092935c3/artifacts/implement/phases/tests-and-docs-migration/feedback.md>).
+- The main issue is documentation/prompt-contract drift, not the runtime fixes themselves: [Workflow_Instructions.md](</home/rauter/autoloop_v3_bkp/autoloop_v3/Workflow_Instructions.md:203>) still teaches “helper routes and compatibility routes”, top-level blocker/failure/question fields, and “Reserved routes are always” `question`/`blocked`/`failed`, which conflicts with the migrated canonical `outcome.route_fields` model and does not explicitly demote `ControlRoutes` plus top-level `question` / `reason` to compatibility-only behavior.
+- [criteria.md](</home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/this-is-the-final-standalone-handoff-spec-it-sup-5b5e7cd0/runs/run-20260506T185744Z-092935c3/artifacts/implement/phases/tests-and-docs-migration/criteria.md>) remains unchecked because the blocking finding means the phase is not yet complete.
+
+Open issues / next step
+
+- Update `Workflow_Instructions.md` to teach the canonical route-table-driven contract and explicitly mark `ControlRoutes` plus top-level `question` / `reason` as compatibility-only.
+- Extend the doc regression suite so that shared instruction file is covered alongside the public docs, then re-run the targeted tests.
+
+<loop-control>
+{"schema":"docloop.loop_control/v1","kind":"promise","promise":"INCOMPLETE"}
+</loop-control>
