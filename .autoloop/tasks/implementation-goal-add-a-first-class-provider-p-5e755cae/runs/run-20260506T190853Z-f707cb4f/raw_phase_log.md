@@ -1091,3 +1091,127 @@ Open issues / next step
 <loop-control>
 {"schema":"docloop.loop_control/v1","kind":"promise","promise":"COMPLETE"}
 </loop-control>
+
+
+---
+run_id=run-20260506T190853Z-f707cb4f | entry=session_turn | pair=test | phase=producer | cycle=1 | attempt=1 | thread_id=019dfed8-551c-7c93-94aa-0e9110d8f650
+---
+provider=codex
+mode=resume
+template=/home/rauter/.local/share/pipx/venvs/autoloop/lib/python3.12/site-packages/autoloop/templates/test_producer.md
+session_id=019dfed8-551c-7c93-94aa-0e9110d8f650
+
+
+---
+run_id=run-20260506T190853Z-f707cb4f | entry=phase_output | pair=test | phase=producer | process=codex-agent | cycle=1 | attempt=1 | thread_id=019dfed8-551c-7c93-94aa-0e9110d8f650
+---
+I’m auditing the current phase tests against the implementation and reviewer history first. Then I’ll add any missing regression that still matters, and I’ll update the phase test artifacts with the exact coverage map.
+
+There’s one adjacent regression still worth pinning down in tests: policy cleanup across step boundaries. I’m adding a case where a workflow-step hook must fall back to the workflow default instead of inheriting the previous step’s resolved policy.
+
+The new edge-case regression passed. I’m writing the coverage map and the concise test feedback now, and I’ll record the cleanup-specific test intent in the current test-turn decisions block so later phases don’t drop it.
+
+Scope considered
+
+- Phase-local test work for `policy-resolution-propagation`.
+- Focused on the changed policy-resolution seams, reviewer-fixed regressions, and adjacent replay/topology behavior with material regression risk.
+- Left provider emission and CLI mapping coverage out of scope.
+
+What I analyzed
+
+- Current phase tests in [tests/runtime/test_provider_policy_steps.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/tests/runtime/test_provider_policy_steps.py).
+- The implementation-side fixes for resolver fallback and per-step policy cleanup.
+- Phase artifacts [test_strategy.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/implementation-goal-add-a-first-class-provider-p-5e755cae/runs/run-20260506T190853Z-f707cb4f/artifacts/test/phases/policy-resolution-propagation/test_strategy.md) and [feedback.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/implementation-goal-add-a-first-class-provider-p-5e755cae/runs/run-20260506T190853Z-f707cb4f/artifacts/test/phases/policy-resolution-propagation/feedback.md).
+- The current run-local decisions block for this test turn.
+
+What I changed
+
+- Added one more deterministic regression in [tests/runtime/test_provider_policy_steps.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/tests/runtime/test_provider_policy_steps.py):
+  - `test_workflow_step_hook_does_not_inherit_stale_policy_from_previous_step`
+- Updated [test_strategy.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/implementation-goal-add-a-first-class-provider-p-5e755cae/runs/run-20260506T190853Z-f707cb4f/artifacts/test/phases/policy-resolution-propagation/test_strategy.md) with an explicit behavior-to-test coverage map, invariants, edge cases, stabilization notes, and known gaps.
+- Appended a concise summary entry to [feedback.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/implementation-goal-add-a-first-class-provider-p-5e755cae/runs/run-20260506T190853Z-f707cb4f/artifacts/test/phases/policy-resolution-propagation/feedback.md).
+- Appended the cleanup-specific coverage decision under the current test-turn header in [decisions.txt](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/implementation-goal-add-a-first-class-provider-p-5e755cae/runs/run-20260506T190853Z-f707cb4f/decisions.txt).
+
+Key findings / decisions
+
+- The main remaining adjacent risk after the implementation fix was stale `Context._provider_policy` leakage across step boundaries; that is now pinned with a dedicated cross-step regression.
+- Coverage now explicitly spans:
+  - workflow policy inheritance
+  - step override behavior
+  - workflow-step hook binding
+  - direct-engine fallback resolution
+  - strict-policy parity for step vs inline paths
+  - topology hash participation
+  - replay fingerprint participation with preserved mismatch behavior
+- All added/updated tests remain deterministic via `ScriptedLLMProvider`, in-memory stores, and temp workspaces only.
+
+Open issues / next step
+
+- No phase-local blocker found in the covered seams.
+- Validation run:
+  - `./.venv/bin/python -m pytest -q tests/runtime/test_provider_policy_steps.py`
+  - `./.venv/bin/python -m pytest -q tests/contract/test_engine_contracts.py -k 'operation_replay_fingerprint or operation_replay_override or llm_and_classify_step_replay_across_reruns'`
+
+
+---
+run_id=run-20260506T190853Z-f707cb4f | entry=session_turn | pair=test | phase=verifier | cycle=1 | attempt=1 | thread_id=019dfed8-551c-7c93-94aa-0e9110d8f650
+---
+provider=codex
+mode=resume
+template=/home/rauter/.local/share/pipx/venvs/autoloop/lib/python3.12/site-packages/autoloop/templates/test_verifier.md
+session_id=019dfed8-551c-7c93-94aa-0e9110d8f650
+
+
+---
+run_id=run-20260506T190853Z-f707cb4f | entry=phase_output | pair=test | phase=verifier | process=codex-agent | cycle=1 | attempt=1 | thread_id=019dfed8-551c-7c93-94aa-0e9110d8f650
+---
+Auditing the phase-local test work now. I’m checking the added regressions against the implementation and the phase acceptance criteria first, then I’ll update the test audit artifacts based on whether any coverage gap remains.
+
+The strategy and tests line up well so far. I’m checking the remaining tail of the test file for the direct-engine case and then I’ll mark the audit artifacts if there isn’t a material gap.
+
+The phase-local coverage is solid. I don’t see a material gap or flake risk in scope, so I’m marking the audit criteria complete and appending a concise no-findings audit note.
+
+Scope considered
+
+- Phase-local audit for `policy-resolution-propagation` test work.
+- Focused on the changed policy-resolution behavior, the reviewer-driven regression fixes, and adjacent replay/topology coverage with material regression risk.
+- Left later-phase provider emission behavior out of scope.
+
+What I analyzed
+
+- [test_strategy.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/implementation-goal-add-a-first-class-provider-p-5e755cae/runs/run-20260506T190853Z-f707cb4f/artifacts/test/phases/policy-resolution-propagation/test_strategy.md)
+- [feedback.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/implementation-goal-add-a-first-class-provider-p-5e755cae/runs/run-20260506T190853Z-f707cb4f/artifacts/test/phases/policy-resolution-propagation/feedback.md)
+- [tests/runtime/test_provider_policy_steps.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/tests/runtime/test_provider_policy_steps.py)
+- The current decisions ledger entries for this phase.
+
+What I reviewed
+
+- Verified the test file now covers:
+  - workflow default inheritance
+  - step overrides
+  - reusable policy reuse
+  - inline `policy=` override behavior
+  - strict-policy rejection parity
+  - workflow-step hook binding
+  - cross-step cleanup of `Context._provider_policy`
+  - topology hash participation
+  - replay fingerprint participation
+  - direct-engine fallback resolver behavior
+- Re-ran:
+  - `./.venv/bin/python -m pytest -q tests/runtime/test_provider_policy_steps.py`
+  - `./.venv/bin/python -m pytest -q tests/contract/test_engine_contracts.py -k 'operation_replay_fingerprint or operation_replay_override or llm_and_classify_step_replay_across_reruns'`
+
+Key findings / decisions
+
+- No blocking or non-blocking audit gap remains in the phase-local test scope.
+- The added cross-step cleanup regression materially improves unintended-behavior detection for the reviewer-fixed binding seam.
+- The strategy artifact is aligned with the actual tests and documents both edge cases and stabilization choices clearly.
+
+Open issues / next step
+
+- No open issue in this audit scope.
+- Updated `criteria.md` to all checked and appended a concise no-findings audit note to `feedback.md`.
+
+<loop-control>
+{"schema":"docloop.loop_control/v1","kind":"promise","promise":"COMPLETE"}
+</loop-control>
