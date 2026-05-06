@@ -1784,3 +1784,41 @@ Updated the plan artifacts to address both verifier blockers.
 [plan.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/this-is-the-final-standalone-handoff-spec-it-sup-5b5e7cd0/runs/run-20260506T204256Z-05282838/artifacts/plan/plan.md) now makes the helper-route exception concrete: helper-generated default question/blocked/failed route-fields contracts must stay compatible without `jsonschema`, custom helper overrides must still fail closed, and both paths are explicitly covered in the validation plan. It also makes the unsupported-backend fallback documentation mandatory, naming `docs/authoring.md` and `controlroutes.md` as required deliverables.
 
 [phase_plan.yaml](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/this-is-the-final-standalone-handoff-spec-it-sup-5b5e7cd0/runs/run-20260506T204256Z-05282838/artifacts/plan/phase_plan.yaml), [feedback.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/this-is-the-final-standalone-handoff-spec-it-sup-5b5e7cd0/runs/run-20260506T204256Z-05282838/artifacts/plan/feedback.md), and [decisions.txt](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/this-is-the-final-standalone-handoff-spec-it-sup-5b5e7cd0/runs/run-20260506T204256Z-05282838/decisions.txt) were updated to reflect those corrections. No source code or tests were run on this planning turn.
+
+
+---
+run_id=run-20260506T204256Z-05282838 | entry=session_turn | pair=plan | phase=verifier | cycle=2 | attempt=1 | thread_id=019dff07-8be8-7403-85db-f40ae08ce678
+---
+provider=codex
+mode=resume
+template=/home/rauter/.local/share/pipx/venvs/autoloop/lib/python3.12/site-packages/autoloop/templates/plan_verifier.md
+session_id=019dff07-8be8-7403-85db-f40ae08ce678
+
+
+---
+run_id=run-20260506T204256Z-05282838 | entry=phase_output | pair=plan | phase=verifier | process=codex-agent | cycle=2 | attempt=1 | thread_id=019dff07-8be8-7403-85db-f40ae08ce678
+---
+I’m re-verifying only the revised plan surfaces and the previous blockers. The main question now is whether the new helper-route coverage and the named documentation deliverables fully close the earlier gaps without introducing any new compatibility or scope drift.
+
+The revised plan closes the earlier gaps. I’m marking the criteria accordingly and appending one non-blocking recheck note so the feedback history shows the blockers were actually resolved on the second pass.
+
+Scope considered
+Run-local verification of the revised planning artifacts against the immutable request, raw-log history, current decisions ledger, and the specific repo code paths that motivated the prior blocking findings.
+
+What I analyzed
+I re-checked the revised helper-route compatibility treatment, missing-`jsonschema` regression coverage, required unsupported-backend fallback documentation, compatibility notes, rollback language, and phase decomposition. I also confirmed `phase_plan.yaml` parses and that runtime-owned metadata stayed unchanged.
+
+What I reviewed
+I reviewed [plan.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/this-is-the-final-standalone-handoff-spec-it-sup-5b5e7cd0/runs/run-20260506T204256Z-05282838/artifacts/plan/plan.md), [phase_plan.yaml](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/this-is-the-final-standalone-handoff-spec-it-sup-5b5e7cd0/runs/run-20260506T204256Z-05282838/artifacts/plan/phase_plan.yaml), [feedback.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/this-is-the-final-standalone-handoff-spec-it-sup-5b5e7cd0/runs/run-20260506T204256Z-05282838/artifacts/plan/feedback.md), [criteria.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/this-is-the-final-standalone-handoff-spec-it-sup-5b5e7cd0/runs/run-20260506T204256Z-05282838/artifacts/plan/criteria.md), and [decisions.txt](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/this-is-the-final-standalone-handoff-spec-it-sup-5b5e7cd0/runs/run-20260506T204256Z-05282838/decisions.txt). I updated the criteria checklist and appended a non-blocking recheck note to the feedback history.
+
+Key findings / decisions
+No remaining blocking findings. The previous blockers are now explicitly covered:
+`PLAN-001` is closed by helper-default-versus-custom-override acceptance criteria and missing-`jsonschema` regression coverage.
+`PLAN-002` is closed by required documentation deliverables in `docs/authoring.md` and `controlroutes.md`, with the strict post-parse validation invariant called out.
+
+Open issues / next step
+The planning artifacts are consistent, concrete, and ready to hand off to implementation.
+
+<loop-control>
+{"schema":"docloop.loop_control/v1","kind":"promise","promise":"COMPLETE"}
+</loop-control>

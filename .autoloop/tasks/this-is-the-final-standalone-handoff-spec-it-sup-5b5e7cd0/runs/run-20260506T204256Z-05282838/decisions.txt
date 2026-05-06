@@ -3,3 +3,6 @@ Custom raw route payload_schema and custom route_fields_schema mappings must fai
 Builtin helper question/blocked/failed route-fields behavior should stay compatible only where existing handwritten engine validation is semantically equivalent to the effective route contract.
 Provider-side structured-output fallback may relax generation guidance only; route legality, payload validation, and route-fields validation remain mandatory post-parse.
 Structured-output delivery mode must be observable in backend metadata or request assertions so tests can distinguish full schema delivery, simplified-schema delivery, and prompt-only fallback.
+<autoloop-decisions-header version="1" block_seq="2" owner="planner" phase_id="task-global" pair="plan" turn_seq="2" run_id="run-20260506T204256Z-05282838" ts="2026-05-06T20:47:57.006022+00:00" />
+Helper-route compatibility under missing jsonschema must be covered explicitly: helper-generated default question/blocked/failed route-fields contracts stay allowed only when the handwritten engine validation is semantically equivalent, while custom helper overrides still fail closed.
+Unsupported-backend structured-output fallback must be a required documented behavior in docs/authoring.md and controlroutes.md, not just an implicit test or metadata convention.

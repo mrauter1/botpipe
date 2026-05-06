@@ -29,7 +29,7 @@ from autoloop.runtime.provider_backends import resolve_provider_backend
 import autoloop.runtime.provider_backends as provider_backends
 
 
-CLAUDE_HEADLESS_HELP = "--print\n-p\n--output-format\n--resume\n--model\n"
+CLAUDE_HEADLESS_HELP = "--print\n-p\n--output-format\n--resume\n--model\n--settings\n"
 
 
 class _StubTransport:
@@ -482,7 +482,7 @@ def test_resolve_provider_backend_rejects_claude_effort_when_cli_does_not_suppor
         "run",
         lambda command, **_: _completed(
             args=command,
-            stdout="--print\n-p\n--output-format\n--resume\n--model\n--allowedTools\n--dangerously-skip-permissions\n",
+            stdout="--print\n-p\n--output-format\n--resume\n--model\n--settings\n--allowedTools\n--dangerously-skip-permissions\n",
         ),
     )
     config = replace(

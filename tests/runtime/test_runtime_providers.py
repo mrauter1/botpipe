@@ -57,8 +57,11 @@ import autoloop.runtime.providers.codex as codex_runtime_provider
 
 CODEX_START_HELP = "--json\n-m, --model <MODEL>\n--dangerously-bypass-approvals-and-sandbox\n"
 CODEX_RESUME_HELP = "--json\n-m, --model <MODEL>\n--dangerously-bypass-approvals-and-sandbox\n"
-CLAUDE_HEADLESS_HELP = "--print\n-p\n--output-format\n--resume\n--model\n"
-CLAUDE_HELP = "--print\n-p\n--output-format\n--resume\n--model\n--allowedTools\n--dangerously-skip-permissions\n"
+CLAUDE_HEADLESS_HELP = "--print\n-p\n--output-format\n--resume\n--model\n--settings\n"
+CLAUDE_HELP = (
+    "--print\n-p\n--output-format\n--resume\n--model\n--settings\n"
+    "--allowedTools\n--dangerously-skip-permissions\n"
+)
 
 
 @pytest.fixture(autouse=True)

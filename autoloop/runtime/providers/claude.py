@@ -353,6 +353,8 @@ def _prepare_turn_command(
             command.extend(["--effort", config.effort])
     if emission is None:
         command.extend(claude_permission_args(config))
+    elif config.permission_strategy == "allow_core_tools":
+        command.extend(["--allowedTools", "Read,Write,Edit,Glob,Grep,Bash"])
     return emission, command, model, effort
 
 
