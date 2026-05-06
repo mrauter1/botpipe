@@ -839,3 +839,48 @@ The main added guardrail is now explicit in tests: the temporary sync compatibil
 Open issues / next step
 
 `python3 -m py_compile tests/contract/test_engine_contracts.py` passed. I could not run `pytest` here because it is not installed in this environment. The next step is the test-phase verifier/auditor pass against the updated repo tests and the new `test_strategy.md` coverage map.
+
+
+---
+run_id=run-20260506T130608Z-37f1c786 | entry=session_turn | pair=test | phase=verifier | cycle=1 | attempt=1 | thread_id=019dfd7a-d4d6-7373-93d8-1421e8ce9184
+---
+provider=codex
+mode=resume
+template=/home/rauter/.local/share/pipx/venvs/autoloop/lib/python3.12/site-packages/autoloop/templates/test_verifier.md
+session_id=019dfd7a-d4d6-7373-93d8-1421e8ce9184
+
+
+---
+run_id=run-20260506T130608Z-37f1c786 | entry=phase_output | pair=test | phase=verifier | process=codex-agent | cycle=1 | attempt=1 | thread_id=019dfd7a-d4d6-7373-93d8-1421e8ce9184
+---
+I’m auditing the test-phase coverage against the clarified helper exception and the updated provider/runtime tests, then I’ll either clear the phase or record any concrete coverage gap in the audit artifacts.
+
+The coverage is coherent with the clarified intent and the changed implementation. I’m marking the audit complete and appending a concise audit note so the artifact reflects that no blocking test gaps remain.
+
+The audit artifacts are updated. I’m doing a final consistency check so the checked criteria and the audit note line up with a `COMPLETE` result.
+
+Scope considered
+
+Phase-local `provider-contract-cutover` test coverage only: the clarified `llm()` / `classify()` compatibility exception, the added active-loop failure-path contract test, the existing outside-loop unit coverage, the async subprocess transport tests, and the phase test artifacts.
+
+What I analyzed
+
+I reviewed [test_strategy.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/full-revised-standalone-spec-autoloop-v3-async-n-3c402473/runs/run-20260506T130608Z-37f1c786/artifacts/test/phases/provider-contract-cutover/test_strategy.md), [feedback.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/full-revised-standalone-spec-autoloop-v3-async-n-3c402473/runs/run-20260506T130608Z-37f1c786/artifacts/test/phases/provider-contract-cutover/feedback.md), the clarified decisions in `decisions.txt`, and the repo tests covering the rendered-provider helper path and async transport behavior in `tests/contract/test_engine_contracts.py`, `tests/unit/test_provider_boundary_core.py`, `tests/runtime/test_provider_backends.py`, and `tests/runtime/test_runtime_providers.py`.
+
+What I reviewed
+
+I updated [criteria.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/full-revised-standalone-spec-autoloop-v3-async-n-3c402473/runs/run-20260506T130608Z-37f1c786/artifacts/test/phases/provider-contract-cutover/criteria.md) to mark all audit criteria satisfied, and I appended [feedback.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/full-revised-standalone-spec-autoloop-v3-async-n-3c402473/runs/run-20260506T130608Z-37f1c786/artifacts/test/phases/provider-contract-cutover/feedback.md) with a non-blocking audit note confirming that no blocking coverage gaps remain.
+
+Key findings / decisions
+
+No blocking audit findings remain.
+
+The added contract test closes the material missing failure-path coverage for rendered providers that omit `operation_executor=...` in active-loop helper execution. The existing unit test preserves the clarified outside-loop async-transport preference, and the strategy artifact now maps the clarified temporary exception and the async subprocess transport coverage explicitly.
+
+Open issues / next step
+
+The documented environment gap remains execution-only: `pytest` is unavailable here, so this audit is based on test design and artifact review rather than a local full test run. There are no remaining test-phase audit blockers.
+
+<loop-control>
+{"schema":"docloop.loop_control/v1","kind":"promise","promise":"COMPLETE"}
+</loop-control>
