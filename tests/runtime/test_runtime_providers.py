@@ -1,11 +1,13 @@
 from __future__ import annotations
 
 import asyncio
+from pathlib import Path
 import subprocess
 
 import pytest
 
 from autoloop.core.errors import ProviderExecutionError
+from autoloop.core.provider_policy import PermissionPolicy, ProviderPolicy, SandboxPolicy, WorkspaceFilesystemPolicy, WorkspacePolicy
 from autoloop.core.prompts import ResolvedPrompt
 from autoloop.core.providers.models import LLMRequest, ProducerRequest, TokenUsage, VerifierRequest
 from autoloop.core.providers.parsing import parse_outcome_json
@@ -144,6 +146,10 @@ def _rendered_turn(
     prompt_text: str = "prompt",
     session: SessionBinding | None = None,
     expected_response: str = "raw_text",
+    policy: ProviderPolicy | None = None,
+    run_folder: Path | None = None,
+    step_execution_id: str | None = None,
+    runtime_event_sink=None,
 ) -> RenderedProviderTurn:
     return RenderedProviderTurn(
         step_name=step_name,
@@ -151,6 +157,10 @@ def _rendered_turn(
         prompt_text=prompt_text,
         session=session,
         expected_response=expected_response,
+        policy=policy,
+        run_folder=run_folder,
+        step_execution_id=step_execution_id,
+        runtime_event_sink=runtime_event_sink,
     )
 
 
@@ -592,7 +602,7 @@ def test_codex_transport_sends_rendered_prompt_text_to_cli_stdin(
     monkeypatch.setattr(codex_runtime_provider.asyncio, "create_subprocess_exec", fake_create_subprocess_exec)
     transport = CodexTransport(
         commands=CodexCLICommand(
-            start_command=("codex", "exec", "--json", "--dangerously-bypass-approvals-and-sandbox", "--model", "gpt-test"),
+            start_command=("codex", "exec", "--json"),
             resume_command=("codex", "exec", "resume", "--json"),
         ),
         model="gpt-test",
@@ -603,7 +613,7 @@ def test_codex_transport_sends_rendered_prompt_text_to_cli_stdin(
         transport.run_turn(_rendered_turn(step_name="produce", prompt_text=prompt_text, session=_placeholder_session()))
     )
 
-    assert calls == [("codex", "exec", "--json", "--dangerously-bypass-approvals-and-sandbox", "--model", "gpt-test")]
+    assert calls == [("codex", "exec", "--json")]
     assert seen_inputs == [prompt_text.encode("utf-8")]
     assert result.raw_text == "producer text"
     assert result.session is not None
@@ -885,6 +895,126 @@ def test_codex_transport_rejects_cross_provider_resume() -> None:
 
     with pytest.raises(ProviderExecutionError, match="resuming across providers is forbidden"):
         asyncio.run(transport.run_turn(_rendered_turn(session=_provider_session("claude"))))
+
+
+def test_codex_transport_emits_run_scoped_policy_artifacts_and_metadata(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    prompt_text = "# Step: produce\n\nShared runtime prompt."
+    calls: list[tuple[str, ...]] = []
+    seen_envs: list[dict[str, str] | None] = []
+    seen_events: list[tuple[str, dict[str, object]]] = []
+
+    async def fake_create_subprocess_exec(*command: str, **kwargs: object) -> _AsyncProcessStub:
+        calls.append(tuple(command))
+        env = kwargs.get("env")
+        seen_envs.append(dict(env) if isinstance(env, dict) else None)
+        return _AsyncProcessStub(
+            stdout="\n".join(
+                (
+                    '{"type":"thread.started","thread_id":"codex-session-policy"}',
+                    '{"type":"item.completed","item":{"type":"agent_message","text":"producer text"}}',
+                )
+            ),
+        )
+
+    monkeypatch.setattr(codex_runtime_provider.asyncio, "create_subprocess_exec", fake_create_subprocess_exec)
+    transport = CodexTransport(
+        commands=CodexCLICommand(
+            start_command=("codex", "exec", "--json"),
+            resume_command=("codex", "exec", "resume", "--json"),
+        ),
+        model="gpt-test",
+        model_effort=None,
+    )
+    policy = ProviderPolicy(
+        permissions=PermissionPolicy(mode="full_auto_sandboxed"),
+        sandbox=SandboxPolicy(
+            mode="workspace_write",
+            workspace=WorkspacePolicy(
+                filesystem=WorkspaceFilesystemPolicy(allow_write=(".", "./build")),
+            ),
+        ),
+    )
+
+    result = asyncio.run(
+        transport.run_turn(
+            _rendered_turn(
+                step_name="produce",
+                prompt_text=prompt_text,
+                session=_placeholder_session(),
+                policy=policy,
+                run_folder=tmp_path,
+                step_execution_id="produce:1",
+                runtime_event_sink=lambda event_type, payload: seen_events.append((event_type, dict(payload))),
+            )
+        )
+    )
+
+    assert calls == [("codex", "exec", "--json")]
+    assert seen_envs and seen_envs[0] is not None
+    codex_home = Path(seen_envs[0]["CODEX_HOME"])
+    assert codex_home == tmp_path / "provider_policy" / "produce__visit-1" / "codex"
+    assert (codex_home / "config.toml").exists()
+    assert result.metadata["provider_metadata"]["policy"]["effective_policy_file"] == str(codex_home / "effective_policy.json")
+    assert result.metadata["provider_metadata"]["policy"]["capability_report_file"] == str(codex_home / "capability_report.json")
+    assert "policy_fingerprint" in result.metadata["provider_metadata"]["policy"]
+    assert [event for event, _payload in seen_events] == [
+        "provider_policy_emitted",
+        "provider_policy_capability_report",
+    ]
+
+
+def test_codex_operation_executor_uses_policy_env_and_metadata(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    seen: list[tuple[tuple[str, ...], dict[str, str] | None]] = []
+
+    def fake_run_text_subprocess(
+        command: list[str],
+        *,
+        input_text: str | None = None,
+        env=None,
+    ) -> tuple[str, str, int]:
+        seen.append((tuple(command), None if env is None else dict(env)))
+        return (
+            "\n".join(
+                (
+                    '{"type":"thread.started","thread_id":"codex-session-op"}',
+                    '{"type":"item.completed","item":{"type":"agent_message","text":"operation text"}}',
+                )
+            ),
+            "",
+            0,
+        )
+
+    monkeypatch.setattr(codex_runtime_provider, "run_text_subprocess", fake_run_text_subprocess)
+    executor = codex_runtime_provider.build_codex_operation_executor(_config())
+    policy = ProviderPolicy(
+        permissions=PermissionPolicy(mode="full_auto_sandboxed"),
+        sandbox=SandboxPolicy(
+            workspace=WorkspacePolicy(
+                filesystem=WorkspaceFilesystemPolicy(allow_write=(".", "./dist")),
+            )
+        ),
+    )
+
+    result = executor(
+        _rendered_turn(
+            step_name="operate",
+            turn_kind="operation",
+            policy=policy,
+            run_folder=tmp_path,
+            step_execution_id="operate:1",
+        )
+    )
+
+    assert seen and seen[0][0] == ("codex", "exec", "--json")
+    assert seen[0][1] is not None
+    assert seen[0][1]["CODEX_HOME"] == str(tmp_path / "provider_policy" / "operate__visit-1" / "codex")
+    assert result.metadata["provider_metadata"]["policy"]["capability_report_file"].endswith("capability_report.json")
 
 
 def test_claude_transport_sends_rendered_prompt_text_to_cli_flag(monkeypatch: pytest.MonkeyPatch) -> None:

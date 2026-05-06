@@ -13,7 +13,7 @@ from autoloop.runtime import cli
 from autoloop.runtime import providers as runtime_providers
 from autoloop.runtime.providers.claude import ClaudeProvider, ClaudeTransport, build_claude_provider
 import autoloop.runtime.providers.claude as claude_runtime_provider
-from autoloop.runtime.providers.codex import CodexProvider, CodexTransport, build_codex_provider
+from autoloop.runtime.providers.codex import CodexCLICommand, CodexProvider, CodexTransport, build_codex_provider
 import autoloop.runtime.providers.codex as codex_runtime_provider
 from autoloop.runtime.config import (
     ClaudeProviderConfig,
@@ -164,6 +164,28 @@ def test_resolve_provider_backend_raises_precise_error_for_unavailable_codex_bac
         match=r"provider 'codex' is unavailable in this environment: the 'codex' CLI was not found on PATH\.",
     ):
         resolve_provider_backend(config=_resolved_config("codex"))
+
+
+def test_resolve_codex_cli_commands_no_longer_bakes_policy_flags_or_model_overrides(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setattr(codex_runtime_provider.shutil, "which", lambda name: "/usr/bin/codex")
+
+    def fake_run(command: list[str], **_: object) -> subprocess.CompletedProcess[str]:
+        if command == ["codex", "exec", "--help"]:
+            return _completed(args=command, stdout="--json\n-m, --model <MODEL>\n--model-effort\n--full-auto\n")
+        if command == ["codex", "exec", "resume", "--help"]:
+            return _completed(args=command, stdout="--json\n-m, --model <MODEL>\n--model-effort\n--full-auto\n")
+        raise AssertionError(f"unexpected command: {command!r}")
+
+    monkeypatch.setattr(codex_runtime_provider.subprocess, "run", fake_run)
+
+    commands = codex_runtime_provider.resolve_codex_cli_commands(_resolved_config("codex"))
+
+    assert commands == CodexCLICommand(
+        start_command=("codex", "exec", "--json"),
+        resume_command=("codex", "exec", "resume", "--json"),
+    )
 
 
 def test_resolve_provider_backend_returns_rendered_codex_provider_when_capabilities_are_supported(

@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import asyncio
+from collections.abc import Callable
 import json
 import shutil
 import subprocess
@@ -11,6 +12,7 @@ from functools import lru_cache
 from typing import Any
 
 from ...core.errors import ProviderExecutionError
+from ...core.provider_policy import ProviderPolicyEmission, ProviderPolicyValidationConfig
 from ...core.providers.models import TokenUsage
 from ...core.providers.protocols import ProviderTransport
 from ...core.providers.rendered import RenderedLLMProvider
@@ -18,13 +20,16 @@ from ...core.providers.turns import ProviderTurnResult, RenderedProviderTurn
 from ...core.stores.protocols import SessionBinding
 from ..config import ConfigError, ResolvedRuntimeConfig
 from ._common import (
+    build_policy_step_key,
     build_session_binding,
     communicate_text_subprocess,
     ensure_session_provider_match,
     extract_token_usage,
     format_subprocess_streams,
+    merge_subprocess_env,
     run_text_subprocess,
 )
+from .codex_policy import CodexPolicyEmitter
 
 
 @dataclass(frozen=True, slots=True)
@@ -39,14 +44,6 @@ class CodexCLICommand:
 class _CodexExecSurface:
     start_help: str
     resume_help: str
-
-    @property
-    def start_auto_flag(self) -> str | None:
-        return _preferred_codex_auto_flag(self.start_help)
-
-    @property
-    def resume_auto_flag(self) -> str | None:
-        return _preferred_codex_auto_flag(self.resume_help)
 
     @property
     def start_supports_model(self) -> bool:
@@ -83,21 +80,10 @@ def resolve_codex_cli_commands(config: ResolvedRuntimeConfig) -> CodexCLICommand
     """Resolve the cached Codex CLI command prefixes for the given config."""
 
     surface = _probe_codex_exec_surface()
-    require_model_effort = config.provider.codex.model_effort is not None
-    _validate_codex_surface(surface, require_model_effort=require_model_effort)
+    _validate_codex_surface(surface, require_model_effort=config.provider.codex.model_effort is not None)
 
-    start_command = ["codex", "exec", "--json", surface.start_auto_flag or ""]
-    resume_command = ["codex", "exec", "resume", "--json", surface.resume_auto_flag or ""]
-
-    model = config.provider.codex.model
-    if model:
-        start_command.extend(["--model", model])
-        resume_command.extend(["--model", model])
-
-    model_effort = config.provider.codex.model_effort
-    if model_effort:
-        start_command.extend(["--model-effort", model_effort])
-        resume_command.extend(["--model-effort", model_effort])
+    start_command = ["codex", "exec", "--json"]
+    resume_command = ["codex", "exec", "resume", "--json"]
 
     return CodexCLICommand(
         start_command=tuple(arg for arg in start_command if arg),
@@ -156,25 +142,42 @@ def parse_codex_exec_json(raw_stdout: str) -> tuple[str, str | None, dict[str, A
 class CodexTransport(ProviderTransport):
     """Transport-only Codex CLI executor."""
 
-    def __init__(self, *, commands: CodexCLICommand, model: str | None, model_effort: str | None) -> None:
+    def __init__(
+        self,
+        *,
+        commands: CodexCLICommand,
+        model: str | None,
+        model_effort: str | None,
+        validation: ProviderPolicyValidationConfig | None = None,
+    ) -> None:
         self._commands = commands
         self._model = model
         self._model_effort = model_effort
+        self._emitter = CodexPolicyEmitter()
+        self._validation = validation or ProviderPolicyValidationConfig()
 
     async def run_turn(self, turn: RenderedProviderTurn) -> ProviderTurnResult:
         ensure_session_provider_match("codex", turn.session)
         resume_session_id = _resumable_session_id("codex", turn.session)
-
+        emission, base_command, model, model_effort = _prepare_turn_command(
+            turn,
+            commands=self._commands,
+            emitter=self._emitter,
+            validation=self._validation,
+            fallback_model=self._model,
+            fallback_model_effort=self._model_effort,
+        )
         if resume_session_id is None:
-            command = list(self._commands.start_command)
+            command = list(base_command)
         else:
-            command = [*self._commands.resume_command, resume_session_id, "-"]
+            command = [*base_command, resume_session_id, "-"]
 
         process = await asyncio.create_subprocess_exec(
             *command,
             stdin=asyncio.subprocess.PIPE,
             stdout=asyncio.subprocess.PIPE,
             stderr=asyncio.subprocess.PIPE,
+            env=merge_subprocess_env(None if emission is None else emission.env),
         )
         stdout, stderr = await communicate_text_subprocess(process, input_text=turn.prompt_text)
         if process.returncode != 0:
@@ -185,6 +188,8 @@ class CodexTransport(ProviderTransport):
             )
 
         assistant_text, resolved_session_id, provider_metadata, usage = parse_codex_exec_json(stdout)
+        if emission is not None:
+            provider_metadata = _with_policy_metadata(provider_metadata, emission=emission)
         return _build_codex_result(
             turn=turn,
             resume_session_id=resume_session_id,
@@ -192,8 +197,8 @@ class CodexTransport(ProviderTransport):
             provider_metadata=provider_metadata,
             usage=usage,
             assistant_text=assistant_text,
-            model=self._model,
-            model_effort=self._model_effort,
+            model=model,
+            model_effort=model_effort,
         )
 
 
@@ -204,6 +209,7 @@ def build_codex_transport(config: ResolvedRuntimeConfig) -> CodexTransport:
         commands=resolve_codex_cli_commands(config),
         model=config.provider.codex.model,
         model_effort=config.provider.codex.model_effort,
+        validation=config.provider_policy.validation,
     )
 
 
@@ -221,11 +227,23 @@ def build_codex_operation_executor(
     def execute(turn: RenderedProviderTurn) -> ProviderTurnResult:
         ensure_session_provider_match("codex", turn.session)
         resume_session_id = _resumable_session_id("codex", turn.session)
+        emission, base_command, turn_model, turn_model_effort = _prepare_turn_command(
+            turn,
+            commands=resolved_commands,
+            emitter=CodexPolicyEmitter(),
+            validation=config.provider_policy.validation,
+            fallback_model=model,
+            fallback_model_effort=model_effort,
+        )
         if resume_session_id is None:
-            command = list(resolved_commands.start_command)
+            command = list(base_command)
         else:
-            command = [*resolved_commands.resume_command, resume_session_id, "-"]
-        stdout, stderr, returncode = run_text_subprocess(command, input_text=turn.prompt_text)
+            command = [*base_command, resume_session_id, "-"]
+        stdout, stderr, returncode = run_text_subprocess(
+            command,
+            input_text=turn.prompt_text,
+            env=merge_subprocess_env(None if emission is None else emission.env),
+        )
         if returncode != 0:
             streams = format_subprocess_streams(stdout, stderr)
             raise ProviderExecutionError(
@@ -233,6 +251,8 @@ def build_codex_operation_executor(
                 f"(exit code {returncode}): {streams}"
             )
         assistant_text, resolved_session_id, provider_metadata, usage = parse_codex_exec_json(stdout)
+        if emission is not None:
+            provider_metadata = _with_policy_metadata(provider_metadata, emission=emission)
         return _build_codex_result(
             turn=turn,
             resume_session_id=resume_session_id,
@@ -240,8 +260,8 @@ def build_codex_operation_executor(
             provider_metadata=provider_metadata,
             usage=usage,
             assistant_text=assistant_text,
-            model=model,
-            model_effort=model_effort,
+            model=turn_model,
+            model_effort=turn_model_effort,
         )
 
     return execute
@@ -257,6 +277,7 @@ class CodexProvider(RenderedLLMProvider):
                 commands=resolved_commands,
                 model=config.provider.codex.model,
                 model_effort=config.provider.codex.model_effort,
+                validation=config.provider_policy.validation,
             ),
             operation_executor=build_codex_operation_executor(config, commands=resolved_commands),
         )
@@ -328,16 +349,6 @@ def _validate_codex_surface(surface: _CodexExecSurface, *, require_model_effort:
         raise ConfigError(
             "provider 'codex' requires 'codex exec resume --model' support, but '--model' is unavailable."
         )
-    if surface.start_auto_flag is None:
-        raise ConfigError(
-            "provider 'codex' requires either '--dangerously-bypass-approvals-and-sandbox' or '--full-auto' "
-            "on 'codex exec'."
-        )
-    if surface.resume_auto_flag is None:
-        raise ConfigError(
-            "provider 'codex' requires either '--dangerously-bypass-approvals-and-sandbox' or '--full-auto' "
-            "on 'codex exec resume'."
-        )
     if require_model_effort and not surface.start_supports_model_effort:
         raise ConfigError(
             "provider 'codex' cannot honor provider.codex.model_effort because 'codex exec' does not support "
@@ -348,14 +359,6 @@ def _validate_codex_surface(surface: _CodexExecSurface, *, require_model_effort:
             "provider 'codex' cannot honor provider.codex.model_effort because 'codex exec resume' does not support "
             "'--model-effort'."
         )
-
-
-def _preferred_codex_auto_flag(help_text: str) -> str | None:
-    if "--dangerously-bypass-approvals-and-sandbox" in help_text:
-        return "--dangerously-bypass-approvals-and-sandbox"
-    if "--full-auto" in help_text:
-        return "--full-auto"
-    return None
 
 
 def _run_help_command(command: list[str], *, provider_name: str) -> str:
@@ -376,3 +379,93 @@ def _resumable_session_id(provider_name: str, session: SessionBinding | None) ->
     if seen_provider == provider_name and session.session_id:
         return session.session_id
     return None
+
+
+def _prepare_turn_command(
+    turn: RenderedProviderTurn,
+    *,
+    commands: CodexCLICommand,
+    emitter: CodexPolicyEmitter,
+    validation: ProviderPolicyValidationConfig,
+    fallback_model: str | None,
+    fallback_model_effort: str | None,
+) -> tuple[ProviderPolicyEmission | None, tuple[str, ...], str | None, str | None]:
+    emission = _emit_turn_policy(emitter, turn, validation=validation)
+    resume_session_id = _resumable_session_id("codex", turn.session)
+    command = commands.resume_command if resume_session_id is not None else commands.start_command
+    model = fallback_model
+    model_effort = fallback_model_effort
+    if turn.policy is not None:
+        model = turn.policy.model.default or model
+        model_effort = turn.policy.model.effort or model_effort
+    if turn.policy is None or turn.policy.model.default is None:
+        if fallback_model:
+            command = (*command, "--model", fallback_model)
+        if fallback_model_effort:
+            command = (*command, "--model-effort", fallback_model_effort)
+    elif emission is not None and emission.cli_args:
+        command = (*command, *emission.cli_args)
+    return emission, command, model, model_effort
+
+
+def _emit_turn_policy(
+    emitter: CodexPolicyEmitter,
+    turn: RenderedProviderTurn,
+    *,
+    validation: ProviderPolicyValidationConfig,
+) -> ProviderPolicyEmission | None:
+    if turn.policy is None or turn.run_folder is None:
+        return None
+    step_key = build_policy_step_key(turn.step_name, step_execution_id=turn.step_execution_id)
+    emission = emitter.emit(
+        turn.policy,
+        run_dir=turn.run_folder,
+        step_key=step_key,
+        validation=validation,
+        step_name=turn.step_name,
+    )
+    _emit_policy_event(
+        turn,
+        "provider_policy_emitted",
+        provider_target="codex",
+        policy_fingerprint=emission.capability_report.policy_fingerprint,
+        decision=emission.capability_report.decision,
+        effective_policy_path=str(emission.config_files["effective_policy"]),
+        capability_report_path=str(emission.config_files["capability_report"]),
+    )
+    _emit_policy_event(
+        turn,
+        "provider_policy_capability_report",
+        provider_target="codex",
+        policy_fingerprint=emission.capability_report.policy_fingerprint,
+        decision=emission.capability_report.decision,
+        capability_report_path=str(emission.config_files["capability_report"]),
+    )
+    return emission
+
+
+def _with_policy_metadata(
+    provider_metadata: dict[str, Any],
+    *,
+    emission: ProviderPolicyEmission,
+) -> dict[str, Any]:
+    metadata = dict(provider_metadata)
+    metadata["policy"] = {
+        "effective_policy_file": str(emission.config_files["effective_policy"]),
+        "capability_report_file": str(emission.config_files["capability_report"]),
+        "policy_fingerprint": emission.capability_report.policy_fingerprint,
+    }
+    return metadata
+
+
+def _emit_policy_event(turn: RenderedProviderTurn, event_type: str, **fields: object) -> None:
+    if turn.runtime_event_sink is None:
+        return
+    payload: dict[str, object] = {
+        "step_name": turn.step_name,
+        "turn_kind": turn.turn_kind,
+    }
+    if turn.step_execution_id is not None:
+        payload["step_execution_id"] = turn.step_execution_id
+    payload.update(fields)
+    turn.runtime_event_sink(event_type, payload)
