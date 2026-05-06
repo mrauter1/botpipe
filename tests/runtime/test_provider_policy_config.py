@@ -147,6 +147,43 @@ def test_resolve_runtime_config_applies_workspace_strict_provider_policy(
     )
 
 
+def test_workspace_strict_null_clears_inherited_strict_policy(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    global_config_dir = tmp_path / "global-config"
+    global_config_path = global_config_dir / "autoloop.yaml"
+    local_config_path = tmp_path / "autoloop.yaml"
+    global_config_dir.mkdir(parents=True)
+    global_config_path.write_text("", encoding="utf-8")
+    local_config_path.write_text("", encoding="utf-8")
+
+    payloads = {
+        global_config_path: {
+            "provider_policy": {
+                "strict": {
+                    "sandbox": {
+                        "workspace": {
+                            "filesystem": {"allowed_write_roots": [".", "./build"]}
+                        }
+                    }
+                }
+            }
+        },
+        local_config_path: {
+            "provider_policy": {
+                "strict": None,
+            }
+        },
+    }
+    monkeypatch.setattr(runtime_config, "user_config_dir", lambda: global_config_dir)
+    monkeypatch.setattr(runtime_config, "load_runtime_config_file", lambda path: payloads[path])
+
+    resolved = resolve_runtime_config(tmp_path, _runtime_args())
+
+    assert resolved.provider_policy.strict is None
+
+
 def test_policy_file_overrides_and_extends_provider_policy_layers(
     tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,
@@ -179,6 +216,33 @@ def test_policy_file_overrides_and_extends_provider_policy_layers(
 
     assert resolved.provider_policy.default.sandbox.workspace.filesystem.allow_write == (".", "./build")
     assert resolved.provider_policy.validation.unsupported == "ignore"
+
+
+def test_policy_file_accepts_full_runtime_config_document_shape(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    config_root = tmp_path / "repo"
+    config_root.mkdir()
+    (config_root / "autoloop.yaml").write_text("", encoding="utf-8")
+    policy_file = tmp_path / "policy.yaml"
+    policy_file.write_text(
+        "provider_policy:\n"
+        "  default:\n"
+        "    sandbox:\n"
+        "      workspace:\n"
+        "        filesystem:\n"
+        "          allow_write: [\".\", \"./dist\"]\n"
+        "  validation:\n"
+        "    lossy_mapping: ignore\n",
+        encoding="utf-8",
+    )
+    monkeypatch.setattr(runtime_config, "user_config_dir", lambda: tmp_path / "missing-user-config")
+
+    resolved = resolve_runtime_config(config_root, _runtime_args(policy_file=policy_file))
+
+    assert resolved.provider_policy.default.sandbox.workspace.filesystem.allow_write == (".", "./dist")
+    assert resolved.provider_policy.validation.lossy_mapping == "ignore"
 
 
 def test_resolve_runtime_config_rejects_unknown_provider_policy_keys(tmp_path: Path) -> None:
@@ -234,6 +298,25 @@ def test_resolve_runtime_config_maps_legacy_provider_model_and_effort_into_provi
     assert resolved.provider.claude.model == "claude-opus"
     assert resolved.provider.claude.effort == "high"
     assert resolved.provider_policy.default.model.default == "claude-opus"
+    assert resolved.provider_policy.default.model.effort == "high"
+
+
+def test_cli_model_and_effort_map_into_provider_policy_only_when_explicit(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    config_root = tmp_path / "repo"
+    config_root.mkdir()
+    monkeypatch.setattr(runtime_config, "user_config_dir", lambda: tmp_path / "missing-user-config")
+
+    resolved = resolve_runtime_config(
+        config_root,
+        _runtime_args(provider="codex", model="gpt-5.5", model_effort="high"),
+    )
+
+    assert resolved.provider.codex.model == "gpt-5.5"
+    assert resolved.provider.codex.model_effort == "high"
+    assert resolved.provider_policy.default.model.default == "gpt-5.5"
     assert resolved.provider_policy.default.model.effort == "high"
 
 

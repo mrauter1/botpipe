@@ -6,3 +6,5 @@
 - Phase Directory Key: provider-outcome-contract
 - Phase Title: Canonical Provider Outcomes
 - Scope: phase-local authoritative verifier artifact
+
+- Added parser and engine regression coverage for canonical-envelope precedence: canonical `route_fields.reason = null` still suppresses legacy top-level `reason`, and canonical `question` routes with missing `route_fields.questions` remain invalid even if a legacy top-level `question` is present. Validated with focused runtime-provider and engine-contract pytest slices.

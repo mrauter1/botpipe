@@ -703,3 +703,66 @@ Open issues / next step
 <loop-control>
 {"schema":"docloop.loop_control/v1","kind":"promise","promise":"COMPLETE"}
 </loop-control>
+
+
+---
+run_id=run-20260506T190853Z-f707cb4f | entry=session_turn | pair=test | phase=producer | cycle=1 | attempt=1 | thread_id=019dfec5-f589-7cb2-ab20-e8f25f37fa06
+---
+provider=codex
+mode=resume
+template=/home/rauter/.local/share/pipx/venvs/autoloop/lib/python3.12/site-packages/autoloop/templates/test_producer.md
+session_id=019dfec5-f589-7cb2-ab20-e8f25f37fa06
+
+
+---
+run_id=run-20260506T190853Z-f707cb4f | entry=phase_output | pair=test | phase=producer | process=codex-agent | cycle=1 | attempt=1 | thread_id=019dfec5-f589-7cb2-ab20-e8f25f37fa06
+---
+I’m checking the phase’s existing test coverage and artifact expectations before I add anything. The main risk now is not missing basic happy paths, but missing guardrails around the new parse distinctions and workflow-policy retention seams that were just fixed.
+
+The obvious remaining gaps are regression guards, not broad new coverage. I’m adding tests for the two policy-file entry shapes and for the one allowed explicit `null` path so later refactors don’t collapse those distinctions again.
+
+I found one more meaningful regression surface: after tightening “explicit-only” legacy model mirroring, we should prove that explicit CLI model and effort still populate `provider_policy.default`. I’m adding that alongside the full policy-file-shape and `strict: null` reset cases.
+
+I’ve added the regression tests around the newly clarified parse semantics. I’m running the focused config suite now so the test artifact reflects actual executed coverage, not just intended coverage.
+
+The focused runtime-config suite passed, so I’m recording exactly what behavior is now exercised: both policy-file shapes, the `strict: null` reset path, and the explicit-only legacy CLI model mirroring. Then I’ll close with the executed validation result.
+
+Scope considered
+
+- Phase-local `policy-config-authoring` test coverage only.
+- I stayed on runtime-config regression coverage and the phase-owned test artifacts.
+
+What I analyzed
+
+- [tests/runtime/test_provider_policy_config.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/tests/runtime/test_provider_policy_config.py)
+- [tests/unit/test_simple_surface.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/tests/unit/test_simple_surface.py)
+- [test_strategy.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/implementation-goal-add-a-first-class-provider-p-5e755cae/runs/run-20260506T190853Z-f707cb4f/artifacts/test/phases/policy-config-authoring/test_strategy.md)
+- [feedback.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/implementation-goal-add-a-first-class-provider-p-5e755cae/runs/run-20260506T190853Z-f707cb4f/artifacts/test/phases/policy-config-authoring/feedback.md)
+- The current run decisions in [decisions.txt](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/implementation-goal-add-a-first-class-provider-p-5e755cae/runs/run-20260506T190853Z-f707cb4f/decisions.txt)
+
+What I changed
+
+- Extended [tests/runtime/test_provider_policy_config.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/tests/runtime/test_provider_policy_config.py) with:
+  - `test_workspace_strict_null_clears_inherited_strict_policy`
+  - `test_policy_file_accepts_full_runtime_config_document_shape`
+  - `test_cli_model_and_effort_map_into_provider_policy_only_when_explicit`
+- Updated [test_strategy.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/implementation-goal-add-a-first-class-provider-p-5e755cae/runs/run-20260506T190853Z-f707cb4f/artifacts/test/phases/policy-config-authoring/test_strategy.md) with an explicit behavior-to-coverage map, edge cases, failure paths, and known gaps.
+- Appended a concise execution summary to [feedback.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/implementation-goal-add-a-first-class-provider-p-5e755cae/runs/run-20260506T190853Z-f707cb4f/artifacts/test/phases/policy-config-authoring/feedback.md).
+- Appended the non-obvious coverage decisions for this turn under the latest header in [decisions.txt](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/implementation-goal-add-a-first-class-provider-p-5e755cae/runs/run-20260506T190853Z-f707cb4f/decisions.txt).
+
+Key findings / decisions
+
+- The highest-risk remaining gaps were around parse-shape distinctions, not basic happy paths.
+- Coverage now explicitly guards:
+  - both supported `--policy-file` shapes,
+  - the only allowed explicit null path (`provider_policy.strict: null`),
+  - the explicit-only legacy CLI model and effort mirroring rule.
+- I did not add transport or emitter tests because those behaviors are explicitly out of scope for this phase.
+
+Open issues / next step
+
+- Focused validation passed:
+  - `python3 -m py_compile tests/runtime/test_provider_policy_config.py`
+  - `.venv/bin/python -m pytest tests/runtime/test_provider_policy_config.py -q`
+- Result: `16 passed in 0.39s`.
+- No additional test-phase blockers found in this scope.
