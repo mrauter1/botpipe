@@ -1543,7 +1543,7 @@ def _resolve_transition_source(source: Step | str, steps_by_name: Mapping[str, S
 
 def _resolve_transition_destination(destination: object, *, source: Step | str, steps_by_name: Mapping[str, Step]) -> object:
     if isinstance(destination, Route):
-        if destination.disabled:
+        if destination.is_disabled:
             return destination
         target = _resolve_transition_destination(destination.target, source=source, steps_by_name=steps_by_name)
         if target is destination.target:
@@ -1604,7 +1604,7 @@ def _route_signature(destination: object) -> tuple[object, str | None, tuple[str
         route.provider_visibility,
         route.payload_schema_mode,
         route.preset_kind,
-        route.disabled,
+        route.is_disabled,
     )
 
 

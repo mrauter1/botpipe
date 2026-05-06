@@ -35,7 +35,7 @@ def outcome_middleware_name(definition: Any) -> str | None:
 def step_available_route_tags(definition: Any, step: Step) -> tuple[str, ...]:
     """Return the ordered legal route tags for a step."""
 
-    return tuple(spec.tag for spec in resolve_step_routes(definition, step) if not spec.route.disabled)
+    return tuple(spec.tag for spec in resolve_step_routes(definition, step) if not spec.route.is_disabled)
 
 
 def step_authored_route_tags(definition: Any, step: Step) -> tuple[str, ...]:
@@ -55,7 +55,7 @@ def step_runtime_control_route_tags(definition: Any, step: Step) -> tuple[str, .
     return tuple(
         spec.tag
         for spec in resolve_step_routes(definition, step)
-        if spec.legacy_runtime_control and not spec.route.disabled
+        if spec.legacy_runtime_control and not spec.route.is_disabled
     )
 
 
@@ -114,7 +114,7 @@ def normalize_step_route_metadata(
             raise WorkflowValidationError(
                 f"step {step.name!r} route metadata for {route_name!r} may only declare summary, required_writes, or handoff"
             )
-        if route.disabled:
+        if route.is_disabled:
             normalized_routes[route_name] = route
             continue
         if route.handoff and step_metadata.handoff and route.handoff != step_metadata.handoff:

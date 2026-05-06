@@ -148,7 +148,7 @@ def _validate_route_destination(
     valid_destinations: set[str],
 ) -> None:
     route = normalize_route_spec(destination)
-    if route.disabled:
+    if route.is_disabled:
         if source == definition.global_route_sentinel:
             raise WorkflowValidationError("GLOBAL routes cannot use Route.disabled()")
         return

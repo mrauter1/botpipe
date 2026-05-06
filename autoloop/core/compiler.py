@@ -746,7 +746,7 @@ def _lower_internal_route_destination(
     current_step_name: str,
 ) -> object:
     if isinstance(destination, Route):
-        if destination.disabled:
+        if destination.is_disabled:
             return destination
         lowered_target = _lower_internal_route_target(
             destination.target,
@@ -939,7 +939,7 @@ def _compile_route(
 ) -> CompiledRoute:
     route = normalize_route_spec(destination)
     compiled_target: str | None
-    if route.disabled:
+    if route.is_disabled:
         compiled_target = None
     else:
         target = route.target
@@ -989,7 +989,7 @@ def _compile_route(
         route_fields_validator=route_fields_validator,
         preset_kind=preset_kind,
         inheritance_source=inheritance_source,
-        disabled=route.disabled,
+        disabled=route.is_disabled,
         is_runtime_control=is_runtime_control,
         _required_writes_explicit=required_writes_explicit,
     )

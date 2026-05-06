@@ -93,7 +93,7 @@ class Route:
     payload_schema: object = _INHERIT_PAYLOAD_SCHEMA
     route_fields_schema: Any | None = None
     preset_kind: RoutePresetKind = "custom"
-    disabled: bool = False
+    is_disabled: bool = False
     payload_schema_mode: Literal["inherit", "none", "explicit"] = field(init=False, default="inherit")
 
     def __post_init__(self) -> None:
@@ -112,7 +112,7 @@ class Route:
         payload_schema_mode, normalized_payload_schema = _normalize_payload_schema(self.payload_schema)
         object.__setattr__(self, "payload_schema_mode", payload_schema_mode)
         object.__setattr__(self, "payload_schema", normalized_payload_schema)
-        if self.disabled:
+        if self.is_disabled:
             if self.target is not None:
                 raise ValueError("disabled routes must not declare a target")
             if self.handoff is not None or self.on_taken is not None:
@@ -469,7 +469,7 @@ class Route:
             payload_schema=_INHERIT_PAYLOAD_SCHEMA,
             route_fields_schema=None,
             preset_kind="disabled",
-            disabled=True,
+            is_disabled=True,
         )
 
 

@@ -65,7 +65,8 @@ phases:
     status: "planned"
     in_scope:
       - "Add compiled workflow and step policy metadata plus topology hash participation."
-      - "Implement ProviderPolicyResolver and use it for step execution and inline operations."
+      - "Implement ProviderPolicyResolver and use it for step execution and inline operations through one runner-to-runtime handoff seam."
+      - "Add the public llm_call(..., policy=...) and classify_call(..., policy=...) overrides plus OperationRuntime.policy inheritance."
       - "Propagate resolved policy through provider request models, rendered turns, operation runtime, and replay fingerprints."
     out_of_scope:
       - "Provider-specific config file emission."
@@ -74,7 +75,7 @@ phases:
       - "policy-config-authoring"
     acceptance_criteria:
       - id: "AC-1"
-        text: "Workflow, step, and explicit operation policies resolve in the requested order and strict policy rejects unsafe overrides."
+        text: "Workflow, step, and explicit operation policies resolve in the requested order, the public policy= operation overrides exist, and strict policy rejects unsafe overrides identically for step and inline paths."
       - id: "AC-2"
         text: "Operation replay fingerprints and compiled topology hashes change when policy changes, while existing mismatch behaviors remain intact."
     deliverables:
@@ -97,8 +98,9 @@ phases:
     status: "planned"
     in_scope:
       - "Implement autoloop/runtime/providers/codex_policy.py and capability-report generation."
+      - "Write authoritative target-scoped files under <run_dir>/provider_policy/<step-key>/codex/ with stable step-key construction."
       - "Pass emitted config file paths, CLI args, and env overrides into both Codex async transport and sync operation execution."
-      - "Record policy metadata paths and decisions in provider metadata and runtime traces."
+      - "Record policy metadata paths, fingerprints, and decision payloads in provider metadata and runtime traces."
     out_of_scope:
       - "Claude-specific settings emission."
       - "Managed or enterprise policy emitters."
@@ -106,9 +108,9 @@ phases:
       - "policy-resolution-propagation"
     acceptance_criteria:
       - id: "AC-1"
-        text: "Codex full-auto sandboxed policies emit workspace-write settings and writable roots under the run directory only."
+        text: "Codex full-auto sandboxed policies emit workspace-write settings and writable roots under <run_dir>/provider_policy/<step-key>/codex/ only."
       - id: "AC-2"
-        text: "Unsupported or lossy Codex mappings produce capability reports and obey validation modes before execution."
+        text: "Unsupported or lossy Codex mappings produce target-scoped capability reports, stable provider metadata paths, and validation-mode decisions before execution."
     deliverables:
       - "autoloop/runtime/providers/codex_policy.py"
       - "autoloop/runtime/providers/codex.py"
@@ -126,6 +128,7 @@ phases:
     status: "planned"
     in_scope:
       - "Implement autoloop/runtime/providers/claude_policy.py with capability-profile-aware filesystem and network handling."
+      - "Write authoritative target-scoped files under <run_dir>/provider_policy/<step-key>/claude/ with the same stable metadata contract as Codex."
       - "Wire Claude settings emission into transport execution and runtime traces."
       - "Finish cross-provider regression tests and update config or authoring examples."
     out_of_scope:
@@ -135,9 +138,9 @@ phases:
       - "policy-codex"
     acceptance_criteria:
       - id: "AC-1"
-        text: "Claude emission writes run-scoped settings and capability reports, including lossy enforcement warnings when native sandbox features are unavailable."
+        text: "Claude emission writes target-scoped settings and capability reports, including lossy enforcement warnings when native sandbox features are unavailable."
       - id: "AC-2"
-        text: "Final regression coverage confirms existing provider dispatch, legacy Claude permission_strategy behavior, cross-provider resume checks, and trace redaction still hold."
+        text: "Final regression coverage confirms existing provider dispatch, legacy Claude permission_strategy behavior, cross-provider resume checks, trace redaction, and provider_metadata['policy'] path stability."
     deliverables:
       - "autoloop/runtime/providers/claude_policy.py"
       - "autoloop/runtime/providers/claude.py"
