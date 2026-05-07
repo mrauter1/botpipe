@@ -15,13 +15,13 @@
       "ctx-regression-coverage-and-docs"
     ],
     "explicit": true,
-    "current_phase_index": 1,
-    "current_phase_id": "ctx-rendering-and-validation"
+    "current_phase_index": 2,
+    "current_phase_id": "ctx-regression-coverage-and-docs"
   },
   "phase_status": {
     "ctx-context-surface": "completed",
-    "ctx-rendering-and-validation": "in_progress",
-    "ctx-regression-coverage-and-docs": "planned"
+    "ctx-rendering-and-validation": "completed",
+    "ctx-regression-coverage-and-docs": "in_progress"
   },
   "phase_history": [
     {
@@ -42,6 +42,19 @@
       "run_id": "run-20260507T122922Z-e6e948b6",
       "status": "in_progress",
       "ts": "2026-05-07T12:47:26.314335+00:00"
+    },
+    {
+      "phase_id": "ctx-rendering-and-validation",
+      "run_id": "run-20260507T122922Z-e6e948b6",
+      "status": "completed",
+      "ts": "2026-05-07T13:04:48.846735+00:00",
+      "pair": "test"
+    },
+    {
+      "phase_id": "ctx-regression-coverage-and-docs",
+      "run_id": "run-20260507T122922Z-e6e948b6",
+      "status": "in_progress",
+      "ts": "2026-05-07T13:04:48.848331+00:00"
     }
   ]
 }
