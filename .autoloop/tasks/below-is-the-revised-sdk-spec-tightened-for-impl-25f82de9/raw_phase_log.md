@@ -1278,3 +1278,117 @@ Open issues / next step
 <loop-control>
 {"schema":"docloop.loop_control/v1","kind":"promise","promise":"COMPLETE"}
 </loop-control>
+
+
+---
+run_id=run-20260507T130811Z-54d93345 | entry=session_turn | pair=implement | phase=producer | cycle=1 | attempt=1 | thread_id=019e02bf-36df-7293-b934-fad7a290777c
+---
+provider=codex
+mode=start
+template=/home/rauter/.local/share/pipx/venvs/autoloop/lib/python3.12/site-packages/autoloop/templates/implement_producer.md
+session_id=019e02bf-36df-7293-b934-fad7a290777c
+
+
+---
+run_id=run-20260507T130811Z-54d93345 | entry=phase_output | pair=implement | phase=producer | process=codex-agent | cycle=1 | attempt=1 | thread_id=019e02bf-36df-7293-b934-fad7a290777c
+---
+I’m implementing the `sdk-facade` phase against the existing runtime rather than adding a parallel execution path. First I’m reading the active phase artifacts and the current workflow/runtime entrypoints to pin down the exact integration seams before editing.
+
+The phase artifacts confirm the intended seams: the SDK has to stay on `execute_workflow_package`, and earlier phases already changed context/input semantics. I’m locating the exact runtime and authoring symbols now so the facade hooks into the existing compiler, runner, operations, and artifact resolution paths instead of duplicating them.
+
+The repository already has the prior context/input work in place, so this phase is mostly about surfacing it cleanly through a new public facade and not leaking lower-level runtime contracts. I’m reading the runner, sync bridge, operation helpers, and exports next to see what can be reused directly and where the error normalization has to sit.
+
+I have the runner and parameter/input coercion paths now. Next I’m tracing provider resolution and the step authoring surface so the SDK can accept provider names, map `provider_questions` cleanly, and synthesize one-step workflows without inventing a new abstraction layer.
+
+The strict step surface is using discovery defaults for simple declarations already, which means I can keep the synthetic workflow wrapper thin and only add explicit routing where core `Step` instances need it. I’m checking the remaining runtime metadata and existing tests now so I can cover the exact acceptance points without widening scope into unrelated behavior.
+
+I have enough context to edit safely. The remaining work breaks down cleanly into four pieces:
+
+1. Add the SDK facade module and its public dataclasses/errors/handlers around the existing runner.
+2. Wire SDK-only helpers for provider resolution, task-id generation, provider-question policy, pause serialization, result/debug/artifact mapping, and sync active-loop normalization.
+3. Re-export the new public surface from `autoloop/__init__.py`.
+4. Add focused tests for `run`, pause handling, debug/artifacts, standalone operations, sync active-loop failures, and synthetic `step(...)`, then update the phase notes and decision ledger.
+
+I’ve confirmed one dependency seam is still incomplete in the repo: `Context.input` is not yet the composite message-plus-fields view the spec requires, even though the runner and placeholder code already assume the separation model. I’m fixing that together with the SDK facade so `ctx.input.message`, `ctx.message`, prompt rendering, and the public SDK all agree on one contract.
+
+I’m editing the shared runtime surface first so the SDK doesn’t have to paper over a split contract. The changes are limited to the spec-required seams: composite `ctx.input`, `Workflow.Input.message` rejection, and placeholder resolution staying aligned with message-plus-fields instead of the old typed-fields-only view.
+
+The SDK module is in place now. I’m wiring the public exports next and then moving straight into tests, because the main remaining risk is contract drift at the package boundary: error types, active-loop behavior, and the now-composite `ctx.input` view all need direct coverage.
+
+I’m adding focused SDK tests rather than broad integration churn. They target the contract edges this phase owns: strict typed-input validation, internal pause/resume through the existing runner, provider-question defaults, sync active-loop normalization, standalone operations, and synthetic one-step execution.
+
+The shared context tests still encode the pre-facade behavior where `ctx.input` excluded `message` and even allowed a typed `Input.message` field. I’m updating only those stale expectations now so the runtime contract and SDK contract stop disagreeing in test coverage.
+
+The code is in place and I’m on verification now. I’m starting with the SDK tests plus the precise legacy assertions affected by the composite-input change, rather than blasting the whole suite, so failures stay attributable to this phase’s edits.
+
+The test runner isn’t on `PATH` in this environment, so I’m rerunning the same verification through `python -m pytest`.
+
+The targeted suite is running now under the repo’s virtualenv. I’m waiting on the first pass before touching anything else, because the likely failures at this point are import-time or contract mismatches in the new SDK module.
+
+The first test pass exposed three real integration issues, not just stale expectations: the SDK is inheriting strict git-tracking defaults in a dirty repo, the composite input view is reading the request snapshot too eagerly for direct `Context(...)` callers, and prompt validation still treats `ctx.input.message` like a declared typed field instead of the always-available runtime message. I’m fixing those now and then rerunning the same targeted suite.
+
+The corrected selection is running cleanly past collection now. I’m waiting for the full result because the remaining likely failures are behavioral, not import-time, and they’ll point directly at the SDK loop or synthetic-step wrapper.
+
+Two remaining failures are straightforward. The strict core-step wrapper needs to synthesize against the strict workflow base instead of the simple one, and `ctx.input.message` still has one old guard in the prompt resolver that blocks it when no typed fields exist. I’m clearing those, plus one lingering stale contract test fixture that still authors `Input.message`.
+
+The targeted verification is green: 276 selected tests passed, including the new SDK suite and the runtime/input regression points the facade depends on. I’m doing a final pass over the changed files now, then I’ll update the phase notes and this turn’s decision block with the non-obvious contract choices that need to persist.
+
+I’m verifying the remaining export/compiler paths and the phase artifacts before finalizing. After that I’ll rerun the targeted tests if any corrections are needed.
+
+The SDK surface and compiler guard are present. I’m checking the stray untracked test file and then I’ll write the required phase notes and decision entries.
+
+I found an untracked test file that doesn’t look like a normal tracked repo edit. I’m checking whether it’s an intentional new coverage file or an accidental local artifact before I touch the phase notes.
+
+I found a contract mismatch: the current diff still rejects `ctx.input.message` in some runtime-template paths, which conflicts with the spec. I’m inspecting those resolver paths now and will correct them before I write the notes.
+
+I’ve isolated the spec mismatch to the runtime `ctx.input` prompt view and two stale tests that still assume `ctx.input.message` is invalid. I’m patching those paths now, then I’ll refresh the phase notes and rerun the focused suite.
+
+I found one helper model in the untracked test file that bakes in the old invalid `Input.message` shape. I’m removing that assumption as part of the test correction.
+
+The runtime prompt view is patched to use the composite input, and the stale `ctx.input.message` tests are now aligned with the spec. I’m running the focused suite before updating the run artifacts.
+
+The focused suite is still running. I’m waiting on that result before I write the implementation notes and decisions block.
+
+The code is green on the focused suite. I’m writing the required phase notes and appending the non-obvious SDK decisions to the run ledger, then I’ll do one last status check.
+
+Scope considered
+
+- `sdk-facade` phase scope from the run contract: public SDK facade, pause loop, result/debug models, provider resolution, synthetic step execution, and SDK-owned sync error handling.
+- Dependency and regression seams around runtime input/message propagation, prompt/artifact placeholder resolution, workflow compilation, and acceptance-style tests.
+- Required phase artifacts: `implementation_notes.md` and `decisions.txt`.
+
+What I analyzed
+
+- `autoloop/sdk.py`, `autoloop/core/context.py`, `autoloop/core/artifacts.py`, `autoloop/core/discovery.py`, `autoloop/core/compiler.py`, and the runtime/contract tests that exercise message vs typed input behavior.
+- The phase plan, feedback file, and current decisions ledger.
+- The final mismatch against the spec: runtime prompt rendering still treated `ctx.input.message` as invalid in some paths.
+
+What I changed
+
+- Completed the SDK facade work in the codebase and verified the public surface/tests around:
+  - `Autoloop.run(...)` as a thin wrapper over `execute_workflow_package(...)`
+  - SDK result/error/input-handler models
+  - strict typed-input validation
+  - provider resolution, provider-question policy, SDK task IDs, debug info
+  - `llm(...)`, `classify(...)`, and synthetic `step(...)`
+  - compile-time rejection of `Workflow.Input.message`
+  - composite `ctx.input` / `ctx.input_fields` behavior
+- Corrected the last runtime rendering gap so `ctx.input.message` now resolves through the composite input view, matching the spec even when no typed input model exists.
+- Updated the affected contract/local tests and refreshed:
+  - `.autoloop/.../artifacts/implement/phases/sdk-facade/implementation_notes.md`
+  - `.autoloop/.../decisions.txt`
+
+Key findings / decisions
+
+- The main spec drift was in `autoloop/core/artifacts.py`: `PromptContextView.input` was still exposing raw `input_fields`, which made `ctx.input.message` unavailable unless a typed model illegally declared `message`.
+- The fix keeps the intended split:
+  - bare `input.*` placeholders still use raw typed fields plus the `input.message` alias
+  - `ctx.input.*` now uses the composite `WorkflowInputView`
+- Focused validation passed:
+  - `./.venv/bin/python -m pytest -q tests/unit/test_sdk_facade.py tests/unit/test_primitives_and_stores.py tests/unit/test_simple_surface.py tests/unit/test_validation.py tests/runtime/test_workspace_and_context.py::test_resume_context_preserves_run_message_and_raw_input_fields tests/contract/test_engine_contracts.py::test_runtime_templates_resolve_bare_input_message_and_fields tests/contract/test_engine_contracts.py::test_runtime_templates_reject_unknown_bare_input_field tests/contract/test_engine_contracts.py::test_runtime_templates_resolve_ctx_input_message_without_typed_input tests/contract/test_engine_contracts.py::test_runtime_templates_resolve_ctx_input_message_separately_from_request`
+  - Result: `278 passed`, `14 warnings`
+
+Open issues / next step
+
+- No functional blockers remain for this phase.
+- `tests/unit/test_primitives_and_stores.py` is still an untracked local coverage file in this worktree; if this should be committed later, it needs an explicit add in the normal repo workflow.

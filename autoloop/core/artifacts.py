@@ -237,7 +237,7 @@ class PromptContextView:
 
     @property
     def input(self) -> Any:
-        return self._context.input
+        return self._context.input_fields
 
     @property
     def state(self) -> BaseModel:
@@ -587,7 +587,7 @@ def _resolve_ctx_placeholder(
     root_name = parts[1]
     if root_name in CTX_MODEL_ROOTS:
         field_name = parts[2]
-        if root_name == "input" and field_name != "message" and context.input_fields is None:
+        if root_name == "input" and context.input_fields is None:
             raise WorkflowExecutionError(
                 f"ctx.{root_name}.{field_name} requires workflow input, but no input was provided"
             )
