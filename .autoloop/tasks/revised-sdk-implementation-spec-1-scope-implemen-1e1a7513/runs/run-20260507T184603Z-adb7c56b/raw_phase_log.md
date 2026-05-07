@@ -173,3 +173,12 @@ No open verification issues remain for the planning artifacts in this run. The p
 <loop-control>
 {"schema":"docloop.loop_control/v1","kind":"promise","promise":"COMPLETE"}
 </loop-control>
+
+
+---
+run_id=run-20260507T184603Z-adb7c56b | entry=phase_scope_resolved
+---
+phase_mode=single
+phase_ids=sdk-surface-and-result-model,sdk-retention-and-safe-cleanup,sdk-routing-and-helper-entrypoints,sdk-acceptance-regression-tests
+explicit=True
+current_phase_index=0
