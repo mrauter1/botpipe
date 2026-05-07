@@ -2583,3 +2583,46 @@ No test-scope blocker remains for this phase.
 <loop-control>
 {"schema":"docloop.loop_control/v1","kind":"promise","promise":"COMPLETE"}
 </loop-control>
+
+
+---
+run_id=run-20260507T145702Z-0c706033 | entry=session_turn | pair=test | phase=verifier | cycle=2 | attempt=1 | thread_id=019e02f5-9c8f-74d1-aed2-ee2404b64c7a
+---
+provider=codex
+mode=resume
+template=/home/rauter/.local/share/pipx/venvs/autoloop/lib/python3.12/site-packages/autoloop/templates/test_verifier.md
+session_id=019e02f5-9c8f-74d1-aed2-ee2404b64c7a
+
+
+---
+run_id=run-20260507T145702Z-0c706033 | entry=phase_output | pair=test | phase=verifier | process=codex-agent | cycle=2 | attempt=1 | thread_id=019e02f5-9c8f-74d1-aed2-ee2404b64c7a
+---
+I’m re-auditing the focused slice after the scoped-child rejection test was added. I’ll verify the updated coverage and rerun the exact slice before I clear the criteria and close the audit.
+
+The scoped-child rejection test is present and the strategy now maps it under AC-3. I’m waiting on the slice rerun, then I’ll clear the remaining criteria and append a closing audit note.
+
+The rerun is green at `278 passed`, and the missing preserved-invariant gap is covered. I’m marking the audit criteria complete and appending a resolution note for the prior blocking finding.
+
+Scope considered
+
+Phase-local re-audit of the focused SDK/runtime regression slice after the scoped strict-child rejection test was added, plus the updated [test_strategy.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/below-is-the-revised-sdk-spec-tightened-for-impl-25f82de9/runs/run-20260507T145702Z-0c706033/artifacts/test/phases/close-remaining-sdk-runtime-gaps/test_strategy.md:1) and [feedback.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/below-is-the-revised-sdk-spec-tightened-for-impl-25f82de9/runs/run-20260507T145702Z-0c706033/artifacts/test/phases/close-remaining-sdk-runtime-gaps/feedback.md:1) artifacts.
+
+What I analyzed
+
+I reviewed the updated `tests/unit/test_sdk_facade.py` coverage around `client.step(...)` preflight rejection paths, the run-local decisions preserving scoped child-workflow rejection, and the strategy mapping for AC-1 through AC-4. I reran `.venv/bin/python -m pytest -q tests/unit/test_primitives_and_stores.py tests/contract/test_engine_contracts.py tests/unit/test_sdk_facade.py`.
+
+What I reviewed
+
+The slice now covers the requested `ctx.input.message` behaviors, workflow-step child message rendering, direct strict child-workflow success, unresolved child-workflow failure, and preserved worklist-scoped strict child-workflow rejection on the same changed SDK preflight path. The tests remain deterministic and environment-stable.
+
+Key findings / decisions
+
+No blocking findings remain in scope. TST-001 is addressed by `tests/unit/test_sdk_facade.py::test_sdk_step_rejects_worklist_scoped_strict_child_workflow_steps`, the strategy artifact maps that case under AC-3, and the rerun passed with `278 passed`. I updated [criteria.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/below-is-the-revised-sdk-spec-tightened-for-impl-25f82de9/runs/run-20260507T145702Z-0c706033/artifacts/test/phases/close-remaining-sdk-runtime-gaps/criteria.md:1) and appended the closing audit note to feedback.
+
+Open issues / next step
+
+No further test-audit action is needed for this phase.
+
+<loop-control>
+{"schema":"docloop.loop_control/v1","kind":"promise","promise":"COMPLETE"}
+</loop-control>
