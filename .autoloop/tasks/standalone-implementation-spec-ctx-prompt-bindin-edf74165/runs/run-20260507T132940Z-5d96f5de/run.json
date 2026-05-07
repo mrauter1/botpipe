@@ -13,11 +13,11 @@
       "finish-ctx-request-input-separation"
     ],
     "explicit": true,
-    "current_phase_index": 0,
-    "current_phase_id": "finish-ctx-request-input-separation"
+    "current_phase_index": 1,
+    "current_phase_id": null
   },
   "phase_status": {
-    "finish-ctx-request-input-separation": "in_progress"
+    "finish-ctx-request-input-separation": "completed"
   },
   "phase_history": [
     {
@@ -25,6 +25,13 @@
       "run_id": "run-20260507T132940Z-5d96f5de",
       "status": "in_progress",
       "ts": "2026-05-07T13:37:17.718161+00:00"
+    },
+    {
+      "phase_id": "finish-ctx-request-input-separation",
+      "run_id": "run-20260507T132940Z-5d96f5de",
+      "status": "completed",
+      "ts": "2026-05-07T14:05:00.226830+00:00",
+      "pair": "test"
     }
   ]
 }
