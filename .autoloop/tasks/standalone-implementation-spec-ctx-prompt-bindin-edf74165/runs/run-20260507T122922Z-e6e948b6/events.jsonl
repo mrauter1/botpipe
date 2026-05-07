@@ -55,3 +55,6 @@
 {"ts": "2026-05-07T13:24:39.421535+00:00", "run_id": "run-20260507T122922Z-e6e948b6", "seq": 55, "event_type": "phase_finished", "pair": "test", "phase": "producer", "cycle": 1, "attempt": 1, "empty_output": false, "phase_id": "ctx-regression-coverage-and-docs"}
 {"ts": "2026-05-07T13:25:21.423287+00:00", "run_id": "run-20260507T122922Z-e6e948b6", "seq": 56, "event_type": "phase_finished", "pair": "test", "phase": "verifier", "cycle": 1, "attempt": 1, "empty_output": false, "phase_id": "ctx-regression-coverage-and-docs"}
 {"ts": "2026-05-07T13:25:21.498543+00:00", "run_id": "run-20260507T122922Z-e6e948b6", "seq": 57, "event_type": "pair_completed", "pair": "test", "cycle": 1, "attempt": 1, "phase_id": "ctx-regression-coverage-and-docs"}
+{"ts": "2026-05-07T13:25:21.618633+00:00", "run_id": "run-20260507T122922Z-e6e948b6", "seq": 58, "event_type": "phase_completed", "pair": "test", "phase_id": "ctx-regression-coverage-and-docs", "phase_mode": "single"}
+{"ts": "2026-05-07T13:25:21.620633+00:00", "run_id": "run-20260507T122922Z-e6e948b6", "seq": 59, "event_type": "pair_started", "pair": "audit", "phase_id": null}
+{"ts": "2026-05-07T13:25:21.620741+00:00", "run_id": "run-20260507T122922Z-e6e948b6", "seq": 60, "event_type": "cycle_started", "pair": "audit", "cycle": 1, "attempt": 1, "phase_id": null}
