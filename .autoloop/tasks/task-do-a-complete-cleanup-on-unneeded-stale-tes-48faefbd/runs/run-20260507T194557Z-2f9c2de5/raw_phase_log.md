@@ -659,3 +659,125 @@ Open issues / next step
 <loop-control>
 {"schema":"docloop.loop_control/v1","kind":"promise","promise":"COMPLETE"}
 </loop-control>
+
+
+---
+run_id=run-20260507T194557Z-2f9c2de5 | entry=session_turn | pair=audit | phase=producer | cycle=1 | attempt=1 | thread_id=019e041f-4360-7390-b1fa-3f6bf70092fe
+---
+provider=codex
+mode=start
+template=/home/rauter/.local/share/pipx/venvs/autoloop/lib/python3.12/site-packages/autoloop/templates/audit_producer.md
+session_id=019e041f-4360-7390-b1fa-3f6bf70092fe
+
+
+---
+run_id=run-20260507T194557Z-2f9c2de5 | entry=phase_output | pair=audit | phase=producer | process=codex-agent | cycle=1 | attempt=1 | thread_id=019e041f-4360-7390-b1fa-3f6bf70092fe
+---
+I’m auditing the completed cleanup run against the original request and the authoritative run artifacts. First I’m reading the request, phase log, decisions, and the produced artifacts, then I’ll compare them to the current `tests/` tree before writing the audit files.
+
+The decision trail already shows one important clarification: misowned workflow, recursive, and docs coverage should be removed from `tests/`, not merely marked optional. I’m checking the final `tests/` tree and implementation/test artifacts now to see which parts of that clarified scope were actually completed and which were left open.
+
+The high-signal check now is whether the clarified ownership boundary was actually enforced across `tests/`, not just in the files explicitly named during implementation. I’m scanning for remaining repo-owned `docs`, `recursive_autoloop`, `autoloop.workflows`, and `copytree(REPO_ROOT / ...)` patterns, then I’ll compare that against the implementation notes and criteria.
+
+I found at least one likely mismatch between the implementation notes and the final tree: `tests/strictness/test_no_compat.py` still references the deleted monolith path, and one split stdlib file still imports repo-owned `autoloop.workflows.*` params. I’m checking those exact spots and running the affected tests so the audit rests on current behavior, not the phase notes.
+
+The current tree does have a real post-split failure: `tests/strictness/test_no_compat.py` still asserts the removed monolith file exists in the scan set. I’m pulling the full pytest failure now and checking whether anything else in the targeted area still depends on repo-owned workflow modules.
+
+The split introduced a second concrete gap: several `tests/unit/stdlib/test_authoring_helpers.py` tests no longer have `_build_lifecycle_context` in scope, so the retained split is not functionally equivalent to the removed monolith. I’m checking where that helper ended up so the follow-up request can be specific rather than generic.
+
+The full `tests/contract` and `tests/unit` subset is failing broadly after the split, not just in the two targeted checks. I’m pulling the summary so the gap report can distinguish between the high-level completed cleanup work and the remaining regressions introduced by the source split.
+
+The dominant regression pattern is clear now: the new split files use `from ... import *`, but the helpers they rely on are underscore-prefixed in `_shared.py`, so Python does not import them. I’m confirming that in the contract split too, then I’ll write the audit with a concrete follow-up request instead of a vague “fix the split.”
+
+I have enough evidence to write the audit artifacts. The result is not “no follow-up”: the stale suites were mostly removed as intended, but the final split left the retained contract/unit coverage broken and one repo-owned workflow import still in place.
+
+The audit artifacts are written. I’m doing one quick read-back to confirm the report, revised request, and JSON summary match the evidence and that the final close-out reflects the current failing state, not the earlier implementation notes.
+
+Scope considered
+
+The audit covered the immutable request, the raw phase log, `decisions.txt`, the plan and implementation artifacts for all three implement phases, and the final `tests/` tree only.
+
+What I analyzed
+
+I compared the requested cleanup against the current test layout and validated the current retained split state with:
+`.venv/bin/python -m pytest tests/strictness/test_no_compat.py tests/unit/stdlib/test_authoring_helpers.py -q`
+and
+`.venv/bin/python -m pytest tests/contract tests/unit -q`
+
+What I changed
+
+I wrote the required audit artifacts:
+- [gap_report.md](</home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/task-do-a-complete-cleanup-on-unneeded-stale-tes-48faefbd/runs/run-20260507T194557Z-2f9c2de5/artifacts/audit/gap_report.md>)
+- [revised_request.md](</home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/task-do-a-complete-cleanup-on-unneeded-stale-tes-48faefbd/runs/run-20260507T194557Z-2f9c2de5/artifacts/audit/revised_request.md>)
+- [audit_result.json](</home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/task-do-a-complete-cleanup-on-unneeded-stale-tes-48faefbd/runs/run-20260507T194557Z-2f9c2de5/artifacts/audit/audit_result.json>)
+
+Key findings / decisions
+
+The stale-suite cleanup was only partially completed. The run did remove the clearly stale parity/docs/workflow-package tests and rewrote the wheel smoke test in the intended direction, which is recorded as justified in the audit report.
+
+Material gaps remain:
+- The retained monolith split is broken. The split files use `from ... import *`, but the helpers they need are underscore-prefixed in `_shared.py`, so they are not imported. Current validation shows `242 failed, 507 passed` across `tests/contract` and `tests/unit`.
+- `tests/strictness/test_no_compat.py` still asserts the deleted path `tests/contract/test_engine_contracts.py`, so that retained strictness test now fails.
+- `tests/unit/stdlib/test_authoring_helpers.py` still imports repo-owned `autoloop.workflows.*.params`, which contradicts the clarified ownership boundary for surviving shared tests.
+
+Open issues / next step
+
+The next run should stay in `tests/` and repair the retained split, update `test_no_compat.py` for the new file layout, and remove the remaining direct repo-owned workflow-package imports from the retained shared tests. The actionable follow-up request is in [revised_request.md](</home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/task-do-a-complete-cleanup-on-unneeded-stale-tes-48faefbd/runs/run-20260507T194557Z-2f9c2de5/artifacts/audit/revised_request.md>).
+
+<loop-control>
+{"schema":"docloop.loop_control/v1","kind":"promise","promise":"INCOMPLETE"}
+</loop-control>
+
+
+---
+run_id=run-20260507T194557Z-2f9c2de5 | entry=session_turn | pair=audit | phase=verifier | cycle=1 | attempt=1 | thread_id=019e041f-4360-7390-b1fa-3f6bf70092fe
+---
+provider=codex
+mode=resume
+template=/home/rauter/.local/share/pipx/venvs/autoloop/lib/python3.12/site-packages/autoloop/templates/audit_verifier.md
+session_id=019e041f-4360-7390-b1fa-3f6bf70092fe
+
+
+---
+run_id=run-20260507T194557Z-2f9c2de5 | entry=phase_output | pair=audit | phase=verifier | process=codex-agent | cycle=1 | attempt=1 | thread_id=019e041f-4360-7390-b1fa-3f6bf70092fe
+---
+I’m verifying the audit artifacts against the clarified intent ledger and the current `tests/` state. First I’m reading the audit report, revised request, criteria, and feedback, then I’ll spot-check the cited evidence before updating the audit artifacts.
+
+The report looks directionally correct. I’m running the two cited verification commands once myself to confirm the audit’s classifications and to make sure the revised request is aimed at the current failures rather than stale implementation notes.
+
+The spot checks are matching the audit so far: the focused strictness/authoring command is failing immediately, and the broader `tests/contract tests/unit` run is also failing immediately. I’m pulling the final summaries now so I can mark the audit criteria with confidence.
+
+The audit is holding up under verification. I don’t see a missed material gap, a misclassified justified difference, or a weak revised request, so I’m marking the audit criteria complete and appending a no-findings verification note to `feedback.md`.
+
+The criteria file needs one cleanup pass: my patch appended checked lines instead of replacing the unchecked ones. I’m fixing that now so the artifact matches the verifier contract exactly.
+
+The audit artifacts are now in the correct verifier shape. I’m doing one last read-back of `criteria.md` and `feedback.md`, then I’ll close this phase as complete.
+
+Scope considered
+
+The verification covered the immutable request, raw-log clarification history, `decisions.txt`, the audit artifacts under the run-local audit directory, and the current `tests/` tree only.
+
+What I analyzed
+
+I reviewed `gap_report.md`, `revised_request.md`, `audit_result.json`, `criteria.md`, and `feedback.md`, then spot-checked the cited evidence in the final tree and reran:
+`.venv/bin/python -m pytest tests/strictness/test_no_compat.py tests/unit/stdlib/test_authoring_helpers.py -q`
+and
+`.venv/bin/python -m pytest tests/contract tests/unit -q`
+
+What I reviewed
+
+I checked whether the audit used the clarified intent ledger correctly, whether its unresolved-gap classification matched the current failures, whether the justified differences were actually supported by the later clarification, and whether the revised request is a direct next-run implementation request for the remaining material gaps.
+
+Key findings / decisions
+
+The audit is accurate. It correctly identifies that the stale-suite cleanup largely happened, but that the final retained split is broken and leaves material follow-up work. The cited failures were reproducible during verification, including the stale strictness assertion against `tests/contract/test_engine_contracts.py` and the split-module `NameError` failures caused by underscore-prefixed helpers not being imported into the new split files.
+
+I updated [criteria.md](</home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/task-do-a-complete-cleanup-on-unneeded-stale-tes-48faefbd/runs/run-20260507T194557Z-2f9c2de5/artifacts/audit/criteria.md>) to fully checked and appended a no-findings verifier note to [feedback.md](</home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/task-do-a-complete-cleanup-on-unneeded-stale-tes-48faefbd/runs/run-20260507T194557Z-2f9c2de5/artifacts/audit/feedback.md>).
+
+Open issues / next step
+
+No audit-quality blockers remain. The audit phase is complete; the remaining work is the follow-up implementation requested in [revised_request.md](</home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/task-do-a-complete-cleanup-on-unneeded-stale-tes-48faefbd/runs/run-20260507T194557Z-2f9c2de5/artifacts/audit/revised_request.md>).
+
+<loop-control>
+{"schema":"docloop.loop_control/v1","kind":"promise","promise":"COMPLETE"}
+</loop-control>
