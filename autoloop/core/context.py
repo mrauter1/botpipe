@@ -89,32 +89,19 @@ class ChildWorkflowResult(Generic[OutputT]):
 
 @dataclass(frozen=True, slots=True)
 class WorkflowInputView:
-    """Composite view over the run message and typed workflow input fields."""
+    """Attribute view over declared typed workflow input fields only."""
 
     fields: BaseModel | None = None
-    _message_value: str | None | object = _DEFAULT_MESSAGE
-    _request: RequestContext | None = field(default=None, repr=False, compare=False)
-
-    @property
-    def message(self) -> str | None:
-        if self._message_value is _DEFAULT_MESSAGE:
-            if self._request is None:
-                return None
-            return self._request.text
-        return self._message_value
 
     def __getattr__(self, name: str) -> Any:
-        if name == "message":
-            return self.message
         if self.fields is not None:
             return getattr(self.fields, name)
         raise AttributeError(name)
 
     def model_dump(self, *args: Any, **kwargs: Any) -> dict[str, Any]:
-        payload = {"message": self.message}
-        if self.fields is not None:
-            payload.update(self.fields.model_dump(*args, **kwargs))
-        return payload
+        if self.fields is None:
+            return {}
+        return self.fields.model_dump(*args, **kwargs)
 
 
 class EmptyParameters(BaseModel):
@@ -357,12 +344,7 @@ class Context:
 
     @property
     def input(self) -> WorkflowInputView:
-        request = self.request if self._message is _DEFAULT_MESSAGE else None
-        return WorkflowInputView(
-            fields=self._input_fields,
-            _message_value=self._message,
-            _request=request,
-        )
+        return WorkflowInputView(fields=self._input_fields)
 
     @property
     def artifacts(self) -> "ResolvedArtifacts | None":

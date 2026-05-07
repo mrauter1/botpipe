@@ -295,6 +295,7 @@ class Engine:
         last_event: Event | None = None
         last_outcome: Outcome | None = None
         last_transition: StepFinalizationRecord | None = None
+        context_message = _DEFAULT_MESSAGE if request_file is not None else message
         try:
             if resume:
                 checkpoint = self.checkpoint_store.load()
@@ -326,7 +327,7 @@ class Engine:
                     selection_snapshots={},
                     params=params,
                     workflow_params=workflow_params,
-                    message=message,
+                    message=context_message,
                     workflow_input=workflow_input,
                     workflow_invoker=workflow_invoker,
                     answer=None,
@@ -381,7 +382,7 @@ class Engine:
                     selection_snapshots=selection_snapshots,
                     params=params,
                     workflow_params=workflow_params,
-                    message=message,
+                    message=context_message,
                     workflow_input=workflow_input,
                     workflow_invoker=workflow_invoker,
                     answer=None,
@@ -427,7 +428,7 @@ class Engine:
                     active_worklist=step.scope_name,
                     params=params,
                     workflow_params=workflow_params,
-                    message=message,
+                    message=context_message,
                     workflow_input=workflow_input,
                     workflow_invoker=workflow_invoker,
                     answer=current_answer,

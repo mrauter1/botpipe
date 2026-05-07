@@ -924,6 +924,18 @@ def test_simple_workflow_accepts_supported_ctx_prompt_bindings() -> None:
     assert compiled.steps["review"].name == "review"
 
 
+def test_simple_workflow_accepts_input_message_prompt_binding() -> None:
+    class InputMessageWorkflow(simple.Workflow):
+        class State(BaseModel):
+            pass
+
+        review = simple.step("Message={input.message}")
+
+    compiled = compile_workflow(InputMessageWorkflow)
+
+    assert compiled.steps["review"].name == "review"
+
+
 @pytest.mark.parametrize(
     ("placeholder", "message"),
     [

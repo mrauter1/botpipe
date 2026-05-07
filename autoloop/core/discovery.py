@@ -1204,6 +1204,8 @@ def _validate_simple_prompt_reference(
             )
         return None
     if root == "input":
+        if second == "message" and not rest:
+            return None
         if second not in input_fields:
             raise WorkflowValidationError(
                 f"simple step {step_name!r} prompt placeholder {{{reference}}} references unknown input field {second!r}"
@@ -1423,8 +1425,6 @@ def _validate_ctx_prompt_reference(
     if root_name in CTX_SCALAR_FIELDS or root_name in CTX_NESTED_FIELDS:
         return None
     field_name = validated[2]
-    if root_name == "input" and field_name == "message":
-        return None
     available_fields = {
         "input": input_fields,
         "state": state_fields,

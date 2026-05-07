@@ -175,7 +175,7 @@ def _create_child_context(
         active_worklist=parent._active_worklist,
         params=parent.params,
         workflow_params=parent._workflow_params,
-        message=parent.message,
+        message=parent._message,
         workflow_input=parent.input_fields,
         workflow_invoker=parent._workflow_invoker,
         answer=parent.answer,

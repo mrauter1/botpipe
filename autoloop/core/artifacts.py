@@ -494,6 +494,12 @@ def _resolve_placeholder(expression: str, context: Context, *, placeholder_label
     elif root_name == "root":
         current = context.root
     elif root_name == "input":
+        if len(parts) > 1:
+            return _resolve_input_placeholder(
+                expression,
+                context,
+                placeholder_label=placeholder_label,
+            )
         current = context.input
     elif root_name == "state":
         current = context.state
@@ -529,6 +535,65 @@ def _resolve_placeholder(expression: str, context: Context, *, placeholder_label
     return "" if current is None else current
 
 
+def _resolve_input_placeholder(
+    expression: str,
+    context: Context,
+    *,
+    placeholder_label: str,
+) -> Any:
+    parts = expression.split(".")
+    if len(parts) < 2:
+        return context.input
+
+    field_name = parts[1]
+    input_fields = context.input_fields
+    declared_input_message = bool(
+        input_fields is not None and "message" in getattr(type(input_fields), "model_fields", {})
+    )
+    if field_name == "message" and not declared_input_message:
+        current: Any = context.message
+        for part in parts[2:]:
+            if current is None:
+                return ""
+            if isinstance(current, Mapping):
+                if part not in current:
+                    raise WorkflowExecutionError(
+                        f"{placeholder_label} {{{expression}}} references unknown input field {part!r}"
+                    )
+                current = current[part]
+                continue
+            try:
+                current = getattr(current, part)
+            except AttributeError as exc:
+                raise WorkflowExecutionError(
+                    f"{placeholder_label} {{{expression}}} references unknown input field {part!r}"
+                ) from exc
+        return "" if current is None else current
+    if context.input_fields is None:
+        raise WorkflowExecutionError(
+            f"{placeholder_label} {{{expression}}} requires workflow input, but no input was provided"
+        )
+
+    current: Any = context.input
+    for part in parts[1:]:
+        if current is None:
+            return ""
+        if isinstance(current, Mapping):
+            if part not in current:
+                raise WorkflowExecutionError(
+                    f"{placeholder_label} {{{expression}}} references unknown input field {part!r}"
+                )
+            current = current[part]
+            continue
+        try:
+            current = getattr(current, part)
+        except AttributeError as exc:
+            raise WorkflowExecutionError(
+                f"{placeholder_label} {{{expression}}} references unknown input field {part!r}"
+            ) from exc
+    return "" if current is None else current
+
+
 def _resolve_ctx_placeholder(
     expression: str,
     context: Context,
@@ -546,7 +611,7 @@ def _resolve_ctx_placeholder(
     root_name = parts[1]
     if root_name in CTX_MODEL_ROOTS:
         field_name = parts[2]
-        if root_name == "input" and field_name != "message" and context.input_fields is None:
+        if root_name == "input" and context.input_fields is None:
             raise WorkflowExecutionError(
                 f"ctx.{root_name}.{field_name} requires workflow input, but no input was provided"
             )

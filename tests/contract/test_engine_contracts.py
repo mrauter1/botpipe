@@ -8,7 +8,7 @@ import pytest
 from pydantic import BaseModel, Field
 
 from autoloop.core.compiler import compile_workflow
-from autoloop.core.artifacts import Artifact
+from autoloop.core.artifacts import Artifact, render_runtime_template, resolve_artifact_template
 from autoloop.core.context import ChildWorkflowResult, Context
 from autoloop.core.engine import Engine
 from autoloop.core.errors import (
@@ -8572,6 +8572,84 @@ def test_ctx_prompt_bindings_render_in_provider_and_operation_prompts(tmp_path: 
         *operation_prompts,
     ]
     assert all("{ctx." not in text for text in rendered_prompts)
+
+
+def test_runtime_templates_resolve_bare_input_message_and_fields(tmp_path: Path) -> None:
+    task_folder = tmp_path / "task"
+    workflow_folder = task_folder / "wf_example"
+    run_folder = workflow_folder / "runs" / "run-1"
+    package_folder = tmp_path / "package"
+    run_folder.mkdir(parents=True)
+    package_folder.mkdir()
+    (run_folder / "request.md").write_text("artifact-request\n", encoding="utf-8")
+
+    class PromptInput(BaseModel):
+        topic: str
+
+    class PromptState(BaseModel):
+        status: str = "draft"
+
+    context = Context(
+        task_id="task-bare-input-template",
+        run_id="run-bare-input-template",
+        workflow_name="example",
+        task_folder=task_folder,
+        workflow_folder=workflow_folder,
+        run_folder=run_folder,
+        package_folder=package_folder,
+        state=PromptState(),
+        workflow_input=PromptInput(topic="release"),
+        session_store=InMemorySessionStore(),
+    )
+
+    rendered = render_runtime_template(
+        "Message={input.message}; Topic={input.topic}",
+        context,
+        placeholder_label="artifact template placeholder",
+    )
+    resolved = resolve_artifact_template("outputs/{input.message}-{input.topic}.md", context)
+
+    assert rendered == "Message=artifact-request; Topic=release"
+    assert resolved == Path("outputs") / "artifact-request-release.md"
+
+
+def test_runtime_templates_reject_unknown_bare_input_field(tmp_path: Path) -> None:
+    task_folder = tmp_path / "task"
+    workflow_folder = task_folder / "wf_example"
+    run_folder = workflow_folder / "runs" / "run-1"
+    package_folder = tmp_path / "package"
+    run_folder.mkdir(parents=True)
+    package_folder.mkdir()
+    (run_folder / "request.md").write_text("artifact-request\n", encoding="utf-8")
+
+    class PromptInput(BaseModel):
+        topic: str
+
+    class PromptState(BaseModel):
+        status: str = "draft"
+
+    context = Context(
+        task_id="task-bare-input-template-error",
+        run_id="run-bare-input-template-error",
+        workflow_name="example",
+        task_folder=task_folder,
+        workflow_folder=workflow_folder,
+        run_folder=run_folder,
+        package_folder=package_folder,
+        state=PromptState(),
+        workflow_input=PromptInput(topic="release"),
+        session_store=InMemorySessionStore(),
+    )
+
+    with pytest.raises(
+        WorkflowExecutionError,
+        match=r"artifact template placeholder \{input\.missing\} references unknown input field 'missing'",
+    ):
+        render_runtime_template(
+            "{input.missing}",
+            context,
+            placeholder_label="artifact template placeholder",
+        )
 
 
 def test_prompt_steps_do_not_auto_inject_run_message_without_ctx_binding(tmp_path: Path) -> None:
