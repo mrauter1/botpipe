@@ -659,3 +659,64 @@ Open issues / next step
 <loop-control>
 {"schema":"docloop.loop_control/v1","kind":"promise","promise":"COMPLETE"}
 </loop-control>
+
+
+---
+run_id=run-20260507T122922Z-e6e948b6 | entry=session_turn | pair=test | phase=producer | cycle=1 | attempt=1 | thread_id=019e027a-8f71-79d1-87f8-8b585e932a4b
+---
+provider=codex
+mode=resume
+template=/home/rauter/.local/share/pipx/venvs/autoloop/lib/python3.12/site-packages/autoloop/templates/test_producer.md
+session_id=019e027a-8f71-79d1-87f8-8b585e932a4b
+
+
+---
+run_id=run-20260507T122922Z-e6e948b6 | entry=phase_output | pair=test | phase=producer | process=codex-agent | cycle=1 | attempt=1 | thread_id=019e027a-8f71-79d1-87f8-8b585e932a4b
+---
+I’m reviewing the current `ctx` rendering coverage against the phase contract before touching tests. I’ll map what’s already covered in the repository, then I’ll add only the missing regression cases and update the phase test artifacts with an explicit coverage map.
+
+The current repo coverage is close, but I’m tightening one useful regression surface: the runtime-only child-message path should fail explicitly for missing `ctx.input`, `ctx.state`, and `ctx.params` fields, not just `ctx.input`. I’m parameterizing that contract test so AC-2 is locked across all three model roots.
+
+I’ve broadened the runtime-only child-message regression test to cover all three `ctx` model roots. I’m recording that coverage map in the phase strategy and summarizing the additions in the phase feedback so the auditor can trace behavior-to-test alignment quickly.
+
+I’m tightening the runtime-only `workflow_step(message=...)` regression coverage and then I’ll update the phase test artifacts to match what was actually added.
+
+The contract test file is larger than expected, so I’m locating the exact runtime `ctx` message test block and patching that in place.
+
+I found the mismatch: the new parameterized test still expected only `ctx.input.missing`. I’m fixing that regex and then I’ll write the phase-local test summary artifact.
+
+The phase artifacts are updated. I’m doing a quick syntax check on the touched contract test to make sure the parameterized expectation is valid.
+
+Scope considered
+
+- Active test phase `ctx-rendering-and-validation` only.
+- Focused on request-relevant regression coverage for runtime `ctx.*` rendering, especially the runtime-only `workflow_step(message=...)` path that bypasses simple-step compile-time validation.
+- Updated the phase-local test artifacts and one contract test file.
+
+What I analyzed
+
+- Existing `ctx` coverage already present in `tests/unit/test_primitives_and_stores.py`, `tests/unit/test_simple_surface.py`, and `tests/contract/test_engine_contracts.py`.
+- The previously added runtime child-message regression test and its parameterization gap after widening coverage from `ctx.input` to `ctx.input/state/params`.
+- The active test strategy and feedback artifacts, plus the current-turn decisions block in `decisions.txt`.
+
+What I changed
+
+- In [tests/contract/test_engine_contracts.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/tests/contract/test_engine_contracts.py), I finalized the runtime-only regression test so it parameterizes unknown-field failures across:
+  - `{ctx.input.missing}`
+  - `{ctx.state.missing}`
+  - `{ctx.params.missing}`
+- I fixed the assertion to match the specific rendered placeholder expression for each parameterized case instead of only `ctx.input.missing`.
+- In [test_strategy.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/standalone-implementation-spec-ctx-prompt-bindin-edf74165/runs/run-20260507T122922Z-e6e948b6/artifacts/test/phases/ctx-rendering-and-validation/test_strategy.md), I added the explicit behavior-to-test coverage map, preserved invariants, failure paths, stabilization notes, and known gaps.
+- In [feedback.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/standalone-implementation-spec-ctx-prompt-bindin-edf74165/runs/run-20260507T122922Z-e6e948b6/artifacts/test/phases/ctx-rendering-and-validation/feedback.md), I appended a concise summary of the added/confirmed coverage.
+- I appended the non-obvious runtime-only coverage decision under the current turn header in `decisions.txt`.
+
+Key findings / decisions
+
+- The main test risk in this turn was false coverage: after parameterizing the runtime child-message test, the regex still only matched `ctx.input.missing`. That is now corrected.
+- The contract suite now explicitly guards the runtime-only failure mode across all three model roots that matter here: `ctx.input`, `ctx.state`, and `ctx.params`.
+- `python3 -m py_compile tests/contract/test_engine_contracts.py` passed.
+
+Open issues / next step
+
+- Local `pytest` execution is still unavailable in this environment, so I could not run the targeted tests end-to-end here.
+- The next step is to run the focused test slices in the project test environment, especially `tests/contract/test_engine_contracts.py` and the two `ctx` unit test files, to confirm runtime behavior matches the updated coverage map.

@@ -8643,7 +8643,19 @@ def test_workflow_step_message_renders_ctx_bindings_before_child_invocation(tmp_
     assert seen["message"] != "structured-topic"
 
 
-def test_workflow_step_message_invalid_ctx_field_raises_workflow_execution_error(tmp_path: Path) -> None:
+@pytest.mark.parametrize(
+    ("message_template", "expected_expression"),
+    (
+        ("{ctx.input.missing}", r"ctx\.input\.missing"),
+        ("{ctx.state.missing}", r"ctx\.state\.missing"),
+        ("{ctx.params.missing}", r"ctx\.params\.missing"),
+    ),
+)
+def test_workflow_step_message_invalid_ctx_field_raises_workflow_execution_error(
+    tmp_path: Path,
+    message_template: str,
+    expected_expression: str,
+) -> None:
     class ChildWorkflow(SimpleWorkflow):
         note = step("Child note.")
 
@@ -8651,9 +8663,15 @@ def test_workflow_step_message_invalid_ctx_field_raises_workflow_execution_error
         class Input(BaseModel):
             topic: str
 
+        class Params(BaseModel):
+            mode: str = "brief"
+
+        class State(BaseModel):
+            status: str = "draft"
+
         launch = workflow_step(
             ChildWorkflow,
-            message="{ctx.input.missing}",
+            message=message_template,
             routes={"done": FINISH},
         )
 
@@ -8665,7 +8683,7 @@ def test_workflow_step_message_invalid_ctx_field_raises_workflow_execution_error
 
     with pytest.raises(
         WorkflowExecutionError,
-        match=r"workflow step 'launch' message placeholder \{ctx\.input\.missing\} references unknown runtime field 'missing'",
+        match=rf"workflow step 'launch' message placeholder \{{{expected_expression}\}} references unknown runtime field 'missing'",
     ):
         Engine(
             ParentWorkflow,
@@ -8678,6 +8696,7 @@ def test_workflow_step_message_invalid_ctx_field_raises_workflow_execution_error
             task_folder=task_folder,
             run_folder=run_folder,
             root=tmp_path,
+            params=ParentWorkflow.Params(mode="brief"),
             workflow_input=ParentWorkflow.Input(topic="alpha"),
             workflow_invoker=invoke_child,
         )
