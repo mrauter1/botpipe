@@ -15,13 +15,13 @@
       "split-retained-monoliths"
     ],
     "explicit": true,
-    "current_phase_index": 2,
-    "current_phase_id": "split-retained-monoliths"
+    "current_phase_index": 3,
+    "current_phase_id": null
   },
   "phase_status": {
     "unblock-shared-suite": "completed",
     "remove-misowned-workflow-suites": "completed",
-    "split-retained-monoliths": "in_progress"
+    "split-retained-monoliths": "completed"
   },
   "phase_history": [
     {
@@ -55,6 +55,13 @@
       "run_id": "run-20260507T194557Z-2f9c2de5",
       "status": "in_progress",
       "ts": "2026-05-07T20:11:47.410618+00:00"
+    },
+    {
+      "phase_id": "split-retained-monoliths",
+      "run_id": "run-20260507T194557Z-2f9c2de5",
+      "status": "completed",
+      "ts": "2026-05-07T20:26:57.556104+00:00",
+      "pair": "implement"
     }
   ]
 }
