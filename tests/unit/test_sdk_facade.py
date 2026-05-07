@@ -716,6 +716,32 @@ def test_sdk_run_retention_keep_all_and_ephemeral_modes(tmp_path: Path) -> None:
     assert ephemeral_result.debug.task_dir.exists() is False
 
 
+def test_sdk_run_custom_promoted_writes_dir_uniquifies_collisions(tmp_path: Path) -> None:
+    shared_promotions = tmp_path / "shared-promotions"
+    task_local_artifact = simple.Text("task_local", path="{task_folder}/exports/report.txt")
+
+    class RetentionWorkflow(simple.Workflow):
+        task_local = task_local_artifact
+
+        @simple.python_step(writes=[task_local_artifact], routes={"done": FINISH})
+        def emit(ctx):
+            ctx.artifacts.task_local.write_text(ctx.message or "")
+            return Event("done")
+
+    policy = RetentionPolicy(promoted_writes_dir=shared_promotions)
+    first_client = _sdk_client_at_root(tmp_path / "first", ScriptedLLMProvider(), retention=policy)
+    second_client = _sdk_client_at_root(tmp_path / "second", ScriptedLLMProvider(), retention=policy)
+
+    first_result = first_client.run(RetentionWorkflow, "first")
+    second_result = second_client.run(RetentionWorkflow, "second")
+
+    assert first_result.artifacts.task_local.path.exists()
+    assert second_result.artifacts.task_local.path.exists()
+    assert first_result.artifacts.task_local.path != second_result.artifacts.task_local.path
+    assert first_result.artifacts.task_local.read_text() == "first"
+    assert second_result.artifacts.task_local.read_text() == "second"
+
+
 def test_sdk_run_too_many_pauses_keeps_task_scratch_by_default(tmp_path: Path) -> None:
     client = _sdk_client(tmp_path, ScriptedLLMProvider())
 

@@ -559,3 +559,57 @@ Open issues / next step
 <loop-control>
 {"schema":"docloop.loop_control/v1","kind":"promise","promise":"INCOMPLETE"}
 </loop-control>
+
+
+---
+run_id=run-20260507T184603Z-adb7c56b | entry=session_turn | pair=implement | phase=producer | cycle=2 | attempt=1 | thread_id=019e03cf-11a5-7c91-97d7-e1e2805ea0f8
+---
+provider=codex
+mode=resume
+template=/home/rauter/.local/share/pipx/venvs/autoloop/lib/python3.12/site-packages/autoloop/templates/implement_producer.md
+session_id=019e03cf-11a5-7c91-97d7-e1e2805ea0f8
+
+
+---
+run_id=run-20260507T184603Z-adb7c56b | entry=phase_output | pair=implement | phase=producer | process=codex-agent | cycle=2 | attempt=1 | thread_id=019e03cf-11a5-7c91-97d7-e1e2805ea0f8
+---
+I’m addressing the reviewer’s blocking finding in the promotion path. First I’m checking the current collision logic and the existing retention tests, then I’ll make the smallest safe fix and add coverage for `promoted_writes_dir` collisions so we don’t regress it again.
+
+I’m applying the fix in the promotion helper now. I’m keeping it conservative: default task-scoped promotion can still reuse its own destination, but any caller-supplied shared `promoted_writes_dir` will uniquify on collision so earlier retained outputs can’t be clobbered.
+
+I’ve fixed the collision branch and I’m adding a regression test for shared `promoted_writes_dir` now. That gives us a direct guard for the exact overwrite case the reviewer flagged.
+
+The regression test is in. I’m rerunning the focused SDK suite and the adjacent placeholder subset now to confirm the promotion fix didn’t disturb the rest of the retention path.
+
+I’ve got the fix verified. I’m updating the run notes and decision ledger now so the new custom-promotion collision rule is explicit for later turns.
+
+Scope considered
+
+- Active phase `sdk-retention-and-safe-cleanup`.
+- Reviewer feedback in [feedback.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/revised-sdk-implementation-spec-1-scope-implemen-1e1a7513/runs/run-20260507T184603Z-adb7c56b/artifacts/implement/phases/sdk-retention-and-safe-cleanup/feedback.md), specifically `IMP-001`.
+
+What I analyzed
+
+- The promoted-write path selection in [autoloop/sdk.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/autoloop/sdk.py), especially `_promote_declared_write(...)` and the unreachable collision branch.
+- Existing retention tests in [tests/unit/test_sdk_facade.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/tests/unit/test_sdk_facade.py).
+- The phase notes and decisions so the fix stayed within the approved retention scope.
+
+What I changed
+
+- Added `_promotion_destination(...)` in [autoloop/sdk.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/autoloop/sdk.py) and routed `_promote_declared_write(...)` through it.
+- Made custom shared `RetentionPolicy.promoted_writes_dir` collisions uniquify instead of overwriting an earlier retained artifact.
+- Added a regression test covering two runs promoting into the same shared custom directory and asserting distinct retained output paths.
+- Updated [implementation_notes.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/revised-sdk-implementation-spec-1-scope-implemen-1e1a7513/runs/run-20260507T184603Z-adb7c56b/artifacts/implement/phases/sdk-retention-and-safe-cleanup/implementation_notes.md) and appended the non-obvious collision-handling decision to [decisions.txt](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/revised-sdk-implementation-spec-1-scope-implemen-1e1a7513/runs/run-20260507T184603Z-adb7c56b/decisions.txt).
+
+Key findings / decisions
+
+- The reviewer’s blocking finding was valid: the old uniqueness branch could never fire because the destination was always under `base_dir`.
+- The fix is intentionally conservative: default SDK-managed task-scoped promotion still keeps stable destinations, while caller-supplied shared promotion bases now prefer suffixed filenames over overwrite.
+
+Open issues / next step
+
+- Validation passed:
+  `./.venv/bin/python -m pytest -q tests/unit/test_sdk_facade.py`
+  `./.venv/bin/python -m pytest -q tests/unit/test_simple_surface.py -k 'input_message_prompt_binding or ctx_input_message_prompt_binding'`
+  `python3 -m py_compile autoloop/sdk.py tests/unit/test_sdk_facade.py`
+- Next step is verifier re-review of the updated promotion logic and the new shared-directory collision test.

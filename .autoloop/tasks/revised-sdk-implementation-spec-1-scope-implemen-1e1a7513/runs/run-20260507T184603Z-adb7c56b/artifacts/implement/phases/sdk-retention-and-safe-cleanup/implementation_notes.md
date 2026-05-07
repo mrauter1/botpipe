@@ -17,7 +17,7 @@
 - `Autoloop.__init__`, `Autoloop.run`, `Autoloop.step`, `Autoloop.cleanup`
 - `SDKExecutionError`, `RetentionInfo`, `CleanupResult`, `ArtifactMap`, `WorkflowResult`
 - `_write_sdk_task_sentinel`, `_safe_delete_sdk_task_dir`, `_collect_declared_write_artifacts`
-- `_promote_declared_write`, `_apply_retention`, `_result_artifact_map_from_declared_writes`
+- `_promote_declared_write`, `_promotion_destination`, `_apply_retention`, `_result_artifact_map_from_declared_writes`
 - `_runtime_equivalent_artifact_context`, `_sdk_tasks_root`, `_default_routes_for_step`
 - `Engine._resolve_prompt`
 - `autoloop.core.operations._resolve_prompt`
@@ -44,11 +44,16 @@
 - Successful SDK `run(...)` and `step(...)` now apply default retention: promote task-local declared writes, delete sentinel-marked task scratch, and return `WorkflowResult.retention`.
 - Failed runs, unhandled input pauses, and too-many-pauses now keep task scratch by default and attach populated retention metadata to returned/raised partial results.
 - `cleanup(...)` now removes only validated SDK task directories and supports conservative dry-run reporting.
+- Custom shared `RetentionPolicy.promoted_writes_dir` bases now uniquify collisions instead of overwriting an earlier retained output from a different SDK run.
 
 ## Known non-changes
 - No workspace-file deletion policy was added beyond task-scratch removal.
 - No retention/cleanup behavior was added to operation replay folders from `llm(...)` or `classify(...)`.
 - No SDK helper constructors (`prompt_step`, `produce_verify_step`, `python_step`, `workflow_step`) were added in this phase.
+
+## Expected side effects
+- Default SDK-managed promotion paths remain stable and task-scoped.
+- Caller-supplied shared promotion bases may now receive suffixed filenames on collisions instead of in-place overwrite.
 
 ## Validation performed
 - `./.venv/bin/python -m pytest -q tests/unit/test_sdk_facade.py`

@@ -1176,6 +1176,25 @@ def _uniquify_path(path: Path) -> Path:
         counter += 1
 
 
+def _promotion_destination(
+    *,
+    artifact: DeclaredWriteArtifact,
+    source: Path,
+    root: Path,
+    task_id: str,
+    task_dir: Path,
+    policy: RetentionPolicy,
+) -> Path:
+    base_dir = _promotion_base_dir(root=root, task_id=task_id, policy=policy).resolve()
+    relative_path = source.relative_to(task_dir.resolve())
+    destination = (base_dir / relative_path).resolve()
+    if not _is_inside_path(destination, base_dir):
+        raise SDKExecutionError(f"refusing to promote declared write outside the promotion directory: {artifact.path}")
+    if destination.exists() and policy.promoted_writes_dir is not None:
+        return _uniquify_path(destination)
+    return destination
+
+
 def _promote_declared_write(
     *,
     artifact: DeclaredWriteArtifact,
@@ -1190,14 +1209,15 @@ def _promote_declared_write(
         raise SDKExecutionError(f"declared write {artifact.name!r} is not inside SDK task scratch: {artifact.path}")
     if source.is_dir():
         raise SDKExecutionError(f"declared write {artifact.name!r} points to a directory, which is unsupported in the SDK MVP")
-    base_dir = _promotion_base_dir(root=root, task_id=task_id, policy=policy).resolve()
-    relative_path = source.relative_to(resolved_task_dir)
-    destination = (base_dir / relative_path).resolve()
-    if not _is_inside_path(destination, base_dir):
-        raise SDKExecutionError(f"refusing to promote declared write outside the promotion directory: {artifact.path}")
+    destination = _promotion_destination(
+        artifact=artifact,
+        source=source,
+        root=root,
+        task_id=task_id,
+        task_dir=resolved_task_dir,
+        policy=policy,
+    )
     destination.parent.mkdir(parents=True, exist_ok=True)
-    if destination.exists() and not _is_inside_path(destination, base_dir):
-        destination = _uniquify_path(destination)
     shutil.copyfile(source, destination)
     return destination
 
