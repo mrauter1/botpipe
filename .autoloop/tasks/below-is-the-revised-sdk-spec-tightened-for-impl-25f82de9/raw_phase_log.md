@@ -211,3 +211,48 @@ The non-obvious compatibility point is that `Context` preserves old runtime beha
 Open issues / next step
 
 Validation here is limited to `python3 -m py_compile` on the touched modules and tests. I could not run `pytest` in this environment because `pytest` is not installed, and I could not run live runtime assertions because the environment Python is also missing runtime deps such as `pydantic`.
+
+
+---
+run_id=run-20260507T130811Z-54d93345 | entry=session_turn | pair=implement | phase=verifier | cycle=1 | attempt=1 | thread_id=019e0294-bcba-7dd0-b377-b52f2c1c504d
+---
+provider=codex
+mode=resume
+template=/home/rauter/.local/share/pipx/venvs/autoloop/lib/python3.12/site-packages/autoloop/templates/implement_verifier.md
+session_id=019e0294-bcba-7dd0-b377-b52f2c1c504d
+
+
+---
+run_id=run-20260507T130811Z-54d93345 | entry=phase_output | pair=implement | phase=verifier | process=codex-agent | cycle=1 | attempt=1 | thread_id=019e0294-bcba-7dd0-b377-b52f2c1c504d
+---
+I’m reviewing the phase-scoped runtime input contract work against the acceptance criteria and the run decisions. I’ll inspect the active review artifacts first, then audit the changed runtime paths and tests for regressions around message fallback, nested context cloning, and persistence separation.
+
+I’ve loaded the phase artifacts and decisions. Next I’m auditing the actual runtime code and tests line-by-line for two likely failure modes: backward-compatibility leaks from the new `message` fallback semantics, and places where the composite `ctx.input` view could still escape into raw typed-input paths.
+
+I found a likely regression surface that wasn’t covered by the new tests: `ctx.input` now always materializes `ctx.message`, so any direct `Context(...)` with typed input but no `request.md` can fail earlier than before. I’m checking the existing codebase for concrete call sites/tests that rely on the older “typed input works even without a request snapshot” behavior.
+
+I’ve confirmed a concrete compatibility regression in the runtime surface. I’m recording it in the phase feedback and leaving the criteria incomplete, because the current `ctx.input` implementation now depends on the request snapshot even for callers that only need typed input fields.
+
+Scope considered
+
+Phase-local runtime input contract changes only: `Context`, engine propagation, branch/fan-in cloning, runtime placeholder resolution, runner propagation, and the added regression tests. I also checked the active implementation notes and run decisions for scope and accepted compatibility constraints.
+
+What I analyzed
+
+I traced the new `message` / `input_fields` split through `Context`, `Engine.run` / `resume`, branch/fan-in cloning, child-workflow invocation paths, and runtime template resolution. I specifically looked for places where the composite `ctx.input` view could still leak into raw typed-input paths or where the new message fallback could change existing behavior.
+
+What I reviewed
+
+I updated the review feedback artifact with one blocking finding: [feedback.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/below-is-the-revised-sdk-spec-tightened-for-impl-25f82de9/runs/run-20260507T130811Z-54d93345/artifacts/implement/phases/runtime-input-contract/feedback.md:1). The criteria remain incomplete because that regression means the phase does not yet satisfy the acceptance bar: [criteria.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/below-is-the-revised-sdk-spec-tightened-for-impl-25f82de9/runs/run-20260507T130811Z-54d93345/artifacts/implement/phases/runtime-input-contract/criteria.md:1).
+
+Key findings / decisions
+
+`IMP-001` is blocking: [autoloop/core/context.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/autoloop/core/context.py:350) now makes every `ctx.input` access eagerly resolve `ctx.message` by constructing `WorkflowInputView(message=self.message, ...)`. That regresses direct `Context(...)` callers that provide typed `workflow_input` but have no `request.md`: `ctx.input.topic` used to work because `ctx.input` was the raw typed model, but now it first tries to read the missing request snapshot and raises. The minimal fix is to keep message fallback lazy inside the composite view so typed-field access does not depend on request snapshot availability.
+
+Open issues / next step
+
+Fix the eager message lookup in `Context.input` / `WorkflowInputView`, then add a regression test for `Context(..., workflow_input=..., no request.md)` proving `ctx.input.<field>` still works while `ctx.message` remains the only path that requires the snapshot fallback.
+
+<loop-control>
+{"schema":"docloop.loop_control/v1","kind":"promise","promise":"INCOMPLETE"}
+</loop-control>
