@@ -2162,3 +2162,12 @@ No open verification issues remain in the plan artifacts. The next step is imple
 <loop-control>
 {"schema":"docloop.loop_control/v1","kind":"promise","promise":"COMPLETE"}
 </loop-control>
+
+
+---
+run_id=run-20260507T141012Z-5af91a26 | entry=phase_scope_resolved
+---
+phase_mode=single
+phase_ids=contract-test-alignment
+explicit=True
+current_phase_index=0
