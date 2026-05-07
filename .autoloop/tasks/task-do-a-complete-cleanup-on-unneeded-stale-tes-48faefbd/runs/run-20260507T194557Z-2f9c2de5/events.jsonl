@@ -21,3 +21,7 @@
 {"ts": "2026-05-07T20:10:15.359732+00:00", "run_id": "run-20260507T194557Z-2f9c2de5", "seq": 21, "event_type": "phase_finished", "pair": "implement", "phase": "producer", "cycle": 1, "attempt": 1, "empty_output": false, "phase_id": "remove-misowned-workflow-suites"}
 {"ts": "2026-05-07T20:11:47.114500+00:00", "run_id": "run-20260507T194557Z-2f9c2de5", "seq": 22, "event_type": "phase_finished", "pair": "implement", "phase": "verifier", "cycle": 1, "attempt": 1, "empty_output": false, "phase_id": "remove-misowned-workflow-suites"}
 {"ts": "2026-05-07T20:11:47.236655+00:00", "run_id": "run-20260507T194557Z-2f9c2de5", "seq": 23, "event_type": "pair_completed", "pair": "implement", "cycle": 1, "attempt": 1, "phase_id": "remove-misowned-workflow-suites"}
+{"ts": "2026-05-07T20:11:47.378221+00:00", "run_id": "run-20260507T194557Z-2f9c2de5", "seq": 24, "event_type": "phase_completed", "pair": "implement", "phase_id": "remove-misowned-workflow-suites", "phase_mode": "single"}
+{"ts": "2026-05-07T20:11:47.411088+00:00", "run_id": "run-20260507T194557Z-2f9c2de5", "seq": 25, "event_type": "phase_started", "phase_id": "split-retained-monoliths", "phase_mode": "single"}
+{"ts": "2026-05-07T20:11:47.416418+00:00", "run_id": "run-20260507T194557Z-2f9c2de5", "seq": 26, "event_type": "pair_started", "pair": "implement", "phase_id": "split-retained-monoliths"}
+{"ts": "2026-05-07T20:11:47.416567+00:00", "run_id": "run-20260507T194557Z-2f9c2de5", "seq": 27, "event_type": "cycle_started", "pair": "implement", "cycle": 1, "attempt": 1, "phase_id": "split-retained-monoliths"}
