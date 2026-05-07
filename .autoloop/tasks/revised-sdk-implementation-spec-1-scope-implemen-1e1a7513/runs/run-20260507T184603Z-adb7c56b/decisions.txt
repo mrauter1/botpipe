@@ -2,3 +2,6 @@
 Public SDK result artifacts are planned to intentionally change from writable ArtifactHandle objects to read-oriented ResultArtifact objects; runtime artifact handles inside workflow execution remain unchanged.
 Retention and cleanup are scoped only to SDK-created workflow or step task directories in this slice; llm and classify operation replay folders remain future work.
 Cleanup and retention deletion must be sentinel-gated and conservative: when failure or awaiting-input status cannot be confidently excluded, the default behavior is to skip deletion unless the caller explicitly opts in.
+<autoloop-decisions-header version="1" block_seq="2" owner="planner" phase_id="task-global" pair="plan" turn_seq="2" run_id="run-20260507T184603Z-adb7c56b" ts="2026-05-07T18:49:54.181861+00:00" />
+Declared-write retention must use a widened SDK helper context that matches runtime field names and semantics for request paths, params, workflow params, typed input, final state, and session snapshot/store access; reusing the current subset helper is not sufficient.
+Existing client.step(...) support for simple named declarations remains part of the planned compatibility contract in this slice; concrete Step becomes the recommended path, not an exclusive one.

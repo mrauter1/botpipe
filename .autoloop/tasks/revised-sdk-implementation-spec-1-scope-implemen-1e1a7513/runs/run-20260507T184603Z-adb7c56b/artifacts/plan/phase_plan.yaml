@@ -2,120 +2,158 @@ version: 1
 task_id: revised-sdk-implementation-spec-1-scope-implemen-1e1a7513
 request_snapshot_ref: /home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/revised-sdk-implementation-spec-1-scope-implemen-1e1a7513/runs/run-20260507T184603Z-adb7c56b/request.md
 phases:
-  - phase_id: "sdk-surface-and-result-model"
-    title: "SDK Surface And Result Model"
-    objective: "Add the requested public exports and replace public SDK result artifacts with retention-aware result objects without changing runtime execution ownership."
-    status: "planned"
-    in_scope:
-      - "Update autoloop/__init__.py exports for concrete step classes and retention/result dataclasses."
-      - "Expand autoloop/sdk.py imports and define ResultArtifact, DeclaredWriteArtifact, RetentionPolicy, RetentionInfo, and CleanupResult."
-      - "Convert ArtifactMap, WorkflowResult.artifact(...), and StepResult to the new public result model."
-    out_of_scope:
-      - "Runtime artifact handle mutation semantics inside workflow execution."
-      - "Any llm(...) or classify(...) retention contract."
-    dependencies: []
-    acceptance_criteria:
-      - id: "AC-1"
-        text: "Requested imports from autoloop succeed, and public SDK result artifacts expose ResultArtifact read/materialize helpers with schema metadata preserved."
-      - id: "AC-2"
-        text: "StepResult no longer reports workflow_result.output as a misleading generic value."
-    deliverables:
-      - "Updated SDK and package export surface."
-      - "Retention-aware public result dataclasses and mapping types."
-    risks:
-      - "Downstream callers may rely on ArtifactHandle-specific mutator methods on SDK results."
-    rollback:
-      - "Revert ArtifactMap and WorkflowResult public-type changes while leaving internal runtime artifact handling untouched."
-
-  - phase_id: "sdk-retention-and-safe-cleanup"
-    title: "SDK Retention And Safe Cleanup"
-    objective: "Add sentinel-marked SDK task lifecycle management, declared-write retention, promotion, and conservative cleanup without deleting non-SDK or workspace data."
-    status: "planned"
-    in_scope:
-      - "Thread retention policy through Autoloop construction, run(...), step(...), and helper entrypoints."
-      - "Write SDK task sentinel files before execute_workflow_package(...) starts."
-      - "Implement safe SDK task deletion, declared-write collection, task-local promotion, retention application, and cleanup(...)."
-      - "Widen the SDK declared-write resolution helper to the full runtime-equivalent context surface required by the spec, including request paths, params, workflow params, typed input, final state, and session snapshot/store semantics."
-      - "Populate WorkflowResult.retention for returned and partial results."
-    out_of_scope:
-      - "Deleting workspace files outside the current SDK task directory."
-      - "Cleaning llm/classify operation replay folders."
-    dependencies:
-      - "sdk-surface-and-result-model"
-    acceptance_criteria:
-      - id: "AC-1"
-        text: "Successful SDK workflow and step runs delete only the current SDK task scratch by default while retaining declared writes and workspace writes."
-      - id: "AC-2"
-        text: "Failures, awaiting-input pauses, and too-many-pauses retain task scratch by default and return or raise partial results with populated retention metadata."
-      - id: "AC-3"
-        text: "cleanup(...) only targets valid sentinel-marked SDK task directories and refuses unsafe deletion candidates."
-      - id: "AC-4"
-        text: "Declared-write artifact resolution uses a runtime-equivalent context surface, so templates depending on request paths, params, workflow params, typed input, final state, or session state resolve the same way retention expects."
-    deliverables:
-      - "Sentinel, retention, promotion, and cleanup helpers in autoloop/sdk.py."
-      - "Retention-aware run/step exception paths and result assembly."
-    risks:
-      - "Unsafe deletion if sentinel or ancestry checks are incomplete."
-      - "Promotion collisions or path traversal bugs for task-local writes."
-    rollback:
-      - "Temporarily default SDK retention to keep_all if deletion behavior is suspect."
-      - "Disable cleanup(...) usage while keeping sentinel creation for diagnostics."
-
-  - phase_id: "sdk-routing-and-helper-entrypoints"
-    title: "SDK Routing And Helper Entrypoints"
-    objective: "Correct synthetic one-step workflow routing, add the requested helper methods, and fix workflow-backed prompt rendering for input placeholders."
-    status: "planned"
-    in_scope:
-      - "Add input placeholder rendering support in engine prompt resolution while preserving artifact-path restrictions."
-      - "Change Autoloop.step(...) to accept Step plus explicit routes and preserve caller-provided route mappings exactly."
-      - "Preserve the current client.step(...) compatibility path for existing simple named declarations while making concrete Step the recommended path."
-      - "Implement default route selection by concrete step type, including produce/verify accepted and needs_rework handling."
-      - "Add prompt_step(...), produce_verify_step(...), python_step(...), and workflow_step(...)."
-      - "Keep MVP rejections for branch groups, scoped steps, malformed steps, and unresolved child workflow references."
-    out_of_scope:
-      - "BranchGroupStep support in the SDK MVP."
-      - "Speculative capture of truthful StepResult.value beyond None."
-    dependencies:
-      - "sdk-surface-and-result-model"
-      - "sdk-retention-and-safe-cleanup"
-    acceptance_criteria:
-      - id: "AC-1"
-        text: "Prompt-backed SDK execution resolves both {input.message} and {ctx.message} to the runtime message and resolves typed input fields through input.*."
-      - id: "AC-2"
-        text: "Explicit routes passed into client.step(...) or helper methods are preserved, and default produce/verify routes allow accepted->FINISH and needs_rework->SELF."
-      - id: "AC-3"
-        text: "Helper entrypoints build the correct concrete step class and route through client.step(...) with retention support."
-      - id: "AC-4"
-        text: "Existing client.step(simple named declaration, ...) call sites continue to work unchanged while concrete Step remains the canonical authoring path."
-    deliverables:
-      - "Updated step routing and helper entrypoints in autoloop/sdk.py."
-      - "Prompt rendering adjustment in autoloop/core/engine.py."
-    risks:
-      - "Synthetic route generation may regress direct step execution semantics if explicit mappings are normalized incorrectly."
-    rollback:
-      - "Revert helper entrypoints independently from retention work if routing regressions are isolated there."
-
-  - phase_id: "sdk-acceptance-regression-tests"
-    title: "SDK Acceptance Regression Tests"
-    objective: "Codify the requested SDK behavior in focused tests so additive surface work does not regress pause handling, routing, retention, or prompt rendering."
-    status: "planned"
-    in_scope:
-      - "Extend tests/unit/test_sdk_facade.py for exports, helper methods, result artifacts, retention, cleanup, and route behavior."
-      - "Add prompt rendering coverage for input placeholders and typed input failures in the most local existing test surface."
-      - "Add regression coverage for runtime-equivalent declared-write resolution context and for existing client.step(simple named declaration, ...) compatibility."
-      - "Keep verification focused on SDK-facing behaviors and the engine placeholder seam touched by this spec."
-    out_of_scope:
-      - "Broad unrelated runtime rewrites or snapshot churn outside the affected SDK/engine contracts."
-    dependencies:
-      - "sdk-routing-and-helper-entrypoints"
-    acceptance_criteria:
-      - id: "AC-1"
-        text: "The new tests cover the acceptance bullets from the request for exports, prompt rendering, step helpers, routes, retained artifacts, retention, and safe cleanup."
-      - id: "AC-2"
-        text: "Focused SDK and prompt-related tests are sufficient to catch the intentional API/result-model changes and the deletion safety invariants."
-    deliverables:
-      - "Focused regression tests for the revised SDK surface."
-    risks:
-      - "Coverage may miss edge cases around optional missing artifacts or uncertain cleanup skip logic."
-    rollback:
-      - "Tighten test scope around the implemented contract first if initial coverage is too broad or brittle."
+- phase_id: sdk-surface-and-result-model
+  title: SDK Surface And Result Model
+  objective: Add the requested public exports and replace public SDK result artifacts
+    with retention-aware result objects without changing runtime execution ownership.
+  status: planned
+  in_scope:
+  - Update autoloop/__init__.py exports for concrete step classes and retention/result
+    dataclasses.
+  - Expand autoloop/sdk.py imports and define ResultArtifact, DeclaredWriteArtifact,
+    RetentionPolicy, RetentionInfo, and CleanupResult.
+  - Convert ArtifactMap, WorkflowResult.artifact(...), and StepResult to the new public
+    result model.
+  out_of_scope:
+  - Runtime artifact handle mutation semantics inside workflow execution.
+  - Any llm(...) or classify(...) retention contract.
+  dependencies: []
+  acceptance_criteria:
+  - id: AC-1
+    text: Requested imports from autoloop succeed, and public SDK result artifacts
+      expose ResultArtifact read/materialize helpers with schema metadata preserved.
+  - id: AC-2
+    text: StepResult no longer reports workflow_result.output as a misleading generic
+      value.
+  deliverables:
+  - Updated SDK and package export surface.
+  - Retention-aware public result dataclasses and mapping types.
+  risks:
+  - Downstream callers may rely on ArtifactHandle-specific mutator methods on SDK
+    results.
+  rollback:
+  - Revert ArtifactMap and WorkflowResult public-type changes while leaving internal
+    runtime artifact handling untouched.
+- phase_id: sdk-retention-and-safe-cleanup
+  title: SDK Retention And Safe Cleanup
+  objective: Add sentinel-marked SDK task lifecycle management, declared-write retention,
+    promotion, and conservative cleanup without deleting non-SDK or workspace data.
+  status: planned
+  in_scope:
+  - Thread retention policy through Autoloop construction, run(...), step(...), and
+    helper entrypoints.
+  - Write SDK task sentinel files before execute_workflow_package(...) starts.
+  - Implement safe SDK task deletion, declared-write collection, task-local promotion,
+    retention application, and cleanup(...).
+  - Widen the SDK declared-write resolution helper to the full runtime-equivalent
+    context surface required by the spec, including request paths, params, workflow
+    params, typed input, final state, and session snapshot/store semantics.
+  - Populate WorkflowResult.retention for returned and partial results.
+  out_of_scope:
+  - Deleting workspace files outside the current SDK task directory.
+  - Cleaning llm/classify operation replay folders.
+  dependencies:
+  - sdk-surface-and-result-model
+  acceptance_criteria:
+  - id: AC-1
+    text: Successful SDK workflow and step runs delete only the current SDK task scratch
+      by default while retaining declared writes and workspace writes.
+  - id: AC-2
+    text: Failures, awaiting-input pauses, and too-many-pauses retain task scratch
+      by default and return or raise partial results with populated retention metadata.
+  - id: AC-3
+    text: cleanup(...) only targets valid sentinel-marked SDK task directories and
+      refuses unsafe deletion candidates.
+  - id: AC-4
+    text: Declared-write artifact resolution uses a runtime-equivalent context surface,
+      so templates depending on request paths, params, workflow params, typed input,
+      final state, or session state resolve the same way retention expects.
+  deliverables:
+  - Sentinel, retention, promotion, and cleanup helpers in autoloop/sdk.py.
+  - Retention-aware run/step exception paths and result assembly.
+  risks:
+  - Unsafe deletion if sentinel or ancestry checks are incomplete.
+  - Promotion collisions or path traversal bugs for task-local writes.
+  rollback:
+  - Temporarily default SDK retention to keep_all if deletion behavior is suspect.
+  - Disable cleanup(...) usage while keeping sentinel creation for diagnostics.
+- phase_id: sdk-routing-and-helper-entrypoints
+  title: SDK Routing And Helper Entrypoints
+  objective: Correct synthetic one-step workflow routing, add the requested helper
+    methods, and fix workflow-backed prompt rendering for input placeholders.
+  status: planned
+  in_scope:
+  - Add input placeholder rendering support in engine prompt resolution while preserving
+    artifact-path restrictions.
+  - Change Autoloop.step(...) to accept Step plus explicit routes and preserve caller-provided
+    route mappings exactly.
+  - Preserve the current client.step(...) compatibility path for existing simple named
+    declarations while making concrete Step the recommended path.
+  - Implement default route selection by concrete step type, including produce/verify
+    accepted and needs_rework handling.
+  - Add prompt_step(...), produce_verify_step(...), python_step(...), and workflow_step(...).
+  - Keep MVP rejections for branch groups, scoped steps, malformed steps, and unresolved
+    child workflow references.
+  out_of_scope:
+  - BranchGroupStep support in the SDK MVP.
+  - Speculative capture of truthful StepResult.value beyond None.
+  dependencies:
+  - sdk-surface-and-result-model
+  - sdk-retention-and-safe-cleanup
+  acceptance_criteria:
+  - id: AC-1
+    text: Prompt-backed SDK execution resolves both {input.message} and {ctx.message}
+      to the runtime message and resolves typed input fields through input.*.
+  - id: AC-2
+    text: Explicit routes passed into client.step(...) or helper methods are preserved,
+      and default produce/verify routes allow accepted->FINISH and needs_rework->SELF.
+  - id: AC-3
+    text: Helper entrypoints build the correct concrete step class and route through
+      client.step(...) with retention support.
+  - id: AC-4
+    text: Existing client.step(simple named declaration, ...) call sites continue
+      to work unchanged while concrete Step remains the canonical authoring path.
+  deliverables:
+  - Updated step routing and helper entrypoints in autoloop/sdk.py.
+  - Prompt rendering adjustment in autoloop/core/engine.py.
+  risks:
+  - Synthetic route generation may regress direct step execution semantics if explicit
+    mappings are normalized incorrectly.
+  rollback:
+  - Revert helper entrypoints independently from retention work if routing regressions
+    are isolated there.
+- phase_id: sdk-acceptance-regression-tests
+  title: SDK Acceptance Regression Tests
+  objective: Codify the requested SDK behavior in focused tests so additive surface
+    work does not regress pause handling, routing, retention, or prompt rendering.
+  status: planned
+  in_scope:
+  - Extend tests/unit/test_sdk_facade.py for exports, helper methods, result artifacts,
+    retention, cleanup, and route behavior.
+  - Add prompt rendering coverage for input placeholders and typed input failures
+    in the most local existing test surface.
+  - Add regression coverage for runtime-equivalent declared-write resolution context
+    and for existing client.step(simple named declaration, ...) compatibility.
+  - Keep verification focused on SDK-facing behaviors and the engine placeholder seam
+    touched by this spec.
+  out_of_scope:
+  - Broad unrelated runtime rewrites or snapshot churn outside the affected SDK/engine
+    contracts.
+  dependencies:
+  - sdk-routing-and-helper-entrypoints
+  acceptance_criteria:
+  - id: AC-1
+    text: The new tests cover the acceptance bullets from the request for exports,
+      prompt rendering, step helpers, routes, retained artifacts, retention, and safe
+      cleanup.
+  - id: AC-2
+    text: Focused SDK and prompt-related tests are sufficient to catch the intentional
+      API/result-model changes and the deletion safety invariants.
+  deliverables:
+  - Focused regression tests for the revised SDK surface.
+  risks:
+  - Coverage may miss edge cases around optional missing artifacts or uncertain cleanup
+    skip logic.
+  rollback:
+  - Tighten test scope around the implemented contract first if initial coverage is
+    too broad or brittle.
