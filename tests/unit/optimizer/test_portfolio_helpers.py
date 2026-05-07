@@ -1,0 +1,8 @@
+from tests.unit.test_stdlib_and_extensions import (
+    test_capability_snapshot_imports_workflows_while_lightweight_portfolio_snapshot_stays_non_importing,
+    test_company_helper_accepts_single_file_workflow_references,
+    test_company_helpers_write_bounded_company_operation_snapshot_without_mutating_autoloop_state,
+    test_portfolio_health_helper_writes_grouped_workflow_run_health_via_shared_resolution_and_run_summaries,
+    test_portfolio_helper_writes_workflow_local_catalog_snapshot,
+    test_portfolio_helpers_keep_catalog_snapshot_lightweight_and_capability_snapshot_rich,
+)

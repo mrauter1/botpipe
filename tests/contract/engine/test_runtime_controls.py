@@ -1,0 +1,18 @@
+from tests.contract.test_engine_contracts import (
+    test_after_hook_request_input_checkpoints_pending_input_and_resume_validates_input,
+    test_after_producer_goto_short_circuits_verifier,
+    test_after_producer_request_input_checkpoints_pending_input_before_verifier,
+    test_before_hook_request_input_short_circuits_without_provider_and_preserves_last_route,
+    test_before_producer_request_input_short_circuits_without_provider_and_checkpoints_pending_input,
+    test_before_verifier_invalid_goto_preserves_state_and_failure_context,
+    test_before_verifier_request_input_short_circuits_verifier_and_checkpoints_pending_input,
+    test_invalid_goto_after_state_mutation_preserves_state_and_failure_context,
+    test_middleware_pause_skips_handler_and_resume_injects_answer_once,
+    test_on_taken_fail_preserves_mutated_state_and_emits_runtime_control,
+    test_on_taken_goto_checkpoints_target_before_next_step_dispatch,
+    test_on_taken_goto_handoff_reaches_target_provider_step,
+    test_on_taken_goto_skips_declared_route_target_and_emits_runtime_control,
+    test_resume_invalid_pending_input_preserves_checkpoint_and_failure_context,
+    test_resumed_request_input_is_consumed_before_later_steps,
+    test_terminal_extensions_receive_pause_fail_and_fatal_events,
+)

@@ -1,0 +1,12 @@
+from tests.unit.test_stdlib_and_extensions import (
+    test_git_filters_preserve_raw_delta_when_scoping_to_the_workflow_workspace,
+    test_git_repo_commit_allows_explicit_empty_commit_for_empty_selected_scope,
+    test_git_repo_commit_all_returns_current_head_without_empty_commit,
+    test_git_repo_commit_all_stages_tracked_and_untracked_workspace_changes,
+    test_git_repo_commit_all_tracks_untracked_files,
+    test_git_repo_commit_ignores_empty_selected_scope_when_unrelated_changes_are_pre_staged,
+    test_git_repo_commit_scope_uses_filtered_delta_without_rewriting_raw_delta,
+    test_git_repo_raw_delta_preserves_two_column_git_status_semantics,
+    test_git_repo_status_porcelain_and_is_dirty_report_workspace_changes,
+    test_session_paths_extraction_returns_only_the_declared_strategy,
+)

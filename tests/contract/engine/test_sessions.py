@@ -1,0 +1,13 @@
+from tests.contract.test_engine_contracts import (
+    test_declared_session_auto_opens_without_on_start,
+    test_invalid_goto_after_session_mutation_preserves_checkpoint_session_bindings,
+    test_llm_retry_reuses_pre_step_session_not_failed_attempt_session,
+    test_non_scoped_work_item_session_fails_when_no_current_item_exists,
+    test_on_start_opens_sessions_before_execution,
+    test_pair_retry_reuses_pre_step_session_but_keeps_attempt_local_session_chain,
+    test_phase_scoped_sessions_follow_active_scope_switches,
+    test_produce_verify_step_verifier_session_override_uses_distinct_verifier_session_slot,
+    test_provider_steps_without_explicit_session_use_default_session,
+    test_resume_reuses_legacy_global_session_binding,
+    test_work_item_session_resume_uses_dir_key_based_key_and_reuses_session,
+)

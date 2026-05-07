@@ -1,0 +1,12 @@
+from tests.contract.test_engine_contracts import (
+    test_engine_emits_provider_attempt_events_with_step_execution_identity,
+    test_extension_failure_semantics_checkpoint_latest_state_and_surface_terminal,
+    test_handler_exception_saves_failure_checkpoint,
+    test_llm_step_retries_illegal_route_twice_and_succeeds_on_third_attempt,
+    test_llm_step_retries_invalid_payload_twice_and_succeeds_on_third_attempt,
+    test_llm_step_retries_malformed_provider_output_twice_and_succeeds_on_third_attempt,
+    test_llm_step_retries_provider_transport_failure_twice_and_succeeds_on_third_attempt,
+    test_pair_step_retries_from_producer_when_route_required_artifact_is_missing,
+    test_retry_budget_exhaustion_checkpoints_failure_context_and_attempt_count,
+    test_retry_policy_can_disable_illegal_route_retries,
+)
