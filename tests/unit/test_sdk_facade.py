@@ -17,8 +17,10 @@ from autoloop import (
     InputRequired,
     InputResponseValidationError,
     ResultArtifact,
+    SDKDebugInfo,
     SDKExecutionError,
     StaticInput,
+    WorkflowResult,
     WorkflowParameterError,
     WorkflowInputError,
 )
@@ -40,6 +42,10 @@ class _SDKTypedInput(BaseModel):
 class _SDKArtifactPayload(BaseModel):
     message: str
     topic: str
+
+
+class _SDKResultState(BaseModel):
+    observed: str = "ok"
 
 
 class _SDKPauseWorkflow(simple.Workflow):
@@ -544,3 +550,56 @@ def test_sdk_run_exposes_result_artifact_metadata_and_helpers(tmp_path: Path) ->
     materialized = artifact.materialize(tmp_path / "materialized" / "artifact_snapshot.json")
 
     assert materialized.read_text(encoding="utf-8") == artifact.read_text()
+
+
+def test_result_artifact_read_model_rejects_missing_or_non_model_schema(tmp_path: Path) -> None:
+    path = tmp_path / "artifact_snapshot.json"
+    path.write_text('{"message":"Ship the release safely.","topic":"release"}\n', encoding="utf-8")
+
+    without_schema = ResultArtifact(name="artifact_snapshot", path=path, kind="json")
+    with_dict_schema = ResultArtifact(name="artifact_snapshot", path=path, kind="json", schema={"type": "object"})
+
+    with pytest.raises(TypeError, match="artifact has no schema"):
+        without_schema.read_model()
+
+    with pytest.raises(TypeError, match="supports Pydantic BaseModel schemas"):
+        with_dict_schema.read_model()
+
+
+def test_sdk_step_result_value_stays_none_even_when_workflow_result_has_output(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    client = _sdk_client(tmp_path, ScriptedLLMProvider())
+    fake_result = WorkflowResult(
+        ok=True,
+        status="completed",
+        terminal=FINISH,
+        state=_SDKResultState(),
+        output={"summary": "should-not-leak"},
+        output_validation_error=None,
+        artifacts=ArtifactMap({}),
+        history=(),
+        last_event=Event("done"),
+        last_outcome=None,
+        handled_inputs=(),
+        debug=SDKDebugInfo(
+            task_id="sdk-noop",
+            run_id="run-1",
+            task_dir=tmp_path / ".autoloop" / "tasks" / "sdk-noop",
+            workflow_dir=tmp_path / ".autoloop" / "tasks" / "sdk-noop" / "workflow",
+            run_dir=tmp_path / ".autoloop" / "tasks" / "sdk-noop" / "runs" / "run-1",
+            events_file=tmp_path / ".autoloop" / "tasks" / "sdk-noop" / "runs" / "run-1" / "events.jsonl",
+            trace_file=None,
+            checkpoint_file=None,
+        ),
+        retention=None,
+    )
+    monkeypatch.setattr(client, "run", lambda *args, **kwargs: fake_result)
+
+    result = client.step(simple.python_step(lambda _ctx: Event("done"), name="noop"), "Ship it.")
+
+    assert result.route == "done"
+    assert result.status == "completed"
+    assert result.workflow_result.output == {"summary": "should-not-leak"}
+    assert result.value is None

@@ -306,3 +306,61 @@ Open issues / next step
 <loop-control>
 {"schema":"docloop.loop_control/v1","kind":"promise","promise":"COMPLETE"}
 </loop-control>
+
+
+---
+run_id=run-20260507T184603Z-adb7c56b | entry=session_turn | pair=test | phase=producer | cycle=1 | attempt=1 | thread_id=019e03c8-27a8-7391-8ff1-6dc74646ef3d
+---
+provider=codex
+mode=resume
+template=/home/rauter/.local/share/pipx/venvs/autoloop/lib/python3.12/site-packages/autoloop/templates/test_producer.md
+session_id=019e03c8-27a8-7391-8ff1-6dc74646ef3d
+
+
+---
+run_id=run-20260507T184603Z-adb7c56b | entry=phase_output | pair=test | phase=producer | process=codex-agent | cycle=1 | attempt=1 | thread_id=019e03c8-27a8-7391-8ff1-6dc74646ef3d
+---
+I’m validating the phase-local test surface now. I’ll inspect the existing SDK tests and the active test artifacts first, then add only the missing coverage that materially improves regression protection for the new result model and `StepResult` semantics.
+
+The current tests cover the happy path, but they still leave one meaningful gap: the `StepResult.value` regression guard is weak if the underlying `workflow_result.output` also happens to be `None`. I’m tracing how workflow outputs are produced so I can add a deterministic test that would fail if `StepResult.value` were ever wired back to `workflow_result.output`.
+
+I found one worthwhile gap and I’m filling it in now: a regression guard that proves `StepResult.value` stays `None` even when the underlying `WorkflowResult.output` is populated. I’m also adding a small failure-path test for `ResultArtifact.read_model()` so the new public surface is checked beyond the happy path.
+
+The gap is covered in the test file now. I’m doing a final syntax pass and then I’ll update the phase strategy, feedback, and decision notes with the exact coverage map and the one non-obvious test choice.
+
+I’ve verified the new test code parses. I’m updating the test artifacts now with the explicit coverage map and the one test-design note that matters for future turns: the `StepResult.value` regression check is intentionally isolated with a stubbed `WorkflowResult` so it fails even if real step workflows don’t produce typed outputs in this phase.
+
+Scope considered
+
+- Phase-local test scope for the SDK surface and result model only.
+- Focused on `tests/unit/test_sdk_facade.py`, existing export coverage in `tests/unit/test_simple_surface.py`, and the phase test artifacts.
+
+What I analyzed
+
+- The implemented SDK surface changes in `autoloop/sdk.py` and `autoloop/__init__.py`.
+- Existing happy-path coverage for `ResultArtifact` and `StepResult`.
+- The active decisions ledger and the phase acceptance criteria.
+
+What I changed
+
+- Added a `ResultArtifact.read_model()` failure-path test for missing schema and non-Pydantic schema cases in `tests/unit/test_sdk_facade.py`.
+- Added a deterministic regression guard proving `StepResult.value` stays `None` even when the underlying `WorkflowResult.output` is non-`None`, using a stubbed `WorkflowResult`.
+- Updated the phase test artifacts:
+  - `test_strategy.md` with an explicit behavior-to-test coverage map.
+  - `feedback.md` with a concise summary of the added coverage.
+  - `decisions.txt` with the non-obvious rationale for the `StepResult.value` regression test design.
+
+Key findings / decisions
+
+- The strongest missing regression guard was for `StepResult.value`: the prior assertions could still pass if `workflow_result.output` happened to be `None`.
+- The new stubbed-output test closes that gap without relying on unrelated workflow-output mechanics that are outside this phase.
+- Validation available in this shell was limited to `python3 -m compileall`; `pytest` and `pydantic` are not installed here.
+
+Open issues / next step
+
+- The repo should run `pytest tests/unit/test_sdk_facade.py tests/unit/test_simple_surface.py` in an environment with dependencies installed.
+- Retention plumbing, sentinel handling, and cleanup tests remain for later phases by design.
+
+<loop-control>
+{"schema":"docloop.loop_control/v1","kind":"promise","promise":"COMPLETE"}
+</loop-control>
