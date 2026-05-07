@@ -841,3 +841,66 @@ Open issues / next step
 <loop-control>
 {"schema":"docloop.loop_control/v1","kind":"promise","promise":"COMPLETE"}
 </loop-control>
+
+
+---
+run_id=run-20260507T130811Z-54d93345 | entry=session_turn | pair=test | phase=producer | cycle=1 | attempt=1 | thread_id=019e02a5-9962-76a3-9250-09fb04c77004
+---
+provider=codex
+mode=resume
+template=/home/rauter/.local/share/pipx/venvs/autoloop/lib/python3.12/site-packages/autoloop/templates/test_producer.md
+session_id=019e02a5-9962-76a3-9250-09fb04c77004
+
+
+---
+run_id=run-20260507T130811Z-54d93345 | entry=phase_output | pair=test | phase=producer | process=codex-agent | cycle=1 | attempt=1 | thread_id=019e02a5-9962-76a3-9250-09fb04c77004
+---
+I’m checking the existing phase test artifacts and the current tracked coverage so I can decide whether any additional regression tests are still missing or whether this turn is mostly test-artifact consolidation.
+
+I found at least one stale unit test that still encodes the pre-spec behavior for `Workflow.Input.message`. I’m scanning for any other outdated expectations before patching the test set and the phase test artifacts together.
+
+I found a stale pre-spec expectation in `tests/unit/test_validation.py`; I’m now checking whether that’s the only remaining mismatch before I patch the tests and phase notes.
+
+I’m patching the one stale validation test I found and then I’ll try a targeted execution pass so the test artifacts can document actual validation rather than only static inspection.
+
+The targeted execution attempt confirmed the environment still lacks `pytest`, so I’m recording the test coverage map and the actual validation result while keeping the test changes narrow: one stale expectation fixed, existing runtime/contract coverage leveraged.
+
+Scope considered
+
+- Active test phase `input-validation-and-rendering` only.
+- Test surfaces reviewed: `tests/unit/test_validation.py`, `tests/unit/test_simple_surface.py`, `tests/runtime/test_workspace_and_context.py`, and `tests/contract/test_engine_contracts.py`.
+- Phase artifacts updated: [test_strategy.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/below-is-the-revised-sdk-spec-tightened-for-impl-25f82de9/runs/run-20260507T130811Z-54d93345/artifacts/test/phases/input-validation-and-rendering/test_strategy.md), [feedback.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/below-is-the-revised-sdk-spec-tightened-for-impl-25f82de9/runs/run-20260507T130811Z-54d93345/artifacts/test/phases/input-validation-and-rendering/feedback.md), and the current turn block in [decisions.txt](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/below-is-the-revised-sdk-spec-tightened-for-impl-25f82de9/runs/run-20260507T130811Z-54d93345/decisions.txt).
+
+What I analyzed
+
+- The current implementation and tracked coverage for:
+  - compile-time rejection of `Workflow.Input.message`
+  - simple prompt validation for `{input.message}` and `{ctx.input.message}`
+  - runtime template rendering for message-only and typed-input flows
+  - persisted `workflow_input` staying separate from `message` across pause/resume
+- The existing phase test artifacts, which were still empty at the start of this turn.
+- The decisions ledger, which already recorded the runtime-input-contract and bare `input.*` error behavior.
+
+What I changed
+
+- Replaced the stale pre-spec unit expectation in [tests/unit/test_validation.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/tests/unit/test_validation.py:107) so it now asserts compile-time rejection of `Workflow.Input.message` with the spec-defined error.
+- Filled in [test_strategy.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/below-is-the-revised-sdk-spec-tightened-for-impl-25f82de9/runs/run-20260507T130811Z-54d93345/artifacts/test/phases/input-validation-and-rendering/test_strategy.md) with an explicit behavior-to-test coverage map, edge cases, known gaps, and actual validation performed.
+- Appended a concise summary to [feedback.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/below-is-the-revised-sdk-spec-tightened-for-impl-25f82de9/runs/run-20260507T130811Z-54d93345/artifacts/test/phases/input-validation-and-rendering/feedback.md).
+- Appended one test-scope decision to `decisions.txt` so later turns do not preserve the stale `Input.message` allowance as compatibility behavior.
+
+Key findings / decisions
+
+- There was one real stale test left: `tests/unit/test_validation.py` still allowed `Workflow.Input.message`, which contradicted the accepted spec and current implementation.
+- The rest of the phase coverage was already present in tracked tests:
+  - `{input.message}` and `{ctx.input.message}` compile-time acceptance
+  - message-only runtime rendering
+  - typed-input `message` remaining distinct from request `message`
+  - persisted `workflow_input` excluding `message`
+  - unknown bare `input.*` placeholders still raising errors
+- `python3 -m py_compile` passed for the touched and adjacent tracked tests.
+
+Open issues / next step
+
+- Targeted `pytest` execution could not run here because `/usr/bin/python3` does not have `pytest` installed.
+- The known phase gap remains the deferred SDK-specific typed-input coercion helper; there is no public SDK entrypoint in-tree yet to test directly from this phase.
+- Next step is auditor review of the updated test set and phase artifacts.

@@ -185,8 +185,8 @@ def test_branch_and_fan_in_contexts_preserve_parent_request_snapshot(tmp_path: P
         assert child.request.task_file == parent.request.task_file
         assert child.message == "Branch-safe request"
         assert child.input_fields is parent.input_fields
-        assert child.input.message == "Branch-safe request"
         assert child.input.topic == "release"
+        assert not hasattr(child.input, "message")
 
 
 def test_branch_session_store_view_keeps_activation_local_to_branch(tmp_path: Path) -> None:
