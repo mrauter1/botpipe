@@ -161,3 +161,51 @@ Validated with `.venv/bin/python -m pytest`; the targeted slice passed: `19 pass
 Open issues / next step
 
 This phase does not yet wire `autoloop/core/context_placeholders.py` into prompt validation/rendering; later phases should consume that shared module instead of re-declaring `ctx.*` allowlists. A broader existing test around nested synchronous `ctx.invoke_workflow(...)` under an active event loop failed when I probed outside this phase’s scope, so I kept validation scoped to the request-context surfaces touched here.
+
+
+---
+run_id=run-20260507T122922Z-e6e948b6 | entry=session_turn | pair=implement | phase=verifier | cycle=1 | attempt=1 | thread_id=019e026e-4b76-7302-be59-9ce6e8535383
+---
+provider=codex
+mode=resume
+template=/home/rauter/.local/share/pipx/venvs/autoloop/lib/python3.12/site-packages/autoloop/templates/implement_verifier.md
+session_id=019e026e-4b76-7302-be59-9ce6e8535383
+
+
+---
+run_id=run-20260507T122922Z-e6e948b6 | entry=phase_output | pair=implement | phase=verifier | process=codex-agent | cycle=1 | attempt=1 | thread_id=019e026e-4b76-7302-be59-9ce6e8535383
+---
+I’m reviewing the phase-local request context changes against the active criteria first, then I’ll append any concrete findings to the phase feedback artifact and update the checklist accurately.
+
+I’ve isolated the main risk area now: whether `ctx.request.task_file` can incorrectly point at a missing task-level `request.md` because the runner started passing a path unconditionally. I’m checking the workspace creation logic against the spec’s “when available, otherwise None” contract before I mark criteria or write findings.
+
+I’m doing one independent verification pass on the key request-snapshot tests before I finalize the review artifacts, rather than relying only on the producer’s note.
+
+The runtime path propagation itself looks sound. The one phase-level gap is in the shared `ctx` contract helper: it doesn’t actually enforce the full allowlist shape yet, so downstream consumers still can’t rely on it as the single validation source. I’m recording that in the review artifacts now.
+
+Scope considered
+
+Phase-local review only: `Context` request/message surface, the new `autoloop/core/context_placeholders.py` helper, root context propagation through engine/runner, branch/fan-in cloning, and the producer’s added tests and implementation notes.
+
+What I analyzed
+
+I read the active criteria, feedback, implementation notes, and run decisions, then audited the changed runtime paths in `autoloop/core/context.py`, `autoloop/core/engine.py`, `autoloop/runtime/runner.py`, and `autoloop/core/branch_groups/context.py`. I also checked the new shared helper contract in `autoloop/core/context_placeholders.py` and reran three key tests covering direct context access, branch/fan-in propagation, and resume stability.
+
+What I reviewed
+
+The request snapshot plumbing itself looks correct: `ctx.message` is lazy, root contexts now receive explicit run/task request paths, and cloned branch/fan-in contexts preserve the parent snapshot. Independent verification passed for:
+- `tests/unit/test_primitives_and_stores.py::test_context_request_surface_reads_run_snapshot_and_task_request_file`
+- `tests/unit/test_branch_group_context_sessions.py::test_branch_and_fan_in_contexts_preserve_parent_request_snapshot`
+- `tests/runtime/test_workspace_and_context.py::test_resume_context_message_uses_run_local_request_snapshot_not_mutated_task_request`
+
+Key findings / decisions
+
+One blocking finding was recorded in the phase feedback artifact. The new shared `ctx` helper does not yet enforce full allowed path shapes, so unsupported references can still pass the supposed single-source validator, which undermines the phase’s “centralize the safe ctx contract” objective.
+
+Open issues / next step
+
+Fix `validate_safe_ctx_reference(...)` so the shared module fully owns scalar, nested, and model-root path-shape validation, then rerun the focused request-context tests and re-review this phase.
+
+<loop-control>
+{"schema":"docloop.loop_control/v1","kind":"promise","promise":"INCOMPLETE"}
+</loop-control>
