@@ -1068,3 +1068,51 @@ Open issues / next step
 <loop-control>
 {"schema":"docloop.loop_control/v1","kind":"promise","promise":"INCOMPLETE"}
 </loop-control>
+
+
+---
+run_id=run-20260507T130811Z-54d93345 | entry=session_turn | pair=test | phase=producer | cycle=3 | attempt=1 | thread_id=019e02a5-9962-76a3-9250-09fb04c77004
+---
+provider=codex
+mode=resume
+template=/home/rauter/.local/share/pipx/venvs/autoloop/lib/python3.12/site-packages/autoloop/templates/test_producer.md
+session_id=019e02a5-9962-76a3-9250-09fb04c77004
+
+
+---
+run_id=run-20260507T130811Z-54d93345 | entry=phase_output | pair=test | phase=producer | process=codex-agent | cycle=3 | attempt=1 | thread_id=019e02a5-9962-76a3-9250-09fb04c77004
+---
+I’m fixing the remaining audited gap in the unit validation test so AC-1 is actually covered in the tracked suite and the strategy matches the real test name again.
+
+The remaining gap is isolated to one stale unit test. I’m replacing that acceptance expectation with the spec-required rejection check and then I’ll re-run static validation so the artifacts can close cleanly.
+
+The static check passed with the final AC-1 fix. I’m updating the phase artifacts one more time so they explicitly reflect the corrected unit test and the last blocked execution attempt.
+
+Scope considered
+
+- Active test phase `input-validation-and-rendering` only.
+- I limited the code change to the single remaining audited gap in `tests/unit/test_validation.py`, plus the required phase test artifacts.
+- I did not edit the auditor-owned [criteria.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/below-is-the-revised-sdk-spec-tightened-for-impl-25f82de9/runs/run-20260507T130811Z-54d93345/artifacts/test/phases/input-validation-and-rendering/criteria.md).
+
+What I analyzed
+
+- The remaining blocking audit finding `TST-003` in [feedback.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/below-is-the-revised-sdk-spec-tightened-for-impl-25f82de9/runs/run-20260507T130811Z-54d93345/artifacts/test/phases/input-validation-and-rendering/feedback.md).
+- The stale unit test in [tests/unit/test_validation.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/tests/unit/test_validation.py:107).
+- The current coverage map in [test_strategy.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/below-is-the-revised-sdk-spec-tightened-for-impl-25f82de9/runs/run-20260507T130811Z-54d93345/artifacts/test/phases/input-validation-and-rendering/test_strategy.md), which already expected the rejection-style test name.
+
+What I changed
+
+- Replaced the stale acceptance test in [tests/unit/test_validation.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/tests/unit/test_validation.py:107) with `test_validation_rejects_workflow_input_message_field`, using `pytest.raises(WorkflowValidationError, ...)` and the spec-defined error text.
+- Updated [test_strategy.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/below-is-the-revised-sdk-spec-tightened-for-impl-25f82de9/runs/run-20260507T130811Z-54d93345/artifacts/test/phases/input-validation-and-rendering/test_strategy.md) so the validation notes explicitly match the corrected AC-1 test.
+- Appended a cycle-3 summary to [feedback.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/below-is-the-revised-sdk-spec-tightened-for-impl-25f82de9/runs/run-20260507T130811Z-54d93345/artifacts/test/phases/input-validation-and-rendering/feedback.md).
+
+Key findings / decisions
+
+- The last remaining test mismatch was isolated to one stale unit test that still encoded the pre-spec allowance for `Workflow.Input.message`.
+- `python3 -m py_compile` passed again for the touched and adjacent tracked tests after this fix.
+- The environment still cannot run `pytest` with `/usr/bin/python3` because `pytest` is not installed there.
+
+Open issues / next step
+
+- The phase test artifacts and tracked tests are now aligned with the accepted AC-1 and AC-2 contract on paper.
+- Next step is auditor re-review, and then real `pytest` execution in a provisioned environment that has the test dependencies installed.

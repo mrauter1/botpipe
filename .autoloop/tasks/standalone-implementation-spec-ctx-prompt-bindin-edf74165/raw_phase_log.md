@@ -1746,3 +1746,54 @@ Update `test_resume_context_preserves_run_message_and_raw_input_fields` to asser
 <loop-control>
 {"schema":"docloop.loop_control/v1","kind":"promise","promise":"INCOMPLETE"}
 </loop-control>
+
+
+---
+run_id=run-20260507T132940Z-5d96f5de | entry=session_turn | pair=implement | phase=producer | cycle=3 | attempt=1 | thread_id=019e02a8-3460-7f63-a341-0ead9bf7f8a2
+---
+provider=codex
+mode=resume
+template=/home/rauter/.local/share/pipx/venvs/autoloop/lib/python3.12/site-packages/autoloop/templates/implement_producer.md
+session_id=019e02a8-3460-7f63-a341-0ead9bf7f8a2
+
+
+---
+run_id=run-20260507T132940Z-5d96f5de | entry=phase_output | pair=implement | phase=producer | process=codex-agent | cycle=3 | attempt=1 | thread_id=019e02a8-3460-7f63-a341-0ead9bf7f8a2
+---
+I’m fixing the last stale runtime regression the reviewer found in the resume path, then I’ll rerun the same focused unit, contract, and runtime checks to close the phase cleanly.
+
+The failure is exactly where the reviewer pointed: the resume regression still serializes undeclared `ctx.input.message`. I’m updating that test to assert the non-alias boundary explicitly on both the paused and resumed snapshots.
+
+The runtime regression now checks the intended boundary directly instead of reaching for the removed alias. I’m rerunning the same focused unit, contract, and runtime commands the notes reference so the verifier can clear the phase on the exact same evidence.
+
+The contract and runtime subsets are green. I’m just waiting on the broader focused unit subset to complete, then I’ll close the notes with the final validation state.
+
+There’s one remaining stale unit test in `test_validation.py` that still expects the old compiler ban. I’m fixing that exact expectation now and rerunning the focused set once more.
+
+The source is stable; this is just the last stale test expectation. I’m replacing the obsolete rejection test with the explicit-allowance assertion and rerunning the same focused evidence set.
+
+The last stale unit expectation is replaced and the runtime/contract subsets are green again. I’m waiting on the unit subset to finish, then I’ll close with the exact validation counts.
+
+Scope considered
+
+The only remaining phase-local gap was the stale resume/runtime and validation coverage around the now-removed undeclared `ctx.input.message` alias, plus the active implementation notes artifact.
+
+What I analyzed
+
+I rechecked the reviewer’s `IMP-002` finding in [feedback.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/standalone-implementation-spec-ctx-prompt-bindin-edf74165/runs/run-20260507T132940Z-5d96f5de/artifacts/implement/phases/finish-ctx-request-input-separation/feedback.md:1), inspected the failing resume test in [tests/runtime/test_workspace_and_context.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/tests/runtime/test_workspace_and_context.py:736), and rechecked the stale validation expectation in [tests/unit/test_validation.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/tests/unit/test_validation.py:107).
+
+What I changed
+
+I updated the resume regression to assert request text through `ctx.message` while proving child typed input does not implicitly gain a `message` field, using `input_has_message: False` instead of reading undeclared `ctx.input.message`. I also corrected the stale validation test so explicit `Input.message` is accepted rather than rejected, and I updated [implementation_notes.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/standalone-implementation-spec-ctx-prompt-bindin-edf74165/runs/run-20260507T132940Z-5d96f5de/artifacts/implement/phases/finish-ctx-request-input-separation/implementation_notes.md:38) to record the reviewer follow-up.
+
+Key findings / decisions
+
+The runtime/source-side contract was already correct; the remaining failures were stale tests. Focused validation is now green on the exact commands referenced in the notes:
+
+- `tests/unit/test_primitives_and_stores.py tests/unit/test_branch_group_context_sessions.py tests/unit/test_simple_surface.py tests/unit/test_validation.py`: `275 passed`
+- `tests/contract/test_engine_contracts.py` targeted subset: `7 passed`
+- `tests/runtime/test_workspace_and_context.py` targeted subset: `2 passed`
+
+Open issues / next step
+
+No known open implementation issues remain in this phase-local scope. The next step is verifier re-review of the updated workspace and review artifacts.
