@@ -81,3 +81,26 @@ The producer plan should be revised to explicitly cover active-event-loop error 
 <loop-control>
 {"schema":"docloop.loop_control/v1","kind":"promise","promise":"INCOMPLETE"}
 </loop-control>
+
+
+---
+run_id=run-20260507T130811Z-54d93345 | entry=session_turn | pair=plan | phase=producer | cycle=2 | attempt=1 | thread_id=019e028d-8e36-7ca3-84de-cb0c29bc8ba1
+---
+provider=codex
+mode=resume
+template=/home/rauter/.local/share/pipx/venvs/autoloop/lib/python3.12/site-packages/autoloop/templates/plan_producer.md
+session_id=019e028d-8e36-7ca3-84de-cb0c29bc8ba1
+
+
+---
+run_id=run-20260507T130811Z-54d93345 | entry=phase_output | pair=plan | phase=producer | process=codex-agent | cycle=2 | attempt=1 | thread_id=019e028d-8e36-7ca3-84de-cb0c29bc8ba1
+---
+I’m addressing the verifier’s blocking findings by tightening the public SDK contract in the plan. First I’m checking the current plan artifacts and the latest decisions header so the revisions land in the right block and stay aligned with the existing wording.
+
+I’ve got the exact gaps. I’m tightening the plan in three places: the sync public contract under active event loops, the one-step synthesis mechanics for `Autoloop.step(...)`, and the debug/task-id contract so implementation can’t drift.
+
+The blocking gaps are patched in the plan. I’m doing one quick pass over the revised sections so the verifier sees the new contract changes exactly where it expects them: the narrative plan, the phase acceptance criteria, the feedback history, and the current decisions block.
+
+Updated the plan artifacts to address the verifier’s blockers.
+
+`plan.md` now explicitly requires `SDKExecutionError` for sync SDK calls made inside an active event loop, pins the SDK task-id/debug contract, and spells out the missing `Autoloop.step(...)` synthesis rules: `Input = type(typed_input)` when typed input is present and implicit `done -> FINISH` when no terminal route is declared. `phase_plan.yaml` was tightened in the same places with updated in-scope items and acceptance criteria, `feedback.md` got a producer follow-up entry documenting the closure, and the current `decisions.txt` block records the non-obvious contract points so later turns do not drift.

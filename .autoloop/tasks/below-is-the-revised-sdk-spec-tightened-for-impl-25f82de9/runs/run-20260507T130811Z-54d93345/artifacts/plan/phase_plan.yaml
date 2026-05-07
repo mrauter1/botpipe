@@ -58,6 +58,7 @@ phases:
     in_scope:
       - "Create autoloop/sdk.py and export the SDK public surface."
       - "Implement provider resolution, SDK task-id generation, pause loop, result mapping, and built-in input handlers."
+      - "Normalize sync active-event-loop failures into SDKExecutionError and populate the full SDKDebugInfo contract."
       - "Keep run execution on existing RunnerOptions and execute_workflow_package."
     out_of_scope:
       - "Public resume or checkpoint APIs."
@@ -70,9 +71,12 @@ phases:
         text: "Autoloop.run enforces the revised public signature, typed input rules, pause handling, and provider_questions defaults."
       - id: "AC-2"
         text: "WorkflowResult exposes mapped status/debug/artifact data without exposing public lifecycle controls."
+      - id: "AC-3"
+        text: "Sync SDK entrypoints raise SDKExecutionError, not raw bridge/runtime errors, when called from an active event loop and sync execution cannot proceed."
     deliverables:
       - "New sdk.py module and __init__.py exports."
       - "SDK result/error/input-handler implementations."
+      - "Task-id generation and SDKDebugInfo wiring aligned to the spec."
     risks:
       - "Provider resolution or pause-loop wrapping can diverge from runtime behavior if not kept runner-backed."
     rollback:
@@ -83,7 +87,7 @@ phases:
     status: "planned"
     in_scope:
       - "Delegate llm/classify to existing operation helpers with SDK-owned replay folders."
-      - "Implement synthetic one-step workflow execution for Autoloop.step."
+      - "Implement synthetic one-step workflow execution for Autoloop.step, including Input = type(typed_input) and implicit done -> FINISH synthesis rules."
       - "Add acceptance-focused SDK and runtime regression tests."
     out_of_scope:
       - "Async SDK API unless it is already low-risk after sync completion."
@@ -95,6 +99,8 @@ phases:
         text: "Autoloop.llm, Autoloop.classify, and Autoloop.step route through existing runtime/operation paths and honor the narrowed MVP scope."
       - id: "AC-2"
         text: "Acceptance coverage exists for message-plus-typed-input, params, pause handling, provider question policy, results, and standalone operations."
+      - id: "AC-3"
+        text: "Synthetic step execution supports the requested one-step defaults and rejects unsupported declarations with SDKExecutionError."
     deliverables:
       - "SDK standalone operation support."
       - "Synthetic step wrapper and acceptance-oriented test coverage."
