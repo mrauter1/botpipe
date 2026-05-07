@@ -16,13 +16,13 @@
       "sdk-operations-and-verification"
     ],
     "explicit": true,
-    "current_phase_index": 1,
-    "current_phase_id": "input-validation-and-rendering"
+    "current_phase_index": 2,
+    "current_phase_id": "sdk-facade"
   },
   "phase_status": {
     "runtime-input-contract": "completed",
-    "input-validation-and-rendering": "in_progress",
-    "sdk-facade": "planned",
+    "input-validation-and-rendering": "completed",
+    "sdk-facade": "in_progress",
     "sdk-operations-and-verification": "planned"
   },
   "phase_history": [
@@ -44,6 +44,19 @@
       "run_id": "run-20260507T130811Z-54d93345",
       "status": "in_progress",
       "ts": "2026-05-07T13:34:26.982873+00:00"
+    },
+    {
+      "phase_id": "input-validation-and-rendering",
+      "run_id": "run-20260507T130811Z-54d93345",
+      "status": "completed",
+      "ts": "2026-05-07T14:02:25.627588+00:00",
+      "pair": "test"
+    },
+    {
+      "phase_id": "sdk-facade",
+      "run_id": "run-20260507T130811Z-54d93345",
+      "status": "in_progress",
+      "ts": "2026-05-07T14:02:25.631175+00:00"
     }
   ]
 }
