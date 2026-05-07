@@ -613,3 +613,120 @@ No open issues in the test-phase audit scope.
 <loop-control>
 {"schema":"docloop.loop_control/v1","kind":"promise","promise":"COMPLETE"}
 </loop-control>
+
+
+---
+run_id=run-20260507T132940Z-5d96f5de | entry=session_turn | pair=audit | phase=producer | cycle=1 | attempt=1 | thread_id=019e02c1-9275-7bf1-8c26-d6f73345a860
+---
+provider=codex
+mode=start
+template=/home/rauter/.local/share/pipx/venvs/autoloop/lib/python3.12/site-packages/autoloop/templates/audit_producer.md
+session_id=019e02c1-9275-7bf1-8c26-d6f73345a860
+
+
+---
+run_id=run-20260507T132940Z-5d96f5de | entry=phase_output | pair=audit | phase=producer | process=codex-agent | cycle=1 | attempt=1 | thread_id=019e02c1-9275-7bf1-8c26-d6f73345a860
+---
+I’m auditing the final run against the original request, clarifications, and the shipped code/tests. I’ll read the authoritative run artifacts first, then inspect the relevant `ctx.*` implementation and regression coverage before writing the audit outputs in the run-local `artifacts/audit` directory.
+
+I have the original request and the run ledger. Next I’m checking the later phase outputs, the active audit artifacts, and the live `ctx.*` code/tests directly, because the implementer and verifier logs already disagree and the audit has to resolve that against the current workspace.
+
+I’ve confirmed the later implementation cycles converged, but I still need to verify the live source and the actual assertions that shipped. I’m reading the specific `context`, `discovery`, `engine`, `runner`, branch-clone, and regression-test sections now rather than relying on phase summaries.
+
+I’ve verified the main runtime surface, but I still need the exact validation and engine construction branches, plus the contract tests around them. I’m pulling those narrow slices now to decide whether any material gap remains or whether the implementation fully matches the request.
+
+I found at least one live contract test that still expects undeclared `{ctx.input.message}` to resolve to request text. I’m validating whether that’s just an unused stale assertion or an actual suite failure, and I’m checking the compile-time placeholder validator to make sure runtime and validation really match.
+
+The runtime and engine paths look correct, but the contract suite still contains at least one stale positive test for undeclared `{ctx.input.message}` and it fails in the live workspace. I’m checking whether there are any other leftover stale assertions of the same kind before I write the audit as a follow-up request rather than a clean pass.
+
+I have the main unresolved issue narrowed: the shipped runtime behavior matches the requested contract, but one contract test still encodes the old alias and fails. I’m reading the test-pair log now so the audit can classify whether that mismatch was noticed and justified or whether it slipped through as an unresolved gap.
+
+I have enough to classify the outcome: the implementation itself matches the requested contract, but the final codebase still contains a stale contract test that asserts the retired alias and fails when run. I’m collecting exact line references now and then I’ll write the audit artifacts under `artifacts/audit` only.
+
+I’m writing the audit outputs now. The audit conclusion is that the runtime implementation is aligned, but one stale contract test still asserts the removed alias and fails in the current workspace, so I’m marking a focused follow-up request rather than a clean pass.
+
+The audit files are written. I’m doing one quick verification pass on the audit artifacts themselves now, mainly to clean up the criteria file and confirm the JSON is valid before I close the turn.
+
+I caught one audit-artifact issue on verification: `criteria.md` had both unchecked and checked copies of each line. I’m cleaning that up now so the audit outputs are self-consistent before I return the canonical loop-control block.
+
+Scope considered
+
+- Immutable request snapshot, authoritative raw log, decisions ledger, plan/implement/test artifacts, relevant `autoloop/core` and `autoloop/runtime` source, and the final tests/workspace state.
+
+What I analyzed
+
+- Inspected `autoloop/core/context.py`, `autoloop/core/engine.py`, `autoloop/runtime/runner.py`, `autoloop/core/branch_groups/context.py`, `autoloop/core/discovery.py`, and `autoloop/core/artifacts.py`.
+- Checked the updated unit/runtime/contract tests around `ctx.message`, `ctx.input`, resume behavior, and child workflow message forwarding.
+- Reran focused pytest coverage and confirmed one live failure in `tests/contract/test_engine_contracts.py::test_runtime_templates_resolve_ctx_input_message_without_typed_input`.
+
+What I changed
+
+- Wrote `artifacts/audit/gap_report.md`.
+- Wrote `artifacts/audit/revised_request.md`.
+- Wrote `artifacts/audit/audit_result.json`.
+- Updated `artifacts/audit/criteria.md`.
+- Updated `artifacts/audit/feedback.md`.
+
+Key findings / decisions
+
+- The runtime implementation is aligned with the requested contract: `ctx.message` is file-backed from the run-local `request.md`, and undeclared `ctx.input.message` is no longer supported through `ctx.*` or direct Python `ctx.input`.
+- One material gap remains in the final codebase: `tests/contract/test_engine_contracts.py::test_runtime_templates_resolve_ctx_input_message_without_typed_input` still expects the removed alias behavior and fails in the live workspace. Focused verification result: `1 failed, 4 passed`.
+- Retaining bare `{input.message}` as an isolated compatibility shim is justified by the recorded decisions and is not treated as a gap.
+
+Open issues / next step
+
+- The next run should update that stale contract test so request text uses `{ctx.message}` or the test asserts the new failure behavior for undeclared `ctx.input.message`, then rerun the focused contract subset.
+
+<loop-control>
+{"schema":"docloop.loop_control/v1","kind":"promise","promise":"INCOMPLETE"}
+</loop-control>
+
+
+---
+run_id=run-20260507T132940Z-5d96f5de | entry=session_turn | pair=audit | phase=verifier | cycle=1 | attempt=1 | thread_id=019e02c1-9275-7bf1-8c26-d6f73345a860
+---
+provider=codex
+mode=resume
+template=/home/rauter/.local/share/pipx/venvs/autoloop/lib/python3.12/site-packages/autoloop/templates/audit_verifier.md
+session_id=019e02c1-9275-7bf1-8c26-d6f73345a860
+
+
+---
+run_id=run-20260507T132940Z-5d96f5de | entry=phase_output | pair=audit | phase=verifier | process=codex-agent | cycle=1 | attempt=1 | thread_id=019e02c1-9275-7bf1-8c26-d6f73345a860
+---
+I’m verifying the audit artifacts against the current workspace and the intent ledger. I’ll recheck the cited code/tests and the audit outputs directly, then either clear the audit as complete or append a blocking verifier finding.
+
+The audit artifacts themselves look coherent. I’m rerunning the cited focused contract subset once to confirm the producer’s only claimed unresolved gap is real, then I’ll normalize the feedback file so every finding is explicitly labeled per the verifier contract.
+
+The focused rerun reproduces exactly the gap the audit reports, and I don’t see any audit-quality defect beyond the unlabeled finding format in `feedback.md`. I’m normalizing that file now and then I can return `COMPLETE`.
+
+Scope considered
+
+- Immutable request, authoritative raw log, decisions ledger, the audit artifacts in `artifacts/audit`, the cited `autoloop/core` and `autoloop/runtime` implementation, and the relevant contract/runtime/unit tests.
+
+What I analyzed
+
+- Re-read `gap_report.md`, `revised_request.md`, `audit_result.json`, `criteria.md`, and `feedback.md`.
+- Rechecked the cited implementation surfaces for `ctx.message`, `ctx.input`, and request-file authority.
+- Reran the focused contract subset the audit cites; it still fails only at `tests/contract/test_engine_contracts.py::test_runtime_templates_resolve_ctx_input_message_without_typed_input` with `1 failed, 4 passed`.
+
+What I reviewed
+
+- `audit_result.json` is valid and consistent with the report.
+- `revised_request.md` is a direct next-run request for the unresolved material gap.
+- `criteria.md` is accurate and fully checked.
+- `feedback.md` now labels each finding and includes a verifier closure note.
+
+Key findings / decisions
+
+- The audit’s core classification is correct: the runtime implementation matches the requested contract, but one stale contract test still asserts the removed undeclared `ctx.input.message` alias.
+- The follow-up request is appropriately narrow and actionable.
+- No blocking audit-quality defects remain.
+
+Open issues / next step
+
+- No verifier-side open issues remain. The audit is complete as written and correctly leaves a focused follow-up request for the stale contract test.
+
+<loop-control>
+{"schema":"docloop.loop_control/v1","kind":"promise","promise":"COMPLETE"}
+</loop-control>

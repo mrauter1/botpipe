@@ -29,3 +29,6 @@
 {"ts": "2026-05-07T14:05:00.227120+00:00", "run_id": "run-20260507T132940Z-5d96f5de", "seq": 29, "event_type": "phase_completed", "pair": "test", "phase_id": "finish-ctx-request-input-separation", "phase_mode": "single"}
 {"ts": "2026-05-07T14:05:00.228475+00:00", "run_id": "run-20260507T132940Z-5d96f5de", "seq": 30, "event_type": "pair_started", "pair": "audit", "phase_id": null}
 {"ts": "2026-05-07T14:05:00.228556+00:00", "run_id": "run-20260507T132940Z-5d96f5de", "seq": 31, "event_type": "cycle_started", "pair": "audit", "cycle": 1, "attempt": 1, "phase_id": null}
+{"ts": "2026-05-07T14:09:16.247059+00:00", "run_id": "run-20260507T132940Z-5d96f5de", "seq": 32, "event_type": "phase_finished", "pair": "audit", "phase": "producer", "cycle": 1, "attempt": 1, "empty_output": false, "phase_id": null}
+{"ts": "2026-05-07T14:10:11.959624+00:00", "run_id": "run-20260507T132940Z-5d96f5de", "seq": 33, "event_type": "phase_finished", "pair": "audit", "phase": "verifier", "cycle": 1, "attempt": 1, "empty_output": false, "phase_id": null}
+{"ts": "2026-05-07T14:10:12.019713+00:00", "run_id": "run-20260507T132940Z-5d96f5de", "seq": 34, "event_type": "pair_completed", "pair": "audit", "cycle": 1, "attempt": 1, "phase_id": null}
