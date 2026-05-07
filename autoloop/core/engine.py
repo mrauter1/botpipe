@@ -295,7 +295,7 @@ class Engine:
         last_event: Event | None = None
         last_outcome: Outcome | None = None
         last_transition: StepFinalizationRecord | None = None
-        context_message = _DEFAULT_MESSAGE if request_file is not None else message
+        context_message = message
         try:
             if resume:
                 checkpoint = self.checkpoint_store.load()

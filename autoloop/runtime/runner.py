@@ -13,7 +13,7 @@ from pydantic import BaseModel, ValidationError
 
 from autoloop.core.artifacts import resolve_artifact_template
 from autoloop.core.compiler import CompiledArtifact, CompiledWorkflow, compile_workflow
-from autoloop.core.context import ChildWorkflowResult
+from autoloop.core.context import ChildWorkflowResult, _DEFAULT_MESSAGE
 from autoloop.core.engine import Engine, RunResult, StepFinalizationRecord
 from autoloop.core.errors import WorkflowExecutionError
 from autoloop.core.mappings import normalize_mapping
@@ -86,7 +86,7 @@ class RunnerOptions:
     root: Path
     task_id: str
     run_id: str | None = None
-    message: str | None = None
+    message: str | None | object = _DEFAULT_MESSAGE
     resume: bool = False
     answer: str | None = None
     state_dir: Path | None = None
@@ -575,10 +575,11 @@ def _prepare_workspaces(
     reference: WorkflowReference,
     planned: PlannedRunContext,
 ) -> tuple[TaskWorkspace, WorkflowWorkspace, RunWorkspace]:
+    explicit_message = None if options.message is _DEFAULT_MESSAGE else options.message
     task_workspace = ensure_workspace(
         planned.task_workspace.root,
         planned.task_workspace.task_id,
-        message=options.message,
+        message=explicit_message,
         record_message=options.record_task_message,
         state_dir=planned.task_workspace.state_root,
     )
@@ -590,7 +591,7 @@ def _prepare_workspaces(
             message=(
                 task_request_text(task_workspace.task_request_file)
                 if options.record_task_message
-                else options.message or task_request_text(task_workspace.task_request_file)
+                else explicit_message or task_request_text(task_workspace.task_request_file)
             ),
             workflow_params=options.workflow_params,
             workflow_input=options.workflow_input,
