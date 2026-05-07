@@ -829,3 +829,47 @@ The artifacts are written. I’m doing one verification pass on the generated pl
 Updated the planning artifacts for this run in [plan.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/task-do-a-complete-cleanup-on-unneeded-stale-tes-48faefbd/runs/run-20260507T203124Z-562ebe8e/artifacts/plan/plan.md), [phase_plan.yaml](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/task-do-a-complete-cleanup-on-unneeded-stale-tes-48faefbd/runs/run-20260507T203124Z-562ebe8e/artifacts/plan/phase_plan.yaml), [feedback.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/task-do-a-complete-cleanup-on-unneeded-stale-tes-48faefbd/runs/run-20260507T203124Z-562ebe8e/artifacts/plan/feedback.md), and [decisions.txt](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/task-do-a-complete-cleanup-on-unneeded-stale-tes-48faefbd/runs/run-20260507T203124Z-562ebe8e/decisions.txt).
 
 The plan keeps this as one implementation slice under `tests/` only. It records that the requested pytest target currently fails in 243 tests, with the main regression coming from split files that still use `import *` while calling underscore-prefixed helpers from `_shared.py`; it also captures the remaining `autoloop.workflows.*.params` dependency in `tests/unit/stdlib/test_authoring_helpers.py` and the stale strictness assertion for deleted `tests/contract/test_engine_contracts.py`.
+
+
+---
+run_id=run-20260507T203124Z-562ebe8e | entry=session_turn | pair=plan | phase=verifier | cycle=1 | attempt=1 | thread_id=019e0423-5779-7bd3-af06-d26692f5031f
+---
+provider=codex
+mode=resume
+template=/home/rauter/.local/share/pipx/venvs/autoloop/lib/python3.12/site-packages/autoloop/templates/plan_verifier.md
+session_id=019e0423-5779-7bd3-af06-d26692f5031f
+
+
+---
+run_id=run-20260507T203124Z-562ebe8e | entry=phase_output | pair=plan | phase=verifier | process=codex-agent | cycle=1 | attempt=1 | thread_id=019e0423-5779-7bd3-af06-d26692f5031f
+---
+I’m checking the two outlier failures that were not on the wildcard-import list to make sure the plan did not miss a separate regression class.
+
+I didn’t find prior notes for those two outliers, so I’m confirming whether they’re independent failures or just fallout from the split cleanup.
+
+The plan misses remaining failing tests inside the mandated pytest target. I’m marking the criteria accordingly and appending a blocking finding with the concrete failures and minimal correction needed.
+
+The first patch missed the current file state. I’m reading the verifier-owned checklist and feedback file exactly as written, then I’ll apply the audit update cleanly.
+
+I’ve written the blocking finding. I’m doing one quick readback to make sure the criteria state and feedback entry match the audit outcome before I close the verifier turn.
+
+Scope considered
+Run-local planning artifacts for the retained `tests/` cleanup follow-up, plus request snapshot, raw log, and decisions ledger. I also checked current failures inside the exact mandated pytest target where plan completeness was uncertain.
+
+What I analyzed
+The authoritative request and constraints, `plan.md`, `phase_plan.yaml`, `feedback.md`, `criteria.md`, and `decisions.txt`. I also re-ran focused validation on `tests/contract/test_canonical_runtime_contracts.py` and `tests/unit/test_branch_group_context_sessions.py` to verify whether the plan covered all remaining failures in the required target.
+
+What I reviewed
+The plan correctly captures the split-import regressions, the stale strictness assertion, the remaining `autoloop.workflows.*.params` dependency, the `tests/`-only scope, and the “do not restore deleted suites” constraint. The YAML phase contract is parseable and structurally coherent as a single phase.
+
+Key findings / decisions
+I recorded one blocking finding in `feedback.md` as `PLAN-001`.
+`PLAN-001` blocks completion because the plan does not account for three remaining failing tests that are still inside the required validation target: two route-contract assertions in `tests/contract/test_canonical_runtime_contracts.py` and one branch/fan-in input-view assertion in `tests/unit/test_branch_group_context_sessions.py`.
+I updated `criteria.md` accordingly: only `Technical Debt` is checked; `Intent Fidelity`, `Behavioral Safety`, `Completeness`, and `Feasibility / Compatibility` remain unchecked.
+
+Open issues / next step
+The plan needs one more revision that either includes a `tests/`-only resolution path for those three target failures or explicitly documents them as an external blocker to the user’s validation requirement.
+
+<loop-control>
+{"schema":"docloop.loop_control/v1","kind":"promise","promise":"INCOMPLETE"}
+</loop-control>
