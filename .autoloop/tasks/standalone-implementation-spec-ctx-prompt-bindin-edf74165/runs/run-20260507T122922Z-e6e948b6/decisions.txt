@@ -3,3 +3,6 @@ ctx.message and ctx.request.text must read the run-local request.md snapshot laz
 Safe ctx placeholder allowlists and path validation must live in one shared module and be reused by compile-time and runtime resolvers to prevent acceptance drift.
 ctx.* placeholders are prompt-only; artifact path templates must reject them without changing existing non-ctx path placeholder behavior.
 workflow_step(message=...) should render supported runtime placeholders, but message_from content must remain a literal file or artifact read with no template expansion.
+<autoloop-decisions-header version="1" block_seq="2" owner="implementer" phase_id="ctx-context-surface" pair="implement" turn_seq="1" run_id="run-20260507T122922Z-e6e948b6" ts="2026-05-07T12:34:02.717909+00:00" />
+Engine.run/run_async/resume/resume_async now accept optional request_file and task_request_file so runner-backed executions can preserve the persisted run snapshot explicitly while direct engine callers keep deriving request paths from run_folder and task_folder.
+autoloop/core/context_placeholders.py defines the shared safe ctx contract in this phase; later prompt-validation and rendering phases should consume it instead of re-declaring ctx allowlists locally.
