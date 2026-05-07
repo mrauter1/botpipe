@@ -7,3 +7,5 @@ The requested narrowing applies to direct Python `ctx.input.message` / `ctx.inpu
 Legacy bare `{input.message}` behavior is outside the requested `ctx.*` contract change and should only survive as an isolated compatibility shim, not by keeping `ctx.input` aliased to request text.
 If in-tree examples such as `sdk.md` are touched while implementing this slice, they must match the retained-versus-migrated `input.message` boundary in the same change.
 <autoloop-decisions-header version="1" block_seq="3" owner="implementer" phase_id="finish-ctx-request-input-separation" pair="implement" turn_seq="1" run_id="run-20260507T132940Z-5d96f5de" ts="2026-05-07T13:37:17.850734+00:00" />
+`Workflow.Input` may now explicitly declare a `message` field; `ctx.input.message` and direct Python `ctx.input.message` only resolve through that declared field and no longer fall back to request text.
+Legacy bare `{input.message}` stays as a compatibility-only shim: it resolves to the declared input field when one exists, otherwise it falls back to request text without restoring the alias on `ctx.input` itself.

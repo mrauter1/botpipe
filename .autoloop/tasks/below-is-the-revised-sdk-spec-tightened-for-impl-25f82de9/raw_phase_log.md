@@ -728,3 +728,59 @@ Open issues / next step
 <loop-control>
 {"schema":"docloop.loop_control/v1","kind":"promise","promise":"INCOMPLETE"}
 </loop-control>
+
+
+---
+run_id=run-20260507T130811Z-54d93345 | entry=session_turn | pair=implement | phase=producer | cycle=3 | attempt=1 | thread_id=019e02a5-9962-76a3-9250-09fb04c77004
+---
+provider=codex
+mode=resume
+template=/home/rauter/.local/share/pipx/venvs/autoloop/lib/python3.12/site-packages/autoloop/templates/implement_producer.md
+session_id=019e02a5-9962-76a3-9250-09fb04c77004
+
+
+---
+run_id=run-20260507T130811Z-54d93345 | entry=phase_output | pair=implement | phase=producer | process=codex-agent | cycle=3 | attempt=1 | thread_id=019e02a5-9962-76a3-9250-09fb04c77004
+---
+I’m fixing the still-open blocker directly in the source this time, not just in placeholder helpers or tests. First I’m re-reading the current `Context` / `WorkflowInputView` and the specific tracked tests the reviewer cited so I can patch the actual contract and the stale expectations together.
+
+I’m editing the actual contract now: `WorkflowInputView` will carry message plus typed fields, `Context.input` will return that composite view, and the tracked tests that currently encode the old typed-only surface will be flipped to assert the revised behavior instead of expecting failures.
+
+The composite `ctx.input` view is now in source, and the tracked runtime/contract tests that were preserving the old typed-only contract have been updated. I’m sweeping the touched files for any remaining stale `input_has_message` / `not hasattr(..., "message")` assertions and then I’ll refresh the phase notes.
+
+The tracked source and test surfaces are now aligned on the composite `ctx.input.message` contract. I’m doing one last status/diff pass against exactly the phase-local files so I can close with a precise summary and call out the remaining non-blocking deferment only.
+
+Scope considered
+
+- Active phase `input-validation-and-rendering`, with the blast radius limited to the runtime input-view contract and its tracked validation/rendering coverage.
+- I focused on the still-open blocker from feedback: `ctx.input.message` was not actually implemented in source.
+
+What I analyzed
+
+- `WorkflowInputView` and `Context.input` in `autoloop/core/context.py`.
+- The reviewer’s blocker in `feedback.md`.
+- The current placeholder/rendering behavior already in `autoloop/core/{discovery,artifacts}.py`.
+- Tracked runtime/contract/unit expectations around `ctx.input.message`.
+
+What I changed
+
+- `autoloop/core/context.py`
+  - `WorkflowInputView` now carries message separately from typed fields.
+  - Added `WorkflowInputView.message` with request-backed fallback when `Context.message` is still `_DEFAULT_MESSAGE`.
+  - `WorkflowInputView.__getattr__` now exposes `message`.
+  - `WorkflowInputView.model_dump()` now includes `{"message": ...}` plus typed fields.
+  - `Context.input` now returns the composite view instead of the old typed-only view.
+- I verified that the stale `input_has_message` / `not hasattr(..., "message")` / undeclared-`ctx.input.message` expectations are gone from the tracked surfaces I checked.
+- `python3 -m py_compile` passed for the touched source/test files.
+
+Key findings / decisions
+
+- The blocker was in the source contract, not just in placeholder helpers: `ctx.input.message` could not work until `WorkflowInputView` itself became composite again.
+- I did not add the SDK-specific coercion helper in this turn; that remains the existing non-blocking deferment from feedback.
+- I did not widen into child-workflow dict compatibility or broader placeholder redesign.
+
+Open issues / next step
+
+- Next step is verifier re-review against this updated tree.
+- The remaining known gap is still the non-blocking SDK-targeted typed-input coercion helper noted in `feedback.md`.
+- Runtime/test execution is still limited by the environment; I only validated with `py_compile` here.
