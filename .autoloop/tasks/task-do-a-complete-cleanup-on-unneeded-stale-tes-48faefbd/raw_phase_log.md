@@ -79,3 +79,35 @@ Best supposition: NO — treat the current checkout as authoritative for repo sh
 
 Answer:
 Yes, they actually exists in this repo. But tests/ are the wrong place for those tests. workflows tests should be inside the worspecific workflow folder, recursive_autoloop tests should be inside recursive_autoloop. Docs I don't see the reason to be on the scope of tests
+
+
+---
+run_id=run-20260507T194557Z-2f9c2de5 | entry=session_turn | pair=plan | phase=producer | cycle=1 | attempt=2 | thread_id=019e03f9-bb40-7960-8b03-7bd4e29b7c88
+---
+provider=codex
+mode=resume
+template=/home/rauter/.local/share/pipx/venvs/autoloop/lib/python3.12/site-packages/autoloop/templates/plan_producer.md
+session_id=019e03f9-bb40-7960-8b03-7bd4e29b7c88
+
+
+---
+run_id=run-20260507T194557Z-2f9c2de5 | entry=phase_output | pair=plan | phase=producer | process=codex-agent | cycle=1 | attempt=2 | thread_id=019e03f9-bb40-7960-8b03-7bd4e29b7c88
+---
+The clarification resolved the repo-shape conflict. I’m writing the plan around removing out-of-scope coverage from `tests/` rather than preserving it behind markers, because the owner-specific workflow and recursive suites should not remain under `tests/` at all.
+
+I’ve settled the decomposition: first unblock and remove clearly misowned coverage, then repair shared survivors so they use synthetic fixtures only, then optionally split the remaining monoliths once the suite is stable. I’m writing that into the run-local plan artifacts now.
+
+The plan files are written. I’m doing a quick consistency pass now to catch any artifact-shape mistakes before I close this turn.
+
+There was one artifact-shape issue: `phase_plan.yaml` ended up with a duplicate `phases` key from the initial empty stub. I’m correcting that and leaving the plan content unchanged.
+
+The artifact shape is fixed. I’m doing a final read of the phase file header and then I’ll close with the planning outcome.
+
+Updated the run-local planning artifacts at [plan.md](</home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/task-do-a-complete-cleanup-on-unneeded-stale-tes-48faefbd/runs/run-20260507T194557Z-2f9c2de5/artifacts/plan/plan.md>), [phase_plan.yaml](</home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/task-do-a-complete-cleanup-on-unneeded-stale-tes-48faefbd/runs/run-20260507T194557Z-2f9c2de5/artifacts/plan/phase_plan.yaml>), and [feedback.md](</home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/task-do-a-complete-cleanup-on-unneeded-stale-tes-48faefbd/runs/run-20260507T194557Z-2f9c2de5/artifacts/plan/feedback.md>), and appended the clarified ownership decisions to [decisions.txt](</home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/task-do-a-complete-cleanup-on-unneeded-stale-tes-48faefbd/runs/run-20260507T194557Z-2f9c2de5/decisions.txt>).
+
+The plan now assumes:
+- `tests/` should keep only shared framework coverage.
+- Workflow-package, recursive-autoloop, and docs-owned tests are removed from `tests/`, not hidden behind markers.
+- Surviving workflow-related tests must use synthetic `tmp_path` fixtures rather than repo-root assets.
+
+I did not touch [criteria.md](</home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/task-do-a-complete-cleanup-on-unneeded-stale-tes-48faefbd/runs/run-20260507T194557Z-2f9c2de5/artifacts/plan/criteria.md>).
