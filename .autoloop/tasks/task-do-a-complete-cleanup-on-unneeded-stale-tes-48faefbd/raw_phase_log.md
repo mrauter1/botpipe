@@ -1029,3 +1029,60 @@ Open issues / next step
 
 - Requested follow-up is complete.
 - Residual warning remains in `tests/unit/test_provider_boundary_core.py` about an unawaited coroutine during a warning-path test; it did not block the requested target and was not changed here.
+
+
+---
+run_id=run-20260507T203124Z-562ebe8e | entry=session_turn | pair=implement | phase=verifier | cycle=1 | attempt=1 | thread_id=019e0429-5d80-7291-a56f-2b4a169ba744
+---
+provider=codex
+mode=resume
+template=/home/rauter/.local/share/pipx/venvs/autoloop/lib/python3.12/site-packages/autoloop/templates/implement_verifier.md
+session_id=019e0429-5d80-7291-a56f-2b4a169ba744
+
+
+---
+run_id=run-20260507T203124Z-562ebe8e | entry=phase_output | pair=implement | phase=verifier | process=codex-agent | cycle=1 | attempt=1 | thread_id=019e0429-5d80-7291-a56f-2b4a169ba744
+---
+I’m reviewing the retained `tests/` changes against the active criteria and decision ledger first, then I’ll update the phase review artifacts with either findings or a clean completion state.
+
+The implementation notes line up with the plan. I’m now checking the actual retained test files and their diffs for any missed private-helper dependency or semantic drift before I mark the criteria.
+
+I’ve confirmed the semantic assertion updates. I’m doing one last automated scan with the venv interpreter for explicit private-helper imports so I can safely close out the criteria with no blind spots.
+
+I’ve finished the audit. The retained split imports are explicit, the workflow-package params dependency is gone, the stale assertions match the maintained runtime surfaces, and I did not find a blocking or non-blocking implementation defect to carry forward.
+
+Scope considered
+
+- The retained `tests/` cleanup covered by the active phase contract.
+- The phase-owned review artifacts: `criteria.md`, `feedback.md`, `implementation_notes.md`, and `decisions.txt`.
+- Adjacent runtime references only where needed to verify the stale assertion realignments.
+
+What I analyzed
+
+- The accepted plan, run-local decisions, and implementation notes.
+- The retained split test files that were supposed to stop relying on underscore-prefixed helper leakage from `import *`.
+- The local synthetic parameter-model replacement in `tests/unit/stdlib/test_authoring_helpers.py`.
+- The maintained runtime semantics behind `question` route required writes and `WorkflowInputView.message`.
+
+What I reviewed
+
+- Explicit private-helper imports across the retained split modules.
+- Removal of direct `autoloop.workflows.*.params` imports from retained tests.
+- The strictness/runtime assertion updates in `tests/strictness/test_no_compat.py`, `tests/contract/test_canonical_runtime_contracts.py`, and `tests/unit/test_branch_group_context_sessions.py`.
+- Validation evidence for `.venv/bin/python -m pytest tests/strictness/test_no_compat.py tests/contract tests/unit -q`.
+
+Key findings / decisions
+
+- No blocking findings.
+- No non-blocking findings.
+- I updated `criteria.md` to mark all acceptance areas satisfied.
+- I appended `feedback.md` with a clean review outcome and the audit/validation notes.
+
+Open issues / next step
+
+- No review issues remain for this phase.
+- The phase can proceed as complete; the only noted test output was the existing warning already captured in implementation notes.
+
+<loop-control>
+{"schema":"docloop.loop_control/v1","kind":"promise","promise":"COMPLETE"}
+</loop-control>
