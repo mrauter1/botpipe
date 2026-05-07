@@ -35,6 +35,7 @@ phases:
       - "Thread retention policy through Autoloop construction, run(...), step(...), and helper entrypoints."
       - "Write SDK task sentinel files before execute_workflow_package(...) starts."
       - "Implement safe SDK task deletion, declared-write collection, task-local promotion, retention application, and cleanup(...)."
+      - "Widen the SDK declared-write resolution helper to the full runtime-equivalent context surface required by the spec, including request paths, params, workflow params, typed input, final state, and session snapshot/store semantics."
       - "Populate WorkflowResult.retention for returned and partial results."
     out_of_scope:
       - "Deleting workspace files outside the current SDK task directory."
@@ -48,6 +49,8 @@ phases:
         text: "Failures, awaiting-input pauses, and too-many-pauses retain task scratch by default and return or raise partial results with populated retention metadata."
       - id: "AC-3"
         text: "cleanup(...) only targets valid sentinel-marked SDK task directories and refuses unsafe deletion candidates."
+      - id: "AC-4"
+        text: "Declared-write artifact resolution uses a runtime-equivalent context surface, so templates depending on request paths, params, workflow params, typed input, final state, or session state resolve the same way retention expects."
     deliverables:
       - "Sentinel, retention, promotion, and cleanup helpers in autoloop/sdk.py."
       - "Retention-aware run/step exception paths and result assembly."
@@ -65,6 +68,7 @@ phases:
     in_scope:
       - "Add input placeholder rendering support in engine prompt resolution while preserving artifact-path restrictions."
       - "Change Autoloop.step(...) to accept Step plus explicit routes and preserve caller-provided route mappings exactly."
+      - "Preserve the current client.step(...) compatibility path for existing simple named declarations while making concrete Step the recommended path."
       - "Implement default route selection by concrete step type, including produce/verify accepted and needs_rework handling."
       - "Add prompt_step(...), produce_verify_step(...), python_step(...), and workflow_step(...)."
       - "Keep MVP rejections for branch groups, scoped steps, malformed steps, and unresolved child workflow references."
@@ -81,6 +85,8 @@ phases:
         text: "Explicit routes passed into client.step(...) or helper methods are preserved, and default produce/verify routes allow accepted->FINISH and needs_rework->SELF."
       - id: "AC-3"
         text: "Helper entrypoints build the correct concrete step class and route through client.step(...) with retention support."
+      - id: "AC-4"
+        text: "Existing client.step(simple named declaration, ...) call sites continue to work unchanged while concrete Step remains the canonical authoring path."
     deliverables:
       - "Updated step routing and helper entrypoints in autoloop/sdk.py."
       - "Prompt rendering adjustment in autoloop/core/engine.py."
@@ -96,6 +102,7 @@ phases:
     in_scope:
       - "Extend tests/unit/test_sdk_facade.py for exports, helper methods, result artifacts, retention, cleanup, and route behavior."
       - "Add prompt rendering coverage for input placeholders and typed input failures in the most local existing test surface."
+      - "Add regression coverage for runtime-equivalent declared-write resolution context and for existing client.step(simple named declaration, ...) compatibility."
       - "Keep verification focused on SDK-facing behaviors and the engine placeholder seam touched by this spec."
     out_of_scope:
       - "Broad unrelated runtime rewrites or snapshot churn outside the affected SDK/engine contracts."

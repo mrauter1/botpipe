@@ -25,7 +25,7 @@
 - Thread `retention` through `Autoloop.__init__`, `run(...)`, `step(...)`, and all new helper methods.
 - Write `.autoloop-sdk-task.json` before each SDK-backed execution once `task_id` and `task_dir` are known.
 - Add `_safe_delete_sdk_task_dir(...)` with strict sentinel, ancestry, and dangerous-path guards before any deletion.
-- Reuse the existing SDK/runtime artifact-context fields to collect declared write artifacts from `execution.compiled.artifact_items(authoritative=False)`.
+- Extend the SDK artifact-resolution helper to a full runtime-equivalent context for declared-write collection, reusing runtime field names and semantics for `root`, `task_id`, `run_id`, `workflow_name`, `task_folder`, `workflow_folder`, `run_folder`, `package_folder`, `request_file`, `task_request_file`, final `state`, `params`, `workflow_params`, `message`, typed `input`, and session snapshot/store access.
 - Promote declared artifacts that resolve inside task scratch into `<root>/.autoloop/outputs/sdk/<task-id>/` or a caller override, then apply retention according to policy.
 - Keep task scratch by default on failed runs, unhandled input pauses, too-many-pauses, and resume/input validation errors.
 - Add `cleanup(...)` that scans only sentinel-marked SDK task directories and skips uncertain failed/paused runs unless explicitly included.
@@ -34,6 +34,7 @@
 - Add `"input"` to engine prompt rendering roots while preserving the existing artifact-template ban on `ctx.*`.
 - Keep `{ctx.message}` and `{input.message}` equivalent for workflow-backed prompt execution.
 - Change `Autoloop.step(...)` to accept concrete `Step` plus optional explicit `routes`.
+- Preserve the current `client.step(simple.<factory>(...), ...)` compatibility path for existing simple named declarations, while keeping concrete `Step` as the recommended authoring path.
 - Build synthetic workflows by preserving caller-supplied routes exactly; only synthesize defaults when `routes is None`.
 - Use spec-defined defaults: `"done" -> FINISH` for prompt/python/child-workflow steps and `"accepted" -> FINISH`, `"needs_rework" -> SELF` for produce/verify steps.
 - Continue rejecting `BranchGroupStep`, scoped/worklist steps, malformed steps, and unresolved child workflow refs in the SDK MVP.
@@ -63,14 +64,16 @@
 - `ResultArtifact` intentionally remains read-only/materialization-focused; write helpers stay on runtime artifact handles inside workflow execution.
 - `StepResult.value = workflow_result.output` is intentionally removed because it is not truthful for general one-step execution.
 - The simple authoring factories (`step`, `produce_verify_step`, `python_step`, `validation_step`, `workflow_step`) remain exported and unchanged.
+- Existing `client.step(simple.llm.step(...), ...)` and comparable simple named-declaration call sites remain supported for backward compatibility in this slice; the plan only recenters documentation and new helper methods around concrete `Step` instances.
 - No retention or cleanup contract is added to `llm(...)` or `classify(...)` in this slice.
 
 ## Regression Controls
-- Reuse the existing SDK/runtime artifact path resolution shape instead of inventing parallel placeholder semantics.
+- Reuse the existing SDK/runtime artifact path resolution shape and field names, but explicitly widen the SDK helper context to the full runtime-equivalent placeholder surface required by the request instead of relying on the current subset helper.
 - Keep retention deletion bounded to SDK-created task directories proven by sentinel and path checks.
 - Preserve existing pause-loop semantics; only inject retention before returning or raising partial-result exceptions.
 - Keep workspace writes outside the current SDK task directory untouched, including previously promoted outputs.
 - Limit cleanup to sentinel-marked directories and skip uncertain failed/awaiting-input state when `include_failed=False`.
+- Preserve current `client.step(...)` behavior for simple named declarations unless a later user clarification explicitly authorizes narrowing that support.
 
 ## Validation
 - Run focused unit coverage in `tests/unit/test_sdk_facade.py`.
@@ -78,6 +81,8 @@
 - Verify export coverage with import-based tests or `test_simple_surface` updates.
 - Verify successful SDK runs delete scratch by default, while failure/input-required/too-many-pauses retain scratch by default.
 - Verify explicit `routes=` preserves `SELF`, `FINISH`, `AWAIT_INPUT`, `FAIL`, `Route(...)`, and valid concrete targets without route-name rewriting.
+- Verify declared-write resolution works for templates that depend on the widened runtime-equivalent context fields rather than only the current SDK subset helper.
+- Verify existing `client.step(simple.llm.step(...), ...)` and equivalent simple named-declaration call sites continue to work unchanged.
 
 ## Risk Register
 - Risk: deleting non-SDK directories.
@@ -87,9 +92,11 @@
 - Risk: route regressions for single-step workflows, especially produce/verify rework loops.
   Mitigation: centralize default-route selection and test both defaults and explicit overrides.
 - Risk: incorrect artifact promotion for task-local writes.
-  Mitigation: reuse compiled artifact metadata, keep path traversal checks strict, and reject unsupported directory promotion unless implemented safely.
+  Mitigation: reuse compiled artifact metadata, widen the SDK resolution context to the full runtime-equivalent field set, keep path traversal checks strict, and reject unsupported directory promotion unless implemented safely.
 - Risk: cleanup removing paused or failed forensic data.
   Mitigation: conservative skip logic by default and `dry_run` coverage.
+- Risk: narrowing `client.step(...)` to concrete `Step` only and breaking current simple declaration call sites.
+  Mitigation: keep backward-compatibility coverage explicit in the plan and tests while shifting recommendations and helper docs toward concrete `Step` usage.
 
 ## Rollback
 - Revert SDK export additions if downstream import surface needs to be narrowed.
