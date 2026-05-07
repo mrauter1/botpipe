@@ -1086,3 +1086,62 @@ Open issues / next step
 <loop-control>
 {"schema":"docloop.loop_control/v1","kind":"promise","promise":"COMPLETE"}
 </loop-control>
+
+
+---
+run_id=run-20260507T203124Z-562ebe8e | entry=session_turn | pair=test | phase=producer | cycle=1 | attempt=1 | thread_id=019e0429-5d80-7291-a56f-2b4a169ba744
+---
+provider=codex
+mode=resume
+template=/home/rauter/.local/share/pipx/venvs/autoloop/lib/python3.12/site-packages/autoloop/templates/test_producer.md
+session_id=019e0429-5d80-7291-a56f-2b4a169ba744
+
+
+---
+run_id=run-20260507T203124Z-562ebe8e | entry=phase_output | pair=test | phase=producer | process=codex-agent | cycle=1 | attempt=1 | thread_id=019e0429-5d80-7291-a56f-2b4a169ba744
+---
+I’m checking the existing test-phase artifacts and the retained test edits before deciding whether any extra regression coverage is warranted beyond the already-updated test files.
+
+The implementation already covers the runtime semantics, but I’m adding one small regression test where it has the most leverage: a source-level check in `tests/unit/stdlib/test_authoring_helpers.py` that prevents repo-owned workflow-package `params` imports from creeping back into the retained shared test.
+
+The extra regression guard is in place. I’m rerunning the requested target so the test-phase artifacts can cite a fresh result for the final retained suite, not just the implementation pass.
+
+The full retained target is moving cleanly through the suite with the added regression guard. I’m waiting for completion, then I’ll update `test_strategy.md`, append the test-phase feedback note, and record any non-obvious test decision under this turn’s decision header.
+
+The first guard tripped on its own assertion string, not on a real dependency. I’m tightening it to an AST-based import check so it stays deterministic and only fails on actual repo-owned workflow-package imports.
+
+The second failure is just a missing local `ast` import for the new source-scan test. I’m fixing that small oversight and rerunning the same target.
+
+The retained target is past the new regression guard now. Once this run finishes, I’ll write the behavior-to-coverage map and the test-phase summary artifacts against the final passing result.
+
+The requested target passed with the added regression guard. I’m cleaning the generated `__pycache__` artifacts again and then updating the test-phase artifacts plus this turn’s decision block with the structural import-boundary check rationale.
+
+Scope considered
+
+- The retained `tests/` cleanup in the active phase contract.
+- The changed retained test files, especially `tests/unit/stdlib/test_authoring_helpers.py`.
+- The test-phase artifacts: `test_strategy.md`, `feedback.md`, and the current-turn decision block.
+
+What I analyzed
+
+- The implementation/test changes already in the retained split suite.
+- The structural regression risk around repo-owned workflow-package `params` imports returning to retained shared tests.
+- The requested target `.venv/bin/python -m pytest tests/strictness/test_no_compat.py tests/contract tests/unit -q`.
+
+What I changed
+
+- Added `tests/unit/stdlib/test_authoring_helpers.py::test_retained_stdlib_authoring_test_stays_free_of_repo_owned_workflow_package_params`, an AST-based source-scan guard that fails only on real forbidden `ImportFrom` nodes.
+- Updated [`test_strategy.md`](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/task-do-a-complete-cleanup-on-unneeded-stale-tes-48faefbd/runs/run-20260507T203124Z-562ebe8e/artifacts/test/phases/repair-retained-split-tests/test_strategy.md) with a behavior-to-coverage map, preserved invariants, edge cases, stabilization notes, and known gaps.
+- Appended a concise test-phase summary to [`feedback.md`](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/task-do-a-complete-cleanup-on-unneeded-stale-tes-48faefbd/runs/run-20260507T203124Z-562ebe8e/artifacts/test/phases/repair-retained-split-tests/feedback.md).
+- Recorded the AST-based guard rationale under the current test-author header in [`decisions.txt`](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/task-do-a-complete-cleanup-on-unneeded-stale-tes-48faefbd/runs/run-20260507T203124Z-562ebe8e/decisions.txt).
+
+Key findings / decisions
+
+- The ownership requirement for workflow-package `params` imports is structural, so I added source-level coverage instead of relying only on runtime behavior.
+- I used AST parsing rather than raw substring matching to avoid the test self-matching on its own assertion text.
+- Validation passed: `.venv/bin/python -m pytest tests/strictness/test_no_compat.py tests/contract tests/unit -q` -> `786 passed, 1 warning`.
+
+Open issues / next step
+
+- No blocking test gaps remain for this phase.
+- The existing warning in `tests/unit/test_provider_boundary_core.py` is unchanged and was not expanded here.

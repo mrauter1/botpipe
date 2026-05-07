@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+import ast
+
 from pydantic import Field
 
 from tests.unit._stdlib_and_extensions_shared import _ExampleModel, _build_lifecycle_context
@@ -47,6 +49,16 @@ def test_active_consumer_runtime_fixtures_avoid_legacy_authoring_tokens() -> Non
         text = (PACKAGE_ROOT / relative_path).read_text(encoding="utf-8")
         for token in BANNED_CONSUMER_TOKENS:
             assert token not in text, f"{relative_path} unexpectedly reintroduced legacy token {token!r}"
+def test_retained_stdlib_authoring_test_stays_free_of_repo_owned_workflow_package_params() -> None:
+    tree = ast.parse(Path(__file__).read_text(encoding="utf-8"))
+    forbidden_modules = {
+        "autoloop.workflows.workflow_and_eval_to_refined_workflow_package.params",
+        "autoloop.workflows.workflow_package_to_composable_building_blocks.params",
+    }
+
+    for node in ast.walk(tree):
+        if isinstance(node, ast.ImportFrom):
+            assert node.module not in forbidden_modules
 def test_control_helpers_merge_routes_and_build_outcome_passthrough() -> None:
     step = object()
     transitions = merge_transitions(
