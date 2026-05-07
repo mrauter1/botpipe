@@ -2333,7 +2333,7 @@ class Engine:
                 step.message,
                 context,
                 placeholder_label=f"workflow step {step.name!r} message placeholder",
-                replace_roots=frozenset({"ctx", "item", "worklist", "branch", "fan_in"}),
+                replace_roots=frozenset({"ctx", "input", "item", "worklist", "branch", "fan_in"}),
             )
         message_from = step.message_from
         if message_from is not None:

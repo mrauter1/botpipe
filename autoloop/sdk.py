@@ -18,16 +18,17 @@ from pydantic import BaseModel, ValidationError
 
 import autoloop.simple as simple
 from autoloop.core import Workflow as CoreWorkflow
-from autoloop.core.artifacts import CompiledArtifact, resolve_artifact_template
+from autoloop.core.artifacts import Artifact, CompiledArtifact, resolve_artifact_template
 from autoloop.core.compiler import CompiledWorkflow, compile_workflow
 from autoloop.core.context import Context, WorkflowInputView
 from autoloop.core.errors import WorkflowCompilationError, WorkflowExecutionError, exception_failure_context
 from autoloop.core.operations import classify_call, llm_call
-from autoloop.core.primitives import AWAIT_INPUT, FAIL, FINISH, Event, Outcome
+from autoloop.core.primitives import AWAIT_INPUT, FAIL, FINISH, SELF, Event, Outcome
 from autoloop.core.prompts import Prompt
 from autoloop.core.provider_policy import ProviderPolicy, ProviderPolicyOverride
 from autoloop.core.providers.protocols import LLMProvider, validate_llm_provider
-from autoloop.core.steps import BranchGroupStep, ChildWorkflowStep, ProduceVerifyStep, PromptStep, PythonStep, Step
+from autoloop.core.providers.retries import ProviderRetryPolicy
+from autoloop.core.steps import BranchGroupStep, ChildWorkflowStep, ProduceVerifyStep, PromptStep, PythonStep, Session, Step
 from autoloop.core.stores.protocols import SessionSnapshot
 from autoloop.core.stores.session_store import InMemorySessionStore
 from autoloop.runtime.config import (
@@ -632,7 +633,7 @@ class Autoloop:
 
     def step(
         self,
-        declaration: object,
+        step_def: Step | object,
         message: str | None = None,
         typed_input: BaseModel | None = None,
         /,
@@ -645,7 +646,7 @@ class Autoloop:
         provider_questions: bool | None = None,
         retention: RetentionPolicy | None = None,
     ) -> StepResult:
-        workflow_cls = _build_synthetic_step_workflow(self.root, declaration, typed_input, routes=routes)
+        workflow_cls = _build_synthetic_step_workflow(self.root, step_def, typed_input, routes=routes)
         workflow_result = self.run(
             workflow_cls,
             message,
@@ -657,15 +658,181 @@ class Autoloop:
             provider_questions=provider_questions,
             retention=retention,
         )
-        route = workflow_result.last_event.tag if workflow_result.last_event is not None else None
         return StepResult(
             ok=workflow_result.ok,
             status=workflow_result.status,
-            route=route,
+            route=_step_result_route(workflow_result),
             value=None,
             state=workflow_result.state,
             artifacts=workflow_result.artifacts,
             workflow_result=workflow_result,
+        )
+
+    def prompt_step(
+        self,
+        prompt: str | Prompt,
+        message: str | None = None,
+        typed_input: BaseModel | None = None,
+        /,
+        *,
+        name: str = "prompt",
+        writes: Mapping[str, Artifact] | None = None,
+        reads: Sequence[Artifact | str | Path] = (),
+        requires: Sequence[Artifact | str | Path] = (),
+        routes: Mapping[str, Any] | None = None,
+        session: Session | None = None,
+        retry: int | ProviderRetryPolicy | None = None,
+        on_input: InputHandler | None = None,
+        max_pauses: int = 8,
+        max_steps: int | None = None,
+        provider_questions: bool | None = None,
+        retention: RetentionPolicy | None = None,
+    ) -> StepResult:
+        step_def = PromptStep(
+            name=name,
+            producer=_normalize_prompt(prompt),
+            writes=writes,
+            reads=reads,
+            requires=requires,
+            route_metadata=None,
+            session=session,
+            retry_policy=_normalize_retry_policy(retry),
+        )
+        return self.step(
+            step_def,
+            message,
+            typed_input,
+            routes=routes,
+            on_input=on_input,
+            max_pauses=max_pauses,
+            max_steps=max_steps,
+            provider_questions=provider_questions,
+            retention=retention,
+        )
+
+    def produce_verify_step(
+        self,
+        *,
+        producer: str | Prompt,
+        verifier: str | Prompt,
+        message: str | None = None,
+        typed_input: BaseModel | None = None,
+        name: str = "produce_verify",
+        writes: Mapping[str, Artifact] | None = None,
+        verifier_writes: Mapping[str, Artifact] | None = None,
+        reads: Sequence[Artifact | str | Path] = (),
+        requires: Sequence[Artifact | str | Path] = (),
+        verifier_requires: Sequence[Artifact | str | Path] = (),
+        routes: Mapping[str, Any] | None = None,
+        session: Session | None = None,
+        verifier_session: Session | None = None,
+        retry: int | ProviderRetryPolicy | None = None,
+        on_input: InputHandler | None = None,
+        max_pauses: int = 8,
+        max_steps: int | None = None,
+        provider_questions: bool | None = None,
+        retention: RetentionPolicy | None = None,
+    ) -> StepResult:
+        step_def = ProduceVerifyStep(
+            name=name,
+            producer=_normalize_prompt(producer),
+            verifier=_normalize_prompt(verifier),
+            producer_writes=writes,
+            verifier_writes=verifier_writes,
+            reads=reads,
+            requires=requires,
+            verifier_requires=verifier_requires,
+            session=session,
+            verifier_session=verifier_session,
+            retry_policy=_normalize_retry_policy(retry),
+        )
+        return self.step(
+            step_def,
+            message,
+            typed_input,
+            routes=routes,
+            on_input=on_input,
+            max_pauses=max_pauses,
+            max_steps=max_steps,
+            provider_questions=provider_questions,
+            retention=retention,
+        )
+
+    def python_step(
+        self,
+        handler: Callable[..., Any],
+        message: str | None = None,
+        typed_input: BaseModel | None = None,
+        /,
+        *,
+        name: str = "python",
+        writes: Mapping[str, Artifact] | None = None,
+        reads: Sequence[Artifact | str | Path] = (),
+        requires: Sequence[Artifact | str | Path] = (),
+        routes: Mapping[str, Any] | None = None,
+        on_input: InputHandler | None = None,
+        max_pauses: int = 8,
+        max_steps: int | None = None,
+        retention: RetentionPolicy | None = None,
+    ) -> StepResult:
+        step_def = PythonStep(
+            name=name,
+            handler=handler,
+            writes=writes,
+            reads=reads,
+            requires=requires,
+        )
+        return self.step(
+            step_def,
+            message,
+            typed_input,
+            routes=routes,
+            on_input=on_input,
+            max_pauses=max_pauses,
+            max_steps=max_steps,
+            retention=retention,
+        )
+
+    def workflow_step(
+        self,
+        workflow: type[CoreWorkflow] | str,
+        message: str | None = None,
+        typed_input: BaseModel | None = None,
+        /,
+        *,
+        child_message: str | None = None,
+        name: str = "workflow",
+        params: BaseModel | Mapping[str, Any] | None = None,
+        writes: Mapping[str, Artifact] | None = None,
+        reads: Sequence[Artifact | str | Path] = (),
+        requires: Sequence[Artifact | str | Path] = (),
+        routes: Mapping[str, Any] | None = None,
+        on_input: InputHandler | None = None,
+        max_pauses: int = 8,
+        max_steps: int | None = None,
+        provider_questions: bool | None = None,
+        retention: RetentionPolicy | None = None,
+    ) -> StepResult:
+        step_def = ChildWorkflowStep(
+            name=name,
+            workflow=workflow,
+            message=message if child_message is None else child_message,
+            input=typed_input,
+            params=_materialize_child_workflow_params(params),
+            writes=writes,
+            reads=reads,
+            requires=requires,
+        )
+        return self.step(
+            step_def,
+            message,
+            typed_input,
+            routes=routes,
+            on_input=on_input,
+            max_pauses=max_pauses,
+            max_steps=max_steps,
+            provider_questions=provider_questions,
+            retention=retention,
         )
 
     def cleanup(
@@ -1361,28 +1528,28 @@ def _task_dir_appears_failed_or_awaiting_input(task_dir: Path) -> bool:
 
 def _build_synthetic_step_workflow(
     root: Path,
-    declaration: object,
+    step_def: Step | object,
     typed_input: BaseModel | None,
     *,
     routes: Mapping[str, Any] | None,
 ) -> type[simple.Workflow]:
-    _validate_step_declaration_supported(root, declaration)
+    _validate_step_declaration_supported(root, step_def)
     attrs: dict[str, Any] = {
         "__module__": __name__,
         "State": _SDKStepState,
     }
     if typed_input is not None:
         attrs["Input"] = type(typed_input)
-    if isinstance(declaration, Step):
-        attrs["entry"] = declaration
-        attrs[declaration.name] = declaration
-        attrs["name"] = f"sdk_step_{_TASK_ID_SAFE_RE.sub('_', declaration.name.strip().lower()).strip('_') or 'step'}"
-        attrs["transitions"] = {declaration: dict(routes) if routes is not None else _default_routes_for_step(declaration)}
-        name = f"SDKStepWorkflow_{declaration.name}_{uuid4().hex[:8]}"
+    if isinstance(step_def, Step):
+        attrs["entry"] = step_def
+        attrs[step_def.name] = step_def
+        attrs["name"] = f"sdk_step_{_TASK_ID_SAFE_RE.sub('_', step_def.name.strip().lower()).strip('_') or 'step'}"
+        attrs["transitions"] = {step_def: dict(routes) if routes is not None else _default_routes_for_step(step_def)}
+        name = f"SDKStepWorkflow_{step_def.name}_{uuid4().hex[:8]}"
         return type(name, (CoreWorkflow,), attrs)
 
-    step_name = getattr(declaration, "name", None) or "step"
-    attrs[step_name] = declaration
+    step_name = getattr(step_def, "name", None) or "step"
+    attrs[step_name] = step_def
     name = f"SDKStepWorkflow_{step_name}_{uuid4().hex[:8]}"
     return type(name, (simple.Workflow,), attrs)
 
@@ -1391,41 +1558,76 @@ class _SDKStepState(BaseModel):
     pass
 
 
-def _default_routes_for_step(declaration: Step) -> dict[str, object]:
-    if declaration.route_metadata:
+def _default_routes_for_step(step_def: Step) -> dict[str, object]:
+    if step_def.route_metadata:
         transitions: dict[str, object] = {}
-        for route_name in declaration.route_metadata:
+        for route_name in step_def.route_metadata:
             if route_name in {"question", "blocked"}:
                 transitions[route_name] = AWAIT_INPUT
             elif route_name == "failed":
                 transitions[route_name] = FAIL
-            elif isinstance(declaration, ProduceVerifyStep) and route_name == "needs_rework":
-                transitions[route_name] = declaration
+            elif isinstance(step_def, ProduceVerifyStep) and route_name == "needs_rework":
+                transitions[route_name] = SELF
             else:
                 transitions[route_name] = FINISH
         return transitions
-    if isinstance(declaration, ProduceVerifyStep):
-        return {"accepted": FINISH, "needs_rework": declaration}
-    if isinstance(declaration, (PromptStep, PythonStep, ChildWorkflowStep)):
+    if isinstance(step_def, ProduceVerifyStep):
+        return {"accepted": FINISH, "needs_rework": SELF}
+    if isinstance(step_def, (PromptStep, PythonStep, ChildWorkflowStep)):
         return {"done": FINISH}
     return {"done": FINISH}
 
+def _normalize_prompt(prompt: str | Prompt) -> Prompt:
+    if isinstance(prompt, Prompt):
+        return prompt
+    if isinstance(prompt, str):
+        return Prompt.inline(prompt)
+    raise TypeError(f"unsupported prompt type: {type(prompt).__name__}")
 
-def _validate_step_declaration_supported(root: Path, declaration: object) -> None:
-    if isinstance(declaration, BranchGroupStep) or getattr(declaration, "kind", None) == "branch_group":
+
+def _normalize_retry_policy(retry: int | ProviderRetryPolicy | None) -> ProviderRetryPolicy | None:
+    if retry is None or isinstance(retry, ProviderRetryPolicy):
+        return retry
+    if isinstance(retry, bool) or not isinstance(retry, int):
+        raise TypeError("retry must be an integer, ProviderRetryPolicy, or None")
+    return ProviderRetryPolicy(max_attempts=retry)
+
+
+def _materialize_child_workflow_params(params: BaseModel | Mapping[str, Any] | None) -> dict[str, Any]:
+    if params is None:
+        return {}
+    if isinstance(params, BaseModel):
+        return params.model_dump(mode="python")
+    if isinstance(params, Mapping):
+        return dict(params)
+    raise WorkflowParameterError(
+        "workflow_step params must be a mapping, Workflow.Params instance, or None"
+    )
+
+
+def _step_result_route(workflow_result: WorkflowResult) -> str | None:
+    if workflow_result.last_event is not None:
+        return workflow_result.last_event.tag
+    if workflow_result.last_outcome is not None:
+        return workflow_result.last_outcome.tag
+    return None
+
+
+def _validate_step_declaration_supported(root: Path, step_def: object) -> None:
+    if isinstance(step_def, BranchGroupStep) or getattr(step_def, "kind", None) == "branch_group":
         raise SDKExecutionError("client.step(...) does not support branch-group declarations in the MVP")
-    if getattr(declaration, "scope", None) is not None:
+    if getattr(step_def, "scope", None) is not None:
         raise SDKExecutionError("client.step(...) does not support worklist-scoped declarations in the MVP")
 
-    if isinstance(declaration, Step):
-        if isinstance(declaration, ChildWorkflowStep):
-            _ensure_child_workflow_resolvable(root, declaration.workflow)
+    if isinstance(step_def, Step):
+        if isinstance(step_def, ChildWorkflowStep):
+            _ensure_child_workflow_resolvable(root, step_def.workflow)
         return
 
-    if isinstance(declaration, getattr(simple, "_NamedDeclaration")):
-        kind = getattr(declaration, "kind", None)
+    if isinstance(step_def, getattr(simple, "_NamedDeclaration")):
+        kind = getattr(step_def, "kind", None)
         if kind == "workflow":
-            _ensure_child_workflow_resolvable(root, getattr(declaration, "workflow"))
+            _ensure_child_workflow_resolvable(root, getattr(step_def, "workflow"))
         return
 
     raise SDKExecutionError(

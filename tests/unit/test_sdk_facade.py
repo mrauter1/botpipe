@@ -14,6 +14,7 @@ from autoloop import (
     AWAIT_INPUT,
     FAIL,
     FINISH,
+    SELF,
     ArtifactMap,
     Autoloop,
     InputRequest,
@@ -30,9 +31,11 @@ from autoloop import (
     WorkflowInputError,
 )
 from autoloop.core.primitives import Event, Outcome, RequestInput
+from autoloop.core.prompts import Prompt
+from autoloop.core.providers.retries import ProviderRetryPolicy
 from autoloop.core.routes import Route
 from autoloop.core.providers.fake import ScriptedLLMProvider
-from autoloop.core.steps import ChildWorkflowStep, PythonStep
+from autoloop.core.steps import ChildWorkflowStep, ProduceVerifyStep, PromptStep, PythonStep
 from autoloop.runtime.config import GitTrackingRuntimeConfig, RuntimeConfig
 
 
@@ -466,6 +469,44 @@ def test_sdk_step_supports_core_python_steps_with_explicit_terminal_route_metada
     assert result.workflow_result.status == "completed"
 
 
+def test_default_routes_for_supported_core_steps() -> None:
+    prompt_step = PromptStep(name="prompt", producer=Prompt.inline("Prompt"))
+    python_step = PythonStep(name="python", handler=lambda _ctx: Event("done"))
+    child_step = ChildWorkflowStep(name="child", workflow=_SDKPauseWorkflow)
+    produce_verify_step = ProduceVerifyStep(
+        name="pair",
+        producer=Prompt.inline("Draft"),
+        verifier=Prompt.inline("Review"),
+    )
+
+    assert sdk_module._default_routes_for_step(prompt_step) == {"done": FINISH}
+    assert sdk_module._default_routes_for_step(python_step) == {"done": FINISH}
+    assert sdk_module._default_routes_for_step(child_step) == {"done": FINISH}
+    assert sdk_module._default_routes_for_step(produce_verify_step) == {
+        "accepted": FINISH,
+        "needs_rework": SELF,
+    }
+
+
+def test_sdk_step_preserves_explicit_routes_for_core_steps(tmp_path: Path) -> None:
+    step_def = PromptStep(name="prompt", producer=Prompt.inline("Prompt"))
+    routes = {
+        "retry": SELF,
+        "done": FINISH,
+        "question": AWAIT_INPUT,
+        "failed": FAIL,
+        "repair": Route(target=SELF, summary="retry once"),
+    }
+
+    workflow_cls = sdk_module._build_synthetic_step_workflow(tmp_path, step_def, None, routes=routes)
+
+    assert workflow_cls.transitions[step_def]["retry"] == SELF
+    assert workflow_cls.transitions[step_def]["done"] == FINISH
+    assert workflow_cls.transitions[step_def]["question"] == AWAIT_INPUT
+    assert workflow_cls.transitions[step_def]["failed"] == FAIL
+    assert workflow_cls.transitions[step_def]["repair"] == Route(target=SELF, summary="retry once")
+
+
 def test_sdk_step_supports_directly_resolvable_strict_child_workflow_steps(tmp_path: Path) -> None:
     class ChildWorkflow(simple.Workflow):
         class State(BaseModel):
@@ -630,6 +671,116 @@ def test_sdk_step_result_value_stays_none_even_when_workflow_result_has_output(
     assert result.status == "completed"
     assert result.workflow_result.output == {"summary": "should-not-leak"}
     assert result.value is None
+
+
+def test_sdk_helper_entrypoints_build_core_steps_and_delegate_to_client_step(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    class ChildWorkflow(simple.Workflow):
+        @simple.python_step(routes={"done": FINISH})
+        def capture(_ctx):
+            return Event("done")
+
+    client = _sdk_client(tmp_path, ScriptedLLMProvider())
+    typed_input = _SDKTypedInput(topic="release")
+    retention = RetentionPolicy.keep_all()
+    sentinel = object()
+    captured: list[tuple[object, tuple[object, ...], dict[str, object]]] = []
+
+    def fake_step(step_def, *args, **kwargs):
+        captured.append((step_def, args, kwargs))
+        return sentinel
+
+    monkeypatch.setattr(client, "step", fake_step)
+
+    assert (
+        client.prompt_step(
+            "Prompt {input.message}",
+            "Ship it.",
+            typed_input,
+            name="prompt_helper",
+            routes={"done": FINISH},
+            retry=5,
+            retention=retention,
+        )
+        is sentinel
+    )
+    assert (
+        client.produce_verify_step(
+            producer="Draft",
+            verifier="Review",
+            message="Ship it.",
+            typed_input=typed_input,
+            name="pair_helper",
+            routes={"accepted": FINISH, "needs_rework": SELF},
+            retry=ProviderRetryPolicy(max_attempts=4),
+            retention=retention,
+        )
+        is sentinel
+    )
+    assert (
+        client.python_step(
+            lambda _ctx: Event("done"),
+            "Ship it.",
+            typed_input,
+            name="python_helper",
+            routes={"done": FINISH},
+            retention=retention,
+        )
+        is sentinel
+    )
+    assert (
+        client.workflow_step(
+            ChildWorkflow,
+            "Outer message",
+            typed_input,
+            child_message="Child message",
+            name="workflow_helper",
+            params={"mode": "review"},
+            routes={"done": FINISH},
+            retention=retention,
+        )
+        is sentinel
+    )
+
+    prompt_step, prompt_args, prompt_kwargs = captured[0]
+    assert isinstance(prompt_step, PromptStep)
+    assert prompt_step.name == "prompt_helper"
+    assert prompt_step.producer.text == "Prompt {input.message}"
+    assert isinstance(prompt_step.retry_policy, ProviderRetryPolicy)
+    assert prompt_step.retry_policy.max_attempts == 5
+    assert prompt_args == ("Ship it.", typed_input)
+    assert prompt_kwargs["routes"] == {"done": FINISH}
+    assert prompt_kwargs["retention"] is retention
+
+    pair_step, pair_args, pair_kwargs = captured[1]
+    assert isinstance(pair_step, ProduceVerifyStep)
+    assert pair_step.name == "pair_helper"
+    assert pair_step.producer.text == "Draft"
+    assert pair_step.verifier.text == "Review"
+    assert pair_step.retry_policy == ProviderRetryPolicy(max_attempts=4)
+    assert pair_args == ("Ship it.", typed_input)
+    assert pair_kwargs["routes"] == {"accepted": FINISH, "needs_rework": SELF}
+    assert pair_kwargs["retention"] is retention
+
+    python_step, python_args, python_kwargs = captured[2]
+    assert isinstance(python_step, PythonStep)
+    assert python_step.name == "python_helper"
+    assert python_args == ("Ship it.", typed_input)
+    assert python_kwargs["routes"] == {"done": FINISH}
+    assert python_kwargs["retention"] is retention
+
+    workflow_step, workflow_args, workflow_kwargs = captured[3]
+    assert isinstance(workflow_step, ChildWorkflowStep)
+    assert workflow_step.name == "workflow_helper"
+    assert workflow_step.workflow is ChildWorkflow
+    assert workflow_step.message == "Child message"
+    assert workflow_step.input is typed_input
+    assert workflow_step.params == {"mode": "review"}
+    assert workflow_args == ("Outer message", typed_input)
+    assert workflow_kwargs["routes"] == {"done": FINISH}
+    assert workflow_kwargs["retention"] is retention
 
 
 def test_sdk_run_default_retention_promotes_task_local_declared_writes_and_keeps_workspace_writes(tmp_path: Path) -> None:
@@ -947,10 +1098,107 @@ def test_sdk_runtime_prompt_rendering_supports_input_and_ctx_message(tmp_path: P
         seen.append(request.prompt.text)
         return Outcome(raw_output="ok", tag="done")
 
-    provider = ScriptedLLMProvider(llm_turns=[record_prompt, record_prompt])
+    provider = ScriptedLLMProvider(llm_turns=[record_prompt, record_prompt, record_prompt])
     client = _sdk_client(tmp_path, provider)
 
     client.step(simple.step("Echo {input.message}", name="echo_input"), "hello")
     client.step(simple.step("Echo {ctx.message}", name="echo_ctx"), "hello")
+    client.prompt_step("Echo {input.topic} / {input.message}", "hello", _SDKTypedInput(topic="Acme"))
 
-    assert seen == ["Echo hello", "Echo hello"]
+    assert seen == ["Echo hello", "Echo hello", "Echo Acme / hello"]
+
+
+def test_sdk_prompt_step_missing_input_field_fails_clearly(tmp_path: Path) -> None:
+    client = _sdk_client(tmp_path, ScriptedLLMProvider())
+
+    with pytest.raises(SDKExecutionError, match=r"\{input\.customer\} requires workflow input"):
+        client.prompt_step("Echo {input.customer}", "hello")
+
+
+def test_sdk_prompt_step_preserves_explicit_self_routes(tmp_path: Path) -> None:
+    provider = ScriptedLLMProvider(
+        llm_turns=[
+            Outcome(raw_output="retry", tag="again"),
+            Outcome(raw_output="ok", tag="done"),
+        ]
+    )
+    client = _sdk_client(tmp_path, provider)
+
+    result = client.prompt_step(
+        "Retry until complete.",
+        "hello",
+        routes={"again": SELF, "done": FINISH},
+    )
+
+    assert result.ok is True
+    assert result.route == "done"
+    assert [call.kind for call in provider.calls] == ["step", "step"]
+
+
+def test_sdk_produce_verify_step_defaults_to_rework_self_loop(tmp_path: Path) -> None:
+    provider = ScriptedLLMProvider(
+        producer_turns=["draft-1", "draft-2"],
+        verifier_turns=[
+            Outcome(raw_output="rework", tag="needs_rework"),
+            Outcome(raw_output="accepted", tag="accepted"),
+        ],
+    )
+    client = _sdk_client(tmp_path, provider)
+
+    result = client.produce_verify_step(
+        producer="Draft {input.message}",
+        verifier="Review draft.",
+        message="hello",
+    )
+
+    assert result.ok is True
+    assert result.route == "accepted"
+    assert [call.kind for call in provider.calls] == ["producer", "verifier", "producer", "verifier"]
+
+
+def test_sdk_python_step_helper_executes_and_honors_retention_override(tmp_path: Path) -> None:
+    client = _sdk_client_at_root(tmp_path, ScriptedLLMProvider())
+    report = simple.Text("report", path="{task_folder}/report.txt")
+    retention = RetentionPolicy.keep_all()
+
+    result = client.python_step(
+        lambda ctx: (ctx.artifacts.report.write_text(ctx.message or ""), Event("done"))[1],
+        "keep scratch",
+        name="python_helper",
+        writes={"report": report.materialize("python_helper")},
+        retention=retention,
+    )
+
+    assert result.ok is True
+    assert result.artifacts.report.read_text() == "keep scratch"
+    assert result.workflow_result.retention is not None
+    assert result.workflow_result.retention.policy == retention
+    assert result.workflow_result.retention.task_scratch_retained is True
+    assert result.workflow_result.debug.task_dir.exists()
+
+
+def test_sdk_workflow_step_renders_child_message_with_input_placeholders(tmp_path: Path) -> None:
+    observed = tmp_path / "child-message.txt"
+
+    class ChildWorkflow(simple.Workflow):
+        class Input(BaseModel):
+            topic: str
+
+        captured = simple.Text("captured", path=observed)
+
+        @simple.python_step(writes=[captured], routes={"done": FINISH})
+        def capture(ctx):
+            ctx.artifacts.captured.write_text(ctx.message or "")
+            return Event("done")
+
+    client = _sdk_client(tmp_path, ScriptedLLMProvider())
+
+    result = client.workflow_step(
+        ChildWorkflow,
+        "outer-message",
+        _SDKTypedInput(topic="Acme"),
+        child_message="Child {input.topic} / {input.message}",
+    )
+
+    assert result.ok is True
+    assert observed.read_text(encoding="utf-8") == "Child Acme / outer-message"
