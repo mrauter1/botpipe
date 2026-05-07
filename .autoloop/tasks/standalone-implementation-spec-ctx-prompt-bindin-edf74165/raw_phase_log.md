@@ -209,3 +209,51 @@ Fix `validate_safe_ctx_reference(...)` so the shared module fully owns scalar, n
 <loop-control>
 {"schema":"docloop.loop_control/v1","kind":"promise","promise":"INCOMPLETE"}
 </loop-control>
+
+
+---
+run_id=run-20260507T122922Z-e6e948b6 | entry=session_turn | pair=implement | phase=producer | cycle=2 | attempt=1 | thread_id=019e026e-4b76-7302-be59-9ce6e8535383
+---
+provider=codex
+mode=resume
+template=/home/rauter/.local/share/pipx/venvs/autoloop/lib/python3.12/site-packages/autoloop/templates/implement_producer.md
+session_id=019e026e-4b76-7302-be59-9ce6e8535383
+
+
+---
+run_id=run-20260507T122922Z-e6e948b6 | entry=phase_output | pair=implement | phase=producer | process=codex-agent | cycle=2 | attempt=1 | thread_id=019e026e-4b76-7302-be59-9ce6e8535383
+---
+I’m addressing the reviewer’s phase-local finding now: the request propagation is fine, but the shared `ctx` contract helper needs to become the actual single source of path-shape validation instead of only screening root segments.
+
+I’ve narrowed the fix: the shared helper should own path shape, not field-name existence. I’m tightening it so scalars are exactly `ctx.<field>`, nested roots are exactly `ctx.<root>.<leaf>`, and model roots are exactly `ctx.<root>.<field>`, which is the contract later compile-time/runtime callers can share.
+
+The helper fix is in and the focused request-snapshot plus helper-shape tests pass. I’m updating the phase notes and ledger with the non-obvious contract decision so later turns don’t relax the shared `ctx` shape checks again.
+
+Scope considered
+
+Phase-local only: I addressed the reviewer’s `IMP-001` finding in the shared `ctx` placeholder contract helper, without changing scope beyond the request/message surface, request-path propagation, and the phase notes/ledger.
+
+What I analyzed
+
+I re-read the active feedback, the shared decisions ledger, and the current `autoloop/core/context_placeholders.py` implementation. The issue was that the helper only validated the `ctx` root segment, so later consumers still could not rely on it as the single source of full `ctx.*` path-shape rules.
+
+What I changed
+
+I tightened [autoloop/core/context_placeholders.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/autoloop/core/context_placeholders.py:34) so `validate_safe_ctx_reference(...)` now enforces complete path shapes:
+- scalar roots: exactly `ctx.<field>`
+- nested roots: exactly `ctx.<root>.<allowlisted_leaf>`
+- model roots: exactly `ctx.<root>.<field>`
+
+I extended [tests/unit/test_primitives_and_stores.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/tests/unit/test_primitives_and_stores.py:95) to cover valid model-root usage and the reviewer’s failure cases like `ctx.message.extra`, `ctx.request.file.read_text`, `ctx.request.missing`, and `ctx.input.topic.extra`. I also updated the phase implementation notes and appended the non-obvious contract decision under the current turn header in `decisions.txt`.
+
+Key findings / decisions
+
+The shared helper now owns path-shape validation, while intentionally leaving model-field existence checks to later compile-time/runtime consumers. That keeps one central safe dotted-path contract without hard-coding workflow-specific field names in this phase.
+
+Validation rerun passed:
+- `.venv/bin/python -m pytest -q tests/unit/test_primitives_and_stores.py::test_validate_safe_ctx_reference_rejects_unsafe_segments tests/unit/test_primitives_and_stores.py::test_context_request_surface_reads_run_snapshot_and_task_request_file tests/unit/test_branch_group_context_sessions.py::test_branch_and_fan_in_contexts_preserve_parent_request_snapshot tests/runtime/test_workspace_and_context.py::test_resume_context_message_uses_run_local_request_snapshot_not_mutated_task_request`
+- Result: `4 passed in 0.65s`
+
+Open issues / next step
+
+This phase’s source changes are ready for re-review. Later phases still need to consume the shared helper from prompt validation/runtime rendering code, but the helper now has the full path-shape contract they can rely on.

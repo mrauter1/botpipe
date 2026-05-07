@@ -46,8 +46,19 @@ def validate_safe_ctx_reference(reference: str) -> tuple[str, ...]:
             raise ValueError("ctx references must not contain whitespace inside path segments")
         if any(character in _CTX_FORBIDDEN_CHARS for character in segment):
             raise ValueError("ctx references must not contain call, index, or quote syntax")
-    if parts[1] not in _CTX_ALLOWED_ROOTS:
-        raise ValueError(f"ctx root {parts[1]!r} is not supported")
+    root = parts[1]
+    if root not in _CTX_ALLOWED_ROOTS:
+        raise ValueError(f"ctx root {root!r} is not supported")
+    if root in CTX_SCALAR_FIELDS:
+        if len(parts) != 2:
+            raise ValueError(f"ctx scalar field {root!r} does not support nested access")
+        return parts
+    if root in CTX_NESTED_FIELDS:
+        if len(parts) != 3 or parts[2] not in CTX_NESTED_FIELDS[root]:
+            raise ValueError(f"ctx nested field {root!r} must use an allowlisted leaf field")
+        return parts
+    if len(parts) != 3:
+        raise ValueError(f"ctx model root {root!r} must qualify exactly one field")
     return parts
 
 

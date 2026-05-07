@@ -54,6 +54,7 @@
 
 - Python/system step contexts now expose `ctx.request_file`, `ctx.request`, and `ctx.message`.
 - Branch and fan-in child contexts now preserve the parent run’s explicit request snapshot paths instead of re-deriving them.
+- The shared `ctx` placeholder helper now rejects unsupported deeper paths instead of only screening the root segment.
 
 ## Known non-changes
 
@@ -75,7 +76,13 @@
   - `tests/runtime/test_workspace_and_context.py::test_run_creates_task_workflow_run_layout_and_immutable_request_snapshots`
   - `tests/runtime/test_workspace_and_context.py::test_resume_preserves_persisted_workflow_params_when_not_resupplied`
   - `tests/runtime/test_workspace_and_context.py::test_resume_context_message_uses_run_local_request_snapshot_not_mutated_task_request`
+- `4 passed in 0.65s` via:
+  - `tests/unit/test_primitives_and_stores.py::test_validate_safe_ctx_reference_rejects_unsafe_segments`
+  - `tests/unit/test_primitives_and_stores.py::test_context_request_surface_reads_run_snapshot_and_task_request_file`
+  - `tests/unit/test_branch_group_context_sessions.py::test_branch_and_fan_in_contexts_preserve_parent_request_snapshot`
+  - `tests/runtime/test_workspace_and_context.py::test_resume_context_message_uses_run_local_request_snapshot_not_mutated_task_request`
 
 ## Deduplication / centralization
 
 - Centralized the future `ctx.*` allowlist and safe-path syntax contract in `autoloop/core/context_placeholders.py` instead of scattering early copies across `Context`, runner, or tests.
+- Kept model-field existence out of `validate_safe_ctx_reference(...)` so later compile-time/runtime callers can share one path-shape validator and layer field lookup separately.
