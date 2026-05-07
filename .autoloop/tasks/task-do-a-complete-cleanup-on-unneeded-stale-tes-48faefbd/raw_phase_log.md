@@ -790,3 +790,42 @@ workspace=/home/rauter/autoloop_v3_bkp/autoloop_v3
 pairs=plan,implement,test,audit
 request_file=/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/task-do-a-complete-cleanup-on-unneeded-stale-tes-48faefbd/runs/run-20260507T203124Z-562ebe8e/request.md
 session_mode=persistent
+
+
+---
+run_id=run-20260507T203124Z-562ebe8e | entry=session_turn | pair=plan | phase=producer | cycle=1 | attempt=1 | thread_id=019e0423-5779-7bd3-af06-d26692f5031f
+---
+provider=codex
+mode=start
+template=/home/rauter/.local/share/pipx/venvs/autoloop/lib/python3.12/site-packages/autoloop/templates/plan_producer.md
+session_id=019e0423-5779-7bd3-af06-d26692f5031f
+
+
+---
+run_id=run-20260507T203124Z-562ebe8e | entry=phase_output | pair=plan | phase=producer | process=codex-agent | cycle=1 | attempt=1 | thread_id=019e0423-5779-7bd3-af06-d26692f5031f
+---
+I’m verifying the authoritative request and the retained `tests/` layout first, then I’ll update the run-local plan artifacts to match the concrete fixes and validation path this cleanup needs.
+
+The request is stable and there are no later clarifications in the raw log. I’m checking the retained split test files and shared helpers now so the plan reflects the actual regression surfaces instead of the earlier monolith layout.
+
+The main hazards are visible now: split tests still rely on wildcard imports from `_shared.py`, the strictness scan still names a deleted monolith, and at least one retained stdlib test imports workflow-package params directly. I’m checking the shared modules to decide whether the implementation should use explicit named imports in split files or adjust shared-module exports.
+
+I’ve confirmed the shared modules do not define `__all__`, so `import *` only exposes non-underscore names. I’m narrowing which split files actually consume underscore-prefixed helpers so the plan can keep the fix local instead of broadening it into a shared-module export change.
+
+I’ve isolated the likely fix style: keep `_shared.py` private and update split tests that consume private helpers to import them explicitly. I’m running the requested target once to confirm the concrete failure set so the plan and risk notes align with observed breakage, not just static inspection.
+
+The first run is already confirming this is a narrow regression set, not a widespread retained-suite failure. I’m collecting the full pytest output now and then I’ll write the plan artifacts around the observed fixes and validation gates.
+
+The requested validation run surfaced the real blast radius: the split regressions are broader than two files because many retained split modules still use wildcard imports while calling private `_shared` helpers. I’m reading the workflow-parameter test section now so the plan can specify the right replacement shape for those repo-owned imports instead of leaving it vague.
+
+I want the plan precise about scope, so I’m computing which split modules actually consume private helper names instead of telling the implementer to churn every retained split file.
+
+I have enough context to write the implementation-ready plan. The work is one coherent slice: repair private-helper imports across the retained split suite, replace the workflow-package params dependency with local synthetic models in `test_authoring_helpers`, update the strictness assertion, then re-run the requested pytest target.
+
+I’m updating the run-local planning artifacts now. The plan will stay narrow: `tests/` only, no restoration of deleted suites, and one implementation slice because the observed failures all reduce to the same split-import regression plus the two named follow-ups.
+
+The artifacts are written. I’m doing one verification pass on the generated plan files now to catch formatting or scope drift before closing the planning turn.
+
+Updated the planning artifacts for this run in [plan.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/task-do-a-complete-cleanup-on-unneeded-stale-tes-48faefbd/runs/run-20260507T203124Z-562ebe8e/artifacts/plan/plan.md), [phase_plan.yaml](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/task-do-a-complete-cleanup-on-unneeded-stale-tes-48faefbd/runs/run-20260507T203124Z-562ebe8e/artifacts/plan/phase_plan.yaml), [feedback.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/task-do-a-complete-cleanup-on-unneeded-stale-tes-48faefbd/runs/run-20260507T203124Z-562ebe8e/artifacts/plan/feedback.md), and [decisions.txt](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/task-do-a-complete-cleanup-on-unneeded-stale-tes-48faefbd/runs/run-20260507T203124Z-562ebe8e/decisions.txt).
+
+The plan keeps this as one implementation slice under `tests/` only. It records that the requested pytest target currently fails in 243 tests, with the main regression coming from split files that still use `import *` while calling underscore-prefixed helpers from `_shared.py`; it also captures the remaining `autoloop.workflows.*.params` dependency in `tests/unit/stdlib/test_authoring_helpers.py` and the stale strictness assertion for deleted `tests/contract/test_engine_contracts.py`.

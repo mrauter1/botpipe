@@ -1,1 +1,2 @@
 # Plan ↔ Plan Verifier Feedback
+- Added a single-phase implementation plan after inspecting the retained split files and running the requested pytest target. The plan expands the import-repair work to every retained split file that still consumes underscore-prefixed shared helpers, keeps `_shared.py` private, replaces the remaining workflow-package params test dependency with local synthetic models, and aligns the strictness scan with the post-split layout.
