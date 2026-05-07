@@ -1,1 +1,1 @@
-# revised_request.md
+No follow-up implementation is required for this run. The requested `ctx.input.message` runtime behavior, directly resolvable strict `ChildWorkflowStep` support in `client.step(...)`, preserved rejection paths for unsupported child declarations, and the focused SDK/runtime regression slice are all implemented and validated.

@@ -1,1 +1,3 @@
 # Intent Audit <-> Intent Audit Verifier Feedback
+
+- AUD-000 | non-blocking | Final run-local audit found no material unresolved gaps. The final codebase matches the follow-up request: `autoloop/core/artifacts.py` centralizes `ctx.input.message` on the composite runtime input view, `autoloop/sdk.py` accepts directly resolvable strict `ChildWorkflowStep` declarations while preserving branch-group and worklist-scoped rejections, and the focused slice reran green with `.venv/bin/python -m pytest -q tests/unit/test_primitives_and_stores.py tests/contract/test_engine_contracts.py tests/unit/test_sdk_facade.py` (`278 passed`).
