@@ -1392,3 +1392,62 @@ Open issues / next step
 
 - No functional blockers remain for this phase.
 - `tests/unit/test_primitives_and_stores.py` is still an untracked local coverage file in this worktree; if this should be committed later, it needs an explicit add in the normal repo workflow.
+
+
+---
+run_id=run-20260507T130811Z-54d93345 | entry=session_turn | pair=implement | phase=verifier | cycle=1 | attempt=1 | thread_id=019e02bf-36df-7293-b934-fad7a290777c
+---
+provider=codex
+mode=resume
+template=/home/rauter/.local/share/pipx/venvs/autoloop/lib/python3.12/site-packages/autoloop/templates/implement_verifier.md
+session_id=019e02bf-36df-7293-b934-fad7a290777c
+
+
+---
+run_id=run-20260507T130811Z-54d93345 | entry=phase_output | pair=implement | phase=verifier | process=codex-agent | cycle=1 | attempt=1 | thread_id=019e02bf-36df-7293-b934-fad7a290777c
+---
+I’m reviewing the SDK facade implementation and the phase artifacts against the spec, starting with the current source state, test coverage, and any remaining contract mismatches.
+
+I’ve finished the artifact review and I’m now probing the SDK code paths directly for contract gaps, especially `client.step(...)`, provider-question handling, and active-event-loop normalization.
+
+I found a likely contract break around explicit `message=None`: the runner still writes/falls back to the default request snapshot and is not passing the explicit runtime message into `Engine.run(...)` / `resume(...)`. I’m confirming that path now because it would violate the SDK input contract.
+
+I’ve isolated one blocking contract break and one smaller validation hygiene issue. I’m recording those in the phase feedback now and updating the criteria to reflect that the phase is not yet complete.
+
+Scope considered
+
+- `sdk-facade` phase source and tests relevant to the SDK public surface, runtime message/input propagation, provider-question behavior, and sync error normalization.
+- Active review artifacts: `criteria.md`, `feedback.md`, `implementation_notes.md`.
+- Run-local decisions ledger for phase-specific constraints and intentional behavior.
+
+What I analyzed
+
+- `autoloop/sdk.py`
+- `autoloop/runtime/runner.py`
+- `autoloop/core/context.py`
+- `autoloop/core/artifacts.py`
+- `autoloop/core/engine.py`
+- `autoloop/__init__.py`
+- tracked SDK/runtime contract tests plus the local untracked coverage file referenced by the notes
+
+What I reviewed
+
+- AC-1 against the revised `run(...)` input contract, especially `message=None`, typed-input handling, pause loop behavior, and provider-question defaults.
+- AC-2 against artifact/debug/result mapping and whether lifecycle internals stay non-public.
+- AC-3 against sync active-event-loop normalization.
+- The implementation notes and validation claims for accuracy and durability.
+
+Key findings / decisions
+
+- I recorded one blocking finding in `feedback.md`: explicit SDK `message=None` is not preserved end-to-end because `autoloop/runtime/runner.py::_execute_compiled_workflow(...)` does not forward `options.message` into `engine.run(...)` / `engine.resume(...)`. A direct repro shows `client.run(Wf, None)` exposes the workspace placeholder text instead of `None` through `ctx.message` and `ctx.input.message`, which violates the spec.
+- I recorded one non-blocking finding in `feedback.md`: `implementation_notes.md` cites `tests/unit/test_primitives_and_stores.py`, but that file is currently untracked in this worktree, so part of the validation record is local-only.
+- I updated `criteria.md` to keep correctness / safety / compatibility / validation unchecked and marked only technical debt / simplicity as satisfied.
+
+Open issues / next step
+
+- Fix `IMP-001` by threading `message=options.message` through the runner’s `engine.run(...)` and `engine.resume(...)` calls and add tracked regression coverage for `client.run(Wf, None)`.
+- Then refresh the phase criteria and re-review the phase for completion.
+
+<loop-control>
+{"schema":"docloop.loop_control/v1","kind":"promise","promise":"INCOMPLETE"}
+</loop-control>

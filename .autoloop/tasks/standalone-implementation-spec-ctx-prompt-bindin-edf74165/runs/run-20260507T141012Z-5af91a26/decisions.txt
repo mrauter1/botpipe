@@ -7,3 +7,5 @@ For the no-typed-input contract slice, the current failure path is "ctx.input.me
 Focused rerun showed a real mismatch for declared ctx.input.message, so ctx.* prompt resolution now reads context.input_fields and applies the no-input guard uniformly; bare {input.message} compatibility still routes through Context.input.
 <autoloop-decisions-header version="1" block_seq="3" owner="implementer" phase_id="contract-test-alignment" pair="implement" turn_seq="2" run_id="run-20260507T141012Z-5af91a26" ts="2026-05-07T14:23:31.899139+00:00" />
 Land the reviewer-identified runtime fix in autoloop/core/artifacts.py by separating ctx.input.* from Context.input and removing the ctx.input.message no-input exemption; keep bare {input.message} on the compatibility shim.
+<autoloop-decisions-header version="1" block_seq="4" owner="test_author" phase_id="contract-test-alignment" pair="test" turn_seq="1" run_id="run-20260507T141012Z-5af91a26" ts="2026-05-07T14:26:50.818155+00:00" />
+Add a mixed bare-versus-ctx regression test so future changes cannot accidentally make typed Input.message override the intentional bare {input.message} compatibility shim.
