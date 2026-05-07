@@ -1202,3 +1202,25 @@ def test_sdk_workflow_step_renders_child_message_with_input_placeholders(tmp_pat
 
     assert result.ok is True
     assert observed.read_text(encoding="utf-8") == "Child Acme / outer-message"
+
+
+def test_sdk_workflow_step_defaults_child_message_to_outer_message(tmp_path: Path) -> None:
+    observed = tmp_path / "child-default-message.txt"
+
+    class ChildWorkflow(simple.Workflow):
+        captured = simple.Text("captured", path=observed)
+
+        @simple.python_step(writes=[captured], routes={"done": FINISH})
+        def capture(ctx):
+            ctx.artifacts.captured.write_text(ctx.message or "")
+            return Event("done")
+
+    client = _sdk_client(tmp_path, ScriptedLLMProvider())
+
+    result = client.workflow_step(
+        ChildWorkflow,
+        "outer-message",
+    )
+
+    assert result.ok is True
+    assert observed.read_text(encoding="utf-8") == "outer-message"

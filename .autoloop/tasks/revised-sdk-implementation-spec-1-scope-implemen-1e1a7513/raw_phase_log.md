@@ -893,3 +893,48 @@ No phase-local issues remain from review. Broader repository coverage was not re
 <loop-control>
 {"schema":"docloop.loop_control/v1","kind":"promise","promise":"COMPLETE"}
 </loop-control>
+
+
+---
+run_id=run-20260507T184603Z-adb7c56b | entry=session_turn | pair=test | phase=producer | cycle=1 | attempt=1 | thread_id=019e03df-4839-7ca0-9407-d7c938d6f1f3
+---
+provider=codex
+mode=resume
+template=/home/rauter/.local/share/pipx/venvs/autoloop/lib/python3.12/site-packages/autoloop/templates/test_producer.md
+session_id=019e03df-4839-7ca0-9407-d7c938d6f1f3
+
+
+---
+run_id=run-20260507T184603Z-adb7c56b | entry=phase_output | pair=test | phase=producer | process=codex-agent | cycle=1 | attempt=1 | thread_id=019e03df-4839-7ca0-9407-d7c938d6f1f3
+---
+I’m validating the phase-local test coverage against the accepted behaviors, then I’ll update the test strategy and feedback artifacts to reflect what is already covered and any remaining gaps.
+
+The code-side coverage already includes the phase behaviors, so I’m using this turn to formalize that coverage map and the stabilization choices in the test artifacts rather than churning more repository tests without a real gap.
+
+I found one worthwhile phase-local gap to close directly in the repo tests: the `workflow_step(...)` default `child_message is None -> use outer message` rule from the spec wasn’t asserted yet. I’m adding that coverage and rerunning the focused suite.
+
+Scope considered
+
+Phase-local SDK routing/helper-entrypoint coverage only: [tests/unit/test_sdk_facade.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/tests/unit/test_sdk_facade.py) plus the active test artifacts [test_strategy.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/revised-sdk-implementation-spec-1-scope-implemen-1e1a7513/runs/run-20260507T184603Z-adb7c56b/artifacts/test/phases/sdk-routing-and-helper-entrypoints/test_strategy.md) and [feedback.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/revised-sdk-implementation-spec-1-scope-implemen-1e1a7513/runs/run-20260507T184603Z-adb7c56b/artifacts/test/phases/sdk-routing-and-helper-entrypoints/feedback.md).
+
+What I analyzed
+
+I checked the active phase contract, the run-local decisions, the already-added SDK facade tests, and the changed helper/routing behaviors in `autoloop/sdk.py` and `autoloop/core/engine.py` to confirm where coverage was already strong and where one spec rule was still unpinned.
+
+What I changed
+
+I added one more focused regression test in [tests/unit/test_sdk_facade.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/tests/unit/test_sdk_facade.py) for the `workflow_step(...)` rule that `child_message is None` must forward the outer SDK message unchanged to the child workflow. I updated [test_strategy.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/revised-sdk-implementation-spec-1-scope-implemen-1e1a7513/runs/run-20260507T184603Z-adb7c56b/artifacts/test/phases/sdk-routing-and-helper-entrypoints/test_strategy.md) with an explicit behavior-to-test coverage map and appended the phase-local test summary to [feedback.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/revised-sdk-implementation-spec-1-scope-implemen-1e1a7513/runs/run-20260507T184603Z-adb7c56b/artifacts/test/phases/sdk-routing-and-helper-entrypoints/feedback.md).
+
+Key findings / decisions
+
+Coverage now directly pins:
+- `input.message`, `ctx.message`, typed `input.*`, and missing-input failure handling.
+- Explicit route preservation and produce/verify `needs_rework -> SELF` looping.
+- Helper construction/delegation and retention threading.
+- Child-workflow helper message rendering, including the default outer-message fallback.
+
+Validation rerun: `./.venv/bin/python -m pytest tests/unit/test_sdk_facade.py -q` with `44 passed`.
+
+Open issues / next step
+
+No phase-local test gaps remain against the stated acceptance criteria. I did not rerun broader repository suites outside `tests/unit/test_sdk_facade.py`.
