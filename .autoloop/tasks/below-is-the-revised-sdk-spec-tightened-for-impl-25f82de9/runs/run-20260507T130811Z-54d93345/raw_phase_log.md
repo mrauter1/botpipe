@@ -2035,3 +2035,94 @@ No open issue for this phase-local review. The deliverables and acceptance crite
 <loop-control>
 {"schema":"docloop.loop_control/v1","kind":"promise","promise":"COMPLETE"}
 </loop-control>
+
+
+---
+run_id=run-20260507T130811Z-54d93345 | entry=session_turn | pair=test | phase=producer | cycle=1 | attempt=1 | thread_id=019e02df-ff69-7963-aa73-ab06d2de2802
+---
+provider=codex
+mode=resume
+template=/home/rauter/.local/share/pipx/venvs/autoloop/lib/python3.12/site-packages/autoloop/templates/test_producer.md
+session_id=019e02df-ff69-7963-aa73-ab06d2de2802
+
+
+---
+run_id=run-20260507T130811Z-54d93345 | entry=phase_output | pair=test | phase=producer | process=codex-agent | cycle=1 | attempt=1 | thread_id=019e02df-ff69-7963-aa73-ab06d2de2802
+---
+I’m treating this as the dedicated test pass for the SDK operations phase. I’ll inspect the active test artifacts, review the current SDK coverage, and then add any missing deterministic regression case before I update the test strategy and test feedback artifacts.
+
+The current SDK tests now hit the main acceptance criteria, but they still only cover the happy path for `params`. I’m adding one deterministic SDK-boundary failure-path test for invalid params so the phase also catches regressions in `WorkflowParameterError` wrapping, then I’ll update the test strategy and feedback artifacts around the full coverage map.
+
+I added one SDK-boundary failure-path test for invalid params. I’m rerunning the SDK suite and the adjacent runtime regression suite to make sure the extra coverage stays deterministic and doesn’t shift the existing behavior.
+
+The added failure-path test passed, and it closes a real wrapper-specific regression surface that runtime-only tests would miss. I’m recording that test decision in the run ledger and then updating the phase-local test strategy and feedback artifacts with the behavior-to-coverage map.
+
+Scope considered
+
+Phase-local SDK operations and verification test work, limited to request-relevant regression coverage and the active test artifacts.
+
+What I analyzed
+
+I reviewed the current SDK-focused suite in [tests/unit/test_sdk_facade.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/tests/unit/test_sdk_facade.py), the accepted plan, and the run-local decisions for SDK coverage scope. I also checked the active test artifacts and the adjacent runtime regression surface in `tests/runtime/test_workspace_and_context.py`.
+
+What I changed
+
+I added one deterministic SDK-boundary failure-path test in [tests/unit/test_sdk_facade.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/tests/unit/test_sdk_facade.py) to verify invalid `params` are wrapped as `WorkflowParameterError`. I updated the phase [test_strategy.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/below-is-the-revised-sdk-spec-tightened-for-impl-25f82de9/runs/run-20260507T130811Z-54d93345/artifacts/test/phases/sdk-operations-and-verification/test_strategy.md) with a behavior-to-coverage map, appended a concise summary to the phase [feedback.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/below-is-the-revised-sdk-spec-tightened-for-impl-25f82de9/runs/run-20260507T130811Z-54d93345/artifacts/test/phases/sdk-operations-and-verification/feedback.md), and recorded the non-obvious SDK params coverage decision in `decisions.txt`.
+
+Key findings / decisions
+
+The added failure-path test closes a wrapper-specific gap that runtime-only parameter tests would not catch. Validation passed:
+- `.venv/bin/python -m pytest -q tests/unit/test_sdk_facade.py` -> `20 passed`
+- `.venv/bin/python -m pytest -q tests/runtime/test_workspace_and_context.py tests/unit/test_primitives_and_stores.py` -> `97 passed`
+
+Open issues / next step
+
+No open blocker in this phase-local test scope. The test strategy and feedback artifacts now reflect the full SDK coverage map, including the params failure path.
+
+
+---
+run_id=run-20260507T130811Z-54d93345 | entry=session_turn | pair=test | phase=verifier | cycle=1 | attempt=1 | thread_id=019e02df-ff69-7963-aa73-ab06d2de2802
+---
+provider=codex
+mode=resume
+template=/home/rauter/.local/share/pipx/venvs/autoloop/lib/python3.12/site-packages/autoloop/templates/test_verifier.md
+session_id=019e02df-ff69-7963-aa73-ab06d2de2802
+
+
+---
+run_id=run-20260507T130811Z-54d93345 | entry=phase_output | pair=test | phase=verifier | process=codex-agent | cycle=1 | attempt=1 | thread_id=019e02df-ff69-7963-aa73-ab06d2de2802
+---
+I’m auditing the phase-local test coverage and artifacts against the SDK operations acceptance criteria. I’ll inspect the updated SDK test module, the active test strategy, rerun the cited suites, and then mark the audit artifacts based on whether any material coverage or flake gap remains.
+
+The targeted suite is green and the coverage map matches the actual SDK tests. I’m marking the audit criteria complete and appending a short no-findings audit note so the artifact records that the added params and failed-result coverage held up under revalidation.
+
+Scope considered
+
+Phase-local audit of the SDK operations and verification test surface, limited to the active test artifacts, the SDK-focused test module, and the adjacent runtime regression suites cited by the producer.
+
+What I analyzed
+
+I reviewed the updated [tests/unit/test_sdk_facade.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/tests/unit/test_sdk_facade.py), the active [test_strategy.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/below-is-the-revised-sdk-spec-tightened-for-impl-25f82de9/runs/run-20260507T130811Z-54d93345/artifacts/test/phases/sdk-operations-and-verification/test_strategy.md), the run-local decisions for SDK test scope, and the existing audit feedback artifact.
+
+What I reviewed
+
+I reran `.venv/bin/python -m pytest -q tests/unit/test_sdk_facade.py tests/runtime/test_workspace_and_context.py tests/unit/test_primitives_and_stores.py`, which passed with `117 passed in 4.90s`. I checked that the SDK suite now directly covers:
+- message plus typed input
+- params success and failure paths at the `client.run(...)` boundary
+- pause handling and provider-question policy
+- result mapping for completed and failed runs
+- standalone `llm` / `classify`
+- synthetic `step(...)` success and unsupported declarations
+- active-event-loop sync normalization
+
+Key findings / decisions
+
+No blocking or non-blocking findings remain in phase-local scope. I updated the audit criteria artifact to all checked and appended a concise no-findings audit note to the phase feedback artifact.
+
+Open issues / next step
+
+No open issue for this phase-local audit. The test coverage and strategy now match the accepted SDK operations scope and the targeted suites are green.
+
+<loop-control>
+{"schema":"docloop.loop_control/v1","kind":"promise","promise":"COMPLETE"}
+</loop-control>
