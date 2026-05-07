@@ -858,3 +858,53 @@ Open issues / next step
 
 - The runner-backed nested child execution path still appears to have an unrelated active-loop problem; I did not change that here.
 - [tests/test_architecture_baseline_docs.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/tests/test_architecture_baseline_docs.py) is currently untracked in this worktree.
+
+
+---
+run_id=run-20260507T122922Z-e6e948b6 | entry=session_turn | pair=implement | phase=verifier | cycle=1 | attempt=1 | thread_id=019e028a-77c8-7b11-9a45-48d5c1d5d8c9
+---
+provider=codex
+mode=resume
+template=/home/rauter/.local/share/pipx/venvs/autoloop/lib/python3.12/site-packages/autoloop/templates/implement_verifier.md
+session_id=019e028a-77c8-7b11-9a45-48d5c1d5d8c9
+
+
+---
+run_id=run-20260507T122922Z-e6e948b6 | entry=phase_output | pair=implement | phase=verifier | process=codex-agent | cycle=1 | attempt=1 | thread_id=019e028a-77c8-7b11-9a45-48d5c1d5d8c9
+---
+I’m auditing the phase artifacts and the request-relevant diffs now, starting with the criteria and feedback files, then I’ll verify whether the changed tests and docs actually satisfy the scoped acceptance criteria without relying on unrelated dirty state.
+
+I’ve got the phase notes and the decision ledger. Now I’m cross-checking the changed contract/docs against the existing unit/runtime coverage to decide whether AC-1 is truly met or whether a coverage gap remains behind the green targeted run.
+
+I found one material deliverable issue: the new doc-baseline assertions live in an untracked test file, so that regression coverage is not actually part of the tracked repository state. I’m recording that as a blocking finding and marking the criteria accordingly.
+
+Scope considered
+
+- Active phase artifacts in `ctx-regression-coverage-and-docs`.
+- Request-relevant changed surfaces: `tests/contract/test_engine_contracts.py`, `docs/authoring.md`, `docs/architecture.md`, `tests/test_architecture_baseline_docs.py`, existing `tests/unit/test_primitives_and_stores.py`, `tests/unit/test_simple_surface.py`, and `tests/runtime/test_workspace_and_context.py`.
+
+What I analyzed
+
+- The accepted phase contract, implementation notes, and run-local decisions ledger.
+- Existing unit/runtime coverage for context API reads, missing input failures, non-scalar failures, artifact-path rejection, prompt validation, and resume stability.
+- The new contract tests for no auto-injection and child message forwarding, plus the new docs language.
+
+What I reviewed
+
+- The implementation adds useful contract-level proof for `workflow_step(message=...)` forwarding and no auto-injection.
+- The docs updates in `docs/authoring.md` and `docs/architecture.md` match the intended `ctx.*` guidance.
+- The new doc-baseline assertions were placed in `tests/test_architecture_baseline_docs.py`, but that file is currently untracked in this worktree.
+
+Key findings / decisions
+
+- `IMP-001` blocking: the new AC-2 regression assertions live in an untracked file, so that coverage is not part of the tracked repository deliverable and can disappear in a clean checkout. I recorded this in `feedback.md` and left the completion criteria unchecked accordingly.
+- No runtime behavior regressions were identified in the reviewed scope.
+- I marked `Behavioral Safety` and `Compatibility / Safety` as satisfied, with the remaining criteria left unchecked because of the blocking deliverable issue.
+
+Open issues / next step
+
+- Move the new ctx-specific doc assertions into a tracked baseline test surface, or explicitly add `tests/test_architecture_baseline_docs.py` to the repository, then rerun the targeted validation set and update the phase artifacts.
+
+<loop-control>
+{"schema":"docloop.loop_control/v1","kind":"promise","promise":"INCOMPLETE"}
+</loop-control>
