@@ -15,4 +15,4 @@ Check these boxes (`- [x]`) only when true.
 - [ ] **Reliability**: Tests avoid flaky assumptions and use stable setup, timing, ordering, and environment expectations.
 - [ ] **Behavioral Intent**: Tests do not encode a regression, reduced behavior, or compatibility break unless that change is explicitly required by user intent and explicitly confirmed.
 
-Auditor status: blocking findings remain; the tracked tests and the strategy artifact still contradict the accepted `ctx.input.message` runtime contract in material places.
+Auditor status: blocking findings remain; the `ctx.input.message` coverage gaps were fixed, but AC-1 coverage is still contradicted by a stale unit test that allows `Workflow.Input.message`.
