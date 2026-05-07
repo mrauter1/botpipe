@@ -39,6 +39,7 @@
 - Plan milestone 2: rendered `workflow_step(message=...)` through runtime templates while keeping `message_from` literal.
 - Plan milestone 3: added compile-time `ctx.*` validation in `discovery.py` with spec-matched `message` / `ctx` / bare model-root failures.
 - Plan milestone 3: added focused unit and engine-contract coverage for safe rendering, invalid placeholders, runtime failures, provider/operation prompt rendering, and child-workflow message rendering.
+- Reviewer `IMP-001`: converted runtime-only missing `ctx.input/state/params` field lookups into `WorkflowExecutionError` and added child-workflow message regression coverage.
 
 ## Assumptions
 
@@ -56,6 +57,7 @@
 
 - Provider-backed prompts, producer/verifier prompts, operation prompts, and workflow-step message strings now render supported `ctx.*` placeholders.
 - Unsupported or unsafe `ctx.*` prompt placeholders now fail explicitly instead of leaking through or silently stringifying internals.
+- Runtime-only message surfaces such as `workflow_step(message=...)` now fail explicitly on missing `ctx` model fields instead of leaking raw `AttributeError`.
 
 ## Known non-changes
 

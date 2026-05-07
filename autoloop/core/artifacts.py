@@ -546,10 +546,19 @@ def _resolve_ctx_placeholder(
         current = getattr(view, root_name)
         field_name = parts[2]
         if current is None:
+            if root_name == "input":
+                raise WorkflowExecutionError(
+                    f"ctx.{root_name}.{field_name} requires workflow input, but no input was provided"
+                )
             raise WorkflowExecutionError(
-                f"ctx.{root_name}.{field_name} requires workflow input, but no input was provided"
+                f"{placeholder_label} {{{expression}}} requires an available runtime value before {field_name!r}"
             )
-        return _lookup_runtime_value(current, field_name)
+        try:
+            return _lookup_runtime_value(current, field_name)
+        except (AttributeError, KeyError, TypeError) as exc:
+            raise WorkflowExecutionError(
+                f"{placeholder_label} {{{expression}}} references unknown runtime field {field_name!r}"
+            ) from exc
 
     current: Any = view
     for part in parts[1:]:

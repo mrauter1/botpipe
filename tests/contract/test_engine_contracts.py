@@ -8643,6 +8643,46 @@ def test_workflow_step_message_renders_ctx_bindings_before_child_invocation(tmp_
     assert seen["message"] != "structured-topic"
 
 
+def test_workflow_step_message_invalid_ctx_field_raises_workflow_execution_error(tmp_path: Path) -> None:
+    class ChildWorkflow(SimpleWorkflow):
+        note = step("Child note.")
+
+    class ParentWorkflow(SimpleWorkflow):
+        class Input(BaseModel):
+            topic: str
+
+        launch = workflow_step(
+            ChildWorkflow,
+            message="{ctx.input.missing}",
+            routes={"done": FINISH},
+        )
+
+    task_folder, run_folder = _workspace(tmp_path)
+    (run_folder / "request.md").write_text("Natural-language request\n", encoding="utf-8")
+
+    def invoke_child(workflow, *, message, parameters=None, input=None):
+        raise AssertionError("child invoker should not run when workflow-step message rendering fails")
+
+    with pytest.raises(
+        WorkflowExecutionError,
+        match=r"workflow step 'launch' message placeholder \{ctx\.input\.missing\} references unknown runtime field 'missing'",
+    ):
+        Engine(
+            ParentWorkflow,
+            provider=ScriptedLLMProvider(),
+            session_store=InMemorySessionStore(),
+            checkpoint_store=InMemoryCheckpointStore(),
+        ).run(
+            task_id="task-ctx-child-invalid",
+            run_id="run-ctx-child-invalid",
+            task_folder=task_folder,
+            run_folder=run_folder,
+            root=tmp_path,
+            workflow_input=ParentWorkflow.Input(topic="alpha"),
+            workflow_invoker=invoke_child,
+        )
+
+
 def test_python_step_feedforward_helpers_require_operation_executor_for_rendered_provider_in_active_loop(
     tmp_path: Path,
 ) -> None:
