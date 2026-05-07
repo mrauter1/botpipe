@@ -13,4 +13,4 @@ Check these boxes (`- [x]`) only when true.
 - [ ] **Behavioral Safety**: Changes do not introduce regression bugs, logical flaws, or unintended behavior unless such behavior change is explicitly required by user intent and explicitly confirmed.
 - [ ] **Compatibility / Safety**: No material compatibility, security, data-integrity, or operational regressions were introduced.
 - [ ] **Technical Debt / Simplicity**: Changes avoid unnecessary indirection, duplicated logic, scattered ownership, over-engineering, and unrelated refactors.
-- [ ] **Maintainability / Validation**: Diffs are cohesive, follow repository conventions, and are supported by appropriate validation, documentation, or notes where needed.
+- [x] **Maintainability / Validation**: Diffs are cohesive, follow repository conventions, and are supported by appropriate validation, documentation, or notes where needed.

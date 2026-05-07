@@ -507,3 +507,55 @@ Open issues / next step
   `./.venv/bin/python -m pytest -q tests/unit/test_sdk_facade.py`
   `./.venv/bin/python -m pytest -q tests/unit/test_simple_surface.py -k 'input_message_prompt_binding or ctx_input_message_prompt_binding'`
   `python3 -m py_compile autoloop/sdk.py autoloop/core/engine.py autoloop/core/operations.py tests/unit/test_sdk_facade.py`
+
+
+---
+run_id=run-20260507T184603Z-adb7c56b | entry=session_turn | pair=implement | phase=verifier | cycle=1 | attempt=1 | thread_id=019e03cf-11a5-7c91-97d7-e1e2805ea0f8
+---
+provider=codex
+mode=resume
+template=/home/rauter/.local/share/pipx/venvs/autoloop/lib/python3.12/site-packages/autoloop/templates/implement_verifier.md
+session_id=019e03cf-11a5-7c91-97d7-e1e2805ea0f8
+
+
+---
+run_id=run-20260507T184603Z-adb7c56b | entry=phase_output | pair=implement | phase=verifier | process=codex-agent | cycle=1 | attempt=1 | thread_id=019e03cf-11a5-7c91-97d7-e1e2805ea0f8
+---
+I’m reviewing the phase artifacts and the changed code paths now. I’ll validate the acceptance criteria against the implementation, then update `criteria.md` and append any findings to `feedback.md` before I close the review.
+
+The artifact notes and decision log line up with the implementation intent. I’m drilling into the retention helpers and the new tests now to see whether any edge cases still violate the phase contract or the conservative deletion rules.
+
+I found one blocking issue in the promotion path and I’m recording it now. After that I’ll mark the affected criteria accordingly and close the review as `INCOMPLETE`.
+
+Scope considered
+
+- Active phase `sdk-retention-and-safe-cleanup` only.
+- Changed/request-relevant files: `autoloop/sdk.py`, `autoloop/core/engine.py`, `autoloop/core/operations.py`, and `tests/unit/test_sdk_facade.py`.
+
+What I analyzed
+
+- Retention plumbing through `Autoloop.__init__`, `run(...)`, `step(...)`, and `cleanup(...)`.
+- Sentinel creation, deletion guards, declared-write collection/promotion, and retained artifact assembly.
+- Adjacent prompt-rendering change for bare `input.*`.
+- Added unit coverage and the implementation notes / run decisions for scope alignment.
+
+What I reviewed
+
+- Acceptance criteria against the implemented behavior.
+- Safety properties around deleting only SDK-owned task scratch.
+- Data-integrity behavior for promoted writes, including caller-supplied `promoted_writes_dir`.
+- Regression risk in strict-step synthetic routing and successful/partial result retention metadata.
+
+Key findings / decisions
+
+- Blocking finding recorded: `IMP-001`.
+- The promoted-write collision logic is incorrect for shared `RetentionPolicy.promoted_writes_dir` bases. The uniqueness fallback is unreachable, so a later SDK run can overwrite an earlier promoted artifact instead of suffixing it.
+
+Open issues / next step
+
+- Fix `autoloop/sdk.py::_promote_declared_write` so destination selection distinguishes the current task’s promotion directory from a shared custom base and applies `_uniquify_path(...)` when reusing an existing path would overwrite another run’s retained output.
+- `criteria.md` and `feedback.md` were updated accordingly.
+
+<loop-control>
+{"schema":"docloop.loop_control/v1","kind":"promise","promise":"INCOMPLETE"}
+</loop-control>
