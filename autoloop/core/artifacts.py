@@ -545,31 +545,7 @@ def _resolve_input_placeholder(
     if len(parts) < 2:
         return context.input
 
-    field_name = parts[1]
-    input_fields = context.input_fields
-    declared_input_message = bool(
-        input_fields is not None and "message" in getattr(type(input_fields), "model_fields", {})
-    )
-    if field_name == "message" and not declared_input_message:
-        current: Any = context.message
-        for part in parts[2:]:
-            if current is None:
-                return ""
-            if isinstance(current, Mapping):
-                if part not in current:
-                    raise WorkflowExecutionError(
-                        f"{placeholder_label} {{{expression}}} references unknown input field {part!r}"
-                    )
-                current = current[part]
-                continue
-            try:
-                current = getattr(current, part)
-            except AttributeError as exc:
-                raise WorkflowExecutionError(
-                    f"{placeholder_label} {{{expression}}} references unknown input field {part!r}"
-                ) from exc
-        return "" if current is None else current
-    if context.input_fields is None:
+    if parts[1] != "message" and context.input_fields is None:
         raise WorkflowExecutionError(
             f"{placeholder_label} {{{expression}}} requires workflow input, but no input was provided"
         )

@@ -820,6 +820,11 @@ def _compile_optional_model(workflow_cls: type[Any], attribute: str) -> type[Bas
         raise WorkflowCompilationError(
             f"{workflow_cls.__name__}.{attribute} must inherit from pydantic.BaseModel"
         )
+    if attribute == "Input" and "message" in getattr(raw, "model_fields", {}):
+        raise WorkflowCompilationError(
+            f"{workflow_cls.__name__}.Input must not declare field 'message'; "
+            "message is provided by client.run(..., message)."
+        )
     return raw
 
 

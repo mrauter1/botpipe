@@ -1,4 +1,32 @@
 version: 1
 task_id: standalone-implementation-spec-ctx-prompt-bindin-edf74165
 request_snapshot_ref: /home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/standalone-implementation-spec-ctx-prompt-bindin-edf74165/runs/run-20260507T141012Z-5af91a26/request.md
-phases: []
+phases:
+  - phase_id: "contract-test-alignment"
+    title: "Align Remaining ctx.input.message Contract Test"
+    objective: "Remove the stale undeclared ctx.input.message alias expectation and verify the intended ctx.message versus ctx.input contracts."
+    status: planned
+    in_scope:
+      - "Update tests/contract/test_engine_contracts.py::test_runtime_templates_resolve_ctx_input_message_without_typed_input to match the current runtime contract."
+      - "Preserve the declared Input.message positive contract and request-text access through ctx.message."
+      - "Rerun focused contract tests for undeclared ctx.input.message, declared Input.message, unreadable request snapshot, and workflow_step(message=\"{ctx.message}\") forwarding."
+    out_of_scope:
+      - "Runtime resolver changes unless the focused contract rerun shows a real behavior mismatch."
+      - "Removing the bare {input.message} compatibility shim."
+      - "Changing file-backed ctx.message behavior."
+    dependencies: []
+    acceptance_criteria:
+      - id: "AC-1"
+        text: "The stale contract test no longer treats undeclared {ctx.input.message} as an alias for request text."
+      - id: "AC-2"
+        text: "Focused contract coverage still proves declared Input.message, unreadable request snapshot failure, and workflow_step(message=\"{ctx.message}\") forwarding behavior."
+      - id: "AC-3"
+        text: "Any runtime code changes remain gated on new evidence from the focused contract rerun."
+    deliverables:
+      - "Updated contract test expectation in tests/contract/test_engine_contracts.py."
+      - "Focused validation coverage for the four required contract scenarios."
+    risks:
+      - "Replacing the stale test with a ctx.message-only assertion could silently drop undeclared ctx.input failure coverage."
+      - "The focused contract rerun may expose a real mismatch between unit-tested and contract-tested behavior."
+    rollback:
+      - "Revert the stale contract test edit if the focused rerun shows the old expectation was still intentionally required."

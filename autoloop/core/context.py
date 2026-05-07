@@ -89,19 +89,23 @@ class ChildWorkflowResult(Generic[OutputT]):
 
 @dataclass(frozen=True, slots=True)
 class WorkflowInputView:
-    """Attribute view over declared typed workflow input fields only."""
+    """Composite attribute view over the run message and typed workflow input."""
 
+    message: str | None
     fields: BaseModel | None = None
 
     def __getattr__(self, name: str) -> Any:
+        if name == "message":
+            return self.message
         if self.fields is not None:
             return getattr(self.fields, name)
         raise AttributeError(name)
 
     def model_dump(self, *args: Any, **kwargs: Any) -> dict[str, Any]:
-        if self.fields is None:
-            return {}
-        return self.fields.model_dump(*args, **kwargs)
+        payload = {"message": self.message}
+        if self.fields is not None:
+            payload.update(self.fields.model_dump(*args, **kwargs))
+        return payload
 
 
 class EmptyParameters(BaseModel):
@@ -344,7 +348,7 @@ class Context:
 
     @property
     def input(self) -> WorkflowInputView:
-        return WorkflowInputView(fields=self._input_fields)
+        return WorkflowInputView(message=self.message, fields=self._input_fields)
 
     @property
     def artifacts(self) -> "ResolvedArtifacts | None":
