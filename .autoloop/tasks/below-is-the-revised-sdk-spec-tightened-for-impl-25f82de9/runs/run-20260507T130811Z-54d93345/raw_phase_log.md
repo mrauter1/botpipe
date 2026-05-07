@@ -1116,3 +1116,60 @@ Open issues / next step
 
 - The phase test artifacts and tracked tests are now aligned with the accepted AC-1 and AC-2 contract on paper.
 - Next step is auditor re-review, and then real `pytest` execution in a provisioned environment that has the test dependencies installed.
+
+
+---
+run_id=run-20260507T130811Z-54d93345 | entry=session_turn | pair=test | phase=verifier | cycle=3 | attempt=1 | thread_id=019e02a5-9962-76a3-9250-09fb04c77004
+---
+provider=codex
+mode=resume
+template=/home/rauter/.local/share/pipx/venvs/autoloop/lib/python3.12/site-packages/autoloop/templates/test_verifier.md
+session_id=019e02a5-9962-76a3-9250-09fb04c77004
+
+
+---
+run_id=run-20260507T130811Z-54d93345 | entry=phase_output | pair=test | phase=verifier | process=codex-agent | cycle=3 | attempt=1 | thread_id=019e02a5-9962-76a3-9250-09fb04c77004
+---
+I’m doing the final audit pass over the corrected unit, contract, and runtime tests plus the phase artifacts to determine whether any blocking coverage gaps remain.
+
+The current tree still leaves two blocking test gaps in place: the runtime pause/resume test reverted to `input_has_message`, and the unit validation test still allows `Workflow.Input.message`. I’m updating the audit artifacts to reflect the actual current state rather than the earlier attempted fixes.
+
+Scope considered
+
+- Active test audit phase `input-validation-and-rendering` only.
+- I re-checked the current tree, not just prior notes, across the phase test artifacts and the tracked unit/contract/runtime tests that are supposed to cover AC-1 and AC-2.
+- I updated only [criteria.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/below-is-the-revised-sdk-spec-tightened-for-impl-25f82de9/runs/run-20260507T130811Z-54d93345/artifacts/test/phases/input-validation-and-rendering/criteria.md) and [feedback.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/below-is-the-revised-sdk-spec-tightened-for-impl-25f82de9/runs/run-20260507T130811Z-54d93345/artifacts/test/phases/input-validation-and-rendering/feedback.md).
+
+What I analyzed
+
+- [tests/contract/test_engine_contracts.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/tests/contract/test_engine_contracts.py:8654)
+- [tests/runtime/test_workspace_and_context.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/tests/runtime/test_workspace_and_context.py:736)
+- [tests/unit/test_validation.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/tests/unit/test_validation.py:107)
+- [test_strategy.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/below-is-the-revised-sdk-spec-tightened-for-impl-25f82de9/runs/run-20260507T130811Z-54d93345/artifacts/test/phases/input-validation-and-rendering/test_strategy.md)
+- The runtime-input-contract and test-author decisions in [decisions.txt](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/below-is-the-revised-sdk-spec-tightened-for-impl-25f82de9/runs/run-20260507T130811Z-54d93345/decisions.txt)
+
+What I reviewed
+
+- `TST-001` is actually resolved in the current tree: the message-only `{ctx.input.message}` contract test now asserts successful rendering.
+- `TST-002` is still unresolved in the current tree: the runtime pause/resume test still asserts `input_has_message: False` instead of `input_message`.
+- `TST-003` is still unresolved in the current tree: the unit validation test still allows `Workflow.Input.message`, while the strategy claims AC-1 rejection coverage.
+
+Key findings / decisions
+
+- Blocking findings remain because two tracked tests still contradict the accepted contract.
+- I appended status rechecks to the feedback artifact so it now reflects the actual current state:
+  - `TST-001` resolved
+  - `TST-002` still blocking
+  - `TST-003` still blocking
+- The criteria remain incomplete because the current test set still leaves AC-1 uncovered and still misses the required resumed `ctx.input.message` invariant.
+
+Open issues / next step
+
+- Status remains incomplete until:
+  - [tests/runtime/test_workspace_and_context.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/tests/runtime/test_workspace_and_context.py:736) asserts `input_message` across pause/resume instead of `input_has_message`
+  - [tests/unit/test_validation.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/tests/unit/test_validation.py:107) is replaced with a rejection test for `Workflow.Input.message`
+- After those two fixes, this phase should be ready for another audit pass.
+
+<loop-control>
+{"schema":"docloop.loop_control/v1","kind":"promise","promise":"INCOMPLETE"}
+</loop-control>
