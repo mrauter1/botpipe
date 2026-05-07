@@ -1173,3 +1173,108 @@ Open issues / next step
 <loop-control>
 {"schema":"docloop.loop_control/v1","kind":"promise","promise":"INCOMPLETE"}
 </loop-control>
+
+
+---
+run_id=run-20260507T130811Z-54d93345 | entry=session_turn | pair=test | phase=producer | cycle=4 | attempt=1 | thread_id=019e02a5-9962-76a3-9250-09fb04c77004
+---
+provider=codex
+mode=resume
+template=/home/rauter/.local/share/pipx/venvs/autoloop/lib/python3.12/site-packages/autoloop/templates/test_producer.md
+session_id=019e02a5-9962-76a3-9250-09fb04c77004
+
+
+---
+run_id=run-20260507T130811Z-54d93345 | entry=phase_output | pair=test | phase=producer | process=codex-agent | cycle=4 | attempt=1 | thread_id=019e02a5-9962-76a3-9250-09fb04c77004
+---
+I’m fixing the two tests the auditor still sees stale in the current tree: the pause/resume regression test and the AC-1 unit validation test. After that I’ll re-run static validation and update the phase artifacts one more time.
+
+I’ve confirmed both stale tests are still present in the working tree. I’m patching them directly now so the next audit sees the actual tracked suite match the strategy and the accepted contract.
+
+The two stale expectations are patched. I’m re-running static validation and then I’ll append a short cycle-4 note to the phase artifacts so the next audit can focus on the current tree instead of old stale status entries.
+
+Static validation passed again. I’m updating the phase notes to reflect that both remaining stale tests are now corrected in the working tree, with execution still limited by the missing `pytest` module.
+
+Scope considered
+
+- Active test phase `input-validation-and-rendering` only.
+- I limited code changes to the two tests the auditor still reported stale in the current tree, plus the required phase test artifacts.
+- I did not edit the auditor-owned [criteria.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/below-is-the-revised-sdk-spec-tightened-for-impl-25f82de9/runs/run-20260507T130811Z-54d93345/artifacts/test/phases/input-validation-and-rendering/criteria.md).
+
+What I analyzed
+
+- The current blocking recheck in [feedback.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/below-is-the-revised-sdk-spec-tightened-for-impl-25f82de9/runs/run-20260507T130811Z-54d93345/artifacts/test/phases/input-validation-and-rendering/feedback.md).
+- The stale unit test in [tests/unit/test_validation.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/tests/unit/test_validation.py:107).
+- The stale runtime pause/resume assertions in [tests/runtime/test_workspace_and_context.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/tests/runtime/test_workspace_and_context.py:736).
+- The current [test_strategy.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/below-is-the-revised-sdk-spec-tightened-for-impl-25f82de9/runs/run-20260507T130811Z-54d93345/artifacts/test/phases/input-validation-and-rendering/test_strategy.md) coverage map to keep the notes aligned with the real tracked test names and assertions.
+
+What I changed
+
+- Replaced `tests/unit/test_validation.py::test_validation_accepts_workflow_input_message_field_when_explicitly_declared` with `test_validation_rejects_workflow_input_message_field`, asserting the spec-defined `WorkflowValidationError`.
+- Updated `tests/runtime/test_workspace_and_context.py::test_resume_context_preserves_run_message_and_raw_input_fields` so it now records and asserts `input_message` instead of the stale `input_has_message` boolean.
+- Updated [test_strategy.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/below-is-the-revised-sdk-spec-tightened-for-impl-25f82de9/runs/run-20260507T130811Z-54d93345/artifacts/test/phases/input-validation-and-rendering/test_strategy.md) to note that the corrected tests are now present in the current working tree.
+- Appended a cycle-4 summary to [feedback.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/below-is-the-revised-sdk-spec-tightened-for-impl-25f82de9/runs/run-20260507T130811Z-54d93345/artifacts/test/phases/input-validation-and-rendering/feedback.md).
+
+Key findings / decisions
+
+- The remaining audit gaps were both stale test expectations, not missing new fixtures or broader coverage holes.
+- `python3 -m py_compile` passed again for the touched and adjacent tracked tests after the cycle-4 fixes.
+- Runtime test execution is still environment-limited because `/usr/bin/python3` does not have `pytest` installed.
+
+Open issues / next step
+
+- The tracked tests and the strategy are now aligned with the accepted AC-1 and AC-2 behavior in the working tree.
+- Next step is auditor re-review, then actual `pytest` execution in an environment with the test dependencies installed.
+
+
+---
+run_id=run-20260507T130811Z-54d93345 | entry=session_turn | pair=test | phase=verifier | cycle=4 | attempt=1 | thread_id=019e02a5-9962-76a3-9250-09fb04c77004
+---
+provider=codex
+mode=resume
+template=/home/rauter/.local/share/pipx/venvs/autoloop/lib/python3.12/site-packages/autoloop/templates/test_verifier.md
+session_id=019e02a5-9962-76a3-9250-09fb04c77004
+
+
+---
+run_id=run-20260507T130811Z-54d93345 | entry=phase_output | pair=test | phase=verifier | process=codex-agent | cycle=4 | attempt=1 | thread_id=019e02a5-9962-76a3-9250-09fb04c77004
+---
+I’m verifying the current tracked tests and phase artifacts one more time so the audit result reflects the actual working tree, not the earlier stale status history.
+
+The current tracked tests now line up with the strategy and the accepted contract. I’m closing out the audit artifacts so they reflect that the earlier blockers are resolved in the working tree.
+
+Scope considered
+
+- Active test audit phase `input-validation-and-rendering` only.
+- I re-checked the current tracked unit, contract, and runtime tests against the phase strategy and the decisions ledger.
+- I updated only [criteria.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/below-is-the-revised-sdk-spec-tightened-for-impl-25f82de9/runs/run-20260507T130811Z-54d93345/artifacts/test/phases/input-validation-and-rendering/criteria.md) and [feedback.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/below-is-the-revised-sdk-spec-tightened-for-impl-25f82de9/runs/run-20260507T130811Z-54d93345/artifacts/test/phases/input-validation-and-rendering/feedback.md).
+
+What I analyzed
+
+- [tests/unit/test_validation.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/tests/unit/test_validation.py:107)
+- [tests/runtime/test_workspace_and_context.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/tests/runtime/test_workspace_and_context.py:736)
+- [tests/contract/test_engine_contracts.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/tests/contract/test_engine_contracts.py:8654)
+- [test_strategy.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/below-is-the-revised-sdk-spec-tightened-for-impl-25f82de9/runs/run-20260507T130811Z-54d93345/artifacts/test/phases/input-validation-and-rendering/test_strategy.md)
+- The authoritative runtime-input-contract and test-author decisions in [decisions.txt](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/below-is-the-revised-sdk-spec-tightened-for-impl-25f82de9/runs/run-20260507T130811Z-54d93345/decisions.txt)
+
+What I reviewed
+
+- AC-1 is now covered by a rejection test for `Workflow.Input.message`.
+- AC-2 is covered by simple prompt validation plus contract/runtime rendering checks for message-only and typed-input flows.
+- The pause/resume regression test now asserts `input_message` together with raw `input_fields` and persisted `workflow_input` separation.
+- The phase strategy now matches the actual tracked test names and behaviors.
+
+Key findings / decisions
+
+- No blocking findings remain in the current tracked test suite for this phase.
+- I marked all criteria complete and appended status updates closing `TST-002` and `TST-003`.
+- The only remaining limitation is execution environment availability, not coverage intent: `pytest` still could not be run with `/usr/bin/python3` because the module is unavailable there.
+
+Open issues / next step
+
+- Test audit for this phase is complete.
+- If a provisioned environment becomes available, the next practical step is to run the targeted `pytest` selections already documented in the strategy and feedback artifacts.
+
+<loop-control>
+{"schema":"docloop.loop_control/v1","kind":"promise","promise":"COMPLETE"}
+</loop-control>
