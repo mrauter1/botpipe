@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+import asyncio
+from concurrent.futures import ThreadPoolExecutor
 import json
 from dataclasses import dataclass, field, replace
 from datetime import datetime, timezone
@@ -811,7 +813,7 @@ def _build_workflow_invoker(
         compiled = compile_workflow(resolved.workflow_cls)
         child_workflow_params = coerce_workflow_parameter_mapping(resolved.parameters_cls, parameters)
         child_workflow_input = _coerce_workflow_input_payload(compiled, input)
-        execution = execute_workflow_package(
+        execution = _execute_child_workflow_package(
             resolved.workflow_cls,
             provider=provider,
             options=RunnerOptions(
@@ -830,6 +832,33 @@ def _build_workflow_invoker(
         return _build_child_workflow_result(execution)
 
     return invoke
+
+
+def _execute_child_workflow_package(
+    workflow_reference: str | type[Any],
+    *,
+    provider: LLMProvider,
+    options: RunnerOptions,
+) -> RunExecution:
+    try:
+        asyncio.get_running_loop()
+    except RuntimeError:
+        return execute_workflow_package(
+            workflow_reference,
+            provider=provider,
+            options=options,
+        )
+
+    # Child workflow invocations may originate from synchronous Python-step handlers
+    # that are already running inside the parent engine's event loop.
+    with ThreadPoolExecutor(max_workers=1, thread_name_prefix="autoloop-child-workflow") as executor:
+        future = executor.submit(
+            execute_workflow_package,
+            workflow_reference,
+            provider=provider,
+            options=options,
+        )
+        return future.result()
 
 
 def _normalize_execution_options(

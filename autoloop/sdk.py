@@ -809,7 +809,7 @@ def _build_synthetic_step_workflow(root: Path, declaration: object, typed_input:
     if isinstance(declaration, Step):
         attrs["entry"] = declaration
         attrs[declaration.name] = declaration
-        attrs["transitions"] = {declaration: {"done": FINISH}}
+        attrs["transitions"] = {declaration: _synthetic_step_transitions(declaration)}
         name = f"SDKStepWorkflow_{declaration.name}"
         return type(name, (CoreWorkflow,), attrs)
 
@@ -821,6 +821,23 @@ def _build_synthetic_step_workflow(root: Path, declaration: object, typed_input:
 
 class _SDKStepState(BaseModel):
     pass
+
+
+def _synthetic_step_transitions(declaration: Step) -> dict[str, object]:
+    transitions: dict[str, object] = {}
+    for route_name in declaration.route_metadata:
+        transitions[route_name] = _synthetic_terminal_target(route_name)
+    if not transitions:
+        transitions["done"] = FINISH
+    return transitions
+
+
+def _synthetic_terminal_target(route_name: str) -> object:
+    if route_name in {"question", "blocked"}:
+        return AWAIT_INPUT
+    if route_name == "failed":
+        return FAIL
+    return FINISH
 
 
 def _validate_step_declaration_supported(root: Path, declaration: object) -> None:

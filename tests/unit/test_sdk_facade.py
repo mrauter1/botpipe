@@ -20,6 +20,7 @@ from autoloop import (
     WorkflowInputError,
 )
 from autoloop.core.primitives import Event, Outcome, RequestInput
+from autoloop.core.routes import Route
 from autoloop.core.providers.fake import ScriptedLLMProvider
 from autoloop.core.steps import PythonStep
 from autoloop.runtime.config import GitTrackingRuntimeConfig, RuntimeConfig
@@ -298,6 +299,37 @@ def test_sdk_step_supports_core_python_step_instances(tmp_path: Path) -> None:
 
     assert result.ok is True
     assert result.artifacts.snapshot.read_json() == {"message": "Handle the typed request.", "topic": "release"}
+
+
+def test_sdk_step_supports_core_python_steps_with_explicit_terminal_route_metadata(tmp_path: Path) -> None:
+    def handler(_ctx):
+        return Event("approved")
+
+    declaration = PythonStep(
+        name="approve",
+        handler=handler,
+        route_metadata={"approved": Route(summary="approved cleanly")},
+    )
+    client = _sdk_client(tmp_path, ScriptedLLMProvider())
+
+    result = client.step(declaration, "Approve the rollout.")
+
+    assert result.ok is True
+    assert result.route == "approved"
+    assert result.workflow_result.status == "completed"
+
+
+def test_sdk_step_rejects_branch_group_declarations(tmp_path: Path) -> None:
+    client = _sdk_client(tmp_path, ScriptedLLMProvider())
+
+    with pytest.raises(SDKExecutionError, match="branch-group"):
+        client.step(
+            simple.parallel(
+                name="review",
+                branches={"one": simple.step("Review one item.", name="review_one")},
+            ),
+            "Review the rollout.",
+        )
 
 
 def test_sdk_sync_entrypoints_normalize_active_event_loop_failures(tmp_path: Path) -> None:

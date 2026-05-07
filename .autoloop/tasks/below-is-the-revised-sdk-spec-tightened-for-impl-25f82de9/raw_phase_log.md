@@ -1838,3 +1838,67 @@ Open issues / next step
 <loop-control>
 {"schema":"docloop.loop_control/v1","kind":"promise","promise":"COMPLETE"}
 </loop-control>
+
+
+---
+run_id=run-20260507T130811Z-54d93345 | entry=session_turn | pair=implement | phase=producer | cycle=1 | attempt=1 | thread_id=019e02df-ff69-7963-aa73-ab06d2de2802
+---
+provider=codex
+mode=start
+template=/home/rauter/.local/share/pipx/venvs/autoloop/lib/python3.12/site-packages/autoloop/templates/implement_producer.md
+session_id=019e02df-ff69-7963-aa73-ab06d2de2802
+
+
+---
+run_id=run-20260507T130811Z-54d93345 | entry=phase_output | pair=implement | phase=producer | process=codex-agent | cycle=1 | attempt=1 | thread_id=019e02df-ff69-7963-aa73-ab06d2de2802
+---
+I’m implementing the SDK operations and verification phase: standalone `llm`/`classify`/`step`, plus acceptance-focused coverage. I’ll start by reading the phase artifacts and the current SDK/runtime code paths so the edits stay aligned with prior phase work.
+
+The facade already exists from the earlier phase, so I’m checking what’s stubbed versus complete. Next I’m reading the SDK implementation, operation helpers, and existing tests to narrow the delta instead of rewriting settled pieces.
+
+I’ve confirmed most of the SDK surface is already present, including tests, but the current `step` wrapper looks optimistic and probably misses some acceptance edges around route detection and unsupported declarations. I’m checking the underlying step/declaration shapes and the existing test baseline before editing anything.
+
+`pytest` is not on PATH in this environment, so I’ll verify through the repo’s configured test runner instead of assuming the shell environment is complete. I’m also checking the simple/core step declaration internals, because the current synthetic wrapper needs to reject the unsupported shapes deliberately rather than by accident.
+
+The repo only declares `pydantic` in `pyproject.toml`, so test tooling is probably coming from the outer environment rather than the package metadata. I’m going to use the available Python/venv path if present, then patch the specific gaps I found in `step` and its coverage.
+
+The current gap is clearer now: simple one-step declarations already inherit default `done -> FINISH`, but strict core `Step` instances do not, and the wrapper currently forces `done -> FINISH` unconditionally. I’m reading the strict workflow discovery rules next so I can make that injection conditional and keep authored terminal routes intact.
+
+The strict `Step` path is where behavior is still too blunt: it always synthesizes `done -> FINISH`, which can override authored route contracts or fail non-`done` steps. I’m tracing the route metadata helpers now so I can preserve authored completion routes and only add the fallback when the step truly has no terminal route.
+
+I have enough context to patch now. The main code change will be to make synthetic `step` wrapping preserve authored strict-step routes and only inject the `done -> FINISH` fallback when no completion route exists, then I’ll back that with direct regression tests for unsupported and non-`done` cases.
+
+The shell Python is present but this image does not have the repo dependencies installed, so validation will be limited to static review unless there’s a checked-in venv. I’m checking for that now, then I’ll patch and record the environment constraint in the phase notes.
+
+I’m editing `autoloop/sdk.py` now to tighten the strict-step synthesis rules instead of relying on accidental compile behavior. After that I’ll extend `tests/unit/test_sdk_facade.py` with the missing acceptance edges and rerun the scoped SDK suite in the repo venv.
+
+The code change is in; I’ve kept it narrow to the synthetic strict-step path and added regression tests for explicit non-`done` terminal routes plus unsupported branch-group rejection. I’m running the SDK-focused suite in the checked-in venv now.
+
+The SDK suite is green, but the broader runtime regression pass exposed a real issue in `ctx.invoke_workflow(...)`: nested child workflow calls are using the synchronous runner from inside the engine’s active event loop. That’s in the same conceptual surface as the SDK input model and child-workflow alignment, so I’m tracing that path and fixing it rather than papering over the failures.
+
+The runtime regression is coming from child workflow execution, not the SDK patch itself. I’m fixing the runner’s child-workflow invoker to fall back to a worker thread when it’s called from inside the parent engine’s event loop, which preserves the synchronous `ctx.invoke_workflow(...)` contract without loosening the public sync engine API.
+
+The regression sweep is clean now. I’m recording the two non-obvious decisions in the run ledger and updating the phase notes with the exact files, symbols, and validation scope so the next turn doesn’t lose the child-workflow fix context.
+
+Scope considered
+
+Phase-local SDK operations and verification work, plus adjacent runtime child-workflow regression surfaces that were exercised by the requested acceptance coverage.
+
+What I analyzed
+
+[autoloop/sdk.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/autoloop/sdk.py), [autoloop/runtime/runner.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/autoloop/runtime/runner.py), [tests/unit/test_sdk_facade.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/tests/unit/test_sdk_facade.py), and the runtime child-invocation path through [autoloop/core/context.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/autoloop/core/context.py) / [autoloop/core/engine.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/autoloop/core/engine.py). I also ran the scoped SDK and runtime regression suites in the repo venv.
+
+What I changed
+
+In [autoloop/sdk.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/autoloop/sdk.py), strict `client.step(...)` synthesis now preserves explicit `Step.route_metadata` tags as one-step terminal routes and only falls back to `done -> FINISH` when no explicit route tags exist. In [autoloop/runtime/runner.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/autoloop/runtime/runner.py), child workflow invocation now uses a worker-thread fallback only when `ctx.invoke_workflow(...)` is called from inside the parent engine’s active event loop. In [tests/unit/test_sdk_facade.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/tests/unit/test_sdk_facade.py), I added coverage for explicit non-`done` strict-step routes and unsupported branch-group rejection.
+
+Key findings / decisions
+
+The SDK-focused tests were already mostly green; the real regression surfaced in runtime child workflow invocation, where nested sync calls were hitting the engine’s active-loop guard. I fixed that without changing the public sync engine contract. Validation run:
+`.venv/bin/python -m pytest -q tests/unit/test_sdk_facade.py`
+`.venv/bin/python -m pytest -q tests/runtime/test_workspace_and_context.py`
+`.venv/bin/python -m pytest -q tests/unit/test_sdk_facade.py tests/unit/test_primitives_and_stores.py`
+
+Open issues / next step
+
+No open blocker from this phase. The scoped suites I ran passed: `16 passed`, `32 passed`, and `81 passed`.
