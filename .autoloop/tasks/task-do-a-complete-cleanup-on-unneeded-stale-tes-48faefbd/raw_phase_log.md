@@ -1265,3 +1265,59 @@ Open issues / next step
 <loop-control>
 {"schema":"docloop.loop_control/v1","kind":"promise","promise":"INCOMPLETE"}
 </loop-control>
+
+
+---
+run_id=run-20260507T203124Z-562ebe8e | entry=session_turn | pair=audit | phase=verifier | cycle=1 | attempt=1 | thread_id=019e0432-be59-7d32-874f-d6070d1ad465
+---
+provider=codex
+mode=resume
+template=/home/rauter/.local/share/pipx/venvs/autoloop/lib/python3.12/site-packages/autoloop/templates/audit_verifier.md
+session_id=019e0432-be59-7d32-874f-d6070d1ad465
+
+
+---
+run_id=run-20260507T203124Z-562ebe8e | entry=phase_output | pair=audit | phase=verifier | process=codex-agent | cycle=1 | attempt=1 | thread_id=019e0432-be59-7d32-874f-d6070d1ad465
+---
+I’m verifying the audit artifacts against the request, decisions ledger, and final retained-test state now. I’ll re-check the evidence chain, then update only the audit criteria and feedback files with either findings or a clean verification result.
+
+The audit content matches the request and decisions on paper. I’m doing one last direct source scan now for the two sensitive claims: no remaining workflow-package `params` imports in retained shared tests, and no restored stale source suites under `tests/`.
+
+I didn’t find an audit-quality defect. I’m appending a clean verifier outcome to the audit feedback now and leaving the criteria fully checked, since the artifacts are consistent with the request, decisions, and final retained-test state.
+
+Scope considered
+
+- The immutable request, `decisions.txt`, and the audit artifacts under `.autoloop/.../artifacts/audit/`.
+- Final retained-test files only where needed to verify the audit’s claims.
+- The current validation evidence for `.venv/bin/python -m pytest tests/strictness/test_no_compat.py tests/contract tests/unit -q`.
+
+What I analyzed
+
+- Whether the audit correctly classified the retained split-test cleanup as complete.
+- Whether `gap_report.md` covered the original request, later decisions, implemented behavior, and justified differences.
+- Whether `revised_request.md` and `audit_result.json` were consistent with `material_gaps_found: false`.
+- Whether the final codebase still had direct retained-test imports of repo-owned workflow-package `params` modules or restored stale source suites under `tests/`.
+
+What I reviewed
+
+- `gap_report.md`, `revised_request.md`, `audit_result.json`, `criteria.md`, and `feedback.md`.
+- `decisions.txt` blocks governing private `_shared.py` helpers, synthetic parameter models, and the two stale-assertion realignments.
+- Direct source checks showing no retained-test `from/import autoloop.workflows.*.params` statements, no restored stale `.py` suites under `tests/`, and explicit helper imports in representative moved split files.
+- The passing validation result cited by the audit: `786 passed, 1 warning`.
+
+Key findings / decisions
+
+- No blocking findings.
+- No non-blocking findings against the audit artifacts.
+- The audit report supports its “no material gaps” conclusion with adequate evidence from the request, decisions ledger, final code, and final test result.
+- `revised_request.md` is appropriate for `material_gaps_found: false`, and `audit_result.json` is accurate and internally consistent.
+- All criteria remain correctly checked.
+
+Open issues / next step
+
+- No audit-quality issue blocks completion.
+- The only remaining note is the already-documented optional hardening idea for the AST guard; it is not a verifier finding against this audit.
+
+<loop-control>
+{"schema":"docloop.loop_control/v1","kind":"promise","promise":"COMPLETE"}
+</loop-control>
