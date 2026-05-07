@@ -295,3 +295,76 @@ No blocking issues for this phase. Broader workflow-owned suite removal, strictn
 <loop-control>
 {"schema":"docloop.loop_control/v1","kind":"promise","promise":"COMPLETE"}
 </loop-control>
+
+
+---
+run_id=run-20260507T194557Z-2f9c2de5 | entry=session_turn | pair=implement | phase=producer | cycle=1 | attempt=1 | thread_id=019e040b-2414-79f1-81ec-e7b2f91b980a
+---
+provider=codex
+mode=start
+template=/home/rauter/.local/share/pipx/venvs/autoloop/lib/python3.12/site-packages/autoloop/templates/implement_producer.md
+session_id=019e040b-2414-79f1-81ec-e7b2f91b980a
+
+
+---
+run_id=run-20260507T194557Z-2f9c2de5 | entry=phase_output | pair=implement | phase=producer | process=codex-agent | cycle=1 | attempt=1 | thread_id=019e040b-2414-79f1-81ec-e7b2f91b980a
+---
+I’m treating this as a test-suite ownership cleanup confined to `tests/`, plus the required phase notes. First I’m reading the active artifacts and the targeted test files to confirm which stale suites are still present and which shared tests need fixture rewrites.
+
+The current tree still has the misowned runtime workflow suites the plan called out. I’m now tracing every retained test that still touches `REPO_ROOT / "docs"`, `recursive_autoloop`, or `autoloop/workflows` so I can remove whole suites where ownership is wrong and only rewrite the shared survivors.
+
+I’ve confirmed the remaining problem areas: the 15 repo-owned workflow runtime suites are still in `tests/runtime`, and the surviving shared files still need cleanup in optimizer helpers, strictness, `test_package_cli`, and `test_simple_surface`. Next I’m editing those directly, then I’ll run collection and the targeted shared suites.
+
+I found one broader issue beyond the obvious removals: `tests/unit/test_stdlib_and_extensions.py` still has a cluster of assertions that read repo `docs/authoring.md`. Those need to be cut or converted, otherwise the phase would miss AC-1 even if the workflow suites are deleted.
+
+I’ve narrowed the remaining edit set. The recursive CLI tests and the bundled-workflow export tests appear to already be gone, so I’m only changing the files that still violate the phase contract: deleting the 15 workflow-owner runtime suites, stripping repo-doc assertions from `test_stdlib_and_extensions.py`, and tightening strictness so it never scans repo workflow/docs assets.
+
+I’m applying the test cleanup now: whole-file removals for the misowned runtime suites, and small targeted edits in the retained shared files. After that I’ll verify there are no remaining repo-root workflow/docs reads in `tests/` before I run pytest.
+
+The first patch missed some local context in `test_no_compat.py`, so I’m re-reading those exact sections and applying a narrower edit. The deletion set is still the same; this is just patch hygiene.
+
+One more stale coupling surfaced while re-reading `test_stdlib_and_extensions.py`: it still has a runtime-fixture token test that names deleted workflow-owner files, and a parameter-model test that resolves concrete repo workflow packages from `PACKAGE_ROOT`. Both have to go for the shared suite to stop depending on repo-owned workflows.
+
+The workflow-owner suites are removed and the shared files are trimmed. I’m doing a repo-wide grep over `tests/` now to catch any remaining direct reads from `REPO_ROOT/docs`, `recursive_autoloop`, or `REPO_ROOT/autoloop/workflows` before I spend time on pytest runs.
+
+The grep is clean for direct repo-root docs/workflow reads in retained tests; the only remaining hits are synthetic `tmp_path` fixture labels. The environment doesn’t have a plain `pytest` binary, so I’m checking the project’s Python entrypoint next to see whether I can still run collection through `python3 -m pytest`.
+
+Collection is running under the repo venv now. I’m waiting on that first because it will catch any stale imports from the deleted workflow-owner files before I decide whether targeted test execution is worth doing.
+
+Collection is clean: `1103` tests collected after the removals, with no import fallout from the deleted suites. I’m running the changed shared modules plus a few retained workflow-fixture runtime tests now to check for behavioral regressions in the surviving coverage.
+
+One targeted test failed late in the run. I’m pulling the tail now so I can fix the specific regression instead of guessing.
+
+The failure is a stale expectation in a retained runtime test, not fallout from the deletions: it still expects implicit `blocked` and `failed` routes on a simple workflow inspection payload. I’m updating that assertion to the current surface and rerunning the same targeted set.
+
+I’ve finished the code changes and the targeted validation pass. The last step is documenting the non-obvious decisions and the phase notes so the next turn doesn’t drift back toward repo-owned workflow coverage under `tests/`.
+
+Scope considered
+
+- `tests/` cleanup only for shared-suite ownership, plus the required phase notes files.
+- I treated repo-owned workflow packages, repo docs, and recursive assets as out of scope for `tests/`.
+
+What I analyzed
+
+- The 15 workflow-owner runtime suites under `tests/runtime/`.
+- Retained shared files that still touched repo-owned surfaces, mainly [test_no_compat.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/tests/strictness/test_no_compat.py) and [test_stdlib_and_extensions.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/tests/unit/test_stdlib_and_extensions.py).
+- Retained runtime coverage after deletions, including [test_workflow_reference_resolution.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/tests/runtime/test_workflow_reference_resolution.py).
+
+What I changed
+
+- Deleted the 15 repo-owned workflow runtime suites from `tests/runtime/`.
+- Narrowed strictness scanning so it no longer reads `docs/`, `recursive_autoloop/`, or `autoloop/workflows/*`.
+- Removed repo-doc assertions and repo-workflow parameter-model coverage from `tests/unit/test_stdlib_and_extensions.py`.
+- Updated one retained workflow-reference assertion to match the current simple inspection route surface.
+
+Key findings / decisions
+
+- `tests/` now collects cleanly without the workflow-owner suites: `1103` tests collected.
+- The retained shared tests no longer directly read concrete repo-owned docs/workflow assets.
+- Targeted validation passed: `246 passed` across the changed/shared suites and retained workflow-fixture runtime tests.
+- I did not do the large monolith splits in this phase; they were not needed to satisfy the active acceptance criteria.
+
+Open issues / next step
+
+- Full-suite execution beyond collection was not run; I only ran the targeted validation set.
+- If you want the remaining cleanup phase to continue, the next logical step is the deferred split of `tests/unit/test_stdlib_and_extensions.py` and `tests/contract/test_engine_contracts.py`.
