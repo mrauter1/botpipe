@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import asyncio
 import json
+from datetime import timedelta
 from pathlib import Path
 
 import pytest
@@ -800,6 +801,55 @@ def test_sdk_cleanup_only_targets_valid_completed_sdk_task_directories(tmp_path:
     assert invalid.exists()
 
 
+def test_sdk_cleanup_honors_older_than_and_include_failed_opt_in(tmp_path: Path) -> None:
+    client = _sdk_client_at_root(tmp_path, ScriptedLLMProvider())
+    tasks_root = tmp_path / ".autoloop" / "tasks"
+    old_completed = tasks_root / "sdk-old-completed"
+    new_completed = tasks_root / "sdk-new-completed"
+    old_failed = tasks_root / "sdk-old-failed"
+
+    def seed_task(task_dir: Path, *, status: str, terminal: str, created_at: str) -> None:
+        task_dir.mkdir(parents=True, exist_ok=True)
+        (task_dir / ".autoloop-sdk-task.json").write_text(
+            json.dumps(
+                {
+                    "schema": "autoloop.sdk_task/v1",
+                    "generated_by": "autoloop.sdk",
+                    "task_id": task_dir.name,
+                    "created_at": created_at,
+                    "retention_mode": "delete_task_scratch",
+                }
+            )
+            + "\n",
+            encoding="utf-8",
+        )
+        run_dir = task_dir / "wf_test" / "runs" / "run-1"
+        run_dir.mkdir(parents=True, exist_ok=True)
+        (run_dir / "run.json").write_text(json.dumps({"status": status, "terminal": terminal}) + "\n", encoding="utf-8")
+
+    seed_task(old_completed, status="completed", terminal=FINISH, created_at="2026-05-01T00:00:00Z")
+    seed_task(new_completed, status="completed", terminal=FINISH, created_at="2026-05-07T00:00:00Z")
+    seed_task(old_failed, status="failed", terminal=FAIL, created_at="2026-05-01T00:00:00Z")
+
+    dry_run = client.cleanup(older_than=timedelta(days=2), dry_run=True)
+
+    assert old_completed in dry_run.deleted
+    assert new_completed in dry_run.skipped
+    assert old_failed in dry_run.skipped
+    assert old_completed.exists()
+    assert new_completed.exists()
+    assert old_failed.exists()
+
+    result = client.cleanup(older_than=timedelta(days=2), include_failed=True)
+
+    assert old_completed in result.deleted
+    assert old_failed in result.deleted
+    assert new_completed in result.skipped
+    assert old_completed.exists() is False
+    assert old_failed.exists() is False
+    assert new_completed.exists()
+
+
 def test_safe_delete_sdk_task_dir_refuses_unsafe_candidates(tmp_path: Path) -> None:
     tasks_root = tmp_path / ".autoloop" / "tasks"
     tasks_root.mkdir(parents=True, exist_ok=True)
@@ -840,6 +890,38 @@ def test_safe_delete_sdk_task_dir_refuses_unsafe_candidates(tmp_path: Path) -> N
     )
     with pytest.raises(SDKExecutionError, match="refusing to delete"):
         sdk_module._safe_delete_sdk_task_dir(task_dir=mismatched, task_id="sdk-mismatched", tasks_root=tasks_root)
+
+    wrong_schema = tasks_root / "sdk-wrong-schema"
+    wrong_schema.mkdir()
+    (wrong_schema / ".autoloop-sdk-task.json").write_text(
+        json.dumps(
+            {
+                "schema": "autoloop.sdk_task/v0",
+                "generated_by": "autoloop.sdk",
+                "task_id": "sdk-wrong-schema",
+            }
+        )
+        + "\n",
+        encoding="utf-8",
+    )
+    with pytest.raises(SDKExecutionError, match="refusing to delete"):
+        sdk_module._safe_delete_sdk_task_dir(task_dir=wrong_schema, task_id="sdk-wrong-schema", tasks_root=tasks_root)
+
+    wrong_owner = tasks_root / "sdk-wrong-owner"
+    wrong_owner.mkdir()
+    (wrong_owner / ".autoloop-sdk-task.json").write_text(
+        json.dumps(
+            {
+                "schema": "autoloop.sdk_task/v1",
+                "generated_by": "someone-else",
+                "task_id": "sdk-wrong-owner",
+            }
+        )
+        + "\n",
+        encoding="utf-8",
+    )
+    with pytest.raises(SDKExecutionError, match="refusing to delete"):
+        sdk_module._safe_delete_sdk_task_dir(task_dir=wrong_owner, task_id="sdk-wrong-owner", tasks_root=tasks_root)
 
     outside = tmp_path / "sdk-outside"
     outside.mkdir()

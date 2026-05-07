@@ -663,3 +663,63 @@ Open issues / next step
 <loop-control>
 {"schema":"docloop.loop_control/v1","kind":"promise","promise":"COMPLETE"}
 </loop-control>
+
+
+---
+run_id=run-20260507T184603Z-adb7c56b | entry=session_turn | pair=test | phase=producer | cycle=1 | attempt=1 | thread_id=019e03cf-11a5-7c91-97d7-e1e2805ea0f8
+---
+provider=codex
+mode=resume
+template=/home/rauter/.local/share/pipx/venvs/autoloop/lib/python3.12/site-packages/autoloop/templates/test_producer.md
+session_id=019e03cf-11a5-7c91-97d7-e1e2805ea0f8
+
+
+---
+run_id=run-20260507T184603Z-adb7c56b | entry=phase_output | pair=test | phase=producer | process=codex-agent | cycle=1 | attempt=1 | thread_id=019e03cf-11a5-7c91-97d7-e1e2805ea0f8
+---
+I’m taking the test-author slice on the completed retention work. First I’m checking the current SDK retention tests and the phase test artifacts so I can add any missing coverage instead of duplicating what’s already in `test_sdk_facade.py`.
+
+I’m checking the existing retention/cleanup test coverage to find the smallest missing cases worth locking down, then I’ll patch the repo tests and the phase test artifacts in one pass.
+
+The current repo already has most retention coverage. I’m reading the cleanup and safe-delete branches directly now so I can add a focused regression test instead of duplicating what’s already there.
+
+I found two worthwhile gaps that aren’t just duplication: explicit rejection of malformed sentinel schema/ownership, and cleanup filtering by `older_than` plus `include_failed=True` without relying on filesystem mtimes. I’m patching those now and then I’ll update the phase test strategy/feedback artifacts.
+
+I’ve narrowed the additions to two deterministic regressions: malformed sentinel rejection and cleanup age/include-failed filtering. I’m editing the unit test file plus the phase test artifacts now.
+
+The tests are patched. I’m running the retention/cleanup slice now to verify the new cases and catch any nearby regressions before I close out the phase artifacts.
+
+The focused slice passed. I’m running the whole SDK facade test module once to make sure the new setup didn’t disturb adjacent behavior.
+
+The full module is still running. I’m polling for completion now; if anything fails I’ll inspect only that regression surface.
+
+Scope considered
+
+- Test-phase slice for `sdk-retention-and-safe-cleanup`.
+- Request-relevant repo test coverage in [tests/unit/test_sdk_facade.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/tests/unit/test_sdk_facade.py) plus the phase artifacts [test_strategy.md](</home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/revised-sdk-implementation-spec-1-scope-implemen-1e1a7513/runs/run-20260507T184603Z-adb7c56b/artifacts/test/phases/sdk-retention-and-safe-cleanup/test_strategy.md>) and [feedback.md](</home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/revised-sdk-implementation-spec-1-scope-implemen-1e1a7513/runs/run-20260507T184603Z-adb7c56b/artifacts/test/phases/sdk-retention-and-safe-cleanup/feedback.md>).
+
+What I analyzed
+
+- Existing retention, promotion, cleanup, and safe-delete tests already present in `tests/unit/test_sdk_facade.py`.
+- Cleanup branches in `autoloop/sdk.py` for `older_than`, `include_failed`, and sentinel validation guards.
+- The current test-turn header in [decisions.txt](</home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/revised-sdk-implementation-spec-1-scope-implemen-1e1a7513/runs/run-20260507T184603Z-adb7c56b/decisions.txt>) to keep any new note append-only and in-scope.
+
+What I changed
+
+- Added `test_sdk_cleanup_honors_older_than_and_include_failed_opt_in` in [tests/unit/test_sdk_facade.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/tests/unit/test_sdk_facade.py) to cover sentinel-based age filtering and explicit failed-task cleanup opt-in.
+- Expanded `test_safe_delete_sdk_task_dir_refuses_unsafe_candidates` to reject wrong-schema and wrong-owner sentinels.
+- Filled in the behavior-to-test coverage map in [test_strategy.md](</home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/revised-sdk-implementation-spec-1-scope-implemen-1e1a7513/runs/run-20260507T184603Z-adb7c56b/artifacts/test/phases/sdk-retention-and-safe-cleanup/test_strategy.md>).
+- Appended a concise summary to the phase [feedback.md](</home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/revised-sdk-implementation-spec-1-scope-implemen-1e1a7513/runs/run-20260507T184603Z-adb7c56b/artifacts/test/phases/sdk-retention-and-safe-cleanup/feedback.md>) and one deterministic-test note under the current test-author header in [decisions.txt](</home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/revised-sdk-implementation-spec-1-scope-implemen-1e1a7513/runs/run-20260507T184603Z-adb7c56b/decisions.txt>).
+
+Key findings / decisions
+
+- Most phase behavior was already covered in the repo; the remaining worthwhile gaps were explicit sentinel-malformation rejection and deterministic cleanup filtering.
+- The age-filter test pins sentinel `created_at` values instead of relying on directory mtimes, which keeps the coverage stable and exercises the intended contract.
+
+Open issues / next step
+
+- Validation passed:
+  - `./.venv/bin/python -m pytest -q tests/unit/test_sdk_facade.py -k 'cleanup_honors_older_than_and_include_failed_opt_in or safe_delete_sdk_task_dir_refuses_unsafe_candidates or cleanup_only_targets_valid_completed_sdk_task_directories'`
+  - `./.venv/bin/python -m pytest -q tests/unit/test_sdk_facade.py`
+  - `python3 -m py_compile tests/unit/test_sdk_facade.py`
+- No open test-author blockers remain in this phase.
