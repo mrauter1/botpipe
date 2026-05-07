@@ -2,3 +2,6 @@
 ctx.input.message follow-up must be fixed in the shared ctx placeholder resolver so runtime templates and workflow_step child message rendering both read the composite Context.input view; do not special-case only bare input.message placeholders.
 Strict ChildWorkflowStep support in client.step(...) is additive only for directly resolvable unscoped declarations and must continue through the existing synthetic core-step workflow path instead of a new execution path.
 Follow-up regression coverage should replace stale typed Input.message expectations and prove ctx.input.message always follows the runtime message, including the no-typed-input path.
+<autoloop-decisions-header version="1" block_seq="2" owner="implementer" phase_id="close-remaining-sdk-runtime-gaps" pair="implement" turn_seq="1" run_id="run-20260507T145702Z-0c706033" ts="2026-05-07T15:01:50.833764+00:00" />
+Preserved the existing compiler invariant that authored Workflow.Input models may not declare a message field; the child-message contract regression proves ctx.input.message with typed input present via normal typed fields instead of relaxing that invariant.
+Contract coverage for invalid workflow-step ctx placeholders now assigns unique local workflow qualnames per parametrized case to avoid compiler cache collisions between otherwise identical local classes.

@@ -2398,3 +2398,48 @@ Validation: `.venv/bin/python -m pytest -q tests/unit/test_primitives_and_stores
 Open issues / next step
 
 No code blockers remain for this phase. One worktree note: [tests/unit/test_primitives_and_stores.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/tests/unit/test_primitives_and_stores.py:1) is currently untracked in this checkout, so its changes are present locally but not in git’s tracked set yet.
+
+
+---
+run_id=run-20260507T145702Z-0c706033 | entry=session_turn | pair=implement | phase=verifier | cycle=1 | attempt=1 | thread_id=019e02f5-9c8f-74d1-aed2-ee2404b64c7a
+---
+provider=codex
+mode=resume
+template=/home/rauter/.local/share/pipx/venvs/autoloop/lib/python3.12/site-packages/autoloop/templates/implement_verifier.md
+session_id=019e02f5-9c8f-74d1-aed2-ee2404b64c7a
+
+
+---
+run_id=run-20260507T145702Z-0c706033 | entry=phase_output | pair=implement | phase=verifier | process=codex-agent | cycle=1 | attempt=1 | thread_id=019e02f5-9c8f-74d1-aed2-ee2404b64c7a
+---
+I’m auditing the implementation against the phase criteria, starting with the active review artifacts and the localized diffs, then I’ll mark criteria and append any findings to feedback before closing the loop.
+
+I’ve got the phase artifacts and notes. Now I’m checking the actual touched code and rerunning the exact regression slice to confirm the behavior claimed in the implementation notes.
+
+The touched code paths match the intended centralization, and the full three-file slice is in progress under the local `.venv` interpreter. I’m checking for any adjacent regression or missed invariant before I mark the criteria.
+
+I didn’t find a correctness or safety issue in scope. I’m marking the criteria complete and adding a no-findings review entry with the validated slice result so the artifact set is explicit.
+
+Scope considered
+
+Phase-local review of the requested SDK/runtime follow-up only: [autoloop/core/artifacts.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/autoloop/core/artifacts.py:239), [autoloop/sdk.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/autoloop/sdk.py:843), and the focused regression files plus the active implementation artifacts.
+
+What I analyzed
+
+I checked the authoritative phase contract, the run-local decisions ledger, the implementation notes, the localized code changes, and the regression expectations around `ctx.input.message`, workflow-step child message rendering, and strict `ChildWorkflowStep` dispatch.
+
+What I reviewed
+
+I verified that `PromptContextView.input` now routes `ctx.input.*` through the composite runtime view, that the missing-input guard still protects non-message typed fields, and that strict resolvable child-workflow steps now pass through the existing synthetic one-step SDK path without relaxing branch-group, scoped, or unresolved-child rejections. I reran the requested slice with `.venv/bin/python -m pytest -q tests/unit/test_primitives_and_stores.py tests/contract/test_engine_contracts.py tests/unit/test_sdk_facade.py`, which passed with `277 passed`.
+
+Key findings / decisions
+
+No blocking or non-blocking findings in scope. The implementation matches the accepted plan, keeps the runtime fix centralized, preserves the existing `Workflow.Input.message` compiler invariant, and includes focused regression coverage for the requested surfaces.
+
+Open issues / next step
+
+Criteria and feedback artifacts were updated. No further verifier action is needed for this phase.
+
+<loop-control>
+{"schema":"docloop.loop_control/v1","kind":"promise","promise":"COMPLETE"}
+</loop-control>
