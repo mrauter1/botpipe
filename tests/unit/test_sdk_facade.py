@@ -18,6 +18,7 @@ from autoloop import (
     InputResponseValidationError,
     SDKExecutionError,
     StaticInput,
+    WorkflowParameterError,
     WorkflowInputError,
 )
 from autoloop.core.primitives import Event, Outcome, RequestInput
@@ -326,6 +327,17 @@ def test_sdk_run_exposes_params_without_leaking_them_into_ctx_input(
         "input_dump": {"message": "Check params handling."},
         "has_mode_on_input": False,
     }
+
+
+def test_sdk_run_wraps_invalid_params_at_the_sdk_boundary(tmp_path: Path) -> None:
+    client = _sdk_client(tmp_path, ScriptedLLMProvider())
+
+    with pytest.raises(WorkflowParameterError, match="unknown workflow parameter 'unknown'"):
+        client.run(
+            _SDKParamsWorkflow,
+            "Check params handling.",
+            params={"mode": "strict", "unknown": "value"},
+        )
 
 
 def test_sdk_run_maps_failed_terminal_to_failed_result_status(tmp_path: Path) -> None:
