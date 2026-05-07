@@ -1405,8 +1405,6 @@ def _validate_ctx_prompt_reference(
     try:
         validated = validate_safe_ctx_reference(reference)
     except ValueError as exc:
-        if len(parts) == 3 and parts[1] == "input" and parts[2] == "message":
-            return None
         if len(parts) == 3 and parts[1] in CTX_MODEL_ROOTS and _is_safe_field_candidate(parts[2]):
             field_name = parts[2]
             available_fields = {
@@ -1427,8 +1425,6 @@ def _validate_ctx_prompt_reference(
     if root_name in CTX_SCALAR_FIELDS or root_name in CTX_NESTED_FIELDS:
         return None
     field_name = validated[2]
-    if root_name == "input" and field_name == "message":
-        return None
     available_fields = {
         "input": input_fields,
         "state": state_fields,
