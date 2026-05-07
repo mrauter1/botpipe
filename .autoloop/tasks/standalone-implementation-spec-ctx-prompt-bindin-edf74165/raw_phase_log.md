@@ -2268,3 +2268,50 @@ I’ve validated the required slice, and I’m doing one last narrow grep for an
 **Open issues / next step**
 - No open issues from the scoped slice.
 - `.venv` was used for local validation because `pytest` was not available on `PATH`.
+
+
+---
+run_id=run-20260507T141012Z-5af91a26 | entry=session_turn | pair=implement | phase=verifier | cycle=1 | attempt=1 | thread_id=019e02c9-db46-72f0-b8e4-e2e8251c8e68
+---
+provider=codex
+mode=resume
+template=/home/rauter/.local/share/pipx/venvs/autoloop/lib/python3.12/site-packages/autoloop/templates/implement_verifier.md
+session_id=019e02c9-db46-72f0-b8e4-e2e8251c8e68
+
+
+---
+run_id=run-20260507T141012Z-5af91a26 | entry=phase_output | pair=implement | phase=verifier | process=codex-agent | cycle=1 | attempt=1 | thread_id=019e02c9-db46-72f0-b8e4-e2e8251c8e68
+---
+I’m auditing the scoped runtime/test diff and the phase artifacts now. I’ll verify the resolver change against adjacent `ctx.input` behavior, then update the review criteria and findings in the active artifact directory only.
+
+The implementation notes and decisions line up with the requested scope. I’m reading the resolver and the adjacent compatibility tests directly now to check for any hidden regression on bare `{input.message}` or nested `ctx.input` access.
+
+The resolver split looks coherent on read. I’m rerunning the focused contract slice plus the two adjacent unit guards that protect bare `{input.message}` compatibility and typed `ctx.input.message` behavior.
+
+The rerun contradicted the file contents I just read, so I’m checking which `autoloop.core.artifacts` module path Python is actually importing. That will tell me whether the change missed the runtime import target or whether the working tree drifted again.
+
+The focused rerun is failing on the current tree, and the failure mode points to the exact two lines that still preserve the retired `ctx.input.message` alias. I’m recording that as a blocking finding and marking the phase criteria accordingly.
+
+Scope considered
+- Phase-local review of the `ctx.input.message` contract alignment work and the active review artifacts only.
+
+What I analyzed
+- The authoritative request, phase contract, implementation notes, and run decisions.
+- The current resolver code in `autoloop/core/artifacts.py`.
+- The focused contract and adjacent unit tests tied to `ctx.input.message`, bare `{input.message}`, unreadable snapshots, and `workflow_step(message="{ctx.message}")`.
+
+What I reviewed
+- Updated [criteria.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/standalone-implementation-spec-ctx-prompt-bindin-edf74165/runs/run-20260507T141012Z-5af91a26/artifacts/implement/phases/contract-test-alignment/criteria.md).
+- Appended findings to [feedback.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/standalone-implementation-spec-ctx-prompt-bindin-edf74165/runs/run-20260507T141012Z-5af91a26/artifacts/implement/phases/contract-test-alignment/feedback.md).
+- Reran the focused verification slice; on the current tree it fails 4 tests, including both required `ctx.input.message` cases.
+
+Key findings / decisions
+- One blocking finding was recorded: the current source still routes `ctx.input.*` through `Context.input` and still exempts `ctx.input.message` from the no-input guard, so undeclared `ctx.input.message` does not fail and declared `Input.message` still aliases request text.
+- This misses AC-1 and AC-2, and it contradicts the run decision that `ctx.*` must stop treating `ctx.input.message` as a request-text alias.
+
+Open issues / next step
+- Fix `autoloop/core/artifacts.py` so `ctx.*` resolution reads `context.input_fields` and removes the `field_name != "message"` special-case, then rerun the same focused verification slice.
+
+<loop-control>
+{"schema":"docloop.loop_control/v1","kind":"promise","promise":"INCOMPLETE"}
+</loop-control>
