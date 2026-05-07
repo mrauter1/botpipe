@@ -46,6 +46,7 @@
 ## Intended behavior changes
 - Runtime contexts now expose `ctx.input.message` and `ctx.input_fields` while keeping raw typed input available separately from `ctx.message`.
 - Explicit `message=None` is preserved on `Context`, allowing a message-less runtime view even when a request snapshot file exists.
+- Omitted-message fallback is lazy inside `WorkflowInputView`, so direct `ctx.input.<field>` access does not depend on `request.md` unless code actually reads `ctx.input.message`.
 - Artifact template resolution now supports bare `{input.message}` / `{input.<field>}` lookups through the composite input view.
 - Simple-step safe placeholder validation now accepts `ctx.input.message`.
 
@@ -59,6 +60,7 @@
 
 ## Validation performed
 - `python3 -m py_compile` on touched runtime/core modules and the touched tests.
+- Re-ran `python3 -m py_compile` after the reviewer-driven lazy fallback fix on `autoloop/core/context.py` and `tests/unit/test_primitives_and_stores.py`.
 - Attempted focused `pytest` execution, but the environment lacks `pytest`.
 - Attempted focused runtime assertions, but the environment Python also lacks installed runtime dependencies such as `pydantic`.
 

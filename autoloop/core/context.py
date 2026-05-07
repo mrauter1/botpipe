@@ -91,8 +91,17 @@ class ChildWorkflowResult(Generic[OutputT]):
 class WorkflowInputView:
     """Composite view over the run message and typed workflow input fields."""
 
-    message: str | None
     fields: BaseModel | None = None
+    _message_value: str | None | object = _DEFAULT_MESSAGE
+    _request: RequestContext | None = field(default=None, repr=False, compare=False)
+
+    @property
+    def message(self) -> str | None:
+        if self._message_value is _DEFAULT_MESSAGE:
+            if self._request is None:
+                return None
+            return self._request.text
+        return self._message_value
 
     def __getattr__(self, name: str) -> Any:
         if name == "message":
@@ -348,7 +357,12 @@ class Context:
 
     @property
     def input(self) -> WorkflowInputView:
-        return WorkflowInputView(message=self.message, fields=self._input_fields)
+        request = self.request if self._message is _DEFAULT_MESSAGE else None
+        return WorkflowInputView(
+            fields=self._input_fields,
+            _message_value=self._message,
+            _request=request,
+        )
 
     @property
     def artifacts(self) -> "ResolvedArtifacts | None":
