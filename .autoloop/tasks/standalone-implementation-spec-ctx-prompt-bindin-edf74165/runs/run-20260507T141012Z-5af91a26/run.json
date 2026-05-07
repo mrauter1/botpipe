@@ -13,11 +13,11 @@
       "contract-test-alignment"
     ],
     "explicit": true,
-    "current_phase_index": 0,
-    "current_phase_id": "contract-test-alignment"
+    "current_phase_index": 1,
+    "current_phase_id": null
   },
   "phase_status": {
-    "contract-test-alignment": "in_progress"
+    "contract-test-alignment": "completed"
   },
   "phase_history": [
     {
@@ -25,6 +25,13 @@
       "run_id": "run-20260507T141012Z-5af91a26",
       "status": "in_progress",
       "ts": "2026-05-07T14:14:03.102019+00:00"
+    },
+    {
+      "phase_id": "contract-test-alignment",
+      "run_id": "run-20260507T141012Z-5af91a26",
+      "status": "completed",
+      "ts": "2026-05-07T14:29:08.951349+00:00",
+      "pair": "test"
     }
   ]
 }

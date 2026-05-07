@@ -20,3 +20,6 @@
 {"ts": "2026-05-07T14:28:22.655787+00:00", "run_id": "run-20260507T141012Z-5af91a26", "seq": 20, "event_type": "phase_finished", "pair": "test", "phase": "producer", "cycle": 1, "attempt": 1, "empty_output": false, "phase_id": "contract-test-alignment"}
 {"ts": "2026-05-07T14:29:08.749467+00:00", "run_id": "run-20260507T141012Z-5af91a26", "seq": 21, "event_type": "phase_finished", "pair": "test", "phase": "verifier", "cycle": 1, "attempt": 1, "empty_output": false, "phase_id": "contract-test-alignment"}
 {"ts": "2026-05-07T14:29:08.810677+00:00", "run_id": "run-20260507T141012Z-5af91a26", "seq": 22, "event_type": "pair_completed", "pair": "test", "cycle": 1, "attempt": 1, "phase_id": "contract-test-alignment"}
+{"ts": "2026-05-07T14:29:08.951760+00:00", "run_id": "run-20260507T141012Z-5af91a26", "seq": 23, "event_type": "phase_completed", "pair": "test", "phase_id": "contract-test-alignment", "phase_mode": "single"}
+{"ts": "2026-05-07T14:29:08.954012+00:00", "run_id": "run-20260507T141012Z-5af91a26", "seq": 24, "event_type": "pair_started", "pair": "audit", "phase_id": null}
+{"ts": "2026-05-07T14:29:08.954123+00:00", "run_id": "run-20260507T141012Z-5af91a26", "seq": 25, "event_type": "cycle_started", "pair": "audit", "cycle": 1, "attempt": 1, "phase_id": null}
