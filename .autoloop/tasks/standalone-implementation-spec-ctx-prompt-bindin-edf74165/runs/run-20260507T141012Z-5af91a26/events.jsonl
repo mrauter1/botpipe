@@ -24,3 +24,5 @@
 {"ts": "2026-05-07T14:29:08.954012+00:00", "run_id": "run-20260507T141012Z-5af91a26", "seq": 24, "event_type": "pair_started", "pair": "audit", "phase_id": null}
 {"ts": "2026-05-07T14:29:08.954123+00:00", "run_id": "run-20260507T141012Z-5af91a26", "seq": 25, "event_type": "cycle_started", "pair": "audit", "cycle": 1, "attempt": 1, "phase_id": null}
 {"ts": "2026-05-07T14:31:16.931592+00:00", "run_id": "run-20260507T141012Z-5af91a26", "seq": 26, "event_type": "phase_finished", "pair": "audit", "phase": "producer", "cycle": 1, "attempt": 1, "empty_output": false, "phase_id": null}
+{"ts": "2026-05-07T14:32:13.894705+00:00", "run_id": "run-20260507T141012Z-5af91a26", "seq": 27, "event_type": "phase_finished", "pair": "audit", "phase": "verifier", "cycle": 1, "attempt": 1, "empty_output": false, "phase_id": null}
+{"ts": "2026-05-07T14:32:13.948861+00:00", "run_id": "run-20260507T141012Z-5af91a26", "seq": 28, "event_type": "pair_completed", "pair": "audit", "cycle": 1, "attempt": 1, "phase_id": null}
