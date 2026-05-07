@@ -605,3 +605,57 @@ Open issues / next step
 
 - I did not run full test execution, only collection.
 - The next step is verifier review against the updated source-level split.
+
+
+---
+run_id=run-20260507T194557Z-2f9c2de5 | entry=session_turn | pair=implement | phase=verifier | cycle=2 | attempt=1 | thread_id=019e0411-607d-7212-a741-6d5d51017949
+---
+provider=codex
+mode=resume
+template=/home/rauter/.local/share/pipx/venvs/autoloop/lib/python3.12/site-packages/autoloop/templates/implement_verifier.md
+session_id=019e0411-607d-7212-a741-6d5d51017949
+
+
+---
+run_id=run-20260507T194557Z-2f9c2de5 | entry=phase_output | pair=implement | phase=verifier | process=codex-agent | cycle=2 | attempt=1 | thread_id=019e0411-607d-7212-a741-6d5d51017949
+---
+I’m verifying the corrected source-level split now. First I’m checking the active review artifacts and the final collection surface to confirm the old blocking issue is actually gone before I update the criteria.
+
+The old ignored monoliths are gone and there’s no remaining `collect_ignore` workaround. I’m doing one final collect-only check directly before I clear the previous blocking finding and mark the criteria.
+
+The source-level split passes the acceptance checks I can verify here. I’m updating the phase artifacts to mark the earlier blocker resolved and clearing the criteria.
+
+Scope considered
+
+- Active phase `split-retained-monoliths` only.
+- Implementation changes relevant to the retained test split under `tests/contract/engine/`, `tests/unit/{stdlib,optimizer,extensions}/`, the new `_shared.py` helpers, and the removed monolith entrypoints.
+
+What I analyzed
+
+- The current implementation notes and run decisions.
+- The previous blocking finding `IMP-001` and whether its concrete failure mode still exists.
+- The final collection surface, including removal of `collect_ignore`, removal of the two monolith test files, and direct collection from the split modules.
+
+What I reviewed
+
+- Whether the retained test bodies were actually moved into ownership-aligned source files.
+- Whether helper sharing stayed mechanical and avoided cross-file circularity or new repo-owned asset coupling.
+- Whether collection still succeeds under the new paths.
+
+Key findings / decisions
+
+- The prior blocker is resolved: the old ignored monolith entrypoints are gone, the retained `test_*` bodies live directly in the split modules, and shared non-test scaffolding is centralized in `_shared.py` helpers.
+- No new blocking or non-blocking findings remain for this phase.
+- I updated `criteria.md` to checked-complete and appended the `IMP-001` resolution note to `feedback.md`.
+- Validation confirmed the acceptance surface:
+  - `.venv_phase/bin/pytest --collect-only tests/contract tests/unit -q`
+  - Result: `749 tests collected`
+
+Open issues / next step
+
+- No open review issues for this phase.
+- Full test execution was not part of this review; only collection and structure were verified here.
+
+<loop-control>
+{"schema":"docloop.loop_control/v1","kind":"promise","promise":"COMPLETE"}
+</loop-control>
