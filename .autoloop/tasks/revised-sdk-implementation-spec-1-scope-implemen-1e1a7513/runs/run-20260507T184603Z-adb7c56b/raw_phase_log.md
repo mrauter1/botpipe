@@ -414,3 +414,148 @@ Open issues / next step
 <loop-control>
 {"schema":"docloop.loop_control/v1","kind":"promise","promise":"COMPLETE"}
 </loop-control>
+
+
+---
+run_id=run-20260507T184603Z-adb7c56b | entry=session_turn | pair=implement | phase=producer | cycle=1 | attempt=1 | thread_id=019e03cf-11a5-7c91-97d7-e1e2805ea0f8
+---
+provider=codex
+mode=start
+template=/home/rauter/.local/share/pipx/venvs/autoloop/lib/python3.12/site-packages/autoloop/templates/implement_producer.md
+session_id=019e03cf-11a5-7c91-97d7-e1e2805ea0f8
+
+
+---
+run_id=run-20260507T184603Z-adb7c56b | entry=phase_output | pair=implement | phase=producer | process=codex-agent | cycle=1 | attempt=1 | thread_id=019e03cf-11a5-7c91-97d7-e1e2805ea0f8
+---
+I’m implementing the `sdk-retention-and-safe-cleanup` phase. First I’m reading the phase artifacts and the current SDK/runtime code paths so I can thread retention through the existing facade without widening scope.
+
+I’ve confirmed the phase is building on the earlier SDK surface changes, not replacing them. Next I’m reading the retention-relevant sections of `sdk.py`, the workspace/runner context fields, and the prompt resolver so the new helpers line up with runtime semantics instead of inventing a parallel model.
+
+The current SDK already has the surface dataclasses, but retention is still entirely unthreaded: `run(...)` returns raw result artifacts immediately, `step(...)` has no `routes`/`retention`, and there’s no sentinel or cleanup path yet. I’m checking the existing unit tests now so I can extend the current test style instead of bolting on a separate harness.
+
+I have enough context to edit safely. The main implementation work is concentrated in `autoloop/sdk.py`, with one prompt-root tweak in the engine and targeted SDK facade tests for retention, promotion, and cleanup behavior.
+
+I found one non-obvious dependency: declared-write resolution wants the same placeholder surface as runtime, including request paths and session access, but `RunExecution` doesn’t currently expose the session store directly. I’m tracing what the completed run already persists so I can resolve artifact templates from runtime-owned data instead of guessing.
+
+I’m editing `autoloop/sdk.py` now. The changes are concentrated around: retention-aware `run(...)`/`step(...)`, sentinel/write-promotion helpers, and conservative cleanup so deletion stays provably inside SDK-owned task scratch.
+
+The retention scaffolding is in place, but I need a cleanup pass on the edited SDK file before moving to tests. I’m reading the updated sections now to catch any internal mismatches from the large patch before I propagate them into unit coverage.
+
+I’m tightening the SDK patch before I run tests: fixing the partial-result raise path, wiring `cleanup(...)`, and cleaning up a couple of helper edges so the retention behavior is internally consistent.
+
+I’m making the prompt-root tweak now. It’s a small change, but it needs to happen in the actual resolver path so `{input.message}` resolves at runtime rather than only passing validation.
+
+I’m switching to tests now. The existing SDK tests assumed successful runs kept task scratch, so I’m updating those expectations and adding focused retention/cleanup coverage instead of introducing a separate test file.
+
+I noticed one test-isolation problem while wiring default retention: successful runs now promote outputs under `root/.autoloop/outputs/sdk`, so leaving the helper rooted at the repo would spill test artifacts into the workspace. I’m fixing the helper to keep all SDK retention writes under each test’s temp directory.
+
+The code paths are in place and the tests are updated for the new default retention semantics. I’m running the focused SDK facade suite now to catch any behavioral mismatches before I touch the phase notes.
+
+`pytest` isn’t on the shell PATH here. I’m retrying via the interpreter so I can still validate the SDK slice without changing scope.
+
+The environment has `python3`, but the `pytest` module isn’t installed there. I’m checking the repo’s configured test runner so I can use the project’s own environment instead of guessing.
+
+There isn’t a packaged test runner in this shell, so I’m doing direct runtime smoke checks with `python3` after the syntax pass. That will at least validate the new retention path, partial-result retention, and cleanup behavior against real SDK execution.
+
+The shell’s `python3` can compile files but doesn’t have the project dependencies installed, so it can’t execute the SDK smoke script. I’m checking whether the repo already carries a virtualenv or local interpreter I can use before I fall back to syntax-only validation.
+
+There are local virtualenvs in the repo. I’m re-running the focused suite in the project environment now, which should give us real execution coverage instead of just syntax checks.
+
+The first test run exposed two concrete issues: the synthetic route defaults were too aggressive for strict steps that already declare route metadata, and two retention tests were using class-scope names that Python doesn’t resolve the way function locals do. I’m fixing both and rerunning the suite.
+
+The remaining failure is narrow: the public result map was still materializing omitted task-local artifacts in `ephemeral()` mode because the retention helper always iterated the full declared-write set. I’m constraining that map to the actually retained names and rerunning.
+
+The focused SDK facade suite is green. I’m doing one more narrow regression pass on adjacent placeholder/route tests so the engine prompt-root change doesn’t drift from the existing simple-surface contracts.
+
+I’ve finished the code and regression pass. I’m updating the phase notes and decision ledger now so later turns inherit the retention semantics and the one conservative cleanup rule that matters for safety.
+
+I removed one dead import from the SDK patch and I’m doing a quick recheck so the final state matches the tested state.
+
+Scope considered
+
+- Active phase `sdk-retention-and-safe-cleanup`: sentinel-marked SDK task lifecycle, retention/promotion, safe cleanup, retention-aware `run(...)`/`step(...)`, and the adjacent prompt-rendering fix required by the spec.
+
+What I analyzed
+
+- Current SDK facade and result model in [autoloop/sdk.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/autoloop/sdk.py).
+- Runtime workspace/context/checkpoint/session plumbing in `runtime/runner.py`, `runtime/workspace.py`, `core/context.py`, and artifact placeholder resolution in `core/artifacts.py`.
+- Existing SDK facade coverage in [tests/unit/test_sdk_facade.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/tests/unit/test_sdk_facade.py).
+- Adjacent prompt placeholder behavior in [autoloop/core/engine.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/autoloop/core/engine.py) and [autoloop/core/operations.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/autoloop/core/operations.py).
+
+What I changed
+
+- In [autoloop/sdk.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/autoloop/sdk.py):
+  added `retention` to `Autoloop.__init__`, `run(...)`, and `step(...)`; wrote SDK sentinel files before execution; implemented `_safe_delete_sdk_task_dir(...)`, declared-write collection, promotion, `_apply_retention(...)`, and `cleanup(...)`; populated `WorkflowResult.retention` for returned and partial results.
+- Default successful SDK runs/steps now promote task-local declared writes and delete only the current SDK task scratch. Failed, awaiting-input, and too-many-pauses paths now keep scratch by default.
+- In [autoloop/core/engine.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/autoloop/core/engine.py) and [autoloop/core/operations.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/autoloop/core/operations.py):
+  widened prompt placeholder replacement to include bare `input.*`, so `{input.message}` now resolves at runtime alongside `{ctx.message}`.
+- In [tests/unit/test_sdk_facade.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/tests/unit/test_sdk_facade.py):
+  updated existing expectations for default scratch deletion and added retention, cleanup, safe-delete, too-many-pauses, and runtime prompt-rendering coverage.
+- Updated the phase notes and decisions ledger under the authoritative run artifacts.
+
+Key findings / decisions
+
+- Declared-write retention needed a runtime-equivalent context rebuilt from `RunExecution`, persisted params/input, request paths, and checkpoint session snapshots; the older SDK-only placeholder context was too narrow.
+- Cleanup is conservative by design: only valid sentinel-marked `sdk-*` task dirs with clearly completed `run.json` metadata are eligible by default. Any missing/invalid sentinel data, failed status, pending input, or parse uncertainty is skipped.
+- For backward compatibility, strict `Step` instances that already declare `route_metadata` still get synthetic terminal routes from that metadata; spec defaults apply only when no authored strict routes exist.
+
+Open issues / next step
+
+- This phase did not add the new SDK helper entrypoints (`prompt_step`, `produce_verify_step`, `python_step`, `workflow_step`). That remains for the later helper/routing phase.
+- Validation run:
+  `./.venv/bin/python -m pytest -q tests/unit/test_sdk_facade.py`
+  `./.venv/bin/python -m pytest -q tests/unit/test_simple_surface.py -k 'input_message_prompt_binding or ctx_input_message_prompt_binding'`
+  `python3 -m py_compile autoloop/sdk.py autoloop/core/engine.py autoloop/core/operations.py tests/unit/test_sdk_facade.py`
+
+
+---
+run_id=run-20260507T184603Z-adb7c56b | entry=session_turn | pair=implement | phase=verifier | cycle=1 | attempt=1 | thread_id=019e03cf-11a5-7c91-97d7-e1e2805ea0f8
+---
+provider=codex
+mode=resume
+template=/home/rauter/.local/share/pipx/venvs/autoloop/lib/python3.12/site-packages/autoloop/templates/implement_verifier.md
+session_id=019e03cf-11a5-7c91-97d7-e1e2805ea0f8
+
+
+---
+run_id=run-20260507T184603Z-adb7c56b | entry=phase_output | pair=implement | phase=verifier | process=codex-agent | cycle=1 | attempt=1 | thread_id=019e03cf-11a5-7c91-97d7-e1e2805ea0f8
+---
+I’m reviewing the phase artifacts and the changed code paths now. I’ll validate the acceptance criteria against the implementation, then update `criteria.md` and append any findings to `feedback.md` before I close the review.
+
+The artifact notes and decision log line up with the implementation intent. I’m drilling into the retention helpers and the new tests now to see whether any edge cases still violate the phase contract or the conservative deletion rules.
+
+I found one blocking issue in the promotion path and I’m recording it now. After that I’ll mark the affected criteria accordingly and close the review as `INCOMPLETE`.
+
+Scope considered
+
+- Active phase `sdk-retention-and-safe-cleanup` only.
+- Changed/request-relevant files: `autoloop/sdk.py`, `autoloop/core/engine.py`, `autoloop/core/operations.py`, and `tests/unit/test_sdk_facade.py`.
+
+What I analyzed
+
+- Retention plumbing through `Autoloop.__init__`, `run(...)`, `step(...)`, and `cleanup(...)`.
+- Sentinel creation, deletion guards, declared-write collection/promotion, and retained artifact assembly.
+- Adjacent prompt-rendering change for bare `input.*`.
+- Added unit coverage and the implementation notes / run decisions for scope alignment.
+
+What I reviewed
+
+- Acceptance criteria against the implemented behavior.
+- Safety properties around deleting only SDK-owned task scratch.
+- Data-integrity behavior for promoted writes, including caller-supplied `promoted_writes_dir`.
+- Regression risk in strict-step synthetic routing and successful/partial result retention metadata.
+
+Key findings / decisions
+
+- Blocking finding recorded: `IMP-001`.
+- The promoted-write collision logic is incorrect for shared `RetentionPolicy.promoted_writes_dir` bases. The uniqueness fallback is unreachable, so a later SDK run can overwrite an earlier promoted artifact instead of suffixing it.
+
+Open issues / next step
+
+- Fix `autoloop/sdk.py::_promote_declared_write` so destination selection distinguishes the current task’s promotion directory from a shared custom base and applies `_uniquify_path(...)` when reusing an existing path would overwrite another run’s retained output.
+- `criteria.md` and `feedback.md` were updated accordingly.
+
+<loop-control>
+{"schema":"docloop.loop_control/v1","kind":"promise","promise":"INCOMPLETE"}
+</loop-control>
