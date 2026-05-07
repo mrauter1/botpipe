@@ -224,7 +224,7 @@ class PromptContextView:
         self._context = context
 
     @property
-    def message(self) -> str:
+    def message(self) -> str | None:
         return self._context.message
 
     @property
@@ -236,7 +236,7 @@ class PromptContextView:
         return self._context.request_file
 
     @property
-    def input(self) -> BaseModel | None:
+    def input(self) -> Any:
         return self._context.input
 
     @property
@@ -493,6 +493,8 @@ def _resolve_placeholder(expression: str, context: Context, *, placeholder_label
         current = context.package_folder
     elif root_name == "root":
         current = context.root
+    elif root_name == "input":
+        current = context.input
     elif root_name == "state":
         current = context.state
     elif root_name == "item":
@@ -543,13 +545,13 @@ def _resolve_ctx_placeholder(
     view = PromptContextView(context)
     root_name = parts[1]
     if root_name in CTX_MODEL_ROOTS:
-        current = getattr(view, root_name)
         field_name = parts[2]
+        if root_name == "input" and field_name != "message" and context.input_fields is None:
+            raise WorkflowExecutionError(
+                f"ctx.{root_name}.{field_name} requires workflow input, but no input was provided"
+            )
+        current = getattr(view, root_name)
         if current is None:
-            if root_name == "input":
-                raise WorkflowExecutionError(
-                    f"ctx.{root_name}.{field_name} requires workflow input, but no input was provided"
-                )
             raise WorkflowExecutionError(
                 f"{placeholder_label} {{{expression}}} requires an available runtime value before {field_name!r}"
             )

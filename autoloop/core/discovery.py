@@ -1423,6 +1423,8 @@ def _validate_ctx_prompt_reference(
     if root_name in CTX_SCALAR_FIELDS or root_name in CTX_NESTED_FIELDS:
         return None
     field_name = validated[2]
+    if root_name == "input" and field_name == "message":
+        return None
     available_fields = {
         "input": input_fields,
         "state": state_fields,
