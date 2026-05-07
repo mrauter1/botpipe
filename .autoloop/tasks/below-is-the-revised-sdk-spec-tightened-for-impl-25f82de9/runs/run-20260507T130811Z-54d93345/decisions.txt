@@ -16,3 +16,4 @@ Runtime resume coverage should assert both `ctx.input.message` and raw `ctx.inpu
 Bare runtime `input.*` placeholders now raise `WorkflowExecutionError` for unknown fields or missing typed input instead of silently rendering `""`; `input.message` and declared fields with value `None` still render as empty string.
 <autoloop-decisions-header version="1" block_seq="6" owner="test_author" phase_id="input-validation-and-rendering" pair="test" turn_seq="1" run_id="run-20260507T130811Z-54d93345" ts="2026-05-07T13:54:16.368278+00:00" />
 Phase test coverage must reject `Workflow.Input.message` at compile time; any lingering unit expectation that allows the field is stale against the spec and should be updated rather than preserved as compatibility behavior.
+<autoloop-decisions-header version="1" block_seq="7" owner="implementer" phase_id="sdk-facade" pair="implement" turn_seq="1" run_id="run-20260507T130811Z-54d93345" ts="2026-05-07T14:02:25.764588+00:00" />
