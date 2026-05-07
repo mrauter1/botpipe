@@ -507,3 +507,109 @@ No open issues in the requested phase-local scope.
 <loop-control>
 {"schema":"docloop.loop_control/v1","kind":"promise","promise":"COMPLETE"}
 </loop-control>
+
+
+---
+run_id=run-20260507T132940Z-5d96f5de | entry=session_turn | pair=test | phase=producer | cycle=1 | attempt=1 | thread_id=019e02a8-3460-7f63-a341-0ead9bf7f8a2
+---
+provider=codex
+mode=resume
+template=/home/rauter/.local/share/pipx/venvs/autoloop/lib/python3.12/site-packages/autoloop/templates/test_producer.md
+session_id=019e02a8-3460-7f63-a341-0ead9bf7f8a2
+
+
+---
+run_id=run-20260507T132940Z-5d96f5de | entry=phase_output | pair=test | phase=producer | process=codex-agent | cycle=1 | attempt=1 | thread_id=019e02a8-3460-7f63-a341-0ead9bf7f8a2
+---
+I’m reviewing the existing regression coverage and the new test-phase artifacts first, then I’ll decide whether the phase needs any additional repo test refinement beyond the implementation changes that already landed.
+
+The core contract already has solid unit, contract, and runtime coverage in the tree. I’m checking whether there’s any thin spot worth strengthening in-repo before I limit this turn to the required test strategy and feedback artifacts.
+
+I found one worthwhile coverage gap for the test phase: the live runtime path still wasn’t explicitly asserting `ctx.input.model_dump()` in provider callbacks. I’m tightening that resume regression and then I’ll fill in the required strategy and feedback artifacts around the exact behavior map.
+
+The patch missed the current runtime test shape, so I’m re-reading the exact blocks and applying the test-phase updates against the live file contents instead of assuming the previous hunk shape.
+
+The live runtime test in the current workspace still had the old alias assertions, so this test-phase turn does need a real repo test refinement. I’m updating that file now, then I’ll write the strategy and audit-summary artifacts around the actual coverage.
+
+The repo test refinement is in place, and the test-phase artifacts now reflect the intended coverage map. I’m rerunning the focused suites so the strategy file points at coverage that is actually green in this workspace.
+
+The focused contract and runtime subsets are green. I’m waiting for the larger unit subset to finish so I can close this test-phase turn with exact counts and no guesswork.
+
+The current workspace still has the old validation expectation, so the focused suite is legitimately red right now. I’m correcting that repo test as part of this test-phase turn and rerunning the same focused set so the artifact summary isn’t ahead of the tree.
+
+The stale validation expectation is now replaced in the live tree. I’m waiting on the unit subset to finish so I can close the test-phase turn with the final pass counts and the exact coverage map that was exercised.
+
+Scope considered
+
+The request/input-separation regression surface in `tests/unit/test_validation.py` and `tests/runtime/test_workspace_and_context.py`, plus the phase-local test artifacts [test_strategy.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/standalone-implementation-spec-ctx-prompt-bindin-edf74165/runs/run-20260507T132940Z-5d96f5de/artifacts/test/phases/finish-ctx-request-input-separation/test_strategy.md:1) and [feedback.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/standalone-implementation-spec-ctx-prompt-bindin-edf74165/runs/run-20260507T132940Z-5d96f5de/artifacts/test/phases/finish-ctx-request-input-separation/feedback.md:1).
+
+What I analyzed
+
+I compared the live workspace against the requested `ctx.message` versus `ctx.input` contract, checked the run-local decisions ledger, and inspected the existing unit, contract, and runtime coverage for direct Python `ctx.input`, bare `{input.message}` compatibility, resume snapshot authority, and child input/request separation.
+
+What I changed
+
+I refined the repo tests in [tests/runtime/test_workspace_and_context.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/tests/runtime/test_workspace_and_context.py:723) so the resume runtime path now proves undeclared `ctx.input` omits `message` from both attribute-level behavior and `model_dump()` while `ctx.message` remains file-backed through resume. I also corrected the stale validation expectation in [tests/unit/test_validation.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/tests/unit/test_validation.py:107) so explicit `Input.message` is accepted rather than rejected. For the test-phase artifacts, I added an explicit behavior-to-coverage map in `test_strategy.md`, appended a concise additions summary in `feedback.md`, and recorded the live-runtime `ctx.input.model_dump()` coverage decision in `decisions.txt`.
+
+Key findings / decisions
+
+The main test-phase gap in the current workspace was that the runtime resume test and one validation test still encoded the retired alias behavior. After fixing those, the focused validation set is green:
+
+- `tests/unit/test_primitives_and_stores.py tests/unit/test_branch_group_context_sessions.py tests/unit/test_simple_surface.py tests/unit/test_validation.py`: `275 passed`
+- `tests/contract/test_engine_contracts.py` targeted subset: `7 passed`
+- `tests/runtime/test_workspace_and_context.py` targeted subset: `2 passed`
+
+Open issues / next step
+
+No known test-author open issues remain in this phase-local scope. The next step is the test-phase auditor review against the updated repo tests and artifacts.
+
+
+---
+run_id=run-20260507T132940Z-5d96f5de | entry=session_turn | pair=test | phase=verifier | cycle=1 | attempt=1 | thread_id=019e02a8-3460-7f63-a341-0ead9bf7f8a2
+---
+provider=codex
+mode=resume
+template=/home/rauter/.local/share/pipx/venvs/autoloop/lib/python3.12/site-packages/autoloop/templates/test_verifier.md
+session_id=019e02a8-3460-7f63-a341-0ead9bf7f8a2
+
+
+---
+run_id=run-20260507T132940Z-5d96f5de | entry=phase_output | pair=test | phase=verifier | process=codex-agent | cycle=1 | attempt=1 | thread_id=019e02a8-3460-7f63-a341-0ead9bf7f8a2
+---
+I’m checking the focused test coverage and the test-phase artifacts against the updated workspace, then I’ll either clear the audit criteria or record any remaining coverage gap with concrete evidence.
+
+The strategy and live tests line up with the requested contract on inspection. I’m rerunning the focused unit, contract, and runtime evidence set before I decide whether there’s any remaining audit finding.
+
+The contract and runtime subsets are green, and the strategy’s claimed runtime boundary is exercised in the current tree. I’m waiting on the broader focused unit subset; if that closes cleanly, there’s no remaining audit blocker.
+
+The focused coverage is green and matches the declared strategy. I’m updating the audit artifacts to show full pass criteria and to record that there are no open test audit findings in this phase scope.
+
+Scope considered
+
+The request/input-separation test coverage in the updated unit, contract, and runtime suites, plus the phase-local test artifacts [test_strategy.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/standalone-implementation-spec-ctx-prompt-bindin-edf74165/runs/run-20260507T132940Z-5d96f5de/artifacts/test/phases/finish-ctx-request-input-separation/test_strategy.md:1), [criteria.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/standalone-implementation-spec-ctx-prompt-bindin-edf74165/runs/run-20260507T132940Z-5d96f5de/artifacts/test/phases/finish-ctx-request-input-separation/criteria.md:1), and [feedback.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/standalone-implementation-spec-ctx-prompt-bindin-edf74165/runs/run-20260507T132940Z-5d96f5de/artifacts/test/phases/finish-ctx-request-input-separation/feedback.md:1).
+
+What I analyzed
+
+I checked the strategy’s behavior-to-test mapping against the live tests, the run-local decisions about direct Python `ctx.input` and legacy bare `{input.message}`, and the two repo test files most relevant to the narrowed contract: [tests/runtime/test_workspace_and_context.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/tests/runtime/test_workspace_and_context.py:723) and [tests/unit/test_validation.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/tests/unit/test_validation.py:107).
+
+What I reviewed
+
+I reran the focused evidence set the strategy claims:
+
+- `tests/unit/test_primitives_and_stores.py tests/unit/test_branch_group_context_sessions.py tests/unit/test_simple_surface.py tests/unit/test_validation.py`: `275 passed`
+- `tests/contract/test_engine_contracts.py` targeted subset: `7 passed`
+- `tests/runtime/test_workspace_and_context.py` targeted subset: `2 passed`
+
+The runtime resume test now exercises both `request.context.input.model_dump()` and the absence of undeclared `message`, which closes the direct-Python compatibility surface the decisions file called out.
+
+Key findings / decisions
+
+No open audit findings remain. The coverage matches the requested contract: undeclared `ctx.input.message` is rejected, explicit `Input.message` remains supported, `ctx.message` stays file-backed through resume, unreadable snapshot failure is covered, and child input/request separation is exercised at both contract and runtime levels.
+
+Open issues / next step
+
+No open issues in the test-phase audit scope.
+
+<loop-control>
+{"schema":"docloop.loop_control/v1","kind":"promise","promise":"COMPLETE"}
+</loop-control>

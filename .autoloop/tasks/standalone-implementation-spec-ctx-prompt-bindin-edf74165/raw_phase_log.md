@@ -1903,3 +1903,54 @@ The main test-phase gap in the current workspace was that the runtime resume tes
 Open issues / next step
 
 No known test-author open issues remain in this phase-local scope. The next step is the test-phase auditor review against the updated repo tests and artifacts.
+
+
+---
+run_id=run-20260507T132940Z-5d96f5de | entry=session_turn | pair=test | phase=verifier | cycle=1 | attempt=1 | thread_id=019e02a8-3460-7f63-a341-0ead9bf7f8a2
+---
+provider=codex
+mode=resume
+template=/home/rauter/.local/share/pipx/venvs/autoloop/lib/python3.12/site-packages/autoloop/templates/test_verifier.md
+session_id=019e02a8-3460-7f63-a341-0ead9bf7f8a2
+
+
+---
+run_id=run-20260507T132940Z-5d96f5de | entry=phase_output | pair=test | phase=verifier | process=codex-agent | cycle=1 | attempt=1 | thread_id=019e02a8-3460-7f63-a341-0ead9bf7f8a2
+---
+I’m checking the focused test coverage and the test-phase artifacts against the updated workspace, then I’ll either clear the audit criteria or record any remaining coverage gap with concrete evidence.
+
+The strategy and live tests line up with the requested contract on inspection. I’m rerunning the focused unit, contract, and runtime evidence set before I decide whether there’s any remaining audit finding.
+
+The contract and runtime subsets are green, and the strategy’s claimed runtime boundary is exercised in the current tree. I’m waiting on the broader focused unit subset; if that closes cleanly, there’s no remaining audit blocker.
+
+The focused coverage is green and matches the declared strategy. I’m updating the audit artifacts to show full pass criteria and to record that there are no open test audit findings in this phase scope.
+
+Scope considered
+
+The request/input-separation test coverage in the updated unit, contract, and runtime suites, plus the phase-local test artifacts [test_strategy.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/standalone-implementation-spec-ctx-prompt-bindin-edf74165/runs/run-20260507T132940Z-5d96f5de/artifacts/test/phases/finish-ctx-request-input-separation/test_strategy.md:1), [criteria.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/standalone-implementation-spec-ctx-prompt-bindin-edf74165/runs/run-20260507T132940Z-5d96f5de/artifacts/test/phases/finish-ctx-request-input-separation/criteria.md:1), and [feedback.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/standalone-implementation-spec-ctx-prompt-bindin-edf74165/runs/run-20260507T132940Z-5d96f5de/artifacts/test/phases/finish-ctx-request-input-separation/feedback.md:1).
+
+What I analyzed
+
+I checked the strategy’s behavior-to-test mapping against the live tests, the run-local decisions about direct Python `ctx.input` and legacy bare `{input.message}`, and the two repo test files most relevant to the narrowed contract: [tests/runtime/test_workspace_and_context.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/tests/runtime/test_workspace_and_context.py:723) and [tests/unit/test_validation.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/tests/unit/test_validation.py:107).
+
+What I reviewed
+
+I reran the focused evidence set the strategy claims:
+
+- `tests/unit/test_primitives_and_stores.py tests/unit/test_branch_group_context_sessions.py tests/unit/test_simple_surface.py tests/unit/test_validation.py`: `275 passed`
+- `tests/contract/test_engine_contracts.py` targeted subset: `7 passed`
+- `tests/runtime/test_workspace_and_context.py` targeted subset: `2 passed`
+
+The runtime resume test now exercises both `request.context.input.model_dump()` and the absence of undeclared `message`, which closes the direct-Python compatibility surface the decisions file called out.
+
+Key findings / decisions
+
+No open audit findings remain. The coverage matches the requested contract: undeclared `ctx.input.message` is rejected, explicit `Input.message` remains supported, `ctx.message` stays file-backed through resume, unreadable snapshot failure is covered, and child input/request separation is exercised at both contract and runtime levels.
+
+Open issues / next step
+
+No open issues in the test-phase audit scope.
+
+<loop-control>
+{"schema":"docloop.loop_control/v1","kind":"promise","promise":"COMPLETE"}
+</loop-control>
