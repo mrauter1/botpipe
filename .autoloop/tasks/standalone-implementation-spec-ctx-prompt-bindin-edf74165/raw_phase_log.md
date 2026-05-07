@@ -91,3 +91,12 @@ No open verification blockers. The plan is ready for the implementation phase.
 <loop-control>
 {"schema":"docloop.loop_control/v1","kind":"promise","promise":"COMPLETE"}
 </loop-control>
+
+
+---
+run_id=run-20260507T122922Z-e6e948b6 | entry=phase_scope_resolved
+---
+phase_mode=single
+phase_ids=ctx-context-surface,ctx-rendering-and-validation,ctx-regression-coverage-and-docs
+explicit=True
+current_phase_index=0
