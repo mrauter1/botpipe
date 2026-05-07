@@ -8608,6 +8608,37 @@ def test_prompt_steps_do_not_auto_inject_run_message_without_ctx_binding(tmp_pat
     assert "THIS SHOULD NOT APPEAR UNLESS BOUND" not in captured["step"]
 
 
+def test_ctx_runtime_prompt_docs_describe_preferred_bindings_and_snapshot_semantics() -> None:
+    authoring = (PACKAGE_ROOT / "docs" / "authoring.md").read_text(encoding="utf-8")
+    architecture = (PACKAGE_ROOT / "docs" / "architecture.md").read_text(encoding="utf-8")
+
+    for required in (
+        "Runtime Context Prompt Bindings",
+        "Use `ctx.*` when a prompt or workflow-step message needs runtime context.",
+        "Use `{ctx.message}`, not `{message}`.",
+        "`ctx.message` is the natural-language run request text",
+        "`ctx.input` is typed structured workflow input.",
+        "`ctx.params` is workflow configuration.",
+        "`ctx.state` is workflow state.",
+        "Existing bare `{input.foo}`, `{state.foo}`, and `{params.foo}` placeholders remain available for compatibility",
+        'message="{ctx.message}"',
+    ):
+        assert required in authoring
+
+    for required in (
+        "`ctx.message` and `ctx.request.text` read the run-local `request.md` snapshot.",
+        "Resume keeps using the persisted run-local snapshot instead of re-reading task-level request metadata or fresh CLI message text.",
+        "{ctx.message}",
+        "{ctx.request.text}",
+        "{ctx.input.<field>}",
+        "{ctx.state.<field>}",
+        "{ctx.params.<field>}",
+        'workflow_step(message="{ctx.message}", ...)',
+        "Typed child `input` remains separate from that request text.",
+    ):
+        assert required in architecture
+
+
 def test_workflow_step_message_can_forward_ctx_message_into_child_request_snapshot(tmp_path: Path) -> None:
     class ChildWorkflow(SimpleWorkflow):
         class Input(BaseModel):

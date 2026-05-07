@@ -31,6 +31,7 @@ if TYPE_CHECKING:
 
 OutputT = TypeVar("OutputT")
 _CONTEXT_RUNTIMES: "WeakKeyDictionary[Context, _ContextRuntime]" = WeakKeyDictionary()
+_DEFAULT_MESSAGE = object()
 
 
 @dataclass(frozen=True, slots=True)
@@ -82,8 +83,29 @@ class ChildWorkflowResult(Generic[OutputT]):
         if not self.artifacts:
             object.__setattr__(self, "artifacts", dict(self.output_artifacts))
         else:
-            object.__setattr__(self, "artifacts", dict(self.artifacts))
+        object.__setattr__(self, "artifacts", dict(self.artifacts))
         object.__setattr__(self, "metadata", dict(self.metadata))
+
+
+@dataclass(frozen=True, slots=True)
+class WorkflowInputView:
+    """Composite view over the run message and typed workflow input fields."""
+
+    message: str | None
+    fields: BaseModel | None = None
+
+    def __getattr__(self, name: str) -> Any:
+        if name == "message":
+            return self.message
+        if self.fields is not None:
+            return getattr(self.fields, name)
+        raise AttributeError(name)
+
+    def model_dump(self, *args: Any, **kwargs: Any) -> dict[str, Any]:
+        payload = {"message": self.message}
+        if self.fields is not None:
+            payload.update(self.fields.model_dump(*args, **kwargs))
+        return payload
 
 
 class EmptyParameters(BaseModel):
@@ -205,6 +227,7 @@ class Context:
         active_worklist: str | None = None,
         params: BaseModel | None = None,
         workflow_params: Mapping[str, Any] | None = None,
+        message: str | None | object = _DEFAULT_MESSAGE,
         workflow_input: BaseModel | None = None,
         workflow_invoker: Callable[..., Any] | None = None,
         answer: str | None = None,
@@ -248,7 +271,8 @@ class Context:
         self._active_worklist = active_worklist
         self._params = params if params is not None else EmptyParameters()
         self._workflow_params = normalize_mapping(workflow_params)
-        self._input = workflow_input
+        self._message = message
+        self._input_fields = workflow_input
         self._workflow_invoker = workflow_invoker
         self._answer = answer
         self._input_response = input_response
@@ -313,12 +337,18 @@ class Context:
         return RequestContext(file=self._request_file, task_file=self._task_request_file)
 
     @property
-    def message(self) -> str:
-        return self.request.text
+    def message(self) -> str | None:
+        if self._message is _DEFAULT_MESSAGE:
+            return self.request.text
+        return self._message
 
     @property
-    def input(self) -> BaseModel | None:
-        return self._input
+    def input_fields(self) -> BaseModel | None:
+        return self._input_fields
+
+    @property
+    def input(self) -> WorkflowInputView:
+        return WorkflowInputView(message=self.message, fields=self._input_fields)
 
     @property
     def artifacts(self) -> "ResolvedArtifacts | None":

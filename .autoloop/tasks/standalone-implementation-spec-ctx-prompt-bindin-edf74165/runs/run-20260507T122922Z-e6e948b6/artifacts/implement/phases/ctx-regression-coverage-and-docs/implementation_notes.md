@@ -19,9 +19,9 @@
 
 - `test_ctx_prompt_bindings_render_in_provider_and_operation_prompts`
 - `test_prompt_steps_do_not_auto_inject_run_message_without_ctx_binding`
+- `test_ctx_runtime_prompt_docs_describe_preferred_bindings_and_snapshot_semantics`
 - `test_workflow_step_message_can_forward_ctx_message_into_child_request_snapshot`
 - `test_workflow_step_message_renders_ctx_bindings_before_child_invocation`
-- `test_docs_cover_ctx_runtime_prompt_bindings_and_request_snapshot_semantics`
 
 ## Checklist mapping
 
@@ -52,8 +52,9 @@
 
 ## Validation performed
 
-- `.venv/bin/python -m pytest tests/contract/test_engine_contracts.py::test_ctx_prompt_bindings_render_in_provider_and_operation_prompts tests/contract/test_engine_contracts.py::test_prompt_steps_do_not_auto_inject_run_message_without_ctx_binding tests/contract/test_engine_contracts.py::test_workflow_step_message_can_forward_ctx_message_into_child_request_snapshot tests/contract/test_engine_contracts.py::test_workflow_step_message_renders_ctx_bindings_before_child_invocation tests/test_architecture_baseline_docs.py::test_docs_cover_ctx_runtime_prompt_bindings_and_request_snapshot_semantics tests/runtime/test_workspace_and_context.py::test_resume_context_message_uses_run_local_request_snapshot_not_mutated_task_request`
+- `.venv/bin/python -m pytest tests/contract/test_engine_contracts.py::test_ctx_prompt_bindings_render_in_provider_and_operation_prompts tests/contract/test_engine_contracts.py::test_prompt_steps_do_not_auto_inject_run_message_without_ctx_binding tests/contract/test_engine_contracts.py::test_ctx_runtime_prompt_docs_describe_preferred_bindings_and_snapshot_semantics tests/contract/test_engine_contracts.py::test_workflow_step_message_can_forward_ctx_message_into_child_request_snapshot tests/contract/test_engine_contracts.py::test_workflow_step_message_renders_ctx_bindings_before_child_invocation tests/runtime/test_workspace_and_context.py::test_resume_context_message_uses_run_local_request_snapshot_not_mutated_task_request`
 
 ## Deduplication / centralization decisions
 
 - Child request-snapshot proof was added to the engine contract suite with a synthetic child `Context` instead of a runner-backed nested child test to avoid coupling this phase to an unrelated active-loop failure.
+- The ctx-specific doc assertions were relocated onto the tracked contract suite and removed from the untracked docs-baseline file so AC-2 coverage remains part of the repository deliverable.

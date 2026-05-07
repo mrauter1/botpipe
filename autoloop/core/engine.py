@@ -18,7 +18,7 @@ from pydantic import BaseModel, TypeAdapter
 from .artifacts import Artifact, ArtifactHandle, ResolvedArtifacts, render_runtime_template, resolve_artifact_template
 from .branch_groups.runtime import BranchGroupRuntime
 from .compiler import CompiledRoute, CompiledStep, CompiledWorkflow, compile_workflow
-from .context import Context, _resolve_context_root, context_runtime
+from .context import Context, _DEFAULT_MESSAGE, _resolve_context_root, context_runtime
 from .engine_collaborators import (
     ArtifactGuard,
     CheckpointManager,
@@ -198,6 +198,7 @@ class Engine:
         task_request_file: Path | None = None,
         params: BaseModel | None = None,
         workflow_params: Mapping[str, Any] | None = None,
+        message: str | None | object = _DEFAULT_MESSAGE,
         workflow_input: BaseModel | None = None,
         workflow_invoker: Callable[..., Any] | None = None,
         initial_state: BaseModel | None = None,
@@ -218,6 +219,7 @@ class Engine:
                 task_request_file=task_request_file,
                 params=params,
                 workflow_params=workflow_params,
+                message=message,
                 workflow_input=workflow_input,
                 workflow_invoker=workflow_invoker,
                 initial_state=initial_state,
@@ -242,6 +244,7 @@ class Engine:
         task_request_file: Path | None = None,
         params: BaseModel | None = None,
         workflow_params: Mapping[str, Any] | None = None,
+        message: str | None | object = _DEFAULT_MESSAGE,
         workflow_input: BaseModel | None = None,
         workflow_invoker: Callable[..., Any] | None = None,
         initial_state: BaseModel | None = None,
@@ -323,6 +326,7 @@ class Engine:
                     selection_snapshots={},
                     params=params,
                     workflow_params=workflow_params,
+                    message=message,
                     workflow_input=workflow_input,
                     workflow_invoker=workflow_invoker,
                     answer=None,
@@ -377,6 +381,7 @@ class Engine:
                     selection_snapshots=selection_snapshots,
                     params=params,
                     workflow_params=workflow_params,
+                    message=message,
                     workflow_input=workflow_input,
                     workflow_invoker=workflow_invoker,
                     answer=None,
@@ -422,6 +427,7 @@ class Engine:
                     active_worklist=step.scope_name,
                     params=params,
                     workflow_params=workflow_params,
+                    message=message,
                     workflow_input=workflow_input,
                     workflow_invoker=workflow_invoker,
                     answer=current_answer,
@@ -766,6 +772,7 @@ class Engine:
         task_request_file: Path | None = None,
         params: BaseModel | None = None,
         workflow_params: Mapping[str, Any] | None = None,
+        message: str | None | object = _DEFAULT_MESSAGE,
         workflow_input: BaseModel | None = None,
         workflow_invoker: Callable[..., Any] | None = None,
         answer: str | None = None,
@@ -784,6 +791,7 @@ class Engine:
                 task_request_file=task_request_file,
                 params=params,
                 workflow_params=workflow_params,
+                message=message,
                 workflow_input=workflow_input,
                 workflow_invoker=workflow_invoker,
                 answer=answer,
@@ -806,6 +814,7 @@ class Engine:
         task_request_file: Path | None = None,
         params: BaseModel | None = None,
         workflow_params: Mapping[str, Any] | None = None,
+        message: str | None | object = _DEFAULT_MESSAGE,
         workflow_input: BaseModel | None = None,
         workflow_invoker: Callable[..., Any] | None = None,
         answer: str | None = None,
@@ -823,6 +832,7 @@ class Engine:
             task_request_file=task_request_file,
             params=params,
             workflow_params=workflow_params,
+            message=message,
             workflow_input=workflow_input,
             workflow_invoker=workflow_invoker,
             resume=True,
