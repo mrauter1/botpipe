@@ -902,6 +902,64 @@ def test_fan_in_placeholder_is_rejected_outside_fan_in_steps() -> None:
         compile_workflow(InvalidFanInPlaceholderWorkflow)
 
 
+def test_simple_workflow_accepts_supported_ctx_prompt_bindings() -> None:
+    class CtxWorkflow(simple.Workflow):
+        class Input(BaseModel):
+            topic: str
+
+        class Params(BaseModel):
+            mode: str = "brief"
+
+        class State(BaseModel):
+            status: str = "draft"
+
+        review = simple.step(
+            "Message={ctx.message}; Request={ctx.request.text}; File={ctx.request.file}; "
+            "TaskFile={ctx.request.task_file}; RequestFile={ctx.request_file}; Topic={ctx.input.topic}; "
+            "Status={ctx.state.status}; Mode={ctx.params.mode}; Run={ctx.run.id}; Workflow={ctx.workflow.folder}"
+        )
+
+    compiled = compile_workflow(CtxWorkflow)
+
+    assert compiled.steps["review"].name == "review"
+
+
+@pytest.mark.parametrize(
+    ("placeholder", "message"),
+    [
+        ("{message}", r"simple step 'review' prompt placeholder \{message\} is unknown; use \{ctx\.message\}"),
+        ("{ctx}", r"simple step 'review' prompt placeholder \{ctx\} must qualify a runtime context field"),
+        ("{ctx.request}", r"simple step 'review' prompt placeholder \{ctx\.request\} must qualify a request field"),
+        ("{ctx.input}", r"simple step 'review' prompt placeholder \{ctx\.input\} must qualify an input field"),
+        ("{ctx.state}", r"simple step 'review' prompt placeholder \{ctx\.state\} must qualify a state field"),
+        ("{ctx.params}", r"simple step 'review' prompt placeholder \{ctx\.params\} must qualify a params field"),
+        ("{ctx.input.missing}", r"simple step 'review' prompt placeholder \{ctx\.input\.missing\} references unknown Input field 'missing'"),
+        ("{ctx.state.missing}", r"simple step 'review' prompt placeholder \{ctx\.state\.missing\} references unknown State field 'missing'"),
+        ("{ctx.params.missing}", r"simple step 'review' prompt placeholder \{ctx\.params\.missing\} references unknown Params field 'missing'"),
+        ("{ctx.__dict__}", r"simple step 'review' prompt placeholder \{ctx\.__dict__\} is not a supported safe dotted path"),
+        ("{ctx.message.upper()}", r"simple step 'review' prompt placeholder \{ctx\.message\.upper\(\)\} is not a supported safe dotted path"),
+        ("{ctx.request.file.read_text()}", r"simple step 'review' prompt placeholder \{ctx\.request\.file\.read_text\(\)\} is not a supported safe dotted path"),
+        ("{ctx.values.foo}", r"simple step 'review' prompt placeholder \{ctx\.values\.foo\} is not a supported safe dotted path"),
+        ("{ctx.artifacts.foo}", r"simple step 'review' prompt placeholder \{ctx\.artifacts\.foo\} is not a supported safe dotted path"),
+    ],
+)
+def test_simple_workflow_rejects_invalid_ctx_prompt_bindings(placeholder: str, message: str) -> None:
+    class InvalidCtxWorkflow(simple.Workflow):
+        class Input(BaseModel):
+            topic: str
+
+        class Params(BaseModel):
+            mode: str = "brief"
+
+        class State(BaseModel):
+            status: str = "draft"
+
+        review = simple.step(placeholder)
+
+    with pytest.raises(WorkflowValidationError, match=message):
+        compile_workflow(InvalidCtxWorkflow)
+
+
 def test_provider_backed_branch_steps_require_explicit_fresh_sessions_only_inside_branch_groups() -> None:
     class TopLevelWorkflow(simple.Workflow):
         class State(BaseModel):

@@ -1359,7 +1359,7 @@ class Engine:
                 resolved.text,
                 context,
                 placeholder_label=placeholder_label,
-                replace_roots=frozenset({"item", "worklist", "branch", "fan_in"}),
+                replace_roots=frozenset({"ctx", "item", "worklist", "branch", "fan_in"}),
             ),
         )
 
@@ -2318,7 +2318,12 @@ class Engine:
 
     def _resolve_workflow_step_message(self, step: Any, context: Context) -> str:
         if step.message is not None:
-            return step.message
+            return render_runtime_template(
+                step.message,
+                context,
+                placeholder_label=f"workflow step {step.name!r} message placeholder",
+                replace_roots=frozenset({"ctx", "item", "worklist", "branch", "fan_in"}),
+            )
         message_from = step.message_from
         if message_from is not None:
             handle = self._workflow_step_message_handle(message_from, context)

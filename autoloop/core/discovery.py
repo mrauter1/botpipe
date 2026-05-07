@@ -24,6 +24,7 @@ from .branch_groups.validation import (
     validate_fan_in_step_kind,
     validate_path_safe_name,
 )
+from .context_placeholders import CTX_MODEL_ROOTS, CTX_NESTED_FIELDS, CTX_SCALAR_FIELDS, validate_safe_ctx_reference
 from .descriptors import (
     ParameterField,
     StateField,
@@ -1152,6 +1153,22 @@ def _validate_simple_prompt_reference(
         allowed=allow_fan_in_placeholders,
     ):
         return None
+    if reference == "message":
+        raise WorkflowValidationError(
+            f"simple step {step_name!r} prompt placeholder {{message}} is unknown; use {{ctx.message}}"
+        )
+    if reference == "ctx":
+        raise WorkflowValidationError(
+            f"simple step {step_name!r} prompt placeholder {{ctx}} must qualify a runtime context field"
+        )
+    if reference.startswith("ctx."):
+        return _validate_ctx_prompt_reference(
+            reference,
+            step_name=step_name,
+            state_fields=state_fields,
+            parameter_fields=parameter_fields,
+            input_fields=input_fields,
+        )
     parts = reference.split(".")
     if len(parts) == 1:
         name = parts[0]
@@ -1344,6 +1361,78 @@ def _simple_prompt_text(prompt: object, *, search_roots: Sequence[Path]) -> str 
             source=prompt_source if isinstance(prompt_source, str) else "registry",
             search_roots=search_roots,
         ).text
+    return None
+
+
+def _validate_ctx_prompt_reference(
+    reference: str,
+    *,
+    step_name: str,
+    state_fields: frozenset[str],
+    parameter_fields: frozenset[str],
+    input_fields: frozenset[str],
+) -> None:
+    model_labels = {
+        "input": "Input",
+        "state": "State",
+        "params": "Params",
+    }
+    qualifier_labels = {
+        "request": "request",
+        "input": "input",
+        "state": "state",
+        "params": "params",
+    }
+    parts = tuple(reference.split("."))
+    if len(parts) == 2 and parts[1] in qualifier_labels:
+        label = qualifier_labels[parts[1]]
+        raise WorkflowValidationError(
+            f"simple step {step_name!r} prompt placeholder {{{reference}}} must qualify a {label} field"
+        )
+
+    def _is_safe_field_candidate(segment: str) -> bool:
+        forbidden_characters = {'"', "'", "(", ")", "[", "]"}
+        return (
+            bool(segment)
+            and not segment.startswith("_")
+            and "__" not in segment
+            and not any(character.isspace() for character in segment)
+            and not any(character in forbidden_characters for character in segment)
+        )
+
+    try:
+        validated = validate_safe_ctx_reference(reference)
+    except ValueError as exc:
+        if len(parts) == 3 and parts[1] in CTX_MODEL_ROOTS and _is_safe_field_candidate(parts[2]):
+            field_name = parts[2]
+            available_fields = {
+                "input": input_fields,
+                "state": state_fields,
+                "params": parameter_fields,
+            }[parts[1]]
+            if field_name not in available_fields:
+                label = model_labels[parts[1]]
+                raise WorkflowValidationError(
+                    f"simple step {step_name!r} prompt placeholder {{{reference}}} references unknown {label} field {field_name!r}"
+                ) from exc
+        raise WorkflowValidationError(
+            f"simple step {step_name!r} prompt placeholder {{{reference}}} is not a supported safe dotted path"
+        ) from exc
+
+    root_name = validated[1]
+    if root_name in CTX_SCALAR_FIELDS or root_name in CTX_NESTED_FIELDS:
+        return None
+    field_name = validated[2]
+    available_fields = {
+        "input": input_fields,
+        "state": state_fields,
+        "params": parameter_fields,
+    }[root_name]
+    if field_name not in available_fields:
+        label = model_labels[root_name]
+        raise WorkflowValidationError(
+            f"simple step {step_name!r} prompt placeholder {{{reference}}} references unknown {label} field {field_name!r}"
+        )
     return None
 
 

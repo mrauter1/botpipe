@@ -415,3 +415,85 @@ This test phase is audit-complete. Prompt rendering, artifact-path rejection, an
 <loop-control>
 {"schema":"docloop.loop_control/v1","kind":"promise","promise":"COMPLETE"}
 </loop-control>
+
+
+---
+run_id=run-20260507T122922Z-e6e948b6 | entry=session_turn | pair=implement | phase=producer | cycle=1 | attempt=1 | thread_id=019e027a-8f71-79d1-87f8-8b585e932a4b
+---
+provider=codex
+mode=start
+template=/home/rauter/.local/share/pipx/venvs/autoloop/lib/python3.12/site-packages/autoloop/templates/implement_producer.md
+session_id=019e027a-8f71-79d1-87f8-8b585e932a4b
+
+
+---
+run_id=run-20260507T122922Z-e6e948b6 | entry=phase_output | pair=implement | phase=producer | process=codex-agent | cycle=1 | attempt=1 | thread_id=019e027a-8f71-79d1-87f8-8b585e932a4b
+---
+I’m implementing the `ctx.*` prompt rendering and validation phase. I’ll inspect the active phase artifacts and the prompt/context code paths first, then patch the shared resolver and the validation surfaces together to avoid drift.
+
+The prior phase already landed the context surface and shared placeholder contract. I’m checking the current implementations around discovery, artifacts, engine, operations, and tests so this phase stays additive and doesn’t fork the placeholder rules.
+
+I’ve confirmed the shared `ctx` contract module already exists and `Context` exposes lazy request/message access. Next I’m reading the current renderer and validator implementations to see what still needs to be wired into runtime prompt resolution and workflow-step message handling.
+
+The current renderer still stringifies everything generically and only knows the older roots. I’m tracing the helper functions below `_resolve_placeholder` and the validation entrypoints so I can thread `ctx` through without changing the non-`ctx` behavior.
+
+There are already request-surface tests from the previous phase. I’m opening those plus the simple-surface/runtime tests that cover prompt compilation and child workflow message behavior so I can extend the smallest existing harnesses instead of inventing new ones.
+
+I found the current request-surface tests and some child-workflow harnesses. Now I’m pinpointing the smallest runtime tests that already capture rendered provider prompts and workflow-step forwarding so I can extend those rather than build a new fake-provider path.
+
+I have two likely test anchors now: `tests/unit/test_simple_surface.py` for compile-time placeholder validation, and `tests/runtime/test_workspace_and_context.py` for rendered prompt text plus child workflow forwarding. I’m checking a few existing validation tests and the engine contract harness before editing so the new assertions match current conventions.
+
+I’ve confirmed the main gap: compile-time currently knows bare `input/state/params`, but the runtime renderer only resolves a narrower set and never sees `ctx`. I’m moving to edits now: shared `ctx` validation in discovery, lazy `ctx` resolution in artifacts, and `ctx` roots threaded through engine and operation prompt rendering.
+
+I’ve finished the read-through and I’m patching the shared runtime path now. The edits are staying narrow: `ctx` gets its own guarded resolver and render path, while existing non-`ctx` placeholders keep their current traversal behavior.
+
+I found one validation nuance while patching: the compile-time `ctx` helper needs to keep “unknown field” errors distinct from “unsafe dotted path” errors. I’m tightening that before moving on so cases like `ctx.input.__dict__` still fail as unsafe, not as a missing field.
+
+I’m adding low-level tests alongside the runtime patch before I do the larger engine checks. These direct template tests are the quickest way to pin the error messages for unsafe paths, missing input, non-scalars, and artifact-path rejection.
+
+The validation and low-level runtime tests are in. I’m adding two focused engine tests now: one for rendered `ctx` prompts across provider and operation paths, and one for `workflow_step(message=...)` so the child handoff path is covered without widening scope to provider adapters.
+
+One test patch needed cleanup: I used `cast(...)` in the new contract test, so I’m fixing that import and simplifying the assertion shape before running the suite.
+
+The code changes are in place. I’m running the focused unit and contract tests for the touched surfaces now, starting with the direct placeholder tests and then the engine contract cases that exercise provider, operation, and child-workflow rendering.
+
+The test runner isn’t on `PATH` here, so I’m retrying with `python -m pytest`.
+
+The environment has `python3`, but no installed `pytest`. I’m switching to syntax verification with `py_compile` and then I’ll do a quick import-level sanity check on the touched modules so we still catch basic breakage in this turn.
+
+The modified files compile under Python 3.12. I’m running a small in-process smoke script next to exercise the new `ctx` resolver and compile-time validation without needing the missing `pytest` package.
+
+I’ve reached the documentation step for this phase: recording the non-obvious implementation choices and the validation limits of the environment so the next loop doesn’t have to rediscover them.
+
+Scope considered
+
+- Active phase `ctx-rendering-and-validation` only: `autoloop/core/artifacts.py`, `discovery.py`, `engine.py`, `operations.py`, and focused test coverage plus phase artifacts.
+- I kept docs, provider adapters, CLI flags, and persistence layout out of scope for this turn.
+
+What I analyzed
+
+- The shared `ctx` contract already added in `autoloop/core/context_placeholders.py` and the prior `Context` request/message surface.
+- Current runtime rendering in `autoloop/core/artifacts.py`, compile-time prompt validation in `autoloop/core/discovery.py`, provider prompt resolution in `autoloop/core/engine.py`, operation prompt resolution in `autoloop/core/operations.py`, and existing workflow-step child invocation behavior.
+- Existing test anchors in `tests/unit/test_simple_surface.py`, `tests/unit/test_primitives_and_stores.py`, and `tests/contract/test_engine_contracts.py`.
+
+What I changed
+
+- Added a restricted `PromptContextView` in `autoloop/core/artifacts.py`, wired `ctx` into `_resolve_placeholder(...)`, enforced shared safe-path validation, scalar-only rendering for `ctx.*`, and explicit artifact-path rejection for `ctx.*`.
+- Updated `autoloop/core/discovery.py` so simple-step prompt validation now accepts supported `ctx.*` bindings and rejects `{message}`, `{ctx}`, bare `ctx.request/input/state/params`, unsafe paths, and unknown `Input`/`State`/`Params` fields with the requested messages.
+- Updated `autoloop/core/engine.py` and `autoloop/core/operations.py` so provider prompts, producer/verifier prompts, operation prompts, and `workflow_step(message=...)` render `ctx` placeholders at runtime.
+- Added focused tests for direct `ctx` template rendering/runtime errors, compile-time `ctx` placeholder validation, provider/operation prompt rendering, and child workflow message rendering.
+
+Key findings / decisions
+
+- `ctx` resolution now goes through a dedicated prompt-only view, so runtime prompts can read the allowed context surface without exposing raw `Context` internals.
+- I kept existing non-`ctx` placeholder traversal unchanged; the new scalar-only coercion applies only to `ctx.*`.
+- Shared safe-path validation still lives in `context_placeholders.py`; compile-time code only layers field-existence checks on top so runtime and validation rules do not drift.
+
+Open issues / next step
+
+- `python3 -m py_compile` passed for the touched modules and tests.
+- I could not run `pytest` in this environment because `pytest` is not installed, and I could not run an import-level smoke test because the system interpreter here also lacks `pydantic`.
+- The next step is to run the targeted pytest slices once the project test environment is available:
+  `tests/unit/test_primitives_and_stores.py`
+  `tests/unit/test_simple_surface.py`
+  `tests/contract/test_engine_contracts.py`

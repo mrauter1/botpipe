@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import json
 from pathlib import Path
+from typing import cast
 
 import pytest
 from pydantic import BaseModel, Field
@@ -8469,6 +8470,177 @@ def test_python_step_feedforward_helpers_accept_plain_string_prompts_with_render
     assert [turn.turn_kind for turn in transport.turns] == ["operation", "operation"]
     assert "Generate a summary." in transport.turns[0].prompt_text
     assert "Classify risk." in transport.turns[1].prompt_text
+
+
+def test_ctx_prompt_bindings_render_in_provider_and_operation_prompts(tmp_path: Path) -> None:
+    class PromptBindingWorkflow(SimpleWorkflow):
+        class Input(BaseModel):
+            topic: str
+
+        class Params(BaseModel):
+            mode: str = "brief"
+
+        class State(BaseModel):
+            status: str = "draft"
+
+        summary = step(
+            "Message={ctx.message}; Topic={ctx.input.topic}; Mode={ctx.params.mode}; Status={ctx.state.status}",
+            routes={"done": "review"},
+        )
+        review = produce_verify_step(
+            producer_prompt="Produce {ctx.message}; topic={ctx.input.topic}; mode={ctx.params.mode}; status={ctx.state.status}",
+            verifier_prompt="Verify {ctx.message}; topic={ctx.input.topic}; mode={ctx.params.mode}; status={ctx.state.status}",
+            routes={"approved": "risk"},
+        )
+        risk = llm.step(
+            prompt="Risk for {ctx.message}; topic={ctx.input.topic}; mode={ctx.params.mode}; status={ctx.state.status}",
+            returns=str,
+        )
+        kind = classify.step(
+            prompt="Classify {ctx.message} for {ctx.input.topic}",
+            choices=["bug", "feature"],
+        )
+
+        @python_step(routes={"done": FINISH})
+        def finish(ctx):
+            assert ctx.values.risk == "medium"
+            assert ctx.values.kind == "feature"
+            return "done"
+
+    task_folder, run_folder = _workspace(tmp_path)
+    (run_folder / "request.md").write_text("Ship the release safely.\n", encoding="utf-8")
+    captured: dict[str, object] = {"operations": []}
+    provider = ScriptedLLMProvider(
+        llm_turns=[
+            lambda request: (
+                captured.__setitem__("step", request.prompt.text),
+                Outcome(raw_output="done", tag="done"),
+            )[1]
+        ],
+        producer_turns=[
+            lambda request: (
+                captured.__setitem__("producer", request.producer_prompt.text),
+                "producer draft",
+            )[1]
+        ],
+        verifier_turns=[
+            lambda request: (
+                captured.__setitem__("verifier", request.verifier_prompt.text),
+                Outcome(raw_output="approved", tag="approved"),
+            )[1]
+        ],
+        operation_turns=[
+            lambda request: (
+                cast(list[str], captured["operations"]).append(request.prompt.text),
+                "medium",
+            )[1],
+            lambda request: (
+                cast(list[str], captured["operations"]).append(request.prompt.text),
+                "feature",
+            )[1],
+        ],
+    )
+
+    result = Engine(
+        PromptBindingWorkflow,
+        provider=provider,
+        session_store=InMemorySessionStore(),
+        checkpoint_store=InMemoryCheckpointStore(),
+    ).run(
+        task_id="task-ctx-prompts",
+        run_id="run-ctx-prompts",
+        task_folder=task_folder,
+        run_folder=run_folder,
+        root=tmp_path,
+        params=PromptBindingWorkflow.Params(mode="brief"),
+        workflow_input=PromptBindingWorkflow.Input(topic="release"),
+    )
+
+    assert result.terminal == FINISH
+    assert captured["step"] == "Message=Ship the release safely.; Topic=release; Mode=brief; Status=draft"
+    assert captured["producer"] == "Produce Ship the release safely.; topic=release; mode=brief; status=draft"
+    assert captured["verifier"] == "Verify Ship the release safely.; topic=release; mode=brief; status=draft"
+    operation_prompts = cast(list[str], captured["operations"])
+    assert operation_prompts == [
+        "Risk for Ship the release safely.; topic=release; mode=brief; status=draft",
+        "Classify Ship the release safely. for release",
+    ]
+    rendered_prompts = [
+        cast(str, captured["step"]),
+        cast(str, captured["producer"]),
+        cast(str, captured["verifier"]),
+        *operation_prompts,
+    ]
+    assert all("{ctx." not in text for text in rendered_prompts)
+
+
+def test_workflow_step_message_renders_ctx_bindings_before_child_invocation(tmp_path: Path) -> None:
+    class ChildWorkflow(SimpleWorkflow):
+        note = step("Child note.")
+
+    class ParentWorkflow(SimpleWorkflow):
+        class Input(BaseModel):
+            topic: str
+
+        launch = workflow_step(
+            ChildWorkflow,
+            message="Parent request: {ctx.message}; topic={ctx.input.topic}",
+            input={"topic": "structured-topic"},
+            routes={"done": FINISH},
+        )
+
+    task_folder, run_folder = _workspace(tmp_path)
+    (run_folder / "request.md").write_text("Natural-language request\n", encoding="utf-8")
+    seen: dict[str, object] = {}
+
+    def invoke_child(workflow, *, message, parameters=None, input=None):
+        seen["workflow"] = workflow
+        seen["message"] = message
+        seen["input"] = input
+        child_run_root = task_folder / "child-runs" / "ctx-child"
+        child_run_root.mkdir(parents=True, exist_ok=True)
+        return ChildWorkflowResult(
+            workflow_name="child_workflow",
+            run_id="child-ctx",
+            terminal=FINISH,
+            status="success",
+            last_event=Event("done"),
+            output_metadata={},
+            output_artifacts={},
+            task_folder=task_folder,
+            workflow_folder=child_run_root,
+            run_folder=child_run_root / "run",
+            package_folder=child_run_root / "package",
+            request_file=child_run_root / "request.md",
+            run_meta_file=child_run_root / "run.json",
+            events_file=child_run_root / "events.jsonl",
+            checkpoint_file=child_run_root / "checkpoint.json",
+            sessions_dir=child_run_root / "sessions",
+            trace_file=child_run_root / "trace.jsonl",
+            raw_dir=child_run_root / "raw",
+            parent_file=child_run_root / "parent.json",
+        )
+
+    result = Engine(
+        ParentWorkflow,
+        provider=ScriptedLLMProvider(),
+        session_store=InMemorySessionStore(),
+        checkpoint_store=InMemoryCheckpointStore(),
+    ).run(
+        task_id="task-ctx-child",
+        run_id="run-ctx-child",
+        task_folder=task_folder,
+        run_folder=run_folder,
+        root=tmp_path,
+        workflow_input=ParentWorkflow.Input(topic="alpha"),
+        workflow_invoker=invoke_child,
+    )
+
+    assert result.terminal == FINISH
+    assert seen["workflow"] is ChildWorkflow
+    assert seen["message"] == "Parent request: Natural-language request; topic=alpha"
+    assert seen["input"] == {"topic": "structured-topic"}
+    assert seen["message"] != "structured-topic"
 
 
 def test_python_step_feedforward_helpers_require_operation_executor_for_rendered_provider_in_active_loop(
