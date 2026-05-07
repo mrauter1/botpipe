@@ -116,6 +116,47 @@ Bootstrap handlers should project already-typed values from `ctx.params` into wo
 
 When the same parameter bundle appears in more than one workflow, prefer shared stdlib-owned parameter models under `stdlib/parameters.py` before copying the same field scaffold again. Shared task framing, selected-workflow framing, and portfolio-review bundles belong there; workflow-specific identifier rules, literal pre-normalization, allow-lists, defaults, and order-sensitive output should stay in the local `params.py`.
 
+## Runtime Context Prompt Bindings
+
+Use `ctx.*` when a prompt or workflow-step message needs runtime context. Use `{ctx.message}`, not `{message}`.
+
+`ctx.message` is the natural-language run request text from the immutable run-local `request.md` snapshot. `ctx.request.text` is the same text through an explicit request object. `ctx.input` is typed structured workflow input. `ctx.params` is workflow configuration. `ctx.state` is workflow state.
+
+Preferred prompt bindings:
+
+```text
+{ctx.message}
+{ctx.request.text}
+{ctx.input.topic}
+{ctx.state.status}
+{ctx.params.mode}
+```
+
+Python hooks and `python_step(...)` handlers can read the same surfaces directly:
+
+```python
+ctx.message
+ctx.request.text
+ctx.request.file
+ctx.request.task_file
+ctx.request_file
+ctx.input.topic
+ctx.state.status
+ctx.params.mode
+```
+
+Existing bare `{input.foo}`, `{state.foo}`, and `{params.foo}` placeholders remain available for compatibility where they already work, but `ctx.*` is the preferred runtime binding surface for new authoring.
+
+Child workflows should forward request text explicitly when they need it:
+
+```python
+workflow_step(
+    ChildWorkflow,
+    message="{ctx.message}",
+    input={"topic": "alpha"},
+)
+```
+
 ## Step Control Contracts
 
 Provider-backed simple steps may declare structured output contracts directly on `step(...)` and `produce_verify_step(...)`. The runtime renders those declarations into one shared human-readable Runtime Step Contract before CLI-backed providers run.

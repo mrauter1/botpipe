@@ -260,6 +260,8 @@ Semantics:
 
 The task `request.md` is the latest rendered request snapshot for the task. Each run also stores its own immutable `request.md` snapshot at run start.
 
+`ctx.message` and `ctx.request.text` read the run-local `request.md` snapshot. Resume keeps using the persisted run-local snapshot instead of re-reading task-level request metadata or fresh CLI message text. Prompt templates should bind request text and structured runtime values through `{ctx.message}`, `{ctx.request.text}`, `{ctx.input.<field>}`, `{ctx.state.<field>}`, and `{ctx.params.<field>}` so request text, typed input, workflow state, and workflow configuration stay semantically distinct.
+
 ## Runtime Observability
 
 Runtime observability is runtime-owned and enabled by default.
@@ -315,5 +317,7 @@ ctx.invoke_workflow(ChildWorkflow, message="Do the child task", parameters={"mod
 ```
 
 Child runs stay under the same task but get their own workflow namespace, run id, checkpoint, event log, trace, sessions, and run-local request snapshot. Parent-child linkage is metadata-only through `children.jsonl` and `parent.json`; child runs are never nested under parent run folders.
+
+When a parent uses `workflow_step(message="{ctx.message}", ...)`, the rendered message becomes the child run's own request snapshot. Typed child `input` remains separate from that request text.
 
 Autoloop-v1 parity is now package-local under `autoloop/workflows/autoloop_v1/`. Framework-owned parity helpers and custom runners are not part of the architecture anymore.

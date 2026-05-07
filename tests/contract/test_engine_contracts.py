@@ -8574,6 +8574,40 @@ def test_ctx_prompt_bindings_render_in_provider_and_operation_prompts(tmp_path: 
     assert all("{ctx." not in text for text in rendered_prompts)
 
 
+def test_prompt_steps_do_not_auto_inject_run_message_without_ctx_binding(tmp_path: Path) -> None:
+    class NoAutoInjectionWorkflow(SimpleWorkflow):
+        summary = step("Write a generic summary.", routes={"done": FINISH})
+
+    task_folder, run_folder = _workspace(tmp_path)
+    (run_folder / "request.md").write_text("THIS SHOULD NOT APPEAR UNLESS BOUND\n", encoding="utf-8")
+    captured: dict[str, str] = {}
+    provider = ScriptedLLMProvider(
+        llm_turns=[
+            lambda request: (
+                captured.__setitem__("step", request.prompt.text),
+                Outcome(raw_output="done", tag="done"),
+            )[1]
+        ]
+    )
+
+    result = Engine(
+        NoAutoInjectionWorkflow,
+        provider=provider,
+        session_store=InMemorySessionStore(),
+        checkpoint_store=InMemoryCheckpointStore(),
+    ).run(
+        task_id="task-no-auto-injection",
+        run_id="run-no-auto-injection",
+        task_folder=task_folder,
+        run_folder=run_folder,
+        root=tmp_path,
+    )
+
+    assert result.terminal == FINISH
+    assert captured["step"] == "Write a generic summary."
+    assert "THIS SHOULD NOT APPEAR UNLESS BOUND" not in captured["step"]
+
+
 def test_workflow_step_message_renders_ctx_bindings_before_child_invocation(tmp_path: Path) -> None:
     class ChildWorkflow(SimpleWorkflow):
         note = step("Child note.")

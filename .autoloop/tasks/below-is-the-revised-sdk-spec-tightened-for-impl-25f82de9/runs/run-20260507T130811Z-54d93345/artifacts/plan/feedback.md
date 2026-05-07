@@ -1,1 +1,2 @@
 # Plan ↔ Plan Verifier Feedback
+- Added an implementation-ready SDK facade plan after inspecting the current runner, context, rendering, and child-context seams. The update fixes the empty plan artifact, defines four ordered phases, and records the main regression controls: separate message/input persistence, composite ctx.input propagation, runner-backed pause/resume, and the explicit Workflow.Input.message validation break.
