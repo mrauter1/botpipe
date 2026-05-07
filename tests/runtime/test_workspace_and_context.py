@@ -805,7 +805,7 @@ def test_resume_context_preserves_run_message_and_raw_input_fields(tmp_path: Pat
     assert paused_context == {
         "message": "Original request",
         "input_has_message": False,
-        "input_model_dump": {"topic": "release"},
+        "input_model_dump": {"message": "Original request", "topic": "release"},
         "input_topic": "release",
         "input_fields": {"topic": "release"},
         "answer": None,
@@ -816,7 +816,7 @@ def test_resume_context_preserves_run_message_and_raw_input_fields(tmp_path: Pat
     assert resumed_context == {
         "message": "Original request",
         "input_has_message": False,
-        "input_model_dump": {"topic": "release"},
+        "input_model_dump": {"message": "Original request", "topic": "release"},
         "input_topic": "release",
         "input_fields": {"topic": "release"},
         "answer": "42",

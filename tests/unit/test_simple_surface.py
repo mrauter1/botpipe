@@ -93,6 +93,24 @@ def test_autoloop_root_exports_only_the_canonical_public_surface() -> None:
         "AWAIT_INPUT",
         "FAIL",
         "SELF",
+        "Autoloop",
+        "WorkflowResult",
+        "StepResult",
+        "ArtifactMap",
+        "InputRequest",
+        "HandledInput",
+        "SDKDebugInfo",
+        "AutoloopSDKError",
+        "WorkflowInputError",
+        "WorkflowParameterError",
+        "InputRequired",
+        "TooManyPauses",
+        "InputResponseValidationError",
+        "SDKExecutionError",
+        "ConsoleInput",
+        "StaticInput",
+        "MappingInput",
+        "BestSuppositionInput",
     )
 
     for symbol in autoloop.__all__:
@@ -938,9 +956,6 @@ def test_simple_workflow_accepts_input_message_prompt_binding() -> None:
 
 def test_simple_workflow_accepts_ctx_input_message_prompt_binding() -> None:
     class CtxInputMessageWorkflow(simple.Workflow):
-        class Input(BaseModel):
-            message: str
-
         class State(BaseModel):
             pass
 

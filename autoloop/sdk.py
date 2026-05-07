@@ -16,6 +16,7 @@ from uuid import uuid4
 from pydantic import BaseModel, ValidationError
 
 import autoloop.simple as simple
+from autoloop.core import Workflow as CoreWorkflow
 from autoloop.core.artifacts import ArtifactHandle, CompiledArtifact, resolve_artifact_template
 from autoloop.core.compiler import CompiledWorkflow, compile_workflow
 from autoloop.core.context import WorkflowInputView
@@ -810,7 +811,7 @@ def _build_synthetic_step_workflow(root: Path, declaration: object, typed_input:
         attrs[declaration.name] = declaration
         attrs["transitions"] = {declaration: {"done": FINISH}}
         name = f"SDKStepWorkflow_{declaration.name}"
-        return type(name, (simple.Workflow,), attrs)
+        return type(name, (CoreWorkflow,), attrs)
 
     step_name = getattr(declaration, "name", None) or "step"
     attrs[step_name] = declaration

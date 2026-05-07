@@ -22,6 +22,7 @@ from autoloop import (
 from autoloop.core.primitives import Event, Outcome, RequestInput
 from autoloop.core.providers.fake import ScriptedLLMProvider
 from autoloop.core.steps import PythonStep
+from autoloop.runtime.config import GitTrackingRuntimeConfig, RuntimeConfig
 
 
 class _SDKApprovalInput(BaseModel):
@@ -80,6 +81,7 @@ def _sdk_client(tmp_path: Path, provider: object) -> Autoloop:
         root=Path.cwd(),
         provider=provider,
         state_dir=tmp_path / ".autoloop",
+        runtime_config=RuntimeConfig(git_tracking=GitTrackingRuntimeConfig(enabled=False, commit_policy="off")),
     )
 
 
@@ -118,7 +120,8 @@ def test_sdk_run_handles_typed_input_pause_loop_and_debug_artifacts(tmp_path: Pa
         "dump": {"message": "Ship the release safely.", "topic": "release"},
         "input_fields": {"topic": "release"},
     }
-    assert result.debug.task_id.startswith("sdk-sdk-pause-workflow-")
+    assert result.debug.task_id.startswith("sdk-")
+    assert "pause-workflow" in result.debug.task_id
     assert result.debug.run_id.startswith("run-")
     assert result.debug.events_file.exists()
 

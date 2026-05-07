@@ -348,7 +348,10 @@ class Context:
 
     @property
     def input(self) -> WorkflowInputView:
-        return WorkflowInputView(message=self.message, fields=self._input_fields)
+        resolved_message = self._message
+        if resolved_message is _DEFAULT_MESSAGE:
+            resolved_message = self.request.text if self.request_file.exists() else None
+        return WorkflowInputView(message=resolved_message, fields=self._input_fields)
 
     @property
     def artifacts(self) -> "ResolvedArtifacts | None":

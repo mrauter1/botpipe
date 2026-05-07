@@ -237,7 +237,7 @@ class PromptContextView:
 
     @property
     def input(self) -> Any:
-        return self._context.input
+        return self._context.input_fields
 
     @property
     def state(self) -> BaseModel:
