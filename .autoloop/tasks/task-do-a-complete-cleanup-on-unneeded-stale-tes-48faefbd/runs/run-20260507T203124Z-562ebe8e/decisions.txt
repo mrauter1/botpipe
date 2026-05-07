@@ -1,0 +1,4 @@
+<autoloop-decisions-header version="1" block_seq="1" owner="planner" phase_id="task-global" pair="plan" turn_seq="1" run_id="run-20260507T203124Z-562ebe8e" ts="2026-05-07T20:31:24.986937+00:00" />
+Keep `tests/.../_shared.py` helpers private; repair retained split files by importing the specific underscore-prefixed helpers they use instead of widening shared-module exports or restoring removed monolith tests.
+`tests/unit/stdlib/test_authoring_helpers.py` must stop importing `autoloop.workflows.*.params` directly and should cover the same inherited parameter validation behavior with local synthetic models or fixtures inside `tests/`.
+`tests/strictness/test_no_compat.py` must track the retained split layout and must not require the deleted `tests/contract/test_engine_contracts.py` path in its maintained scan assertions.
