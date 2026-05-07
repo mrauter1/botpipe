@@ -40,8 +40,8 @@
   `tests/runtime/test_workspace_and_context.py::test_resume_context_preserves_run_message_and_raw_input_fields`
   `tests/contract/test_engine_contracts.py::test_runtime_templates_resolve_bare_input_message_and_fields`
   `tests/contract/test_engine_contracts.py::test_runtime_templates_reject_unknown_bare_input_field`
-  `tests/contract/test_engine_contracts.py::test_runtime_templates_reject_undeclared_ctx_input_message_without_typed_input`
-  `tests/contract/test_engine_contracts.py::test_runtime_templates_resolve_declared_ctx_input_message_separately_from_request`
+  `tests/contract/test_engine_contracts.py::test_runtime_templates_resolve_ctx_input_message_without_typed_input`
+  `tests/contract/test_engine_contracts.py::test_runtime_templates_resolve_ctx_input_message_separately_from_request`
   `tests/unit/test_simple_surface.py::test_autoloop_root_exports_only_the_canonical_public_surface`
   Covers the compile-time `Workflow.Input.message` break, resume message/input stability, placeholder rendering, and root exports.
 
@@ -65,3 +65,4 @@
 ## Known gaps
 - Async SDK entrypoints remain deferred by product scope, so no async facade tests were added.
 - `llm` / `classify` active-loop failures are not asserted because the current implementation executes those operation calls synchronously without the runtime bridge failure path.
+- The corrected `ctx.input.message` contract tests currently fail against the implementation, which means runtime template resolution still does not honor the accepted composite-input contract in all `ctx.*` paths.

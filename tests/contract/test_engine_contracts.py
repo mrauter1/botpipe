@@ -8652,7 +8652,7 @@ def test_runtime_templates_reject_unknown_bare_input_field(tmp_path: Path) -> No
         )
 
 
-def test_runtime_templates_reject_undeclared_ctx_input_message_without_typed_input(tmp_path: Path) -> None:
+def test_runtime_templates_resolve_ctx_input_message_without_typed_input(tmp_path: Path) -> None:
     task_folder = tmp_path / "task"
     workflow_folder = task_folder / "wf_example"
     run_folder = workflow_folder / "runs" / "run-1"
@@ -8676,19 +8676,17 @@ def test_runtime_templates_reject_undeclared_ctx_input_message_without_typed_inp
         session_store=InMemorySessionStore(),
     )
 
-    with pytest.raises(
-        WorkflowExecutionError,
-        match=r"ctx\.input\.message requires workflow input, but no input was provided",
-    ):
-        render_runtime_template(
-            "{ctx.input.message}",
-            context,
-            placeholder_label="artifact template placeholder",
-            replace_roots=frozenset({"ctx"}),
-        )
+    rendered = render_runtime_template(
+        "{ctx.input.message}",
+        context,
+        placeholder_label="artifact template placeholder",
+        replace_roots=frozenset({"ctx"}),
+    )
+
+    assert rendered == "artifact-request"
 
 
-def test_runtime_templates_resolve_declared_ctx_input_message_separately_from_request(tmp_path: Path) -> None:
+def test_runtime_templates_resolve_ctx_input_message_separately_from_request(tmp_path: Path) -> None:
     task_folder = tmp_path / "task"
     workflow_folder = task_folder / "wf_example"
     run_folder = workflow_folder / "runs" / "run-1"
@@ -8698,7 +8696,6 @@ def test_runtime_templates_resolve_declared_ctx_input_message_separately_from_re
     (run_folder / "request.md").write_text("artifact-request\n", encoding="utf-8")
 
     class PromptInput(BaseModel):
-        message: str
         topic: str
 
     class PromptState(BaseModel):
@@ -8713,7 +8710,8 @@ def test_runtime_templates_resolve_declared_ctx_input_message_separately_from_re
         run_folder=run_folder,
         package_folder=package_folder,
         state=PromptState(),
-        workflow_input=PromptInput(message="typed-input", topic="release"),
+        message="runtime-message",
+        workflow_input=PromptInput(topic="release"),
         session_store=InMemorySessionStore(),
     )
 
@@ -8724,7 +8722,7 @@ def test_runtime_templates_resolve_declared_ctx_input_message_separately_from_re
         replace_roots=frozenset({"ctx"}),
     )
 
-    assert rendered == "Request=artifact-request; InputMessage=typed-input; Topic=release"
+    assert rendered == "Request=runtime-message; InputMessage=runtime-message; Topic=release"
 
 
 def test_prompt_steps_do_not_auto_inject_run_message_without_ctx_binding(tmp_path: Path) -> None:

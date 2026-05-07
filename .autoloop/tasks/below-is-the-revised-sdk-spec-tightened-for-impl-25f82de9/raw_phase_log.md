@@ -1718,3 +1718,65 @@ Open issues / next step
 <loop-control>
 {"schema":"docloop.loop_control/v1","kind":"promise","promise":"INCOMPLETE"}
 </loop-control>
+
+
+---
+run_id=run-20260507T130811Z-54d93345 | entry=session_turn | pair=test | phase=producer | cycle=2 | attempt=1 | thread_id=019e02bf-36df-7293-b934-fad7a290777c
+---
+provider=codex
+mode=resume
+template=/home/rauter/.local/share/pipx/venvs/autoloop/lib/python3.12/site-packages/autoloop/templates/test_producer.md
+session_id=019e02bf-36df-7293-b934-fad7a290777c
+
+
+---
+run_id=run-20260507T130811Z-54d93345 | entry=phase_output | pair=test | phase=producer | process=codex-agent | cycle=2 | attempt=1 | thread_id=019e02bf-36df-7293-b934-fad7a290777c
+---
+I’m fixing the stale contract coverage the auditor flagged by bringing the tracked `ctx.input.message` runtime-template tests back into line with the accepted SDK input contract, then I’ll refresh the strategy and feedback artifacts to cite the corrected regression surface.
+
+I’ve confirmed the stale expectations are still in the tracked contract file. I’m replacing them with runtime-message assertions that match the accepted contract, then I’ll rerun the focused regression slice and refresh the test artifacts to cite the corrected test names.
+
+The stale contract expectations are patched. I’m rerunning the focused cross-module regression slice with the corrected test names before I update the strategy and feedback artifacts.
+
+The corrected focused regression slice is still running. I’m waiting on that result before I rewrite the strategy references and append the test-phase feedback update.
+
+The corrected contract tests are now exposing a real implementation gap: `ctx.input.message` still resolves through raw input fields in the runtime template path. I’m updating the test artifacts to record that the new regression surface is intentional and currently failing for the right reason, rather than hiding it behind stale expectations.
+
+Scope considered
+
+- `sdk-facade` test-phase scope, specifically the stale contract coverage the auditor flagged around `ctx.input.message`.
+- The tracked SDK facade unit tests, the runtime/contract regression slice, and the phase test artifacts.
+- Run-local decisions that define `ctx.input.message` as a runtime-message view, not a typed-input field.
+
+What I analyzed
+
+- `tests/contract/test_engine_contracts.py` around the two stale `ctx.input.message` expectations.
+- `tests/unit/test_sdk_facade.py` and the focused regression slice already used in this phase.
+- `artifacts/test/phases/sdk-facade/test_strategy.md`, `feedback.md`, and the latest `decisions.txt` test-phase block.
+
+What I changed
+
+- Replaced the stale contract tests in [tests/contract/test_engine_contracts.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/tests/contract/test_engine_contracts.py:8655) so they now assert the accepted behavior:
+  - `test_runtime_templates_resolve_ctx_input_message_without_typed_input`
+  - `test_runtime_templates_resolve_ctx_input_message_separately_from_request`
+- Removed the stale `PromptInput.message` pattern from that regression surface and switched the second contract test to use an explicit runtime `message`.
+- Updated `test_strategy.md` to cite the corrected contract test names and to record that these corrected tests currently expose an implementation gap.
+- Appended a concise update to `feedback.md` summarizing the corrected tests and the failing focused rerun.
+- Appended a test-phase decision under the latest header in `decisions.txt` stating that these corrected failures should be preserved because they surface a real implementation gap.
+
+Key findings / decisions
+
+- The corrected contract tests currently fail, which is the right outcome for the current repository state:
+  - `ctx.input.message` without typed input still raises `WorkflowExecutionError`
+  - `ctx.input.message` with typed input still resolves against raw `input_fields` instead of the composite runtime message view
+- Focused reruns:
+  - `./.venv/bin/python -m pytest -q tests/unit/test_sdk_facade.py`
+  - Result: `14 passed`
+  - `./.venv/bin/python -m pytest -q tests/unit/test_sdk_facade.py tests/unit/test_simple_surface.py tests/unit/test_validation.py tests/runtime/test_workspace_and_context.py::test_resume_context_preserves_run_message_and_raw_input_fields tests/contract/test_engine_contracts.py::test_runtime_templates_resolve_bare_input_message_and_fields tests/contract/test_engine_contracts.py::test_runtime_templates_reject_unknown_bare_input_field tests/contract/test_engine_contracts.py::test_runtime_templates_resolve_ctx_input_message_without_typed_input tests/contract/test_engine_contracts.py::test_runtime_templates_resolve_ctx_input_message_separately_from_request`
+  - Result: `215 passed`, `2 failed`, `14 warnings`
+- Those two failures are now intentional regression surfacing, not test bugs.
+
+Open issues / next step
+
+- The implementation still needs to route `ctx.input` through the composite input view in runtime template resolution so the two corrected contract tests pass.
+- The test-phase artifacts now reflect that state accurately and should remain as-is until the producer side fixes the implementation gap.
