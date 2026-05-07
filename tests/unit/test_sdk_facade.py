@@ -209,6 +209,20 @@ def test_sdk_run_suppresses_provider_questions_without_handler_by_default(tmp_pa
         client.run(_SDKProviderQuestionWorkflow, "Review the rollout.")
 
 
+def test_sdk_run_explicit_provider_questions_true_allows_handlerless_pause(tmp_path: Path) -> None:
+    provider = ScriptedLLMProvider(
+        llm_turns=[Outcome(raw_output="Need approval", tag="question", question="Proceed?")]
+    )
+    client = _sdk_client(tmp_path, provider)
+
+    with pytest.raises(InputRequired, match="Proceed\\?"):
+        client.run(
+            _SDKProviderQuestionWorkflow,
+            "Review the rollout.",
+            provider_questions=True,
+        )
+
+
 def test_sdk_run_keeps_direct_request_input_when_provider_questions_disabled(tmp_path: Path) -> None:
     client = _sdk_client(tmp_path, ScriptedLLMProvider())
 
@@ -217,6 +231,21 @@ def test_sdk_run_keeps_direct_request_input_when_provider_questions_disabled(tmp
             _SDKPauseWorkflow,
             "Ship the release safely.",
             _SDKPauseWorkflow.Input(topic="release"),
+            provider_questions=False,
+        )
+
+
+def test_sdk_run_explicit_provider_questions_false_suppresses_provider_questions_even_with_handler(tmp_path: Path) -> None:
+    provider = ScriptedLLMProvider(
+        llm_turns=[Outcome(raw_output="Need approval", tag="question", question="Proceed?")]
+    )
+    client = _sdk_client(tmp_path, provider)
+
+    with pytest.raises(SDKExecutionError, match="question"):
+        client.run(
+            _SDKProviderQuestionWorkflow,
+            "Review the rollout.",
+            on_input=StaticInput("yes"),
             provider_questions=False,
         )
 
