@@ -13,11 +13,11 @@
       "repair-retained-split-tests"
     ],
     "explicit": true,
-    "current_phase_index": 0,
-    "current_phase_id": "repair-retained-split-tests"
+    "current_phase_index": 1,
+    "current_phase_id": null
   },
   "phase_status": {
-    "repair-retained-split-tests": "in_progress"
+    "repair-retained-split-tests": "completed"
   },
   "phase_history": [
     {
@@ -25,6 +25,13 @@
       "run_id": "run-20260507T203124Z-562ebe8e",
       "status": "in_progress",
       "ts": "2026-05-07T20:37:59.555655+00:00"
+    },
+    {
+      "phase_id": "repair-retained-split-tests",
+      "run_id": "run-20260507T203124Z-562ebe8e",
+      "status": "completed",
+      "ts": "2026-05-07T20:48:14.187135+00:00",
+      "pair": "test"
     }
   ]
 }

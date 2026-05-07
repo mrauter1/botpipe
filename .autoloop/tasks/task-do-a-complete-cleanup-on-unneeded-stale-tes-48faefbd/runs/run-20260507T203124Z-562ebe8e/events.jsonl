@@ -20,3 +20,6 @@
 {"ts": "2026-05-07T20:47:27.429920+00:00", "run_id": "run-20260507T203124Z-562ebe8e", "seq": 20, "event_type": "phase_finished", "pair": "test", "phase": "producer", "cycle": 1, "attempt": 1, "empty_output": false, "phase_id": "repair-retained-split-tests"}
 {"ts": "2026-05-07T20:48:13.993418+00:00", "run_id": "run-20260507T203124Z-562ebe8e", "seq": 21, "event_type": "phase_finished", "pair": "test", "phase": "verifier", "cycle": 1, "attempt": 1, "empty_output": false, "phase_id": "repair-retained-split-tests"}
 {"ts": "2026-05-07T20:48:14.078643+00:00", "run_id": "run-20260507T203124Z-562ebe8e", "seq": 22, "event_type": "pair_completed", "pair": "test", "cycle": 1, "attempt": 1, "phase_id": "repair-retained-split-tests"}
+{"ts": "2026-05-07T20:48:14.187480+00:00", "run_id": "run-20260507T203124Z-562ebe8e", "seq": 23, "event_type": "phase_completed", "pair": "test", "phase_id": "repair-retained-split-tests", "phase_mode": "single"}
+{"ts": "2026-05-07T20:48:14.189658+00:00", "run_id": "run-20260507T203124Z-562ebe8e", "seq": 24, "event_type": "pair_started", "pair": "audit", "phase_id": null}
+{"ts": "2026-05-07T20:48:14.189736+00:00", "run_id": "run-20260507T203124Z-562ebe8e", "seq": 25, "event_type": "cycle_started", "pair": "audit", "cycle": 1, "attempt": 1, "phase_id": null}
