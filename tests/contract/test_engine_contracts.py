@@ -9,7 +9,7 @@ from pydantic import BaseModel, Field
 
 from autoloop.core.compiler import compile_workflow
 from autoloop.core.artifacts import Artifact
-from autoloop.core.context import ChildWorkflowResult
+from autoloop.core.context import ChildWorkflowResult, Context
 from autoloop.core.engine import Engine
 from autoloop.core.errors import (
     MissingArtifactError,
@@ -8608,8 +8608,124 @@ def test_prompt_steps_do_not_auto_inject_run_message_without_ctx_binding(tmp_pat
     assert "THIS SHOULD NOT APPEAR UNLESS BOUND" not in captured["step"]
 
 
+def test_workflow_step_message_can_forward_ctx_message_into_child_request_snapshot(tmp_path: Path) -> None:
+    class ChildWorkflow(SimpleWorkflow):
+        class Input(BaseModel):
+            topic: str
+
+        class State(BaseModel):
+            pass
+
+        note = step("Child note.")
+
+    class ParentWorkflow(SimpleWorkflow):
+        class Input(BaseModel):
+            topic: str
+
+        launch = workflow_step(
+            ChildWorkflow,
+            message="{ctx.message}",
+            input={"topic": "structured-topic"},
+            routes={"done": FINISH},
+        )
+
+    task_folder, run_folder = _workspace(tmp_path)
+    (run_folder / "request.md").write_text("Natural-language request\n", encoding="utf-8")
+    seen: dict[str, object] = {}
+
+    def invoke_child(workflow, *, message, parameters=None, input=None):
+        seen["workflow"] = workflow
+        seen["message"] = message
+        seen["input"] = input
+        child_run_root = task_folder / "child-runs" / "ctx-child"
+        child_run_folder = child_run_root / "run"
+        child_run_folder.mkdir(parents=True, exist_ok=True)
+        (child_run_root / "package").mkdir(parents=True, exist_ok=True)
+        request_file = child_run_folder / "request.md"
+        request_file.write_text(f"{message}\n", encoding="utf-8")
+        child_context = Context(
+            task_id="task-ctx-child",
+            run_id="child-ctx",
+            workflow_name="child_workflow",
+            task_folder=task_folder,
+            workflow_folder=child_run_root,
+            run_folder=child_run_folder,
+            package_folder=child_run_root / "package",
+            request_file=request_file,
+            task_request_file=task_folder / "request.md",
+            state=workflow.State(),
+            workflow_input=workflow.Input.model_validate(input),
+            session_store=InMemorySessionStore(),
+        )
+        seen["child_payload"] = {
+            "message": child_context.message,
+            "request_text": child_context.request.text,
+            "request_file": str(child_context.request.file),
+            "task_request_file": None if child_context.request.task_file is None else str(child_context.request.task_file),
+            "topic": child_context.input.topic,
+        }
+        return ChildWorkflowResult(
+            workflow_name="child_workflow",
+            run_id="child-ctx",
+            terminal=FINISH,
+            status="success",
+            last_event=Event("done"),
+            output_metadata={},
+            output_artifacts={},
+            task_folder=task_folder,
+            workflow_folder=child_run_root,
+            run_folder=child_run_folder,
+            package_folder=child_run_root / "package",
+            request_file=request_file,
+            run_meta_file=child_run_folder / "run.json",
+            events_file=child_run_folder / "events.jsonl",
+            checkpoint_file=child_run_folder / "checkpoint.json",
+            sessions_dir=child_run_folder / "sessions",
+            trace_file=child_run_folder / "trace.jsonl",
+            raw_dir=child_run_folder / "raw",
+            parent_file=child_run_folder / "parent.json",
+        )
+
+    result = Engine(
+        ParentWorkflow,
+        provider=ScriptedLLMProvider(),
+        session_store=InMemorySessionStore(),
+        checkpoint_store=InMemoryCheckpointStore(),
+    ).run(
+        task_id="task-ctx-child",
+        run_id="run-ctx-child",
+        task_folder=task_folder,
+        run_folder=run_folder,
+        root=tmp_path,
+        workflow_input=ParentWorkflow.Input(topic="alpha"),
+        workflow_invoker=invoke_child,
+    )
+
+    assert result.terminal == FINISH
+    assert seen["workflow"] is ChildWorkflow
+    assert seen["message"] == "Natural-language request"
+    assert seen["input"] == {"topic": "structured-topic"}
+    assert seen["child_payload"] == {
+        "message": "Natural-language request",
+        "request_text": "Natural-language request",
+        "request_file": str(task_folder / "child-runs" / "ctx-child" / "run" / "request.md"),
+        "task_request_file": str(task_folder / "request.md"),
+        "topic": "structured-topic",
+    }
+    assert seen["message"] != "structured-topic"
+    assert (task_folder / "child-runs" / "ctx-child" / "run" / "request.md").read_text(encoding="utf-8") == (
+        "Natural-language request\n"
+    )
+
+
 def test_workflow_step_message_renders_ctx_bindings_before_child_invocation(tmp_path: Path) -> None:
     class ChildWorkflow(SimpleWorkflow):
+        class Input(BaseModel):
+            topic: str
+
+        class State(BaseModel):
+            pass
+
         note = step("Child note.")
 
     class ParentWorkflow(SimpleWorkflow):
@@ -8631,11 +8747,34 @@ def test_workflow_step_message_renders_ctx_bindings_before_child_invocation(tmp_
         seen["workflow"] = workflow
         seen["message"] = message
         seen["input"] = input
-        child_run_root = task_folder / "child-runs" / "ctx-child"
-        child_run_root.mkdir(parents=True, exist_ok=True)
+        child_run_root = task_folder / "child-runs" / "ctx-child-mixed"
+        child_run_folder = child_run_root / "run"
+        child_run_folder.mkdir(parents=True, exist_ok=True)
+        (child_run_root / "package").mkdir(parents=True, exist_ok=True)
+        request_file = child_run_folder / "request.md"
+        request_file.write_text(f"{message}\n", encoding="utf-8")
+        child_context = Context(
+            task_id="task-ctx-child-mixed",
+            run_id="child-ctx-mixed",
+            workflow_name="child_workflow",
+            task_folder=task_folder,
+            workflow_folder=child_run_root,
+            run_folder=child_run_folder,
+            package_folder=child_run_root / "package",
+            request_file=request_file,
+            task_request_file=task_folder / "request.md",
+            state=workflow.State(),
+            workflow_input=workflow.Input.model_validate(input),
+            session_store=InMemorySessionStore(),
+        )
+        seen["child_payload"] = {
+            "message": child_context.message,
+            "request_text": child_context.request.text,
+            "topic": child_context.input.topic,
+        }
         return ChildWorkflowResult(
             workflow_name="child_workflow",
-            run_id="child-ctx",
+            run_id="child-ctx-mixed",
             terminal=FINISH,
             status="success",
             last_event=Event("done"),
@@ -8643,16 +8782,16 @@ def test_workflow_step_message_renders_ctx_bindings_before_child_invocation(tmp_
             output_artifacts={},
             task_folder=task_folder,
             workflow_folder=child_run_root,
-            run_folder=child_run_root / "run",
+            run_folder=child_run_folder,
             package_folder=child_run_root / "package",
-            request_file=child_run_root / "request.md",
-            run_meta_file=child_run_root / "run.json",
-            events_file=child_run_root / "events.jsonl",
-            checkpoint_file=child_run_root / "checkpoint.json",
-            sessions_dir=child_run_root / "sessions",
-            trace_file=child_run_root / "trace.jsonl",
-            raw_dir=child_run_root / "raw",
-            parent_file=child_run_root / "parent.json",
+            request_file=request_file,
+            run_meta_file=child_run_folder / "run.json",
+            events_file=child_run_folder / "events.jsonl",
+            checkpoint_file=child_run_folder / "checkpoint.json",
+            sessions_dir=child_run_folder / "sessions",
+            trace_file=child_run_folder / "trace.jsonl",
+            raw_dir=child_run_folder / "raw",
+            parent_file=child_run_folder / "parent.json",
         )
 
     result = Engine(
@@ -8661,8 +8800,8 @@ def test_workflow_step_message_renders_ctx_bindings_before_child_invocation(tmp_
         session_store=InMemorySessionStore(),
         checkpoint_store=InMemoryCheckpointStore(),
     ).run(
-        task_id="task-ctx-child",
-        run_id="run-ctx-child",
+        task_id="task-ctx-child-mixed",
+        run_id="run-ctx-child-mixed",
         task_folder=task_folder,
         run_folder=run_folder,
         root=tmp_path,
@@ -8674,6 +8813,11 @@ def test_workflow_step_message_renders_ctx_bindings_before_child_invocation(tmp_
     assert seen["workflow"] is ChildWorkflow
     assert seen["message"] == "Parent request: Natural-language request; topic=alpha"
     assert seen["input"] == {"topic": "structured-topic"}
+    assert seen["child_payload"] == {
+        "message": "Parent request: Natural-language request; topic=alpha",
+        "request_text": "Parent request: Natural-language request; topic=alpha",
+        "topic": "structured-topic",
+    }
     assert seen["message"] != "structured-topic"
 
 

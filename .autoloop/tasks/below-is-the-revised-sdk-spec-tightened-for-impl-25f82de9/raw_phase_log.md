@@ -43,3 +43,41 @@ Updated the planning artifacts for this run.
 `plan.md` now contains an implementation-ready SDK plan centered on four milestones: runtime message/input refactor, input validation/rendering alignment, the new `autoloop/sdk.py` facade, and standalone operations plus acceptance coverage. It explicitly anchors the work to the current seams in `core/context.py`, `core/artifacts.py`, `core/compiler.py`, `core/branch_groups/context.py`, and `runtime/runner.py`, and it calls out the main invariant and regression risks.
 
 `phase_plan.yaml` now has four ordered phases with dependencies, scope boundaries, acceptance criteria, deliverables, risks, and rollback notes. I also appended a concise verifier-facing note to `feedback.md` and recorded three durable decisions in `decisions.txt`: keep the SDK runner-backed, keep `message` separate from raw typed input propagation, and treat `Workflow.Input.message` rejection as the only intentional authoring break in this slice.
+
+
+---
+run_id=run-20260507T130811Z-54d93345 | entry=session_turn | pair=plan | phase=verifier | cycle=1 | attempt=1 | thread_id=019e028d-8e36-7ca3-84de-cb0c29bc8ba1
+---
+provider=codex
+mode=resume
+template=/home/rauter/.local/share/pipx/venvs/autoloop/lib/python3.12/site-packages/autoloop/templates/plan_verifier.md
+session_id=019e028d-8e36-7ca3-84de-cb0c29bc8ba1
+
+
+---
+run_id=run-20260507T130811Z-54d93345 | entry=phase_output | pair=plan | phase=verifier | process=codex-agent | cycle=1 | attempt=1 | thread_id=019e028d-8e36-7ca3-84de-cb0c29bc8ba1
+---
+I’ve finished the audit. The plan is directionally correct, but there are two material gaps against the requested public SDK contract, so I’m marking the verification incomplete and recording the blocking fixes.
+
+Scope considered
+The primary planning artifacts for this run, the immutable SDK spec in the request snapshot, the current run decisions, and the runtime/context/runner seams the plan depends on.
+
+What I analyzed
+I checked the producer plan against the requested SDK contract, especially the public `Autoloop` surface, context/message/input separation, pause handling, synthetic `step(...)`, compatibility notes, and regression controls. I also validated the machine-readable phase ordering and dependencies.
+
+What I reviewed
+I reviewed `plan.md`, `phase_plan.yaml`, `criteria.md`, `feedback.md`, and `decisions.txt`. I also cross-checked the plan against the current runtime behavior around `run_awaitable_sync(...)`, `Context(...)`, `execute_workflow_package(...)`, and child/synthetic workflow constraints to verify feasibility and hidden regression risk.
+
+Key findings / decisions
+Two blocking findings were added to `feedback.md`.
+`PLAN-001` blocks completion because the plan does not require the sync SDK entrypoints to translate active-event-loop failures into the spec-required `SDKExecutionError`.
+`PLAN-002` blocks completion because the `Autoloop.step(...)` plan omits the required synthetic workflow mechanics for typed input injection and default `done -> FINISH` routing.
+`PLAN-003` was recorded as non-blocking because the task-id/debug contract is under-specified but not as immediately dangerous as the two issues above.
+`criteria.md` was updated accordingly: only `Technical Debt` is currently satisfied.
+
+Open issues / next step
+The producer plan should be revised to explicitly cover active-event-loop error handling for sync SDK methods, and to spell out the missing one-step workflow synthesis rules and tests for `Autoloop.step(...)`. After those fixes, the verifier pass can be rerun.
+
+<loop-control>
+{"schema":"docloop.loop_control/v1","kind":"promise","promise":"INCOMPLETE"}
+</loop-control>
