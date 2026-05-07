@@ -10,6 +10,7 @@ phases:
       - "Remove built-in `ctx.input.message` acceptance unless the workflow `Input` model explicitly declares `message`."
       - "Restore file-backed lazy `ctx.message` behavior for root engine contexts, resumed contexts, and branch/fan-in clones when a run-local `request_file` is authoritative."
       - "Update provider prompt, operation prompt, workflow-step, and runtime context tests to use `ctx.message` for request text and to cover the unreadable-snapshot path."
+      - "Explicitly bound shared compatibility surfaces that currently depend on `WorkflowInputView.message`, including direct Python `ctx.input.message` / `ctx.input.model_dump()`, legacy bare `{input.message}`, and touched in-tree examples."
     out_of_scope:
       - "Broad reopening of the full `ctx.*` feature surface."
       - "Changes to supported `ctx.request.*`, `ctx.state.*`, `ctx.params.*`, or artifact-path rejection semantics."
@@ -26,13 +27,18 @@ phases:
         text: "An engine/runner-backed context raises `WorkflowExecutionError(\"run request snapshot could not be read: <path>\")` when the authoritative run-local snapshot becomes unreadable after context construction."
       - id: AC-5
         text: "Child typed input remains distinct from request text, and branch/fan-in clones preserve snapshot-path authority instead of cached message text."
+      - id: AC-6
+        text: "The implementation explicitly decides and tests the shared compatibility boundary: direct Python `ctx.input.message` follows declared `Input.message`, legacy bare `{input.message}` is either preserved as a compatibility-only shim or intentionally migrated with paired expectation updates, and touched examples no longer advertise undeclared `ctx.input.message` as built in."
     deliverables:
       - "Patched `context`, `discovery`, `artifacts`, `engine`, `runner`, and branch-group context code aligned to the requested contract."
       - "Updated unit, contract, and runtime regression tests covering request/input separation, file-backed message access, and unreadable snapshot failures."
+      - "Updated compatibility notes and any touched in-tree examples so the retained versus migrated `input.message` surfaces are explicit instead of implicit."
     risks:
       - "Legacy tests or helpers may rely on the synthetic `ctx.input.message` alias."
       - "Removing cached message text from root and clone contexts can surface latent file-read failures in normal execution paths."
       - "Compile-time and runtime behavior can drift if validator, placeholder resolution, and `Context.input` are not changed together."
+      - "Shared `WorkflowInputView` plumbing can accidentally widen this follow-up into a bare-`input` regression if the compatibility boundary is not implemented deliberately."
     rollback:
       - "Revert validator/runtime/test changes together if compatibility fallout appears outside the explicitly requested contract narrowing."
       - "Prefer a narrow explicit override seam over restoring implicit `ctx.input.message` aliasing across the full runtime surface."
+      - "If bare `{input.message}` compatibility is retained, roll it back as an isolated shim rather than restoring request-text aliasing on `ctx.input` itself."
