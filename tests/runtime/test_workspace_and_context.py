@@ -720,6 +720,105 @@ def test_resume_context_message_uses_run_local_request_snapshot_not_mutated_task
     assert (run_dir / "request.md").read_text(encoding="utf-8") == "Original request\n"
 
 
+def test_resume_context_preserves_input_message_and_raw_input_fields(tmp_path: Path) -> None:
+    _write_typed_input_pause_resume_workflow_package(
+        tmp_path,
+        "resume_typed_input_demo",
+        "ResumeTypedInputWorkflow",
+    )
+    provider = ScriptedLLMProvider(
+        llm_turns=[
+            lambda request: (
+                request.artifacts.context_dump.write_text(
+                    json.dumps(
+                        {
+                            "message": request.context.message,
+                            "input_message": request.context.input.message,
+                            "input_topic": request.context.input.topic,
+                            "input_fields": None
+                            if request.context.input_fields is None
+                            else request.context.input_fields.model_dump(mode="python"),
+                            "answer": request.context.answer,
+                        }
+                    ),
+                ),
+                Outcome(raw_output="Need answer", tag="question", question="What value?"),
+            )[1],
+            lambda request: (
+                request.artifacts.context_dump.write_text(
+                    json.dumps(
+                        {
+                            "message": request.context.message,
+                            "input_message": request.context.input.message,
+                            "input_topic": request.context.input.topic,
+                            "input_fields": None
+                            if request.context.input_fields is None
+                            else request.context.input_fields.model_dump(mode="python"),
+                            "answer": request.context.answer,
+                        }
+                    ),
+                ),
+                Outcome(raw_output="Answered", tag="answered", payload={"answer": request.context.answer}),
+            )[1],
+        ]
+    )
+
+    paused = run_workflow_package(
+        "resume_typed_input_demo",
+        provider=provider,
+        options=_runner_options(
+            tmp_path,
+            task_id="task-typed-input-message",
+            message="Original request",
+            workflow_input={"topic": "release"},
+        ),
+    )
+
+    workflow_dir = tmp_path / ".autoloop" / "tasks" / "task-typed-input-message" / "wf_resume_typed_input_demo"
+    task_dir = tmp_path / ".autoloop" / "tasks" / "task-typed-input-message"
+    run_dir = next((workflow_dir / "runs").iterdir())
+    paused_context = json.loads((run_dir / "context.json").read_text(encoding="utf-8"))
+    paused_meta = json.loads((run_dir / "run.json").read_text(encoding="utf-8"))
+
+    (task_dir / "request.md").write_text("Mutated task request\n", encoding="utf-8")
+
+    resumed = run_workflow_package(
+        "resume_typed_input_demo",
+        provider=provider,
+        options=_runner_options(
+            tmp_path,
+            task_id="task-typed-input-message",
+            run_id=run_dir.name,
+            resume=True,
+            answer="42",
+        ),
+    )
+
+    resumed_context = json.loads((run_dir / "context.json").read_text(encoding="utf-8"))
+    resumed_meta = json.loads((run_dir / "run.json").read_text(encoding="utf-8"))
+
+    assert paused.terminal == "AWAIT_INPUT"
+    assert paused_context == {
+        "message": "Original request",
+        "input_message": "Original request",
+        "input_topic": "release",
+        "input_fields": {"topic": "release"},
+        "answer": None,
+    }
+    assert paused_meta["workflow_input"] == {"topic": "release"}
+    assert "message" not in paused_meta["workflow_input"]
+    assert resumed.terminal == "FINISH"
+    assert resumed_context == {
+        "message": "Original request",
+        "input_message": "Original request",
+        "input_topic": "release",
+        "input_fields": {"topic": "release"},
+        "answer": "42",
+    }
+    assert resumed_meta["workflow_input"] == {"topic": "release"}
+    assert "message" not in resumed_meta["workflow_input"]
+
+
 def test_create_run_persists_workflow_input_and_resolve_run_workflow_input_handles_fresh_and_stored_paths(
     tmp_path: Path,
 ) -> None:
@@ -2075,6 +2174,53 @@ from autoloop import AWAIT_INPUT, FINISH, Prompt, Raw, Workflow, step
 
 class {class_name}(Workflow):
     name = "{workflow_name}"
+
+    class State(BaseModel):
+        answer: str | None = None
+
+    context_dump = Raw("context_dump", path="{{run_folder}}/context.json")
+    ask = step(
+        prompt=Prompt.file("prompts/ask.md"),
+        writes=[context_dump],
+        routes={{"answered": FINISH, "question": AWAIT_INPUT}},
+    )
+""".strip()
+        + "\n",
+        encoding="utf-8",
+    )
+    return package_dir / "workflow.py"
+
+
+def _write_typed_input_pause_resume_workflow_package(
+    root: Path,
+    workflow_name: str,
+    class_name: str,
+) -> Path:
+    package_dir = root / "workflows" / workflow_name
+    package_dir.mkdir(parents=True, exist_ok=True)
+    (root / "workflows" / "__init__.py").write_text("__all__ = []\n", encoding="utf-8")
+    (package_dir / "__init__.py").write_text(
+        f"from .workflow import {class_name}\n__all__ = ['{class_name}']\n",
+        encoding="utf-8",
+    )
+    (package_dir / "workflow.toml").write_text(f'name = "{workflow_name}"\n', encoding="utf-8")
+    (package_dir / "prompts").mkdir(exist_ok=True)
+    (package_dir / "assets").mkdir(exist_ok=True)
+    (package_dir / "prompts" / "ask.md").write_text("package prompt\n", encoding="utf-8")
+    (package_dir / "workflow.py").write_text(
+        f"""
+from __future__ import annotations
+
+from pydantic import BaseModel
+
+from autoloop import AWAIT_INPUT, FINISH, Prompt, Raw, Workflow, step
+
+
+class {class_name}(Workflow):
+    name = "{workflow_name}"
+
+    class Input(BaseModel):
+        topic: str
 
     class State(BaseModel):
         answer: str | None = None

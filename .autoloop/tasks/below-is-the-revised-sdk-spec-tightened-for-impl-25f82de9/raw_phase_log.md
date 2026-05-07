@@ -332,3 +332,50 @@ No code issues remain for this phase. The only residual gap is environment-level
 <loop-control>
 {"schema":"docloop.loop_control/v1","kind":"promise","promise":"COMPLETE"}
 </loop-control>
+
+
+---
+run_id=run-20260507T130811Z-54d93345 | entry=session_turn | pair=test | phase=producer | cycle=1 | attempt=1 | thread_id=019e0294-bcba-7dd0-b377-b52f2c1c504d
+---
+provider=codex
+mode=resume
+template=/home/rauter/.local/share/pipx/venvs/autoloop/lib/python3.12/site-packages/autoloop/templates/test_producer.md
+session_id=019e0294-bcba-7dd0-b377-b52f2c1c504d
+
+
+---
+run_id=run-20260507T130811Z-54d93345 | entry=phase_output | pair=test | phase=producer | process=codex-agent | cycle=1 | attempt=1 | thread_id=019e0294-bcba-7dd0-b377-b52f2c1c504d
+---
+I’m validating the phase’s regression coverage rather than expanding scope. I’ll inspect the test-phase artifacts and the current runtime-input tests first, then decide whether the implementation-side test additions are sufficient or whether this phase needs a targeted refinement.
+
+The current implementation-side tests cover direct `Context`, branch/fan-in, and child workflow paths, but resume still only has message coverage. I’m checking the runtime workspace test helpers now to add one focused end-to-end resume test that proves `ctx.input.message` and raw `ctx.input_fields` stay correct across a paused/resumed run.
+
+I’ve got a focused gap to close: an end-to-end resume test where typed workflow input is persisted, the task request is mutated between segments, and the resumed context must still expose the original run-local message plus raw `input_fields`. I’m adding one dedicated fixture-style helper and a single deterministic runtime test for that contract.
+
+I’ve added the resume-specific coverage that was still missing from the runtime-input contract. I’m doing a syntax pass now, then I’ll write the coverage map and the test-phase feedback summary so the artifact trail matches the actual test surface.
+
+Scope considered
+
+Phase-local regression coverage for the runtime input contract only: I focused on the existing context/branch/child tests and added the missing resume-path coverage in [tests/runtime/test_workspace_and_context.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/tests/runtime/test_workspace_and_context.py:722). I also updated the test-phase artifacts [test_strategy.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/below-is-the-revised-sdk-spec-tightened-for-impl-25f82de9/runs/run-20260507T130811Z-54d93345/artifacts/test/phases/runtime-input-contract/test_strategy.md:1) and [feedback.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/below-is-the-revised-sdk-spec-tightened-for-impl-25f82de9/runs/run-20260507T130811Z-54d93345/artifacts/test/phases/runtime-input-contract/feedback.md:1).
+
+What I analyzed
+
+I checked which acceptance-criteria surfaces were already covered by the implementation-side tests: direct `Context`, branch/fan-in cloning, child workflow invocation, and persistence separation. The main remaining gap was end-to-end resume coverage for `ctx.input.message` plus raw `ctx.input_fields` after the task request mutates between paused and resumed segments.
+
+What I changed
+
+I added a small typed-input pause/resume workflow-package helper and one deterministic runtime test that proves resumed contexts preserve:
+- the original run-local message,
+- `ctx.input.message`,
+- raw `ctx.input_fields`,
+- and `run.json["workflow_input"]` without leaking `message`.
+
+That coverage lives in [tests/runtime/test_workspace_and_context.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/tests/runtime/test_workspace_and_context.py:722). I also documented the behavior-to-test map, invariants, edge cases, and known environment gap in [test_strategy.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/below-is-the-revised-sdk-spec-tightened-for-impl-25f82de9/runs/run-20260507T130811Z-54d93345/artifacts/test/phases/runtime-input-contract/test_strategy.md:1), and appended a concise test-addition summary to [feedback.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/below-is-the-revised-sdk-spec-tightened-for-impl-25f82de9/runs/run-20260507T130811Z-54d93345/artifacts/test/phases/runtime-input-contract/feedback.md:1).
+
+Key findings / decisions
+
+The non-obvious test decision I recorded in [decisions.txt](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/below-is-the-revised-sdk-spec-tightened-for-impl-25f82de9/runs/run-20260507T130811Z-54d93345/decisions.txt:14) is that resume coverage must mutate the task-level request between segments; otherwise the test would not detect regressions where resumed contexts accidentally re-read task request text instead of using the run-local snapshot.
+
+Open issues / next step
+
+I validated the new runtime test file with `python3 -m py_compile`, but I could not run `pytest` in this environment because `pytest` and runtime dependencies are unavailable here. The next step is the test-phase verifier/auditor pass, then targeted execution once the environment has the repo’s test dependencies.
