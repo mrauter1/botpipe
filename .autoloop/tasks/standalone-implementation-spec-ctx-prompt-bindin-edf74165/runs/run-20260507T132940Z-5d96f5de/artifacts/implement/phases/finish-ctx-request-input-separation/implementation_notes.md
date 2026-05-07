@@ -38,6 +38,7 @@
 - Plan 1: Removed synthetic `ctx.input.message` behavior from validation/runtime surfaces; direct Python `ctx.input.message` and `ctx.input.model_dump()` now follow declared `Input` fields only.
 - Plan 2: Restored file-backed root/clone `ctx.message` semantics by keeping `_DEFAULT_MESSAGE` through runner, engine root contexts, and branch/fan-in clones.
 - Plan 3: Rebased regression coverage for undeclared vs declared `ctx.input.message`, `{ctx.message}` prompt/message rendering, resume snapshot authority, unreadable snapshot failure, and child input/request separation.
+- Reviewer follow-up: corrected stale unit expectations so undeclared `ctx.input.message` is rejected while explicit `Input.message` remains accepted.
 
 ## Assumptions
 - Allowing `Workflow.Input.message` is required to satisfy the requested “valid only when explicitly declared” contract, so the previous compiler ban was part of the drift and not a preserved invariant.
