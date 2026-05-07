@@ -1,0 +1,4 @@
+<autoloop-decisions-header version="1" block_seq="1" owner="planner" phase_id="task-global" pair="plan" turn_seq="1" run_id="run-20260507T184603Z-adb7c56b" ts="2026-05-07T18:46:03.783854+00:00" />
+Public SDK result artifacts are planned to intentionally change from writable ArtifactHandle objects to read-oriented ResultArtifact objects; runtime artifact handles inside workflow execution remain unchanged.
+Retention and cleanup are scoped only to SDK-created workflow or step task directories in this slice; llm and classify operation replay folders remain future work.
+Cleanup and retention deletion must be sentinel-gated and conservative: when failure or awaiting-input status cannot be confidently excluded, the default behavior is to skip deletion unless the caller explicitly opts in.
