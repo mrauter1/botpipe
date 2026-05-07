@@ -152,3 +152,12 @@ Open issues / next step
 <loop-control>
 {"schema":"docloop.loop_control/v1","kind":"promise","promise":"COMPLETE"}
 </loop-control>
+
+
+---
+run_id=run-20260507T194557Z-2f9c2de5 | entry=phase_scope_resolved
+---
+phase_mode=single
+phase_ids=unblock-shared-suite,remove-misowned-workflow-suites,split-retained-monoliths
+explicit=True
+current_phase_index=0
