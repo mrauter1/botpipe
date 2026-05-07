@@ -1290,3 +1290,53 @@ remove implicit `ctx.input.message` support from the `ctx.*` contract, restore f
 <loop-control>
 {"schema":"docloop.loop_control/v1","kind":"promise","promise":"INCOMPLETE"}
 </loop-control>
+
+
+---
+run_id=run-20260507T122922Z-e6e948b6 | entry=session_turn | pair=audit | phase=verifier | cycle=1 | attempt=1 | thread_id=019e029d-46dd-72e0-b2b4-64b3651da375
+---
+provider=codex
+mode=resume
+template=/home/rauter/.local/share/pipx/venvs/autoloop/lib/python3.12/site-packages/autoloop/templates/audit_verifier.md
+session_id=019e029d-46dd-72e0-b2b4-64b3651da375
+
+
+---
+run_id=run-20260507T122922Z-e6e948b6 | entry=phase_output | pair=audit | phase=verifier | process=codex-agent | cycle=1 | attempt=1 | thread_id=019e029d-46dd-72e0-b2b4-64b3651da375
+---
+I’m verifying the audit artifacts against the request, decisions, final code, and the cited tests. I’ll recheck the two reported gaps directly in the implementation, then confirm the revised request and JSON match that classification before I touch the audit feedback.
+
+The audit classification itself looks sound. I’m only adding a verifier note so the feedback file distinguishes the product gaps the audit found from audit-quality defects, then I’ll close the phase as complete.
+
+Scope considered
+
+Run-local audit verification only. I checked the active audit artifacts, the immutable request snapshot, the authoritative decisions ledger, and the relevant final implementation/test files tied to the reported gaps.
+
+What I analyzed
+
+I read `gap_report.md`, `revised_request.md`, `audit_result.json`, `criteria.md`, and `feedback.md`, then rechecked the cited code paths in `autoloop/core/context.py`, `autoloop/core/discovery.py`, `autoloop/core/engine.py`, `autoloop/runtime/runner.py`, and `autoloop/core/branch_groups/context.py`. I also verified the cited test behavior and the decisions ledger entries about lazy run-local request reads and prompt-only `ctx.*` support.
+
+What I reviewed
+
+I verified three things:
+- the audit’s two reported gaps are real and materially inconsistent with the original request;
+- `revised_request.md` is a direct next-run request scoped only to those unresolved gaps;
+- `audit_result.json` correctly sets `material_gaps_found` to `true` and points at the revised request.
+
+Key findings / decisions
+
+No blocking audit-quality defects found.
+
+The audit’s two material-gap findings are accurate:
+- `ctx.input.message` is still explicitly supported in code and tests, which conflicts with the requested typed-input separation.
+- runner-backed contexts still inject cached `message=` values, so live `ctx.message` is not strictly file-backed/lazy as requested.
+
+I kept every checkbox checked in `criteria.md`. I appended one verifier note to `feedback.md` clarifying that the blocking item is an implementation gap identified by the audit, not a flaw in the audit itself.
+
+Open issues / next step
+
+No further audit corrections are needed. The next run should implement the scoped follow-up in `revised_request.md`.
+
+<loop-control>
+{"schema":"docloop.loop_control/v1","kind":"promise","promise":"COMPLETE"}
+</loop-control>
