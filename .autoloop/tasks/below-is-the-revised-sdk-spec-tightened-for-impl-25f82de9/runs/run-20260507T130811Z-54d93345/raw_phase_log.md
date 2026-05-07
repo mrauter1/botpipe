@@ -256,3 +256,40 @@ Fix the eager message lookup in `Context.input` / `WorkflowInputView`, then add 
 <loop-control>
 {"schema":"docloop.loop_control/v1","kind":"promise","promise":"INCOMPLETE"}
 </loop-control>
+
+
+---
+run_id=run-20260507T130811Z-54d93345 | entry=session_turn | pair=implement | phase=producer | cycle=2 | attempt=1 | thread_id=019e0294-bcba-7dd0-b377-b52f2c1c504d
+---
+provider=codex
+mode=resume
+template=/home/rauter/.local/share/pipx/venvs/autoloop/lib/python3.12/site-packages/autoloop/templates/implement_producer.md
+session_id=019e0294-bcba-7dd0-b377-b52f2c1c504d
+
+
+---
+run_id=run-20260507T130811Z-54d93345 | entry=phase_output | pair=implement | phase=producer | process=codex-agent | cycle=2 | attempt=1 | thread_id=019e0294-bcba-7dd0-b377-b52f2c1c504d
+---
+I’m addressing the reviewer’s concrete regression: `ctx.input` should not force a request snapshot read just to access typed fields. I’m changing the composite view to resolve the omitted-message fallback lazily and adding a regression test for direct `Context(...)` usage with typed input but no `request.md`.
+
+The fix is in. I’m doing a narrow syntax pass and then I’ll refresh the implementation notes/decision ledger to capture the lazy-fallback rule, since that detail is easy to regress in a later SDK turn.
+
+Scope considered
+
+Reviewer feedback for the phase-local runtime input contract only, centered on `Context` and the direct `Context(...)` compatibility surface. I kept the blast radius to [autoloop/core/context.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/autoloop/core/context.py:91), one regression test in [tests/unit/test_primitives_and_stores.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/tests/unit/test_primitives_and_stores.py:255), and the phase notes/decision files.
+
+What I analyzed
+
+I verified the reviewer’s failure mode against the current `Context.input` implementation: the composite view was eagerly resolving `self.message`, which meant direct typed-input access could fail if `request.md` was absent. I also re-checked the intended fallback behavior from the run decisions so the fix would preserve explicit `message=None` while keeping normal runtime flows unchanged.
+
+What I changed
+
+I made `WorkflowInputView` resolve the omitted-message fallback lazily instead of forcing it when `ctx.input` is constructed, so `ctx.input.<field>` now works without touching `request.md` and only `ctx.input.message` / `ctx.message` may read the snapshot: [autoloop/core/context.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/autoloop/core/context.py:91), [autoloop/core/context.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/autoloop/core/context.py:359). I added a regression test covering direct `Context(...)` with typed input and no request snapshot: [tests/unit/test_primitives_and_stores.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/tests/unit/test_primitives_and_stores.py:255). I also updated the phase notes and decision ledger to record the lazy-fallback rule: [implementation_notes.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/below-is-the-revised-sdk-spec-tightened-for-impl-25f82de9/runs/run-20260507T130811Z-54d93345/artifacts/implement/phases/runtime-input-contract/implementation_notes.md:1), [decisions.txt](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/below-is-the-revised-sdk-spec-tightened-for-impl-25f82de9/runs/run-20260507T130811Z-54d93345/decisions.txt:10).
+
+Key findings / decisions
+
+The core decision is now explicit: omitted-message fallback stays legacy-compatible, but it is lazy inside the composite input view so typed input remains decoupled from request snapshot availability. That addresses the reviewer’s blocker without changing the normal runner/engine behavior that keeps `ctx.message` aligned with the persisted run-local request text.
+
+Open issues / next step
+
+I re-ran `python3 -m py_compile` on the touched source/test files, but I still could not run `pytest` in this environment because `pytest` is not installed. The next step is verifier re-review, and then targeted test execution once the environment has the repo’s runtime test dependencies.

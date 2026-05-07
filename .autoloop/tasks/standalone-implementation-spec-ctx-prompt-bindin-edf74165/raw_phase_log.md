@@ -1212,3 +1212,81 @@ Open issues / next step
 <loop-control>
 {"schema":"docloop.loop_control/v1","kind":"promise","promise":"COMPLETE"}
 </loop-control>
+
+
+---
+run_id=run-20260507T122922Z-e6e948b6 | entry=session_turn | pair=audit | phase=producer | cycle=1 | attempt=1 | thread_id=019e029d-46dd-72e0-b2b4-64b3651da375
+---
+provider=codex
+mode=start
+template=/home/rauter/.local/share/pipx/venvs/autoloop/lib/python3.12/site-packages/autoloop/templates/audit_producer.md
+session_id=019e029d-46dd-72e0-b2b4-64b3651da375
+
+
+---
+run_id=run-20260507T122922Z-e6e948b6 | entry=phase_output | pair=audit | phase=producer | process=codex-agent | cycle=1 | attempt=1 | thread_id=019e029d-46dd-72e0-b2b4-64b3651da375
+---
+I’m auditing the completed `ctx.*` prompt-binding work against the original request, clarifications, final code, and run artifacts. I’ll read the authoritative request and logs first, then inspect the relevant implementation and tests before writing the audit artifacts.
+
+The phase log shows the request stayed stable and the work landed across three implementation slices. I’m reading the final code and test surface now to verify what actually shipped versus what was only planned or discussed.
+
+I’ve confirmed the feature touched the expected codepaths and that the worktree is noisy outside this run, so I’m keeping the audit scoped to the targeted files and run artifacts only. Next I’m reading the concrete implementations and the new regression tests to look for gaps against the contract.
+
+The core rendering and validation pieces are present. I’m now checking the request-message plumbing more critically, because the spec was strict about `ctx.message` reading the run-local snapshot rather than an injected message string.
+
+I found a likely semantic drift: the runtime still exposes `ctx.input.message` as an alias of the run request, and the tests actively cover it. The original spec explicitly separated `ctx.message` from typed input, so I’m checking whether that was later authorized or just carried forward from older behavior.
+
+I found a second contract risk: the main runtime still injects `message=` into `Context(...)` from `runner.py`, which means `ctx.message` can come from a cached string instead of reading `request.md` lazily as specified. I’m tracing the remaining `Context(...)` call sites to confirm whether that affects live execution paths or only test scaffolding.
+
+I’ve narrowed the audit to two likely contract mismatches: `ctx.input.message` is still a first-class prompt binding, and live runtime contexts still take an injected `message=` path that can bypass lazy file reads. I’m checking the run log and decisions one more time for any explicit authorization of those deviations before I write them up as unresolved gaps.
+
+I’ve got enough static evidence to classify the likely gaps, but I want one verification pass on the feature-focused tests before I write the report. I’m running the targeted `ctx.*` contract and resume tests now so the audit can distinguish “implemented and passing” from “implemented but semantically off-spec.”
+
+The targeted `ctx.*` tests pass, so the remaining work is not a broad failure. The audit is down to spec conformance gaps that the current tests and docs miss or, in one case, actively encode.
+
+I have the final classification. I’m writing the audit artifacts now: one report that separates shipped behavior from unresolved gaps, one follow-up request scoped only to those gaps, and the machine-readable result.
+
+The audit artifacts are written. I’m doing one final readback to verify the JSON, the report sections, and that the follow-up request stayed tightly scoped to the actual unresolved gaps.
+
+Scope considered
+
+Run-local intent audit only for the `ctx.*` prompt-binding work. I compared the immutable request snapshot, raw phase log, decisions ledger, phase artifacts, final implementation in `autoloop/core`, `autoloop/runtime`, and `docs/`, and the relevant tests. I kept scope out of unrelated dirty workspace files.
+
+What I analyzed
+
+I audited the shipped request/message surface in `autoloop/core/context.py`, runtime rendering in `autoloop/core/artifacts.py`, compile-time validation in `autoloop/core/discovery.py`, prompt/message plumbing in `autoloop/core/engine.py` and `autoloop/runtime/runner.py`, branch/fan-in cloning in `autoloop/core/branch_groups/context.py`, and the new docs/tests. I also reran a focused test slice:
+`tests/unit/test_primitives_and_stores.py::test_context_request_surface_reads_run_snapshot_and_task_request_file`
+`tests/unit/test_primitives_and_stores.py::test_render_runtime_template_resolves_ctx_bindings_with_scalar_values`
+`tests/unit/test_simple_surface.py::test_simple_workflow_accepts_supported_ctx_prompt_bindings`
+`tests/contract/test_engine_contracts.py::test_ctx_prompt_bindings_render_in_provider_and_operation_prompts`
+`tests/runtime/test_workspace_and_context.py::test_resume_context_message_uses_run_local_request_snapshot_not_mutated_task_request`
+Result: `5 passed in 0.74s`.
+
+What I changed
+
+I wrote the audit artifacts in the active audit directory:
+
+- `gap_report.md`
+- `revised_request.md`
+- `audit_result.json`
+
+I also marked `criteria.md` complete and appended one blocking audit finding to `feedback.md`.
+
+Key findings / decisions
+
+Two material gaps remain.
+
+1. `ctx.input.message` is still supported and tested as a built-in alias for the run request. That conflicts with the original contract that `ctx.input` must stay typed structured input and `{ctx.input.<field>}` must only target declared `Input` fields.
+
+2. Runner-backed execution still injects cached `message=` text into `Context(...)`, so live `ctx.message` is not guaranteed to read lazily from the run-local `request.md` snapshot. That diverges from the specified file-backed semantics and weakens the requested read-error behavior.
+
+I treated the synthetic child-workflow request-forwarding coverage as justified, because the decisions ledger explicitly allowed that substitution due to an unrelated active-event-loop limitation in runner-backed nested child execution.
+
+Open issues / next step
+
+The next run should be a narrow follow-up:
+remove implicit `ctx.input.message` support from the `ctx.*` contract, restore file-backed `ctx.message` semantics in runner/engine/branch contexts, and add runtime regression coverage for unreadable run-local request snapshots. `audit_result.json` is set to `material_gaps_found: true` and points to the revised request.
+
+<loop-control>
+{"schema":"docloop.loop_control/v1","kind":"promise","promise":"INCOMPLETE"}
+</loop-control>
