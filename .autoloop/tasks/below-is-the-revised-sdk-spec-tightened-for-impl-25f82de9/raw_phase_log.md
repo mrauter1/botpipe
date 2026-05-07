@@ -2126,3 +2126,66 @@ No open issue for this phase-local audit. The test coverage and strategy now mat
 <loop-control>
 {"schema":"docloop.loop_control/v1","kind":"promise","promise":"COMPLETE"}
 </loop-control>
+
+
+---
+run_id=run-20260507T130811Z-54d93345 | entry=session_turn | pair=audit | phase=producer | cycle=1 | attempt=1 | thread_id=019e02ec-12af-7421-98fe-ead9434c6dfd
+---
+provider=codex
+mode=start
+template=/home/rauter/.local/share/pipx/venvs/autoloop/lib/python3.12/site-packages/autoloop/templates/audit_producer.md
+session_id=019e02ec-12af-7421-98fe-ead9434c6dfd
+
+
+---
+run_id=run-20260507T130811Z-54d93345 | entry=phase_output | pair=audit | phase=producer | process=codex-agent | cycle=1 | attempt=1 | thread_id=019e02ec-12af-7421-98fe-ead9434c6dfd
+---
+I’m auditing this run against the authoritative request, raw log, decisions, artifacts, tests, and final codebase, then I’ll write the three audit outputs under the run-local `artifacts/audit` directory only.
+
+I’ve confirmed the workspace is dirty well outside this run, so I’m treating unrelated changes as out of scope and only tracing the SDK-related files and run artifacts that bear on this request.
+
+I have the decision ledger and enough run history to start comparing intent against the final implementation. Next I’m reading the SDK surface, the context/runner seams, and the run’s implement/test artifacts together so any claimed coverage matches the code that actually landed.
+
+The phase artifacts show most verifier issues were closed, but there’s still at least one self-recorded “known gap” in the SDK test strategy. I’m now checking whether that gap was later resolved in code/tests or whether it remains a real follow-up item.
+
+I’ve confirmed the repo now has a `.venv` with `pytest`, so I can verify the current tree directly instead of relying only on the recorded phase notes. I’m running the focused SDK/runtime regression slice next to see whether the remaining “known gap” note is stale or still reflects the code.
+
+The focused regression suite is still running cleanly so far. I’m waiting for the final result before I classify any remaining gaps, because the audit should be based on the current tree rather than stale intermediate notes.
+
+The direct verification exposed a real spec gap, not just stale artifacts: the current tree still fails the `ctx.input.message` runtime-template contract. I’m checking one other ambiguous area in `client.step(...)` now, because the implementation appears to reject strict child-workflow step instances more aggressively than the request text allows.
+
+I confirmed one more contract divergence directly: `client.step(...)` still rejects a resolvable strict `ChildWorkflowStep`, even though the request’s MVP rejection list only excludes child-workflow steps when the reference is not directly resolvable. I’m cleaning that temporary state directory and then writing the audit artifacts with these evidence-backed gaps.
+
+I have enough evidence to write the audit outputs now. I’m restricting edits to the three run-local audit files and basing the follow-up request only on the gaps that are both request-backed and still present in the current tree.
+
+The audit artifacts are written. I’m doing one final readback to make sure the gap report, follow-up request, and JSON result are internally consistent with the evidence and the required machine shape.
+
+Scope considered
+
+The immutable request snapshot, authoritative raw log, decisions ledger, phase-local implement/test artifacts, the final SDK/runtime codepaths, and the tracked SDK/runtime/contract tests relevant to the requested SDK facade.
+
+What I analyzed
+
+I compared the requested SDK/runtime contract against `autoloop/sdk.py`, `autoloop/core/context.py`, `autoloop/core/artifacts.py`, `autoloop/core/compiler.py`, `autoloop/core/engine.py`, `autoloop/runtime/runner.py`, and the final tests. I also reran the focused verification slice with `.venv/bin/python -m pytest -q tests/unit/test_sdk_facade.py tests/unit/test_validation.py tests/unit/test_simple_surface.py tests/runtime/test_workspace_and_context.py tests/contract/test_engine_contracts.py -q`.
+
+What I changed
+
+I wrote the audit outputs only under the allowed audit directory:
+- `artifacts/audit/gap_report.md`
+- `artifacts/audit/revised_request.md`
+- `artifacts/audit/audit_result.json`
+
+Key findings / decisions
+
+Two material gaps remain.
+First, `ctx.input.message` is still not wired through runtime `ctx.*` placeholder rendering: `PromptContextView.input` exposes raw `input_fields`, and the focused contract tests for message-only and typed-input `ctx.input.message` rendering fail in the current tree.
+Second, `client.step(...)` still rejects resolvable strict `ChildWorkflowStep` instances even though request section 23 leaves that case in scope.
+I treated the active-loop coverage scope and omitted-message sentinel behavior as justified differences because the run decisions explicitly narrowed and explained those points.
+
+Open issues / next step
+
+The next run should finish the composite `ctx.input.message` runtime-template path and broaden `Autoloop.step(...)` to accept directly resolvable strict `ChildWorkflowStep` instances, then add/refresh focused tests and rerun the SDK/runtime slice.
+
+<loop-control>
+{"schema":"docloop.loop_control/v1","kind":"promise","promise":"INCOMPLETE"}
+</loop-control>
