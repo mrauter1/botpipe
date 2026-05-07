@@ -456,3 +456,54 @@ The runtime/source-side contract was already correct; the remaining failures wer
 Open issues / next step
 
 No known open implementation issues remain in this phase-local scope. The next step is verifier re-review of the updated workspace and review artifacts.
+
+
+---
+run_id=run-20260507T132940Z-5d96f5de | entry=session_turn | pair=implement | phase=verifier | cycle=3 | attempt=1 | thread_id=019e02a8-3460-7f63-a341-0ead9bf7f8a2
+---
+provider=codex
+mode=resume
+template=/home/rauter/.local/share/pipx/venvs/autoloop/lib/python3.12/site-packages/autoloop/templates/implement_verifier.md
+session_id=019e02a8-3460-7f63-a341-0ead9bf7f8a2
+
+
+---
+run_id=run-20260507T132940Z-5d96f5de | entry=phase_output | pair=implement | phase=verifier | process=codex-agent | cycle=3 | attempt=1 | thread_id=019e02a8-3460-7f63-a341-0ead9bf7f8a2
+---
+I’m rechecking the last reviewer blocker against the updated workspace and rerunning the focused evidence set once more. If it stays green, I’ll clear the criteria and close the review artifacts.
+
+The last stale runtime and validation expectations are aligned now. I’m waiting on the unit subset to finish; if it comes back clean, there’s no remaining blocker in the requested scope.
+
+The focused evidence set is clean across unit, contract, and runtime coverage. I’m updating the review artifacts to reflect that there are no open findings and that all verification criteria now pass.
+
+Scope considered
+
+The request/input-separation implementation, the request-snapshot runtime paths, the focused unit/contract/runtime regressions named in the implementation notes, and the active review artifacts for this phase.
+
+What I analyzed
+
+I rechecked the last reviewer blocker in the resume runtime test, the explicit `Input.message` validation expectation, the run-local decisions ledger, and the current implementation notes. I also verified the updated test assertions in the live workspace.
+
+What I reviewed
+
+I reran the focused validation set myself:
+
+- `tests/unit/test_primitives_and_stores.py tests/unit/test_branch_group_context_sessions.py tests/unit/test_simple_surface.py tests/unit/test_validation.py`: `275 passed`
+- `tests/contract/test_engine_contracts.py` targeted subset: `7 passed`
+- `tests/runtime/test_workspace_and_context.py` targeted subset: `2 passed`
+
+I then updated the review artifacts to reflect the clean state:
+- [criteria.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/standalone-implementation-spec-ctx-prompt-bindin-edf74165/runs/run-20260507T132940Z-5d96f5de/artifacts/implement/phases/finish-ctx-request-input-separation/criteria.md:1)
+- [feedback.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/standalone-implementation-spec-ctx-prompt-bindin-edf74165/runs/run-20260507T132940Z-5d96f5de/artifacts/implement/phases/finish-ctx-request-input-separation/feedback.md:1)
+
+Key findings / decisions
+
+No open findings remain. The prior blockers are resolved: undeclared `ctx.input.message` is no longer preserved, explicit `Input.message` is allowed and tested, and the resume/runtime regression now proves child input remains distinct from request text while `ctx.message` stays snapshot-backed.
+
+Open issues / next step
+
+No open issues in the requested phase-local scope.
+
+<loop-control>
+{"schema":"docloop.loop_control/v1","kind":"promise","promise":"COMPLETE"}
+</loop-control>

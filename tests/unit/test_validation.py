@@ -104,21 +104,22 @@ def test_validation_defaults_missing_entry_to_first_declared_step():
     assert compiled.entry_step_name == "begin"
 
 
-def test_validation_accepts_workflow_input_message_field_when_explicitly_declared() -> None:
-    class ValidInputWorkflow(Workflow):
-        class State(BaseModel):
-            pass
+def test_validation_rejects_workflow_input_message_field() -> None:
+    with pytest.raises(
+        WorkflowValidationError,
+        match=r"InvalidInputWorkflow\.Input must not declare field 'message'; message is provided by client\.run\(\.\.\., message\)",
+    ):
 
-        class Input(BaseModel):
-            message: str
+        class InvalidInputWorkflow(Workflow):
+            class State(BaseModel):
+                pass
 
-        begin = PythonStep(name="begin", handler=lambda ctx: Event("done"))
-        entry = begin
-        transitions = {begin: {"done": FINISH}}
+            class Input(BaseModel):
+                message: str
 
-    compiled = compile_workflow(ValidInputWorkflow)
-
-    assert compiled.input_model is ValidInputWorkflow.Input
+            begin = PythonStep(name="begin", handler=lambda ctx: Event("done"))
+            entry = begin
+            transitions = {begin: {"done": FINISH}}
 
 
 def test_core_control_routes_compile_provider_visibility_and_non_provider_defaults() -> None:
