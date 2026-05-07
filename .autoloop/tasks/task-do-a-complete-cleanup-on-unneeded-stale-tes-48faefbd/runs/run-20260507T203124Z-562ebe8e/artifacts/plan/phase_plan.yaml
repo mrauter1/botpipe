@@ -1,0 +1,4 @@
+version: 1
+task_id: task-do-a-complete-cleanup-on-unneeded-stale-tes-48faefbd
+request_snapshot_ref: /home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/task-do-a-complete-cleanup-on-unneeded-stale-tes-48faefbd/runs/run-20260507T203124Z-562ebe8e/request.md
+phases: []
