@@ -1,0 +1,4 @@
+<autoloop-decisions-header version="1" block_seq="1" owner="planner" phase_id="task-global" pair="plan" turn_seq="1" run_id="run-20260507T130811Z-54d93345" ts="2026-05-07T13:08:11.471920+00:00" />
+SDK execution must remain a facade over execute_workflow_package and RunnerOptions; do not add a second public engine or public resume path.
+Context propagation must carry message separately from raw Workflow.Input fields; never pass the composite ctx.input view into workflow_input propagation paths.
+Rejecting Workflow.Input.message is an intentional authoring break required by the spec, but child-workflow dict input compatibility remains internal runtime behavior and must not be removed as part of the SDK surface change.
