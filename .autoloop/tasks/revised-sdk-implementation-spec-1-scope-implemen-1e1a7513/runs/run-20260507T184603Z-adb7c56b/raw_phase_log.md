@@ -1171,3 +1171,107 @@ No open test-audit issues in this phase.
 <loop-control>
 {"schema":"docloop.loop_control/v1","kind":"promise","promise":"COMPLETE"}
 </loop-control>
+
+
+---
+run_id=run-20260507T184603Z-adb7c56b | entry=session_turn | pair=audit | phase=producer | cycle=1 | attempt=1 | thread_id=019e03ef-5202-7a41-89cb-72f4ee5ba97e
+---
+provider=codex
+mode=start
+template=/home/rauter/.local/share/pipx/venvs/autoloop/lib/python3.12/site-packages/autoloop/templates/audit_producer.md
+session_id=019e03ef-5202-7a41-89cb-72f4ee5ba97e
+
+
+---
+run_id=run-20260507T184603Z-adb7c56b | entry=phase_output | pair=audit | phase=producer | process=codex-agent | cycle=1 | attempt=1 | thread_id=019e03ef-5202-7a41-89cb-72f4ee5ba97e
+---
+I’m auditing the completed run against the authoritative request, clarifications, artifacts, and final code, then I’ll write the run-local gap report and follow-up request under the audit artifact directory only.
+
+I’ve confirmed the run progressed through all planned implementation/test phases. Next I’m reading the implementation and test artifacts alongside the final SDK/engine/tests so the audit can distinguish delivered behavior from remaining gaps.
+
+The audit criteria file is still blank, so I’m building the evidence trail from the final code and phase artifacts rather than inheriting any prior verdict. I’m checking the exact exported symbols, retention plumbing, helper routing, and acceptance coverage now.
+
+The raw log shows one real mid-run defect was found and fixed, and later verifier/test passes reported clean targeted pytest runs. I’m still checking the final source directly for spec mismatches rather than relying on those summaries.
+
+I’ve isolated the final source sections. Before I write the audit files, I’m rerunning the relevant repo tests in the project virtualenv so the audit can cite actual final validation instead of only earlier phase logs.
+
+The targeted ancillary tests are green. The main SDK facade module is still running; I’m waiting for that result because it covers most of the requested behavior directly.
+
+I’ve mapped the likely difference points. I’m doing one last artifact pass over the implementation/test feedback files so the audit can cite the resolved reviewer finding and the final clean state without paraphrasing from memory.
+
+I’ve reached the final audit verdict: the requested SDK slice is implemented, the earlier promotion-path defect was fixed in-run, and I’m not finding a remaining material gap after the final code/test pass. I’m writing the audit artifacts now.
+
+The required audit artifacts are written. I’m doing a final readback on those files and the JSON shape, then I’ll return the required producer summary with the loop-control block.
+
+Scope considered
+
+The full revised SDK implementation request in `request.md`, the authoritative chronology in `raw_phase_log.md`, the run decisions in `decisions.txt`, the plan/implement/test artifacts for this run, the final code in `autoloop/__init__.py`, `autoloop/sdk.py`, and `autoloop/core/engine.py`, and the final repo tests relevant to exports, prompt rendering, retention, routing, helpers, and cleanup.
+
+What I analyzed
+
+I compared the original spec against the final SDK surface, retention lifecycle, prompt rendering, helper routing, cleanup behavior, and acceptance coverage. I also checked the run-local feedback artifacts to confirm the one blocking retention defect (`IMP-001`) was fixed and re-verified before closing the audit. As a final validation pass, I reran:
+- `./.venv/bin/python -m pytest -q tests/unit/test_sdk_facade.py` -> `46 passed`
+- `./.venv/bin/python -m pytest -q tests/unit/test_simple_surface.py -k 'root_package_exports_include_sdk_surface or input_message_prompt_binding or ctx_input_message_prompt_binding or workflow_params'` -> `2 passed`
+- `./.venv/bin/python -m pytest -q tests/unit/test_primitives_and_stores.py -k 'artifact_template or render_runtime_template or workflow_params'` -> `22 passed`
+
+What I changed
+
+I wrote the required audit artifacts:
+- [gap_report.md](</home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/revised-sdk-implementation-spec-1-scope-implemen-1e1a7513/runs/run-20260507T184603Z-adb7c56b/artifacts/audit/gap_report.md>)
+- [revised_request.md](</home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/revised-sdk-implementation-spec-1-scope-implemen-1e1a7513/runs/run-20260507T184603Z-adb7c56b/artifacts/audit/revised_request.md>)
+- [audit_result.json](</home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/revised-sdk-implementation-spec-1-scope-implemen-1e1a7513/runs/run-20260507T184603Z-adb7c56b/artifacts/audit/audit_result.json>)
+
+Key findings / decisions
+
+No material unresolved gaps remain against the authoritative request. The final code implements the requested SDK exports, `ResultArtifact`/retention model, sentinel-gated cleanup, `{input.message}` prompt rendering, helper entrypoints, and produce/verify routing. The only notable differences are justified by recorded run-local analysis: strict core `Step` instances with authored `route_metadata` still preserve those routes when no explicit `routes=` is passed, and cleanup intentionally skips deletion when metadata is uncertain.
+
+Open issues / next step
+
+No follow-up implementation request is needed, and `audit_result.json` records `material_gaps_found: false`. The producer return remains `INCOMPLETE` so the audit verifier can make the pair-completion decision.
+
+<loop-control>
+{"schema":"docloop.loop_control/v1","kind":"promise","promise":"INCOMPLETE"}
+</loop-control>
+
+
+---
+run_id=run-20260507T184603Z-adb7c56b | entry=session_turn | pair=audit | phase=verifier | cycle=1 | attempt=1 | thread_id=019e03ef-5202-7a41-89cb-72f4ee5ba97e
+---
+provider=codex
+mode=resume
+template=/home/rauter/.local/share/pipx/venvs/autoloop/lib/python3.12/site-packages/autoloop/templates/audit_verifier.md
+session_id=019e03ef-5202-7a41-89cb-72f4ee5ba97e
+
+
+---
+run_id=run-20260507T184603Z-adb7c56b | entry=phase_output | pair=audit | phase=verifier | process=codex-agent | cycle=1 | attempt=1 | thread_id=019e03ef-5202-7a41-89cb-72f4ee5ba97e
+---
+I’m verifying the audit artifacts against the request, raw log, decisions, final code, and final tests now. I’ll check whether the audit missed a material gap or misclassified a recorded difference before I update the audit criteria and feedback.
+
+The audit artifacts look accurate against the code, tests, and run-local decisions. I’m marking the verifier checklist complete and appending a no-findings verification note to the audit feedback.
+
+The verifier artifacts are updated. I’m doing a final readback on `criteria.md` and `feedback.md`, then I’ll return the completion verdict.
+
+Scope considered
+
+The immutable request, authoritative raw log, decisions ledger, the audit artifacts in `artifacts/audit`, the final SDK/engine/test files, and the run-local implement/test feedback that documented the resolved promotion-path defect and the final clean validation state.
+
+What I analyzed
+
+I checked whether the audit accurately reflected the final code and tests rather than just the phase summaries. That included reviewing `autoloop/__init__.py`, `autoloop/sdk.py`, `autoloop/core/engine.py`, `tests/unit/test_sdk_facade.py`, and the recorded run-local decisions about retention safety and strict-step route compatibility. I also verified the final targeted pytest evidence the audit cited.
+
+What I reviewed
+
+I reviewed `gap_report.md`, `revised_request.md`, and `audit_result.json` for consistency with the verified final state, then updated [criteria.md](</home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/revised-sdk-implementation-spec-1-scope-implemen-1e1a7513/runs/run-20260507T184603Z-adb7c56b/artifacts/audit/criteria.md>) and [feedback.md](</home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/revised-sdk-implementation-spec-1-scope-implemen-1e1a7513/runs/run-20260507T184603Z-adb7c56b/artifacts/audit/feedback.md>). I confirmed the JSON is valid, `material_gaps_found` is correctly `false`, and the report supports why no follow-up implementation run is required.
+
+Key findings / decisions
+
+No blocking or non-blocking audit-quality defects were found. All audit criteria are now checked, and `feedback.md` records `AUD-000` as the clean verification result. The audit’s two noted differences are adequately justified by explicit run-local decisions and do not hide unresolved requested behavior.
+
+Open issues / next step
+
+No open verifier issues remain for the audit artifacts. The audit pair is complete.
+
+<loop-control>
+{"schema":"docloop.loop_control/v1","kind":"promise","promise":"COMPLETE"}
+</loop-control>
