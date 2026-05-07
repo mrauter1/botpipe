@@ -2,89 +2,123 @@ version: 1
 task_id: standalone-implementation-spec-ctx-prompt-bindin-edf74165
 request_snapshot_ref: /home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/standalone-implementation-spec-ctx-prompt-bindin-edf74165/runs/run-20260507T122922Z-e6e948b6/request.md
 phases:
-  - phase_id: "ctx-context-surface"
-    title: "Add Request Context Surface"
-    objective: "Expose stable run-local request/message access on Context and centralize the safe ctx placeholder contract."
-    status: "planned"
-    in_scope:
-      - "Add RequestContext plus ctx.message, ctx.request, and ctx.request_file in autoloop/core/context.py."
-      - "Create autoloop/core/context_placeholders.py for shared safe ctx allowlists and validation helpers."
-      - "Propagate request_file and task_request_file through runner root contexts and branch/fan-in cloned contexts."
-    out_of_scope:
-      - "CLI flag changes."
-      - "Run persistence layout changes."
-      - "New ctx exposure for values, artifacts, sessions, or step/item state."
-    dependencies: []
-    acceptance_criteria:
-      - id: "AC-1"
-        text: "Context instances expose lazy request/message access backed by the run-local request.md snapshot, and synthetic test contexts still derive that path from run_folder when explicit paths are omitted."
-      - id: "AC-2"
-        text: "Every root and cloned Context construction path preserves the correct run-local request file and optional task-level request file without changing existing state/input/params semantics."
-    deliverables:
-      - "Updated Context request/message API and RequestContext dataclass."
-      - "Shared context placeholder contract module used by downstream validation/rendering work."
-      - "Runner and branch/fan-in context propagation changes."
-    risks:
-      - "A missed Context(...) site can make ctx.message inconsistent across resume or nested execution."
-      - "Eager message reads would make simple context access depend on filesystem availability before prompts need it."
-    rollback:
-      - "Remove new request/message properties and revert Context constructor extensions."
-      - "Revert request-file propagation to existing Context creation paths."
-  - phase_id: "ctx-rendering-and-validation"
-    title: "Integrate Safe ctx Prompt Rendering"
-    objective: "Render supported ctx placeholders in prompts and workflow-step messages while keeping artifact paths and unsupported roots locked down."
-    status: "planned"
-    in_scope:
-      - "Add PromptContextView and safe ctx runtime resolution in autoloop/core/artifacts.py."
-      - "Reject ctx.* placeholders in artifact path templates before generic rendering."
-      - "Update autoloop/core/discovery.py, prompt_validation.py, engine.py, and operations.py to validate and render supported ctx placeholders."
-      - "Render workflow_step(message=...) through runtime templates while preserving literal message_from content."
-    out_of_scope:
-      - "Python-expression evaluation in templates."
-      - "Provider adapter specific prompt rendering logic unless shared plumbing tests fail."
-      - "Automatic bare {message} support."
-    dependencies:
-      - "ctx-context-surface"
-    acceptance_criteria:
-      - id: "AC-1"
-        text: "Provider-backed prompts, llm/classify operation prompts, produce/verify prompts, and workflow_step(message=...) resolve supported ctx placeholders to concrete values instead of passing literal template text."
-      - id: "AC-2"
-        text: "Unsupported ctx roots, unsafe dotted paths, missing ctx.input values, complex non-scalar ctx model fields, and ctx.* artifact-path templates fail with the specified explicit errors."
-    deliverables:
-      - "Runtime placeholder resolver support for ctx.* with scalar-only rendering."
-      - "Compile-time validator support for supported and rejected ctx references."
-      - "Workflow-step message rendering changes limited to placeholder-capable message strings."
-    risks:
-      - "Validation/runtime drift can produce compile-pass/runtime-fail placeholder behavior."
-      - "Changing generic artifact template rendering could regress existing non-ctx path placeholders."
-    rollback:
-      - "Revert ctx root support from runtime prompt rendering and workflow-step message templating."
-      - "Remove ctx artifact-path rejection if it causes unrelated path regressions."
-  - phase_id: "ctx-regression-coverage-and-docs"
-    title: "Lock In Behavior With Tests And Docs"
-    objective: "Prove the new ctx surface across runtime, contract, and authoring seams, then document the preferred API."
-    status: "planned"
-    in_scope:
-      - "Extend existing request snapshot, child-workflow, prompt rendering, and resume test suites with ctx-specific assertions."
-      - "Add targeted validation/error-message coverage for supported and rejected ctx placeholders."
-      - "Document runtime context prompt bindings in docs/authoring.md and reinforce immutable request snapshot semantics in docs/architecture.md."
-    out_of_scope:
-      - "Broad refactors of production workflow packages that already read request.md directly for non-prompt reasons."
-      - "Behavior changes to existing bare input/state/params placeholder compatibility."
-    dependencies:
-      - "ctx-rendering-and-validation"
-    acceptance_criteria:
-      - id: "AC-1"
-        text: "Tests cover context API reads, provider and operation prompt rendering, child workflow message forwarding, message/input separation, resume stability, missing input failures, non-scalar failures, no auto-injection, and artifact-path rejection."
-      - id: "AC-2"
-        text: "Author-facing docs describe ctx.message, ctx.request.text, ctx.input.<field>, ctx.state.<field>, and ctx.params.<field> as the preferred runtime binding surface and explicitly keep {message} unsupported."
-    deliverables:
-      - "Updated runtime/contract/unit tests for ctx prompt bindings."
-      - "Updated authoring and architecture documentation."
-      - "Regression evidence that existing placeholder behavior remains intact outside the new ctx surface."
-    risks:
-      - "Coverage gaps could miss resume-only or child-workflow-only regressions."
-      - "Docs may drift from the exact supported placeholder set if they are updated without referencing the shared contract."
-    rollback:
-      - "Revert new ctx-specific tests and docs if the implementation direction changes before merge."
-      - "Keep existing request.md guidance until ctx.* behavior is stable."
+- phase_id: ctx-context-surface
+  title: Add Request Context Surface
+  objective: Expose stable run-local request/message access on Context and centralize
+    the safe ctx placeholder contract.
+  status: planned
+  in_scope:
+  - Add RequestContext plus ctx.message, ctx.request, and ctx.request_file in autoloop/core/context.py.
+  - Create autoloop/core/context_placeholders.py for shared safe ctx allowlists and
+    validation helpers.
+  - Propagate request_file and task_request_file through runner root contexts and
+    branch/fan-in cloned contexts.
+  out_of_scope:
+  - CLI flag changes.
+  - Run persistence layout changes.
+  - New ctx exposure for values, artifacts, sessions, or step/item state.
+  dependencies: []
+  acceptance_criteria:
+  - id: AC-1
+    text: Context instances expose lazy request/message access backed by the run-local
+      request.md snapshot, and synthetic test contexts still derive that path from
+      run_folder when explicit paths are omitted.
+  - id: AC-2
+    text: Every root and cloned Context construction path preserves the correct run-local
+      request file and optional task-level request file without changing existing
+      state/input/params semantics.
+  deliverables:
+  - Updated Context request/message API and RequestContext dataclass.
+  - Shared context placeholder contract module used by downstream validation/rendering
+    work.
+  - Runner and branch/fan-in context propagation changes.
+  risks:
+  - A missed Context(...) site can make ctx.message inconsistent across resume or
+    nested execution.
+  - Eager message reads would make simple context access depend on filesystem availability
+    before prompts need it.
+  rollback:
+  - Remove new request/message properties and revert Context constructor extensions.
+  - Revert request-file propagation to existing Context creation paths.
+- phase_id: ctx-rendering-and-validation
+  title: Integrate Safe ctx Prompt Rendering
+  objective: Render supported ctx placeholders in prompts and workflow-step messages
+    while keeping artifact paths and unsupported roots locked down.
+  status: planned
+  in_scope:
+  - Add PromptContextView and safe ctx runtime resolution in autoloop/core/artifacts.py.
+  - Reject ctx.* placeholders in artifact path templates before generic rendering.
+  - Update autoloop/core/discovery.py, prompt_validation.py, engine.py, and operations.py
+    to validate and render supported ctx placeholders.
+  - Render workflow_step(message=...) through runtime templates while preserving literal
+    message_from content.
+  out_of_scope:
+  - Python-expression evaluation in templates.
+  - Provider adapter specific prompt rendering logic unless shared plumbing tests
+    fail.
+  - Automatic bare {message} support.
+  dependencies:
+  - ctx-context-surface
+  acceptance_criteria:
+  - id: AC-1
+    text: Provider-backed prompts, llm/classify operation prompts, produce/verify
+      prompts, and workflow_step(message=...) resolve supported ctx placeholders to
+      concrete values instead of passing literal template text.
+  - id: AC-2
+    text: Unsupported ctx roots, unsafe dotted paths, missing ctx.input values, complex
+      non-scalar ctx model fields, and ctx.* artifact-path templates fail with the
+      specified explicit errors.
+  deliverables:
+  - Runtime placeholder resolver support for ctx.* with scalar-only rendering.
+  - Compile-time validator support for supported and rejected ctx references.
+  - Workflow-step message rendering changes limited to placeholder-capable message
+    strings.
+  risks:
+  - Validation/runtime drift can produce compile-pass/runtime-fail placeholder behavior.
+  - Changing generic artifact template rendering could regress existing non-ctx path
+    placeholders.
+  rollback:
+  - Revert ctx root support from runtime prompt rendering and workflow-step message
+    templating.
+  - Remove ctx artifact-path rejection if it causes unrelated path regressions.
+- phase_id: ctx-regression-coverage-and-docs
+  title: Lock In Behavior With Tests And Docs
+  objective: Prove the new ctx surface across runtime, contract, and authoring seams,
+    then document the preferred API.
+  status: planned
+  in_scope:
+  - Extend existing request snapshot, child-workflow, prompt rendering, and resume
+    test suites with ctx-specific assertions.
+  - Add targeted validation/error-message coverage for supported and rejected ctx
+    placeholders.
+  - Document runtime context prompt bindings in docs/authoring.md and reinforce immutable
+    request snapshot semantics in docs/architecture.md.
+  out_of_scope:
+  - Broad refactors of production workflow packages that already read request.md directly
+    for non-prompt reasons.
+  - Behavior changes to existing bare input/state/params placeholder compatibility.
+  dependencies:
+  - ctx-rendering-and-validation
+  acceptance_criteria:
+  - id: AC-1
+    text: Tests cover context API reads, provider and operation prompt rendering,
+      child workflow message forwarding, message/input separation, resume stability,
+      missing input failures, non-scalar failures, no auto-injection, and artifact-path
+      rejection.
+  - id: AC-2
+    text: Author-facing docs describe ctx.message, ctx.request.text, ctx.input.<field>,
+      ctx.state.<field>, and ctx.params.<field> as the preferred runtime binding surface
+      and explicitly keep {message} unsupported.
+  deliverables:
+  - Updated runtime/contract/unit tests for ctx prompt bindings.
+  - Updated authoring and architecture documentation.
+  - Regression evidence that existing placeholder behavior remains intact outside
+    the new ctx surface.
+  risks:
+  - Coverage gaps could miss resume-only or child-workflow-only regressions.
+  - Docs may drift from the exact supported placeholder set if they are updated without
+    referencing the shared contract.
+  rollback:
+  - Revert new ctx-specific tests and docs if the implementation direction changes
+    before merge.
+  - Keep existing request.md guidance until ctx.* behavior is stable.

@@ -1,0 +1,5 @@
+<autoloop-decisions-header version="1" block_seq="1" owner="planner" phase_id="task-global" pair="plan" turn_seq="1" run_id="run-20260507T122922Z-e6e948b6" ts="2026-05-07T12:29:22.401379+00:00" />
+ctx.message and ctx.request.text must read the run-local request.md snapshot lazily so resume, branch, and fan-in contexts observe the original run message instead of mutable task metadata or fresh runner options.
+Safe ctx placeholder allowlists and path validation must live in one shared module and be reused by compile-time and runtime resolvers to prevent acceptance drift.
+ctx.* placeholders are prompt-only; artifact path templates must reject them without changing existing non-ctx path placeholder behavior.
+workflow_step(message=...) should render supported runtime placeholders, but message_from content must remain a literal file or artifact read with no template expansion.
