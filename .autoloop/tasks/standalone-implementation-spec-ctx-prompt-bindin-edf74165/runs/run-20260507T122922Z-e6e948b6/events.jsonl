@@ -20,3 +20,7 @@
 {"ts": "2026-05-07T12:46:35.784050+00:00", "run_id": "run-20260507T122922Z-e6e948b6", "seq": 20, "event_type": "phase_finished", "pair": "test", "phase": "producer", "cycle": 1, "attempt": 1, "empty_output": false, "phase_id": "ctx-context-surface"}
 {"ts": "2026-05-07T12:47:26.136722+00:00", "run_id": "run-20260507T122922Z-e6e948b6", "seq": 21, "event_type": "phase_finished", "pair": "test", "phase": "verifier", "cycle": 1, "attempt": 1, "empty_output": false, "phase_id": "ctx-context-surface"}
 {"ts": "2026-05-07T12:47:26.203801+00:00", "run_id": "run-20260507T122922Z-e6e948b6", "seq": 22, "event_type": "pair_completed", "pair": "test", "cycle": 1, "attempt": 1, "phase_id": "ctx-context-surface"}
+{"ts": "2026-05-07T12:47:26.312247+00:00", "run_id": "run-20260507T122922Z-e6e948b6", "seq": 23, "event_type": "phase_completed", "pair": "test", "phase_id": "ctx-context-surface", "phase_mode": "single"}
+{"ts": "2026-05-07T12:47:26.315476+00:00", "run_id": "run-20260507T122922Z-e6e948b6", "seq": 24, "event_type": "phase_started", "phase_id": "ctx-rendering-and-validation", "phase_mode": "single"}
+{"ts": "2026-05-07T12:47:26.318102+00:00", "run_id": "run-20260507T122922Z-e6e948b6", "seq": 25, "event_type": "pair_started", "pair": "implement", "phase_id": "ctx-rendering-and-validation"}
+{"ts": "2026-05-07T12:47:26.318238+00:00", "run_id": "run-20260507T122922Z-e6e948b6", "seq": 26, "event_type": "cycle_started", "pair": "implement", "cycle": 1, "attempt": 1, "phase_id": "ctx-rendering-and-validation"}
