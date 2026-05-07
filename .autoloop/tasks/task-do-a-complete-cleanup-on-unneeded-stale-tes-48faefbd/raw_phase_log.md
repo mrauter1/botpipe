@@ -873,3 +873,30 @@ The plan needs one more revision that either includes a `tests/`-only resolution
 <loop-control>
 {"schema":"docloop.loop_control/v1","kind":"promise","promise":"INCOMPLETE"}
 </loop-control>
+
+
+---
+run_id=run-20260507T203124Z-562ebe8e | entry=session_turn | pair=plan | phase=producer | cycle=2 | attempt=1 | thread_id=019e0423-5779-7bd3-af06-d26692f5031f
+---
+provider=codex
+mode=resume
+template=/home/rauter/.local/share/pipx/venvs/autoloop/lib/python3.12/site-packages/autoloop/templates/plan_producer.md
+session_id=019e0423-5779-7bd3-af06-d26692f5031f
+
+
+---
+run_id=run-20260507T203124Z-562ebe8e | entry=phase_output | pair=plan | phase=producer | process=codex-agent | cycle=2 | attempt=1 | thread_id=019e0423-5779-7bd3-af06-d26692f5031f
+---
+I’m revising the plan around the verifier’s blocking finding. First I’m reloading the current artifacts and the latest decisions block, then I’ll fold the remaining validation-target failures into the same `tests/`-only implementation slice.
+
+The verifier gap is real. I’m checking whether the three residual failures are clearly stale test expectations or could indicate production regressions, because the revised plan has to keep the scope in `tests/` without papering over real runtime bugs.
+
+The current code suggests `WorkflowInputView` intentionally exposes `.message`. I’m sampling nearby contract tests now to anchor the revised plan to the maintained semantics instead of guessing.
+
+I’ve confirmed the three residual failures are stale assertions against current maintained semantics, not a new production-change requirement. I’m updating the plan and phase contract now so the `tests/`-only slice explicitly includes those files and the safety check that prevents papering over real runtime regressions.
+
+The revised plan now includes the verifier’s outliers and the safety condition that keeps this in `tests/` only. I’m checking the updated artifacts once for consistency with the blocking finding and the decisions ledger, then I’ll close the producer turn.
+
+Updated [plan.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/task-do-a-complete-cleanup-on-unneeded-stale-tes-48faefbd/runs/run-20260507T203124Z-562ebe8e/artifacts/plan/plan.md), [phase_plan.yaml](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/task-do-a-complete-cleanup-on-unneeded-stale-tes-48faefbd/runs/run-20260507T203124Z-562ebe8e/artifacts/plan/phase_plan.yaml), [feedback.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/task-do-a-complete-cleanup-on-unneeded-stale-tes-48faefbd/runs/run-20260507T203124Z-562ebe8e/artifacts/plan/feedback.md), and the current decisions block in [decisions.txt](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/task-do-a-complete-cleanup-on-unneeded-stale-tes-48faefbd/runs/run-20260507T203124Z-562ebe8e/decisions.txt).
+
+The revision closes the verifier gap by explicitly adding the three residual validation-target failures in `tests/contract/test_canonical_runtime_contracts.py` and `tests/unit/test_branch_group_context_sessions.py` to the same `tests/`-only phase, and it adds a safety rule: those assertions should only be updated when they match maintained runtime references in `autoloop/core/context.py`, `tests/contract/engine/test_core_contracts.py`, and `tests/contract/engine/test_routes.py`, otherwise the task is blocked by out-of-scope production behavior.

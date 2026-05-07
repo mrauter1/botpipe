@@ -4,12 +4,14 @@ request_snapshot_ref: /home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/t
 phases:
   - phase_id: "repair-retained-split-tests"
     title: "Repair retained split tests"
-    objective: "Make the retained split suite under tests green by fixing private-helper imports, removing repo-owned workflow-package test imports, and aligning the strictness scan with the split layout."
+    objective: "Make the required tests-only validation target green by fixing private-helper imports, removing repo-owned workflow-package test imports, and realigning stale retained assertions with current maintained runtime semantics."
     status: "planned"
     in_scope:
       - "Replace wildcard-only reliance on underscore-prefixed helpers in retained split files under tests/contract/engine and retained tests/unit splits with explicit named imports from their existing _shared modules."
       - "Replace repo-owned workflow-package params imports in tests/unit/stdlib/test_authoring_helpers.py with local or synthetic parameter models that exercise the same inherited validation behavior."
       - "Update tests/strictness/test_no_compat.py to stop requiring the deleted tests/contract/test_engine_contracts.py path."
+      - "Update tests/contract/test_canonical_runtime_contracts.py to match the maintained question-route required-write semantics already covered by retained contract tests."
+      - "Update tests/unit/test_branch_group_context_sessions.py to match the current WorkflowInputView.message surface exposed by autoloop/core/context.py."
       - "Run .venv/bin/python -m pytest tests/strictness/test_no_compat.py tests/contract tests/unit -q."
     out_of_scope:
       - "Restoring deleted parity, docs, or workflow-package runtime suites under tests/."
@@ -22,15 +24,18 @@ phases:
       - id: "AC-2"
         text: "tests/unit/stdlib/test_authoring_helpers.py no longer imports autoloop.workflows.*.params and still covers the inherited selected-workflow parameter validation behavior locally."
       - id: "AC-3"
-        text: "tests/strictness/test_no_compat.py matches the retained split layout and the requested pytest target passes."
+        text: "tests/strictness/test_no_compat.py, tests/contract/test_canonical_runtime_contracts.py, and tests/unit/test_branch_group_context_sessions.py reflect current maintained runtime semantics without requiring production-code changes."
+      - id: "AC-4"
+        text: "The requested pytest target passes after the retained tests-only cleanup."
     deliverables:
       - "Updated retained split test modules under tests/contract/engine and tests/unit with explicit private-helper imports where required."
       - "Updated tests/unit/stdlib/test_authoring_helpers.py with local synthetic parameter coverage."
-      - "Updated tests/strictness/test_no_compat.py assertion(s) for the current retained scan set."
+      - "Updated tests/strictness/test_no_compat.py, tests/contract/test_canonical_runtime_contracts.py, and tests/unit/test_branch_group_context_sessions.py assertions for the current retained behavior."
     risks:
       - "Missing one split file that still consumes a private helper would leave residual NameError failures in the retained suite."
       - "Synthetic replacement models could weaken the intended validation coverage if they do not mirror the inherited base-model semantics being exercised."
       - "Over-broad import rewrites could accidentally change test behavior beyond the stale-test cleanup boundary."
+      - "Rewriting the three residual assertions without checking maintained runtime references could hide a real production regression that this tests-only task is not allowed to fix."
     rollback:
       - "Revert only touched tests/ files if the targeted validation command uncovers new regressions."
       - "Do not restore deleted monolith entrypoints or removed stale suites as part of rollback."
