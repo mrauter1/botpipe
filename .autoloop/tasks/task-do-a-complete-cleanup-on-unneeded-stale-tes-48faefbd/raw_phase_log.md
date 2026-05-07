@@ -900,3 +900,51 @@ The revised plan now includes the verifier’s outliers and the safety condition
 Updated [plan.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/task-do-a-complete-cleanup-on-unneeded-stale-tes-48faefbd/runs/run-20260507T203124Z-562ebe8e/artifacts/plan/plan.md), [phase_plan.yaml](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/task-do-a-complete-cleanup-on-unneeded-stale-tes-48faefbd/runs/run-20260507T203124Z-562ebe8e/artifacts/plan/phase_plan.yaml), [feedback.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/task-do-a-complete-cleanup-on-unneeded-stale-tes-48faefbd/runs/run-20260507T203124Z-562ebe8e/artifacts/plan/feedback.md), and the current decisions block in [decisions.txt](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/task-do-a-complete-cleanup-on-unneeded-stale-tes-48faefbd/runs/run-20260507T203124Z-562ebe8e/decisions.txt).
 
 The revision closes the verifier gap by explicitly adding the three residual validation-target failures in `tests/contract/test_canonical_runtime_contracts.py` and `tests/unit/test_branch_group_context_sessions.py` to the same `tests/`-only phase, and it adds a safety rule: those assertions should only be updated when they match maintained runtime references in `autoloop/core/context.py`, `tests/contract/engine/test_core_contracts.py`, and `tests/contract/engine/test_routes.py`, otherwise the task is blocked by out-of-scope production behavior.
+
+
+---
+run_id=run-20260507T203124Z-562ebe8e | entry=session_turn | pair=plan | phase=verifier | cycle=2 | attempt=1 | thread_id=019e0423-5779-7bd3-af06-d26692f5031f
+---
+provider=codex
+mode=resume
+template=/home/rauter/.local/share/pipx/venvs/autoloop/lib/python3.12/site-packages/autoloop/templates/plan_verifier.md
+session_id=019e0423-5779-7bd3-af06-d26692f5031f
+
+
+---
+run_id=run-20260507T203124Z-562ebe8e | entry=phase_output | pair=plan | phase=verifier | process=codex-agent | cycle=2 | attempt=1 | thread_id=019e0423-5779-7bd3-af06-d26692f5031f
+---
+I’m re-checking the revised plan against the verifier finding and the decisions ledger now. I’ll validate the YAML shape and then either clear the checklist or record any remaining blocker.
+
+The only verification gap left is parseability tooling, not the plan content. I’m using the system YAML parser to validate `phase_plan.yaml`, then I’ll finalize the checklist if it’s clean.
+
+The revised plan now covers the verifier’s prior blocker and stays inside the user’s `tests/`-only scope with a clear stop condition. I’m clearing the checklist and appending the closure note to feedback.
+
+I’ve cleared the checklist and recorded the closure note. I’m doing a final readback so the verifier output matches the artifact state exactly.
+
+Scope considered
+Run-local plan artifacts for the retained `tests/` cleanup follow-up, the request snapshot, the raw log, and the shared decisions ledger.
+
+What I analyzed
+I re-checked `plan.md`, `phase_plan.yaml`, `feedback.md`, `criteria.md`, and `decisions.txt` against the original request and the prior blocking verifier finding. I also re-used the earlier focused failure evidence for `tests/contract/test_canonical_runtime_contracts.py` and `tests/unit/test_branch_group_context_sessions.py` to confirm the revised plan now covers those residual validation-target failures.
+
+What I reviewed
+The revised plan now explicitly includes:
+the split-import repairs across retained split tests,
+the stale strictness assertion update,
+the removal of direct `autoloop.workflows.*.params` imports from retained shared tests,
+the residual assertion updates in `tests/contract/test_canonical_runtime_contracts.py` and `tests/unit/test_branch_group_context_sessions.py`,
+and a safety gate that prevents silently masking a real production regression outside the allowed `tests/` scope.
+The phase contract remains coherent as a single phase and keeps runtime-owned metadata unchanged.
+
+Key findings / decisions
+No blocking findings remain.
+`PLAN-001` is resolved by the current revision and is now recorded as non-blocking in `feedback.md`.
+I updated `criteria.md` so all verification checkboxes are checked.
+
+Open issues / next step
+No open verifier issues remain for the planning artifacts. The plan is ready for implementation within the stated `tests/`-only boundary.
+
+<loop-control>
+{"schema":"docloop.loop_control/v1","kind":"promise","promise":"COMPLETE"}
+</loop-control>
