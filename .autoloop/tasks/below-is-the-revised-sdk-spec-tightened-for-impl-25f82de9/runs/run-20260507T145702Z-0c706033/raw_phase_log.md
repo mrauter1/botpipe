@@ -79,3 +79,12 @@ No open plan-level issues remain. The next step is implementation against the si
 <loop-control>
 {"schema":"docloop.loop_control/v1","kind":"promise","promise":"COMPLETE"}
 </loop-control>
+
+
+---
+run_id=run-20260507T145702Z-0c706033 | entry=phase_scope_resolved
+---
+phase_mode=single
+phase_ids=close-remaining-sdk-runtime-gaps
+explicit=True
+current_phase_index=0
