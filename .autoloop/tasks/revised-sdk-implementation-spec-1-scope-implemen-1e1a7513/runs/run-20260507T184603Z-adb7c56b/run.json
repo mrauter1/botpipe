@@ -16,14 +16,14 @@
       "sdk-acceptance-regression-tests"
     ],
     "explicit": true,
-    "current_phase_index": 2,
-    "current_phase_id": "sdk-routing-and-helper-entrypoints"
+    "current_phase_index": 3,
+    "current_phase_id": "sdk-acceptance-regression-tests"
   },
   "phase_status": {
     "sdk-surface-and-result-model": "completed",
     "sdk-retention-and-safe-cleanup": "completed",
-    "sdk-routing-and-helper-entrypoints": "in_progress",
-    "sdk-acceptance-regression-tests": "planned"
+    "sdk-routing-and-helper-entrypoints": "completed",
+    "sdk-acceptance-regression-tests": "in_progress"
   },
   "phase_history": [
     {
@@ -57,6 +57,19 @@
       "run_id": "run-20260507T184603Z-adb7c56b",
       "status": "in_progress",
       "ts": "2026-05-07T19:17:04.571632+00:00"
+    },
+    {
+      "phase_id": "sdk-routing-and-helper-entrypoints",
+      "run_id": "run-20260507T184603Z-adb7c56b",
+      "status": "completed",
+      "ts": "2026-05-07T19:27:18.371342+00:00",
+      "pair": "test"
+    },
+    {
+      "phase_id": "sdk-acceptance-regression-tests",
+      "run_id": "run-20260507T184603Z-adb7c56b",
+      "status": "in_progress",
+      "ts": "2026-05-07T19:27:18.374236+00:00"
     }
   ]
 }
