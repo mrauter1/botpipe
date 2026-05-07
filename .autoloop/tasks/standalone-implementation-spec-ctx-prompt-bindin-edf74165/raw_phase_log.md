@@ -2416,3 +2416,48 @@ Open issues / next step
 <loop-control>
 {"schema":"docloop.loop_control/v1","kind":"promise","promise":"COMPLETE"}
 </loop-control>
+
+
+---
+run_id=run-20260507T141012Z-5af91a26 | entry=session_turn | pair=test | phase=producer | cycle=1 | attempt=1 | thread_id=019e02c9-db46-72f0-b8e4-e2e8251c8e68
+---
+provider=codex
+mode=resume
+template=/home/rauter/.local/share/pipx/venvs/autoloop/lib/python3.12/site-packages/autoloop/templates/test_producer.md
+session_id=019e02c9-db46-72f0-b8e4-e2e8251c8e68
+
+
+---
+run_id=run-20260507T141012Z-5af91a26 | entry=phase_output | pair=test | phase=producer | process=codex-agent | cycle=1 | attempt=1 | thread_id=019e02c9-db46-72f0-b8e4-e2e8251c8e68
+---
+I’m checking the current test artifacts and the adjacent preserved-behavior coverage first. The main likely gap is protecting bare `{input.message}` when a typed `Input.message` also exists, since that compatibility shim is explicitly a non-goal.
+
+The current tests already cover bare `{input.message}` and the new `ctx.input.message` split separately, but they do not yet lock the two behaviors together when a typed `Input.message` exists. I’m adding that exact regression guard and then I’ll update the test strategy and test-phase feedback with the concrete coverage map.
+
+I’ve confirmed the extra regression worth locking down: bare `{input.message}` should keep using the runtime/request message even when typed `Input.message` exists. I’m adding that unit guard now and documenting the exact coverage map in the test-phase artifacts.
+
+The extra regression guard is in place. I’m rerunning the prior seven-test slice plus the new mixed bare-vs-ctx case so the test-phase artifacts point to executed coverage, not just planned coverage.
+
+Scope considered
+- Phase-local runtime/template contract coverage for `ctx.input.message`, `ctx.message`, and preserved bare `{input.message}` compatibility.
+- Test artifacts in [test_strategy.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/standalone-implementation-spec-ctx-prompt-bindin-edf74165/runs/run-20260507T141012Z-5af91a26/artifacts/test/phases/contract-test-alignment/test_strategy.md:1) and [feedback.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/standalone-implementation-spec-ctx-prompt-bindin-edf74165/runs/run-20260507T141012Z-5af91a26/artifacts/test/phases/contract-test-alignment/feedback.md:1).
+
+What I analyzed
+- The current request, decisions ledger, and the existing unit/contract tests around `ctx.input.message` and `input.message`.
+- The main preserved-behavior gap: no test previously proved that bare `{input.message}` stays on the compatibility shim even when typed `Input.message` exists.
+
+What I changed
+- Added a mixed regression test in [test_primitives_and_stores.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/tests/unit/test_primitives_and_stores.py:541) that asserts `Bare={input.message}` still uses request/runtime text while `Ctx={ctx.input.message}` resolves the declared typed input field.
+- Appended the non-obvious coverage decision under the test-turn header in [decisions.txt](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/standalone-implementation-spec-ctx-prompt-bindin-edf74165/runs/run-20260507T141012Z-5af91a26/decisions.txt:10).
+- Filled in the behavior-to-coverage map and preserved-invariant notes in [test_strategy.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/standalone-implementation-spec-ctx-prompt-bindin-edf74165/runs/run-20260507T141012Z-5af91a26/artifacts/test/phases/contract-test-alignment/test_strategy.md:10).
+- Appended a concise summary to [feedback.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/standalone-implementation-spec-ctx-prompt-bindin-edf74165/runs/run-20260507T141012Z-5af91a26/artifacts/test/phases/contract-test-alignment/feedback.md:10).
+
+Key findings / decisions
+- The additional regression guard is worth keeping because it protects the explicit non-goal: bare `{input.message}` must remain compatible even after `ctx.input.message` stopped aliasing request text.
+- Validation passed:
+  - `.venv/bin/python -m pytest tests/unit/test_primitives_and_stores.py::test_context_request_surface_reads_run_snapshot_and_task_request_file tests/unit/test_primitives_and_stores.py::test_render_runtime_template_rejects_undeclared_ctx_input_message tests/unit/test_primitives_and_stores.py::test_render_runtime_template_resolves_declared_ctx_input_message_separately_from_request tests/unit/test_primitives_and_stores.py::test_render_runtime_template_keeps_bare_input_message_separate_from_typed_ctx_input_message tests/contract/test_engine_contracts.py::test_runtime_templates_reject_undeclared_ctx_input_message_without_typed_input tests/contract/test_engine_contracts.py::test_runtime_templates_resolve_declared_ctx_input_message_separately_from_request tests/contract/test_engine_contracts.py::test_engine_context_message_raises_when_run_snapshot_is_removed_after_context_construction tests/contract/test_engine_contracts.py::test_workflow_step_message_can_forward_ctx_message_into_child_request_snapshot`
+  - Result: `8 passed`
+
+Open issues / next step
+- No open test-author issues in the scoped slice.
+- Next step is test-auditor review against the updated strategy and executed coverage.
