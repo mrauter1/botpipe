@@ -1108,3 +1108,54 @@ Open issues / next step
 <loop-control>
 {"schema":"docloop.loop_control/v1","kind":"promise","promise":"COMPLETE"}
 </loop-control>
+
+
+---
+run_id=run-20260507T122922Z-e6e948b6 | entry=session_turn | pair=test | phase=producer | cycle=1 | attempt=1 | thread_id=019e028a-77c8-7b11-9a45-48d5c1d5d8c9
+---
+provider=codex
+mode=resume
+template=/home/rauter/.local/share/pipx/venvs/autoloop/lib/python3.12/site-packages/autoloop/templates/test_producer.md
+session_id=019e028a-77c8-7b11-9a45-48d5c1d5d8c9
+
+
+---
+run_id=run-20260507T122922Z-e6e948b6 | entry=phase_output | pair=test | phase=producer | process=codex-agent | cycle=1 | attempt=1 | thread_id=019e028a-77c8-7b11-9a45-48d5c1d5d8c9
+---
+I’m reviewing the phase test artifacts and the existing ctx coverage first, then I’ll add one focused regression test where the contract is still underspecified and update the phase strategy/feedback to match.
+
+I’m checking the existing ctx test surfaces and the active test-phase artifacts now, then I’ll add only the missing regression coverage and map it explicitly in the phase test strategy.
+
+I’ve confirmed the existing ctx suites already cover most of AC-1 and AC-2. The remaining useful addition is a normalization edge case: proving the run snapshot strips only terminal newlines and preserves trailing spaces, then I’ll record the full behavior-to-suite map in the test artifacts.
+
+I’ve made the minimal repo test change and updated the phase test artifacts. Next I’m running the focused ctx regression set, including the new normalization case, to confirm the added coverage is stable.
+
+Scope considered
+
+- The active `test`-pair phase scope for `ctx-regression-coverage-and-docs`.
+- Request-relevant ctx regression surfaces in `tests/unit/test_primitives_and_stores.py`, `tests/contract/test_engine_contracts.py`, and `tests/runtime/test_workspace_and_context.py`.
+- The active phase artifacts `test_strategy.md` and `feedback.md`.
+
+What I analyzed
+
+- Existing ctx coverage already in place for prompt rendering, validation failures, child workflow message forwarding, no auto-injection, and resume stability.
+- The remaining gap worth locking down was request snapshot normalization at the text edge: preserve trailing spaces while stripping only trailing newline characters.
+- The current test-phase artifact files were still skeletal and needed an explicit behavior-to-suite coverage map.
+
+What I changed
+
+- Added `test_context_request_surface_preserves_trailing_spaces_while_stripping_only_newlines` to [tests/unit/test_primitives_and_stores.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/tests/unit/test_primitives_and_stores.py).
+- Expanded [test_strategy.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/standalone-implementation-spec-ctx-prompt-bindin-edf74165/runs/run-20260507T122922Z-e6e948b6/artifacts/test/phases/ctx-regression-coverage-and-docs/test_strategy.md) with an explicit behavior-to-test coverage map, preserved invariants, edge cases, failure paths, and the known synthetic-child coverage gap.
+- Appended a concise summary entry to [feedback.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/standalone-implementation-spec-ctx-prompt-bindin-edf74165/runs/run-20260507T122922Z-e6e948b6/artifacts/test/phases/ctx-regression-coverage-and-docs/feedback.md).
+
+Key findings / decisions
+
+- The repo already had broad ctx regression coverage; the meaningful missing edge case was request-text normalization around trailing spaces.
+- Focused validation passed:
+  `.venv/bin/python -m pytest tests/unit/test_primitives_and_stores.py::test_context_request_surface_preserves_trailing_spaces_while_stripping_only_newlines tests/contract/test_engine_contracts.py::test_ctx_prompt_bindings_render_in_provider_and_operation_prompts tests/contract/test_engine_contracts.py::test_prompt_steps_do_not_auto_inject_run_message_without_ctx_binding tests/contract/test_engine_contracts.py::test_ctx_runtime_prompt_docs_describe_preferred_bindings_and_snapshot_semantics tests/contract/test_engine_contracts.py::test_workflow_step_message_can_forward_ctx_message_into_child_request_snapshot tests/contract/test_engine_contracts.py::test_workflow_step_message_renders_ctx_bindings_before_child_invocation tests/runtime/test_workspace_and_context.py::test_resume_context_message_uses_run_local_request_snapshot_not_mutated_task_request`
+- Result: `7 passed`.
+
+Open issues / next step
+
+- No new test blocker surfaced in this pass.
+- The next step is the auditor/verifier pass against the updated test artifacts and the new normalization regression test.

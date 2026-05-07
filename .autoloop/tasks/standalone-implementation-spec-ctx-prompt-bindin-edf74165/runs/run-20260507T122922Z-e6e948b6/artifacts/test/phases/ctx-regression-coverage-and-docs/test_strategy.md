@@ -6,3 +6,45 @@
 - Phase Directory Key: ctx-regression-coverage-and-docs
 - Phase Title: Lock In Behavior With Tests And Docs
 - Scope: phase-local producer artifact
+- Behaviors covered:
+  - Context request surface and snapshot semantics:
+    - `tests/unit/test_primitives_and_stores.py::test_context_request_surface_reads_run_snapshot_and_task_request_file`
+    - `tests/unit/test_primitives_and_stores.py::test_context_request_surface_preserves_trailing_spaces_while_stripping_only_newlines`
+    - `tests/unit/test_primitives_and_stores.py::test_context_message_raises_when_run_request_snapshot_is_missing`
+    - `tests/unit/test_primitives_and_stores.py::test_context_request_surface_leaves_task_request_file_unset_when_absent`
+  - Prompt rendering and preserved non-injection behavior:
+    - `tests/unit/test_primitives_and_stores.py::test_render_runtime_template_resolves_ctx_bindings_with_scalar_values`
+    - `tests/contract/test_engine_contracts.py::test_ctx_prompt_bindings_render_in_provider_and_operation_prompts`
+    - `tests/contract/test_engine_contracts.py::test_prompt_steps_do_not_auto_inject_run_message_without_ctx_binding`
+  - Child workflow message forwarding and message/input separation:
+    - `tests/contract/test_engine_contracts.py::test_workflow_step_message_can_forward_ctx_message_into_child_request_snapshot`
+    - `tests/contract/test_engine_contracts.py::test_workflow_step_message_renders_ctx_bindings_before_child_invocation`
+    - `tests/unit/test_primitives_and_stores.py::test_context_can_keep_message_separate_from_request_snapshot_and_typed_input`
+  - Validation and failure paths:
+    - `tests/unit/test_primitives_and_stores.py::test_validate_safe_ctx_reference_rejects_unsafe_segments`
+    - `tests/unit/test_primitives_and_stores.py::test_render_runtime_template_raises_for_missing_ctx_input`
+    - `tests/unit/test_primitives_and_stores.py::test_render_runtime_template_raises_for_non_scalar_ctx_values`
+    - `tests/unit/test_primitives_and_stores.py::test_resolve_artifact_template_rejects_ctx_placeholders`
+    - `tests/unit/test_simple_surface.py` ctx placeholder validation cases for supported bindings, bare `{message}`, bare model roots, unknown fields, and unsafe paths
+  - Resume stability and immutable run snapshot semantics:
+    - `tests/runtime/test_workspace_and_context.py::test_resume_context_message_uses_run_local_request_snapshot_not_mutated_task_request`
+  - Author-facing docs contract:
+    - `tests/contract/test_engine_contracts.py::test_ctx_runtime_prompt_docs_describe_preferred_bindings_and_snapshot_semantics`
+- Preserved invariants checked:
+  - `ctx.message` reads the run-local snapshot, not task-level mutable request state.
+  - `ctx.request.task_file` may be `None` without affecting run snapshot reads.
+  - `ctx.input` stays distinct from `ctx.message`.
+  - Prompts do not receive the run message unless explicitly bound through `ctx.*`.
+  - Artifact path templates continue rejecting `ctx.*` without widening existing placeholder rules.
+- Edge cases covered:
+  - Internal newlines remain intact.
+  - Trailing spaces are preserved while trailing newline characters are removed.
+  - Missing workflow input and non-scalar prompt values fail with ctx-specific runtime errors.
+  - Unsafe dotted paths are rejected at validation and runtime seams.
+- Failure paths covered:
+  - Missing run-local `request.md`.
+  - Missing typed input for `ctx.input.<field>`.
+  - Non-scalar `ctx.input/state/params` values.
+  - Unsupported `ctx.*` usage in artifact path templates.
+- Known gaps:
+  - Runner-backed nested child execution remains covered indirectly via engine contract seams and synthetic child `Context` setup because the nested async runner path has a separate active-event-loop issue outside this phase.

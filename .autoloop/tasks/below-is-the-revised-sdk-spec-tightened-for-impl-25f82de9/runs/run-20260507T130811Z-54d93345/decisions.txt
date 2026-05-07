@@ -7,3 +7,5 @@ Sync SDK entrypoints must translate active-event-loop bridge failures into SDKEx
 Synthetic Autoloop.step wrapping must inject Input = type(typed_input) when typed input is supplied and must add default done -> FINISH routing when the declaration has no terminal route.
 SDK task ids and debug info are part of the requested troubleshooting contract; keep the exact sdk-<workflow-name>-<utc>-<8hex> format, retry on collision, and populate the full SDKDebugInfo path set.
 <autoloop-decisions-header version="1" block_seq="3" owner="implementer" phase_id="runtime-input-contract" pair="implement" turn_seq="1" run_id="run-20260507T130811Z-54d93345" ts="2026-05-07T13:16:01.989997+00:00" />
+Context now treats `message` as a separate runtime field and falls back to the persisted run request snapshot only when callers omit `message`; explicit `message=None` is preserved for future SDK message-less runs.
+Runner passes the persisted run-local `request.md` text back into Engine run/resume so normal runtime and resume flows keep `ctx.message` aligned with the run snapshot while branch/fan-in clones propagate raw `input_fields`.

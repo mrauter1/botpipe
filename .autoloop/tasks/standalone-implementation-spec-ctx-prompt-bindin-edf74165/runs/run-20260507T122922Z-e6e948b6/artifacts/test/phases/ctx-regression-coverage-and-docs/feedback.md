@@ -6,3 +6,4 @@
 - Phase Directory Key: ctx-regression-coverage-and-docs
 - Phase Title: Lock In Behavior With Tests And Docs
 - Scope: phase-local authoritative verifier artifact
+- Added request-snapshot normalization coverage for trailing-space preservation versus newline stripping in `tests/unit/test_primitives_and_stores.py`, and mapped the full ctx regression/doc coverage across unit, contract, and runtime suites in `test_strategy.md`.
