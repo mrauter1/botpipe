@@ -204,3 +204,93 @@ Criteria and feedback artifacts were updated. No further verifier action is need
 <loop-control>
 {"schema":"docloop.loop_control/v1","kind":"promise","promise":"COMPLETE"}
 </loop-control>
+
+
+---
+run_id=run-20260507T145702Z-0c706033 | entry=session_turn | pair=test | phase=producer | cycle=1 | attempt=1 | thread_id=019e02f5-9c8f-74d1-aed2-ee2404b64c7a
+---
+provider=codex
+mode=resume
+template=/home/rauter/.local/share/pipx/venvs/autoloop/lib/python3.12/site-packages/autoloop/templates/test_producer.md
+session_id=019e02f5-9c8f-74d1-aed2-ee2404b64c7a
+
+
+---
+run_id=run-20260507T145702Z-0c706033 | entry=phase_output | pair=test | phase=producer | process=codex-agent | cycle=1 | attempt=1 | thread_id=019e02f5-9c8f-74d1-aed2-ee2404b64c7a
+---
+I’m reviewing the current test coverage and the active test-phase artifacts first, then I’ll update the behavior map and feedback with exactly what the focused slice now protects.
+
+I’ve confirmed the active test artifacts are mostly blank. I’m pulling the concrete test names now so the strategy map can point at the exact coverage added, then I’ll record the focused slice result and the one non-obvious test decision in the run ledger.
+
+The exact coverage map is clear now. I’m waiting for the rerun to finish, then I’ll write the strategy and feedback artifacts to match the actual protected behaviors and preserved invariants.
+
+The rerun is green. I’m recording the coverage split and the exact slice result now, including why the typed-message shadowing case stays in direct `Context` unit tests instead of compiled workflow tests.
+
+Scope considered
+
+Phase-local test follow-up only: the three requested regression files, the active test-phase artifacts, and the run-local decisions that constrain how `ctx.input.message` and strict `ChildWorkflowStep` coverage should be expressed.
+
+What I analyzed
+
+I checked the already-updated tests in `tests/unit/test_primitives_and_stores.py`, `tests/contract/test_engine_contracts.py`, and `tests/unit/test_sdk_facade.py`, the implementation/test notes from the implement phase, and the run decision preserving the `Workflow.Input.message` compiler invariant.
+
+What I changed
+
+I updated [test_strategy.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/below-is-the-revised-sdk-spec-tightened-for-impl-25f82de9/runs/run-20260507T145702Z-0c706033/artifacts/test/phases/close-remaining-sdk-runtime-gaps/test_strategy.md:1) with an explicit behavior-to-test coverage map, preserved invariants, failure paths, flake controls, and the validated slice. I appended a concise summary to [feedback.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/below-is-the-revised-sdk-spec-tightened-for-impl-25f82de9/runs/run-20260507T145702Z-0c706033/artifacts/test/phases/close-remaining-sdk-runtime-gaps/feedback.md:1) and recorded the non-obvious coverage split in [decisions.txt](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/below-is-the-revised-sdk-spec-tightened-for-impl-25f82de9/runs/run-20260507T145702Z-0c706033/decisions.txt:8).
+
+Key findings / decisions
+
+The focused coverage is sufficient for AC-1 through AC-4 as implemented. The one non-obvious test decision is that the typed-message shadowing case must stay in direct `Context` unit tests, because compiled workflow `Input` models are still forbidden from declaring a `message` field. I reran `.venv/bin/python -m pytest -q tests/unit/test_primitives_and_stores.py tests/contract/test_engine_contracts.py tests/unit/test_sdk_facade.py`, and it passed with `277 passed`.
+
+Open issues / next step
+
+No test-scope blocker remains. No additional repository test edits were needed beyond the already-present focused regression updates; this turn validated them and completed the test-phase artifacts.
+
+<loop-control>
+{"schema":"docloop.loop_control/v1","kind":"promise","promise":"COMPLETE"}
+</loop-control>
+
+
+---
+run_id=run-20260507T145702Z-0c706033 | entry=session_turn | pair=test | phase=verifier | cycle=1 | attempt=1 | thread_id=019e02f5-9c8f-74d1-aed2-ee2404b64c7a
+---
+provider=codex
+mode=resume
+template=/home/rauter/.local/share/pipx/venvs/autoloop/lib/python3.12/site-packages/autoloop/templates/test_verifier.md
+session_id=019e02f5-9c8f-74d1-aed2-ee2404b64c7a
+
+
+---
+run_id=run-20260507T145702Z-0c706033 | entry=phase_output | pair=test | phase=verifier | process=codex-agent | cycle=1 | attempt=1 | thread_id=019e02f5-9c8f-74d1-aed2-ee2404b64c7a
+---
+I’m auditing the focused test coverage against the phase contract, starting with the active test artifacts, the touched regression tests, and the run-local decisions that constrain acceptable expectations.
+
+I’m checking one adjacent preserved invariant now: whether the focused slice actually includes an assertion for scoped-step rejection, since AC-3 explicitly keeps unsupported declarations rejected.
+
+I found one gap in the focused SDK coverage: branch-group rejection is asserted, but the preserved worklist-scoped rejection path that sits on the same changed preflight still isn’t covered. I’m confirming there isn’t already an equivalent SDK test elsewhere before I record it.
+
+I confirmed there isn’t already an equivalent SDK worklist-scope regression elsewhere. I’m recording that as a blocking coverage gap and marking the affected audit criteria accordingly.
+
+Scope considered
+
+Phase-local audit of the focused regression slice and its supporting artifacts: the three touched test files, [test_strategy.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/below-is-the-revised-sdk-spec-tightened-for-impl-25f82de9/runs/run-20260507T145702Z-0c706033/artifacts/test/phases/close-remaining-sdk-runtime-gaps/test_strategy.md:1), [feedback.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/below-is-the-revised-sdk-spec-tightened-for-impl-25f82de9/runs/run-20260507T145702Z-0c706033/artifacts/test/phases/close-remaining-sdk-runtime-gaps/feedback.md:1), and the run-local decisions ledger.
+
+What I analyzed
+
+I checked the accepted scope and AC-1 through AC-4 against the actual named tests in `tests/unit/test_primitives_and_stores.py`, `tests/contract/test_engine_contracts.py`, and `tests/unit/test_sdk_facade.py`. I also verified the stated validation slice and confirmed there is no separate SDK facade regression already covering worklist-scoped rejection on the changed `client.step(...)` preflight path.
+
+What I reviewed
+
+The added coverage correctly protects `ctx.input.message` with and without typed input, preserves the bare `input.message` distinction, exercises workflow-step child message rendering through the shared runtime template path, and covers strict `ChildWorkflowStep` success plus unresolved-reference failure. The slice is deterministic and the stated rerun is credible.
+
+Key findings / decisions
+
+I recorded one blocking finding: [TST-001](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/below-is-the-revised-sdk-spec-tightened-for-impl-25f82de9/runs/run-20260507T145702Z-0c706033/artifacts/test/phases/close-remaining-sdk-runtime-gaps/feedback.md:10). The focused SDK coverage does not assert that worklist-scoped declarations remain rejected, even though AC-3 and the phase scope explicitly preserve that behavior on the same changed `_validate_step_declaration_supported(...)` path. I updated [criteria.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/below-is-the-revised-sdk-spec-tightened-for-impl-25f82de9/runs/run-20260507T145702Z-0c706033/artifacts/test/phases/close-remaining-sdk-runtime-gaps/criteria.md:1) accordingly.
+
+Open issues / next step
+
+Add one focused SDK facade regression that calls `client.step(...)` with a scoped strict `ChildWorkflowStep` (or equivalent scoped declaration on the same preflight path) and asserts the existing `worklist-scoped` `SDKExecutionError`. After that, the slice should satisfy the preserved unsupported-declaration half of AC-3.
+
+<loop-control>
+{"schema":"docloop.loop_control/v1","kind":"promise","promise":"INCOMPLETE"}
+</loop-control>
