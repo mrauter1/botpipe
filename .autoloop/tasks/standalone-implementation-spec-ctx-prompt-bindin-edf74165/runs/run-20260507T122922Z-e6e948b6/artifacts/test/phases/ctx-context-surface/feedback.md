@@ -6,3 +6,7 @@
 - Phase Directory Key: ctx-context-surface
 - Phase Title: Add Request Context Surface
 - Scope: phase-local authoritative verifier artifact
+
+- Added explicit AC-2 edge coverage for the absent task-level request file case in `tests/unit/test_primitives_and_stores.py`, asserting `ctx.request.task_file is None` while `ctx.message` still resolves from the run-local snapshot.
+- Consolidated the phase coverage map in `test_strategy.md` across direct context access, missing-run failure, branch/fan-in propagation, resume stability, and shared helper path-shape validation.
+- Validation run: `6 passed in 0.58s` on the focused request-context and helper-contract test slice.
