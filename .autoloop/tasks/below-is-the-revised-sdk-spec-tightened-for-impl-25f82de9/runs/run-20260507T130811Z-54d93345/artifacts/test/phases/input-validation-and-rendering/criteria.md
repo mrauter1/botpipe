@@ -14,3 +14,5 @@ Check these boxes (`- [x]`) only when true.
 - [ ] **Edge Cases / Failure Paths**: Relevant boundary cases, error cases, and failure paths are covered.
 - [ ] **Reliability**: Tests avoid flaky assumptions and use stable setup, timing, ordering, and environment expectations.
 - [ ] **Behavioral Intent**: Tests do not encode a regression, reduced behavior, or compatibility break unless that change is explicitly required by user intent and explicitly confirmed.
+
+Auditor status: blocking findings remain; the tracked tests and the strategy artifact still contradict the accepted `ctx.input.message` runtime contract in material places.

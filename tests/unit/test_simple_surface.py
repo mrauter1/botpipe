@@ -938,6 +938,9 @@ def test_simple_workflow_accepts_input_message_prompt_binding() -> None:
 
 def test_simple_workflow_accepts_ctx_input_message_prompt_binding() -> None:
     class CtxInputMessageWorkflow(simple.Workflow):
+        class Input(BaseModel):
+            message: str
+
         class State(BaseModel):
             pass
 
