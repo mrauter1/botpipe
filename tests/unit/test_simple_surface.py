@@ -936,17 +936,14 @@ def test_simple_workflow_accepts_input_message_prompt_binding() -> None:
     assert compiled.steps["review"].name == "review"
 
 
-def test_simple_workflow_accepts_declared_ctx_input_message_prompt_binding() -> None:
-    class DeclaredCtxInputMessageWorkflow(simple.Workflow):
-        class Input(BaseModel):
-            message: str
-
+def test_simple_workflow_accepts_ctx_input_message_prompt_binding() -> None:
+    class CtxInputMessageWorkflow(simple.Workflow):
         class State(BaseModel):
             pass
 
         review = simple.step("Message={ctx.input.message}")
 
-    compiled = compile_workflow(DeclaredCtxInputMessageWorkflow)
+    compiled = compile_workflow(CtxInputMessageWorkflow)
 
     assert compiled.steps["review"].name == "review"
 
@@ -957,8 +954,7 @@ def test_simple_workflow_accepts_declared_ctx_input_message_prompt_binding() -> 
         ("{message}", r"simple step 'review' prompt placeholder \{message\} is unknown; use \{ctx\.message\}"),
         ("{ctx}", r"simple step 'review' prompt placeholder \{ctx\} must qualify a runtime context field"),
         ("{ctx.request}", r"simple step 'review' prompt placeholder \{ctx\.request\} must qualify a request field"),
-        ("{ctx.input}", r"simple step 'review' prompt placeholder \{ctx\.input\} must qualify an input field"),
-        ("{ctx.input.message}", r"simple step 'review' prompt placeholder \{ctx\.input\.message\} references unknown Input field 'message'"),
+        ("{ctx.input}", r"simple step 'review' prompt placeholder \{ctx\.input\} must qualify a input field"),
         ("{ctx.state}", r"simple step 'review' prompt placeholder \{ctx\.state\} must qualify a state field"),
         ("{ctx.params}", r"simple step 'review' prompt placeholder \{ctx\.params\} must qualify a params field"),
         ("{ctx.input.missing}", r"simple step 'review' prompt placeholder \{ctx\.input\.missing\} references unknown Input field 'missing'"),

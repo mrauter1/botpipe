@@ -8652,6 +8652,81 @@ def test_runtime_templates_reject_unknown_bare_input_field(tmp_path: Path) -> No
         )
 
 
+def test_runtime_templates_reject_undeclared_ctx_input_message(tmp_path: Path) -> None:
+    task_folder = tmp_path / "task"
+    workflow_folder = task_folder / "wf_example"
+    run_folder = workflow_folder / "runs" / "run-1"
+    package_folder = tmp_path / "package"
+    run_folder.mkdir(parents=True)
+    package_folder.mkdir()
+    (run_folder / "request.md").write_text("artifact-request\n", encoding="utf-8")
+
+    class PromptState(BaseModel):
+        status: str = "draft"
+
+    context = Context(
+        task_id="task-ctx-input-message",
+        run_id="run-ctx-input-message",
+        workflow_name="example",
+        task_folder=task_folder,
+        workflow_folder=workflow_folder,
+        run_folder=run_folder,
+        package_folder=package_folder,
+        state=PromptState(),
+        session_store=InMemorySessionStore(),
+    )
+
+    with pytest.raises(
+        WorkflowExecutionError,
+        match=r"artifact template placeholder \{ctx\.input\.message\} references unknown runtime field 'message'",
+    ):
+        render_runtime_template(
+            "Message={ctx.input.message}",
+            context,
+            placeholder_label="artifact template placeholder",
+            replace_roots=frozenset({"ctx"}),
+        )
+
+
+def test_runtime_templates_resolve_declared_ctx_input_message_separately_from_request(tmp_path: Path) -> None:
+    task_folder = tmp_path / "task"
+    workflow_folder = task_folder / "wf_example"
+    run_folder = workflow_folder / "runs" / "run-1"
+    package_folder = tmp_path / "package"
+    run_folder.mkdir(parents=True)
+    package_folder.mkdir()
+    (run_folder / "request.md").write_text("artifact-request\n", encoding="utf-8")
+
+    class PromptInput(BaseModel):
+        message: str
+        topic: str
+
+    class PromptState(BaseModel):
+        status: str = "draft"
+
+    context = Context(
+        task_id="task-ctx-input-message",
+        run_id="run-ctx-input-message",
+        workflow_name="example",
+        task_folder=task_folder,
+        workflow_folder=workflow_folder,
+        run_folder=run_folder,
+        package_folder=package_folder,
+        state=PromptState(),
+        workflow_input=PromptInput(message="typed-input", topic="release"),
+        session_store=InMemorySessionStore(),
+    )
+
+    rendered = render_runtime_template(
+        "Request={ctx.message}; InputMessage={ctx.input.message}; Topic={ctx.input.topic}",
+        context,
+        placeholder_label="artifact template placeholder",
+        replace_roots=frozenset({"ctx"}),
+    )
+
+    assert rendered == "Request=artifact-request; InputMessage=typed-input; Topic=release"
+
+
 def test_prompt_steps_do_not_auto_inject_run_message_without_ctx_binding(tmp_path: Path) -> None:
     class NoAutoInjectionWorkflow(SimpleWorkflow):
         summary = step("Write a generic summary.", routes={"done": FINISH})
@@ -8799,7 +8874,7 @@ def test_workflow_step_message_can_forward_ctx_message_into_child_request_snapsh
             "request_text": child_context.request.text,
             "request_file": str(child_context.request.file),
             "task_request_file": None if child_context.request.task_file is None else str(child_context.request.task_file),
-            "input_has_message": hasattr(child_context.input, "message"),
+            "input_message": child_context.input.message,
             "input_topic": child_context.input.topic,
             "input_fields_topic": None if child_context.input_fields is None else child_context.input_fields.topic,
             "topic": child_context.input.topic,
@@ -8850,7 +8925,7 @@ def test_workflow_step_message_can_forward_ctx_message_into_child_request_snapsh
         "request_text": "Natural-language request",
         "request_file": str(task_folder / "child-runs" / "ctx-child" / "run" / "request.md"),
         "task_request_file": str(task_folder / "request.md"),
-        "input_has_message": False,
+        "input_message": "Natural-language request",
         "input_topic": "structured-topic",
         "input_fields_topic": "structured-topic",
         "topic": "structured-topic",
@@ -8913,7 +8988,7 @@ def test_workflow_step_message_renders_ctx_bindings_before_child_invocation(tmp_
         seen["child_payload"] = {
             "message": child_context.message,
             "request_text": child_context.request.text,
-            "input_has_message": hasattr(child_context.input, "message"),
+            "input_message": child_context.input.message,
             "input_fields_topic": None if child_context.input_fields is None else child_context.input_fields.topic,
             "topic": child_context.input.topic,
         }
@@ -8961,7 +9036,7 @@ def test_workflow_step_message_renders_ctx_bindings_before_child_invocation(tmp_
     assert seen["child_payload"] == {
         "message": "Parent request: Natural-language request; topic=alpha",
         "request_text": "Parent request: Natural-language request; topic=alpha",
-        "input_has_message": False,
+        "input_message": "Parent request: Natural-language request; topic=alpha",
         "input_fields_topic": "structured-topic",
         "topic": "structured-topic",
     }

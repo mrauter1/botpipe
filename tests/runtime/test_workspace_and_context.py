@@ -733,7 +733,10 @@ def test_resume_context_preserves_run_message_and_raw_input_fields(tmp_path: Pat
                     json.dumps(
                         {
                             "message": request.context.message,
-                            "input_has_message": hasattr(request.context.input, "message"),
+                            "input_has_message": (
+                                request.context.input_fields is not None
+                                and "message" in type(request.context.input_fields).model_fields
+                            ),
                             "input_topic": request.context.input.topic,
                             "input_fields": None
                             if request.context.input_fields is None
@@ -749,7 +752,10 @@ def test_resume_context_preserves_run_message_and_raw_input_fields(tmp_path: Pat
                     json.dumps(
                         {
                             "message": request.context.message,
-                            "input_has_message": hasattr(request.context.input, "message"),
+                            "input_has_message": (
+                                request.context.input_fields is not None
+                                and "message" in type(request.context.input_fields).model_fields
+                            ),
                             "input_topic": request.context.input.topic,
                             "input_fields": None
                             if request.context.input_fields is None

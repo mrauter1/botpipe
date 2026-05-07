@@ -581,3 +581,95 @@ Open issues / next step
 <loop-control>
 {"schema":"docloop.loop_control/v1","kind":"promise","promise":"INCOMPLETE"}
 </loop-control>
+
+
+---
+run_id=run-20260507T130811Z-54d93345 | entry=session_turn | pair=implement | phase=producer | cycle=2 | attempt=1 | thread_id=019e02a5-9962-76a3-9250-09fb04c77004
+---
+provider=codex
+mode=resume
+template=/home/rauter/.local/share/pipx/venvs/autoloop/lib/python3.12/site-packages/autoloop/templates/implement_producer.md
+session_id=019e02a5-9962-76a3-9250-09fb04c77004
+
+
+---
+run_id=run-20260507T130811Z-54d93345 | entry=phase_output | pair=implement | phase=producer | process=codex-agent | cycle=2 | attempt=1 | thread_id=019e02a5-9962-76a3-9250-09fb04c77004
+---
+I’m addressing the verifier’s two findings directly. First I’m reconciling the current `Context` / `WorkflowInputView` state with the earlier runtime-input-contract expectations, because the review correctly points out that the tree still behaves as if `ctx.input` were typed-fields-only.
+
+The codebase still has conflicting expectations around `ctx.input.message`: the current tracked source omits it from `WorkflowInputView`, while an untracked local test file expects the newer composite behavior. I’m checking the tracked simple-surface tests next so I can fix the contract in a way that matches the active request rather than whichever local test file happens to exist.
+
+The tracked test suite still contains pre-spec expectations that `Workflow.Input.message` is allowed and that `ctx.input.message` should be rejected. I’m updating those tracked expectations along with the source fix so this phase lands on one consistent contract instead of relying on untracked local tests.
+
+The tracked runtime test surface confirms the reviewer’s point: the repository still asserts `hasattr(ctx.input, "message") is False` across pause/resume, which directly conflicts with the active SDK contract. I’m widening the edit just enough to finish that dependency integration in the current tree, then I’ll bring the tracked tests into alignment with the spec instead of the old typed-only view.
+
+I’ve got the fix plan. I’m updating the actual runtime contract, not just the placeholder helper: `WorkflowInputView` will carry message separately from typed fields, `ctx.input.message` will validate/render as a first-class field, and the tracked tests that still encode the old typed-only behavior will be brought into line with the spec.
+
+One patch anchor drifted because the tracked test file has already changed under this phase. I’m re-reading the exact sections and then I’ll apply the fixes in smaller patches so I don’t accidentally trample unrelated local state.
+
+The runtime contract changes are in. I’m sweeping the tracked test suite for any remaining typed-only expectations like `input_has_message: False` or “unknown Input field 'message'” so this doesn’t leave split behavior between source and tests.
+
+I’ve cleared the blocking contract split in source and tracked tests. I’m updating the implementation notes to reflect the widened but still request-relevant blast radius, then I’ll do one last diff/status pass against the reviewer’s findings before closing.
+
+There’s one remaining tracked expectation in `tests/unit/test_branch_group_context_sessions.py` that still asserts `not hasattr(child.input, "message")`. That’s the same old typed-only contract, so I’m updating that tracked test too to keep the runtime contract consistent across branch-context cloning.
+
+The remaining tracked expectations are cleared, and the touched tracked files still parse. I’m doing a final sanity read on `compiler.py` and `test_validation.py` now because the diff summary shows those files shifted again and I want to make sure the `Workflow.Input.message` rejection is still present before I wrap.
+
+The current tree had drifted back to the pre-spec behavior for `Workflow.Input.message`: the compiler no longer rejects it, and the tracked validation test was still asserting that it should compile. I’m restoring the rejection now so the source and tests match the active contract again.
+
+The source and the tracked validation test are back in sync on `Workflow.Input.message` rejection. I’m running one last parse check across every touched tracked file and then I’ll stop; the remaining open item is still the consciously deferred SDK-specific coercion helper, which the reviewer marked non-blocking.
+
+There are still later tracked assertions using the old `input_has_message` shape in the same runtime and contract files. I’m normalizing those remaining cases now so the contract isn’t split across different tests in the same modules.
+
+The last stale typed-only assertions are removed. I’m doing the final parse and grep pass now; after that the only unresolved item should be the already-documented non-blocking SDK coercion helper omission.
+
+One branch-group test still has the old `not hasattr(child.input, "message")` expectation. I’m correcting that last tracked assertion now so the branch/fan-in cloning tests align with the same composite input contract as the rest of the runtime surface.
+
+`tests/unit/test_validation.py` is the last tracked file still stuck on the old allowance. I’m replacing that exact block directly now rather than relying on a broader patch context.
+
+The final parse and grep passes are clean on the source/test contract issues. I’m checking the tracked-file status one last time, mainly to confirm which files remain changed after restoring the composite input view and the `Workflow.Input.message` rejection.
+
+Scope considered
+
+- Active phase `input-validation-and-rendering`, widened only as needed to finish the missing runtime-input-contract dependency in the current tree.
+- Source/test surfaces touched: `autoloop/core/{context,compiler,discovery,artifacts}.py`, tracked runtime/contract/unit tests that still encoded the old typed-only `ctx.input` behavior, and the phase `implementation_notes.md`.
+- I did not pull unrelated dirty files or the untracked `tests/unit/test_primitives_and_stores.py` into scope.
+
+What I analyzed
+
+- The verifier’s blocking finding around `WorkflowInputView` and `_resolve_ctx_placeholder(...)`.
+- Current `Context.input` / `WorkflowInputView` behavior, branch/fan-in context cloning, engine message propagation, and runtime template rendering paths.
+- Tracked tests that still expected `ctx.input.message` to be absent or `Workflow.Input.message` to be allowed.
+
+What I changed
+
+- Restored the composite input contract in `autoloop/core/context.py`:
+  - `WorkflowInputView` now exposes `message`, keeps typed fields separate, and includes `message` in `model_dump()`.
+  - `Context.input` now builds the composite view from `Context.message` plus raw `input_fields`.
+- Aligned validation/rendering with that contract:
+  - `autoloop/core/discovery.py` now accepts `{ctx.input.message}` during simple prompt validation.
+  - `autoloop/core/artifacts.py` again allows `{ctx.input.message}` when no typed input model instance exists, while still rejecting unknown bare `input.*` fields.
+- Kept the `Workflow.Input.message` compile-time rejection in place with the spec text.
+- Updated tracked tests to the new contract:
+  - `tests/unit/test_simple_surface.py`
+  - `tests/runtime/test_workspace_and_context.py`
+  - `tests/contract/test_engine_contracts.py`
+  - `tests/unit/test_branch_group_context_sessions.py`
+- Added tracked runtime coverage for `{ctx.input.message}` without typed input.
+
+Key findings / decisions
+
+- The verifier’s blocker was valid: the current tree had not actually integrated the earlier runtime-input-contract work, so this turn had to finish that dependency locally for the phase to be correct.
+- I left the reviewer’s non-blocking SDK-specific typed-input coercion helper omission as-is; there is still no public SDK surface in-tree here, and I did not add an unused helper just to satisfy the shape of a later API.
+- `python3 -m py_compile` succeeded across all touched tracked source/test files.
+- I still could not run `pytest` or runtime execution in this environment because the provided interpreter lacks the installed test/runtime dependencies needed for execution.
+
+Open issues / next step
+
+- The remaining known gap from reviewer feedback is the non-blocking SDK-targeted coercion helper; it still needs to be introduced when the SDK entrypoint work lands.
+- Next step is rerunning the verifier against this updated tree, then executing the targeted tests in a provisioned environment:
+  - `tests/unit/test_simple_surface.py`
+  - `tests/runtime/test_workspace_and_context.py`
+  - `tests/contract/test_engine_contracts.py`
+  - `tests/unit/test_branch_group_context_sessions.py`
+  - `tests/unit/test_validation.py`
