@@ -8484,11 +8484,11 @@ def test_ctx_prompt_bindings_render_in_provider_and_operation_prompts(tmp_path: 
             status: str = "draft"
 
         summary = step(
-            "Message={ctx.message}; Topic={ctx.input.topic}; Mode={ctx.params.mode}; Status={ctx.state.status}",
+            "Message={ctx.input.message}; Topic={ctx.input.topic}; Mode={ctx.params.mode}; Status={ctx.state.status}",
             routes={"done": "review"},
         )
         review = produce_verify_step(
-            producer_prompt="Produce {ctx.message}; topic={ctx.input.topic}; mode={ctx.params.mode}; status={ctx.state.status}",
+            producer_prompt="Produce {ctx.input.message}; topic={ctx.input.topic}; mode={ctx.params.mode}; status={ctx.state.status}",
             verifier_prompt="Verify {ctx.message}; topic={ctx.input.topic}; mode={ctx.params.mode}; status={ctx.state.status}",
             routes={"approved": "risk"},
         )

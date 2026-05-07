@@ -150,3 +150,64 @@ phase_mode=single
 phase_ids=runtime-input-contract,input-validation-and-rendering,sdk-facade,sdk-operations-and-verification
 explicit=True
 current_phase_index=0
+
+
+---
+run_id=run-20260507T130811Z-54d93345 | entry=session_turn | pair=implement | phase=producer | cycle=1 | attempt=1 | thread_id=019e0294-bcba-7dd0-b377-b52f2c1c504d
+---
+provider=codex
+mode=start
+template=/home/rauter/.local/share/pipx/venvs/autoloop/lib/python3.12/site-packages/autoloop/templates/implement_producer.md
+session_id=019e0294-bcba-7dd0-b377-b52f2c1c504d
+
+
+---
+run_id=run-20260507T130811Z-54d93345 | entry=phase_output | pair=implement | phase=producer | process=codex-agent | cycle=1 | attempt=1 | thread_id=019e0294-bcba-7dd0-b377-b52f2c1c504d
+---
+I’m implementing the phase-scoped runtime input contract changes: separate `message` from typed workflow input in runtime contexts, update propagation paths, and add regression coverage. I’ll inspect the active phase artifacts and the context/engine code paths first so the edits stay inside scope and don’t break resume or branching behavior.
+
+I’ve loaded the plan and the phase artifacts. Next I’m tracing the actual context construction and template-resolution paths so the change lands where the runtime already centralizes input handling, instead of scattering adapters.
+
+The main regression risk is clear now: several clone paths currently treat `ctx.input` as the raw typed model. I’m reading those constructor call sites and the placeholder resolver together so I can switch the contract once and keep rendering behavior consistent.
+
+I have enough context to make the change as one coherent unit.
+
+Plan:
+1. Refactor `Context` to keep raw typed input and message separately, with a composite `WorkflowInputView` for `ctx.input`.
+2. Propagate the separate fields through `Engine` root/resume execution and branch/fan-in child cloning, making sure clones reuse `parent.input_fields`, not `parent.input`.
+3. Extend placeholder/template resolution only where needed for the new contract, then add regression tests for `ctx.message`, `ctx.input.message`, `ctx.input_fields`, resume behavior, branch/fan-in cloning, and persisted `workflow_input` separation.
+4. Update the phase `implementation_notes.md` and append any non-obvious decision to this turn’s block in `decisions.txt`.
+
+I’m editing the core runtime surface now: `Context` will hold message and typed input separately, and `ctx.input` will become a composite view backed by those raw pieces. After that I’ll update the propagation call sites and the tests around resume/branch/child flows.
+
+I’ve switched the runtime surface and started landing regression coverage. I’m checking the edited tests now for coherence before I run them, because this change touches both direct `Context(...)` unit tests and workflow-path contract tests.
+
+I’ve finished the code-path edits. I’m running the focused runtime/unit/contract tests that exercise exactly the surfaces changed here: direct `Context`, branch/fan-in cloning, child workflow message/input separation, and resume preservation.
+
+The environment doesn’t have `pytest` installed, so I can’t execute the repository test suite directly here. I’m switching to two fallback checks: bytecode compilation on the touched modules/tests, and a focused Python assertion script that exercises the new `Context`/branch/fan-in/artifact behavior without the test runner.
+
+I generated a few `__pycache__` artifacts while doing syntax checks. I’m removing those before I finish so the phase output stays limited to source and phase notes.
+
+I’ve reached the bookkeeping step: recording the phase-local decisions and a concise implementation note so later turns don’t accidentally undo the fallback semantics or the resume propagation rule that make this safe.
+
+Scope considered
+
+Phase-local runtime input contract work only: [autoloop/core/context.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/autoloop/core/context.py:91), [autoloop/core/engine.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/autoloop/core/engine.py:201), [autoloop/core/branch_groups/context.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/autoloop/core/branch_groups/context.py:157), [autoloop/core/artifacts.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/autoloop/core/artifacts.py:496), [autoloop/runtime/runner.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/autoloop/runtime/runner.py:321), plus focused regression tests and the phase notes/decision files. I left unrelated dirty repo state alone.
+
+What I analyzed
+
+I traced every runtime `Context(...)` construction path, the branch/fan-in clone helper, runner-to-engine propagation, and prompt/artifact placeholder resolution. I also checked existing child-workflow and resume tests to make sure the new composite input view would not leak into persisted `workflow_input` or nested runtime paths.
+
+What I changed
+
+`Context` now keeps message and raw typed input separately and exposes a composite `WorkflowInputView` via `ctx.input`, with `ctx.input_fields` for the raw model and `ctx.input.message` always available: [autoloop/core/context.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/autoloop/core/context.py:91). Engine root/resume execution and branch/fan-in clones now propagate `message` and raw `input_fields` explicitly instead of reusing the composite view: [autoloop/core/engine.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/autoloop/core/engine.py:201), [autoloop/core/branch_groups/context.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/autoloop/core/branch_groups/context.py:178), [autoloop/runtime/runner.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/autoloop/runtime/runner.py:321).
+
+I also updated runtime placeholder handling so `ctx.input.message` resolves correctly and artifact templates can read composite input values like `{input.message}`: [autoloop/core/artifacts.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/autoloop/core/artifacts.py:496), [autoloop/core/discovery.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/autoloop/core/discovery.py:1426). Regression coverage was added in [tests/unit/test_primitives_and_stores.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/tests/unit/test_primitives_and_stores.py:80), [tests/unit/test_branch_group_context_sessions.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/tests/unit/test_branch_group_context_sessions.py:152), and [tests/contract/test_engine_contracts.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/tests/contract/test_engine_contracts.py:8484).
+
+Key findings / decisions
+
+The non-obvious compatibility point is that `Context` preserves old runtime behavior only when `message` is omitted; explicit `message=None` is now preserved for future SDK message-less runs. I recorded that, along with the runner rule that normal/resumed runtime flows must feed the persisted run-local `request.md` text back into Engine, in the authoritative notes: [implementation_notes.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/below-is-the-revised-sdk-spec-tightened-for-impl-25f82de9/runs/run-20260507T130811Z-54d93345/artifacts/implement/phases/runtime-input-contract/implementation_notes.md:1) and [decisions.txt](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/below-is-the-revised-sdk-spec-tightened-for-impl-25f82de9/runs/run-20260507T130811Z-54d93345/decisions.txt:10).
+
+Open issues / next step
+
+Validation here is limited to `python3 -m py_compile` on the touched modules and tests. I could not run `pytest` in this environment because `pytest` is not installed, and I could not run live runtime assertions because the environment Python is also missing runtime deps such as `pydantic`.
