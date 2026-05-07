@@ -23,3 +23,6 @@
 {"ts": "2026-05-07T15:13:59.025632+00:00", "run_id": "run-20260507T145702Z-0c706033", "seq": 23, "event_type": "phase_completed", "pair": "test", "phase_id": "close-remaining-sdk-runtime-gaps", "phase_mode": "single"}
 {"ts": "2026-05-07T15:13:59.027492+00:00", "run_id": "run-20260507T145702Z-0c706033", "seq": 24, "event_type": "pair_started", "pair": "audit", "phase_id": null}
 {"ts": "2026-05-07T15:13:59.027593+00:00", "run_id": "run-20260507T145702Z-0c706033", "seq": 25, "event_type": "cycle_started", "pair": "audit", "cycle": 1, "attempt": 1, "phase_id": null}
+{"ts": "2026-05-07T15:16:18.288466+00:00", "run_id": "run-20260507T145702Z-0c706033", "seq": 26, "event_type": "phase_finished", "pair": "audit", "phase": "producer", "cycle": 1, "attempt": 1, "empty_output": false, "phase_id": null}
+{"ts": "2026-05-07T15:17:13.091275+00:00", "run_id": "run-20260507T145702Z-0c706033", "seq": 27, "event_type": "phase_finished", "pair": "audit", "phase": "verifier", "cycle": 1, "attempt": 1, "empty_output": false, "phase_id": null}
+{"ts": "2026-05-07T15:17:13.140201+00:00", "run_id": "run-20260507T145702Z-0c706033", "seq": 28, "event_type": "pair_completed", "pair": "audit", "cycle": 1, "attempt": 1, "phase_id": null}

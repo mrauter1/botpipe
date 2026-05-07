@@ -387,3 +387,108 @@ No further test-audit action is needed for this phase.
 <loop-control>
 {"schema":"docloop.loop_control/v1","kind":"promise","promise":"COMPLETE"}
 </loop-control>
+
+
+---
+run_id=run-20260507T145702Z-0c706033 | entry=session_turn | pair=audit | phase=producer | cycle=1 | attempt=1 | thread_id=019e0300-b985-7c50-8877-ecbe113c0d5e
+---
+provider=codex
+mode=start
+template=/home/rauter/.local/share/pipx/venvs/autoloop/lib/python3.12/site-packages/autoloop/templates/audit_producer.md
+session_id=019e0300-b985-7c50-8877-ecbe113c0d5e
+
+
+---
+run_id=run-20260507T145702Z-0c706033 | entry=phase_output | pair=audit | phase=producer | process=codex-agent | cycle=1 | attempt=1 | thread_id=019e0300-b985-7c50-8877-ecbe113c0d5e
+---
+I’m auditing the completed run against the original request, clarifications, artifacts, and final codebase. I’ll read the authoritative run files first, then inspect the touched runtime/SDK code and focused tests before I write the audit artifacts.
+
+I’ve got the request and decision ledger. Next I’m reading the run artifacts and the final code/test surfaces the implementation claims touched so I can compare intent against actual behavior rather than just the phase summaries.
+
+The raw log shows the test verifier initially found a real coverage gap, then a second test cycle closed it. I’m reading the final phase artifacts and the exact source/test excerpts now to determine whether anything still materially diverges from the request.
+
+The audit outputs are still stubbed, so this turn needs to author them from scratch. I’ve verified the code-level changes exist; I’m checking a few more concrete points in the contract tests and validation artifacts, then I’ll write the gap report and result files.
+
+I have enough evidence to classify intent, but I want one direct validation pass from the final codebase rather than relying only on the phase logs. I’m rerunning the focused SDK/runtime slice now and then I’ll write the audit artifacts with the final status.
+
+The focused slice is still running. Once I have the final pass count from this checkout, I’ll finish the gap classification and write the audit outputs.
+
+I’ve verified the final slice in this checkout at `278 passed`. I’m writing the audit artifacts now: a no-gap report, a no-follow-up revised request, the JSON result, and the audit criteria/feedback completion markers.
+
+The audit artifacts are written. I’m doing a quick readback now to confirm the report sections, JSON shape, and no-gap conclusion are internally consistent before I close with the required loop-control block.
+
+Scope considered
+
+Run-local final audit only for the follow-up SDK/runtime request: the immutable request snapshot, authoritative raw phase log, decisions ledger, plan/implement/test artifacts, final code in `autoloop/core/artifacts.py` and `autoloop/sdk.py`, focused regressions in `tests/unit/test_primitives_and_stores.py`, `tests/contract/test_engine_contracts.py`, and `tests/unit/test_sdk_facade.py`, and the active audit artifacts.
+
+What I analyzed
+
+I compared the requested behaviors against the final code and tests. I verified that `PromptContextView.input` now uses the composite runtime input view, that `_resolve_ctx_placeholder(...)` still guards `ctx.input.<field>` while allowing `ctx.input.message` without typed input, and that `_validate_step_declaration_supported(...)` now accepts directly resolvable strict `ChildWorkflowStep` declarations while still rejecting branch-group and worklist-scoped declarations. I also checked the raw log and decisions to classify later clarifications correctly, including the preserved `Workflow.Input.message` invariant and the intermediate `TST-001` coverage gap that was later closed. I reran `.venv/bin/python -m pytest -q tests/unit/test_primitives_and_stores.py tests/contract/test_engine_contracts.py tests/unit/test_sdk_facade.py`, which passed with `278 passed in 3.07s`.
+
+What I changed
+
+I wrote the audit outputs in the active audit directory:
+- `artifacts/audit/gap_report.md`
+- `artifacts/audit/revised_request.md`
+- `artifacts/audit/audit_result.json`
+
+I also completed the audit-local `criteria.md` and `feedback.md` to record the no-gap conclusion and validation evidence.
+
+Key findings / decisions
+
+No material unresolved gaps remain in the final codebase for this request. The `ctx.input.message` fix is centralized on the shared `ctx` resolver and covers both runtime templates and workflow-step child message rendering. Directly resolvable strict `ChildWorkflowStep` support is present on the existing synthetic step path, and preserved rejection coverage now includes unresolved and worklist-scoped child declarations. Differences from broader possible behavior were justified by recorded decisions: bare `input.*` behavior remained intentionally unchanged, and authored `Workflow.Input.message` support remained intentionally forbidden. `audit_result.json` therefore records `material_gaps_found: false`, and `revised_request.md` states that no follow-up implementation run is required.
+
+Open issues / next step
+
+No implementation follow-up is required for this request. The producer result remains `INCOMPLETE` only because the audit phase hands control to the verifier.
+
+<loop-control>
+{"schema":"docloop.loop_control/v1","kind":"promise","promise":"INCOMPLETE"}
+</loop-control>
+
+
+---
+run_id=run-20260507T145702Z-0c706033 | entry=session_turn | pair=audit | phase=verifier | cycle=1 | attempt=1 | thread_id=019e0300-b985-7c50-8877-ecbe113c0d5e
+---
+provider=codex
+mode=resume
+template=/home/rauter/.local/share/pipx/venvs/autoloop/lib/python3.12/site-packages/autoloop/templates/audit_verifier.md
+session_id=019e0300-b985-7c50-8877-ecbe113c0d5e
+
+
+---
+run_id=run-20260507T145702Z-0c706033 | entry=phase_output | pair=audit | phase=verifier | process=codex-agent | cycle=1 | attempt=1 | thread_id=019e0300-b985-7c50-8877-ecbe113c0d5e
+---
+I’m verifying the final audit against the intent ledger, final audit artifacts, and the same localized code/test surfaces the audit cites. I’ll confirm the audit’s no-gap classification first, then update the audit feedback and criteria only if the artifacts hold up.
+
+The audit artifacts are internally consistent with the request and decisions. I’m doing one direct verification pass against the cited code and focused tests now so the verifier conclusion is grounded in the final checkout, not just the producer’s report.
+
+The focused slice is still running. I’ve already confirmed the key code paths the audit cites; once the rerun finishes, I’ll record the verifier result in the audit feedback and close the loop.
+
+The audit’s no-gap conclusion holds up after direct code inspection and a fresh rerun at `278 passed`. I’m appending one verifier note to the audit feedback now; the criteria file already matches the verified state.
+
+The verifier note is appended. I’m doing a final quick read of the audit feedback so the closing status reflects exactly what’s on disk.
+
+Scope considered
+
+Run-local audit verification only: the immutable request snapshot, authoritative raw log clarifications, `decisions.txt`, the final audit artifacts in `artifacts/audit`, the localized final code in `autoloop/core/artifacts.py` and `autoloop/sdk.py`, and the focused regression files the audit cites.
+
+What I analyzed
+
+I checked whether the audit’s no-gap conclusion is consistent with the request and later explicit decisions. I verified that the audit correctly treated the first test-verifier finding (`TST-001`) as an intermediate gap that was later closed, not a remaining unresolved gap. I also verified that `audit_result.json` and `revised_request.md` are aligned: `material_gaps_found` is `false`, so a no-follow-up statement is the correct revised-request form.
+
+What I reviewed
+
+I rechecked the cited code paths in `autoloop/core/artifacts.py` and `autoloop/sdk.py`, confirmed the preserved rejection coverage in `tests/unit/test_sdk_facade.py`, and reran `.venv/bin/python -m pytest -q tests/unit/test_primitives_and_stores.py tests/contract/test_engine_contracts.py tests/unit/test_sdk_facade.py`, which passed with `278 passed in 2.99s`. I also reviewed `gap_report.md`, `revised_request.md`, `audit_result.json`, `criteria.md`, and `feedback.md`.
+
+Key findings / decisions
+
+No blocking audit defects found. The criteria file is accurate with every checkbox checked, and the audit feedback now includes a verifier note confirming the classification and fresh rerun. The audit quality is sufficient: it cites concrete code/tests, correctly applies the decision ledger, and supports the `material_gaps_found: false` result.
+
+Open issues / next step
+
+No further audit changes are needed. Verification is complete.
+
+<loop-control>
+{"schema":"docloop.loop_control/v1","kind":"promise","promise":"COMPLETE"}
+</loop-control>
