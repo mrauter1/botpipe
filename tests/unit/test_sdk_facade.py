@@ -24,7 +24,7 @@ from autoloop import (
 from autoloop.core.primitives import Event, Outcome, RequestInput
 from autoloop.core.routes import Route
 from autoloop.core.providers.fake import ScriptedLLMProvider
-from autoloop.core.steps import PythonStep
+from autoloop.core.steps import ChildWorkflowStep, PythonStep
 from autoloop.runtime.config import GitTrackingRuntimeConfig, RuntimeConfig
 
 
@@ -407,6 +407,45 @@ def test_sdk_step_supports_core_python_steps_with_explicit_terminal_route_metada
     assert result.ok is True
     assert result.route == "approved"
     assert result.workflow_result.status == "completed"
+
+
+def test_sdk_step_supports_directly_resolvable_strict_child_workflow_steps(tmp_path: Path) -> None:
+    class ChildWorkflow(simple.Workflow):
+        class State(BaseModel):
+            observed_message: str | None = None
+
+        @simple.python_step(routes={"done": FINISH})
+        def capture(ctx):
+            ctx.state = ctx.state.model_copy(update={"observed_message": ctx.message})
+            return Event("done")
+
+    declaration = ChildWorkflowStep(
+        name="launch",
+        workflow=ChildWorkflow,
+        message="{ctx.message}",
+    )
+    client = Autoloop(
+        root=tmp_path,
+        provider=ScriptedLLMProvider(),
+        state_dir=tmp_path / ".autoloop",
+        runtime_config=RuntimeConfig(git_tracking=GitTrackingRuntimeConfig(enabled=False, commit_policy="off")),
+    )
+
+    result = client.step(declaration, "Run the child workflow.")
+
+    assert result.ok is True
+    assert result.route == "done"
+    assert result.workflow_result.status == "completed"
+
+
+def test_sdk_step_rejects_unresolved_strict_child_workflow_steps(tmp_path: Path) -> None:
+    client = _sdk_client(tmp_path, ScriptedLLMProvider())
+
+    with pytest.raises(SDKExecutionError, match=r"child workflow reference could not be resolved for client\.step"):
+        client.step(
+            ChildWorkflowStep(name="launch", workflow="missing_child_workflow"),
+            "Run the child workflow.",
+        )
 
 
 def test_sdk_step_rejects_branch_group_declarations(tmp_path: Path) -> None:

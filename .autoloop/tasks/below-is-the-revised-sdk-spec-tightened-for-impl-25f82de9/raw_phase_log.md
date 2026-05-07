@@ -2327,3 +2327,74 @@ phase_mode=single
 phase_ids=close-remaining-sdk-runtime-gaps
 explicit=True
 current_phase_index=0
+
+
+---
+run_id=run-20260507T145702Z-0c706033 | entry=session_turn | pair=implement | phase=producer | cycle=1 | attempt=1 | thread_id=019e02f5-9c8f-74d1-aed2-ee2404b64c7a
+---
+provider=codex
+mode=start
+template=/home/rauter/.local/share/pipx/venvs/autoloop/lib/python3.12/site-packages/autoloop/templates/implement_producer.md
+session_id=019e02f5-9c8f-74d1-aed2-ee2404b64c7a
+
+
+---
+run_id=run-20260507T145702Z-0c706033 | entry=phase_output | pair=implement | phase=producer | process=codex-agent | cycle=1 | attempt=1 | thread_id=019e02f5-9c8f-74d1-aed2-ee2404b64c7a
+---
+I’m reading the phase artifacts and the current SDK/runtime code paths first, then I’ll make the smallest localized changes in `autoloop/core/artifacts.py`, `autoloop/sdk.py`, and the focused test files.
+
+The phase plan is specific enough to implement directly. I’m drilling into the current resolver and `client.step(...)` preflight so I can change the shared fix points rather than patching individual call sites.
+
+I’ve confirmed the two fix points: `PromptContextView.input` currently drops the composite input view, and `client.step(...)` explicitly rejects strict child-workflow steps after successful resolution. Now I’m aligning tests with the intended contract before editing.
+
+I have the relevant surfaces now. Next I’m editing the shared `ctx` resolver, removing only the strict-child rejection that’s no longer valid, and then I’ll add the narrow regression cases the phase contract calls for.
+
+I’m applying the code changes now. The runtime change stays inside the shared `ctx` resolver, and the SDK change only removes the strict-child rejection after the existing resolution guard passes.
+
+The test updates are narrow: I’m flipping the stale `ctx.input.message` expectations to runtime-message behavior, adding one workflow-step child-message regression, and adding the SDK strict-child success/failure coverage.
+
+The code is patched. I’m running the focused regressions now, starting with the exact new/changed cases so I can catch any contract mismatch before the broader slice.
+
+`pytest` isn’t on `PATH` here, so I’m checking the project’s test runner setup and then I’ll rerun the same focused slice with the repository’s expected command.
+
+The repo has a local `.venv`, so I’m using that interpreter for the regression slice instead of the missing global `pytest`.
+
+The first two focused subsets passed. I’m waiting on the contract slice now, then I’ll run the full three-file regression set if it’s clean.
+
+The contract failure is expected from an existing compiler invariant: real workflow `Input` models may not declare `message`. I’m keeping that invariant and revising the child-message regression to use typed input presence plus `ctx.input.message`, which still exercises the intended runtime path.
+
+The revised contract subset is running, along with the full three-file regression slice. If both stay green, I’ll write the phase notes and decision ledger entry and stop.
+
+The full slice turned up an adjacent test issue in the contract file: the parametrized local workflow class is reusing the wrong cached message template across cases. I’m fixing the test shape so the regression slice reflects the intended assertions, then I’ll rerun the full three-file set.
+
+I fixed the cache-shaped test issue in the contract suite and reran the full three-file slice. I’m waiting on that result now.
+
+The code and the focused regression slice are green. I’m recording the non-obvious constraints and validation in the phase artifacts now, then I’ll close with the required scope/analyzed/changed summary.
+
+Scope considered
+
+Phase-local SDK/runtime follow-up only: shared `ctx.input.message` rendering, strict `ChildWorkflowStep` handling in `client.step(...)`, and the requested regression slice.
+
+What I analyzed
+
+I traced the shared runtime template path in [autoloop/core/artifacts.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/autoloop/core/artifacts.py:239), the workflow-step child message path in [autoloop/core/engine.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/autoloop/core/engine.py:2332), and the SDK synthetic-step preflight in [autoloop/sdk.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/autoloop/sdk.py:843). I also checked the requested regression surfaces in [tests/unit/test_primitives_and_stores.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/tests/unit/test_primitives_and_stores.py:252), [tests/contract/test_engine_contracts.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/tests/contract/test_engine_contracts.py:8940), and [tests/unit/test_sdk_facade.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/tests/unit/test_sdk_facade.py:412).
+
+What I changed
+
+In [autoloop/core/artifacts.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/autoloop/core/artifacts.py:239) and [autoloop/core/artifacts.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/autoloop/core/artifacts.py:590), `ctx.input` now uses the composite runtime input view, and the missing-input guard still blocks `ctx.input.<field>` without typed input while allowing `ctx.input.message` to resolve from the runtime message.
+
+In [autoloop/sdk.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/autoloop/sdk.py:849), I removed the post-resolution MVP rejection for strict `ChildWorkflowStep`, so directly resolvable unscoped child steps now flow through the existing synthetic one-step workflow path.
+
+I updated focused regressions in [tests/unit/test_primitives_and_stores.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/tests/unit/test_primitives_and_stores.py:252), [tests/contract/test_engine_contracts.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/tests/contract/test_engine_contracts.py:8940), and [tests/unit/test_sdk_facade.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/tests/unit/test_sdk_facade.py:412) to cover message-only and typed-input `ctx.input.message`, workflow-step child message rendering, successful strict child-step dispatch, and unresolved-child failure wrapping.
+
+Key findings / decisions
+
+`ctx.input.message` had drifted only because `PromptContextView.input` was pointed at `input_fields` instead of the composite `Context.input`; fixing that one shared resolver path was sufficient for both runtime templates and workflow-step child messages.
+
+I preserved the existing invariant that authored workflow `Input` models cannot declare a `message` field. I also had to give one parametrized local contract workflow a unique qualname per case to avoid compiler-cache collisions during the full slice.
+
+Validation: `.venv/bin/python -m pytest -q tests/unit/test_primitives_and_stores.py tests/contract/test_engine_contracts.py tests/unit/test_sdk_facade.py` passed with `277 passed`.
+
+Open issues / next step
+
+No code blockers remain for this phase. One worktree note: [tests/unit/test_primitives_and_stores.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/tests/unit/test_primitives_and_stores.py:1) is currently untracked in this checkout, so its changes are present locally but not in git’s tracked set yet.

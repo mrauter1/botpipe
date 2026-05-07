@@ -8937,7 +8937,7 @@ def test_workflow_step_message_can_forward_ctx_message_into_child_request_snapsh
     )
 
 
-def test_workflow_step_message_renders_ctx_bindings_before_child_invocation(tmp_path: Path) -> None:
+def test_workflow_step_message_renders_composite_ctx_input_bindings_before_child_invocation(tmp_path: Path) -> None:
     class ChildWorkflow(SimpleWorkflow):
         class Input(BaseModel):
             topic: str
@@ -8953,7 +8953,7 @@ def test_workflow_step_message_renders_ctx_bindings_before_child_invocation(tmp_
 
         launch = workflow_step(
             ChildWorkflow,
-            message="Parent request: {ctx.message}; topic={ctx.input.topic}",
+            message="Parent request: {ctx.input.message}; topic={ctx.input.topic}",
             input={"topic": "structured-topic"},
             routes={"done": FINISH},
         )
@@ -9078,6 +9078,10 @@ def test_workflow_step_message_invalid_ctx_field_raises_workflow_execution_error
             message=message_template,
             routes={"done": FINISH},
         )
+
+    workflow_suffix = expected_expression.replace("\\", "").replace(".", "_")
+    ParentWorkflow.__name__ = f"ParentWorkflow_{workflow_suffix}"
+    ParentWorkflow.__qualname__ = ParentWorkflow.__name__
 
     task_folder, run_folder = _workspace(tmp_path)
     (run_folder / "request.md").write_text("Natural-language request\n", encoding="utf-8")

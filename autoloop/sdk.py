@@ -849,7 +849,6 @@ def _validate_step_declaration_supported(root: Path, declaration: object) -> Non
     if isinstance(declaration, Step):
         if isinstance(declaration, ChildWorkflowStep):
             _ensure_child_workflow_resolvable(root, declaration.workflow)
-            raise SDKExecutionError("client.step(...) does not support strict child-workflow Step instances in the MVP")
         return
 
     if isinstance(declaration, getattr(simple, "_NamedDeclaration")):
