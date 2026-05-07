@@ -432,3 +432,54 @@ Open issues / next step
 <loop-control>
 {"schema":"docloop.loop_control/v1","kind":"promise","promise":"COMPLETE"}
 </loop-control>
+
+
+---
+run_id=run-20260507T141012Z-5af91a26 | entry=session_turn | pair=audit | phase=producer | cycle=1 | attempt=1 | thread_id=019e02d7-ad73-7d71-b474-af0392aa9293
+---
+provider=codex
+mode=start
+template=/home/rauter/.local/share/pipx/venvs/autoloop/lib/python3.12/site-packages/autoloop/templates/audit_producer.md
+session_id=019e02d7-ad73-7d71-b474-af0392aa9293
+
+
+---
+run_id=run-20260507T141012Z-5af91a26 | entry=phase_output | pair=audit | phase=producer | process=codex-agent | cycle=1 | attempt=1 | thread_id=019e02d7-ad73-7d71-b474-af0392aa9293
+---
+I’m auditing the final run-local state against the original request, clarifications, and produced artifacts. I’ll read the authoritative request/log/decisions first, then inspect the relevant contract tests and current code before writing the audit artifacts.
+
+I’ve got the authoritative request and decision trail. Next I’m reading the implementation and test artifacts alongside the current resolver/tests to determine whether the final tree actually satisfies the required behavior and validation, or whether a follow-up request is still warranted.
+
+I’ve confirmed the pair artifacts claim the focused slice ultimately passed. I’m checking the final tree directly now, including the exact resolver lines and relevant test definitions, so the audit is based on persisted code rather than artifact claims.
+
+The final log shows the implementation and test verifiers both closed cleanly, but I’m still treating the current tree as authoritative. I’m running the focused validation slice myself and checking the additional mixed bare-vs-ctx regression so the audit can classify any remaining gap from fresh evidence.
+
+The remaining work is just the audit writeback. I’ve confirmed the current tree passes the focused 8-test slice and matches the narrowed runtime split, so I’m gathering exact file/line anchors before I write the gap report, revised request, and machine result.
+
+I have enough evidence to write the audit artifacts now. I’m updating only the audit directory: a gap report that classifies the one runtime deviation as justified and resolved, a no-follow-up revised request, a machine result, and the audit checklist/feedback.
+
+The audit artifacts are written. I’m doing a quick readback and JSON parse check so the final summary reflects the persisted files exactly and the machine result is valid.
+
+Scope considered
+
+Immutable request snapshot, raw-log clarification history, `decisions.txt`, plan/implement/test artifacts, the final resolver/tests, and the active audit artifact directory.
+
+What I analyzed
+
+I checked the final `ctx.input` runtime path in [artifacts.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/autoloop/core/artifacts.py:239) and [artifacts.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/autoloop/core/artifacts.py:573), the updated contract coverage in [test_engine_contracts.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/tests/contract/test_engine_contracts.py:8655), [test_engine_contracts.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/tests/contract/test_engine_contracts.py:8691), [test_engine_contracts.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/tests/contract/test_engine_contracts.py:8764), and [test_engine_contracts.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/tests/contract/test_engine_contracts.py:8823), plus the matching unit guards in [test_primitives_and_stores.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/tests/unit/test_primitives_and_stores.py:229), [test_primitives_and_stores.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/tests/unit/test_primitives_and_stores.py:264), and [test_primitives_and_stores.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/tests/unit/test_primitives_and_stores.py:543). I also reran the focused validation slice locally; result: `8 passed`.
+
+What I changed
+
+I wrote the audit outputs in [gap_report.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/standalone-implementation-spec-ctx-prompt-bindin-edf74165/runs/run-20260507T141012Z-5af91a26/artifacts/audit/gap_report.md), [revised_request.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/standalone-implementation-spec-ctx-prompt-bindin-edf74165/runs/run-20260507T141012Z-5af91a26/artifacts/audit/revised_request.md), and [audit_result.json](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/standalone-implementation-spec-ctx-prompt-bindin-edf74165/runs/run-20260507T141012Z-5af91a26/artifacts/audit/audit_result.json). I also completed [criteria.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/standalone-implementation-spec-ctx-prompt-bindin-edf74165/runs/run-20260507T141012Z-5af91a26/artifacts/audit/criteria.md) and appended the audit note to [feedback.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/standalone-implementation-spec-ctx-prompt-bindin-edf74165/runs/run-20260507T141012Z-5af91a26/artifacts/audit/feedback.md).
+
+Key findings / decisions
+
+No material unresolved gaps remain. The final tree satisfies the request: undeclared `{ctx.input.message}` no longer aliases request text, declared `Input.message` stays separate from `ctx.message`, unreadable snapshot failure and `workflow_step(message="{ctx.message}")` forwarding remain covered, and bare `{input.message}` compatibility is still preserved. The only scope expansion beyond the initial “update the stale test” ask was the narrow runtime correction recorded in `decisions.txt`, and that is justified because focused reruns exposed a real runtime mismatch, which the request explicitly allowed reopening.
+
+Open issues / next step
+
+No follow-up implementation is required for this request. `audit_result.json` is set to `material_gaps_found=false`. Per loop protocol, this producer turn still returns `INCOMPLETE` for verifier control.
+
+<loop-control>
+{"schema":"docloop.loop_control/v1","kind":"promise","promise":"INCOMPLETE"}
+</loop-control>

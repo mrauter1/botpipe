@@ -1451,3 +1451,79 @@ Open issues / next step
 <loop-control>
 {"schema":"docloop.loop_control/v1","kind":"promise","promise":"INCOMPLETE"}
 </loop-control>
+
+
+---
+run_id=run-20260507T130811Z-54d93345 | entry=session_turn | pair=implement | phase=producer | cycle=2 | attempt=1 | thread_id=019e02bf-36df-7293-b934-fad7a290777c
+---
+provider=codex
+mode=resume
+template=/home/rauter/.local/share/pipx/venvs/autoloop/lib/python3.12/site-packages/autoloop/templates/implement_producer.md
+session_id=019e02bf-36df-7293-b934-fad7a290777c
+
+
+---
+run_id=run-20260507T130811Z-54d93345 | entry=phase_output | pair=implement | phase=producer | process=codex-agent | cycle=2 | attempt=1 | thread_id=019e02bf-36df-7293-b934-fad7a290777c
+---
+I’m fixing the reviewer’s blocking issue in the runner path and adding a tracked SDK regression test for `client.run(Wf, None)`. After that I’ll refresh the phase notes to stop relying on the untracked local test file.
+
+I’m making two small source changes: threading the explicit runtime message through the runner, and adding a tracked SDK regression that covers the message-less call path. Then I’ll clean up the notes so the reviewer’s non-blocking validation concern is gone too.
+
+The runner now forwards the explicit message into engine execution. I’m running focused SDK/runtime tests that cover the corrected `message=None` path plus the existing facade contract.
+
+Two contract test names changed under the current worktree, so that pytest invocation missed them. I’m resolving the current names and rerunning the focused suite rather than broadening scope.
+
+One focused test failed. I’m reading that failure first so I can correct the regression without changing unrelated paths.
+
+The runner pass-through alone wasn’t enough, so I’m tracing where `RunnerOptions.message` gets normalized before execution. That will tell me whether the explicit `None` is being overwritten earlier in the runner pipeline.
+
+I found the second half of the same bug: `Engine.run_async(...)` forcibly replaced any explicit message with request-snapshot fallback whenever a request file existed. I’m removing that override so the existing `_DEFAULT_MESSAGE` sentinel can distinguish “omitted” from explicit `None`.
+
+The focused suite is still running after the engine fix. I’m waiting for the result before I update the notes and decisions block.
+
+The remaining regression is a caller-contract issue in `RunnerOptions`: the runner can’t currently distinguish “message omitted” from explicit `None`. I’m tightening that internal contract with a sentinel so normal runtime resume keeps request-snapshot fallback while SDK message-less runs preserve real `None`.
+
+The runner now distinguishes omitted messages from explicit `None`. I’m rerunning the focused SDK/runtime suite, including the resume regression that failed after the first partial fix.
+
+The focused suite is still running after the runner contract change. I’m waiting on that result before I update the artifact notes.
+
+The blocking contract issue is fixed and the tracked regression is green. I’m updating the implementation notes to reflect the runner/engine changes and to remove the untracked test file from the recorded validation evidence.
+
+The source fix is in place, the tracked regression is green, and the phase notes no longer rely on the untracked local test file. I’m doing one last status check so the close-out reflects the actual edited set.
+
+Scope considered
+
+- `sdk-facade` phase scope, with focus on reviewer findings `IMP-001` and `IMP-002`.
+- Runtime message propagation across `RunnerOptions`, runner execution, engine context creation, and SDK pause/resume behavior.
+- Tracked SDK/runtime tests and the phase-local implementation artifacts.
+
+What I analyzed
+
+- `autoloop/runtime/runner.py` around workspace preparation and `engine.run(...)` / `engine.resume(...)` calls.
+- `autoloop/core/engine.py` around context message selection in `run_async(...)`.
+- `tests/unit/test_sdk_facade.py` and the runtime/contract tests covering message propagation and placeholder rendering.
+- The reviewer feedback, plan, implementation notes, and decisions ledger.
+
+What I changed
+
+- Fixed the blocking message propagation bug in two places:
+  - `autoloop/runtime/runner.py` now preserves an internal omitted-message sentinel in `RunnerOptions` and passes the effective message through to engine execution without collapsing explicit `None` into “omitted”.
+  - `autoloop/core/engine.py` no longer overwrites an explicit runtime message with request-file fallback just because a request snapshot exists.
+- Added a tracked SDK regression in `tests/unit/test_sdk_facade.py` that exercises `client.run(Wf, None)` and asserts both `ctx.message` and `ctx.input.message` remain `None`, with artifact resolution still working on an `{input.message}` path.
+- Updated `implementation_notes.md` to include the runner/engine changes and removed the untracked local test file from the recorded validation evidence.
+- Appended the runner/engine message-sentinel decision under the latest turn header in `decisions.txt`.
+
+Key findings / decisions
+
+- The reviewer’s blocking issue was only partially in the runner callsite. The deeper problem was that the runner could not distinguish omitted message from explicit `None`, and the engine also force-fell back to request snapshots whenever `request_file` existed.
+- The fix keeps both required behaviors intact:
+  - normal runtime callers that omit `message` still fall back to the persisted request snapshot on resume
+  - SDK `client.run(..., None)` and internal SDK resumes now preserve real `None`
+- Validation passed:
+  - `./.venv/bin/python -m pytest -q tests/unit/test_sdk_facade.py tests/unit/test_simple_surface.py tests/unit/test_validation.py tests/runtime/test_workspace_and_context.py::test_resume_context_preserves_run_message_and_raw_input_fields tests/contract/test_engine_contracts.py::test_runtime_templates_resolve_bare_input_message_and_fields tests/contract/test_engine_contracts.py::test_runtime_templates_reject_unknown_bare_input_field tests/contract/test_engine_contracts.py::test_runtime_templates_reject_undeclared_ctx_input_message_without_typed_input tests/contract/test_engine_contracts.py::test_runtime_templates_resolve_declared_ctx_input_message_separately_from_request`
+  - Result: `215 passed`, `14 warnings`
+
+Open issues / next step
+
+- No known blocking implementation issues remain in the producer-owned scope.
+- The reviewer-owned artifacts still reflect the previous review state and need a new verifier pass to clear `IMP-001` / `IMP-002` if they agree with the fix.
