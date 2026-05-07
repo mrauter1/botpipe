@@ -613,3 +613,53 @@ Open issues / next step
   `./.venv/bin/python -m pytest -q tests/unit/test_simple_surface.py -k 'input_message_prompt_binding or ctx_input_message_prompt_binding'`
   `python3 -m py_compile autoloop/sdk.py tests/unit/test_sdk_facade.py`
 - Next step is verifier re-review of the updated promotion logic and the new shared-directory collision test.
+
+
+---
+run_id=run-20260507T184603Z-adb7c56b | entry=session_turn | pair=implement | phase=verifier | cycle=2 | attempt=1 | thread_id=019e03cf-11a5-7c91-97d7-e1e2805ea0f8
+---
+provider=codex
+mode=resume
+template=/home/rauter/.local/share/pipx/venvs/autoloop/lib/python3.12/site-packages/autoloop/templates/implement_verifier.md
+session_id=019e03cf-11a5-7c91-97d7-e1e2805ea0f8
+
+
+---
+run_id=run-20260507T184603Z-adb7c56b | entry=phase_output | pair=implement | phase=verifier | process=codex-agent | cycle=2 | attempt=1 | thread_id=019e03cf-11a5-7c91-97d7-e1e2805ea0f8
+---
+I’m re-checking the specific promotion-path fix and the updated validation coverage now. The goal for this pass is to confirm the blocking overwrite case is actually closed and that no new retention regressions slipped in.
+
+The targeted re-check passed and the blocking overwrite case is closed. I’m updating the reviewer artifacts now: criteria to all green, and feedback with a resolution note so the earlier blocking item doesn’t stay ambiguous.
+
+Scope considered
+
+- Active phase `sdk-retention-and-safe-cleanup`.
+- Updated promotion logic in `autoloop/sdk.py`, the new shared-directory regression test in `tests/unit/test_sdk_facade.py`, and the phase review artifacts.
+
+What I analyzed
+
+- The reviewer-flagged overwrite path in `_promote_declared_write(...)`.
+- The new `_promotion_destination(...)` helper and its collision policy for caller-supplied `RetentionPolicy.promoted_writes_dir`.
+- The updated validation coverage for shared promotion directories, retention modes, and cleanup behavior.
+
+What I reviewed
+
+- The original blocking case from `IMP-001`.
+- Targeted pytest coverage:
+  `./.venv/bin/python -m pytest -q tests/unit/test_sdk_facade.py -k 'custom_promoted_writes_dir_uniquifies_collisions or retention_keep_all_and_ephemeral_modes or cleanup_only_targets_valid_completed_sdk_task_directories'`
+- The current reviewer artifacts so `criteria.md` and `feedback.md` reflect the resolved state.
+
+Key findings / decisions
+
+- `IMP-001` is resolved.
+- No new blocking or non-blocking implementation defects were found in this review pass.
+- `criteria.md` is now fully checked, and `feedback.md` includes an explicit follow-up note for the resolved finding.
+
+Open issues / next step
+
+- No open reviewer issues remain for this phase.
+- This slice is ready to proceed with `sdk-retention-and-safe-cleanup` marked complete.
+
+<loop-control>
+{"schema":"docloop.loop_control/v1","kind":"promise","promise":"COMPLETE"}
+</loop-control>
