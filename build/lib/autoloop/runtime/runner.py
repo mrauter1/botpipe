@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+import asyncio
+from concurrent.futures import ThreadPoolExecutor
 import json
 from dataclasses import dataclass, field, replace
 from datetime import datetime, timezone
@@ -13,7 +15,7 @@ from pydantic import BaseModel, ValidationError
 
 from autoloop.core.artifacts import resolve_artifact_template
 from autoloop.core.compiler import CompiledArtifact, CompiledWorkflow, compile_workflow
-from autoloop.core.context import ChildWorkflowResult
+from autoloop.core.context import ChildWorkflowResult, _DEFAULT_MESSAGE
 from autoloop.core.engine import Engine, RunResult, StepFinalizationRecord
 from autoloop.core.errors import WorkflowExecutionError
 from autoloop.core.mappings import normalize_mapping
@@ -23,7 +25,13 @@ from autoloop.core.providers.protocols import LLMProvider
 from autoloop.core.schema_registry import RUN_METADATA_SCHEMA, WORKFLOW_TOPOLOGY_SCHEMA, migrate_schemaless_payload, validate_persisted_schema
 from autoloop.core.statuses import terminal_to_run_status
 from autoloop.extensions.session_paths import extract_session_path_strategy
-from .config import ConfigError, DEFAULT_MAX_STEPS, RuntimeConfig
+from .config import (
+    ConfigError,
+    DEFAULT_MAX_STEPS,
+    ProviderConfig,
+    ProviderPolicyRuntimeConfig,
+    RuntimeConfig,
+)
 from .events import EventLogger
 from .git_tracking import RuntimeGitTracker
 from .loader import (
@@ -35,6 +43,7 @@ from .loader import (
 )
 from .observability import BoundRuntimeObservability
 from .prompts import FilesystemPromptRegistry
+from .provider_policy_resolver import create_provider_policy_resolver
 from .stores.filesystem import FilesystemCheckpointStore, FilesystemSessionStore
 from .static_graph import (
     ARTIFACT_CONTRACTS_FILENAME,
@@ -79,7 +88,7 @@ class RunnerOptions:
     root: Path
     task_id: str
     run_id: str | None = None
-    message: str | None = None
+    message: str | None | object = _DEFAULT_MESSAGE
     resume: bool = False
     answer: str | None = None
     state_dir: Path | None = None
@@ -89,6 +98,7 @@ class RunnerOptions:
     parent_run: RunWorkspace | None = None
     record_task_message: bool = True
     runtime_config: RuntimeConfig = field(default_factory=RuntimeConfig)
+    provider_policy_config: ProviderPolicyRuntimeConfig = field(default_factory=ProviderPolicyRuntimeConfig)
 
 
 @dataclass(frozen=True, slots=True)
@@ -260,6 +270,13 @@ def _execute_compiled_workflow(
         prepared.logger.emit(event_type, **payload)
         trace_writer.runtime_event(event_type=event_type, **payload)
 
+    provider_policy_resolver = create_provider_policy_resolver(
+        workflow_policy=prepared.compiled.provider_policy,
+        workspace_root=prepared.task_workspace.root,
+        provider_policy=options.provider_policy_config,
+        runtime=options.runtime_config,
+        provider=ProviderConfig(),
+    )
     engine = Engine(
         prepared.compiled,
         provider=provider,
@@ -275,6 +292,7 @@ def _execute_compiled_workflow(
         ),
         hook_event_sink=emit_hook_event,
         runtime_event_sink=emit_runtime_event,
+        provider_policy_resolver=provider_policy_resolver,
     )
     workflow_invoker = _build_workflow_invoker(
         provider=provider,
@@ -298,8 +316,11 @@ def _execute_compiled_workflow(
                 run_folder=prepared.run_workspace.run_dir,
                 package_folder=prepared.workflow_workspace.package_dir,
                 root=prepared.task_workspace.root,
+                request_file=prepared.run_workspace.request_file,
+                task_request_file=prepared.task_workspace.task_request_file,
                 params=resolved_params,
                 workflow_params=resolved_workflow_params,
+                message=options.message,
                 workflow_input=resolved_workflow_input,
                 workflow_invoker=workflow_invoker,
                 answer=options.answer,
@@ -314,8 +335,11 @@ def _execute_compiled_workflow(
                 run_folder=prepared.run_workspace.run_dir,
                 package_folder=prepared.workflow_workspace.package_dir,
                 root=prepared.task_workspace.root,
+                request_file=prepared.run_workspace.request_file,
+                task_request_file=prepared.task_workspace.task_request_file,
                 params=resolved_params,
                 workflow_params=resolved_workflow_params,
+                message=options.message,
                 workflow_input=resolved_workflow_input,
                 workflow_invoker=workflow_invoker,
                 max_steps=max_steps,
@@ -553,10 +577,11 @@ def _prepare_workspaces(
     reference: WorkflowReference,
     planned: PlannedRunContext,
 ) -> tuple[TaskWorkspace, WorkflowWorkspace, RunWorkspace]:
+    explicit_message = None if options.message is _DEFAULT_MESSAGE else options.message
     task_workspace = ensure_workspace(
         planned.task_workspace.root,
         planned.task_workspace.task_id,
-        message=options.message,
+        message=explicit_message,
         record_message=options.record_task_message,
         state_dir=planned.task_workspace.state_root,
     )
@@ -568,7 +593,7 @@ def _prepare_workspaces(
             message=(
                 task_request_text(task_workspace.task_request_file)
                 if options.record_task_message
-                else options.message or task_request_text(task_workspace.task_request_file)
+                else explicit_message or task_request_text(task_workspace.task_request_file)
             ),
             workflow_params=options.workflow_params,
             workflow_input=options.workflow_input,
@@ -788,7 +813,7 @@ def _build_workflow_invoker(
         compiled = compile_workflow(resolved.workflow_cls)
         child_workflow_params = coerce_workflow_parameter_mapping(resolved.parameters_cls, parameters)
         child_workflow_input = _coerce_workflow_input_payload(compiled, input)
-        execution = execute_workflow_package(
+        execution = _execute_child_workflow_package(
             resolved.workflow_cls,
             provider=provider,
             options=RunnerOptions(
@@ -807,6 +832,33 @@ def _build_workflow_invoker(
         return _build_child_workflow_result(execution)
 
     return invoke
+
+
+def _execute_child_workflow_package(
+    workflow_reference: str | type[Any],
+    *,
+    provider: LLMProvider,
+    options: RunnerOptions,
+) -> RunExecution:
+    try:
+        asyncio.get_running_loop()
+    except RuntimeError:
+        return execute_workflow_package(
+            workflow_reference,
+            provider=provider,
+            options=options,
+        )
+
+    # Child workflow invocations may originate from synchronous Python-step handlers
+    # that are already running inside the parent engine's event loop.
+    with ThreadPoolExecutor(max_workers=1, thread_name_prefix="autoloop-child-workflow") as executor:
+        future = executor.submit(
+            execute_workflow_package,
+            workflow_reference,
+            provider=provider,
+            options=options,
+        )
+        return future.result()
 
 
 def _normalize_execution_options(

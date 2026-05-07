@@ -25,6 +25,7 @@ if TYPE_CHECKING:
 class Workflow(metaclass=WorkflowMeta):
     """Workflow authoring base class."""
     extensions: tuple["WorkflowExtension", ...] = ()
+    policy = None
 __all__ = [
     "AWAIT_INPUT",
     "Artifact",

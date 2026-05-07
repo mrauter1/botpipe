@@ -8,6 +8,19 @@ from pathlib import Path
 from typing import Any, Literal, cast
 
 from autoloop.core.extensions import ExtensionFailurePolicy
+from autoloop.core.provider_policy import (
+    ModelPolicy,
+    PermissionPolicy,
+    PolicyValidationMode,
+    ProviderPolicy,
+    ProviderPolicyOverride,
+    ProviderPolicyValidationConfig,
+    SandboxPolicy,
+    StrictProviderPolicy,
+    SYSTEM_DEFAULT_PROVIDER_POLICY,
+    merge_provider_policies,
+)
+from pydantic import BaseModel, ConfigDict, Field, ValidationError
 
 try:
     import yaml
@@ -26,6 +39,7 @@ SUPPORTED_GIT_COMMIT_POLICIES = frozenset({"off", "run", "step"})
 SUPPORTED_EXTENSION_FAILURE_POLICIES = frozenset({"propagate", "record_and_continue"})
 SUPPORTED_REPLAY_MISMATCH_BEHAVIORS = frozenset({"warn", "fail"})
 SUPPORTED_RESUME_TOPOLOGY_MISMATCH_BEHAVIORS = frozenset({"warn", "fail"})
+_LEGACY_POLICY_EFFORT_ALIASES = {"max": "xhigh"}
 
 
 class ConfigError(ValueError):
@@ -33,6 +47,28 @@ class ConfigError(ValueError):
 
 
 GitCommitPolicy = Literal["off", "run", "step"]
+
+
+class _RuntimeConfigModel(BaseModel):
+    model_config = ConfigDict(extra="forbid", frozen=True)
+
+
+class ProviderPolicyValidationConfigOverride(_RuntimeConfigModel):
+    unsupported: PolicyValidationMode | None = None
+    lossy_mapping: PolicyValidationMode | None = None
+    unsafe_expansion: PolicyValidationMode | None = None
+
+
+class ProviderPolicyRuntimeConfigOverride(_RuntimeConfigModel):
+    default: ProviderPolicyOverride | None = None
+    strict: StrictProviderPolicy | None = None
+    validation: ProviderPolicyValidationConfigOverride | None = None
+
+
+class ProviderPolicyRuntimeConfig(_RuntimeConfigModel):
+    default: ProviderPolicy = Field(default_factory=lambda: SYSTEM_DEFAULT_PROVIDER_POLICY)
+    strict: StrictProviderPolicy | None = None
+    validation: ProviderPolicyValidationConfig = Field(default_factory=ProviderPolicyValidationConfig)
 
 
 @dataclass(frozen=True, slots=True)
@@ -84,6 +120,7 @@ class RuntimeConfig:
 class ResolvedRuntimeConfig:
     provider: ProviderConfig
     runtime: RuntimeConfig
+    provider_policy: ProviderPolicyRuntimeConfig = field(default_factory=ProviderPolicyRuntimeConfig)
 
 
 @dataclass(frozen=True, slots=True)
@@ -137,6 +174,7 @@ class RuntimeConfigOverride:
 class RuntimeConfigLayer:
     provider: ProviderConfigOverride = field(default_factory=ProviderConfigOverride)
     runtime: RuntimeConfigOverride = field(default_factory=RuntimeConfigOverride)
+    provider_policy: ProviderPolicyRuntimeConfigOverride = field(default_factory=ProviderPolicyRuntimeConfigOverride)
 
 
 def user_config_dir() -> Path:
@@ -244,11 +282,50 @@ def _parse_narrow_yaml_scalar(raw_value: str, *, path: Path, line_number: int) -
         if len(raw_value) < 2 or raw_value[-1] != raw_value[0]:
             raise ConfigError(f"{path}:{line_number}: unterminated quoted string.")
         return raw_value[1:-1]
+    if raw_value.startswith("["):
+        return _parse_narrow_yaml_inline_list(raw_value, path=path, line_number=line_number)
     if raw_value.lstrip("-").isdigit():
         return int(raw_value)
     if any(token in raw_value for token in ("[", "]", "{", "}")):
         raise ConfigError(f"{path}:{line_number}: unsupported YAML construct in runtime config.")
     return raw_value
+
+
+def _parse_narrow_yaml_inline_list(raw_value: str, *, path: Path, line_number: int) -> list[object]:
+    if not raw_value.endswith("]"):
+        raise ConfigError(f"{path}:{line_number}: unterminated inline list.")
+    inner = raw_value[1:-1].strip()
+    if not inner:
+        return []
+
+    items: list[str] = []
+    token: list[str] = []
+    in_single = False
+    in_double = False
+    for char in inner:
+        if char == "'" and not in_double:
+            in_single = not in_single
+            token.append(char)
+            continue
+        if char == '"' and not in_single:
+            in_double = not in_double
+            token.append(char)
+            continue
+        if char == "," and not in_single and not in_double:
+            item = "".join(token).strip()
+            if not item:
+                raise ConfigError(f"{path}:{line_number}: inline lists must not contain empty items.")
+            items.append(item)
+            token = []
+            continue
+        token.append(char)
+    if in_single or in_double:
+        raise ConfigError(f"{path}:{line_number}: unterminated quoted string in inline list.")
+    tail = "".join(token).strip()
+    if not tail:
+        raise ConfigError(f"{path}:{line_number}: inline lists must not end with an empty item.")
+    items.append(tail)
+    return [_parse_narrow_yaml_scalar(item, path=path, line_number=line_number) for item in items]
 
 
 def parse_runtime_config(payload: object, source: Path) -> RuntimeConfigLayer:
@@ -257,16 +334,23 @@ def parse_runtime_config(payload: object, source: Path) -> RuntimeConfigLayer:
     if not isinstance(payload, dict):
         raise ConfigError(f"{source}: configuration must be a YAML mapping.")
 
+    _reject_unknown_keys(source, "configuration", payload, {"provider", "runtime", "provider_policy"})
+
     provider_payload = payload.get("provider")
     runtime_payload = payload.get("runtime")
+    provider_policy_payload = payload.get("provider_policy")
     if provider_payload is None:
         provider_payload = {}
     if runtime_payload is None:
         runtime_payload = {}
+    if provider_policy_payload is None:
+        provider_policy_payload = {}
     if not isinstance(provider_payload, dict):
         raise ConfigError(f"{source}: provider must be a mapping when provided.")
     if not isinstance(runtime_payload, dict):
         raise ConfigError(f"{source}: runtime must be a mapping when provided.")
+    if not isinstance(provider_policy_payload, dict):
+        raise ConfigError(f"{source}: provider_policy must be a mapping when provided.")
 
     _reject_unknown_keys(source, "provider", provider_payload, {"name", "model", "model_effort", "codex", "claude"})
     _reject_unknown_keys(
@@ -364,12 +448,24 @@ def parse_runtime_config(payload: object, source: Path) -> RuntimeConfigLayer:
             ),
         ),
     )
-    return RuntimeConfigLayer(provider=provider, runtime=runtime)
+    provider_policy = _parse_provider_policy_config(provider_policy_payload, source)
+    return RuntimeConfigLayer(provider=provider, runtime=runtime, provider_policy=provider_policy)
+
+
+def parse_policy_runtime_config(payload: object, source: Path) -> RuntimeConfigLayer:
+    if payload is None:
+        return RuntimeConfigLayer()
+    if not isinstance(payload, dict):
+        raise ConfigError(f"{source}: policy file must be a YAML mapping.")
+    if any(key in payload for key in ("provider", "runtime", "provider_policy")):
+        return parse_runtime_config(payload, source)
+    return parse_runtime_config({"provider_policy": payload}, source)
 
 
 def resolve_runtime_config(root: Path, args: argparse.Namespace) -> ResolvedRuntimeConfig:
     global_config_path = discover_config_file(user_config_dir())
     local_config_path = discover_config_file(root)
+    policy_file_path = _optional_cli_path(getattr(args, "policy_file", None), "policy_file")
 
     global_layer = (
         parse_runtime_config(load_runtime_config_file(global_config_path), global_config_path)
@@ -381,9 +477,25 @@ def resolve_runtime_config(root: Path, args: argparse.Namespace) -> ResolvedRunt
         if local_config_path is not None
         else RuntimeConfigLayer()
     )
+    policy_layer = (
+        parse_policy_runtime_config(load_runtime_config_file(policy_file_path), policy_file_path)
+        if policy_file_path is not None
+        else RuntimeConfigLayer()
+    )
+    provider = _merge_provider_config(global_layer.provider, local_layer.provider, policy_layer.provider, args=args)
+    runtime = _merge_runtime_config(global_layer.runtime, local_layer.runtime, policy_layer.runtime, args=args)
     return ResolvedRuntimeConfig(
-        provider=_merge_provider_config(global_layer.provider, local_layer.provider, args=args),
-        runtime=_merge_runtime_config(global_layer.runtime, local_layer.runtime, args=args),
+        provider=provider,
+        runtime=runtime,
+        provider_policy=_merge_provider_policy_config(
+            global_layer.provider_policy,
+            local_layer.provider_policy,
+            policy_layer.provider_policy,
+            provider_layers=(global_layer.provider, local_layer.provider, policy_layer.provider),
+            provider=provider,
+            runtime=runtime,
+            args=args,
+        ),
     )
 
 
@@ -536,6 +648,173 @@ def _merge_runtime_config(
     )
 
 
+def _parse_provider_policy_config(
+    payload: dict[str, Any],
+    source: Path,
+) -> ProviderPolicyRuntimeConfigOverride:
+    if "default" in payload and payload["default"] is None:
+        raise ConfigError(f"{source}: provider_policy.default must be a mapping when provided.")
+    if "validation" in payload and payload["validation"] is None:
+        raise ConfigError(f"{source}: provider_policy.validation must be a mapping when provided.")
+    try:
+        return ProviderPolicyRuntimeConfigOverride.model_validate(payload)
+    except ValidationError as exc:
+        raise _render_model_validation_error(source, "provider_policy", exc) from exc
+
+
+def _merge_provider_policy_config(
+    *layers: ProviderPolicyRuntimeConfigOverride,
+    provider_layers: tuple[ProviderConfigOverride, ...],
+    provider: ProviderConfig,
+    runtime: RuntimeConfig,
+    args: argparse.Namespace,
+) -> ProviderPolicyRuntimeConfig:
+    default_policy = merge_provider_policies(
+        SYSTEM_DEFAULT_PROVIDER_POLICY,
+        *(layer.default for layer in layers if layer.default is not None),
+    )
+
+    legacy_model, legacy_effort = _resolve_explicit_legacy_provider_model_overrides(
+        *provider_layers,
+        provider_name=provider.name,
+        args=args,
+    )
+
+    if legacy_model is not None and not any(_policy_override_sets_field(layer.default, ("model", "default")) for layer in layers):
+        default_policy = merge_provider_policies(
+            default_policy,
+            ProviderPolicyOverride(model=ModelPolicy(default=legacy_model)),
+        )
+    if legacy_effort is not None and not any(_policy_override_sets_field(layer.default, ("model", "effort")) for layer in layers):
+        default_policy = merge_provider_policies(
+            default_policy,
+            ProviderPolicyOverride(model=ModelPolicy(effort=_policy_effort_alias(legacy_effort))),
+        )
+    if runtime.full_auto and not any(
+        _policy_override_sets_field(layer.default, ("permissions", "mode")) for layer in layers
+    ):
+        default_policy = merge_provider_policies(
+            default_policy,
+            ProviderPolicyOverride(permissions=PermissionPolicy(mode="full_auto_sandboxed")),
+        )
+    if (
+        provider.name == "claude"
+        and provider.claude.permission_strategy == "bypass"
+        and not _policy_layers_set_any_field(
+            layers,
+            (
+                ("permissions", "mode"),
+                ("permissions", "allow_dangerous_bypass"),
+                ("permissions", "disable_dangerous_bypass"),
+                ("sandbox", "enabled"),
+                ("sandbox", "required"),
+                ("sandbox", "mode"),
+            ),
+        )
+    ):
+        default_policy = merge_provider_policies(
+            default_policy,
+            ProviderPolicyOverride(
+                permissions=PermissionPolicy(
+                    mode="full_auto_unsandboxed",
+                    allow_dangerous_bypass=True,
+                    disable_dangerous_bypass=False,
+                ),
+                sandbox=SandboxPolicy(
+                    enabled=False,
+                    required=False,
+                    mode="danger_full_access",
+                ),
+            ),
+        )
+
+    strict_payload: dict[str, Any] | None = None
+    for layer in layers:
+        if "strict" not in layer.model_fields_set:
+            continue
+        if layer.strict is None:
+            strict_payload = None
+            continue
+        update = layer.strict.model_dump(mode="python", exclude_none=True, exclude_unset=True, warnings=False)
+        strict_payload = _deep_merge_dicts(strict_payload or {}, update)
+    strict = StrictProviderPolicy.model_validate(strict_payload) if strict_payload is not None else None
+
+    validation_payload = ProviderPolicyValidationConfig().model_dump(mode="python", warnings=False)
+    for layer in layers:
+        if layer.validation is None:
+            continue
+        update = layer.validation.model_dump(mode="python", exclude_none=True, exclude_unset=True, warnings=False)
+        validation_payload = _deep_merge_dicts(validation_payload, update)
+
+    cli_validation_overrides = {
+        "unsupported": _optional_cli_policy_validation_mode(getattr(args, "policy_validation_unsupported", None)),
+        "lossy_mapping": _optional_cli_policy_validation_mode(getattr(args, "policy_validation_lossy", None)),
+        "unsafe_expansion": _optional_cli_policy_validation_mode(
+            getattr(args, "policy_validation_unsafe_expansion", None)
+        ),
+    }
+    validation_payload = _deep_merge_dicts(
+        validation_payload,
+        {key: value for key, value in cli_validation_overrides.items() if value is not None},
+    )
+    validation = ProviderPolicyValidationConfig.model_validate(validation_payload)
+
+    return ProviderPolicyRuntimeConfig(
+        default=default_policy,
+        strict=strict,
+        validation=validation,
+    )
+
+
+def _resolve_explicit_legacy_provider_model_overrides(
+    *layers: ProviderConfigOverride,
+    provider_name: str,
+    args: argparse.Namespace,
+) -> tuple[str | None, str | None]:
+    codex_model: str | None = None
+    codex_effort: str | None = None
+    claude_model: str | None = None
+    claude_effort: str | None = None
+
+    for layer in cast(tuple[ProviderConfigOverride, ...], layers):
+        if layer.codex.model is not None:
+            codex_model = layer.codex.model
+        if layer.codex.model_effort is not None:
+            codex_effort = layer.codex.model_effort
+        if layer.claude.model is not None:
+            claude_model = layer.claude.model
+        if layer.claude.effort is not None:
+            claude_effort = layer.claude.effort
+
+        codex_model, codex_effort, claude_model, claude_effort = _apply_generic_provider_overrides(
+            provider_name=provider_name,
+            model=layer.model,
+            model_effort=layer.model_effort,
+            codex_model=codex_model,
+            codex_effort=codex_effort,
+            claude_model=claude_model,
+            claude_effort=claude_effort,
+        )
+
+    cli_model = getattr(args, "model", None)
+    cli_model_effort = getattr(args, "model_effort", None)
+    codex_model, codex_effort, claude_model, claude_effort = _apply_generic_provider_overrides(
+        provider_name=provider_name,
+        model=cli_model.strip() if isinstance(cli_model, str) and cli_model.strip() else None,
+        model_effort=cli_model_effort.strip()
+        if isinstance(cli_model_effort, str) and cli_model_effort.strip()
+        else None,
+        codex_model=codex_model,
+        codex_effort=codex_effort,
+        claude_model=claude_model,
+        claude_effort=claude_effort,
+    )
+
+    if provider_name == "codex":
+        return codex_model, codex_effort
+    return claude_model, claude_effort
+
+
 def _reject_unknown_keys(source: Path, label: str, payload: dict[str, Any], allowed: set[str]) -> None:
     unknown = sorted(key for key in payload if key not in allowed)
     if unknown:
@@ -607,6 +886,25 @@ def _optional_cli_git_commit_policy(raw_value: object) -> GitCommitPolicy | None
     return cast(GitCommitPolicy, value)
 
 
+def _optional_cli_path(raw_value: object, label: str) -> Path | None:
+    if raw_value is None:
+        return None
+    if not isinstance(raw_value, Path):
+        raise ConfigError(f"CLI {label} must be a filesystem path when provided.")
+    return raw_value
+
+
+def _optional_cli_policy_validation_mode(raw_value: object) -> PolicyValidationMode | None:
+    if raw_value is None:
+        return None
+    if not isinstance(raw_value, str) or not raw_value.strip():
+        raise ConfigError("CLI policy validation overrides must be non-empty strings when provided.")
+    value = raw_value.strip()
+    if value not in {"fail", "warn", "ignore"}:
+        raise ConfigError("CLI policy validation overrides must be one of: fail, warn, ignore.")
+    return cast(PolicyValidationMode, value)
+
+
 def _apply_generic_provider_overrides(
     *,
     provider_name: str,
@@ -630,6 +928,10 @@ def _apply_generic_provider_overrides(
             claude_effort = model_effort
         return codex_model, codex_effort, claude_model, claude_effort
     raise ConfigError(f"provider.name must be one of: {', '.join(sorted(SUPPORTED_PROVIDER_NAMES))}.")
+
+
+def _policy_effort_alias(value: str) -> str:
+    return _LEGACY_POLICY_EFFORT_ALIASES.get(value, value)
 
 
 def _optional_permission_strategy(raw_value: object, label: str, source: Path) -> str | None:
@@ -695,3 +997,55 @@ def _optional_replay_mismatch_behavior(
             f"{source}: {label} must be one of: {', '.join(sorted(SUPPORTED_REPLAY_MISMATCH_BEHAVIORS))}."
         )
     return cast(Literal["warn", "fail"], value)
+
+
+def _policy_override_sets_field(
+    policy: ProviderPolicyOverride | None,
+    path: tuple[str, ...],
+) -> bool:
+    current: BaseModel | Any = policy
+    for part in path:
+        if not isinstance(current, BaseModel) or part not in current.model_fields_set:
+            return False
+        current = getattr(current, part)
+    return True
+
+
+def _policy_layers_set_any_field(
+    layers: tuple[ProviderPolicyRuntimeConfigOverride, ...],
+    paths: tuple[tuple[str, ...], ...],
+) -> bool:
+    for layer in layers:
+        for path in paths:
+            if _policy_override_sets_field(layer.default, path):
+                return True
+    return False
+
+
+def _deep_merge_dicts(base: dict[str, Any], update: dict[str, Any]) -> dict[str, Any]:
+    merged = dict(base)
+    for key, value in update.items():
+        existing = merged.get(key)
+        if isinstance(existing, dict) and isinstance(value, dict):
+            merged[key] = _deep_merge_dicts(existing, value)
+        else:
+            merged[key] = value
+    return merged
+
+
+def _render_model_validation_error(source: Path, prefix: str, exc: ValidationError) -> ConfigError:
+    messages = []
+    for error in exc.errors(include_url=False):
+        location = _format_validation_location(prefix, tuple(error.get("loc", ())))
+        messages.append(f"{source}: {location}: {error['msg']}")
+    return ConfigError("\n".join(messages))
+
+
+def _format_validation_location(prefix: str, location: tuple[Any, ...]) -> str:
+    parts = [prefix]
+    for item in location:
+        if isinstance(item, int):
+            parts[-1] = f"{parts[-1]}[{item}]"
+        else:
+            parts.append(str(item))
+    return ".".join(parts)

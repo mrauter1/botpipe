@@ -10,12 +10,18 @@ from dataclasses import asdict, dataclass, is_dataclass
 from datetime import date, datetime, time
 from enum import Enum
 from pathlib import Path
+from copy import deepcopy
 from types import ModuleType, UnionType
 from typing import Annotated, Any, Union, get_args, get_origin
 
 from pydantic import BaseModel
 
 from .compiler import CompiledWorkflow, compile_workflow
+from .route_reporting import (
+    payload_contract_for_route,
+    provider_response_contract_for_routes,
+    route_fields_contract_for_route,
+)
 from .validation import is_workflow_class
 from .workflow_catalog import AuthoringShape, WorkflowCatalogEntry, discover_workflow_catalog
 
@@ -58,15 +64,25 @@ class WorkflowArtifactCapability:
 class WorkflowRouteCapability:
     """Normalized compiled-route capability summary."""
 
-    target: str
+    target: str | None
     summary: str | None
     required_writes: tuple[str, ...]
     handoff: str | None
     on_taken: str | None
+    provider_visibility: str
     provider_visible: bool
     provider_visible_interactive: bool
     provider_visible_full_auto: bool
+    payload_schema_mode: str
+    payload_schema: dict[str, Any] | None
+    payload_contract: dict[str, Any]
+    route_fields_schema: dict[str, Any] | None
+    route_fields_contract: dict[str, Any]
+    preset_kind: str
+    inheritance_source: str
+    disabled: bool
     is_runtime_control: bool
+    available: bool
 
 
 @dataclass(frozen=True, slots=True)
@@ -82,11 +98,15 @@ class WorkflowStepCapability:
     log_artifacts: tuple[str, ...]
     available_routes: tuple[str, ...]
     authored_routes: tuple[str, ...]
+    compiled_route_tags: tuple[str, ...]
+    suppressed_route_tags: tuple[str, ...]
     runtime_control_routes: tuple[str, ...]
     provider_visible_routes_interactive: tuple[str, ...]
     provider_visible_routes_full_auto: tuple[str, ...]
+    provider_response_contracts: dict[str, Any]
     expected_output_schema: dict[str, Any] | None
     routes: dict[str, WorkflowRouteCapability]
+    compiled_routes: dict[str, WorkflowRouteCapability]
     producer_prompt: str | None
     verifier_prompt: str | None
 
@@ -128,6 +148,7 @@ class WorkflowCapabilityEntry:
     artifacts: tuple[WorkflowArtifactCapability, ...]
     routes: dict[str, dict[str, str]]
     global_routes: dict[str, str]
+    compiled_global_routes: dict[str, WorkflowRouteCapability]
     steps: tuple[WorkflowStepCapability, ...]
 
 
@@ -297,6 +318,10 @@ def workflow_capability_payload(entry: WorkflowCapabilityEntry) -> dict[str, obj
         "entry_step_name": entry.entry_step_name,
         "flow_path": None if entry.flow_path is None else str(entry.flow_path),
         "global_routes": dict(entry.global_routes),
+        "compiled_global_routes": {
+            route_name: _route_capability_payload(route)
+            for route_name, route in entry.compiled_global_routes.items()
+        },
         "workflow_py_path": None if entry.workflow_py_path is None else str(entry.workflow_py_path),
         "manifest_path": None if entry.manifest_path is None else str(entry.manifest_path),
         "package_dir": str(entry.package_dir),
@@ -328,30 +353,24 @@ def workflow_capability_payload(entry: WorkflowCapabilityEntry) -> dict[str, obj
             {
                 "available_routes": list(step.available_routes),
                 "authored_routes": list(step.authored_routes),
+                "compiled_route_tags": list(step.compiled_route_tags),
+                "suppressed_route_tags": list(step.suppressed_route_tags),
                 "has_expected_output_schema": step.expected_output_schema is not None,
                 "kind": step.kind,
                 "log_artifacts": list(step.log_artifacts),
                 "name": step.name,
                 "provider_visible_routes_full_auto": list(step.provider_visible_routes_full_auto),
                 "provider_visible_routes_interactive": list(step.provider_visible_routes_interactive),
+                "provider_response_contracts": deepcopy(step.provider_response_contracts),
                 "producer_prompt": step.producer_prompt,
                 "writes": list(step.writes),
                 "reads": list(step.reads),
                 "requires": list(step.requires),
                 "runtime_control_routes": list(step.runtime_control_routes),
-                "routes": {
-                    route_name: {
-                        "target": route.target,
-                        "summary": route.summary,
-                        "required_writes": list(route.required_writes or ()),
-                        "handoff": route.handoff,
-                        "on_taken": route.on_taken,
-                        "provider_visible": route.provider_visible,
-                        "provider_visible_interactive": route.provider_visible_interactive,
-                        "provider_visible_full_auto": route.provider_visible_full_auto,
-                        "is_runtime_control": route.is_runtime_control,
-                    }
-                    for route_name, route in step.routes.items()
+                "routes": {route_name: _route_capability_payload(route) for route_name, route in step.routes.items()},
+                "compiled_routes": {
+                    route_name: _route_capability_payload(route)
+                    for route_name, route in step.compiled_routes.items()
                 },
                 "session_name": step.session_name,
                 "typed_output_schema": step.expected_output_schema,
@@ -464,6 +483,10 @@ def selected_workflow_decomposition_surface_payload(
             "artifacts": [_artifact_capability_payload(artifact) for artifact in entry.artifacts],
             "entry_step_name": entry.entry_step_name,
             "global_routes": dict(entry.global_routes),
+            "compiled_global_routes": {
+                route_name: _route_capability_payload(route)
+                for route_name, route in entry.compiled_global_routes.items()
+            },
             "parameters": [_parameter_field_payload(field) for field in entry.parameters],
             "parameters_supported": entry.parameters_supported,
             "sessions": list(entry.sessions),
@@ -604,6 +627,12 @@ def _capability_entry_from_resolved(resolved, compiled: CompiledWorkflow, catalo
             for step_name, routes in compiled.routes.items()
         },
         global_routes={tag: route.target for tag, route in compiled.global_routes.items()},
+        compiled_global_routes=_compiled_routes(
+            tuple(compiled.global_routes.keys()),
+            step_routes=compiled.global_routes,
+            global_routes={},
+            expected_output_schema=None,
+        ),
         steps=tuple(
             _compiled_step_capability(
                 step,
@@ -650,24 +679,54 @@ def _compiled_routes(
     *,
     step_routes: Mapping[str, Any],
     global_routes: Mapping[str, Any],
+    expected_output_schema: Mapping[str, Any] | None,
 ) -> dict[str, WorkflowRouteCapability]:
     routes: dict[str, WorkflowRouteCapability] = {}
     for route_name in available_routes:
         route = step_routes.get(route_name) or global_routes.get(route_name)
         if route is None:
             continue
+        payload_contract = payload_contract_for_route(
+            route,
+            expected_output_schema=expected_output_schema,
+        )
+        route_fields_contract = route_fields_contract_for_route(route)
         routes[route_name] = WorkflowRouteCapability(
             target=route.target,
             summary=route.summary,
             required_writes=tuple(route.required_writes or ()),
             handoff=route.handoff,
             on_taken=getattr(route.on_taken, "__name__", None),
+            provider_visibility=route.provider_visibility,
             provider_visible=route.provider_visible,
             provider_visible_interactive=route.provider_visible_interactive,
             provider_visible_full_auto=route.provider_visible_full_auto,
+            payload_schema_mode=route.payload_schema_mode,
+            payload_schema=payload_contract["schema"],
+            payload_contract=payload_contract,
+            route_fields_schema=route.route_fields_schema,
+            route_fields_contract=route_fields_contract,
+            preset_kind=route.preset_kind,
+            inheritance_source=route.inheritance_source,
+            disabled=route.disabled,
             is_runtime_control=route.is_runtime_control,
+            available=not route.disabled,
         )
     return routes
+
+
+def _provider_route_map(step: Any, *, policy: str) -> dict[str, Any]:
+    visible_tags = (
+        step.provider_visible_routes_interactive
+        if policy == "interactive"
+        else step.provider_visible_routes_full_auto
+    )
+    route_table = getattr(step, "route_table", None) or {}
+    return {
+        route_tag: route_table[route_tag]
+        for route_tag in visible_tags
+        if route_tag in route_table and not route_table[route_tag].disabled
+    }
 
 
 def _compiled_step_capability(
@@ -681,6 +740,14 @@ def _compiled_step_capability(
         step.available_routes,
         step_routes=step_routes,
         global_routes=global_routes,
+        expected_output_schema=step.expected_output_schema,
+    )
+    compiled_route_tags = tuple((getattr(step, "route_table", None) or {}).keys())
+    compiled_routes = _compiled_routes(
+        compiled_route_tags,
+        step_routes=step_routes,
+        global_routes=global_routes,
+        expected_output_schema=step.expected_output_schema,
     )
     return WorkflowStepCapability(
         name=step.name,
@@ -692,11 +759,24 @@ def _compiled_step_capability(
         log_artifacts=step.log_artifacts,
         available_routes=step.available_routes,
         authored_routes=step.authored_routes,
+        compiled_route_tags=compiled_route_tags,
+        suppressed_route_tags=tuple(tag for tag, route in compiled_routes.items() if route.disabled),
         runtime_control_routes=step.runtime_control_routes,
         provider_visible_routes_interactive=step.provider_visible_routes_interactive,
         provider_visible_routes_full_auto=step.provider_visible_routes_full_auto,
+        provider_response_contracts={
+            "interactive": provider_response_contract_for_routes(
+                routes=_provider_route_map(step, policy="interactive"),
+                expected_output_schema=step.expected_output_schema,
+            ),
+            "full_auto": provider_response_contract_for_routes(
+                routes=_provider_route_map(step, policy="full_auto"),
+                expected_output_schema=step.expected_output_schema,
+            ),
+        },
         expected_output_schema=step.expected_output_schema,
         routes=routes,
+        compiled_routes=compiled_routes,
         producer_prompt=_prompt_path(step.producer_prompt),
         verifier_prompt=_prompt_path(step.verifier_prompt),
     )
@@ -721,6 +801,31 @@ def _artifact_capability_payload(artifact: WorkflowArtifactCapability) -> dict[s
     }
 
 
+def _route_capability_payload(route: WorkflowRouteCapability) -> dict[str, object]:
+    return {
+        "target": route.target,
+        "summary": route.summary,
+        "required_writes": list(route.required_writes or ()),
+        "handoff": route.handoff,
+        "on_taken": route.on_taken,
+        "provider_visibility": route.provider_visibility,
+        "provider_visible": route.provider_visible,
+        "provider_visible_interactive": route.provider_visible_interactive,
+        "provider_visible_full_auto": route.provider_visible_full_auto,
+        "payload_schema_mode": route.payload_schema_mode,
+        "payload_schema": deepcopy(route.payload_schema),
+        "payload_contract": deepcopy(route.payload_contract),
+        "route_fields_schema": deepcopy(route.route_fields_schema),
+        "route_fields_contract": deepcopy(route.route_fields_contract),
+        "preset_kind": route.preset_kind,
+        "inheritance_source": route.inheritance_source,
+        "disabled": route.disabled,
+        "available": route.available,
+        "suppressed": route.disabled,
+        "is_runtime_control": route.is_runtime_control,
+    }
+
+
 def _compiled_step_payload(
     repo_root: Path,
     package_dir: Path,
@@ -731,31 +836,25 @@ def _compiled_step_payload(
     return {
         "available_routes": list(step.available_routes),
         "authored_routes": list(step.authored_routes),
+        "compiled_route_tags": list(step.compiled_route_tags),
+        "suppressed_route_tags": list(step.suppressed_route_tags),
         "expected_output_schema": step.expected_output_schema,
         "kind": step.kind,
         "log_artifacts": list(step.log_artifacts),
         "name": step.name,
         "provider_visible_routes_full_auto": list(step.provider_visible_routes_full_auto),
         "provider_visible_routes_interactive": list(step.provider_visible_routes_interactive),
+        "provider_response_contracts": deepcopy(step.provider_response_contracts),
         "producer_prompt": step.producer_prompt,
         "producer_prompt_repo_relative": _prompt_repo_relative(repo_root, package_dir, step.producer_prompt),
         "writes": list(step.writes),
         "reads": list(step.reads),
         "requires": list(step.requires),
         "runtime_control_routes": list(step.runtime_control_routes),
-        "routes": {
-            route_name: {
-                "target": route.target,
-                "summary": route.summary,
-                "required_writes": list(route.required_writes or ()),
-                "handoff": route.handoff,
-                "on_taken": route.on_taken,
-                "provider_visible": route.provider_visible,
-                "provider_visible_interactive": route.provider_visible_interactive,
-                "provider_visible_full_auto": route.provider_visible_full_auto,
-                "is_runtime_control": route.is_runtime_control,
-            }
-            for route_name, route in step.routes.items()
+        "routes": {route_name: _route_capability_payload(route) for route_name, route in step.routes.items()},
+        "compiled_routes": {
+            route_name: _route_capability_payload(route)
+            for route_name, route in step.compiled_routes.items()
         },
         "route_targets": dict(route_targets),
         "session_name": step.session_name,

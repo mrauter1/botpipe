@@ -14,13 +14,12 @@ from .models import (
     VerifierRequest,
 )
 from .retries import ProviderRetryPolicy, build_retry_feedback
-from .protocols import AsyncLLMProvider, AsyncProviderTransport, LLMProvider, ProviderTransport
+from .protocols import LLMProvider, ProviderTransport, validate_llm_provider, validate_provider_transport
 from .rendered import RenderedLLMProvider
 from .turns import ProviderTurnResult, RenderedProviderTurn
 
 __all__ = [
     "LLMProvider",
-    "AsyncLLMProvider",
     "LLMRequest",
     "OutcomeResponse",
     "ProducerRequest",
@@ -30,7 +29,6 @@ __all__ = [
     "ProviderCall",
     "ProviderRetryPolicy",
     "ProviderTransport",
-    "AsyncProviderTransport",
     "StepProviderUsage",
     "TokenUsage",
     "ProviderTurnContext",
@@ -40,4 +38,6 @@ __all__ = [
     "ScriptedLLMProvider",
     "VerifierRequest",
     "build_retry_feedback",
+    "validate_llm_provider",
+    "validate_provider_transport",
 ]

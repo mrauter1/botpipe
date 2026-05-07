@@ -56,14 +56,14 @@
 
 ## Routes
 
-- Treat `question` as the only default runtime control route; use it only when a true intent gap or missing hard constraint blocks safe progress.
-- If this workflow authors `blocked` or `failed`, treat them as ordinary application routes rather than framework defaults.
+- Treat helper routes only when the runtime contract exposes them for this step; use `question` only use it only when a true intent gap or missing hard constraint blocks safe progress.
+- Treat helper routes as ordinary compiled routes with conventional defaults rather than a separate control-routing subsystem.
 
 ### Route guidance for the verifier
 - `portfolio_operating_model_analyzed`: the lifecycle matrix, gap analysis, and change-candidate manifest are aligned and ready for packaging.
 - `needs_rework`: the same lifecycle-analysis boundary still holds, but one or more analysis artifacts need local repair.
 - `needs_replan`: the focus set, criteria, or evidence boundary changed materially and framing must be revisited.
-- Treat `question` as the only default runtime control route; use it only for genuine intent gaps, missing prerequisites, or irreconcilable contradictions.
+- Treat helper routes only when the runtime contract exposes them for this step; use `question` only use it only for genuine intent gaps, missing prerequisites, or irreconcilable contradictions.
 
 ## Out Of Scope
 

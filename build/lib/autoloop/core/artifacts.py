@@ -10,11 +10,12 @@ from typing import TYPE_CHECKING, Any, Iterable, Iterator, Literal, Mapping
 
 from pydantic import BaseModel, ValidationError
 
+from .context_placeholders import CTX_MODEL_ROOTS, validate_safe_ctx_reference
 from .errors import WorkflowExecutionError
 
 ArtifactKind = Literal["text", "markdown", "json", "raw"]
 if TYPE_CHECKING:
-    from .context import Context
+    from .context import Context, RequestContext
     from .steps import Step
 
 
@@ -216,11 +217,83 @@ class CompiledArtifact:
 _PLACEHOLDER_RE = re.compile(r"\{([^{}]+)\}")
 
 
+class PromptContextView:
+    """Restricted runtime prompt surface for safe ``ctx.*`` placeholder access."""
+
+    def __init__(self, context: Context) -> None:
+        self._context = context
+
+    @property
+    def message(self) -> str | None:
+        return self._context.message
+
+    @property
+    def request(self) -> "RequestContext":
+        return self._context.request
+
+    @property
+    def request_file(self) -> Path:
+        return self._context.request_file
+
+    @property
+    def input(self) -> Any:
+        return self._context.input
+
+    @property
+    def state(self) -> BaseModel:
+        return self._context.state
+
+    @property
+    def params(self) -> BaseModel:
+        return self._context.params
+
+    @property
+    def task_id(self) -> str:
+        return self._context.task_id
+
+    @property
+    def run_id(self) -> str:
+        return self._context.run_id
+
+    @property
+    def workflow_name(self) -> str:
+        return self._context.workflow_name
+
+    @property
+    def task_folder(self) -> Path:
+        return self._context.task_folder
+
+    @property
+    def workflow_folder(self) -> Path:
+        return self._context.workflow_folder
+
+    @property
+    def run_folder(self) -> Path:
+        return self._context.run_folder
+
+    @property
+    def package_folder(self) -> Path:
+        return self._context.package_folder
+
+    @property
+    def root(self) -> Path:
+        return self._context.root
+
+    @property
+    def run(self) -> Any:
+        return self._context.run
+
+    @property
+    def workflow(self) -> Any:
+        return self._context.workflow
+
+
 def resolve_artifact_template(template: str | Artifact, context: Context) -> Path:
     """Resolve a template against runtime context."""
 
     artifact = template if isinstance(template, Artifact) else None
     raw_template = artifact.template if artifact is not None else template
+    _reject_ctx_placeholders_in_artifact_template(raw_template)
     candidate = Path(raw_template)
     if candidate.is_absolute():
         return candidate
@@ -252,6 +325,12 @@ def render_runtime_template(
         if replace_roots is not None and root_name not in replace_roots:
             return match.group(0)
         value = _resolve_placeholder(expression, context, placeholder_label=placeholder_label)
+        if root_name == "ctx":
+            return _render_prompt_value(
+                value,
+                expression=expression,
+                placeholder_label=placeholder_label,
+            )
         return "" if value is None else str(value)
 
     return _PLACEHOLDER_RE.sub(replace, template)
@@ -368,12 +447,36 @@ def _load_jsonschema_validator_cls() -> type[Any]:
     return Draft202012Validator
 
 
+def _reject_ctx_placeholders_in_artifact_template(template: str) -> None:
+    for placeholder in _PLACEHOLDER_RE.findall(template):
+        if placeholder.strip().split(".", 1)[0] == "ctx":
+            raise WorkflowExecutionError(
+                "ctx.* placeholders are only supported in prompts and workflow-step messages, not artifact paths"
+            )
+
+
+def _render_prompt_value(value: Any, *, expression: str, placeholder_label: str) -> str:
+    if value is None:
+        return ""
+    if isinstance(value, (str, int, float, bool, Path)):
+        return str(value)
+    raise WorkflowExecutionError(
+        f"{placeholder_label} {{{expression}}} resolved to a non-scalar value"
+    )
+
+
 def _resolve_placeholder(expression: str, context: Context, *, placeholder_label: str) -> Any:
     parts = expression.split(".")
     if not parts:
         return ""
     root_name = parts[0]
     current: Any
+    if root_name == "ctx":
+        return _resolve_ctx_placeholder(
+            expression,
+            context,
+            placeholder_label=placeholder_label,
+        )
     if root_name == "task_id":
         current = context.task_id
     elif root_name == "run_id":
@@ -390,6 +493,20 @@ def _resolve_placeholder(expression: str, context: Context, *, placeholder_label
         current = context.package_folder
     elif root_name == "root":
         current = context.root
+    elif root_name == "request_file":
+        current = context.request_file
+    elif root_name == "params":
+        current = context.params
+    elif root_name == "workflow_params":
+        current = context.workflow_params
+    elif root_name == "input":
+        if len(parts) > 1:
+            return _resolve_input_placeholder(
+                expression,
+                context,
+                placeholder_label=placeholder_label,
+            )
+        current = context.input
     elif root_name == "state":
         current = context.state
     elif root_name == "item":
@@ -422,6 +539,80 @@ def _resolve_placeholder(expression: str, context: Context, *, placeholder_label
         else:
             current = getattr(current, part, "")
     return "" if current is None else current
+
+
+def _resolve_input_placeholder(
+    expression: str,
+    context: Context,
+    *,
+    placeholder_label: str,
+) -> Any:
+    parts = expression.split(".")
+    if len(parts) < 2:
+        return context.input
+
+    if parts[1] != "message" and context.input_fields is None:
+        raise WorkflowExecutionError(
+            f"{placeholder_label} {{{expression}}} requires workflow input, but no input was provided"
+        )
+
+    current: Any = context.input
+    for part in parts[1:]:
+        if current is None:
+            return ""
+        if isinstance(current, Mapping):
+            if part not in current:
+                raise WorkflowExecutionError(
+                    f"{placeholder_label} {{{expression}}} references unknown input field {part!r}"
+                )
+            current = current[part]
+            continue
+        try:
+            current = getattr(current, part)
+        except AttributeError as exc:
+            raise WorkflowExecutionError(
+                f"{placeholder_label} {{{expression}}} references unknown input field {part!r}"
+            ) from exc
+    return "" if current is None else current
+
+
+def _resolve_ctx_placeholder(
+    expression: str,
+    context: Context,
+    *,
+    placeholder_label: str,
+) -> Any:
+    try:
+        parts = validate_safe_ctx_reference(expression)
+    except ValueError as exc:
+        raise WorkflowExecutionError(
+            f"{placeholder_label} {{{expression}}} is not a supported safe dotted path"
+        ) from exc
+
+    view = PromptContextView(context)
+    root_name = parts[1]
+    if root_name in CTX_MODEL_ROOTS:
+        field_name = parts[2]
+        if root_name == "input" and field_name != "message" and context.input_fields is None:
+            raise WorkflowExecutionError(
+                f"ctx.{root_name}.{field_name} requires workflow input, but no input was provided"
+            )
+        current = getattr(view, root_name)
+        if current is None:
+            raise WorkflowExecutionError(
+                f"{placeholder_label} {{{expression}}} requires an available runtime value before {field_name!r}"
+            )
+        try:
+            return _lookup_runtime_value(current, field_name)
+        except (AttributeError, KeyError, TypeError) as exc:
+            raise WorkflowExecutionError(
+                f"{placeholder_label} {{{expression}}} references unknown runtime field {field_name!r}"
+            ) from exc
+
+    current: Any = view
+    for part in parts[1:]:
+        current = _lookup_runtime_value(current, part)
+    return current
 
 
 def _resolve_item_placeholder(

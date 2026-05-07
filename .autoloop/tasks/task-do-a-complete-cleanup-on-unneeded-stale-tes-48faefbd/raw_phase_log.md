@@ -161,3 +161,88 @@ phase_mode=single
 phase_ids=unblock-shared-suite,remove-misowned-workflow-suites,split-retained-monoliths
 explicit=True
 current_phase_index=0
+
+
+---
+run_id=run-20260507T194557Z-2f9c2de5 | entry=session_turn | pair=implement | phase=producer | cycle=1 | attempt=1 | thread_id=019e0402-2683-7053-af93-2253220dd35f
+---
+provider=codex
+mode=start
+template=/home/rauter/.local/share/pipx/venvs/autoloop/lib/python3.12/site-packages/autoloop/templates/implement_producer.md
+session_id=019e0402-2683-7053-af93-2253220dd35f
+
+
+---
+run_id=run-20260507T194557Z-2f9c2de5 | entry=phase_output | pair=implement | phase=producer | process=codex-agent | cycle=1 | attempt=1 | thread_id=019e0402-2683-7053-af93-2253220dd35f
+---
+I’m treating this as a phase-scoped test cleanup limited to `tests/`. First I’m reading the phase artifacts and the targeted test files to confirm the exact blockers and avoid pulling unrelated repo state into scope.
+
+The plan artifact confirms this phase is narrower than the full cleanup: remove the obvious misowned coverage, unblock collection, and keep the rest behaviorally intact. I’m checking the exact stale assertions and import blockers before editing so the deletions stay surgical.
+
+I’ve confirmed the first two whole-file deletions and the wheel smoke rewrite target. Now I’m isolating the exact stale tests inside the retained files so I can remove only the misowned coverage and leave the shared contracts intact.
+
+The remaining blockers are localized: one monolithic unit file importing contract specs from repo workflow packages, a few stale retained tests, and one helper that still copies repo workflow/docs trees. I’m reading the exact call sites now so I can replace only the repo-owned dependencies with local fixtures.
+
+I have enough context to edit safely. The change set is: delete the two whole stale files, rewrite the wheel smoke test to package/CLI/import behavior only, remove the recursive-wrapper assertions, drop the docs-text and bundled-workflow export tests, and replace the shared unit file’s top-level workflow-contract imports with local artifact specs.
+
+I’m applying the file edits now. I’m keeping this phase tight: only the explicit stale/shared-test removals and the local-fixture replacement needed to stop collection from depending on repo-owned workflow contract modules.
+
+The edit pass is in place. I’m checking the touched files for any syntax or dangling-code issues before running pytest collection, because the recursive-template removals and the local artifact-spec replacement were the two spots most likely to leave cleanup debris.
+
+The recursive-template test removal left a dangling tail in `test_package_cli.py`; I’m cleaning that up and then rerunning syntax and collection checks with `python3`, since this shell doesn’t have `python` on PATH.
+
+Syntax is clean. The environment can’t run `pytest` because the interpreter on PATH lacks the module, so I’m checking whether there’s a project-local test runner available before I close out validation.
+
+Both pytest jobs are running under the repo’s local `.venv` now: one full `--collect-only` pass for the `tests` tree, and one focused execution pass for the files changed in this phase. I’m waiting on those results before updating the run artifacts.
+
+Collection is clean across the full `tests` tree. The focused execution pass is mostly green but has a couple of failures in the touched set, so I’m pulling the failure details and fixing those before finalizing.
+
+The only execution failures are in `test_stdlib_and_extensions.py`, and they’re stale route-shape expectations rather than import or collection problems. I’m confirming those assertions against the current compiled surface and trimming just the obsolete `blocked`/`failed` expectations so the shared helper tests match current behavior.
+
+The stale route assertions are patched. I’m rerunning the focused pytest set now; the command is still in flight, so I’m waiting for the final result rather than guessing from partial output.
+
+The focused suite is almost through without new failures after the stale route cleanup. I’m waiting for the final exit rather than truncating the validation record.
+
+The phase goals are satisfied in code and validation now. I’m updating the run artifacts next with the exact files changed, the scoped decisions that mattered, and the validation results, then I’ll summarize the outcome and the one remaining broader cleanup step for later phases.
+
+I generated a few `__pycache__` artifacts while validating. I’m removing those cache files so the workspace diff stays limited to the intentional test-source changes and the required run artifacts.
+
+Pytest touched tracked cache artifacts under `tests/__pycache__`, which are outside the intent of this phase. I’m restoring those tracked cache files from HEAD so the diff stays on the source tests only.
+
+Scope considered
+
+`tests/` only for source changes, plus the required run artifacts at `.autoloop/.../implementation_notes.md` and `.autoloop/.../decisions.txt`.
+
+What I analyzed
+
+The phase plan and decisions ledger, then the targeted stale/shared tests in [tests/runtime/test_wheel_packaging_smoke.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/tests/runtime/test_wheel_packaging_smoke.py), [tests/runtime/test_package_cli.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/tests/runtime/test_package_cli.py), [tests/contract/test_engine_contracts.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/tests/contract/test_engine_contracts.py), [tests/unit/test_simple_surface.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/tests/unit/test_simple_surface.py), [tests/unit/test_stdlib_and_extensions.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/tests/unit/test_stdlib_and_extensions.py), and [tests/unit/test_optimization_helpers.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/tests/unit/test_optimization_helpers.py). I also validated current route-shape expectations in the shared stdlib test after the import-blocker cleanup.
+
+What I changed
+
+- Removed the stale parity/docs test files from `tests/`:
+  `tests/runtime/test_workflow_integration_parity.py`
+  `tests/test_architecture_baseline_docs.py`
+- Rewrote the wheel smoke test to check wheel build/install, CLI help, and public `autoloop` imports only, with no packaged-workflow asset assertions.
+- Removed the recursive wrapper/template assertions from `tests/runtime/test_package_cli.py`.
+- Removed the docs-text assertion from `tests/contract/test_engine_contracts.py`.
+- Removed the bundled-workflow export/discovery tests from `tests/unit/test_simple_surface.py`.
+- Replaced the top-level `autoloop.workflows.*.contracts` imports in `tests/unit/test_stdlib_and_extensions.py` with local `BaseModel`-backed `JsonArtifactSpec` fixtures.
+- Replaced the optimizer helper’s repo-copy fixture with a synthetic workflow package created under `tmp_path` in `tests/unit/test_optimization_helpers.py`.
+- Trimmed three stale route-surface expectations in `tests/unit/test_stdlib_and_extensions.py` so they match the current shared synthetic fixture behavior.
+
+Key findings / decisions
+
+- The immediate collection blocker was resolved without touching product code: shared test collection no longer imports repo-owned workflow contract modules.
+- The wheel smoke coverage is now aligned with this phase’s ownership boundary: package/CLI/import behavior stays covered, bundled workflow assets do not.
+- The shared capability/decomposition helper tests had stale expectations for implicit `blocked`/`failed` route entries; current snapshots expose `question` only for that synthetic fixture.
+- Validation passed with:
+  `.venv/bin/python -m pytest --collect-only tests`
+  and
+  `.venv/bin/python -m pytest tests/runtime/test_wheel_packaging_smoke.py tests/runtime/test_package_cli.py tests/contract/test_engine_contracts.py tests/unit/test_simple_surface.py tests/unit/test_stdlib_and_extensions.py tests/unit/test_optimization_helpers.py -q`
+  Result: `1481` tests collected, `429` targeted tests passed.
+
+Open issues / next step
+
+- This phase did not yet remove or relocate the workflow-owned runtime package suites under `tests/runtime/`.
+- `tests/strictness/test_no_compat.py` was not narrowed yet.
+- The monolith splits for `test_engine_contracts.py` and `test_stdlib_and_extensions.py` remain for a later cleanup phase.

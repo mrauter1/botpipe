@@ -1,6 +1,5 @@
 from __future__ import annotations
 
-import json
 import subprocess
 import sys
 import venv
@@ -24,7 +23,7 @@ def _venv_bin(venv_dir: Path, name: str) -> str:
     return str(venv_dir / "bin" / name)
 
 
-def test_built_wheel_installs_cli_and_packaged_workflow_assets(tmp_path: Path) -> None:
+def test_built_wheel_installs_public_autoloop_package_and_cli(tmp_path: Path) -> None:
     dist_dir = tmp_path / "dist"
     dist_dir.mkdir(parents=True, exist_ok=True)
     _run(
@@ -51,32 +50,26 @@ def test_built_wheel_installs_cli_and_packaged_workflow_assets(tmp_path: Path) -
 
     help_result = _run(autoloop, "--help")
     assert "autoloop" in help_result.stdout
+    assert "workflows" in help_result.stdout
+    assert "run" in help_result.stdout
 
-    list_help_result = _run(autoloop, "workflows", "list", "--help")
-    assert ".autoloop/workflows/." in list_help_result.stdout
+    workflow_help_result = _run(autoloop, "workflows", "--help")
+    assert "list" in workflow_help_result.stdout
 
-    workspace_root = tmp_path / "empty-workspace"
-    workspace_root.mkdir(parents=True, exist_ok=True)
-    list_result = _run(autoloop, "workflows", "list", "--root", str(workspace_root))
-    payload = json.loads(list_result.stdout)
-
-    assert any(entry["name"] == "autoloop_v1" for entry in payload)
-    assert all(entry["source_root_kind"] == "package" for entry in payload)
-
-    asset_check = _run(
+    import_check = _run(
         python,
         "-c",
         "\n".join(
             (
-                "from importlib.resources import files",
-                "root = files('autoloop') / 'workflows'",
-                "manifest = root / 'autoloop_v1' / 'workflow.toml'",
-                "prompt = root / 'autoloop_v1' / 'prompts' / 'README.md'",
-                "asset = root / 'release_candidate_to_go_no_go' / 'assets' / 'release_decision_package_checklist.md'",
-                "assert manifest.is_file(), manifest",
-                "assert prompt.is_file(), prompt",
-                "assert asset.is_file(), asset",
+                "import autoloop",
+                "from autoloop import FINISH, Route, Workflow, step",
+                "from autoloop.runtime import cli",
+                "assert Workflow is not None",
+                "assert step is not None",
+                "assert Route is not None",
+                "assert FINISH == 'FINISH'",
+                "assert callable(cli.main)",
             )
         ),
     )
-    assert asset_check.returncode == 0
+    assert import_check.returncode == 0

@@ -48,7 +48,7 @@ def build_retry_feedback(
             "Action required:",
             "- Repair the issue using the current Runtime Step Contract.",
             "- Use only an allowed route.",
-            "- If selecting `question`, include a non-empty top-level `question`.",
+            "- If selecting a question-style route, include non-empty `outcome.route_fields.questions`.",
             "- Write all artifacts required by the selected route.",
         )
     )

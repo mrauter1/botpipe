@@ -1,11 +1,13 @@
 MANIFEST.in
 pyproject.toml
 autoloop/__init__.py
+autoloop/sdk.py
 autoloop/simple.py
 autoloop/core/__init__.py
 autoloop/core/artifacts.py
 autoloop/core/compiler.py
 autoloop/core/context.py
+autoloop/core/context_placeholders.py
 autoloop/core/descriptors.py
 autoloop/core/discovery.py
 autoloop/core/effects.py
@@ -19,9 +21,12 @@ autoloop/core/inventory.py
 autoloop/core/lowering.py
 autoloop/core/mappings.py
 autoloop/core/operations.py
+autoloop/core/outcome_contract.py
 autoloop/core/primitives.py
 autoloop/core/prompt_validation.py
 autoloop/core/prompts.py
+autoloop/core/provider_policy.py
+autoloop/core/route_reporting.py
 autoloop/core/route_required_writes.py
 autoloop/core/routes.py
 autoloop/core/schema_registry.py
@@ -76,6 +81,7 @@ autoloop/runtime/loader.py
 autoloop/runtime/observability.py
 autoloop/runtime/prompts.py
 autoloop/runtime/provider_backends.py
+autoloop/runtime/provider_policy_resolver.py
 autoloop/runtime/runner.py
 autoloop/runtime/static_graph.py
 autoloop/runtime/tracing.py
@@ -83,7 +89,9 @@ autoloop/runtime/workspace.py
 autoloop/runtime/providers/__init__.py
 autoloop/runtime/providers/_common.py
 autoloop/runtime/providers/claude.py
+autoloop/runtime/providers/claude_policy.py
 autoloop/runtime/providers/codex.py
+autoloop/runtime/providers/codex_policy.py
 autoloop/runtime/stores/__init__.py
 autoloop/runtime/stores/filesystem.py
 autoloop/stdlib/__init__.py
@@ -344,4 +352,3 @@ autoloop_v3_surface.egg-info/dependency_links.txt
 autoloop_v3_surface.egg-info/entry_points.txt
 autoloop_v3_surface.egg-info/requires.txt
 autoloop_v3_surface.egg-info/top_level.txt
-tests/test_architecture_baseline_docs.py

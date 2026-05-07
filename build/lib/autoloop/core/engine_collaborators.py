@@ -17,6 +17,12 @@ from .effects import Effects, WorklistEffect
 from .errors import FailureContext, ProviderExecutionError, WorkflowExecutionError
 from .extensions import HookRouteRedirect
 from .operations import OperationRuntime, bind_operation_runtime, provider_configuration
+from .outcome_contract import (
+    build_provider_outcome_schema,
+    payload_schema_for_route,
+    route_fields_schema_for_route,
+)
+from .provider_policy import ProviderPolicyError, policy_fingerprint
 from .primitives import Event, Fail, Goto, Outcome, RequestInput
 from .providers.models import (
     LLMRequest,
@@ -28,7 +34,6 @@ from .providers.models import (
     TokenUsage,
     VerifierRequest,
 )
-from .providers.protocols import supports_async_llm_provider
 from .route_required_writes import effective_route_required_writes_for_step, explicit_route_required_writes
 from .stores.protocols import PendingHandoff, PendingInput
 
@@ -117,7 +122,7 @@ RouteMode = Literal["capture", "finalize"]
 
 @dataclass(frozen=True, slots=True)
 class PairProviderResult:
-    producer_raw_output: str
+    producer_raw_output: str | None
     verifier_raw_output: str | None
     outcome: Any | None
     producer_session: "SessionBinding | None"
@@ -160,14 +165,21 @@ class ProviderContractBuilder:
         retry_feedback: str | None,
         route_handoff: str | None,
     ) -> dict[str, Any]:
+        routes = self.routes(step)
+        response_schema, response_schema_simplified = build_provider_outcome_schema(
+            routes=routes,
+            expected_output_schema=step.expected_output_schema,
+        )
         return {
             "expected_output_schema": deepcopy(step.expected_output_schema),
             "available_routes": self.available_routes(step),
-            "routes": deepcopy(self.routes(step)),
+            "routes": deepcopy(routes),
             "readable_artifacts": self.readable_refs(step.reads, artifacts, context=context),
             "required_artifacts": self.artifact_refs(step.requires, artifacts),
             "writable_artifacts": self.artifact_refs(step.writes, artifacts),
             "route_required_writes": self.route_required_writes(step),
+            "response_schema": response_schema,
+            "response_schema_simplified": response_schema_simplified,
             "retry_feedback": retry_feedback,
             "route_handoff": route_handoff,
             "attempt": attempt,
@@ -193,6 +205,8 @@ class ProviderContractBuilder:
             "required_artifacts": self.artifact_refs(step.producer_requires, artifacts),
             "writable_artifacts": self.artifact_refs(step.producer_writes, artifacts),
             "route_required_writes": {},
+            "response_schema": None,
+            "response_schema_simplified": False,
             "retry_feedback": retry_feedback,
             "route_handoff": route_handoff,
             "attempt": attempt,
@@ -212,14 +226,21 @@ class ProviderContractBuilder:
     ) -> dict[str, Any]:
         readable_names = tuple(dict.fromkeys(step.verifier_reads))
         writable_names = step.verifier_writes or step.writes
+        routes = self.routes(step)
+        response_schema, response_schema_simplified = build_provider_outcome_schema(
+            routes=routes,
+            expected_output_schema=step.expected_output_schema,
+        )
         return {
             "expected_output_schema": deepcopy(step.expected_output_schema),
             "available_routes": self.available_routes(step),
-            "routes": deepcopy(self.routes(step)),
+            "routes": deepcopy(routes),
             "readable_artifacts": self.readable_refs(readable_names, artifacts, context=context),
             "required_artifacts": self.artifact_refs(step.verifier_requires, artifacts),
             "writable_artifacts": self.artifact_refs(writable_names, artifacts),
             "route_required_writes": self.route_required_writes(step),
+            "response_schema": response_schema,
+            "response_schema_simplified": response_schema_simplified,
             "retry_feedback": retry_feedback,
             "route_handoff": route_handoff,
             "attempt": attempt,
@@ -313,10 +334,18 @@ class ProviderContractBuilder:
                 continue
             routes[route_name] = ProviderRoute(
                 summary=compiled_route.summary,
+                target=compiled_route.target,
                 required_writes=tuple(compiled_route.required_writes or ()),
                 explicit_required_writes=explicit_route_required_writes(compiled_route),
                 handoff=compiled_route.handoff,
                 provider_visible=True,
+                provider_visibility=compiled_route.provider_visibility,
+                payload_schema=payload_schema_for_route(
+                    compiled_route,
+                    expected_output_schema=step.expected_output_schema,
+                ),
+                route_fields_schema=route_fields_schema_for_route(compiled_route),
+                preset_kind=compiled_route.preset_kind,
             )
         return routes
 
@@ -341,175 +370,16 @@ class StepDispatcher:
         *,
         route_mode: RouteMode = "finalize",
     ) -> StepExecutionResult:
-        if route_mode == "capture":
-            return run_awaitable_sync(
-                lambda: self.execute_async(
-                    step,
-                    context,
-                    state,
-                    pending_handoffs,
-                    route_mode=route_mode,
-                ),
-                active_loop_error="Synchronous step execution cannot bridge async execution inside an active event loop.",
-            )
-        runtime = context_runtime(context)
-        runtime.set_state(state)
-        runtime.set_active_worklist(step.scope_name)
-        if step.scope_name is not None:
-            context.ensure_selection(step.scope_name)
-        initial_artifacts = self._engine._resolve_artifacts(context)
-        runtime.set_artifacts(initial_artifacts)
-        self._engine._ensure_required_artifacts(step, initial_artifacts)
-        if step.kind == "produce_verify":
-            return self._engine._execute_pair_step(step, context, state, pending_handoffs)
-        if step.kind == "branch_group":
-            return self._engine.branch_group_runtime.run(step, context, state, pending_handoffs)
-
-        before_result = self._engine.hook_runner.run_before(step, context, state, artifacts=initial_artifacts)
-        state = before_result.state
-        runtime.set_state(state)
-        runtime.set_artifacts(self._engine._resolve_artifacts(context))
-        if before_result.control is not None:
-            _, remaining_pending_handoffs = self._engine._matching_pending_handoffs(step, context, pending_handoffs)
-            direct_control = self._engine._normalize_direct_runtime_control(
-                step=step,
-                context=context,
-                control=before_result.control,
-                hook_name=getattr(step.before_hook, "__name__", type(step.before_hook).__name__),
-                hook_phase="before",
-            )
-            scheduled_handoffs = self._engine._schedule_direct_control_handoffs(
-                remaining_pending_handoffs,
-                control=direct_control,
-                context=context,
-                source_step=step.name,
-            )
-            return self._engine._step_result_from_direct_control(
-                step=step,
-                state=state,
-                control=direct_control,
-                pending_handoffs=scheduled_handoffs,
-            )
-        if before_result.event is not None:
-            _, remaining_pending_handoffs = self._engine._matching_pending_handoffs(step, context, pending_handoffs)
-            finalization = self._engine.route_finalizer.finalize(
-                StepFinalizationRequest(
-                    step=step,
-                    context=context,
-                    state=state,
-                    artifacts=self._engine._resolve_artifacts(context),
-                    candidate_event=before_result.event,
-                    candidate_route_present=False,
-                    after_subject=before_result.event,
-                    pending_handoffs=remaining_pending_handoffs,
-                    error_cls=WorkflowExecutionError,
-                    provider_attributable=False,
-                    source_hook=getattr(step.before_hook, "__name__", type(step.before_hook).__name__),
-                    source_phase="before",
-                )
-            )
-            return self._engine._step_result_from_route_finalization(
-                step=step,
-                route_finalization=finalization,
-            )
-        if step.kind == "step":
-            return self._engine._execute_llm_step(step, context, state, pending_handoffs)
-        if step.kind == "workflow":
-            return self._engine._execute_workflow_step(step, context, state, pending_handoffs)
-        if step.kind in {"python", "operation"}:
-            _, remaining_pending_handoffs = self._engine._matching_pending_handoffs(step, context, pending_handoffs)
-            if step.python_handler is None:
-                raise WorkflowExecutionError(f"{step.kind} step {step.name!r} has no compiled handler")
-            runtime = context_runtime(context)
-            runtime.set_route(None)
-            runtime.set_event(None)
-            runtime.set_outcome(None)
-            handler_name = getattr(step.python_handler, "__name__", step.name)
-            invocation_id = f"{step.name}:python_step:{handler_name}"
-            runtime.set_execution_source(
-                hook_name=handler_name,
-                phase="python_step",
-                invocation_id=invocation_id,
-            )
-            try:
-                result = step.python_handler(context)
-                next_state = context.state
-            finally:
-                runtime.set_execution_source(hook_name=None, phase=None, invocation_id=None)
-            try:
-                hook_result = self._engine.hook_runner.normalize_result(
-                    step,
-                    state=next_state,
-                    context=context,
-                    current_event=None,
-                    result=result,
-                    hook_phase="python_step",
-                    hook_name=handler_name,
-                )
-            except WorkflowExecutionError as exc:
-                candidate_route: str | None = None
-                if isinstance(result, str):
-                    candidate_route = result
-                elif isinstance(result, Event):
-                    candidate_route = result.tag
-                annotated = self._engine._annotate_execution_error(
-                    exc,
-                    checkpoint_state=self._engine._clone_state(context.state),
-                    failure_context=FailureContext(
-                        kind="route_validation",
-                        step_name=step.name,
-                        candidate_route=candidate_route,
-                        source_hook=handler_name,
-                        source_phase="python_step",
-                        details={"error": str(exc), "error_type": type(exc).__name__},
-                    ),
-                )
-                if annotated is exc:
-                    raise
-                raise annotated from exc
-            if hook_result.control is not None:
-                direct_control = self._engine._normalize_direct_runtime_control(
-                    step=step,
-                    context=context,
-                    control=hook_result.control,
-                    hook_name=handler_name,
-                    hook_phase="python_step",
-                )
-                scheduled_handoffs = self._engine._schedule_direct_control_handoffs(
-                    remaining_pending_handoffs,
-                    control=direct_control,
-                    context=context,
-                    source_step=step.name,
-                )
-                return self._engine._step_result_from_direct_control(
-                    step=step,
-                    state=next_state,
-                    control=direct_control,
-                    pending_handoffs=scheduled_handoffs,
-                )
-            event = hook_result.event or Event("done")
-            finalization = self._engine.route_finalizer.finalize(
-                StepFinalizationRequest(
-                    step=step,
-                    context=context,
-                    state=next_state,
-                    artifacts=self._engine._resolve_artifacts(context),
-                    candidate_event=event,
-                    candidate_route=event.tag,
-                    candidate_route_present=True,
-                    after_subject=event,
-                    pending_handoffs=remaining_pending_handoffs,
-                    error_cls=WorkflowExecutionError,
-                    provider_attributable=False,
-                    source_hook=handler_name,
-                    source_phase="python_step",
-                )
-            )
-            return self._engine._step_result_from_route_finalization(
-                step=step,
-                route_finalization=finalization,
-            )
-        raise WorkflowExecutionError(f"unsupported step kind {step.kind!r}")
+        return run_awaitable_sync(
+            lambda: self.execute_async(
+                step,
+                context,
+                state,
+                pending_handoffs,
+                route_mode=route_mode,
+            ),
+            active_loop_error="Synchronous step execution cannot bridge async execution inside an active event loop.",
+        )
 
     async def execute_async(
         self,
@@ -614,13 +484,12 @@ class StepDispatcher:
             return self._engine.route_finalizer.capture(request)
         return self._engine.route_finalizer.finalize(request)
 
-    def _require_async_provider(self):
-        provider = self._engine.provider
-        if not supports_async_llm_provider(provider):
-            raise ProviderExecutionError(
-                f"provider {type(provider).__name__!r} does not implement async step execution methods."
-            )
-        return provider
+    async def _call_provider(
+        self,
+        *,
+        call: Callable[[Any], Awaitable[_T]],
+    ) -> _T:
+        return await call(self._engine.provider)
 
     def _execute_workflow_step_for_mode(
         self,
@@ -794,6 +663,7 @@ class StepDispatcher:
                     state,
                     artifacts,
                     baseline_session,
+                    route_mode=route_mode,
                     attempt=attempt,
                     max_attempts=max_attempts,
                     retry_feedback=retry_feedback,
@@ -830,8 +700,7 @@ class StepDispatcher:
                             state=pair_result.state or context.state,
                             artifacts=self._engine._resolve_artifacts(context),
                             candidate_event=pair_result.short_circuit_event,
-                            candidate_route=pair_result.short_circuit_event.tag,
-                            candidate_route_present=True,
+                            candidate_route_present=False,
                             after_subject=pair_result.short_circuit_event,
                             pending_handoffs=remaining_pending_handoffs,
                             error_cls=ProviderExecutionError,
@@ -850,11 +719,7 @@ class StepDispatcher:
                 self._engine._persist_session(pair_result.producer_session, context=context)
                 self._engine._persist_session(pair_result.verifier_session, context=context)
                 assert pair_result.outcome is not None
-                final_event = Event(
-                    pair_result.outcome.tag,
-                    reason=pair_result.outcome.reason,
-                    question=pair_result.outcome.question,
-                )
+                final_event = self._engine._event_from_outcome(step, pair_result.outcome)
                 finalization = self._complete_route(
                     route_mode=route_mode,
                     request=StepFinalizationRequest(
@@ -913,6 +778,7 @@ class StepDispatcher:
                     context,
                     artifacts,
                     baseline_session,
+                    route_mode=route_mode,
                     attempt=attempt,
                     max_attempts=max_attempts,
                     retry_feedback=retry_feedback,
@@ -921,7 +787,7 @@ class StepDispatcher:
                     restorable_pending_handoffs=pending_handoffs,
                 )
                 assert llm_result.outcome is not None
-                final_event = Event(llm_result.outcome.tag, reason=llm_result.outcome.reason, question=llm_result.outcome.question)
+                final_event = self._engine._event_from_outcome(step, llm_result.outcome)
                 finalization = self._complete_route(
                     route_mode=route_mode,
                     request=StepFinalizationRequest(
@@ -965,6 +831,7 @@ class StepDispatcher:
         artifacts: ResolvedArtifacts,
         session: "SessionBinding | None",
         *,
+        route_mode: RouteMode,
         attempt: int,
         max_attempts: int,
         retry_feedback: str | None,
@@ -972,7 +839,50 @@ class StepDispatcher:
         consumed_pending_handoffs: tuple["PendingHandoff", ...],
         restorable_pending_handoffs: tuple["PendingHandoff", ...],
     ) -> PairProviderResult:
-        provider = self._require_async_provider()
+        runtime = context_runtime(context)
+        before_producer_result = self._engine.hook_runner.run_before(
+            step,
+            context,
+            state,
+            artifacts=artifacts,
+            hook=step.before_producer_hook,
+            hook_phase="before_producer",
+        )
+        producer_state = before_producer_result.state
+        runtime.set_state(producer_state)
+        runtime.set_artifacts(self._engine._resolve_artifacts(context))
+        if before_producer_result.control is not None:
+            direct_control = self._engine._normalize_direct_runtime_control(
+                step=step,
+                context=context,
+                control=before_producer_result.control,
+                hook_name=getattr(step.before_producer_hook, "__name__", type(step.before_producer_hook).__name__),
+                hook_phase="before_producer",
+            )
+            return PairProviderResult(
+                producer_raw_output=None,
+                verifier_raw_output=None,
+                outcome=None,
+                producer_session=session,
+                verifier_session=None,
+                usage=StepProviderUsage(),
+                state=producer_state,
+                direct_control=direct_control,
+            )
+        if before_producer_result.event is not None:
+            return PairProviderResult(
+                producer_raw_output=None,
+                verifier_raw_output=None,
+                outcome=None,
+                producer_session=session,
+                verifier_session=None,
+                usage=StepProviderUsage(),
+                state=producer_state,
+                short_circuit_event=before_producer_result.event,
+                source_hook=getattr(step.before_producer_hook, "__name__", type(step.before_producer_hook).__name__),
+                source_phase="before_producer",
+            )
+
         producer_prompt = self._engine._resolve_prompt(step.producer_prompt, context=context)
         self._engine._emit_provider_attempt_event(
             "provider_attempt_started",
@@ -982,23 +892,25 @@ class StepDispatcher:
             attempt=attempt,
         )
         try:
-            producer_response = await provider.run_producer_async(
-                ProducerRequest(
-                    step_name=step.name,
-                    producer_prompt=producer_prompt,
+            producer_request = ProducerRequest(
+                step_name=step.name,
+                producer_prompt=producer_prompt,
+                context=context,
+                artifacts=artifacts,
+                session=session,
+                policy=_context_provider_policy(context),
+                **self._engine.provider_contract_builder.pair_producer_contract(
+                    step,
                     context=context,
                     artifacts=artifacts,
-                    session=session,
-                    **self._engine.provider_contract_builder.pair_producer_contract(
-                        step,
-                        context=context,
-                        artifacts=artifacts,
-                        attempt=attempt,
-                        max_attempts=max_attempts,
-                        retry_feedback=retry_feedback,
-                        route_handoff=route_handoff,
-                    ),
-                )
+                    attempt=attempt,
+                    max_attempts=max_attempts,
+                    retry_feedback=retry_feedback,
+                    route_handoff=route_handoff,
+                ),
+            )
+            producer_response = await self._call_provider(
+                call=lambda provider: provider.run_producer(producer_request),
             )
         except asyncio.CancelledError:
             raise
@@ -1030,7 +942,7 @@ class StepDispatcher:
         after_producer_result = self._engine.hook_runner.run_after(
             step,
             context,
-            state=state,
+            state=producer_state,
             artifacts=self._engine._resolve_artifacts(context),
             subject=producer_exec.text,
             candidate_event=None,
@@ -1130,24 +1042,26 @@ class StepDispatcher:
                 attempt=attempt,
             )
             try:
-                verifier_response = await provider.run_verifier_async(
-                    VerifierRequest(
-                        step_name=step.name,
-                        verifier_prompt=verifier_prompt,
-                        producer_raw_output=producer_exec.text,
+                verifier_request = VerifierRequest(
+                    step_name=step.name,
+                    verifier_prompt=verifier_prompt,
+                    producer_raw_output=producer_exec.text,
+                    context=context,
+                    artifacts=review_artifacts,
+                    session=verifier_session,
+                    policy=_context_provider_policy(context),
+                    **self._engine.provider_contract_builder.pair_verifier_contract(
+                        step,
                         context=context,
                         artifacts=review_artifacts,
-                        session=verifier_session,
-                        **self._engine.provider_contract_builder.pair_verifier_contract(
-                            step,
-                            context=context,
-                            artifacts=review_artifacts,
-                            attempt=attempt,
-                            max_attempts=max_attempts,
-                            retry_feedback=retry_feedback,
-                            route_handoff=route_handoff,
-                        ),
-                    )
+                        attempt=attempt,
+                        max_attempts=max_attempts,
+                        retry_feedback=retry_feedback,
+                        route_handoff=route_handoff,
+                    ),
+                )
+                verifier_response = await self._call_provider(
+                    call=lambda provider: provider.run_verifier(verifier_request),
                 )
                 self._engine._validate_outcome(step, verifier_response.outcome)
             except asyncio.CancelledError:
@@ -1204,6 +1118,7 @@ class StepDispatcher:
         artifacts: ResolvedArtifacts,
         session: "SessionBinding | None",
         *,
+        route_mode: RouteMode,
         attempt: int,
         max_attempts: int,
         retry_feedback: str | None,
@@ -1211,7 +1126,6 @@ class StepDispatcher:
         consumed_pending_handoffs: tuple["PendingHandoff", ...],
         restorable_pending_handoffs: tuple["PendingHandoff", ...],
     ) -> ProviderExecResult:
-        provider = self._require_async_provider()
         prompt = self._engine._resolve_prompt(step.producer_prompt, context=context)
         self._engine._emit_provider_attempt_event(
             "provider_attempt_started",
@@ -1221,23 +1135,25 @@ class StepDispatcher:
             attempt=attempt,
         )
         try:
-            response = await provider.run_llm_async(
-                LLMRequest(
-                    step_name=step.name,
-                    prompt=prompt,
+            llm_request = LLMRequest(
+                step_name=step.name,
+                prompt=prompt,
+                context=context,
+                artifacts=artifacts,
+                session=session,
+                policy=_context_provider_policy(context),
+                **self._engine.provider_contract_builder.control_contract(
+                    step,
                     context=context,
                     artifacts=artifacts,
-                    session=session,
-                    **self._engine.provider_contract_builder.control_contract(
-                        step,
-                        context=context,
-                        artifacts=artifacts,
-                        attempt=attempt,
-                        max_attempts=max_attempts,
-                        retry_feedback=retry_feedback,
-                        route_handoff=route_handoff,
-                    ),
-                )
+                    attempt=attempt,
+                    max_attempts=max_attempts,
+                    retry_feedback=retry_feedback,
+                    route_handoff=route_handoff,
+                ),
+            )
+            response = await self._call_provider(
+                call=lambda provider: provider.run_llm(llm_request),
             )
             self._engine._validate_outcome(step, response.outcome)
         except asyncio.CancelledError:
@@ -2139,32 +2055,68 @@ class OperationRecorder:
     def bind_step(
         self,
         *,
+        step: "CompiledStep",
         context: "Context",
         run_folder: "Path",
         step_name: str,
         step_visit: int,
     ):
-        with bind_operation_runtime(
-            OperationRuntime(
-                provider=self._engine.provider,
-                provider_configuration=provider_configuration(
-                    self._engine.provider,
-                    default_session_name=self._engine.compiled.default_session_name,
-                ),
-                prompt_registry=self._engine.prompt_registry,
-                context=context,
-                run_folder=run_folder,
-                workflow_name=self._engine.compiled.workflow_name,
-                topology_hash=self._engine.compiled.topology_hash,
-                source_hash=self._engine.compiled.source_hash,
-                step_name=step_name,
-                step_visit=step_visit,
-                default_session_name=self._engine.compiled.default_session_name,
-                replay_mismatch_behavior=self._engine.operation_replay_mismatch_behavior,
-                event_sink=self._engine.runtime_event_sink,
+        previous_policy = getattr(context, "_provider_policy", _MISSING_PROVIDER_POLICY)
+        resolved_policy = None
+        if self._engine.provider_policy_resolver is not None:
+            try:
+                resolved_policy = self._engine.provider_policy_resolver.resolve_for_step(step)
+            except ProviderPolicyError as exc:
+                context_runtime(context).emit_runtime_event(
+                    "provider_policy_violation",
+                    policy_fingerprint=None,
+                    error_message=str(exc),
+                )
+                raise
+            context._provider_policy = resolved_policy
+            context_runtime(context).emit_runtime_event(
+                "provider_policy_resolved",
+                policy_fingerprint=policy_fingerprint(resolved_policy),
             )
-        ) as runtime:
-            yield runtime
+        try:
+            with bind_operation_runtime(
+                OperationRuntime(
+                    provider=self._engine.provider,
+                    provider_configuration=provider_configuration(
+                        self._engine.provider,
+                        default_session_name=self._engine.compiled.default_session_name,
+                    ),
+                    prompt_registry=self._engine.prompt_registry,
+                    context=context,
+                    run_folder=run_folder,
+                    workflow_name=self._engine.compiled.workflow_name,
+                    topology_hash=self._engine.compiled.topology_hash,
+                    source_hash=self._engine.compiled.source_hash,
+                    step_name=step_name,
+                    step_visit=step_visit,
+                    default_session_name=self._engine.compiled.default_session_name,
+                    replay_mismatch_behavior=self._engine.operation_replay_mismatch_behavior,
+                    policy=resolved_policy,
+                    provider_policy_resolver=self._engine.provider_policy_resolver,
+                    event_sink=self._engine.runtime_event_sink,
+                )
+            ) as runtime:
+                yield runtime
+        finally:
+            if previous_policy is _MISSING_PROVIDER_POLICY:
+                try:
+                    delattr(context, "_provider_policy")
+                except AttributeError:
+                    pass
+            else:
+                context._provider_policy = previous_policy
+
+
+def _context_provider_policy(context: "Context") -> object | None:
+    return getattr(context, "_provider_policy", None)
+
+
+_MISSING_PROVIDER_POLICY = object()
 
 
 class WorkflowInvoker:

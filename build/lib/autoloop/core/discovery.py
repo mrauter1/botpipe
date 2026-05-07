@@ -24,6 +24,7 @@ from .branch_groups.validation import (
     validate_fan_in_step_kind,
     validate_path_safe_name,
 )
+from .context_placeholders import CTX_MODEL_ROOTS, CTX_NESTED_FIELDS, CTX_SCALAR_FIELDS, validate_safe_ctx_reference
 from .descriptors import (
     ParameterField,
     StateField,
@@ -34,8 +35,9 @@ from .descriptors import (
 from .errors import WorkflowValidationError
 from .primitives import AWAIT_INPUT, FAIL, FINISH, GLOBAL, SELF
 from .prompts import resolve_prompt_reference
+from .provider_policy import ProviderPolicy
 from .providers.retries import ProviderRetryPolicy
-from .routes import Route, normalize_route_spec
+from .routes import Route, _replace_route, normalize_route_spec
 from .sessions import DEFAULT_SESSION_NAME
 from .step_state import build_step_item_state_model, build_step_state_model
 from .steps import BranchGroupStep, ChildWorkflowStep, ProduceVerifyStep, PromptStep, PythonStep, Session, Step
@@ -70,6 +72,7 @@ class _EmptyWorkflowState(BaseModel):
 class WorkflowDefinition:
     workflow_cls: type[Any]
     workflow_name: str
+    workflow_policy: ProviderPolicy | None
     state_cls: type[BaseModel]
     parameters_cls: type[BaseModel] | None
     entry: Step
@@ -83,6 +86,7 @@ class WorkflowDefinition:
     extensions: tuple[Any, ...]
     authored_transitions: dict[Step | str, dict[str, Any]]
     transitions: dict[Step | str, dict[str, Any]]
+    framework_default_transitions_by_step: dict[str, dict[str, Any]]
     runtime_control_routes_by_step: dict[str, tuple[str, ...]]
 
     @property
@@ -157,6 +161,7 @@ def get_workflow_definition(workflow_cls: type[Any]) -> WorkflowDefinition:
 
 def describe_workflow_class(workflow_cls: type[Any]) -> WorkflowDefinition:
     _validate_simple_authoring_models(workflow_cls)
+    workflow_policy = _validate_workflow_policy(workflow_cls)
     state_cls = effective_state_model(workflow_cls, fallback_model=_EmptyWorkflowState)
     parameters_cls = effective_parameters_model(workflow_cls)
     entry = getattr(workflow_cls, "entry", None)
@@ -266,13 +271,15 @@ def describe_workflow_class(workflow_cls: type[Any]) -> WorkflowDefinition:
         transitions = _lower_simple_transition_table(transitions, {})
 
     authored_transitions: dict[Step | str, dict[str, Any]] = {}
+    framework_default_transitions_by_step: dict[str, dict[str, Any]] = {}
     runtime_control_routes_by_step: dict[str, tuple[str, ...]] = {}
     if isinstance(transitions, dict):
         authored_transitions = _resolve_named_transition_targets(transitions, steps_by_name)
-        transitions, runtime_control_routes_by_step = _inject_control_routes(
+        framework_default_transitions_by_step, runtime_control_routes_by_step = _lower_control_route_defaults(
             authored_transitions,
             tuple(steps),
         )
+        transitions = authored_transitions
 
     entry = _resolve_named_entry(entry, steps_by_name)
     ordered_steps = tuple(sorted(steps, key=lambda step: step_order.get(id(step), step._order)))
@@ -291,6 +298,7 @@ def describe_workflow_class(workflow_cls: type[Any]) -> WorkflowDefinition:
     return WorkflowDefinition(
         workflow_cls=workflow_cls,
         workflow_name=workflow_name,
+        workflow_policy=workflow_policy,
         state_cls=state_cls,
         parameters_cls=parameters_cls,
         entry=entry,
@@ -304,6 +312,7 @@ def describe_workflow_class(workflow_cls: type[Any]) -> WorkflowDefinition:
         extensions=extensions,
         authored_transitions=authored_transitions,
         transitions=transitions,
+        framework_default_transitions_by_step=framework_default_transitions_by_step,
         runtime_control_routes_by_step=runtime_control_routes_by_step,
     )
 
@@ -342,6 +351,15 @@ def _validate_simple_authoring_models(workflow_cls: type[Any]) -> None:
     raw_params = getattr(workflow_cls, "Params", None)
     if raw_params is not None and (not inspect.isclass(raw_params) or not issubclass(raw_params, BaseModel)):
         raise WorkflowValidationError(f"{workflow_cls.__name__}.Params must inherit from pydantic.BaseModel")
+
+
+def _validate_workflow_policy(workflow_cls: type[Any]) -> ProviderPolicy | None:
+    workflow_policy = getattr(workflow_cls, "policy", None)
+    if workflow_policy is None:
+        return None
+    if not isinstance(workflow_policy, ProviderPolicy):
+        raise WorkflowValidationError(f"{workflow_cls.__name__}.policy must be a ProviderPolicy")
+    return workflow_policy
 
 
 def _snake_case_workflow_name(name: str) -> str:
@@ -591,6 +609,7 @@ def _lower_one_simple_seed(
             after=getattr(declaration, "after", None),
             item_state=step_item_state_model,
             control_routes=getattr(declaration, "control_routes", None),
+            provider_policy=getattr(declaration, "policy", None),
         )
     elif seed.kind == "operation":
         step = PythonStep(
@@ -627,6 +646,7 @@ def _lower_one_simple_seed(
             after_verifier=getattr(declaration, "after_verifier", None),
             item_state=step_item_state_model,
             control_routes=getattr(declaration, "control_routes", None),
+            provider_policy=getattr(declaration, "policy", None),
         )
     elif seed.kind in {"system", "python"}:
         step = PythonStep(
@@ -639,6 +659,7 @@ def _lower_one_simple_seed(
             before=getattr(declaration, "before", None),
             after=getattr(declaration, "after", None),
             control_routes=getattr(declaration, "control_routes", None),
+            provider_policy=getattr(declaration, "policy", None),
         )
     elif seed.kind == "workflow":
         step = ChildWorkflowStep(
@@ -655,6 +676,7 @@ def _lower_one_simple_seed(
             before=getattr(declaration, "before", None),
             after=getattr(declaration, "after", None),
             control_routes=getattr(declaration, "control_routes", None),
+            provider_policy=getattr(declaration, "policy", None),
         )
     else:
         raise WorkflowValidationError(f"unsupported simple step kind {seed.kind!r}")
@@ -1131,6 +1153,22 @@ def _validate_simple_prompt_reference(
         allowed=allow_fan_in_placeholders,
     ):
         return None
+    if reference == "message":
+        raise WorkflowValidationError(
+            f"simple step {step_name!r} prompt placeholder {{message}} is unknown; use {{ctx.message}}"
+        )
+    if reference == "ctx":
+        raise WorkflowValidationError(
+            f"simple step {step_name!r} prompt placeholder {{ctx}} must qualify a runtime context field"
+        )
+    if reference.startswith("ctx."):
+        return _validate_ctx_prompt_reference(
+            reference,
+            step_name=step_name,
+            state_fields=state_fields,
+            parameter_fields=parameter_fields,
+            input_fields=input_fields,
+        )
     parts = reference.split(".")
     if len(parts) == 1:
         name = parts[0]
@@ -1166,6 +1204,8 @@ def _validate_simple_prompt_reference(
             )
         return None
     if root == "input":
+        if second == "message" and not rest:
+            return None
         if second not in input_fields:
             raise WorkflowValidationError(
                 f"simple step {step_name!r} prompt placeholder {{{reference}}} references unknown input field {second!r}"
@@ -1326,6 +1366,80 @@ def _simple_prompt_text(prompt: object, *, search_roots: Sequence[Path]) -> str 
     return None
 
 
+def _validate_ctx_prompt_reference(
+    reference: str,
+    *,
+    step_name: str,
+    state_fields: frozenset[str],
+    parameter_fields: frozenset[str],
+    input_fields: frozenset[str],
+) -> None:
+    model_labels = {
+        "input": "Input",
+        "state": "State",
+        "params": "Params",
+    }
+    qualifier_labels = {
+        "request": "request",
+        "input": "input",
+        "state": "state",
+        "params": "params",
+    }
+    parts = tuple(reference.split("."))
+    if len(parts) == 2 and parts[1] in qualifier_labels:
+        label = qualifier_labels[parts[1]]
+        raise WorkflowValidationError(
+            f"simple step {step_name!r} prompt placeholder {{{reference}}} must qualify a {label} field"
+        )
+
+    def _is_safe_field_candidate(segment: str) -> bool:
+        forbidden_characters = {'"', "'", "(", ")", "[", "]"}
+        return (
+            bool(segment)
+            and not segment.startswith("_")
+            and "__" not in segment
+            and not any(character.isspace() for character in segment)
+            and not any(character in forbidden_characters for character in segment)
+        )
+
+    try:
+        validated = validate_safe_ctx_reference(reference)
+    except ValueError as exc:
+        if len(parts) == 3 and parts[1] in CTX_MODEL_ROOTS and _is_safe_field_candidate(parts[2]):
+            field_name = parts[2]
+            available_fields = {
+                "input": input_fields,
+                "state": state_fields,
+                "params": parameter_fields,
+            }[parts[1]]
+            if field_name not in available_fields:
+                label = model_labels[parts[1]]
+                raise WorkflowValidationError(
+                    f"simple step {step_name!r} prompt placeholder {{{reference}}} references unknown {label} field {field_name!r}"
+                ) from exc
+        raise WorkflowValidationError(
+            f"simple step {step_name!r} prompt placeholder {{{reference}}} is not a supported safe dotted path"
+        ) from exc
+
+    root_name = validated[1]
+    if root_name in CTX_SCALAR_FIELDS or root_name in CTX_NESTED_FIELDS:
+        return None
+    field_name = validated[2]
+    if root_name == "input" and field_name == "message":
+        return None
+    available_fields = {
+        "input": input_fields,
+        "state": state_fields,
+        "params": parameter_fields,
+    }[root_name]
+    if field_name not in available_fields:
+        label = model_labels[root_name]
+        raise WorkflowValidationError(
+            f"simple step {step_name!r} prompt placeholder {{{reference}}} references unknown {label} field {field_name!r}"
+        )
+    return None
+
+
 def _model_field_names(model_cls: object) -> frozenset[str]:
     if not inspect.isclass(model_cls) or not issubclass(model_cls, BaseModel):
         return frozenset()
@@ -1475,14 +1589,7 @@ def _lower_simple_destination(destination: object, simple_step_map: Mapping[obje
         target = _lower_simple_target(destination.target, simple_step_map)
         if target is destination.target:
             return destination
-        return Route(
-            target=target,
-            summary=destination.summary,
-            required_writes=destination.required_writes,
-            handoff=destination.handoff,
-            on_taken=destination.on_taken,
-            provider_visible=destination.provider_visible,
-        )
+        return _replace_route(destination, target=target)
     return _lower_simple_target(destination, simple_step_map)
 
 
@@ -1539,17 +1646,12 @@ def _resolve_transition_source(source: Step | str, steps_by_name: Mapping[str, S
 
 def _resolve_transition_destination(destination: object, *, source: Step | str, steps_by_name: Mapping[str, Step]) -> object:
     if isinstance(destination, Route):
+        if destination.is_disabled:
+            return destination
         target = _resolve_transition_destination(destination.target, source=source, steps_by_name=steps_by_name)
         if target is destination.target:
             return destination
-        return Route(
-            target=target,
-            summary=destination.summary,
-            required_writes=destination.required_writes,
-            handoff=destination.handoff,
-            on_taken=destination.on_taken,
-            provider_visible=destination.provider_visible,
-        )
+        return _replace_route(destination, target=target)
     if destination == SELF:
         return source if isinstance(source, Step) else destination
     if isinstance(destination, str) and destination not in {FINISH, AWAIT_INPUT, FAIL}:
@@ -1574,29 +1676,23 @@ def _merge_transition_tables(base: Mapping[Step | str, Mapping[str, object]], ex
     return merged
 
 
-def _inject_control_routes(
+def _lower_control_route_defaults(
     transitions: Mapping[Step | str, Mapping[str, object]],
     steps: Sequence[Step],
 ) -> tuple[dict[Step | str, dict[str, object]], dict[str, tuple[str, ...]]]:
-    injected: dict[Step | str, dict[str, object]] = {source: dict(route_map) for source, route_map in transitions.items()}
+    framework_defaults_by_step: dict[str, dict[str, object]] = {}
     runtime_control_routes_by_step: dict[str, tuple[str, ...]] = {}
-    global_routes = transitions.get(GLOBAL, {})
     for step in steps:
-        step_routes = injected.setdefault(step, {})
+        default_routes: dict[str, object] = {}
         runtime_routes: list[str] = []
         question_mode = getattr(getattr(step, "control_routes", None), "question", "never")
         if question_mode != "never":
-            if "question" not in step_routes and "question" not in global_routes:
-                step_routes["question"] = AWAIT_INPUT
+            provider_visibility = "always" if question_mode == "always" else "interactive_only"
+            default_routes["question"] = Route.question(provider_visibility=provider_visibility)
             runtime_routes.append("question")
-        if isinstance(step, (PromptStep, ProduceVerifyStep)):
-            if "blocked" not in step_routes and "blocked" not in global_routes:
-                step_routes["blocked"] = AWAIT_INPUT
-            if "failed" not in step_routes and "failed" not in global_routes:
-                step_routes["failed"] = FAIL
-            runtime_routes.extend(("blocked", "failed"))
+        framework_defaults_by_step[step.name] = default_routes
         runtime_control_routes_by_step[step.name] = tuple(runtime_routes)
-    return injected, runtime_control_routes_by_step
+    return framework_defaults_by_step, runtime_control_routes_by_step
 
 
 def _route_signature(destination: object) -> tuple[object, str | None, tuple[str, ...], str | None, object | None]:
@@ -1608,6 +1704,10 @@ def _route_signature(destination: object) -> tuple[object, str | None, tuple[str
         None if route.required_writes is None else tuple(route.required_writes),
         route.handoff,
         route.on_taken,
+        route.provider_visibility,
+        route.payload_schema_mode,
+        route.preset_kind,
+        route.is_disabled,
     )
 
 

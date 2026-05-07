@@ -6,6 +6,7 @@ from dataclasses import dataclass, field
 from typing import TYPE_CHECKING, Any, Literal, Mapping
 
 from ..primitives import Outcome
+from ..provider_policy import ResolvedProviderPolicy
 from ..prompts import ResolvedPrompt
 from ..stores.protocols import SessionBinding
 
@@ -57,10 +58,15 @@ class StepProviderUsage:
 @dataclass(frozen=True, slots=True)
 class ProviderRoute:
     summary: str | None = None
+    target: str | None = None
     required_writes: tuple[str, ...] = ()
     explicit_required_writes: tuple[str, ...] | None = None
     handoff: str | None = None
     provider_visible: bool = True
+    provider_visibility: str = "always"
+    payload_schema: dict[str, Any] | None = None
+    route_fields_schema: dict[str, Any] | None = None
+    preset_kind: str = "custom"
 
 
 @dataclass(frozen=True, slots=True)
@@ -83,8 +89,11 @@ class ProviderTurnContext:
     required_artifacts: tuple[ProviderArtifactRef, ...] = ()
     writable_artifacts: tuple[ProviderArtifactRef, ...] = ()
     route_required_writes: Mapping[str, tuple[str, ...]] = field(default_factory=dict)
+    response_schema: Mapping[str, Any] | None = None
+    response_schema_simplified: bool = False
     retry_feedback: str | None = None
     route_handoff: str | None = None
+    policy: ResolvedProviderPolicy | None = None
     attempt: int = 1
     max_attempts: int = 3
 
@@ -103,8 +112,11 @@ class ProducerRequest:
     required_artifacts: tuple[ProviderArtifactRef, ...] = ()
     writable_artifacts: tuple[ProviderArtifactRef, ...] = ()
     route_required_writes: Mapping[str, tuple[str, ...]] = field(default_factory=dict)
+    response_schema: Mapping[str, Any] | None = None
+    response_schema_simplified: bool = False
     retry_feedback: str | None = None
     route_handoff: str | None = None
+    policy: ResolvedProviderPolicy | None = None
     attempt: int = 1
     max_attempts: int = 3
 
@@ -124,8 +136,11 @@ class VerifierRequest:
     required_artifacts: tuple[ProviderArtifactRef, ...] = ()
     writable_artifacts: tuple[ProviderArtifactRef, ...] = ()
     route_required_writes: Mapping[str, tuple[str, ...]] = field(default_factory=dict)
+    response_schema: Mapping[str, Any] | None = None
+    response_schema_simplified: bool = False
     retry_feedback: str | None = None
     route_handoff: str | None = None
+    policy: ResolvedProviderPolicy | None = None
     attempt: int = 1
     max_attempts: int = 3
 
@@ -144,8 +159,11 @@ class LLMRequest:
     required_artifacts: tuple[ProviderArtifactRef, ...] = ()
     writable_artifacts: tuple[ProviderArtifactRef, ...] = ()
     route_required_writes: Mapping[str, tuple[str, ...]] = field(default_factory=dict)
+    response_schema: Mapping[str, Any] | None = None
+    response_schema_simplified: bool = False
     retry_feedback: str | None = None
     route_handoff: str | None = None
+    policy: ResolvedProviderPolicy | None = None
     attempt: int = 1
     max_attempts: int = 3
 
@@ -160,6 +178,7 @@ class OperationRequest:
     return_schema: Mapping[str, Any] | None = None
     choices: tuple[str, ...] = ()
     retry_feedback: str | None = None
+    policy: ResolvedProviderPolicy | None = None
     attempt: int = 1
     max_attempts: int = 3
 

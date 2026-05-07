@@ -2,11 +2,14 @@
 
 from __future__ import annotations
 
+from collections.abc import Callable
 from dataclasses import dataclass
 import json
+from pathlib import Path
 from typing import Any, Literal, Mapping, Sequence
 
 from ..errors import ProviderExecutionError
+from ..outcome_contract import describe_route_target
 from .models import ProviderArtifactRef, ProviderReadableRef, ProviderTurnContext
 from .turns import RenderedProviderTurn
 
@@ -82,8 +85,39 @@ def render_provider_turn_with_policy(
         turn_kind=context.turn_kind,
         prompt_text=rendered_prompt,
         session=context.session,
+        policy=context.policy,
+        run_folder=_context_run_folder(context.context),
+        workspace_root=_context_workspace_root(context.context),
+        step_execution_id=_context_step_execution_id(context.context),
+        runtime_event_sink=_context_runtime_event_sink(context.context),
         expected_response="raw_text" if context.turn_kind in {"producer", "operation"} else "outcome_json",
+        response_schema=None if context.turn_kind in {"producer", "operation"} else _response_schema_payload(context),
+        response_schema_simplified=context.response_schema_simplified if context.turn_kind not in {"producer", "operation"} else False,
     )
+
+
+def _context_run_folder(context: object) -> Path | None:
+    run_folder = getattr(context, "run_folder", None)
+    if isinstance(run_folder, Path):
+        return run_folder
+    return None
+
+
+def _context_workspace_root(context: object) -> Path | None:
+    workspace_root = getattr(context, "root", None)
+    if isinstance(workspace_root, Path):
+        return workspace_root
+    return None
+
+
+def _context_step_execution_id(context: object) -> str | None:
+    value = getattr(context, "_step_execution_id", None)
+    return value if isinstance(value, str) and value else None
+
+
+def _context_runtime_event_sink(context: object) -> Callable[[str, Mapping[str, Any]], None] | None:
+    sink = getattr(context, "_runtime_event_sink", None)
+    return sink if callable(sink) else None
 
 
 def _markdown_table(headers: Sequence[str], rows: Sequence[Sequence[str]]) -> str:
@@ -211,7 +245,7 @@ def _response_contract_sections(context: ProviderTurnContext) -> list[str]:
         ]
     return [
         "### Control response",
-        _render_control_response(context.expected_output_schema),
+        _render_outcome_response(context),
     ]
 
 
@@ -249,30 +283,78 @@ def _render_operation_response(context: ProviderTurnContext) -> str:
     return "Return a non-empty raw-text value only."
 
 
-def _render_control_response(schema: Mapping[str, Any] | None) -> str:
-    payload_rule = (
-        "If no control payload schema is declared, `payload` may be omitted or `{}`."
-        if not isinstance(schema, Mapping)
-        else "If a control payload schema is declared, `payload` must validate against it."
-    )
+def _render_outcome_response(context: ProviderTurnContext) -> str:
+    response_schema = _response_schema_payload(context) or {
+        "type": "object",
+        "properties": {
+            "outcome": {
+                "type": "object",
+                "properties": {
+                    "tag": {"type": "string", "enum": list(_visible_routes(context))},
+                    "payload": {"type": "object", "additionalProperties": True},
+                    "route_fields": {"type": "object", "additionalProperties": True},
+                },
+                "required": ["tag", "payload", "route_fields"],
+                "additionalProperties": False,
+            }
+        },
+        "required": ["outcome"],
+        "additionalProperties": False,
+    }
+    route_sections = []
+    for route in _visible_routes(context):
+        route_sections.extend(
+            [
+                f"#### Route `{route}`",
+                f"- Summary: {_route_summary(context, route)}",
+                f"- Target: {_route_target(context, route)}",
+                f"- Required writes: {_render_route_required_writes(context, route)}",
+                "",
+                "Payload schema:",
+                "```json",
+                json.dumps(_route_payload_schema(context, route), indent=2, sort_keys=True),
+                "```",
+                "Route fields schema:",
+                "```json",
+                json.dumps(_route_fields_schema(context, route), indent=2, sort_keys=True),
+                "```",
+                "",
+            ]
+        )
     lines = [
         "Return exactly one JSON object with this shape:",
         "```json",
         json.dumps(
             {
-                "tag": "<one available route>",
-                "payload": {},
+                "outcome": {
+                    "tag": "<one available route>",
+                    "payload": {},
+                    "route_fields": {},
+                }
             },
             indent=2,
         ),
         "```",
-        payload_rule,
-        "`reason` is optional and defaults to an empty string when omitted.",
-        "If the selected route is `question`, include a non-empty top-level `question` string.",
+        "`outcome.tag` selects one visible route.",
+        "`outcome.payload` is the business or domain payload for the selected route.",
+        "`outcome.route_fields` contains metadata for the selected route only.",
+        "For question-style routes, include a non-empty `outcome.route_fields.questions` list.",
+        "Route helper reasons belong in `outcome.route_fields.reason` when the selected route defines one.",
         "",
-        "#### Payload schema",
-        _render_expected_output_schema(schema),
+        "#### Required outcome structure",
+        "```json",
+        json.dumps(response_schema, indent=2, sort_keys=True),
+        "```",
     ]
+    if context.response_schema_simplified:
+        lines.extend(
+            [
+                "",
+                "The provider-side schema was simplified for size or complexity limits. "
+                "Runtime post-parse validation still enforces the selected route's payload and route-fields schemas.",
+            ]
+        )
+    lines.extend(["", *route_sections])
     return "\n".join(lines)
 
 
@@ -365,6 +447,49 @@ def _route_summary(context: ProviderTurnContext, route: str) -> str:
         if isinstance(summary, str) and summary.strip():
             return summary.strip()
     return "No route summary provided."
+
+
+def _route_target(context: ProviderTurnContext, route: str) -> str:
+    info = context.routes.get(route)
+    target = None
+    if isinstance(info, Mapping):
+        raw_target = info.get("target")
+        if isinstance(raw_target, str):
+            target = raw_target
+    elif info is not None:
+        target = info.target
+    description = describe_route_target(target)
+    return description or "No explicit target description."
+
+
+def _route_payload_schema(context: ProviderTurnContext, route: str) -> dict[str, Any]:
+    info = context.routes.get(route)
+    if isinstance(info, Mapping):
+        schema = info.get("payload_schema")
+        if isinstance(schema, Mapping):
+            return dict(schema)
+    elif info is not None and isinstance(info.payload_schema, Mapping):
+        return dict(info.payload_schema)
+    if isinstance(context.expected_output_schema, Mapping):
+        return dict(context.expected_output_schema)
+    return {"type": "object", "additionalProperties": True}
+
+
+def _route_fields_schema(context: ProviderTurnContext, route: str) -> dict[str, Any]:
+    info = context.routes.get(route)
+    if isinstance(info, Mapping):
+        schema = info.get("route_fields_schema")
+        if isinstance(schema, Mapping):
+            return dict(schema)
+    elif info is not None and isinstance(info.route_fields_schema, Mapping):
+        return dict(info.route_fields_schema)
+    return {"type": "object", "properties": {}, "required": [], "additionalProperties": False}
+
+
+def _response_schema_payload(context: ProviderTurnContext) -> dict[str, Any] | None:
+    if not isinstance(context.response_schema, Mapping):
+        return None
+    return dict(context.response_schema)
 
 
 def _artifact_notes(ref: ProviderArtifactRef) -> str:

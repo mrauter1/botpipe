@@ -3,8 +3,7 @@
 from __future__ import annotations
 
 import asyncio
-
-from ..errors import ProviderExecutionError
+from collections.abc import Callable
 from .models import (
     LLMRequest,
     OperationRequest,
@@ -16,50 +15,39 @@ from .models import (
     VerifierRequest,
 )
 from .parsing import parse_outcome_json
-from .protocols import ProviderTransport, supports_async_provider_transport
+from .protocols import ProviderTransport, validate_provider_transport
 from .rendering import render_provider_turn
+from .turns import ProviderTurnResult
 
 
 class RenderedLLMProvider:
     """Adapt the semantic provider protocol to the rendered transport boundary."""
 
-    def __init__(self, transport: ProviderTransport) -> None:
-        self._transport = transport
+    def __init__(
+        self,
+        transport: ProviderTransport,
+        *,
+        operation_executor: Callable[[RenderedProviderTurn], ProviderTurnResult] | None = None,
+    ) -> None:
+        self._transport = validate_provider_transport(transport)
+        if operation_executor is not None and not callable(operation_executor):
+            raise TypeError("operation_executor must be callable when provided")
+        self._operation_executor = operation_executor
 
-    def run_producer(self, request: ProducerRequest) -> ProducerResponse:
-        context = _producer_context(request)
-        turn = render_provider_turn(context)
-        result = self._transport.run_turn(turn)
+    async def run_producer(self, request: ProducerRequest) -> ProducerResponse:
+        result = await self._run_turn(_producer_context(request))
         return _producer_response(result)
 
-    async def run_producer_async(self, request: ProducerRequest) -> ProducerResponse:
-        result = await self._run_turn_async(_producer_context(request))
-        return _producer_response(result)
-
-    def run_verifier(self, request: VerifierRequest) -> OutcomeResponse:
-        context = _verifier_context(request)
-        turn = render_provider_turn(context)
-        result = self._transport.run_turn(turn)
+    async def run_verifier(self, request: VerifierRequest) -> OutcomeResponse:
+        result = await self._run_turn(_verifier_context(request))
         return _outcome_response(result)
 
-    async def run_verifier_async(self, request: VerifierRequest) -> OutcomeResponse:
-        result = await self._run_turn_async(_verifier_context(request))
-        return _outcome_response(result)
-
-    def run_llm(self, request: LLMRequest) -> OutcomeResponse:
-        context = _llm_context(request)
-        turn = render_provider_turn(context)
-        result = self._transport.run_turn(turn)
-        return _outcome_response(result)
-
-    async def run_llm_async(self, request: LLMRequest) -> OutcomeResponse:
-        result = await self._run_turn_async(_llm_context(request))
+    async def run_llm(self, request: LLMRequest) -> OutcomeResponse:
+        result = await self._run_turn(_llm_context(request))
         return _outcome_response(result)
 
     def run_operation(self, request: OperationRequest) -> OperationResponse:
-        context = _operation_context(request)
-        turn = render_provider_turn(context)
-        result = self._transport.run_turn(turn)
+        result = self._run_operation_turn(_operation_context(request))
         return OperationResponse(
             raw_output=result.raw_text,
             session=result.session,
@@ -67,13 +55,26 @@ class RenderedLLMProvider:
             usage=result.usage,
         )
 
-    async def _run_turn_async(self, context: ProviderTurnContext):
+    async def _run_turn(self, context: ProviderTurnContext):
         turn = render_provider_turn(context)
-        if not supports_async_provider_transport(self._transport):
-            raise ProviderExecutionError(
-                f"provider transport {type(self._transport).__name__!r} does not implement async turn execution."
-            )
-        return await self._transport.run_turn_async(turn)
+        return await self._transport.run_turn(turn)
+
+    def _run_operation_turn(self, context: ProviderTurnContext):
+        turn = render_provider_turn(context)
+        try:
+            asyncio.get_running_loop()
+        except RuntimeError:
+            return run_provider_coro_sync(self._transport.run_turn(turn))
+        # Temporary compatibility exception for the existing public non-parallel
+        # operation helpers only. Provider-backed branch steps, produce/verify
+        # steps, prompt steps, and provider-backed fan-in execution stay on the
+        # async transport path and must not route through this sync bridge.
+        if self._operation_executor is not None:
+            return self._operation_executor(turn)
+        raise RuntimeError(
+            "RenderedLLMProvider requires an explicit operation_executor to support llm()/classify() "
+            "inside an active workflow event loop."
+        )
 
 
 def _producer_response(result) -> ProducerResponse:
@@ -120,8 +121,11 @@ def _producer_context(request: ProducerRequest) -> ProviderTurnContext:
         required_artifacts=request.required_artifacts,
         writable_artifacts=request.writable_artifacts,
         route_required_writes=request.route_required_writes,
+        response_schema=request.response_schema,
+        response_schema_simplified=request.response_schema_simplified,
         retry_feedback=request.retry_feedback,
         route_handoff=request.route_handoff,
+        policy=request.policy,
         attempt=request.attempt,
         max_attempts=request.max_attempts,
     )
@@ -142,8 +146,11 @@ def _verifier_context(request: VerifierRequest) -> ProviderTurnContext:
         required_artifacts=request.required_artifacts,
         writable_artifacts=request.writable_artifacts,
         route_required_writes=request.route_required_writes,
+        response_schema=request.response_schema,
+        response_schema_simplified=request.response_schema_simplified,
         retry_feedback=request.retry_feedback,
         route_handoff=request.route_handoff,
+        policy=request.policy,
         attempt=request.attempt,
         max_attempts=request.max_attempts,
     )
@@ -164,8 +171,11 @@ def _llm_context(request: LLMRequest) -> ProviderTurnContext:
         required_artifacts=request.required_artifacts,
         writable_artifacts=request.writable_artifacts,
         route_required_writes=request.route_required_writes,
+        response_schema=request.response_schema,
+        response_schema_simplified=request.response_schema_simplified,
         retry_feedback=request.retry_feedback,
         route_handoff=request.route_handoff,
+        policy=request.policy,
         attempt=request.attempt,
         max_attempts=request.max_attempts,
     )
@@ -186,8 +196,11 @@ def _operation_context(request: OperationRequest) -> ProviderTurnContext:
         required_artifacts=(),
         writable_artifacts=(),
         route_required_writes={},
+        response_schema=None,
+        response_schema_simplified=False,
         retry_feedback=request.retry_feedback,
         route_handoff=None,
+        policy=request.policy,
         attempt=request.attempt,
         max_attempts=request.max_attempts,
     )

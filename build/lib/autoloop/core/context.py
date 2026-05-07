@@ -31,6 +31,24 @@ if TYPE_CHECKING:
 
 OutputT = TypeVar("OutputT")
 _CONTEXT_RUNTIMES: "WeakKeyDictionary[Context, _ContextRuntime]" = WeakKeyDictionary()
+_DEFAULT_MESSAGE = object()
+
+
+@dataclass(frozen=True, slots=True)
+class RequestContext:
+    """Stable access to persisted request snapshots for one run."""
+
+    file: Path
+    task_file: Path | None = None
+
+    @property
+    def text(self) -> str:
+        try:
+            return self.file.read_text(encoding="utf-8").rstrip("\n")
+        except OSError as exc:
+            raise WorkflowExecutionError(
+                f"run request snapshot could not be read: {self.file}"
+            ) from exc
 
 
 @dataclass(frozen=True, slots=True)
@@ -67,6 +85,27 @@ class ChildWorkflowResult(Generic[OutputT]):
         else:
             object.__setattr__(self, "artifacts", dict(self.artifacts))
         object.__setattr__(self, "metadata", dict(self.metadata))
+
+
+@dataclass(frozen=True, slots=True)
+class WorkflowInputView:
+    """Composite attribute view over the run message and typed workflow input."""
+
+    message: str | None
+    fields: BaseModel | None = None
+
+    def __getattr__(self, name: str) -> Any:
+        if name == "message":
+            return self.message
+        if self.fields is not None:
+            return getattr(self.fields, name)
+        raise AttributeError(name)
+
+    def model_dump(self, *args: Any, **kwargs: Any) -> dict[str, Any]:
+        payload = {"message": self.message}
+        if self.fields is not None:
+            payload.update(self.fields.model_dump(*args, **kwargs))
+        return payload
 
 
 class EmptyParameters(BaseModel):
@@ -176,6 +215,8 @@ class Context:
         workflow_folder: Path,
         run_folder: Path,
         package_folder: Path,
+        request_file: Path | None = None,
+        task_request_file: Path | None = None,
         state: BaseModel,
         state_cell: StateCell | None = None,
         session_store: SessionStore,
@@ -186,6 +227,7 @@ class Context:
         active_worklist: str | None = None,
         params: BaseModel | None = None,
         workflow_params: Mapping[str, Any] | None = None,
+        message: str | None | object = _DEFAULT_MESSAGE,
         workflow_input: BaseModel | None = None,
         workflow_invoker: Callable[..., Any] | None = None,
         answer: str | None = None,
@@ -213,6 +255,12 @@ class Context:
         self.workflow_folder = workflow_folder
         self.run_folder = run_folder
         self.package_folder = package_folder
+        self._request_file = Path(request_file) if request_file is not None else run_folder / "request.md"
+        if task_request_file is not None:
+            self._task_request_file = Path(task_request_file)
+        else:
+            candidate = task_folder / "request.md"
+            self._task_request_file = candidate if candidate.exists() else None
         self._state_cell = state_cell or StateCell(state)
         self._state = self._state_cell.value
         self._session_store = session_store
@@ -223,7 +271,8 @@ class Context:
         self._active_worklist = active_worklist
         self._params = params if params is not None else EmptyParameters()
         self._workflow_params = normalize_mapping(workflow_params)
-        self._input = workflow_input
+        self._message = message
+        self._input_fields = workflow_input
         self._workflow_invoker = workflow_invoker
         self._answer = answer
         self._input_response = input_response
@@ -280,8 +329,29 @@ class Context:
         return dict(self._workflow_params)
 
     @property
-    def input(self) -> BaseModel | None:
-        return self._input
+    def request_file(self) -> Path:
+        return self._request_file
+
+    @property
+    def request(self) -> RequestContext:
+        return RequestContext(file=self._request_file, task_file=self._task_request_file)
+
+    @property
+    def message(self) -> str | None:
+        if self._message is _DEFAULT_MESSAGE:
+            return self.request.text
+        return self._message
+
+    @property
+    def input_fields(self) -> BaseModel | None:
+        return self._input_fields
+
+    @property
+    def input(self) -> WorkflowInputView:
+        resolved_message = self._message
+        if resolved_message is _DEFAULT_MESSAGE:
+            resolved_message = self.request.text if self.request_file.exists() else None
+        return WorkflowInputView(message=resolved_message, fields=self._input_fields)
 
     @property
     def artifacts(self) -> "ResolvedArtifacts | None":

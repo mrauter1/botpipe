@@ -63,14 +63,14 @@
 
 ## Routes
 
-- Treat `question` as the only default runtime control route; use it only when a true intent gap or missing hard constraint blocks safe progress.
-- If this workflow authors `blocked` or `failed`, treat them as ordinary application routes rather than framework defaults.
+- Treat helper routes only when the runtime contract exposes them for this step; use `question` only use it only when a true intent gap or missing hard constraint blocks safe progress.
+- Treat helper routes as ordinary compiled routes with conventional defaults rather than a separate control-routing subsystem.
 
 ### Route guidance for the verifier
 - `evidence_pack_ready`: the evidence pack is coherent, source-traced, explicit about gaps, and ready for downstream reuse.
 - `needs_rework`: the same evidence boundary still holds, but source tracing, coverage, or gap handling needs local repair.
 - `needs_replan`: the investigation boundary or evidence plan changed materially and framing must be revisited.
-- Treat `question` as the only default runtime control route; use it only for genuine missing prerequisites, hard source-access blockers, or irreconcilable contradictions.
+- Treat helper routes only when the runtime contract exposes them for this step; use `question` only use it only for genuine missing prerequisites, hard source-access blockers, or irreconcilable contradictions.
 
 ## Out Of Scope
 

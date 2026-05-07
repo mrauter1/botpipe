@@ -2,13 +2,21 @@
 
 from __future__ import annotations
 
+import asyncio
 from copy import deepcopy
+import os
+import re
+from pathlib import Path
+import subprocess
 from typing import Any, Mapping
 
 from ...core.errors import ProviderExecutionError
 from ...core.providers.models import TokenUsage
 from ...core.prompts import ResolvedPrompt
 from ...core.stores.protocols import SessionBinding
+
+
+_SAFE_STEP_KEY_PATTERN = re.compile(r"[^A-Za-z0-9_.-]+")
 
 
 def require_prompt_text(prompt: ResolvedPrompt, provider_name: str, step_name: str) -> str:
@@ -160,3 +168,121 @@ def _coerce_int(value: Any) -> int | None:
     if isinstance(value, int):
         return value
     return None
+
+
+async def communicate_text_subprocess(
+    process: asyncio.subprocess.Process,
+    *,
+    input_text: str | None = None,
+) -> tuple[str, str]:
+    """Communicate with a subprocess and clean it up correctly on cancellation."""
+
+    try:
+        stdin_payload = None if input_text is None else input_text.encode("utf-8")
+        stdout_bytes, stderr_bytes = await process.communicate(stdin_payload)
+    except asyncio.CancelledError:
+        await terminate_text_subprocess(process)
+        raise
+    return stdout_bytes.decode("utf-8"), stderr_bytes.decode("utf-8")
+
+
+async def terminate_text_subprocess(process: asyncio.subprocess.Process) -> None:
+    """Terminate, then kill, a subprocess that is still running."""
+
+    if process.returncode is not None:
+        return
+    try:
+        process.terminate()
+    except ProcessLookupError:
+        pass
+    try:
+        await asyncio.wait_for(process.wait(), timeout=1.0)
+        return
+    except asyncio.TimeoutError:
+        pass
+    if process.returncode is not None:
+        return
+    try:
+        process.kill()
+    except ProcessLookupError:
+        return
+    await process.wait()
+
+
+def run_text_subprocess(
+    command: list[str],
+    *,
+    input_text: str | None = None,
+    env: Mapping[str, str] | None = None,
+    cwd: Path | None = None,
+) -> tuple[str, str, int]:
+    """Run a subprocess synchronously for explicit compatibility-only paths."""
+
+    completed = subprocess.run(
+        command,
+        input=input_text,
+        text=True,
+        capture_output=True,
+        check=False,
+        env=None if env is None else dict(env),
+        cwd=str(cwd) if cwd is not None else None,
+    )
+    return completed.stdout, completed.stderr, completed.returncode
+
+
+def merge_subprocess_env(overrides: Mapping[str, str] | None = None) -> dict[str, str]:
+    """Merge subprocess environment overrides over the ambient environment."""
+
+    env = dict(os.environ)
+    if overrides:
+        env.update({str(key): str(value) for key, value in overrides.items()})
+    return env
+
+
+def build_policy_step_key(step_name: str, *, step_execution_id: str | None = None) -> str:
+    """Build the stable run-scoped step key for provider policy artifacts."""
+
+    base_step = step_name
+    scope_name: str | None = None
+    item_id: str | None = None
+    visit: str | None = None
+    if step_execution_id:
+        parts = [part for part in step_execution_id.split(":") if part]
+        if len(parts) == 2:
+            base_step, visit = parts
+        elif len(parts) >= 4:
+            base_step, scope_name, item_id, visit = parts[0], parts[1], parts[2], parts[3]
+    sections = [_safe_step_key_component(base_step or step_name)]
+    if scope_name:
+        sections.append(f"scope-{_safe_step_key_component(scope_name)}")
+    if item_id:
+        sections.append(f"item-{_safe_step_key_component(item_id)}")
+    if visit:
+        sections.append(f"visit-{_safe_step_key_component(visit)}")
+    return "__".join(section for section in sections if section)
+
+
+def structured_output_metadata(
+    *,
+    provider_name: str,
+    delivery_mode: str,
+    reason: str | None = None,
+    schema_path: str | None = None,
+) -> dict[str, Any]:
+    """Build stable structured-output delivery metadata."""
+
+    payload: dict[str, Any] = {
+        "provider": provider_name,
+        "delivery_mode": delivery_mode,
+    }
+    if reason is not None:
+        payload["reason"] = reason
+    if schema_path is not None:
+        payload["schema_path"] = schema_path
+    return payload
+
+
+def _safe_step_key_component(value: str) -> str:
+    normalized = _SAFE_STEP_KEY_PATTERN.sub("-", value.strip())
+    normalized = normalized.strip("._-")
+    return normalized or "step"

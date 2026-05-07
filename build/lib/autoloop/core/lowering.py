@@ -4,17 +4,26 @@ from __future__ import annotations
 
 from collections.abc import Callable, Mapping
 from copy import deepcopy
+from dataclasses import dataclass
 from typing import Any
 
 from pydantic import TypeAdapter
 
 from .errors import WorkflowValidationError
 from .inventory import ArtifactInventoryRecord, resolve_artifact_reference
-from .routes import Route, normalize_route_spec
+from .routes import Route, _replace_route, normalize_route_spec
 from .steps import Step
 
 
 PayloadValidator = Callable[[dict[str, Any]], None]
+
+
+@dataclass(frozen=True, slots=True)
+class ResolvedRouteSpec:
+    tag: str
+    route: Route
+    inheritance_source: str
+    legacy_runtime_control: bool = False
 
 
 def outcome_middleware_name(definition: Any) -> str | None:
@@ -26,13 +35,13 @@ def outcome_middleware_name(definition: Any) -> str | None:
 def step_available_route_tags(definition: Any, step: Step) -> tuple[str, ...]:
     """Return the ordered legal route tags for a step."""
 
+    resolved = tuple(spec.tag for spec in resolve_step_routes(definition, step) if not spec.route.is_disabled)
     composite_tags = getattr(step, "composite_route_tags", None)
     if composite_tags:
-        runtime_control = step_runtime_control_route_tags(definition, step)
-        return tuple(dict.fromkeys((*tuple(composite_tags), *runtime_control)))
-    authored = step_authored_route_tags(definition, step)
-    runtime_control = step_runtime_control_route_tags(definition, step)
-    return tuple(dict.fromkeys((*authored, *runtime_control)))
+        composite_order = [tag for tag in composite_tags if tag in resolved]
+        extras = [tag for tag in resolved if tag not in composite_tags]
+        return tuple((*composite_order, *extras))
+    return resolved
 
 
 def step_authored_route_tags(definition: Any, step: Step) -> tuple[str, ...]:
@@ -49,7 +58,50 @@ def step_authored_route_tags(definition: Any, step: Step) -> tuple[str, ...]:
 def step_runtime_control_route_tags(definition: Any, step: Step) -> tuple[str, ...]:
     """Return the ordered runtime-control route tags for a step."""
 
-    return tuple(definition.runtime_control_routes_by_step.get(step.name, ()))
+    return tuple(
+        spec.tag
+        for spec in resolve_step_routes(definition, step)
+        if spec.legacy_runtime_control and not spec.route.is_disabled
+    )
+
+
+def resolve_step_routes(definition: Any, step: Step) -> tuple[ResolvedRouteSpec, ...]:
+    """Resolve step-local, GLOBAL, and framework-default routes by precedence."""
+
+    step_routes = definition.transitions.get(step, {})
+    global_routes = definition.transitions.get(definition.global_route_sentinel, {})
+    framework_defaults = getattr(definition, "framework_default_transitions_by_step", {}).get(step.name, {})
+    ordered_tags = tuple(dict.fromkeys((*step_routes.keys(), *global_routes.keys(), *framework_defaults.keys())))
+    resolved: list[ResolvedRouteSpec] = []
+    for tag in ordered_tags:
+        if tag in step_routes:
+            resolved.append(
+                ResolvedRouteSpec(
+                    tag=tag,
+                    route=normalize_route_spec(step_routes[tag]),
+                    inheritance_source="step_local",
+                )
+            )
+            continue
+        if tag in global_routes:
+            resolved.append(
+                ResolvedRouteSpec(
+                    tag=tag,
+                    route=normalize_route_spec(global_routes[tag]),
+                    inheritance_source="global",
+                )
+            )
+            continue
+        if tag in framework_defaults:
+            resolved.append(
+                ResolvedRouteSpec(
+                    tag=tag,
+                    route=normalize_route_spec(framework_defaults[tag]),
+                    inheritance_source="framework_default",
+                    legacy_runtime_control=True,
+                )
+            )
+    return tuple(resolved)
 
 
 def normalize_step_route_metadata(
@@ -59,18 +111,18 @@ def normalize_step_route_metadata(
 ) -> dict[str, Route]:
     """Normalize one step's route metadata."""
 
-    available_routes = step_available_route_tags(definition, step)
-    step_routes = definition.transitions.get(step, {})
-    global_routes = definition.transitions.get(definition.global_route_sentinel, {})
     normalized_routes: dict[str, Route] = {}
-    for route_name in available_routes:
-        destination = step_routes.get(route_name, global_routes.get(route_name))
-        route = normalize_route_spec(destination)
+    for resolved in resolve_step_routes(definition, step):
+        route_name = resolved.tag
+        route = resolved.route
         step_metadata = step.route_metadata.get(route_name, Route())
         if step_metadata.target is not None or step_metadata.on_taken is not None:
             raise WorkflowValidationError(
                 f"step {step.name!r} route metadata for {route_name!r} may only declare summary, required_writes, or handoff"
             )
+        if route.is_disabled:
+            normalized_routes[route_name] = route
+            continue
         if route.handoff and step_metadata.handoff and route.handoff != step_metadata.handoff:
             raise WorkflowValidationError(
                 f"step {step.name!r} route {route_name!r} defines conflicting handoff values"
@@ -90,15 +142,22 @@ def normalize_step_route_metadata(
                 inventory=inventory,
             )
         )
-        summary = route.summary or step_metadata.summary or _fallback_route_summary(step.name, route_name, route.target)
+        summary_source = (
+            definition.global_route_sentinel
+            if resolved.inheritance_source == "global"
+            else step.name
+        )
+        summary = route.summary or step_metadata.summary or _fallback_route_summary(
+            summary_source,
+            route_name,
+            route.target,
+        )
         handoff = route.handoff or step_metadata.handoff
-        normalized_routes[route_name] = Route(
-            target=route.target,
+        normalized_routes[route_name] = _replace_route(
+            route,
             summary=summary,
             required_writes=required_writes,
             handoff=handoff,
-            on_taken=route.on_taken,
-            provider_visible=route.provider_visible,
         )
     return normalized_routes
 
@@ -203,6 +262,7 @@ __all__ = [
     "compile_expected_output_contract",
     "normalize_step_route_metadata",
     "outcome_middleware_name",
+    "resolve_step_routes",
     "step_authored_route_tags",
     "step_available_route_tags",
     "step_runtime_control_route_tags",

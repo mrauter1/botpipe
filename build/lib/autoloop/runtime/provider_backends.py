@@ -2,16 +2,18 @@
 
 from __future__ import annotations
 
-from typing import Callable
+from collections.abc import Callable
 
 from ..core.providers.protocols import LLMProvider, ProviderTransport
 from ..core.providers.rendered import RenderedLLMProvider
+from ..core.providers.turns import ProviderTurnResult, RenderedProviderTurn
 from .config import ConfigError, ResolvedRuntimeConfig
-from .providers.claude import build_claude_transport
-from .providers.codex import build_codex_transport
+from .providers.claude import build_claude_operation_executor, build_claude_transport
+from .providers.codex import build_codex_operation_executor, build_codex_transport
 
 
 BackendBuilder = Callable[[ResolvedRuntimeConfig], ProviderTransport]
+OperationExecutorBuilder = Callable[[ResolvedRuntimeConfig], Callable[[RenderedProviderTurn], ProviderTurnResult]]
 
 
 def resolve_provider_backend(*, config: ResolvedRuntimeConfig) -> LLMProvider:
@@ -25,13 +27,22 @@ def resolve_provider_backend(*, config: ResolvedRuntimeConfig) -> LLMProvider:
         )
 
     builder = _BACKEND_BUILDERS.get(provider_name)
-    if builder is None:
+    operation_builder = _OPERATION_EXECUTOR_BUILDERS.get(provider_name)
+    if builder is None or operation_builder is None:
         supported = ", ".join(sorted(_BACKEND_BUILDERS))
         raise ConfigError(f"provider.name must be one of the built-in backends: {supported}.")
-    return RenderedLLMProvider(builder(config))
+    return RenderedLLMProvider(
+        builder(config),
+        operation_executor=operation_builder(config),
+    )
 
 
 _BACKEND_BUILDERS: dict[str, BackendBuilder] = {
     "claude": build_claude_transport,
     "codex": build_codex_transport,
+}
+
+_OPERATION_EXECUTOR_BUILDERS = {
+    "claude": build_claude_operation_executor,
+    "codex": build_codex_operation_executor,
 }

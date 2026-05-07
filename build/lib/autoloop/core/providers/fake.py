@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import inspect
 from collections import deque
 from collections.abc import Callable, Iterable
 from copy import deepcopy
@@ -11,6 +12,7 @@ from typing import Any
 from ..primitives import Outcome
 from .models import ProviderArtifactRef, ProviderReadableRef, ProviderRoute
 from .models import LLMRequest, OperationRequest, OperationResponse, OutcomeResponse, ProducerRequest, ProducerResponse, VerifierRequest
+from ..stores.protocols import SessionBinding
 
 
 ProviderTurn = ProducerResponse | OutcomeResponse | Outcome | str | Callable[[Any], Any]
@@ -21,6 +23,7 @@ class ProviderCall:
     kind: str
     step_name: str
     prompt_path: str | None
+    session: SessionBinding | None = None
     expected_output_schema: dict[str, Any] | None = None
     available_routes: tuple[str, ...] = ()
     routes: dict[str, ProviderRoute] = field(default_factory=dict)
@@ -30,6 +33,7 @@ class ProviderCall:
     route_required_writes: dict[str, tuple[str, ...]] = field(default_factory=dict)
     retry_feedback: str | None = None
     route_handoff: str | None = None
+    policy: Any | None = None
     attempt: int = 1
     max_attempts: int = 3
     operation_kind: str | None = None
@@ -53,41 +57,32 @@ class ScriptedLLMProvider:
         self._operation_turns = deque(operation_turns or ())
         self.calls: list[ProviderCall] = []
 
-    def run_producer(self, request: ProducerRequest) -> ProducerResponse:
+    async def run_producer(self, request: ProducerRequest) -> ProducerResponse:
         self._record_producer_call(request)
-        value = self._pop(self._producer_turns, request)
+        value = await self._pop_async(self._producer_turns, request)
         if isinstance(value, ProducerResponse):
             return value
         if isinstance(value, str):
             return ProducerResponse(raw_output=value)
         raise TypeError(f"unsupported scripted producer response: {value!r}")
 
-    async def run_producer_async(self, request: ProducerRequest) -> ProducerResponse:
-        return self.run_producer(request)
-
-    def run_verifier(self, request: VerifierRequest) -> OutcomeResponse:
+    async def run_verifier(self, request: VerifierRequest) -> OutcomeResponse:
         self._record_verifier_call(request)
-        value = self._pop(self._verifier_turns, request)
+        value = await self._pop_async(self._verifier_turns, request)
         if isinstance(value, OutcomeResponse):
             return value
         if isinstance(value, Outcome):
             return OutcomeResponse(outcome=value)
         raise TypeError(f"unsupported scripted verifier response: {value!r}")
 
-    async def run_verifier_async(self, request: VerifierRequest) -> OutcomeResponse:
-        return self.run_verifier(request)
-
-    def run_llm(self, request: LLMRequest) -> OutcomeResponse:
+    async def run_llm(self, request: LLMRequest) -> OutcomeResponse:
         self._record_llm_call(request)
-        value = self._pop(self._llm_turns, request)
+        value = await self._pop_async(self._llm_turns, request)
         if isinstance(value, OutcomeResponse):
             return value
         if isinstance(value, Outcome):
             return OutcomeResponse(outcome=value)
         raise TypeError(f"unsupported scripted llm response: {value!r}")
-
-    async def run_llm_async(self, request: LLMRequest) -> OutcomeResponse:
-        return self.run_llm(request)
 
     def _record_producer_call(self, request: ProducerRequest) -> None:
         self.calls.append(
@@ -95,6 +90,7 @@ class ScriptedLLMProvider:
                 "producer",
                 request.step_name,
                 request.producer_prompt.path,
+                session=deepcopy(request.session),
                 expected_output_schema=deepcopy(request.expected_output_schema),
                 available_routes=tuple(request.available_routes),
                 routes=deepcopy(dict(request.routes)),
@@ -104,6 +100,7 @@ class ScriptedLLMProvider:
                 route_required_writes=deepcopy(dict(request.route_required_writes)),
                 retry_feedback=request.retry_feedback,
                 route_handoff=request.route_handoff,
+                policy=deepcopy(request.policy),
                 attempt=request.attempt,
                 max_attempts=request.max_attempts,
             )
@@ -115,6 +112,7 @@ class ScriptedLLMProvider:
                 "verifier",
                 request.step_name,
                 request.verifier_prompt.path,
+                session=deepcopy(request.session),
                 expected_output_schema=deepcopy(request.expected_output_schema),
                 available_routes=tuple(request.available_routes),
                 routes=deepcopy(dict(request.routes)),
@@ -124,6 +122,7 @@ class ScriptedLLMProvider:
                 route_required_writes=deepcopy(dict(request.route_required_writes)),
                 retry_feedback=request.retry_feedback,
                 route_handoff=request.route_handoff,
+                policy=deepcopy(request.policy),
                 attempt=request.attempt,
                 max_attempts=request.max_attempts,
             )
@@ -135,6 +134,7 @@ class ScriptedLLMProvider:
                 "step",
                 request.step_name,
                 request.prompt.path,
+                session=deepcopy(request.session),
                 expected_output_schema=deepcopy(request.expected_output_schema),
                 available_routes=tuple(request.available_routes),
                 routes=deepcopy(dict(request.routes)),
@@ -144,6 +144,7 @@ class ScriptedLLMProvider:
                 route_required_writes=deepcopy(dict(request.route_required_writes)),
                 retry_feedback=request.retry_feedback,
                 route_handoff=request.route_handoff,
+                policy=deepcopy(request.policy),
                 attempt=request.attempt,
                 max_attempts=request.max_attempts,
             )
@@ -155,15 +156,17 @@ class ScriptedLLMProvider:
                 "operation",
                 request.step_name,
                 request.prompt.path,
+                session=deepcopy(request.session),
                 expected_output_schema=deepcopy(request.return_schema) if request.return_schema is not None else None,
                 retry_feedback=request.retry_feedback,
+                policy=deepcopy(request.policy),
                 attempt=request.attempt,
                 max_attempts=request.max_attempts,
                 operation_kind=request.operation_kind,
                 choices=tuple(request.choices),
             )
         )
-        value = self._pop(self._operation_turns, request)
+        value = self._pop_sync(self._operation_turns, request)
         if isinstance(value, OperationResponse):
             return value
         if isinstance(value, str):
@@ -171,7 +174,21 @@ class ScriptedLLMProvider:
         raise TypeError(f"unsupported scripted operation response: {value!r}")
 
     @staticmethod
-    def _pop(queue: deque[ProviderTurn], request: Any) -> Any:
+    async def _pop_async(queue: deque[ProviderTurn], request: Any) -> Any:
+        value = ScriptedLLMProvider._pop_value(queue, request)
+        if inspect.isawaitable(value):
+            return await value
+        return value
+
+    @staticmethod
+    def _pop_sync(queue: deque[ProviderTurn], request: Any) -> Any:
+        value = ScriptedLLMProvider._pop_value(queue, request)
+        if inspect.isawaitable(value):
+            raise TypeError("scripted sync operation responses must not be awaitable")
+        return value
+
+    @staticmethod
+    def _pop_value(queue: deque[ProviderTurn], request: Any) -> Any:
         if not queue:
             raise RuntimeError("scripted provider exhausted")
         value = queue.popleft()

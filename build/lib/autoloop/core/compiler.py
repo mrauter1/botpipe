@@ -5,6 +5,7 @@ from __future__ import annotations
 import hashlib
 import inspect
 import json
+from copy import deepcopy
 from dataclasses import dataclass, replace
 from pathlib import Path
 from typing import Any, Callable, Mapping
@@ -21,21 +22,23 @@ from .branch_groups.models import (
 from .context import Context
 from .discovery import WorkflowDefinition, get_workflow_definition
 from .extensions import WorkflowExtension
-from .errors import RoutingError, WorkflowCompilationError
+from .errors import RoutingError, WorkflowCompilationError, WorkflowValidationError
 from .inventory import ArtifactInventoryRecord, collect_artifact_inventory, public_artifact_inventory, resolve_artifact_reference, resolve_optional_read_reference
 from .lowering import (
+    ResolvedRouteSpec,
     _fallback_route_summary,
     compile_expected_output_contract,
     normalize_step_route_metadata,
+    resolve_step_routes,
     step_authored_route_tags,
-    step_available_route_tags,
-    step_runtime_control_route_tags,
 )
 from .primitives import AWAIT_INPUT, FAIL, FINISH, GLOBAL, SELF
 from .prompts import PromptSpec
+from .provider_policy import ProviderPolicy, ProviderPolicyOverride, policy_fingerprint
 from .providers.retries import ProviderRetryPolicy
+from .route_reporting import payload_contract_for_route, route_fields_contract_for_route
 from .route_required_writes import route_required_write_payload
-from .routes import Route, normalize_route_spec
+from .routes import Route, _replace_route, normalize_route_spec
 from .sessions import Continuity, DEFAULT_SESSION_NAME
 from .step_state import build_step_item_state_model, build_step_state_model
 from .steps import BranchGroupStep, PromptStep, ProduceVerifyStep, Session, Step, PythonStep, ChildWorkflowStep
@@ -89,6 +92,7 @@ class CompiledStep:
     step_state_fields: tuple[str, ...]
     step_item_state_model: type[BaseModel] | None
     step_item_state_fields: tuple[str, ...]
+    provider_policy: ProviderPolicy | ProviderPolicyOverride | None = None
     branch_group: Any | None = None
     route_table: dict[str, "CompiledRoute"] | None = None
 
@@ -99,14 +103,23 @@ class CompiledRoute:
 
     source_step: str
     tag: str
-    target: str
+    target: str | None
     summary: str | None = None
     required_writes: tuple[str, ...] = ()
     handoff: str | None = None
     on_taken: object | None = None
+    provider_visibility: str = "always"
     provider_visible: bool = True
     provider_visible_interactive: bool = True
     provider_visible_full_auto: bool = True
+    payload_schema_mode: str = "inherit"
+    payload_schema: dict[str, Any] | None = None
+    payload_validator: PayloadValidator | None = None
+    route_fields_schema: dict[str, Any] | None = None
+    route_fields_validator: PayloadValidator | None = None
+    preset_kind: str = "custom"
+    inheritance_source: str = "step_local"
+    disabled: bool = False
     is_runtime_control: bool = False
     _required_writes_explicit: bool = False
 
@@ -133,6 +146,7 @@ class CompiledWorkflow:
     artifacts: dict[str, CompiledArtifact]
     artifacts_by_qualified_name: dict[str, CompiledArtifact]
     extensions: tuple[WorkflowExtension, ...]
+    provider_policy: ProviderPolicy | None
     source_hash: str | None
     topology_hash: str
 
@@ -148,9 +162,12 @@ class CompiledWorkflow:
 
     def route(self, step_name: str, tag: str) -> CompiledRoute:
         compiled_route = self.routes.get(step_name, {}).get(tag)
-        if compiled_route is None:
-            compiled_route = self.global_routes.get(tag)
-        if compiled_route is None:
+        if compiled_route is not None:
+            if compiled_route.disabled:
+                raise RoutingError(f"no route for step {step_name!r} and tag {tag!r}")
+            return compiled_route
+        compiled_route = self.global_routes.get(tag)
+        if compiled_route is None or compiled_route.disabled:
             raise RoutingError(f"no route for step {step_name!r} and tag {tag!r}")
         return compiled_route
 
@@ -196,12 +213,13 @@ def compile_workflow(workflow_cls: type[Any]) -> CompiledWorkflow:
         if definition.default_session_name in definition.sessions_by_name
         else False,
         worklists=dict(definition.worklists_by_name),
-        steps=_compile_steps(definition, inventory, compiled_routes, compiled_global_routes),
+        steps=_compile_steps(definition, inventory, compiled_routes),
         routes=compiled_routes,
         global_routes=compiled_global_routes,
         artifacts=_compile_public_artifacts(inventory),
         artifacts_by_qualified_name=_compile_artifacts_by_qualified_name(inventory),
         extensions=definition.extensions,
+        provider_policy=_validated_compiled_policy(definition.workflow_policy, owner="workflow"),
         source_hash=source_hash,
         topology_hash="",
     )
@@ -215,25 +233,24 @@ def _compile_steps(
     definition: WorkflowDefinition,
     inventory: dict[str, ArtifactInventoryRecord],
     compiled_routes: dict[str, dict[str, CompiledRoute]],
-    compiled_global_routes: dict[str, CompiledRoute],
 ) -> dict[str, CompiledStep]:
     compiled_steps: dict[str, CompiledStep] = {}
     for step in definition.steps:
-        available_routes = step_available_route_tags(definition, step)
+        route_table = compiled_routes.get(step.name, {})
+        available_routes = _compiled_available_route_tags(step, route_table)
         authored_routes = step_authored_route_tags(definition, step)
-        runtime_control_routes = step_runtime_control_route_tags(definition, step)
-        provider_visible_routes_interactive = _provider_visible_route_tags(
-            step,
+        runtime_control_routes = _compiled_runtime_control_route_tags(
             available_routes,
-            compiled_routes=compiled_routes,
-            compiled_global_routes=compiled_global_routes,
+            route_table=route_table,
+        )
+        provider_visible_routes_interactive = _provider_visible_route_tags(
+            available_routes,
+            route_table=route_table,
             policy="interactive",
         )
         provider_visible_routes_full_auto = _provider_visible_route_tags(
-            step,
             available_routes,
-            compiled_routes=compiled_routes,
-            compiled_global_routes=compiled_global_routes,
+            route_table=route_table,
             policy="full_auto",
         )
         expected_output_schema, expected_output_validator = _compile_expected_output_contract(step)
@@ -365,6 +382,8 @@ def _compile_steps(
                 step_state_fields=step_state_fields,
                 step_item_state_model=step_item_state_model,
                 step_item_state_fields=step_item_state_fields,
+                provider_policy=_validated_compiled_policy(step.provider_policy, owner=f"step {step.name!r}"),
+                route_table=dict(route_table),
             )
         elif isinstance(step, PromptStep):
             compiled_steps[step.name] = CompiledStep(
@@ -406,6 +425,8 @@ def _compile_steps(
                 step_state_fields=step_state_fields,
                 step_item_state_model=step_item_state_model,
                 step_item_state_fields=step_item_state_fields,
+                provider_policy=_validated_compiled_policy(step.provider_policy, owner=f"step {step.name!r}"),
+                route_table=dict(route_table),
             )
         elif isinstance(step, PythonStep):
             compiled_steps[step.name] = CompiledStep(
@@ -451,6 +472,8 @@ def _compile_steps(
                 step_state_fields=step_state_fields,
                 step_item_state_model=step_item_state_model,
                 step_item_state_fields=step_item_state_fields,
+                provider_policy=_validated_compiled_policy(step.provider_policy, owner=f"step {step.name!r}"),
+                route_table=dict(route_table),
             )
         elif isinstance(step, ChildWorkflowStep):
             compiled_steps[step.name] = CompiledStep(
@@ -496,6 +519,8 @@ def _compile_steps(
                 step_state_fields=step_state_fields,
                 step_item_state_model=step_item_state_model,
                 step_item_state_fields=step_item_state_fields,
+                provider_policy=_validated_compiled_policy(step.provider_policy, owner=f"step {step.name!r}"),
+                route_table=dict(route_table),
             )
         elif isinstance(step, BranchGroupStep):
             compiled_branch_group = _compile_branch_group_internal_steps(
@@ -542,7 +567,9 @@ def _compile_steps(
                 step_state_fields=step_state_fields,
                 step_item_state_model=None,
                 step_item_state_fields=(),
+                provider_policy=_validated_compiled_policy(step.provider_policy, owner=f"step {step.name!r}"),
                 branch_group=compiled_branch_group,
+                route_table=dict(route_table),
             )
         else:
             raise WorkflowCompilationError(f"unsupported step type {type(step)!r}")
@@ -550,21 +577,44 @@ def _compile_steps(
 
 
 def _provider_visible_route_tags(
-    step: Step,
     available_routes: tuple[str, ...],
     *,
-    compiled_routes: dict[str, dict[str, CompiledRoute]],
-    compiled_global_routes: dict[str, CompiledRoute],
+    route_table: Mapping[str, CompiledRoute],
     policy: str,
 ) -> tuple[str, ...]:
     visible: list[str] = []
     for route_tag in available_routes:
-        route = compiled_routes.get(step.name, {}).get(route_tag) or compiled_global_routes.get(route_tag)
+        route = route_table.get(route_tag)
         if route is None:
             continue
         if _compiled_route_visible_for_policy(route, policy=policy):
             visible.append(route_tag)
     return tuple(visible)
+
+
+def _compiled_available_route_tags(
+    step: Step,
+    route_table: Mapping[str, CompiledRoute],
+) -> tuple[str, ...]:
+    resolved = tuple(tag for tag, route in route_table.items() if not route.disabled)
+    composite_tags = getattr(step, "composite_route_tags", None)
+    if composite_tags:
+        composite_order = [tag for tag in composite_tags if tag in resolved]
+        extras = [tag for tag in resolved if tag not in composite_tags]
+        return tuple((*composite_order, *extras))
+    return resolved
+
+
+def _compiled_runtime_control_route_tags(
+    available_routes: tuple[str, ...],
+    *,
+    route_table: Mapping[str, CompiledRoute],
+) -> tuple[str, ...]:
+    return tuple(
+        route_tag
+        for route_tag in available_routes
+        if route_table.get(route_tag) is not None and route_table[route_tag].is_runtime_control
+    )
 
 
 def _compiled_route_visible_for_policy(route: CompiledRoute, *, policy: str) -> bool:
@@ -627,6 +677,7 @@ def _compile_branch_group_internal_step(
     internal_definition = WorkflowDefinition(
         workflow_cls=definition.workflow_cls,
         workflow_name=definition.workflow_name,
+        workflow_policy=definition.workflow_policy,
         state_cls=definition.state_cls,
         parameters_cls=definition.parameters_cls,
         entry=step,
@@ -639,16 +690,15 @@ def _compile_branch_group_internal_step(
         workflow_log_artifacts=tuple(definition.workflow_log_artifacts),
         extensions=(),
         authored_transitions={step: _internal_step_authored_routes(definition, step)},
-        transitions={step: _internal_step_runtime_routes(definition, step)},
+        transitions={step: _internal_step_authored_routes(definition, step)},
+        framework_default_transitions_by_step={step.name: _internal_step_framework_default_routes(step)},
         runtime_control_routes_by_step={step.name: _internal_step_runtime_control_routes(step)},
     )
     compiled_routes = _compile_routes(internal_definition)
-    compiled_global_routes = _compile_global_routes(internal_definition)
     compiled_step = _compile_steps(
         internal_definition,
         inventory,
         compiled_routes,
-        compiled_global_routes,
     )[step.name]
     return replace(compiled_step, route_table=dict(compiled_routes.get(step.name, {})))
 
@@ -667,18 +717,12 @@ def _internal_step_authored_routes(
     return {"done": FINISH}
 
 
-def _internal_step_runtime_routes(
-    definition: WorkflowDefinition,
-    step: Step,
-) -> dict[str, object]:
-    routes = dict(_internal_step_authored_routes(definition, step))
+def _internal_step_framework_default_routes(step: Step) -> dict[str, object]:
     question_mode = getattr(getattr(step, "control_routes", None), "question", "never")
-    if question_mode != "never" and "question" not in routes:
-        routes["question"] = AWAIT_INPUT
-    if isinstance(step, (PromptStep, ProduceVerifyStep)):
-        routes.setdefault("blocked", AWAIT_INPUT)
-        routes.setdefault("failed", FAIL)
-    return routes
+    if question_mode == "never":
+        return {}
+    provider_visibility = "always" if question_mode == "always" else "interactive_only"
+    return {"question": Route.question(provider_visibility=provider_visibility)}
 
 
 def _internal_step_runtime_control_routes(step: Step) -> tuple[str, ...]:
@@ -686,8 +730,6 @@ def _internal_step_runtime_control_routes(step: Step) -> tuple[str, ...]:
     question_mode = getattr(getattr(step, "control_routes", None), "question", "never")
     if question_mode != "never":
         runtime_routes.append("question")
-    if isinstance(step, (PromptStep, ProduceVerifyStep)):
-        runtime_routes.extend(("blocked", "failed"))
     return tuple(runtime_routes)
 
 
@@ -739,19 +781,14 @@ def _lower_internal_route_destination(
     current_step_name: str,
 ) -> object:
     if isinstance(destination, Route):
+        if destination.is_disabled:
+            return destination
         lowered_target = _lower_internal_route_target(
             destination.target,
             destination_names=destination_names,
             current_step_name=current_step_name,
         )
-        return Route(
-            target=lowered_target,
-            summary=destination.summary,
-            required_writes=destination.required_writes,
-            handoff=destination.handoff,
-            on_taken=destination.on_taken,
-            provider_visible=destination.provider_visible,
-        )
+        return _replace_route(destination, target=lowered_target)
     return _lower_internal_route_target(
         destination,
         destination_names=destination_names,
@@ -782,6 +819,11 @@ def _compile_optional_model(workflow_cls: type[Any], attribute: str) -> type[Bas
     if not isinstance(raw, type) or not issubclass(raw, BaseModel):
         raise WorkflowCompilationError(
             f"{workflow_cls.__name__}.{attribute} must inherit from pydantic.BaseModel"
+        )
+    if attribute == "Input" and "message" in getattr(raw, "model_fields", {}):
+        raise WorkflowCompilationError(
+            f"{workflow_cls.__name__}.Input must not declare field 'message'; "
+            "message is provided by client.run(..., message)."
         )
     return raw
 
@@ -892,25 +934,19 @@ def _compile_routes(definition: WorkflowDefinition) -> dict[str, dict[str, Compi
         for step in definition.steps
     }
     routes: dict[str, dict[str, CompiledRoute]] = {}
-    for source, source_routes in definition.transitions.items():
-        if source == GLOBAL:
-            continue
-        if not isinstance(source, Step):
-            continue
-        runtime_control_routes = set(definition.runtime_control_routes_by_step.get(source.name, ()))
-        routes[source.name] = {
-            tag: _compile_route(
-                source,
-                source.name,
-                tag,
-                destination,
-                summary=route_metadata[source.name].get(tag).summary,
-                required_writes=route_metadata[source.name].get(tag).required_writes,
-                handoff=route_metadata[source.name].get(tag).handoff,
-                is_runtime_control=tag in runtime_control_routes,
+    for step in definition.steps:
+        compiled_step_routes: dict[str, CompiledRoute] = {}
+        for resolved in resolve_step_routes(definition, step):
+            normalized_route = route_metadata[step.name].get(resolved.tag, resolved.route)
+            compiled_step_routes[resolved.tag] = _compile_route(
+                step,
+                GLOBAL if resolved.inheritance_source == "global" else step.name,
+                resolved.tag,
+                normalized_route,
+                inheritance_source=resolved.inheritance_source,
+                is_runtime_control=resolved.legacy_runtime_control,
             )
-            for tag, destination in source_routes.items()
-        }
+        routes[step.name] = compiled_step_routes
     return routes
 
 
@@ -922,7 +958,8 @@ def _compile_global_routes(definition: WorkflowDefinition) -> dict[str, Compiled
             GLOBAL,
             tag,
             destination,
-            summary=_fallback_route_summary(GLOBAL, tag, destination),
+            summary=_fallback_route_summary(GLOBAL, tag, normalize_route_spec(destination).target),
+            inheritance_source="global",
         )
         for tag, destination in source_routes.items()
     }
@@ -935,37 +972,63 @@ def _compile_route(
     destination: Step | str | Route,
     *,
     summary: str | None = None,
-    required_writes: tuple[str, ...] | None = None,
-    handoff: str | None = None,
+    inheritance_source: str,
     is_runtime_control: bool = False,
 ) -> CompiledRoute:
     route = normalize_route_spec(destination)
-    target = route.target
-    if isinstance(target, Step):
-        compiled_target = target.name
-    elif isinstance(target, str):
-        compiled_target = target
-    else:  # pragma: no cover - validation guards this before compilation
-        raise WorkflowCompilationError(f"route {tag!r} from {source_step!r} is missing a target")
-    required_writes_explicit = required_writes is not None or route.required_writes is not None
-    compiled_required_writes = required_writes if required_writes is not None else tuple(route.required_writes or ())
-    provider_visible_interactive, provider_visible_full_auto = _compiled_provider_visibility(
+    compiled_target: str | None
+    if route.is_disabled:
+        compiled_target = None
+    else:
+        target = route.target
+        if isinstance(target, Step):
+            compiled_target = target.name
+        elif isinstance(target, str):
+            compiled_target = target
+        else:  # pragma: no cover - validation guards this before compilation
+            raise WorkflowCompilationError(f"route {tag!r} from {source_step!r} is missing a target")
+    required_writes_explicit = route.required_writes is not None
+    compiled_required_writes = tuple(route.required_writes or ())
+    payload_schema, payload_validator = _compile_route_contract(
+        route.payload_schema if route.payload_schema_mode == "explicit" else None,
+        owner=f"route {tag!r} from {source_step!r} payload_schema",
+    )
+    route_fields_schema, route_fields_validator = _compile_route_contract(
+        route.route_fields_schema,
+        owner=f"route {tag!r} from {source_step!r} route_fields_schema",
+        allow_missing_jsonschema_fallback=route._handwritten_route_fields_validation_equivalent,
+    )
+    provider_visibility = _effective_provider_visibility(
         step,
+        route=route,
         tag=tag,
-        provider_visible=route.provider_visible,
         is_runtime_control=is_runtime_control,
     )
+    provider_visible_interactive, provider_visible_full_auto = _compiled_provider_visibility(
+        step,
+        provider_visibility=provider_visibility,
+    )
+    preset_kind = _effective_preset_kind(route, tag=tag)
     return CompiledRoute(
         source_step=source_step,
         tag=tag,
         target=compiled_target,
         summary=route.summary or summary,
         required_writes=compiled_required_writes,
-        handoff=route.handoff or handoff,
+        handoff=route.handoff,
         on_taken=route.on_taken,
-        provider_visible=route.provider_visible,
+        provider_visibility=provider_visibility,
+        provider_visible=provider_visibility != "hidden",
         provider_visible_interactive=provider_visible_interactive,
         provider_visible_full_auto=provider_visible_full_auto,
+        payload_schema_mode=route.payload_schema_mode,
+        payload_schema=payload_schema,
+        payload_validator=payload_validator,
+        route_fields_schema=route_fields_schema,
+        route_fields_validator=route_fields_validator,
+        preset_kind=preset_kind,
+        inheritance_source=inheritance_source,
+        disabled=route.is_disabled,
         is_runtime_control=is_runtime_control,
         _required_writes_explicit=required_writes_explicit,
     )
@@ -974,26 +1037,72 @@ def _compile_route(
 def _compiled_provider_visibility(
     step: Step | None,
     *,
-    tag: str,
-    provider_visible: bool,
-    is_runtime_control: bool,
+    provider_visibility: str,
 ) -> tuple[bool, bool]:
-    if not provider_visible:
+    if provider_visibility == "hidden":
         return False, False
-    if step is None:
-        if tag == "question":
-            return True, False
-        return True, True
     if not isinstance(step, (PromptStep, ProduceVerifyStep)):
-        return False, False
-    question_mode = getattr(getattr(step, "control_routes", None), "question", "never")
-    if tag != "question":
+        return (True, False) if step is None and provider_visibility == "interactive_only" else (
+            False,
+            False,
+        )
+    if provider_visibility == "always":
         return True, True
-    if question_mode == "always":
-        return True, True
-    if is_runtime_control:
-        return True, False
     return True, False
+
+
+def _effective_provider_visibility(
+    step: Step | None,
+    *,
+    route: Route,
+    tag: str,
+    is_runtime_control: bool,
+) -> str:
+    provider_visibility = route.provider_visibility or ("hidden" if not route.provider_visible else "always")
+    if provider_visibility == "hidden":
+        return "hidden"
+    if route.preset_kind == "question":
+        return provider_visibility
+    if tag == "question":
+        if step is None:
+            return "interactive_only"
+        question_mode = getattr(getattr(step, "control_routes", None), "question", "never")
+        if question_mode == "always":
+            return "always"
+        if is_runtime_control:
+            return "interactive_only"
+        return "interactive_only"
+    return provider_visibility
+
+
+def _effective_preset_kind(route: Route, *, tag: str) -> str:
+    if route.preset_kind != "custom":
+        return route.preset_kind
+    if tag == "question":
+        return "question"
+    return route.preset_kind
+
+
+def _compile_route_contract(
+    spec: Any | None,
+    *,
+    owner: str,
+    allow_missing_jsonschema_fallback: bool = False,
+) -> tuple[dict[str, Any] | None, PayloadValidator | None]:
+    if spec is None:
+        return None, None
+    if isinstance(spec, Mapping):
+        schema = deepcopy(dict(spec))
+        try:
+            return compile_expected_output_contract(schema)
+        except WorkflowValidationError as exc:
+            if allow_missing_jsonschema_fallback and "optional jsonschema dependency" in str(exc):
+                return schema, None
+            raise WorkflowCompilationError(f"{owner} is invalid: {exc}") from exc
+    try:
+        return compile_expected_output_contract(spec)
+    except WorkflowValidationError as exc:
+        raise WorkflowCompilationError(f"{owner} is invalid: {exc}") from exc
 
 
 def _compiled_step_kind(step: Step) -> str:
@@ -1148,6 +1257,7 @@ def _workflow_compile_cache_key(
         "parameter_fields": sorted(getattr(definition.parameters_cls, "model_fields", {}).keys())
         if definition.parameters_cls is not None
         else [],
+        "workflow_policy_fingerprint": _policy_input_fingerprint(definition.workflow_policy),
         "steps": [
             {
                 "name": step.name,
@@ -1165,6 +1275,7 @@ def _workflow_compile_cache_key(
                 "control_routes": {
                     "question": getattr(getattr(step, "control_routes", None), "question", None),
                 },
+                "provider_policy_fingerprint": _policy_input_fingerprint(getattr(step, "provider_policy", None)),
             }
             for step in definition.steps
         ],
@@ -1212,7 +1323,34 @@ def _workflow_definition_transition_payload(definition: WorkflowDefinition) -> d
                 "handoff": route.handoff,
                 "on_taken": _callable_name(route.on_taken),
                 "provider_visible": route.provider_visible,
+                "provider_visibility": route.provider_visibility,
+                "payload_schema_mode": route.payload_schema_mode,
+                "route_fields_schema": route.route_fields_schema,
+                "preset_kind": route.preset_kind,
+                "disabled": route.disabled,
             }
+    if getattr(definition, "framework_default_transitions_by_step", None):
+        for step_name, routes in definition.framework_default_transitions_by_step.items():
+            source_name = f"{step_name}::__framework_default__"
+            payload[source_name] = {}
+            for tag, destination in routes.items():
+                route = normalize_route_spec(destination)
+                target = route.target
+                if hasattr(target, "name"):
+                    target = getattr(target, "name")
+                payload[source_name][tag] = {
+                    "target": target,
+                    "summary": route.summary,
+                    "required_writes": list(route.required_writes or ()),
+                    "handoff": route.handoff,
+                    "on_taken": _callable_name(route.on_taken),
+                    "provider_visible": route.provider_visible,
+                    "provider_visibility": route.provider_visibility,
+                    "payload_schema_mode": route.payload_schema_mode,
+                    "route_fields_schema": route.route_fields_schema,
+                    "preset_kind": route.preset_kind,
+                    "disabled": route.disabled,
+                }
     return payload
 
 
@@ -1235,6 +1373,7 @@ def _topology_hash_payload(compiled: CompiledWorkflow) -> dict[str, Any]:
         "workflow_name": compiled.workflow_name,
         "entry_step_name": compiled.entry_step_name,
         "global_session": compiled.default_session_name,
+        "workflow_policy_fingerprint": _policy_input_fingerprint(compiled.provider_policy),
         "steps": [_topology_hash_step_payload(step) for step in compiled.steps.values()],
         "worklists": {
             name: {
@@ -1248,43 +1387,25 @@ def _topology_hash_payload(compiled: CompiledWorkflow) -> dict[str, Any]:
         },
         "routes": {
             step_name: {
-                tag: {
-                    "target": route.target,
-                    "summary": route.summary,
-                    **route_required_write_payload(
-                        compiled,
-                        step_name=step_name,
-                        route_tag=tag,
-                        route=route,
-                    ),
-                    "handoff": route.handoff,
-                    "on_taken": _callable_name(route.on_taken),
-                    "provider_visible": route.provider_visible,
-                    "provider_visible_interactive": route.provider_visible_interactive,
-                    "provider_visible_full_auto": route.provider_visible_full_auto,
-                    "is_runtime_control": route.is_runtime_control,
-                }
+                tag: _topology_hash_route_payload(
+                    compiled,
+                    step_name=step_name,
+                    route_tag=tag,
+                    route=route,
+                    expected_output_schema=compiled.steps[step_name].expected_output_schema,
+                )
                 for tag, route in routes.items()
             }
             for step_name, routes in compiled.routes.items()
         },
         "global_routes": {
-            tag: {
-                "target": route.target,
-                "summary": route.summary,
-                **route_required_write_payload(
-                    compiled,
-                    step_name=None,
-                    route_tag=tag,
-                    route=route,
-                ),
-                "handoff": route.handoff,
-                "on_taken": _callable_name(route.on_taken),
-                "provider_visible": route.provider_visible,
-                "provider_visible_interactive": route.provider_visible_interactive,
-                "provider_visible_full_auto": route.provider_visible_full_auto,
-                "is_runtime_control": route.is_runtime_control,
-            }
+            tag: _topology_hash_route_payload(
+                compiled,
+                step_name=None,
+                route_tag=tag,
+                route=route,
+                expected_output_schema=None,
+            )
             for tag, route in compiled.global_routes.items()
         },
         "workflow_state_fields": sorted(getattr(compiled.state_cls, "model_fields", {}).keys()),
@@ -1325,6 +1446,7 @@ def _topology_hash_step_payload(step: CompiledStep) -> dict[str, Any]:
         "after_producer_hook": _callable_name(step.after_producer_hook),
         "before_verifier_hook": _callable_name(step.before_verifier_hook),
         "after_verifier_hook": _callable_name(step.after_verifier_hook),
+        "provider_policy_fingerprint": _policy_input_fingerprint(step.provider_policy),
         "prompt_refs": [
             _topology_json_value(reference)
             for reference in getattr(step.step, "simple_prompt_references", ())
@@ -1332,22 +1454,72 @@ def _topology_hash_step_payload(step: CompiledStep) -> dict[str, Any]:
     }
     if step.route_table:
         payload["route_table"] = {
-            tag: {
-                "target": route.target,
-                "summary": route.summary,
-                "required_writes": list(route.required_writes),
-                "handoff": route.handoff,
-                "on_taken": _callable_name(route.on_taken),
-                "provider_visible": route.provider_visible,
-                "provider_visible_interactive": route.provider_visible_interactive,
-                "provider_visible_full_auto": route.provider_visible_full_auto,
-                "is_runtime_control": route.is_runtime_control,
-            }
+            tag: _topology_hash_route_payload(
+                None,
+                step_name=step.name,
+                route_tag=tag,
+                route=route,
+                expected_output_schema=step.expected_output_schema,
+                use_effective_required_writes=False,
+            )
             for tag, route in step.route_table.items()
         }
     if step.branch_group is not None:
         payload["branch_group"] = _topology_hash_branch_group_payload(step.branch_group)
     return payload
+
+
+def _topology_hash_route_payload(
+    compiled: CompiledWorkflow | None,
+    *,
+    step_name: str | None,
+    route_tag: str,
+    route: CompiledRoute,
+    expected_output_schema: Mapping[str, Any] | None,
+    use_effective_required_writes: bool = True,
+) -> dict[str, Any]:
+    payload_contract = payload_contract_for_route(
+        route,
+        expected_output_schema=expected_output_schema,
+    )
+    route_fields_contract = route_fields_contract_for_route(route)
+    if use_effective_required_writes:
+        required_write_payload = route_required_write_payload(
+            compiled,
+            step_name=step_name,
+            route_tag=route_tag,
+            route=route,
+        )
+    else:
+        required_write_payload = {
+            "required_writes": list(route.required_writes),
+            "explicit_required_writes": list(route.required_writes) if route._required_writes_explicit else None,
+            "effective_required_writes": None,
+        }
+    return {
+        "target": route.target,
+        "summary": route.summary,
+        **required_write_payload,
+        "handoff": route.handoff,
+        "on_taken": _callable_name(route.on_taken),
+        "provider_visibility": route.provider_visibility,
+        "provider_visible": route.provider_visible,
+        "provider_visible_interactive": route.provider_visible_interactive,
+        "provider_visible_full_auto": route.provider_visible_full_auto,
+        "payload_schema_mode": route.payload_schema_mode,
+        "payload_schema": route.payload_schema,
+        "payload_schema_source": payload_contract["source"],
+        "payload_schema_name": payload_contract["name"],
+        "payload_schema_fingerprint": payload_contract["fingerprint"],
+        "route_fields_schema": route.route_fields_schema,
+        "route_fields_schema_source": route_fields_contract["source"],
+        "route_fields_schema_name": route_fields_contract["name"],
+        "route_fields_schema_fingerprint": route_fields_contract["fingerprint"],
+        "preset_kind": route.preset_kind,
+        "inheritance_source": route.inheritance_source,
+        "disabled": route.disabled,
+        "is_runtime_control": route.is_runtime_control,
+    }
 
 
 def _topology_hash_branch_group_payload(spec: Any) -> dict[str, Any]:
@@ -1400,6 +1572,7 @@ def _with_topology_hash(compiled: CompiledWorkflow) -> CompiledWorkflow:
         artifacts=compiled.artifacts,
         artifacts_by_qualified_name=compiled.artifacts_by_qualified_name,
         extensions=compiled.extensions,
+        provider_policy=compiled.provider_policy,
         source_hash=compiled.source_hash,
         topology_hash=topology_hash,
     )
@@ -1409,6 +1582,53 @@ def _callable_name(value: object | None) -> str | None:
     if value is None:
         return None
     return getattr(value, "__name__", type(value).__name__)
+
+
+def _policy_input_payload(
+    policy: ProviderPolicy | ProviderPolicyOverride | None,
+) -> dict[str, Any] | None:
+    if policy is None:
+        return None
+    return {
+        "kind": "policy" if isinstance(policy, ProviderPolicy) else "override",
+        "payload": policy.model_dump(mode="json", warnings=False),
+    }
+
+
+def _policy_input_fingerprint(policy: ProviderPolicy | ProviderPolicyOverride | None) -> str | None:
+    if policy is None:
+        return None
+    if isinstance(policy, ProviderPolicy):
+        return policy_fingerprint(policy)
+    payload = _policy_input_payload(policy)
+    return hashlib.sha256(
+        json.dumps(
+            payload,
+            sort_keys=True,
+            separators=(",", ":"),
+            default=_topology_json_value,
+        ).encode("utf-8")
+    ).hexdigest()
+
+
+def _validated_compiled_policy(
+    policy: ProviderPolicy | ProviderPolicyOverride | None,
+    *,
+    owner: str,
+) -> ProviderPolicy | ProviderPolicyOverride | None:
+    payload = _policy_input_payload(policy)
+    if payload is None:
+        return None
+    try:
+        json.dumps(
+            payload,
+            sort_keys=True,
+            separators=(",", ":"),
+            default=_topology_json_value,
+        )
+    except TypeError as exc:
+        raise WorkflowCompilationError(f"{owner} provider policy must be JSON-serializable: {exc}") from exc
+    return policy
 
 
 def _topology_json_value(value: object) -> object:

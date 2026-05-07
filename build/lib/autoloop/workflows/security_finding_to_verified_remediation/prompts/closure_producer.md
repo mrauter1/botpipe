@@ -57,14 +57,14 @@
 
 ## Routes
 
-- Treat `question` as the only default runtime control route; use it only when a true intent gap or missing hard constraint blocks safe progress.
-- If this workflow authors `blocked` or `failed`, treat them as ordinary application routes rather than framework defaults.
+- Treat helper routes only when the runtime contract exposes them for this step; use `question` only use it only when a true intent gap or missing hard constraint blocks safe progress.
+- Treat helper routes as ordinary compiled routes with conventional defaults rather than a separate control-routing subsystem.
 
 ### Route guidance for the verifier
 - `closure_package_ready`: the package, communication draft, and closure-evidence requirements are consistent, accurate, and ready for deterministic publication.
 - `needs_rework`: the same packaging boundary still holds, but the package artifacts need local repair.
 - `needs_replan`: packaging revealed a material change in the remediation or verification story and planning must be revisited.
-- Treat `question` as the only default runtime control route; use it only for true intent gaps, missing prerequisites, or irreconcilable contradictions.
+- Treat helper routes only when the runtime contract exposes them for this step; use `question` only use it only for true intent gaps, missing prerequisites, or irreconcilable contradictions.
 
 ## Out Of Scope
 

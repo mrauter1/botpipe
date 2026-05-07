@@ -8,6 +8,7 @@ from itertools import count
 from pathlib import Path
 from typing import TYPE_CHECKING, Any, Literal, Mapping, Sequence
 
+from .provider_policy import ProviderPolicy, ProviderPolicyOverride
 from .primitives import Event
 from .prompts import PromptSpec
 from .providers.retries import ProviderRetryPolicy
@@ -32,6 +33,7 @@ class ControlRoutes:
 
 _DEFAULT_PROVIDER_CONTROL_ROUTES = ControlRoutes(question="auto")
 _DEFAULT_NON_PROVIDER_CONTROL_ROUTES = ControlRoutes(question="never")
+ProviderPolicyInput = ProviderPolicy | ProviderPolicyOverride | None
 
 
 def normalize_control_routes(
@@ -128,6 +130,7 @@ class Step:
         state_fields: Mapping[str, object] | None = None,
         item_state: object | None = None,
         control_routes: ControlRoutes | bool | None = None,
+        provider_policy: ProviderPolicyInput = None,
     ) -> None:
         self.name = name
         self.session = session
@@ -144,6 +147,7 @@ class Step:
         self.state_fields = dict(state_fields or {})
         self.item_state = item_state
         self.control_routes = normalize_control_routes(control_routes, default=self.default_control_routes)
+        self.provider_policy = _normalize_provider_policy(provider_policy)
         self._order = next(_STEP_COUNTER)
         for artifact_name, artifact in self.writes.items():
             artifact.bind_name(artifact_name)
@@ -191,6 +195,7 @@ class ProduceVerifyStep(Step):
         state_fields: Mapping[str, object] | None = None,
         item_state: object | None = None,
         control_routes: ControlRoutes | bool | None = None,
+        provider_policy: ProviderPolicyInput = None,
     ) -> None:
         super().__init__(
             name=name,
@@ -208,6 +213,7 @@ class ProduceVerifyStep(Step):
             state_fields=state_fields,
             item_state=item_state,
             control_routes=control_routes,
+            provider_policy=provider_policy,
         )
         self.producer = producer
         self.verifier = verifier
@@ -261,6 +267,7 @@ class PromptStep(Step):
         state_fields: Mapping[str, object] | None = None,
         item_state: object | None = None,
         control_routes: ControlRoutes | bool | None = None,
+        provider_policy: ProviderPolicyInput = None,
     ) -> None:
         super().__init__(
             name=name,
@@ -278,13 +285,18 @@ class PromptStep(Step):
             state_fields=state_fields,
             item_state=item_state,
             control_routes=control_routes,
+            provider_policy=provider_policy,
         )
         self.producer = producer
         self.retry_policy = retry_policy or ProviderRetryPolicy()
 
 
 class PythonStep(Step):
-    """Pure python-step handler."""
+    """Pure python-step handler.
+
+    The optional provider policy applies only to provider-backed operations invoked
+    inside the handler. It is not an OS sandbox for the Python code itself.
+    """
 
     kind = "system"
 
@@ -306,6 +318,7 @@ class PythonStep(Step):
         state_fields: Mapping[str, object] | None = None,
         item_state: object | None = None,
         control_routes: ControlRoutes | bool | None = None,
+        provider_policy: ProviderPolicyInput = None,
     ) -> None:
         super().__init__(
             name=name,
@@ -323,6 +336,7 @@ class PythonStep(Step):
             state_fields=state_fields,
             item_state=item_state,
             control_routes=control_routes,
+            provider_policy=provider_policy,
         )
         self.handler = handler
 
@@ -353,6 +367,7 @@ class ChildWorkflowStep(Step):
         after: Any | None = None,
         state_fields: Mapping[str, object] | None = None,
         control_routes: ControlRoutes | bool | None = None,
+        provider_policy: ProviderPolicyInput = None,
     ) -> None:
         super().__init__(
             name=name,
@@ -369,6 +384,7 @@ class ChildWorkflowStep(Step):
             after=after,
             state_fields=state_fields,
             control_routes=control_routes,
+            provider_policy=provider_policy,
         )
         self.workflow = workflow
         self.message = message
@@ -405,3 +421,9 @@ class BranchGroupStep(Step):
             control_routes=ControlRoutes(question="never"),
         )
         self.branch_group = branch_group
+
+
+def _normalize_provider_policy(policy: ProviderPolicyInput) -> ProviderPolicyInput:
+    if policy is None or isinstance(policy, (ProviderPolicy, ProviderPolicyOverride)):
+        return policy
+    raise TypeError("provider_policy must be a ProviderPolicy, ProviderPolicyOverride, or None")

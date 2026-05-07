@@ -2,7 +2,6 @@ from __future__ import annotations
 
 import hashlib
 import json
-import shutil
 from pathlib import Path
 from types import SimpleNamespace
 
@@ -26,9 +25,6 @@ from autoloop_optimizer.optimization import (
     write_selected_workflow_source_manifest,
 )
 from autoloop.core.schema_registry import RUN_METADATA_SCHEMA
-
-
-REPO_ROOT = Path(__file__).resolve().parents[2]
 
 
 def test_parse_run_ref_accepts_task_slash_run() -> None:
@@ -1071,15 +1067,53 @@ def _install_selected_workflow(root: Path) -> None:
     workflows_root = root / "workflows"
     workflows_root.mkdir(parents=True, exist_ok=True)
     (workflows_root / "__init__.py").write_text("__all__ = []\n", encoding="utf-8")
-    shutil.copytree(
-        REPO_ROOT / "autoloop" / "workflows" / "release_candidate_to_go_no_go",
-        workflows_root / "release_candidate_to_go_no_go",
-        dirs_exist_ok=True,
-        ignore=shutil.ignore_patterns("__pycache__", "*.pyc"),
+    package_dir = workflows_root / "release_candidate_to_go_no_go"
+    (package_dir / "assets").mkdir(parents=True, exist_ok=True)
+    (package_dir / "prompts").mkdir(parents=True, exist_ok=True)
+    (package_dir / "__init__.py").write_text(
+        "from .workflow import ReleaseCandidateToGoNoGo\n"
+        "__all__ = ['ReleaseCandidateToGoNoGo']\n",
+        encoding="utf-8",
     )
-    shutil.copytree(
-        REPO_ROOT / "docs",
-        root / "docs",
-        dirs_exist_ok=True,
-        ignore=shutil.ignore_patterns("__pycache__", "*.pyc"),
+    (package_dir / "workflow.toml").write_text(
+        "\n".join(
+            (
+                'name = "release_candidate_to_go_no_go"',
+                'title = "Release Candidate To Go No Go"',
+                'description = "Synthetic workflow fixture for optimizer tests."',
+                'aliases = ["release-readiness"]',
+            )
+        )
+        + "\n",
+        encoding="utf-8",
+    )
+    (package_dir / "workflow.py").write_text(
+        "\n".join(
+            (
+                "from __future__ import annotations",
+                "",
+                "from pydantic import BaseModel",
+                "",
+                "from autoloop import Event, FINISH, Workflow, python_step",
+                "",
+                "",
+                "class ReleaseCandidateToGoNoGo(Workflow):",
+                '    name = "release_candidate_to_go_no_go"',
+                "",
+                "    class State(BaseModel):",
+                "        published: bool = False",
+                "",
+                '    @python_step(name="bootstrap", routes={"published": FINISH})',
+                "    def bootstrap(ctx):",
+                '        ctx.state = ctx.state.model_copy(update={"published": True})',
+                '        return Event("published")',
+            )
+        )
+        + "\n",
+        encoding="utf-8",
+    )
+    (package_dir / "prompts" / "README.md").write_text("# Synthetic prompts\n", encoding="utf-8")
+    (package_dir / "assets" / "release_decision_package_checklist.md").write_text(
+        "# Checklist\n- verify evidence\n",
+        encoding="utf-8",
     )
