@@ -1527,3 +1527,65 @@ Open issues / next step
 
 - No known blocking implementation issues remain in the producer-owned scope.
 - The reviewer-owned artifacts still reflect the previous review state and need a new verifier pass to clear `IMP-001` / `IMP-002` if they agree with the fix.
+
+
+---
+run_id=run-20260507T130811Z-54d93345 | entry=session_turn | pair=implement | phase=verifier | cycle=2 | attempt=1 | thread_id=019e02bf-36df-7293-b934-fad7a290777c
+---
+provider=codex
+mode=resume
+template=/home/rauter/.local/share/pipx/venvs/autoloop/lib/python3.12/site-packages/autoloop/templates/implement_verifier.md
+session_id=019e02bf-36df-7293-b934-fad7a290777c
+
+
+---
+run_id=run-20260507T130811Z-54d93345 | entry=phase_output | pair=implement | phase=verifier | process=codex-agent | cycle=2 | attempt=1 | thread_id=019e02bf-36df-7293-b934-fad7a290777c
+---
+I’m re-reviewing the SDK facade after the producer’s follow-up fix, focusing on the runner/engine message contract, the new tracked regression, and whether any blocking issues remain.
+
+The implementation notes and code now line up with the reviewer feedback. I’m running the focused tracked suite once more from the review side so I can decide whether the remaining feedback entries can be cleared.
+
+The focused tracked suite is still running. I’m waiting for the result before I update the review artifacts.
+
+The focused tracked suite passed, and I’m not seeing a remaining contract gap in the reviewed scope. I’m updating the reviewer artifacts to mark the previous findings resolved and to reflect a complete verification pass.
+
+Scope considered
+
+- `sdk-facade` phase source and tracked regression coverage relevant to the reviewer’s prior findings.
+- Reviewer-owned artifacts `criteria.md` and `feedback.md`.
+- Run-local implementation notes and decisions to verify the final producer state against the accepted plan and spec.
+
+What I analyzed
+
+- `autoloop/runtime/runner.py` for `RunnerOptions.message`, workspace preparation, and engine invocation.
+- `autoloop/core/engine.py` for runtime context message handling.
+- `tests/unit/test_sdk_facade.py` for the new tracked `client.run(Wf, None)` regression.
+- `tests/runtime/test_workspace_and_context.py` and the relevant contract tests for message/input placeholder behavior.
+- `implementation_notes.md` for validation evidence and artifact accuracy.
+
+What I reviewed
+
+- AC-1: `Autoloop.run(...)` now preserves explicit `message=None`, keeps omitted-message resume behavior intact, and still enforces the SDK input/pause contract.
+- AC-2: result/debug/artifact behavior remains within the requested public boundary.
+- AC-3: sync SDK error normalization remains covered and unchanged by the follow-up fix.
+- The prior findings:
+  - `IMP-001` blocking message propagation bug
+  - `IMP-002` non-blocking untracked validation evidence issue
+
+Key findings / decisions
+
+- `IMP-001` is resolved. The runner now preserves an omitted-message sentinel distinct from explicit `None`, forwards the effective message into engine execution, and the engine no longer overwrites explicit runtime messages with request-snapshot fallback just because a request file exists.
+- `IMP-002` is resolved. The implementation notes now cite tracked validation only and no longer rely on the untracked local test file.
+- Focused tracked validation passed:
+  - `./.venv/bin/python -m pytest -q tests/unit/test_sdk_facade.py tests/unit/test_simple_surface.py tests/unit/test_validation.py tests/runtime/test_workspace_and_context.py::test_resume_context_preserves_run_message_and_raw_input_fields tests/contract/test_engine_contracts.py::test_runtime_templates_resolve_bare_input_message_and_fields tests/contract/test_engine_contracts.py::test_runtime_templates_reject_unknown_bare_input_field tests/contract/test_engine_contracts.py::test_runtime_templates_reject_undeclared_ctx_input_message_without_typed_input tests/contract/test_engine_contracts.py::test_runtime_templates_resolve_declared_ctx_input_message_separately_from_request`
+  - Result: `215 passed`, `14 warnings`
+- No new blocking or non-blocking findings remain in the reviewed scope.
+
+Open issues / next step
+
+- No blocking review issues remain for `sdk-facade`.
+- Reviewer artifacts have been updated to reflect a complete pass.
+
+<loop-control>
+{"schema":"docloop.loop_control/v1","kind":"promise","promise":"COMPLETE"}
+</loop-control>
