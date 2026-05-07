@@ -9,3 +9,4 @@
 
 - Added focused SDK acceptance coverage for the revised public exports and for declared-write retention with bare `params.*` / `workflow_params.*` artifact placeholders.
 - Re-ran the local SDK facade suite plus the focused artifact-template/runtime-placeholder subset to confirm the new regression stays deterministic and does not disturb adjacent placeholder behavior.
+- TST-000 | non-blocking | No audit findings. The added SDK facade regressions cover the request-driven export, prompt, retention, cleanup, and route seams, and the deterministic tempdir/scripted-provider setup keeps the new assertions stable.
