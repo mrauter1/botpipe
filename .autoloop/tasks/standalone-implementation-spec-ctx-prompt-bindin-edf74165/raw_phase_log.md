@@ -1389,3 +1389,46 @@ The implementation plan is in [plan.md](</home/rauter/autoloop_v3_bkp/autoloop_v
 - rebaselining focused unit/contract/runtime regression coverage.
 
 I also populated the machine-readable phase in [phase_plan.yaml](</home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/standalone-implementation-spec-ctx-prompt-bindin-edf74165/runs/run-20260507T132940Z-5d96f5de/artifacts/plan/phase_plan.yaml>), appended the change note in [feedback.md](</home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/standalone-implementation-spec-ctx-prompt-bindin-edf74165/runs/run-20260507T132940Z-5d96f5de/artifacts/plan/feedback.md>), and recorded the non-obvious contract constraints in [decisions.txt](</home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/standalone-implementation-spec-ctx-prompt-bindin-edf74165/runs/run-20260507T132940Z-5d96f5de/decisions.txt>). No tests were run, since this turn was planning-only.
+
+
+---
+run_id=run-20260507T132940Z-5d96f5de | entry=session_turn | pair=plan | phase=verifier | cycle=1 | attempt=1 | thread_id=019e02a1-3d91-7fc1-81c9-db6b39f65f52
+---
+provider=codex
+mode=resume
+template=/home/rauter/.local/share/pipx/venvs/autoloop/lib/python3.12/site-packages/autoloop/templates/plan_verifier.md
+session_id=019e02a1-3d91-7fc1-81c9-db6b39f65f52
+
+
+---
+run_id=run-20260507T132940Z-5d96f5de | entry=phase_output | pair=plan | phase=verifier | process=codex-agent | cycle=1 | attempt=1 | thread_id=019e02a1-3d91-7fc1-81c9-db6b39f65f52
+---
+I’m verifying the plan artifacts against the original request and the current codebase assumptions, then I’ll update the criteria and feedback with any blocking gaps rather than re-planning the whole change.
+
+I’m checking one specific regression surface before I finalize the verdict: whether the plan is explicit enough about non-`ctx.*` callers that currently flow through the same `WorkflowInputView` alias path, because that is the main place a “small local change” could accidentally widen the break.
+
+I found one material gap: the plan is clear on the `ctx.*` contract itself, but it does not explicitly decide what happens to the shared non-`ctx.*` surfaces that currently ride on the same `WorkflowInputView.message` alias path. I’m recording that as a blocking verification finding and marking the criteria accordingly.
+
+Scope considered
+
+Run-local planning artifacts for this request, plus the current runtime/test surfaces that the plan explicitly names: `context.py`, `discovery.py`, `artifacts.py`, `engine.py`, `runner.py`, branch-group cloning, and the existing contract/runtime/unit tests around `ctx.message` and `ctx.input`.
+
+What I analyzed
+
+The immutable request, raw log, planner-written `plan.md`, `phase_plan.yaml`, `feedback.md`, `criteria.md`, and the current decision block. I also checked the live repo for existing `ctx.input.message`, `context.input.message`, bare `{input.message}`, cached `message=` injection, and unreadable-request-path coverage to see whether the plan bounded the real regression surfaces.
+
+What I reviewed
+
+`phase_plan.yaml` is parseable YAML and its runtime-owned metadata is correct. The single-phase decomposition is acceptable for scope size. I updated [criteria.md](</home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/standalone-implementation-spec-ctx-prompt-bindin-edf74165/runs/run-20260507T132940Z-5d96f5de/artifacts/plan/criteria.md>) and appended a prioritized finding to [feedback.md](</home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/standalone-implementation-spec-ctx-prompt-bindin-edf74165/runs/run-20260507T132940Z-5d96f5de/artifacts/plan/feedback.md>).
+
+Key findings / decisions
+
+`PLAN-001` is blocking. The plan correctly targets the `ctx.*` contract drift, but it does not explicitly decide what happens to the shared non-`ctx.*` compatibility surfaces that currently ride on the same `WorkflowInputView.message` alias path. That includes direct `context.input.message` expectations, branch/runtime child assertions, bare `{input.message}` artifact behavior, and contradictory `sdk.md` examples. Without that explicit boundary, implementation can either over-break beyond the requested `ctx.*` contract or preserve the alias in a way that leaves semantics inconsistent.
+
+Open issues / next step
+
+The planner should revise the plan so it explicitly states which shared surfaces are preserved versus migrated, and add matching acceptance coverage and validation scope for that decision. Until that is fixed, the plan is not safe to execute as implementation guidance.
+
+<loop-control>
+{"schema":"docloop.loop_control/v1","kind":"promise","promise":"INCOMPLETE"}
+</loop-control>
