@@ -64,3 +64,6 @@
 {"ts": "2026-05-07T14:32:35.997479+00:00", "run_id": "run-20260507T130811Z-54d93345", "seq": 64, "event_type": "phase_deferred", "pair": "implement", "phase_mode": "single", "phase_id": "sdk-facade", "reason": "awaiting enabled test pair completion"}
 {"ts": "2026-05-07T14:32:35.999541+00:00", "run_id": "run-20260507T130811Z-54d93345", "seq": 65, "event_type": "pair_started", "pair": "test", "phase_id": "sdk-facade"}
 {"ts": "2026-05-07T14:32:35.999833+00:00", "run_id": "run-20260507T130811Z-54d93345", "seq": 66, "event_type": "cycle_started", "pair": "test", "cycle": 1, "attempt": 1, "phase_id": "sdk-facade"}
+{"ts": "2026-05-07T14:34:53.641111+00:00", "run_id": "run-20260507T130811Z-54d93345", "seq": 67, "event_type": "phase_finished", "pair": "test", "phase": "producer", "cycle": 1, "attempt": 1, "empty_output": false, "phase_id": "sdk-facade"}
+{"ts": "2026-05-07T14:35:58.387896+00:00", "run_id": "run-20260507T130811Z-54d93345", "seq": 68, "event_type": "phase_finished", "pair": "test", "phase": "verifier", "cycle": 1, "attempt": 1, "empty_output": false, "phase_id": "sdk-facade"}
+{"ts": "2026-05-07T14:36:00.568635+00:00", "run_id": "run-20260507T130811Z-54d93345", "seq": 69, "event_type": "cycle_started", "pair": "test", "cycle": 2, "attempt": 1, "phase_id": "sdk-facade"}

@@ -1589,3 +1589,132 @@ Open issues / next step
 <loop-control>
 {"schema":"docloop.loop_control/v1","kind":"promise","promise":"COMPLETE"}
 </loop-control>
+
+
+---
+run_id=run-20260507T130811Z-54d93345 | entry=session_turn | pair=test | phase=producer | cycle=1 | attempt=1 | thread_id=019e02bf-36df-7293-b934-fad7a290777c
+---
+provider=codex
+mode=resume
+template=/home/rauter/.local/share/pipx/venvs/autoloop/lib/python3.12/site-packages/autoloop/templates/test_producer.md
+session_id=019e02bf-36df-7293-b934-fad7a290777c
+
+
+---
+run_id=run-20260507T130811Z-54d93345 | entry=phase_output | pair=test | phase=producer | process=codex-agent | cycle=1 | attempt=1 | thread_id=019e02bf-36df-7293-b934-fad7a290777c
+---
+I’m reviewing the existing SDK facade tests against the phase contract to fill any remaining acceptance-criteria gaps, then I’ll update the phase test strategy and feedback artifacts with the exact coverage map.
+
+I found two acceptance-criteria gaps in the tracked SDK tests: explicit `provider_questions` overrides and active-event-loop normalization for `llm` / `classify`. I’m adding focused tests for those public SDK behaviors now.
+
+The new tests are in place. I’m running the focused SDK facade unit module first, then I’ll update the phase test artifacts with the final behavior map and stabilization notes.
+
+The SDK facade unit module is still running. I’m waiting for the result before I record the coverage map and test feedback.
+
+The attempted `llm` / `classify` active-loop expectation was wrong for this runtime: those operations execute synchronously and don’t use the async bridge. I’m narrowing the active-loop normalization test back to the bridge-backed entrypoints and will record that distinction in the test strategy.
+
+I’ve narrowed the active-loop test to the entrypoints that actually bridge async execution in this runtime. I’m rerunning the SDK facade module before I write the phase strategy and feedback.
+
+The SDK facade unit module is still running after the test correction. I’m waiting for the result before updating the test artifacts.
+
+The added SDK tests are green. I’m running the same focused cross-module regression slice the implementer used so the strategy artifact can cite tracked end-to-end coverage, not just the local unit module.
+
+The focused cross-module regression slice is still running. I’m waiting for that result before I update the strategy and feedback artifacts.
+
+The tracked regression slice passed. I’m updating the test-phase artifacts now with the exact behavior-to-coverage map, the stabilization notes, and a concise summary of the new SDK tests added in this phase.
+
+Scope considered
+
+- `sdk-facade` test-phase scope, with emphasis on tracked public SDK behavior and acceptance-criteria gaps rather than unrelated runtime churn.
+- Existing SDK facade unit tests, adjacent runtime/contract regressions, and the test-phase artifacts `test_strategy.md` and `feedback.md`.
+- Run-local decisions relevant to message handling, provider-question behavior, and active-event-loop semantics.
+
+What I analyzed
+
+- `tests/unit/test_sdk_facade.py` against AC-1 through AC-3.
+- Existing tracked coverage for message/input separation, compile-time `Workflow.Input.message` rejection, runtime placeholder behavior, and root exports.
+- Current runtime behavior for sync active-event-loop handling to avoid encoding a false regression expectation for `llm` / `classify`.
+
+What I changed
+
+- Added tracked SDK facade tests for explicit provider-question overrides:
+  - handlerless `provider_questions=True` now asserts the workflow pauses with `InputRequired`
+  - handler-present `provider_questions=False` now asserts provider-visible questions stay suppressed
+- Kept active-event-loop normalization coverage scoped to `run` and `step`, which are the bridge-backed sync entrypoints in the current runtime.
+- Updated the test-phase artifacts:
+  - `artifacts/test/phases/sdk-facade/test_strategy.md` now contains an explicit behavior-to-coverage map, invariants, edge cases, stabilization notes, and known gaps
+  - `artifacts/test/phases/sdk-facade/feedback.md` now summarizes the added SDK tests and the focused regression run
+- Appended two non-obvious test decisions under the latest turn header in `decisions.txt`.
+
+Key findings / decisions
+
+- A naive active-event-loop test for `llm` / `classify` was incorrect: those calls currently execute synchronously through operation calls and do not hit the runtime bridge failure path, so treating their success as a bug would normalize a false regression.
+- Focused validation passed:
+  - `./.venv/bin/python -m pytest -q tests/unit/test_sdk_facade.py`
+  - Result: `14 passed`
+- Cross-module regression slice also passed:
+  - `./.venv/bin/python -m pytest -q tests/unit/test_sdk_facade.py tests/unit/test_simple_surface.py tests/unit/test_validation.py tests/runtime/test_workspace_and_context.py::test_resume_context_preserves_run_message_and_raw_input_fields tests/contract/test_engine_contracts.py::test_runtime_templates_resolve_bare_input_message_and_fields tests/contract/test_engine_contracts.py::test_runtime_templates_reject_unknown_bare_input_field tests/contract/test_engine_contracts.py::test_runtime_templates_reject_undeclared_ctx_input_message_without_typed_input tests/contract/test_engine_contracts.py::test_runtime_templates_resolve_declared_ctx_input_message_separately_from_request`
+  - Result: `217 passed`, `14 warnings`
+
+Open issues / next step
+
+- No blocking test-author issues remain in the phase-local scope.
+- Async SDK coverage remains deferred by product scope, and `llm` / `classify` active-loop failure expectations remain intentionally excluded in the current runtime because they do not use the sync-to-async bridge path.
+
+
+---
+run_id=run-20260507T130811Z-54d93345 | entry=session_turn | pair=test | phase=verifier | cycle=1 | attempt=1 | thread_id=019e02bf-36df-7293-b934-fad7a290777c
+---
+provider=codex
+mode=resume
+template=/home/rauter/.local/share/pipx/venvs/autoloop/lib/python3.12/site-packages/autoloop/templates/test_verifier.md
+session_id=019e02bf-36df-7293-b934-fad7a290777c
+
+
+---
+run_id=run-20260507T130811Z-54d93345 | entry=phase_output | pair=test | phase=verifier | process=codex-agent | cycle=1 | attempt=1 | thread_id=019e02bf-36df-7293-b934-fad7a290777c
+---
+I’m auditing the SDK facade test additions and the phase test artifacts against the acceptance criteria, starting with the tracked coverage map, the updated unit tests, and the focused regression slice the test author recorded.
+
+I found one potentially stale contract-test name in the recorded regression slice, and I’m checking whether it’s just a name mismatch or whether the test expectation actually contradicts the SDK input contract before I finalize the audit.
+
+I confirmed a material stale expectation in the tracked contract suite: it still asserts `ctx.input.message` is invalid without typed input and uses a typed input model that declares `message`, both of which contradict the accepted SDK contract. I’m recording that as a blocking test-audit finding now.
+
+Scope considered
+
+- `sdk-facade` test-phase coverage in `tests/unit/test_sdk_facade.py` plus the tracked runtime/contract tests the strategy artifact claims as regression protection.
+- Test-phase artifacts `test_strategy.md`, `feedback.md`, and the run-local decisions that define the intended `ctx.input.message` behavior.
+- Focus remained on changed/request-relevant behavior, especially provider-question overrides, explicit `message=None`, and runtime message/input rendering.
+
+What I analyzed
+
+- `tests/unit/test_sdk_facade.py`
+- `tests/runtime/test_workspace_and_context.py::test_resume_context_preserves_run_message_and_raw_input_fields`
+- `tests/contract/test_engine_contracts.py` around the `ctx.input.message` assertions
+- `artifacts/test/phases/sdk-facade/test_strategy.md`
+- `decisions.txt` entries for runtime-input-contract and sdk-facade
+
+What I reviewed
+
+- Whether the new SDK tests cover the requested facade behavior at the right level.
+- Whether the tracked regression surface actually matches the accepted runtime-input contract.
+- Whether the strategy artifact accurately maps tests to behaviors without citing stale expectations.
+- Reliability and flake risk of the new SDK tests.
+
+Key findings / decisions
+
+- I recorded one blocking finding in `artifacts/test/phases/sdk-facade/feedback.md`:
+  - `TST-001` flags that the tracked contract suite still encodes stale behavior for `ctx.input.message`.
+  - `tests/contract/test_engine_contracts.py::test_runtime_templates_reject_undeclared_ctx_input_message_without_typed_input` still expects `ctx.input.message` to fail without typed input, which contradicts the accepted contract and run-local decisions.
+  - `tests/contract/test_engine_contracts.py::test_runtime_templates_resolve_declared_ctx_input_message_separately_from_request` still uses a typed input model with a `message` field, mirroring the now-rejected `Workflow.Input.message` pattern.
+  - Because the strategy artifact cites both tests as supporting SDK behavior, the current test story would still silently approve a regression back to the wrong runtime-input contract.
+- I updated the test audit criteria to reflect that reliability and edge/failure-path coverage are solid, but coverage quality, regression protection, and behavioral intent are not yet satisfied due to the stale contract expectations.
+
+Open issues / next step
+
+- Fix `TST-001` by rewriting the cited contract tests so `ctx.input.message` resolves from the runtime message regardless of typed-input presence, and stop using typed input models that declare `message` in the SDK regression surface.
+- After that correction, rerun the focused regression slice and update the test strategy so its cited regression surface matches the accepted contract.
+
+<loop-control>
+{"schema":"docloop.loop_control/v1","kind":"promise","promise":"INCOMPLETE"}
+</loop-control>
