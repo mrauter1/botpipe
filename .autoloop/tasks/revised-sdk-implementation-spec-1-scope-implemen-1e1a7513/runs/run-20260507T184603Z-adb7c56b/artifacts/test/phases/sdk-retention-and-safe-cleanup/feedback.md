@@ -8,3 +8,4 @@
 - Scope: phase-local authoritative verifier artifact
 
 - Added deterministic regression coverage for cleanup age filtering plus `include_failed=True` opt-in, and expanded `_safe_delete_sdk_task_dir(...)` guard tests to reject wrong-schema and wrong-owner sentinels.
+- TST-001 [non-blocking] Audit follow-up: re-ran `tests/unit/test_sdk_facade.py` and spot-checked the acceptance-criteria mapping in `test_strategy.md`; no additional coverage or reliability defects were found in this phase.
