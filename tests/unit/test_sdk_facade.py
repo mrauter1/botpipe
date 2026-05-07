@@ -9,6 +9,7 @@ from pydantic import BaseModel
 import autoloop.simple as simple
 from autoloop import (
     AWAIT_INPUT,
+    FAIL,
     FINISH,
     ArtifactMap,
     Autoloop,
@@ -97,6 +98,40 @@ class _SDKNoMessageWorkflow(simple.Workflow):
         )
         ctx.artifacts.empty_message_snapshot.write_text("captured")
         return Event("done")
+
+
+class _SDKParamsWorkflow(simple.Workflow):
+    class Params(BaseModel):
+        mode: str
+        reviewers: list[str] = []
+
+    class State(BaseModel):
+        observed_mode: str | None = None
+
+    params_snapshot = simple.Json("params_snapshot")
+
+    @simple.python_step(writes=[params_snapshot], routes={"done": FINISH})
+    def capture(ctx):
+        ctx.state = ctx.state.model_copy(update={"observed_mode": ctx.params.mode})
+        ctx.artifacts.params_snapshot.write_json(
+            {
+                "params": ctx.params.model_dump(mode="python"),
+                "workflow_params": ctx.workflow_params,
+                "input_dump": ctx.input.model_dump(mode="python"),
+                "has_mode_on_input": hasattr(ctx.input, "mode"),
+            }
+        )
+        return Event("done")
+
+
+class _SDKFailWorkflow(simple.Workflow):
+    class State(BaseModel):
+        failure_reason: str | None = None
+
+    @simple.python_step(routes={"failed": FAIL})
+    def reject(ctx):
+        ctx.state = ctx.state.model_copy(update={"failure_reason": "Rejected by policy."})
+        return Event("failed", reason="Rejected by policy.")
 
 
 def _sdk_client(tmp_path: Path, provider: object) -> Autoloop:
@@ -261,6 +296,49 @@ def test_sdk_llm_and_classify_delegate_to_operation_path(tmp_path: Path) -> None
     assert summary == "summary"
     assert label == "incident"
     assert [call.kind for call in provider.calls] == ["operation", "operation"]
+
+
+@pytest.mark.parametrize(
+    ("params_value", "expected"),
+    [
+        ({"mode": "strict", "reviewers": ["alice"]}, {"mode": "strict", "reviewers": ["alice"]}),
+        (_SDKParamsWorkflow.Params(mode="focused", reviewers=["bob"]), {"mode": "focused", "reviewers": ["bob"]}),
+    ],
+)
+def test_sdk_run_exposes_params_without_leaking_them_into_ctx_input(
+    tmp_path: Path,
+    params_value: BaseModel | dict[str, object],
+    expected: dict[str, object],
+) -> None:
+    client = _sdk_client(tmp_path, ScriptedLLMProvider())
+
+    result = client.run(
+        _SDKParamsWorkflow,
+        "Check params handling.",
+        params=params_value,
+    )
+
+    assert result.ok is True
+    assert result.state.observed_mode == expected["mode"]
+    assert result.artifacts.params_snapshot.read_json() == {
+        "params": expected,
+        "workflow_params": expected,
+        "input_dump": {"message": "Check params handling."},
+        "has_mode_on_input": False,
+    }
+
+
+def test_sdk_run_maps_failed_terminal_to_failed_result_status(tmp_path: Path) -> None:
+    client = _sdk_client(tmp_path, ScriptedLLMProvider())
+
+    result = client.run(_SDKFailWorkflow, "Reject this request.")
+
+    assert result.ok is False
+    assert result.status == "failed"
+    assert result.terminal == FAIL
+    assert result.state.failure_reason == "Rejected by policy."
+    assert result.last_event is not None
+    assert result.last_event.tag == "failed"
 
 
 def test_sdk_step_executes_synthetic_simple_operation_workflow(tmp_path: Path) -> None:

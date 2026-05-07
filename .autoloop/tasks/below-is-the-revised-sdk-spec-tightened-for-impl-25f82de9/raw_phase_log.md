@@ -1947,3 +1947,48 @@ Add the missing SDK-level tests in `tests/unit/test_sdk_facade.py`, then rerun t
 <loop-control>
 {"schema":"docloop.loop_control/v1","kind":"promise","promise":"INCOMPLETE"}
 </loop-control>
+
+
+---
+run_id=run-20260507T130811Z-54d93345 | entry=session_turn | pair=implement | phase=producer | cycle=2 | attempt=1 | thread_id=019e02df-ff69-7963-aa73-ab06d2de2802
+---
+provider=codex
+mode=resume
+template=/home/rauter/.local/share/pipx/venvs/autoloop/lib/python3.12/site-packages/autoloop/templates/implement_producer.md
+session_id=019e02df-ff69-7963-aa73-ab06d2de2802
+
+
+---
+run_id=run-20260507T130811Z-54d93345 | entry=phase_output | pair=implement | phase=producer | process=codex-agent | cycle=2 | attempt=1 | thread_id=019e02df-ff69-7963-aa73-ab06d2de2802
+---
+I’m addressing the reviewer’s single blocking gap: SDK-facing acceptance coverage for `params` and failed-result mapping. I’ll verify the current SDK `params` path and add the smallest direct tests that close AC-2 without broadening scope.
+
+I’m editing the SDK test module only. The added coverage will stay phase-local: one workflow to prove `params` reach `ctx.params` without leaking onto `ctx.input`, and one workflow to prove `FAIL` maps to the promised SDK result shape.
+
+The code path didn’t need another implementation change; the blocker was purely coverage. I’m updating the phase notes to reflect that this turn only extended SDK acceptance tests and that the targeted suites are now green with the missing cases included.
+
+Scope considered
+
+Phase-local SDK operations and verification work, limited to the reviewer’s blocking gap in AC-2: missing SDK-facing acceptance coverage for `params` and failed-result mapping.
+
+What I analyzed
+
+I re-read the reviewer feedback, checked the current `Autoloop.run(...)` params path in [autoloop/sdk.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/autoloop/sdk.py), and inspected [tests/unit/test_sdk_facade.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/tests/unit/test_sdk_facade.py) to confirm which SDK contracts were still untested.
+
+What I changed
+
+I extended [tests/unit/test_sdk_facade.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/tests/unit/test_sdk_facade.py) with:
+- direct SDK `params` coverage for both mapping input and `Workflow.Params` instances, asserting they reach `ctx.params` and do not leak onto `ctx.input`
+- direct SDK failed-result coverage, asserting a `FAIL` terminal maps to `WorkflowResult(status="failed", ok=False)`
+
+I also updated the phase [implementation_notes.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/below-is-the-revised-sdk-spec-tightened-for-impl-25f82de9/runs/run-20260507T130811Z-54d93345/artifacts/implement/phases/sdk-operations-and-verification/implementation_notes.md) to reflect the added coverage.
+
+Key findings / decisions
+
+No source behavior change was needed; the blocker was coverage only. Validation passed:
+- `.venv/bin/python -m pytest -q tests/unit/test_sdk_facade.py` -> `19 passed`
+- `.venv/bin/python -m pytest -q tests/runtime/test_workspace_and_context.py tests/unit/test_primitives_and_stores.py` -> `97 passed`
+
+Open issues / next step
+
+No known open issue in this phase-local scope. The remaining step is verifier review so the criteria and feedback artifacts can be updated against the new SDK test coverage.
