@@ -368,3 +368,56 @@ Open issues / next step
 
 - Full-suite execution beyond collection was not run; I only ran the targeted validation set.
 - If you want the remaining cleanup phase to continue, the next logical step is the deferred split of `tests/unit/test_stdlib_and_extensions.py` and `tests/contract/test_engine_contracts.py`.
+
+
+---
+run_id=run-20260507T194557Z-2f9c2de5 | entry=session_turn | pair=implement | phase=verifier | cycle=1 | attempt=1 | thread_id=019e040b-2414-79f1-81ec-e7b2f91b980a
+---
+provider=codex
+mode=resume
+template=/home/rauter/.local/share/pipx/venvs/autoloop/lib/python3.12/site-packages/autoloop/templates/implement_verifier.md
+session_id=019e040b-2414-79f1-81ec-e7b2f91b980a
+
+
+---
+run_id=run-20260507T194557Z-2f9c2de5 | entry=phase_output | pair=implement | phase=verifier | process=codex-agent | cycle=1 | attempt=1 | thread_id=019e040b-2414-79f1-81ec-e7b2f91b980a
+---
+I’m reviewing the implementation against the phase contract first: deleted workflow-owner suites, retained tests free of repo-root workflow/docs reads, and shared fixture-based coverage still working. I’m reading the criteria and diff summary, then I’ll spot-check the touched tests against the acceptance criteria before writing review artifacts.
+
+`git diff` isn’t giving usable signal in this workspace, so I’m switching to direct filesystem review. I’m checking the retained tests for any remaining concrete reads from repo `docs/`, `recursive_autoloop/`, or `autoloop/workflows/*`, and I’m confirming the workflow-owner runtime files are actually gone.
+
+I’ve verified the acceptance-criteria grep directly. I’m running a reviewer validation pass over the shared suites now, focused on the retained workflow-fixture coverage and the files that were edited to satisfy AC-1 and AC-2.
+
+Scope considered
+
+- Active phase scope only: deleted workflow-owner runtime suites, retained shared test rewrites, and review artifacts under the active phase directory.
+
+What I analyzed
+
+- Confirmed the 15 workflow-owner runtime files are absent from `tests/runtime/`.
+- Grepped retained `tests/` for direct reads of repo `docs/`, `recursive_autoloop/`, and `autoloop/workflows/*`.
+- Reviewed the retained edits in `tests/strictness/test_no_compat.py`, `tests/unit/test_stdlib_and_extensions.py`, and `tests/runtime/test_workflow_reference_resolution.py`.
+
+What I reviewed
+
+- Acceptance criteria alignment:
+  AC-1: retained tests no longer read concrete repo-owned docs/workflow/recursive assets.
+  AC-2: shared workflow discovery, workspace, and optimizer/helper coverage still runs through `tmp_path` fixtures.
+- Validation:
+  `./.venv/bin/pytest tests/strictness/test_no_compat.py tests/unit/test_stdlib_and_extensions.py tests/unit/test_optimization_helpers.py tests/runtime/test_package_cli.py tests/runtime/test_wheel_packaging_smoke.py tests/runtime/test_golden_workflow.py tests/runtime/test_workflow_catalog_roots.py tests/runtime/test_workflow_reference_resolution.py tests/runtime/test_workspace_and_context.py -q`
+  Result: `246 passed in 26.09s`.
+
+Key findings / decisions
+
+- No blocking or non-blocking code findings.
+- Updated `criteria.md` to checked for all five review gates.
+- Appended `IMP-000` to `feedback.md` documenting that the review found no issues.
+
+Open issues / next step
+
+- No review blockers for this phase.
+- The deferred monolith splits remain optional follow-up work outside this verification result.
+
+<loop-control>
+{"schema":"docloop.loop_control/v1","kind":"promise","promise":"COMPLETE"}
+</loop-control>
