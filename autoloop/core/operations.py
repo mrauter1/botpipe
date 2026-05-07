@@ -621,12 +621,12 @@ def _resolve_prompt(prompt: Prompt | str, *, runtime: OperationRuntime) -> Resol
     return replace(
         resolved,
         text=render_runtime_template(
-            resolved.text,
-            runtime.context,
-            placeholder_label=placeholder_label,
-            replace_roots=frozenset({"ctx", "item", "worklist", "branch", "fan_in"}),
-        ),
-    )
+        resolved.text,
+        runtime.context,
+        placeholder_label=placeholder_label,
+        replace_roots=frozenset({"ctx", "input", "item", "worklist", "branch", "fan_in"}),
+    ),
+)
 
 
 def _normalize_operation_prompt(prompt: Prompt | str) -> Prompt:

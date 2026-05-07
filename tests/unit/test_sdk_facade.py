@@ -1,12 +1,14 @@
 from __future__ import annotations
 
 import asyncio
+import json
 from pathlib import Path
 
 import pytest
 from pydantic import BaseModel
 
 import autoloop.simple as simple
+import autoloop.sdk as sdk_module
 from autoloop import (
     AWAIT_INPUT,
     FAIL,
@@ -16,10 +18,12 @@ from autoloop import (
     InputRequest,
     InputRequired,
     InputResponseValidationError,
+    RetentionPolicy,
     ResultArtifact,
     SDKDebugInfo,
     SDKExecutionError,
     StaticInput,
+    TooManyPauses,
     WorkflowResult,
     WorkflowParameterError,
     WorkflowInputError,
@@ -163,10 +167,20 @@ class _SDKSchemaArtifactWorkflow(simple.Workflow):
 
 def _sdk_client(tmp_path: Path, provider: object) -> Autoloop:
     return Autoloop(
-        root=Path.cwd(),
+        root=tmp_path,
         provider=provider,
         state_dir=tmp_path / ".autoloop",
         runtime_config=RuntimeConfig(git_tracking=GitTrackingRuntimeConfig(enabled=False, commit_policy="off")),
+    )
+
+
+def _sdk_client_at_root(tmp_path: Path, provider: object, *, retention: RetentionPolicy | None = None) -> Autoloop:
+    return Autoloop(
+        root=tmp_path,
+        provider=provider,
+        state_dir=tmp_path / ".autoloop",
+        runtime_config=RuntimeConfig(git_tracking=GitTrackingRuntimeConfig(enabled=False, commit_policy="off")),
+        retention=retention,
     )
 
 
@@ -209,7 +223,9 @@ def test_sdk_run_handles_typed_input_pause_loop_and_debug_artifacts(tmp_path: Pa
     assert result.debug.task_id.startswith("sdk-")
     assert "pause-workflow" in result.debug.task_id
     assert result.debug.run_id.startswith("run-")
-    assert result.debug.events_file.exists()
+    assert result.retention is not None
+    assert result.retention.task_scratch_deleted is True
+    assert result.debug.task_dir.exists() is False
 
 
 def test_sdk_run_preserves_explicit_none_message(tmp_path: Path) -> None:
@@ -279,24 +295,30 @@ def test_sdk_run_explicit_provider_questions_true_allows_handlerless_pause(tmp_p
     )
     client = _sdk_client(tmp_path, provider)
 
-    with pytest.raises(InputRequired, match="Proceed\\?"):
+    with pytest.raises(InputRequired, match="Proceed\\?") as exc_info:
         client.run(
             _SDKProviderQuestionWorkflow,
             "Review the rollout.",
             provider_questions=True,
         )
+    assert exc_info.value.partial.retention is not None
+    assert exc_info.value.partial.retention.task_scratch_retained is True
+    assert exc_info.value.partial.debug.task_dir.exists()
 
 
 def test_sdk_run_keeps_direct_request_input_when_provider_questions_disabled(tmp_path: Path) -> None:
     client = _sdk_client(tmp_path, ScriptedLLMProvider())
 
-    with pytest.raises(InputRequired, match="Approve the release"):
+    with pytest.raises(InputRequired, match="Approve the release") as exc_info:
         client.run(
             _SDKPauseWorkflow,
             "Ship the release safely.",
             _SDKPauseWorkflow.Input(topic="release"),
             provider_questions=False,
         )
+    assert exc_info.value.partial.retention is not None
+    assert exc_info.value.partial.retention.task_scratch_retained is True
+    assert exc_info.value.partial.debug.task_dir.exists()
 
 
 def test_sdk_run_explicit_provider_questions_false_suppresses_provider_questions_even_with_handler(tmp_path: Path) -> None:
@@ -378,6 +400,9 @@ def test_sdk_run_maps_failed_terminal_to_failed_result_status(tmp_path: Path) ->
     assert result.state.failure_reason == "Rejected by policy."
     assert result.last_event is not None
     assert result.last_event.tag == "failed"
+    assert result.retention is not None
+    assert result.retention.task_scratch_retained is True
+    assert result.debug.task_dir.exists()
 
 
 def test_sdk_step_executes_synthetic_simple_operation_workflow(tmp_path: Path) -> None:
@@ -540,8 +565,9 @@ def test_sdk_run_exposes_result_artifact_metadata_and_helpers(tmp_path: Path) ->
     assert isinstance(artifact, ResultArtifact)
     assert artifact.kind == "json"
     assert artifact.schema is _SDKArtifactPayload
-    assert artifact.source_path == artifact.path
-    assert artifact.promoted is False
+    assert artifact.source_path is not None
+    assert artifact.source_path != artifact.path
+    assert artifact.promoted is True
     assert artifact.required is False
     assert artifact.qualified_name == "capture.artifact_snapshot"
     assert artifact.read_json() == {"message": "Ship the release safely.", "topic": "release"}
@@ -603,3 +629,220 @@ def test_sdk_step_result_value_stays_none_even_when_workflow_result_has_output(
     assert result.status == "completed"
     assert result.workflow_result.output == {"summary": "should-not-leak"}
     assert result.value is None
+
+
+def test_sdk_run_default_retention_promotes_task_local_declared_writes_and_keeps_workspace_writes(tmp_path: Path) -> None:
+    client = _sdk_client_at_root(tmp_path, ScriptedLLMProvider())
+    workspace_output = tmp_path / "workspace-output.txt"
+    task_local_artifact = simple.Text("task_local", path="{task_folder}/exports/report.txt")
+    workspace_artifact = simple.Text("workspace", path=workspace_output)
+
+    class RetentionWorkflow(simple.Workflow):
+        task_local = task_local_artifact
+        workspace = workspace_artifact
+
+        @simple.python_step(writes=[task_local_artifact, workspace_artifact], routes={"done": FINISH})
+        def emit(ctx):
+            ctx.artifacts.task_local.write_text("task-local")
+            ctx.artifacts.workspace.write_text("workspace")
+            (ctx.task_folder / "scratch.tmp").write_text("scratch", encoding="utf-8")
+            return Event("done")
+
+    result = client.run(RetentionWorkflow, "Retain declared writes.")
+
+    assert result.retention is not None
+    assert result.retention.task_scratch_deleted is True
+    assert result.retention.promoted_artifacts == ("task_local",)
+    assert result.debug.task_dir.exists() is False
+    assert result.artifacts.task_local.promoted is True
+    assert result.artifacts.task_local.read_text() == "task-local"
+    assert result.artifacts.task_local.source_path is not None
+    assert result.artifacts.task_local.source_path.parent.name == "exports"
+    assert result.artifacts.workspace.promoted is False
+    assert result.artifacts.workspace.path == workspace_output
+    assert workspace_output.read_text(encoding="utf-8") == "workspace"
+
+
+def test_sdk_step_default_retention_deletes_task_scratch_on_success(tmp_path: Path) -> None:
+    client = _sdk_client_at_root(tmp_path, ScriptedLLMProvider())
+    report = simple.Text("report", path="{task_folder}/report.txt")
+
+    declaration = simple.python_step(
+        lambda ctx: (ctx.artifacts.report.write_text("from-step"), Event("done"))[1],
+        name="emit",
+        writes=[report],
+        routes={"done": FINISH},
+    )
+
+    result = client.step(declaration, "Step retention.")
+
+    assert result.workflow_result.retention is not None
+    assert result.workflow_result.retention.task_scratch_deleted is True
+    assert result.workflow_result.debug.task_dir.exists() is False
+    assert result.artifacts.report.read_text() == "from-step"
+
+
+def test_sdk_run_retention_keep_all_and_ephemeral_modes(tmp_path: Path) -> None:
+    workspace_output = tmp_path / "workspace-output.txt"
+    task_local_artifact = simple.Text("task_local", path="{task_folder}/exports/report.txt")
+    workspace_artifact = simple.Text("workspace", path=workspace_output)
+
+    class RetentionWorkflow(simple.Workflow):
+        task_local = task_local_artifact
+        workspace = workspace_artifact
+
+        @simple.python_step(writes=[task_local_artifact, workspace_artifact], routes={"done": FINISH})
+        def emit(ctx):
+            ctx.artifacts.task_local.write_text("task-local")
+            ctx.artifacts.workspace.write_text("workspace")
+            return Event("done")
+
+    keep_all_client = _sdk_client_at_root(tmp_path / "keep_all", ScriptedLLMProvider(), retention=RetentionPolicy.keep_all())
+    keep_all_result = keep_all_client.run(RetentionWorkflow, "Keep task scratch.")
+
+    assert keep_all_result.retention is not None
+    assert keep_all_result.retention.task_scratch_retained is True
+    assert keep_all_result.debug.task_dir.exists()
+    assert keep_all_result.artifacts.task_local.promoted is False
+    assert keep_all_result.artifacts.task_local.path.exists()
+
+    ephemeral_client = _sdk_client_at_root(tmp_path / "ephemeral", ScriptedLLMProvider(), retention=RetentionPolicy.ephemeral())
+    ephemeral_result = ephemeral_client.run(RetentionWorkflow, "Delete task-local writes.")
+
+    assert ephemeral_result.retention is not None
+    assert ephemeral_result.retention.task_scratch_deleted is True
+    assert "task_local" not in ephemeral_result.artifacts
+    assert ephemeral_result.artifacts.workspace.path.exists()
+    assert ephemeral_result.debug.task_dir.exists() is False
+
+
+def test_sdk_run_too_many_pauses_keeps_task_scratch_by_default(tmp_path: Path) -> None:
+    client = _sdk_client(tmp_path, ScriptedLLMProvider())
+
+    with pytest.raises(TooManyPauses, match="max_pauses=0") as exc_info:
+        client.run(
+            _SDKPauseWorkflow,
+            "Ship the release safely.",
+            _SDKPauseWorkflow.Input(topic="release"),
+            on_input=StaticInput({"approved": True}),
+            max_pauses=0,
+        )
+
+    assert exc_info.value.partial is not None
+    assert exc_info.value.partial.retention is not None
+    assert exc_info.value.partial.retention.task_scratch_retained is True
+    assert exc_info.value.partial.debug.task_dir.exists()
+
+
+def test_sdk_cleanup_only_targets_valid_completed_sdk_task_directories(tmp_path: Path) -> None:
+    client = _sdk_client_at_root(tmp_path, ScriptedLLMProvider())
+    tasks_root = tmp_path / ".autoloop" / "tasks"
+    valid = tasks_root / "sdk-completed"
+    failed = tasks_root / "sdk-failed"
+    invalid = tasks_root / "manual-task"
+
+    def seed_task(task_dir: Path, *, status: str, terminal: str, task_id: str | None = None) -> None:
+        task_dir.mkdir(parents=True, exist_ok=True)
+        sentinel = {
+            "schema": "autoloop.sdk_task/v1",
+            "generated_by": "autoloop.sdk",
+            "task_id": task_id or task_dir.name,
+            "created_at": "2026-05-01T00:00:00Z",
+            "retention_mode": "delete_task_scratch",
+        }
+        (task_dir / ".autoloop-sdk-task.json").write_text(json.dumps(sentinel) + "\n", encoding="utf-8")
+        run_dir = task_dir / "wf_test" / "runs" / "run-1"
+        run_dir.mkdir(parents=True, exist_ok=True)
+        (run_dir / "run.json").write_text(json.dumps({"status": status, "terminal": terminal}) + "\n", encoding="utf-8")
+
+    seed_task(valid, status="completed", terminal=FINISH)
+    seed_task(failed, status="failed", terminal=FAIL)
+    invalid.mkdir(parents=True, exist_ok=True)
+
+    dry_run = client.cleanup(dry_run=True)
+
+    assert valid in dry_run.deleted
+    assert failed in dry_run.skipped
+    assert invalid in dry_run.skipped
+    assert valid.exists()
+
+    result = client.cleanup()
+
+    assert valid in result.deleted
+    assert valid.exists() is False
+    assert failed.exists()
+    assert invalid.exists()
+
+
+def test_safe_delete_sdk_task_dir_refuses_unsafe_candidates(tmp_path: Path) -> None:
+    tasks_root = tmp_path / ".autoloop" / "tasks"
+    tasks_root.mkdir(parents=True, exist_ok=True)
+
+    non_sdk = tasks_root / "manual-task"
+    non_sdk.mkdir()
+    (non_sdk / ".autoloop-sdk-task.json").write_text(
+        json.dumps(
+            {
+                "schema": "autoloop.sdk_task/v1",
+                "generated_by": "autoloop.sdk",
+                "task_id": "manual-task",
+            }
+        )
+        + "\n",
+        encoding="utf-8",
+    )
+    with pytest.raises(SDKExecutionError, match="refusing to delete"):
+        sdk_module._safe_delete_sdk_task_dir(task_dir=non_sdk, task_id="manual-task", tasks_root=tasks_root)
+
+    missing_sentinel = tasks_root / "sdk-missing"
+    missing_sentinel.mkdir()
+    with pytest.raises(SDKExecutionError, match="refusing to delete"):
+        sdk_module._safe_delete_sdk_task_dir(task_dir=missing_sentinel, task_id="sdk-missing", tasks_root=tasks_root)
+
+    mismatched = tasks_root / "sdk-mismatched"
+    mismatched.mkdir()
+    (mismatched / ".autoloop-sdk-task.json").write_text(
+        json.dumps(
+            {
+                "schema": "autoloop.sdk_task/v1",
+                "generated_by": "autoloop.sdk",
+                "task_id": "sdk-other",
+            }
+        )
+        + "\n",
+        encoding="utf-8",
+    )
+    with pytest.raises(SDKExecutionError, match="refusing to delete"):
+        sdk_module._safe_delete_sdk_task_dir(task_dir=mismatched, task_id="sdk-mismatched", tasks_root=tasks_root)
+
+    outside = tmp_path / "sdk-outside"
+    outside.mkdir()
+    (outside / ".autoloop-sdk-task.json").write_text(
+        json.dumps(
+            {
+                "schema": "autoloop.sdk_task/v1",
+                "generated_by": "autoloop.sdk",
+                "task_id": "sdk-outside",
+            }
+        )
+        + "\n",
+        encoding="utf-8",
+    )
+    with pytest.raises(SDKExecutionError, match="refusing to delete"):
+        sdk_module._safe_delete_sdk_task_dir(task_dir=outside, task_id="sdk-outside", tasks_root=tasks_root)
+
+
+def test_sdk_runtime_prompt_rendering_supports_input_and_ctx_message(tmp_path: Path) -> None:
+    seen: list[str] = []
+
+    def record_prompt(request):
+        seen.append(request.prompt.text)
+        return Outcome(raw_output="ok", tag="done")
+
+    provider = ScriptedLLMProvider(llm_turns=[record_prompt, record_prompt])
+    client = _sdk_client(tmp_path, provider)
+
+    client.step(simple.step("Echo {input.message}", name="echo_input"), "hello")
+    client.step(simple.step("Echo {ctx.message}", name="echo_ctx"), "hello")
+
+    assert seen == ["Echo hello", "Echo hello"]

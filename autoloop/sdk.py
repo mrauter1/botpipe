@@ -5,9 +5,10 @@ from __future__ import annotations
 import argparse
 import json
 import re
+import shutil
 from collections.abc import Callable, Iterator, Mapping, Sequence
 from dataclasses import dataclass, replace
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 from pathlib import Path
 from types import SimpleNamespace
 from typing import Any, Literal
@@ -19,7 +20,7 @@ import autoloop.simple as simple
 from autoloop.core import Workflow as CoreWorkflow
 from autoloop.core.artifacts import CompiledArtifact, resolve_artifact_template
 from autoloop.core.compiler import CompiledWorkflow, compile_workflow
-from autoloop.core.context import WorkflowInputView
+from autoloop.core.context import Context, WorkflowInputView
 from autoloop.core.errors import WorkflowCompilationError, WorkflowExecutionError, exception_failure_context
 from autoloop.core.operations import classify_call, llm_call
 from autoloop.core.primitives import AWAIT_INPUT, FAIL, FINISH, Event, Outcome
@@ -27,6 +28,8 @@ from autoloop.core.prompts import Prompt
 from autoloop.core.provider_policy import ProviderPolicy, ProviderPolicyOverride
 from autoloop.core.providers.protocols import LLMProvider, validate_llm_provider
 from autoloop.core.steps import BranchGroupStep, ChildWorkflowStep, ProduceVerifyStep, PromptStep, PythonStep, Step
+from autoloop.core.stores.protocols import SessionSnapshot
+from autoloop.core.stores.session_store import InMemorySessionStore
 from autoloop.runtime.config import (
     ClaudeProviderConfig,
     CodexProviderConfig,
@@ -41,6 +44,7 @@ from autoloop.runtime.loader import (
     WorkflowDiscoveryError,
     WorkflowParameterError as RuntimeWorkflowParameterError,
     coerce_workflow_parameter_mapping,
+    materialize_workflow_params,
     resolve_workflow_reference,
 )
 from autoloop.runtime.provider_backends import resolve_provider_backend
@@ -175,6 +179,16 @@ class WorkflowParameterError(AutoloopSDKError):
 
 class SDKExecutionError(AutoloopSDKError):
     """Raised when the SDK cannot execute the requested operation."""
+
+    def __init__(
+        self,
+        message: str,
+        *,
+        original_error: Exception | None = None,
+        task_dir: Path | None = None,
+    ) -> None:
+        super().__init__(message, original_error=original_error)
+        self.task_dir = task_dir
 
 
 class InputRequired(AutoloopSDKError):
@@ -421,11 +435,13 @@ class Autoloop:
         runtime_config: RuntimeConfig | None = None,
         provider_policy_config: ProviderPolicyRuntimeConfig | None = None,
         state_dir: str | Path | None = None,
+        retention: RetentionPolicy | None = None,
     ) -> None:
         self.root = Path(root).resolve()
         self.runtime_config = runtime_config or RuntimeConfig()
         self.provider_policy_config = provider_policy_config or ProviderPolicyRuntimeConfig()
         self.state_dir = primary_state_root(self.root) if state_dir is None else Path(state_dir).resolve()
+        self.retention = retention or RetentionPolicy.sdk_default()
         self._provider = _resolve_sdk_provider(
             root=self.root,
             provider=provider,
@@ -448,6 +464,7 @@ class Autoloop:
         max_steps: int | None = None,
         provider_questions: bool | None = None,
         options: RunOptions | None = None,
+        retention: RetentionPolicy | None = None,
     ) -> WorkflowResult:
         if message is not None and not isinstance(message, str):
             raise WorkflowInputError(f"message must be str | None; received {type(message).__name__}")
@@ -460,6 +477,7 @@ class Autoloop:
         structured_input = _coerce_sdk_typed_input(compiled, typed_input)
         structured_params = _coerce_sdk_params(resolved.parameters_cls, params, workflow_name=compiled.workflow_name)
         effective_provider_questions = provider_questions if provider_questions is not None else on_input is not None
+        effective_retention = retention or self.retention
         runtime_config = _sdk_runtime_config_with_provider_questions(
             self.runtime_config,
             allow_provider_questions=effective_provider_questions,
@@ -468,6 +486,12 @@ class Autoloop:
             compiled.workflow_name,
             root=self.root,
             state_dir=self.state_dir,
+        )
+        task_workspace = resolve_task_workspace(self.root, task_id, state_dir=self.state_dir)
+        _write_sdk_task_sentinel(
+            task_dir=task_workspace.task_dir,
+            task_id=task_id,
+            policy=effective_retention,
         )
         run_id: str | None = None
         resume = False
@@ -504,7 +528,11 @@ class Autoloop:
                         response=handled_inputs[-1].response,
                         original_error=exc if isinstance(exc, Exception) else Exception(str(exc)),
                     ) from exc
-                raise _wrap_sdk_execution_error(exc, workflow_name=compiled.workflow_name) from exc
+                raise _wrap_sdk_execution_error(
+                    exc,
+                    workflow_name=compiled.workflow_name,
+                    task_dir=task_workspace.task_dir,
+                ) from exc
 
             result = WorkflowResult.from_execution(
                 execution,
@@ -512,34 +540,55 @@ class Autoloop:
                 handled_inputs=tuple(handled_inputs),
             )
             if result.terminal != AWAIT_INPUT:
-                return result
+                return _apply_retention(
+                    execution=execution,
+                    result=result,
+                    policy=effective_retention,
+                    message=message,
+                )
 
-            request = InputRequest.from_execution(
+            draft_request = InputRequest.from_execution(
                 execution,
                 pause_index=pause_index,
                 partial=result,
             )
             if on_input is None:
-                raise InputRequired(request=request, partial=result)
+                retained_partial = _apply_retention(
+                    execution=execution,
+                    result=result,
+                    policy=effective_retention,
+                    message=message,
+                )
+                request = replace(draft_request, partial=retained_partial)
+                raise InputRequired(request=request, partial=retained_partial)
 
-            response = on_input(request)
+            response = on_input(draft_request)
             try:
                 answer = serialize_input_response(response)
             except Exception as exc:
                 if isinstance(exc, InputResponseValidationError):
                     raise
                 raise InputResponseValidationError(
-                    request=request,
+                    request=draft_request,
                     response=response,
                     original_error=exc if isinstance(exc, Exception) else Exception(str(exc)),
                 ) from exc
 
-            handled_inputs.append(HandledInput(request=request, response=response))
-            last_request = request
+            handled_inputs.append(HandledInput(request=draft_request, response=response))
+            last_request = draft_request
             run_id = execution.run_workspace.run_id
             resume = True
 
-        raise TooManyPauses(max_pauses=max_pauses, partial=result)
+        if result is None:
+            raise TooManyPauses(max_pauses=max_pauses, partial=None)
+        retained_partial = _apply_retention(
+            execution=execution,
+            result=result,
+            policy=effective_retention,
+            message=message,
+            too_many_pauses=True,
+        )
+        raise TooManyPauses(max_pauses=max_pauses, partial=retained_partial)
 
     def llm(
         self,
@@ -588,18 +637,25 @@ class Autoloop:
         typed_input: BaseModel | None = None,
         /,
         *,
+        params: BaseModel | Mapping[str, Any] | None = None,
+        routes: Mapping[str, Any] | None = None,
         on_input: InputHandler | None = None,
         max_pauses: int = 8,
         max_steps: int | None = None,
+        provider_questions: bool | None = None,
+        retention: RetentionPolicy | None = None,
     ) -> StepResult:
-        workflow_cls = _build_synthetic_step_workflow(self.root, declaration, typed_input)
+        workflow_cls = _build_synthetic_step_workflow(self.root, declaration, typed_input, routes=routes)
         workflow_result = self.run(
             workflow_cls,
             message,
             typed_input,
+            params=params,
             on_input=on_input,
             max_pauses=max_pauses,
             max_steps=max_steps,
+            provider_questions=provider_questions,
+            retention=retention,
         )
         route = workflow_result.last_event.tag if workflow_result.last_event is not None else None
         return StepResult(
@@ -610,6 +666,64 @@ class Autoloop:
             state=workflow_result.state,
             artifacts=workflow_result.artifacts,
             workflow_result=workflow_result,
+        )
+
+    def cleanup(
+        self,
+        *,
+        older_than: timedelta | None = None,
+        include_failed: bool = False,
+        dry_run: bool = False,
+    ) -> CleanupResult:
+        tasks_root = _sdk_tasks_root(self.root, self.state_dir)
+        if not tasks_root.is_dir():
+            return CleanupResult(deleted=(), skipped=(), errors={}, dry_run=dry_run)
+
+        now = datetime.now(timezone.utc)
+        deleted: list[Path] = []
+        skipped: list[Path] = []
+        errors: dict[Path, str] = {}
+        for task_dir in sorted(path for path in tasks_root.iterdir() if path.is_dir()):
+            try:
+                payload = _load_sdk_task_sentinel(task_dir)
+            except SDKExecutionError:
+                skipped.append(task_dir)
+                continue
+            if payload.get("schema") != "autoloop.sdk_task/v1":
+                skipped.append(task_dir)
+                continue
+            if payload.get("generated_by") != "autoloop.sdk":
+                skipped.append(task_dir)
+                continue
+            if payload.get("task_id") != task_dir.name:
+                skipped.append(task_dir)
+                continue
+            if older_than is not None and now - _sdk_task_created_at(task_dir) < older_than:
+                skipped.append(task_dir)
+                continue
+            if not include_failed and _task_dir_appears_failed_or_awaiting_input(task_dir):
+                skipped.append(task_dir)
+                continue
+            if dry_run:
+                deleted.append(task_dir)
+                continue
+            try:
+                _safe_delete_sdk_task_dir(
+                    task_dir=task_dir,
+                    task_id=task_dir.name,
+                    tasks_root=tasks_root,
+                )
+            except SDKExecutionError as exc:
+                errors[task_dir] = str(exc)
+                skipped.append(task_dir)
+                continue
+            deleted.append(task_dir)
+
+        return CleanupResult(
+            deleted=tuple(deleted),
+            skipped=tuple(skipped),
+            errors=errors,
+            dry_run=dry_run,
         )
 
 
@@ -826,6 +940,11 @@ def _sdk_result_artifacts(
     return artifacts
 
 
+def _sdk_tasks_root(root: Path, state_dir: Path) -> Path:
+    del root
+    return state_dir / "tasks"
+
+
 def _sdk_artifact_context(execution: RunExecution, *, message: str | None) -> Any:
     workflow_input = execution.workflow_input
     return SimpleNamespace(
@@ -841,6 +960,32 @@ def _sdk_artifact_context(execution: RunExecution, *, message: str | None) -> An
         message=message,
         input_fields=workflow_input,
         input=WorkflowInputView(message=message, fields=workflow_input),
+    )
+
+
+def _runtime_equivalent_artifact_context(execution: RunExecution, *, message: str | None) -> Any:
+    session_store = InMemorySessionStore()
+    checkpoint = execution.result.checkpoint
+    snapshot = checkpoint.session_bindings if checkpoint is not None else SessionSnapshot(bindings=())
+    session_store.restore(snapshot)
+    params = materialize_workflow_params(execution.compiled.parameters_cls, execution.workflow_params)
+    return Context(
+        root=execution.task_workspace.root,
+        task_id=execution.task_workspace.task_id,
+        run_id=execution.run_workspace.run_id,
+        workflow_name=execution.compiled.workflow_name,
+        task_folder=execution.task_workspace.task_dir,
+        workflow_folder=execution.workflow_workspace.workflow_dir,
+        run_folder=execution.run_workspace.run_dir,
+        package_folder=execution.workflow_workspace.package_dir,
+        request_file=execution.run_workspace.request_file,
+        task_request_file=execution.task_workspace.task_request_file,
+        state=execution.result.state,
+        session_store=session_store,
+        params=params,
+        workflow_params=execution.workflow_params,
+        message=message,
+        workflow_input=execution.workflow_input,
     )
 
 
@@ -871,20 +1016,26 @@ def _wrap_sdk_execution_error(
     *,
     workflow_name: str | None = None,
     operation_name: str | None = None,
+    task_dir: Path | None = None,
 ) -> SDKExecutionError:
     if isinstance(exc, AutoloopSDKError):
-        return exc if isinstance(exc, SDKExecutionError) else SDKExecutionError(str(exc), original_error=exc)
+        return (
+            exc
+            if isinstance(exc, SDKExecutionError)
+            else SDKExecutionError(str(exc), original_error=exc, task_dir=task_dir)
+        )
     if _is_active_loop_runtime_error(exc):
         subject = operation_name or "workflow execution"
         return SDKExecutionError(
             f"Synchronous SDK {subject} cannot run inside an active event loop. {_ACTIVE_LOOP_HINT}",
             original_error=exc,
+            task_dir=task_dir,
         )
     if workflow_name is not None:
-        return SDKExecutionError(f"workflow {workflow_name!r} execution failed: {exc}", original_error=exc)
+        return SDKExecutionError(f"workflow {workflow_name!r} execution failed: {exc}", original_error=exc, task_dir=task_dir)
     if operation_name is not None:
-        return SDKExecutionError(f"sdk.{operation_name} failed: {exc}", original_error=exc)
-    return SDKExecutionError(str(exc), original_error=exc)
+        return SDKExecutionError(f"sdk.{operation_name} failed: {exc}", original_error=exc, task_dir=task_dir)
+    return SDKExecutionError(str(exc), original_error=exc, task_dir=task_dir)
 
 
 def _is_active_loop_runtime_error(exc: BaseException) -> bool:
@@ -908,7 +1059,293 @@ def _sdk_operation_dir(root: Path, state_dir: Path, *, kind: str) -> Path:
     return operation_dir
 
 
-def _build_synthetic_step_workflow(root: Path, declaration: object, typed_input: BaseModel | None) -> type[simple.Workflow]:
+def _is_inside_path(path: Path, parent: Path) -> bool:
+    try:
+        path.resolve().relative_to(parent.resolve())
+    except ValueError:
+        return False
+    return True
+
+
+def _write_sdk_task_sentinel(
+    *,
+    task_dir: Path,
+    task_id: str,
+    policy: RetentionPolicy,
+) -> None:
+    task_dir.mkdir(parents=True, exist_ok=True)
+    sentinel = task_dir / ".autoloop-sdk-task.json"
+    payload = {
+        "schema": "autoloop.sdk_task/v1",
+        "generated_by": "autoloop.sdk",
+        "task_id": task_id,
+        "created_at": datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ"),
+        "retention_mode": policy.mode,
+    }
+    sentinel.write_text(json.dumps(payload, indent=2) + "\n", encoding="utf-8")
+
+
+def _load_sdk_task_sentinel(task_dir: Path) -> dict[str, Any]:
+    sentinel = task_dir / ".autoloop-sdk-task.json"
+    try:
+        payload = json.loads(sentinel.read_text(encoding="utf-8"))
+    except OSError as exc:
+        raise SDKExecutionError(f"refusing to delete non-SDK or unsafe task directory {task_dir}", original_error=exc) from exc
+    except json.JSONDecodeError as exc:
+        raise SDKExecutionError(f"refusing to delete non-SDK or unsafe task directory {task_dir}", original_error=exc) from exc
+    if not isinstance(payload, dict):
+        raise SDKExecutionError(f"refusing to delete non-SDK or unsafe task directory {task_dir}")
+    return payload
+
+
+def _safe_delete_sdk_task_dir(
+    *,
+    task_dir: Path,
+    task_id: str,
+    tasks_root: Path,
+) -> None:
+    resolved_task_dir = task_dir.resolve()
+    resolved_tasks_root = tasks_root.resolve()
+    sentinel = task_dir / ".autoloop-sdk-task.json"
+    blocked_roots = {
+        resolved_tasks_root,
+        resolved_tasks_root.parent,
+        resolved_tasks_root.parent.parent,
+        Path.home().resolve(),
+        Path(resolved_task_dir.anchor).resolve(),
+    }
+    if not task_id.startswith("sdk-"):
+        raise SDKExecutionError(f"refusing to delete non-SDK or unsafe task directory {task_dir}")
+    if task_dir.name != task_id:
+        raise SDKExecutionError(f"refusing to delete non-SDK or unsafe task directory {task_dir}")
+    if not _is_inside_path(resolved_task_dir, resolved_tasks_root):
+        raise SDKExecutionError(f"refusing to delete non-SDK or unsafe task directory {task_dir}")
+    if not sentinel.is_file():
+        raise SDKExecutionError(f"refusing to delete non-SDK or unsafe task directory {task_dir}")
+    payload = _load_sdk_task_sentinel(task_dir)
+    if payload.get("schema") != "autoloop.sdk_task/v1":
+        raise SDKExecutionError(f"refusing to delete non-SDK or unsafe task directory {task_dir}")
+    if payload.get("generated_by") != "autoloop.sdk":
+        raise SDKExecutionError(f"refusing to delete non-SDK or unsafe task directory {task_dir}")
+    if payload.get("task_id") != task_dir.name:
+        raise SDKExecutionError(f"refusing to delete non-SDK or unsafe task directory {task_dir}")
+    if resolved_task_dir in blocked_roots:
+        raise SDKExecutionError(f"refusing to delete non-SDK or unsafe task directory {task_dir}")
+    shutil.rmtree(resolved_task_dir)
+
+
+def _collect_declared_write_artifacts(
+    execution: RunExecution,
+    *,
+    message: str | None,
+) -> dict[str, DeclaredWriteArtifact]:
+    context = _runtime_equivalent_artifact_context(execution, message=message)
+    artifacts: dict[str, DeclaredWriteArtifact] = {}
+    for name, artifact in execution.compiled.artifact_items(authoritative=False):
+        path = _resolve_sdk_artifact_path(artifact, context)
+        artifacts[name] = DeclaredWriteArtifact(
+            name=name,
+            path=path,
+            kind=artifact.kind,
+            schema=artifact.schema,
+            required=artifact.required,
+            qualified_name=artifact.qualified_name,
+        )
+    return artifacts
+
+
+def _promotion_base_dir(*, root: Path, task_id: str, policy: RetentionPolicy) -> Path:
+    if policy.promoted_writes_dir is None:
+        return root / ".autoloop" / "outputs" / "sdk" / task_id
+    candidate = Path(policy.promoted_writes_dir)
+    if not candidate.is_absolute():
+        candidate = root / candidate
+    return candidate
+
+
+def _uniquify_path(path: Path) -> Path:
+    if not path.exists():
+        return path
+    stem = path.stem
+    suffix = path.suffix
+    counter = 1
+    while True:
+        candidate = path.with_name(f"{stem}-{counter}{suffix}")
+        if not candidate.exists():
+            return candidate
+        counter += 1
+
+
+def _promote_declared_write(
+    *,
+    artifact: DeclaredWriteArtifact,
+    root: Path,
+    task_id: str,
+    task_dir: Path,
+    policy: RetentionPolicy,
+) -> Path:
+    source = artifact.path.resolve()
+    resolved_task_dir = task_dir.resolve()
+    if not _is_inside_path(source, resolved_task_dir):
+        raise SDKExecutionError(f"declared write {artifact.name!r} is not inside SDK task scratch: {artifact.path}")
+    if source.is_dir():
+        raise SDKExecutionError(f"declared write {artifact.name!r} points to a directory, which is unsupported in the SDK MVP")
+    base_dir = _promotion_base_dir(root=root, task_id=task_id, policy=policy).resolve()
+    relative_path = source.relative_to(resolved_task_dir)
+    destination = (base_dir / relative_path).resolve()
+    if not _is_inside_path(destination, base_dir):
+        raise SDKExecutionError(f"refusing to promote declared write outside the promotion directory: {artifact.path}")
+    destination.parent.mkdir(parents=True, exist_ok=True)
+    if destination.exists() and not _is_inside_path(destination, base_dir):
+        destination = _uniquify_path(destination)
+    shutil.copyfile(source, destination)
+    return destination
+
+
+def _result_artifact_map_from_declared_writes(
+    declared_writes: Mapping[str, DeclaredWriteArtifact],
+    *,
+    retained_paths: Mapping[str, Path] | None = None,
+    promoted_names: frozenset[str] = frozenset(),
+) -> ArtifactMap:
+    result: dict[str, ResultArtifact] = {}
+    path_overrides = dict(retained_paths or {})
+    names = tuple(path_overrides) if retained_paths is not None else tuple(declared_writes)
+    for name in names:
+        artifact = declared_writes[name]
+        retained_path = path_overrides.get(name, artifact.path)
+        result[name] = ResultArtifact(
+            name=name,
+            path=retained_path,
+            kind=artifact.kind,
+            schema=artifact.schema,
+            source_path=artifact.path,
+            promoted=name in promoted_names,
+            required=artifact.required,
+            qualified_name=artifact.qualified_name,
+        )
+    return ArtifactMap(result)
+
+
+def _apply_retention(
+    *,
+    execution: RunExecution,
+    result: WorkflowResult,
+    policy: RetentionPolicy,
+    message: str | None,
+    too_many_pauses: bool = False,
+) -> WorkflowResult:
+    task_dir = execution.task_workspace.task_dir
+    task_id = execution.task_workspace.task_id
+    tasks_root = _sdk_tasks_root(execution.task_workspace.root, execution.task_workspace.state_root)
+    root = execution.task_workspace.root
+    declared_writes = _collect_declared_write_artifacts(execution, message=message)
+
+    keep_task_dir = policy.mode == "keep_all"
+    if result.status == "failed" and policy.keep_on_failure:
+        keep_task_dir = True
+    if result.status == "awaiting_input" and policy.keep_on_input_required:
+        keep_task_dir = True
+    if too_many_pauses and policy.keep_on_too_many_pauses:
+        keep_task_dir = True
+
+    retained_paths: dict[str, Path] = {}
+    promoted_artifacts: list[str] = []
+    if keep_task_dir:
+        for name, artifact in declared_writes.items():
+            retained_paths[name] = artifact.path
+    else:
+        for name, artifact in declared_writes.items():
+            artifact_path = artifact.path
+            if not _is_inside_path(artifact_path, task_dir):
+                retained_paths[name] = artifact_path
+                continue
+            if not policy.keep_declared_writes:
+                continue
+            if not artifact_path.exists():
+                retained_paths[name] = artifact_path
+                continue
+            if not policy.promote_task_writes:
+                raise SDKExecutionError(
+                    f"declared write {name!r} would be deleted with SDK task scratch retention disabled"
+                )
+            retained_paths[name] = _promote_declared_write(
+                artifact=artifact,
+                root=root,
+                task_id=task_id,
+                task_dir=task_dir,
+                policy=policy,
+            )
+            promoted_artifacts.append(name)
+
+    if not keep_task_dir and policy.mode in {"delete_task_scratch", "delete_all_sdk_managed"}:
+        _safe_delete_sdk_task_dir(
+            task_dir=task_dir,
+            task_id=task_id,
+            tasks_root=tasks_root,
+        )
+
+    retention = RetentionInfo(
+        policy=policy,
+        task_scratch_retained=keep_task_dir,
+        task_scratch_deleted=not keep_task_dir and policy.mode in {"delete_task_scratch", "delete_all_sdk_managed"},
+        promoted_artifacts=tuple(promoted_artifacts),
+        retained_task_dir=task_dir if keep_task_dir else None,
+    )
+    return replace(
+        result,
+        artifacts=_result_artifact_map_from_declared_writes(
+            declared_writes,
+            retained_paths=retained_paths,
+            promoted_names=frozenset(promoted_artifacts),
+        ),
+        retention=retention,
+    )
+
+
+def _sdk_task_created_at(candidate: Path) -> datetime:
+    payload = _load_sdk_task_sentinel(candidate)
+    created_at = payload.get("created_at")
+    if isinstance(created_at, str):
+        try:
+            return datetime.fromisoformat(created_at.replace("Z", "+00:00"))
+        except ValueError:
+            pass
+    return datetime.fromtimestamp(candidate.stat().st_mtime, tz=timezone.utc)
+
+
+def _task_dir_appears_failed_or_awaiting_input(task_dir: Path) -> bool:
+    run_meta_files = sorted(task_dir.glob("wf_*/runs/*/run.json"))
+    if not run_meta_files:
+        return True
+    for run_meta_file in run_meta_files:
+        try:
+            payload = json.loads(run_meta_file.read_text(encoding="utf-8"))
+        except (OSError, json.JSONDecodeError):
+            return True
+        if not isinstance(payload, dict):
+            return True
+        status = payload.get("status")
+        terminal = payload.get("terminal")
+        pending_input = payload.get("pending_input")
+        if status not in {"completed"}:
+            return True
+        if terminal == AWAIT_INPUT:
+            return True
+        if isinstance(pending_input, dict) and pending_input:
+            return True
+        if payload.get("error") is not None:
+            return True
+    return False
+
+
+def _build_synthetic_step_workflow(
+    root: Path,
+    declaration: object,
+    typed_input: BaseModel | None,
+    *,
+    routes: Mapping[str, Any] | None,
+) -> type[simple.Workflow]:
     _validate_step_declaration_supported(root, declaration)
     attrs: dict[str, Any] = {
         "__module__": __name__,
@@ -919,13 +1356,14 @@ def _build_synthetic_step_workflow(root: Path, declaration: object, typed_input:
     if isinstance(declaration, Step):
         attrs["entry"] = declaration
         attrs[declaration.name] = declaration
-        attrs["transitions"] = {declaration: _synthetic_step_transitions(declaration)}
-        name = f"SDKStepWorkflow_{declaration.name}"
+        attrs["name"] = f"sdk_step_{_TASK_ID_SAFE_RE.sub('_', declaration.name.strip().lower()).strip('_') or 'step'}"
+        attrs["transitions"] = {declaration: dict(routes) if routes is not None else _default_routes_for_step(declaration)}
+        name = f"SDKStepWorkflow_{declaration.name}_{uuid4().hex[:8]}"
         return type(name, (CoreWorkflow,), attrs)
 
     step_name = getattr(declaration, "name", None) or "step"
     attrs[step_name] = declaration
-    name = f"SDKStepWorkflow_{step_name}"
+    name = f"SDKStepWorkflow_{step_name}_{uuid4().hex[:8]}"
     return type(name, (simple.Workflow,), attrs)
 
 
@@ -933,21 +1371,24 @@ class _SDKStepState(BaseModel):
     pass
 
 
-def _synthetic_step_transitions(declaration: Step) -> dict[str, object]:
-    transitions: dict[str, object] = {}
-    for route_name in declaration.route_metadata:
-        transitions[route_name] = _synthetic_terminal_target(route_name)
-    if not transitions:
-        transitions["done"] = FINISH
-    return transitions
-
-
-def _synthetic_terminal_target(route_name: str) -> object:
-    if route_name in {"question", "blocked"}:
-        return AWAIT_INPUT
-    if route_name == "failed":
-        return FAIL
-    return FINISH
+def _default_routes_for_step(declaration: Step) -> dict[str, object]:
+    if declaration.route_metadata:
+        transitions: dict[str, object] = {}
+        for route_name in declaration.route_metadata:
+            if route_name in {"question", "blocked"}:
+                transitions[route_name] = AWAIT_INPUT
+            elif route_name == "failed":
+                transitions[route_name] = FAIL
+            elif isinstance(declaration, ProduceVerifyStep) and route_name == "needs_rework":
+                transitions[route_name] = declaration
+            else:
+                transitions[route_name] = FINISH
+        return transitions
+    if isinstance(declaration, ProduceVerifyStep):
+        return {"accepted": FINISH, "needs_rework": declaration}
+    if isinstance(declaration, (PromptStep, PythonStep, ChildWorkflowStep)):
+        return {"done": FINISH}
+    return {"done": FINISH}
 
 
 def _validate_step_declaration_supported(root: Path, declaration: object) -> None:

@@ -1370,7 +1370,7 @@ class Engine:
                 resolved.text,
                 context,
                 placeholder_label=placeholder_label,
-                replace_roots=frozenset({"ctx", "item", "worklist", "branch", "fan_in"}),
+                replace_roots=frozenset({"ctx", "input", "item", "worklist", "branch", "fan_in"}),
             ),
         )
 
