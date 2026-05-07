@@ -1,0 +1,3 @@
+<autoloop-decisions-header version="1" block_seq="1" owner="planner" phase_id="task-global" pair="plan" turn_seq="1" run_id="run-20260507T141012Z-5af91a26" ts="2026-05-07T14:10:12.645447+00:00" />
+Treat the remaining stale contract as an undeclared ctx.input access regression: it should assert failure for {ctx.input.message} unless Workflow.Input explicitly declares message.
+Keep bare {input.message} compatibility and file-backed ctx.message behavior unchanged; only reopen runtime code if the focused contract rerun reveals a real mismatch.
