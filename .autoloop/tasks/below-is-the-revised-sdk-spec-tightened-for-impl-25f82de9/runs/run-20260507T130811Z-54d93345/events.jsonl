@@ -20,3 +20,4 @@
 {"ts": "2026-05-07T13:29:44.163126+00:00", "run_id": "run-20260507T130811Z-54d93345", "seq": 20, "event_type": "phase_deferred", "pair": "implement", "phase_mode": "single", "phase_id": "runtime-input-contract", "reason": "awaiting enabled test pair completion"}
 {"ts": "2026-05-07T13:29:44.164579+00:00", "run_id": "run-20260507T130811Z-54d93345", "seq": 21, "event_type": "pair_started", "pair": "test", "phase_id": "runtime-input-contract"}
 {"ts": "2026-05-07T13:29:44.164734+00:00", "run_id": "run-20260507T130811Z-54d93345", "seq": 22, "event_type": "cycle_started", "pair": "test", "cycle": 1, "attempt": 1, "phase_id": "runtime-input-contract"}
+{"ts": "2026-05-07T13:32:34.164881+00:00", "run_id": "run-20260507T130811Z-54d93345", "seq": 23, "event_type": "phase_finished", "pair": "test", "phase": "producer", "cycle": 1, "attempt": 1, "empty_output": false, "phase_id": "runtime-input-contract"}
