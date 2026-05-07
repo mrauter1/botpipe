@@ -13,11 +13,11 @@
       "close-remaining-sdk-runtime-gaps"
     ],
     "explicit": true,
-    "current_phase_index": 0,
-    "current_phase_id": "close-remaining-sdk-runtime-gaps"
+    "current_phase_index": 1,
+    "current_phase_id": null
   },
   "phase_status": {
-    "close-remaining-sdk-runtime-gaps": "in_progress"
+    "close-remaining-sdk-runtime-gaps": "completed"
   },
   "phase_history": [
     {
@@ -25,6 +25,13 @@
       "run_id": "run-20260507T145702Z-0c706033",
       "status": "in_progress",
       "ts": "2026-05-07T15:01:50.700598+00:00"
+    },
+    {
+      "phase_id": "close-remaining-sdk-runtime-gaps",
+      "run_id": "run-20260507T145702Z-0c706033",
+      "status": "completed",
+      "ts": "2026-05-07T15:13:59.025308+00:00",
+      "pair": "test"
     }
   ]
 }
