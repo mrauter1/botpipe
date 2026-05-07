@@ -2,3 +2,7 @@
 Treat `Context(message=...)` as an explicit synthetic-context override seam only; runner/engine root contexts and branch/fan-in clones should preserve `request_file` authority instead of caching request text there.
 The requested contract narrowing is intentional: `ctx.input.message` is valid only when `Input.message` is actually declared, and request text should move to `ctx.message` / `ctx.request.text`.
 The asserted public docs already match the requested behavior, so implementation focus should stay on runtime code and tests, with stale internal examples updated only if they would otherwise contradict the shipped contract.
+<autoloop-decisions-header version="1" block_seq="2" owner="planner" phase_id="task-global" pair="plan" turn_seq="2" run_id="run-20260507T132940Z-5d96f5de" ts="2026-05-07T13:35:01.394497+00:00" />
+The requested narrowing applies to direct Python `ctx.input.message` / `ctx.input.model_dump()` too, because `ctx.input` itself must stop aliasing request text unless `Input.message` is explicitly declared.
+Legacy bare `{input.message}` behavior is outside the requested `ctx.*` contract change and should only survive as an isolated compatibility shim, not by keeping `ctx.input` aliased to request text.
+If in-tree examples such as `sdk.md` are touched while implementing this slice, they must match the retained-versus-migrated `input.message` boundary in the same change.
