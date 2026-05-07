@@ -1087,3 +1087,46 @@ No open verifier issues in this phase. The review artifacts are updated and this
 <loop-control>
 {"schema":"docloop.loop_control/v1","kind":"promise","promise":"COMPLETE"}
 </loop-control>
+
+
+---
+run_id=run-20260507T184603Z-adb7c56b | entry=session_turn | pair=test | phase=producer | cycle=1 | attempt=1 | thread_id=019e03e8-a651-7bb3-9d8d-639ed65542e6
+---
+provider=codex
+mode=resume
+template=/home/rauter/.local/share/pipx/venvs/autoloop/lib/python3.12/site-packages/autoloop/templates/test_producer.md
+session_id=019e03e8-a651-7bb3-9d8d-639ed65542e6
+
+
+---
+run_id=run-20260507T184603Z-adb7c56b | entry=phase_output | pair=test | phase=producer | process=codex-agent | cycle=1 | attempt=1 | thread_id=019e03e8-a651-7bb3-9d8d-639ed65542e6
+---
+I’m treating this as the test-author closeout for the SDK acceptance phase. I’ll verify the current test surface and then update the test-phase artifacts with an explicit coverage map and a concise summary of the added regressions.
+
+The repository test already contains the added SDK regressions, and there’s an empty test-author header for this turn in `decisions.txt`. I’m running the focused test commands again under the test phase, then I’ll record the coverage map and one non-obvious assertion choice for future drift resistance.
+
+The focused validation is green: `46` SDK facade tests and `22` placeholder-focused runtime tests. I’m writing the test artifact coverage map now, and I’ll capture the key assertion choice that makes the declared-write context regression catch both draft and retained path resolution.
+
+Scope considered
+
+Phase-local test work for `sdk-acceptance-regression-tests`: the existing SDK-facing regressions in [tests/unit/test_sdk_facade.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/tests/unit/test_sdk_facade.py), plus the required test-phase artifacts [test_strategy.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/revised-sdk-implementation-spec-1-scope-implemen-1e1a7513/runs/run-20260507T184603Z-adb7c56b/artifacts/test/phases/sdk-acceptance-regression-tests/test_strategy.md) and [feedback.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/revised-sdk-implementation-spec-1-scope-implemen-1e1a7513/runs/run-20260507T184603Z-adb7c56b/artifacts/test/phases/sdk-acceptance-regression-tests/feedback.md).
+
+What I analyzed
+
+The phase contract, the existing SDK facade coverage, the current run decisions, and the newly added export/runtime-param retention assertions. I also checked the focused placeholder subset because the phase touched the SDK-facing artifact-template seam.
+
+What I changed
+
+- Updated [test_strategy.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/revised-sdk-implementation-spec-1-scope-implemen-1e1a7513/runs/run-20260507T184603Z-adb7c56b/artifacts/test/phases/sdk-acceptance-regression-tests/test_strategy.md) with an explicit behavior-to-test coverage map, preserved invariants, edge/failure paths, flake controls, and known gaps.
+- Appended a concise summary to [feedback.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/revised-sdk-implementation-spec-1-scope-implemen-1e1a7513/runs/run-20260507T184603Z-adb7c56b/artifacts/test/phases/sdk-acceptance-regression-tests/feedback.md).
+- Appended one non-obvious test decision under the current test-author header in [decisions.txt](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/revised-sdk-implementation-spec-1-scope-implemen-1e1a7513/runs/run-20260507T184603Z-adb7c56b/decisions.txt).
+
+Key findings / decisions
+
+The runtime-params declared-write regression now explicitly checks both `artifact.path.name` and `artifact.source_path.name`, which makes it catch failures in either draft SDK artifact resolution or post-retention promotion. Validation re-run was green:
+- `.venv/bin/python -m pytest -q tests/unit/test_sdk_facade.py`
+- `.venv/bin/python -m pytest -q tests/unit/test_primitives_and_stores.py -k 'artifact_template or render_runtime_template or workflow_params'`
+
+Open issues / next step
+
+No open test-author issues in this phase.
