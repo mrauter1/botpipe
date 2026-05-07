@@ -23,3 +23,7 @@
 {"ts": "2026-05-07T13:32:34.164881+00:00", "run_id": "run-20260507T130811Z-54d93345", "seq": 23, "event_type": "phase_finished", "pair": "test", "phase": "producer", "cycle": 1, "attempt": 1, "empty_output": false, "phase_id": "runtime-input-contract"}
 {"ts": "2026-05-07T13:34:26.790398+00:00", "run_id": "run-20260507T130811Z-54d93345", "seq": 24, "event_type": "phase_finished", "pair": "test", "phase": "verifier", "cycle": 1, "attempt": 1, "empty_output": false, "phase_id": "runtime-input-contract"}
 {"ts": "2026-05-07T13:34:26.850607+00:00", "run_id": "run-20260507T130811Z-54d93345", "seq": 25, "event_type": "pair_completed", "pair": "test", "cycle": 1, "attempt": 1, "phase_id": "runtime-input-contract"}
+{"ts": "2026-05-07T13:34:26.980330+00:00", "run_id": "run-20260507T130811Z-54d93345", "seq": 26, "event_type": "phase_completed", "pair": "test", "phase_id": "runtime-input-contract", "phase_mode": "single"}
+{"ts": "2026-05-07T13:34:26.984308+00:00", "run_id": "run-20260507T130811Z-54d93345", "seq": 27, "event_type": "phase_started", "phase_id": "input-validation-and-rendering", "phase_mode": "single"}
+{"ts": "2026-05-07T13:34:26.986660+00:00", "run_id": "run-20260507T130811Z-54d93345", "seq": 28, "event_type": "pair_started", "pair": "implement", "phase_id": "input-validation-and-rendering"}
+{"ts": "2026-05-07T13:34:26.986924+00:00", "run_id": "run-20260507T130811Z-54d93345", "seq": 29, "event_type": "cycle_started", "pair": "implement", "cycle": 1, "attempt": 1, "phase_id": "input-validation-and-rendering"}
