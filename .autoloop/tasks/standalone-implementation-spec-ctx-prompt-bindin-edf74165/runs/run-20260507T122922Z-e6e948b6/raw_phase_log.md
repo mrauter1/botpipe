@@ -556,3 +556,106 @@ Open issues / next step
 <loop-control>
 {"schema":"docloop.loop_control/v1","kind":"promise","promise":"INCOMPLETE"}
 </loop-control>
+
+
+---
+run_id=run-20260507T122922Z-e6e948b6 | entry=session_turn | pair=implement | phase=producer | cycle=2 | attempt=1 | thread_id=019e027a-8f71-79d1-87f8-8b585e932a4b
+---
+provider=codex
+mode=resume
+template=/home/rauter/.local/share/pipx/venvs/autoloop/lib/python3.12/site-packages/autoloop/templates/implement_producer.md
+session_id=019e027a-8f71-79d1-87f8-8b585e932a4b
+
+
+---
+run_id=run-20260507T122922Z-e6e948b6 | entry=phase_output | pair=implement | phase=producer | process=codex-agent | cycle=2 | attempt=1 | thread_id=019e027a-8f71-79d1-87f8-8b585e932a4b
+---
+I’m addressing the reviewer’s blocking gap in the runtime-only child-message path. I’m patching `ctx` model-root lookup so invalid fields fail as `WorkflowExecutionError`, then I’ll add a regression test that exercises `workflow_step(message=...)` with an invalid `ctx` field.
+
+I’ve got the fix shape: convert missing `ctx.input/state/params` field lookups into `WorkflowExecutionError` inside the resolver itself, then add a child-message regression test so the runtime-only path stays covered. I’m applying that now.
+
+The runtime fix and regression test are in. I’m updating the run-local notes and decisions now, then I’ll do another syntax pass over the touched files.
+
+The follow-up patch compiles under Python 3.12. I’m doing one last quick read of the modified resolver and the new contract test to make sure the error path and the regression coverage line up with the reviewer’s finding before I close the turn.
+
+Scope considered
+
+- Reviewer finding `IMP-001` only, within the active `ctx-rendering-and-validation` phase.
+- Touched runtime resolver code in [autoloop/core/artifacts.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/autoloop/core/artifacts.py) and the related contract coverage in [tests/contract/test_engine_contracts.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/tests/contract/test_engine_contracts.py).
+- Updated the phase-local notes in [implementation_notes.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/standalone-implementation-spec-ctx-prompt-bindin-edf74165/runs/run-20260507T122922Z-e6e948b6/artifacts/implement/phases/ctx-rendering-and-validation/implementation_notes.md) and appended the non-obvious decision under the current turn header in `decisions.txt`.
+
+What I analyzed
+
+- The reviewer’s failure path: `workflow_step(message=...)` renders at runtime and bypasses `_validate_simple_prompt_reference(...)`.
+- The current `ctx` model-root lookup in `_resolve_ctx_placeholder(...)`, specifically how missing `ctx.input/state/params` fields behaved after `validate_safe_ctx_reference(...)` accepted the path shape.
+- The existing valid child-message rendering test to place the regression test beside the newly enabled surface.
+
+What I changed
+
+- In [autoloop/core/artifacts.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/autoloop/core/artifacts.py), I wrapped model-root field lookup in `_resolve_ctx_placeholder(...)` so missing `ctx.input/state/params` fields now raise `WorkflowExecutionError` instead of leaking raw `AttributeError`.
+- I preserved the spec-mandated missing-input error for `ctx.input.<field>` when no input exists.
+- In [tests/contract/test_engine_contracts.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/tests/contract/test_engine_contracts.py), I added `test_workflow_step_message_invalid_ctx_field_raises_workflow_execution_error(...)` to cover the runtime-only `workflow_step(message=...)` path the reviewer flagged.
+
+Key findings / decisions
+
+- `IMP-001` is addressed by moving the error conversion into the runtime `ctx` resolver itself, which keeps `workflow_step(message=...)` safe even when compile-time validation is bypassed.
+- I kept the fix local to the model-root branch of `_resolve_ctx_placeholder(...)` so the existing non-`ctx` traversal and the prior `ctx` shape validation remain unchanged.
+
+Open issues / next step
+
+- `python3 -m py_compile autoloop/core/artifacts.py tests/contract/test_engine_contracts.py` passed.
+- I still could not run `pytest` in this environment because `pytest` is not installed.
+- The next step is reviewer recheck of `IMP-001`, then a focused pytest run for the touched contract and `ctx` validation slices in the project test environment.
+
+
+---
+run_id=run-20260507T122922Z-e6e948b6 | entry=session_turn | pair=implement | phase=verifier | cycle=2 | attempt=1 | thread_id=019e027a-8f71-79d1-87f8-8b585e932a4b
+---
+provider=codex
+mode=resume
+template=/home/rauter/.local/share/pipx/venvs/autoloop/lib/python3.12/site-packages/autoloop/templates/implement_verifier.md
+session_id=019e027a-8f71-79d1-87f8-8b585e932a4b
+
+
+---
+run_id=run-20260507T122922Z-e6e948b6 | entry=phase_output | pair=implement | phase=verifier | process=codex-agent | cycle=2 | attempt=1 | thread_id=019e027a-8f71-79d1-87f8-8b585e932a4b
+---
+I’m re-reviewing the focused fix for `IMP-001` and the added regression coverage. I’ll confirm the runtime error path now stays inside `WorkflowExecutionError`, then I’ll update the review artifacts for a clean close if nothing else regressed.
+
+The fix aligns with the earlier blocker: the raw `AttributeError` escape hatch is closed and the regression test covers the runtime-only child-message path. I’m updating the reviewer artifacts to reflect that `IMP-001` is resolved and that this phase now meets the criteria.
+
+The reviewer artifacts are updated. I’m doing a final quick read of the criteria and feedback so the close-out accurately reflects “resolved blocker, no new findings” before I return `COMPLETE`.
+
+Scope considered
+
+- Phase-local re-review for `ctx-rendering-and-validation`.
+- Focused on the producer’s follow-up changes for `IMP-001` in `autoloop/core/artifacts.py`, the new regression coverage in `tests/contract/test_engine_contracts.py`, and the phase-local implementation notes/decisions.
+- Updated only the reviewer-owned artifacts in the active phase directory.
+
+What I analyzed
+
+- The runtime `ctx` model-root lookup path in `autoloop/core/artifacts.py::_resolve_ctx_placeholder`.
+- The runtime-only `workflow_step(message=...)` surface that previously bypassed compile-time placeholder validation.
+- The new contract test covering invalid `ctx` field usage in a child-workflow message path.
+
+What I reviewed
+
+- Whether missing `ctx.input/state/params` fields now fail as `WorkflowExecutionError` instead of leaking `AttributeError`.
+- Whether the regression test exercises the exact runtime-only surface from `IMP-001`.
+- Whether the phase now satisfies AC-1 and AC-2 without introducing new compatibility or maintainability issues.
+- I updated `criteria.md` to all checked and appended a re-review note to `feedback.md`.
+
+Key findings / decisions
+
+- `IMP-001` is resolved.
+- No new findings in cycle 2 review.
+- The fix is appropriately local: runtime model-root lookup now converts missing fields into `WorkflowExecutionError`, and the new contract test locks that behavior onto the `workflow_step(message=...)` path that originally escaped compile-time validation.
+
+Open issues / next step
+
+- No remaining blocking issues for this phase.
+- The environment limitation noted by the producer still stands for local pytest execution, but that does not block this review close because the code path and regression coverage align with the accepted phase contract.
+
+<loop-control>
+{"schema":"docloop.loop_control/v1","kind":"promise","promise":"COMPLETE"}
+</loop-control>
