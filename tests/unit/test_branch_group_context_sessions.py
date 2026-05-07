@@ -133,6 +133,9 @@ def test_fan_in_context_exposes_metadata_and_branch_execution_ids(tmp_path: Path
 
 
 def test_branch_and_fan_in_contexts_preserve_parent_request_snapshot(tmp_path: Path) -> None:
+    class Input(BaseModel):
+        topic: str
+
     task_folder = tmp_path / "task"
     workflow_folder = task_folder / "wf_example"
     run_folder = workflow_folder / "runs" / "run-1"
@@ -151,6 +154,7 @@ def test_branch_and_fan_in_contexts_preserve_parent_request_snapshot(tmp_path: P
         run_folder=run_folder,
         package_folder=package_folder,
         state=_State(),
+        workflow_input=Input(topic="release"),
         session_store=InMemorySessionStore(),
     )
     branch = create_branch_context(
@@ -180,6 +184,9 @@ def test_branch_and_fan_in_contexts_preserve_parent_request_snapshot(tmp_path: P
         assert child.request_file == parent.request_file
         assert child.request.task_file == parent.request.task_file
         assert child.message == "Branch-safe request"
+        assert child.input.message == "Branch-safe request"
+        assert child.input_fields is parent.input_fields
+        assert child.input.topic == "release"
 
 
 def test_branch_session_store_view_keeps_activation_local_to_branch(tmp_path: Path) -> None:

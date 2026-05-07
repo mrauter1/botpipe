@@ -8693,6 +8693,9 @@ def test_workflow_step_message_can_forward_ctx_message_into_child_request_snapsh
             "request_text": child_context.request.text,
             "request_file": str(child_context.request.file),
             "task_request_file": None if child_context.request.task_file is None else str(child_context.request.task_file),
+            "input_message": child_context.input.message,
+            "input_topic": child_context.input.topic,
+            "input_fields_topic": None if child_context.input_fields is None else child_context.input_fields.topic,
             "topic": child_context.input.topic,
         }
         return ChildWorkflowResult(
@@ -8741,6 +8744,9 @@ def test_workflow_step_message_can_forward_ctx_message_into_child_request_snapsh
         "request_text": "Natural-language request",
         "request_file": str(task_folder / "child-runs" / "ctx-child" / "run" / "request.md"),
         "task_request_file": str(task_folder / "request.md"),
+        "input_message": "Natural-language request",
+        "input_topic": "structured-topic",
+        "input_fields_topic": "structured-topic",
         "topic": "structured-topic",
     }
     assert seen["message"] != "structured-topic"
@@ -8801,6 +8807,8 @@ def test_workflow_step_message_renders_ctx_bindings_before_child_invocation(tmp_
         seen["child_payload"] = {
             "message": child_context.message,
             "request_text": child_context.request.text,
+            "input_message": child_context.input.message,
+            "input_fields_topic": None if child_context.input_fields is None else child_context.input_fields.topic,
             "topic": child_context.input.topic,
         }
         return ChildWorkflowResult(
@@ -8847,6 +8855,8 @@ def test_workflow_step_message_renders_ctx_bindings_before_child_invocation(tmp_
     assert seen["child_payload"] == {
         "message": "Parent request: Natural-language request; topic=alpha",
         "request_text": "Parent request: Natural-language request; topic=alpha",
+        "input_message": "Parent request: Natural-language request; topic=alpha",
+        "input_fields_topic": "structured-topic",
         "topic": "structured-topic",
     }
     assert seen["message"] != "structured-topic"

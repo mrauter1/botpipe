@@ -83,7 +83,7 @@ class ChildWorkflowResult(Generic[OutputT]):
         if not self.artifacts:
             object.__setattr__(self, "artifacts", dict(self.output_artifacts))
         else:
-        object.__setattr__(self, "artifacts", dict(self.artifacts))
+            object.__setattr__(self, "artifacts", dict(self.artifacts))
         object.__setattr__(self, "metadata", dict(self.metadata))
 
 

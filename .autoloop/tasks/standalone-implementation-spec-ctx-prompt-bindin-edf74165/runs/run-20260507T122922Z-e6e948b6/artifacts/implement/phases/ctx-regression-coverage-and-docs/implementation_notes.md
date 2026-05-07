@@ -9,14 +9,15 @@
 
 ## Files changed
 
+- `autoloop/core/context.py`
 - `tests/contract/test_engine_contracts.py`
 - `tests/test_architecture_baseline_docs.py`
 - `docs/authoring.md`
 - `docs/architecture.md`
-- `.../decisions.txt`
 
 ## Symbols touched
 
+- `ChildWorkflowResult.__post_init__`
 - `test_ctx_prompt_bindings_render_in_provider_and_operation_prompts`
 - `test_prompt_steps_do_not_auto_inject_run_message_without_ctx_binding`
 - `test_ctx_runtime_prompt_docs_describe_preferred_bindings_and_snapshot_semantics`
@@ -33,16 +34,17 @@
 ## Assumptions
 
 - The existing runner-backed nested child execution path is outside this phase scope because it already fails independently of the `ctx.*` surface.
+- The `autoloop/core/context.py` indentation repair is justified even though it is outside the docs-and-tests phase goal because the request-relevant ctx validation command could not import the core context module without it.
 
 ## Preserved invariants
 
-- No production runtime behavior changed in this phase.
+- No intended production runtime behavior changed in this phase beyond repairing a malformed `else:` block so the existing code imports again.
 - `{message}` remains unsupported.
 - Existing resume snapshot behavior assertions stay intact.
 
 ## Intended behavior changes
 
-- None in runtime code; this phase locks behavior with tests and documentation only.
+- None in ctx feature behavior; the only runtime code edit restores existing importability for `ChildWorkflowResult.__post_init__`.
 
 ## Known non-changes
 
@@ -58,3 +60,4 @@
 
 - Child request-snapshot proof was added to the engine contract suite with a synthetic child `Context` instead of a runner-backed nested child test to avoid coupling this phase to an unrelated active-loop failure.
 - The ctx-specific doc assertions were relocated onto the tracked contract suite and removed from the untracked docs-baseline file so AC-2 coverage remains part of the repository deliverable.
+- The `ChildWorkflowResult.__post_init__` fix was kept to the single malformed line instead of broader context refactoring so the reviewer-blocking import failure is resolved without widening change surface.
