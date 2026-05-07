@@ -67,3 +67,6 @@
 {"ts": "2026-05-07T14:34:53.641111+00:00", "run_id": "run-20260507T130811Z-54d93345", "seq": 67, "event_type": "phase_finished", "pair": "test", "phase": "producer", "cycle": 1, "attempt": 1, "empty_output": false, "phase_id": "sdk-facade"}
 {"ts": "2026-05-07T14:35:58.387896+00:00", "run_id": "run-20260507T130811Z-54d93345", "seq": 68, "event_type": "phase_finished", "pair": "test", "phase": "verifier", "cycle": 1, "attempt": 1, "empty_output": false, "phase_id": "sdk-facade"}
 {"ts": "2026-05-07T14:36:00.568635+00:00", "run_id": "run-20260507T130811Z-54d93345", "seq": 69, "event_type": "cycle_started", "pair": "test", "cycle": 2, "attempt": 1, "phase_id": "sdk-facade"}
+{"ts": "2026-05-07T14:37:26.550212+00:00", "run_id": "run-20260507T130811Z-54d93345", "seq": 70, "event_type": "phase_finished", "pair": "test", "phase": "producer", "cycle": 2, "attempt": 1, "empty_output": false, "phase_id": "sdk-facade"}
+{"ts": "2026-05-07T14:38:13.992328+00:00", "run_id": "run-20260507T130811Z-54d93345", "seq": 71, "event_type": "phase_finished", "pair": "test", "phase": "verifier", "cycle": 2, "attempt": 1, "empty_output": false, "phase_id": "sdk-facade"}
+{"ts": "2026-05-07T14:38:14.070710+00:00", "run_id": "run-20260507T130811Z-54d93345", "seq": 72, "event_type": "pair_completed", "pair": "test", "cycle": 2, "attempt": 1, "phase_id": "sdk-facade"}

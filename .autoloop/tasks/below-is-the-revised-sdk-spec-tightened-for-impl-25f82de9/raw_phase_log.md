@@ -1780,3 +1780,61 @@ Open issues / next step
 
 - The implementation still needs to route `ctx.input` through the composite input view in runtime template resolution so the two corrected contract tests pass.
 - The test-phase artifacts now reflect that state accurately and should remain as-is until the producer side fixes the implementation gap.
+
+
+---
+run_id=run-20260507T130811Z-54d93345 | entry=session_turn | pair=test | phase=verifier | cycle=2 | attempt=1 | thread_id=019e02bf-36df-7293-b934-fad7a290777c
+---
+provider=codex
+mode=resume
+template=/home/rauter/.local/share/pipx/venvs/autoloop/lib/python3.12/site-packages/autoloop/templates/test_verifier.md
+session_id=019e02bf-36df-7293-b934-fad7a290777c
+
+
+---
+run_id=run-20260507T130811Z-54d93345 | entry=phase_output | pair=test | phase=verifier | process=codex-agent | cycle=2 | attempt=1 | thread_id=019e02bf-36df-7293-b934-fad7a290777c
+---
+I’m re-auditing the corrected SDK facade test surface, focusing on whether the previously blocking contract-test mismatch is now fixed and whether the remaining failures are intentional implementation surfacing rather than test defects.
+
+The corrected contract tests now match the accepted SDK contract, and the remaining red state is a legitimate implementation signal rather than a test defect. I’m updating the audit artifacts to clear the prior blocking test-fidelity finding.
+
+Scope considered
+
+- `sdk-facade` test-phase artifacts and the corrected tracked contract tests for `ctx.input.message`.
+- The focused regression surface cited by the test strategy, especially the runtime-template tests and the new SDK facade unit coverage.
+- Run-local decisions governing `ctx.input.message`, `Workflow.Input.message`, provider-question overrides, and active-event-loop scope.
+
+What I analyzed
+
+- `artifacts/test/phases/sdk-facade/test_strategy.md`
+- `artifacts/test/phases/sdk-facade/feedback.md`
+- `tests/contract/test_engine_contracts.py` around the corrected `ctx.input.message` expectations
+- The latest `decisions.txt` entries for the sdk-facade test phase
+- The focused rerun results reported by the test producer
+
+What I reviewed
+
+- Whether the prior blocking mismatch (`TST-001`) between the accepted contract and the tracked contract suite is now fixed.
+- Whether the corrected contract tests encode the intended SDK/runtime behavior rather than a stale or reduced behavior.
+- Whether the strategy artifact now cites the right regression surface and accurately explains the remaining red state.
+- Whether the remaining failing tests represent valid implementation surfacing instead of a test-quality issue.
+
+Key findings / decisions
+
+- `TST-001` is resolved. The tracked contract suite now asserts the accepted behavior for `ctx.input.message`:
+  - it resolves from runtime message without typed input
+  - it resolves from runtime message even when typed input exists
+  - it no longer relies on a typed input model that declares `message`
+- The remaining failing focused tests are not a test-audit problem. They now correctly expose a real implementation gap in runtime template resolution, which is exactly the regression-protection behavior the test phase should provide.
+- I updated the test audit artifacts accordingly:
+  - all criteria are now checked
+  - feedback records `TST-001` as resolved and notes that there are no new test-quality findings in scope
+
+Open issues / next step
+
+- No blocking or non-blocking test-quality findings remain in the reviewed scope.
+- The implementation side still needs to fix the runtime template resolver so the corrected contract tests pass, but that is no longer a test-surface defect.
+
+<loop-control>
+{"schema":"docloop.loop_control/v1","kind":"promise","promise":"COMPLETE"}
+</loop-control>
