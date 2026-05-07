@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+from tests.contract.engine._shared import _chain_hooks, _workspace
 from tests.contract.engine._shared import *
 
 def test_scoped_step_advances_worklist_items_and_uses_item_placeholders(tmp_path: Path):

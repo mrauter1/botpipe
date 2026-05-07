@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+from tests.contract.engine._shared import _chain_hooks, _workspace
 from tests.contract.engine._shared import *
 
 def test_on_start_opens_sessions_before_execution(tmp_path: Path):

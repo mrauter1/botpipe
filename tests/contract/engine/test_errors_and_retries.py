@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+from tests.contract.engine._shared import _chain_hooks, _workspace
 from tests.contract.engine._shared import *
 
 def test_llm_step_retries_illegal_route_twice_and_succeeds_on_third_attempt(tmp_path: Path):

@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+from tests.contract.engine._shared import _workspace
 from tests.contract.engine._shared import *
 
 @pytest.mark.parametrize(

@@ -1,5 +1,10 @@
 from __future__ import annotations
 
+from tests.unit._stdlib_and_extensions_shared import (
+    _build_child_result,
+    _build_lifecycle_context,
+    _capture_child_invocation,
+)
 from tests.unit._stdlib_and_extensions_shared import *
 
 def test_composition_helpers_delegate_to_ctx_invoke_workflow_and_adopt_child_artifacts(tmp_path: Path) -> None:

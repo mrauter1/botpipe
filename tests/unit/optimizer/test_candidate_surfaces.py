@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+from tests.unit._stdlib_and_extensions_shared import _build_lifecycle_context
 from tests.unit._stdlib_and_extensions_shared import *
 
 def test_candidate_surface_helpers_normalize_repo_boundary_and_stay_reexported_from_stdlib(tmp_path: Path) -> None:

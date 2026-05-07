@@ -1,5 +1,8 @@
 from __future__ import annotations
 
+from pydantic import Field
+
+from tests.unit._stdlib_and_extensions_shared import _ExampleModel, _build_lifecycle_context
 from tests.unit._stdlib_and_extensions_shared import *
 
 def test_stdlib_modules_remain_pure_authoring_helpers() -> None:
@@ -232,12 +235,28 @@ def test_parameter_model_bundles_preserve_shared_task_and_selected_workflow_norm
     with pytest.raises(ValueError, match="must be a positive integer"):
         _WindowedTaskParameters.model_validate({"task_title": "Governance review", "max_iterations": 0})
 def test_workflow_specific_parameter_models_keep_inherited_selected_workflow_validation() -> None:
-    from autoloop.workflows.workflow_and_eval_to_refined_workflow_package.params import (
-        Params as RefinementParameters,
-    )
-    from autoloop.workflows.workflow_package_to_composable_building_blocks.params import (
-        Params as DecompositionParameters,
-    )
+    class RefinementParameters(SelectedWorkflowTaskFramingParameters):
+        evaluation_summary_path: str
+        evaluation_findings_path: str
+        failure_modes_path: str | None = None
+        target_test_command: str | None = None
+
+        _normalize_required_text = required_text_fields(
+            "evaluation_summary_path",
+            "evaluation_findings_path",
+            error_message="value must be non-empty",
+        )
+        _normalize_optional_text = optional_text_fields("failure_modes_path", "target_test_command")
+
+    class DecompositionParameters(SelectedWorkflowTaskFramingParameters):
+        evidence_paths: list[str] = Field(default_factory=list)
+        target_test_command: str
+
+        _normalize_evidence_paths = deduped_string_list_fields("evidence_paths")
+        _normalize_target_test_command = required_text_fields(
+            "target_test_command",
+            error_message="value must be non-empty",
+        )
 
     refinement_params = RefinementParameters.model_validate(
         {

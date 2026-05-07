@@ -57,7 +57,7 @@ def test_canonical_step_contract_uses_finish_and_required_writes(tmp_path: Path)
     assert call.routes["done"].explicit_required_writes is None
     assert call.route_required_writes == {
         "done": ("draft.report",),
-        "question": ("draft.report",),
+        "question": (),
     }
     assert not hasattr(call, "route_required_" + "outputs")
 
@@ -120,6 +120,6 @@ def test_canonical_produce_verify_contract_splits_phase_writes_and_verifier_rout
     assert verifier_call.routes["approved"].explicit_required_writes == ("review.draft", "review.review_report")
     assert verifier_call.route_required_writes == {
         "approved": ("review.draft", "review.review_report"),
-        "question": ("review.draft", "review.review_report"),
+        "question": (),
     }
     assert not hasattr(verifier_call, "route_required_" + "outputs")

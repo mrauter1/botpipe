@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+from tests.contract.engine._shared import _ApprovalInput, _chain_hooks, _workspace
 from tests.contract.engine._shared import *
 
 def test_middleware_pause_skips_handler_and_resume_injects_answer_once(tmp_path: Path):

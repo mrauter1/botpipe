@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+from tests.contract.engine._shared import _chain_hooks, _workspace
 from tests.contract.engine._shared import *
 
 def test_llm_step_hooks_run_in_order_and_on_taken_follows_after_hooks(tmp_path: Path):

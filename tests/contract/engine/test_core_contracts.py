@@ -1,6 +1,9 @@
 from __future__ import annotations
 
+from tests.contract.engine._shared import _chain_hooks, _RecordingExtension, _workspace
 from tests.contract.engine._shared import *
+
+PACKAGE_ROOT = Path(__file__).resolve().parents[3]
 
 def test_runtime_extensions_bind_before_workflow_extensions(tmp_path: Path):
     events: list[str] = []

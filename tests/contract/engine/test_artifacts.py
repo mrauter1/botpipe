@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+from tests.contract.engine._shared import _chain_hooks, _workspace
 from tests.contract.engine._shared import *
 
 def test_system_question_events_validate_strictly_and_failed_remains_authored(tmp_path: Path):
