@@ -1660,3 +1660,61 @@ Open issues / next step
 
 - No blocking test-author issues remain in the phase-local scope.
 - Async SDK coverage remains deferred by product scope, and `llm` / `classify` active-loop failure expectations remain intentionally excluded in the current runtime because they do not use the sync-to-async bridge path.
+
+
+---
+run_id=run-20260507T130811Z-54d93345 | entry=session_turn | pair=test | phase=verifier | cycle=1 | attempt=1 | thread_id=019e02bf-36df-7293-b934-fad7a290777c
+---
+provider=codex
+mode=resume
+template=/home/rauter/.local/share/pipx/venvs/autoloop/lib/python3.12/site-packages/autoloop/templates/test_verifier.md
+session_id=019e02bf-36df-7293-b934-fad7a290777c
+
+
+---
+run_id=run-20260507T130811Z-54d93345 | entry=phase_output | pair=test | phase=verifier | process=codex-agent | cycle=1 | attempt=1 | thread_id=019e02bf-36df-7293-b934-fad7a290777c
+---
+I’m auditing the SDK facade test additions and the phase test artifacts against the acceptance criteria, starting with the tracked coverage map, the updated unit tests, and the focused regression slice the test author recorded.
+
+I found one potentially stale contract-test name in the recorded regression slice, and I’m checking whether it’s just a name mismatch or whether the test expectation actually contradicts the SDK input contract before I finalize the audit.
+
+I confirmed a material stale expectation in the tracked contract suite: it still asserts `ctx.input.message` is invalid without typed input and uses a typed input model that declares `message`, both of which contradict the accepted SDK contract. I’m recording that as a blocking test-audit finding now.
+
+Scope considered
+
+- `sdk-facade` test-phase coverage in `tests/unit/test_sdk_facade.py` plus the tracked runtime/contract tests the strategy artifact claims as regression protection.
+- Test-phase artifacts `test_strategy.md`, `feedback.md`, and the run-local decisions that define the intended `ctx.input.message` behavior.
+- Focus remained on changed/request-relevant behavior, especially provider-question overrides, explicit `message=None`, and runtime message/input rendering.
+
+What I analyzed
+
+- `tests/unit/test_sdk_facade.py`
+- `tests/runtime/test_workspace_and_context.py::test_resume_context_preserves_run_message_and_raw_input_fields`
+- `tests/contract/test_engine_contracts.py` around the `ctx.input.message` assertions
+- `artifacts/test/phases/sdk-facade/test_strategy.md`
+- `decisions.txt` entries for runtime-input-contract and sdk-facade
+
+What I reviewed
+
+- Whether the new SDK tests cover the requested facade behavior at the right level.
+- Whether the tracked regression surface actually matches the accepted runtime-input contract.
+- Whether the strategy artifact accurately maps tests to behaviors without citing stale expectations.
+- Reliability and flake risk of the new SDK tests.
+
+Key findings / decisions
+
+- I recorded one blocking finding in `artifacts/test/phases/sdk-facade/feedback.md`:
+  - `TST-001` flags that the tracked contract suite still encodes stale behavior for `ctx.input.message`.
+  - `tests/contract/test_engine_contracts.py::test_runtime_templates_reject_undeclared_ctx_input_message_without_typed_input` still expects `ctx.input.message` to fail without typed input, which contradicts the accepted contract and run-local decisions.
+  - `tests/contract/test_engine_contracts.py::test_runtime_templates_resolve_declared_ctx_input_message_separately_from_request` still uses a typed input model with a `message` field, mirroring the now-rejected `Workflow.Input.message` pattern.
+  - Because the strategy artifact cites both tests as supporting SDK behavior, the current test story would still silently approve a regression back to the wrong runtime-input contract.
+- I updated the test audit criteria to reflect that reliability and edge/failure-path coverage are solid, but coverage quality, regression protection, and behavioral intent are not yet satisfied due to the stale contract expectations.
+
+Open issues / next step
+
+- Fix `TST-001` by rewriting the cited contract tests so `ctx.input.message` resolves from the runtime message regardless of typed-input presence, and stop using typed input models that declare `message` in the SDK regression surface.
+- After that correction, rerun the focused regression slice and update the test strategy so its cited regression surface matches the accepted contract.
+
+<loop-control>
+{"schema":"docloop.loop_control/v1","kind":"promise","promise":"INCOMPLETE"}
+</loop-control>
