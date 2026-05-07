@@ -251,3 +251,58 @@ Open issues / next step
 - Next phase should wire real retention behavior into `WorkflowResult.retention` and the SDK lifecycle helpers.
 - When the environment has dependencies installed, run `pytest tests/unit/test_sdk_facade.py tests/unit/test_simple_surface.py`.
 - I also updated the phase notes and decisions ledger in [implementation_notes.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/revised-sdk-implementation-spec-1-scope-implemen-1e1a7513/runs/run-20260507T184603Z-adb7c56b/artifacts/implement/phases/sdk-surface-and-result-model/implementation_notes.md) and [decisions.txt](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/revised-sdk-implementation-spec-1-scope-implemen-1e1a7513/runs/run-20260507T184603Z-adb7c56b/decisions.txt).
+
+
+---
+run_id=run-20260507T184603Z-adb7c56b | entry=session_turn | pair=implement | phase=verifier | cycle=1 | attempt=1 | thread_id=019e03c8-27a8-7391-8ff1-6dc74646ef3d
+---
+provider=codex
+mode=resume
+template=/home/rauter/.local/share/pipx/venvs/autoloop/lib/python3.12/site-packages/autoloop/templates/implement_verifier.md
+session_id=019e03c8-27a8-7391-8ff1-6dc74646ef3d
+
+
+---
+run_id=run-20260507T184603Z-adb7c56b | entry=phase_output | pair=implement | phase=verifier | process=codex-agent | cycle=1 | attempt=1 | thread_id=019e03c8-27a8-7391-8ff1-6dc74646ef3d
+---
+I’m reviewing the phase-local implementation against the active criteria and the exact changed surface now. I’ll audit the SDK/public-shape diffs first, then update the criteria and append any findings to the phase feedback artifact.
+
+I’ve got the phase artifacts and decisions loaded. I’m checking for regression surfaces now, especially whether the new SDK `ResultArtifact` shape silently drops public methods or behaviors that existing callers or tests relied on beyond the explicitly allowed writable-handle break.
+
+I haven’t found a surface-level type bug yet, so I’m checking the import graph for an unintended package-cycle regression from adding direct `autoloop.core.steps` imports at the root package boundary.
+
+I’ve finished the review pass. I don’t see a phase-scope correctness or compatibility defect in the implementation diff, so I’m marking the criteria complete and recording an explicit no-findings result in the review artifact.
+
+Scope considered
+
+- Phase-local review only for SDK surface and result model.
+- Reviewed the changed implementation in `autoloop/sdk.py`, `autoloop/__init__.py`, and the paired test updates relevant to this phase’s acceptance criteria.
+
+What I analyzed
+
+- The public export additions for concrete step classes and retention/result dataclasses.
+- The SDK artifact conversion from `ArtifactHandle` to `ResultArtifact`, including metadata preservation and helper methods.
+- The `WorkflowResult.artifact(...)`, `ArtifactMap`, and `StepResult` shape changes.
+- The active implementation notes and the run-local decisions ledger for scope and compatibility intent.
+
+What I reviewed
+
+- Intent fidelity against the active phase contract and accepted plan.
+- Compatibility risk at the SDK boundary, including whether runtime artifact ownership stayed internal.
+- Regression risk from the `StepResult.value` change and the new public export surface.
+- Validation evidence recorded by the implementer.
+
+Key findings / decisions
+
+- No blocking or non-blocking findings in this review pass.
+- The implementation stays within the phase scope and matches the documented intent to change only the public SDK result surface while leaving runtime artifact mutation semantics internal.
+- I updated the phase criteria to complete and recorded an explicit no-findings result in the feedback artifact.
+
+Open issues / next step
+
+- No phase-local code issues to return to implementation.
+- Validation remains environment-limited in this shell because `pytest` and `pydantic` are unavailable, but that does not reveal a code defect in the reviewed diff.
+
+<loop-control>
+{"schema":"docloop.loop_control/v1","kind":"promise","promise":"COMPLETE"}
+</loop-control>

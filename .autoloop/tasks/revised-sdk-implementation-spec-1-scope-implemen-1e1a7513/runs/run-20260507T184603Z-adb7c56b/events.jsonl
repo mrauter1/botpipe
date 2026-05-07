@@ -11,3 +11,6 @@
 {"ts": "2026-05-07T18:51:48.751621+00:00", "run_id": "run-20260507T184603Z-adb7c56b", "seq": 11, "event_type": "phase_started", "phase_id": "sdk-surface-and-result-model", "phase_mode": "single"}
 {"ts": "2026-05-07T18:51:48.753782+00:00", "run_id": "run-20260507T184603Z-adb7c56b", "seq": 12, "event_type": "pair_started", "pair": "implement", "phase_id": "sdk-surface-and-result-model"}
 {"ts": "2026-05-07T18:51:48.753861+00:00", "run_id": "run-20260507T184603Z-adb7c56b", "seq": 13, "event_type": "cycle_started", "pair": "implement", "cycle": 1, "attempt": 1, "phase_id": "sdk-surface-and-result-model"}
+{"ts": "2026-05-07T18:54:57.014246+00:00", "run_id": "run-20260507T184603Z-adb7c56b", "seq": 14, "event_type": "phase_finished", "pair": "implement", "phase": "producer", "cycle": 1, "attempt": 1, "empty_output": false, "phase_id": "sdk-surface-and-result-model"}
+{"ts": "2026-05-07T18:56:26.751131+00:00", "run_id": "run-20260507T184603Z-adb7c56b", "seq": 15, "event_type": "phase_finished", "pair": "implement", "phase": "verifier", "cycle": 1, "attempt": 1, "empty_output": false, "phase_id": "sdk-surface-and-result-model"}
+{"ts": "2026-05-07T18:56:26.819638+00:00", "run_id": "run-20260507T184603Z-adb7c56b", "seq": 16, "event_type": "pair_completed", "pair": "implement", "cycle": 1, "attempt": 1, "phase_id": "sdk-surface-and-result-model"}

@@ -182,3 +182,127 @@ phase_mode=single
 phase_ids=sdk-surface-and-result-model,sdk-retention-and-safe-cleanup,sdk-routing-and-helper-entrypoints,sdk-acceptance-regression-tests
 explicit=True
 current_phase_index=0
+
+
+---
+run_id=run-20260507T184603Z-adb7c56b | entry=session_turn | pair=implement | phase=producer | cycle=1 | attempt=1 | thread_id=019e03c8-27a8-7391-8ff1-6dc74646ef3d
+---
+provider=codex
+mode=start
+template=/home/rauter/.local/share/pipx/venvs/autoloop/lib/python3.12/site-packages/autoloop/templates/implement_producer.md
+session_id=019e03c8-27a8-7391-8ff1-6dc74646ef3d
+
+
+---
+run_id=run-20260507T184603Z-adb7c56b | entry=phase_output | pair=implement | phase=producer | process=codex-agent | cycle=1 | attempt=1 | thread_id=019e03c8-27a8-7391-8ff1-6dc74646ef3d
+---
+I’m implementing the phase-scoped SDK surface/result-model changes first: exports, new public result dataclasses, and the SDK result mapping updates. I’ll inspect the current SDK/package surface, the active phase notes, and the relevant plan/feedback before editing.
+
+I’ve confirmed the phase scope: this slice is limited to the SDK surface and result model, not the full retention plumbing yet. Next I’m tracing the existing `ArtifactMap`, `StepResult`, `run`, and `step` paths so the public type changes stay local and don’t disturb runtime ownership.
+
+The current SDK surface is narrower than the requested phase: `ArtifactMap` still exposes raw runtime handles, and `StepResult.value` is still set from `workflow_result.output`. I’m reading the supporting helpers and the existing SDK tests now so I can switch the public types without accidentally breaking the synthetic workflow path.
+
+I’ve got the main regression surfaces. The next pass is on artifact metadata: I need the compiled artifact shape and current handle behavior so `ResultArtifact` preserves schema/kind/name information while staying read-only on the SDK boundary.
+
+I’ve confirmed the public-shape change is self-contained: no other code constructs `StepResult` directly, and the new retention/result classes are not present yet. I’m moving into the file edits now, keeping runtime behavior intact and only changing the SDK boundary types plus the export surface for this phase.
+
+I’m editing `autoloop/sdk.py` and the package surface now. The change is intentionally narrow: new public dataclasses, `ArtifactMap` backed by `ResultArtifact`, `WorkflowResult.retention` as a placeholder field for later phases, and `StepResult` no longer pretending to surface `workflow_result.output` as a generic value.
+
+The code edits are in. I’m running the focused SDK and surface tests now to catch any type-shape or export regressions before I update the phase notes.
+
+The first validation attempt hit an environment issue rather than a code failure: this shell doesn’t have `pytest` or `python` on `PATH`. I’m checking the available interpreter/test entrypoints and then rerunning the same focused validation with the repo’s actual toolchain.
+
+The environment has `python3` but no `pytest` module installed, so I can’t run the unit suite directly here. I’m switching to syntax and import-level smoke checks with `python3`, which is the strongest validation available in this shell without changing the environment.
+
+The code compiles, but runtime smoke imports are blocked by missing dependencies too: this shell also lacks `pydantic`, so I can’t execute import-time checks or the test suite. I’m doing a final diff review now and then I’ll write the phase notes and decision ledger with the exact scope and validation limits.
+
+I’ve finished the code path review. The only non-obvious decision worth recording for later phases is that `WorkflowResult.retention` is added now as a public placeholder and remains `None` until the retention-plumbing phase fills it in, so downstream work doesn’t accidentally infer that retention is already active.
+
+Scope considered
+
+- Phase-local scope only: SDK surface and result model.
+- In scope: [autoloop/sdk.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/autoloop/sdk.py), [autoloop/__init__.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/autoloop/__init__.py), [tests/unit/test_sdk_facade.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/tests/unit/test_sdk_facade.py), [tests/unit/test_simple_surface.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/tests/unit/test_simple_surface.py).
+- Deferred by phase scope: retention plumbing, sentinel/deletion, cleanup, routing fixes, prompt rendering changes.
+
+What I analyzed
+
+- Current SDK result construction, `ArtifactMap`, `WorkflowResult.artifact(...)`, and `StepResult`.
+- Root package export surface and its canonical export test.
+- Existing SDK facade tests to keep runtime ownership and synthetic-step behavior unchanged.
+
+What I changed
+
+- Added public root exports for `Step`, `PromptStep`, `ProduceVerifyStep`, `PythonStep`, `ChildWorkflowStep`, `ResultArtifact`, `RetentionPolicy`, `RetentionInfo`, and `CleanupResult`.
+- Added SDK-side dataclasses `ResultArtifact`, `DeclaredWriteArtifact`, `RetentionPolicy`, `RetentionInfo`, and `CleanupResult`.
+- Changed SDK public artifacts from raw runtime handles to `ResultArtifact`, preserving compiled metadata like `kind`, `schema`, `required`, and `qualified_name`.
+- Updated `ArtifactMap` and `WorkflowResult.artifact(...)` to return `ResultArtifact`.
+- Added `WorkflowResult.retention` as a public placeholder field for later phases.
+- Revised `StepResult` to include `status` and to leave `value=None` instead of copying `workflow_result.output`.
+- Extended focused unit coverage for the new exports and `ResultArtifact` helper behavior.
+
+Key findings / decisions
+
+- Runtime workflow execution still uses mutable `ArtifactHandle` objects internally; only the SDK boundary changed.
+- `WorkflowResult.retention` is intentionally present but still `None` until the retention phase implements policy application.
+- Validation available in this shell was limited to `python3 -m compileall`; `pytest` and `pydantic` are not installed here, so import-time and unit-test execution could not run.
+
+Open issues / next step
+
+- Next phase should wire real retention behavior into `WorkflowResult.retention` and the SDK lifecycle helpers.
+- When the environment has dependencies installed, run `pytest tests/unit/test_sdk_facade.py tests/unit/test_simple_surface.py`.
+- I also updated the phase notes and decisions ledger in [implementation_notes.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/revised-sdk-implementation-spec-1-scope-implemen-1e1a7513/runs/run-20260507T184603Z-adb7c56b/artifacts/implement/phases/sdk-surface-and-result-model/implementation_notes.md) and [decisions.txt](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/revised-sdk-implementation-spec-1-scope-implemen-1e1a7513/runs/run-20260507T184603Z-adb7c56b/decisions.txt).
+
+
+---
+run_id=run-20260507T184603Z-adb7c56b | entry=session_turn | pair=implement | phase=verifier | cycle=1 | attempt=1 | thread_id=019e03c8-27a8-7391-8ff1-6dc74646ef3d
+---
+provider=codex
+mode=resume
+template=/home/rauter/.local/share/pipx/venvs/autoloop/lib/python3.12/site-packages/autoloop/templates/implement_verifier.md
+session_id=019e03c8-27a8-7391-8ff1-6dc74646ef3d
+
+
+---
+run_id=run-20260507T184603Z-adb7c56b | entry=phase_output | pair=implement | phase=verifier | process=codex-agent | cycle=1 | attempt=1 | thread_id=019e03c8-27a8-7391-8ff1-6dc74646ef3d
+---
+I’m reviewing the phase-local implementation against the active criteria and the exact changed surface now. I’ll audit the SDK/public-shape diffs first, then update the criteria and append any findings to the phase feedback artifact.
+
+I’ve got the phase artifacts and decisions loaded. I’m checking for regression surfaces now, especially whether the new SDK `ResultArtifact` shape silently drops public methods or behaviors that existing callers or tests relied on beyond the explicitly allowed writable-handle break.
+
+I haven’t found a surface-level type bug yet, so I’m checking the import graph for an unintended package-cycle regression from adding direct `autoloop.core.steps` imports at the root package boundary.
+
+I’ve finished the review pass. I don’t see a phase-scope correctness or compatibility defect in the implementation diff, so I’m marking the criteria complete and recording an explicit no-findings result in the review artifact.
+
+Scope considered
+
+- Phase-local review only for SDK surface and result model.
+- Reviewed the changed implementation in `autoloop/sdk.py`, `autoloop/__init__.py`, and the paired test updates relevant to this phase’s acceptance criteria.
+
+What I analyzed
+
+- The public export additions for concrete step classes and retention/result dataclasses.
+- The SDK artifact conversion from `ArtifactHandle` to `ResultArtifact`, including metadata preservation and helper methods.
+- The `WorkflowResult.artifact(...)`, `ArtifactMap`, and `StepResult` shape changes.
+- The active implementation notes and the run-local decisions ledger for scope and compatibility intent.
+
+What I reviewed
+
+- Intent fidelity against the active phase contract and accepted plan.
+- Compatibility risk at the SDK boundary, including whether runtime artifact ownership stayed internal.
+- Regression risk from the `StepResult.value` change and the new public export surface.
+- Validation evidence recorded by the implementer.
+
+Key findings / decisions
+
+- No blocking or non-blocking findings in this review pass.
+- The implementation stays within the phase scope and matches the documented intent to change only the public SDK result surface while leaving runtime artifact mutation semantics internal.
+- I updated the phase criteria to complete and recorded an explicit no-findings result in the feedback artifact.
+
+Open issues / next step
+
+- No phase-local code issues to return to implementation.
+- Validation remains environment-limited in this shell because `pytest` and `pydantic` are unavailable, but that does not reveal a code defect in the reviewed diff.
+
+<loop-control>
+{"schema":"docloop.loop_control/v1","kind":"promise","promise":"COMPLETE"}
+</loop-control>
