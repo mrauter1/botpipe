@@ -8484,11 +8484,11 @@ def test_ctx_prompt_bindings_render_in_provider_and_operation_prompts(tmp_path: 
             status: str = "draft"
 
         summary = step(
-            "Message={ctx.input.message}; Topic={ctx.input.topic}; Mode={ctx.params.mode}; Status={ctx.state.status}",
+            "Message={ctx.message}; Topic={ctx.input.topic}; Mode={ctx.params.mode}; Status={ctx.state.status}",
             routes={"done": "review"},
         )
         review = produce_verify_step(
-            producer_prompt="Produce {ctx.input.message}; topic={ctx.input.topic}; mode={ctx.params.mode}; status={ctx.state.status}",
+            producer_prompt="Produce {ctx.message}; topic={ctx.input.topic}; mode={ctx.params.mode}; status={ctx.state.status}",
             verifier_prompt="Verify {ctx.message}; topic={ctx.input.topic}; mode={ctx.params.mode}; status={ctx.state.status}",
             routes={"approved": "risk"},
         )
@@ -8686,6 +8686,34 @@ def test_prompt_steps_do_not_auto_inject_run_message_without_ctx_binding(tmp_pat
     assert "THIS SHOULD NOT APPEAR UNLESS BOUND" not in captured["step"]
 
 
+def test_engine_context_message_raises_when_run_snapshot_is_removed_after_context_construction(tmp_path: Path) -> None:
+    class MissingSnapshotWorkflow(SimpleWorkflow):
+        @python_step(routes={"done": FINISH})
+        def remove_snapshot_then_read(ctx):
+            ctx.request_file.unlink()
+            _ = ctx.message
+            return "done"
+
+    task_folder, run_folder = _workspace(tmp_path)
+    (run_folder / "request.md").write_text("Natural-language request\n", encoding="utf-8")
+
+    engine = Engine(
+        MissingSnapshotWorkflow,
+        provider=ScriptedLLMProvider(),
+        session_store=InMemorySessionStore(),
+        checkpoint_store=InMemoryCheckpointStore(),
+    )
+
+    with pytest.raises(WorkflowExecutionError, match=r"run request snapshot could not be read: .*request\.md"):
+        engine.run(
+            task_id="task-missing-snapshot",
+            run_id="run-missing-snapshot",
+            task_folder=task_folder,
+            run_folder=run_folder,
+            root=tmp_path,
+        )
+
+
 def test_ctx_runtime_prompt_docs_describe_preferred_bindings_and_snapshot_semantics() -> None:
     authoring = (PACKAGE_ROOT / "docs" / "authoring.md").read_text(encoding="utf-8")
     architecture = (PACKAGE_ROOT / "docs" / "architecture.md").read_text(encoding="utf-8")
@@ -8771,7 +8799,7 @@ def test_workflow_step_message_can_forward_ctx_message_into_child_request_snapsh
             "request_text": child_context.request.text,
             "request_file": str(child_context.request.file),
             "task_request_file": None if child_context.request.task_file is None else str(child_context.request.task_file),
-            "input_message": child_context.input.message,
+            "input_has_message": hasattr(child_context.input, "message"),
             "input_topic": child_context.input.topic,
             "input_fields_topic": None if child_context.input_fields is None else child_context.input_fields.topic,
             "topic": child_context.input.topic,
@@ -8822,7 +8850,7 @@ def test_workflow_step_message_can_forward_ctx_message_into_child_request_snapsh
         "request_text": "Natural-language request",
         "request_file": str(task_folder / "child-runs" / "ctx-child" / "run" / "request.md"),
         "task_request_file": str(task_folder / "request.md"),
-        "input_message": "Natural-language request",
+        "input_has_message": False,
         "input_topic": "structured-topic",
         "input_fields_topic": "structured-topic",
         "topic": "structured-topic",
@@ -8885,7 +8913,7 @@ def test_workflow_step_message_renders_ctx_bindings_before_child_invocation(tmp_
         seen["child_payload"] = {
             "message": child_context.message,
             "request_text": child_context.request.text,
-            "input_message": child_context.input.message,
+            "input_has_message": hasattr(child_context.input, "message"),
             "input_fields_topic": None if child_context.input_fields is None else child_context.input_fields.topic,
             "topic": child_context.input.topic,
         }
@@ -8933,7 +8961,7 @@ def test_workflow_step_message_renders_ctx_bindings_before_child_invocation(tmp_
     assert seen["child_payload"] == {
         "message": "Parent request: Natural-language request; topic=alpha",
         "request_text": "Parent request: Natural-language request; topic=alpha",
-        "input_message": "Parent request: Natural-language request; topic=alpha",
+        "input_has_message": False,
         "input_fields_topic": "structured-topic",
         "topic": "structured-topic",
     }

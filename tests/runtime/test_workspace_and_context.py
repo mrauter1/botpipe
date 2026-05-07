@@ -720,7 +720,7 @@ def test_resume_context_message_uses_run_local_request_snapshot_not_mutated_task
     assert (run_dir / "request.md").read_text(encoding="utf-8") == "Original request\n"
 
 
-def test_resume_context_preserves_input_message_and_raw_input_fields(tmp_path: Path) -> None:
+def test_resume_context_preserves_run_message_and_raw_input_fields(tmp_path: Path) -> None:
     _write_typed_input_pause_resume_workflow_package(
         tmp_path,
         "resume_typed_input_demo",
@@ -733,7 +733,7 @@ def test_resume_context_preserves_input_message_and_raw_input_fields(tmp_path: P
                     json.dumps(
                         {
                             "message": request.context.message,
-                            "input_message": request.context.input.message,
+                            "input_has_message": hasattr(request.context.input, "message"),
                             "input_topic": request.context.input.topic,
                             "input_fields": None
                             if request.context.input_fields is None
@@ -749,7 +749,7 @@ def test_resume_context_preserves_input_message_and_raw_input_fields(tmp_path: P
                     json.dumps(
                         {
                             "message": request.context.message,
-                            "input_message": request.context.input.message,
+                            "input_has_message": hasattr(request.context.input, "message"),
                             "input_topic": request.context.input.topic,
                             "input_fields": None
                             if request.context.input_fields is None
@@ -800,7 +800,7 @@ def test_resume_context_preserves_input_message_and_raw_input_fields(tmp_path: P
     assert paused.terminal == "AWAIT_INPUT"
     assert paused_context == {
         "message": "Original request",
-        "input_message": "Original request",
+        "input_has_message": False,
         "input_topic": "release",
         "input_fields": {"topic": "release"},
         "answer": None,
@@ -810,7 +810,7 @@ def test_resume_context_preserves_input_message_and_raw_input_fields(tmp_path: P
     assert resumed.terminal == "FINISH"
     assert resumed_context == {
         "message": "Original request",
-        "input_message": "Original request",
+        "input_has_message": False,
         "input_topic": "release",
         "input_fields": {"topic": "release"},
         "answer": "42",

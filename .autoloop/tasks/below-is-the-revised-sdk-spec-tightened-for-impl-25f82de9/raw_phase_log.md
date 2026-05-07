@@ -526,3 +526,58 @@ Open issues / next step
   - `tests/unit/test_validation.py`
   - `tests/unit/test_simple_surface.py`
   - `tests/contract/test_engine_contracts.py`
+
+
+---
+run_id=run-20260507T130811Z-54d93345 | entry=session_turn | pair=implement | phase=verifier | cycle=1 | attempt=1 | thread_id=019e02a5-9962-76a3-9250-09fb04c77004
+---
+provider=codex
+mode=resume
+template=/home/rauter/.local/share/pipx/venvs/autoloop/lib/python3.12/site-packages/autoloop/templates/implement_verifier.md
+session_id=019e02a5-9962-76a3-9250-09fb04c77004
+
+
+---
+run_id=run-20260507T130811Z-54d93345 | entry=phase_output | pair=implement | phase=verifier | process=codex-agent | cycle=1 | attempt=1 | thread_id=019e02a5-9962-76a3-9250-09fb04c77004
+---
+I’m reviewing only the phase-local changes against the active criteria and the run decisions ledger. First I’m reading the review artifacts and the touched diffs so I can verify intent fidelity before I mark criteria or append findings.
+
+I’ve got the phase artifacts and the run decisions. Next I’m reading the exact edited code paths and the new tracked tests to look for omissions against scope and for behavior regressions around placeholder resolution, especially the new bare `input.*` error path.
+
+I found one concrete regression candidate and one scope omission, and I’m validating both before I write findings. The regression is around `ctx.input.message` inside runtime template rendering when a workflow has no typed input model instance; the omission is that the phase-local “SDK-targeted typed input coercion” work appears not to have been implemented at all, even as a shared helper.
+
+The main blocking issue is confirmed: the current tree still exposes a typed-input-only `WorkflowInputView`, so `ctx.input.message` is not actually available in runtime rendering paths unless the earlier runtime-input-contract work lands with it. I’m recording that as the lead blocker and then I’ll mark the criteria file accordingly.
+
+Scope considered
+
+- Active phase `input-validation-and-rendering` only.
+- Review scope included the touched source paths `autoloop/core/{compiler,discovery,artifacts}.py`, the new tracked tests, the phase notes, and the run decisions ledger.
+- I did not treat unrelated dirty files or the untracked `tests/unit/test_primitives_and_stores.py` as part of the reviewed implementation surface.
+
+What I analyzed
+
+- The current `WorkflowInputView` and `Context.input` contract in [autoloop/core/context.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/autoloop/core/context.py:89).
+- Runtime placeholder resolution in [autoloop/core/artifacts.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/autoloop/core/artifacts.py:538).
+- Compile/discovery validation changes in [autoloop/core/compiler.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/autoloop/core/compiler.py:815) and [autoloop/core/discovery.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/autoloop/core/discovery.py:1207).
+- New validation/rendering coverage in [tests/unit/test_validation.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/tests/unit/test_validation.py:107), [tests/unit/test_simple_surface.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/tests/unit/test_simple_surface.py:927), and [tests/contract/test_engine_contracts.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/tests/contract/test_engine_contracts.py:8599).
+
+What I reviewed
+
+- `Workflow.Input.message` rejection: implemented and correctly uses the spec text.
+- Bare `{input.message}` validation/rendering: added and covered.
+- Runtime compatibility with the earlier runtime-input-contract decision: not satisfied in the current tree because `ctx.input` is still typed-fields-only.
+- Phase-scope completeness: the SDK-targeted typed-input coercion item was explicitly deferred rather than implemented.
+
+Key findings / decisions
+
+- Blocking: the current implementation does not actually satisfy the composite input-view contract for `ctx.input.message`. Message-only workflows can still fail in runtime rendering paths that use `{ctx.input.message}` because [autoloop/core/context.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/autoloop/core/context.py:89) does not expose `message` on `WorkflowInputView`, and [autoloop/core/artifacts.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/autoloop/core/artifacts.py:596) still rejects `ctx.input.message` when `context.input_fields is None`.
+- Non-blocking: the phase contract explicitly included SDK-targeted typed-input coercion around `compiled.input_model`, but no helper or groundwork was added; the omission is documented in the producer notes and should be reconciled before later SDK turns rely on this phase being complete.
+
+Open issues / next step
+
+- I updated [criteria.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/below-is-the-revised-sdk-spec-tightened-for-impl-25f82de9/runs/run-20260507T130811Z-54d93345/artifacts/implement/phases/input-validation-and-rendering/criteria.md) and appended findings to [feedback.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/below-is-the-revised-sdk-spec-tightened-for-impl-25f82de9/runs/run-20260507T130811Z-54d93345/artifacts/implement/phases/input-validation-and-rendering/feedback.md).
+- Status is not complete until the composite `ctx.input.message` runtime path is fixed and covered by a tracked regression test.
+
+<loop-control>
+{"schema":"docloop.loop_control/v1","kind":"promise","promise":"INCOMPLETE"}
+</loop-control>
