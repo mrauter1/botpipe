@@ -17,6 +17,7 @@
 ## Symbols Touched
 - `PromptContextView.input`
 - `_resolve_ctx_placeholder`
+- `_PromptInputWithMessage`
 - `test_render_runtime_template_rejects_undeclared_ctx_input_message`
 - `test_render_runtime_template_resolves_declared_ctx_input_message_separately_from_request`
 - `test_runtime_templates_reject_undeclared_ctx_input_message_without_typed_input`

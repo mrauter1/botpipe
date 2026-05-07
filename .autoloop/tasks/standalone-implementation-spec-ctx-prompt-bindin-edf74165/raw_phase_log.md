@@ -2315,3 +2315,62 @@ Open issues / next step
 <loop-control>
 {"schema":"docloop.loop_control/v1","kind":"promise","promise":"INCOMPLETE"}
 </loop-control>
+
+
+---
+run_id=run-20260507T141012Z-5af91a26 | entry=session_turn | pair=implement | phase=producer | cycle=2 | attempt=1 | thread_id=019e02c9-db46-72f0-b8e4-e2e8251c8e68
+---
+provider=codex
+mode=resume
+template=/home/rauter/.local/share/pipx/venvs/autoloop/lib/python3.12/site-packages/autoloop/templates/implement_producer.md
+session_id=019e02c9-db46-72f0-b8e4-e2e8251c8e68
+
+
+---
+run_id=run-20260507T141012Z-5af91a26 | entry=phase_output | pair=implement | phase=producer | process=codex-agent | cycle=2 | attempt=1 | thread_id=019e02c9-db46-72f0-b8e4-e2e8251c8e68
+---
+I’m reconciling the reviewer’s failing rerun against the current tree first. The fix should stay narrow: land the two unresolved `ctx.input.message` resolver changes the reviewer pointed to, then rerun the focused validation slice.
+
+The reviewer was right: the current tree reverted both the resolver and the nearby test expectations. I’m reapplying the scoped runtime split in `autoloop/core/artifacts.py`, restoring the unit/contract assertions to the intended contract, and then rerunning the same focused slice.
+
+One patch hunk missed because the test file names drifted again on disk. I’m reading the exact current symbols and reapplying the same changes against the actual hunk boundaries.
+
+I have the exact current hunks now. Reapplying the same narrow change against these on-disk definitions will bring the reviewer’s expected contract and the runtime back into sync.
+
+The resolver and the stale test expectations are back in the intended state on disk. I’m rerunning the exact seven-test slice the reviewer used so the code and the validation evidence stay aligned this turn.
+
+This rerun needs to be the source of truth for the turn. If it passes, I’ll update the implementation notes to match the actual landed runtime fix and the exact validation command.
+
+The runtime and contract slice are fixed; the only remaining failure is local to the unit test scaffold. I’m adding the missing typed-input fixture model that the restored positive test now depends on, then I’ll rerun the same seven tests.
+
+The missing helper is an artifact of the earlier test drift, not a new runtime issue. I’m restoring the typed-input test model next to the existing prompt fixtures and then rerunning the focused slice unchanged.
+
+The scoped validation now passes. I’m bringing `implementation_notes.md` into sync with the actual landed resolver fix, the restored test coverage, and the final seven-test command.
+
+The notes are mostly aligned already; I’m just adding the restored unit helper symbol so the artifact reflects the full on-disk change set for this turn.
+
+Scope considered
+- Reviewer finding `IMP-001` plus the phase-local `ctx.input.message` contract/test slice only.
+- Resolver behavior in [artifacts.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/autoloop/core/artifacts.py:239) and the adjacent unit/contract tests in [test_primitives_and_stores.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/tests/unit/test_primitives_and_stores.py:229) and [test_engine_contracts.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/tests/contract/test_engine_contracts.py:8655).
+
+What I analyzed
+- The reviewer feedback in [feedback.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/standalone-implementation-spec-ctx-prompt-bindin-edf74165/runs/run-20260507T141012Z-5af91a26/artifacts/implement/phases/contract-test-alignment/feedback.md:10).
+- The current on-disk resolver state and the run-local decisions in [decisions.txt](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/standalone-implementation-spec-ctx-prompt-bindin-edf74165/runs/run-20260507T141012Z-5af91a26/decisions.txt:8).
+- The exact seven-test rerun the reviewer used.
+
+What I changed
+- Fixed `ctx.*` prompt resolution in [artifacts.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/autoloop/core/artifacts.py:239) so `ctx.input.*` reads `input_fields`, and removed the `ctx.input.message` no-input exemption in [artifacts.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/autoloop/core/artifacts.py:590).
+- Restored the intended unit coverage in [test_primitives_and_stores.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/tests/unit/test_primitives_and_stores.py:56) and [test_primitives_and_stores.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/tests/unit/test_primitives_and_stores.py:229).
+- Restored the intended contract coverage in [test_engine_contracts.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/tests/contract/test_engine_contracts.py:8655).
+- Recorded the turn-2 runtime decision in [decisions.txt](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/standalone-implementation-spec-ctx-prompt-bindin-edf74165/runs/run-20260507T141012Z-5af91a26/decisions.txt:8) and kept [implementation_notes.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/standalone-implementation-spec-ctx-prompt-bindin-edf74165/runs/run-20260507T141012Z-5af91a26/artifacts/implement/phases/contract-test-alignment/implementation_notes.md:10) aligned with the landed change set.
+
+Key findings / decisions
+- The reviewer’s blocker was valid: the tree had reverted both the resolver and the nearby test expectations.
+- The runtime change stayed narrow and preserved bare `{input.message}` compatibility by leaving `Context.input` and `_resolve_input_placeholder` untouched.
+- Validation passed:
+  - `.venv/bin/python -m pytest tests/unit/test_primitives_and_stores.py::test_context_request_surface_reads_run_snapshot_and_task_request_file tests/unit/test_primitives_and_stores.py::test_render_runtime_template_rejects_undeclared_ctx_input_message tests/unit/test_primitives_and_stores.py::test_render_runtime_template_resolves_declared_ctx_input_message_separately_from_request tests/contract/test_engine_contracts.py::test_runtime_templates_reject_undeclared_ctx_input_message_without_typed_input tests/contract/test_engine_contracts.py::test_runtime_templates_resolve_declared_ctx_input_message_separately_from_request tests/contract/test_engine_contracts.py::test_engine_context_message_raises_when_run_snapshot_is_removed_after_context_construction tests/contract/test_engine_contracts.py::test_workflow_step_message_can_forward_ctx_message_into_child_request_snapshot`
+  - Result: `7 passed`
+
+Open issues / next step
+- No open implementation issues in the scoped slice.
+- Next step is reviewer rerun against the current tree.
