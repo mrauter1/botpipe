@@ -2,109 +2,132 @@ version: 1
 task_id: below-is-the-revised-sdk-spec-tightened-for-impl-25f82de9
 request_snapshot_ref: /home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/below-is-the-revised-sdk-spec-tightened-for-impl-25f82de9/runs/run-20260507T130811Z-54d93345/request.md
 phases:
-  - phase_id: "runtime-input-contract"
-    title: "Refactor Runtime Input Contract"
-    objective: "Separate message from typed workflow input while exposing a composite runtime input view."
-    status: "planned"
-    in_scope:
-      - "Add Context.message storage, Context.input_fields, and WorkflowInputView."
-      - "Update engine root/resume/step context construction and branch/fan-in child context cloning."
-      - "Preserve request snapshot and workflow_input persistence separation."
-    out_of_scope:
-      - "Public SDK entrypoints."
-      - "Async SDK methods."
-    dependencies: []
-    acceptance_criteria:
-      - id: "AC-1"
-        text: "Runtime contexts expose ctx.message, ctx.input.message, and ctx.input_fields without persisting message inside workflow_input."
-      - id: "AC-2"
-        text: "Resume, branch, fan-in, and child workflow paths keep using raw typed input models instead of the composite view."
-    deliverables:
-      - "Updated context and engine propagation code."
-      - "Regression tests for context/message/input persistence behavior."
-    risks:
-      - "Composite input leakage into raw workflow_input propagation can break child workflows and resume validation."
-    rollback:
-      - "Revert context and branch/fan-in propagation changes together if composite-view behavior regresses runtime execution."
-  - phase_id: "input-validation-and-rendering"
-    title: "Align Validation And Rendering"
-    objective: "Make Workflow.Input validation and runtime placeholder rendering match the revised SDK contract."
-    status: "planned"
-    in_scope:
-      - "Reject Workflow.Input.message during validation or compilation."
-      - "Implement SDK-targeted typed input coercion rules around compiled.input_model."
-      - "Support message-aware input placeholder rendering with empty-string behavior for None values."
-    out_of_scope:
-      - "Changing existing child-workflow dict input compatibility."
-      - "Broad placeholder syntax redesign unrelated to input/message support."
-    dependencies:
-      - "runtime-input-contract"
-    acceptance_criteria:
-      - id: "AC-1"
-        text: "Workflows declaring Input.message fail with the spec-defined error."
-      - id: "AC-2"
-        text: "Prompt and runtime template rendering can resolve message and typed input fields without merging message into persisted workflow_input."
-    deliverables:
-      - "Validation updates in compiler/discovery paths."
-      - "Template rendering updates and coverage for message/input placeholders."
-    risks:
-      - "Placeholder logic changes may regress existing ctx.* rendering behavior."
-    rollback:
-      - "Back out validation/rendering changes together if existing prompt contracts fail."
-  - phase_id: "sdk-facade"
-    title: "Add SDK Facade"
-    objective: "Introduce Autoloop.run and related SDK models as a thin wrapper over execute_workflow_package."
-    status: "planned"
-    in_scope:
-      - "Create autoloop/sdk.py and export the SDK public surface."
-      - "Implement provider resolution, SDK task-id generation, pause loop, result mapping, and built-in input handlers."
-      - "Normalize sync active-event-loop failures into SDKExecutionError and populate the full SDKDebugInfo contract."
-      - "Keep run execution on existing RunnerOptions and execute_workflow_package."
-    out_of_scope:
-      - "Public resume or checkpoint APIs."
-      - "Alternative engine implementation."
-    dependencies:
-      - "runtime-input-contract"
-      - "input-validation-and-rendering"
-    acceptance_criteria:
-      - id: "AC-1"
-        text: "Autoloop.run enforces the revised public signature, typed input rules, pause handling, and provider_questions defaults."
-      - id: "AC-2"
-        text: "WorkflowResult exposes mapped status/debug/artifact data without exposing public lifecycle controls."
-      - id: "AC-3"
-        text: "Sync SDK entrypoints raise SDKExecutionError, not raw bridge/runtime errors, when called from an active event loop and sync execution cannot proceed."
-    deliverables:
-      - "New sdk.py module and __init__.py exports."
-      - "SDK result/error/input-handler implementations."
-      - "Task-id generation and SDKDebugInfo wiring aligned to the spec."
-    risks:
-      - "Provider resolution or pause-loop wrapping can diverge from runtime behavior if not kept runner-backed."
-    rollback:
-      - "Remove sdk.py and exports without touching the runtime runner contract."
-  - phase_id: "sdk-operations-and-verification"
-    title: "Finish Operations And Verification"
-    objective: "Add standalone SDK llm/classify/step support and complete acceptance coverage."
-    status: "planned"
-    in_scope:
-      - "Delegate llm/classify to existing operation helpers with SDK-owned replay folders."
-      - "Implement synthetic one-step workflow execution for Autoloop.step, including Input = type(typed_input) and implicit done -> FINISH synthesis rules."
-      - "Add acceptance-focused SDK and runtime regression tests."
-    out_of_scope:
-      - "Async SDK API unless it is already low-risk after sync completion."
-      - "Artifact cleanup or in-memory-only execution."
-    dependencies:
-      - "sdk-facade"
-    acceptance_criteria:
-      - id: "AC-1"
-        text: "Autoloop.llm, Autoloop.classify, and Autoloop.step route through existing runtime/operation paths and honor the narrowed MVP scope."
-      - id: "AC-2"
-        text: "Acceptance coverage exists for message-plus-typed-input, params, pause handling, provider question policy, results, and standalone operations."
-      - id: "AC-3"
-        text: "Synthetic step execution supports the requested one-step defaults and rejects unsupported declarations with SDKExecutionError."
-    deliverables:
-      - "SDK standalone operation support."
-      - "Synthetic step wrapper and acceptance-oriented test coverage."
-    risks:
-      - "Synthetic step support can over-accept declarations that require broader workflow context."
-    rollback:
-      - "Disable unsupported step synthesis cases and keep llm/classify support if step coverage proves unstable."
+- phase_id: runtime-input-contract
+  title: Refactor Runtime Input Contract
+  objective: Separate message from typed workflow input while exposing a composite
+    runtime input view.
+  status: planned
+  in_scope:
+  - Add Context.message storage, Context.input_fields, and WorkflowInputView.
+  - Update engine root/resume/step context construction and branch/fan-in child context
+    cloning.
+  - Preserve request snapshot and workflow_input persistence separation.
+  out_of_scope:
+  - Public SDK entrypoints.
+  - Async SDK methods.
+  dependencies: []
+  acceptance_criteria:
+  - id: AC-1
+    text: Runtime contexts expose ctx.message, ctx.input.message, and ctx.input_fields
+      without persisting message inside workflow_input.
+  - id: AC-2
+    text: Resume, branch, fan-in, and child workflow paths keep using raw typed input
+      models instead of the composite view.
+  deliverables:
+  - Updated context and engine propagation code.
+  - Regression tests for context/message/input persistence behavior.
+  risks:
+  - Composite input leakage into raw workflow_input propagation can break child workflows
+    and resume validation.
+  rollback:
+  - Revert context and branch/fan-in propagation changes together if composite-view
+    behavior regresses runtime execution.
+- phase_id: input-validation-and-rendering
+  title: Align Validation And Rendering
+  objective: Make Workflow.Input validation and runtime placeholder rendering match
+    the revised SDK contract.
+  status: planned
+  in_scope:
+  - Reject Workflow.Input.message during validation or compilation.
+  - Implement SDK-targeted typed input coercion rules around compiled.input_model.
+  - Support message-aware input placeholder rendering with empty-string behavior for
+    None values.
+  out_of_scope:
+  - Changing existing child-workflow dict input compatibility.
+  - Broad placeholder syntax redesign unrelated to input/message support.
+  dependencies:
+  - runtime-input-contract
+  acceptance_criteria:
+  - id: AC-1
+    text: Workflows declaring Input.message fail with the spec-defined error.
+  - id: AC-2
+    text: Prompt and runtime template rendering can resolve message and typed input
+      fields without merging message into persisted workflow_input.
+  deliverables:
+  - Validation updates in compiler/discovery paths.
+  - Template rendering updates and coverage for message/input placeholders.
+  risks:
+  - Placeholder logic changes may regress existing ctx.* rendering behavior.
+  rollback:
+  - Back out validation/rendering changes together if existing prompt contracts fail.
+- phase_id: sdk-facade
+  title: Add SDK Facade
+  objective: Introduce Autoloop.run and related SDK models as a thin wrapper over
+    execute_workflow_package.
+  status: planned
+  in_scope:
+  - Create autoloop/sdk.py and export the SDK public surface.
+  - Implement provider resolution, SDK task-id generation, pause loop, result mapping,
+    and built-in input handlers.
+  - Normalize sync active-event-loop failures into SDKExecutionError and populate
+    the full SDKDebugInfo contract.
+  - Keep run execution on existing RunnerOptions and execute_workflow_package.
+  out_of_scope:
+  - Public resume or checkpoint APIs.
+  - Alternative engine implementation.
+  dependencies:
+  - runtime-input-contract
+  - input-validation-and-rendering
+  acceptance_criteria:
+  - id: AC-1
+    text: Autoloop.run enforces the revised public signature, typed input rules, pause
+      handling, and provider_questions defaults.
+  - id: AC-2
+    text: WorkflowResult exposes mapped status/debug/artifact data without exposing
+      public lifecycle controls.
+  - id: AC-3
+    text: Sync SDK entrypoints raise SDKExecutionError, not raw bridge/runtime errors,
+      when called from an active event loop and sync execution cannot proceed.
+  deliverables:
+  - New sdk.py module and __init__.py exports.
+  - SDK result/error/input-handler implementations.
+  - Task-id generation and SDKDebugInfo wiring aligned to the spec.
+  risks:
+  - Provider resolution or pause-loop wrapping can diverge from runtime behavior if
+    not kept runner-backed.
+  rollback:
+  - Remove sdk.py and exports without touching the runtime runner contract.
+- phase_id: sdk-operations-and-verification
+  title: Finish Operations And Verification
+  objective: Add standalone SDK llm/classify/step support and complete acceptance
+    coverage.
+  status: planned
+  in_scope:
+  - Delegate llm/classify to existing operation helpers with SDK-owned replay folders.
+  - Implement synthetic one-step workflow execution for Autoloop.step, including Input
+    = type(typed_input) and implicit done -> FINISH synthesis rules.
+  - Add acceptance-focused SDK and runtime regression tests.
+  out_of_scope:
+  - Async SDK API unless it is already low-risk after sync completion.
+  - Artifact cleanup or in-memory-only execution.
+  dependencies:
+  - sdk-facade
+  acceptance_criteria:
+  - id: AC-1
+    text: Autoloop.llm, Autoloop.classify, and Autoloop.step route through existing
+      runtime/operation paths and honor the narrowed MVP scope.
+  - id: AC-2
+    text: Acceptance coverage exists for message-plus-typed-input, params, pause handling,
+      provider question policy, results, and standalone operations.
+  - id: AC-3
+    text: Synthetic step execution supports the requested one-step defaults and rejects
+      unsupported declarations with SDKExecutionError.
+  deliverables:
+  - SDK standalone operation support.
+  - Synthetic step wrapper and acceptance-oriented test coverage.
+  risks:
+  - Synthetic step support can over-accept declarations that require broader workflow
+    context.
+  rollback:
+  - Disable unsupported step synthesis cases and keep llm/classify support if step
+    coverage proves unstable.

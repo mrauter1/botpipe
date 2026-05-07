@@ -781,3 +781,80 @@ Open issues / next step
 <loop-control>
 {"schema":"docloop.loop_control/v1","kind":"promise","promise":"COMPLETE"}
 </loop-control>
+
+
+---
+run_id=run-20260507T122922Z-e6e948b6 | entry=session_turn | pair=implement | phase=producer | cycle=1 | attempt=1 | thread_id=019e028a-77c8-7b11-9a45-48d5c1d5d8c9
+---
+provider=codex
+mode=start
+template=/home/rauter/.local/share/pipx/venvs/autoloop/lib/python3.12/site-packages/autoloop/templates/implement_producer.md
+session_id=019e028a-77c8-7b11-9a45-48d5c1d5d8c9
+
+
+---
+run_id=run-20260507T122922Z-e6e948b6 | entry=phase_output | pair=implement | phase=producer | process=codex-agent | cycle=1 | attempt=1 | thread_id=019e028a-77c8-7b11-9a45-48d5c1d5d8c9
+---
+I’m reviewing the active phase artifacts and the existing `ctx.*` implementation seams first, then I’ll add the missing regression tests and docs within the scoped areas only.
+
+The tree is already dirty in unrelated areas, so I’m isolating scope to the current `autoloop/` and `docs/` paths plus the phase artifacts. Next I’m locating the existing `ctx.*` tests and the docs sections that need to be extended rather than duplicated.
+
+The implementation seams are already in place. I’m drilling into the existing runtime test module and docs so I can fill the remaining gaps without inventing a parallel test harness.
+
+The current suite already covers most low-level `ctx.*` mechanics. What’s still needed is phase-level proof across resume and child-run behavior plus the docs language that makes `ctx.*` the preferred authoring surface.
+
+I’ve confirmed the remaining gaps are integration-shaped, not core-logic gaps: full child-run propagation, explicit no-auto-injection proof, and docs/test expectations for the preferred `ctx.*` surface. I’m reading the surrounding runtime helpers before patching those targeted tests.
+
+I have the edit plan now:
+1. add end-to-end runtime tests for `workflow_step(message=...)` child request propagation and message/input separation,
+2. add a focused contract test proving no prompt auto-injection,
+3. document `Runtime context prompt bindings` and tighten the doc assertions around that wording.
+
+I’ve narrowed the patch to five files: one runtime integration test module, one engine contract test module, the two docs, and the doc-baseline test. I’m editing those now, keeping the existing low-level `ctx.*` tests untouched because they already cover the core resolver behavior.
+
+The patch hit a context mismatch in the large runtime test file, so I’m switching to smaller surgical edits against exact local anchors. The scoped plan is unchanged.
+
+The edits are in. I’m running the narrow regression set that exercises the new runtime tests, the no-auto-injection contract, and the doc baseline assertions before I touch the phase notes.
+
+`pytest` is not on PATH here. I’m checking the project’s available Python test entrypoint and then rerunning the same targeted subset through that instead of broadening scope.
+
+The first pass only executed the doc assertion because the shared `-k` filter was too narrow across multiple files. I’m rerunning the exact node ids for the runtime and contract tests so the new behavior gets exercised directly.
+
+The runner cannot execute a nested declarative `workflow_step` child inside that synchronous test path without hitting the existing active-loop guard. I’m shifting the runtime integration proof to `ctx.invoke_workflow(...)`, which already has runner coverage, and leaving the declarative `workflow_step(message=...)` rendering proof in the engine contract test where it belongs.
+
+The runner-backed child-workflow path is already failing independently of this `ctx.*` patch, so I’m not going to leave brittle red tests behind. I’m removing those new runtime-only child cases and moving the end-to-end child snapshot proof into the engine contract test with a synthetic child context, which avoids that unrelated active-loop failure while still locking the intended behavior.
+
+The targeted regression set is green now. I’m doing a quick diff review, then I’ll record the phase notes and the one non-obvious test-placement decision in the run artifacts.
+
+I’m recording one implementation decision explicitly: the child snapshot proof lives in the engine contract test because the runner-backed nested-child path is already red for an unrelated active-loop reason. That keeps this phase’s coverage stable and scoped to `ctx.*` behavior.
+
+I’m doing one last content check on the touched surfaces themselves instead of trusting the noisy worktree state, then I’ll close out with the scoped summary.
+
+Scope considered
+
+- `ctx.*` regression coverage and docs only, centered on [tests/contract/test_engine_contracts.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/tests/contract/test_engine_contracts.py), [tests/runtime/test_workspace_and_context.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/tests/runtime/test_workspace_and_context.py), [docs/authoring.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/docs/authoring.md), [docs/architecture.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/docs/architecture.md), and the phase notes.
+
+What I analyzed
+
+- Existing `ctx.*` low-level tests were already covering context reads, scalar rendering, missing input, unsafe paths, and artifact-path rejection.
+- Existing resume coverage already proved run-local request snapshot stability on resume.
+- Runner-backed nested child execution currently hits an unrelated active-event-loop guard, so it is not a stable place to anchor new `ctx.*` child-snapshot assertions.
+
+What I changed
+
+- Added contract coverage for no auto-injection and for `workflow_step(message=...)` forwarding both plain `{ctx.message}` and mixed `{ctx.message}` + `{ctx.input.topic}` into a synthetic child request snapshot in [tests/contract/test_engine_contracts.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/tests/contract/test_engine_contracts.py).
+- Added a doc baseline assertion for the new authoring and architecture language in [tests/test_architecture_baseline_docs.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/tests/test_architecture_baseline_docs.py).
+- Documented the preferred runtime binding surface in [docs/authoring.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/docs/authoring.md) and the immutable run-local snapshot semantics in [docs/architecture.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/docs/architecture.md).
+- Updated the phase artifacts in [implementation_notes.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/standalone-implementation-spec-ctx-prompt-bindin-edf74165/runs/run-20260507T122922Z-e6e948b6/artifacts/implement/phases/ctx-regression-coverage-and-docs/implementation_notes.md) and [decisions.txt](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/standalone-implementation-spec-ctx-prompt-bindin-edf74165/runs/run-20260507T122922Z-e6e948b6/decisions.txt).
+
+Key findings / decisions
+
+- Child request-snapshot proof was kept in the engine contract suite with a synthetic child `Context` instead of the runner suite, because the current nested child runner path already fails for a separate async-bridging reason.
+- No production runtime code changed in this phase.
+- Targeted validation passed with:
+  `.venv/bin/python -m pytest tests/contract/test_engine_contracts.py::test_ctx_prompt_bindings_render_in_provider_and_operation_prompts tests/contract/test_engine_contracts.py::test_prompt_steps_do_not_auto_inject_run_message_without_ctx_binding tests/contract/test_engine_contracts.py::test_workflow_step_message_can_forward_ctx_message_into_child_request_snapshot tests/contract/test_engine_contracts.py::test_workflow_step_message_renders_ctx_bindings_before_child_invocation tests/test_architecture_baseline_docs.py::test_docs_cover_ctx_runtime_prompt_bindings_and_request_snapshot_semantics tests/runtime/test_workspace_and_context.py::test_resume_context_message_uses_run_local_request_snapshot_not_mutated_task_request`
+
+Open issues / next step
+
+- The runner-backed nested child execution path still appears to have an unrelated active-loop problem; I did not change that here.
+- [tests/test_architecture_baseline_docs.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/tests/test_architecture_baseline_docs.py) is currently untracked in this worktree.
