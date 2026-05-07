@@ -776,3 +776,120 @@ Open issues / next step
 <loop-control>
 {"schema":"docloop.loop_control/v1","kind":"promise","promise":"COMPLETE"}
 </loop-control>
+
+
+---
+run_id=run-20260507T184603Z-adb7c56b | entry=session_turn | pair=implement | phase=producer | cycle=1 | attempt=1 | thread_id=019e03df-4839-7ca0-9407-d7c938d6f1f3
+---
+provider=codex
+mode=start
+template=/home/rauter/.local/share/pipx/venvs/autoloop/lib/python3.12/site-packages/autoloop/templates/implement_producer.md
+session_id=019e03df-4839-7ca0-9407-d7c938d6f1f3
+
+
+---
+run_id=run-20260507T184603Z-adb7c56b | entry=phase_output | pair=implement | phase=producer | process=codex-agent | cycle=1 | attempt=1 | thread_id=019e03df-4839-7ca0-9407-d7c938d6f1f3
+---
+I’m implementing the SDK routing and helper-entrypoint phase. First I’m reading the phase feedback, current `sdk.py`/engine code, and the plan artifacts to pin down the required behavior before editing.
+
+The earlier phases already landed the result-surface and retention plumbing, so this phase is narrower: routing defaults, helper entrypoints, and prompt placeholder parity. I’m reading the current implementation and adjacent tests before patching.
+
+I’ve confirmed the retention work is already present in `sdk.py`. Next I’m drilling into the synthetic workflow builder and the current tests around `client.step(...)`, because that’s where the route-preservation regression is likely sitting.
+
+The prompt render gap is confined to `Engine._resolve_prompt`; the operation path already includes `input` roots. I’m now reading the synthetic workflow builder and step classes to align helper construction with the actual constructor signatures instead of guessing.
+
+I’ve isolated the main gap: `_default_routes_for_step(...)` still derives strict-step routes from `route_metadata`, which can silently rewrite behavior, and it uses the step object instead of `SELF` for produce/verify rework. I’m checking compiler expectations around `SELF` and then I’ll patch the builder plus add helper coverage.
+
+I’ve got the edit plan pinned down now:
+
+1. Patch prompt rendering so workflow-backed prompt resolution accepts `input.*` wherever `ctx.*` already worked.
+2. Update `Autoloop.step(...)` internals to keep explicit `routes=` intact, use spec defaults for concrete steps, and keep the existing simple-declaration path untouched.
+3. Add the four helper entrypoints as thin constructors over `client.step(...)`, with local prompt/retry normalization only.
+4. Extend the SDK facade tests for helper construction, route defaults/overrides, and typed `input.*` prompt rendering.
+
+I’m moving into file edits now.
+
+The prompt placeholder change for provider-backed steps is already present in `_resolve_prompt(...)`; the remaining adjacent gap is child-workflow step message rendering, which still omits `input.*`. I’m folding that in while I patch the SDK helper/routing side so the message model stays consistent.
+
+I’ve confirmed the worktree is very dirty outside this slice, so I’m keeping edits strictly to `autoloop/sdk.py`, `autoloop/core/engine.py`, the phase notes, and the focused SDK tests. No unrelated files are getting pulled into scope.
+
+The helper methods are in place. I’m doing a quick pass for signature mismatches and then patching the one remaining engine placeholder site so child-workflow step messages honor `input.*` as well.
+
+The first test run hit an environment issue: `python` isn’t on PATH here. I’m rerunning with `python3` and will fix any compile/test failures from the actual code after that.
+
+The focused SDK suite is running clean through the early cases. I’m waiting on the rest of `tests/unit/test_sdk_facade.py`, then I’ll do a quick compile pass and update the phase notes/decision ledger.
+
+The focused suite passed. I’m adding two narrow regression tests before I close out: one for the explicit missing-`input.*` failure message, and one for child-workflow message rendering through the helper path I just broadened in the engine.
+
+I’ve finished the code and validation pass. The last step is repo bookkeeping for this run: I’m recording the non-obvious compatibility decisions and the implementation notes required by the loop contract.
+
+I found one low-noise cleanup before wrapping: the helper signatures reference `Session`, and `from __future__ import annotations` makes that safe at runtime, but I’m importing it explicitly so the module surface is self-contained.
+
+Scope considered
+
+Phase-local SDK routing and helper entrypoints only: [autoloop/sdk.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/autoloop/sdk.py), [autoloop/core/engine.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/autoloop/core/engine.py), [tests/unit/test_sdk_facade.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/tests/unit/test_sdk_facade.py), plus the required phase notes and decisions artifacts.
+
+What I analyzed
+
+I reviewed the active phase contract, plan, prior phase decisions, the current synthetic step builder, the existing retention/result plumbing, engine prompt/message rendering, and the focused SDK facade tests to keep the change compatible with both concrete `Step` inputs and existing simple named declarations.
+
+What I changed
+
+In [autoloop/sdk.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/autoloop/sdk.py), I updated `Autoloop.step(...)` to treat concrete `Step` as the canonical path while preserving the simple-declaration compatibility branch, kept explicit `routes=` mappings intact, switched produce/verify self-loops to `SELF`, added `_step_result_route`, and added the four helper entrypoints: `prompt_step(...)`, `produce_verify_step(...)`, `python_step(...)`, and `workflow_step(...)`. I also centralized helper normalization with `_normalize_prompt`, `_normalize_retry_policy`, and `_materialize_child_workflow_params`.
+
+In [autoloop/core/engine.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/autoloop/core/engine.py), I widened child-workflow step message rendering to accept `input.*` placeholders alongside `ctx.*`. In [tests/unit/test_sdk_facade.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/tests/unit/test_sdk_facade.py), I added coverage for default strict-step routes, explicit route preservation, helper construction/delegation, prompt rendering through `input.message`, `ctx.message`, and typed `input.*`, missing-input failures, produce/verify rework looping, helper retention overrides, and child-workflow message rendering.
+
+Key findings / decisions
+
+Explicit caller routes now pass through unchanged for concrete `Step` executions, including `SELF`, `FINISH`, `AWAIT_INPUT`, `FAIL`, and `Route(...)` targets. To preserve compatibility already recorded in the run ledger, strict `route_metadata` still acts as a fallback when no explicit `routes=` are provided. Child-workflow helper messages now follow the same `message`/`input.*` model as prompt-backed steps.
+
+Validation:
+- `./.venv/bin/python -m pytest tests/unit/test_sdk_facade.py -q`
+- `./.venv/bin/python -m compileall autoloop/sdk.py autoloop/core/engine.py tests/unit/test_sdk_facade.py`
+
+Open issues / next step
+
+No open code issues in this phase slice. I only ran the focused SDK facade suite, not the broader repository test matrix.
+
+
+---
+run_id=run-20260507T184603Z-adb7c56b | entry=session_turn | pair=implement | phase=verifier | cycle=1 | attempt=1 | thread_id=019e03df-4839-7ca0-9407-d7c938d6f1f3
+---
+provider=codex
+mode=resume
+template=/home/rauter/.local/share/pipx/venvs/autoloop/lib/python3.12/site-packages/autoloop/templates/implement_verifier.md
+session_id=019e03df-4839-7ca0-9407-d7c938d6f1f3
+
+
+---
+run_id=run-20260507T184603Z-adb7c56b | entry=phase_output | pair=implement | phase=verifier | process=codex-agent | cycle=1 | attempt=1 | thread_id=019e03df-4839-7ca0-9407-d7c938d6f1f3
+---
+I’m auditing the phase-local implementation against the active criteria, starting from the phase artifacts and the touched SDK/engine/tests so I can update the review checklist and findings accurately.
+
+I’ve loaded the criteria and run decisions. Next I’m reading the exact changed regions and replaying the focused validation so I can judge compatibility and regression risk rather than just trust the notes.
+
+The focused SDK facade suite reproduced cleanly. I’m doing the final artifact updates now: criteria will be checked through, and feedback will note that this review found no phase-local issues requiring follow-up.
+
+Scope considered
+
+Phase-local review only: [autoloop/sdk.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/autoloop/sdk.py), [autoloop/core/engine.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/autoloop/core/engine.py), [tests/unit/test_sdk_facade.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/tests/unit/test_sdk_facade.py), and the active review artifacts in `.autoloop/.../sdk-routing-and-helper-entrypoints/`.
+
+What I analyzed
+
+I checked the active phase contract, implementation notes, and run-local decisions, then read the helper-entrypoint and synthetic-routing changes in `sdk.py`, the child-workflow message rendering change in `engine.py`, and the added regression coverage in `test_sdk_facade.py`.
+
+What I reviewed
+
+I verified the concrete `Step` path still preserves the simple named-declaration compatibility branch, explicit `routes=` mappings stay intact, produce/verify defaults use `needs_rework -> SELF`, helper methods delegate through `client.step(...)` with retention forwarding, and `input.*` placeholder rendering now works for prompt-backed SDK execution and child-workflow helper messages. I also reran `./.venv/bin/python -m pytest tests/unit/test_sdk_facade.py -q`, which passed (`43 passed`).
+
+Key findings / decisions
+
+No blocking or non-blocking findings in the reviewed phase-local scope. I updated [criteria.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/revised-sdk-implementation-spec-1-scope-implemen-1e1a7513/runs/run-20260507T184603Z-adb7c56b/artifacts/implement/phases/sdk-routing-and-helper-entrypoints/criteria.md) to fully checked and recorded the clean review result in [feedback.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/revised-sdk-implementation-spec-1-scope-implemen-1e1a7513/runs/run-20260507T184603Z-adb7c56b/artifacts/implement/phases/sdk-routing-and-helper-entrypoints/feedback.md).
+
+Open issues / next step
+
+No phase-local issues remain from review. Broader repository coverage was not rerun in this verifier pass.
+
+<loop-control>
+{"schema":"docloop.loop_control/v1","kind":"promise","promise":"COMPLETE"}
+</loop-control>
