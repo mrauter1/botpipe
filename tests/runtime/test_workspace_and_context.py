@@ -733,7 +733,8 @@ def test_resume_context_preserves_run_message_and_raw_input_fields(tmp_path: Pat
                     json.dumps(
                         {
                             "message": request.context.message,
-                            "input_message": request.context.input.message,
+                            "input_has_message": request.context.input_fields is not None
+                            and "message" in type(request.context.input_fields).model_fields,
                             "input_topic": request.context.input.topic,
                             "input_fields": None
                             if request.context.input_fields is None
@@ -749,7 +750,8 @@ def test_resume_context_preserves_run_message_and_raw_input_fields(tmp_path: Pat
                     json.dumps(
                         {
                             "message": request.context.message,
-                            "input_message": request.context.input.message,
+                            "input_has_message": request.context.input_fields is not None
+                            and "message" in type(request.context.input_fields).model_fields,
                             "input_topic": request.context.input.topic,
                             "input_fields": None
                             if request.context.input_fields is None
@@ -800,7 +802,7 @@ def test_resume_context_preserves_run_message_and_raw_input_fields(tmp_path: Pat
     assert paused.terminal == "AWAIT_INPUT"
     assert paused_context == {
         "message": "Original request",
-        "input_message": "Original request",
+        "input_has_message": False,
         "input_topic": "release",
         "input_fields": {"topic": "release"},
         "answer": None,
@@ -810,7 +812,7 @@ def test_resume_context_preserves_run_message_and_raw_input_fields(tmp_path: Pat
     assert resumed.terminal == "FINISH"
     assert resumed_context == {
         "message": "Original request",
-        "input_message": "Original request",
+        "input_has_message": False,
         "input_topic": "release",
         "input_fields": {"topic": "release"},
         "answer": "42",
