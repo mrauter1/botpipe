@@ -10,7 +10,6 @@ from collections.abc import Callable, Iterator, Mapping, Sequence
 from dataclasses import dataclass, replace
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
-from types import SimpleNamespace
 from typing import Any, Literal
 from uuid import uuid4
 
@@ -20,7 +19,7 @@ import autoloop.simple as simple
 from autoloop.core import Workflow as CoreWorkflow
 from autoloop.core.artifacts import Artifact, CompiledArtifact, resolve_artifact_template
 from autoloop.core.compiler import CompiledWorkflow, compile_workflow
-from autoloop.core.context import Context, WorkflowInputView
+from autoloop.core.context import Context
 from autoloop.core.errors import WorkflowCompilationError, WorkflowExecutionError, exception_failure_context
 from autoloop.core.operations import classify_call, llm_call
 from autoloop.core.primitives import AWAIT_INPUT, FAIL, FINISH, SELF, Event, Outcome
@@ -1113,21 +1112,7 @@ def _sdk_tasks_root(root: Path, state_dir: Path) -> Path:
 
 
 def _sdk_artifact_context(execution: RunExecution, *, message: str | None) -> Any:
-    workflow_input = execution.workflow_input
-    return SimpleNamespace(
-        root=execution.task_workspace.root,
-        task_id=execution.task_workspace.task_id,
-        run_id=execution.run_workspace.run_id,
-        workflow_name=execution.compiled.workflow_name,
-        task_folder=execution.task_workspace.task_dir,
-        workflow_folder=execution.workflow_workspace.workflow_dir,
-        run_folder=execution.run_workspace.run_dir,
-        package_folder=execution.workflow_workspace.package_dir,
-        state=execution.result.state,
-        message=message,
-        input_fields=workflow_input,
-        input=WorkflowInputView(message=message, fields=workflow_input),
-    )
+    return _runtime_equivalent_artifact_context(execution, message=message)
 
 
 def _runtime_equivalent_artifact_context(execution: RunExecution, *, message: str | None) -> Any:

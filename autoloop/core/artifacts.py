@@ -493,6 +493,12 @@ def _resolve_placeholder(expression: str, context: Context, *, placeholder_label
         current = context.package_folder
     elif root_name == "root":
         current = context.root
+    elif root_name == "request_file":
+        current = context.request_file
+    elif root_name == "params":
+        current = context.params
+    elif root_name == "workflow_params":
+        current = context.workflow_params
     elif root_name == "input":
         if len(parts) > 1:
             return _resolve_input_placeholder(

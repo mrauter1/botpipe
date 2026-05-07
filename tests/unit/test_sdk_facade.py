@@ -8,6 +8,7 @@ from pathlib import Path
 import pytest
 from pydantic import BaseModel
 
+import autoloop
 import autoloop.simple as simple
 import autoloop.sdk as sdk_module
 from autoloop import (
@@ -166,6 +167,18 @@ class _SDKSchemaArtifactWorkflow(simple.Workflow):
         ctx.artifacts.artifact_snapshot.write_model(
             _SDKArtifactPayload(message=ctx.input.message or "", topic=ctx.input.topic)
         )
+        return Event("done")
+
+
+class _SDKDeclaredWriteContextWorkflow(simple.Workflow):
+    class Params(BaseModel):
+        mode: str
+
+    report = simple.Text("report", path="{workflow_folder}/exports/{params.mode}-{workflow_params.mode}.txt")
+
+    @simple.python_step(writes=[report], routes={"done": FINISH})
+    def capture(ctx):
+        ctx.artifacts.report.write_text(f"{ctx.params.mode}:{ctx.workflow_params['mode']}")
         return Event("done")
 
 
@@ -593,6 +606,18 @@ def test_sdk_constructor_rejects_unknown_provider_name(tmp_path: Path) -> None:
         Autoloop(root=tmp_path, provider="not-a-provider")
 
 
+def test_sdk_public_exports_include_revised_sdk_surface() -> None:
+    assert autoloop.Step is sdk_module.Step
+    assert autoloop.PromptStep is PromptStep
+    assert autoloop.ProduceVerifyStep is ProduceVerifyStep
+    assert autoloop.PythonStep is PythonStep
+    assert autoloop.ChildWorkflowStep is ChildWorkflowStep
+    assert autoloop.ResultArtifact is ResultArtifact
+    assert autoloop.RetentionPolicy is RetentionPolicy
+    assert autoloop.RetentionInfo is sdk_module.RetentionInfo
+    assert autoloop.CleanupResult is sdk_module.CleanupResult
+
+
 def test_sdk_run_exposes_result_artifact_metadata_and_helpers(tmp_path: Path) -> None:
     client = _sdk_client(tmp_path, ScriptedLLMProvider())
 
@@ -892,6 +917,24 @@ def test_sdk_run_custom_promoted_writes_dir_uniquifies_collisions(tmp_path: Path
     assert first_result.artifacts.task_local.path != second_result.artifacts.task_local.path
     assert first_result.artifacts.task_local.read_text() == "first"
     assert second_result.artifacts.task_local.read_text() == "second"
+
+
+def test_sdk_run_retention_collects_declared_writes_with_runtime_param_context(tmp_path: Path) -> None:
+    client = _sdk_client_at_root(tmp_path, ScriptedLLMProvider())
+
+    result = client.run(
+        _SDKDeclaredWriteContextWorkflow,
+        "Retain the report.",
+        params={"mode": "strict"},
+    )
+
+    assert result.ok is True
+    assert result.retention is not None
+    assert result.retention.task_scratch_deleted is True
+    assert result.artifacts.report.read_text() == "strict:strict"
+    assert result.artifacts.report.path.name == "strict-strict.txt"
+    assert result.artifacts.report.source_path is not None
+    assert result.artifacts.report.source_path.name == "strict-strict.txt"
 
 
 def test_sdk_run_too_many_pauses_keeps_task_scratch_by_default(tmp_path: Path) -> None:
