@@ -17,7 +17,7 @@ from pydantic import BaseModel, ValidationError
 
 import autoloop.simple as simple
 from autoloop.core import Workflow as CoreWorkflow
-from autoloop.core.artifacts import ArtifactHandle, CompiledArtifact, resolve_artifact_template
+from autoloop.core.artifacts import CompiledArtifact, resolve_artifact_template
 from autoloop.core.compiler import CompiledWorkflow, compile_workflow
 from autoloop.core.context import WorkflowInputView
 from autoloop.core.errors import WorkflowCompilationError, WorkflowExecutionError, exception_failure_context
@@ -26,7 +26,7 @@ from autoloop.core.primitives import AWAIT_INPUT, FAIL, FINISH, Event, Outcome
 from autoloop.core.prompts import Prompt
 from autoloop.core.provider_policy import ProviderPolicy, ProviderPolicyOverride
 from autoloop.core.providers.protocols import LLMProvider, validate_llm_provider
-from autoloop.core.steps import BranchGroupStep, ChildWorkflowStep, Step
+from autoloop.core.steps import BranchGroupStep, ChildWorkflowStep, ProduceVerifyStep, PromptStep, PythonStep, Step
 from autoloop.runtime.config import (
     ClaudeProviderConfig,
     CodexProviderConfig,
@@ -57,6 +57,104 @@ _ACTIVE_LOOP_HINT = "Use an async SDK entrypoint instead."
 @dataclass(frozen=True, slots=True)
 class RunOptions:
     record_task_message: bool = True
+
+
+RetentionMode = Literal["keep_all", "delete_task_scratch", "delete_all_sdk_managed"]
+
+
+@dataclass(frozen=True, slots=True)
+class RetentionPolicy:
+    mode: RetentionMode = "delete_task_scratch"
+    keep_declared_writes: bool = True
+    keep_workspace_writes: bool = True
+    keep_on_failure: bool = True
+    keep_on_input_required: bool = True
+    keep_on_too_many_pauses: bool = True
+    promote_task_writes: bool = True
+    promoted_writes_dir: Path | None = None
+
+    @classmethod
+    def sdk_default(cls) -> "RetentionPolicy":
+        return cls(mode="delete_task_scratch")
+
+    @classmethod
+    def keep_all(cls) -> "RetentionPolicy":
+        return cls(mode="keep_all")
+
+    @classmethod
+    def ephemeral(cls) -> "RetentionPolicy":
+        return cls(
+            mode="delete_all_sdk_managed",
+            keep_declared_writes=False,
+            keep_workspace_writes=True,
+            keep_on_failure=False,
+            keep_on_input_required=False,
+            keep_on_too_many_pauses=False,
+        )
+
+
+@dataclass(frozen=True, slots=True)
+class ResultArtifact:
+    name: str
+    path: Path
+    kind: str
+    schema: type[BaseModel] | dict[str, object] | None = None
+    source_path: Path | None = None
+    promoted: bool = False
+    required: bool = False
+    qualified_name: str | None = None
+
+    def exists(self) -> bool:
+        return self.path.exists()
+
+    def read_bytes(self) -> bytes:
+        return self.path.read_bytes()
+
+    def read_text(self) -> str:
+        return self.path.read_text(encoding="utf-8")
+
+    def read_json(self) -> object:
+        return json.loads(self.read_text())
+
+    def read_model(self) -> BaseModel:
+        if self.schema is None:
+            raise TypeError("artifact has no schema")
+        if not isinstance(self.schema, type) or not issubclass(self.schema, BaseModel):
+            raise TypeError("read_model only supports Pydantic BaseModel schemas")
+        return self.schema.model_validate(self.read_json())
+
+    def materialize(self, destination: str | Path) -> Path:
+        target = Path(destination)
+        target.parent.mkdir(parents=True, exist_ok=True)
+        target.write_bytes(self.read_bytes())
+        return target
+
+
+@dataclass(frozen=True, slots=True)
+class DeclaredWriteArtifact:
+    name: str
+    path: Path
+    kind: str
+    schema: type[BaseModel] | dict[str, object] | None
+    required: bool
+    qualified_name: str | None
+
+
+@dataclass(frozen=True, slots=True)
+class RetentionInfo:
+    policy: RetentionPolicy
+    task_scratch_retained: bool
+    task_scratch_deleted: bool
+    promoted_artifacts: tuple[str, ...]
+    retained_task_dir: Path | None
+
+
+@dataclass(frozen=True, slots=True)
+class CleanupResult:
+    deleted: tuple[Path, ...]
+    skipped: tuple[Path, ...]
+    errors: Mapping[Path, str]
+    dry_run: bool
 
 
 class AutoloopSDKError(Exception):
@@ -144,6 +242,7 @@ class WorkflowResult:
     last_outcome: Outcome | None
     handled_inputs: tuple[HandledInput, ...]
     debug: SDKDebugInfo
+    retention: RetentionInfo | None = None
 
     @classmethod
     def from_execution(
@@ -161,15 +260,16 @@ class WorkflowResult:
             state=execution.result.state,
             output=execution.result.output,
             output_validation_error=execution.result.output_validation_error,
-            artifacts=ArtifactMap(_sdk_artifact_handles(execution, message=message)),
+            artifacts=ArtifactMap(_sdk_result_artifacts(execution, message=message)),
             history=tuple(execution.result.history),
             last_event=execution.result.last_event,
             last_outcome=execution.result.last_outcome,
             handled_inputs=handled_inputs,
             debug=_sdk_debug_info(execution),
+            retention=None,
         )
 
-    def artifact(self, name: str) -> ArtifactHandle:
+    def artifact(self, name: str) -> ResultArtifact:
         return self.artifacts.require(name)
 
 
@@ -240,6 +340,7 @@ class InputRequest:
 @dataclass(frozen=True, slots=True)
 class StepResult:
     ok: bool
+    status: Literal["completed", "failed", "awaiting_input"]
     route: str | None
     value: Any | None
     state: BaseModel
@@ -247,13 +348,13 @@ class StepResult:
     workflow_result: WorkflowResult
 
 
-class ArtifactMap(Mapping[str, ArtifactHandle]):
-    """Declared public artifact handles for one SDK workflow result."""
+class ArtifactMap(Mapping[str, ResultArtifact]):
+    """Declared public result artifacts for one SDK workflow result."""
 
-    def __init__(self, handles: Mapping[str, ArtifactHandle]) -> None:
+    def __init__(self, handles: Mapping[str, ResultArtifact]) -> None:
         self._handles = dict(handles)
 
-    def __getitem__(self, key: str) -> ArtifactHandle:
+    def __getitem__(self, key: str) -> ResultArtifact:
         return self._handles[key]
 
     def __iter__(self) -> Iterator[str]:
@@ -262,13 +363,13 @@ class ArtifactMap(Mapping[str, ArtifactHandle]):
     def __len__(self) -> int:
         return len(self._handles)
 
-    def __getattr__(self, name: str) -> ArtifactHandle:
+    def __getattr__(self, name: str) -> ResultArtifact:
         try:
             return self._handles[name]
         except KeyError as exc:
             raise AttributeError(name) from exc
 
-    def require(self, name: str) -> ArtifactHandle:
+    def require(self, name: str) -> ResultArtifact:
         return self._handles[name]
 
 
@@ -501,11 +602,11 @@ class Autoloop:
             max_steps=max_steps,
         )
         route = workflow_result.last_event.tag if workflow_result.last_event is not None else None
-        value = workflow_result.output
         return StepResult(
             ok=workflow_result.ok,
+            status=workflow_result.status,
             route=route,
-            value=value,
+            value=None,
             state=workflow_result.state,
             artifacts=workflow_result.artifacts,
             workflow_result=workflow_result,
@@ -703,17 +804,26 @@ def _sdk_debug_info(execution: RunExecution) -> SDKDebugInfo:
     )
 
 
-def _sdk_artifact_handles(
+def _sdk_result_artifacts(
     execution: RunExecution,
     *,
     message: str | None,
-) -> dict[str, ArtifactHandle]:
+) -> dict[str, ResultArtifact]:
     context = _sdk_artifact_context(execution, message=message)
-    handles: dict[str, ArtifactHandle] = {}
+    artifacts: dict[str, ResultArtifact] = {}
     for name, artifact in execution.compiled.artifact_items(authoritative=False):
         path = _resolve_sdk_artifact_path(artifact, context)
-        handles[name] = ArtifactHandle(name=name, path=path)
-    return handles
+        artifacts[name] = ResultArtifact(
+            name=name,
+            path=path,
+            kind=artifact.kind,
+            schema=artifact.schema,
+            source_path=path,
+            promoted=False,
+            required=artifact.required,
+            qualified_name=artifact.qualified_name,
+        )
+    return artifacts
 
 
 def _sdk_artifact_context(execution: RunExecution, *, message: str | None) -> Any:
@@ -874,17 +984,22 @@ __all__ = [
     "Autoloop",
     "AutoloopSDKError",
     "BestSuppositionInput",
+    "CleanupResult",
     "ConsoleInput",
+    "DeclaredWriteArtifact",
     "HandledInput",
     "InputRequest",
     "InputRequired",
     "InputResponseValidationError",
     "MappingInput",
+    "ResultArtifact",
     "SDKDebugInfo",
     "SDKExecutionError",
     "StaticInput",
     "StepResult",
     "TooManyPauses",
+    "RetentionInfo",
+    "RetentionPolicy",
     "WorkflowInputError",
     "WorkflowParameterError",
     "WorkflowResult",

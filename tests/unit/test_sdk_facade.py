@@ -16,6 +16,7 @@ from autoloop import (
     InputRequest,
     InputRequired,
     InputResponseValidationError,
+    ResultArtifact,
     SDKExecutionError,
     StaticInput,
     WorkflowParameterError,
@@ -33,6 +34,11 @@ class _SDKApprovalInput(BaseModel):
 
 
 class _SDKTypedInput(BaseModel):
+    topic: str
+
+
+class _SDKArtifactPayload(BaseModel):
+    message: str
     topic: str
 
 
@@ -135,6 +141,20 @@ class _SDKFailWorkflow(simple.Workflow):
         return Event("failed", reason="Rejected by policy.")
 
 
+class _SDKSchemaArtifactWorkflow(simple.Workflow):
+    class Input(BaseModel):
+        topic: str
+
+    artifact_snapshot = simple.Json("artifact_snapshot", schema=_SDKArtifactPayload)
+
+    @simple.python_step(writes=[artifact_snapshot], routes={"done": FINISH})
+    def capture(ctx):
+        ctx.artifacts.artifact_snapshot.write_model(
+            _SDKArtifactPayload(message=ctx.input.message or "", topic=ctx.input.topic)
+        )
+        return Event("done")
+
+
 def _sdk_client(tmp_path: Path, provider: object) -> Autoloop:
     return Autoloop(
         root=Path.cwd(),
@@ -172,6 +192,7 @@ def test_sdk_run_handles_typed_input_pause_loop_and_debug_artifacts(tmp_path: Pa
     assert len(result.handled_inputs) == 1
     assert result.handled_inputs[0].response == {"approved": True}
     assert isinstance(result.artifacts, ArtifactMap)
+    assert isinstance(result.artifacts.snapshot, ResultArtifact)
     assert result.artifacts.snapshot.read_json() == {
         "message": "Ship the release safely.",
         "input_message": "Ship the release safely.",
@@ -363,7 +384,9 @@ def test_sdk_step_executes_synthetic_simple_operation_workflow(tmp_path: Path) -
     )
 
     assert result.ok is True
+    assert result.status == "completed"
     assert result.route == "done"
+    assert result.value is None
     assert result.workflow_result.status == "completed"
 
 
@@ -405,7 +428,9 @@ def test_sdk_step_supports_core_python_steps_with_explicit_terminal_route_metada
     result = client.step(declaration, "Approve the rollout.")
 
     assert result.ok is True
+    assert result.status == "completed"
     assert result.route == "approved"
+    assert result.value is None
     assert result.workflow_result.status == "completed"
 
 
@@ -493,3 +518,29 @@ def test_sdk_sync_entrypoints_normalize_active_event_loop_failures(tmp_path: Pat
 def test_sdk_constructor_rejects_unknown_provider_name(tmp_path: Path) -> None:
     with pytest.raises(SDKExecutionError, match="could not resolve SDK provider"):
         Autoloop(root=tmp_path, provider="not-a-provider")
+
+
+def test_sdk_run_exposes_result_artifact_metadata_and_helpers(tmp_path: Path) -> None:
+    client = _sdk_client(tmp_path, ScriptedLLMProvider())
+
+    result = client.run(
+        _SDKSchemaArtifactWorkflow,
+        "Ship the release safely.",
+        _SDKSchemaArtifactWorkflow.Input(topic="release"),
+    )
+
+    artifact = result.artifact("artifact_snapshot")
+
+    assert isinstance(artifact, ResultArtifact)
+    assert artifact.kind == "json"
+    assert artifact.schema is _SDKArtifactPayload
+    assert artifact.source_path == artifact.path
+    assert artifact.promoted is False
+    assert artifact.required is False
+    assert artifact.qualified_name == "capture.artifact_snapshot"
+    assert artifact.read_json() == {"message": "Ship the release safely.", "topic": "release"}
+    assert artifact.read_model() == _SDKArtifactPayload(message="Ship the release safely.", topic="release")
+
+    materialized = artifact.materialize(tmp_path / "materialized" / "artifact_snapshot.json")
+
+    assert materialized.read_text(encoding="utf-8") == artifact.read_text()

@@ -65,6 +65,11 @@ def test_autoloop_root_exports_only_the_canonical_public_surface() -> None:
         "python_step",
         "validation_step",
         "workflow_step",
+        "Step",
+        "PromptStep",
+        "ProduceVerifyStep",
+        "PythonStep",
+        "ChildWorkflowStep",
         "parallel",
         "fan_out",
         "llm",
@@ -97,6 +102,10 @@ def test_autoloop_root_exports_only_the_canonical_public_surface() -> None:
         "WorkflowResult",
         "StepResult",
         "ArtifactMap",
+        "ResultArtifact",
+        "RetentionPolicy",
+        "RetentionInfo",
+        "CleanupResult",
         "InputRequest",
         "HandledInput",
         "SDKDebugInfo",
@@ -117,6 +126,11 @@ def test_autoloop_root_exports_only_the_canonical_public_surface() -> None:
         assert _import_from("autoloop", symbol) is getattr(autoloop, symbol)
 
     assert autoloop.StateVar is simple.StateVar
+    assert autoloop.Step is core_steps.Step
+    assert autoloop.PromptStep is core_steps.PromptStep
+    assert autoloop.ProduceVerifyStep is core_steps.ProduceVerifyStep
+    assert autoloop.PythonStep is core_steps.PythonStep
+    assert autoloop.ChildWorkflowStep is core_steps.ChildWorkflowStep
 
 
 def test_effect_exports_and_route_helpers_are_public() -> None:

@@ -6,3 +6,29 @@
 - Phase Directory Key: sdk-surface-and-result-model
 - Phase Title: SDK Surface And Result Model
 - Scope: phase-local producer artifact
+- Files changed: `autoloop/sdk.py`, `autoloop/__init__.py`, `tests/unit/test_sdk_facade.py`, `tests/unit/test_simple_surface.py`
+- Symbols touched: `ResultArtifact`, `DeclaredWriteArtifact`, `RetentionPolicy`, `RetentionInfo`, `CleanupResult`, `ArtifactMap`, `WorkflowResult`, `StepResult`, package `__all__`
+- Checklist mapping:
+  - Public exports for concrete step classes: completed
+  - Public exports for retention/result dataclasses: completed
+  - ResultArtifact/ArtifactMap public surface conversion: completed
+  - StepResult value/status correction: completed
+  - Retention plumbing and task lifecycle helpers: deferred to later scoped phases
+- Assumptions: this phase should add the public retention/result model without activating retention behavior yet because the active phase contract limits work to SDK surface and result-model changes.
+- Preserved invariants:
+  - `Autoloop.run(...)` and `Autoloop.step(...)` still execute through the existing runtime flow.
+  - Runtime workflow execution still uses mutable `ArtifactHandle` objects internally.
+  - No retention deletion, promotion, sentinel, or cleanup behavior is active in this phase.
+- Intended behavior changes:
+  - Root-package exports now include `Step`, `PromptStep`, `ProduceVerifyStep`, `PythonStep`, `ChildWorkflowStep`, `ResultArtifact`, `RetentionPolicy`, `RetentionInfo`, and `CleanupResult`.
+  - SDK result artifacts exposed through `WorkflowResult.artifacts[...]` and `WorkflowResult.artifact(...)` are now `ResultArtifact` instances with preserved metadata and read/materialize helpers.
+  - `StepResult` now reports `status` directly and leaves `value=None` instead of copying `workflow_result.output`.
+- Known non-changes:
+  - `WorkflowResult.retention` remains `None` until a later retention phase populates it.
+  - No `retention=` arguments, sentinel files, cleanup logic, or prompt-routing changes were implemented in this phase.
+- Expected side effects: callers that previously treated SDK result artifacts as writable runtime `ArtifactHandle` objects must now treat them as read-oriented `ResultArtifact` objects.
+- Validation performed:
+  - `python3 -m compileall autoloop/sdk.py autoloop/__init__.py tests/unit/test_sdk_facade.py tests/unit/test_simple_surface.py`
+  - Added focused unit assertions for root exports, `ResultArtifact` metadata/helpers, and `StepResult.value/status`
+  - Could not run `pytest` or import-time smoke tests in this shell because `pytest` and `pydantic` are not installed.
+- Deduplication / centralization decisions: reused compiled artifact metadata in a single SDK helper (`_sdk_result_artifacts(...)`) instead of duplicating read-helper behavior across result surfaces.
