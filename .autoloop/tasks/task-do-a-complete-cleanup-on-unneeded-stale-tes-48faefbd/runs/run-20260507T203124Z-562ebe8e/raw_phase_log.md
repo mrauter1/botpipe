@@ -166,3 +166,12 @@ No open verifier issues remain for the planning artifacts. The plan is ready for
 <loop-control>
 {"schema":"docloop.loop_control/v1","kind":"promise","promise":"COMPLETE"}
 </loop-control>
+
+
+---
+run_id=run-20260507T203124Z-562ebe8e | entry=phase_scope_resolved
+---
+phase_mode=single
+phase_ids=repair-retained-split-tests
+explicit=True
+current_phase_index=0
