@@ -497,3 +497,62 @@ Open issues / next step
   `tests/unit/test_primitives_and_stores.py`
   `tests/unit/test_simple_surface.py`
   `tests/contract/test_engine_contracts.py`
+
+
+---
+run_id=run-20260507T122922Z-e6e948b6 | entry=session_turn | pair=implement | phase=verifier | cycle=1 | attempt=1 | thread_id=019e027a-8f71-79d1-87f8-8b585e932a4b
+---
+provider=codex
+mode=resume
+template=/home/rauter/.local/share/pipx/venvs/autoloop/lib/python3.12/site-packages/autoloop/templates/implement_verifier.md
+session_id=019e027a-8f71-79d1-87f8-8b585e932a4b
+
+
+---
+run_id=run-20260507T122922Z-e6e948b6 | entry=phase_output | pair=implement | phase=verifier | process=codex-agent | cycle=1 | attempt=1 | thread_id=019e027a-8f71-79d1-87f8-8b585e932a4b
+---
+I’m auditing the phase-local implementation against the active criteria and the actual diffs. I’ll inspect the changed runtime/validation paths first, then I’ll update the review artifacts with any blocking gaps or close them out if the behavior matches the contract.
+
+The repo diff view is empty for these paths in this worktree, so I’m reviewing the current source directly against the phase contract and the implementation notes instead of relying on `git diff` output.
+
+I found one likely runtime gap around unsupported `ctx` model fields on paths that bypass compile-time validation. I’m checking whether there’s also an existing bare `input/params` compatibility surface in the repo before I write this up, since the spec explicitly protects that behavior if it already exists.
+
+I’ve narrowed the review to one material behavior gap so far, and I’m reading the new tests around child-message rendering to confirm they don’t cover it. If they don’t, I’ll record it as a blocking finding and close out the rest of the phase as aligned.
+
+I’ve confirmed the main issue is real and untested: invalid `ctx` model-field references in `workflow_step(message=...)` bypass compile-time validation and currently surface as raw `AttributeError`. I’m recording that as a blocking finding and updating the criteria to match the current state.
+
+Scope considered
+
+- Phase-local review for `ctx-rendering-and-validation`.
+- Request-relevant runtime and validation paths in `autoloop/core/artifacts.py`, `discovery.py`, `engine.py`, `operations.py`, plus the new phase-local tests and implementation notes.
+- Review artifacts updated only under the active phase directory.
+
+What I analyzed
+
+- The shared `ctx` contract in `autoloop/core/context_placeholders.py`.
+- Runtime `ctx` placeholder resolution and rendering in `autoloop/core/artifacts.py`.
+- Compile-time simple prompt validation in `autoloop/core/discovery.py`.
+- Provider prompt rendering, operation prompt rendering, and `workflow_step(message=...)` handling in `autoloop/core/engine.py` and `autoloop/core/operations.py`.
+- The newly added tests for prompt rendering and child-workflow message rendering.
+
+What I reviewed
+
+- Whether supported `ctx.*` bindings render on all in-scope prompt/message surfaces.
+- Whether unsupported or invalid `ctx.*` references fail with explicit `WorkflowExecutionError` / `WorkflowValidationError` behavior instead of leaking raw exceptions.
+- Whether the implementation stays aligned with the decisions ledger and phase contract.
+- I updated `criteria.md` and appended the review finding to `feedback.md`.
+
+Key findings / decisions
+
+- One blocking issue was found and recorded as `IMP-001`.
+- The main gap is on runtime-only `workflow_step(message=...)` paths: invalid `ctx.input/state/params` field references can currently escape as raw `AttributeError` because `_resolve_ctx_placeholder(...)` does not convert missing model fields into `WorkflowExecutionError`.
+- The rest of the phase shape is coherent: `ctx` is routed through a restricted prompt view, artifact-path rejection is explicit, and the rendering hooks were added in the intended engine/operation call sites.
+
+Open issues / next step
+
+- Fix `IMP-001` by making runtime model-root field lookup in `_resolve_ctx_placeholder(...)` fail explicitly with `WorkflowExecutionError`, then add a regression test for an invalid `workflow_step(message=...)` placeholder such as `{ctx.input.missing}`.
+- After that, re-run the focused test slices in a real project test environment.
+
+<loop-control>
+{"schema":"docloop.loop_control/v1","kind":"promise","promise":"INCOMPLETE"}
+</loop-control>
