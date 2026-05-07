@@ -2189,3 +2189,52 @@ The next run should finish the composite `ctx.input.message` runtime-template pa
 <loop-control>
 {"schema":"docloop.loop_control/v1","kind":"promise","promise":"INCOMPLETE"}
 </loop-control>
+
+
+---
+run_id=run-20260507T130811Z-54d93345 | entry=session_turn | pair=audit | phase=verifier | cycle=1 | attempt=1 | thread_id=019e02ec-12af-7421-98fe-ead9434c6dfd
+---
+provider=codex
+mode=resume
+template=/home/rauter/.local/share/pipx/venvs/autoloop/lib/python3.12/site-packages/autoloop/templates/audit_verifier.md
+session_id=019e02ec-12af-7421-98fe-ead9434c6dfd
+
+
+---
+run_id=run-20260507T130811Z-54d93345 | entry=phase_output | pair=audit | phase=verifier | process=codex-agent | cycle=1 | attempt=1 | thread_id=019e02ec-12af-7421-98fe-ead9434c6dfd
+---
+I’m verifying the audit artifacts against the request, decisions, final code, and the focused regression evidence, then I’ll update only the audit criteria and feedback files.
+
+The written audit is specific, but I’m confirming the two claimed gaps directly from the current tree before I mark the audit complete: the failing `ctx.input.message` contract tests and the strict `ChildWorkflowStep` rejection path.
+
+The two claimed material gaps reproduce exactly from the current tree, and the revised request matches them cleanly. I’m marking the audit criteria complete, appending a no-findings verifier note, and removing the temporary verifier state directory.
+
+Scope considered
+
+The immutable request snapshot, authoritative clarifications in the raw log, the run decisions ledger, the produced audit artifacts, the final SDK/runtime codepaths, and the focused SDK/runtime/contract tests needed to verify the claimed gaps.
+
+What I analyzed
+
+I checked `gap_report.md`, `revised_request.md`, and `audit_result.json` against the current tree and the decisions ledger. I also directly reproduced the two claimed material gaps with the current environment: the failing `ctx.input.message` contract tests and the resolvable strict `ChildWorkflowStep` rejection path.
+
+What I reviewed
+
+I reviewed the audit artifacts under `artifacts/audit`, the read-only `decisions.txt`, the relevant runtime/SDK files, and the focused verification commands:
+`.venv/bin/python -m pytest -q tests/contract/test_engine_contracts.py -k 'ctx_input_message_without_typed_input or ctx_input_message_separately_from_request'`
+and a direct `.venv/bin/python` reproduction of `client.step(ChildWorkflowStep(...))`.
+
+Key findings / decisions
+
+The audit is accurate and complete for this verifier pass.
+The two reported material gaps both reproduce from the current tree.
+`revised_request.md` is a direct next-run request focused only on those unresolved gaps.
+`audit_result.json` is valid and consistent with the report.
+All audit criteria are now checked, and I appended a no-findings verifier note to `feedback.md`.
+
+Open issues / next step
+
+No audit-artifact corrections are needed. The next step is to execute the focused follow-up implementation request captured in `artifacts/audit/revised_request.md`.
+
+<loop-control>
+{"schema":"docloop.loop_control/v1","kind":"promise","promise":"COMPLETE"}
+</loop-control>
