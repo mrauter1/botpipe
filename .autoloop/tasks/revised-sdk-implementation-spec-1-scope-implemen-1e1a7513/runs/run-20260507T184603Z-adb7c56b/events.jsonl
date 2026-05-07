@@ -62,3 +62,6 @@
 {"ts": "2026-05-07T19:33:56.939455+00:00", "run_id": "run-20260507T184603Z-adb7c56b", "seq": 62, "event_type": "phase_finished", "pair": "test", "phase": "producer", "cycle": 1, "attempt": 1, "empty_output": false, "phase_id": "sdk-acceptance-regression-tests"}
 {"ts": "2026-05-07T19:34:35.459745+00:00", "run_id": "run-20260507T184603Z-adb7c56b", "seq": 63, "event_type": "phase_finished", "pair": "test", "phase": "verifier", "cycle": 1, "attempt": 1, "empty_output": false, "phase_id": "sdk-acceptance-regression-tests"}
 {"ts": "2026-05-07T19:34:35.525326+00:00", "run_id": "run-20260507T184603Z-adb7c56b", "seq": 64, "event_type": "pair_completed", "pair": "test", "cycle": 1, "attempt": 1, "phase_id": "sdk-acceptance-regression-tests"}
+{"ts": "2026-05-07T19:34:35.648226+00:00", "run_id": "run-20260507T184603Z-adb7c56b", "seq": 65, "event_type": "phase_completed", "pair": "test", "phase_id": "sdk-acceptance-regression-tests", "phase_mode": "single"}
+{"ts": "2026-05-07T19:34:35.650725+00:00", "run_id": "run-20260507T184603Z-adb7c56b", "seq": 66, "event_type": "pair_started", "pair": "audit", "phase_id": null}
+{"ts": "2026-05-07T19:34:35.651008+00:00", "run_id": "run-20260507T184603Z-adb7c56b", "seq": 67, "event_type": "cycle_started", "pair": "audit", "cycle": 1, "attempt": 1, "phase_id": null}
