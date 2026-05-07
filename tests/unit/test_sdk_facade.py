@@ -76,6 +76,28 @@ class _SDKProviderQuestionWorkflow(simple.Workflow):
     )
 
 
+class _SDKNoMessageWorkflow(simple.Workflow):
+    class State(BaseModel):
+        observed_message: str | None = None
+        observed_input_message: str | None = None
+
+    empty_message_snapshot = simple.Text(
+        "empty_message_snapshot",
+        path="{workflow_folder}/capture/{input.message}snapshot.txt",
+    )
+
+    @simple.python_step(writes=[empty_message_snapshot], routes={"done": FINISH})
+    def capture(ctx):
+        ctx.state = ctx.state.model_copy(
+            update={
+                "observed_message": ctx.message,
+                "observed_input_message": ctx.input.message,
+            }
+        )
+        ctx.artifacts.empty_message_snapshot.write_text("captured")
+        return Event("done")
+
+
 def _sdk_client(tmp_path: Path, provider: object) -> Autoloop:
     return Autoloop(
         root=Path.cwd(),
@@ -124,6 +146,18 @@ def test_sdk_run_handles_typed_input_pause_loop_and_debug_artifacts(tmp_path: Pa
     assert "pause-workflow" in result.debug.task_id
     assert result.debug.run_id.startswith("run-")
     assert result.debug.events_file.exists()
+
+
+def test_sdk_run_preserves_explicit_none_message(tmp_path: Path) -> None:
+    client = _sdk_client(tmp_path, ScriptedLLMProvider())
+
+    result = client.run(_SDKNoMessageWorkflow, None)
+
+    assert result.ok is True
+    assert result.state.observed_message is None
+    assert result.state.observed_input_message is None
+    assert result.artifacts.empty_message_snapshot.path.name == "snapshot.txt"
+    assert result.artifacts.empty_message_snapshot.read_text() == "captured"
 
 
 def test_sdk_run_rejects_plain_dict_third_argument(tmp_path: Path) -> None:
