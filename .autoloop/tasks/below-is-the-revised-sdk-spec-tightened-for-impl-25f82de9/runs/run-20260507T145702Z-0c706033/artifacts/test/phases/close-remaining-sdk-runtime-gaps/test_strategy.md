@@ -23,6 +23,7 @@
 - AC-3 SDK strict child-workflow dispatch:
   - `tests/unit/test_sdk_facade.py::test_sdk_step_supports_directly_resolvable_strict_child_workflow_steps`
   - `tests/unit/test_sdk_facade.py::test_sdk_step_rejects_unresolved_strict_child_workflow_steps`
+  - `tests/unit/test_sdk_facade.py::test_sdk_step_rejects_worklist_scoped_strict_child_workflow_steps`
 
 ## Preserved invariants checked
 
@@ -36,6 +37,7 @@
 - No-typed-input `ctx.input.message` rendering.
 - Typed input present with a separate runtime message and typed fields.
 - Unresolved strict child-workflow reference at the SDK boundary.
+- Worklist-scoped strict child-workflow declaration rejection at the SDK boundary.
 
 ## Flake-risk review and stabilization
 
@@ -45,7 +47,7 @@
 ## Validation slice
 
 - `.venv/bin/python -m pytest -q tests/unit/test_primitives_and_stores.py tests/contract/test_engine_contracts.py tests/unit/test_sdk_facade.py`
-- Result: `277 passed`
+- Result: `278 passed`
 
 ## Known gaps
 

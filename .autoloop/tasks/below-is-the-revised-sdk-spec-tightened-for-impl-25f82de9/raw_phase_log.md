@@ -2533,3 +2533,53 @@ Add one focused SDK facade regression that calls `client.step(...)` with a scope
 <loop-control>
 {"schema":"docloop.loop_control/v1","kind":"promise","promise":"INCOMPLETE"}
 </loop-control>
+
+
+---
+run_id=run-20260507T145702Z-0c706033 | entry=session_turn | pair=test | phase=producer | cycle=2 | attempt=1 | thread_id=019e02f5-9c8f-74d1-aed2-ee2404b64c7a
+---
+provider=codex
+mode=resume
+template=/home/rauter/.local/share/pipx/venvs/autoloop/lib/python3.12/site-packages/autoloop/templates/test_producer.md
+session_id=019e02f5-9c8f-74d1-aed2-ee2404b64c7a
+
+
+---
+run_id=run-20260507T145702Z-0c706033 | entry=phase_output | pair=test | phase=producer | process=codex-agent | cycle=2 | attempt=1 | thread_id=019e02f5-9c8f-74d1-aed2-ee2404b64c7a
+---
+I’m addressing the audit finding directly in the focused SDK slice: I’ll add a worklist-scoped rejection regression on the same `client.step(...)` preflight path, rerun the narrowed SDK tests plus the three-file slice, and then update the test artifacts to reflect the added coverage.
+
+I’m adding the missing scoped-child regression directly next to the other SDK preflight tests, then I’ll rerun the narrowed SDK subset and the full three-file slice so the artifact updates reflect the new passing count.
+
+The scoped strict-child rejection test is in place. I’m running the SDK subset that covers the changed preflight branches first, then the full three-file slice, before I update the strategy and feedback artifacts.
+
+The narrowed SDK preflight subset passed. I’m waiting on the full slice now, then I’ll update the coverage map, feedback summary, and the run-local test decision entry with the stabilized result.
+
+The full slice is green at `278 passed`. I’m updating the artifacts now to reflect the added scoped-child rejection coverage and the new validated count.
+
+Scope considered
+
+Phase-local test follow-up only: the focused SDK/runtime regression files, the active test artifacts, and the auditor finding about missing scoped-declaration rejection coverage on the `client.step(...)` preflight path.
+
+What I analyzed
+
+I reviewed the current `tests/unit/test_sdk_facade.py` coverage around strict child-workflow dispatch, the existing test strategy and feedback artifacts, and the run-local decisions that preserve scoped child-workflow rejection alongside the new direct strict-child success case.
+
+What I changed
+
+I added `test_sdk_step_rejects_worklist_scoped_strict_child_workflow_steps` in [tests/unit/test_sdk_facade.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/tests/unit/test_sdk_facade.py:449) so the same changed preflight path now has explicit coverage for preserved worklist-scoped rejection. I updated [test_strategy.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/below-is-the-revised-sdk-spec-tightened-for-impl-25f82de9/runs/run-20260507T145702Z-0c706033/artifacts/test/phases/close-remaining-sdk-runtime-gaps/test_strategy.md:1), appended the test-phase summary in [feedback.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/below-is-the-revised-sdk-spec-tightened-for-impl-25f82de9/runs/run-20260507T145702Z-0c706033/artifacts/test/phases/close-remaining-sdk-runtime-gaps/feedback.md:1), and recorded the non-obvious coverage decision in [decisions.txt](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/below-is-the-revised-sdk-spec-tightened-for-impl-25f82de9/runs/run-20260507T145702Z-0c706033/decisions.txt:10).
+
+Key findings / decisions
+
+The missing preserved-behavior gap from TST-001 is now covered directly. Validation passed for both the narrowed SDK subset and the full requested slice:
+` .venv/bin/python -m pytest -q tests/unit/test_sdk_facade.py -k 'strict_child_workflow or branch_group or worklist_scoped'`
+` .venv/bin/python -m pytest -q tests/unit/test_primitives_and_stores.py tests/contract/test_engine_contracts.py tests/unit/test_sdk_facade.py`
+Final full-slice result: `278 passed`.
+
+Open issues / next step
+
+No test-scope blocker remains for this phase.
+
+<loop-control>
+{"schema":"docloop.loop_control/v1","kind":"promise","promise":"COMPLETE"}
+</loop-control>

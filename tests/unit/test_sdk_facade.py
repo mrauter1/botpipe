@@ -448,6 +448,21 @@ def test_sdk_step_rejects_unresolved_strict_child_workflow_steps(tmp_path: Path)
         )
 
 
+def test_sdk_step_rejects_worklist_scoped_strict_child_workflow_steps(tmp_path: Path) -> None:
+    class ChildWorkflow(simple.Workflow):
+        @simple.python_step(routes={"done": FINISH})
+        def capture(_ctx):
+            return Event("done")
+
+    client = _sdk_client(tmp_path, ScriptedLLMProvider())
+
+    with pytest.raises(SDKExecutionError, match="worklist-scoped"):
+        client.step(
+            ChildWorkflowStep(name="launch", workflow=ChildWorkflow, scope="items"),
+            "Run the child workflow.",
+        )
+
+
 def test_sdk_step_rejects_branch_group_declarations(tmp_path: Path) -> None:
     client = _sdk_client(tmp_path, ScriptedLLMProvider())
 
