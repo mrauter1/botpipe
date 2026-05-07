@@ -1,1 +1,5 @@
-{}
+{
+  "material_gaps_found": true,
+  "summary": "Runtime behavior matches the requested ctx.message/ctx.input contract, but one stale contract test still asserts the removed undeclared ctx.input.message alias and fails in the live workspace.",
+  "revised_request_path": "/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/standalone-implementation-spec-ctx-prompt-bindin-edf74165/runs/run-20260507T132940Z-5d96f5de/artifacts/audit/revised_request.md"
+}
