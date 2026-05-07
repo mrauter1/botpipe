@@ -14,3 +14,7 @@
 {"ts": "2026-05-07T20:03:34.677605+00:00", "run_id": "run-20260507T194557Z-2f9c2de5", "seq": 14, "event_type": "phase_finished", "pair": "implement", "phase": "producer", "cycle": 1, "attempt": 1, "empty_output": false, "phase_id": "unblock-shared-suite"}
 {"ts": "2026-05-07T20:04:58.545317+00:00", "run_id": "run-20260507T194557Z-2f9c2de5", "seq": 15, "event_type": "phase_finished", "pair": "implement", "phase": "verifier", "cycle": 1, "attempt": 1, "empty_output": false, "phase_id": "unblock-shared-suite"}
 {"ts": "2026-05-07T20:04:58.668560+00:00", "run_id": "run-20260507T194557Z-2f9c2de5", "seq": 16, "event_type": "pair_completed", "pair": "implement", "cycle": 1, "attempt": 1, "phase_id": "unblock-shared-suite"}
+{"ts": "2026-05-07T20:04:58.849905+00:00", "run_id": "run-20260507T194557Z-2f9c2de5", "seq": 17, "event_type": "phase_completed", "pair": "implement", "phase_id": "unblock-shared-suite", "phase_mode": "single"}
+{"ts": "2026-05-07T20:04:58.851840+00:00", "run_id": "run-20260507T194557Z-2f9c2de5", "seq": 18, "event_type": "phase_started", "phase_id": "remove-misowned-workflow-suites", "phase_mode": "single"}
+{"ts": "2026-05-07T20:04:58.852705+00:00", "run_id": "run-20260507T194557Z-2f9c2de5", "seq": 19, "event_type": "pair_started", "pair": "implement", "phase_id": "remove-misowned-workflow-suites"}
+{"ts": "2026-05-07T20:04:58.852783+00:00", "run_id": "run-20260507T194557Z-2f9c2de5", "seq": 20, "event_type": "cycle_started", "pair": "implement", "cycle": 1, "attempt": 1, "phase_id": "remove-misowned-workflow-suites"}
