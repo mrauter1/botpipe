@@ -132,6 +132,56 @@ def test_fan_in_context_exposes_metadata_and_branch_execution_ids(tmp_path: Path
         _ = parent.fan_in
 
 
+def test_branch_and_fan_in_contexts_preserve_parent_request_snapshot(tmp_path: Path) -> None:
+    task_folder = tmp_path / "task"
+    workflow_folder = task_folder / "wf_example"
+    run_folder = workflow_folder / "runs" / "run-1"
+    package_folder = tmp_path / "package"
+    run_folder.mkdir(parents=True)
+    package_folder.mkdir(parents=True)
+    (task_folder / "request.md").write_text("Task request\n", encoding="utf-8")
+    (run_folder / "request.md").write_text("Branch-safe request\n", encoding="utf-8")
+
+    parent = Context(
+        task_id="task-1",
+        run_id="run-1",
+        workflow_name="example",
+        task_folder=task_folder,
+        workflow_folder=workflow_folder,
+        run_folder=run_folder,
+        package_folder=package_folder,
+        state=_State(),
+        session_store=InMemorySessionStore(),
+    )
+    branch = create_branch_context(
+        parent,
+        step_name="assess",
+        branch=BranchMetadata(name="security", index=0, group="reviews", input={}, count=1),
+        session_store=BranchSessionStoreView(parent._session_store, namespace="reviews.security"),
+    )
+    fan_in = create_fan_in_context(
+        parent,
+        step_name="combine",
+        fan_in=FanInMetadata(
+            results={"branches": []},
+            results_path=workflow_folder / "_branch_groups" / "reviews" / "results.json",
+            context_path=workflow_folder / "_branch_groups" / "reviews" / "context.md",
+            context_text="# Reviews",
+            branch_count=1,
+            completed_count=1,
+            failed_count=0,
+            needs_input_count=0,
+            cancelled_count=0,
+        ),
+        session_store=parent._session_store,
+    )
+
+    for child in (branch, fan_in):
+        assert child.request_file == parent.request_file
+        assert child.request.task_file == parent.request.task_file
+        assert child.message == "Branch-safe request"
+
+
 def test_branch_session_store_view_keeps_activation_local_to_branch(tmp_path: Path) -> None:
     parent = _make_context(tmp_path)
     parent_binding = parent.open_session("main")

@@ -163,6 +163,8 @@ def _create_child_context(
         workflow_folder=parent.workflow_folder,
         run_folder=parent.run_folder,
         package_folder=parent.package_folder,
+        request_file=parent.request_file,
+        task_request_file=parent.request.task_file,
         state=parent.state,
         state_cell=parent.state_cell,
         session_store=session_store,

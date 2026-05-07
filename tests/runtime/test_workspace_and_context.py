@@ -635,6 +635,91 @@ def test_resume_ignores_explicit_workflow_param_override_for_existing_run(tmp_pa
     assert resumed_meta["workflow_params"] == {"mode": "strict"}
 
 
+def test_resume_context_message_uses_run_local_request_snapshot_not_mutated_task_request(tmp_path: Path) -> None:
+    _write_pause_resume_workflow_package(tmp_path, "resume_message_demo", "ResumeMessageWorkflow")
+    provider = ScriptedLLMProvider(
+        llm_turns=[
+            lambda request: (
+                request.artifacts.context_dump.write_text(
+                    json.dumps(
+                        {
+                            "message": request.context.message,
+                            "request_file": str(request.context.request_file),
+                            "task_request_file": None
+                            if request.context.request.task_file is None
+                            else str(request.context.request.task_file),
+                            "answer": request.context.answer,
+                        }
+                    ),
+                ),
+                Outcome(raw_output="Need answer", tag="question", question="What value?"),
+            )[1],
+            lambda request: (
+                request.artifacts.context_dump.write_text(
+                    json.dumps(
+                        {
+                            "message": request.context.message,
+                            "request_file": str(request.context.request_file),
+                            "task_request_file": None
+                            if request.context.request.task_file is None
+                            else str(request.context.request.task_file),
+                            "answer": request.context.answer,
+                        }
+                    ),
+                ),
+                Outcome(raw_output="Answered", tag="answered", payload={"answer": request.context.answer}),
+            )[1],
+        ]
+    )
+
+    paused = run_workflow_package(
+        "resume_message_demo",
+        provider=provider,
+        options=_runner_options(
+            tmp_path,
+            task_id="task-message",
+            message="Original request",
+        ),
+    )
+
+    workflow_dir = tmp_path / ".autoloop" / "tasks" / "task-message" / "wf_resume_message_demo"
+    task_dir = tmp_path / ".autoloop" / "tasks" / "task-message"
+    run_dir = next((workflow_dir / "runs").iterdir())
+    paused_context = json.loads((run_dir / "context.json").read_text(encoding="utf-8"))
+
+    (task_dir / "request.md").write_text("Mutated task request\n", encoding="utf-8")
+
+    resumed = run_workflow_package(
+        "resume_message_demo",
+        provider=provider,
+        options=_runner_options(
+            tmp_path,
+            task_id="task-message",
+            run_id=run_dir.name,
+            resume=True,
+            answer="42",
+        ),
+    )
+
+    resumed_context = json.loads((run_dir / "context.json").read_text(encoding="utf-8"))
+
+    assert paused.terminal == "AWAIT_INPUT"
+    assert paused_context == {
+        "message": "Original request",
+        "request_file": str(run_dir / "request.md"),
+        "task_request_file": str(task_dir / "request.md"),
+        "answer": None,
+    }
+    assert resumed.terminal == "FINISH"
+    assert resumed_context == {
+        "message": "Original request",
+        "request_file": str(run_dir / "request.md"),
+        "task_request_file": str(task_dir / "request.md"),
+        "answer": "42",
+    }
+    assert (run_dir / "request.md").read_text(encoding="utf-8") == "Original request\n"
+
+
 def test_create_run_persists_workflow_input_and_resolve_run_workflow_input_handles_fresh_and_stored_paths(
     tmp_path: Path,
 ) -> None:

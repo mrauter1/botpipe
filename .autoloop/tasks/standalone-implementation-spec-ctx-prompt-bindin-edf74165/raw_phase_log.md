@@ -100,3 +100,64 @@ phase_mode=single
 phase_ids=ctx-context-surface,ctx-rendering-and-validation,ctx-regression-coverage-and-docs
 explicit=True
 current_phase_index=0
+
+
+---
+run_id=run-20260507T122922Z-e6e948b6 | entry=session_turn | pair=implement | phase=producer | cycle=1 | attempt=1 | thread_id=019e026e-4b76-7302-be59-9ce6e8535383
+---
+provider=codex
+mode=start
+template=/home/rauter/.local/share/pipx/venvs/autoloop/lib/python3.12/site-packages/autoloop/templates/implement_producer.md
+session_id=019e026e-4b76-7302-be59-9ce6e8535383
+
+
+---
+run_id=run-20260507T122922Z-e6e948b6 | entry=phase_output | pair=implement | phase=producer | process=codex-agent | cycle=1 | attempt=1 | thread_id=019e026e-4b76-7302-be59-9ce6e8535383
+---
+I’m implementing the phase-scoped `ctx` context surface: first I’m reading the active phase artifacts and the current `Context`/runner/branch context code to pin down the existing construction paths before editing anything.
+
+The phase plan is aligned with the spec: this slice is confined to `Context`, shared placeholder policy, and propagation through runner plus branch/fan-in cloning. I’m checking every `Context(...)` construction path now so the request snapshot stays stable across fresh runs, resume, and cloned contexts.
+
+I’ve confirmed the core risk surface: `Context` is instantiated in the engine, not only in the filesystem runner, so request snapshot propagation has to be wired through both the runner and the engine’s resume/run step contexts. I’m reading the existing placeholder validation next so the new shared contract lands in the same shape the later prompt-rendering phase will consume.
+
+The runner doesn’t build the `Context` objects directly; it passes run folders into the engine, and the engine constructs the actual runtime contexts for fresh, resumed, and per-step execution. I’m threading `request_file` and `task_request_file` through those public engine entrypoints so the new `ctx.message` surface won’t silently fall back to task-level data on resume.
+
+I have the construction paths mapped. I’m editing the core context surface now: adding lazy request access on `Context`, then I’ll thread the explicit request paths through engine and runner creation so cloned and resumed contexts all read the same run snapshot.
+
+The core code path changes are in place. I’m adding focused tests now: one set for the direct `Context` API and branch/fan-in propagation, and one runner-level resume test to make sure a mutated task request never leaks into an existing run’s `ctx.message`.
+
+The code edits are staged; I’m running the smallest useful test slice first to catch constructor or propagation regressions before touching notes and decisions.
+
+The workspace doesn’t have a `pytest` executable on `PATH`. I’m checking the local test entrypoint next and will run the same slice through the project’s Python environment instead of assuming a global install.
+
+The first pass only exercised one selected node because of the way `pytest -k` interacted with the multi-file command. I’m rerunning the exact test nodes directly so each new regression check is actually covered.
+
+One broader regression test surfaced an unrelated existing limitation in nested synchronous `ctx.invoke_workflow(...)` execution under an active event loop. That isn’t on this phase’s critical path, so I’m narrowing back to the request-context regression surface and keeping the validated slice limited to the paths this change actually touched.
+
+I’ve confirmed the request-path wiring hits every engine context constructor and the runner entrypoints. I’m doing the final bookkeeping now: recording the non-obvious decisions for later turns and updating the phase implementation notes with the exact scope and validations.
+
+Scope considered
+
+Phase-local `ctx-context-surface` only: `Context` request/message API, request path propagation through engine/runner and branch/fan-in cloning, the shared `ctx` placeholder contract seed, and focused regression tests. I ignored unrelated dirty/untracked workspace files outside this slice.
+
+What I analyzed
+
+I traced every runtime `Context(...)` construction path through [autoloop/core/engine.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/autoloop/core/engine.py:188), [autoloop/runtime/runner.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/autoloop/runtime/runner.py:308), and [autoloop/core/branch_groups/context.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/autoloop/core/branch_groups/context.py:157), plus the workspace request snapshot behavior and existing resume tests.
+
+What I changed
+
+Added `RequestContext`, `ctx.request_file`, `ctx.request`, and lazy `ctx.message` on [autoloop/core/context.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/autoloop/core/context.py:36), with the spec’d UTF-8 read and `WorkflowExecutionError` on request snapshot read failure.
+
+Threaded `request_file` and `task_request_file` through root engine execution and resume paths in [autoloop/core/engine.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/autoloop/core/engine.py:188) and passed them from the filesystem runner in [autoloop/runtime/runner.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/autoloop/runtime/runner.py:308). Branch and fan-in child contexts now preserve the parent request snapshot in [autoloop/core/branch_groups/context.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/autoloop/core/branch_groups/context.py:157).
+
+Seeded the shared safe `ctx` contract in [autoloop/core/context_placeholders.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/autoloop/core/context_placeholders.py:1) and added focused tests in [tests/unit/test_primitives_and_stores.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/tests/unit/test_primitives_and_stores.py:42), [tests/unit/test_branch_group_context_sessions.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/tests/unit/test_branch_group_context_sessions.py:135), and [tests/runtime/test_workspace_and_context.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/tests/runtime/test_workspace_and_context.py:638). I also updated the phase notes and decisions artifacts.
+
+Key findings / decisions
+
+`Context` was not constructed in the runner itself, so preserving the run-local request snapshot required optional request-path plumbing on engine entrypoints, not just runner changes.
+
+Validated with `.venv/bin/python -m pytest`; the targeted slice passed: `19 passed in 0.92s`.
+
+Open issues / next step
+
+This phase does not yet wire `autoloop/core/context_placeholders.py` into prompt validation/rendering; later phases should consume that shared module instead of re-declaring `ctx.*` allowlists. A broader existing test around nested synchronous `ctx.invoke_workflow(...)` under an active event loop failed when I probed outside this phase’s scope, so I kept validation scoped to the request-context surfaces touched here.

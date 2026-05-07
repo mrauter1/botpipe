@@ -34,6 +34,23 @@ _CONTEXT_RUNTIMES: "WeakKeyDictionary[Context, _ContextRuntime]" = WeakKeyDictio
 
 
 @dataclass(frozen=True, slots=True)
+class RequestContext:
+    """Stable access to persisted request snapshots for one run."""
+
+    file: Path
+    task_file: Path | None = None
+
+    @property
+    def text(self) -> str:
+        try:
+            return self.file.read_text(encoding="utf-8").rstrip("\n")
+        except OSError as exc:
+            raise WorkflowExecutionError(
+                f"run request snapshot could not be read: {self.file}"
+            ) from exc
+
+
+@dataclass(frozen=True, slots=True)
 class ChildWorkflowResult(Generic[OutputT]):
     """Structured result returned by ``ctx.invoke_workflow(...)``."""
 
@@ -176,6 +193,8 @@ class Context:
         workflow_folder: Path,
         run_folder: Path,
         package_folder: Path,
+        request_file: Path | None = None,
+        task_request_file: Path | None = None,
         state: BaseModel,
         state_cell: StateCell | None = None,
         session_store: SessionStore,
@@ -213,6 +232,12 @@ class Context:
         self.workflow_folder = workflow_folder
         self.run_folder = run_folder
         self.package_folder = package_folder
+        self._request_file = Path(request_file) if request_file is not None else run_folder / "request.md"
+        if task_request_file is not None:
+            self._task_request_file = Path(task_request_file)
+        else:
+            candidate = task_folder / "request.md"
+            self._task_request_file = candidate if candidate.exists() else None
         self._state_cell = state_cell or StateCell(state)
         self._state = self._state_cell.value
         self._session_store = session_store
@@ -278,6 +303,18 @@ class Context:
     @property
     def workflow_params(self) -> dict[str, Any]:
         return dict(self._workflow_params)
+
+    @property
+    def request_file(self) -> Path:
+        return self._request_file
+
+    @property
+    def request(self) -> RequestContext:
+        return RequestContext(file=self._request_file, task_file=self._task_request_file)
+
+    @property
+    def message(self) -> str:
+        return self.request.text
 
     @property
     def input(self) -> BaseModel | None:
