@@ -1145,3 +1145,54 @@ Open issues / next step
 
 - No blocking test gaps remain for this phase.
 - The existing warning in `tests/unit/test_provider_boundary_core.py` is unchanged and was not expanded here.
+
+
+---
+run_id=run-20260507T203124Z-562ebe8e | entry=session_turn | pair=test | phase=verifier | cycle=1 | attempt=1 | thread_id=019e0429-5d80-7291-a56f-2b4a169ba744
+---
+provider=codex
+mode=resume
+template=/home/rauter/.local/share/pipx/venvs/autoloop/lib/python3.12/site-packages/autoloop/templates/test_verifier.md
+session_id=019e0429-5d80-7291-a56f-2b4a169ba744
+
+
+---
+run_id=run-20260507T203124Z-562ebe8e | entry=phase_output | pair=test | phase=verifier | process=codex-agent | cycle=1 | attempt=1 | thread_id=019e0429-5d80-7291-a56f-2b4a169ba744
+---
+I’m auditing the added regression coverage and the test-phase artifacts now, starting with the criteria file, strategy, and the one new source-scan test that was added on top of the retained suite.
+
+I found one small coverage blind spot in the new structural guard: it catches `from ... import ...` but not a plain dotted `import ... as ...` of the same forbidden modules. I’m recording that as a non-blocking audit suggestion and otherwise marking the phase criteria complete.
+
+Scope considered
+
+- The retained `tests/` cleanup behaviors in the active phase contract.
+- The added regression guard in `tests/unit/stdlib/test_authoring_helpers.py`.
+- The test-phase artifacts `test_strategy.md` and `feedback.md`, plus the run-local decisions ledger.
+
+What I analyzed
+
+- The accepted scope and decisions for private-helper imports, forbidden workflow-package `params` dependencies, and stale assertion realignment.
+- The updated retained test files, especially the new AST-based source-scan guard.
+- The documented validation result for `.venv/bin/python -m pytest tests/strictness/test_no_compat.py tests/contract tests/unit -q`.
+
+What I reviewed
+
+- Coverage of the structural ownership requirement around `autoloop.workflows.*.params`.
+- Coverage of the maintained runtime semantics for `question` route writes and `WorkflowInputView.message`.
+- Flake risk and determinism for the added source-scan test and the overall retained target.
+- The completeness and clarity of the test-phase strategy/feedback artifacts.
+
+Key findings / decisions
+
+- No blocking findings.
+- One non-blocking coverage suggestion recorded as `TST-001`: the new AST guard only rejects `ast.ImportFrom`, so it could be broadened later to also reject matching dotted `ast.Import` aliases.
+- I updated `criteria.md` to reflect that the phase satisfies the audit criteria and appended the non-blocking note to `feedback.md`.
+
+Open issues / next step
+
+- No audit issue blocks completion of this phase.
+- Optional follow-up: widen the AST source guard to cover both `from ... import ...` and `import ... as ...` forms of the forbidden workflow-package `params` modules.
+
+<loop-control>
+{"schema":"docloop.loop_control/v1","kind":"promise","promise":"COMPLETE"}
+</loop-control>
