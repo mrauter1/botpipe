@@ -257,3 +257,48 @@ Validation rerun passed:
 Open issues / next step
 
 This phase’s source changes are ready for re-review. Later phases still need to consume the shared helper from prompt validation/runtime rendering code, but the helper now has the full path-shape contract they can rely on.
+
+
+---
+run_id=run-20260507T122922Z-e6e948b6 | entry=session_turn | pair=implement | phase=verifier | cycle=2 | attempt=1 | thread_id=019e026e-4b76-7302-be59-9ce6e8535383
+---
+provider=codex
+mode=resume
+template=/home/rauter/.local/share/pipx/venvs/autoloop/lib/python3.12/site-packages/autoloop/templates/implement_verifier.md
+session_id=019e026e-4b76-7302-be59-9ce6e8535383
+
+
+---
+run_id=run-20260507T122922Z-e6e948b6 | entry=phase_output | pair=implement | phase=verifier | process=codex-agent | cycle=2 | attempt=1 | thread_id=019e026e-4b76-7302-be59-9ce6e8535383
+---
+I’m re-reviewing the phase after the helper fix, starting with the updated `ctx` contract module and the focused tests that exercise the reviewer’s previously blocked cases.
+
+The helper now rejects the reviewer’s previously missed path shapes. I’m rerunning the focused request-context and helper-contract tests once from the verifier side, then I’ll clear the artifacts if nothing else surfaces.
+
+Scope considered
+
+Phase-local re-review only: the `Context` request/message surface, request-path propagation, and the shared `ctx` placeholder contract helper that previously carried `IMP-001`.
+
+What I analyzed
+
+I re-read the current implementation, the reviewer artifact state, and the focused tests added around `validate_safe_ctx_reference(...)`. I also reran the key verifier slice covering helper shape validation, direct context request access, branch/fan-in propagation, and resume stability.
+
+What I reviewed
+
+The blocking gap is fixed. `validate_safe_ctx_reference(...)` now enforces the full path-shape contract instead of only checking the `ctx` root category, and the regression cases called out in `IMP-001` are covered in tests. Verifier rerun:
+- `tests/unit/test_primitives_and_stores.py::test_validate_safe_ctx_reference_rejects_unsafe_segments`
+- `tests/unit/test_primitives_and_stores.py::test_context_request_surface_reads_run_snapshot_and_task_request_file`
+- `tests/unit/test_branch_group_context_sessions.py::test_branch_and_fan_in_contexts_preserve_parent_request_snapshot`
+- `tests/runtime/test_workspace_and_context.py::test_resume_context_message_uses_run_local_request_snapshot_not_mutated_task_request`
+
+Key findings / decisions
+
+No remaining findings in this phase slice. I updated `criteria.md` to fully checked and appended a re-review note in `feedback.md` marking `IMP-001` resolved.
+
+Open issues / next step
+
+This phase is review-complete. Later phases still need to consume the shared helper from prompt validation and rendering code, but that is outside this phase’s scoped acceptance criteria.
+
+<loop-control>
+{"schema":"docloop.loop_control/v1","kind":"promise","promise":"COMPLETE"}
+</loop-control>
