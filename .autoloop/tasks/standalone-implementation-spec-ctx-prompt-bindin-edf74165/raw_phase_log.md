@@ -358,3 +358,60 @@ Result: `6 passed in 0.58s`.
 Open issues / next step
 
 This phase’s request-context tests are in place and documented. The remaining `ctx.*` prompt-rendering, artifact-path rejection, and compile-time validation coverage belongs to later phases that actually wire those behaviors.
+
+
+---
+run_id=run-20260507T122922Z-e6e948b6 | entry=session_turn | pair=test | phase=verifier | cycle=1 | attempt=1 | thread_id=019e026e-4b76-7302-be59-9ce6e8535383
+---
+provider=codex
+mode=resume
+template=/home/rauter/.local/share/pipx/venvs/autoloop/lib/python3.12/site-packages/autoloop/templates/test_verifier.md
+session_id=019e026e-4b76-7302-be59-9ce6e8535383
+
+
+---
+run_id=run-20260507T122922Z-e6e948b6 | entry=phase_output | pair=test | phase=verifier | process=codex-agent | cycle=1 | attempt=1 | thread_id=019e026e-4b76-7302-be59-9ce6e8535383
+---
+I’m auditing the phase-local tests against the request-context contract now, starting with the new edge-case coverage and the test strategy mapping before I mark criteria or write any audit findings.
+
+The coverage map lines up with the changed behavior. I’m rerunning the exact focused slice the test author recorded so I can confirm the audit on the same request-context surfaces rather than only inspecting the files.
+
+The phase-local test slice passes cleanly and the missing `task_file is None` edge is now explicitly covered. I’m marking the audit artifacts complete with no findings.
+
+Scope considered
+
+Phase-local test audit only: direct `Context` request/message access, the optional `ctx.request.task_file` behavior, branch/fan-in propagation, resume stability, and the shared `ctx` helper path-shape checks documented in the active test strategy.
+
+What I analyzed
+
+I reviewed the updated test strategy, the focused request-context tests in `tests/unit/test_primitives_and_stores.py`, the branch/fan-in propagation test, and the resume-stability runtime test. I also checked that the strategy’s stated known gaps stay within the phase’s explicit out-of-scope boundaries.
+
+What I reviewed
+
+The test author covered the material request-context regression surfaces for this phase:
+- happy path for run-local request access
+- missing run snapshot failure
+- absent task-level request file edge case
+- branch/fan-in propagation
+- resume stability against mutated task request metadata
+- shared helper rejection of unsupported `ctx.*` shapes
+
+Verifier rerun matched the strategy slice and passed:
+- `tests/unit/test_primitives_and_stores.py::test_context_request_surface_reads_run_snapshot_and_task_request_file`
+- `tests/unit/test_primitives_and_stores.py::test_context_request_surface_leaves_task_request_file_unset_when_absent`
+- `tests/unit/test_primitives_and_stores.py::test_context_message_raises_when_run_request_snapshot_is_missing`
+- `tests/unit/test_primitives_and_stores.py::test_validate_safe_ctx_reference_rejects_unsafe_segments`
+- `tests/unit/test_branch_group_context_sessions.py::test_branch_and_fan_in_contexts_preserve_parent_request_snapshot`
+- `tests/runtime/test_workspace_and_context.py::test_resume_context_message_uses_run_local_request_snapshot_not_mutated_task_request`
+
+Key findings / decisions
+
+No audit findings. The added `task_file is None` case closes the main phase-local edge that was still worth guarding, and the tests remain deterministic and filesystem-local under `tmp_path`.
+
+Open issues / next step
+
+This test phase is audit-complete. Prompt rendering, artifact-path rejection, and compile-time placeholder validation should be audited in the later phases that actually introduce those behaviors.
+
+<loop-control>
+{"schema":"docloop.loop_control/v1","kind":"promise","promise":"COMPLETE"}
+</loop-control>
