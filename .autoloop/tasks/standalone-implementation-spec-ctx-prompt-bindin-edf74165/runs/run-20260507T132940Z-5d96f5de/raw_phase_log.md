@@ -350,3 +350,58 @@ The remaining breakage was only in stale tests, not in a new source-side regress
 Open issues / next step
 
 No known open implementation issues in this phase-local scope. The next step is verifier review against the updated workspace and artifacts.
+
+
+---
+run_id=run-20260507T132940Z-5d96f5de | entry=session_turn | pair=implement | phase=verifier | cycle=2 | attempt=1 | thread_id=019e02a8-3460-7f63-a341-0ead9bf7f8a2
+---
+provider=codex
+mode=resume
+template=/home/rauter/.local/share/pipx/venvs/autoloop/lib/python3.12/site-packages/autoloop/templates/implement_verifier.md
+session_id=019e02a8-3460-7f63-a341-0ead9bf7f8a2
+
+
+---
+run_id=run-20260507T132940Z-5d96f5de | entry=phase_output | pair=implement | phase=verifier | process=codex-agent | cycle=2 | attempt=1 | thread_id=019e02a8-3460-7f63-a341-0ead9bf7f8a2
+---
+I’m rechecking the request-relevant source and the reviewer artifacts against the updated workspace, then I’ll either clear the criteria or record any remaining blocking mismatch with the contract.
+
+The prior blocker was specifically about synthetic `ctx.input.message`; I’m verifying the current source now, including the runtime placeholder path and the root/clone request-file handling that could still regress the snapshot contract.
+
+The old alias is gone from the primary surfaces. I’m doing one more repo-scope check for any leftover `ctx.input.message` special case and rerunning the focused regressions myself before updating the review artifacts.
+
+The focused grep still finds `input.message` references, but at this point they may be intentional declared-field or legacy-compatibility coverage. I’m verifying the remaining test output and then spot-checking the runtime references before I clear the blocker.
+
+The remaining issue is no longer the runtime implementation; it’s the last stale runtime regression test. I’m updating the review artifacts to clear the old blocker, record the new one precisely, and mark the criteria accordingly.
+
+Scope considered
+
+The updated `ctx.message` / `ctx.input` implementation, the request-snapshot root/clone paths, the focused regression tests named in the phase notes, and the active review artifacts in the phase directory.
+
+What I analyzed
+
+I re-read the current `WorkflowInputView`, `Context.input`, discovery validation, runtime `ctx.*` placeholder resolution, compiler handling of explicit `Input.message`, and the runner/engine/branch clone request-file wiring. I also checked the run-local decisions and implementation notes to verify the intended compatibility boundary.
+
+What I reviewed
+
+The prior blocker is fixed in source: undeclared `ctx.input.message` is no longer preserved in `autoloop/core/context.py`, `autoloop/core/discovery.py`, or runtime `ctx.*` resolution. I reran the focused validation set myself:
+
+- `tests/unit/test_primitives_and_stores.py tests/unit/test_branch_group_context_sessions.py tests/unit/test_simple_surface.py tests/unit/test_validation.py`: `275 passed`
+- `tests/contract/test_engine_contracts.py` targeted subset: `7 passed`
+- `tests/runtime/test_workspace_and_context.py -k "resume_context_message_uses_run_local_request_snapshot_not_mutated_task_request or resume_context_preserves_run_message_and_raw_input_fields"`: `1 failed, 1 passed`
+
+Key findings / decisions
+
+- One blocking finding remains, recorded as `IMP-002` in `feedback.md`.
+- The failure is in stale regression coverage, not the runtime implementation: [tests/runtime/test_workspace_and_context.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/tests/runtime/test_workspace_and_context.py:736) and [tests/runtime/test_workspace_and_context.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/tests/runtime/test_workspace_and_context.py:752) still read undeclared `request.context.input.message` for a workflow whose input only declares `topic`.
+- I updated the review artifacts accordingly:
+  - [criteria.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/standalone-implementation-spec-ctx-prompt-bindin-edf74165/runs/run-20260507T132940Z-5d96f5de/artifacts/implement/phases/finish-ctx-request-input-separation/criteria.md:1)
+  - [feedback.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/standalone-implementation-spec-ctx-prompt-bindin-edf74165/runs/run-20260507T132940Z-5d96f5de/artifacts/implement/phases/finish-ctx-request-input-separation/feedback.md:1)
+
+Open issues / next step
+
+Update `test_resume_context_preserves_run_message_and_raw_input_fields` to assert request text via `ctx.message` and prove the non-alias boundary for child input, then rerun the same focused runtime subset and re-review.
+
+<loop-control>
+{"schema":"docloop.loop_control/v1","kind":"promise","promise":"INCOMPLETE"}
+</loop-control>
