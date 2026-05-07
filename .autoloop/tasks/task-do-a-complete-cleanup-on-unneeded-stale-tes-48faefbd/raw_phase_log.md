@@ -545,3 +545,63 @@ Open issues / next step
 <loop-control>
 {"schema":"docloop.loop_control/v1","kind":"promise","promise":"INCOMPLETE"}
 </loop-control>
+
+
+---
+run_id=run-20260507T194557Z-2f9c2de5 | entry=session_turn | pair=implement | phase=producer | cycle=2 | attempt=1 | thread_id=019e0411-607d-7212-a741-6d5d51017949
+---
+provider=codex
+mode=resume
+template=/home/rauter/.local/share/pipx/venvs/autoloop/lib/python3.12/site-packages/autoloop/templates/implement_producer.md
+session_id=019e0411-607d-7212-a741-6d5d51017949
+
+
+---
+run_id=run-20260507T194557Z-2f9c2de5 | entry=phase_output | pair=implement | phase=producer | process=codex-agent | cycle=2 | attempt=1 | thread_id=019e0411-607d-7212-a741-6d5d51017949
+---
+The reviewer is right about the wrapper-only split. I’m replacing that with a real source split now: generate shared helper modules from the non-test top-level code, move the actual retained test definitions into the new domain files, remove the collection ignore, and retire the two monolith test files.
+
+The source-level split is in place. I’m validating collection and checking the generated helper modules now so I can catch any missed imports, dropped helper definitions, or stale wiring before I update the phase notes.
+
+Collection is still running in the phase venv. I’m waiting for that result before I touch the notes, because this refactor only counts if the new source-level modules collect cleanly without the ignored monolith files.
+
+The real split is validated. I’m updating the phase notes and shared decisions now so the run record matches the final structure instead of the earlier wrapper-based attempt.
+
+Scope considered
+
+- Active phase `split-retained-monoliths` only.
+- `tests/` plus the phase-local `implementation_notes.md` and `decisions.txt`.
+
+What I analyzed
+
+- Reviewer finding `IMP-001` in [feedback.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/task-do-a-complete-cleanup-on-unneeded-stale-tes-48faefbd/runs/run-20260507T194557Z-2f9c2de5/artifacts/implement/phases/split-retained-monoliths/feedback.md).
+- The current split layout under `tests/contract/engine/` and `tests/unit/{stdlib,optimizer,extensions}/`.
+- The original monolith sources to separate non-test scaffolding from retained `test_*` definitions.
+
+What I changed
+
+- Replaced the wrapper-only approach with a real source split.
+- Added shared helper modules:
+  - [tests/contract/engine/_shared.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/tests/contract/engine/_shared.py)
+  - [tests/unit/_stdlib_and_extensions_shared.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/tests/unit/_stdlib_and_extensions_shared.py)
+- Moved the retained `test_*` definitions into the owned split files under:
+  - [tests/contract/engine](/home/rauter/autoloop_v3_bkp/autoloop_v3/tests/contract/engine)
+  - [tests/unit/stdlib](/home/rauter/autoloop_v3_bkp/autoloop_v3/tests/unit/stdlib)
+  - [tests/unit/optimizer](/home/rauter/autoloop_v3_bkp/autoloop_v3/tests/unit/optimizer)
+  - [tests/unit/extensions](/home/rauter/autoloop_v3_bkp/autoloop_v3/tests/unit/extensions)
+- Removed the old monolith entrypoints:
+  - `tests/contract/test_engine_contracts.py`
+  - `tests/unit/test_stdlib_and_extensions.py`
+- Removed the temporary `collect_ignore` workaround from [tests/conftest.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/tests/conftest.py).
+- Updated [implementation_notes.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/task-do-a-complete-cleanup-on-unneeded-stale-tes-48faefbd/runs/run-20260507T194557Z-2f9c2de5/artifacts/implement/phases/split-retained-monoliths/implementation_notes.md) and appended the superseding decision in [decisions.txt](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/task-do-a-complete-cleanup-on-unneeded-stale-tes-48faefbd/runs/run-20260507T194557Z-2f9c2de5/decisions.txt).
+
+Key findings / decisions
+
+- The reviewer’s complaint was valid: ignored monoliths plus wrapper modules did not satisfy the split objective.
+- The corrected structure keeps helper sharing mechanical by centralizing only non-test top-level scaffolding in `_shared.py` modules.
+- Validation passed: `749 tests collected` with `.venv_phase/bin/pytest --collect-only tests/contract tests/unit -q`.
+
+Open issues / next step
+
+- I did not run full test execution, only collection.
+- The next step is verifier review against the updated source-level split.
