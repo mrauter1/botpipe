@@ -496,3 +496,52 @@ Open issues / next step
 
 - I did not run the full test execution matrix; only collection was validated for this phase.
 - The original monolith files are now non-collected sources, not deleted files. If you want a later cleanup pass to physically rename or retire them, that should be a separate, higher-risk follow-up.
+
+
+---
+run_id=run-20260507T194557Z-2f9c2de5 | entry=session_turn | pair=implement | phase=verifier | cycle=1 | attempt=1 | thread_id=019e0411-607d-7212-a741-6d5d51017949
+---
+provider=codex
+mode=resume
+template=/home/rauter/.local/share/pipx/venvs/autoloop/lib/python3.12/site-packages/autoloop/templates/implement_verifier.md
+session_id=019e0411-607d-7212-a741-6d5d51017949
+
+
+---
+run_id=run-20260507T194557Z-2f9c2de5 | entry=phase_output | pair=implement | phase=verifier | process=codex-agent | cycle=1 | attempt=1 | thread_id=019e0411-607d-7212-a741-6d5d51017949
+---
+I’m reviewing the active phase artifacts and the implemented test split now. First I’m checking the success criteria and the actual collection wiring against the stated objective, then I’ll record any blocking gaps in the phase feedback.
+
+I found one material gap that affects both intent fidelity and future safety. I’m recording it in the review artifacts now and leaving the phase incomplete rather than marking the split accepted.
+
+Scope considered
+
+- Active phase only: `split-retained-monoliths`.
+- Reviewed the implemented split wiring in `tests/` and updated only the active review artifacts in the phase directory.
+
+What I analyzed
+
+- Phase contract, acceptance criteria, implementation notes, and run decisions.
+- The implemented collection strategy around `tests/conftest.py`.
+- The relationship between the new `tests/contract/engine/*` and `tests/unit/{stdlib,optimizer,extensions}/*` modules and the original monolith files.
+
+What I reviewed
+
+- Whether the retained suites were actually split into ownership-aligned modules.
+- Whether the new structure preserved collection while keeping maintenance ownership clear.
+- Whether the implementation introduced avoidable indirection or future coverage risk.
+
+Key findings / decisions
+
+- Recorded one blocking finding in `feedback.md`:
+  - `IMP-001`: the change does not actually split the retained monoliths; it adds import-only wrapper modules and suppresses direct collection of the real source files with `collect_ignore`.
+- This materially misses the phase objective and introduces a concrete regression risk: future retained tests added to the real monolith files will be silently skipped by pytest because those files are ignored.
+- Left all criteria unchecked in `criteria.md` because the phase is not complete against the accepted objective.
+
+Open issues / next step
+
+- The implementation needs a real source-level split: move retained test definitions into the new domain modules, keep only genuinely shared helpers in helper modules, and retire or rename the original monolith files so pytest does not rely on `collect_ignore`.
+
+<loop-control>
+{"schema":"docloop.loop_control/v1","kind":"promise","promise":"INCOMPLETE"}
+</loop-control>
