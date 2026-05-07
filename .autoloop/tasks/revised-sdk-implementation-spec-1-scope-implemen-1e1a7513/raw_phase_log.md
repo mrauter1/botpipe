@@ -364,3 +364,53 @@ Open issues / next step
 <loop-control>
 {"schema":"docloop.loop_control/v1","kind":"promise","promise":"COMPLETE"}
 </loop-control>
+
+
+---
+run_id=run-20260507T184603Z-adb7c56b | entry=session_turn | pair=test | phase=verifier | cycle=1 | attempt=1 | thread_id=019e03c8-27a8-7391-8ff1-6dc74646ef3d
+---
+provider=codex
+mode=resume
+template=/home/rauter/.local/share/pipx/venvs/autoloop/lib/python3.12/site-packages/autoloop/templates/test_verifier.md
+session_id=019e03c8-27a8-7391-8ff1-6dc74646ef3d
+
+
+---
+run_id=run-20260507T184603Z-adb7c56b | entry=phase_output | pair=test | phase=verifier | process=codex-agent | cycle=1 | attempt=1 | thread_id=019e03c8-27a8-7391-8ff1-6dc74646ef3d
+---
+I’m auditing the phase-local tests against the acceptance criteria and the active strategy now. I’ll verify the added regression guards first, then update the audit artifacts with either targeted findings or an explicit no-findings result.
+
+The added tests hit the right risk points for this phase: import/export coverage, `ResultArtifact` metadata and helpers, failure-path parsing behavior, and a real regression guard for `StepResult.value`. I’m marking the audit criteria complete and recording an explicit no-findings result.
+
+Scope considered
+
+- Phase-local audit of the SDK surface/result-model tests only.
+- Reviewed the updated repository tests plus the active test strategy, feedback artifact, and run-local decisions ledger.
+
+What I analyzed
+
+- `tests/unit/test_simple_surface.py` for requested root-export coverage.
+- `tests/unit/test_sdk_facade.py` for `ResultArtifact` metadata/helper coverage, failure-path coverage, and `StepResult.value` regression protection.
+- The phase strategy’s mapping between intended behavior and actual test coverage.
+
+What I reviewed
+
+- Whether AC-1 is covered by import/export assertions and `ResultArtifact` helper tests.
+- Whether AC-2 is covered by a test that would fail if `StepResult.value` mirrored `workflow_result.output` again.
+- Whether the added tests are deterministic and avoid flaky runtime assumptions.
+- Whether any test expectation silently normalizes an unconfirmed regression or reduced behavior.
+
+Key findings / decisions
+
+- No blocking or non-blocking audit findings.
+- The new stubbed `WorkflowResult.output` test is an appropriate deterministic guard for `StepResult.value`; it closes the main regression hole left by happy-path-only assertions.
+- I updated the audit criteria to complete and recorded an explicit no-findings audit result in the phase feedback artifact.
+
+Open issues / next step
+
+- No test-surface issues to send back in this phase.
+- Full pytest execution is still environment-limited in this shell, but the audited test design itself is sound for the scoped behavior.
+
+<loop-control>
+{"schema":"docloop.loop_control/v1","kind":"promise","promise":"COMPLETE"}
+</loop-control>
