@@ -985,3 +985,105 @@ No phase-local test issues remain. The only remaining gap is breadth, not correc
 <loop-control>
 {"schema":"docloop.loop_control/v1","kind":"promise","promise":"COMPLETE"}
 </loop-control>
+
+
+---
+run_id=run-20260507T184603Z-adb7c56b | entry=session_turn | pair=implement | phase=producer | cycle=1 | attempt=1 | thread_id=019e03e8-a651-7bb3-9d8d-639ed65542e6
+---
+provider=codex
+mode=start
+template=/home/rauter/.local/share/pipx/venvs/autoloop/lib/python3.12/site-packages/autoloop/templates/implement_producer.md
+session_id=019e03e8-a651-7bb3-9d8d-639ed65542e6
+
+
+---
+run_id=run-20260507T184603Z-adb7c56b | entry=phase_output | pair=implement | phase=producer | process=codex-agent | cycle=1 | attempt=1 | thread_id=019e03e8-a651-7bb3-9d8d-639ed65542e6
+---
+I’m treating this as the acceptance-test phase for the revised SDK work. I’ll read the active feedback, implementation notes, plan, and the current SDK test surfaces first, then I’ll add focused regression tests only where they exercise the new contracts.
+
+The active phase artifacts are basically empty shells, so the useful signal is in the current SDK code and test surface. I’m reading the existing facade tests and the touched SDK/engine seams now to extend them without duplicating already-covered behavior.
+
+The existing facade test file already covers a lot of the requested surface. I’m checking the remaining uncovered acceptance bullets against the current helper and retention internals so I can add only the missing regressions instead of bloating the file.
+
+I’ve narrowed the gap to the bullets that are not yet explicitly pinned: local export coverage, runtime-equivalent declared-write resolution beyond the old subset helper, and a couple of safety/compatibility edges around cleanup and simple step entrypoints. I’m reading the artifact-template surface next so those tests hit the exact runtime placeholders the SDK now depends on.
+
+I’ve confirmed most of the spec is already pinned in `test_sdk_facade.py`; the remaining gaps are narrow enough that I can add them surgically. Before editing, I’m running the current SDK facade tests once so I know whether I’m extending a green baseline or also need to correct a nearby seam that the new tests expose.
+
+The environment doesn’t have a `pytest` shell entrypoint, so I’m switching to `python -m pytest` for validation. After that I’ll patch the missing regression coverage and re-run just the focused test file.
+
+I found one adjacent implementation gap while designing the regression: declared artifact templates that use bare `params.*` and `workflow_params.*` currently collapse those segments to empty strings, even though the SDK now depends on runtime-equivalent context there. I’m making a minimal resolver fix and then adding the acceptance tests that lock it in.
+
+The new regression exposed a second half of the same seam: `WorkflowResult.from_execution(...)` still resolves its draft artifact map with the older subset context before retention runs. I’m aligning that draft artifact path resolution with the same runtime-equivalent context so pre-retention and retained results behave the same.
+
+The new facade tests are green. I changed a shared artifact-template resolver, so I’m also running a focused placeholder/artefact subset outside the SDK file to make sure the added bare-root support didn’t disturb the existing runtime placeholder contracts.
+
+I’ve finished the code and regression work. I’m updating the phase notes and the decision ledger with the one non-obvious behavior lock: the SDK’s retained-artifact path resolution now has to match the same bare-root placeholder surface that workflow discovery already accepts, otherwise params-based declared writes silently degrade.
+
+Scope considered
+
+Phase-local SDK acceptance/regression work only: [tests/unit/test_sdk_facade.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/tests/unit/test_sdk_facade.py), with the minimal adjacent runtime fix needed to support the requested declared-write retention contract in [autoloop/core/artifacts.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/autoloop/core/artifacts.py) and [autoloop/sdk.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/autoloop/sdk.py). I also updated the phase notes and this turn’s decision block.
+
+What I analyzed
+
+The active phase contract, plan/decision artifacts, the existing SDK facade tests, and the SDK retention/artifact-resolution path. I verified the current facade file first, then traced the failure surface from retained declared writes into bare placeholder resolution and draft `WorkflowResult` artifact materialization.
+
+What I changed
+
+- Added local regression coverage for the revised SDK export surface and for declared-write retention using `params.*` and `workflow_params.*` in [tests/unit/test_sdk_facade.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/tests/unit/test_sdk_facade.py).
+- Fixed bare runtime artifact placeholder resolution for `request_file`, `params`, and `workflow_params` in [autoloop/core/artifacts.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/autoloop/core/artifacts.py).
+- Aligned draft SDK result artifact resolution with the runtime-equivalent context in [autoloop/sdk.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/autoloop/sdk.py), so pre-retention and retained paths resolve consistently.
+- Recorded the phase notes in [implementation_notes.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/revised-sdk-implementation-spec-1-scope-implemen-1e1a7513/runs/run-20260507T184603Z-adb7c56b/artifacts/implement/phases/sdk-acceptance-regression-tests/implementation_notes.md) and appended the non-obvious decision lines under the current header in [decisions.txt](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/revised-sdk-implementation-spec-1-scope-implemen-1e1a7513/runs/run-20260507T184603Z-adb7c56b/decisions.txt).
+
+Key findings / decisions
+
+- The new regression exposed a real implementation gap: artifact templates that used bare `params.*` / `workflow_params.*` were silently degrading to empty path segments even though discovery already allows those roots.
+- The old subset artifact context in `sdk.py` was also inconsistent with retained-artifact resolution; reusing the runtime-equivalent context removed that split path.
+
+Open issues / next step
+
+No open phase-local issues from this slice. Validation run:
+- `.venv/bin/python -m pytest -q tests/unit/test_sdk_facade.py`
+- `.venv/bin/python -m pytest -q tests/unit/test_primitives_and_stores.py -k 'artifact_template or render_runtime_template or workflow_params'`
+
+
+---
+run_id=run-20260507T184603Z-adb7c56b | entry=session_turn | pair=implement | phase=verifier | cycle=1 | attempt=1 | thread_id=019e03e8-a651-7bb3-9d8d-639ed65542e6
+---
+provider=codex
+mode=resume
+template=/home/rauter/.local/share/pipx/venvs/autoloop/lib/python3.12/site-packages/autoloop/templates/implement_verifier.md
+session_id=019e03e8-a651-7bb3-9d8d-639ed65542e6
+
+
+---
+run_id=run-20260507T184603Z-adb7c56b | entry=phase_output | pair=implement | phase=verifier | process=codex-agent | cycle=1 | attempt=1 | thread_id=019e03e8-a651-7bb3-9d8d-639ed65542e6
+---
+I’m reviewing only the acceptance-test phase scope and the adjacent placeholder seam the implementation touched. First I’m reading the active criteria and feedback artifacts, then I’ll audit the changed files and validation evidence before I mark the phase complete or raise findings.
+
+The recorded validation looks coherent, but the `git diff` surface is empty in this verifier context, so I’m reading the actual file contents directly at the touched symbols instead of relying on index state. That’s enough to judge intent fidelity and regression risk here.
+
+I don’t see a material correctness, compatibility, or regression issue in the scoped changes. I’m marking the criteria complete and recording a no-findings review note in the phase feedback artifact, then I’ll close the verifier turn with `COMPLETE`.
+
+Scope considered
+
+Phase-local verification for `sdk-acceptance-regression-tests`, centered on `tests/unit/test_sdk_facade.py` and the adjacent SDK/artifact placeholder seam the implementation touched. I only updated the active review artifacts under the phase directory.
+
+What I analyzed
+
+The active phase contract, the run decisions ledger, the implementation notes, the touched symbols in `autoloop/core/artifacts.py`, `autoloop/sdk.py`, and `tests/unit/test_sdk_facade.py`, plus the existing root export coverage in `tests/unit/test_simple_surface.py`.
+
+What I reviewed
+
+The implementation adds focused SDK acceptance regressions for exports and runtime-equivalent declared-write retention, and it applies a minimal fix so bare `params.*` / `workflow_params.*` artifact placeholders resolve consistently in both draft and retained SDK result paths. The recorded validation is appropriate for the seam touched: `tests/unit/test_sdk_facade.py` and the focused placeholder subset in `tests/unit/test_primitives_and_stores.py`.
+
+Key findings / decisions
+
+No blocking or non-blocking review findings beyond a recorded no-findings note. I marked all criteria complete and appended `IMP-000` to the feedback artifact to document that outcome.
+
+Open issues / next step
+
+No open verifier issues in this phase. The review artifacts are updated and this phase can be treated as complete.
+
+<loop-control>
+{"schema":"docloop.loop_control/v1","kind":"promise","promise":"COMPLETE"}
+</loop-control>

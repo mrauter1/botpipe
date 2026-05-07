@@ -1044,3 +1044,46 @@ Open issues / next step
 No open phase-local issues from this slice. Validation run:
 - `.venv/bin/python -m pytest -q tests/unit/test_sdk_facade.py`
 - `.venv/bin/python -m pytest -q tests/unit/test_primitives_and_stores.py -k 'artifact_template or render_runtime_template or workflow_params'`
+
+
+---
+run_id=run-20260507T184603Z-adb7c56b | entry=session_turn | pair=implement | phase=verifier | cycle=1 | attempt=1 | thread_id=019e03e8-a651-7bb3-9d8d-639ed65542e6
+---
+provider=codex
+mode=resume
+template=/home/rauter/.local/share/pipx/venvs/autoloop/lib/python3.12/site-packages/autoloop/templates/implement_verifier.md
+session_id=019e03e8-a651-7bb3-9d8d-639ed65542e6
+
+
+---
+run_id=run-20260507T184603Z-adb7c56b | entry=phase_output | pair=implement | phase=verifier | process=codex-agent | cycle=1 | attempt=1 | thread_id=019e03e8-a651-7bb3-9d8d-639ed65542e6
+---
+I’m reviewing only the acceptance-test phase scope and the adjacent placeholder seam the implementation touched. First I’m reading the active criteria and feedback artifacts, then I’ll audit the changed files and validation evidence before I mark the phase complete or raise findings.
+
+The recorded validation looks coherent, but the `git diff` surface is empty in this verifier context, so I’m reading the actual file contents directly at the touched symbols instead of relying on index state. That’s enough to judge intent fidelity and regression risk here.
+
+I don’t see a material correctness, compatibility, or regression issue in the scoped changes. I’m marking the criteria complete and recording a no-findings review note in the phase feedback artifact, then I’ll close the verifier turn with `COMPLETE`.
+
+Scope considered
+
+Phase-local verification for `sdk-acceptance-regression-tests`, centered on `tests/unit/test_sdk_facade.py` and the adjacent SDK/artifact placeholder seam the implementation touched. I only updated the active review artifacts under the phase directory.
+
+What I analyzed
+
+The active phase contract, the run decisions ledger, the implementation notes, the touched symbols in `autoloop/core/artifacts.py`, `autoloop/sdk.py`, and `tests/unit/test_sdk_facade.py`, plus the existing root export coverage in `tests/unit/test_simple_surface.py`.
+
+What I reviewed
+
+The implementation adds focused SDK acceptance regressions for exports and runtime-equivalent declared-write retention, and it applies a minimal fix so bare `params.*` / `workflow_params.*` artifact placeholders resolve consistently in both draft and retained SDK result paths. The recorded validation is appropriate for the seam touched: `tests/unit/test_sdk_facade.py` and the focused placeholder subset in `tests/unit/test_primitives_and_stores.py`.
+
+Key findings / decisions
+
+No blocking or non-blocking review findings beyond a recorded no-findings note. I marked all criteria complete and appended `IMP-000` to the feedback artifact to document that outcome.
+
+Open issues / next step
+
+No open verifier issues in this phase. The review artifacts are updated and this phase can be treated as complete.
+
+<loop-control>
+{"schema":"docloop.loop_control/v1","kind":"promise","promise":"COMPLETE"}
+</loop-control>

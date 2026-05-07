@@ -23,3 +23,6 @@ ChildWorkflowStep message rendering now accepts input.* placeholders in addition
 <autoloop-decisions-header version="1" block_seq="8" owner="test_author" phase_id="sdk-routing-and-helper-entrypoints" pair="test" turn_seq="1" run_id="run-20260507T184603Z-adb7c56b" ts="2026-05-07T19:24:43.910017+00:00" />
 ChildWorkflowStep helper message-rendering coverage observes the child workflow's `ctx.message` through a workspace file side effect rather than task scratch so the assertion stays stable regardless of retention cleanup.
 Workflow-step helper coverage also locks the spec rule that omitting `child_message` forwards the outer SDK message to the child workflow unchanged.
+<autoloop-decisions-header version="1" block_seq="9" owner="implementer" phase_id="sdk-acceptance-regression-tests" pair="implement" turn_seq="1" run_id="run-20260507T184603Z-adb7c56b" ts="2026-05-07T19:27:18.496768+00:00" />
+SDK regression coverage now locks bare params.* and workflow_params.* artifact placeholders through the SDK retention path because workflow discovery already accepts those roots and silent empty-string fallback would corrupt retained artifact destinations.
+Draft WorkflowResult artifact resolution now reuses the runtime-equivalent SDK artifact context instead of the older subset helper so pre-retention and retained results resolve declared artifact paths consistently.
