@@ -293,3 +293,60 @@ Fix the blocking `ctx.input.message` alias in `WorkflowInputView`, `Context.inpu
 <loop-control>
 {"schema":"docloop.loop_control/v1","kind":"promise","promise":"INCOMPLETE"}
 </loop-control>
+
+
+---
+run_id=run-20260507T132940Z-5d96f5de | entry=session_turn | pair=implement | phase=producer | cycle=2 | attempt=1 | thread_id=019e02a8-3460-7f63-a341-0ead9bf7f8a2
+---
+provider=codex
+mode=resume
+template=/home/rauter/.local/share/pipx/venvs/autoloop/lib/python3.12/site-packages/autoloop/templates/implement_producer.md
+session_id=019e02a8-3460-7f63-a341-0ead9bf7f8a2
+
+
+---
+run_id=run-20260507T132940Z-5d96f5de | entry=phase_output | pair=implement | phase=producer | process=codex-agent | cycle=2 | attempt=1 | thread_id=019e02a8-3460-7f63-a341-0ead9bf7f8a2
+---
+I’m addressing the reviewer’s blocking finding directly: the live `WorkflowInputView` and `ctx.*` validation paths still synthesize `ctx.input.message`. I’ll patch those source files to match the already-decided compatibility boundary, then rerun the focused suites and update the notes.
+
+I’ve confirmed the tree still contains the alias in both code and tests. I’m patching the live files now so the source and the focused regressions line up with the reviewer’s finding instead of just the notes.
+
+The source fix is in, and I’ve aligned the stale child/resume regressions that were still asserting the old alias. I’m doing a full focused validation pass on the exact source/tests touched by the reviewer’s finding.
+
+The remaining `rg` hits are a mix of intended negative/positive assertions and a few stale test names that may still need cleanup. I’m waiting on the actual pytest results now instead of patching by grep alone.
+
+I’m checking the two stale unit tests the reviewer surfaced and will patch them to match the now-enforced `ctx.message` versus declared `Input.message` contract before rerunning the focused regression set.
+
+The remaining failures are both stale tests: one still expects undeclared `ctx.input.message` to compile, and one still expects explicit `Input.message` to be banned. I’m updating those expectations directly and then rerunning the focused unit, contract, and runtime coverage.
+
+The source and contract-targeted tests are green so far. I’m waiting on the broader focused unit subset to confirm there are no remaining stale expectations before I update the implementation notes.
+
+The requested behavior is now implemented in code and reflected in the stale unit expectations that were blocking review. I’m making a small update to the phase notes so the follow-up fix and green validation state are explicit in the run artifacts.
+
+Scope considered
+
+The follow-up reviewer finding was limited to the remaining `ctx.input.message` contract drift in the active phase scope: request/input binding behavior, the stale unit expectations around explicit `Input.message`, and the phase implementation notes artifact.
+
+What I analyzed
+
+I rechecked the live `ctx.input.message` surfaces the reviewer called out and then inspected the two failing unit tests that still encoded the old contract:
+[tests/unit/test_simple_surface.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/tests/unit/test_simple_surface.py:939) and [tests/unit/test_validation.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/tests/unit/test_validation.py:107).
+I also updated the active notes artifact at [implementation_notes.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/standalone-implementation-spec-ctx-prompt-bindin-edf74165/runs/run-20260507T132940Z-5d96f5de/artifacts/implement/phases/finish-ctx-request-input-separation/implementation_notes.md:38) so the reviewer-follow-up fix is explicit.
+
+What I changed
+
+- Updated `test_simple_workflow_accepts_ctx_input_message_prompt_binding` to declare `Input.message`, so `{ctx.input.message}` is only accepted when explicitly declared.
+- Replaced the old validation test that banned `Input.message` with a positive test asserting explicit `Input.message` compiles successfully.
+- Recorded the reviewer follow-up in `implementation_notes.md`.
+
+Key findings / decisions
+
+The remaining breakage was only in stale tests, not in a new source-side regression. After aligning those expectations, the focused validation set is green:
+
+- `tests/unit/test_primitives_and_stores.py tests/unit/test_branch_group_context_sessions.py tests/unit/test_simple_surface.py tests/unit/test_validation.py`: `275 passed`
+- `tests/contract/test_engine_contracts.py` targeted subset: `7 passed`
+- `tests/runtime/test_workspace_and_context.py` targeted subset: `2 passed`
+
+Open issues / next step
+
+No known open implementation issues in this phase-local scope. The next step is verifier review against the updated workspace and artifacts.

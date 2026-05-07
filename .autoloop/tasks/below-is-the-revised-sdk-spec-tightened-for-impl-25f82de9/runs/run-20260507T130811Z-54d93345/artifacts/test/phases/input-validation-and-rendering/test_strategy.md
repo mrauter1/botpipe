@@ -37,5 +37,7 @@
 ## Validation performed
 
 - Updated stale unit expectation in `tests/unit/test_validation.py` to match the now-intentional authoring break.
+- Corrected the tracked contract/runtime expectations so message-only `{ctx.input.message}` and pause/resume `ctx.input.message` are asserted as success paths instead of preserving the pre-spec typed-only behavior.
 - `python3 -m py_compile tests/unit/test_validation.py tests/unit/test_simple_surface.py tests/runtime/test_workspace_and_context.py tests/contract/test_engine_contracts.py`
 - Attempted and blocked by environment: `python3 -m pytest tests/unit/test_validation.py -k workflow_input_message` (`No module named pytest`).
+- Attempted and blocked by environment: `python3 -m pytest tests/contract/test_engine_contracts.py -k ctx_input_message` (`No module named pytest`).

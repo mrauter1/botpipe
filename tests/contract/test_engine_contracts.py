@@ -8676,16 +8676,14 @@ def test_runtime_templates_resolve_ctx_input_message_without_typed_input(tmp_pat
         session_store=InMemorySessionStore(),
     )
 
-    with pytest.raises(
-        WorkflowExecutionError,
-        match=r"artifact template placeholder \{ctx\.input\.message\} references unknown runtime field 'message'",
-    ):
-        render_runtime_template(
-            "Message={ctx.input.message}",
-            context,
-            placeholder_label="artifact template placeholder",
-            replace_roots=frozenset({"ctx"}),
-        )
+    rendered = render_runtime_template(
+        "Message={ctx.input.message}",
+        context,
+        placeholder_label="artifact template placeholder",
+        replace_roots=frozenset({"ctx"}),
+    )
+
+    assert rendered == "Message=artifact-request"
 
 
 def test_runtime_templates_resolve_declared_ctx_input_message_separately_from_request(tmp_path: Path) -> None:
