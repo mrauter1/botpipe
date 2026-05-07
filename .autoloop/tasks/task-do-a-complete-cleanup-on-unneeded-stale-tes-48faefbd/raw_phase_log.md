@@ -246,3 +246,52 @@ Open issues / next step
 - This phase did not yet remove or relocate the workflow-owned runtime package suites under `tests/runtime/`.
 - `tests/strictness/test_no_compat.py` was not narrowed yet.
 - The monolith splits for `test_engine_contracts.py` and `test_stdlib_and_extensions.py` remain for a later cleanup phase.
+
+
+---
+run_id=run-20260507T194557Z-2f9c2de5 | entry=session_turn | pair=implement | phase=verifier | cycle=1 | attempt=1 | thread_id=019e0402-2683-7053-af93-2253220dd35f
+---
+provider=codex
+mode=resume
+template=/home/rauter/.local/share/pipx/venvs/autoloop/lib/python3.12/site-packages/autoloop/templates/implement_verifier.md
+session_id=019e0402-2683-7053-af93-2253220dd35f
+
+
+---
+run_id=run-20260507T194557Z-2f9c2de5 | entry=phase_output | pair=implement | phase=verifier | process=codex-agent | cycle=1 | attempt=1 | thread_id=019e0402-2683-7053-af93-2253220dd35f
+---
+I’m reviewing the phase against the acceptance criteria and the clarified scope. First I’m reading the review artifacts and checking the changed test files directly so the criteria and findings are grounded in the actual workspace state.
+
+I’ve got the producer’s notes and the phase decisions. Now I’m checking the actual workspace state for the acceptance criteria: deleted file absence, recursive-wrapper assertion removal, and whether the shared unit file still has repo-owned workflow contract imports at module scope.
+
+I’ve confirmed the deleted files are gone and the recursive wrapper assertions are no longer present in `tests/runtime/test_package_cli.py`. I’m checking the two shared helper rewrites next: the wheel smoke test scope and the synthetic optimizer fixture, because those are the places most likely to drift from the phase intent.
+
+The synthetic optimizer fixture is clean: it no longer copies repo workflow or docs trees. I’m finishing with direct pytest verification from the repo’s `.venv` so the criteria update is based on an independent run, not just the producer notes.
+
+The phase checks are clean: both acceptance criteria are met in the workspace, and the targeted validation passes independently. I’m updating the reviewer artifacts now with an all-clear result and no findings.
+
+Scope considered
+
+Phase-local review of the `unblock-shared-suite` implementation against the request, clarification ledger, active phase contract, and the changed shared tests. I limited artifact edits to the active review directory.
+
+What I analyzed
+
+The authoritative decisions ledger, producer implementation notes, active criteria/feedback artifacts, and the touched tests for parity/docs removal, recursive-wrapper assertion removal, wheel smoke scope, local artifact-spec replacement, and synthetic optimizer fixtures.
+
+What I reviewed
+
+I verified the deleted files are absent, confirmed the recursive wrapper assertions are gone, confirmed the shared unit file no longer has top-level `autoloop.workflows.*.contracts` imports, and independently ran:
+- `.venv/bin/python -m pytest --collect-only tests`
+- `.venv/bin/python -m pytest tests/runtime/test_wheel_packaging_smoke.py tests/runtime/test_package_cli.py tests/contract/test_engine_contracts.py tests/unit/test_simple_surface.py tests/unit/test_stdlib_and_extensions.py tests/unit/test_optimization_helpers.py -q`
+
+Key findings / decisions
+
+No findings. The phase meets AC-1 and AC-2, and the targeted validation passed (`429 passed`) with full test-tree collection succeeding (`1481 tests collected`).
+
+Open issues / next step
+
+No blocking issues for this phase. Broader workflow-owned suite removal, strictness narrowing, and monolith splitting remain for later phases, as already noted by the producer.
+
+<loop-control>
+{"schema":"docloop.loop_control/v1","kind":"promise","promise":"COMPLETE"}
+</loop-control>
