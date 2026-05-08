@@ -6,7 +6,7 @@
   "provider_metadata": {},
   "model_override": null,
   "effort_override": null,
-  "pending_clarification_note": null,
+  "pending_clarification_note": "Question:\nWARNING:\n1. Should this rename intentionally make existing `.autoloop` workspaces, `autoloop.yaml` / `autoloop.config`, and persisted `autoloop.*` artifacts unreadable or unsupported after the change, or must runtime/config readers continue to accept them while new writes emit only `.botlane`, `botlane.*`, and Botlane-only package/CLI names? Answer YES if old inputs should become unsupported. Answer NO if they must remain readable during transition.\nBest supposition: keep read or migration compatibility for existing state/config/data, while making all newly generated outputs Botlane-only.\n\nAnswer:\nI\u2019m checking the immutable request and the raw phase log against the repository\u2019s current rename/migration behavior to determine whether old `autoloop` inputs must remain readable during transition.\n\nNO\n\nSafest explicit assumption from the raw phase log and repo context: do not intentionally break read compatibility for existing `.autoloop` workspaces, `autoloop.yaml` / `autoloop.config`, or persisted `autoloop.*` artifacts during the transition. Runtime/config/data readers should continue to accept old inputs or migrate them, while all new writes and generated outputs become Botlane-only: `.botlane`, `botlane.*`, `botlane.yaml` / `botlane.config`, `botlane` package/CLI names.",
   "created_at": "2026-05-08T19:05:24.504191+00:00",
-  "last_used_at": "2026-05-08T19:10:39.827387+00:00"
+  "last_used_at": "2026-05-08T19:11:03.216932+00:00"
 }

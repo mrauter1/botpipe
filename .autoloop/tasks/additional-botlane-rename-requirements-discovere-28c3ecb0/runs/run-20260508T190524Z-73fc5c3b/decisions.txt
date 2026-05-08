@@ -3,3 +3,13 @@ The rename is an intentional breaking change: do not keep `autoloop` or `autoloo
 Machine-facing identity includes config filenames, SDK sentinel files and payload tags, generated marker/header prefixes, and serialized metadata, not just package imports and help text.
 The final strictness grep gate must cover maintained source, workflow packages, tests, docs, examples, and embedded fixture strings, with only a minimal explicit allowlist for historical text.
 Automation-owned run artifacts under `.autoloop/tasks/**` and similar generated state remain out of scope for the product rename and should be excluded from the live-tree grep proof.
+<autoloop-decisions-header version="1" block_seq="2" owner="runtime" phase_id="task-global" pair="plan" turn_seq="2" run_id="run-20260508T190524Z-73fc5c3b" ts="2026-05-08T19:11:29.162911+00:00" entry="questions" qa_seq="1" />
+WARNING:
+1. Should this rename intentionally make existing `.autoloop` workspaces, `autoloop.yaml` / `autoloop.config`, and persisted `autoloop.*` artifacts unreadable or unsupported after the change, or must runtime/config readers continue to accept them while new writes emit only `.botlane`, `botlane.*`, and Botlane-only package/CLI names? Answer YES if old inputs should become unsupported. Answer NO if they must remain readable during transition.
+Best supposition: keep read or migration compatibility for existing state/config/data, while making all newly generated outputs Botlane-only.
+<autoloop-decisions-header version="1" block_seq="3" owner="runtime" phase_id="task-global" pair="plan" turn_seq="2" run_id="run-20260508T190524Z-73fc5c3b" ts="2026-05-08T19:11:29.163297+00:00" entry="answers" qa_seq="1" source="auto" />
+I’m checking the immutable request and the raw phase log against the repository’s current rename/migration behavior to determine whether old `autoloop` inputs must remain readable during transition.
+
+NO
+
+Safest explicit assumption from the raw phase log and repo context: do not intentionally break read compatibility for existing `.autoloop` workspaces, `autoloop.yaml` / `autoloop.config`, or persisted `autoloop.*` artifacts during the transition. Runtime/config/data readers should continue to accept old inputs or migrate them, while all new writes and generated outputs become Botlane-only: `.botlane`, `botlane.*`, `botlane.yaml` / `botlane.config`, `botlane` package/CLI names.

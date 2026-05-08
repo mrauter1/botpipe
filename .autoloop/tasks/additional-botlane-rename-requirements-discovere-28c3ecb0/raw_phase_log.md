@@ -88,3 +88,53 @@ The planner needs to tighten the grep exception wording and either ask for confi
 <loop-control>
 {"schema":"docloop.loop_control/v1","kind":"promise","promise":"INCOMPLETE"}
 </loop-control>
+
+
+---
+run_id=run-20260508T190524Z-73fc5c3b | entry=session_turn | pair=plan | phase=producer | cycle=2 | attempt=1 | thread_id=019e08fa-f9a9-7363-87a2-7eb7e16e0abb
+---
+provider=codex
+mode=resume
+template=/home/rauter/.local/share/pipx/venvs/autoloop/lib/python3.12/site-packages/autoloop/templates/plan_producer.md
+session_id=019e08fa-f9a9-7363-87a2-7eb7e16e0abb
+
+
+---
+run_id=run-20260508T190524Z-73fc5c3b | entry=phase_output | pair=plan | phase=producer | process=codex-agent | cycle=2 | attempt=1 | thread_id=019e08fa-f9a9-7363-87a2-7eb7e16e0abb
+---
+Scope considered
+The producer plan artifacts, the verifier’s blocking findings, the immutable request, and the current decisions ledger.
+
+What I analyzed
+The verifier correctly flagged one material ambiguity: the current plan says existing `.autoloop` workspaces, `autoloop.yaml` / `autoloop.config`, and persisted `autoloop.*` artifacts become unsupported, but the request explicitly removes old imports and CLI identity without clearly confirming that old state/config/data readers should break too. I also reviewed the grep-gate wording issue; that one can be tightened to explicit historical changelog/history files without changing product intent.
+
+What I changed
+No files changed in this turn because a clarification is required before I can safely revise the compatibility section and dependent phase criteria.
+
+Key findings / decisions
+The remaining blocker is whether read compatibility for old workspaces/configs/persisted artifacts should be intentionally dropped.
+My current best interpretation is narrower than the previous plan: keep readers/migration paths for old `.autoloop` / `autoloop.*` inputs if feasible, but emit only `.botlane`, `botlane.*`, `botlane.yaml` / `botlane.config`, and Botlane-only CLI/import identity going forward.
+If confirmed, I will also tighten the grep-proof wording from generic historical text to explicit historical changelog/history files only.
+
+Open issues / next step
+I need explicit confirmation on the old workspace/config/artifact compatibility break before updating `plan.md`, `phase_plan.yaml`, `feedback.md`, and this turn’s decisions block.
+
+<loop-control>
+{"schema":"docloop.loop_control/v1","kind":"question","question":"WARNING:\n1. Should this rename intentionally make existing `.autoloop` workspaces, `autoloop.yaml` / `autoloop.config`, and persisted `autoloop.*` artifacts unreadable or unsupported after the change, or must runtime/config readers continue to accept them while new writes emit only `.botlane`, `botlane.*`, and Botlane-only package/CLI names? Answer YES if old inputs should become unsupported. Answer NO if they must remain readable during transition.\nBest supposition: keep read or migration compatibility for existing state/config/data, while making all newly generated outputs Botlane-only.","best_supposition":"Keep old workspace/config/artifact inputs readable during transition, but emit only Botlane names for all new outputs."}
+</loop-control>
+
+
+---
+run_id=run-20260508T190524Z-73fc5c3b | entry=clarification | pair=plan | phase=producer | cycle=2 | attempt=1 | source=auto
+---
+Question:
+WARNING:
+1. Should this rename intentionally make existing `.autoloop` workspaces, `autoloop.yaml` / `autoloop.config`, and persisted `autoloop.*` artifacts unreadable or unsupported after the change, or must runtime/config readers continue to accept them while new writes emit only `.botlane`, `botlane.*`, and Botlane-only package/CLI names? Answer YES if old inputs should become unsupported. Answer NO if they must remain readable during transition.
+Best supposition: keep read or migration compatibility for existing state/config/data, while making all newly generated outputs Botlane-only.
+
+Answer:
+I’m checking the immutable request and the raw phase log against the repository’s current rename/migration behavior to determine whether old `autoloop` inputs must remain readable during transition.
+
+NO
+
+Safest explicit assumption from the raw phase log and repo context: do not intentionally break read compatibility for existing `.autoloop` workspaces, `autoloop.yaml` / `autoloop.config`, or persisted `autoloop.*` artifacts during the transition. Runtime/config/data readers should continue to accept old inputs or migrate them, while all new writes and generated outputs become Botlane-only: `.botlane`, `botlane.*`, `botlane.yaml` / `botlane.config`, `botlane` package/CLI names.
