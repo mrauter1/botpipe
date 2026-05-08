@@ -16,14 +16,14 @@
       "prove-botlane-only-surface"
     ],
     "explicit": true,
-    "current_phase_index": 2,
-    "current_phase_id": "rewrite-schemas-workflows-and-fixtures"
+    "current_phase_index": 3,
+    "current_phase_id": "prove-botlane-only-surface"
   },
   "phase_status": {
     "rename-package-and-public-api": "completed",
     "rewrite-runtime-and-workspace-identity": "completed",
-    "rewrite-schemas-workflows-and-fixtures": "in_progress",
-    "prove-botlane-only-surface": "planned"
+    "rewrite-schemas-workflows-and-fixtures": "completed",
+    "prove-botlane-only-surface": "in_progress"
   },
   "phase_history": [
     {
@@ -57,6 +57,19 @@
       "run_id": "run-20260508T190524Z-73fc5c3b",
       "status": "in_progress",
       "ts": "2026-05-08T19:56:17.594682+00:00"
+    },
+    {
+      "phase_id": "rewrite-schemas-workflows-and-fixtures",
+      "run_id": "run-20260508T190524Z-73fc5c3b",
+      "status": "completed",
+      "ts": "2026-05-08T20:25:10.922832+00:00",
+      "pair": "test"
+    },
+    {
+      "phase_id": "prove-botlane-only-surface",
+      "run_id": "run-20260508T190524Z-73fc5c3b",
+      "status": "in_progress",
+      "ts": "2026-05-08T20:25:10.926057+00:00"
     }
   ]
 }
