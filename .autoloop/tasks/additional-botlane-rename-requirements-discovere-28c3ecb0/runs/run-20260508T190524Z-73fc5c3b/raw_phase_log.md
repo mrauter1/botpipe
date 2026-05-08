@@ -1587,3 +1587,105 @@ This phase is complete. The remaining note is the existing `MANIFEST.in` auditab
 <loop-control>
 {"schema":"docloop.loop_control/v1","kind":"promise","promise":"COMPLETE"}
 </loop-control>
+
+
+---
+run_id=run-20260508T190524Z-73fc5c3b | entry=session_turn | pair=test | phase=producer | cycle=1 | attempt=1 | thread_id=019e0943-ff31-72a3-a94a-bb192b9cb63e
+---
+provider=codex
+mode=resume
+template=/home/rauter/.local/share/pipx/venvs/autoloop/lib/python3.12/site-packages/autoloop/templates/test_producer.md
+session_id=019e0943-ff31-72a3-a94a-bb192b9cb63e
+
+
+---
+run_id=run-20260508T190524Z-73fc5c3b | entry=phase_output | pair=test | phase=producer | process=codex-agent | cycle=1 | attempt=1 | thread_id=019e0943-ff31-72a3-a94a-bb192b9cb63e
+---
+I’m reviewing the current proof tests and the test-phase artifacts first, then I’ll either add a small missing regression test or document that the existing test changes already cover the phase contract and update the strategy/feedback accordingly.
+
+The repo already has the core proof tests, but there’s still one useful regression test missing: asserting that the branding scan truly runs from `REPO_ROOT` and skips only the explicit history allowlist. I’m adding that plus the test-phase strategy/feedback updates.
+
+I’m adding one focused regression test to lock in the repo-root scan and explicit-history skip behavior. Then I’ll run the strictness subset and update the test-phase artifacts.
+
+The new regression test is in. I’m waiting on the strictness suite now, then I’ll write the coverage map and the concise test-phase handoff entry.
+
+I’ve got green validation. I’m writing the behavior-to-test map, appending the test-phase feedback entry, and recording the one non-obvious test decision under the current test-author header.
+
+I’ve finished the artifact updates. I’m running the focused wheel/runtime proof once more so this turn closes with the same validation slice the phase is judged on, not just the strictness suite.
+
+The focused proof is green. I’m doing a quick readback of the test artifacts, then I’ll close with the coverage summary and any remaining gaps.
+
+Scope considered
+
+Phase-local Botlane proof coverage only: `tests/strictness/test_no_compat.py`, the focused wheel/runtime proof slice, and the test-phase artifacts under `artifacts/test/phases/prove-botlane-only-surface/`.
+
+What I analyzed
+
+I reviewed the existing proof tests against P4-AC1 through P4-AC3 and the updated decisions ledger. The main remaining test-author gap was locking in that the branding scan really runs from `REPO_ROOT` and skips only generated state plus the explicit `legacy_docs/*.md` history allowlist.
+
+What I changed
+
+I added `test_branding_scan_walks_repo_root_and_skips_only_explicit_history_files` to [tests/strictness/test_no_compat.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/tests/strictness/test_no_compat.py). It asserts the scan root is `REPO_ROOT`, key maintained files are scanned, and historical allowlisted files plus generated-state paths stay excluded.
+
+I updated [test_strategy.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/additional-botlane-rename-requirements-discovere-28c3ecb0/runs/run-20260508T190524Z-73fc5c3b/artifacts/test/phases/prove-botlane-only-surface/test_strategy.md) with a behavior-to-test map for AC1 through AC3, edge cases, preserved invariants, stability notes, and known gaps. I also appended the concise test-addition note to [feedback.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/additional-botlane-rename-requirements-discovere-28c3ecb0/runs/run-20260508T190524Z-73fc5c3b/artifacts/test/phases/prove-botlane-only-surface/feedback.md) and recorded the non-obvious test decision under block 16 in [decisions.txt](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/additional-botlane-rename-requirements-discovere-28c3ecb0/runs/run-20260508T190524Z-73fc5c3b/decisions.txt).
+
+Key findings / decisions
+
+Validation passed:
+- `.venv/bin/python -m pytest -q tests/strictness/test_no_compat.py` -> `41 passed`
+- `.venv/bin/python -m pytest -q tests/runtime/test_wheel_packaging_smoke.py tests/runtime/test_workspace_and_context.py -k 'test_built_wheel_installs_public_botlane_package_and_cli or run_creates_task_workflow_run_layout_and_immutable_request_snapshots or run_metadata_records_topology_hashes_and_artifact_contract_paths'` -> `3 passed, 32 deselected`
+- Repo-wide `rg` for legacy branding, excluding only generated state and the explicit `legacy_docs/*.md` allowlist, returned no matches.
+
+Open issues / next step
+
+No new test-author blockers remain in this phase. The only noted gap is that I did not add a broad full-suite rerun, and the `MANIFEST.in` auditability concern remains advisory rather than test-enforced.
+
+
+---
+run_id=run-20260508T190524Z-73fc5c3b | entry=session_turn | pair=test | phase=verifier | cycle=1 | attempt=1 | thread_id=019e0943-ff31-72a3-a94a-bb192b9cb63e
+---
+provider=codex
+mode=resume
+template=/home/rauter/.local/share/pipx/venvs/autoloop/lib/python3.12/site-packages/autoloop/templates/test_verifier.md
+session_id=019e0943-ff31-72a3-a94a-bb192b9cb63e
+
+
+---
+run_id=run-20260508T190524Z-73fc5c3b | entry=phase_output | pair=test | phase=verifier | process=codex-agent | cycle=1 | attempt=1 | thread_id=019e0943-ff31-72a3-a94a-bb192b9cb63e
+---
+I’m auditing the updated proof tests and the test-phase artifacts against AC1 through AC3, then I’ll update only the test auditor artifacts.
+
+I’m checking one last AC3 detail now: whether legacy config-name and persisted-artifact compatibility are actually covered, not just legacy state-root reads.
+
+I found broader AC3 coverage in the existing runtime tests. I’m checking whether legacy config-name compatibility is explicitly covered too, since that would decide whether there’s any audit finding or just a complete pass.
+
+The focused proof slice is green and I found no blocking coverage gaps. I’m marking the audit complete and appending one small non-blocking traceability note to the feedback artifact.
+
+The audit artifacts are updated. I’m doing a final readback for consistency, then I’ll close this test audit as complete.
+
+Scope considered
+
+Phase-local audit of the Botlane proof tests and test artifacts: the updated strictness coverage in `tests/strictness/test_no_compat.py`, the focused wheel/runtime proof slice, and the active [test_strategy.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/additional-botlane-rename-requirements-discovere-28c3ecb0/runs/run-20260508T190524Z-73fc5c3b/artifacts/test/phases/prove-botlane-only-surface/test_strategy.md).
+
+What I analyzed
+
+I checked AC1 through AC3 coverage, especially the new repo-root branding scan and explicit `legacy_docs/*.md` history allowlist. I also verified that preserved legacy-read behavior is still covered by existing runtime tests, including legacy config compatibility in `tests/runtime/test_provider_policy_config.py` and legacy persisted-artifact/schema readers in the runtime/history/optimization tests.
+
+What I reviewed
+
+I updated [criteria.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/additional-botlane-rename-requirements-discovere-28c3ecb0/runs/run-20260508T190524Z-73fc5c3b/artifacts/test/phases/prove-botlane-only-surface/criteria.md) to fully checked and appended one non-blocking traceability note to [feedback.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/additional-botlane-rename-requirements-discovere-28c3ecb0/runs/run-20260508T190524Z-73fc5c3b/artifacts/test/phases/prove-botlane-only-surface/feedback.md).
+
+Focused validation passed:
+- `.venv/bin/python -m pytest -q tests/strictness/test_no_compat.py tests/runtime/test_wheel_packaging_smoke.py tests/runtime/test_workspace_and_context.py -k 'test_built_wheel_installs_public_botlane_package_and_cli or run_creates_task_workflow_run_layout_and_immutable_request_snapshots or run_metadata_records_topology_hashes_and_artifact_contract_paths or test_branding_scan_walks_repo_root_and_skips_only_explicit_history_files or test_explicit_history_allowlist_matches_legacy_docs_inventory or test_product_tree_docs_and_fixtures_do_not_emit_removed_legacy_branding'` -> `6 passed, 70 deselected`
+
+Key findings / decisions
+
+No blocking audit findings remain. `TST-001` is non-blocking only: the AC3 strategy section could cite an explicit legacy-config compatibility test for easier traceability, but the underlying coverage is present.
+
+Open issues / next step
+
+This test audit is complete. The only follow-up is the non-blocking strategy-traceability note if the team wants a slightly tighter audit trail later.
+
+<loop-control>
+{"schema":"docloop.loop_control/v1","kind":"promise","promise":"COMPLETE"}
+</loop-control>
