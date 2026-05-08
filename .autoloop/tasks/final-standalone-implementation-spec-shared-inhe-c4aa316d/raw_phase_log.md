@@ -866,3 +866,54 @@ Open issues / next step
 - Validation passed:
   - `.venv-test/bin/python -m pytest tests/unit/test_provider_policy.py tests/runtime/test_provider_policy_steps.py tests/runtime/test_provider_policy_emitters.py tests/runtime/test_provider_policy_config.py tests/unit/test_simple_surface.py tests/unit/test_sdk_facade.py tests/unit/test_policy.py tests/runtime/test_sdk_policy.py -q`
   - Result: `208 passed in 3.87s`
+
+
+---
+run_id=run-20260508T141115Z-6c430e1a | entry=session_turn | pair=implement | phase=verifier | cycle=1 | attempt=1 | thread_id=019e0810-03ca-7d63-94af-b0895960b1ef
+---
+provider=codex
+mode=resume
+template=/home/rauter/.local/share/pipx/venvs/autoloop/lib/python3.12/site-packages/autoloop/templates/implement_verifier.md
+session_id=019e0810-03ca-7d63-94af-b0895960b1ef
+
+
+---
+run_id=run-20260508T141115Z-6c430e1a | entry=phase_output | pair=implement | phase=verifier | process=codex-agent | cycle=1 | attempt=1 | thread_id=019e0810-03ca-7d63-94af-b0895960b1ef
+---
+I’m reviewing the `sdk-runtime-alignment` changes against the phase contract and the implementation notes, then I’ll update the phase criteria and feedback artifacts with any concrete findings.
+
+Reviewing the SDK/runtime alignment changes against the phase contract now. I’m checking the merge-order code paths and the invocation-local step wrapping before I update the review artifacts.
+
+The main remaining risk surface is whether the SDK signatures and the runtime operation resolver stayed aligned in every path, especially synthetic one-step runs and direct `llm`/`classify` calls. I’m checking those exact methods now.
+
+I’ve checked the code paths that actually decide policy precedence. At this point I’m looking for spec gaps rather than broad regressions, because the implementation lines up with the merge-order contract and the new tests cover the intended public surface.
+
+I haven’t found a material spec miss so far. I’m running the focused SDK/runtime tests that exercise the new merge order and surface keywords to confirm the implementation matches the diff review.
+
+The review is closed out unless a last-minute spec contradiction shows up in the artifacts. I’m updating the criteria and feedback files now with the final verifier result.
+
+Scope considered
+
+Phase-local review of the SDK/runtime alignment work only: public SDK signatures, resolver-owned policy merge order, direct SDK operations, synthetic `client.step(...)` invocations, and the active review artifacts.
+
+What I analyzed
+
+Implementation notes, decisions ledger, and the changed request-relevant code in [autoloop/sdk.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/autoloop/sdk.py), [autoloop/runtime/provider_policy_resolver.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/autoloop/runtime/provider_policy_resolver.py), [autoloop/runtime/runner.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/autoloop/runtime/runner.py), [autoloop/core/operations.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/autoloop/core/operations.py), and adjacent runtime integration points.
+
+What I reviewed
+
+I verified that `workspace`, `input`, `params`, and `policy` are the public SDK surface; that removed compatibility keywords are rejected; that resolver merge order is owned centrally by `ProviderPolicyResolver`; that direct `llm` / `classify` calls now use the same resolver contract; and that `client.step(..., policy=...)` applies an invocation-local layer without mutating the reused step object. I also ran:
+- `.venv-test/bin/python -m pytest tests/unit/test_sdk_facade.py tests/runtime/test_sdk_policy.py -q`
+- `.venv-test/bin/python -m pytest tests/runtime/test_provider_policy_steps.py -q`
+
+Key findings / decisions
+
+No blocking or non-blocking findings. The implementation matches the phase contract, and I updated [criteria.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/final-standalone-implementation-spec-shared-inhe-c4aa316d/runs/run-20260508T141115Z-6c430e1a/artifacts/implement/phases/sdk-runtime-alignment/criteria.md) and [feedback.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/final-standalone-implementation-spec-shared-inhe-c4aa316d/runs/run-20260508T141115Z-6c430e1a/artifacts/implement/phases/sdk-runtime-alignment/feedback.md) accordingly.
+
+Open issues / next step
+
+No open issues in this phase scope.
+
+<loop-control>
+{"schema":"docloop.loop_control/v1","kind":"promise","promise":"COMPLETE"}
+</loop-control>
