@@ -2013,3 +2013,46 @@ No open issues within this phase scope.
 <loop-control>
 {"schema":"docloop.loop_control/v1","kind":"promise","promise":"COMPLETE"}
 </loop-control>
+
+
+---
+run_id=run-20260508T205237Z-432ec7b1 | entry=session_turn | pair=test | phase=producer | cycle=1 | attempt=1 | thread_id=019e0960-bc32-7fd2-be36-5118582d54a2
+---
+provider=codex
+mode=resume
+template=/home/rauter/.local/share/pipx/venvs/autoloop/lib/python3.12/site-packages/autoloop/templates/test_producer.md
+session_id=019e0960-bc32-7fd2-be36-5118582d54a2
+
+
+---
+run_id=run-20260508T205237Z-432ec7b1 | entry=phase_output | pair=test | phase=producer | process=codex-agent | cycle=1 | attempt=1 | thread_id=019e0960-bc32-7fd2-be36-5118582d54a2
+---
+I’m treating this test-phase pass as refinement, not a new feature: I’ll inspect the current test artifact state and tighten the packaging smoke coverage only if there’s a real regression gap left after the implementation change.
+
+I found one remaining test gap: the fresh-wheel smoke path still proved importability and console scripts, but not the installed distribution identity itself. I’m tightening that path so both the wheel install and the shared `.venv` assert the same Botlane metadata contract.
+
+The wheel smoke test now checks the installed distribution object directly, not just the CLI surface around it. I’m running the focused file again before I write the phase artifacts so the strategy and feedback reflect the final test state.
+
+The focused file is still in its wheel-build/install cycle. Once it returns green I’ll update the test strategy with the behavior map and note the added metadata assertions in the phase feedback.
+
+I have the final passing result. I’m recording the test-scope decision and updating the phase strategy/feedback artifacts with the exact behavior coverage and verification outcome.
+
+Scope considered
+
+Phase-local test coverage only: [tests/runtime/test_wheel_packaging_smoke.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/tests/runtime/test_wheel_packaging_smoke.py), the active test artifacts, and the run-local decisions for this rename proof.
+
+What I analyzed
+
+I reviewed the current packaging smoke coverage, the run decisions, and the existing repo-local editable-install proof to see whether any part of AC-1 through AC-3 was still only indirectly covered.
+
+What I changed
+
+I tightened the fresh-wheel smoke path in [tests/runtime/test_wheel_packaging_smoke.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/tests/runtime/test_wheel_packaging_smoke.py) so it now asserts installed distribution metadata is `botlane-v3-surface` and that `autoloop-v3-surface` is absent, not just that the CLI/import surface looks right. I updated [test_strategy.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/additional-botlane-rename-requirements-discovere-28c3ecb0/runs/run-20260508T205237Z-432ec7b1/artifacts/test/phases/editable-install-refresh-and-proof/test_strategy.md) with an explicit behavior-to-test coverage map, appended the test summary to [feedback.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/additional-botlane-rename-requirements-discovere-28c3ecb0/runs/run-20260508T205237Z-432ec7b1/artifacts/test/phases/editable-install-refresh-and-proof/feedback.md), and recorded the non-obvious test decision in [decisions.txt](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/additional-botlane-rename-requirements-discovere-28c3ecb0/runs/run-20260508T205237Z-432ec7b1/decisions.txt).
+
+Key findings / decisions
+
+The remaining meaningful gap was that the throwaway wheel smoke path did not explicitly prove installed distribution identity, so I aligned it with the shared `.venv` proof. Verification passed with `./.venv/bin/pytest -q tests/runtime/test_wheel_packaging_smoke.py` (`2 passed`).
+
+Open issues / next step
+
+No blocking test gaps remain in this phase scope.
