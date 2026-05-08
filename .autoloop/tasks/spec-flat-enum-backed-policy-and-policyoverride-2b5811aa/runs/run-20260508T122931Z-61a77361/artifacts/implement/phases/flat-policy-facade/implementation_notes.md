@@ -27,6 +27,7 @@
 
 ## Assumptions
 - The existing core `ProviderPolicy` validator remains authoritative and unchanged, even where it constrains the facade shape.
+- Clarification QA-2 overrides the original dangerous-manual example: `sandbox_mode=SandboxMode.DANGER_FULL_ACCESS` is invalid unless the caller also supplies an explicit compatible `permission_mode`.
 
 ## Preserved invariants
 - No changes to `autoloop/core/provider_policy.py`
@@ -45,7 +46,7 @@
 ## Expected side effects
 - `Policy()` now reproduces `SYSTEM_DEFAULT_PROVIDER_POLICY` through the flat surface.
 - `PolicyOverride(...)` now produces sparse override payloads suitable for merge-based resolution.
-- Explicit `sandbox_mode=SandboxMode.DANGER_FULL_ACCESS` without an explicit `permission_mode` lowers to manual `permissions.mode='ask'` plus dangerous bypass, because the unchanged core validator rejects the current default `full_auto_sandboxed` mode with danger-full-access.
+- Explicit `sandbox_mode=SandboxMode.DANGER_FULL_ACCESS` without an explicit `permission_mode` now raises `ValueError` per clarification, rather than silently rewriting the permission mode.
 
 ## Deduplication / centralization
 - Centralized enum normalization, tuple/mapping coercion, inference, and compatibility checks in `_flat_policy_payload` to keep `Policy` and `PolicyOverride` aligned.

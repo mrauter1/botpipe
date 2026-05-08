@@ -263,7 +263,9 @@ def _flat_policy_payload(
 
     effective_permission_mode = permission_mode_value
     if effective_sandbox_mode == SandboxMode.DANGER_FULL_ACCESS.value and effective_permission_mode is None:
-        effective_permission_mode = PermissionMode.ASK.value
+        raise ValueError(
+            "sandbox_mode=SandboxMode.DANGER_FULL_ACCESS requires an explicit compatible permission_mode"
+        )
 
     dangerous_access = (
         effective_sandbox_mode == SandboxMode.DANGER_FULL_ACCESS.value

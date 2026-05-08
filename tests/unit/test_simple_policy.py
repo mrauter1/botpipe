@@ -199,16 +199,14 @@ def test_policy_can_disable_network() -> None:
 
 
 def test_dangerous_workflow_level_policy_inference_and_validation() -> None:
-    sandbox_policy = simple.Policy(sandbox_mode=simple.SandboxMode.DANGER_FULL_ACCESS)
     permission_policy = simple.Policy(permission_mode=simple.PermissionMode.FULL_AUTO_UNSANDBOXED)
-
-    assert sandbox_policy.sandbox.mode == "danger_full_access"
-    assert sandbox_policy.permissions.allow_dangerous_bypass is True
 
     assert permission_policy.permissions.mode == "full_auto_unsandboxed"
     assert permission_policy.permissions.allow_dangerous_bypass is True
     assert permission_policy.sandbox.mode == "danger_full_access"
 
+    with pytest.raises(ValueError):
+        simple.Policy(sandbox_mode=simple.SandboxMode.DANGER_FULL_ACCESS)
     with pytest.raises(ValueError):
         simple.Policy(
             permission_mode=simple.PermissionMode.FULL_AUTO_UNSANDBOXED,
@@ -275,16 +273,10 @@ def test_override_merge_clears_and_replaces_write_roots() -> None:
 
 
 def test_dangerous_override_inference_and_validation() -> None:
-    sandbox_override = simple.PolicyOverride(sandbox_mode=simple.SandboxMode.DANGER_FULL_ACCESS)
     permission_override = simple.PolicyOverride(
         permission_mode=simple.PermissionMode.FULL_AUTO_UNSANDBOXED
     )
     resolved = merge_provider_policies(SYSTEM_DEFAULT_PROVIDER_POLICY, permission_override)
-
-    assert sandbox_override.sandbox is not None
-    assert sandbox_override.sandbox.mode == "danger_full_access"
-    assert sandbox_override.permissions is not None
-    assert sandbox_override.permissions.allow_dangerous_bypass is True
 
     assert permission_override.sandbox is not None
     assert permission_override.sandbox.mode == "danger_full_access"
@@ -296,6 +288,8 @@ def test_dangerous_override_inference_and_validation() -> None:
     assert resolved.permissions.allow_dangerous_bypass is True
     assert resolved.sandbox.mode == "danger_full_access"
 
+    with pytest.raises(ValueError):
+        simple.PolicyOverride(sandbox_mode=simple.SandboxMode.DANGER_FULL_ACCESS)
     with pytest.raises(ValueError):
         simple.PolicyOverride(
             permission_mode=simple.PermissionMode.FULL_AUTO_UNSANDBOXED,
