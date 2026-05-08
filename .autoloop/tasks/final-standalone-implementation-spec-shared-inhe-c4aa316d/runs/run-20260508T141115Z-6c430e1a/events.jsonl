@@ -11,3 +11,6 @@
 {"ts": "2026-05-08T14:18:42.000236+00:00", "run_id": "run-20260508T141115Z-6c430e1a", "seq": 11, "event_type": "phase_started", "phase_id": "shared-policy-core", "phase_mode": "single"}
 {"ts": "2026-05-08T14:18:42.001161+00:00", "run_id": "run-20260508T141115Z-6c430e1a", "seq": 12, "event_type": "pair_started", "pair": "implement", "phase_id": "shared-policy-core"}
 {"ts": "2026-05-08T14:18:42.001244+00:00", "run_id": "run-20260508T141115Z-6c430e1a", "seq": 13, "event_type": "cycle_started", "pair": "implement", "cycle": 1, "attempt": 1, "phase_id": "shared-policy-core"}
+{"ts": "2026-05-08T14:31:49.415498+00:00", "run_id": "run-20260508T141115Z-6c430e1a", "seq": 14, "event_type": "phase_finished", "pair": "implement", "phase": "producer", "cycle": 1, "attempt": 1, "empty_output": false, "phase_id": "shared-policy-core"}
+{"ts": "2026-05-08T14:34:50.670831+00:00", "run_id": "run-20260508T141115Z-6c430e1a", "seq": 15, "event_type": "phase_finished", "pair": "implement", "phase": "verifier", "cycle": 1, "attempt": 1, "empty_output": false, "phase_id": "shared-policy-core"}
+{"ts": "2026-05-08T14:34:52.869563+00:00", "run_id": "run-20260508T141115Z-6c430e1a", "seq": 16, "event_type": "cycle_started", "pair": "implement", "cycle": 2, "attempt": 1, "phase_id": "shared-policy-core"}

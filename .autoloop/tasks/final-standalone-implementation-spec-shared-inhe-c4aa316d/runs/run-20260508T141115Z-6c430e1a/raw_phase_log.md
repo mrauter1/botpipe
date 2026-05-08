@@ -179,3 +179,170 @@ phase_mode=single
 phase_ids=shared-policy-core,compiler-simple-integration,sdk-runtime-alignment,regression-cleanup
 explicit=True
 current_phase_index=0
+
+
+---
+run_id=run-20260508T141115Z-6c430e1a | entry=session_turn | pair=implement | phase=producer | cycle=1 | attempt=1 | thread_id=019e07f4-78a0-79f0-9681-b0d48a911120
+---
+provider=codex
+mode=start
+template=/home/rauter/.local/share/pipx/venvs/autoloop/lib/python3.12/site-packages/autoloop/templates/implement_producer.md
+session_id=019e07f4-78a0-79f0-9681-b0d48a911120
+
+
+---
+run_id=run-20260508T141115Z-6c430e1a | entry=phase_output | pair=implement | phase=producer | process=codex-agent | cycle=1 | attempt=1 | thread_id=019e07f4-78a0-79f0-9681-b0d48a911120
+---
+I’m starting with the phase-scoped policy core work: I’ll inspect the current provider-policy/resolver/compiler surfaces, the active artifacts, and the existing SDK/simple exports before touching code.
+
+I’ve loaded the phase artifacts and the plan. Next I’m tracing the current policy surface, resolver, compiler fingerprints, and SDK/simple entrypoints to find the narrowest safe edit set.
+
+The current surface is still centered on `simple.PolicyOverride`, eager `simple.Policy(...)`, and SDK `root=`/`typed_input=`. I’m reading the exact lowering and merge paths now so I can replace them once instead of layering more compatibility on top.
+
+I’ve confirmed the current architecture: policy flattening lives in `simple.py`, compiler fingerprints only know core policy types, and the resolver only merges config/workflow/step layers. The main change is going to be centralizing policy semantics in a new module and then swapping all those call sites over to it.
+
+I have enough context to start the core refactor. I’m going to add `autoloop/policy.py`, switch the authoring and normalization sites to `PolicyInput`, then wire compiler and runtime resolution to that shared layer before I touch SDK naming/tests.
+
+I’m at the edit point. The first changes are going into the new shared module and the normalization/fingerprint layers; after that I’ll wire the resolver and simple surface to accept the new sparse `Policy` object without changing unrelated runtime behavior.
+
+I’m adding the canonical policy module now. This file will own enum validation, sparse-layer storage, flat-to-core lowering, explicit-base recursion, and deterministic layer payloads so the rest of the repo can stop duplicating policy logic.
+
+The shared module is in. I’m replacing the duplicated `simple.py` policy block now so the public authoring surface uses the canonical implementation instead of its own copy.
+
+The public surfaces are now pointing at the shared module. I’m doing a pass for remaining type checks and export assumptions before I run tests, because the likely failures here are stale `PolicyOverride` references and places that still only accept concrete core policies.
+
+`python` isn’t available in this shell, so I’m switching validation to `python3`. I also have the first wave of stale tests identified: they’re still asserting public `PolicyOverride` and the old eager `simple.Policy(...)` behavior, so I’m updating the targeted policy surface tests before running the phase suite.
+
+I’m shifting the targeted tests now. The runtime/core compatibility tests can still keep `ProviderPolicyOverride` where that’s the internal subject, but every public-surface assertion is moving to `Policy` and the new export contract.
+
+The largest stale test file is the old `simple.Policy`/`PolicyOverride` suite. I’m replacing it with a smaller integration set that asserts the new shared module, the root/simple exports, and public `Policy` behavior instead of the removed facade.
+
+The code compiles at module level. I’m doing one fast static pass over the new tests and then running the targeted suites for this phase to catch the integration gaps around discovery, compiler payloads, and runtime policy resolution.
+
+I’m in the validation loop now. I’m starting with the tests directly touched by this phase so I can fix the policy-layer and export regressions first, then I’ll widen to the existing provider-policy/runtime suites.
+
+`pytest` isn’t installed in this environment, so I can’t execute the suite directly. I’m checking the project’s packaging config and available tooling so I can at least validate imports and, if there’s a project-managed test runner, use that instead.
+
+I can’t use `pytest` here without installing extra tooling, so I’m switching to direct Python smoke checks against the touched APIs: imports, `Policy.resolve()`, workflow compilation, and resolver behavior.
+
+The environment is missing the project’s declared dependency (`pydantic`) as well as `pytest`, so even import smoke checks can’t run yet. I’m installing the minimal test/runtime dependencies locally so I can validate the change instead of stopping at static edits.
+
+The system Python is PEP 668 managed, so I’m not touching it. I’m creating a repo-local virtualenv instead and using that for validation.
+
+The phase-specific tests are green. I’m widening to the adjacent provider-policy suites now because the touched code sits on the compiler/resolver boundary and that’s the main regression surface for this refactor.
+
+The code and the targeted adjacent suites are green. I’m recording the non-obvious implementation decisions and the phase notes now, then I’ll do a final diff pass and close with the scoped outcome and validation.
+
+I generated some tracked `.pyc` files while doing import/compile validation. I’m restoring those binaries back to the committed state so the final diff stays source-only.
+
+I’m doing one last source-only cleanup pass. There are a couple of unused imports left from the initial module scaffold, and I want the new policy module to stay tight since it’s now the canonical entry point.
+
+I reran one focused test after the cleanup, which regenerated tracked/untracked bytecode again. I’m restoring those artifacts once more so the final patch stays source-only.
+
+Scope considered
+
+- Phase-local `shared-policy-core` only.
+- Core public policy surface, simple authoring integration, compiler fingerprinting, operation/runtime resolution, and the directly affected tests.
+- I avoided unrelated dirty/untracked files already present in `tests/` and elsewhere.
+
+What I analyzed
+
+- The old flat policy implementation in [autoloop/simple.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/autoloop/simple.py).
+- Core policy merge/validation in [autoloop/core/provider_policy.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/autoloop/core/provider_policy.py).
+- Policy acceptance/fingerprinting in [autoloop/core/steps.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/autoloop/core/steps.py), [autoloop/core/discovery.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/autoloop/core/discovery.py), and [autoloop/core/compiler.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/autoloop/core/compiler.py).
+- Runtime/inline resolution in [autoloop/runtime/provider_policy_resolver.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/autoloop/runtime/provider_policy_resolver.py) and [autoloop/core/operations.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/autoloop/core/operations.py).
+- Public export surfaces in [autoloop/__init__.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/autoloop/__init__.py) and [autoloop/sdk.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/autoloop/sdk.py).
+
+What I changed
+
+- Added the canonical shared policy module at [autoloop/policy.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/autoloop/policy.py) with:
+  - public enums,
+  - sparse inheriting `Policy`,
+  - `PolicyInput`,
+  - shared coercion helpers,
+  - sparse lowering to core `ProviderPolicyOverride`,
+  - recursive `base=` resolution with cycle detection,
+  - deterministic `to_layer_payload()`,
+  - `resolve_policy_layer(...)`.
+- Removed the duplicated public policy facade from [autoloop/simple.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/autoloop/simple.py) and re-exported the shared policy symbols instead.
+- Updated simple/core/runtime surfaces to accept `PolicyInput` directly and keep internal `ProviderPolicy` / `ProviderPolicyOverride` compatibility.
+- Updated compiler policy payload/fingerprint handling so authored public `Policy` layers are serialized without forcing eager resolution.
+- Removed public `PolicyOverride` re-exports from [autoloop/__init__.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/autoloop/__init__.py) and `autoloop.simple`; added shared policy convenience re-exports to [autoloop/sdk.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/autoloop/sdk.py).
+- Added/updated focused tests in [tests/unit/test_policy.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/tests/unit/test_policy.py), [tests/unit/test_simple_policy.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/tests/unit/test_simple_policy.py), [tests/unit/test_simple_surface.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/tests/unit/test_simple_surface.py), and [tests/runtime/test_provider_policy_steps.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/tests/runtime/test_provider_policy_steps.py).
+
+Key findings / decisions
+
+- The existing core schema was usable as-is; the right seam was a new sparse public layer that lowers into `ProviderPolicyOverride` only at resolution time.
+- Keeping `ProviderPolicyOverride` internal compatibility worked cleanly once discovery, step normalization, compiler payloads, and runtime resolution all switched to `PolicyInput`.
+- `ProviderPolicyResolver` now uses the shared resolver helper instead of ad hoc `merge_provider_policies(...)` calls for public layers.
+- Validation environment was missing `pydantic` and `pytest`; I used a repo-local `.venv` for verification rather than modifying the system Python.
+
+Open issues / next step
+
+- This phase did not implement the later SDK naming work (`workspace`, `input`, `params`) or SDK default/run policy layering through `RunnerOptions`; that remains for the subsequent phases.
+- Validation completed with:
+  - `.venv/bin/python -m pytest tests/unit/test_policy.py tests/unit/test_simple_policy.py tests/unit/test_simple_surface.py tests/runtime/test_provider_policy_steps.py`
+  - `.venv/bin/python -m pytest tests/unit/test_provider_policy.py tests/runtime/test_provider_policy_emitters.py tests/runtime/test_provider_policy_config.py`
+  - `.venv/bin/python -m pytest tests/unit/test_sdk_facade.py`
+- I updated the phase notes and decisions ledger at:
+  - [implementation_notes.md](</home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/final-standalone-implementation-spec-shared-inhe-c4aa316d/runs/run-20260508T141115Z-6c430e1a/artifacts/implement/phases/shared-policy-core/implementation_notes.md>)
+  - [decisions.txt](</home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/final-standalone-implementation-spec-shared-inhe-c4aa316d/runs/run-20260508T141115Z-6c430e1a/decisions.txt>)
+
+
+---
+run_id=run-20260508T141115Z-6c430e1a | entry=session_turn | pair=implement | phase=verifier | cycle=1 | attempt=1 | thread_id=019e07f4-78a0-79f0-9681-b0d48a911120
+---
+provider=codex
+mode=resume
+template=/home/rauter/.local/share/pipx/venvs/autoloop/lib/python3.12/site-packages/autoloop/templates/implement_verifier.md
+session_id=019e07f4-78a0-79f0-9681-b0d48a911120
+
+
+---
+run_id=run-20260508T141115Z-6c430e1a | entry=phase_output | pair=implement | phase=verifier | process=codex-agent | cycle=1 | attempt=1 | thread_id=019e07f4-78a0-79f0-9681-b0d48a911120
+---
+I’m reviewing the phase-local policy-core changes against the spec and adjacent resolver/compiler behavior. I’ll inspect the active criteria/feedback artifacts first, then audit the touched code paths and validate the implementation against the phase acceptance criteria.
+
+I’ve loaded the artifacts. Now I’m reading the actual implementation rather than just the plan notes, with focus on whether the sparse layer semantics are correct and whether any public surface still leaks the removed compatibility shape.
+
+I found a concrete dangerous-access edge case that looks like a phase blocker, and I’m confirming it directly before I write it up: the public `Policy(sandbox_mode=DANGER_FULL_ACCESS)` path appears to fail against the current default base policy instead of resolving as the spec requires.
+
+I found a second surface leak to verify: `PolicyOverride` is gone, but the internal `ProviderPolicyOverride` type may still be importable from `autoloop.simple` just because it’s left in the module globals. If that’s true, it conflicts with the “internal/core compatibility only” requirement for this phase.
+
+I’ve got two blocking findings. I’m recording them in the phase feedback artifact and marking the criteria as not met for this pass, since the dangerous-manual policy path still fails and the internal override type is still publicly reachable from `autoloop.simple`.
+
+Scope considered
+
+- Phase-local `shared-policy-core` implementation only.
+- Touched source: `autoloop/policy.py`, simple/core/runtime policy integration points, and the phase-local policy tests.
+- Active review artifacts: `criteria.md`, `feedback.md`, `implementation_notes.md`, and the run decisions ledger.
+
+What I analyzed
+
+- The new sparse public layer in `autoloop/policy.py`.
+- Public surface/export changes in `autoloop/simple.py`, `autoloop/__init__.py`, and `autoloop/sdk.py`.
+- Acceptance points in discovery/compiler/runtime resolution: `autoloop/core/discovery.py`, `autoloop/core/compiler.py`, `autoloop/core/operations.py`, `autoloop/core/steps.py`, and `autoloop/runtime/provider_policy_resolver.py`.
+- The producer’s validation notes and the spec’s dangerous-access requirements.
+
+What I reviewed
+
+- Direct behavior of `Policy.resolve(...)`, especially dangerous sandbox/manual access semantics.
+- Whether the removed public override surface still leaks through canonical public modules.
+- Whether phase acceptance criteria AC-1 through AC-3 are actually met by the implementation, not just by the rewritten tests.
+
+Key findings / decisions
+
+- Two blocking findings were recorded in `feedback.md`.
+- `IMP-001`: `Policy(sandbox_mode=SandboxMode.DANGER_FULL_ACCESS).resolve()` still fails against the default base policy, so the dangerous-manual public example from the spec does not work.
+- `IMP-002`: the internal core override type is still publicly reachable as `autoloop.simple.ProviderPolicyOverride`, which conflicts with the “internal/core compatibility only” requirement for this phase.
+- `criteria.md` remains unchecked for this pass.
+
+Open issues / next step
+
+- Fix the dangerous-manual sandbox resolution rule in `autoloop.policy` and add direct coverage for it.
+- Remove the public `ProviderPolicyOverride` leak from `autoloop.simple` while preserving internal compatibility checks.
+- Re-run the targeted policy/core/runtime suites after those fixes.
+
+<loop-control>
+{"schema":"docloop.loop_control/v1","kind":"promise","promise":"INCOMPLETE"}
+</loop-control>
