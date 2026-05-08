@@ -1522,3 +1522,58 @@ Open issues / next step
 
 - No open issues in this phase scope.
 - The requested export cleanup is implemented and the required regression coverage passed.
+
+
+---
+run_id=run-20260508T161613Z-c2f3eecb | entry=session_turn | pair=implement | phase=verifier | cycle=1 | attempt=1 | thread_id=019e0862-cb54-7a82-b93d-898c486428a1
+---
+provider=codex
+mode=resume
+template=/home/rauter/.local/share/pipx/venvs/autoloop/lib/python3.12/site-packages/autoloop/templates/implement_verifier.md
+session_id=019e0862-cb54-7a82-b93d-898c486428a1
+
+
+---
+run_id=run-20260508T161613Z-c2f3eecb | entry=phase_output | pair=implement | phase=verifier | process=codex-agent | cycle=1 | attempt=1 | thread_id=019e0862-cb54-7a82-b93d-898c486428a1
+---
+I’m reviewing the implemented diff against the phase contract first, then I’ll update the phase criteria and feedback artifacts with either blocking findings or a clean pass.
+
+I’ve confirmed the phase notes and run decisions are consistent with the implementation. I’m doing one last direct runtime check of the missing exports and then I’ll mark the review artifacts.
+
+The runtime check matches the contract: both leaked names are absent and `getattr` raises `AttributeError`. I found no blocking or non-blocking defects in-scope, so I’m recording a clean review result in the verifier artifacts.
+
+Scope considered
+
+- Reviewed the phase-scoped implementation only: `autoloop.simple`, the added regression coverage, the phase notes, and the phase criteria/feedback artifacts.
+- Ignored unrelated dirty files outside this task’s scoped blast radius.
+
+What I analyzed
+
+- The `autoloop.simple` policy alias cleanup and its effect on public module attributes.
+- The export-matrix regression assertions in `tests/unit/test_simple_policy.py`.
+- The run-local decisions and implementation notes for consistency with the approved plan.
+- A direct runtime import/attribute check for `PolicyInput` and `ProviderPolicyInput`.
+
+What I reviewed
+
+- `PolicyInput` is no longer importable from `autoloop.simple`, and `getattr(autoloop.simple, "PolicyInput")` raises `AttributeError`.
+- `ProviderPolicyInput` is no longer exposed from `autoloop.simple`.
+- The replacement private alias keeps simple declarations typed and compatible with `Policy`, `ProviderPolicy`, `ProviderPolicyOverride`, and `None`.
+- Required validation was documented and previously passed:
+  `./.venv/bin/pytest tests/unit/test_simple_policy.py`
+  `./.venv/bin/pytest tests/unit/test_simple_surface.py tests/unit/test_policy.py tests/runtime/test_sdk_policy.py tests/unit/test_sdk_facade.py`
+
+Key findings / decisions
+
+- No blocking findings.
+- No non-blocking defects in phase scope.
+- Updated `criteria.md` to all checked and appended a clean review entry to `feedback.md` with stable ID `IMP-000`.
+
+Open issues / next step
+
+- No open issues in this phase scope.
+- Review is complete and the phase can advance.
+
+<loop-control>
+{"schema":"docloop.loop_control/v1","kind":"promise","promise":"COMPLETE"}
+</loop-control>
