@@ -169,3 +169,12 @@ No open plan-verification blockers remain. The planning artifacts are ready for 
 <loop-control>
 {"schema":"docloop.loop_control/v1","kind":"promise","promise":"COMPLETE"}
 </loop-control>
+
+
+---
+run_id=run-20260508T122931Z-61a77361 | entry=phase_scope_resolved
+---
+phase_mode=single
+phase_ids=flat-policy-facade
+explicit=True
+current_phase_index=0
