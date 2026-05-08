@@ -32,6 +32,11 @@ EXIT_RUNTIME_ERROR = 1
 EXIT_USAGE_ERROR = 2
 EXIT_RESOLUTION_ERROR = 3
 
+_WORKSPACE_HELP = (
+    "Workspace directory. Package workflows are loaded from the installed autoloop package; "
+    "workspace workflows are loaded from .autoloop/workflows/."
+)
+
 
 def build_arg_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(
@@ -42,18 +47,20 @@ def build_arg_parser() -> argparse.ArgumentParser:
 
     common = argparse.ArgumentParser(add_help=False)
     common.add_argument(
-        "--root",
+        "--workspace",
+        dest="root",
         type=Path,
-        default=Path.cwd(),
-        help="Workspace root. Package workflows are loaded from the installed autoloop package; workspace workflows are loaded from .autoloop/workflows/.",
+        required=True,
+        help=_WORKSPACE_HELP,
     )
 
     mutate = argparse.ArgumentParser(add_help=False)
     mutate.add_argument(
-        "--root",
+        "--workspace",
+        dest="root",
         type=Path,
-        default=Path.cwd(),
-        help="Workspace root. Package workflows are loaded from the installed autoloop package; workspace workflows are loaded from .autoloop/workflows/.",
+        required=True,
+        help=_WORKSPACE_HELP,
     )
     mutate.add_argument(
         "--provider",

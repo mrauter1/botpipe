@@ -318,7 +318,7 @@ def test_cli_workflows_list_show_and_all_emit_shadow_and_source_metadata(
     package_dir = _write_package_workflow(package_root, "shared_demo", aliases=("shared",))
     workspace_dir = _write_workspace_workflow(tmp_path, "shared_demo", aliases=("shared",))
 
-    exit_code = cli.main(["workflows", "list", "--root", str(tmp_path)])
+    exit_code = cli.main(["workflows", "list", "--workspace", str(tmp_path)])
     payload = json.loads(capsys.readouterr().out)
 
     assert exit_code == 0
@@ -338,7 +338,7 @@ def test_cli_workflows_list_show_and_all_emit_shadow_and_source_metadata(
         }
     ]
 
-    exit_code = cli.main(["workflows", "list", "--all", "--root", str(tmp_path)])
+    exit_code = cli.main(["workflows", "list", "--all", "--workspace", str(tmp_path)])
     payload = json.loads(capsys.readouterr().out)
 
     assert exit_code == 0
@@ -349,7 +349,7 @@ def test_cli_workflows_list_show_and_all_emit_shadow_and_source_metadata(
     assert payload[1]["shadowed"] is True
     assert payload[1]["shadowed_by"] == "shared_demo"
 
-    exit_code = cli.main(["workflows", "show", "shared_demo", "--root", str(tmp_path)])
+    exit_code = cli.main(["workflows", "show", "shared_demo", "--workspace", str(tmp_path)])
     payload = json.loads(capsys.readouterr().out)
 
     assert exit_code == 0
@@ -371,7 +371,7 @@ def test_cli_workflows_show_emits_package_source_metadata(
     package_root = _configure_package_root(monkeypatch, tmp_path)
     package_dir = _write_package_workflow(package_root, "package_show")
 
-    exit_code = cli.main(["workflows", "show", "package_show", "--root", str(tmp_path)])
+    exit_code = cli.main(["workflows", "show", "package_show", "--workspace", str(tmp_path)])
     payload = json.loads(capsys.readouterr().out)
 
     assert exit_code == 0
@@ -387,7 +387,7 @@ def test_cli_workflows_show_emits_package_source_metadata(
 
 
 def test_cli_init_workflow_scaffolds_under_dot_autoloop_workflows(tmp_path: Path, capsys) -> None:
-    exit_code = cli.main(["init", "workflow", "demo", "--root", str(tmp_path)])
+    exit_code = cli.main(["init", "workflow", "demo", "--workspace", str(tmp_path)])
     payload = json.loads(capsys.readouterr().out)
 
     package_dir = tmp_path / ".autoloop" / "workflows" / "demo"
@@ -413,5 +413,8 @@ def test_cli_workflows_list_help_describes_package_and_dot_autoloop_roots(capsys
 
     assert excinfo.value.code == 0
     help_text = capsys.readouterr().out
+    assert "--workspace" in help_text
+    assert "--root" not in help_text
+    assert "workspace directory" in help_text.lower()
     assert "package workflows are loaded" in help_text.lower()
     assert ".autoloop/workflows/." in help_text

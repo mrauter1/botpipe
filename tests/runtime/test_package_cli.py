@@ -216,6 +216,8 @@ def test_cli_mutating_command_help_exposes_provider_and_hides_provider_factory(c
 
         assert excinfo.value.code == 0
         help_text = capsys.readouterr().out
+        assert "--workspace" in help_text
+        assert "--root" not in help_text
         assert "--provider" in help_text
         assert "--policy-file" in help_text
         assert "--policy-validation-unsupported" in help_text
@@ -225,6 +227,50 @@ def test_cli_mutating_command_help_exposes_provider_and_hides_provider_factory(c
         assert "--git-commit-policy" in help_text
         assert "--no-trace" in help_text
         assert PUBLIC_PROVIDER_FACTORY_FLAG not in help_text
+
+
+@pytest.mark.parametrize(
+    "argv",
+    [
+        ["workflows", "list"],
+        ["workflows", "show", "review"],
+        ["run", "review", "task-1", "--message", "hello"],
+        ["resume", "review", "task-1"],
+        ["answer", "review", "task-1", "--answer", "hello"],
+        ["runs", "list"],
+        ["runs", "show", "review", "task-1"],
+        ["logs", "review", "task-1"],
+        ["init", "workflow", "child_workflow"],
+    ],
+)
+def test_cli_requires_workspace_for_public_entry_points(argv: list[str], capsys) -> None:
+    with pytest.raises(SystemExit) as excinfo:
+        cli.build_arg_parser().parse_args(argv)
+
+    assert excinfo.value.code == cli.EXIT_USAGE_ERROR
+    assert "--workspace" in capsys.readouterr().err
+
+
+@pytest.mark.parametrize(
+    "argv",
+    [
+        ["workflows", "list", "--workspace", "workspace", "--root", "legacy"],
+        ["workflows", "show", "review", "--workspace", "workspace", "--root", "legacy"],
+        ["run", "review", "task-1", "--message", "hello", "--workspace", "workspace", "--root", "legacy"],
+        ["resume", "review", "task-1", "--workspace", "workspace", "--root", "legacy"],
+        ["answer", "review", "task-1", "--answer", "hello", "--workspace", "workspace", "--root", "legacy"],
+        ["runs", "list", "--workspace", "workspace", "--root", "legacy"],
+        ["runs", "show", "review", "task-1", "--workspace", "workspace", "--root", "legacy"],
+        ["logs", "review", "task-1", "--workspace", "workspace", "--root", "legacy"],
+        ["init", "workflow", "child_workflow", "--workspace", "workspace", "--root", "legacy"],
+    ],
+)
+def test_cli_rejects_root_flag_for_public_entry_points(argv: list[str], capsys) -> None:
+    with pytest.raises(SystemExit) as excinfo:
+        cli.build_arg_parser().parse_args(argv)
+
+    assert excinfo.value.code == cli.EXIT_USAGE_ERROR
+    assert "unrecognized arguments: --root legacy" in capsys.readouterr().err
 
 
 def test_cli_workflows_show_reports_parameters_and_aliases(
@@ -248,7 +294,7 @@ class Params(BaseModel):
 """.strip(),
     )
 
-    exit_code = cli.main(["workflows", "show", "reviewer", "--root", str(tmp_path)])
+    exit_code = cli.main(["workflows", "show", "reviewer", "--workspace", str(tmp_path)])
     captured = capsys.readouterr()
 
     assert exit_code == 0
@@ -324,7 +370,7 @@ def test_cli_workflows_show_uses_spec_paths_for_specs_and_contracts_support_file
     (package_dir / "specs.py").write_text("class Params:\n    pass\n", encoding="utf-8")
     (package_dir / "contracts.py").write_text("# support schema\n", encoding="utf-8")
 
-    exit_code = cli.main(["workflows", "show", "review", "--root", str(tmp_path)])
+    exit_code = cli.main(["workflows", "show", "review", "--workspace", str(tmp_path)])
     captured = capsys.readouterr()
 
     assert exit_code == 0
@@ -355,7 +401,7 @@ def test_cli_workflow_resolution_rejects_same_tier_name_alias_collisions_and_amb
         class_name="SharedWorkflow",
     )
 
-    duplicate_key_exit = cli.main(["workflows", "show", "shared", "--root", str(tmp_path)])
+    duplicate_key_exit = cli.main(["workflows", "show", "shared", "--workspace", str(tmp_path)])
     duplicate_key_captured = capsys.readouterr()
 
     assert duplicate_key_exit == cli.EXIT_RESOLUTION_ERROR
@@ -378,7 +424,7 @@ def test_cli_workflow_resolution_rejects_same_tier_name_alias_collisions_and_amb
         aliases=("common",),
     )
 
-    ambiguous_exit = cli.main(["workflows", "show", "common", "--root", str(tmp_path)])
+    ambiguous_exit = cli.main(["workflows", "show", "common", "--workspace", str(tmp_path)])
     ambiguous_captured = capsys.readouterr()
 
     assert ambiguous_exit == cli.EXIT_RESOLUTION_ERROR
@@ -404,7 +450,7 @@ def test_cli_workflows_list_includes_manifest_and_inferred_workflows_without_imp
         encoding="utf-8",
     )
 
-    exit_code = cli.main(["workflows", "list", "--root", str(tmp_path)])
+    exit_code = cli.main(["workflows", "list", "--workspace", str(tmp_path)])
     payload = json.loads(capsys.readouterr().out)
 
     assert exit_code == 0
@@ -468,7 +514,7 @@ class Params(BaseModel):
 """.strip(),
     )
 
-    show_exit = cli.main(["workflows", "show", "typed_review", "--root", str(tmp_path)])
+    show_exit = cli.main(["workflows", "show", "typed_review", "--workspace", str(tmp_path)])
     show_payload = json.loads(capsys.readouterr().out)
 
     assert show_exit == 0
@@ -490,7 +536,7 @@ class Params(BaseModel):
             "run",
             "typed_review",
             "task-json",
-            "--root",
+            "--workspace",
             str(tmp_path),
             "--message",
             "Serialize defaults",
@@ -526,7 +572,7 @@ def test_cli_mutating_commands_accept_non_public_provider_factory_injection_seam
             "run",
             "injected_provider",
             "task-injected-provider",
-            "--root",
+            "--workspace",
             str(tmp_path),
             "--message",
             "Run with a non-public injected provider factory",
@@ -563,7 +609,7 @@ def test_cli_mutating_commands_route_public_provider_selection_through_typed_con
             "run",
             "selected_provider",
             "task-selected-provider",
-            "--root",
+            "--workspace",
             str(tmp_path),
             "--message",
             "Run with a public provider selection path",
@@ -611,7 +657,7 @@ def test_cli_mutating_commands_route_runtime_git_and_trace_overrides_through_typ
             "run",
             "runtime_configured",
             "task-runtime-configured",
-            "--root",
+            "--workspace",
             str(tmp_path),
             "--message",
             "Run with runtime git and trace overrides",
@@ -650,7 +696,7 @@ def test_cli_run_rejects_public_provider_factory_flag(
                 "run",
                 "public_provider",
                 "task-public-provider",
-                "--root",
+                "--workspace",
                 str(tmp_path),
                 "--message",
                 "Run with a public provider factory",
@@ -691,7 +737,7 @@ class Params(BaseModel):
             "run",
             "reviewer",
             "task-42",
-            "--root",
+            "--workspace",
             str(tmp_path),
             "--message",
             "Review this change",
@@ -721,7 +767,7 @@ class Params(BaseModel):
     run_dir = tmp_path / ".autoloop" / "tasks" / "task-42" / "wf_review" / "runs" / run_id
     assert len(list((run_dir.parent).iterdir())) == 1
 
-    show_exit = cli.main(["runs", "show", "review", "task-42", "--root", str(tmp_path)])
+    show_exit = cli.main(["runs", "show", "review", "task-42", "--workspace", str(tmp_path)])
     show_output = json.loads(capsys.readouterr().out)
 
     assert show_exit == 0
@@ -732,7 +778,7 @@ class Params(BaseModel):
     assert show_output["workflow_params"] == {"mode": "focused", "reviewers": ["alice", "bob"]}
     assert show_output["pending_input"]["question"] == "What value?"
 
-    list_exit = cli.main(["runs", "list", "--workflow", "reviewer", "--task", "task-42", "--root", str(tmp_path)])
+    list_exit = cli.main(["runs", "list", "--workflow", "reviewer", "--task", "task-42", "--workspace", str(tmp_path)])
     list_output = json.loads(capsys.readouterr().out)
 
     assert list_exit == 0
@@ -740,20 +786,20 @@ class Params(BaseModel):
     assert list_output[0]["run_id"] == run_id
     assert list_output[0]["awaiting_input"] is True
 
-    logs_exit = cli.main(["logs", "review", "task-42", "--root", str(tmp_path)])
+    logs_exit = cli.main(["logs", "review", "task-42", "--workspace", str(tmp_path)])
     logs_output = capsys.readouterr().out
 
     assert logs_exit == 0
     assert '"event_type": "run_started"' in logs_output
 
-    raw_logs_exit = cli.main(["logs", "review", "task-42", "--root", str(tmp_path), "--raw"])
+    raw_logs_exit = cli.main(["logs", "review", "task-42", "--workspace", str(tmp_path), "--raw"])
     raw_logs_captured = capsys.readouterr()
 
     assert raw_logs_exit == cli.EXIT_RESOLUTION_ERROR
     assert "raw log output is missing" in raw_logs_captured.err
 
     resume_exit = cli.main(
-        ["resume", "review", "task-42", "--root", str(tmp_path), "--no-git"],
+        ["resume", "review", "task-42", "--workspace", str(tmp_path), "--no-git"],
         provider_factory=_provider_factory,
     )
     resume_output = json.loads(capsys.readouterr().out)
@@ -764,7 +810,7 @@ class Params(BaseModel):
     assert len(list((run_dir.parent).iterdir())) == 1
 
     answer_exit = cli.main(
-        ["answer", "review", "task-42", "--root", str(tmp_path), "--answer", "Use OAuth", "--no-git"],
+        ["answer", "review", "task-42", "--workspace", str(tmp_path), "--answer", "Use OAuth", "--no-git"],
         provider_factory=_provider_factory,
     )
     answer_output = json.loads(capsys.readouterr().out)
@@ -775,7 +821,7 @@ class Params(BaseModel):
     assert answer_output["awaiting_input"] is False
     assert len(list((run_dir.parent).iterdir())) == 1
 
-    final_show_exit = cli.main(["runs", "show", "reviewer", "task-42", "--root", str(tmp_path)])
+    final_show_exit = cli.main(["runs", "show", "reviewer", "task-42", "--workspace", str(tmp_path)])
     final_show = json.loads(capsys.readouterr().out)
     result_payload = json.loads((run_dir / "result.json").read_text(encoding="utf-8"))
 
@@ -826,7 +872,7 @@ def test_cli_runs_list_filters_legacy_paused_run_metadata_as_awaiting_input(
             "task-legacy",
             "--status",
             "awaiting_input",
-            "--root",
+            "--workspace",
             str(tmp_path),
         ]
     )
@@ -860,12 +906,12 @@ def test_cli_latest_run_selection_and_explicit_run_id_targeting_are_deterministi
     )
 
     first_exit = cli.main(
-        ["run", "review", "task-runs", "--root", str(tmp_path), "--message", "First request", "--no-git"],
+        ["run", "review", "task-runs", "--workspace", str(tmp_path), "--message", "First request", "--no-git"],
         provider_factory=_provider_factory,
     )
     first_run = json.loads(capsys.readouterr().out)
     second_exit = cli.main(
-        ["run", "review", "task-runs", "--root", str(tmp_path), "--message", "Second request", "--no-git"],
+        ["run", "review", "task-runs", "--workspace", str(tmp_path), "--message", "Second request", "--no-git"],
         provider_factory=_provider_factory,
     )
     second_run = json.loads(capsys.readouterr().out)
@@ -874,7 +920,7 @@ def test_cli_latest_run_selection_and_explicit_run_id_targeting_are_deterministi
     assert second_exit == 0
     assert first_run["run_id"] != second_run["run_id"]
 
-    latest_show_exit = cli.main(["runs", "show", "review", "task-runs", "--root", str(tmp_path)])
+    latest_show_exit = cli.main(["runs", "show", "review", "task-runs", "--workspace", str(tmp_path)])
     latest_show = json.loads(capsys.readouterr().out)
 
     assert latest_show_exit == 0
@@ -882,7 +928,7 @@ def test_cli_latest_run_selection_and_explicit_run_id_targeting_are_deterministi
     assert latest_show["status"] == "awaiting_input"
 
     latest_resume_exit = cli.main(
-        ["resume", "review", "task-runs", "--root", str(tmp_path), "--no-git"],
+        ["resume", "review", "task-runs", "--workspace", str(tmp_path), "--no-git"],
         provider_factory=_provider_factory,
     )
     latest_resume = json.loads(capsys.readouterr().out)
@@ -896,7 +942,7 @@ def test_cli_latest_run_selection_and_explicit_run_id_targeting_are_deterministi
             "answer",
             "review",
             "task-runs",
-            "--root",
+            "--workspace",
             str(tmp_path),
             "--run-id",
             first_run["run_id"],
@@ -918,7 +964,7 @@ def test_cli_latest_run_selection_and_explicit_run_id_targeting_are_deterministi
             "show",
             "review",
             "task-runs",
-            "--root",
+            "--workspace",
             str(tmp_path),
             "--run-id",
             second_run["run_id"],
@@ -942,7 +988,7 @@ def test_cli_rejects_invalid_or_unsupported_workflow_params(
         class_name="NoParamsWorkflow",
     )
     exit_code = cli.main(
-        ["run", "no_params", "task-1", "--root", str(tmp_path), "--message", "hello", "-wf", "mode", "strict"],
+        ["run", "no_params", "task-1", "--workspace", str(tmp_path), "--message", "hello", "-wf", "mode", "strict"],
         provider_factory=_provider_factory,
     )
     captured = capsys.readouterr()
@@ -963,7 +1009,7 @@ def test_cli_rejects_invalid_or_unsupported_workflow_params(
             "run",
             "strict_review",
             "task-1",
-            "--root",
+            "--workspace",
             str(tmp_path),
             "--message",
             "hello",
@@ -982,7 +1028,7 @@ def test_cli_rejects_invalid_or_unsupported_workflow_params(
     assert "does not accept repeated values" in duplicate_captured.err
 
     unknown_exit = cli.main(
-        ["run", "strict_review", "task-1", "--root", str(tmp_path), "--message", "hello", "-wf", "unknown", "x"],
+        ["run", "strict_review", "task-1", "--workspace", str(tmp_path), "--message", "hello", "-wf", "unknown", "x"],
         provider_factory=_provider_factory,
     )
     unknown_captured = capsys.readouterr()
@@ -1013,7 +1059,7 @@ def test_cli_init_workflow_scaffolds_supported_shapes_and_rejects_duplicates(
     shape: str,
     expected_relpaths: tuple[str, ...],
 ) -> None:
-    exit_code = cli.main(["init", "workflow", "child_workflow", "--shape", shape, "--root", str(tmp_path)])
+    exit_code = cli.main(["init", "workflow", "child_workflow", "--shape", shape, "--workspace", str(tmp_path)])
     captured = capsys.readouterr()
 
     assert exit_code == 0
@@ -1048,7 +1094,7 @@ def test_cli_init_workflow_scaffolds_supported_shapes_and_rejects_duplicates(
     assert compiled.workflow_name == "child_workflow"
     _assert_compiled_bootstrap_contract(compiled)
 
-    duplicate_exit = cli.main(["init", "workflow", "child_workflow", "--shape", shape, "--root", str(tmp_path)])
+    duplicate_exit = cli.main(["init", "workflow", "child_workflow", "--shape", shape, "--workspace", str(tmp_path)])
     duplicate = capsys.readouterr()
 
     assert duplicate_exit == cli.EXIT_USAGE_ERROR
@@ -1056,7 +1102,7 @@ def test_cli_init_workflow_scaffolds_supported_shapes_and_rejects_duplicates(
 
 
 def test_cli_init_workflow_defaults_to_package_shape(tmp_path: Path, capsys) -> None:
-    exit_code = cli.main(["init", "workflow", "child_workflow", "--root", str(tmp_path)])
+    exit_code = cli.main(["init", "workflow", "child_workflow", "--workspace", str(tmp_path)])
     captured = capsys.readouterr()
 
     assert exit_code == 0
