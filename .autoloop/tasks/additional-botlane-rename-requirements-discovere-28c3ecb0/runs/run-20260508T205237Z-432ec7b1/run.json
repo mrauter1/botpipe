@@ -13,11 +13,11 @@
       "editable-install-refresh-and-proof"
     ],
     "explicit": true,
-    "current_phase_index": 0,
-    "current_phase_id": "editable-install-refresh-and-proof"
+    "current_phase_index": 1,
+    "current_phase_id": null
   },
   "phase_status": {
-    "editable-install-refresh-and-proof": "in_progress"
+    "editable-install-refresh-and-proof": "completed"
   },
   "phase_history": [
     {
@@ -25,6 +25,13 @@
       "run_id": "run-20260508T205237Z-432ec7b1",
       "status": "in_progress",
       "ts": "2026-05-08T20:56:34.263967+00:00"
+    },
+    {
+      "phase_id": "editable-install-refresh-and-proof",
+      "run_id": "run-20260508T205237Z-432ec7b1",
+      "status": "completed",
+      "ts": "2026-05-08T21:03:13.158971+00:00",
+      "pair": "test"
     }
   ]
 }
