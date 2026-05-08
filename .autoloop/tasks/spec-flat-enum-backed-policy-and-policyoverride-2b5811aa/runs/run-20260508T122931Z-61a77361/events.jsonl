@@ -23,3 +23,6 @@
 {"ts": "2026-05-08T12:48:28.426027+00:00", "run_id": "run-20260508T122931Z-61a77361", "seq": 23, "event_type": "phase_finished", "pair": "implement", "phase": "producer", "cycle": 2, "attempt": 3, "empty_output": false, "phase_id": "flat-policy-facade"}
 {"ts": "2026-05-08T12:49:39.938330+00:00", "run_id": "run-20260508T122931Z-61a77361", "seq": 24, "event_type": "phase_finished", "pair": "implement", "phase": "verifier", "cycle": 2, "attempt": 3, "empty_output": false, "phase_id": "flat-policy-facade"}
 {"ts": "2026-05-08T12:49:40.014167+00:00", "run_id": "run-20260508T122931Z-61a77361", "seq": 25, "event_type": "pair_completed", "pair": "implement", "cycle": 2, "attempt": 3, "phase_id": "flat-policy-facade"}
+{"ts": "2026-05-08T12:49:40.115492+00:00", "run_id": "run-20260508T122931Z-61a77361", "seq": 26, "event_type": "phase_deferred", "pair": "implement", "phase_mode": "single", "phase_id": "flat-policy-facade", "reason": "awaiting enabled test pair completion"}
+{"ts": "2026-05-08T12:49:40.120292+00:00", "run_id": "run-20260508T122931Z-61a77361", "seq": 27, "event_type": "pair_started", "pair": "test", "phase_id": "flat-policy-facade"}
+{"ts": "2026-05-08T12:49:40.124405+00:00", "run_id": "run-20260508T122931Z-61a77361", "seq": 28, "event_type": "cycle_started", "pair": "test", "cycle": 1, "attempt": 1, "phase_id": "flat-policy-facade"}
