@@ -1,2 +1,3 @@
 # Plan ↔ Plan Verifier Feedback
 - Planned a single run-local phase focused on replacing the stale editable install in the shared `.venv` and adding active-environment proof, because the maintained source metadata already publishes `botlane-v3-surface` and the remaining gap is live install state plus missing validation.
+- PLAN-001 | non-blocking | Verified the plan against the request, current decisions block, repo packaging metadata, and the live `.venv` evidence. No blocking defects found: the artifacts keep scope on the active editable install, forbid reintroducing `autoloop` aliases, preserve legacy-read compatibility as read-only, and add the missing active-environment validation alongside the existing wheel smoke proof.
