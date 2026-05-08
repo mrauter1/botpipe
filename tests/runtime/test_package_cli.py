@@ -204,6 +204,7 @@ def test_cli_help_exposes_package_commands_only() -> None:
 
     for required in ("workflows", "run", "resume", "answer", "runs", "logs", "init"):
         assert required in help_text
+    assert "ROOT" not in help_text
 
     for forbidden in ("--class-name", "--request-text", "--resume", " exec "):
         assert forbidden not in help_text
@@ -217,7 +218,9 @@ def test_cli_mutating_command_help_exposes_provider_and_hides_provider_factory(c
         assert excinfo.value.code == 0
         help_text = capsys.readouterr().out
         assert "--workspace" in help_text
+        assert "--workspace WORKSPACE" in help_text
         assert "--root" not in help_text
+        assert "ROOT" not in help_text
         assert "--provider" in help_text
         assert "--policy-file" in help_text
         assert "--policy-validation-unsupported" in help_text

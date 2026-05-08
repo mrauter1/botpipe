@@ -19,7 +19,7 @@
 
 ## Checklist mapping
 - Plan milestone 3 / AC-1: replaced public `--root` with required `--workspace` on shared runtime parser parents; updated covered runtime CLI command tests; added omission and legacy-flag rejection coverage.
-- Plan milestone 3 / AC-2: aligned runtime CLI help assertions to workspace wording and absence of `--root`.
+- Plan milestone 3 / AC-2: aligned runtime CLI help text to workspace wording by keeping the public flag as `--workspace WORKSPACE`; strengthened help assertions to reject both `--root` and `ROOT`.
 - Plan milestone 3 / AC-3: updated authoring doc command examples from `--root` to `--workspace`.
 
 ## Assumptions
@@ -32,7 +32,7 @@
 ## Intended behavior changes
 - Covered public runtime CLI entry points now require `--workspace`.
 - Public runtime CLI no longer accepts `--root`.
-- Public help and touched examples now describe the project directory as the workspace.
+- Public help and touched examples now describe the project directory as the workspace, including the argparse placeholder name.
 
 ## Known non-changes
 - No runtime handler logic or downstream variable names were renamed beyond parser argument wiring.

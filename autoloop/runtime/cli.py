@@ -50,6 +50,7 @@ def build_arg_parser() -> argparse.ArgumentParser:
         "--workspace",
         dest="root",
         type=Path,
+        metavar="WORKSPACE",
         required=True,
         help=_WORKSPACE_HELP,
     )
@@ -59,6 +60,7 @@ def build_arg_parser() -> argparse.ArgumentParser:
         "--workspace",
         dest="root",
         type=Path,
+        metavar="WORKSPACE",
         required=True,
         help=_WORKSPACE_HELP,
     )

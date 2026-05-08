@@ -752,3 +752,56 @@ Open issues / next step
 <loop-control>
 {"schema":"docloop.loop_control/v1","kind":"promise","promise":"INCOMPLETE"}
 </loop-control>
+
+
+---
+run_id=run-20260508T173757Z-dbc5e2d0 | entry=session_turn | pair=implement | phase=producer | cycle=2 | attempt=1 | thread_id=019e08c0-fd19-7d83-8d47-b301dba7c66b
+---
+provider=codex
+mode=resume
+template=/home/rauter/.local/share/pipx/venvs/autoloop/lib/python3.12/site-packages/autoloop/templates/implement_producer.md
+session_id=019e08c0-fd19-7d83-8d47-b301dba7c66b
+
+
+---
+run_id=run-20260508T173757Z-dbc5e2d0 | entry=phase_output | pair=implement | phase=producer | process=codex-agent | cycle=2 | attempt=1 | thread_id=019e08c0-fd19-7d83-8d47-b301dba7c66b
+---
+I’m addressing the single reviewer finding in the runtime CLI help surface. I’ll patch the shared parser argument so help renders `WORKSPACE` instead of leaking `ROOT`, then tighten the help assertions and rerun the focused runtime suite.
+
+I’m making the smallest fix that closes the finding: keep `dest="root"` for handler stability, but override the public metavar to `WORKSPACE` and lock that into the help tests.
+
+The code fix is in. I’m updating the phase notes to reflect the resolved help-surface leak, then I’ll rerun the same focused runtime CLI suite the reviewer used.
+
+The metavar leak is fixed in rendered help, but one test regressed. I’m pulling the exact failure before changing anything else so the fix stays minimal and phase-local.
+
+The failure is in the top-level parser help, which never included subcommand-specific options before this change. I’m narrowing that assertion so it still guards against `ROOT` leakage without inventing a new top-level help contract.
+
+I’ve corrected the overreach in the top-level help assertion. Rerunning the focused runtime CLI suite now to verify the help fix and the tightened regression coverage together.
+
+Scope considered
+
+- Phase-local runtime CLI workspace-flag fix only: [autoloop/runtime/cli.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/autoloop/runtime/cli.py), [tests/runtime/test_package_cli.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/tests/runtime/test_package_cli.py), [tests/runtime/test_runtime_cli_metadata_integration.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/tests/runtime/test_runtime_cli_metadata_integration.py), and the phase [implementation_notes.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/below-is-the-revised-standalone-correction-spec-a9877342/runs/run-20260508T173757Z-dbc5e2d0/artifacts/implement/phases/runtime-cli-workspace-flag/implementation_notes.md).
+
+What I analyzed
+
+- The reviewer’s blocking finding in [feedback.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/below-is-the-revised-standalone-correction-spec-a9877342/runs/run-20260508T173757Z-dbc5e2d0/artifacts/implement/phases/runtime-cli-workspace-flag/feedback.md) about argparse help still rendering `ROOT`.
+- The shared `--workspace` parent arguments and the existing help assertions for runtime CLI commands.
+- Rendered help output for `workflows list` after the parser change.
+
+What I changed
+
+- Added `metavar="WORKSPACE"` to the shared `--workspace` arguments in [autoloop/runtime/cli.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/autoloop/runtime/cli.py) while keeping `dest="root"` unchanged for handler compatibility.
+- Tightened runtime CLI help assertions so subcommand help now requires `--workspace WORKSPACE` and rejects `ROOT`.
+- Kept the top-level help test scoped correctly: it now rejects `ROOT` leakage without asserting subcommand-only flags at the top level.
+- Updated [implementation_notes.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/below-is-the-revised-standalone-correction-spec-a9877342/runs/run-20260508T173757Z-dbc5e2d0/artifacts/implement/phases/runtime-cli-workspace-flag/implementation_notes.md) to reflect the metavar fix and strengthened validation.
+
+Key findings / decisions
+
+- The minimal safe fix was an explicit metavar override; changing `dest` would have expanded the blast radius into runtime handler code that the phase contract explicitly keeps out of scope.
+- Rendered help now shows `--workspace WORKSPACE`, which closes the reviewer’s AC-2 gap without changing CLI behavior.
+- Validation passed with `./.venv/bin/pytest tests/runtime/test_package_cli.py tests/runtime/test_runtime_cli_metadata_integration.py`.
+
+Open issues / next step
+
+- No open issues remain in this phase-local scope.
+- The updated implementation is ready for the next verifier pass.
