@@ -657,3 +657,87 @@ Fix `IMP-001` by making effective catalog ordering honor the declared search-roo
 <loop-control>
 {"schema":"docloop.loop_control/v1","kind":"promise","promise":"INCOMPLETE"}
 </loop-control>
+
+
+---
+run_id=run-20260508T190524Z-73fc5c3b | entry=session_turn | pair=implement | phase=producer | cycle=2 | attempt=1 | thread_id=019e0916-8e98-7b41-a2e9-9a6a5f5047d8
+---
+provider=codex
+mode=resume
+template=/home/rauter/.local/share/pipx/venvs/autoloop/lib/python3.12/site-packages/autoloop/templates/implement_producer.md
+session_id=019e0916-8e98-7b41-a2e9-9a6a5f5047d8
+
+
+---
+run_id=run-20260508T190524Z-73fc5c3b | entry=phase_output | pair=implement | phase=producer | process=codex-agent | cycle=2 | attempt=1 | thread_id=019e0916-8e98-7b41-a2e9-9a6a5f5047d8
+---
+I’m addressing the two blocking review findings only: workflow discovery precedence between `.botlane` and `.autoloop`, and cross-root resume selection. I’ll inspect the affected catalog and runner paths together before patching.
+
+I’ve got the fix shape. I’m replacing the root-presence heuristic with a shared cross-root run selector, and I’m making workflow discovery honor the explicit search-root precedence it already records. After that I’ll add narrow regression tests for both cases.
+
+I’ve patched both blockers and added focused regressions for each. I’m doing a syntax pass now and then I’ll refresh the phase notes with the reviewer-driven fixes and the remaining validation constraints.
+
+Scope considered
+
+Active phase only. I addressed the two blocking review findings in workflow catalog precedence and cross-root resume selection, plus the narrow regression tests that cover those behaviors.
+
+What I analyzed
+
+I re-read the reviewer feedback, then traced `workflow_search_roots()` and `_effective_catalog()` in [botlane/core/workflow_catalog.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/botlane/core/workflow_catalog.py), and `_plan_workspaces()` in [botlane/runtime/runner.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/botlane/runtime/runner.py). I also checked the focused regression surfaces in [tests/runtime/test_workflow_catalog_roots.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/tests/runtime/test_workflow_catalog_roots.py) and [tests/runtime/test_workspace_and_context.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/tests/runtime/test_workspace_and_context.py).
+
+What I changed
+
+I made workflow catalog shadowing honor each entry’s declared search-root precedence, so `workflows/` still wins first, `.botlane/workflows` now consistently wins over `.autoloop/workflows`, and package workflows remain last. I also removed the runner’s root-presence fallback heuristic for `resume` and instead select the concrete run through shared cross-root lookup before binding the workspace root, so `resume` follows the same latest-run ordering as public run listing. I added focused tests covering both the Botlane-over-legacy workflow resolution case and the mixed-root resume case, then updated the implementation notes and decisions ledger.
+
+Key findings / decisions
+
+The reviewer’s two blockers were valid. The catalog already stored separate precedence values but never used them for effective ordering, and resume root selection had diverged from the public cross-root record lookup logic. Both are now centralized on the existing shared selectors instead of maintaining separate heuristics.
+
+Open issues / next step
+
+Static validation passed with `python3 -m compileall botlane tests` and a narrower compile pass on the touched source/tests. I still could not run `pytest` or runtime-level smoke checks here because this environment lacks `pytest` and runtime deps like `pydantic`; the next step is to rerun the focused runtime/SDK tests in a dependency-complete environment.
+
+
+---
+run_id=run-20260508T190524Z-73fc5c3b | entry=session_turn | pair=implement | phase=verifier | cycle=2 | attempt=1 | thread_id=019e0916-8e98-7b41-a2e9-9a6a5f5047d8
+---
+provider=codex
+mode=resume
+template=/home/rauter/.local/share/pipx/venvs/autoloop/lib/python3.12/site-packages/autoloop/templates/implement_verifier.md
+session_id=019e0916-8e98-7b41-a2e9-9a6a5f5047d8
+
+
+---
+run_id=run-20260508T190524Z-73fc5c3b | entry=phase_output | pair=implement | phase=verifier | process=codex-agent | cycle=2 | attempt=1 | thread_id=019e0916-8e98-7b41-a2e9-9a6a5f5047d8
+---
+I’m re-reviewing only the updated runtime/workspace diffs against the prior blockers, then I’ll reconcile the reviewer artifacts and close the phase if the fixes hold.
+
+Reviewing the cycle 2 fixes against the active phase criteria and prior findings. I’m checking the updated runtime/workspace paths and then I’ll update the reviewer artifacts only.
+
+The two prior blockers are fixed in the implementation, and the remaining gap is still test-environment availability rather than a code defect. I’m updating the review artifacts to reflect that status.
+
+The reviewer artifacts are updated. I’m doing a quick sanity read to confirm the criteria are fully checked and the feedback log reflects the resolved blockers plus the remaining non-blocking validation gap.
+
+Scope considered
+
+Active phase only: runtime and workspace identity changes, the cycle 2 fixes for the two prior blockers, and the reviewer-owned artifacts in the active phase directory.
+
+What I analyzed
+
+I rechecked the corrected precedence path in `botlane/core/workflow_catalog.py`, the corrected cross-root resume path in `botlane/runtime/runner.py`, and the two focused regression tests added for those behaviors. I also reviewed the implementation notes and decisions ledger to confirm the fixes match the accepted transition-compatibility requirements.
+
+What I reviewed
+
+I updated [criteria.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/additional-botlane-rename-requirements-discovere-28c3ecb0/runs/run-20260508T190524Z-73fc5c3b/artifacts/implement/phases/rewrite-runtime-and-workspace-identity/criteria.md) so all verifier criteria are checked. I appended to [feedback.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/additional-botlane-rename-requirements-discovere-28c3ecb0/runs/run-20260508T190524Z-73fc5c3b/artifacts/implement/phases/rewrite-runtime-and-workspace-identity/feedback.md) that `IMP-001` and `IMP-002` are resolved and that `IMP-003` remains as a non-blocking environment validation gap.
+
+Key findings / decisions
+
+The two blocking findings from the previous review pass are resolved. No new blocking findings were identified in this verifier pass. The only remaining open item is the previously noted inability to run `pytest` and runtime-dependent checks in this environment, which remains non-blocking.
+
+Open issues / next step
+
+The next step is still to rerun the focused runtime/SDK tests in an environment with the project test dependencies installed. That is a validation follow-up, not a code-correctness blocker for this phase.
+
+<loop-control>
+{"schema":"docloop.loop_control/v1","kind":"promise","promise":"COMPLETE"}
+</loop-control>
