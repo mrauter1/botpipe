@@ -40,7 +40,7 @@
 - Milestone 4 / P4-AC3: added explicit `.botlane`-only and `botlane.*` schema assertions to runtime workspace emission tests while leaving legacy read-compat coverage intact.
 
 ## Assumptions
-- `legacy_docs/` remains out of proof scope as historical scratch material; the reviewer-blocking rename proof focused instead on the maintained recursive wrapper plus root review/spec docs that still carried live Botlane-facing examples.
+- `legacy_docs/*.md` remains unchanged in this phase, but only as an explicit historical-file allowlist enumerated in the strictness test; broad `legacy_docs/**` exclusions are no longer treated as acceptable proof scope.
 
 ## Preserved invariants
 - Legacy `.autoloop` workspaces, config names, and persisted schema aliases remain readable through existing compatibility readers/tests.
@@ -51,19 +51,21 @@
 - Built-wheel proof now fails if the wheel ships legacy package paths, exposes an `autoloop` console script, or prints legacy branding in CLI help.
 - Runtime proof now fails if new workspace creation writes legacy state roots or emits legacy schema prefixes in run/topology payloads.
 - Recursive wrapper docs/templates/shell surfaces now use `botlane`, `.botlane`, `.botlane_recursive`, and Botlane-only examples.
+- Branding strictness now walks the repo root, skips only generated state and explicitly listed historical files, and inventory-checks the `legacy_docs/*.md` allowlist so new retained history files cannot be hidden behind a directory carveout.
 
 ## Known non-changes
 - No runtime compatibility logic was changed in this phase.
-- Historical scratch docs under `legacy_docs/` were not renamed here.
+- Historical scratch docs under `legacy_docs/` were not renamed here; they remain unchanged historical text and are now enumerated explicitly in the proof allowlist.
 
 ## Expected side effects
 - Source-distribution manifests will stop advertising `autoloop/workflows` and will exclude both current `.botlane` state and legacy `.autoloop` state from package archives.
 - The recursive wrapper entry path is now `recursive_botlane/run_recursive_botlane.sh`, and its templates now emit Botlane-only workspace/CLI guidance.
+- Adding a new historical file under `legacy_docs/` now fails strictness until the file is either rewritten to Botlane-only text or added deliberately to the explicit history allowlist.
 
 ## Validation performed
 - `.venv/bin/python -m pytest -q tests/strictness/test_no_compat.py`
 - `.venv/bin/python -m pytest -q tests/runtime/test_wheel_packaging_smoke.py tests/runtime/test_workspace_and_context.py -k 'test_built_wheel_installs_public_botlane_package_and_cli or run_creates_task_workflow_run_layout_and_immutable_request_snapshots or run_metadata_records_topology_hashes_and_artifact_contract_paths'`
-- `rg -n --hidden --glob '!.git/**' --glob '!.autoloop/**' --glob '!.autoloop_recursive/**' --glob '!legacy_docs/**' --glob '!.venv*/**' --glob '!build/**' --glob '!dist/**' 'autoloop|Autoloop|AUTOLOOP|\.autoloop|autoloop_optimizer|_autoloop_workspace_workflows' botlane botlane_optimizer docs recursive_botlane tests pyproject.toml MANIFEST.in Review15.md review16.md rebrand.md Workflow_Instructions.md`
+- Repo-wide `rg` scan for `autoloop|Autoloop|AUTOLOOP|\.autoloop|autoloop_optimizer|_autoloop_workspace_workflows` with only generated-state globs and the explicit `legacy_docs/*.md` history-file allowlist excluded.
 
 ## Deduplication / centralization
-- Reused the existing strictness scan helpers instead of adding a second repo-grep test; the maintained-file allowlist now covers the recursive wrapper and root review/spec docs directly.
+- Reused the existing strictness scan helpers instead of adding a second repo-grep test; the branding proof now centralizes its only retained historical exceptions in `EXPLICIT_HISTORY_FILE_ALLOWLIST` and walks the repo root directly.
