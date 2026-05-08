@@ -527,3 +527,58 @@ Open issues / next step
   - `.venv/bin/python -m pytest tests/unit/test_policy.py tests/unit/test_simple_policy.py`
   - `.venv/bin/python - <<'PY' ... resolve_policy_layer(ProviderPolicy(permissions={'mode': 'auto_edit'}), Policy(sandbox_mode=SandboxMode.DANGER_FULL_ACCESS)) ... PY`
 - This phase-local test work does not cover later SDK naming and runtime layer-order work, which remains out of scope for `shared-policy-core`.
+
+
+---
+run_id=run-20260508T141115Z-6c430e1a | entry=session_turn | pair=test | phase=verifier | cycle=1 | attempt=1 | thread_id=019e07f4-78a0-79f0-9681-b0d48a911120
+---
+provider=codex
+mode=resume
+template=/home/rauter/.local/share/pipx/venvs/autoloop/lib/python3.12/site-packages/autoloop/templates/test_verifier.md
+session_id=019e07f4-78a0-79f0-9681-b0d48a911120
+
+
+---
+run_id=run-20260508T141115Z-6c430e1a | entry=phase_output | pair=test | phase=verifier | process=codex-agent | cycle=1 | attempt=1 | thread_id=019e07f4-78a0-79f0-9681-b0d48a911120
+---
+I’m auditing the new phase-local policy tests and strategy against the shared-policy-core scope and the recorded dangerous-manual decision. I’ll verify the changed coverage, check for missing regression branches or flaky assumptions, then update only the test audit artifacts.
+
+The changed coverage aligns with the dangerous-manual decision and closes the main regression branch that was previously implicit. I’m marking the audit artifacts complete with no remaining findings in this phase-local scope.
+
+Scope considered
+
+- Phase-local `shared-policy-core` test audit only.
+- I reviewed the newly added and updated unit coverage in `tests/unit/test_policy.py` and `tests/unit/test_simple_policy.py`, plus the phase-local `test_strategy.md`.
+- I updated only the active test audit artifacts: `criteria.md` and `feedback.md`.
+
+What I analyzed
+
+- The dangerous-manual compatibility decision recorded in `decisions.txt`.
+- The public-policy regression coverage for sparse resolution, dangerous access, and public-surface cleanup.
+- The strategy artifact’s mapping from intended behaviors to explicit tests.
+- The unit-level reliability profile of the new coverage.
+
+What I reviewed
+
+- Coverage for both dangerous-manual branches:
+  - coercion from the default inherited `full_auto_sandboxed` base to manual `ask`
+  - preservation of inherited non-`full_auto_sandboxed` permission modes
+- Coverage for the public-surface removal of `autoloop.simple.ProviderPolicyOverride`.
+- Existing failure-path coverage for read-only, network, dangerous sandbox/permission conflicts, and cyclic `Policy(base=...)`.
+- Whether the new tests encode only behavior explicitly supported by the request and later recorded decisions.
+
+Key findings / decisions
+
+- No blocking or non-blocking findings in this phase-local scope.
+- The tests now match the recorded dangerous-manual resolution rule and would catch regressions in both the coercion and preservation branches.
+- The strategy artifact is sufficiently explicit about covered behaviors, preserved invariants, flake controls, and known out-of-scope gaps.
+- I marked all audit criteria complete and appended a clean audit-pass note to `feedback.md`.
+
+Open issues / next step
+
+- No additional audit issues for `shared-policy-core`.
+- Later SDK naming and runtime-layer merge-order coverage remains intentionally out of scope for this phase and is already called out in `test_strategy.md`.
+
+<loop-control>
+{"schema":"docloop.loop_control/v1","kind":"promise","promise":"COMPLETE"}
+</loop-control>
