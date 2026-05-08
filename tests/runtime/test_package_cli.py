@@ -235,6 +235,27 @@ def test_cli_mutating_command_help_exposes_provider_and_hides_provider_factory(c
 @pytest.mark.parametrize(
     "argv",
     [
+        ["workflows", "list", "--help"],
+        ["runs", "list", "--help"],
+        ["logs", "--help"],
+        ["init", "workflow", "--help"],
+    ],
+)
+def test_cli_common_workspace_help_surfaces_render_workspace_metavar(argv: list[str], capsys) -> None:
+    with pytest.raises(SystemExit) as excinfo:
+        cli.main(argv)
+
+    assert excinfo.value.code == 0
+    help_text = capsys.readouterr().out
+    assert "--workspace WORKSPACE" in help_text
+    assert "--root" not in help_text
+    assert "ROOT" not in help_text
+    assert "workspace directory" in help_text.lower()
+
+
+@pytest.mark.parametrize(
+    "argv",
+    [
         ["workflows", "list"],
         ["workflows", "show", "review"],
         ["run", "review", "task-1", "--message", "hello"],
