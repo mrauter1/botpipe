@@ -8,6 +8,7 @@ phases:
     status: "planned"
     in_scope:
       - "Add flat public enums and Policy/PolicyOverride helpers in autoloop/simple.py."
+      - "Implement the exact public keyword signatures, exact helper signatures, and exact request docstrings for the new public helpers."
       - "Centralize flat-field coercion, inference, and incompatibility validation in one shared lowering helper."
       - "Export new public names from autoloop/simple.py and autoloop/__init__.py."
       - "Add targeted unit and runtime tests for lowering, sparsity, dangerous-access inference, exports, and operation/workflow integration."
@@ -18,15 +19,15 @@ phases:
     dependencies: []
     acceptance_criteria:
       - id: "AC-1"
-        text: "Policy() returns a complete ProviderPolicy layered from SYSTEM_DEFAULT_PROVIDER_POLICY, while PolicyOverride() returns a sparse ProviderPolicyOverride containing only supplied or implied sections."
+        text: "Policy() and PolicyOverride() use the exact public keyword signatures from the request, do not expose allow_dangerous_bypass or disable_dangerous_bypass kwargs, and return ProviderPolicy and ProviderPolicyOverride respectively."
       - id: "AC-2"
-        text: "All enum-backed facade fields accept only the new public enums and raise TypeError for raw strings in both Policy and PolicyOverride."
+        text: "The helper signatures for _policy_enum_value, _policy_tuple, _policy_optional_tuple, and _policy_string_mapping match the request and enforce the specified enum, tuple, Path, mapping, and bytes-rejection behavior."
       - id: "AC-3"
-        text: "Dangerous-access, read-only, workspace-write, and limited-network inference rules match the spec and produce coherent nested payloads without modifying the core schema."
+        text: "Policy() builds a full ProviderPolicy from SYSTEM_DEFAULT_PROVIDER_POLICY, PolicyOverride() stays sparse, and dangerous-access, read-only, workspace-write, and limited-network inference rules match the request without modifying the core schema."
       - id: "AC-4"
-        text: "Workflow compilation, step policy compilation, merge behavior, operation normalization, and required export/import tests pass under the targeted pytest suite."
+        text: "Policy and PolicyOverride carry the exact request docstrings, every new public name is exported from autoloop.simple and autoloop.__all__, and the targeted workflow, operation, export, and regression test suite passes."
     deliverables:
-      - "Updated autoloop/simple.py flat policy facade and helper logic."
+      - "Updated autoloop/simple.py flat policy facade, exact signatures, exact docstrings, and shared helper logic."
       - "Updated autoloop/__init__.py public exports and __all__."
       - "Focused policy facade tests in unit/runtime suites."
     risks:

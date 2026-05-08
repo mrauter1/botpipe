@@ -1,107 +1,264 @@
 # Flat Policy Facade Plan
 
 ## Scope
-- Implement `Policy(...) -> ProviderPolicy` and `PolicyOverride(...) -> ProviderPolicyOverride` in `autoloop/simple.py` only as flat public authoring helpers.
-- Add enum-backed public fixed-option types in `autoloop/simple.py`: `ProviderName`, `ModelEffort`, `ModelVerbosity`, `ReasoningSummary`, `SandboxMode`, `NetworkMode`, `PermissionMode`.
+- Implement the flat public policy authoring facade in `autoloop/simple.py` only.
+- Add `Policy(...) -> ProviderPolicy` and `PolicyOverride(...) -> ProviderPolicyOverride`.
+- Add public enums `ProviderName`, `ModelEffort`, `ModelVerbosity`, `ReasoningSummary`, `SandboxMode`, `NetworkMode`, and `PermissionMode`.
 - Export the new helpers and enums from `autoloop/simple.py`, `autoloop/__init__.py`, and `autoloop.__all__`.
-- Add focused unit/runtime coverage for exports, enum strictness, lowering, override sparsity, merge behavior, workflow compilation, and operation normalization.
+- Add targeted tests for exports, enum strictness, lowering, dangerous-access inference, override sparsity, workflow compilation, and operation normalization.
 
 ## Out Of Scope
-- No schema changes in `autoloop/core/provider_policy.py`.
+- No changes to `autoloop/core/provider_policy.py` schema definitions, validators, or accepted nested payload shape.
 - No provider emitter changes, runtime config parsing changes, merge-order changes, or strict-policy semantic changes.
-- No compatibility aliases, helper constructors, namespaced kwargs, or raw-string acceptance for enum-backed flat fields.
+- No alternate constructors, namespaced kwargs, uppercase aliases, or raw-string acceptance for enum-backed flat fields.
 
-## Existing Constraints To Preserve
-- `ProviderPolicy` and `ProviderPolicyOverride` remain the only engine-facing authored policy types accepted by workflow declarations and inline operations.
-- Internal serialized values must stay as strings because fingerprints, runtime config, and emitters already depend on the nested schema payload shape.
-- `_normalize_provider_policy(policy)` in `autoloop/simple.py` should remain behaviorally unchanged apart from import/export adjacency if needed.
-- `Policy()` must produce a full `ProviderPolicy` based on `SYSTEM_DEFAULT_PROVIDER_POLICY`; `PolicyOverride()` must produce a sparse `ProviderPolicyOverride`.
+## Required Public Contract
+### Imports to add in `autoloop/simple.py`
+```python
+from collections.abc import Mapping, Sequence
+from enum import Enum
+from pathlib import Path
 
-## Planned Interface
-- `autoloop.simple` adds `_PolicyEnum(str, Enum)` plus the seven public enums defined by the spec.
-- `autoloop.simple` adds:
-  - `Policy(...) -> ProviderPolicy`
-  - `PolicyOverride(...) -> ProviderPolicyOverride`
-  - `_policy_enum_value(...)`
-  - `_policy_tuple(...)`
-  - `_policy_optional_tuple(...)`
-  - `_policy_string_mapping(...)`
-  - one shared private flat-policy payload builder for both full and sparse lowering.
-- `ProviderPolicyInput` remains `ProviderPolicy | ProviderPolicyOverride | None`; the new helpers return those canonical types instead of widening accepted input types.
+from autoloop.core.provider_policy import (
+    ModelPolicy,
+    PermissionPolicy,
+    ProviderPolicy,
+    ProviderPolicyOverride,
+    SandboxPolicy,
+    SYSTEM_DEFAULT_PROVIDER_POLICY,
+    WorkspaceFilesystemPolicy,
+    WorkspaceNetworkPolicy,
+    WorkspacePolicy,
+)
+```
+
+### Enum base and public enums
+```python
+class _PolicyEnum(str, Enum):
+    def __str__(self) -> str:
+        return self.value
+```
+
+- Implement the seven public enums exactly as specified in the request.
+- Enum-backed flat fields are: `provider`, `effort`, `verbosity`, `reasoning_summary`, `sandbox_mode`, `network`, and `permission_mode`.
+- Open-ended string fields remain only: `model`, `base_url`, filesystem paths, network domains, permission rule patterns, and `model_overrides` keys/values.
+
+### Exact public signatures
+```python
+def Policy(
+    *,
+    model: str | None = None,
+    provider: ProviderName | None = None,
+    base_url: str | None = None,
+    effort: ModelEffort | None = None,
+    verbosity: ModelVerbosity | None = None,
+    reasoning_summary: ReasoningSummary | None = None,
+    model_overrides: Mapping[str, str] | None = None,
+    sandbox_mode: SandboxMode | None = None,
+    read_only: bool = False,
+    allow_read: str | Path | Sequence[str | Path] | None = None,
+    deny_read: str | Path | Sequence[str | Path] | None = None,
+    allow_write: str | Path | Sequence[str | Path] | None = None,
+    deny_write: str | Path | Sequence[str | Path] | None = None,
+    network: NetworkMode | None = None,
+    network_domains: str | Sequence[str] | None = None,
+    deny_network_domains: str | Sequence[str] | None = None,
+    allow_local_binding: bool | None = None,
+    permission_mode: PermissionMode | None = None,
+    allow_permissions: str | Sequence[str] | None = None,
+    ask_permissions: str | Sequence[str] | None = None,
+    deny_permissions: str | Sequence[str] | None = None,
+) -> ProviderPolicy:
+    ...
+
+
+def PolicyOverride(
+    *,
+    model: str | None = None,
+    provider: ProviderName | None = None,
+    base_url: str | None = None,
+    effort: ModelEffort | None = None,
+    verbosity: ModelVerbosity | None = None,
+    reasoning_summary: ReasoningSummary | None = None,
+    model_overrides: Mapping[str, str] | None = None,
+    sandbox_mode: SandboxMode | None = None,
+    read_only: bool = False,
+    allow_read: str | Path | Sequence[str | Path] | None = None,
+    deny_read: str | Path | Sequence[str | Path] | None = None,
+    allow_write: str | Path | Sequence[str | Path] | None = None,
+    deny_write: str | Path | Sequence[str | Path] | None = None,
+    network: NetworkMode | None = None,
+    network_domains: str | Sequence[str] | None = None,
+    deny_network_domains: str | Sequence[str] | None = None,
+    allow_local_binding: bool | None = None,
+    permission_mode: PermissionMode | None = None,
+    allow_permissions: str | Sequence[str] | None = None,
+    ask_permissions: str | Sequence[str] | None = None,
+    deny_permissions: str | Sequence[str] | None = None,
+) -> ProviderPolicyOverride:
+    ...
+```
+
+- Do not add public `allow_dangerous_bypass` or `disable_dangerous_bypass` kwargs.
+- Unknown kwargs should continue to fail with normal Python `TypeError`.
+
+### Exact helper signatures
+```python
+def _policy_enum_value(value: object, *, enum_cls: type[_PolicyEnum], field_name: str) -> str | None:
+    ...
+
+
+def _policy_tuple(value: object, *, field_name: str) -> tuple[str, ...]:
+    ...
+
+
+def _policy_optional_tuple(value: object, *, field_name: str) -> tuple[str, ...] | None:
+    ...
+
+
+def _policy_string_mapping(value: object, *, field_name: str) -> dict[str, str] | None:
+    ...
+```
+
+### Exact docstrings to require
+```python
+"""Flat workflow-level authoring facade for ProviderPolicy.
+
+Omitted fields preserve SYSTEM_DEFAULT_PROVIDER_POLICY. Fixed option fields use
+Autoloop policy enums rather than raw strings. network_domains implies limited
+network mode. allow_write implies workspace_write mode unless read_only or
+sandbox_mode=SandboxMode.READ_ONLY is set, which is invalid with allow_write.
+sandbox_mode=SandboxMode.DANGER_FULL_ACCESS and
+permission_mode=PermissionMode.FULL_AUTO_UNSANDBOXED use the same flat API and
+internally enable the dangerous-bypass latch required by the nested policy
+schema.
+"""
+```
+
+```python
+"""Flat step/operation-level authoring facade for ProviderPolicyOverride.
+
+Only supplied fields are included in the override payload. Fixed option fields
+use Autoloop policy enums rather than raw strings. read_only=True also sets
+allow_write=() so merged policy cannot inherit write roots. network_domains
+implies limited network mode. sandbox_mode=SandboxMode.DANGER_FULL_ACCESS and
+permission_mode=PermissionMode.FULL_AUTO_UNSANDBOXED use the same flat API and
+internally enable the dangerous-bypass latch required by the nested policy
+schema.
+"""
+```
 
 ## Implementation Approach
-### 1. Flat facade and enum normalization in `autoloop/simple.py`
-- Add the enum classes and helper coercions near other public simple-surface declarations.
-- Enforce runtime enum strictness centrally with `_policy_enum_value(...)`; raw strings and other wrong types must raise `TypeError` with guidance to use the matching enum class.
-- Normalize tuple-like open-ended inputs for filesystem paths, domains, and permission rules with shared helpers that:
-  - accept scalar `str` and `Path`,
-  - accept ordered sequences without treating `str`/`bytes` as sequences,
-  - trim whitespace,
-  - reject empty entries,
-  - convert `Path` to `str`,
-  - dedupe while preserving first occurrence.
-- Normalize `model_overrides` through `_policy_string_mapping(...)`, keeping keys/values stringified and rejecting empty keys.
+### 1. Add flat facade types and helpers in `autoloop/simple.py`
+- Keep `ProviderPolicyInput = ProviderPolicy | ProviderPolicyOverride | None` unchanged; the new helpers must return those canonical objects rather than widening accepted input types elsewhere.
+- Implement `_policy_enum_value(...)` so:
+  - `None` returns `None`,
+  - enum members lower to `.value`,
+  - raw strings and wrong types raise `TypeError` instructing authors to use the correct enum class.
+- Implement `_policy_tuple(...)`, `_policy_optional_tuple(...)`, and `_policy_string_mapping(...)` with the exact coercion behavior from the request:
+  - scalar `str` becomes a one-element tuple,
+  - scalar `Path` becomes a one-element tuple of `str(path)`,
+  - `Sequence[str | Path]` normalizes to ordered deduped tuples,
+  - `str` is not treated as a sequence,
+  - `bytes` is rejected,
+  - whitespace is stripped,
+  - empty string entries are rejected,
+  - mapping keys/values are stringified and empty keys are rejected.
 
-### 2. Shared lowering helper
-- Implement one private helper that computes effective flat inputs and returns the nested payload for either full or sparse construction.
-- Centralize all non-trivial behavior there:
-  - enum `.value` lowering,
-  - read-only alias handling,
-  - implicit `workspace_write` when `allow_write` is supplied,
-  - implicit `limited` network when `network_domains` is supplied,
-  - dangerous-access inference for `sandbox_mode=SandboxMode.DANGER_FULL_ACCESS` and `permission_mode=PermissionMode.FULL_AUTO_UNSANDBOXED`,
-  - incompatibility checks required by the spec,
-  - sparse inclusion rules for override payloads.
-- For `Policy(...)`, start from `SYSTEM_DEFAULT_PROVIDER_POLICY.model_dump(mode="python", warnings=False)` and only overwrite fields whose effective value changed.
-- For `PolicyOverride(...)`, build a payload from scratch and include only touched sections (`model`, `permissions`, `sandbox`, `workspace.filesystem`, `workspace.network`) per the spec.
+### 2. Centralize lowering in one private helper
+- Implement one shared helper for full and sparse construction with the request’s suggested shape or an equivalent local name:
+```python
+def _flat_policy_payload(
+    *,
+    full_policy: bool,
+    model: str | None,
+    provider: ProviderName | None,
+    base_url: str | None,
+    effort: ModelEffort | None,
+    verbosity: ModelVerbosity | None,
+    reasoning_summary: ReasoningSummary | None,
+    model_overrides: Mapping[str, str] | None,
+    sandbox_mode: SandboxMode | None,
+    read_only: bool,
+    allow_read: object,
+    deny_read: object,
+    allow_write: object,
+    deny_write: object,
+    network: NetworkMode | None,
+    network_domains: object,
+    deny_network_domains: object,
+    allow_local_binding: bool | None,
+    permission_mode: PermissionMode | None,
+    allow_permissions: object,
+    ask_permissions: object,
+    deny_permissions: object,
+) -> dict[str, object]:
+    ...
+```
+- Centralize in that helper:
+  - enum normalization,
+  - read-only handling,
+  - workspace-write inference,
+  - network-domain inference,
+  - dangerous-access inference,
+  - tuple/mapping coercion,
+  - incompatible-input validation,
+  - sparse section inclusion rules.
 
-### 3. Dangerous-access and mode rules
-- Encode the required coupling without touching nested validators:
-  - `PermissionMode.FULL_AUTO_UNSANDBOXED` implies `allow_dangerous_bypass=True` and, unless already explicit, `SandboxMode.DANGER_FULL_ACCESS`.
-  - `SandboxMode.DANGER_FULL_ACCESS` implies `allow_dangerous_bypass=True` while preserving default permission mode unless explicitly changed.
-- Reject incompatible combinations in the facade before model validation:
+### 3. Lower into existing nested payloads only
+- `Policy(...)`:
+  - start from `SYSTEM_DEFAULT_PROVIDER_POLICY.model_dump(mode="python", warnings=False)`,
+  - apply only fields changed by explicit or implied flat inputs,
+  - return `ProviderPolicy.model_validate(updated_payload)`.
+- `PolicyOverride(...)`:
+  - build payload from scratch,
+  - include `model`, `permissions`, `sandbox`, `workspace.filesystem`, and `workspace.network` only when the request’s sparse rules require them,
+  - return `ProviderPolicyOverride.model_validate(payload)`.
+- Keep `_normalize_provider_policy(policy)` behavior unchanged so the new helpers work naturally because they already return accepted policy types.
+
+### 4. Required behavior to encode explicitly
+- `read_only=True` aliases `sandbox_mode=SandboxMode.READ_ONLY`.
+- `allow_write` implies `SandboxMode.WORKSPACE_WRITE` only when not read-only and no explicit sandbox mode overrides it.
+- `network_domains=<non-empty>` implies `NetworkMode.LIMITED` when `network is None`.
+- `PermissionMode.FULL_AUTO_UNSANDBOXED` implies `allow_dangerous_bypass=True` and, unless explicitly set, `SandboxMode.DANGER_FULL_ACCESS`.
+- `SandboxMode.DANGER_FULL_ACCESS` implies `allow_dangerous_bypass=True` while preserving default permission mode unless the caller explicitly changes it.
+- The facade must reject incompatible combinations required by the spec, including:
+  - raw strings for enum-backed fields,
   - read-only with `allow_write`,
-  - explicit read-only alias conflicting with non-read-only sandbox mode,
-  - limited network without domains,
-  - full/none network with non-empty `network_domains`,
-  - empty `network_domains` when used for inference,
-  - unsandboxed full-auto with read-only/workspace-write sandbox mode,
-  - danger-full-access sandbox with `PermissionMode.FULL_AUTO_SANDBOXED`.
-- Preserve lowering of filesystem and network subpayloads even for danger-full-access mode; enforcement remains with existing strict validation and emitters.
+  - `NetworkMode.LIMITED` without `network_domains`,
+  - `NetworkMode.FULL` or `NetworkMode.NONE` with non-empty `network_domains`,
+  - `network_domains=()` when it would be used for inference,
+  - `PermissionMode.FULL_AUTO_UNSANDBOXED` with `SandboxMode.READ_ONLY` or `SandboxMode.WORKSPACE_WRITE`,
+  - `SandboxMode.DANGER_FULL_ACCESS` with `PermissionMode.FULL_AUTO_SANDBOXED`.
+- Lower filesystem and network subpayloads even for danger-full-access mode; enforcement remains with existing strict validation and emitters.
 
-### 4. Public exports
-- Re-export the helpers and enums from `autoloop/simple.py` and `autoloop/__init__.py`.
-- Expand `autoloop.__all__` in a stable order that keeps the existing canonical surface intact while adding the new symbols explicitly.
-- Update export tests in `tests/unit/test_simple_surface.py` to assert root/simple imports, `__all__` membership, and callable status for `Policy` / `PolicyOverride`.
-
-### 5. Test coverage
-- Prefer a new focused file `tests/unit/test_simple_policy.py` for flat facade behavior so export tests in `test_simple_surface.py` stay readable.
-- Add unit coverage for:
-  - `Policy()` / `PolicyOverride()` return types,
-  - enum strictness `TypeError` cases for both helpers,
-  - tuple/mapping normalization outcomes,
-  - default-preserving full policy behavior,
+### 5. Exports and tests
+- Export all new helpers and enums from `autoloop/simple.py`, `autoloop/__init__.py`, and `autoloop.__all__`.
+- Add or extend tests to cover:
+  - root/simple imports and `__all__` membership for every new public name,
+  - callable status for `Policy` and `PolicyOverride`,
+  - exact enum strictness failures for both helpers,
+  - full-policy default preservation,
   - sparse override behavior,
+  - merge behavior against `SYSTEM_DEFAULT_PROVIDER_POLICY`,
   - dangerous-access inference and invalid combinations,
-  - merge behavior with `merge_provider_policies(...)`.
-- Extend runtime-facing coverage in existing files only where it proves integration:
-  - workflow compilation with workflow-level `Policy(...)`,
-  - step compilation with `PolicyOverride(...)`,
-  - dangerous workflow compilation,
-  - operation normalization path using `llm(..., policy=PolicyOverride(...))`.
+  - workflow compilation and operation normalization using the new helpers,
+  - the exact examples and acceptance workflows called out in the request.
+- Keep existing provider-emitter, provider-policy, runtime-config, and runtime-step suites in the validation list to guard regressions outside the new facade.
 
 ## Milestone
-### M1. Ship the flat enum-backed policy facade
-- Add the enums, coercion helpers, lowering helper, `Policy`, and `PolicyOverride` in `autoloop/simple.py`.
-- Export new public names from `autoloop/simple.py` and `autoloop/__init__.py`.
-- Add/extend unit and runtime tests listed in the spec.
-- Run the required targeted pytest commands.
+### M1. Ship the flat enum-backed facade without schema changes
+- Implement the exact public signatures, exact helper signatures, exact docstrings, enums, and shared lowering helper in `autoloop/simple.py`.
+- Export every new public symbol from `autoloop/simple.py`, `autoloop/__init__.py`, and `autoloop.__all__`.
+- Add focused tests proving exact lowering, sparsity, dangerous-access behavior, compiler integration, and operation normalization.
+- Run the required targeted pytest commands from the request.
 
 ## Regression Prevention
-- Do not widen accepted policy input types anywhere outside the new helper return values; declarations and operations should keep consuming only `ProviderPolicy`, `ProviderPolicyOverride`, or `None`.
-- Keep all nested payload keys and value formats aligned with current schema field names so fingerprints, compiler serialization, resolver merging, and emitters remain unchanged.
-- Prefer facade-side validation for flat incompatibilities so failures are deterministic and do not depend on downstream emitter/runtime paths.
-- Preserve default sections in `Policy()` by layering over `SYSTEM_DEFAULT_PROVIDER_POLICY`; preserve override sparsity in `PolicyOverride()` by omitting untouched sections.
+- Do not widen accepted policy surface types outside the helper return values.
+- Keep nested payload keys and serialized values string-based so fingerprints, config parsing, resolver merging, and emitters remain unchanged.
+- Use one shared lowering helper so `Policy(...)` and `PolicyOverride(...)` cannot drift on enum coercion, inference, or incompatibility checks.
+- Preserve `Policy()` defaults by layering over `SYSTEM_DEFAULT_PROVIDER_POLICY`; preserve `PolicyOverride()` sparsity by omitting untouched sections.
+- Preserve current strict-policy validation ownership for danger-full-access enforcement and reporting.
 
 ## Validation Plan
 - Run:
@@ -110,25 +267,26 @@
   - `pytest tests/runtime/test_provider_policy_steps.py`
   - `pytest tests/runtime/test_provider_policy_emitters.py`
   - `pytest tests/runtime/test_provider_policy_config.py`
-  - `pytest tests/unit/test_simple_policy.py` if the new focused file is added
-- Spot-check that compiled workflow policies are still JSON-serializable through existing compiler paths and that operation policy normalization still accepts the new override-returning helpers without special cases.
+  - `pytest tests/unit/test_simple_policy.py` if a new focused file is added
+- Verify the exact workflow-level, step-level, dangerous-access, and operation examples from the request compile or normalize successfully.
+- Verify the new facade does not require any special handling in workflow discovery, compiler validation, resolver merge paths, or operation normalization.
 
 ## Compatibility Notes
-- This is an additive public API expansion, but it intentionally rejects raw strings for new enum-backed flat fields in the facade at runtime.
-- Existing direct nested `ProviderPolicy(...)` / `ProviderPolicyOverride(...)` authoring remains valid and unchanged.
-- Existing config-file policy parsing remains string-based and unchanged because the nested schema is intentionally untouched.
+- This is an additive authoring API, but it intentionally rejects raw strings for enum-backed flat fields.
+- Existing direct nested `ProviderPolicy(...)` and `ProviderPolicyOverride(...)` authoring remains supported and unchanged.
+- Config-file and JSON-facing policy serialization remain string-based and unchanged because the nested schema is intentionally untouched.
+- No migration is required for existing nested policy authors; the new facade is optional.
 
 ## Risk Register
+- Risk: omission of exact signature or docstring requirements reopens public-surface drift.
+  - Control: keep the exact signature and docstring blocks above as implementation requirements and mirror them in phase acceptance criteria.
 - Risk: sparse override construction accidentally materializes default sandbox or permissions blocks and changes merge behavior.
-  - Control: explicitly gate section inclusion on supplied/effective flat fields and add merge assertions against `SYSTEM_DEFAULT_PROVIDER_POLICY`.
-- Risk: facade-side inference diverges from current nested validation rules and creates incoherent dangerous-access payloads.
-  - Control: encode the spec’s compatibility matrix in the shared helper and verify with both direct construction and merge tests.
+  - Control: gate inclusion strictly on the request’s sparse rules and add merge assertions against `SYSTEM_DEFAULT_PROVIDER_POLICY`.
+- Risk: facade-side inference diverges between `Policy(...)` and `PolicyOverride(...)`.
+  - Control: keep one shared lowering helper and add paired tests for both helpers.
 - Risk: export-order changes break canonical-surface tests.
   - Control: update `tests/unit/test_simple_surface.py` in lockstep with `autoloop.__all__`.
-- Risk: normalization helpers over-accept sequence-like inputs such as `bytes` or under-handle `Path`.
-  - Control: add negative tests for `bytes` and positive tests for scalar and sequence `Path` inputs.
 
 ## Rollback
-- Remove the new public helpers/enums and corresponding exports.
-- Remove the new flat-facade tests.
-- Because the core schema and runtime config layers stay unchanged, rollback is isolated to `autoloop/simple.py`, `autoloop/__init__.py`, and test files.
+- Remove the new flat-facade helpers, enums, exports, and tests.
+- Because the nested schema and runtime layers stay unchanged, rollback remains local to `autoloop/simple.py`, `autoloop/__init__.py`, and the added/updated tests.

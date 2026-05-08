@@ -89,3 +89,44 @@ The producer plan needs revision to explicitly include the exact public signatur
 <loop-control>
 {"schema":"docloop.loop_control/v1","kind":"promise","promise":"INCOMPLETE"}
 </loop-control>
+
+
+---
+run_id=run-20260508T122931Z-61a77361 | entry=session_turn | pair=plan | phase=producer | cycle=2 | attempt=1 | thread_id=019e0790-8888-7211-ab0b-2f3d4a24b8a5
+---
+provider=codex
+mode=resume
+template=/home/rauter/.local/share/pipx/venvs/autoloop/lib/python3.12/site-packages/autoloop/templates/plan_producer.md
+session_id=019e0790-8888-7211-ab0b-2f3d4a24b8a5
+
+
+---
+run_id=run-20260508T122931Z-61a77361 | entry=phase_output | pair=plan | phase=producer | process=codex-agent | cycle=2 | attempt=1 | thread_id=019e0790-8888-7211-ab0b-2f3d4a24b8a5
+---
+I’m revising the plan against the verifier’s blocking findings, starting by confirming the latest run-local feedback and the current decisions header so I only update the artifacts this turn is allowed to change.
+
+I have the correction scope pinned down: tighten the plan around the exact public/helper signatures and make the exact `Policy` / `PolicyOverride` docstrings first-class acceptance criteria, without changing the overall one-slice structure.
+
+The plan artifacts are updated. I’m doing a final consistency pass to make sure the revised plan actually closes the verifier’s two findings and that the decisions entry stayed within the current turn’s header block.
+
+Scope considered
+The run-local planning artifacts for the flat enum-backed `Policy(...)` / `PolicyOverride(...)` facade, the verifier’s blocking findings, the immutable request, and the current decisions ledger.
+
+What I analyzed
+I re-checked the verifier feedback against the request’s exact public-contract requirements, especially the fixed helper signatures, forbidden public dangerous-bypass kwargs, and the exact `Policy` / `PolicyOverride` docstrings.
+
+What I changed
+I revised `plan.md` to make the exact public signatures, helper signatures, required imports, exact docstrings, and forbidden facade kwargs explicit implementation requirements. I updated `phase_plan.yaml` acceptance criteria to mirror those requirements, appended a resolution note to `feedback.md`, and recorded the non-obvious public-contract constraints under the current decisions header in `decisions.txt`.
+
+Key findings / decisions
+The plan remains a single coherent phase.
+The prior blocking gaps are now addressed directly in both the narrative plan and the machine-readable phase contract.
+The flat facade remains localized to `autoloop.simple`, with no schema, emitter, config, or merge-semantic changes.
+The exact signatures and exact docstrings are now treated as required public contract, not optional detail.
+
+Open issues / next step
+No open planning blockers remain from the current verifier feedback. The next step is verifier re-review of the updated artifacts.
+
+<loop-control>
+{"schema":"docloop.loop_control/v1","kind":"promise","promise":"COMPLETE"}
+</loop-control>
