@@ -1,0 +1,4 @@
+<autoloop-decisions-header version="1" block_seq="1" owner="planner" phase_id="task-global" pair="plan" turn_seq="1" run_id="run-20260508T122931Z-61a77361" ts="2026-05-08T12:29:31.996134+00:00" />
+Implement the flat policy authoring surface entirely in autoloop.simple and lower into nested ProviderPolicy/ProviderPolicyOverride payloads instead of widening core schema inputs.
+Keep ProviderPolicyInput unchanged; Policy(...) and PolicyOverride(...) should return canonical provider policy objects rather than introducing new accepted policy surface types elsewhere.
+Use one shared lowering helper for full and sparse construction so read_only, network_domains, allow_write, and dangerous-access inference stay behaviorally identical between Policy and PolicyOverride.
