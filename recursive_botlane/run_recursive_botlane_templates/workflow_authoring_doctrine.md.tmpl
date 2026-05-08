@@ -1,0 +1,165 @@
+Workflow authoring doctrine (must follow):
+
+## 1. Global-vs-local boundary
+
+- The workflow owns the global SOP.
+- The prompt template owns the provider-facing local SOP for the current step.
+- The provider owns cognition inside the current step.
+- The runtime stays narrow, mechanical, and policy-light.
+- Do not move domain policy into runtime-only abstractions.
+
+## 2. Root authoring surface discipline
+
+- Keep the root `workflow` import surface strict and minimal.
+- Authoring usually happens under `.botlane/workflows/<name>/` for workspace-local workflows or `botlane/workflows/<name>/` for package-installed workflows, while execution stays on the public `botlane run/resume/answer` contract.
+- Do not add public root primitives merely to reduce local boilerplate.
+- Prefer stdlib helpers before expanding the core DSL.
+- Prefer helper functions that write explicit artifacts over hidden runtime behavior.
+- Do not expose engine, compiler, loader, runner, provider, store, or compatibility internals through the root workflow shim.
+
+## 3. Prompt-template doctrine
+
+Prompt templates should tell the provider:
+
+- which role or step it is executing
+- the purpose of the current step
+- relevant context and current work item, if any
+- which artifacts to read
+- which artifacts to create, update, or leave untouched
+- where to write artifacts
+- what evidence must be produced
+- how to choose among legal routes
+- what is in scope, out of scope, and forbidden
+
+But prompt templates should not become bloated.
+
+Use compact tables where possible:
+
+| Artifact | Read/Write | Purpose | Handling |
+|---|---:|---|---|
+
+Use concise route guidance. Do not restate machine-readable route metadata verbatim when the runtime already injects `available_routes`, route summaries, and `route_required_writes`.
+
+## 4. Runtime-injected control contract
+
+The runtime may inject or enforce only narrow machine-readable control surfaces such as:
+
+- `expected_output_schema`
+- `available_routes`
+- route summaries and `route_required_writes`
+
+The runtime may validate returned routes and schemas, and enforce reserved-route behavior.
+
+Do not widen the runtime-injected provider contract unless there is a clear cross-workflow reason.
+
+## 5. Artifact-first design
+
+Prefer filesystem artifacts as the durable work product.
+
+Provider prose is control metadata unless it is written into a declared artifact.
+
+For each step, specify:
+
+- required input artifacts
+- required output artifacts
+- exact names and paths or path templates
+- overwrite / append / patch handling
+- authoritative artifacts
+- evidence artifacts
+- downstream-consumed artifacts
+
+## 6. Validation and schema discipline
+
+Do not repeat low-level validation code across workflows.
+
+If the same validation appears in two or more workflows, prefer a shared helper.
+
+Generic validation that should usually be shared:
+
+- JSON object/list shape checks
+- required string/list/bool/int checks
+- path-safety checks
+- selected-workflow existence checks
+- known-artifact-name checks
+- manifest/summary/receipt consistency checks
+- duplicate ID checks
+- status/category allow-list checks
+
+Workflow code should keep domain-specific assertions, but generic mechanics should move to stdlib or core helper seams.
+
+## 7. Verification doctrine
+
+For non-trivial or quality-sensitive work, explicitly enforce producer/verifier behavior.
+
+Verification must have:
+
+- clear evidence requirements
+- clear artifact checks
+- clear route decision policy
+- clear rework vs replan boundary
+
+Rework loops must be local to the same work-item contract.
+Replan must be explicit when local repair is no longer the right response.
+
+## 8. Work-item boundary doctrine
+
+Do not optimize only for tiny tasks.
+
+Work items may be ambitious and long-horizon, but their boundaries should be coherent across:
+
+- role / specialization
+- artifact family
+- acceptance surface
+- verifier authority
+- local repairability
+
+`needs_rework` means the same work-item contract still holds.
+`needs_replan` means the boundary, sequencing, specialization, or artifact graph changed materially.
+
+## 9. Composition doctrine
+
+Prefer explicit workflow composition over hidden runtime sequencing.
+
+When invoking child workflows:
+
+- use explicit workflow code or approved stdlib composition helpers
+- keep child execution compatible with `ctx.invoke_workflow(...)`
+- validate child status, terminal route, and required artifacts before adoption
+- copy explicitly named child artifacts into the parent workflow folder when needed
+- route child `question` and `blocked` states explicitly in the parent
+- do not create hidden downstream execution
+
+## 10. Helper-seam doctrine
+
+Helper seams should:
+
+- be additive
+- write explicit workflow-local artifacts
+- avoid mutating workflow packages unless that is the workflow’s explicit purpose
+- avoid adding `workflow.toml` semantic fields
+- avoid runtime-owned routing/policy
+- have clear boundaries and non-goals
+- be reused by multiple workflows or justified by clear future reuse
+
+## 11. Readability doctrine
+
+For every workflow touched or created, the top-level flow definition in `flow.py`, legacy `workflow.py`, or a single-file workflow should make the core flow obvious quickly:
+
+- workflow purpose
+- state fields that matter
+- artifacts grouped by role/output
+- steps in order
+- transitions in order
+- system/publication handlers separated from provider-step handlers
+
+If a workflow requires a long publication validator, move generic parts into stdlib and leave only domain-specific assertions in the workflow.
+
+## 12. Recursive self-improvement doctrine
+
+Candidate workflow, prompt, helper, policy, or artifact changes may be proposed by the provider.
+
+Promotion must remain deterministic and evidence-gated.
+
+Baseline, candidate, evaluation, regression, promotion, and rollback artifacts should be explicit.
+
+Future recursive cycles should improve architecture shape, not merely add more workflows.

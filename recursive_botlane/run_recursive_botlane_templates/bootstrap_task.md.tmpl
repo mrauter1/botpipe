@@ -1,0 +1,105 @@
+# Recursive Framework Bootstrap
+
+Objective:
+- Establish durable framework-evolution memory and roadmap for later recursive cycles.
+- Make Botlane valuable by enabling high-quality workflow authoring, workflow reuse, workflow refinement, and workflow portfolio governance.
+- Set the system up to converge toward simpler, clearer, less repetitive architecture.
+
+Mandatory reading before changes:
+- entire repo codebase
+- `docs/architecture.md`
+- `docs/authoring.md`
+- `.botlane_recursive/framework_evolution_charter.md`
+- `.botlane_recursive/framework_roadmap.md`
+- `.botlane_recursive/framework_gap_ledger.md`
+- `.botlane_recursive/workflow_candidate_ledger.md`
+- `.botlane_recursive/validation_debt_ledger.md` if present
+
+Repository landmarks to inspect:
+- `core/`
+- `runtime/`
+- `extensions/`
+- `stdlib/`
+- `botlane/workflows/`
+- `.botlane/workflows/`
+- `.botlane_recursive/`
+
+CLI and composition reminders:
+- Greenfield authoring is allowed when justified, but feature compatibility with the current workflow/runtime boundary is mandatory.
+- The recursive wrapper runs through the globally installed CLI: `botlane --workspace ... --task-id ... --intent ... --pairs ...` and `botlane --workspace ... --task-id ... --resume`.
+- Existing workflow composition through `ctx.invoke_workflow(...)` must keep working.
+
+Foundational observation:
+- Botlane should help design, refine, validate, simplify, and implement its own workflows and reusable workflow building blocks.
+- The workflow builder is foundational, but endless expansion is not the goal.
+- A good recursive system must know when to reuse, adapt, compose, refine, decompose, merge, retire, or create workflows.
+- The long-term goal is not more workflow files. The goal is a smaller, clearer, more powerful authoring surface and a legible workflow ecosystem.
+
+Primary goals:
+1. Establish the current architecture baseline.
+2. Identify the strongest current seams and weaknesses.
+3. Identify repeated validation/schema/artifact/prompt patterns.
+4. Identify portfolio overlaps and missing building blocks.
+5. Decide whether immediate priority should be:
+   - consolidation
+   - authoring-surface improvement
+   - portfolio shaping
+   - expansion
+6. Improve the repository in a way that makes future workflows easier to author, read, test, and reason about.
+
+{{WORKFLOW_AUTHORING_DOCTRINE}}
+
+Required bootstrap outputs:
+1. Update `.botlane_recursive/framework_roadmap.md` with current seams, target state, and near-term migration path.
+2. Update `.botlane_recursive/framework_gap_ledger.md` with concrete framework gaps discovered in the current codebase.
+3. Update `.botlane_recursive/workflow_candidate_ledger.md` with candidate reuse/adapt/compose/refine/decompose/create options.
+4. Create or update `.botlane_recursive/validation_debt_ledger.md` with repeated validation/schema/artifact patterns.
+5. Implement at least one concrete repository improvement.
+6. Prefer an improvement that reduces future boilerplate, consolidates repeated logic, or clarifies core workflow flow.
+7. Update tests and docs to cover the chosen improvement.
+8. Leave the repository in a better state for future recursive cycles.
+
+Decision requirements:
+- Explore a small set of strong candidate improvements.
+- Include at least one consolidation or simplification candidate.
+- Include the workflow-builder only if it is relevant to the highest-leverage move.
+- Optimize for future authoring leverage, not only immediate feature count.
+- Prefer shared helpers over repeated workflow-local validation.
+- Prefer clearer workflow flow over adding more workflow packages.
+- Prefer reusable framework/stdlib mechanisms when repetition is truly generic.
+- Reject changes that add hidden runtime-owned policy.
+- Reject changes that merely add more special-case control logic.
+- Reject new workflow packages unless the new-workflow gate passes.
+
+Bootstrap candidate areas include:
+- shared validation helpers
+- compiled workflow surface serializer consolidation
+- workflow-builder output cleanup
+- prompt-template boilerplate reduction
+- portfolio overlap mapping
+- route-metadata helper extraction
+- helper artifact schema versioning
+- workflow-local publication validator simplification
+- run-history/portfolio snapshot consolidation
+- workflow package creation only if clearly justified
+
+{{ARCHITECTURE_IMPROVEMENT_EXAMPLES}}
+
+{{WORKFLOW_EXAMPLES}}
+
+Authoring deliverables for any touched or new workflow:
+- clear objective
+- obvious core flow
+- explicit role/step topology
+- explicit control flow
+- explicit route grammar
+- explicit artifact contract
+- narrow runtime-injected control contract
+- concise prompt templates
+- explicit verification/evidence contract
+- explicit rework/replan/block/fail policy
+- shared validation helpers where appropriate
+
+Outcome standard:
+- The bootstrap must make future recursive cycles more likely to converge toward a smaller, clearer, more reusable architecture.
+- Prefer work that improves authoring leverage across multiple workflows.
