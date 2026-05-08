@@ -1241,3 +1241,79 @@ No open issues in phase scope. The test audit can close as complete.
 <loop-control>
 {"schema":"docloop.loop_control/v1","kind":"promise","promise":"COMPLETE"}
 </loop-control>
+
+
+---
+run_id=run-20260508T141115Z-6c430e1a | entry=session_turn | pair=audit | phase=producer | cycle=1 | attempt=1 | thread_id=019e085a-511f-77d0-8f23-41deb7382815
+---
+provider=codex
+mode=start
+template=/home/rauter/.local/share/pipx/venvs/autoloop/lib/python3.12/site-packages/autoloop/templates/audit_producer.md
+session_id=019e085a-511f-77d0-8f23-41deb7382815
+
+
+---
+run_id=run-20260508T141115Z-6c430e1a | entry=phase_output | pair=audit | phase=producer | process=codex-agent | cycle=1 | attempt=1 | thread_id=019e085a-511f-77d0-8f23-41deb7382815
+---
+I’m auditing the completed run against the authoritative request, clarifications, decisions, artifacts, and final code. I’ll first collect the run-local records and the policy-related code/tests, then I’ll write only the audit artifacts under the allowed directory.
+
+I’ve confirmed the run is in a dirty worktree, so I’m treating the audit as read-only outside the run-local `artifacts/audit` directory. Next I’m reading the authoritative run records and the implementation/test artifacts to see what was actually changed and validated.
+
+The run log shows the implementation and test phases completed with several explicit policy-resolution decisions, including a dangerous-manual access rule not spelled out in the original spec. I’m reading the final policy, SDK, simple, resolver, and test files now to determine whether that behavior is justified or a material gap.
+
+I’ve narrowed the main audit question to whether the code matches the spec or intentionally diverges where the spec is internally inconsistent. I’m now checking the targeted test files and runtime defaults, then I’ll run the smallest relevant test subset if the run-local virtualenv from the implementation phase is still present.
+
+The implementation phase left local virtualenvs behind, so I can verify the final state directly instead of relying only on prior logs. I’m running the policy-facing unit/runtime suites first, then I’ll use any failures or skipped expectations as audit evidence.
+
+The direct policy suites are green, including the SDK facade tests that exercise the renamed public surface. I’m widening to the spec’s minimum listed regression commands now so the audit can distinguish between implemented behavior and merely untested behavior.
+
+I found a concrete export-contract failure that wasn’t covered by the earlier green suites: `autoloop.simple` still leaks `PolicyInput` as an importable module attribute even though the spec requires `PolicyInput` to stay out of the simple public surface. I’m checking whether that’s the only surviving export leak before I write the audit artifacts.
+
+I have enough evidence to write the audit. The requested regression commands passed, but an additional spec-relevant policy-surface test fails because `autoloop.simple` still exposes `PolicyInput` as a public importable symbol, which violates the required export matrix and leaves a stale duplicate type alias on the simple surface.
+
+I’m taking one final read with line numbers on the export leak and the recorded dangerous-manual decision so the audit report can cite exact evidence instead of paraphrasing it.
+
+I’m writing the run-local audit artifacts now. They’ll capture one material unresolved gap: the simple surface still exposes `PolicyInput` and a stale `ProviderPolicyInput` alias despite the exact export contract requiring those names to stay off `autoloop.simple`.
+
+The audit artifacts are written. I’m doing a quick readback and JSON validation now so the final handoff is based on the exact files in the run-local audit directory.
+
+Scope considered
+
+Run-local audit of the final shared-policy / SDK-simple alignment work against the authoritative request, raw phase log, decisions ledger, final codebase, and relevant tests. I limited edits to the allowed audit artifact directory.
+
+What I analyzed
+
+I reviewed the request snapshot, raw log, and decisions ledger, then inspected `autoloop/policy.py`, `autoloop/simple.py`, `autoloop/sdk.py`, `autoloop/__init__.py`, the runtime policy resolver, and the policy-facing tests. I also ran:
+
+- `./.venv/bin/pytest tests/unit/test_policy.py tests/runtime/test_sdk_policy.py`
+- `./.venv/bin/pytest tests/unit/test_sdk_facade.py -q`
+- `./.venv/bin/pytest tests/unit/test_provider_policy.py tests/runtime/test_provider_policy_steps.py tests/runtime/test_provider_policy_emitters.py`
+- `./.venv/bin/pytest tests/runtime/test_provider_policy_config.py tests/unit/test_simple_surface.py`
+- `./.venv/bin/pytest tests/unit/test_simple_policy.py -q`
+
+What I changed
+
+I wrote the required audit artifacts:
+
+- `.autoloop/tasks/final-standalone-implementation-spec-shared-inhe-c4aa316d/runs/run-20260508T141115Z-6c430e1a/artifacts/audit/gap_report.md`
+- `.autoloop/tasks/final-standalone-implementation-spec-shared-inhe-c4aa316d/runs/run-20260508T141115Z-6c430e1a/artifacts/audit/revised_request.md`
+- `.autoloop/tasks/final-standalone-implementation-spec-shared-inhe-c4aa316d/runs/run-20260508T141115Z-6c430e1a/artifacts/audit/audit_result.json`
+
+Key findings / decisions
+
+Most of the requested behavior is implemented and the listed regression suites passed. One material gap remains: `autoloop.simple` still exposes `PolicyInput` as an importable module attribute and also leaves a stale `ProviderPolicyInput` alias at module scope. That violates the exact export contract recorded in the request and decisions ledger.
+
+Evidence:
+- `autoloop/simple.py:29-44` binds `PolicyInput` and `ProviderPolicyInput` publicly.
+- `tests/unit/test_simple_policy.py::test_policy_input_export_matrix_matches_phase_contract` fails because `from autoloop.simple import PolicyInput` succeeds.
+- Extra probe confirmed both `from autoloop.simple import PolicyInput` and `from autoloop.simple import ProviderPolicyInput` succeed.
+
+I did not count the dangerous-manual access coercion as an unresolved gap. It is a recorded implementation choice that resolves an internal contradiction between the unchanged core schema, the system default `full_auto_sandboxed` base, and the spec’s dangerous-manual acceptance example.
+
+Open issues / next step
+
+A follow-up run is required to finish the simple-surface export cleanup: remove `PolicyInput` and the stale `ProviderPolicyInput` alias from `autoloop.simple`’s public namespace while preserving internal typing behavior, then rerun `tests/unit/test_simple_policy.py` plus the adjacent policy/simple/SDK suites listed in `revised_request.md`.
+
+<loop-control>
+{"schema":"docloop.loop_control/v1","kind":"promise","promise":"INCOMPLETE"}
+</loop-control>

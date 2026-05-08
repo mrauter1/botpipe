@@ -1,1 +1,5 @@
-{}
+{
+  "material_gaps_found": true,
+  "summary": "One material gap remains: autoloop.simple still publicly exposes PolicyInput and a stale ProviderPolicyInput alias, violating the required export contract.",
+  "revised_request_path": "/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/final-standalone-implementation-spec-shared-inhe-c4aa316d/runs/run-20260508T141115Z-6c430e1a/artifacts/audit/revised_request.md"
+}
