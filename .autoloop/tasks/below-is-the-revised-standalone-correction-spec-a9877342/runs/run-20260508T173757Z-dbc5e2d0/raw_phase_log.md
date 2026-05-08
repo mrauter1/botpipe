@@ -627,3 +627,128 @@ The only remaining limitation is environment-related: `pytest` was not executabl
 <loop-control>
 {"schema":"docloop.loop_control/v1","kind":"promise","promise":"COMPLETE"}
 </loop-control>
+
+
+---
+run_id=run-20260508T173757Z-dbc5e2d0 | entry=session_turn | pair=implement | phase=producer | cycle=1 | attempt=1 | thread_id=019e08c0-fd19-7d83-8d47-b301dba7c66b
+---
+provider=codex
+mode=start
+template=/home/rauter/.local/share/pipx/venvs/autoloop/lib/python3.12/site-packages/autoloop/templates/implement_producer.md
+session_id=019e08c0-fd19-7d83-8d47-b301dba7c66b
+
+
+---
+run_id=run-20260508T173757Z-dbc5e2d0 | entry=phase_output | pair=implement | phase=producer | process=codex-agent | cycle=1 | attempt=1 | thread_id=019e08c0-fd19-7d83-8d47-b301dba7c66b
+---
+I’m implementing the runtime CLI phase only: require public `--workspace`, remove `--root` in covered entry points, and align tests/docs before validating the touched surface.
+
+I’ve got the phase artifacts and decision history. Next I’m narrowing the actual runtime CLI blast radius in code, tests, and any public examples that still mention `--root`.
+
+The parser still defines `--root` in both shared parent parsers, so this phase is a straight CLI surface correction rather than a broader refactor. I’m reading the runtime CLI tests now to update all covered entry points and add explicit rejection cases for omitted `--workspace` and legacy `--root`.
+
+I’ve confirmed the public doc drift too: `docs/authoring.md` still advertises `--root`, so I’ll update that alongside parser/help/tests rather than leaving the docs inconsistent with the enforced CLI.
+
+I have enough context to edit safely. I’m changing the parser first so the public surface enforces `--workspace` while leaving downstream handler logic on `args.root` unchanged.
+
+I’m updating the public examples next, but only the lines directly tied to this renamed runtime flag so the doc blast radius stays within the phase contract.
+
+The bulk test conversion is in. I’m doing a verification pass on remaining `--root` references before I run the targeted runtime suite, so I don’t end up chasing avoidable parser failures.
+
+The remaining `--root` hits are intentional assertions in the new rejection tests. I’m running the focused runtime CLI suites now to catch parser/help or command-path regressions from the required flag change.
+
+`pytest` isn’t on PATH here, so I’m rerunning through the interpreter rather than assuming a toolchain issue in the code itself.
+
+The host has `python3` but no installed `pytest`, so I’m checking the repo-local environment next. If there’s a project venv, I can still run the targeted CLI tests without broad environment changes.
+
+The parser change itself is loading, but the targeted suite is failing in nine CLI tests. I’m pulling the failures now before editing again so I can correct the exact argument-ordering or scope issue instead of guessing.
+
+`argparse` is prioritizing the missing required flag before it reports unknown options, which is fine behavior. I’m tightening the legacy-flag rejection test to provide a valid `--workspace` first so it isolates the actual `--root` incompatibility we care about.
+
+The code and focused tests are green. I’m recording the phase artifacts now so later turns inherit the exact behavior change and validation scope instead of rediscovering it from the diff.
+
+Scope considered
+
+- Phase-local runtime CLI work only: [autoloop/runtime/cli.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/autoloop/runtime/cli.py), runtime CLI tests, and the directly affected public example lines in [docs/authoring.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/docs/authoring.md).
+- I did not broaden into SDK/simple or policy code, which earlier phases already handled.
+
+What I analyzed
+
+- The shared CLI parent parsers in [autoloop/runtime/cli.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/autoloop/runtime/cli.py) still exposed optional `--root` with a `cwd` default.
+- Runtime coverage in [tests/runtime/test_package_cli.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/tests/runtime/test_package_cli.py) and [tests/runtime/test_runtime_cli_metadata_integration.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/tests/runtime/test_runtime_cli_metadata_integration.py) still invoked `--root`.
+- Public recursive/runtime examples in [docs/authoring.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/docs/authoring.md) still advertised `--root`.
+
+What I changed
+
+- Replaced the public CLI flag with required `--workspace` in [autoloop/runtime/cli.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/autoloop/runtime/cli.py) and kept `dest="root"` so handler logic stays unchanged.
+- Centralized the repeated help text in `_WORKSPACE_HELP` and made help text say “Workspace directory”.
+- Updated the covered runtime CLI tests to call `--workspace`, and added parser-level regression coverage that:
+  - omitting `--workspace` fails for all covered public entry points
+  - `--root` is rejected for all covered public entry points
+- Updated the affected public command examples in [docs/authoring.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/docs/authoring.md).
+- Recorded the phase notes in [implementation_notes.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/below-is-the-revised-standalone-correction-spec-a9877342/runs/run-20260508T173757Z-dbc5e2d0/artifacts/implement/phases/runtime-cli-workspace-flag/implementation_notes.md) and appended the non-obvious decisions in [decisions.txt](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/below-is-the-revised-standalone-correction-spec-a9877342/runs/run-20260508T173757Z-dbc5e2d0/decisions.txt).
+
+Key findings / decisions
+
+- Keeping the internal attribute name as `args.root` is consistent with the phase contract and avoided unnecessary downstream churn.
+- For legacy-flag rejection coverage, the tests must also supply a valid `--workspace`; otherwise `argparse` reports the missing required flag before it reports the unknown `--root`.
+- Validation passed with `./.venv/bin/pytest tests/runtime/test_package_cli.py tests/runtime/test_runtime_cli_metadata_integration.py`.
+
+Open issues / next step
+
+- No open issues inside this phase scope.
+- I did not run the full repository test suite; only the targeted runtime CLI suites above.
+
+
+---
+run_id=run-20260508T173757Z-dbc5e2d0 | entry=session_turn | pair=implement | phase=verifier | cycle=1 | attempt=1 | thread_id=019e08c0-fd19-7d83-8d47-b301dba7c66b
+---
+provider=codex
+mode=resume
+template=/home/rauter/.local/share/pipx/venvs/autoloop/lib/python3.12/site-packages/autoloop/templates/implement_verifier.md
+session_id=019e08c0-fd19-7d83-8d47-b301dba7c66b
+
+
+---
+run_id=run-20260508T173757Z-dbc5e2d0 | entry=phase_output | pair=implement | phase=verifier | process=codex-agent | cycle=1 | attempt=1 | thread_id=019e08c0-fd19-7d83-8d47-b301dba7c66b
+---
+I’m reviewing the runtime CLI workspace-flag phase now. I’ll verify the changed parser, touched docs, and regression coverage against the acceptance criteria before I update the phase artifacts.
+
+The phase artifacts are still blank, so I’m validating the final repo state directly rather than trusting the notes. Next I’m checking for residual `--root` exposure in the runtime CLI surface and rerunning the focused tests.
+
+The core behavior is passing, but I’m checking one more public-surface detail in the help output itself. The parser still uses `dest="root"`, which can leak into argparse’s metavar unless it’s overridden.
+
+I found one user-visible gap: the required flag rename is correct, but argparse still renders the placeholder as `ROOT` in help output because `dest="root"` is reused without a custom metavar. I’m recording that as a blocking review finding and marking the criteria accordingly.
+
+Scope considered
+
+- Phase-local runtime CLI workspace-flag review only: [autoloop/runtime/cli.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/autoloop/runtime/cli.py), [tests/runtime/test_package_cli.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/tests/runtime/test_package_cli.py), [tests/runtime/test_runtime_cli_metadata_integration.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/tests/runtime/test_runtime_cli_metadata_integration.py), [docs/authoring.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/docs/authoring.md), and the active phase artifacts.
+
+What I analyzed
+
+- The authoritative phase contract, implementation notes, and run decisions.
+- The final parser state for the shared `common` and `mutate` parent parsers.
+- Residual `--root` and `--workspace` references in touched runtime CLI files and docs.
+- Focused runtime CLI validation via `./.venv/bin/pytest tests/runtime/test_package_cli.py tests/runtime/test_runtime_cli_metadata_integration.py`.
+
+What I reviewed
+
+- Required `--workspace` enforcement and legacy `--root` rejection across covered public entry points.
+- Public help text wording, including actual rendered argparse help output.
+- Touched docs/examples for the CLI rename.
+- Test coverage quality for the acceptance criteria.
+
+Key findings / decisions
+
+- I recorded one blocking finding in [feedback.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/below-is-the-revised-standalone-correction-spec-a9877342/runs/run-20260508T173757Z-dbc5e2d0/artifacts/implement/phases/runtime-cli-workspace-flag/feedback.md): help output still renders `--workspace ROOT` because the parser keeps `dest="root"` without overriding the metavar.
+- That means AC-2 is not fully satisfied yet: the public help surface still leaks the removed root terminology even though the flag name itself was renamed.
+- I updated [criteria.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/below-is-the-revised-standalone-correction-spec-a9877342/runs/run-20260508T173757Z-dbc5e2d0/artifacts/implement/phases/runtime-cli-workspace-flag/criteria.md) accordingly.
+
+Open issues / next step
+
+- Fix the shared `--workspace` arguments to render `WORKSPACE` instead of `ROOT` in help output, then strengthen the help assertions to reject `ROOT` explicitly.
+- After that, rerun the focused runtime CLI suite and update the phase artifacts to complete.
+
+<loop-control>
+{"schema":"docloop.loop_control/v1","kind":"promise","promise":"INCOMPLETE"}
+</loop-control>
