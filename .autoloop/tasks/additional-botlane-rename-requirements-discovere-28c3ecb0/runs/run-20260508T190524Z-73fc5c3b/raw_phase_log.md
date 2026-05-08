@@ -1492,3 +1492,98 @@ This phase should stay incomplete until `legacy_docs/**` is either brought under
 <loop-control>
 {"schema":"docloop.loop_control/v1","kind":"promise","promise":"INCOMPLETE"}
 </loop-control>
+
+
+---
+run_id=run-20260508T190524Z-73fc5c3b | entry=session_turn | pair=implement | phase=producer | cycle=3 | attempt=1 | thread_id=019e0943-ff31-72a3-a94a-bb192b9cb63e
+---
+provider=codex
+mode=resume
+template=/home/rauter/.local/share/pipx/venvs/autoloop/lib/python3.12/site-packages/autoloop/templates/implement_producer.md
+session_id=019e0943-ff31-72a3-a94a-bb192b9cb63e
+
+
+---
+run_id=run-20260508T190524Z-73fc5c3b | entry=phase_output | pair=implement | phase=producer | process=codex-agent | cycle=3 | attempt=1 | thread_id=019e0943-ff31-72a3-a94a-bb192b9cb63e
+---
+I’m resolving the remaining blocker by replacing the broad `legacy_docs/**` carveout with an explicit historical-file allowlist in the strictness proof, so the gate is narrow and auditable. After that I’ll refresh the notes and decision ledger.
+
+I’m editing the strictness test now. The change is to scan the repo root for branding regressions, skip only generated state, and encode `legacy_docs/*.md` as an explicit historical-file allowlist rather than a hidden directory carveout.
+
+The proof logic is updated. I’m validating it with the strictness suite and the focused runtime/wheel checks, then I’ll refresh the phase notes and decision block with the exact policy change.
+
+The repo-wide scan found one issue in the proof itself: I reintroduced literal `.autoloop` tokens inside the strictness test. I’m removing those literals by rebuilding them from fragments so the gate stays self-consistent.
+
+That failure was from the pre-fix test run. The literal-token cleanup is in place; I’m rerunning the strictness proof and the repo-wide scan now.
+
+I’ve got clean validation now. I’m updating the phase notes and the current decision block to capture the new explicit-history allowlist policy and the repo-root branding scan.
+
+Scope considered
+
+Phase-local proof surfaces only: `tests/strictness/test_no_compat.py`, the focused wheel/runtime proof tests, `legacy_docs/*.md` as the remaining AC2 carveout, and the required phase artifacts and decisions ledger.
+
+What I analyzed
+
+I traced the remaining verifier blocker to the broad `legacy_docs/**` exclusion, checked the accepted allowlist policy in the plan and decisions ledger, and verified that the strictness proof could move to a repo-root scan without reintroducing generated-state noise.
+
+What I changed
+
+I updated [tests/strictness/test_no_compat.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/tests/strictness/test_no_compat.py) so the branding proof now walks `REPO_ROOT`, skips only generated-state directories, and treats `legacy_docs/*.md` as an explicit per-file history allowlist. I also added an inventory test that fails if `legacy_docs/` changes without a deliberate allowlist update, and I kept the file free of literal legacy-brand tokens.
+
+I refreshed [implementation_notes.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/additional-botlane-rename-requirements-discovere-28c3ecb0/runs/run-20260508T190524Z-73fc5c3b/artifacts/implement/phases/prove-botlane-only-surface/implementation_notes.md) and appended the non-obvious proof-policy decision under block 15 in [decisions.txt](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/additional-botlane-rename-requirements-discovere-28c3ecb0/runs/run-20260508T190524Z-73fc5c3b/decisions.txt).
+
+Key findings / decisions
+
+Validation passed:
+- `.venv/bin/python -m pytest -q tests/strictness/test_no_compat.py` -> `40 passed`
+- `.venv/bin/python -m pytest -q tests/runtime/test_wheel_packaging_smoke.py tests/runtime/test_workspace_and_context.py -k 'test_built_wheel_installs_public_botlane_package_and_cli or run_creates_task_workflow_run_layout_and_immutable_request_snapshots or run_metadata_records_topology_hashes_and_artifact_contract_paths'` -> `3 passed, 32 deselected`
+- Repo-wide `rg` for `autoloop|Autoloop|AUTOLOOP|\.autoloop|autoloop_optimizer|_autoloop_workspace_workflows`, excluding only generated state and the explicit `legacy_docs/*.md` history allowlist, returned no matches.
+
+Open issues / next step
+
+No new implementation blockers remain in this phase. The only outstanding item is verifier re-review; the earlier non-blocking `MANIFEST.in` auditability note is unchanged.
+
+
+---
+run_id=run-20260508T190524Z-73fc5c3b | entry=session_turn | pair=implement | phase=verifier | cycle=3 | attempt=1 | thread_id=019e0943-ff31-72a3-a94a-bb192b9cb63e
+---
+provider=codex
+mode=resume
+template=/home/rauter/.local/share/pipx/venvs/autoloop/lib/python3.12/site-packages/autoloop/templates/implement_verifier.md
+session_id=019e0943-ff31-72a3-a94a-bb192b9cb63e
+
+
+---
+run_id=run-20260508T190524Z-73fc5c3b | entry=phase_output | pair=implement | phase=verifier | process=codex-agent | cycle=3 | attempt=1 | thread_id=019e0943-ff31-72a3-a94a-bb192b9cb63e
+---
+I’m re-reviewing the updated strictness proof and its allowlist policy against the phase contract, then I’ll update only the verifier artifacts.
+
+The new proof shape is clear. I’m confirming it with focused validation and checking the updated decisions/notes for drift before I decide whether any blocker remains.
+
+The blocker is resolved: the proof now uses an explicit history-file allowlist instead of a hidden directory carveout, and the focused validation passes. I’m closing the old blocker in feedback and marking the criteria complete.
+
+The review artifacts are updated. I’m doing a final readback to make sure the completion state and audit trail are internally consistent.
+
+Scope considered
+
+Phase-local re-review of the updated proof surfaces: the repo-root branding scan and explicit history allowlist in `tests/strictness/test_no_compat.py`, the focused wheel/runtime proof tests, the active implementation notes, and the shared decisions ledger.
+
+What I analyzed
+
+I checked the remaining AC2 blocker against the updated strictness design and verified that the broad `legacy_docs/**` exclusion is gone. I also confirmed the producer’s focused validation: `40` strictness tests passed, the focused runtime/wheel batch passed, and the repo-wide legacy-brand scan was clean outside generated state and the explicit `legacy_docs/*.md` history allowlist.
+
+What I reviewed
+
+I updated [criteria.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/additional-botlane-rename-requirements-discovere-28c3ecb0/runs/run-20260508T190524Z-73fc5c3b/artifacts/implement/phases/prove-botlane-only-surface/criteria.md) to fully checked and appended the cycle-3 resolution note to [feedback.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/additional-botlane-rename-requirements-discovere-28c3ecb0/runs/run-20260508T190524Z-73fc5c3b/artifacts/implement/phases/prove-botlane-only-surface/feedback.md).
+
+Key findings / decisions
+
+No blocking findings remain. `IMP-003` is resolved by the explicit per-file `legacy_docs/*.md` allowlist and the repo-root branding scan. `IMP-002` remains advisory only and does not prevent acceptance.
+
+Open issues / next step
+
+This phase is complete. The remaining note is the existing `MANIFEST.in` auditability advisory if the team wants to tighten that packaging rule later.
+
+<loop-control>
+{"schema":"docloop.loop_control/v1","kind":"promise","promise":"COMPLETE"}
+</loop-control>

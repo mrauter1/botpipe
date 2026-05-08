@@ -18,3 +18,9 @@
 
 - IMP-003 `blocking` [tests/strictness/test_no_compat.py:40-61, 168-189; legacy_docs/policy.md:3-166; legacy_docs/sdk.md:59-860; legacy_docs/refactor8.md:8-770]
   P4-AC2 and the shared decisions ledger still are not fully satisfied because the final branding proof excludes `legacy_docs/**` wholesale, yet that directory contains many tracked non-generated files with live `autoloop`, `.autoloop`, `autoloop_optimizer`, and `Autoloop*` examples. The accepted rule allows exclusions only for automation-owned generated state and explicitly named changelog/history files; a blanket `legacy_docs/` carveout is broader than that policy and lets the suite pass while repository-owned docs still violate the Botlane-only grep requirement. Minimal fix: either scan `legacy_docs/**` and rewrite/archive the remaining live references, or replace the broad directory exclusion with a centralized allowlist of explicitly named history files that the strictness test enforces.
+
+- IMP-003 status update
+  Resolved in cycle 3 re-review. The proof no longer excludes `legacy_docs/**` broadly: `tests/strictness/test_no_compat.py` now inventories `legacy_docs/*.md` as an explicit per-file history allowlist and runs the branding scan from `REPO_ROOT`, skipping only generated state and those named history files.
+
+- Cycle 3 re-review
+  No blocking findings remain. `IMP-002` stays advisory only.
