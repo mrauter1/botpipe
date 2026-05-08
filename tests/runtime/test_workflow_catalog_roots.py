@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import importlib
+import re
 import sys
 from pathlib import Path
 
@@ -15,6 +16,11 @@ from botlane.core.workflow_catalog import (
     workflow_search_roots,
 )
 from botlane.runtime.loader import WorkflowDiscoveryError, resolve_workflow_reference
+
+LEGACY_PRODUCT = "auto" + "loop"
+LEGACY_STATE_DIRNAME = "." + LEGACY_PRODUCT
+LEGACY_WORKFLOWS_ROOT = Path(LEGACY_STATE_DIRNAME) / "workflows"
+LEGACY_WORKFLOW_V1 = LEGACY_PRODUCT + "_v1"
 
 
 def _clear_workflow_modules() -> None:
@@ -222,7 +228,7 @@ def test_workflow_search_roots_include_repo_workspace_and_package_roots(
     assert roots[0].path == tmp_path / "workflows"
     assert roots[0].import_prefix == "workflows"
     assert roots[1].path == tmp_path / ".botlane" / "workflows"
-    assert roots[2].path == tmp_path / ".autoloop" / "workflows"
+    assert roots[2].path == tmp_path / LEGACY_WORKFLOWS_ROOT
     assert roots[3].path == package_root
     assert roots[0].precedence > roots[1].precedence > roots[2].precedence > roots[3].precedence
 
@@ -232,7 +238,7 @@ def test_discover_workflow_catalog_reads_legacy_workspace_root_when_present(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     _configure_package_root(monkeypatch, tmp_path)
-    package_dir = tmp_path / ".autoloop" / "workflows" / "legacy_demo"
+    package_dir = tmp_path / LEGACY_WORKFLOWS_ROOT / "legacy_demo"
     package_dir.mkdir(parents=True, exist_ok=True)
     (package_dir / "workflow.toml").write_text(
         'name = "legacy_demo"\n'
@@ -257,7 +263,7 @@ def test_discover_workflow_catalog_reads_legacy_workspace_root_when_present(
 
     assert len(entries) == 1
     assert entries[0].workflow_name == "legacy_demo"
-    assert entries[0].source_root == tmp_path / ".autoloop" / "workflows"
+    assert entries[0].source_root == tmp_path / LEGACY_WORKFLOWS_ROOT
 
 
 def test_workflow_resolution_prefers_botlane_workspace_root_over_legacy_root(
@@ -283,7 +289,7 @@ class SharedWorkflow(Workflow):
         return None
 """.strip(),
     )
-    legacy_dir = tmp_path / ".autoloop" / "workflows" / "shared_demo"
+    legacy_dir = tmp_path / LEGACY_WORKFLOWS_ROOT / "shared_demo"
     legacy_dir.mkdir(parents=True, exist_ok=True)
     (legacy_dir / "workflow.toml").write_text(
         'name = "shared_demo"\n'
@@ -367,7 +373,7 @@ def test_discover_workflow_catalog_returns_workspace_and_package_source_kinds(
     assert entries["single_demo"].authoring_shape == "single_file"
 
 
-def test_distributed_package_catalog_exposes_botlane_v1_and_rejects_autoloop_v1(tmp_path: Path) -> None:
+def test_distributed_package_catalog_exposes_botlane_v1_and_rejects_legacy_v1(tmp_path: Path) -> None:
     entries = {entry.workflow_name: entry for entry in discover_workflow_catalog(tmp_path)}
     entry = entries["botlane_v1"]
 
@@ -384,8 +390,8 @@ def test_distributed_package_catalog_exposes_botlane_v1_and_rejects_autoloop_v1(
     assert resolved_by_alias.reference.package_dir == entry.package_dir
     assert resolved_by_alias.reference.workflow_name == "botlane_v1"
 
-    with pytest.raises(WorkflowDiscoveryError, match="unknown workflow 'autoloop_v1'"):
-        resolve_workflow_reference(tmp_path, "autoloop_v1")
+    with pytest.raises(WorkflowDiscoveryError, match=rf"unknown workflow '{re.escape(LEGACY_WORKFLOW_V1)}'"):
+        resolve_workflow_reference(tmp_path, LEGACY_WORKFLOW_V1)
 
 
 def test_discover_repo_local_catalog_entries_use_workflows_namespace_defaults_and_repo_tests(

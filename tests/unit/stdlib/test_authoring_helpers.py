@@ -274,8 +274,8 @@ def test_workflow_specific_parameter_models_keep_inherited_selected_workflow_val
         {
             "selected_workflow": " release_candidate_to_go_no_go ",
             "task_title": " Release workflow refinement ",
-            "evaluation_summary_path": " .autoloop/evals/summary.json ",
-            "evaluation_findings_path": " .autoloop/evals/findings.md ",
+            "evaluation_summary_path": f" {STATE_DIRNAME}/evals/summary.json ",
+            "evaluation_findings_path": f" {STATE_DIRNAME}/evals/findings.md ",
             "failure_modes_path": " ",
             "target_test_command": " pytest -q ",
             "constraints": [" keep candidate publication explicit ", "keep candidate publication explicit"],
@@ -286,8 +286,8 @@ def test_workflow_specific_parameter_models_keep_inherited_selected_workflow_val
             "selected_workflow": " release_candidate_to_go_no_go ",
             "task_title": " Release workflow decomposition ",
             "evidence_paths": [
-                " .autoloop/signals/release_decomposition_pressure.md ",
-                ".autoloop/signals/release_decomposition_pressure.md",
+                f" {STATE_DIRNAME}/signals/release_decomposition_pressure.md ",
+                f"{STATE_DIRNAME}/signals/release_decomposition_pressure.md",
             ],
             "target_test_command": " pytest -q ",
             "constraints": [" keep runtime control narrow ", "keep runtime control narrow"],
@@ -296,15 +296,15 @@ def test_workflow_specific_parameter_models_keep_inherited_selected_workflow_val
 
     assert refinement_params.selected_workflow == "release_candidate_to_go_no_go"
     assert refinement_params.task_title == "Release workflow refinement"
-    assert refinement_params.evaluation_summary_path == ".autoloop/evals/summary.json"
-    assert refinement_params.evaluation_findings_path == ".autoloop/evals/findings.md"
+    assert refinement_params.evaluation_summary_path == f"{STATE_DIRNAME}/evals/summary.json"
+    assert refinement_params.evaluation_findings_path == f"{STATE_DIRNAME}/evals/findings.md"
     assert refinement_params.failure_modes_path is None
     assert refinement_params.target_test_command == "pytest -q"
     assert refinement_params.constraints == ["keep candidate publication explicit"]
 
     assert decomposition_params.selected_workflow == "release_candidate_to_go_no_go"
     assert decomposition_params.task_title == "Release workflow decomposition"
-    assert decomposition_params.evidence_paths == [".autoloop/signals/release_decomposition_pressure.md"]
+    assert decomposition_params.evidence_paths == [f"{STATE_DIRNAME}/signals/release_decomposition_pressure.md"]
     assert decomposition_params.target_test_command == "pytest -q"
     assert decomposition_params.constraints == ["keep runtime control narrow"]
 
@@ -313,8 +313,8 @@ def test_workflow_specific_parameter_models_keep_inherited_selected_workflow_val
             {
                 "selected_workflow": "   ",
                 "task_title": "Release workflow refinement",
-                "evaluation_summary_path": ".autoloop/evals/summary.json",
-                "evaluation_findings_path": ".autoloop/evals/findings.md",
+                "evaluation_summary_path": f"{STATE_DIRNAME}/evals/summary.json",
+                "evaluation_findings_path": f"{STATE_DIRNAME}/evals/findings.md",
             }
         )
 

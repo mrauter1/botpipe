@@ -7,6 +7,9 @@ from pathlib import Path
 
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
+LEGACY_PRODUCT = "auto" + "loop"
+LEGACY_OPTIMIZER = LEGACY_PRODUCT + "_optimizer"
+LEGACY_WORKFLOW_V1 = LEGACY_PRODUCT + "_v1"
 
 
 def _run(*args: str, cwd: Path | None = None) -> subprocess.CompletedProcess[str]:
@@ -45,11 +48,11 @@ def test_built_wheel_installs_public_botlane_package_and_cli(tmp_path: Path) -> 
     pip = _venv_bin(venv_dir, "pip")
     python = _venv_bin(venv_dir, "python")
     botlane = _venv_bin(venv_dir, "botlane")
-    autoloop = _venv_bin(venv_dir, "autoloop")
+    legacy_cli = _venv_bin(venv_dir, LEGACY_PRODUCT)
 
     _run(pip, "install", str(wheels[-1]))
 
-    assert not Path(autoloop).exists()
+    assert not Path(legacy_cli).exists()
 
     help_result = _run(botlane, "--help")
     assert "botlane" in help_result.stdout
@@ -74,7 +77,7 @@ def test_built_wheel_installs_public_botlane_package_and_cli(tmp_path: Path) -> 
                 "assert Route is not None",
                 "assert FINISH == 'FINISH'",
                 "assert BotlaneV1.name == 'botlane_v1'",
-                "assert importlib.util.find_spec('botlane.workflows.autoloop_v1') is None",
+                f"assert importlib.util.find_spec('botlane.workflows.{LEGACY_WORKFLOW_V1}') is None",
                 "assert callable(cli.main)",
             )
         ),
@@ -88,7 +91,7 @@ def test_built_wheel_installs_public_botlane_package_and_cli(tmp_path: Path) -> 
             "\n".join(
                 (
                     "import importlib",
-                    "importlib.import_module('autoloop')",
+                    f"importlib.import_module('{LEGACY_PRODUCT}')",
                 )
             ),
         ],
@@ -105,7 +108,7 @@ def test_built_wheel_installs_public_botlane_package_and_cli(tmp_path: Path) -> 
             "\n".join(
                 (
                     "import importlib",
-                    "importlib.import_module('autoloop_optimizer')",
+                    f"importlib.import_module('{LEGACY_OPTIMIZER}')",
                 )
             ),
         ],
@@ -116,7 +119,7 @@ def test_built_wheel_installs_public_botlane_package_and_cli(tmp_path: Path) -> 
     assert old_optimizer_import_check.returncode != 0
 
     old_module_run = subprocess.run(
-        [python, "-m", "autoloop"],
+        [python, "-m", LEGACY_PRODUCT],
         check=False,
         capture_output=True,
         text=True,

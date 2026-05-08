@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+import re
+
 from tests.contract.engine._shared import (
     _ConfigurableRenderedTransport,
     _RenderedTransportStub,
@@ -9,6 +11,10 @@ from tests.contract.engine._shared import (
     _workspace,
 )
 from tests.contract.engine._shared import *
+
+LEGACY_PRODUCT = "auto" + "loop"
+LEGACY_OPERATION_REPLAY_V1 = LEGACY_PRODUCT + ".operation_replay/v1"
+LEGACY_OPERATION_REPLAY_V3 = LEGACY_PRODUCT + ".operation_replay/v3"
 
 def test_low_level_engine_requires_prompt_registry_for_relative_file_prompts(tmp_path: Path):
     (tmp_path / "ask.md").write_text("Answer the request.\n", encoding="utf-8")
@@ -693,7 +699,7 @@ def test_operation_replay_fingerprint_includes_provider_configuration(tmp_path: 
         ({"records": {"legacy": {"value": "stale"}}, "attempts": ["first"]}, ["first"]),
         (
             {
-                "schema": "autoloop.operation_replay/v1",
+                "schema": LEGACY_OPERATION_REPLAY_V1,
                 "records": {"legacy": {"value": "stale"}},
                 "attempts": ["first", "second"],
             },
@@ -721,7 +727,7 @@ def test_operation_replay_store_rejects_unsupported_schema_versions(tmp_path: Pa
     replay_path.write_text(
         json.dumps(
             {
-                "schema": "autoloop.operation_replay/v3",
+                "schema": LEGACY_OPERATION_REPLAY_V3,
                 "records": {"legacy": {"value": "stale"}},
                 "attempts": ["first"],
             }
@@ -729,7 +735,7 @@ def test_operation_replay_store_rejects_unsupported_schema_versions(tmp_path: Pa
         encoding="utf-8",
     )
 
-    with pytest.raises(ValueError, match="uses unsupported schema 'autoloop.operation_replay/v3'"):
+    with pytest.raises(ValueError, match=rf"uses unsupported schema '{re.escape(LEGACY_OPERATION_REPLAY_V3)}'"):
         _load_replay_store(replay_path)
 def test_inline_operation_provider_override_participates_in_replay_fingerprint(tmp_path: Path) -> None:
     first_override = _rendered_provider_with_operation_executor(

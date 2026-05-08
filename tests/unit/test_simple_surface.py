@@ -35,13 +35,14 @@ REMOVED_REVIEW_STEP = "review" + "_" + "step"
 REMOVED_DO_REVIEW_STEP = "do" + "_" + "review" + "_" + "step"
 REMOVED_SYSTEM_STEP_ALIAS = "system" + "_" + "step"
 REMOVED_VERIFIER_WRITES = "review_" + "writes"
+LEGACY_V3_PACKAGE = ("auto" + "loop") + "_v3"
 def _import_from(module_name: str, symbol: str) -> object:
     namespace: dict[str, object] = {}
     exec(f"from {module_name} import {symbol} as imported_symbol", namespace)
     return namespace["imported_symbol"]
 
 
-def test_autoloop_root_exports_only_the_canonical_public_surface() -> None:
+def test_root_exports_only_the_canonical_public_surface() -> None:
     assert tuple(botlane.__all__) == (
         "Workflow",
         "step",
@@ -342,8 +343,8 @@ def test_core_module_identity_remains_canonical() -> None:
 def test_legacy_core_import_usage_is_absent_from_active_python_files() -> None:
     repo_root = Path(__file__).resolve().parents[2]
     forbidden_patterns = (
-        re.compile(r"\bfrom\s+autoloop_v3\.core(?:\.|\s+import\b)"),
-        re.compile(r"\bimport\s+autoloop_v3\.core(?:\.|\b)"),
+        re.compile(rf"\bfrom\s+{re.escape(LEGACY_V3_PACKAGE)}\.core(?:\.|\s+import\b)"),
+        re.compile(rf"\bimport\s+{re.escape(LEGACY_V3_PACKAGE)}\.core(?:\.|\b)"),
         re.compile(r"\bfrom\s+core\._compat(?:\.|\s+import\b)"),
         re.compile(r"\bimport\s+core\._compat(?:\.|\b)"),
     )

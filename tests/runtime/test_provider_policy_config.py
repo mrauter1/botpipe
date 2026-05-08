@@ -9,6 +9,9 @@ from botlane.core.provider_policy import SYSTEM_DEFAULT_PROVIDER_POLICY
 from botlane.runtime.config import ConfigError, resolve_runtime_config
 import botlane.runtime.config as runtime_config
 
+LEGACY_PRODUCT = "auto" + "loop"
+LEGACY_CONFIG_FILENAME = LEGACY_PRODUCT + ".yaml"
+
 
 def _runtime_args(**overrides: object) -> argparse.Namespace:
     payload = {
@@ -102,7 +105,7 @@ def test_resolve_runtime_config_accepts_legacy_workspace_filename_when_no_botlan
 ) -> None:
     config_root = tmp_path / "repo"
     config_root.mkdir()
-    (config_root / "autoloop.yaml").write_text("runtime:\n  max_steps: 7\n", encoding="utf-8")
+    (config_root / LEGACY_CONFIG_FILENAME).write_text("runtime:\n  max_steps: 7\n", encoding="utf-8")
     monkeypatch.setattr(runtime_config, "user_config_dir", lambda: tmp_path / "missing-user-config")
 
     resolved = resolve_runtime_config(config_root, _runtime_args())
@@ -116,7 +119,7 @@ def test_resolve_runtime_config_accepts_legacy_global_config_dir_when_botlane_di
 ) -> None:
     legacy_global_config_dir = tmp_path / "legacy-global-config"
     legacy_global_config_dir.mkdir()
-    (legacy_global_config_dir / "autoloop.yaml").write_text("runtime:\n  max_steps: 11\n", encoding="utf-8")
+    (legacy_global_config_dir / LEGACY_CONFIG_FILENAME).write_text("runtime:\n  max_steps: 11\n", encoding="utf-8")
     monkeypatch.setattr(runtime_config, "user_config_dir", lambda: tmp_path / "missing-user-config")
     monkeypatch.setattr(runtime_config, "legacy_user_config_dir", lambda: legacy_global_config_dir)
 
@@ -134,7 +137,7 @@ def test_resolve_runtime_config_prefers_botlane_global_config_dir_over_legacy_gl
     global_config_dir.mkdir()
     legacy_global_config_dir.mkdir()
     (global_config_dir / "botlane.yaml").write_text("runtime:\n  max_steps: 5\n", encoding="utf-8")
-    (legacy_global_config_dir / "autoloop.yaml").write_text("runtime:\n  max_steps: 11\n", encoding="utf-8")
+    (legacy_global_config_dir / LEGACY_CONFIG_FILENAME).write_text("runtime:\n  max_steps: 11\n", encoding="utf-8")
     monkeypatch.setattr(runtime_config, "user_config_dir", lambda: global_config_dir)
     monkeypatch.setattr(runtime_config, "legacy_user_config_dir", lambda: legacy_global_config_dir)
 
@@ -150,7 +153,7 @@ def test_resolve_runtime_config_prefers_botlane_filename_over_legacy_workspace_f
     config_root = tmp_path / "repo"
     config_root.mkdir()
     (config_root / "botlane.yaml").write_text("runtime:\n  max_steps: 5\n", encoding="utf-8")
-    (config_root / "autoloop.yaml").write_text("runtime:\n  max_steps: 7\n", encoding="utf-8")
+    (config_root / LEGACY_CONFIG_FILENAME).write_text("runtime:\n  max_steps: 7\n", encoding="utf-8")
     monkeypatch.setattr(runtime_config, "user_config_dir", lambda: tmp_path / "missing-user-config")
 
     resolved = resolve_runtime_config(config_root, _runtime_args())

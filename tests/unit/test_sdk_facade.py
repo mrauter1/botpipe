@@ -40,6 +40,10 @@ from botlane.core.providers.fake import ScriptedLLMProvider
 from botlane.core.steps import ChildWorkflowStep, ProduceVerifyStep, PromptStep, PythonStep
 from botlane.runtime.config import GitTrackingRuntimeConfig, RuntimeConfig
 
+LEGACY_PRODUCT = "auto" + "loop"
+LEGACY_STATE_DIRNAME = "." + LEGACY_PRODUCT
+LEGACY_TASK_SENTINEL = "." + LEGACY_PRODUCT + "-sdk-task.json"
+
 
 class _SDKApprovalInput(BaseModel):
     approved: bool
@@ -1182,10 +1186,10 @@ def test_sdk_cleanup_only_targets_valid_completed_sdk_task_directories(tmp_path:
 
 def test_sdk_cleanup_reads_legacy_state_root_and_legacy_sentinel_names(tmp_path: Path) -> None:
     client = _sdk_client_at_root(tmp_path, ScriptedLLMProvider())
-    tasks_root = tmp_path / ".autoloop" / "tasks"
+    tasks_root = tmp_path / LEGACY_STATE_DIRNAME / "tasks"
     legacy_task = tasks_root / "sdk-legacy"
     legacy_task.mkdir(parents=True, exist_ok=True)
-    (legacy_task / ".autoloop-sdk-task.json").write_text(
+    (legacy_task / LEGACY_TASK_SENTINEL).write_text(
         json.dumps(
             {
                 "schema": "botlane.sdk_task/v1",

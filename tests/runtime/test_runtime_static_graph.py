@@ -22,9 +22,15 @@ from botlane.runtime.static_graph import (
 )
 from botlane.core.schema_registry import WORKFLOW_STATIC_STEP_GRAPH_SCHEMA
 
+STATE_DIRNAME = ".botlane"
+
 
 class _AssessmentPayload(BaseModel):
     summary: str
+
+
+class _RouteReasonPayload(BaseModel):
+    reason: str | None = None
 
 
 class _StaticGraphWorkflow(Workflow):
@@ -46,7 +52,7 @@ class _StaticGraphWorkflow(Workflow):
 
 
 def test_static_step_graph_written_for_run(tmp_path: Path) -> None:
-    run_dir = tmp_path / ".autoloop" / "tasks" / "task-1" / "wf_demo" / "runs" / "run-1"
+    run_dir = tmp_path / STATE_DIRNAME / "tasks" / "task-1" / "wf_demo" / "runs" / "run-1"
     run_dir.mkdir(parents=True)
     compiled = compile_workflow(_StaticGraphWorkflow)
 
@@ -251,14 +257,7 @@ def test_route_visibility_and_route_schema_changes_change_topology_hash() -> Non
                 "audit": Route.to(
                     FINISH,
                     provider_visibility="always",
-                    route_fields_schema={
-                        "type": "object",
-                        "properties": {
-                            "reason": {"type": ["string", "null"]},
-                        },
-                        "required": ["reason"],
-                        "additionalProperties": False,
-                    },
+                    route_fields_schema=_RouteReasonPayload,
                 ),
             },
         )

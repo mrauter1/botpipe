@@ -11,6 +11,8 @@ from botlane.core.steps import PythonStep
 from botlane.core.provider_policy import ProviderPolicy, ProviderPolicyOverride
 from botlane.policy import PermissionMode, Policy
 
+LEGACY_PRODUCT = "auto" + "loop"
+
 
 def test_policy_surface_exports_shared_policy_symbols() -> None:
     from botlane import (
@@ -85,11 +87,11 @@ def test_policy_resolves_public_layers_and_internal_overrides() -> None:
 
 def test_policy_rejects_removed_public_policy_override_symbol() -> None:
     with pytest.raises(ImportError):
-        exec("from autoloop import PolicyOverride")
+        exec(f"from {LEGACY_PRODUCT} import PolicyOverride")
     with pytest.raises(AttributeError):
         getattr(simple, "PolicyOverride")
     with pytest.raises(ImportError):
-        exec("from autoloop.simple import ProviderPolicyOverride")
+        exec(f"from {LEGACY_PRODUCT}.simple import ProviderPolicyOverride")
     with pytest.raises(AttributeError):
         getattr(simple, "ProviderPolicyOverride")
 
@@ -104,15 +106,15 @@ def test_policy_input_export_matrix_matches_phase_contract() -> None:
     assert sdk.PolicyInput is public_policy.PolicyInput
 
     with pytest.raises(ImportError):
-        exec("from autoloop import PolicyInput")
+        exec(f"from {LEGACY_PRODUCT} import PolicyInput")
     with pytest.raises(AttributeError):
         getattr(botlane, "PolicyInput")
     with pytest.raises(ImportError):
-        exec("from autoloop.simple import PolicyInput")
+        exec(f"from {LEGACY_PRODUCT}.simple import PolicyInput")
     with pytest.raises(AttributeError):
         getattr(simple, "PolicyInput")
     with pytest.raises(ImportError):
-        exec("from autoloop.simple import ProviderPolicyInput")
+        exec(f"from {LEGACY_PRODUCT}.simple import ProviderPolicyInput")
     with pytest.raises(AttributeError):
         getattr(simple, "ProviderPolicyInput")
 

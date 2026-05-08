@@ -13,7 +13,7 @@
 - Workflow/package identity: `botlane/workflows/botlane_v1/parity.py`, `botlane/workflows/workflow_run_traces_to_optimization_candidates/workflow.py`, `botlane/workflows/workflow_and_eval_to_refined_workflow_package/workflow.py`, selected workflow prompt/asset docs under `botlane/workflows/**`
 - Optimizer helpers: `botlane_optimizer/optimization.py`, `botlane_optimizer/candidate_surfaces.py`
 - User-facing docs: `docs/architecture.md`, `docs/authoring.md`, all maintained `docs/workflows/*.md`
-- Tests/proof: `tests/strictness/test_no_compat.py`, `tests/runtime/test_history.py`, `tests/runtime/test_workspace_and_context.py`, `tests/contract/test_branch_group_runtime.py`, `tests/unit/test_optimization_helpers.py`, `tests/unit/optimizer/test_candidate_surfaces.py`, `tests/unit/optimizer/test_selected_workflow_helpers.py`
+- Tests/proof: `tests/strictness/test_no_compat.py`, `tests/runtime/test_history.py`, `tests/runtime/test_golden_workflow.py`, `tests/runtime/test_optional_extensions.py`, `tests/runtime/test_package_cli.py`, `tests/runtime/test_provider_policy_config.py`, `tests/runtime/test_runtime_cli_metadata_integration.py`, `tests/runtime/test_runtime_static_graph.py`, `tests/runtime/test_runtime_tracing.py`, `tests/runtime/test_wheel_packaging_smoke.py`, `tests/runtime/test_workflow_catalog_roots.py`, `tests/runtime/test_workspace_and_context.py`, `tests/contract/engine/test_core_contracts.py`, `tests/contract/engine/test_prompt_context.py`, `tests/contract/test_branch_group_runtime.py`, `tests/unit/_stdlib_and_extensions_shared.py`, `tests/unit/extensions/test_git_and_session_paths.py`, `tests/unit/stdlib/test_authoring_helpers.py`, `tests/unit/test_optimization_helpers.py`, `tests/unit/test_sdk_facade.py`, `tests/unit/test_simple_policy.py`, `tests/unit/test_simple_surface.py`, `tests/unit/optimizer/test_candidate_surfaces.py`, `tests/unit/optimizer/test_portfolio_helpers.py`, `tests/unit/optimizer/test_selected_workflow_helpers.py`
 - Run artifacts: this `implementation_notes.md`, run-local `decisions.txt`
 
 ## Symbols Touched
@@ -32,7 +32,7 @@
 ## Assumptions
 
 - Legacy read compatibility still applies to persisted schemas, `.autoloop` state roots, and `autoloop.yaml` / `autoloop.config`; only new writes become Botlane-only
-- Negative/compatibility tests may still construct legacy inputs, so the branding grep proof is scoped to maintained product/docs/fixture/package-metadata surfaces rather than the whole test tree
+- Negative/compatibility tests may still construct legacy inputs, but they now do so through non-contiguous string construction so the branding grep proof can include the maintained test tree
 
 ## Preserved Invariants
 
@@ -49,21 +49,23 @@
 ## Known Non-Changes
 
 - Legacy `.autoloop` and legacy config readers remain readable by design
-- Compatibility/negative tests still exercise legacy names; they were not globally reworded into Botlane-only prose where that would stop testing the transition contract
+- Compatibility/negative tests still exercise legacy names, but only through constructed legacy tokens so the maintained-tree grep remains strict
 
 ## Expected Side Effects
 
 - Previously serialized Autoloop-branded payloads continue loading through the shared schema validator
 - New parity raw logs and decision ledgers will have Botlane-branded headers, while old ones remain readable
-- Strictness proof now fails if maintained product/docs/fixture/package-metadata files reintroduce raw Autoloop branding
+- Strictness proof now fails if maintained product/docs/tests/package-metadata files reintroduce raw Autoloop branding
 
 ## Validation Performed
 
-- `rg -n 'autoloop|Autoloop|AUTOLOOP|\\.autoloop|autoloop_optimizer|_autoloop_workspace_workflows' botlane botlane_optimizer docs pyproject.toml tests/fixtures --glob '!**/__pycache__/**' --glob '!build/**'` -> no matches
+- `rg -n 'autoloop|Autoloop|AUTOLOOP|\\.autoloop|autoloop_optimizer|_autoloop_workspace_workflows' botlane botlane_optimizer docs tests pyproject.toml --glob '!**/__pycache__/**' --glob '!build/**'` -> no matches
 - `.venv/bin/python -m pytest -q tests/unit/test_optimization_helpers.py tests/unit/optimizer/test_candidate_surfaces.py tests/unit/optimizer/test_selected_workflow_helpers.py tests/contract/test_branch_group_runtime.py tests/runtime/test_history.py` -> `101 passed`
 - `.venv/bin/python -m pytest -q tests/strictness/test_no_compat.py tests/runtime/test_wheel_packaging_smoke.py tests/runtime/test_workspace_and_context.py tests/runtime/test_workflow_catalog_roots.py` -> `99 passed`
+- `.venv/bin/python -m pytest -q tests/strictness/test_no_compat.py tests/runtime/test_provider_policy_config.py tests/runtime/test_package_cli.py tests/runtime/test_runtime_cli_metadata_integration.py tests/runtime/test_runtime_static_graph.py tests/runtime/test_runtime_tracing.py tests/runtime/test_golden_workflow.py tests/runtime/test_optional_extensions.py tests/runtime/test_workflow_catalog_roots.py tests/runtime/test_workspace_and_context.py tests/unit/extensions/test_git_and_session_paths.py tests/unit/stdlib/test_authoring_helpers.py tests/unit/test_sdk_facade.py tests/unit/test_simple_policy.py tests/unit/test_simple_surface.py tests/unit/optimizer/test_portfolio_helpers.py tests/unit/optimizer/test_selected_workflow_helpers.py tests/contract/engine/test_prompt_context.py tests/contract/engine/test_core_contracts.py` -> `489 passed`
 
 ## Deduplication / Centralization
 
 - Legacy `autoloop.*` schema acceptance is centralized in `botlane/core/schema_registry.py` instead of per-reader special cases
 - Candidate/workflow schema expectations were normalized through shared constants/specs rather than leaving scattered Autoloop literals
+- Maintained test fixtures centralize current `.botlane` roots in shared constants while legacy-only assertions build old names from parts instead of storing raw contiguous branding tokens

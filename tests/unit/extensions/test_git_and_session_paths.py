@@ -3,6 +3,9 @@ from __future__ import annotations
 from tests.unit._stdlib_and_extensions_shared import _git
 from tests.unit._stdlib_and_extensions_shared import *
 
+TEST_USER_EMAIL = "botlane@example.com"
+TEST_USER_NAME = "Botlane Tests"
+
 def test_session_paths_extraction_returns_only_the_declared_strategy() -> None:
     class Strategy:
         def path_for(self, run_dir: Path, ref_name: str, scope: str | None) -> Path:
@@ -16,7 +19,7 @@ def test_session_paths_extraction_returns_only_the_declared_strategy() -> None:
         extract_session_path_strategy((extension, SessionPaths(strategy=Strategy())))
 def test_git_filters_preserve_raw_delta_when_scoping_to_the_workflow_workspace(tmp_path: Path) -> None:
     repo_root = tmp_path / "repo"
-    task_folder = repo_root / ".autoloop" / "tasks" / "task-1"
+    task_folder = repo_root / STATE_DIRNAME / "tasks" / "task-1"
     workflow_folder = task_folder / "wf_example"
     run_folder = workflow_folder / "runs" / "run-1"
     binding = RunBinding(
@@ -31,35 +34,35 @@ def test_git_filters_preserve_raw_delta_when_scoping_to_the_workflow_workspace(t
     )
     raw_delta = GitDelta(
         (
-            GitChange(status="M", path=".autoloop/tasks/task-1/wf_example/notes.md"),
-            GitChange(status="M", path=".autoloop/tasks/task-1/shared.md"),
+            GitChange(status="M", path=f"{STATE_DIRNAME}/tasks/task-1/wf_example/notes.md"),
+            GitChange(status="M", path=f"{STATE_DIRNAME}/tasks/task-1/shared.md"),
             GitChange(status="M", path="README.md"),
         )
     )
 
     prefix = workflow_workspace_pathspec(repo_root, binding)
     scoped = filter_delta_by_prefixes(raw_delta, (prefix,) if prefix else ())
-    narrowed = filter_delta_by_pathspecs(scoped, (".autoloop/tasks/task-1/wf_example/notes.md",))
+    narrowed = filter_delta_by_pathspecs(scoped, (f"{STATE_DIRNAME}/tasks/task-1/wf_example/notes.md",))
 
     assert raw_delta.changes == (
-        GitChange(status="M", path=".autoloop/tasks/task-1/wf_example/notes.md"),
-        GitChange(status="M", path=".autoloop/tasks/task-1/shared.md"),
+        GitChange(status="M", path=f"{STATE_DIRNAME}/tasks/task-1/wf_example/notes.md"),
+        GitChange(status="M", path=f"{STATE_DIRNAME}/tasks/task-1/shared.md"),
         GitChange(status="M", path="README.md"),
     )
-    assert tuple(change.path for change in scoped.changes) == (".autoloop/tasks/task-1/wf_example/notes.md",)
-    assert tuple(change.path for change in narrowed.changes) == (".autoloop/tasks/task-1/wf_example/notes.md",)
-    assert delta_pathspecs(narrowed) == (".autoloop/tasks/task-1/wf_example/notes.md",)
+    assert tuple(change.path for change in scoped.changes) == (f"{STATE_DIRNAME}/tasks/task-1/wf_example/notes.md",)
+    assert tuple(change.path for change in narrowed.changes) == (f"{STATE_DIRNAME}/tasks/task-1/wf_example/notes.md",)
+    assert delta_pathspecs(narrowed) == (f"{STATE_DIRNAME}/tasks/task-1/wf_example/notes.md",)
 def test_git_repo_commit_scope_uses_filtered_delta_without_rewriting_raw_delta(tmp_path: Path) -> None:
     repo_root = tmp_path / "repo"
     repo_root.mkdir()
     _git(repo_root, "init")
-    _git(repo_root, "config", "user.email", "autoloop@example.com")
-    _git(repo_root, "config", "user.name", "Autoloop Tests")
+    _git(repo_root, "config", "user.email", TEST_USER_EMAIL)
+    _git(repo_root, "config", "user.name", TEST_USER_NAME)
     (repo_root / "README.md").write_text("base\n", encoding="utf-8")
     _git(repo_root, "add", "README.md")
     _git(repo_root, "commit", "-m", "baseline")
 
-    task_folder = repo_root / ".autoloop" / "tasks" / "task-1"
+    task_folder = repo_root / STATE_DIRNAME / "tasks" / "task-1"
     workflow_folder = task_folder / "wf_example"
     workflow_note = workflow_folder / "notes.md"
     workflow_note.parent.mkdir(parents=True, exist_ok=True)
@@ -88,20 +91,20 @@ def test_git_repo_commit_scope_uses_filtered_delta_without_rewriting_raw_delta(t
 
     assert commit_sha
     assert {change.path for change in raw_delta.changes} == {
-        ".autoloop/tasks/task-1/wf_example/notes.md",
-        ".autoloop/tasks/task-1/shared.md",
+        f"{STATE_DIRNAME}/tasks/task-1/wf_example/notes.md",
+        f"{STATE_DIRNAME}/tasks/task-1/shared.md",
         "README.md",
     }
     assert {change.path for change in repo.raw_delta().changes} == {
-        ".autoloop/tasks/task-1/shared.md",
+        f"{STATE_DIRNAME}/tasks/task-1/shared.md",
         "README.md",
     }
 def test_git_repo_commit_ignores_empty_selected_scope_when_unrelated_changes_are_pre_staged(tmp_path: Path) -> None:
     repo_root = tmp_path / "repo"
     repo_root.mkdir()
     _git(repo_root, "init")
-    _git(repo_root, "config", "user.email", "autoloop@example.com")
-    _git(repo_root, "config", "user.name", "Autoloop Tests")
+    _git(repo_root, "config", "user.email", TEST_USER_EMAIL)
+    _git(repo_root, "config", "user.name", TEST_USER_NAME)
     (repo_root / "README.md").write_text("base\n", encoding="utf-8")
     _git(repo_root, "add", "README.md")
     _git(repo_root, "commit", "-m", "baseline")
@@ -121,8 +124,8 @@ def test_git_repo_commit_allows_explicit_empty_commit_for_empty_selected_scope(t
     repo_root = tmp_path / "repo"
     repo_root.mkdir()
     _git(repo_root, "init")
-    _git(repo_root, "config", "user.email", "autoloop@example.com")
-    _git(repo_root, "config", "user.name", "Autoloop Tests")
+    _git(repo_root, "config", "user.email", TEST_USER_EMAIL)
+    _git(repo_root, "config", "user.name", TEST_USER_NAME)
     (repo_root / "README.md").write_text("base\n", encoding="utf-8")
     _git(repo_root, "add", "README.md")
     _git(repo_root, "commit", "-m", "baseline")
@@ -139,8 +142,8 @@ def test_git_repo_status_porcelain_and_is_dirty_report_workspace_changes(tmp_pat
     repo_root = tmp_path / "repo"
     repo_root.mkdir()
     _git(repo_root, "init")
-    _git(repo_root, "config", "user.email", "autoloop@example.com")
-    _git(repo_root, "config", "user.name", "Autoloop Tests")
+    _git(repo_root, "config", "user.email", TEST_USER_EMAIL)
+    _git(repo_root, "config", "user.name", TEST_USER_NAME)
     readme = repo_root / "README.md"
     readme.write_text("base\n", encoding="utf-8")
     _git(repo_root, "add", "README.md")
@@ -159,8 +162,8 @@ def test_git_repo_commit_all_tracks_untracked_files(tmp_path: Path) -> None:
     repo_root = tmp_path / "repo"
     repo_root.mkdir()
     _git(repo_root, "init")
-    _git(repo_root, "config", "user.email", "autoloop@example.com")
-    _git(repo_root, "config", "user.name", "Autoloop Tests")
+    _git(repo_root, "config", "user.email", TEST_USER_EMAIL)
+    _git(repo_root, "config", "user.name", TEST_USER_NAME)
     (repo_root / "README.md").write_text("base\n", encoding="utf-8")
     _git(repo_root, "add", "README.md")
     _git(repo_root, "commit", "-m", "baseline")
@@ -180,8 +183,8 @@ def test_git_repo_commit_all_stages_tracked_and_untracked_workspace_changes(tmp_
     repo_root = tmp_path / "repo"
     repo_root.mkdir()
     _git(repo_root, "init")
-    _git(repo_root, "config", "user.email", "autoloop@example.com")
-    _git(repo_root, "config", "user.name", "Autoloop Tests")
+    _git(repo_root, "config", "user.email", TEST_USER_EMAIL)
+    _git(repo_root, "config", "user.name", TEST_USER_NAME)
     readme = repo_root / "README.md"
     readme.write_text("base\n", encoding="utf-8")
     _git(repo_root, "add", "README.md")
@@ -202,8 +205,8 @@ def test_git_repo_commit_all_returns_current_head_without_empty_commit(tmp_path:
     repo_root = tmp_path / "repo"
     repo_root.mkdir()
     _git(repo_root, "init")
-    _git(repo_root, "config", "user.email", "autoloop@example.com")
-    _git(repo_root, "config", "user.name", "Autoloop Tests")
+    _git(repo_root, "config", "user.email", TEST_USER_EMAIL)
+    _git(repo_root, "config", "user.name", TEST_USER_NAME)
     (repo_root / "README.md").write_text("base\n", encoding="utf-8")
     _git(repo_root, "add", "README.md")
     _git(repo_root, "commit", "-m", "baseline")
@@ -222,8 +225,8 @@ def test_git_repo_raw_delta_preserves_two_column_git_status_semantics(tmp_path: 
     staged_repo = tmp_path / "staged"
     staged_repo.mkdir()
     _git(staged_repo, "init")
-    _git(staged_repo, "config", "user.email", "autoloop@example.com")
-    _git(staged_repo, "config", "user.name", "Autoloop Tests")
+    _git(staged_repo, "config", "user.email", TEST_USER_EMAIL)
+    _git(staged_repo, "config", "user.name", TEST_USER_NAME)
     staged_file = staged_repo / "file.txt"
     staged_file.write_text("base\n", encoding="utf-8")
     _git(staged_repo, "add", "file.txt")
@@ -234,8 +237,8 @@ def test_git_repo_raw_delta_preserves_two_column_git_status_semantics(tmp_path: 
     unstaged_repo = tmp_path / "unstaged"
     unstaged_repo.mkdir()
     _git(unstaged_repo, "init")
-    _git(unstaged_repo, "config", "user.email", "autoloop@example.com")
-    _git(unstaged_repo, "config", "user.name", "Autoloop Tests")
+    _git(unstaged_repo, "config", "user.email", TEST_USER_EMAIL)
+    _git(unstaged_repo, "config", "user.name", TEST_USER_NAME)
     unstaged_file = unstaged_repo / "file.txt"
     unstaged_file.write_text("base\n", encoding="utf-8")
     _git(unstaged_repo, "add", "file.txt")

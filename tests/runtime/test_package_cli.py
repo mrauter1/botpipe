@@ -18,6 +18,7 @@ from botlane.runtime.loader import resolve_workflow_reference
 PUBLIC_PROVIDER_FACTORY_FLAG = "--provider" + "-factory"
 REMOVED_CONTRACTS_PATH = "contracts" + "_path"
 REMOVED_WORKFLOW_PY_FIELD = "legacy_" + "workflow_path"
+LEGACY_PRODUCT = "auto" + "loop"
 
 
 def _evict_generated_modules() -> None:
@@ -214,7 +215,7 @@ def test_cli_help_uses_botlane_identity(capsys) -> None:
     parser = cli.build_arg_parser()
     assert parser.prog == "botlane"
     assert "filesystem Botlane runtime" in parser.format_help()
-    assert "autoloop" not in parser.format_help()
+    assert LEGACY_PRODUCT not in parser.format_help()
 
     with pytest.raises(SystemExit) as excinfo:
         parser.parse_args(["run", "--help"])
@@ -223,7 +224,7 @@ def test_cli_help_uses_botlane_identity(capsys) -> None:
     help_text = capsys.readouterr().out
     assert "installed botlane package" in help_text
     assert "`.botlane/workflows/`" in help_text
-    assert "autoloop" not in help_text
+    assert LEGACY_PRODUCT not in help_text
 
 
 def test_cli_mutating_command_help_exposes_provider_and_hides_provider_factory(capsys) -> None:

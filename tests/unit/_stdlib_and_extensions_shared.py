@@ -116,6 +116,8 @@ from botlane.core.extensions import RunBinding
 from botlane.runtime.loader import WorkflowParameterError, coerce_workflow_parameter_mapping, resolve_workflow_reference
 from botlane.core import AWAIT_INPUT, FAIL, FINISH, GLOBAL
 from botlane.core.primitives import Event, Outcome
+STATE_DIRNAME = ".botlane"
+STATE_DIR = Path(STATE_DIRNAME)
 PACKAGE_ROOT = Path(__file__).resolve().parents[2]
 REMOVED_CONTRACTS_PATH = "contracts" + "_path"
 REMOVED_CONTRACTS_PATH_REPO_RELATIVE = "contracts" + "_path_repo_relative"
@@ -213,7 +215,7 @@ def _build_lifecycle_context(
     *,
     workflow_name: str = "release_candidate_to_go_no_go",
 ) -> Context:
-    task_folder = tmp_path / ".autoloop" / "tasks" / "task-1"
+    task_folder = tmp_path / STATE_DIRNAME / "tasks" / "task-1"
     workflow_folder = task_folder / f"wf_{workflow_name}"
     run_folder = workflow_folder / "runs" / "run-1"
     package_folder = tmp_path / "workflows" / workflow_name
@@ -234,7 +236,7 @@ def _build_lifecycle_context(
         workflow_invoker=workflow_invoker,
     )
 def _build_child_result(tmp_path: Path, output_artifacts: dict[str, Path]) -> ChildWorkflowResult:
-    child_task_folder = tmp_path / ".autoloop" / "tasks" / "task-1"
+    child_task_folder = tmp_path / STATE_DIRNAME / "tasks" / "task-1"
     child_workflow_folder = child_task_folder / "wf_investigation_request_to_evidence_pack"
     child_run_folder = child_workflow_folder / "runs" / "child-run-1"
     child_package_folder = tmp_path / "botlane" / "workflows" / "investigation_request_to_evidence_pack"
@@ -469,7 +471,7 @@ def _write_run_history_record(
     error: str | None = None,
     pending_question: str | None = None,
 ) -> Path:
-    task_dir = root / ".autoloop" / "tasks" / task_id
+    task_dir = root / STATE_DIRNAME / "tasks" / task_id
     workflow_dir = task_dir / f"wf_{workflow_name}"
     run_dir = workflow_dir / "runs" / run_id
     run_dir.mkdir(parents=True, exist_ok=True)
@@ -488,15 +490,15 @@ def _write_run_history_record(
         "created_at": created_at,
         "package_folder": str(Path("workflows") / workflow_name),
         "request_file": str(
-            Path(".autoloop") / "tasks" / task_id / f"wf_{workflow_name}" / "runs" / run_id / "request.md"
+            STATE_DIR / "tasks" / task_id / f"wf_{workflow_name}" / "runs" / run_id / "request.md"
         ),
-        "run_folder": str(Path(".autoloop") / "tasks" / task_id / f"wf_{workflow_name}" / "runs" / run_id),
+        "run_folder": str(STATE_DIR / "tasks" / task_id / f"wf_{workflow_name}" / "runs" / run_id),
         "run_id": run_id,
         "status": status,
-        "task_folder": str(Path(".autoloop") / "tasks" / task_id),
+        "task_folder": str(STATE_DIR / "tasks" / task_id),
         "task_id": task_id,
         "updated_at": updated_at,
-        "workflow_folder": str(Path(".autoloop") / "tasks" / task_id / f"wf_{workflow_name}"),
+        "workflow_folder": str(STATE_DIR / "tasks" / task_id / f"wf_{workflow_name}"),
         "workflow_name": workflow_name,
         "workflow_params": dict(workflow_params or {}),
     }
@@ -517,7 +519,7 @@ def _write_task_operation_record(
     request_text: str,
     messages: list[tuple[str, str]],
 ) -> Path:
-    task_dir = root / ".autoloop" / "tasks" / task_id
+    task_dir = root / STATE_DIRNAME / "tasks" / task_id
     task_dir.mkdir(parents=True, exist_ok=True)
     (task_dir / "request.md").write_text(request_text, encoding="utf-8")
     (task_dir / "messages.jsonl").write_text(
@@ -529,8 +531,8 @@ def _write_task_operation_record(
     )
     payload = {
         "created_at": created_at,
-        "messages_file": str(Path(".autoloop") / "tasks" / task_id / "messages.jsonl"),
-        "request_file": str(Path(".autoloop") / "tasks" / task_id / "request.md"),
+        "messages_file": str(STATE_DIR / "tasks" / task_id / "messages.jsonl"),
+        "request_file": str(STATE_DIR / "tasks" / task_id / "request.md"),
         "request_updated_at": messages[-1][0] if messages else updated_at,
         "task_id": task_id,
         "updated_at": updated_at,

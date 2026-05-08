@@ -27,6 +27,8 @@ from botlane.core.schema_registry import RUNTIME_TRACE_SCHEMA, RUN_METADATA_SCHE
 from botlane.runtime.tracing import RuntimeTraceError, RuntimeTraceWriter
 from botlane.runtime.workspace import next_observability_sequence
 
+STATE_DIRNAME = ".botlane"
+
 
 class _State(BaseModel):
     note: str = ""
@@ -80,7 +82,7 @@ def _binding(run_dir: Path) -> RunBinding:
 
 
 def _run_dir(tmp_path: Path) -> Path:
-    run_dir = tmp_path / ".autoloop" / "tasks" / "task-1" / "wf_demo" / "runs" / "run-1"
+    run_dir = tmp_path / STATE_DIRNAME / "tasks" / "task-1" / "wf_demo" / "runs" / "run-1"
     run_dir.mkdir(parents=True)
     return run_dir
 
@@ -596,7 +598,7 @@ def test_runtime_trace_failure_policy_record_and_continue_swallows_initializatio
 ) -> None:
     run_dir = _run_dir(tmp_path)
     monkeypatch.setattr(
-        "autoloop.runtime.tracing.write_static_step_graph_payload",
+        "botlane.runtime.tracing.write_static_step_graph_payload",
         lambda *args, **kwargs: (_ for _ in ()).throw(RuntimeError("graph write failed")),
     )
 

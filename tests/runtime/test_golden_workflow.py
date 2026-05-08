@@ -13,6 +13,8 @@ from botlane.runtime.config import GitTrackingRuntimeConfig, RuntimeConfig
 from botlane.runtime.inspection import load_run_history, load_run_record, load_run_topology
 from botlane.runtime.runner import RunnerOptions, run_workflow_package
 
+STATE_DIRNAME = ".botlane"
+
 
 def _clear_workflow_modules() -> None:
     importlib.invalidate_caches()
@@ -207,7 +209,7 @@ class GoldenSurfaceWorkflow(Workflow):
 
 
 def _run_dir(root: Path, *, task_id: str, run_id: str) -> Path:
-    return root / ".autoloop" / "tasks" / task_id / "wf_golden_surface" / "runs" / run_id
+    return root / STATE_DIRNAME / "tasks" / task_id / "wf_golden_surface" / "runs" / run_id
 
 
 def test_golden_workflow_exercises_runtime_controls_resume_topology_and_history(tmp_path: Path) -> None:

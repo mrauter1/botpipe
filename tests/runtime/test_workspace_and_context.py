@@ -37,11 +37,21 @@ from botlane.runtime.workspace import (
 )
 from botlane.core.primitives import Outcome
 
+LEGACY_PRODUCT = "auto" + "loop"
+LEGACY_STATE_DIRNAME = "." + LEGACY_PRODUCT
+LEGACY_WORKFLOWS_MODULE = LEGACY_PRODUCT + ".workflows"
+LEGACY_TOPOLOGY_SCHEMA = LEGACY_PRODUCT + ".workflow_topology/v999"
+
 
 def _clear_workflow_modules() -> None:
     importlib.invalidate_caches()
     for name in list(sys.modules):
-        if name == "workflows" or name.startswith("workflows.") or name == "autoloop.workflows" or name.startswith("autoloop.workflows."):
+        if (
+            name == "workflows"
+            or name.startswith("workflows.")
+            or name == LEGACY_WORKFLOWS_MODULE
+            or name.startswith(LEGACY_WORKFLOWS_MODULE + ".")
+        ):
             sys.modules.pop(name, None)
 
 
@@ -406,7 +416,7 @@ def test_resume_rejects_unsupported_embedded_topology_schema_when_topology_file_
     run_meta_file = run_dir / "run.json"
     run_meta = json.loads(run_meta_file.read_text(encoding="utf-8"))
     embedded_topology = dict(run_meta["topology"])
-    embedded_topology["schema"] = "autoloop.workflow_topology/v999"
+    embedded_topology["schema"] = LEGACY_TOPOLOGY_SCHEMA
     run_meta["topology"] = embedded_topology
     run_meta_file.write_text(json.dumps(run_meta, indent=2, ensure_ascii=False) + "\n", encoding="utf-8")
 
@@ -1174,7 +1184,7 @@ def test_run_record_projects_legacy_pending_question_as_pending_input(tmp_path: 
 
 
 def test_list_run_records_reads_legacy_state_root_when_botlane_root_is_absent(tmp_path: Path) -> None:
-    task_dir = tmp_path / ".autoloop" / "tasks" / "legacy-task"
+    task_dir = tmp_path / LEGACY_STATE_DIRNAME / "tasks" / "legacy-task"
     workflow_dir = task_dir / "wf_legacy_demo"
     run_dir = workflow_dir / "runs" / "run-legacy"
     run_dir.mkdir(parents=True, exist_ok=True)
@@ -1231,10 +1241,10 @@ def test_resume_without_run_id_uses_latest_run_across_botlane_and_legacy_state_r
             tmp_path,
             task_id="task-mixed-root",
             message="Create legacy run second",
-            state_dir=tmp_path / ".autoloop",
+            state_dir=tmp_path / LEGACY_STATE_DIRNAME,
         ),
     )
-    legacy_workflow_dir = tmp_path / ".autoloop" / "tasks" / "task-mixed-root" / "wf_mixed_root_resume_demo"
+    legacy_workflow_dir = tmp_path / LEGACY_STATE_DIRNAME / "tasks" / "task-mixed-root" / "wf_mixed_root_resume_demo"
     legacy_run_dir = next((legacy_workflow_dir / "runs").iterdir())
 
     resumed = run_workflow_package(

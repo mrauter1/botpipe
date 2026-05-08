@@ -530,7 +530,7 @@ def test_portfolio_health_helper_writes_grouped_workflow_run_health_via_shared_r
         write_workflow_portfolio_health_snapshot(ctx, statuses=["failed", "  "])
     with pytest.raises(ValueError, match="at least one workflow reference"):
         write_workflow_portfolio_health_snapshot(ctx, workflows=[])
-def test_company_helpers_write_bounded_company_operation_snapshot_without_mutating_autoloop_state(
+def test_company_helpers_write_bounded_company_operation_snapshot_without_mutating_current_state(
     tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
