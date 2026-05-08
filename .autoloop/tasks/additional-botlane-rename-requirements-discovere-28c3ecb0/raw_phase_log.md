@@ -2056,3 +2056,48 @@ The remaining meaningful gap was that the throwaway wheel smoke path did not exp
 Open issues / next step
 
 No blocking test gaps remain in this phase scope.
+
+
+---
+run_id=run-20260508T205237Z-432ec7b1 | entry=session_turn | pair=test | phase=verifier | cycle=1 | attempt=1 | thread_id=019e0960-bc32-7fd2-be36-5118582d54a2
+---
+provider=codex
+mode=resume
+template=/home/rauter/.local/share/pipx/venvs/autoloop/lib/python3.12/site-packages/autoloop/templates/test_verifier.md
+session_id=019e0960-bc32-7fd2-be36-5118582d54a2
+
+
+---
+run_id=run-20260508T205237Z-432ec7b1 | entry=phase_output | pair=test | phase=verifier | process=codex-agent | cycle=1 | attempt=1 | thread_id=019e0960-bc32-7fd2-be36-5118582d54a2
+---
+I’m auditing the test refinement against the phase contract and the current repository state, then I’ll update the test audit artifacts only.
+
+The strategy and test changes are aligned with the phase contract. I’m running the focused smoke file once under the shared repo `.venv` so the audit result is based on direct execution evidence, not just the recorded strategy.
+
+The shell checks still match the Botlane-only install contract. I’m waiting for the focused smoke file to finish before I update the audit artifacts.
+
+I have direct passing evidence and no audit findings at blocking or non-blocking severity within this phase scope. I’m marking the audit criteria complete and appending the result to the test feedback artifact.
+
+Scope considered
+
+Phase-local test audit only: the updated packaging smoke test, the active test strategy, the current shared `.venv` state, and the audit artifacts in the active phase directory.
+
+What I analyzed
+
+I reviewed the test strategy against AC-1 through AC-3, checked the run-local decisions for any contradictory expectations, and inspected the current `tests/runtime/test_wheel_packaging_smoke.py` coverage for install identity, CLI identity, failure paths, and isolation against repo-root shadowing.
+
+What I reviewed
+
+I reran `./.venv/bin/pytest -q tests/runtime/test_wheel_packaging_smoke.py`, verified `./.venv/bin/pip show botlane-v3-surface` still reports the editable repo install, and confirmed `./.venv/bin/pip show autoloop-v3-surface` still fails. I also reviewed the strategy’s stated gaps and stabilization notes against the actual test code.
+
+Key findings / decisions
+
+No blocking or non-blocking findings. The tests now cover both install modes with aligned Botlane-only distribution assertions, and the isolated working-directory approach removes the main false-positive risk for packaging smoke coverage. I updated [criteria.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/additional-botlane-rename-requirements-discovere-28c3ecb0/runs/run-20260508T205237Z-432ec7b1/artifacts/test/phases/editable-install-refresh-and-proof/criteria.md) and appended the audit result to [feedback.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/additional-botlane-rename-requirements-discovere-28c3ecb0/runs/run-20260508T205237Z-432ec7b1/artifacts/test/phases/editable-install-refresh-and-proof/feedback.md).
+
+Open issues / next step
+
+No open issues in this phase scope.
+
+<loop-control>
+{"schema":"docloop.loop_control/v1","kind":"promise","promise":"COMPLETE"}
+</loop-control>

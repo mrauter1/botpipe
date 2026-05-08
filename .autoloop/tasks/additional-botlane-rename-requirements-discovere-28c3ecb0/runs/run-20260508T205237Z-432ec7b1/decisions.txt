@@ -4,3 +4,5 @@ Do not add `autoloop` import aliases or CLI aliases while repairing the shared `
 Prefer a direct editable reinstall plus focused repo-local proof over introducing new bootstrap or install wrapper scripts, because maintained package metadata is already Botlane-branded.
 <autoloop-decisions-header version="1" block_seq="2" owner="implementer" phase_id="editable-install-refresh-and-proof" pair="implement" turn_seq="1" run_id="run-20260508T205237Z-432ec7b1" ts="2026-05-08T20:56:34.401188+00:00" />
 Packaging smoke subprocesses must run from an isolated working directory, not the repo root, so repo-local source metadata cannot shadow the installed wheel or editable distribution being validated.
+<autoloop-decisions-header version="1" block_seq="3" owner="test_author" phase_id="editable-install-refresh-and-proof" pair="test" turn_seq="1" run_id="run-20260508T205237Z-432ec7b1" ts="2026-05-08T21:00:55.314887+00:00" />
+Fresh-wheel smoke should assert installed distribution metadata (`botlane-v3-surface` present, `autoloop-v3-surface` absent) in addition to CLI/import behavior, so both install modes enforce the same rename contract.
