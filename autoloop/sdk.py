@@ -717,6 +717,7 @@ class Autoloop:
             self.root,
             effective_step,
             input,
+            params,
             routes=routes,
             workflow_policy=workflow_policy,
         )
@@ -1692,6 +1693,7 @@ def _build_synthetic_step_workflow(
     root: Path,
     step_def: Step | object,
     input: BaseModel | Mapping[str, Any] | None,
+    params: BaseModel | Mapping[str, Any] | None,
     *,
     routes: Mapping[str, Any] | None,
     workflow_policy: PolicyInput = None,
@@ -1709,6 +1711,13 @@ def _build_synthetic_step_workflow(
         attrs["Input"] = create_model(
             f"SDKStepInput_{uuid4().hex[:8]}",
             **{str(key): (Any, ...) for key in input},
+        )
+    if isinstance(params, BaseModel):
+        attrs["Params"] = type(params)
+    elif isinstance(params, Mapping) and params:
+        attrs["Params"] = create_model(
+            f"SDKStepParams_{uuid4().hex[:8]}",
+            **{str(key): (Any, ...) for key in params},
         )
     if isinstance(step_def, Step):
         attrs["entry"] = step_def

@@ -19,19 +19,22 @@
 
 ## Symbols touched
 - `_normalize_sdk_policy_input`
+- `Autoloop.step`
+- `_build_synthetic_step_workflow`
 - `simple._normalize_provider_policy`
 - `core.steps._normalize_provider_policy`
 - `core.discovery._validate_workflow_policy`
 - `resolve_policy_layer`
 - `test_sdk_constructor_rejects_invalid_default_policy_with_public_wording`
 - `test_sdk_run_rejects_removed_typed_input_and_parameters_keywords`
+- `test_sdk_step_accepts_input_and_params_for_synthetic_workflows`
 - `test_policy_module_export_lists_match_public_surface_contract`
 - `test_public_policy_validation_wording_hides_internal_override_types`
 
 ## Checklist mapping
 - Plan milestone 2: completed for public-facing policy wording cleanup in SDK/simple/core discovery/step normalization paths.
 - Plan milestone 2: completed for export regression coverage without widening any public surface.
-- Plan validation bullets for `tests/unit/test_sdk_facade.py`, `tests/unit/test_simple_surface.py`, and `tests/unit/test_simple_policy.py`: completed for removed keyword rejection, export guarantees, sequence-style public helper usage coverage preservation, and public wording assertions.
+- Plan validation bullets for `tests/unit/test_sdk_facade.py`, `tests/unit/test_simple_surface.py`, and `tests/unit/test_simple_policy.py`: completed for removed keyword rejection, direct `client.step(..., input=..., params=...)` coverage, export guarantees, sequence-style public helper usage coverage preservation, and public wording assertions.
 - Plan milestone 3: intentionally deferred in this phase; no runtime CLI edits were made.
 
 ## Assumptions
@@ -45,6 +48,7 @@
 ## Intended behavior changes
 - Public normalization and discovery errors now refer to `Policy` or a `core provider policy object` instead of exposing `ProviderPolicyOverride`.
 - SDK regression tests now explicitly reject removed `typed_input=` and `parameters=` keywords for both `client.run(...)` and `client.step(...)`.
+- Synthetic SDK step workflows now synthesize a `Params` model from explicit step-invocation params so non-empty `client.step(..., params=...)` calls remain supported.
 
 ## Known non-changes
 - No runtime CLI `--workspace` migration in this phase.

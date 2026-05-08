@@ -477,6 +477,37 @@ def test_sdk_step_supports_core_python_step_instances(tmp_path: Path) -> None:
     assert result.artifacts.snapshot.read_json() == {"message": "Handle the typed request.", "topic": "release"}
 
 
+def test_sdk_step_accepts_input_and_params_for_synthetic_workflows(tmp_path: Path) -> None:
+    snapshot = simple.Json("snapshot")
+
+    @simple.python_step(writes=[snapshot], routes={"done": FINISH})
+    def capture(ctx):
+        ctx.artifacts.snapshot.write_json(
+            {
+                "params": ctx.params.model_dump(mode="python"),
+                "workflow_params": ctx.workflow_params,
+                "input_dump": ctx.input.model_dump(mode="python"),
+            }
+        )
+        return Event("done")
+
+    client = _sdk_client(tmp_path, ScriptedLLMProvider())
+
+    result = client.step(
+        capture,
+        message="Handle the typed request.",
+        input=_SDKTypedInput(topic="release"),
+        params={"mode": "strict", "reviewers": ["alice"]},
+    )
+
+    assert result.ok is True
+    assert result.artifacts.snapshot.read_json() == {
+        "params": {"mode": "strict", "reviewers": ["alice"]},
+        "workflow_params": {"mode": "strict", "reviewers": ["alice"]},
+        "input_dump": {"message": "Handle the typed request.", "topic": "release"},
+    }
+
+
 def test_sdk_step_supports_core_python_steps_with_explicit_terminal_route_metadata(tmp_path: Path) -> None:
     def handler(_ctx):
         return Event("approved")
@@ -526,7 +557,7 @@ def test_sdk_step_preserves_explicit_routes_for_core_steps(tmp_path: Path) -> No
         "repair": Route(target=SELF, summary="retry once"),
     }
 
-    workflow_cls = sdk_module._build_synthetic_step_workflow(tmp_path, step_def, None, routes=routes)
+    workflow_cls = sdk_module._build_synthetic_step_workflow(tmp_path, step_def, None, None, routes=routes)
 
     assert workflow_cls.transitions[step_def]["retry"] == SELF
     assert workflow_cls.transitions[step_def]["done"] == FINISH

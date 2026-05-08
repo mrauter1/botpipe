@@ -449,3 +449,50 @@ Implement synthetic `Params` support for `client.step(...)` in the same place sy
 <loop-control>
 {"schema":"docloop.loop_control/v1","kind":"promise","promise":"INCOMPLETE"}
 </loop-control>
+
+
+---
+run_id=run-20260508T173757Z-dbc5e2d0 | entry=session_turn | pair=implement | phase=producer | cycle=2 | attempt=1 | thread_id=019e08b6-b80c-7ff0-ace1-633bbcb6bb47
+---
+provider=codex
+mode=resume
+template=/home/rauter/.local/share/pipx/venvs/autoloop/lib/python3.12/site-packages/autoloop/templates/implement_producer.md
+session_id=019e08b6-b80c-7ff0-ace1-633bbcb6bb47
+
+
+---
+run_id=run-20260508T173757Z-dbc5e2d0 | entry=phase_output | pair=implement | phase=producer | process=codex-agent | cycle=2 | attempt=1 | thread_id=019e08b6-b80c-7ff0-ace1-633bbcb6bb47
+---
+The reviewer found a real contract gap, so I’m focused on `client.step(..., params=...)` only. I’m tracing the synthetic-step workflow builder and params materialization path now so I can add support in one place and lock it with a direct regression test.
+
+I’ve got the fix plan: synthesize a `Params` model for synthetic step workflows in the same builder that already synthesizes `Input`, then add one direct `client.step(..., input=..., params=...)` regression test using sequence-style writes. I’m patching that now.
+
+I’m editing the synthetic workflow builder and the SDK facade test together so the fix and the contract coverage land in one pass. After that I’ll rerun the narrow validation commands and refresh the phase notes.
+
+The main fix is in. I’m checking for every `_build_synthetic_step_workflow(...)` call site now, then I’ll rerun compilation and the limited test commands to catch any signature fallout before I touch the phase notes.
+
+There was one direct helper call in the test suite that still used the old builder signature. I’m updating that test harness call and then refreshing the implementation notes with the new synthetic-params support and validation status.
+
+The signature fallout is fixed. I’m doing one more compilation pass over the touched files and then a focused diff review to make sure the synthetic params change stayed local and didn’t reopen any of the earlier wording/export surfaces.
+
+Scope considered
+
+The reviewer’s blocking feedback only: restore the real `client.step(..., params=...)` contract inside this phase’s public SDK/simple surface work, without widening into runtime CLI or unrelated cleanup.
+
+What I analyzed
+
+I traced `Autoloop.step(...)` through [autoloop/sdk.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/autoloop/sdk.py) into `_build_synthetic_step_workflow(...)`, `_coerce_sdk_params(...)`, and the runtime parameter coercion path. That confirmed non-empty step params were failing because synthetic step workflows had no `Params` model.
+
+What I changed
+
+I updated [autoloop/sdk.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/autoloop/sdk.py) so synthetic SDK step workflows now synthesize a `Params` model from explicit invocation params, alongside the existing synthetic `Input` model handling. `Autoloop.step(...)` now passes `params` into that builder.
+
+I added a direct regression test in [tests/unit/test_sdk_facade.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/tests/unit/test_sdk_facade.py) proving `client.step(..., input=..., params=...)` succeeds and exposes both `ctx.params` and `ctx.workflow_params`, and I updated the one helper-call test that uses `_build_synthetic_step_workflow(...)`. I also refreshed [implementation_notes.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/below-is-the-revised-standalone-correction-spec-a9877342/runs/run-20260508T173757Z-dbc5e2d0/artifacts/implement/phases/public-surface-cleanup/implementation_notes.md) to reflect the fix.
+
+Key findings / decisions
+
+The reviewer’s blocker was valid: this was not just missing coverage, the public step params path was actually broken. The smallest safe fix was to keep the support centralized in the existing synthetic workflow builder rather than scattering param handling across call sites.
+
+Open issues / next step
+
+`python3 -m py_compile` passed on the touched files. `pytest` still could not run here because the environment lacks `pytest`, so the next step is to rerun the targeted unit suite in a dependency-complete environment.
