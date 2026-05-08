@@ -59,7 +59,7 @@
 
 ## Evidence
 
-- The generated workflow must be discoverable under `autoloop/workflows/`.
+- The generated workflow must be discoverable under `botlane/workflows/`.
 - The generated layout summary and build report must make the chosen shape obvious.
 - The build report must be sufficient for a verifier to check completeness without guessing.
 

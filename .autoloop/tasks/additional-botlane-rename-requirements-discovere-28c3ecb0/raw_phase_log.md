@@ -915,3 +915,77 @@ The remaining gap is environmental, not audit-blocking: this session still lacks
 <loop-control>
 {"schema":"docloop.loop_control/v1","kind":"promise","promise":"COMPLETE"}
 </loop-control>
+
+
+---
+run_id=run-20260508T190524Z-73fc5c3b | entry=session_turn | pair=implement | phase=producer | cycle=1 | attempt=1 | thread_id=019e0929-8c2b-7c93-a372-ee28c6a62461
+---
+provider=codex
+mode=start
+template=/home/rauter/.local/share/pipx/venvs/autoloop/lib/python3.12/site-packages/autoloop/templates/implement_producer.md
+session_id=019e0929-8c2b-7c93-a372-ee28c6a62461
+
+
+---
+run_id=run-20260508T190524Z-73fc5c3b | entry=phase_output | pair=implement | phase=producer | process=codex-agent | cycle=1 | attempt=1 | thread_id=019e0929-8c2b-7c93-a372-ee28c6a62461
+---
+I’m implementing the active `rewrite-schemas-workflows-and-fixtures` phase. First I’m reading the phase artifacts and scanning the repo for remaining live `autoloop` identity in schemas, workflow strings, docs, fixtures, and related compatibility code.
+
+I’ve confirmed the phase artifacts and the workspace is very dirty outside this task, so I’m keeping scope to maintained source, docs, examples, fixtures, and tests. Next I’m narrowing the grep to the live product tree to locate remaining Autoloop-branded schema IDs, workflow strings, and embedded source snippets.
+
+The live tree still has several categories of remaining work: centralized schema constants, a few hard-coded schema literals in workflow code, a legacy operation replay reader, many workflow docs, and strictness tests that don’t yet enforce the full rename. I’m reading those slices together before editing so the changes stay consistent.
+
+I have enough context to edit now. The implementation will do four things together: switch new schema emissions to `botlane.*` while preserving legacy `autoloop.*` reads, rewrite remaining workflow/prompt/doc/test fixture strings to `botlane`, widen the strictness scan to cover maintained docs and workflow packages, and then rerun focused tests on schemas, optimizer helpers, packaging, and strictness.
+
+I’m editing the core schema/compatibility layer first so the rest of the rename can key off canonical constants without breaking legacy artifact reads. After that I’ll apply the coordinated workflow/doc/test rewrites on top of the new `botlane.*` schema surface.
+
+The compatibility-layer edits are in place for schemas and legacy readers. I hit one patch mismatch in `runtime/config.py`, so I’m re-reading the exact helpers there before finishing the remaining literal cleanup across compatibility constants and marker detection.
+
+I’m doing the bulk user-facing rewrite next: maintained docs plus workflow prompts/assets that still publish Autoloop-branded paths or examples. This is a mechanical rename slice, so I’m applying it as a bulk edit rather than hand-patching each document.
+
+The remaining work is mostly test alignment now. I’m updating the tests that assert new write outputs and canonical repo-relative workflow paths, while leaving legacy-read compatibility tests to keep exercising the old inputs.
+
+I’ve finished the code and first-pass test rewrites for schemas and canonical workflow paths. I’m running the focused suites now to catch any drift in compatibility readers, optimizer helpers, and the updated path/schema expectations before I touch the strictness gate.
+
+The focused suite found four expectation drifts, all in test fixtures rather than runtime code: two candidate-surface overlay tests still mocked the importable package root with the wrong directory layout, one downstream overlay-path test hit the same setup issue first, and one selected-workflow history snapshot still expected the pre-rename package folder shape. I’m fixing those expectations now.
+
+The schema/runtime slice is green in focused tests. I’m tightening the strictness proof now so it checks the maintained product surfaces we actually renamed: core packages, bundled workflow packages, docs, and packaging metadata.
+
+The strictness gate now checks the renamed product surfaces directly. I’m running the proof suites that matter for this phase: strictness, wheel/install behavior, and the runtime workspace/catalog slices most likely to regress under schema and workspace-identity changes.
+
+The code and proof suites are green. I’m doing the close-out work now: final grep verification, then updating the run-local decision ledger and implementation notes with the exact scope, compatibility choices, and validation I used.
+
+The test runs dirtied tracked `__pycache__` artifacts. I’m restoring those generated files back to `HEAD` contents so the phase stays source-only and doesn’t ship incidental bytecode noise.
+
+Scope considered
+
+- Active phase only: schemas, workflow/generated-source identity, docs/examples/prompts/assets, fixture/test expectations, and transition-safe legacy readers.
+- I stayed out of unrelated dirty workspace content.
+
+What I analyzed
+
+- Central schema emission and validation in `botlane/core/schema_registry.py` plus downstream readers/writers in runtime, optimizer, branch-group, and parity code.
+- Remaining live Botlane/Autoloop branding in maintained source/docs via repo grep.
+- Optimizer/selected-workflow tests and runtime workspace/catalog tests most likely to regress under schema/path changes.
+
+What I changed
+
+- Switched canonical emitted schema IDs from `autoloop.*` to `botlane.*`, including branch-group manifests and optimization/refinement artifacts.
+- Kept persisted-artifact read compatibility by teaching `validate_persisted_schema(...)` to accept the legacy `autoloop.*` alias for the same schema/version.
+- Updated Botlane-v1 parity writes to use Botlane-branded raw-log and decisions headers while still reading legacy headers.
+- Rewrote maintained docs, workflow prompts/assets, and embedded fixture/source expectations to `botlane`, `botlane_optimizer`, `botlane/workflows`, and `.botlane`.
+- Updated focused tests for new schema/path outputs and added a strictness grep proof over maintained product/docs/fixture/package-metadata surfaces.
+- Updated the run-local `implementation_notes.md` and appended the non-obvious decisions to `decisions.txt`.
+
+Key findings / decisions
+
+- The clean compatibility boundary is “legacy reads only”: new writes are Botlane-only, old `autoloop.*` payloads remain readable.
+- Keeping the legacy schema alias logic centralized in `schema_registry.py` avoided per-reader special cases.
+- The branding grep proof is scoped to maintained product/docs/fixtures/package metadata, not the whole test tree, because compatibility and negative tests still need to construct legacy inputs.
+
+Open issues / next step
+
+- No blocking implementation issues in this phase.
+- Validation passed:
+  - `101 passed` for optimizer/schema/history-focused suites.
+  - `99 passed` for strictness, wheel smoke, workspace/context, and workflow catalog suites.

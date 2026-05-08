@@ -483,12 +483,12 @@ def test_core_selected_workflow_payload_builders_preserve_authoring_and_decompos
     assert decomposition_authoring_surface["workflow_py_path"] == str(package_dir / "workflow.py")
     assert (
         decomposition_authoring_surface["workflow_py_path_repo_relative"]
-        == "autoloop/workflows/release_candidate_to_go_no_go/workflow.py"
+        == "botlane/workflows/release_candidate_to_go_no_go/workflow.py"
     )
     assert REMOVED_WORKFLOW_PY_FIELD not in decomposition_authoring_surface
     assert (
         decomposition_authoring_surface["workflow_path_repo_relative"]
-        == "autoloop/workflows/release_candidate_to_go_no_go/workflow.py"
+        == "botlane/workflows/release_candidate_to_go_no_go/workflow.py"
     )
     assert decomposition_authoring_surface["runtime_test_path_repo_relative"] == (
         "tests/runtime/test_release_candidate_to_go_no_go.py"
@@ -609,7 +609,7 @@ def test_refinement_helper_snapshots_selected_workflow_authoring_surface_via_sha
     runtime_test = tmp_path / "tests" / "runtime" / "test_release_candidate_to_go_no_go.py"
     runtime_test.parent.mkdir(parents=True, exist_ok=True)
     runtime_test.write_text("def test_placeholder():\n    assert True\n", encoding="utf-8")
-    selected_workflow_folder = tmp_path / ".autoloop" / "tasks" / "task-1" / "wf_release_candidate_to_go_no_go"
+    selected_workflow_folder = tmp_path / ".botlane" / "tasks" / "task-1" / "wf_release_candidate_to_go_no_go"
     before_surface_files = {
         str(path.relative_to(tmp_path)): path.read_text(encoding="utf-8")
         for path in (
@@ -700,37 +700,37 @@ def test_refinement_helper_snapshots_selected_workflow_authoring_surface_via_sha
             "workflow_py_path": str(package_dir / "workflow.py"),
             "workflow_path": str(package_dir / "workflow.py"),
             "asset_paths_repo_relative": [
-                "autoloop/workflows/release_candidate_to_go_no_go/assets/checklist.md",
-                "autoloop/workflows/release_candidate_to_go_no_go/assets/templates/rollback.txt",
+                "botlane/workflows/release_candidate_to_go_no_go/assets/checklist.md",
+                "botlane/workflows/release_candidate_to_go_no_go/assets/templates/rollback.txt",
             ],
             "doc_path_repo_relative": "docs/workflows/release_candidate_to_go_no_go.md",
-            "manifest_path_repo_relative": "autoloop/workflows/release_candidate_to_go_no_go/workflow.toml",
-            "package_dir_repo_relative": "autoloop/workflows/release_candidate_to_go_no_go",
-            "package_init_path_repo_relative": "autoloop/workflows/release_candidate_to_go_no_go/__init__.py",
-            "params_path_repo_relative": "autoloop/workflows/release_candidate_to_go_no_go/params.py",
+            "manifest_path_repo_relative": "botlane/workflows/release_candidate_to_go_no_go/workflow.toml",
+            "package_dir_repo_relative": "botlane/workflows/release_candidate_to_go_no_go",
+            "package_init_path_repo_relative": "botlane/workflows/release_candidate_to_go_no_go/__init__.py",
+            "params_path_repo_relative": "botlane/workflows/release_candidate_to_go_no_go/params.py",
             "prompt_paths_repo_relative": [
-                "autoloop/workflows/release_candidate_to_go_no_go/prompts/assess_producer.md",
-                "autoloop/workflows/release_candidate_to_go_no_go/prompts/assess_verifier.md",
-                "autoloop/workflows/release_candidate_to_go_no_go/prompts/repair/strategy.md",
+                "botlane/workflows/release_candidate_to_go_no_go/prompts/assess_producer.md",
+                "botlane/workflows/release_candidate_to_go_no_go/prompts/assess_verifier.md",
+                "botlane/workflows/release_candidate_to_go_no_go/prompts/repair/strategy.md",
             ],
             "runtime_test_path_repo_relative": "tests/runtime/test_release_candidate_to_go_no_go.py",
-            "spec_paths_repo_relative": ["autoloop/workflows/release_candidate_to_go_no_go/contracts.py"],
+            "spec_paths_repo_relative": ["botlane/workflows/release_candidate_to_go_no_go/contracts.py"],
             "test_paths_repo_relative": ["tests/runtime/test_release_candidate_to_go_no_go.py"],
-            "workflow_py_path_repo_relative": "autoloop/workflows/release_candidate_to_go_no_go/workflow.py",
-            "workflow_path_repo_relative": "autoloop/workflows/release_candidate_to_go_no_go/workflow.py",
+            "workflow_py_path_repo_relative": "botlane/workflows/release_candidate_to_go_no_go/workflow.py",
+            "workflow_path_repo_relative": "botlane/workflows/release_candidate_to_go_no_go/workflow.py",
         },
     )
     assert set(payload["selected_workflow_authoring_surface"]["editable_paths_repo_relative"]) == {
-        "autoloop/workflows/release_candidate_to_go_no_go/__init__.py",
-        "autoloop/workflows/release_candidate_to_go_no_go/workflow.toml",
-        "autoloop/workflows/release_candidate_to_go_no_go/workflow.py",
-        "autoloop/workflows/release_candidate_to_go_no_go/params.py",
-        "autoloop/workflows/release_candidate_to_go_no_go/contracts.py",
-        "autoloop/workflows/release_candidate_to_go_no_go/prompts/assess_producer.md",
-        "autoloop/workflows/release_candidate_to_go_no_go/prompts/assess_verifier.md",
-        "autoloop/workflows/release_candidate_to_go_no_go/prompts/repair/strategy.md",
-        "autoloop/workflows/release_candidate_to_go_no_go/assets/checklist.md",
-        "autoloop/workflows/release_candidate_to_go_no_go/assets/templates/rollback.txt",
+        "botlane/workflows/release_candidate_to_go_no_go/__init__.py",
+        "botlane/workflows/release_candidate_to_go_no_go/workflow.toml",
+        "botlane/workflows/release_candidate_to_go_no_go/workflow.py",
+        "botlane/workflows/release_candidate_to_go_no_go/params.py",
+        "botlane/workflows/release_candidate_to_go_no_go/contracts.py",
+        "botlane/workflows/release_candidate_to_go_no_go/prompts/assess_producer.md",
+        "botlane/workflows/release_candidate_to_go_no_go/prompts/assess_verifier.md",
+        "botlane/workflows/release_candidate_to_go_no_go/prompts/repair/strategy.md",
+        "botlane/workflows/release_candidate_to_go_no_go/assets/checklist.md",
+        "botlane/workflows/release_candidate_to_go_no_go/assets/templates/rollback.txt",
         "docs/workflows/release_candidate_to_go_no_go.md",
         "tests/runtime/test_release_candidate_to_go_no_go.py",
     }
@@ -857,11 +857,11 @@ def test_refinement_helper_accepts_main_workflow_class_references(tmp_path: Path
                 ]
             ),
             "manifest_path": str(package_dir / "workflow.toml"),
-            "manifest_path_repo_relative": "autoloop/workflows/release_candidate_to_go_no_go/workflow.toml",
+            "manifest_path_repo_relative": "botlane/workflows/release_candidate_to_go_no_go/workflow.toml",
             "package_dir": str(package_dir),
-            "package_dir_repo_relative": "autoloop/workflows/release_candidate_to_go_no_go",
+            "package_dir_repo_relative": "botlane/workflows/release_candidate_to_go_no_go",
             "package_init_path": str(package_dir / "__init__.py"),
-            "package_init_path_repo_relative": "autoloop/workflows/release_candidate_to_go_no_go/__init__.py",
+            "package_init_path_repo_relative": "botlane/workflows/release_candidate_to_go_no_go/__init__.py",
             "package_name": "release_candidate_to_go_no_go",
             "params_path": None,
             "params_path_repo_relative": None,
@@ -870,8 +870,8 @@ def test_refinement_helper_accepts_main_workflow_class_references(tmp_path: Path
                 str(package_dir / "prompts" / "assess_verifier.md"),
             ],
             "prompt_paths_repo_relative": [
-                "autoloop/workflows/release_candidate_to_go_no_go/prompts/assess_producer.md",
-                "autoloop/workflows/release_candidate_to_go_no_go/prompts/assess_verifier.md",
+                "botlane/workflows/release_candidate_to_go_no_go/prompts/assess_producer.md",
+                "botlane/workflows/release_candidate_to_go_no_go/prompts/assess_verifier.md",
             ],
             "runtime_test_path": None,
             "runtime_test_path_repo_relative": None,
@@ -881,17 +881,17 @@ def test_refinement_helper_accepts_main_workflow_class_references(tmp_path: Path
             "test_paths_repo_relative": [],
             "workflow_name": "release_candidate_to_go_no_go",
             "workflow_py_path": str(package_dir / "workflow.py"),
-            "workflow_py_path_repo_relative": "autoloop/workflows/release_candidate_to_go_no_go/workflow.py",
+            "workflow_py_path_repo_relative": "botlane/workflows/release_candidate_to_go_no_go/workflow.py",
             "workflow_path": str(package_dir / "workflow.py"),
-            "workflow_path_repo_relative": "autoloop/workflows/release_candidate_to_go_no_go/workflow.py",
+            "workflow_path_repo_relative": "botlane/workflows/release_candidate_to_go_no_go/workflow.py",
         },
     )
     assert set(payload["selected_workflow_authoring_surface"]["editable_paths_repo_relative"]) == {
-        "autoloop/workflows/release_candidate_to_go_no_go/__init__.py",
-        "autoloop/workflows/release_candidate_to_go_no_go/workflow.toml",
-        "autoloop/workflows/release_candidate_to_go_no_go/workflow.py",
-        "autoloop/workflows/release_candidate_to_go_no_go/prompts/assess_producer.md",
-        "autoloop/workflows/release_candidate_to_go_no_go/prompts/assess_verifier.md",
+        "botlane/workflows/release_candidate_to_go_no_go/__init__.py",
+        "botlane/workflows/release_candidate_to_go_no_go/workflow.toml",
+        "botlane/workflows/release_candidate_to_go_no_go/workflow.py",
+        "botlane/workflows/release_candidate_to_go_no_go/prompts/assess_producer.md",
+        "botlane/workflows/release_candidate_to_go_no_go/prompts/assess_verifier.md",
         "docs/workflows/release_candidate_to_go_no_go.md",
     }
 def test_decomposition_helper_writes_selected_workflow_identity_authoring_surface_and_compiled_routes(
@@ -973,8 +973,8 @@ def test_decomposition_helper_writes_selected_workflow_identity_authoring_surfac
                 str(package_dir / "assets" / "templates" / "rollback.txt"),
             ],
             "asset_paths_repo_relative": [
-                "autoloop/workflows/release_candidate_to_go_no_go/assets/checklist.md",
-                "autoloop/workflows/release_candidate_to_go_no_go/assets/templates/rollback.txt",
+                "botlane/workflows/release_candidate_to_go_no_go/assets/checklist.md",
+                "botlane/workflows/release_candidate_to_go_no_go/assets/templates/rollback.txt",
             ],
             "doc_path": str(tmp_path / "docs" / "workflows" / "release_candidate_to_go_no_go.md"),
             "doc_path_repo_relative": "docs/workflows/release_candidate_to_go_no_go.md",
@@ -995,46 +995,46 @@ def test_decomposition_helper_writes_selected_workflow_identity_authoring_surfac
                 ]
             ),
             "manifest_path": str(package_dir / "workflow.toml"),
-            "manifest_path_repo_relative": "autoloop/workflows/release_candidate_to_go_no_go/workflow.toml",
+            "manifest_path_repo_relative": "botlane/workflows/release_candidate_to_go_no_go/workflow.toml",
             "package_dir": str(package_dir),
-            "package_dir_repo_relative": "autoloop/workflows/release_candidate_to_go_no_go",
+            "package_dir_repo_relative": "botlane/workflows/release_candidate_to_go_no_go",
             "package_init_path": str(package_dir / "__init__.py"),
-            "package_init_path_repo_relative": "autoloop/workflows/release_candidate_to_go_no_go/__init__.py",
+            "package_init_path_repo_relative": "botlane/workflows/release_candidate_to_go_no_go/__init__.py",
             "params_path": str(package_dir / "params.py"),
-            "params_path_repo_relative": "autoloop/workflows/release_candidate_to_go_no_go/params.py",
+            "params_path_repo_relative": "botlane/workflows/release_candidate_to_go_no_go/params.py",
             "prompt_paths": [
                 str(package_dir / "prompts" / "assess_producer.md"),
                 str(package_dir / "prompts" / "assess_verifier.md"),
                 str(package_dir / "prompts" / "repair" / "strategy.md"),
             ],
             "prompt_paths_repo_relative": [
-                "autoloop/workflows/release_candidate_to_go_no_go/prompts/assess_producer.md",
-                "autoloop/workflows/release_candidate_to_go_no_go/prompts/assess_verifier.md",
-                "autoloop/workflows/release_candidate_to_go_no_go/prompts/repair/strategy.md",
+                "botlane/workflows/release_candidate_to_go_no_go/prompts/assess_producer.md",
+                "botlane/workflows/release_candidate_to_go_no_go/prompts/assess_verifier.md",
+                "botlane/workflows/release_candidate_to_go_no_go/prompts/repair/strategy.md",
             ],
             "runtime_test_path": str(runtime_test),
             "runtime_test_path_repo_relative": "tests/runtime/test_release_candidate_to_go_no_go.py",
             "spec_paths": [str(package_dir / "contracts.py")],
-            "spec_paths_repo_relative": ["autoloop/workflows/release_candidate_to_go_no_go/contracts.py"],
+            "spec_paths_repo_relative": ["botlane/workflows/release_candidate_to_go_no_go/contracts.py"],
             "test_paths": [str(runtime_test)],
             "test_paths_repo_relative": ["tests/runtime/test_release_candidate_to_go_no_go.py"],
             "workflow_py_path": str(package_dir / "workflow.py"),
-            "workflow_py_path_repo_relative": "autoloop/workflows/release_candidate_to_go_no_go/workflow.py",
+            "workflow_py_path_repo_relative": "botlane/workflows/release_candidate_to_go_no_go/workflow.py",
             "workflow_path": str(package_dir / "workflow.py"),
-            "workflow_path_repo_relative": "autoloop/workflows/release_candidate_to_go_no_go/workflow.py",
+            "workflow_path_repo_relative": "botlane/workflows/release_candidate_to_go_no_go/workflow.py",
         },
     )
     assert set(decomposition_surface["selected_workflow_authoring_surface"]["editable_paths_repo_relative"]) == {
-        "autoloop/workflows/release_candidate_to_go_no_go/__init__.py",
-        "autoloop/workflows/release_candidate_to_go_no_go/workflow.toml",
-        "autoloop/workflows/release_candidate_to_go_no_go/workflow.py",
-        "autoloop/workflows/release_candidate_to_go_no_go/params.py",
-        "autoloop/workflows/release_candidate_to_go_no_go/contracts.py",
-        "autoloop/workflows/release_candidate_to_go_no_go/prompts/assess_producer.md",
-        "autoloop/workflows/release_candidate_to_go_no_go/prompts/assess_verifier.md",
-        "autoloop/workflows/release_candidate_to_go_no_go/prompts/repair/strategy.md",
-        "autoloop/workflows/release_candidate_to_go_no_go/assets/checklist.md",
-        "autoloop/workflows/release_candidate_to_go_no_go/assets/templates/rollback.txt",
+        "botlane/workflows/release_candidate_to_go_no_go/__init__.py",
+        "botlane/workflows/release_candidate_to_go_no_go/workflow.toml",
+        "botlane/workflows/release_candidate_to_go_no_go/workflow.py",
+        "botlane/workflows/release_candidate_to_go_no_go/params.py",
+        "botlane/workflows/release_candidate_to_go_no_go/contracts.py",
+        "botlane/workflows/release_candidate_to_go_no_go/prompts/assess_producer.md",
+        "botlane/workflows/release_candidate_to_go_no_go/prompts/assess_verifier.md",
+        "botlane/workflows/release_candidate_to_go_no_go/prompts/repair/strategy.md",
+        "botlane/workflows/release_candidate_to_go_no_go/assets/checklist.md",
+        "botlane/workflows/release_candidate_to_go_no_go/assets/templates/rollback.txt",
         "docs/workflows/release_candidate_to_go_no_go.md",
         "tests/runtime/test_release_candidate_to_go_no_go.py",
     }
@@ -1474,7 +1474,7 @@ def test_diagnostics_helper_snapshots_selected_workflow_run_history_via_shared_r
                     "run_metadata": {
                         "created_at": "2026-04-24T06:00:00+00:00",
                         "error": None,
-                        "package_folder": "workflows/release_candidate_to_go_no_go",
+                            "package_folder": "workflows/release_candidate_to_go_no_go",
                         "pending_question": "Clarify the release gate owner.",
                         "run_id": "run-paused",
                         "status": "awaiting_input",
@@ -1493,9 +1493,9 @@ def test_diagnostics_helper_snapshots_selected_workflow_run_history_via_shared_r
                         "request_file": str(paused_run_dir / "request.md"),
                         "run_dir": str(paused_run_dir),
                         "run_meta_file": str(paused_run_dir / "run.json"),
-                        "task_dir": str(tmp_path / ".autoloop" / "tasks" / "task-1"),
+                            "task_dir": str(tmp_path / ".autoloop" / "tasks" / "task-1"),
                         "trace_file": str(paused_run_dir / "trace.jsonl"),
-                        "workflow_dir": str(tmp_path / ".autoloop" / "tasks" / "task-1" / "wf_release_candidate_to_go_no_go"),
+                            "workflow_dir": str(tmp_path / ".autoloop" / "tasks" / "task-1" / "wf_release_candidate_to_go_no_go"),
                     },
                 },
                 {
@@ -1512,7 +1512,7 @@ def test_diagnostics_helper_snapshots_selected_workflow_run_history_via_shared_r
                     "run_metadata": {
                         "created_at": "2026-04-24T06:00:00+00:00",
                         "error": "verification mismatch",
-                        "package_folder": "workflows/release_candidate_to_go_no_go",
+                            "package_folder": "workflows/release_candidate_to_go_no_go",
                         "pending_question": None,
                         "run_id": "run-failed",
                         "status": "failed",
@@ -1531,9 +1531,9 @@ def test_diagnostics_helper_snapshots_selected_workflow_run_history_via_shared_r
                         "request_file": str(failed_run_dir / "request.md"),
                         "run_dir": str(failed_run_dir),
                         "run_meta_file": str(failed_run_dir / "run.json"),
-                        "task_dir": str(tmp_path / ".autoloop" / "tasks" / "task-2"),
+                            "task_dir": str(tmp_path / ".autoloop" / "tasks" / "task-2"),
                         "trace_file": str(failed_run_dir / "trace.jsonl"),
-                        "workflow_dir": str(tmp_path / ".autoloop" / "tasks" / "task-2" / "wf_release_candidate_to_go_no_go"),
+                            "workflow_dir": str(tmp_path / ".autoloop" / "tasks" / "task-2" / "wf_release_candidate_to_go_no_go"),
                     },
                 },
             ],

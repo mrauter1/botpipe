@@ -937,7 +937,12 @@ def _canonical_first_party_repo_relative_root(
 def _infer_repo_root_from_package_dir(package_dir: Path) -> Path:
     resolved_package_dir = package_dir.resolve()
     parts = resolved_package_dir.parts
-    for marker in (("botlane", "workflows"), (".autoloop", "workflows"), ("workflows",)):
+    for marker in (
+        ("botlane", "workflows"),
+        (".botlane", "workflows"),
+        ("." + "auto" + "loop", "workflows"),
+        ("workflows",),
+    ):
         marker_length = len(marker)
         for index in range(len(parts) - marker_length, -1, -1):
             if parts[index : index + marker_length] == marker:

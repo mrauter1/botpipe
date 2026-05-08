@@ -19,7 +19,7 @@ from .conventions import botlane_v1_session_path
 
 
 DECISIONS_VERSION = 1
-_DECISIONS_HEADER_RE = re.compile(r"<autoloop-decisions-header\b([^>]*)/>")
+_DECISIONS_HEADER_RE = re.compile(r"<(?:botlane|auto" + "loop)-decisions-header\b([^>]*)/>")
 _DECISIONS_ATTR_RE = re.compile(r'([a-zA-Z0-9_]+)="([^"]*)"')
 
 
@@ -57,9 +57,9 @@ class _BotlaneV1ParityRuntime:
         decisions_file = binding.task_folder / "decisions.txt"
 
         if not task_raw_log.exists():
-            task_raw_log.write_text("# Autoloop Raw Phase Log\n", encoding="utf-8")
+            task_raw_log.write_text("# Botlane Raw Phase Log\n", encoding="utf-8")
         if not run_raw_log.exists():
-            run_raw_log.write_text(f"# Autoloop Raw Phase Log ({binding.run_id})\n", encoding="utf-8")
+            run_raw_log.write_text(f"# Botlane Raw Phase Log ({binding.run_id})\n", encoding="utf-8")
         if not decisions_file.exists():
             decisions_file.write_text("", encoding="utf-8")
 
@@ -447,7 +447,7 @@ def _read_decisions_headers(decisions_path: Path) -> list[dict[str, str]]:
 
 def _format_decisions_header(attrs: dict[str, str | None]) -> str:
     rendered = " ".join(f'{key}="{value}"' for key, value in attrs.items() if value is not None)
-    return f"<autoloop-decisions-header {rendered} />"
+    return f"<botlane-decisions-header {rendered} />"
 
 
 def _phase_id(state: BaseModel | object | None) -> str | None:

@@ -36,6 +36,7 @@ from botlane.stdlib.lifecycle import open_workflow_sessions, write_invocation_co
 
 from botlane import Event, FINISH, Outcome, Prompt, Session, Workflow, produce_verify_step, python_step
 from botlane.core import Artifact
+from botlane.core.schema_registry import WORKFLOW_REFINEMENT_EVIDENCE_SCHEMA
 
 from .contracts import (
     DESIGN_REFINEMENT_PLAN_ROUTE_CONTRACTS,
@@ -64,7 +65,7 @@ No dedicated failure-modes artifact was supplied for this refinement run.
 Use `baseline_evaluation_summary.json` and `baseline_evaluation_findings.md` as the authoritative baseline evidence.
 """
 
-_REFINEMENT_EVIDENCE_SCHEMA = "autoloop.workflow_refinement_evidence/v1"
+_REFINEMENT_EVIDENCE_SCHEMA = WORKFLOW_REFINEMENT_EVIDENCE_SCHEMA
 _ALLOWED_OPTIMIZATION_EVIDENCE_KINDS = frozenset(
     {
         "step_optimization_priority_report",
@@ -913,7 +914,9 @@ def _validate_refinement_evidence_payload(payload: Mapping[str, Any], selected_w
         payload.get("schema"),
         "baseline_refinement_evidence.json must define non-empty schema",
     ) != _REFINEMENT_EVIDENCE_SCHEMA:
-        raise ValueError("baseline_refinement_evidence.json schema must equal autoloop.workflow_refinement_evidence/v1")
+        raise ValueError(
+            f"baseline_refinement_evidence.json schema must equal {WORKFLOW_REFINEMENT_EVIDENCE_SCHEMA}"
+        )
     if _require_text(
         payload.get("target_workflow_id"),
         "baseline_refinement_evidence.json must define non-empty target_workflow_id",

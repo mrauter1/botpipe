@@ -12,32 +12,32 @@ The internal workflow kernel lives under:
 - `extensions/`
 
 The public authoring contract does not point workflow authors at internal modules.
-Public workflow code imports from `autoloop`.
+Public workflow code imports from `botlane`.
 
-`autoloop` is the active public authoring surface:
+`botlane` is the active public authoring surface:
 
 - `Workflow`
 - `step`, `produce_verify_step`, `workflow_step`, `python_step`
 - `Json`, `Md`, `Text`, `Raw`
 - `Prompt`, `Route`, `FINISH`, `SELF`
 
-Legacy aliases are intentionally removed from the active public contract; workflow authoring stays on the canonical `autoloop` surface.
+Legacy aliases are intentionally removed from the active public contract; workflow authoring stays on the canonical `botlane` surface.
 
-`autoloop.core` remains the internal and power-user kernel surface for strict runtime code and tests. It is not the default public authoring API.
+`botlane.core` remains the internal and power-user kernel surface for strict runtime code and tests. It is not the default public authoring API.
 
 ## Workflow Surfaces
 
-Autoloop has exactly two first-class workflow discovery roots:
+Botlane has exactly two first-class workflow discovery roots:
 
-- package-installed workflows under `autoloop/workflows/`
-- workspace-local workflows under `{workspace}/.autoloop/workflows/`
+- package-installed workflows under `botlane/workflows/`
+- workspace-local workflows under `{workspace}/.botlane/workflows/`
 
 Workspace-local workflow names and aliases override package workflow names and aliases. `{workspace}/workflows/` is not a discovery root.
 
 Package-installed workflows use package directories:
 
 ```text
-autoloop/workflows/
+botlane/workflows/
   release_review/
     __init__.py
     flow.py or workflow.py
@@ -50,7 +50,7 @@ autoloop/workflows/
 Workspace-local workflows may be package directories or single files:
 
 ```text
-{workspace}/.autoloop/workflows/
+{workspace}/.botlane/workflows/
   release_review/
     flow.py or workflow.py
     specs.py optional
@@ -58,7 +58,7 @@ Workspace-local workflows may be package directories or single files:
     prompts/ optional
     assets/ optional
 
-{workspace}/.autoloop/workflows/release_review.py
+{workspace}/.botlane/workflows/release_review.py
 ```
 
 `flow.py` is the preferred scaffold and documentation shape. `workflow.py` remains supported. Workspace-local single-file workflows are supported; package-installed single-file workflows are not.
@@ -71,13 +71,13 @@ Workflow packages are still reusable building blocks. Package-installed workflow
 
 Shallow workflow discovery stays import-free and scans only:
 
-- `autoloop/workflows/*/workflow.toml`
-- `autoloop/workflows/*/flow.py`
-- `autoloop/workflows/*/workflow.py`
-- `{workspace}/.autoloop/workflows/*/workflow.toml`
-- `{workspace}/.autoloop/workflows/*/flow.py`
-- `{workspace}/.autoloop/workflows/*/workflow.py`
-- `{workspace}/.autoloop/workflows/*.py`
+- `botlane/workflows/*/workflow.toml`
+- `botlane/workflows/*/flow.py`
+- `botlane/workflows/*/workflow.py`
+- `{workspace}/.botlane/workflows/*/workflow.toml`
+- `{workspace}/.botlane/workflows/*/flow.py`
+- `{workspace}/.botlane/workflows/*/workflow.py`
+- `{workspace}/.botlane/workflows/*.py`
 
 Deep inspection and execution may import and compile workflow modules. That richer seam reports compiled step contracts, parameters, prompt paths, support-file paths, and source metadata without widening `workflow.toml`.
 
@@ -91,37 +91,37 @@ Worklists are lazy runtime resources. The compiler validates the declared workli
 
 ## CLI Contract
 
-The public executable name is `autoloop`.
+The public executable name is `botlane`.
 
 The CLI remains message-first and workflow-reference oriented:
 
 ```bash
-autoloop workflows list
-autoloop workflows show <workflow>
+botlane workflows list
+botlane workflows show <workflow>
 
-autoloop run <workflow> <task-id> --message "..."
-autoloop resume <workflow> <task-id> [--run-id <run-id>]
-autoloop answer <workflow> <task-id> --answer "..." [--run-id <run-id>]
+botlane run <workflow> <task-id> --message "..."
+botlane resume <workflow> <task-id> [--run-id <run-id>]
+botlane answer <workflow> <task-id> --answer "..." [--run-id <run-id>]
 
-autoloop runs list [--workflow <workflow>] [--task <task-id>] [--status <status>]
-autoloop runs show <workflow> <task-id> [--run-id <run-id>]
-autoloop logs <workflow> <task-id> [--run-id <run-id>] [--events|--trace|--raw]
+botlane runs list [--workflow <workflow>] [--task <task-id>] [--status <status>]
+botlane runs show <workflow> <task-id> [--run-id <run-id>]
+botlane logs <workflow> <task-id> [--run-id <run-id>] [--events|--trace|--raw]
 
-autoloop init workflow <name>
+botlane init workflow <name>
 ```
 
 Workflow references may be names, files, modules, or explicit classes:
 
 ```bash
-autoloop run release_review task-1 --message "Review this release"
-autoloop run .autoloop/workflows/release_review.py task-1 --message "Review this release"
-autoloop run .autoloop/workflows/release_review/flow.py:ReleaseReview task-1 --message "Review this release"
-autoloop run autoloop.workflows.release_review.workflow:ReleaseReview task-1 --message "Review this release"
+botlane run release_review task-1 --message "Review this release"
+botlane run .botlane/workflows/release_review.py task-1 --message "Review this release"
+botlane run .botlane/workflows/release_review/flow.py:ReleaseReview task-1 --message "Review this release"
+botlane run botlane.workflows.release_review.workflow:ReleaseReview task-1 --message "Review this release"
 ```
 
 There is no public raw execution mode. File and module refs resolve through the same workflow runtime path as named workflows rather than bypassing the engine.
 
-`autoloop run` is message-first and accepts repeatable workflow-specific parameters through `-wf <name> <value>`.
+`botlane run` is message-first and accepts repeatable workflow-specific parameters through `-wf <name> <value>`.
 
 Mutating commands also accept generic runtime controls:
 
@@ -132,7 +132,7 @@ Mutating commands also accept generic runtime controls:
 
 ## Provider Selection
 
-Public provider selection is typed and package-runtime-owned. The runtime discovers `autoloop.yaml` or `autoloop.config` from the user config directory and the repo root, then merges those layers with CLI overrides.
+Public provider selection is typed and package-runtime-owned. The runtime discovers `botlane.yaml` or `botlane.config` from the user config directory and the repo root, then merges those layers with CLI overrides.
 
 Typed example:
 
@@ -230,7 +230,7 @@ Artifact contracts and provider-output contracts are separate:
 Runtime data lives under task, workflow, and run scopes:
 
 ```text
-.autoloop/
+.botlane/
   tasks/
     <task-id>/
       task.json
@@ -266,10 +266,10 @@ The task `request.md` is the latest rendered request snapshot for the task. Each
 
 Runtime observability is runtime-owned and enabled by default.
 
-- Runtime git tracking uses `git add --all` plus deterministic `autoloop: ...` commit messages.
+- Runtime git tracking uses `git add --all` plus deterministic `botlane: ...` commit messages.
 - The repository must be clean before a git-tracked run or resume starts.
 - Git commits are the workspace replay boundary.
-- Autoloop does not classify changed paths for replay.
+- Botlane does not classify changed paths for replay.
 - `trace.jsonl`, `git_tracking.jsonl`, `static_step_graph.json`, and runtime-owned `raw/` outputs are written without requiring workflow declarations.
 
 Normal runs write runtime-owned evidence under each run folder:
@@ -281,7 +281,7 @@ Normal runs write runtime-owned evidence under each run folder:
 
 `run.json` summarizes the runtime-owned tracing and git-tracking state.
 
-Workflows do not declare `GitTracking` or `Tracing`; runtime observability is configured only through `autoloop.runtime.config`.
+Workflows do not declare `GitTracking` or `Tracing`; runtime observability is configured only through `botlane.runtime.config`.
 
 `workflow_run_traces_to_optimization_candidates` consumes runtime-owned `run.json`, `events.jsonl`, `trace.jsonl`, `git_tracking.jsonl`, `static_step_graph.json`, and `raw/` evidence.
 
@@ -294,12 +294,12 @@ The optimizer is a bundled authoring-only workflow:
 
 ## Recursive Operation
 
-Recursive automation under `recursive_autoloop/` keeps the globally installed Autoloop CLI contract.
+Recursive automation under `recursive_botlane/` keeps the globally installed Botlane CLI contract.
 
-- Wrapper start commands use `autoloop --workspace ... --task-id ... --intent ... --pairs ...`
-- Wrapper resume commands use `autoloop --workspace ... --task-id ... --resume`
-- Recursive memory lives under `.autoloop_recursive/`
-- Recursive templates and guidance point readers at `docs/architecture.md`, `docs/authoring.md`, `core/`, `runtime/`, `extensions/`, `stdlib/`, `autoloop/workflows/`, and `.autoloop/workflows/`
+- Wrapper start commands use `botlane --workspace ... --task-id ... --intent ... --pairs ...`
+- Wrapper resume commands use `botlane --workspace ... --task-id ... --resume`
+- Recursive memory lives under `.botlane_recursive/`
+- Recursive templates and guidance point readers at `docs/architecture.md`, `docs/authoring.md`, `core/`, `runtime/`, `extensions/`, `stdlib/`, `botlane/workflows/`, and `.botlane/workflows/`
 
 ## Composition And Parity
 
@@ -320,4 +320,4 @@ Child runs stay under the same task but get their own workflow namespace, run id
 
 When a parent uses `workflow_step(message="{ctx.message}", ...)`, the rendered message becomes the child run's own request snapshot. Typed child `input` remains separate from that request text.
 
-Autoloop-v1 parity is now package-local under `autoloop/workflows/autoloop_v1/`. Framework-owned parity helpers and custom runners are not part of the architecture anymore.
+Botlane-v1 parity is now package-local under `botlane/workflows/botlane_v1/`. Framework-owned parity helpers and custom runners are not part of the architecture anymore.

@@ -540,7 +540,7 @@ def test_context_history_rejects_explicit_unsupported_trace_schema(tmp_path: Pat
         run_folder / "trace.jsonl",
         [
             {
-                "schema": "autoloop.runtime_trace/v2",
+                "schema": "botlane.runtime_trace/v2",
                 "event_type": "step_started",
                 "timestamp": "2026-04-30T11:30:00+00:00",
                 "step_name": "triage",

@@ -8,17 +8,17 @@
 - Why it matters: once the portfolio can build, retrieve, adapt, evaluate, and refine workflows, the missing layer is explicit diagnosis of how workflows fail over time.
 - Likely sponsors: workflow maintainers, engineering productivity owners, AI platform teams, QA and reliability leads, and recursive portfolio operators.
 - Classification: reusable workflow building block.
-- Why Autoloop fits: the work needs durable artifacts, verifier-gated rework loops, deterministic selected-workflow inspection, bounded run-history capture, and publication-time validation.
+- Why Botlane fits: the work needs durable artifacts, verifier-gated rework loops, deterministic selected-workflow inspection, bounded run-history capture, and publication-time validation.
 - Why one-shot is insufficient: credible diagnostics need an explicit evidence window, clustered failure modes, recurring weak points, ranked opportunities, and a receipt another operator or workflow can trust later.
 
 ## Invocation
 
-- Package path: `autoloop/workflows/workflow_run_history_to_failure_modes/`
-- Discovery: `autoloop workflows show workflow_run_history_to_failure_modes`
+- Package path: `botlane/workflows/workflow_run_history_to_failure_modes/`
+- Discovery: `botlane workflows show workflow_run_history_to_failure_modes`
 - Direct run:
 
 ```bash
-autoloop run workflow_run_history_to_failure_modes <task-id> \
+botlane run workflow_run_history_to_failure_modes <task-id> \
   --message "Diagnose why the release workflow keeps stalling across recent runs." \
   -wf selected_workflow release_candidate_to_go_no_go \
   -wf task_title "Release workflow failure-mode diagnosis" \
@@ -53,7 +53,7 @@ Params:
 
 | Candidate | Benefits | Trade-offs | Decision |
 | --- | --- | --- | --- |
-| Additive authoring-only run-history snapshot seam | Lets workflows capture one selected workflow's historical evidence under `ctx.workflow_folder` without ad hoc `.autoloop` scraping or runtime-owned diagnostics policy | Adds one focused stdlib seam plus docs/tests, but keeps diagnostic meaning visible in workflow code, prompt templates, and artifacts | Chosen in the paired framework slice and consumed here |
+| Additive authoring-only run-history snapshot seam | Lets workflows capture one selected workflow's historical evidence under `ctx.workflow_folder` without ad hoc `.botlane` scraping or runtime-owned diagnostics policy | Adds one focused stdlib seam plus docs/tests, but keeps diagnostic meaning visible in workflow code, prompt templates, and artifacts | Chosen in the paired framework slice and consumed here |
 | Expand `workflow.toml` with diagnostic history metadata | Could expose some diagnostic metadata statically to tooling | Widens the manifest contract, pushes dynamic run evidence into static metadata, and hides workflow meaning outside the durable artifact package | Rejected |
 | Runtime-owned diagnostic runner and automatic failure clustering | Could reduce workflow code in the short term | Hides policy in runtime code, blurs the runtime/provider boundary, and violates the rule that workflows own the global SOP and terminal outcome | Rejected |
 
@@ -90,7 +90,7 @@ Params:
 
 | Candidate | Description | Trade-off | Decision |
 | --- | --- | --- | --- |
-| Workflow-only implementation with ad hoc `.autoloop` scraping inside the workflow package | Build the package directly against raw workspace paths and JSONL parsing inside workflow code | Smallest diff, but duplicates logic already needed elsewhere and weakens the authoring boundary | Rejected |
+| Workflow-only implementation with ad hoc `.botlane` scraping inside the workflow package | Build the package directly against raw workspace paths and JSONL parsing inside workflow code | Smallest diff, but duplicates logic already needed elsewhere and weakens the authoring boundary | Rejected |
 | Shared diagnostic helper seam plus dedicated workflow package | Reuse the helper seam for authoritative history capture while keeping diagnostic policy visible in the workflow package, prompts, and docs | Slightly broader change set, but it is the clearest reusable and inspectable design | Selected |
 | Absorb run-history diagnosis into the refinement or portfolio workflow packages | Reduce package count by folding diagnostics into a later workflow | Collapses boundaries and leaves no reusable diagnostic building block for later composition | Rejected |
 
@@ -221,8 +221,8 @@ Payload models used by the package:
 
 ## Evidence
 
-- Package implementation: `autoloop/workflows/workflow_run_history_to_failure_modes/`
+- Package implementation: `botlane/workflows/workflow_run_history_to_failure_modes/`
 - Shared diagnostic seam consumed: `stdlib/diagnostics.py`
-- Workflow asset: `autoloop/workflows/workflow_run_history_to_failure_modes/assets/failure_mode_diagnostic_checklist.md`
+- Workflow asset: `botlane/workflows/workflow_run_history_to_failure_modes/assets/failure_mode_diagnostic_checklist.md`
 - Workflow-specific proof: `tests/runtime/test_workflow_run_history_to_failure_modes.py`
 - The scripted tests prove workflow discovery, compilation, terminal diagnostic publication, and publish-side rejection of empty filtered histories, selected-workflow mismatches, missing artifacts, and hidden downstream execution signals.

@@ -8,17 +8,17 @@
 - Why it matters: once the portfolio can build, retrieve, adapt, evaluate, refine, and diagnose workflows, the missing layer is durable portfolio governance that decides what should happen next across the ecosystem.
 - Likely sponsors: workflow maintainers, engineering-productivity owners, AI platform teams, PM or TPM leads, and recursive portfolio operators.
 - Classification: end-to-end workflow.
-- Why Autoloop fits: the work needs durable evidence capture, verifier-gated rework loops, explicit lifecycle packaging, and a publication boundary another operator or workflow can trust later.
+- Why Botlane fits: the work needs durable evidence capture, verifier-gated rework loops, explicit lifecycle packaging, and a publication boundary another operator or workflow can trust later.
 - Why one-shot is insufficient: credible governance requires scoped portfolio evidence, explicit lifecycle criteria, contradiction handling, machine-readable change candidates, and deterministic publication checks.
 
 ## Invocation
 
-- Package path: `autoloop/workflows/workflow_portfolio_to_operating_system/`
-- Discovery: `autoloop workflows show workflow_portfolio_to_operating_system`
+- Package path: `botlane/workflows/workflow_portfolio_to_operating_system/`
+- Discovery: `botlane workflows show workflow_portfolio_to_operating_system`
 - Direct run:
 
 ```bash
-autoloop run workflow_portfolio_to_operating_system <task-id> \
+botlane run workflow_portfolio_to_operating_system <task-id> \
   --message "Recommend how the current workflow portfolio should evolve for the next recursive cycle." \
   -wf task_title "Workflow portfolio operating-system review" \
   -wf sponsor_role "workflow platform" \
@@ -92,7 +92,7 @@ Params:
 
 | Candidate | Description | Trade-off | Decision |
 | --- | --- | --- | --- |
-| Workflow-only implementation with ad hoc `.autoloop` scraping inside the package | Build the package directly against raw workspace paths and JSON parsing inside workflow code | Smallest diff, but duplicates the portfolio-health seam and weakens the authoring boundary | Rejected |
+| Workflow-only implementation with ad hoc `.botlane` scraping inside the package | Build the package directly against raw workspace paths and JSON parsing inside workflow code | Smallest diff, but duplicates the portfolio-health seam and weakens the authoring boundary | Rejected |
 | Shared portfolio-health seam plus dedicated governance workflow package | Reuse the helper seam for authoritative evidence capture while keeping lifecycle policy visible in the workflow package, prompts, and docs | Slightly broader change set, but it is the clearest reusable and inspectable design | Selected |
 | Runtime-owned governance subsystem | Move portfolio scoring and lifecycle recommendation logic into runtime code | Collapses the workflow/runtime boundary and hides the governance SOP where operators cannot inspect it easily | Rejected |
 
@@ -204,7 +204,7 @@ Payload models used by the package:
 - Compilation must expose typed route metadata and payload schemas for the three pair steps.
 - Runtime proof must cover:
 - successful publication of `workflow_capability_snapshot.json`, `workflow_portfolio_health_snapshot.json`, `workflow_lifecycle_matrix.md`, `portfolio_gap_analysis.md`, `portfolio_change_candidates.json`, `workflow_portfolio_operating_system.md`, `portfolio_operating_summary.json`, `portfolio_next_actions.md`, and `portfolio_operating_system_receipt.json`
-- deterministic capture of grouped portfolio run-health evidence from the current `.autoloop` run records without mutating run state or workflow packages
+- deterministic capture of grouped portfolio run-health evidence from the current `.botlane` run records without mutating run state or workflow packages
 - proof that the workflow stops at governance publication and does not auto-run builder, refinement, decomposition, merge, or retirement work
 - publish-side rejection of missing capability or health artifacts, unknown focus-workflow references, summary drift, invalid lifecycle postures, and outputs that imply hidden downstream execution
 
@@ -223,8 +223,8 @@ Payload models used by the package:
 
 ## Evidence
 
-- Package implementation: `autoloop/workflows/workflow_portfolio_to_operating_system/`
+- Package implementation: `botlane/workflows/workflow_portfolio_to_operating_system/`
 - Shared seam consumed: `runtime/workspace.py` and `stdlib/portfolio.py`
-- Workflow asset: `autoloop/workflows/workflow_portfolio_to_operating_system/assets/portfolio_operating_system_checklist.md`
+- Workflow asset: `botlane/workflows/workflow_portfolio_to_operating_system/assets/portfolio_operating_system_checklist.md`
 - Workflow-specific proof: `tests/runtime/test_workflow_portfolio_to_operating_system.py`
 - The scripted tests prove workflow discovery, compilation, terminal governance publication, and publish-side rejection of missing scoped-evidence artifacts, unknown focus workflows, summary drift, invalid lifecycle postures, and hidden downstream execution signals.

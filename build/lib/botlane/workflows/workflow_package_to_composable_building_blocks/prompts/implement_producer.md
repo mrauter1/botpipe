@@ -45,7 +45,7 @@
 ### Artifact handling
 - `candidate_decomposition_surface/` must contain:
 - the rewritten parent workflow surface,
-- at least one extracted workflow package under `autoloop/workflows/`,
+- at least one extracted workflow package under `botlane/workflows/`,
 - the associated docs and runtime-test footprint for each extracted building block.
 - `candidate_building_block_index.json` must be valid JSON and define:
 - `selected_workflow_name`,

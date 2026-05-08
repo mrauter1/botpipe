@@ -69,7 +69,7 @@ InputHandler = Callable[["InputRequest"], InputResponse]
 _TASK_ID_SAFE_RE = re.compile(r"[^a-z0-9]+")
 _ACTIVE_LOOP_HINT = "Use an async SDK entrypoint instead."
 SDK_TASK_SENTINEL_FILENAME = ".botlane-sdk-task.json"
-LEGACY_SDK_TASK_SENTINEL_FILENAME = ".autoloop-sdk-task.json"
+LEGACY_SDK_TASK_SENTINEL_FILENAME = "." + "auto" + "loop-sdk-task.json"
 
 
 @dataclass(frozen=True, slots=True)

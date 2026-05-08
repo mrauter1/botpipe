@@ -8,17 +8,17 @@
 - Why it matters: once the portfolio can discover, choose, and adapt workflows, the next missing layer is explicit evaluation authoring that survives handoff and enables later refinement cycles.
 - Likely sponsors: engineering productivity, AI platform owners, workflow maintainers, QA and reliability leads, and recursive portfolio operators.
 - Classification: reusable workflow building block.
-- Why Autoloop fits: the work needs durable artifacts, verifier-gated rework loops, selected-workflow contract inspection, and deterministic publication-side validation.
+- Why Botlane fits: the work needs durable artifacts, verifier-gated rework loops, selected-workflow contract inspection, and deterministic publication-side validation.
 - Why one-shot is insufficient: a useful suite needs explicit evaluation framing, categorized cases, a reusable rubric, a validated manifest, and a publication receipt another operator or workflow can trust later.
 
 ## Invocation
 
-- Package path: `autoloop/workflows/workflow_to_eval_suite/`
-- Discovery: `autoloop workflows show workflow_to_eval_suite`
+- Package path: `botlane/workflows/workflow_to_eval_suite/`
+- Discovery: `botlane workflows show workflow_to_eval_suite`
 - Direct run:
 
 ```bash
-autoloop run workflow_to_eval_suite <task-id> \
+botlane run workflow_to_eval_suite <task-id> \
   --message "Author an evaluation suite for the release go/no-go workflow." \
   -wf selected_workflow release_candidate_to_go_no_go \
   -wf task_title "Release readiness evaluation suite" \
@@ -217,8 +217,8 @@ Payload models used by the package:
 
 ## Evidence
 
-- Package implementation: `autoloop/workflows/workflow_to_eval_suite/`
+- Package implementation: `botlane/workflows/workflow_to_eval_suite/`
 - Shared evaluation seam consumed: `stdlib/evaluation.py`
-- Workflow asset: `autoloop/workflows/workflow_to_eval_suite/assets/eval_suite_checklist.md`
+- Workflow asset: `botlane/workflows/workflow_to_eval_suite/assets/eval_suite_checklist.md`
 - Workflow-specific proof: `tests/runtime/test_workflow_to_eval_suite.py`
 - The scripted tests prove workflow discovery, compilation, terminal publication, and publish-side validation of malformed case kinds, duplicate ids, workflow-parameter errors, unknown expected artifacts, and summary drift.

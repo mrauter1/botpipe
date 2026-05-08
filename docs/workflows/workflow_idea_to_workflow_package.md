@@ -1,24 +1,24 @@
 # `workflow_idea_to_workflow_package`
 
-`workflow_idea_to_workflow_package` is the repository's first explicit workflow-builder package. It turns an ambiguous workflow idea into a concrete Autoloop workflow package plus design, verification, promotion, and rollback evidence.
+`workflow_idea_to_workflow_package` is the repository's first explicit workflow-builder package. It turns an ambiguous workflow idea into a concrete Botlane workflow package plus design, verification, promotion, and rollback evidence.
 
 ## Problem and value
 
 - Problem solved: turn a valuable workflow idea or reusable recipe concept into a package another team can discover, inspect, run, and extend.
-- Why it matters: the repo previously had only `autoloop init workflow <name>` plus manual discipline, not a credible builder workflow.
+- Why it matters: the repo previously had only `botlane init workflow <name>` plus manual discipline, not a credible builder workflow.
 - Likely sponsors: framework owners, internal platform teams, engineering productivity groups, or consulting organizations building repeatable delivery playbooks.
 - Classification: end-to-end workflow. The trigger is a workflow idea; the terminal result is a workflow package and evidence pack.
-- Why Autoloop fits: the work spans candidate analysis, explicit design, repository edits, and verification evidence across multiple durable artifacts.
+- Why Botlane fits: the work spans candidate analysis, explicit design, repository edits, and verification evidence across multiple durable artifacts.
 - Why one-shot is insufficient: the package needs comparison, design, build, evaluation, and a deterministic publish gate with rework versus replan logic.
 
 ## Invocation
 
-- Package path: `autoloop/workflows/workflow_idea_to_workflow_package/`
-- Discovery: `autoloop workflows show workflow_idea_to_workflow_package`
+- Package path: `botlane/workflows/workflow_idea_to_workflow_package/`
+- Discovery: `botlane workflows show workflow_idea_to_workflow_package`
 - Run:
 
 ```bash
-autoloop run workflow_idea_to_workflow_package <task-id> \
+botlane run workflow_idea_to_workflow_package <task-id> \
   --message "We need a workflow for release readiness reviews." \
   -wf package_name release_candidate_to_go_no_go \
   -wf workflow_kind end_to_end \
@@ -85,13 +85,13 @@ Params:
 | --- | --- | --- | --- |
 | Hidden generator layer | Add a reusable framework generator that writes packages from a spec | Too much new machinery for one cycle | Rejected |
 | Direct package creation from accepted design | Use the existing package scaffold contract and write files directly from the workflow | More explicit artifacts to manage, but much easier to inspect | Chosen |
-| Child-workflow composition around `autoloop init workflow` | Invoke the scaffold command and patch the results in later steps | Adds command coupling and obscures the actual file contract | Rejected |
+| Child-workflow composition around `botlane init workflow` | Invoke the scaffold command and patch the results in later steps | Adds command coupling and obscures the actual file contract | Rejected |
 
 ## Workflow contract
 
 ### Objective
 
-Turn a workflow idea into a concrete Autoloop workflow package with prompts, docs, tests, and promotion/rollback evidence.
+Turn a workflow idea into a concrete Botlane workflow package with prompts, docs, tests, and promotion/rollback evidence.
 
 ### Global deterministic responsibilities
 
@@ -173,7 +173,7 @@ Stable workflow-local artifacts:
 
 Generated package roots:
 
-- `autoloop/workflows/<package_name>/`
+- `botlane/workflows/<package_name>/`
 - `docs/workflows/<package_name>.md`
 - `tests/runtime/test_<package_name>.py`
 
@@ -227,6 +227,6 @@ Each prompt names the role, purpose, current work item, required reads, required
 
 ## Evidence
 
-- Package implementation: `autoloop/workflows/workflow_idea_to_workflow_package/`
+- Package implementation: `botlane/workflows/workflow_idea_to_workflow_package/`
 - Workflow-specific test: `tests/runtime/test_workflow_builder_package.py`
 - Scripted exercise proves discovery, compilation, execution, artifact generation, and a compilable generated package.

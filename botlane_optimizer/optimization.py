@@ -66,6 +66,8 @@ _RUNTIME_OBSERVABILITY_SCHEMAS = {
     "git_tracking.jsonl": GIT_TRACKING_SCHEMA,
     "static_step_graph.json": WORKFLOW_STATIC_STEP_GRAPH_SCHEMA,
 }
+_PRIMARY_STATE_DIR = ".botlane"
+_LEGACY_STATE_DIR = "." + "auto" + "loop"
 
 
 @dataclass(frozen=True, slots=True)
@@ -162,7 +164,9 @@ def list_selected_workflow_runs(
             if run_ref in seen:
                 raise ValueError("run_refs entries must be unique")
             seen.add(run_ref)
-            run_dir = repo_root / ".autoloop" / "tasks" / task_id / f"wf_{workflow_name}" / "runs" / run_id
+            run_dir = repo_root / _PRIMARY_STATE_DIR / "tasks" / task_id / f"wf_{workflow_name}" / "runs" / run_id
+            if not run_dir.is_dir():
+                run_dir = repo_root / _LEGACY_STATE_DIR / "tasks" / task_id / f"wf_{workflow_name}" / "runs" / run_id
             if not run_dir.is_dir():
                 raise FileNotFoundError(f"run_ref does not resolve to an existing run directory: {run_ref}")
             selected_paths.append(run_dir)

@@ -3,9 +3,9 @@
 Use this checklist when designing or building a workflow from a workflow idea.
 
 Supported output shapes:
-- `single`: `.autoloop/workflows/<package_name>.py`
-- `flow_specs`: `.autoloop/workflows/<package_name>/flow.py` plus optional `specs.py`
-- `package`: `autoloop/workflows/<package_name>/flow.py`, `specs.py`, `workflow.toml`, and any chosen support folders
+- `single`: `.botlane/workflows/<package_name>.py`
+- `flow_specs`: `.botlane/workflows/<package_name>/flow.py` plus optional `specs.py`
+- `package`: `botlane/workflows/<package_name>/flow.py`, `specs.py`, `workflow.toml`, and any chosen support folders
 
 Required supporting outputs:
 - workflow design spec

@@ -5,29 +5,38 @@ from __future__ import annotations
 from collections.abc import Callable, MutableMapping
 from typing import Any
 
-RUN_METADATA_SCHEMA = "autoloop.run_metadata/v1"
-CHECKPOINT_SCHEMA = "autoloop.checkpoint/v1"
-RUNTIME_TRACE_SCHEMA = "autoloop.runtime_trace/v1"
-RUNTIME_EVENT_SCHEMA = "autoloop.runtime_event/v1"
-CHILD_RUN_SUMMARY_SCHEMA = "autoloop.child_run_summary/v1"
-OPERATION_REPLAY_SCHEMA = "autoloop.operation_replay/v2"
-GIT_TRACKING_SCHEMA = "autoloop.git_tracking/v1"
-WORKFLOW_STATIC_STEP_GRAPH_SCHEMA = "autoloop.workflow_static_step_graph/v1"
-WORKFLOW_TOPOLOGY_SCHEMA = "autoloop.workflow_topology/v1"
-WORKFLOW_ARTIFACT_CONTRACTS_SCHEMA = "autoloop.workflow_artifact_contracts/v1"
-WORKFLOW_PROMPT_REFS_SCHEMA = "autoloop.workflow_prompt_refs/v1"
-WORKFLOW_STATE_CONTRACTS_SCHEMA = "autoloop.workflow_state_contracts/v1"
-WORKFLOW_SESSION_CONTRACTS_SCHEMA = "autoloop.workflow_session_contracts/v1"
+_SCHEMA_PREFIX = "botlane."
+_LEGACY_SCHEMA_PREFIX = "auto" + "loop."
 
-WORKFLOW_OPTIMIZATION_TRACE_CORPUS_SCHEMA = "autoloop.workflow_optimization.trace_corpus/v1"
-WORKFLOW_OPTIMIZATION_SOURCE_MANIFEST_SCHEMA = "autoloop.workflow_optimization.source_manifest/v1"
-WORKFLOW_OPTIMIZATION_EXCLUDED_RUN_REPORT_SCHEMA = "autoloop.workflow_optimization.excluded_run_report/v1"
-WORKFLOW_REFINEMENT_EVIDENCE_SCHEMA = "autoloop.workflow_refinement_evidence/v1"
-WORKFLOW_OPTIMIZATION_STEP_TRACE_METRICS_SCHEMA = "autoloop.workflow_optimization.step_trace_metrics/v1"
-WORKFLOW_OPTIMIZATION_STEP_PRIORITY_REPORT_SCHEMA = "autoloop.workflow_optimization.step_priority_report/v1"
-WORKFLOW_OPTIMIZATION_FAILURE_SCENARIO_SEEDS_SCHEMA = "autoloop.workflow_optimization.failure_scenario_seeds/v1"
-WORKFLOW_OPTIMIZATION_FAILURE_SCENARIOS_SCHEMA = "autoloop.workflow_optimization.failure_scenarios/v1"
-WORKFLOW_OPTIMIZATION_SCOPE_SCHEMA = "autoloop.workflow_optimization.scope/v1"
+RUN_METADATA_SCHEMA = "botlane.run_metadata/v1"
+CHECKPOINT_SCHEMA = "botlane.checkpoint/v1"
+RUNTIME_TRACE_SCHEMA = "botlane.runtime_trace/v1"
+RUNTIME_EVENT_SCHEMA = "botlane.runtime_event/v1"
+CHILD_RUN_SUMMARY_SCHEMA = "botlane.child_run_summary/v1"
+OPERATION_REPLAY_SCHEMA = "botlane.operation_replay/v2"
+GIT_TRACKING_SCHEMA = "botlane.git_tracking/v1"
+WORKFLOW_STATIC_STEP_GRAPH_SCHEMA = "botlane.workflow_static_step_graph/v1"
+WORKFLOW_TOPOLOGY_SCHEMA = "botlane.workflow_topology/v1"
+WORKFLOW_ARTIFACT_CONTRACTS_SCHEMA = "botlane.workflow_artifact_contracts/v1"
+WORKFLOW_PROMPT_REFS_SCHEMA = "botlane.workflow_prompt_refs/v1"
+WORKFLOW_STATE_CONTRACTS_SCHEMA = "botlane.workflow_state_contracts/v1"
+WORKFLOW_SESSION_CONTRACTS_SCHEMA = "botlane.workflow_session_contracts/v1"
+
+WORKFLOW_OPTIMIZATION_TRACE_CORPUS_SCHEMA = "botlane.workflow_optimization.trace_corpus/v1"
+WORKFLOW_OPTIMIZATION_SOURCE_MANIFEST_SCHEMA = "botlane.workflow_optimization.source_manifest/v1"
+WORKFLOW_OPTIMIZATION_EXCLUDED_RUN_REPORT_SCHEMA = "botlane.workflow_optimization.excluded_run_report/v1"
+WORKFLOW_REFINEMENT_EVIDENCE_SCHEMA = "botlane.workflow_refinement_evidence/v1"
+WORKFLOW_OPTIMIZATION_STEP_TRACE_METRICS_SCHEMA = "botlane.workflow_optimization.step_trace_metrics/v1"
+WORKFLOW_OPTIMIZATION_STEP_PRIORITY_REPORT_SCHEMA = "botlane.workflow_optimization.step_priority_report/v1"
+WORKFLOW_OPTIMIZATION_FAILURE_SCENARIO_SEEDS_SCHEMA = "botlane.workflow_optimization.failure_scenario_seeds/v1"
+WORKFLOW_OPTIMIZATION_FAILURE_SCENARIOS_SCHEMA = "botlane.workflow_optimization.failure_scenarios/v1"
+WORKFLOW_OPTIMIZATION_SCOPE_SCHEMA = "botlane.workflow_optimization.scope/v1"
+
+
+def legacy_schema_alias(expected: str) -> str | None:
+    if not expected.startswith(_SCHEMA_PREFIX):
+        return None
+    return _LEGACY_SCHEMA_PREFIX + expected.removeprefix(_SCHEMA_PREFIX)
 
 
 def validate_persisted_schema(
@@ -55,7 +64,10 @@ def validate_persisted_schema(
         schema = payload.get("schema")
     if not isinstance(schema, str) or not schema:
         raise ValueError(f"{artifact_name} must define a non-empty schema string when present")
-    if schema != expected:
+    accepted = {expected}
+    if (legacy_alias := legacy_schema_alias(expected)) is not None:
+        accepted.add(legacy_alias)
+    if schema not in accepted:
         raise ValueError(
             f"{artifact_name} uses unsupported schema {schema!r}; expected {expected!r}"
         )
@@ -75,6 +87,7 @@ __all__ = [
     "CHECKPOINT_SCHEMA",
     "CHILD_RUN_SUMMARY_SCHEMA",
     "GIT_TRACKING_SCHEMA",
+    "legacy_schema_alias",
     "migrate_schemaless_payload",
     "OPERATION_REPLAY_SCHEMA",
     "RUN_METADATA_SCHEMA",

@@ -70,7 +70,7 @@
 ## Out Of Scope
 
 - Publishing the final recursive-improvement cycle package.
-- Mutating workflow packages or `.autoloop` history.
+- Mutating workflow packages or `.botlane` history.
 - Executing downstream workflows.
 
 ## Forbidden

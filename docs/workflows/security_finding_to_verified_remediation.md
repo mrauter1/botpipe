@@ -8,17 +8,17 @@
 - Why it matters: security teams rarely need another free-form analysis; they need a package engineering can execute and AppSec can review without reconstructing the evidence or guesswork around proof of closure.
 - Likely sponsors: AppSec, security engineering, platform owners, engineering managers, or incident/vulnerability management leads.
 - Classification: end-to-end workflow. The trigger is a concrete security finding and the terminal outcome is a closure-ready remediation package.
-- Why Autoloop fits: the work spans child workflow composition, evidence adoption, security-specific assessment, remediation planning, closure packaging, and verifier-gated local rework.
+- Why Botlane fits: the work spans child workflow composition, evidence adoption, security-specific assessment, remediation planning, closure packaging, and verifier-gated local rework.
 - Why one-shot is insufficient: the workflow needs a durable evidence base, explicit producer/verifier loops, and filesystem artifacts another team can inspect or challenge later.
 
 ## Invocation
 
-- Package path: `autoloop/workflows/security_finding_to_verified_remediation/`
-- Discovery: `autoloop workflows show security_finding_to_verified_remediation`
+- Package path: `botlane/workflows/security_finding_to_verified_remediation/`
+- Discovery: `botlane workflows show security_finding_to_verified_remediation`
 - Direct run:
 
 ```bash
-autoloop run security_finding_to_verified_remediation <task-id> \
+botlane run security_finding_to_verified_remediation <task-id> \
   --message "Pentest found privilege escalation in admin impersonation." \
   -wf finding_title "Admin impersonation privilege escalation" \
   -wf finding_source pentest \
@@ -245,8 +245,8 @@ Step payload models:
 
 ## Evidence
 
-- Package implementation: `autoloop/workflows/security_finding_to_verified_remediation/`
-- Child building block consumed: `autoloop/workflows/investigation_request_to_evidence_pack/`
-- Workflow asset: `autoloop/workflows/security_finding_to_verified_remediation/assets/security_remediation_package_checklist.md`
+- Package implementation: `botlane/workflows/security_finding_to_verified_remediation/`
+- Child building block consumed: `botlane/workflows/investigation_request_to_evidence_pack/`
+- Workflow asset: `botlane/workflows/security_finding_to_verified_remediation/assets/security_remediation_package_checklist.md`
 - Workflow-specific proof: `tests/runtime/test_security_finding_to_verified_remediation.py`
 - The scripted tests prove workflow discovery, compilation, success-path execution, deterministic child-result adoption, publish validation, and child-question propagation.

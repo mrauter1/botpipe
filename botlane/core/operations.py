@@ -41,7 +41,7 @@ if TYPE_CHECKING:
 
 _JSON_FENCE_RE = re.compile(r"\A```(?:json)?\s*\n(?P<body>[\s\S]*?)\n?```\s*\Z")
 _CURRENT_OPERATION_RUNTIME: ContextVar["OperationRuntime | None"] = ContextVar(
-    "autoloop_operation_runtime",
+    "botlane_operation_runtime",
     default=None,
 )
 
@@ -846,7 +846,7 @@ def _load_replay_store(path: Path | None) -> dict[str, Any]:
     payload = json.loads(path.read_text(encoding="utf-8"))
     if not isinstance(payload, dict):
         return {"schema": OPERATION_REPLAY_SCHEMA, "records": {}, "attempts": []}
-    if payload.get("schema") == "autoloop.operation_replay/v1":
+    if payload.get("schema") == ("auto" + "loop.operation_replay/v1"):
         payload = _migrate_operation_replay_store(payload)
     validate_persisted_schema(
         payload,

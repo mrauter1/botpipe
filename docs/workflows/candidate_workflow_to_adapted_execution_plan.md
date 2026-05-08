@@ -8,17 +8,17 @@
 - Why it matters: once the portfolio has a front door and reusable candidate retrieval, the next missing reuse-over-rebuild layer is concrete adaptation planning that survives handoff.
 - Likely sponsors: engineering productivity, platform owners, TPM and delivery leads, consulting delivery teams, and recursive portfolio operators who want to reuse existing workflows before defaulting to greenfield authoring.
 - Classification: reusable workflow building block.
-- Why Autoloop fits: the work needs durable artifacts, verifier-gated repair loops, inspectable workflow contracts, and deterministic validation of workflow parameters against the shared loader rules.
+- Why Botlane fits: the work needs durable artifacts, verifier-gated repair loops, inspectable workflow contracts, and deterministic validation of workflow parameters against the shared loader rules.
 - Why one-shot is insufficient: the selected workflow, execution assumptions, parameter mapping, expected downstream artifacts, and next action all need to survive challenge and handoff instead of disappearing into transient chat prose.
 
 ## Invocation
 
-- Package path: `autoloop/workflows/candidate_workflow_to_adapted_execution_plan/`
-- Discovery: `autoloop workflows show candidate_workflow_to_adapted_execution_plan`
+- Package path: `botlane/workflows/candidate_workflow_to_adapted_execution_plan/`
+- Discovery: `botlane workflows show candidate_workflow_to_adapted_execution_plan`
 - Direct run:
 
 ```bash
-autoloop run candidate_workflow_to_adapted_execution_plan <task-id> \
+botlane run candidate_workflow_to_adapted_execution_plan <task-id> \
   --message "Adapt the security remediation workflow for an admin impersonation privilege-escalation finding." \
   -wf selected_workflow security_finding_to_verified_remediation \
   -wf task_title "Admin impersonation privilege escalation response" \
@@ -219,9 +219,9 @@ Payload models used by the package:
 
 ## Evidence
 
-- Package implementation: `autoloop/workflows/candidate_workflow_to_adapted_execution_plan/`
+- Package implementation: `botlane/workflows/candidate_workflow_to_adapted_execution_plan/`
 - Shared adaptation seam consumed: `stdlib/adaptation.py`
-- Front-door handoff update: `autoloop/workflows/task_to_workflow_strategy/`
-- Workflow asset: `autoloop/workflows/candidate_workflow_to_adapted_execution_plan/assets/adapted_execution_plan_checklist.md`
+- Front-door handoff update: `botlane/workflows/task_to_workflow_strategy/`
+- Workflow asset: `botlane/workflows/candidate_workflow_to_adapted_execution_plan/assets/adapted_execution_plan_checklist.md`
 - Workflow-specific proof: `tests/runtime/test_candidate_workflow_to_adapted_execution_plan.py`
 - The scripted tests prove workflow discovery, compilation, terminal publication, and publication-side validation of workflow-reference resolution, workflow-parameter coercion, authoritative-artifact declarations, and summary drift.

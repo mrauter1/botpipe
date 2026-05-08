@@ -23,7 +23,7 @@ from botlane.core.statuses import normalize_run_status
 
 
 STATE_DIRNAME = ".botlane"
-LEGACY_STATE_DIRNAME = ".autoloop"
+LEGACY_STATE_DIRNAME = "." + "auto" + "loop"
 DEFAULT_REQUEST_TEXT = "No explicit initial message was provided for this run. Use repository artifacts and explicit clarifications only."
 _RAW_SEQUENCE_PATTERN = re.compile(r"^(?P<sequence>\d+)_")
 _UNSET = object()

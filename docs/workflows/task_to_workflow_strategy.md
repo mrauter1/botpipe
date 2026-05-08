@@ -8,17 +8,17 @@
 - Why it matters: the repository now has a credible builder, a reusable evidence-building block, and multiple domain workflows, but it still needs a front door that can decide reuse versus rebuild explicitly.
 - Likely sponsors: engineering productivity, platform owners, TPM and delivery leads, consulting delivery teams, or recursive portfolio owners.
 - Classification: end-to-end workflow. The trigger is an arbitrary task and the terminal outcome is a published strategy package plus a next-action handoff artifact.
-- Why Autoloop fits: the work depends on durable portfolio inspection, explicit fit-gap analysis, producer/verifier rework loops, and filesystem artifacts that other workflows or operators can inspect later.
+- Why Botlane fits: the work depends on durable portfolio inspection, explicit fit-gap analysis, producer/verifier rework loops, and filesystem artifacts that other workflows or operators can inspect later.
 - Why one-shot is insufficient: the strategy must survive handoff, challenge, and later execution, so the durable output has to be more than a transient recommendation in chat.
 
 ## Invocation
 
-- Package path: `autoloop/workflows/task_to_workflow_strategy/`
-- Discovery: `autoloop workflows show task_to_workflow_strategy`
+- Package path: `botlane/workflows/task_to_workflow_strategy/`
+- Discovery: `botlane workflows show task_to_workflow_strategy`
 - Run:
 
 ```bash
-autoloop run task_to_workflow_strategy <task-id> \
+botlane run task_to_workflow_strategy <task-id> \
   --message "Pentest found privilege escalation in admin impersonation." \
   -wf task_title "Admin impersonation privilege escalation response" \
   -wf sponsor_role "security engineering" \
@@ -237,9 +237,9 @@ Step payload models:
 
 ## Evidence
 
-- Package implementation: `autoloop/workflows/task_to_workflow_strategy/`
+- Package implementation: `botlane/workflows/task_to_workflow_strategy/`
 - Shared portfolio seams consumed: `core/workflow_catalog.py`, `core/workflow_capabilities.py`, and `stdlib/portfolio.py`
-- Child building block consumed: `autoloop/workflows/task_to_candidate_workflow_set/`
-- Workflow asset: `autoloop/workflows/task_to_workflow_strategy/assets/strategy_package_checklist.md`
+- Child building block consumed: `botlane/workflows/task_to_candidate_workflow_set/`
+- Workflow asset: `botlane/workflows/task_to_workflow_strategy/assets/strategy_package_checklist.md`
 - Workflow-specific proof: `tests/runtime/test_task_to_workflow_strategy.py`
 - The scripted tests prove workflow discovery, explicit child composition, terminal strategy publication, and publication-side validation that the builder baseline stays part of the compared-candidate set.

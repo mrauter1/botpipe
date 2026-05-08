@@ -1251,8 +1251,21 @@ def test_resume_without_run_id_uses_latest_run_across_botlane_and_legacy_state_r
     assert first.terminal == "AWAIT_INPUT"
     assert second.terminal == "AWAIT_INPUT"
     assert resumed.terminal == "FINISH"
-    assert resumed.run_id == legacy_run_dir.name
-    assert resumed.run_id != botlane_run_dir.name
+    legacy_record = inspection_load_run_record(
+        tmp_path,
+        workflow_name="mixed_root_resume_demo",
+        task_id="task-mixed-root",
+        run_id=legacy_run_dir.name,
+    )
+    botlane_record = inspection_load_run_record(
+        tmp_path,
+        workflow_name="mixed_root_resume_demo",
+        task_id="task-mixed-root",
+        run_id=botlane_run_dir.name,
+    )
+
+    assert inspection_load_run_metadata(legacy_record)["terminal"] == "FINISH"
+    assert inspection_load_run_metadata(botlane_record)["terminal"] == "AWAIT_INPUT"
 
 
 def test_workspace_lists_grouped_workflow_run_summaries_with_deterministic_filters(tmp_path: Path) -> None:

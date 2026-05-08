@@ -8,17 +8,17 @@
 - Why it matters: once the portfolio has a builder, building blocks, and multiple domain workflows, reusable candidate retrieval becomes the missing substrate for strategy selection and later adaptation workflows.
 - Likely sponsors: engineering productivity, platform owners, TPM and delivery teams, consulting delivery teams, or recursive portfolio operators who need reusable retrieval before they decide reuse versus rebuild.
 - Classification: reusable workflow building block. It is directly runnable, but its main value is composition into portfolio-level workflows such as `task_to_workflow_strategy`.
-- Why Autoloop fits: the work needs durable artifacts, verifier-gated repair loops, capability inspection, and an inspectable handoff surface for later strategy or adaptation workflows.
+- Why Botlane fits: the work needs durable artifacts, verifier-gated repair loops, capability inspection, and an inspectable handoff surface for later strategy or adaptation workflows.
 - Why one-shot is insufficient: candidate retrieval must survive challenge, handoff, and later composition, so the durable output has to be more than a transient recommendation in chat.
 
 ## Invocation
 
-- Package path: `autoloop/workflows/task_to_candidate_workflow_set/`
-- Discovery: `autoloop workflows show task_to_candidate_workflow_set`
+- Package path: `botlane/workflows/task_to_candidate_workflow_set/`
+- Discovery: `botlane workflows show task_to_candidate_workflow_set`
 - Direct run:
 
 ```bash
-autoloop run task_to_candidate_workflow_set <task-id> \
+botlane run task_to_candidate_workflow_set <task-id> \
   --message "Pentest found privilege escalation in admin impersonation." \
   -wf task_title "Admin impersonation privilege escalation response" \
   -wf sponsor_role "security engineering" \
@@ -217,9 +217,9 @@ Payload models used by the package:
 
 ## Evidence
 
-- Package implementation: `autoloop/workflows/task_to_candidate_workflow_set/`
+- Package implementation: `botlane/workflows/task_to_candidate_workflow_set/`
 - Shared capability seam consumed: `core/workflow_capabilities.py` and `stdlib/portfolio.py`
-- Immediate reuse proof: `autoloop/workflows/task_to_workflow_strategy/`
-- Workflow asset: `autoloop/workflows/task_to_candidate_workflow_set/assets/candidate_workflow_set_checklist.md`
+- Immediate reuse proof: `botlane/workflows/task_to_workflow_strategy/`
+- Workflow asset: `botlane/workflows/task_to_candidate_workflow_set/assets/candidate_workflow_set_checklist.md`
 - Workflow-specific proof: `tests/runtime/test_task_to_candidate_workflow_set.py`
 - The scripted tests prove workflow discovery, compilation, terminal publication, and publication-side validation that the builder baseline stays part of the compared-candidate set.

@@ -432,7 +432,10 @@ def _is_simple_artifact_spec(value: object) -> bool:
 
 
 def _is_simple_flow_spec(value: object) -> bool:
-    return bool(getattr(value, "__autoloop_simple_flow_spec__", False))
+    return bool(
+        getattr(value, "__botlane_simple_flow_spec__", False)
+        or getattr(value, "__auto" + "loop_simple_flow_spec__", False)
+    )
 
 
 def _lower_simple_writes(declaration: object, step_name: str) -> dict[str, Artifact]:

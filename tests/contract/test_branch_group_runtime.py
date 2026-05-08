@@ -156,7 +156,7 @@ def test_parallel_branch_group_without_fan_in_routes_question_and_writes_evidenc
     context_path = _branch_group_dir(task_folder, ReviewWorkflow, "reviews") / "context.md"
     manifest = json.loads(results_path.read_text(encoding="utf-8"))
     context_text = context_path.read_text(encoding="utf-8")
-    assert manifest["schema"] == "autoloop.branch_results/v1"
+    assert manifest["schema"] == "botlane.branch_results/v1"
     assert [branch["name"] for branch in manifest["branches"]] == ["security", "cost"]
     assert manifest["branches"][0]["status"] == "needs_input"
     assert manifest["branches"][0]["question"] == "Approve security review?"

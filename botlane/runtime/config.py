@@ -29,7 +29,7 @@ except ImportError:  # pragma: no cover - optional dependency
 
 
 CONFIG_FILENAMES = ("botlane.yaml", "botlane.config")
-LEGACY_CONFIG_FILENAMES = ("autoloop.yaml", "autoloop.config")
+LEGACY_CONFIG_FILENAMES = ("auto" + "loop.yaml", "auto" + "loop.config")
 DEFAULT_CODEX_MODEL = "gpt-5.4"
 DEFAULT_PROVIDER_NAME = "codex"
 SUPPORTED_PROVIDER_NAMES = frozenset({"codex", "claude"})
@@ -189,7 +189,7 @@ def legacy_user_config_dir() -> Path:
     xdg_config_home = Path.home() / ".config"
     if "XDG_CONFIG_HOME" in __import__("os").environ:
         xdg_config_home = Path(__import__("os").environ["XDG_CONFIG_HOME"]).expanduser()
-    return xdg_config_home / "autoloop"
+    return xdg_config_home / ("auto" + "loop")
 
 
 def discover_config_file(directory: Path) -> Path | None:

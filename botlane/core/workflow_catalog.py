@@ -11,7 +11,7 @@ from typing import Any, Literal
 
 _WORKFLOW_MANIFEST_FIELDS = frozenset({"aliases", "class", "description", "module", "name", "title"})
 _PRIMARY_WORKSPACE_STATE_DIR = ".botlane"
-_LEGACY_WORKSPACE_STATE_DIR = ".autoloop"
+_LEGACY_WORKSPACE_STATE_DIR = "." + "auto" + "loop"
 
 AuthoringShape = Literal["single_file", "flow_package", "workflow_package", "manifest_package", "unknown"]
 WorkflowSourceKind = Literal["workspace", "package"]

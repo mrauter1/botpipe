@@ -52,7 +52,7 @@ def test_list_selected_workflow_runs_filters_by_workflow_and_status(tmp_path: Pa
 
     assert runs == [
         tmp_path
-        / ".autoloop"
+        / ".botlane"
         / "tasks"
         / "task-1"
         / "wf_release_candidate_to_go_no_go"
@@ -196,7 +196,7 @@ def test_normalize_trace_corpus_separates_run_statuses_from_route_tags(tmp_path:
         handle.write(
             json.dumps(
                 {
-                    "schema": "autoloop.runtime_trace/v1",
+                    "schema": "botlane.runtime_trace/v1",
                     "event_type": "step_finished",
                     "sequence": 4,
                     "step_name": "assessment",
@@ -215,7 +215,7 @@ def test_normalize_trace_corpus_separates_run_statuses_from_route_tags(tmp_path:
         handle.write(
             json.dumps(
                 {
-                    "schema": "autoloop.git_tracking/v1",
+                    "schema": "botlane.git_tracking/v1",
                     "event_type": "step_committed",
                     "sequence": 4,
                     "step_name": "assessment",
@@ -265,7 +265,7 @@ def test_normalize_trace_corpus_preserves_direct_runtime_control_metadata(tmp_pa
     (run_dir / "trace.jsonl").write_text(
         json.dumps(
             {
-                "schema": "autoloop.runtime_trace/v1",
+                "schema": "botlane.runtime_trace/v1",
                 "event_type": "step_finished",
                 "sequence": 1,
                 "step_name": "assessment",
@@ -316,7 +316,7 @@ def test_normalize_trace_corpus_keeps_question_route_distinct_from_awaiting_inpu
     (run_dir / "trace.jsonl").write_text(
         json.dumps(
             {
-                "schema": "autoloop.runtime_trace/v1",
+                "schema": "botlane.runtime_trace/v1",
                 "event_type": "step_finished",
                 "sequence": 1,
                 "step_name": "assessment",
@@ -517,7 +517,7 @@ def test_extract_failure_scenario_seeds_limits_to_max_scenarios() -> None:
         max_scenarios=2,
     )
 
-    assert payload["schema"] == "autoloop.workflow_optimization.failure_scenario_seeds/v1"
+    assert payload["schema"] == "botlane.workflow_optimization.failure_scenario_seeds/v1"
     assert len(payload["seeds"]) == 2
     assert any(
         "repeated_same_step_needs_rework_loop" in seed["seed_reasons"]
@@ -528,7 +528,7 @@ def test_extract_failure_scenario_seeds_limits_to_max_scenarios() -> None:
 
 def test_write_selected_workflow_source_manifest_records_hashes(tmp_path: Path) -> None:
     _install_selected_workflow(tmp_path)
-    workflow_folder = tmp_path / ".autoloop" / "tasks" / "task-1" / "wf_optimizer"
+    workflow_folder = tmp_path / ".botlane" / "tasks" / "task-1" / "wf_optimizer"
     workflow_folder.mkdir(parents=True, exist_ok=True)
     ctx = SimpleNamespace(root=tmp_path, workflow_folder=workflow_folder)
 
@@ -553,10 +553,10 @@ def test_write_selected_workflow_source_manifest_records_hashes(tmp_path: Path) 
 
 def test_write_selected_workflow_source_manifest_does_not_materialize_canonical_repo_tree(tmp_path: Path) -> None:
     _install_selected_workflow(tmp_path)
-    workflow_folder = tmp_path / ".autoloop" / "tasks" / "task-1" / "wf_optimizer"
+    workflow_folder = tmp_path / ".botlane" / "tasks" / "task-1" / "wf_optimizer"
     workflow_folder.mkdir(parents=True, exist_ok=True)
     ctx = SimpleNamespace(root=tmp_path, workflow_folder=workflow_folder)
-    canonical_dir = tmp_path / "autoloop" / "workflows" / "release_candidate_to_go_no_go"
+    canonical_dir = tmp_path / "botlane" / "workflows" / "release_candidate_to_go_no_go"
 
     assert canonical_dir.exists() is False
 
@@ -573,7 +573,7 @@ def test_write_selected_workflow_source_manifest_uses_repo_local_bytes_under_can
     tmp_path: Path,
 ) -> None:
     _install_selected_workflow(tmp_path)
-    workflow_folder = tmp_path / ".autoloop" / "tasks" / "task-1" / "wf_optimizer"
+    workflow_folder = tmp_path / ".botlane" / "tasks" / "task-1" / "wf_optimizer"
     workflow_folder.mkdir(parents=True, exist_ok=True)
     ctx = SimpleNamespace(root=tmp_path, workflow_folder=workflow_folder)
     workflow_toml = tmp_path / "workflows" / "release_candidate_to_go_no_go" / "workflow.toml"
@@ -588,16 +588,16 @@ def test_write_selected_workflow_source_manifest_uses_repo_local_bytes_under_can
     entry = next(
         item
         for item in payload["files"]
-        if item["path"] == "autoloop/workflows/release_candidate_to_go_no_go/workflow.toml"
+        if item["path"] == "botlane/workflows/release_candidate_to_go_no_go/workflow.toml"
     )
 
-    assert payload["package_dir"] == "autoloop/workflows/release_candidate_to_go_no_go"
+    assert payload["package_dir"] == "botlane/workflows/release_candidate_to_go_no_go"
     assert entry["sha256"] == hashlib.sha256(workflow_toml.read_bytes()).hexdigest()
 
 
 def test_write_selected_workflow_source_manifest_normalizes_alias_to_canonical_workflow_name(tmp_path: Path) -> None:
     _install_selected_workflow(tmp_path)
-    workflow_folder = tmp_path / ".autoloop" / "tasks" / "task-1" / "wf_optimizer"
+    workflow_folder = tmp_path / ".botlane" / "tasks" / "task-1" / "wf_optimizer"
     workflow_folder.mkdir(parents=True, exist_ok=True)
     ctx = SimpleNamespace(root=tmp_path, workflow_folder=workflow_folder)
 
@@ -609,13 +609,13 @@ def test_write_selected_workflow_source_manifest_normalizes_alias_to_canonical_w
     payload = json.loads(manifest_path.read_text(encoding="utf-8"))
 
     assert payload["selected_workflow"] == "release_candidate_to_go_no_go"
-    assert payload["package_dir"] == "autoloop/workflows/release_candidate_to_go_no_go"
+    assert payload["package_dir"] == "botlane/workflows/release_candidate_to_go_no_go"
     assert payload["files"]
 
 
 def test_validate_selected_workflow_source_unchanged_detects_mutation(tmp_path: Path) -> None:
     _install_selected_workflow(tmp_path)
-    workflow_folder = tmp_path / ".autoloop" / "tasks" / "task-1" / "wf_optimizer"
+    workflow_folder = tmp_path / ".botlane" / "tasks" / "task-1" / "wf_optimizer"
     workflow_folder.mkdir(parents=True, exist_ok=True)
     ctx = SimpleNamespace(root=tmp_path, workflow_folder=workflow_folder)
 
@@ -638,7 +638,7 @@ def test_validate_selected_workflow_source_unchanged_detects_mutation(tmp_path: 
 
 
 def test_write_optimization_refinement_evidence_uses_expected_schema(tmp_path: Path) -> None:
-    workflow_folder = tmp_path / ".autoloop" / "tasks" / "task-1" / "wf_optimizer"
+    workflow_folder = tmp_path / ".botlane" / "tasks" / "task-1" / "wf_optimizer"
     workflow_folder.mkdir(parents=True, exist_ok=True)
     ctx = SimpleNamespace(root=tmp_path, workflow_folder=workflow_folder)
 
@@ -656,7 +656,7 @@ def test_write_optimization_refinement_evidence_uses_expected_schema(tmp_path: P
     )
 
     payload = json.loads(path.read_text(encoding="utf-8"))
-    assert payload["schema"] == "autoloop.workflow_refinement_evidence/v1"
+    assert payload["schema"] == "botlane.workflow_refinement_evidence/v1"
     assert payload["target_workflow_id"] == "release_candidate_to_go_no_go"
     assert payload["evidence_entries"][0]["kind"] == "workflow_optimization_scorecard"
 
@@ -666,11 +666,11 @@ def test_finalize_optional_optimization_artifact_writes_empty_payload_for_missin
     spec = OptimizationArtifactSpec(
         filename=artifact_path.name,
         artifact_name=artifact_path.name,
-        expected_schema="autoloop.workflow_optimization.token_candidates/v1",
+        expected_schema="botlane.workflow_optimization.token_candidates/v1",
         list_field="candidates",
         reader=_namespace_reader,
         empty_payload_factory=lambda *, selected_workflow: {
-            "schema": "autoloop.workflow_optimization.token_candidates/v1",
+            "schema": "botlane.workflow_optimization.token_candidates/v1",
             "selected_workflow": selected_workflow,
             "candidates": [],
         },
@@ -684,7 +684,7 @@ def test_finalize_optional_optimization_artifact_writes_empty_payload_for_missin
     )
 
     assert json.loads(artifact_path.read_text(encoding="utf-8")) == {
-        "schema": "autoloop.workflow_optimization.token_candidates/v1",
+        "schema": "botlane.workflow_optimization.token_candidates/v1",
         "selected_workflow": "release_candidate_to_go_no_go",
         "candidates": [],
     }
@@ -695,7 +695,7 @@ def test_collect_and_validate_optimization_publication_surface_aggregates_counts
     producer_path.write_text(
         json.dumps(
             {
-                "schema": "autoloop.workflow_optimization.producer_candidates/v1",
+                "schema": "botlane.workflow_optimization.producer_candidates/v1",
                 "selected_workflow": "release_candidate_to_go_no_go",
                 "candidates": [
                     {"candidate_id": "producer-001", "requires_ablation": False},
@@ -712,7 +712,7 @@ def test_collect_and_validate_optimization_publication_surface_aggregates_counts
     adversarial_path.write_text(
         json.dumps(
             {
-                "schema": "autoloop.workflow_optimization.adversarial_case_candidates/v1",
+                "schema": "botlane.workflow_optimization.adversarial_case_candidates/v1",
                 "selected_workflow": "release_candidate_to_go_no_go",
                 "cases": [
                     {"case_id": "case-001"},
@@ -728,11 +728,11 @@ def test_collect_and_validate_optimization_publication_surface_aggregates_counts
         OptimizationArtifactSpec(
             filename=producer_path.name,
             artifact_name=producer_path.name,
-            expected_schema="autoloop.workflow_optimization.producer_candidates/v1",
+            expected_schema="botlane.workflow_optimization.producer_candidates/v1",
             list_field="candidates",
             reader=_namespace_reader,
             empty_payload_factory=lambda *, selected_workflow: {
-                "schema": "autoloop.workflow_optimization.producer_candidates/v1",
+                "schema": "botlane.workflow_optimization.producer_candidates/v1",
                 "selected_workflow": selected_workflow,
                 "candidates": [],
             },
@@ -743,11 +743,11 @@ def test_collect_and_validate_optimization_publication_surface_aggregates_counts
         OptimizationArtifactSpec(
             filename=adversarial_path.name,
             artifact_name=adversarial_path.name,
-            expected_schema="autoloop.workflow_optimization.adversarial_case_candidates/v1",
+            expected_schema="botlane.workflow_optimization.adversarial_case_candidates/v1",
             list_field="cases",
             reader=_namespace_reader,
             empty_payload_factory=lambda *, selected_workflow: {
-                "schema": "autoloop.workflow_optimization.adversarial_case_candidates/v1",
+                "schema": "botlane.workflow_optimization.adversarial_case_candidates/v1",
                 "selected_workflow": selected_workflow,
                 "cases": [],
             },
@@ -815,18 +815,18 @@ def test_validate_optimization_scorecard_publication_rejects_ablation_flag_misma
 
 
 def _write_minimal_run_metadata(root: Path, task_id: str, workflow_name: str, run_id: str, status: str) -> Path:
-    run_dir = root / ".autoloop" / "tasks" / task_id / f"wf_{workflow_name}" / "runs" / run_id
+    run_dir = root / ".botlane" / "tasks" / task_id / f"wf_{workflow_name}" / "runs" / run_id
     run_dir.mkdir(parents=True, exist_ok=True)
     payload = {
         "created_at": "2026-04-24T06:00:00+00:00",
         "package_folder": str(Path("workflows") / workflow_name),
-        "run_folder": str(Path(".autoloop") / "tasks" / task_id / f"wf_{workflow_name}" / "runs" / run_id),
+        "run_folder": str(Path(".botlane") / "tasks" / task_id / f"wf_{workflow_name}" / "runs" / run_id),
         "run_id": run_id,
         "status": status,
-        "task_folder": str(Path(".autoloop") / "tasks" / task_id),
+        "task_folder": str(Path(".botlane") / "tasks" / task_id),
         "task_id": task_id,
         "updated_at": "2026-04-24T06:05:00+00:00",
-        "workflow_folder": str(Path(".autoloop") / "tasks" / task_id / f"wf_{workflow_name}"),
+        "workflow_folder": str(Path(".botlane") / "tasks" / task_id / f"wf_{workflow_name}"),
         "workflow_name": workflow_name,
         "workflow_params": {},
     }
@@ -849,7 +849,7 @@ def _to_namespace(value):
 
 def _manifest_entry_source_path(root: Path, entry_path: str, *, workflow_name: str) -> Path:
     relative_path = Path(entry_path)
-    canonical_root = Path("autoloop") / "workflows" / workflow_name
+    canonical_root = Path("botlane") / "workflows" / workflow_name
     if relative_path.parts[: len(canonical_root.parts)] == canonical_root.parts:
         suffix = relative_path.relative_to(canonical_root)
         return root / "workflows" / workflow_name / suffix
@@ -875,7 +875,7 @@ def _write_observable_run(root: Path, task_id: str, workflow_name: str, run_id: 
     (run_dir / "trace.jsonl").write_text(
         json.dumps(
             {
-                "schema": "autoloop.runtime_trace/v1",
+                "schema": "botlane.runtime_trace/v1",
                 "event_type": "step_finished",
                 "sequence": 3,
                 "step_name": "assessment",
@@ -907,7 +907,7 @@ def _write_observable_run(root: Path, task_id: str, workflow_name: str, run_id: 
     (run_dir / "git_tracking.jsonl").write_text(
         json.dumps(
             {
-                "schema": "autoloop.git_tracking/v1",
+                "schema": "botlane.git_tracking/v1",
                 "event_type": "step_committed",
                 "sequence": 3,
                 "step_name": "assessment",
@@ -921,7 +921,7 @@ def _write_observable_run(root: Path, task_id: str, workflow_name: str, run_id: 
     (run_dir / "static_step_graph.json").write_text(
         json.dumps(
             {
-                "schema": "autoloop.workflow_static_step_graph/v1",
+                "schema": "botlane.workflow_static_step_graph/v1",
                 "workflow_name": workflow_name,
                 "steps": [{"name": "assessment", "kind": "pair"}],
                 "transitions": {"steps": {"assessment": {"needs_rework": "assessment"}}, "global": {}},
@@ -954,7 +954,7 @@ def _write_upstream_pass_downstream_fail_run(root: Path, task_id: str, workflow_
             (
                 json.dumps(
                     {
-                        "schema": "autoloop.runtime_trace/v1",
+                        "schema": "botlane.runtime_trace/v1",
                         "event_type": "step_finished",
                         "sequence": 1,
                         "step_name": "assessment",
@@ -980,7 +980,7 @@ def _write_upstream_pass_downstream_fail_run(root: Path, task_id: str, workflow_
                 ),
                 json.dumps(
                     {
-                        "schema": "autoloop.runtime_trace/v1",
+                        "schema": "botlane.runtime_trace/v1",
                         "event_type": "step_finished",
                         "sequence": 2,
                         "step_name": "package",
@@ -1014,7 +1014,7 @@ def _write_upstream_pass_downstream_fail_run(root: Path, task_id: str, workflow_
             (
                 json.dumps(
                     {
-                        "schema": "autoloop.git_tracking/v1",
+                        "schema": "botlane.git_tracking/v1",
                         "event_type": "step_committed",
                         "sequence": 1,
                         "step_name": "assessment",
@@ -1024,7 +1024,7 @@ def _write_upstream_pass_downstream_fail_run(root: Path, task_id: str, workflow_
                 ),
                 json.dumps(
                     {
-                        "schema": "autoloop.git_tracking/v1",
+                        "schema": "botlane.git_tracking/v1",
                         "event_type": "step_committed",
                         "sequence": 2,
                         "step_name": "package",
@@ -1040,7 +1040,7 @@ def _write_upstream_pass_downstream_fail_run(root: Path, task_id: str, workflow_
     (run_dir / "static_step_graph.json").write_text(
         json.dumps(
             {
-                "schema": "autoloop.workflow_static_step_graph/v1",
+                "schema": "botlane.workflow_static_step_graph/v1",
                 "workflow_name": workflow_name,
                 "steps": [
                     {"name": "assessment", "kind": "pair"},
@@ -1094,7 +1094,7 @@ def _install_selected_workflow(root: Path) -> None:
                 "",
                 "from pydantic import BaseModel",
                 "",
-                "from autoloop import Event, FINISH, Workflow, python_step",
+                "from botlane import Event, FINISH, Workflow, python_step",
                 "",
                 "",
                 "class ReleaseCandidateToGoNoGo(Workflow):",

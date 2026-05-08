@@ -84,7 +84,7 @@
 ## Out Of Scope
 
 - Executing the next workflow.
-- Mutating workflow packages or `.autoloop` history.
+- Mutating workflow packages or `.botlane` history.
 - Writing the publication receipt.
 
 ## Forbidden

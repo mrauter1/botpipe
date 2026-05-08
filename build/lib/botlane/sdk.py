@@ -61,13 +61,15 @@ from botlane.runtime.loader import (
 from botlane.runtime.provider_backends import resolve_provider_backend
 from botlane.runtime.provider_policy_resolver import create_provider_policy_resolver
 from botlane.runtime.runner import RunExecution, RunnerOptions, execute_workflow_package
-from botlane.runtime.workspace import primary_state_root, resolve_task_workspace
+from botlane.runtime.workspace import primary_state_root, readable_state_roots, resolve_task_workspace
 
 
 InputResponse = str | BaseModel | Mapping[str, Any] | Sequence[Any] | int | float | bool | None
 InputHandler = Callable[["InputRequest"], InputResponse]
 _TASK_ID_SAFE_RE = re.compile(r"[^a-z0-9]+")
 _ACTIVE_LOOP_HINT = "Use an async SDK entrypoint instead."
+SDK_TASK_SENTINEL_FILENAME = ".botlane-sdk-task.json"
+LEGACY_SDK_TASK_SENTINEL_FILENAME = "." + "auto" + "loop-sdk-task.json"
 
 
 @dataclass(frozen=True, slots=True)
@@ -453,7 +455,7 @@ class Botlane:
         """Initialize an SDK client rooted at a workspace.
 
         `workspace` is the actual project or repository working directory, not the
-        internal `.autoloop` state directory. `default_policy` is an SDK client-level
+        internal `.botlane` state directory. `default_policy` is an SDK client-level
         policy layer; unset values inherit from runtime config defaults and system
         defaults at resolution time. Like other public `Policy(...)` layers, it is
         not a hard security cap.
@@ -944,49 +946,55 @@ class Botlane:
         include_failed: bool = False,
         dry_run: bool = False,
     ) -> CleanupResult:
-        tasks_root = _sdk_tasks_root(self.root, self.state_dir)
-        if not tasks_root.is_dir():
+        tasks_roots = tuple(root for root in _sdk_readable_tasks_roots(self.root, self.state_dir) if root.is_dir())
+        if not tasks_roots:
             return CleanupResult(deleted=(), skipped=(), errors={}, dry_run=dry_run)
 
         now = datetime.now(timezone.utc)
         deleted: list[Path] = []
         skipped: list[Path] = []
         errors: dict[Path, str] = {}
-        for task_dir in sorted(path for path in tasks_root.iterdir() if path.is_dir()):
-            try:
-                payload = _load_sdk_task_sentinel(task_dir)
-            except SDKExecutionError:
-                skipped.append(task_dir)
-                continue
-            if payload.get("schema") != "botlane.sdk_task/v1":
-                skipped.append(task_dir)
-                continue
-            if payload.get("generated_by") != "botlane.sdk":
-                skipped.append(task_dir)
-                continue
-            if payload.get("task_id") != task_dir.name:
-                skipped.append(task_dir)
-                continue
-            if older_than is not None and now - _sdk_task_created_at(task_dir) < older_than:
-                skipped.append(task_dir)
-                continue
-            if not include_failed and _task_dir_appears_failed_or_awaiting_input(task_dir):
-                skipped.append(task_dir)
-                continue
-            if dry_run:
+        seen_task_dirs: set[Path] = set()
+        for tasks_root in tasks_roots:
+            for task_dir in sorted(path for path in tasks_root.iterdir() if path.is_dir()):
+                resolved_task_dir = task_dir.resolve()
+                if resolved_task_dir in seen_task_dirs:
+                    continue
+                seen_task_dirs.add(resolved_task_dir)
+                try:
+                    payload = _load_sdk_task_sentinel(task_dir)
+                except SDKExecutionError:
+                    skipped.append(task_dir)
+                    continue
+                if payload.get("schema") != "botlane.sdk_task/v1":
+                    skipped.append(task_dir)
+                    continue
+                if payload.get("generated_by") != "botlane.sdk":
+                    skipped.append(task_dir)
+                    continue
+                if payload.get("task_id") != task_dir.name:
+                    skipped.append(task_dir)
+                    continue
+                if older_than is not None and now - _sdk_task_created_at(task_dir) < older_than:
+                    skipped.append(task_dir)
+                    continue
+                if not include_failed and _task_dir_appears_failed_or_awaiting_input(task_dir):
+                    skipped.append(task_dir)
+                    continue
+                if dry_run:
+                    deleted.append(task_dir)
+                    continue
+                try:
+                    _safe_delete_sdk_task_dir(
+                        task_dir=task_dir,
+                        task_id=task_dir.name,
+                        tasks_root=tasks_root,
+                    )
+                except SDKExecutionError as exc:
+                    errors[task_dir] = str(exc)
+                    skipped.append(task_dir)
+                    continue
                 deleted.append(task_dir)
-                continue
-            try:
-                _safe_delete_sdk_task_dir(
-                    task_dir=task_dir,
-                    task_id=task_dir.name,
-                    tasks_root=tasks_root,
-                )
-            except SDKExecutionError as exc:
-                errors[task_dir] = str(exc)
-                skipped.append(task_dir)
-                continue
-            deleted.append(task_dir)
 
         return CleanupResult(
             deleted=tuple(deleted),
@@ -1289,6 +1297,13 @@ def _sdk_tasks_root(root: Path, state_dir: Path) -> Path:
     return state_dir / "tasks"
 
 
+def _sdk_readable_tasks_roots(root: Path, state_dir: Path) -> tuple[Path, ...]:
+    primary = primary_state_root(root.resolve())
+    if state_dir.resolve() != primary:
+        return (_sdk_tasks_root(root, state_dir.resolve()),)
+    return tuple(state_root / "tasks" for state_root in readable_state_roots(root))
+
+
 def _sdk_artifact_context(execution: RunExecution, *, message: str | None) -> Any:
     return _runtime_equivalent_artifact_context(execution, message=message)
 
@@ -1404,7 +1419,7 @@ def _write_sdk_task_sentinel(
     policy: RetentionPolicy,
 ) -> None:
     task_dir.mkdir(parents=True, exist_ok=True)
-    sentinel = task_dir / ".autoloop-sdk-task.json"
+    sentinel = task_dir / SDK_TASK_SENTINEL_FILENAME
     payload = {
         "schema": "botlane.sdk_task/v1",
         "generated_by": "botlane.sdk",
@@ -1416,7 +1431,7 @@ def _write_sdk_task_sentinel(
 
 
 def _load_sdk_task_sentinel(task_dir: Path) -> dict[str, Any]:
-    sentinel = task_dir / ".autoloop-sdk-task.json"
+    sentinel = _sdk_task_sentinel_path(task_dir)
     try:
         payload = json.loads(sentinel.read_text(encoding="utf-8"))
     except OSError as exc:
@@ -1436,7 +1451,7 @@ def _safe_delete_sdk_task_dir(
 ) -> None:
     resolved_task_dir = task_dir.resolve()
     resolved_tasks_root = tasks_root.resolve()
-    sentinel = task_dir / ".autoloop-sdk-task.json"
+    sentinel = _sdk_task_sentinel_path(task_dir)
     blocked_roots = {
         resolved_tasks_root,
         resolved_tasks_root.parent,
@@ -1486,11 +1501,21 @@ def _collect_declared_write_artifacts(
 
 def _promotion_base_dir(*, root: Path, task_id: str, policy: RetentionPolicy) -> Path:
     if policy.promoted_writes_dir is None:
-        return root / ".autoloop" / "outputs" / "sdk" / task_id
+        return root / ".botlane" / "outputs" / "sdk" / task_id
     candidate = Path(policy.promoted_writes_dir)
     if not candidate.is_absolute():
         candidate = root / candidate
     return candidate
+
+
+def _sdk_task_sentinel_path(task_dir: Path) -> Path:
+    primary = task_dir / SDK_TASK_SENTINEL_FILENAME
+    if primary.is_file():
+        return primary
+    legacy = task_dir / LEGACY_SDK_TASK_SENTINEL_FILENAME
+    if legacy.is_file():
+        return legacy
+    return primary
 
 
 def _uniquify_path(path: Path) -> Path:

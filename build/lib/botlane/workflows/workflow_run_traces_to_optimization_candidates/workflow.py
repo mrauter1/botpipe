@@ -92,6 +92,11 @@ _PACKAGE_EVIDENCE_FILES = {
     "workflow_level_optimization_candidates.json": "workflow_level_optimization_candidates",
     "workflow_optimization_scorecard.json": "workflow_optimization_scorecard",
 }
+_PRODUCER_CANDIDATES_SCHEMA = "botlane.workflow_optimization.producer_candidates/v1"
+_VERIFIER_RUBRIC_CANDIDATES_SCHEMA = "botlane.workflow_optimization.verifier_rubric_candidates/v1"
+_TOKEN_CANDIDATES_SCHEMA = "botlane.workflow_optimization.token_candidates/v1"
+_ADVERSARIAL_CASE_CANDIDATES_SCHEMA = "botlane.workflow_optimization.adversarial_case_candidates/v1"
+_WORKFLOW_LEVEL_CANDIDATES_SCHEMA = "botlane.workflow_optimization.workflow_level_candidates/v1"
 
 
 def _after_frame(ctx):
@@ -941,7 +946,7 @@ def _empty_failure_scenarios_payload(*, selected_workflow: str) -> dict[str, Any
 
 def _empty_producer_candidates_payload(*, selected_workflow: str) -> dict[str, Any]:
     return {
-        "schema": "autoloop.workflow_optimization.producer_candidates/v1",
+        "schema": _PRODUCER_CANDIDATES_SCHEMA,
         "selected_workflow": selected_workflow,
         "target_steps": [],
         "candidates": [],
@@ -950,7 +955,7 @@ def _empty_producer_candidates_payload(*, selected_workflow: str) -> dict[str, A
 
 def _empty_verifier_rubric_candidates_payload(*, selected_workflow: str) -> dict[str, Any]:
     return {
-        "schema": "autoloop.workflow_optimization.verifier_rubric_candidates/v1",
+        "schema": _VERIFIER_RUBRIC_CANDIDATES_SCHEMA,
         "selected_workflow": selected_workflow,
         "target_steps": [],
         "candidates": [],
@@ -959,7 +964,7 @@ def _empty_verifier_rubric_candidates_payload(*, selected_workflow: str) -> dict
 
 def _empty_token_candidates_payload(*, selected_workflow: str) -> dict[str, Any]:
     return {
-        "schema": "autoloop.workflow_optimization.token_candidates/v1",
+        "schema": _TOKEN_CANDIDATES_SCHEMA,
         "selected_workflow": selected_workflow,
         "candidates": [],
     }
@@ -967,7 +972,7 @@ def _empty_token_candidates_payload(*, selected_workflow: str) -> dict[str, Any]
 
 def _empty_adversarial_cases_payload(*, selected_workflow: str) -> dict[str, Any]:
     return {
-        "schema": "autoloop.workflow_optimization.adversarial_case_candidates/v1",
+        "schema": _ADVERSARIAL_CASE_CANDIDATES_SCHEMA,
         "selected_workflow": selected_workflow,
         "cases": [],
     }
@@ -975,7 +980,7 @@ def _empty_adversarial_cases_payload(*, selected_workflow: str) -> dict[str, Any
 
 def _empty_workflow_level_candidates_payload(*, selected_workflow: str) -> dict[str, Any]:
     return {
-        "schema": "autoloop.workflow_optimization.workflow_level_candidates/v1",
+        "schema": _WORKFLOW_LEVEL_CANDIDATES_SCHEMA,
         "selected_workflow": selected_workflow,
         "candidates": [],
     }
@@ -993,7 +998,7 @@ _FAILURE_SCENARIOS_SPEC = OptimizationArtifactSpec(
 _PRODUCER_CANDIDATES_SPEC = OptimizationArtifactSpec(
     filename="producer_prompt_optimization_candidates.json",
     artifact_name="producer_prompt_optimization_candidates.json",
-    expected_schema="autoloop.workflow_optimization.producer_candidates/v1",
+    expected_schema=_PRODUCER_CANDIDATES_SCHEMA,
     list_field="candidates",
     reader=PRODUCER_PROMPT_OPTIMIZATION_CANDIDATES_ARTIFACT.read,
     empty_payload_factory=_empty_producer_candidates_payload,
@@ -1005,7 +1010,7 @@ _PRODUCER_CANDIDATES_SPEC = OptimizationArtifactSpec(
 _VERIFIER_RUBRIC_CANDIDATES_SPEC = OptimizationArtifactSpec(
     filename="verifier_rubric_optimization_candidates.json",
     artifact_name="verifier_rubric_optimization_candidates.json",
-    expected_schema="autoloop.workflow_optimization.verifier_rubric_candidates/v1",
+    expected_schema=_VERIFIER_RUBRIC_CANDIDATES_SCHEMA,
     list_field="candidates",
     reader=VERIFIER_RUBRIC_OPTIMIZATION_CANDIDATES_ARTIFACT.read,
     empty_payload_factory=_empty_verifier_rubric_candidates_payload,
@@ -1017,7 +1022,7 @@ _VERIFIER_RUBRIC_CANDIDATES_SPEC = OptimizationArtifactSpec(
 _TOKEN_CANDIDATES_SPEC = OptimizationArtifactSpec(
     filename="token_optimization_candidates.json",
     artifact_name="token_optimization_candidates.json",
-    expected_schema="autoloop.workflow_optimization.token_candidates/v1",
+    expected_schema=_TOKEN_CANDIDATES_SCHEMA,
     list_field="candidates",
     reader=TOKEN_OPTIMIZATION_CANDIDATES_ARTIFACT.read,
     empty_payload_factory=_empty_token_candidates_payload,
@@ -1029,7 +1034,7 @@ _TOKEN_CANDIDATES_SPEC = OptimizationArtifactSpec(
 _ADVERSARIAL_CASES_SPEC = OptimizationArtifactSpec(
     filename="adversarial_case_candidates.json",
     artifact_name="adversarial_case_candidates.json",
-    expected_schema="autoloop.workflow_optimization.adversarial_case_candidates/v1",
+    expected_schema=_ADVERSARIAL_CASE_CANDIDATES_SCHEMA,
     list_field="cases",
     reader=ADVERSARIAL_CASE_CANDIDATES_ARTIFACT.read,
     empty_payload_factory=_empty_adversarial_cases_payload,
@@ -1040,7 +1045,7 @@ _ADVERSARIAL_CASES_SPEC = OptimizationArtifactSpec(
 _WORKFLOW_LEVEL_CANDIDATES_SPEC = OptimizationArtifactSpec(
     filename="workflow_level_optimization_candidates.json",
     artifact_name="workflow_level_optimization_candidates.json",
-    expected_schema="autoloop.workflow_optimization.workflow_level_candidates/v1",
+    expected_schema=_WORKFLOW_LEVEL_CANDIDATES_SCHEMA,
     list_field="candidates",
     reader=WORKFLOW_LEVEL_OPTIMIZATION_CANDIDATES_ARTIFACT.read,
     empty_payload_factory=_empty_workflow_level_candidates_payload,

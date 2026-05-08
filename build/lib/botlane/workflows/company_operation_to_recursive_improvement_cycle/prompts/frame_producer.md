@@ -74,7 +74,7 @@
 
 - Ranking recursive-improvement candidates.
 - Publishing the final cycle package.
-- Mutating workflow packages or `.autoloop` history.
+- Mutating workflow packages or `.botlane` history.
 
 ## Forbidden
 

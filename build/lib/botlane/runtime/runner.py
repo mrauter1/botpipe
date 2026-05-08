@@ -71,6 +71,7 @@ from .workspace import (
     ensure_workflow_workspace,
     latest_run_id,
     next_observability_sequence,
+    resolve_run_record,
     resolve_run_workspace,
     write_parent_run_metadata,
     update_run_metadata,
@@ -615,6 +616,17 @@ def _plan_workspaces(
     reference: WorkflowReference,
 ) -> PlannedRunContext:
     state_dir = _resolved_state_dir(options)
+    resume_run_id = options.run_id
+    if options.resume and options.state_dir is None:
+        resume_record = resolve_run_record(
+            options.root,
+            workflow_name=compiled.workflow_name,
+            task_id=options.task_id,
+            run_id=options.run_id,
+            selector="latest",
+        )
+        state_dir = resume_record.task_dir.parent.parent
+        resume_run_id = resume_record.run_id
     task_workspace = resolve_task_workspace(options.root, options.task_id, state_dir=state_dir)
     workflow_workspace = resolve_workflow_workspace(
         task_workspace,
@@ -640,7 +652,7 @@ def _plan_workspaces(
             run_workspace=resolve_run_workspace(workflow_workspace, options.run_id or create_run_id()),
         )
 
-    run_id = options.run_id or latest_run_id(workflow_workspace.runs_dir)
+    run_id = resume_run_id or latest_run_id(workflow_workspace.runs_dir)
     if run_id is None:
         raise FileNotFoundError(f"no runs exist under {workflow_workspace.runs_dir}")
     run_workspace = resolve_run_workspace(workflow_workspace, run_id)
@@ -859,7 +871,7 @@ def _execute_child_workflow_package(
 
     # Child workflow invocations may originate from synchronous Python-step handlers
     # that are already running inside the parent engine's event loop.
-    with ThreadPoolExecutor(max_workers=1, thread_name_prefix="autoloop-child-workflow") as executor:
+    with ThreadPoolExecutor(max_workers=1, thread_name_prefix="botlane-child-workflow") as executor:
         future = executor.submit(
             execute_workflow_package,
             workflow_reference,

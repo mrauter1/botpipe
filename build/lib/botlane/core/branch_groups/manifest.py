@@ -34,7 +34,7 @@ def build_branch_manifest(
     branches: list[Mapping[str, Any]],
 ) -> dict[str, Any]:
     return {
-        "schema": "autoloop.branch_results/v1",
+        "schema": "botlane.branch_results/v1",
         "kind": spec.kind,
         "name": spec.name,
         "started_at": started_at,

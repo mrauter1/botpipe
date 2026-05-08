@@ -48,7 +48,7 @@
 - at least three credible candidates were compared,
 - the workflow-builder was explicitly included,
 - the chosen addition is clearly justified against the alternatives,
-- the selected brief states problem, sponsor, classification, why Autoloop fits, and the terminal outcome.
+- the selected brief states problem, sponsor, classification, why Botlane fits, and the terminal outcome.
 - Choose `needs_rework` when the same framing step can be repaired locally.
 - Choose `needs_replan` when the candidate set, selected addition, or workflow kind must change materially.
 - Use `question` only when user intent or a missing hard constraint prevents a safe choice.

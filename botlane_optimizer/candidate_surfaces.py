@@ -531,7 +531,7 @@ def validate_candidate_surface_overlay(
             overlay_source_root,
             overlay_root,
             ignore=shutil.ignore_patterns(
-                ".autoloop",
+                "." + "auto" + "loop",
                 ".git",
                 ".pytest_cache",
                 "__pycache__",

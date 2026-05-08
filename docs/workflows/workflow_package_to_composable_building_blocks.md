@@ -8,21 +8,21 @@
 - Why it matters: once portfolio governance can recommend `decompose`, the repository still needs a reusable workflow that turns that recommendation into package interfaces, candidate files, migration guidance, and promotion or rollback evidence.
 - Likely sponsors: workflow maintainers, engineering-productivity owners, AI platform teams, recursive portfolio operators, and delivery teams trying to reduce repeated monolith workflow growth.
 - Classification: reusable workflow building block.
-- Why Autoloop fits: decomposition is artifact-heavy, verifier-sensitive, multi-turn work that needs durable baseline and candidate surfaces plus deterministic publication checks.
+- Why Botlane fits: decomposition is artifact-heavy, verifier-sensitive, multi-turn work that needs durable baseline and candidate surfaces plus deterministic publication checks.
 - Why one-shot is insufficient: credible decomposition needs selected-workflow capture, accepted extraction boundaries, candidate package authoring, migration planning, verification, and publication-side validation that the authoritative parent workflow stayed untouched.
 
 ## Invocation
 
-- Package path: `autoloop/workflows/workflow_package_to_composable_building_blocks/`
-- Discovery: `autoloop workflows show workflow_package_to_composable_building_blocks`
+- Package path: `botlane/workflows/workflow_package_to_composable_building_blocks/`
+- Discovery: `botlane workflows show workflow_package_to_composable_building_blocks`
 - Direct run:
 
 ```bash
-autoloop run workflow_package_to_composable_building_blocks <task-id> \
+botlane run workflow_package_to_composable_building_blocks <task-id> \
   --message "Decompose the release workflow into reusable building blocks." \
   -wf selected_workflow release_candidate_to_go_no_go \
   -wf task_title "Release workflow decomposition candidate" \
-  -wf evidence_paths .autoloop/signals/release_decomposition_pressure.md \
+  -wf evidence_paths .botlane/signals/release_decomposition_pressure.md \
   -wf sponsor_role "engineering productivity" \
   -wf desired_outcome "Publish a candidate decomposition overlay, migration guide, and decomposition receipt for the selected workflow." \
   -wf constraints "Keep runtime control narrow and stop before promotion." \
@@ -248,8 +248,8 @@ Payload models used by the package:
 
 ## Evidence
 
-- Package implementation: `autoloop/workflows/workflow_package_to_composable_building_blocks/`
+- Package implementation: `botlane/workflows/workflow_package_to_composable_building_blocks/`
 - Shared decomposition seam consumed: `stdlib/decomposition.py`
-- Workflow asset: `autoloop/workflows/workflow_package_to_composable_building_blocks/assets/decomposition_package_checklist.md`
+- Workflow asset: `botlane/workflows/workflow_package_to_composable_building_blocks/assets/decomposition_package_checklist.md`
 - Workflow-specific proof: `tests/runtime/test_workflow_package_to_composable_building_blocks.py`
 - The scripted tests prove workflow discovery, compilation, prompt contract markers, terminal candidate publication, fallback evidence capture, blocked unreadable evidence paths, and publish-side rejection of hidden execution, identity drift, and boundary escapes.

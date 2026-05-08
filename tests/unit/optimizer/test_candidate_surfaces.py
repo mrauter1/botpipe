@@ -477,12 +477,12 @@ def test_candidate_surface_helpers_allow_canonical_relative_paths_with_repo_loca
     workflow_path.parent.mkdir(parents=True, exist_ok=True)
     workflow_path.write_text("BASELINE = True\n", encoding="utf-8")
 
-    canonical_relative_path = "autoloop/workflows/release_candidate_to_go_no_go/workflow.py"
+    canonical_relative_path = "botlane/workflows/release_candidate_to_go_no_go/workflow.py"
     baseline_manifest = {
         "surface_kind": "baseline",
         "selected_workflow_name": "release_candidate_to_go_no_go",
         "package_name": "release_candidate_to_go_no_go",
-        "package_root_relative_path": "autoloop/workflows/release_candidate_to_go_no_go",
+        "package_root_relative_path": "botlane/workflows/release_candidate_to_go_no_go",
         "repo_root": str(tmp_path),
         **materialize_baseline_surface(
             workflow_folder=ctx.workflow_folder,
@@ -505,7 +505,7 @@ def test_candidate_surface_helpers_allow_canonical_relative_paths_with_repo_loca
         expected_surface_kind="baseline",
         expected_boundary={
             "package_name": "release_candidate_to_go_no_go",
-            "package_root_relative_path": "autoloop/workflows/release_candidate_to_go_no_go",
+            "package_root_relative_path": "botlane/workflows/release_candidate_to_go_no_go",
         },
         boundary_field_map={
             "package_name": "package_name",
@@ -528,7 +528,7 @@ def test_candidate_surface_helpers_allow_canonical_relative_paths_with_repo_loca
     workflow_path.write_text("BASELINE = False\n", encoding="utf-8")
     with pytest.raises(
         ValueError,
-        match="authoritative workflow drift: autoloop/workflows/release_candidate_to_go_no_go/workflow.py",
+        match="authoritative workflow drift: botlane/workflows/release_candidate_to_go_no_go/workflow.py",
     ):
         validate_authoritative_surface_sources_unchanged(
             baseline_manifest,
@@ -588,7 +588,7 @@ def test_candidate_surface_helpers_validate_overlay_normalizes_pytest_and_falls_
     tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    workflow_folder = tmp_path / ".autoloop" / "tasks" / "task-1" / "wf_demo"
+    workflow_folder = tmp_path / ".botlane" / "tasks" / "task-1" / "wf_demo"
     workflow_folder.mkdir(parents=True, exist_ok=True)
     candidate_root = workflow_folder / "candidate_surface"
     candidate_file = candidate_root / "workflows" / "demo_workflow" / "workflow.py"
@@ -597,11 +597,12 @@ def test_candidate_surface_helpers_validate_overlay_normalizes_pytest_and_falls_
 
     repo_root = tmp_path / "phase_only_workspace"
     repo_root.mkdir(parents=True, exist_ok=True)
-    installed_root = tmp_path / "installed_autoloop_v3"
-    (installed_root / "core").mkdir(parents=True, exist_ok=True)
-    (installed_root / "runtime").mkdir(parents=True, exist_ok=True)
+    installed_root = tmp_path / "installed_botlane"
+    package_root = installed_root / "botlane"
+    (package_root / "core").mkdir(parents=True, exist_ok=True)
+    (package_root / "runtime").mkdir(parents=True, exist_ok=True)
     (installed_root / "tests").mkdir(parents=True, exist_ok=True)
-    (installed_root / "__init__.py").write_text("__all__ = []\n", encoding="utf-8")
+    (package_root / "__init__.py").write_text("__all__ = []\n", encoding="utf-8")
     (installed_root / "tests" / "conftest.py").write_text("import pytest\n", encoding="utf-8")
 
     observed: dict[str, Any] = {}
@@ -619,7 +620,7 @@ def test_candidate_surface_helpers_validate_overlay_normalizes_pytest_and_falls_
         observed["candidate_exists"] = (kwargs["cwd"] / "workflows" / "demo_workflow" / "workflow.py").is_file()
         return SimpleNamespace(returncode=0, stdout="", stderr="")
 
-    monkeypatch.setitem(sys.modules, "autoloop_v3", SimpleNamespace(__file__=str(installed_root / "__init__.py")))
+    monkeypatch.setitem(sys.modules, "botlane", SimpleNamespace(__file__=str(package_root / "__init__.py")))
     monkeypatch.setattr(candidate_surface_helpers, "resolve_workflow_reference", _record_resolve)
     monkeypatch.setattr(candidate_surface_helpers, "compile_workflow", _record_compile)
     monkeypatch.setattr(candidate_surface_helpers.subprocess, "run", _record_run)
@@ -703,7 +704,7 @@ def test_candidate_surface_helpers_reject_non_repo_relative_overlay_paths(
     monkeypatch: pytest.MonkeyPatch,
     raw_relative_path: str,
 ) -> None:
-    workflow_folder = tmp_path / ".autoloop" / "tasks" / "task-1" / "wf_demo"
+    workflow_folder = tmp_path / ".botlane" / "tasks" / "task-1" / "wf_demo"
     workflow_folder.mkdir(parents=True, exist_ok=True)
     candidate_root = workflow_folder / "candidate_surface"
     outside_path = workflow_folder / "outside.py"
@@ -714,14 +715,15 @@ def test_candidate_surface_helpers_reject_non_repo_relative_overlay_paths(
 
     repo_root = tmp_path / "phase_only_workspace"
     repo_root.mkdir(parents=True, exist_ok=True)
-    installed_root = tmp_path / "installed_autoloop_v3"
-    (installed_root / "core").mkdir(parents=True, exist_ok=True)
-    (installed_root / "runtime").mkdir(parents=True, exist_ok=True)
+    installed_root = tmp_path / "installed_botlane"
+    package_root = installed_root / "botlane"
+    (package_root / "core").mkdir(parents=True, exist_ok=True)
+    (package_root / "runtime").mkdir(parents=True, exist_ok=True)
     (installed_root / "tests").mkdir(parents=True, exist_ok=True)
-    (installed_root / "__init__.py").write_text("__all__ = []\n", encoding="utf-8")
+    (package_root / "__init__.py").write_text("__all__ = []\n", encoding="utf-8")
     (installed_root / "tests" / "conftest.py").write_text("import pytest\n", encoding="utf-8")
 
-    monkeypatch.setitem(sys.modules, "autoloop_v3", SimpleNamespace(__file__=str(installed_root / "__init__.py")))
+    monkeypatch.setitem(sys.modules, "botlane", SimpleNamespace(__file__=str(package_root / "__init__.py")))
 
     with pytest.raises(
         ValueError,

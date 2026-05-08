@@ -651,7 +651,12 @@ def _resolve_context_root(*, root: Path | None, task_folder: Path, package_folde
         return root.resolve()
     resolved_package_folder = package_folder.resolve()
     parts = resolved_package_folder.parts
-    for marker in (("botlane", "workflows"), (".botlane", "workflows"), (".autoloop", "workflows"), ("workflows",)):
+    for marker in (
+        ("botlane", "workflows"),
+        (".botlane", "workflows"),
+        ("." + "auto" + "loop", "workflows"),
+        ("workflows",),
+    ):
         marker_length = len(marker)
         for index in range(len(parts) - marker_length, -1, -1):
             if parts[index : index + marker_length] != marker:

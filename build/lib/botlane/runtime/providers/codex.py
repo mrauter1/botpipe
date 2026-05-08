@@ -490,7 +490,7 @@ def _write_response_schema_file(turn: RenderedProviderTurn) -> tuple[Path, Path 
         mode="w",
         encoding="utf-8",
         suffix=".json",
-        prefix="autoloop-codex-schema-",
+        prefix="botlane-codex-schema-",
         delete=False,
     )
     try:

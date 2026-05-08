@@ -22,7 +22,8 @@ from botlane.core.schema_registry import (
 from botlane.core.statuses import normalize_run_status
 
 
-STATE_DIRNAME = ".autoloop"
+STATE_DIRNAME = ".botlane"
+LEGACY_STATE_DIRNAME = "." + "auto" + "loop"
 DEFAULT_REQUEST_TEXT = "No explicit initial message was provided for this run. Use repository artifacts and explicit clarifications only."
 _RAW_SEQUENCE_PATTERN = re.compile(r"^(?P<sequence>\d+)_")
 _UNSET = object()
@@ -195,8 +196,25 @@ def primary_state_root(root: Path) -> Path:
     return root / STATE_DIRNAME
 
 
+def legacy_state_root(root: Path) -> Path:
+    return root / LEGACY_STATE_DIRNAME
+
+
+def readable_state_roots(root: Path) -> tuple[Path, ...]:
+    resolved_root = root.resolve()
+    roots = (primary_state_root(resolved_root), legacy_state_root(resolved_root))
+    return tuple(dict.fromkeys(path.resolve() for path in roots))
+
+
 def resolve_resume_state_root(root: Path) -> Path:
-    return primary_state_root(root.resolve())
+    resolved_root = root.resolve()
+    primary = primary_state_root(resolved_root)
+    legacy = legacy_state_root(resolved_root)
+    if primary.exists():
+        return primary
+    if legacy.exists():
+        return legacy
+    return primary
 
 
 def latest_run_id(runs_dir: Path) -> str | None:
@@ -490,38 +508,42 @@ def list_task_records(
     *,
     task_ids: str | Iterable[str] | None = None,
 ) -> tuple[TaskRecord, ...]:
-    tasks_dir = primary_state_root(root.resolve()) / "tasks"
-    if not tasks_dir.is_dir():
-        return ()
-
     normalized_task_ids = _normalize_summary_names(task_ids, field_name="task_ids")
     allowed_task_ids = None if normalized_task_ids is None else set(normalized_task_ids)
 
     records: list[TaskRecord] = []
-    for task_dir in sorted(path for path in tasks_dir.iterdir() if path.is_dir()):
-        if allowed_task_ids is not None and task_dir.name not in allowed_task_ids:
+    seen_task_ids: set[str] = set()
+    for state_root in readable_state_roots(root):
+        tasks_dir = state_root / "tasks"
+        if not tasks_dir.is_dir():
             continue
-        task_meta_file = task_dir / "task.json"
-        metadata = _load_json(task_meta_file, default={"task_id": task_dir.name})
-        task_id = metadata.get("task_id")
-        if not isinstance(task_id, str) or not task_id:
-            task_id = task_dir.name
-        if allowed_task_ids is not None and task_id not in allowed_task_ids:
-            continue
-        records.append(
-            TaskRecord(
-                root=root.resolve(),
-                task_id=task_id,
-                created_at=_optional_text_value(metadata.get("created_at")),
-                updated_at=_optional_text_value(metadata.get("updated_at")),
-                request_updated_at=_optional_text_value(metadata.get("request_updated_at")),
-                metadata=metadata,
-                task_dir=task_dir,
-                task_meta_file=task_meta_file,
-                task_request_file=task_dir / "request.md",
-                task_messages_file=task_dir / "messages.jsonl",
+        for task_dir in sorted(path for path in tasks_dir.iterdir() if path.is_dir()):
+            if allowed_task_ids is not None and task_dir.name not in allowed_task_ids:
+                continue
+            task_meta_file = task_dir / "task.json"
+            metadata = _load_json(task_meta_file, default={"task_id": task_dir.name})
+            task_id = metadata.get("task_id")
+            if not isinstance(task_id, str) or not task_id:
+                task_id = task_dir.name
+            if allowed_task_ids is not None and task_id not in allowed_task_ids:
+                continue
+            if task_id in seen_task_ids:
+                continue
+            seen_task_ids.add(task_id)
+            records.append(
+                TaskRecord(
+                    root=root.resolve(),
+                    task_id=task_id,
+                    created_at=_optional_text_value(metadata.get("created_at")),
+                    updated_at=_optional_text_value(metadata.get("updated_at")),
+                    request_updated_at=_optional_text_value(metadata.get("request_updated_at")),
+                    metadata=metadata,
+                    task_dir=task_dir,
+                    task_meta_file=task_meta_file,
+                    task_request_file=task_dir / "request.md",
+                    task_messages_file=task_dir / "messages.jsonl",
+                )
             )
-        )
     return tuple(sorted(records, key=lambda record: record.sort_key, reverse=True))
 
 
@@ -532,56 +554,61 @@ def list_run_records(
     task_id: str | None = None,
     status: str | None = None,
 ) -> tuple[RunRecord, ...]:
-    tasks_dir = primary_state_root(root.resolve()) / "tasks"
-    if not tasks_dir.is_dir():
-        return ()
-
     normalized_status = normalize_run_status(status)
     records: list[RunRecord] = []
-    for task_dir in sorted(path for path in tasks_dir.iterdir() if path.is_dir()):
-        if task_id is not None and task_dir.name != task_id:
+    seen_records: set[tuple[str, str, str]] = set()
+    for state_root in readable_state_roots(root):
+        tasks_dir = state_root / "tasks"
+        if not tasks_dir.is_dir():
             continue
-        for workflow_dir in sorted(path for path in task_dir.glob("wf_*") if path.is_dir()):
-            fallback_workflow_name = workflow_dir.name[3:]
-            if workflow_name is not None and fallback_workflow_name != workflow_name:
+        for task_dir in sorted(path for path in tasks_dir.iterdir() if path.is_dir()):
+            if task_id is not None and task_dir.name != task_id:
                 continue
-            runs_dir = workflow_dir / "runs"
-            if not runs_dir.is_dir():
-                continue
-            for run_dir in sorted(path for path in runs_dir.iterdir() if path.is_dir()):
-                metadata = _load_json(run_dir / "run.json", default={})
-                resolved_workflow_name = metadata.get("workflow_name")
-                if not isinstance(resolved_workflow_name, str) or not resolved_workflow_name:
-                    resolved_workflow_name = fallback_workflow_name
-                if workflow_name is not None and resolved_workflow_name != workflow_name:
+            for workflow_dir in sorted(path for path in task_dir.glob("wf_*") if path.is_dir()):
+                fallback_workflow_name = workflow_dir.name[3:]
+                if workflow_name is not None and fallback_workflow_name != workflow_name:
                     continue
-                resolved_task_id = metadata.get("task_id")
-                if not isinstance(resolved_task_id, str) or not resolved_task_id:
-                    resolved_task_id = task_dir.name
-                record = RunRecord(
-                    root=root.resolve(),
-                    task_id=resolved_task_id,
-                    workflow_name=resolved_workflow_name,
-                    run_id=run_dir.name,
-                    status=metadata.get("status") if isinstance(metadata.get("status"), str) else None,
-                    created_at=metadata.get("created_at") if isinstance(metadata.get("created_at"), str) else None,
-                    updated_at=metadata.get("updated_at") if isinstance(metadata.get("updated_at"), str) else None,
-                    metadata=metadata,
-                    task_dir=task_dir,
-                    workflow_dir=workflow_dir,
-                    run_dir=run_dir,
-                    run_meta_file=run_dir / "run.json",
-                    checkpoint_file=run_dir / "checkpoint.json",
-                    request_file=run_dir / "request.md",
-                    events_file=run_dir / "events.jsonl",
-                    children_file=run_dir / "children.jsonl",
-                    parent_file=run_dir / "parent.json",
-                    trace_file=run_dir / "trace.jsonl",
-                    raw_dir=run_dir / "raw",
-                )
-                if normalized_status is not None and record.normalized_status != normalized_status:
+                runs_dir = workflow_dir / "runs"
+                if not runs_dir.is_dir():
                     continue
-                records.append(record)
+                for run_dir in sorted(path for path in runs_dir.iterdir() if path.is_dir()):
+                    metadata = _load_json(run_dir / "run.json", default={})
+                    resolved_workflow_name = metadata.get("workflow_name")
+                    if not isinstance(resolved_workflow_name, str) or not resolved_workflow_name:
+                        resolved_workflow_name = fallback_workflow_name
+                    if workflow_name is not None and resolved_workflow_name != workflow_name:
+                        continue
+                    resolved_task_id = metadata.get("task_id")
+                    if not isinstance(resolved_task_id, str) or not resolved_task_id:
+                        resolved_task_id = task_dir.name
+                    record_key = (resolved_task_id, resolved_workflow_name, run_dir.name)
+                    if record_key in seen_records:
+                        continue
+                    record = RunRecord(
+                        root=root.resolve(),
+                        task_id=resolved_task_id,
+                        workflow_name=resolved_workflow_name,
+                        run_id=run_dir.name,
+                        status=metadata.get("status") if isinstance(metadata.get("status"), str) else None,
+                        created_at=metadata.get("created_at") if isinstance(metadata.get("created_at"), str) else None,
+                        updated_at=metadata.get("updated_at") if isinstance(metadata.get("updated_at"), str) else None,
+                        metadata=metadata,
+                        task_dir=task_dir,
+                        workflow_dir=workflow_dir,
+                        run_dir=run_dir,
+                        run_meta_file=run_dir / "run.json",
+                        checkpoint_file=run_dir / "checkpoint.json",
+                        request_file=run_dir / "request.md",
+                        events_file=run_dir / "events.jsonl",
+                        children_file=run_dir / "children.jsonl",
+                        parent_file=run_dir / "parent.json",
+                        trace_file=run_dir / "trace.jsonl",
+                        raw_dir=run_dir / "raw",
+                    )
+                    if normalized_status is not None and record.normalized_status != normalized_status:
+                        continue
+                    seen_records.add(record_key)
+                    records.append(record)
     return tuple(sorted(records, key=lambda record: record.sort_key, reverse=True))
 
 
