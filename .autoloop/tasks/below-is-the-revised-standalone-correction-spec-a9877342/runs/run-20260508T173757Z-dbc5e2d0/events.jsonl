@@ -36,3 +36,7 @@
 {"ts": "2026-05-08T18:01:26.368185+00:00", "run_id": "run-20260508T173757Z-dbc5e2d0", "seq": 36, "event_type": "phase_finished", "pair": "test", "phase": "producer", "cycle": 1, "attempt": 1, "empty_output": false, "phase_id": "public-surface-cleanup"}
 {"ts": "2026-05-08T18:02:04.953751+00:00", "run_id": "run-20260508T173757Z-dbc5e2d0", "seq": 37, "event_type": "phase_finished", "pair": "test", "phase": "verifier", "cycle": 1, "attempt": 1, "empty_output": false, "phase_id": "public-surface-cleanup"}
 {"ts": "2026-05-08T18:02:05.041694+00:00", "run_id": "run-20260508T173757Z-dbc5e2d0", "seq": 38, "event_type": "pair_completed", "pair": "test", "cycle": 1, "attempt": 1, "phase_id": "public-surface-cleanup"}
+{"ts": "2026-05-08T18:02:05.176027+00:00", "run_id": "run-20260508T173757Z-dbc5e2d0", "seq": 39, "event_type": "phase_completed", "pair": "test", "phase_id": "public-surface-cleanup", "phase_mode": "single"}
+{"ts": "2026-05-08T18:02:05.183265+00:00", "run_id": "run-20260508T173757Z-dbc5e2d0", "seq": 40, "event_type": "phase_started", "phase_id": "runtime-cli-workspace-flag", "phase_mode": "single"}
+{"ts": "2026-05-08T18:02:05.185239+00:00", "run_id": "run-20260508T173757Z-dbc5e2d0", "seq": 41, "event_type": "pair_started", "pair": "implement", "phase_id": "runtime-cli-workspace-flag"}
+{"ts": "2026-05-08T18:02:05.185404+00:00", "run_id": "run-20260508T173757Z-dbc5e2d0", "seq": 42, "event_type": "cycle_started", "pair": "implement", "cycle": 1, "attempt": 1, "phase_id": "runtime-cli-workspace-flag"}
