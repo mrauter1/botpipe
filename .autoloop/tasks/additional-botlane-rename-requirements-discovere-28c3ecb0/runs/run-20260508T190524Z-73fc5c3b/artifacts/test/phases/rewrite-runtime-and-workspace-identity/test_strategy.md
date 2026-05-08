@@ -12,6 +12,8 @@
 - P2-AC1 CLI/runtime identity:
   `tests/runtime/test_package_cli.py`
   Covers Botlane parser `prog`, top-level help branding, run-command workspace/package help text, and absence of `autoloop` in surfaced CLI help.
+  `tests/runtime/test_runtime_cli_metadata_integration.py`
+  Covers integration-level CLI help text for workflow discovery commands and verifies `.botlane/workflows/` is the advertised workspace root in user-facing help.
 
 - P2-AC2 workspace/generated identity:
   `tests/runtime/test_workflow_catalog_roots.py`

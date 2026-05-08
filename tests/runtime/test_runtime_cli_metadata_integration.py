@@ -386,7 +386,7 @@ def test_cli_workflows_show_emits_package_source_metadata(
     assert payload["shadowed_by"] is None
 
 
-def test_cli_init_workflow_scaffolds_under_dot_autoloop_workflows(tmp_path: Path, capsys) -> None:
+def test_cli_init_workflow_scaffolds_under_dot_botlane_workflows(tmp_path: Path, capsys) -> None:
     exit_code = cli.main(["init", "workflow", "demo", "--workspace", str(tmp_path)])
     payload = json.loads(capsys.readouterr().out)
 
@@ -407,7 +407,7 @@ def test_cli_init_workflow_scaffolds_under_dot_autoloop_workflows(tmp_path: Path
     assert resolved.workflow_module is None
 
 
-def test_cli_workflows_list_help_describes_package_and_dot_autoloop_roots(capsys) -> None:
+def test_cli_workflows_list_help_describes_package_and_dot_botlane_roots(capsys) -> None:
     with pytest.raises(SystemExit) as excinfo:
         cli.main(["workflows", "list", "--help"])
 
@@ -418,6 +418,7 @@ def test_cli_workflows_list_help_describes_package_and_dot_autoloop_roots(capsys
     assert "--root" not in help_text
     assert "ROOT" not in help_text
     assert "workspace directory" in help_text.lower()
-    assert "package workflows are loaded" in help_text.lower()
-    assert "workspace workflow directory" in help_text
-    assert ".botlane/workflows/" not in help_text
+    assert "installed botlane package" in help_text
+    assert "workspace workflows are loaded" in help_text
+    assert "`.botlane/workflows/`" in help_text
+    assert "autoloop" not in help_text
