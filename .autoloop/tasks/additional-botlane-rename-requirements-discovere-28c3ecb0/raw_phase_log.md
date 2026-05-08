@@ -1904,3 +1904,67 @@ phase_mode=single
 phase_ids=editable-install-refresh-and-proof
 explicit=True
 current_phase_index=0
+
+
+---
+run_id=run-20260508T205237Z-432ec7b1 | entry=session_turn | pair=implement | phase=producer | cycle=1 | attempt=1 | thread_id=019e0960-bc32-7fd2-be36-5118582d54a2
+---
+provider=codex
+mode=start
+template=/home/rauter/.local/share/pipx/venvs/autoloop/lib/python3.12/site-packages/autoloop/templates/implement_producer.md
+session_id=019e0960-bc32-7fd2-be36-5118582d54a2
+
+
+---
+run_id=run-20260508T205237Z-432ec7b1 | entry=phase_output | pair=implement | phase=producer | process=codex-agent | cycle=1 | attempt=1 | thread_id=019e0960-bc32-7fd2-be36-5118582d54a2
+---
+I’m treating this as a packaging/install-state repair in the shared repo `.venv`, plus durable validation that proves the editable install is Botlane-branded in-place. I’ll read the run artifacts and inspect the current packaging/CLI wiring before making any edits or reinstalling anything.
+
+The repo metadata already looks Botlane-branded, so I’m narrowing on two surfaces: how the shared `.venv` gets refreshed, and where tests currently stop at wheel-only proof. Next I’m reading the packaging smoke test and checking the live `.venv` state directly.
+
+The active environment is exactly the failure mode from the request: stale installed `autoloop-v3-surface` in `.venv`, while the repo root only has Botlane egg-info from source metadata. I’m checking whether there’s any existing maintained install-refresh path or editable-install test I should reuse before I patch the smoke coverage.
+
+I have enough context to implement this cleanly.
+
+Plan:
+1. Extend [tests/runtime/test_wheel_packaging_smoke.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/tests/runtime/test_wheel_packaging_smoke.py) with a focused repo-local proof that inspects `REPO_ROOT/.venv` directly for installed distribution identity, script presence/absence, and console entry-point metadata.
+2. Refresh the shared `.venv` by removing the stale editable install and reinstalling the current repo in editable mode, then verify the old dist/script residue is actually gone.
+3. Update the phase notes and decisions artifact with the non-obvious validation choice, then rerun focused checks against both the shared `.venv` and the existing wheel smoke path.
+
+I’m editing the packaging smoke test next. The change will keep wheel validation intact and add a separate repo-local `.venv` proof that uses the shared environment directly, while skipping cleanly if that local venv is absent in another context.
+
+The test coverage is in place. I’m refreshing the shared `.venv` now with a direct uninstall/reinstall path so the proof will be exercising the same environment the request called out, not a rebuilt scratch venv.
+
+The stale editable uninstall completed cleanly; I’m waiting for the editable reinstall to finish so I can verify that the old script and dist metadata were actually replaced, not just overlaid.
+
+I found a validation hole worth fixing while staying in scope: these subprocess-based packaging checks were being launched from the repo root, which lets local source metadata shadow the installed distribution. I’m tightening both smoke paths to run from an isolated working directory so they prove the installed environment rather than the checkout.
+
+The proof now runs from an isolated working directory in both paths. That closes the main false-positive risk for packaging tests before I run them against the repaired environment.
+
+The installed metadata now resolves from `.venv/site-packages` when isolated, which is the proof surface we need. I’m running the focused packaging smoke file under the shared repo `.venv` now, then I’ll capture the final shell-state evidence.
+
+The smoke file is still running. That likely means the wheel-build/install path is in progress rather than stalled, so I’m letting it finish before I summarize the verification set.
+
+The remaining work is artifact bookkeeping. I’m recording the one non-obvious validation decision and updating the phase notes with the exact scope, files, and verification evidence from this turn.
+
+The code and run artifacts are updated. I’m doing one last pass over the diffs and status to make sure the touched scope stayed narrow and I’m not accidentally attributing unrelated dirty files to this phase.
+
+Scope considered
+
+Phase-local packaging/install state only: the shared repo `.venv`, [tests/runtime/test_wheel_packaging_smoke.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/tests/runtime/test_wheel_packaging_smoke.py), and the required run artifacts for this phase.
+
+What I analyzed
+
+I checked the run plan and decisions, inspected [pyproject.toml](/home/rauter/autoloop_v3_bkp/autoloop_v3/pyproject.toml), read the existing wheel smoke test, and verified the live failure state in `.venv`: `autoloop-v3-surface` was installed, `.venv/bin/autoloop` existed, `.venv/bin/botlane` was missing, and the old dist-info entry point still registered `autoloop`.
+
+What I changed
+
+I refreshed the shared env with `./.venv/bin/pip uninstall -y autoloop-v3-surface` and `./.venv/bin/pip install -e .`, which repaired the active editable install to `botlane-v3-surface`. I also extended [tests/runtime/test_wheel_packaging_smoke.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/tests/runtime/test_wheel_packaging_smoke.py) with a repo-local editable-install proof and tightened both packaging smoke paths to run subprocess checks from an isolated working directory so they validate the installed environment instead of repo-root source metadata. I updated the phase [implementation_notes.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/additional-botlane-rename-requirements-discovere-28c3ecb0/runs/run-20260508T205237Z-432ec7b1/artifacts/implement/phases/editable-install-refresh-and-proof/implementation_notes.md) and appended the non-obvious validation decision in [decisions.txt](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/additional-botlane-rename-requirements-discovere-28c3ecb0/runs/run-20260508T205237Z-432ec7b1/decisions.txt).
+
+Key findings / decisions
+
+The important validation hole was that subprocess-based packaging checks launched from the repo root can see local `egg-info` and source packages, which weakens wheel/editable install proof. After the fix, the active `.venv` now reports `botlane-v3-surface`, `pip show autoloop-v3-surface` fails, `.venv/bin/botlane` exists, `.venv/bin/autoloop` is gone, and `.venv/lib/python3.12/site-packages/botlane_v3_surface-0.0.0.dist-info/entry_points.txt` contains only `botlane = botlane.runtime.cli:main`. Focused verification passed with `./.venv/bin/pytest -q tests/runtime/test_wheel_packaging_smoke.py` (`2 passed`).
+
+Open issues / next step
+
+No blocking issues in this phase scope. I did not run the broader test suite beyond the focused packaging smoke file.
