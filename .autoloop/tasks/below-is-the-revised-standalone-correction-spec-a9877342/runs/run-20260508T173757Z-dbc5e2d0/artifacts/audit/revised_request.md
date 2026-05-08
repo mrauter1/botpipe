@@ -1,1 +1,1 @@
-# revised_request.md
+No follow-up implementation is required. The final codebase satisfies the active correction spec for policy payload kinds, compiler/topology fingerprinting, public SDK/simple wording and naming, runtime CLI `--workspace`, export cleanup, and the requested regression coverage.

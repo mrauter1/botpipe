@@ -957,3 +957,73 @@ Open issues / next step
 <loop-control>
 {"schema":"docloop.loop_control/v1","kind":"promise","promise":"COMPLETE"}
 </loop-control>
+
+
+---
+run_id=run-20260508T173757Z-dbc5e2d0 | entry=session_turn | pair=audit | phase=producer | cycle=1 | attempt=1 | thread_id=019e08cc-05af-7133-9ead-db8dd776ddea
+---
+provider=codex
+mode=start
+template=/home/rauter/.local/share/pipx/venvs/autoloop/lib/python3.12/site-packages/autoloop/templates/audit_producer.md
+session_id=019e08cc-05af-7133-9ead-db8dd776ddea
+
+
+---
+run_id=run-20260508T173757Z-dbc5e2d0 | entry=phase_output | pair=audit | phase=producer | process=codex-agent | cycle=1 | attempt=1 | thread_id=019e08cc-05af-7133-9ead-db8dd776ddea
+---
+I’m auditing the completed run against the original request, the raw clarification log, the recorded decisions, and the final code/tests. I’ll first collect the authoritative artifacts and inspect the policy/SDK/CLI surfaces that the spec targeted.
+
+The run log confirms there were no later user clarifications overriding the correction spec, but there were phase-local deferrals. I’m now checking whether those deferrals are actually justified by the final code and test state, especially around the public-surface and CLI requirements that the original request treated as task-level acceptance criteria.
+
+I’ve narrowed the audit to the spec-owned surfaces and their proof tests: policy serialization, compiler hashing, public normalization errors, SDK/simple public names, `__all__`, and runtime CLI flag behavior. Next I’m reading the final implementations and the exact tests that claim coverage, then I’ll decide whether any remaining differences are true gaps or just phase-local bookkeeping.
+
+I have the implementation/test artifacts now. One important detail: the final run did execute the focused runtime CLI pytest suite from `./.venv/bin/pytest`, but the unit suites for policy and SDK/simple only have syntax checks plus planned coverage, not a recorded successful run in the artifacts. I’m verifying whether that leaves any material acceptance gaps or whether the existing code/tests are still sufficient.
+
+The artifact trail shows the environment mismatch only affected the earlier producer/test turns that used the system interpreter. Since the runtime CLI phase later used the repo virtualenv successfully, I’m validating the missing unit surfaces the same way now so the audit can distinguish “artifact bookkeeping gap” from an actual product gap.
+
+The repo virtualenv works, and the previously unrun unit suites are in flight now. I’m also collecting the final diff against the spec-owned files so the audit cites exact implemented changes rather than relying on phase notes alone.
+
+I’ve finished the code and test audit. The important outcome is that the originally requested behavior is present across all three planned phases, and the previously “unrun” unit coverage now passes in the repo virtualenv as well. I’m writing the audit artifacts now with a no-follow-up conclusion unless I find a last-minute contradiction in the existing audit files.
+
+The audit artifacts are written. I’m doing one final readback to verify the JSON and the run-local conclusions before I emit the required loop-control block.
+
+Scope considered
+
+The original request in `request.md`, the authoritative clarification/phase ledger in `raw_phase_log.md`, the task-global decisions in `decisions.txt`, the plan/implement/test artifacts for all three phases, the final code in the spec-owned surfaces, the touched docs/examples, and the relevant unit/runtime tests.
+
+What I analyzed
+
+I compared the requested behavior against the final implementations in `autoloop/policy.py`, `autoloop/core/compiler.py`, `autoloop/sdk.py`, `autoloop/simple.py`, `autoloop/core/steps.py`, `autoloop/core/discovery.py`, `autoloop/runtime/cli.py`, and `docs/authoring.md`. I also checked the proof tests in `tests/unit/test_policy.py`, `tests/unit/test_sdk_facade.py`, `tests/unit/test_simple_surface.py`, `tests/unit/test_simple_policy.py`, `tests/runtime/test_package_cli.py`, and `tests/runtime/test_runtime_cli_metadata_integration.py`.
+
+What I changed
+
+I wrote the audit artifacts:
+- `.autoloop/tasks/below-is-the-revised-standalone-correction-spec-a9877342/runs/run-20260508T173757Z-dbc5e2d0/artifacts/audit/gap_report.md`
+- `.autoloop/tasks/below-is-the-revised-standalone-correction-spec-a9877342/runs/run-20260508T173757Z-dbc5e2d0/artifacts/audit/revised_request.md`
+- `.autoloop/tasks/below-is-the-revised-standalone-correction-spec-a9877342/runs/run-20260508T173757Z-dbc5e2d0/artifacts/audit/audit_result.json`
+
+I also ran the previously unverified unit coverage in the repo virtualenv:
+- `./.venv/bin/pytest tests/unit/test_policy.py tests/unit/test_sdk_facade.py tests/unit/test_simple_surface.py tests/unit/test_simple_policy.py`
+- Result: `167 passed in 3.53s`
+
+Key findings / decisions
+
+No material unresolved gaps remain. The final codebase matches the active correction spec:
+- public `Policy(...)` payloads use `policy_layer`
+- concrete core payloads use `provider_policy` / `provider_policy_override`
+- compiler/topology fingerprinting uses the unified payload path
+- public SDK/simple/core-normalization wording no longer leaks `ProviderPolicyOverride`
+- strict public SDK naming is preserved for `workspace`, `input`, and `params`
+- runtime CLI requires `--workspace` and rejects `--root`
+- required public export cleanup is present
+- targeted unit and runtime CLI coverage exists and passes
+
+The only notable discrepancy was process-level, not product-level: some earlier artifacts reported blocked unit-test execution under the system interpreter, but the repo virtualenv was available and the missing unit suites pass there.
+
+Open issues / next step
+
+No follow-up implementation run is required. Audit artifacts record `material_gaps_found: false`.
+
+<loop-control>
+{"schema":"docloop.loop_control/v1","kind":"promise","promise":"INCOMPLETE"}
+</loop-control>
