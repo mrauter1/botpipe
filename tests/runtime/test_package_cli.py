@@ -210,6 +210,22 @@ def test_cli_help_exposes_package_commands_only() -> None:
         assert forbidden not in help_text
 
 
+def test_cli_help_uses_botlane_identity(capsys) -> None:
+    parser = cli.build_arg_parser()
+    assert parser.prog == "botlane"
+    assert "filesystem Botlane runtime" in parser.format_help()
+    assert "autoloop" not in parser.format_help()
+
+    with pytest.raises(SystemExit) as excinfo:
+        parser.parse_args(["run", "--help"])
+
+    assert excinfo.value.code == 0
+    help_text = capsys.readouterr().out
+    assert "installed botlane package" in help_text
+    assert "`.botlane/workflows/`" in help_text
+    assert "autoloop" not in help_text
+
+
 def test_cli_mutating_command_help_exposes_provider_and_hides_provider_factory(capsys) -> None:
     for command in ("run", "resume", "answer"):
         with pytest.raises(SystemExit) as excinfo:

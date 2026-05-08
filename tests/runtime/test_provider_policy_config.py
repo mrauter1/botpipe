@@ -110,6 +110,39 @@ def test_resolve_runtime_config_accepts_legacy_workspace_filename_when_no_botlan
     assert resolved.runtime.max_steps == 7
 
 
+def test_resolve_runtime_config_accepts_legacy_global_config_dir_when_botlane_dir_is_unconfigured(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    legacy_global_config_dir = tmp_path / "legacy-global-config"
+    legacy_global_config_dir.mkdir()
+    (legacy_global_config_dir / "autoloop.yaml").write_text("runtime:\n  max_steps: 11\n", encoding="utf-8")
+    monkeypatch.setattr(runtime_config, "user_config_dir", lambda: tmp_path / "missing-user-config")
+    monkeypatch.setattr(runtime_config, "legacy_user_config_dir", lambda: legacy_global_config_dir)
+
+    resolved = resolve_runtime_config(tmp_path, _runtime_args())
+
+    assert resolved.runtime.max_steps == 11
+
+
+def test_resolve_runtime_config_prefers_botlane_global_config_dir_over_legacy_global_config_dir(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    global_config_dir = tmp_path / "global-config"
+    legacy_global_config_dir = tmp_path / "legacy-global-config"
+    global_config_dir.mkdir()
+    legacy_global_config_dir.mkdir()
+    (global_config_dir / "botlane.yaml").write_text("runtime:\n  max_steps: 5\n", encoding="utf-8")
+    (legacy_global_config_dir / "autoloop.yaml").write_text("runtime:\n  max_steps: 11\n", encoding="utf-8")
+    monkeypatch.setattr(runtime_config, "user_config_dir", lambda: global_config_dir)
+    monkeypatch.setattr(runtime_config, "legacy_user_config_dir", lambda: legacy_global_config_dir)
+
+    resolved = resolve_runtime_config(tmp_path, _runtime_args())
+
+    assert resolved.runtime.max_steps == 5
+
+
 def test_resolve_runtime_config_prefers_botlane_filename_over_legacy_workspace_filename(
     tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,

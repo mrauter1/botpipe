@@ -741,3 +741,46 @@ The next step is still to rerun the focused runtime/SDK tests in an environment 
 <loop-control>
 {"schema":"docloop.loop_control/v1","kind":"promise","promise":"COMPLETE"}
 </loop-control>
+
+
+---
+run_id=run-20260508T190524Z-73fc5c3b | entry=session_turn | pair=test | phase=producer | cycle=1 | attempt=1 | thread_id=019e0916-8e98-7b41-a2e9-9a6a5f5047d8
+---
+provider=codex
+mode=resume
+template=/home/rauter/.local/share/pipx/venvs/autoloop/lib/python3.12/site-packages/autoloop/templates/test_producer.md
+session_id=019e0916-8e98-7b41-a2e9-9a6a5f5047d8
+
+
+---
+run_id=run-20260508T190524Z-73fc5c3b | entry=phase_output | pair=test | phase=producer | process=codex-agent | cycle=1 | attempt=1 | thread_id=019e0916-8e98-7b41-a2e9-9a6a5f5047d8
+---
+I’m reviewing the existing runtime/workspace tests and the active test-phase artifacts to identify the remaining coverage gaps for this Botlane rename phase. Then I’ll add only the focused tests and artifact updates that close those gaps.
+
+The runtime tests are concentrated differently than I expected, so I’m locating the existing coverage points for config, CLI, and SDK behavior before editing anything.
+
+I’ve confirmed the phase already has good coverage for workspace-root precedence, legacy run reading, and SDK legacy sentinels. The remaining useful gaps are CLI identity assertions and legacy global-config directory compatibility, so I’m targeting those next.
+
+I’ve narrowed the remaining coverage work to two concrete gaps: Botlane CLI branding in help text, and legacy global config-directory compatibility. I’m adding those tests now, then I’ll update the phase test strategy and feedback artifacts.
+
+The focused tests are in place. I’m validating them now with a targeted `pytest` run if the environment supports it, and I’ll fall back to a compile check if runtime dependencies are still missing.
+
+Scope considered
+
+Active phase only: test coverage for runtime and workspace identity, with focus on Botlane CLI branding, Botlane-vs-legacy workspace precedence, and legacy-read compatibility for config and SDK state.
+
+What I analyzed
+
+I reviewed the existing runtime tests in `tests/runtime/test_package_cli.py`, `tests/runtime/test_provider_policy_config.py`, `tests/runtime/test_workflow_catalog_roots.py`, `tests/runtime/test_workspace_and_context.py`, and the SDK cleanup coverage in `tests/unit/test_sdk_facade.py`. I also checked the active phase artifacts to map each acceptance criterion to concrete tests.
+
+What I changed
+
+I added focused CLI identity coverage in [tests/runtime/test_package_cli.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/tests/runtime/test_package_cli.py) to assert `prog="botlane"`, Botlane-branded help text, Botlane workspace/package wording, and absence of `autoloop` in surfaced CLI help. I added focused config fallback coverage in [tests/runtime/test_provider_policy_config.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/tests/runtime/test_provider_policy_config.py) for legacy global config-dir compatibility and canonical Botlane global-dir precedence. I also updated [test_strategy.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/additional-botlane-rename-requirements-discovere-28c3ecb0/runs/run-20260508T190524Z-73fc5c3b/artifacts/test/phases/rewrite-runtime-and-workspace-identity/test_strategy.md) with an explicit behavior-to-test map and appended a concise summary to [feedback.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/additional-botlane-rename-requirements-discovere-28c3ecb0/runs/run-20260508T190524Z-73fc5c3b/artifacts/test/phases/rewrite-runtime-and-workspace-identity/feedback.md).
+
+Key findings / decisions
+
+The phase already had strong coverage for `.botlane` vs `.autoloop` workflow precedence, mixed-root resume selection, legacy run discovery, and legacy SDK sentinel handling, so I did not duplicate those paths. The remaining high-value gaps were CLI identity and legacy global-config fallback, and the new tests keep legacy inputs readable only as fallback while preserving Botlane as the canonical write/read-preference path.
+
+Open issues / next step
+
+`python3 -m compileall` passed for the two touched test files. A targeted `pytest` run could not execute here because `/usr/bin/python3` does not have `pytest` installed, so the next step is to run the focused runtime tests in a dependency-complete environment.
