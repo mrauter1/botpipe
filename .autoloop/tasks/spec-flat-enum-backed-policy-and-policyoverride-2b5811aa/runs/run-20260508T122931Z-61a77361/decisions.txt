@@ -5,3 +5,5 @@ Use one shared lowering helper for full and sparse construction so read_only, ne
 <autoloop-decisions-header version="1" block_seq="2" owner="planner" phase_id="task-global" pair="plan" turn_seq="2" run_id="run-20260508T122931Z-61a77361" ts="2026-05-08T12:33:16.712382+00:00" />
 Treat the exact Policy/PolicyOverride public keyword signatures, helper signatures, and exact docstrings from the request as part of the required public contract, not optional implementation detail.
 Do not expose allow_dangerous_bypass or disable_dangerous_bypass on the flat facade; those fields may only be implied internally during lowering.
+<autoloop-decisions-header version="1" block_seq="3" owner="implementer" phase_id="flat-policy-facade" pair="implement" turn_seq="1" run_id="run-20260508T122931Z-61a77361" ts="2026-05-08T12:35:54.404510+00:00" />
+When sandbox_mode=SandboxMode.DANGER_FULL_ACCESS is requested without an explicit permission_mode, lower the facade to permissions.mode='ask' plus allow_dangerous_bypass=True so the result remains valid under the unchanged core ProviderPolicy validator, which rejects the current default full_auto_sandboxed mode with danger_full_access.
