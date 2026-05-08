@@ -300,7 +300,7 @@ class Policy:
                 payload[key] = value
         if isinstance(self.base, Policy):
             payload["base"] = {
-                "kind": "policy",
+                "kind": "policy_layer",
                 "payload": self.base.to_layer_payload(),
             }
         elif isinstance(self.base, ProviderPolicy):

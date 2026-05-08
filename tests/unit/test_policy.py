@@ -1,11 +1,29 @@
 from __future__ import annotations
 
+import hashlib
+import json
+
 import pytest
 
 import autoloop.policy as public_policy
 from autoloop import FINISH, Workflow, step
-from autoloop.core.compiler import compile_workflow
-from autoloop.core.provider_policy import ProviderPolicy, ProviderPolicyOverride, SYSTEM_DEFAULT_PROVIDER_POLICY
+from autoloop.core.compiler import (
+    _policy_input_fingerprint,
+    _policy_input_payload,
+    compile_workflow,
+)
+from autoloop.core.provider_policy import (
+    ProviderPolicy,
+    ProviderPolicyOverride,
+    SYSTEM_DEFAULT_PROVIDER_POLICY,
+    policy_fingerprint,
+)
+
+
+def _payload_fingerprint(payload: dict[str, object]) -> str:
+    return hashlib.sha256(
+        json.dumps(payload, sort_keys=True, separators=(",", ":")).encode("utf-8")
+    ).hexdigest()
 
 
 def test_public_policy_imports_and_all() -> None:
@@ -153,19 +171,103 @@ def test_resolve_policy_layer_accepts_policy_inputs_and_detects_cycles() -> None
         first.resolve()
 
 
+def test_policy_to_layer_payload_serializes_nested_public_policy_bases_as_policy_layers() -> None:
+    base = public_policy.Policy(effort=public_policy.ModelEffort.LOW)
+    child = public_policy.Policy(base=base, allow_write="reports/")
+    payload = child.to_layer_payload()
+
+    assert payload["allow_write"] == ["reports/"]
+    assert payload["base"] == {
+        "kind": "policy_layer",
+        "payload": {"effort": "low"},
+    }
+    encoded = json.dumps(payload, sort_keys=True)
+    assert '"kind": "policy"' not in encoded
+    assert '"kind": "layer"' not in encoded
+
+
+def test_policy_to_layer_payload_serializes_concrete_provider_policy_bases() -> None:
+    base = ProviderPolicy(permissions={"mode": "ask"})
+    child = public_policy.Policy(
+        base=base,
+        effort=public_policy.ModelEffort.HIGH,
+        allow_write=("src/", "tests/"),
+    )
+
+    assert child.to_layer_payload() == {
+        "effort": "high",
+        "allow_write": ["src/", "tests/"],
+        "base": {
+            "kind": "provider_policy",
+            "payload": base.model_dump(mode="json", warnings=False),
+        },
+    }
+
+
+def test_policy_input_payload_and_fingerprint_use_explicit_kind_labels() -> None:
+    policy_layer = public_policy.Policy(effort=public_policy.ModelEffort.LOW)
+    provider_policy = ProviderPolicy(model={"effort": "low"})
+    provider_policy_override = ProviderPolicyOverride(model={"effort": "low"})
+
+    layer_payload = _policy_input_payload(policy_layer)
+    provider_payload = _policy_input_payload(provider_policy)
+    override_payload = _policy_input_payload(provider_policy_override)
+
+    assert layer_payload == {
+        "kind": "policy_layer",
+        "payload": {"effort": "low"},
+    }
+    assert provider_payload == {
+        "kind": "provider_policy",
+        "payload": provider_policy.model_dump(mode="json", warnings=False),
+    }
+    assert override_payload == {
+        "kind": "provider_policy_override",
+        "payload": provider_policy_override.model_dump(mode="json", warnings=False),
+    }
+
+    assert _policy_input_fingerprint(policy_layer) == _payload_fingerprint(layer_payload)
+    assert _policy_input_fingerprint(provider_policy) == _payload_fingerprint(provider_payload)
+    assert _policy_input_fingerprint(provider_policy_override) == _payload_fingerprint(override_payload)
+    assert _policy_input_fingerprint(provider_policy) != policy_fingerprint(provider_policy)
+    assert len(
+        {
+            _policy_input_fingerprint(policy_layer),
+            _policy_input_fingerprint(provider_policy),
+            _policy_input_fingerprint(provider_policy_override),
+        }
+    ) == 3
+
+
+def test_policy_payload_and_fingerprint_are_deterministic_for_identical_authored_layers() -> None:
+    left = public_policy.Policy(
+        base=public_policy.Policy(effort=public_policy.ModelEffort.LOW),
+        allow_write=("reports/", "src/"),
+    )
+    right = public_policy.Policy(
+        base=public_policy.Policy(effort=public_policy.ModelEffort.LOW),
+        allow_write=("reports/", "src/"),
+    )
+    different = public_policy.Policy(
+        base=ProviderPolicy(model={"effort": "low"}),
+        allow_write=("reports/", "src/"),
+    )
+
+    assert left.to_layer_payload() == right.to_layer_payload()
+    assert _policy_input_fingerprint(left) == _policy_input_fingerprint(right)
+    assert _policy_input_payload(left) != _policy_input_payload(different)
+    assert _policy_input_fingerprint(left) != _policy_input_fingerprint(different)
+
+
 def test_policy_layer_payload_and_compiler_fingerprint_support_public_policy() -> None:
     policy = public_policy.Policy(
         base=ProviderPolicy(permissions={"mode": "ask"}),
         effort=public_policy.ModelEffort.HIGH,
         allow_write=("src/", "tests/"),
     )
-    assert policy.to_layer_payload() == {
-        "effort": "high",
-        "allow_write": ["src/", "tests/"],
-        "base": {
-            "kind": "provider_policy",
-            "payload": ProviderPolicy(permissions={"mode": "ask"}).model_dump(mode="json", warnings=False),
-        },
+    assert _policy_input_payload(policy) == {
+        "kind": "policy_layer",
+        "payload": policy.to_layer_payload(),
     }
 
     class DocsPatchWorkflow(Workflow):

@@ -162,3 +162,55 @@ phase_mode=single
 phase_ids=policy-payload-fingerprints,public-surface-cleanup,runtime-cli-workspace-flag
 explicit=True
 current_phase_index=0
+
+
+---
+run_id=run-20260508T173757Z-dbc5e2d0 | entry=session_turn | pair=implement | phase=producer | cycle=1 | attempt=1 | thread_id=019e08b0-65e6-70f1-91d9-b5bfac7dbe44
+---
+provider=codex
+mode=start
+template=/home/rauter/.local/share/pipx/venvs/autoloop/lib/python3.12/site-packages/autoloop/templates/implement_producer.md
+session_id=019e08b0-65e6-70f1-91d9-b5bfac7dbe44
+
+
+---
+run_id=run-20260508T173757Z-dbc5e2d0 | entry=phase_output | pair=implement | phase=producer | process=codex-agent | cycle=1 | attempt=1 | thread_id=019e08b0-65e6-70f1-91d9-b5bfac7dbe44
+---
+I’m implementing the phase-scoped policy payload and fingerprint cleanup. I’ll inspect the phase artifacts and the policy/compiler paths first, then make the minimal code and test changes that satisfy the spec.
+
+I’ve confirmed the phase plan and the existing decision ledger. Next I’m tracing the actual serialization, fingerprint, and CLI entry points so the edits stay confined to the required surfaces.
+
+I found the specific policy/compiler/SDK/simple/runtime hotspots, and the worktree is already very dirty outside this task. I’m keeping edits narrowly limited to the phase files and their directly affected tests.
+
+The required behavior change is broader than the active phase contract because the planner already marked runtime CLI as in scope. I’m checking the exact parser/handler usage now so `--workspace` becomes the only public flag without leaking a compatibility path.
+
+I have enough context to start editing. I’m changing only the phase-owned serialization and fingerprint paths plus targeted unit coverage, and I’ll record any intentional deferrals for the broader cleanup in the implementation notes.
+
+I’m editing the core serializer and compiler helpers now, then I’ll tighten the unit tests around the exact payload kinds and fingerprints required by this phase.
+
+The serializer and fingerprint edits are in place. I’m running the narrow policy suites now to catch any regressions before I write the phase notes.
+
+`pytest` is not on `PATH` here, so I’m switching to the interpreter module entrypoint and checking the same focused suites again.
+
+The system interpreter exists, but it doesn’t have `pytest` installed. I’m checking the repo’s expected test runner so I can validate with the project environment instead of guessing.
+
+The environment is missing project dependencies as well, so runtime validation isn’t available. I can still do syntax-level verification on the touched modules and tests, which I’m running now.
+
+I’ve reviewed the diff. The code change is small and centralized, and I’m documenting the intentional phase boundary now because the broader SDK/simple/CLI cleanup from the full spec is still outside this phase’s accepted scope.
+
+I’ve finished the phase-owned edits and the documentation updates. I’m grabbing exact line references for the close-out, then I’ll hand back the scope status and the validation gap clearly.
+
+**Scope considered**
+Phase-local work only: policy serialization and compiler/topology fingerprint normalization, plus directly related tests. I deferred the broader SDK/simple wording and runtime CLI surface cleanup to later phases and recorded that in [implementation_notes.md](</home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/below-is-the-revised-standalone-correction-spec-a9877342/runs/run-20260508T173757Z-dbc5e2d0/artifacts/implement/phases/policy-payload-fingerprints/implementation_notes.md:24>) and `decisions.txt`.
+
+**What I analyzed**
+I traced the phase-owned paths in [autoloop/policy.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/autoloop/policy.py:292), [autoloop/core/compiler.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/autoloop/core/compiler.py:1589), and the existing coverage in [tests/unit/test_policy.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/tests/unit/test_policy.py:174). I also checked the current decision ledger and updated the phase notes artifact.
+
+**What I changed**
+In [autoloop/policy.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/autoloop/policy.py:301), nested public `Policy` bases now serialize as `kind="policy_layer"` while concrete `ProviderPolicy` bases remain `kind="provider_policy"`. In [autoloop/core/compiler.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/autoloop/core/compiler.py:1589), `_policy_input_payload(...)` now emits `policy_layer`, `provider_policy`, and `provider_policy_override`, and `_policy_input_fingerprint(...)` always hashes that unified payload path. In [tests/unit/test_policy.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/tests/unit/test_policy.py:174), I added targeted coverage for nested public bases, concrete provider bases, explicit kind labels, deterministic payload/fingerprint behavior, and proof that concrete `ProviderPolicy` no longer uses the old shortcut fingerprint path.
+
+**Key findings / decisions**
+The necessary behavior change was small and centralized: only `Policy.to_layer_payload()` and the compiler helper pair needed code changes. I intentionally did not touch SDK/simple error wording or runtime CLI flags in this phase; that phase-boundary decision is documented in [implementation_notes.md](</home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/below-is-the-revised-standalone-correction-spec-a9877342/runs/run-20260508T173757Z-dbc5e2d0/artifacts/implement/phases/policy-payload-fingerprints/implementation_notes.md:43>).
+
+**Open issues / next step**
+Syntax validation passed with `python3 -m py_compile` for the touched files. I could not run `pytest` because this environment is missing `pytest` and project deps like `pydantic`, so the next step is to run the targeted suites in the project’s real test environment.

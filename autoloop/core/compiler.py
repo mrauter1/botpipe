@@ -36,7 +36,7 @@ from .lowering import (
 )
 from .primitives import AWAIT_INPUT, FAIL, FINISH, GLOBAL, SELF
 from .prompts import PromptSpec
-from .provider_policy import ProviderPolicy, ProviderPolicyOverride, policy_fingerprint
+from .provider_policy import ProviderPolicy, ProviderPolicyOverride
 from .providers.retries import ProviderRetryPolicy
 from .route_reporting import payload_contract_for_route, route_fields_contract_for_route
 from .route_required_writes import route_required_write_payload
@@ -1593,11 +1593,11 @@ def _policy_input_payload(
         return None
     if isinstance(policy, Policy):
         return {
-            "kind": "layer",
+            "kind": "policy_layer",
             "payload": policy.to_layer_payload(),
         }
     return {
-        "kind": "policy" if isinstance(policy, ProviderPolicy) else "override",
+        "kind": "provider_policy" if isinstance(policy, ProviderPolicy) else "provider_policy_override",
         "payload": policy.model_dump(mode="json", warnings=False),
     }
 
@@ -1605,8 +1605,6 @@ def _policy_input_payload(
 def _policy_input_fingerprint(policy: PolicyInput) -> str | None:
     if policy is None:
         return None
-    if isinstance(policy, ProviderPolicy):
-        return policy_fingerprint(policy)
     payload = _policy_input_payload(policy)
     return hashlib.sha256(
         json.dumps(
