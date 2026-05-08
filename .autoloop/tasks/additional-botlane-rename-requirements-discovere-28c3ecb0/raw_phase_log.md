@@ -138,3 +138,30 @@ I’m checking the immutable request and the raw phase log against the repositor
 NO
 
 Safest explicit assumption from the raw phase log and repo context: do not intentionally break read compatibility for existing `.autoloop` workspaces, `autoloop.yaml` / `autoloop.config`, or persisted `autoloop.*` artifacts during the transition. Runtime/config/data readers should continue to accept old inputs or migrate them, while all new writes and generated outputs become Botlane-only: `.botlane`, `botlane.*`, `botlane.yaml` / `botlane.config`, `botlane` package/CLI names.
+
+
+---
+run_id=run-20260508T190524Z-73fc5c3b | entry=session_turn | pair=plan | phase=producer | cycle=2 | attempt=2 | thread_id=019e08fa-f9a9-7363-87a2-7eb7e16e0abb
+---
+provider=codex
+mode=resume
+template=/home/rauter/.local/share/pipx/venvs/autoloop/lib/python3.12/site-packages/autoloop/templates/plan_producer.md
+session_id=019e08fa-f9a9-7363-87a2-7eb7e16e0abb
+
+
+---
+run_id=run-20260508T190524Z-73fc5c3b | entry=phase_output | pair=plan | phase=producer | process=codex-agent | cycle=2 | attempt=2 | thread_id=019e08fa-f9a9-7363-87a2-7eb7e16e0abb
+---
+The clarification is now explicit: old `.autoloop` workspaces, `autoloop.yaml` / `autoloop.config`, and persisted `autoloop.*` artifacts must remain readable or migratable while all new writes become Botlane-only. I’m updating the plan and phase contract to preserve that compatibility and tightening the grep exception to explicit historical changelog/history files only.
+
+I have enough to patch directly now. The edits are limited to closing the verifier’s two blockers: preserving legacy read/migration compatibility for old Autoloop inputs, and narrowing the grep-proof exception to explicit changelog/history files inside the maintained tree.
+
+The plan is updated. I’m doing a quick readback now to confirm the compatibility change is explicit in both the narrative plan and the machine-readable phases, and that the decisions block only adds turn-local superseding guidance.
+
+Updated the plan artifacts to apply the new clarification.
+
+[plan.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/additional-botlane-rename-requirements-discovere-28c3ecb0/runs/run-20260508T190524Z-73fc5c3b/artifacts/plan/plan.md) now preserves read or migration compatibility for existing `.autoloop` workspaces, `autoloop.yaml` / `autoloop.config`, and persisted `autoloop.*` artifacts, while keeping all new writes and generated outputs Botlane-only. It also narrows the grep-proof exception so maintained product files may retain Autoloop text only in explicitly named changelog/history files; automation-owned generated state remains excluded.
+
+[phase_plan.yaml](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/additional-botlane-rename-requirements-discovere-28c3ecb0/runs/run-20260508T190524Z-73fc5c3b/artifacts/plan/phase_plan.yaml) now encodes that same transition policy with explicit acceptance criteria for legacy workspace/config/schema readability plus Botlane-only new outputs. I also appended the resolution note to [feedback.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/additional-botlane-rename-requirements-discovere-28c3ecb0/runs/run-20260508T190524Z-73fc5c3b/artifacts/plan/feedback.md) and recorded the superseding compatibility constraint in [decisions.txt](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/additional-botlane-rename-requirements-discovere-28c3ecb0/runs/run-20260508T190524Z-73fc5c3b/decisions.txt).
+
+No verifier-owned files were changed.
