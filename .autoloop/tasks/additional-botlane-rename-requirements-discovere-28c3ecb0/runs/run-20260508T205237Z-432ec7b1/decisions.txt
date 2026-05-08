@@ -2,3 +2,5 @@
 The fix must replace the active repo `.venv` editable install itself; wheel-only packaging proof is insufficient for this task.
 Do not add `autoloop` import aliases or CLI aliases while repairing the shared `.venv`; legacy compatibility remains limited to reading persisted `.autoloop`, legacy config names, and `autoloop.*` artifacts.
 Prefer a direct editable reinstall plus focused repo-local proof over introducing new bootstrap or install wrapper scripts, because maintained package metadata is already Botlane-branded.
+<autoloop-decisions-header version="1" block_seq="2" owner="implementer" phase_id="editable-install-refresh-and-proof" pair="implement" turn_seq="1" run_id="run-20260508T205237Z-432ec7b1" ts="2026-05-08T20:56:34.401188+00:00" />
+Packaging smoke subprocesses must run from an isolated working directory, not the repo root, so repo-local source metadata cannot shadow the installed wheel or editable distribution being validated.
