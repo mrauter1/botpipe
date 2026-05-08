@@ -287,3 +287,62 @@ Open issues / next step
 - I updated the phase notes and decisions ledger at:
   - [implementation_notes.md](</home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/final-standalone-implementation-spec-shared-inhe-c4aa316d/runs/run-20260508T141115Z-6c430e1a/artifacts/implement/phases/shared-policy-core/implementation_notes.md>)
   - [decisions.txt](</home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/final-standalone-implementation-spec-shared-inhe-c4aa316d/runs/run-20260508T141115Z-6c430e1a/decisions.txt>)
+
+
+---
+run_id=run-20260508T141115Z-6c430e1a | entry=session_turn | pair=implement | phase=verifier | cycle=1 | attempt=1 | thread_id=019e07f4-78a0-79f0-9681-b0d48a911120
+---
+provider=codex
+mode=resume
+template=/home/rauter/.local/share/pipx/venvs/autoloop/lib/python3.12/site-packages/autoloop/templates/implement_verifier.md
+session_id=019e07f4-78a0-79f0-9681-b0d48a911120
+
+
+---
+run_id=run-20260508T141115Z-6c430e1a | entry=phase_output | pair=implement | phase=verifier | process=codex-agent | cycle=1 | attempt=1 | thread_id=019e07f4-78a0-79f0-9681-b0d48a911120
+---
+I’m reviewing the phase-local policy-core changes against the spec and adjacent resolver/compiler behavior. I’ll inspect the active criteria/feedback artifacts first, then audit the touched code paths and validate the implementation against the phase acceptance criteria.
+
+I’ve loaded the artifacts. Now I’m reading the actual implementation rather than just the plan notes, with focus on whether the sparse layer semantics are correct and whether any public surface still leaks the removed compatibility shape.
+
+I found a concrete dangerous-access edge case that looks like a phase blocker, and I’m confirming it directly before I write it up: the public `Policy(sandbox_mode=DANGER_FULL_ACCESS)` path appears to fail against the current default base policy instead of resolving as the spec requires.
+
+I found a second surface leak to verify: `PolicyOverride` is gone, but the internal `ProviderPolicyOverride` type may still be importable from `autoloop.simple` just because it’s left in the module globals. If that’s true, it conflicts with the “internal/core compatibility only” requirement for this phase.
+
+I’ve got two blocking findings. I’m recording them in the phase feedback artifact and marking the criteria as not met for this pass, since the dangerous-manual policy path still fails and the internal override type is still publicly reachable from `autoloop.simple`.
+
+Scope considered
+
+- Phase-local `shared-policy-core` implementation only.
+- Touched source: `autoloop/policy.py`, simple/core/runtime policy integration points, and the phase-local policy tests.
+- Active review artifacts: `criteria.md`, `feedback.md`, `implementation_notes.md`, and the run decisions ledger.
+
+What I analyzed
+
+- The new sparse public layer in `autoloop/policy.py`.
+- Public surface/export changes in `autoloop/simple.py`, `autoloop/__init__.py`, and `autoloop/sdk.py`.
+- Acceptance points in discovery/compiler/runtime resolution: `autoloop/core/discovery.py`, `autoloop/core/compiler.py`, `autoloop/core/operations.py`, `autoloop/core/steps.py`, and `autoloop/runtime/provider_policy_resolver.py`.
+- The producer’s validation notes and the spec’s dangerous-access requirements.
+
+What I reviewed
+
+- Direct behavior of `Policy.resolve(...)`, especially dangerous sandbox/manual access semantics.
+- Whether the removed public override surface still leaks through canonical public modules.
+- Whether phase acceptance criteria AC-1 through AC-3 are actually met by the implementation, not just by the rewritten tests.
+
+Key findings / decisions
+
+- Two blocking findings were recorded in `feedback.md`.
+- `IMP-001`: `Policy(sandbox_mode=SandboxMode.DANGER_FULL_ACCESS).resolve()` still fails against the default base policy, so the dangerous-manual public example from the spec does not work.
+- `IMP-002`: the internal core override type is still publicly reachable as `autoloop.simple.ProviderPolicyOverride`, which conflicts with the “internal/core compatibility only” requirement for this phase.
+- `criteria.md` remains unchecked for this pass.
+
+Open issues / next step
+
+- Fix the dangerous-manual sandbox resolution rule in `autoloop.policy` and add direct coverage for it.
+- Remove the public `ProviderPolicyOverride` leak from `autoloop.simple` while preserving internal compatibility checks.
+- Re-run the targeted policy/core/runtime suites after those fixes.
+
+<loop-control>
+{"schema":"docloop.loop_control/v1","kind":"promise","promise":"INCOMPLETE"}
+</loop-control>
