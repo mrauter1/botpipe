@@ -138,3 +138,71 @@ I’m checking the immutable request and the raw phase log against the repositor
 NO
 
 Safest explicit assumption from the raw phase log and repo context: do not intentionally break read compatibility for existing `.autoloop` workspaces, `autoloop.yaml` / `autoloop.config`, or persisted `autoloop.*` artifacts during the transition. Runtime/config/data readers should continue to accept old inputs or migrate them, while all new writes and generated outputs become Botlane-only: `.botlane`, `botlane.*`, `botlane.yaml` / `botlane.config`, `botlane` package/CLI names.
+
+
+---
+run_id=run-20260508T190524Z-73fc5c3b | entry=session_turn | pair=plan | phase=producer | cycle=2 | attempt=2 | thread_id=019e08fa-f9a9-7363-87a2-7eb7e16e0abb
+---
+provider=codex
+mode=resume
+template=/home/rauter/.local/share/pipx/venvs/autoloop/lib/python3.12/site-packages/autoloop/templates/plan_producer.md
+session_id=019e08fa-f9a9-7363-87a2-7eb7e16e0abb
+
+
+---
+run_id=run-20260508T190524Z-73fc5c3b | entry=phase_output | pair=plan | phase=producer | process=codex-agent | cycle=2 | attempt=2 | thread_id=019e08fa-f9a9-7363-87a2-7eb7e16e0abb
+---
+The clarification is now explicit: old `.autoloop` workspaces, `autoloop.yaml` / `autoloop.config`, and persisted `autoloop.*` artifacts must remain readable or migratable while all new writes become Botlane-only. I’m updating the plan and phase contract to preserve that compatibility and tightening the grep exception to explicit historical changelog/history files only.
+
+I have enough to patch directly now. The edits are limited to closing the verifier’s two blockers: preserving legacy read/migration compatibility for old Autoloop inputs, and narrowing the grep-proof exception to explicit changelog/history files inside the maintained tree.
+
+The plan is updated. I’m doing a quick readback now to confirm the compatibility change is explicit in both the narrative plan and the machine-readable phases, and that the decisions block only adds turn-local superseding guidance.
+
+Updated the plan artifacts to apply the new clarification.
+
+[plan.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/additional-botlane-rename-requirements-discovere-28c3ecb0/runs/run-20260508T190524Z-73fc5c3b/artifacts/plan/plan.md) now preserves read or migration compatibility for existing `.autoloop` workspaces, `autoloop.yaml` / `autoloop.config`, and persisted `autoloop.*` artifacts, while keeping all new writes and generated outputs Botlane-only. It also narrows the grep-proof exception so maintained product files may retain Autoloop text only in explicitly named changelog/history files; automation-owned generated state remains excluded.
+
+[phase_plan.yaml](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/additional-botlane-rename-requirements-discovere-28c3ecb0/runs/run-20260508T190524Z-73fc5c3b/artifacts/plan/phase_plan.yaml) now encodes that same transition policy with explicit acceptance criteria for legacy workspace/config/schema readability plus Botlane-only new outputs. I also appended the resolution note to [feedback.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/additional-botlane-rename-requirements-discovere-28c3ecb0/runs/run-20260508T190524Z-73fc5c3b/artifacts/plan/feedback.md) and recorded the superseding compatibility constraint in [decisions.txt](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/additional-botlane-rename-requirements-discovere-28c3ecb0/runs/run-20260508T190524Z-73fc5c3b/decisions.txt).
+
+No verifier-owned files were changed.
+
+
+---
+run_id=run-20260508T190524Z-73fc5c3b | entry=session_turn | pair=plan | phase=verifier | cycle=2 | attempt=2 | thread_id=019e08fa-f9a9-7363-87a2-7eb7e16e0abb
+---
+provider=codex
+mode=resume
+template=/home/rauter/.local/share/pipx/venvs/autoloop/lib/python3.12/site-packages/autoloop/templates/plan_verifier.md
+session_id=019e08fa-f9a9-7363-87a2-7eb7e16e0abb
+
+
+---
+run_id=run-20260508T190524Z-73fc5c3b | entry=phase_output | pair=plan | phase=verifier | process=codex-agent | cycle=2 | attempt=2 | thread_id=019e08fa-f9a9-7363-87a2-7eb7e16e0abb
+---
+I’m re-running the verification pass against the clarified transition policy now. The main checks are whether the plan preserves legacy read/migration compatibility while keeping all new outputs Botlane-only, and whether the grep-proof exception is now as narrow as the request requires.
+
+The clarified plan now matches the confirmed transition policy and the grep-proof scope. I’m marking the criteria complete and appending a closure note so the feedback history shows that the earlier blockers are resolved rather than silently superseded.
+
+The criteria and feedback history are updated. I’m doing a final readback to confirm the checklist is fully checked and the appended note clearly closes the previous blockers before I return the completion promise.
+
+Scope considered
+The clarified request, raw-log clarification, shared decisions ledger, and the updated `plan.md`, `phase_plan.yaml`, `feedback.md`, and `criteria.md`.
+
+What I analyzed
+The previously blocking compatibility ambiguity around existing `.autoloop` workspaces/configs/persisted artifacts, the grep-proof exception scope, phase coherence, acceptance criteria, rollback coverage, and YAML validity.
+
+What I reviewed
+`plan.md` now explicitly preserves read or migration compatibility for legacy `.autoloop` / `autoloop.*` inputs while requiring Botlane-only new outputs. `phase_plan.yaml` encodes that same transition policy with explicit compatibility acceptance criteria and stricter grep-proof language. `decisions.txt` contains matching superseding guidance, and `phase_plan.yaml` remains parseable.
+
+Key findings / decisions
+No blocking findings remain.
+The earlier blockers are now addressed by the confirmed transition policy and the narrowed grep-proof exception.
+`criteria.md` was updated so every verification checkbox is checked.
+A non-blocking closure note was appended to `feedback.md` as `PLAN-003`.
+
+Open issues / next step
+No open verification issues remain on the planning artifacts for this run.
+
+<loop-control>
+{"schema":"docloop.loop_control/v1","kind":"promise","promise":"COMPLETE"}
+</loop-control>

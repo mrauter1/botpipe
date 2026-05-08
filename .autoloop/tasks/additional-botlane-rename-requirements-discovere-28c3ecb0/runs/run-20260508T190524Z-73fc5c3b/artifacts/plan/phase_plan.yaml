@@ -2,124 +2,172 @@ version: 1
 task_id: additional-botlane-rename-requirements-discovere-28c3ecb0
 request_snapshot_ref: /home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/additional-botlane-rename-requirements-discovere-28c3ecb0/runs/run-20260508T190524Z-73fc5c3b/request.md
 phases:
-  - phase_id: "rename-package-and-public-api"
-    title: "Rename Package And Public API"
-    objective: "Establish Botlane as the only supported package and public-symbol identity."
-    status: "planned"
-    in_scope:
-      - "Rename source package roots from autoloop/autoloop_optimizer to botlane/botlane_optimizer."
-      - "Update pyproject package discovery, project metadata, package data, and console entry points to Botlane names."
-      - "Rename branded public exports such as Autoloop and AutoloopSDKError and update __all__ surfaces without compatibility aliases."
-    out_of_scope:
-      - "Runtime workspace path and dynamic import namespace rewrites."
-      - "Repository-wide docs and fixture text rewrites."
-    dependencies: []
-    acceptance_criteria:
-      - id: "P1-AC1"
-        text: "The repository builds around botlane/botlane_optimizer package roots and no maintained public import path or exported symbol still uses Autoloop branding."
-      - id: "P1-AC2"
-        text: "Packaging metadata and entry-point definitions no longer install or advertise autoloop."
-    deliverables:
-      - "Renamed package roots and updated packaging metadata."
-      - "Updated public API exports and branded exception/facade names."
-    risks:
-      - "Leaving stale imports or __all__ exports behind will create mixed-brand public surfaces."
-      - "Changing package roots before packaging metadata is aligned can break wheel installation and import resolution."
-    rollback:
-      - "Revert package-root and packaging edits together if imports or wheel metadata become inconsistent."
-
-  - phase_id: "rewrite-runtime-and-workspace-identity"
-    title: "Rewrite Runtime And Workspace Identity"
-    objective: "Make CLI and all new workspace/generated outputs Botlane-only while preserving read or migration compatibility for existing Autoloop inputs."
-    status: "planned"
-    in_scope:
-      - "Rename CLI prog/help/description strings, package-loading text, and workspace-loading text from autoloop to botlane."
-      - "Move newly written workspace and generated-state paths from .autoloop to .botlane, including SDK sentinel paths and runtime metadata fields."
-      - "Rename workflow import namespaces, isolated workspace module prefixes, importlib targets, workflow catalog roots, and sys.modules cleanup keys."
-      - "Preserve or add read or migration compatibility for existing .autoloop workspace state and old config filenames while shifting all new writes to Botlane names."
-      - "Remove legacy import modules, import-legacy commands, and compatibility-only flags or fallbacks tied to the old identity."
-    out_of_scope:
-      - "Historical text retained only in explicitly named changelog or history files."
-      - "Non-product automation state under run-local task artifacts."
-    dependencies:
-      - "rename-package-and-public-api"
-    acceptance_criteria:
-      - id: "P2-AC1"
-        text: "CLI help and runtime metadata describe Botlane only and no installed autoloop executable remains."
-      - id: "P2-AC2"
-        text: "Workspace discovery, generated module namespaces, and workflow catalog metadata use .botlane, botlane.workflows, and _botlane_workspace_workflows consistently for new outputs."
-      - id: "P2-AC3"
-        text: "Existing .autoloop workspace inputs and old config filenames remain readable or are migrated during the transition."
-    deliverables:
-      - "Updated runtime CLI, workspace, loader, and workflow catalog identity contract."
-      - "Legacy workspace and config readers or migrators that preserve transition compatibility while removing old import and CLI aliases."
-    risks:
-      - "Partial namespace rewrites can break package workflow resolution or workspace module isolation."
-      - "Workspace-path changes can silently desynchronize SDK/runtime helpers if sentinel and metadata fields are missed."
-      - "Removing old readers too early can strand existing workspaces even if new Botlane outputs succeed."
-    rollback:
-      - "Revert loader/catalog/workspace changes as one slice if workflow discovery, run resumption, or legacy workspace/config reads break."
-
-  - phase_id: "rewrite-schemas-workflows-and-fixtures"
-    title: "Rewrite Schemas Workflows And Fixtures"
-    objective: "Remove remaining live Autoloop identity from schemas, workflow packages, docs, examples, and embedded source strings."
-    status: "planned"
-    in_scope:
-      - "Rename product-branded schema IDs and generated-by markers for all new writes from autoloop.* to botlane.* while leaving unrelated families such as docloop.* intact."
-      - "Preserve or add read or migration compatibility for persisted autoloop.* artifacts during the transition."
-      - "Update workflow packages, optimizer references, generated workflow source strings, and fixture snippets to import botlane and botlane_optimizer."
-      - "Rewrite active docs, examples, and user-facing prose to Botlane/ botlane casing rules."
-      - "Audit marker or header prefixes that still embed autoloop-* naming."
-    out_of_scope:
-      - "Historical allowlisted text outside explicitly named changelog or history files."
-      - "Ongoing emission of autoloop-branded schemas or generated files."
-    dependencies:
-      - "rewrite-runtime-and-workspace-identity"
-    acceptance_criteria:
-      - id: "P3-AC1"
-        text: "All newly emitted schema constants and serialized metadata use botlane.* only."
-      - id: "P3-AC2"
-        text: "Workflow packages, docs, examples, and embedded fixture source no longer present live Autoloop-branded imports or paths."
-      - id: "P3-AC3"
-        text: "Persisted autoloop.* artifacts remain readable or are migrated during the transition."
-    deliverables:
-      - "Updated schema registry, serializer literals, and any required legacy readers or migrators for persisted artifacts."
-      - "Rewritten workflow, docs, example, and fixture corpus with Botlane identity."
-    risks:
-      - "Missed embedded source strings can regenerate Autoloop imports even after code compiles."
-      - "Broad text replacement can accidentally rename unrelated historical or non-product material without an explicit allowlist."
-      - "Schema-writer changes can outpace legacy-reader support and strand existing persisted artifacts."
-    rollback:
-      - "Revert the schema and content rewrite slice if serializer output, fixture generation, or legacy artifact reads become inconsistent."
-
-  - phase_id: "prove-botlane-only-surface"
-    title: "Prove Botlane Only Surface"
-    objective: "Codify the intentional break with positive packaging checks and negative strictness checks so Autoloop identity cannot regress."
-    status: "planned"
-    in_scope:
-      - "Update wheel-install smoke tests for botlane package and botlane CLI installation."
-      - "Add or update strictness tests for failed autoloop imports, absent python -m autoloop, absent autoloop CLI, and Botlane-only CLI help text."
-      - "Add workspace and schema emission tests proving .botlane and botlane.* outputs only."
-      - "Add compatibility regression tests proving legacy .autoloop workspaces, old config filenames, and persisted autoloop.* artifacts are still readable or migrated during transition."
-      - "Widen repository grep enforcement to maintained code, workflow packages, tests, docs, examples, and fixtures, with explicit exclusions only for automation-owned generated state and explicitly named changelog or history files."
-    out_of_scope:
-      - "Broad full-suite stabilization unrelated to the rename."
-      - "Changing verifier-owned criteria artifacts."
-    dependencies:
-      - "rewrite-schemas-workflows-and-fixtures"
-    acceptance_criteria:
-      - id: "P4-AC1"
-        text: "The validation suite proves Botlane installs and runs while Autoloop imports, module execution, and CLI entry points are unavailable."
-      - id: "P4-AC2"
-        text: "The final strictness grep gate fails on any live autoloop, Autoloop, AUTOLOOP, .autoloop, autoloop_optimizer, or _autoloop_workspace_workflows reference outside automation-owned generated state and explicitly named changelog or history files."
-      - id: "P4-AC3"
-        text: "Compatibility regression tests prove old workspace, config, and persisted-artifact inputs still load or migrate while every new output is Botlane-only."
-    deliverables:
-      - "Updated wheel smoke, runtime, and strictness tests covering the breaking rename."
-      - "A repo grep policy that guards live product files against Autoloop regressions without masking non-changelog retained references."
-    risks:
-      - "A narrow grep scope can create a false sense of completion."
-      - "A broad grep scope can fail on automation or generated directories that are not part of the maintained product surface."
-      - "Negative strictness coverage alone can miss regressions that break existing legacy readers."
-    rollback:
-      - "Revert only the proof-phase test changes if the assertions are mis-scoped, then re-land with a tighter maintained-tree contract and explicit compatibility checks."
+- phase_id: rename-package-and-public-api
+  title: Rename Package And Public API
+  objective: Establish Botlane as the only supported package and public-symbol identity.
+  status: planned
+  in_scope:
+  - Rename source package roots from autoloop/autoloop_optimizer to botlane/botlane_optimizer.
+  - Update pyproject package discovery, project metadata, package data, and console
+    entry points to Botlane names.
+  - Rename branded public exports such as Autoloop and AutoloopSDKError and update
+    __all__ surfaces without compatibility aliases.
+  out_of_scope:
+  - Runtime workspace path and dynamic import namespace rewrites.
+  - Repository-wide docs and fixture text rewrites.
+  dependencies: []
+  acceptance_criteria:
+  - id: P1-AC1
+    text: The repository builds around botlane/botlane_optimizer package roots and
+      no maintained public import path or exported symbol still uses Autoloop branding.
+  - id: P1-AC2
+    text: Packaging metadata and entry-point definitions no longer install or advertise
+      autoloop.
+  deliverables:
+  - Renamed package roots and updated packaging metadata.
+  - Updated public API exports and branded exception/facade names.
+  risks:
+  - Leaving stale imports or __all__ exports behind will create mixed-brand public
+    surfaces.
+  - Changing package roots before packaging metadata is aligned can break wheel installation
+    and import resolution.
+  rollback:
+  - Revert package-root and packaging edits together if imports or wheel metadata
+    become inconsistent.
+- phase_id: rewrite-runtime-and-workspace-identity
+  title: Rewrite Runtime And Workspace Identity
+  objective: Make CLI and all new workspace/generated outputs Botlane-only while preserving
+    read or migration compatibility for existing Autoloop inputs.
+  status: planned
+  in_scope:
+  - Rename CLI prog/help/description strings, package-loading text, and workspace-loading
+    text from autoloop to botlane.
+  - Move newly written workspace and generated-state paths from .autoloop to .botlane,
+    including SDK sentinel paths and runtime metadata fields.
+  - Rename workflow import namespaces, isolated workspace module prefixes, importlib
+    targets, workflow catalog roots, and sys.modules cleanup keys.
+  - Preserve or add read or migration compatibility for existing .autoloop workspace
+    state and old config filenames while shifting all new writes to Botlane names.
+  - Remove legacy import modules, import-legacy commands, and compatibility-only flags
+    or fallbacks tied to the old identity.
+  out_of_scope:
+  - Historical text retained only in explicitly named changelog or history files.
+  - Non-product automation state under run-local task artifacts.
+  dependencies:
+  - rename-package-and-public-api
+  acceptance_criteria:
+  - id: P2-AC1
+    text: CLI help and runtime metadata describe Botlane only and no installed autoloop
+      executable remains.
+  - id: P2-AC2
+    text: Workspace discovery, generated module namespaces, and workflow catalog metadata
+      use .botlane, botlane.workflows, and _botlane_workspace_workflows consistently
+      for new outputs.
+  - id: P2-AC3
+    text: Existing .autoloop workspace inputs and old config filenames remain readable
+      or are migrated during the transition.
+  deliverables:
+  - Updated runtime CLI, workspace, loader, and workflow catalog identity contract.
+  - Legacy workspace and config readers or migrators that preserve transition compatibility
+    while removing old import and CLI aliases.
+  risks:
+  - Partial namespace rewrites can break package workflow resolution or workspace
+    module isolation.
+  - Workspace-path changes can silently desynchronize SDK/runtime helpers if sentinel
+    and metadata fields are missed.
+  - Removing old readers too early can strand existing workspaces even if new Botlane
+    outputs succeed.
+  rollback:
+  - Revert loader/catalog/workspace changes as one slice if workflow discovery, run
+    resumption, or legacy workspace/config reads break.
+- phase_id: rewrite-schemas-workflows-and-fixtures
+  title: Rewrite Schemas Workflows And Fixtures
+  objective: Remove remaining live Autoloop identity from schemas, workflow packages,
+    docs, examples, and embedded source strings.
+  status: planned
+  in_scope:
+  - Rename product-branded schema IDs and generated-by markers for all new writes
+    from autoloop.* to botlane.* while leaving unrelated families such as docloop.*
+    intact.
+  - Preserve or add read or migration compatibility for persisted autoloop.* artifacts
+    during the transition.
+  - Update workflow packages, optimizer references, generated workflow source strings,
+    and fixture snippets to import botlane and botlane_optimizer.
+  - Rewrite active docs, examples, and user-facing prose to Botlane/ botlane casing
+    rules.
+  - Audit marker or header prefixes that still embed autoloop-* naming.
+  out_of_scope:
+  - Historical allowlisted text outside explicitly named changelog or history files.
+  - Ongoing emission of autoloop-branded schemas or generated files.
+  dependencies:
+  - rewrite-runtime-and-workspace-identity
+  acceptance_criteria:
+  - id: P3-AC1
+    text: All newly emitted schema constants and serialized metadata use botlane.*
+      only.
+  - id: P3-AC2
+    text: Workflow packages, docs, examples, and embedded fixture source no longer
+      present live Autoloop-branded imports or paths.
+  - id: P3-AC3
+    text: Persisted autoloop.* artifacts remain readable or are migrated during the
+      transition.
+  deliverables:
+  - Updated schema registry, serializer literals, and any required legacy readers
+    or migrators for persisted artifacts.
+  - Rewritten workflow, docs, example, and fixture corpus with Botlane identity.
+  risks:
+  - Missed embedded source strings can regenerate Autoloop imports even after code
+    compiles.
+  - Broad text replacement can accidentally rename unrelated historical or non-product
+    material without an explicit allowlist.
+  - Schema-writer changes can outpace legacy-reader support and strand existing persisted
+    artifacts.
+  rollback:
+  - Revert the schema and content rewrite slice if serializer output, fixture generation,
+    or legacy artifact reads become inconsistent.
+- phase_id: prove-botlane-only-surface
+  title: Prove Botlane Only Surface
+  objective: Codify the intentional break with positive packaging checks and negative
+    strictness checks so Autoloop identity cannot regress.
+  status: planned
+  in_scope:
+  - Update wheel-install smoke tests for botlane package and botlane CLI installation.
+  - Add or update strictness tests for failed autoloop imports, absent python -m autoloop,
+    absent autoloop CLI, and Botlane-only CLI help text.
+  - Add workspace and schema emission tests proving .botlane and botlane.* outputs
+    only.
+  - Add compatibility regression tests proving legacy .autoloop workspaces, old config
+    filenames, and persisted autoloop.* artifacts are still readable or migrated during
+    transition.
+  - Widen repository grep enforcement to maintained code, workflow packages, tests,
+    docs, examples, and fixtures, with explicit exclusions only for automation-owned
+    generated state and explicitly named changelog or history files.
+  out_of_scope:
+  - Broad full-suite stabilization unrelated to the rename.
+  - Changing verifier-owned criteria artifacts.
+  dependencies:
+  - rewrite-schemas-workflows-and-fixtures
+  acceptance_criteria:
+  - id: P4-AC1
+    text: The validation suite proves Botlane installs and runs while Autoloop imports,
+      module execution, and CLI entry points are unavailable.
+  - id: P4-AC2
+    text: The final strictness grep gate fails on any live autoloop, Autoloop, AUTOLOOP,
+      .autoloop, autoloop_optimizer, or _autoloop_workspace_workflows reference outside
+      automation-owned generated state and explicitly named changelog or history files.
+  - id: P4-AC3
+    text: Compatibility regression tests prove old workspace, config, and persisted-artifact
+      inputs still load or migrate while every new output is Botlane-only.
+  deliverables:
+  - Updated wheel smoke, runtime, and strictness tests covering the breaking rename.
+  - A repo grep policy that guards live product files against Autoloop regressions
+    without masking non-changelog retained references.
+  risks:
+  - A narrow grep scope can create a false sense of completion.
+  - A broad grep scope can fail on automation or generated directories that are not
+    part of the maintained product surface.
+  - Negative strictness coverage alone can miss regressions that break existing legacy
+    readers.
+  rollback:
+  - Revert only the proof-phase test changes if the assertions are mis-scoped, then
+    re-land with a tighter maintained-tree contract and explicit compatibility checks.

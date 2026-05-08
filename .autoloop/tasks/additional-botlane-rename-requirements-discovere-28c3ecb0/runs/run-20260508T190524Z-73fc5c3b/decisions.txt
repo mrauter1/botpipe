@@ -13,3 +13,7 @@ I’m checking the immutable request and the raw phase log against the repositor
 NO
 
 Safest explicit assumption from the raw phase log and repo context: do not intentionally break read compatibility for existing `.autoloop` workspaces, `autoloop.yaml` / `autoloop.config`, or persisted `autoloop.*` artifacts during the transition. Runtime/config/data readers should continue to accept old inputs or migrate them, while all new writes and generated outputs become Botlane-only: `.botlane`, `botlane.*`, `botlane.yaml` / `botlane.config`, `botlane` package/CLI names.
+<autoloop-decisions-header version="1" block_seq="4" owner="planner" phase_id="task-global" pair="plan" turn_seq="3" run_id="run-20260508T190524Z-73fc5c3b" ts="2026-05-08T19:11:29.458721+00:00" />
+Clarified transition policy: existing `.autoloop` workspaces, `autoloop.yaml` / `autoloop.config`, and persisted `autoloop.*` artifacts must remain readable or be migrated during the rename; only new writes and generated outputs become Botlane-only.
+Earlier guidance about avoiding a mixed-brand runtime is narrowed: do not keep old import or CLI aliases and do not emit Autoloop-branded outputs, but legacy read or migration compatibility for old state, config, and persisted data is still required.
+The final grep proof may exclude automation-owned generated state such as `.autoloop/tasks/**`, but within the maintained product tree the only retained Autoloop references allowed are in explicitly named changelog or history files.
