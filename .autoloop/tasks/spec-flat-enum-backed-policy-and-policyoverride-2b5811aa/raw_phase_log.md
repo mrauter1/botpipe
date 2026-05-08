@@ -595,3 +595,65 @@ Open issues / next step
 <loop-control>
 {"schema":"docloop.loop_control/v1","kind":"promise","promise":"COMPLETE"}
 </loop-control>
+
+
+---
+run_id=run-20260508T122931Z-61a77361 | entry=session_turn | pair=audit | phase=producer | cycle=1 | attempt=1 | thread_id=019e07a4-c0e3-7fe3-9037-906c6dff6a24
+---
+provider=codex
+mode=start
+template=/home/rauter/.local/share/pipx/venvs/autoloop/lib/python3.12/site-packages/autoloop/templates/audit_producer.md
+session_id=019e07a4-c0e3-7fe3-9037-906c6dff6a24
+
+
+---
+run_id=run-20260508T122931Z-61a77361 | entry=phase_output | pair=audit | phase=producer | process=codex-agent | cycle=1 | attempt=1 | thread_id=019e07a4-c0e3-7fe3-9037-906c6dff6a24
+---
+I’m auditing the completed run against the original request, clarifications, artifacts, and final codebase. I’ll first collect the authoritative inputs and the final implementation/test state, then I’ll write the audit artifacts only under the run-local `artifacts/audit` directory.
+
+The implementation log already shows one likely intent conflict around dangerous manual sandbox access. I’m checking the final code, verifier/test outputs, and the targeted tests now to decide whether that conflict was authoritatively justified or remains a material follow-up gap.
+
+I’ve confirmed the final code intentionally narrows one requested example: `sandbox_mode=SandboxMode.DANGER_FULL_ACCESS` now raises unless an explicit compatible `permission_mode` is also supplied. I’m checking whether anything else materially diverged, including docstrings, exports, compile coverage, and the remaining runtime test artifacts.
+
+The test artifacts confirm the narrowed dangerous-manual contract was deliberate and covered, but that clarification also explicitly says the original dangerous-manual example no longer compiles. I’m now checking whether any additional request requirements were left untested or implemented differently beyond that known conflict.
+
+I’m checking a few exact edge cases against the written contract now rather than relying only on the new tests. The main questions are whether `Policy()` truly preserves defaults, whether overrides stay sparse, and whether any requested acceptance examples besides the clarified dangerous-manual case still fail.
+
+The current implementation passes its focused policy tests, and the only live divergence I’ve confirmed so far is the clarified rejection of manual `danger_full_access` without explicit `permission_mode`. I’m running the core acceptance-shape workflows directly now to separate genuine remaining gaps from requirements that were superseded by clarification.
+
+I’ve finished the intent comparison and there are no new mismatches beyond the clarified dangerous-manual change. I’m running the requested regression slice once from the audit side so the final audit artifacts can cite direct verification rather than only earlier phase notes.
+
+The regression slice is still running. I already have enough to write the audit conclusion if it stays green: the implementation matches the clarified intent, and the only change from the original spec is the explicit clarification that manual `danger_full_access` now requires an explicit compatible `permission_mode`.
+
+I’ve got the final disposition: no material unresolved gaps remain after applying the authoritative clarifications. I’m writing the run-local audit artifacts now with the one justified spec difference called out explicitly, then I’ll return the required audit summary and loop-control block.
+
+Scope considered
+
+The original request in `request.md`, the authoritative clarification ledger in `raw_phase_log.md`, `decisions.txt`, the final implementation in `autoloop/simple.py` and `autoloop/__init__.py`, the new policy tests, and the run-local plan/implement/test artifacts.
+
+What I analyzed
+
+I compared the requested public contract against the final flat policy facade, exports, lowering behavior, and tests. I also re-ran the requested regression slice:
+`./.venv/bin/python -m pytest tests/unit/test_simple_surface.py tests/unit/test_provider_policy.py tests/runtime/test_provider_policy_steps.py tests/runtime/test_provider_policy_emitters.py tests/runtime/test_provider_policy_config.py tests/unit/test_simple_policy.py`
+and confirmed `179 passed in 1.45s`.
+
+What I changed
+
+I wrote the audit outputs only under the allowed run-local audit directory:
+`artifacts/audit/gap_report.md`
+`artifacts/audit/revised_request.md`
+`artifacts/audit/audit_result.json`
+
+Key findings / decisions
+
+No material unresolved gaps remain after applying the authoritative clarifications.
+The final implementation matches the clarified intent: flat enum-backed `Policy(...)` and `PolicyOverride(...)` exist, lower into unchanged nested core policy objects, export correctly, and are covered by focused unit/runtime tests.
+The only material difference from the original request is justified by later clarification: manual `sandbox_mode=SandboxMode.DANGER_FULL_ACCESS` without an explicit compatible `permission_mode` is now intentionally rejected. That superseded the original dangerous-manual example and avoids silently rewriting permission mode.
+
+Open issues / next step
+
+No follow-up implementation run is required. The audit result records `material_gaps_found: false`.
+
+<loop-control>
+{"schema":"docloop.loop_control/v1","kind":"promise","promise":"INCOMPLETE"}
+</loop-control>
