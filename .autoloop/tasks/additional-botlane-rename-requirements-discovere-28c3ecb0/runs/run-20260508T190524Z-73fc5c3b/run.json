@@ -16,14 +16,14 @@
       "prove-botlane-only-surface"
     ],
     "explicit": true,
-    "current_phase_index": 3,
-    "current_phase_id": "prove-botlane-only-surface"
+    "current_phase_index": 4,
+    "current_phase_id": null
   },
   "phase_status": {
     "rename-package-and-public-api": "completed",
     "rewrite-runtime-and-workspace-identity": "completed",
     "rewrite-schemas-workflows-and-fixtures": "completed",
-    "prove-botlane-only-surface": "in_progress"
+    "prove-botlane-only-surface": "completed"
   },
   "phase_history": [
     {
@@ -70,6 +70,13 @@
       "run_id": "run-20260508T190524Z-73fc5c3b",
       "status": "in_progress",
       "ts": "2026-05-08T20:25:10.926057+00:00"
+    },
+    {
+      "phase_id": "prove-botlane-only-surface",
+      "run_id": "run-20260508T190524Z-73fc5c3b",
+      "status": "completed",
+      "ts": "2026-05-08T20:47:51.116489+00:00",
+      "pair": "test"
     }
   ]
 }
