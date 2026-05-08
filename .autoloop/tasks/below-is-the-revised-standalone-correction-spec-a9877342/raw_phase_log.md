@@ -404,3 +404,48 @@ Open issues / next step
 
 `python3 -m py_compile` passed for all touched code and tests. I could not run `pytest` here because the environment is missing `pytest`, and direct import smoke checks are also blocked because `pydantic` is not installed. The next step is to run the targeted unit suite in an environment with project test dependencies:
 `tests/unit/test_sdk_facade.py`, `tests/unit/test_simple_surface.py`, and `tests/unit/test_simple_policy.py`.
+
+
+---
+run_id=run-20260508T173757Z-dbc5e2d0 | entry=session_turn | pair=implement | phase=verifier | cycle=1 | attempt=1 | thread_id=019e08b6-b80c-7ff0-ace1-633bbcb6bb47
+---
+provider=codex
+mode=resume
+template=/home/rauter/.local/share/pipx/venvs/autoloop/lib/python3.12/site-packages/autoloop/templates/implement_verifier.md
+session_id=019e08b6-b80c-7ff0-ace1-633bbcb6bb47
+
+
+---
+run_id=run-20260508T173757Z-dbc5e2d0 | entry=phase_output | pair=implement | phase=verifier | process=codex-agent | cycle=1 | attempt=1 | thread_id=019e08b6-b80c-7ff0-ace1-633bbcb6bb47
+---
+I’m reviewing the public-surface-cleanup diff and the phase artifacts first. I’ll verify each acceptance criterion against the actual code and test coverage, then update `criteria.md` and `feedback.md` with any concrete gaps.
+
+I found a likely AC-3 gap around `client.step(..., params=...)`, and I’m checking whether it’s only missing test coverage or whether the implementation itself still rejects non-empty params for synthetic step workflows.
+
+I confirmed the main issue is real, not just missing coverage: `client.step(..., params={"mode": "strict"})` still routes through a synthetic workflow with no `Params` model, so non-empty params are rejected. I’m recording that as a blocking finding and updating the phase criteria accordingly.
+
+Scope considered
+
+Phase-local review of the public-surface-cleanup diff only: public policy wording paths, export/tests, and adjacent SDK step/run contract code needed to verify AC-1 through AC-3.
+
+What I analyzed
+
+I checked the changed validation paths in `autoloop/sdk.py`, `autoloop/simple.py`, `autoloop/core/steps.py`, `autoloop/core/discovery.py`, and `autoloop/policy.py`, then traced the `client.step(..., params=...)` execution path through `_build_synthetic_step_workflow`, `_coerce_sdk_params`, and `coerce_workflow_parameter_mapping(...)` in `autoloop/runtime/loader.py`.
+
+What I reviewed
+
+I audited the new regression coverage in `tests/unit/test_sdk_facade.py`, `tests/unit/test_simple_surface.py`, and `tests/unit/test_simple_policy.py`, and updated the active review artifacts:
+- `criteria.md`
+- `feedback.md`
+
+Key findings / decisions
+
+I recorded one blocking finding: the implementation still does not satisfy the required `client.step(..., params=...)` public contract. Non-empty step params are still rejected because synthetic step workflows are created without a `Params` model, and the added tests do not catch that gap.
+
+Open issues / next step
+
+Implement synthetic `Params` support for `client.step(...)` in the same place synthetic `Input` is created, then add a direct success-path regression test for `client.step(..., input=..., params=...)`. The review remains incomplete until that is fixed.
+
+<loop-control>
+{"schema":"docloop.loop_control/v1","kind":"promise","promise":"INCOMPLETE"}
+</loop-control>
