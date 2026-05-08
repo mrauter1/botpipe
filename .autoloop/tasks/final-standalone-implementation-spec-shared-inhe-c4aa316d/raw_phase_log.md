@@ -473,3 +473,57 @@ Open issues / next step
 <loop-control>
 {"schema":"docloop.loop_control/v1","kind":"promise","promise":"COMPLETE"}
 </loop-control>
+
+
+---
+run_id=run-20260508T141115Z-6c430e1a | entry=session_turn | pair=test | phase=producer | cycle=1 | attempt=1 | thread_id=019e07f4-78a0-79f0-9681-b0d48a911120
+---
+provider=codex
+mode=resume
+template=/home/rauter/.local/share/pipx/venvs/autoloop/lib/python3.12/site-packages/autoloop/templates/test_producer.md
+session_id=019e07f4-78a0-79f0-9681-b0d48a911120
+
+
+---
+run_id=run-20260508T141115Z-6c430e1a | entry=phase_output | pair=test | phase=producer | process=codex-agent | cycle=1 | attempt=1 | thread_id=019e07f4-78a0-79f0-9681-b0d48a911120
+---
+I’m focusing on phase-local regression coverage for the shared public policy layer. I’ll inspect the current policy tests and test strategy, add any missing edge coverage around the dangerous-manual decision that was just introduced, then update the test artifacts and rerun the focused suites.
+
+I found one useful edge case missing from the current tests: the new dangerous-manual compatibility rule should only coerce an inherited `full_auto_sandboxed` base, not every inherited permission mode. I’m adding that pinning test now and then I’ll update the phase test strategy and summary artifact.
+
+The new edge-case test and artifact updates are in place. I’m running the focused policy/simple suites again to confirm the preserved-permission branch behaves as intended and that the test additions stay deterministic.
+
+The focused suites passed, including the preserved-permission branch of the dangerous-manual rule. I’m doing a quick hygiene check on the touched files and then I’ll close the test-phase summary.
+
+Scope considered
+
+- Phase-local `shared-policy-core` test work only.
+- I limited repository test edits to the public policy unit coverage already in scope, and updated only the phase-local test artifacts plus the current-turn decisions block.
+- I did not edit the auditor-owned `criteria.md`.
+
+What I analyzed
+
+- The implemented `Policy` resolution behavior in [tests/unit/test_policy.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/tests/unit/test_policy.py), especially the new dangerous-manual compatibility rule recorded in [decisions.txt](</home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/final-standalone-implementation-spec-shared-inhe-c4aa316d/runs/run-20260508T141115Z-6c430e1a/decisions.txt>).
+- The public-surface regression guard in [tests/unit/test_simple_policy.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/tests/unit/test_simple_policy.py).
+- The phase-local artifact baseline in [test_strategy.md](</home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/final-standalone-implementation-spec-shared-inhe-c4aa316d/runs/run-20260508T141115Z-6c430e1a/artifacts/test/phases/shared-policy-core/test_strategy.md>).
+
+What I changed
+
+- Added a new edge-case unit test in [tests/unit/test_policy.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/tests/unit/test_policy.py) that pins the preserved branch of the dangerous-manual rule:
+  - if the base policy’s permission mode is not `full_auto_sandboxed`, `Policy(sandbox_mode=SandboxMode.DANGER_FULL_ACCESS)` preserves that inherited permission mode while still enabling dangerous bypass.
+- Expanded [test_strategy.md](</home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/final-standalone-implementation-spec-shared-inhe-c4aa316d/runs/run-20260508T141115Z-6c430e1a/artifacts/test/phases/shared-policy-core/test_strategy.md>) with an explicit behavior-to-test coverage map, preserved invariants, flake controls, and known phase-local gaps.
+- Appended a concise summary entry to [feedback.md](</home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/final-standalone-implementation-spec-shared-inhe-c4aa316d/runs/run-20260508T141115Z-6c430e1a/artifacts/test/phases/shared-policy-core/feedback.md>).
+- Appended one test-specific decision to [decisions.txt](</home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/final-standalone-implementation-spec-shared-inhe-c4aa316d/runs/run-20260508T141115Z-6c430e1a/decisions.txt>) under the current test-author header.
+
+Key findings / decisions
+
+- The existing tests already covered the coercion branch of the dangerous-manual rule over the default inherited `full_auto_sandboxed` base.
+- The missing regression risk was the opposite branch: ensuring the helper does not overreach and rewrite inherited non-`full_auto_sandboxed` permission modes. The new test closes that gap.
+- The focused suites stayed deterministic and fast; no new flake risks were introduced.
+
+Open issues / next step
+
+- Validation performed:
+  - `.venv/bin/python -m pytest tests/unit/test_policy.py tests/unit/test_simple_policy.py`
+  - `.venv/bin/python - <<'PY' ... resolve_policy_layer(ProviderPolicy(permissions={'mode': 'auto_edit'}), Policy(sandbox_mode=SandboxMode.DANGER_FULL_ACCESS)) ... PY`
+- This phase-local test work does not cover later SDK naming and runtime layer-order work, which remains out of scope for `shared-policy-core`.

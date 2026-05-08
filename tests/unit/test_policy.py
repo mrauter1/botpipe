@@ -190,3 +190,16 @@ def test_compile_and_resolve_dangerous_manual_workflow_policy() -> None:
     assert resolved.permissions.mode == "ask"
     assert resolved.permissions.allow_dangerous_bypass is True
     assert resolved.sandbox.mode == "danger_full_access"
+
+
+def test_dangerous_manual_policy_preserves_non_full_auto_base_permissions() -> None:
+    base = ProviderPolicy(permissions={"mode": "auto_edit"})
+
+    resolved = public_policy.resolve_policy_layer(
+        base,
+        public_policy.Policy(sandbox_mode=public_policy.SandboxMode.DANGER_FULL_ACCESS),
+    )
+
+    assert resolved.permissions.mode == "auto_edit"
+    assert resolved.permissions.allow_dangerous_bypass is True
+    assert resolved.sandbox.mode == "danger_full_access"
