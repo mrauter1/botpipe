@@ -653,6 +653,40 @@ def test_sdk_run_rejects_removed_typed_input_and_parameters_keywords(tmp_path: P
         )
 
 
+def test_sdk_public_docstrings_encode_workspace_policy_and_runtime_behavior_contract() -> None:
+    init_doc = Autoloop.__init__.__doc__
+    run_doc = Autoloop.run.__doc__
+    step_doc = Autoloop.step.__doc__
+    prompt_step_doc = Autoloop.prompt_step.__doc__
+    workflow_step_doc = Autoloop.workflow_step.__doc__
+
+    assert init_doc is not None
+    assert "actual project or repository working directory" in init_doc
+    assert "`.autoloop` state directory" in init_doc
+    assert "SDK client-level" in init_doc
+    assert "not a hard security cap" in init_doc
+
+    assert run_doc is not None
+    assert "`message` is the task or run request" in run_doc
+    assert "`input` is typed workflow input" in run_doc
+    assert "`params` are workflow parameters" in run_doc
+    assert "`provider_questions` is an SDK/runtime" in run_doc
+    assert "distinct from simple" in run_doc
+
+    assert step_doc is not None
+    assert "`policy` applies only to this SDK step invocation" in step_doc
+    assert "not mutated" in step_doc
+    assert "`provider_questions` is an" in step_doc
+    assert "`control_routes`" in step_doc
+
+    assert prompt_step_doc is not None
+    assert "`prompt` is the provider instruction" in prompt_step_doc
+    assert "`message` is the" in prompt_step_doc
+
+    assert workflow_step_doc is not None
+    assert "`child_message` is the child workflow request" in workflow_step_doc
+
+
 def test_sdk_public_exports_include_revised_sdk_surface() -> None:
     assert autoloop.Step is sdk_module.Step
     assert autoloop.PromptStep is PromptStep

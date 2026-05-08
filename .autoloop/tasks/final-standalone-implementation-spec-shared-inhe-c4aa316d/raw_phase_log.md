@@ -1019,3 +1019,72 @@ No open issues in this phase scope.
 <loop-control>
 {"schema":"docloop.loop_control/v1","kind":"promise","promise":"COMPLETE"}
 </loop-control>
+
+
+---
+run_id=run-20260508T141115Z-6c430e1a | entry=session_turn | pair=implement | phase=producer | cycle=1 | attempt=1 | thread_id=019e0854-49f5-7e41-ae2f-199bac1cd6c7
+---
+provider=codex
+mode=start
+template=/home/rauter/.local/share/pipx/venvs/autoloop/lib/python3.12/site-packages/autoloop/templates/implement_producer.md
+session_id=019e0854-49f5-7e41-ae2f-199bac1cd6c7
+
+
+---
+run_id=run-20260508T141115Z-6c430e1a | entry=phase_output | pair=implement | phase=producer | process=codex-agent | cycle=1 | attempt=1 | thread_id=019e0854-49f5-7e41-ae2f-199bac1cd6c7
+---
+I’m checking the current policy, simple, SDK, and test surfaces against the regression-cleanup scope first. I’ll read the active phase notes, prior phase artifacts, and the current implementation to find any remaining contract mismatches before editing tests or docstrings.
+
+I’ve got the prior phase decisions and the active phase is narrowly about regression coverage and surface cleanup. Next I’m diffing the current public API, docstrings, and targeted tests to find any remaining assertions or examples that still encode removed compatibility behavior.
+
+The implementation surface is mostly in place already. I’m now checking whether the regression suites and public exports still have stale assumptions, then I’ll patch only the focused test/docstring mismatches and validate with the spec’s test list.
+
+The focused tests already exist, so the fastest way to find remaining cleanup is to run the required suites and fix concrete failures instead of guessing. I’m also scanning for stale public-surface strings like `typed_input`, `root=`, and mapping-style `writes` examples in the active modules.
+
+`pytest` isn’t on the shell path here, so I need to use the repo’s Python runner instead of assuming a global install. I’m checking the project tooling next so I can run the required suites through the right entrypoint and then patch only the failures.
+
+The repo has a local virtualenv, so I can validate against that instead of the system interpreter. I’m running the focused policy, SDK, and simple suites first to surface the specific regression-cleanup gaps.
+
+The focused suites are green, so the remaining work is contract hardening rather than bug fixing. I’m checking the SDK helper surfaces for missing public-facing guidance and any stale example shape that still encodes the old vocabulary.
+
+The current focused contract tests are passing. I’m running the full required validation list from the spec now, then I’ll decide whether a code/doc patch is still warranted or whether this phase should close with verification plus notes only.
+
+The runtime behavior is green, but one contract gap is still unpinned: the spec’s required public docstrings and the `provider_questions` vs `control_routes` distinction aren’t explicitly tested. I’m adding narrow regression checks for those strings and tightening the SDK docstrings so the public surface stays aligned.
+
+I’ve patched only the public-contract docstrings and added regression tests that pin them. Next I’m rerunning the impacted suites, then the full required validation list, and after that I’ll update the phase notes with the exact evidence.
+
+The code and the required validation set are green now. I’m recording the phase-local decisions and implementation notes next so later turns don’t lose the docstring-contract pinning or the exact validation evidence.
+
+I’ve finished the phase-local edits and notes. I’m doing one last diff summary pass so the closeout can be precise about exactly what changed and what validation evidence exists.
+
+Scope considered
+
+Phase-local regression cleanup only: public SDK/simple/policy surface, focused regression tests, required validation suites, and the phase artifacts/decision log. I did not widen into CLI/config/provider-emitter changes.
+
+What I analyzed
+
+I checked the current shared `Policy`/SDK/simple implementation against the active phase contract, reviewed the focused regression files, and validated the public docstring surface in [autoloop/sdk.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/autoloop/sdk.py), [tests/unit/test_policy.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/tests/unit/test_policy.py), and [tests/unit/test_sdk_facade.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/tests/unit/test_sdk_facade.py). I also updated the phase notes in [implementation_notes.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/final-standalone-implementation-spec-shared-inhe-c4aa316d/runs/run-20260508T141115Z-6c430e1a/artifacts/implement/phases/regression-cleanup/implementation_notes.md) and appended the non-obvious decision to [decisions.txt](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/final-standalone-implementation-spec-shared-inhe-c4aa316d/runs/run-20260508T141115Z-6c430e1a/decisions.txt).
+
+What I changed
+
+I tightened SDK public docstrings in [autoloop/sdk.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/autoloop/sdk.py) so they now explicitly document:
+- `workspace` vs `.autoloop`
+- `prompt` vs `message`
+- `provider_questions` as SDK/runtime behavior distinct from simple authoring `control_routes`
+
+I added regression coverage for:
+- the required `Policy` docstring contract in [tests/unit/test_policy.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/tests/unit/test_policy.py)
+- the required SDK docstring/public-surface contract in [tests/unit/test_sdk_facade.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/tests/unit/test_sdk_facade.py)
+
+Validation:
+- `.venv/bin/pytest tests/unit/test_policy.py tests/unit/test_sdk_facade.py tests/runtime/test_sdk_policy.py tests/unit/test_simple_surface.py -q`
+- `.venv/bin/pytest tests/unit/test_provider_policy.py tests/runtime/test_provider_policy_steps.py tests/runtime/test_provider_policy_emitters.py tests/runtime/test_provider_policy_config.py tests/unit/test_simple_surface.py tests/unit/test_sdk_facade.py tests/unit/test_policy.py tests/runtime/test_sdk_policy.py -q`
+- Result: `212 passed`
+
+Key findings / decisions
+
+The functional API work from prior phases was already green; the remaining gap was that the docstring contract from the spec was not explicitly pinned. This phase now locks that down so future drift on `Policy`, `workspace`, `prompt`/`message`, or `provider_questions`/`control_routes` will fail focused tests.
+
+Open issues / next step
+
+No open issues from this phase. The required targeted suites passed after the docstring and regression-test updates.

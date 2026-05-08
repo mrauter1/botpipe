@@ -43,6 +43,17 @@ def test_public_policy_imports_and_all() -> None:
     assert PermissionMode.FULL_AUTO_UNSANDBOXED.value == "full_auto_unsandboxed"
 
 
+def test_policy_docstring_describes_sparse_inheriting_public_contract() -> None:
+    doc = public_policy.Policy.__doc__
+
+    assert doc is not None
+    assert "stores only supplied fields" in doc
+    assert "inherit from the effective" in doc
+    assert "policy enums rather than raw strings" in doc
+    assert "network_domains implies limited network mode" in doc
+    assert "permission_mode=PermissionMode.FULL_AUTO_UNSANDBOXED" in doc
+
+
 def test_policy_rejects_raw_strings_for_enum_backed_fields() -> None:
     with pytest.raises(TypeError):
         public_policy.Policy(effort="medium")

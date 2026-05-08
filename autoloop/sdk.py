@@ -500,7 +500,9 @@ class Autoloop:
         `message` is the task or run request. `input` is typed workflow input, and
         `params` are workflow parameters. `policy` is a per-run policy layer whose
         unset values inherit from SDK client defaults, workflow policy, runtime
-        config policy, and system defaults. It is not a hard security cap.
+        config policy, and system defaults. `provider_questions` is an SDK/runtime
+        behavior option for provider-driven pauses; it is distinct from simple
+        workflow authoring `control_routes`. `policy` is not a hard security cap.
         """
 
         if message is not None and not isinstance(message, str):
@@ -638,6 +640,12 @@ class Autoloop:
         retry: int = 3,
         policy: PolicyInput = None,
     ) -> Any:
+        """Run one direct LLM operation.
+
+        `prompt` is the provider instruction for the operation. `policy` is an
+        explicit operation policy layer resolved after runtime config defaults and
+        the SDK client default policy.
+        """
         try:
             return llm_call(
                 prompt if isinstance(prompt, Prompt) else prompt,
@@ -659,6 +667,12 @@ class Autoloop:
         retry: int = 3,
         policy: PolicyInput = None,
     ) -> str:
+        """Run one direct classification operation.
+
+        `prompt` is the provider instruction for the operation. `policy` is an
+        explicit operation policy layer resolved after runtime config defaults and
+        the SDK client default policy.
+        """
         try:
             return classify_call(
                 prompt if isinstance(prompt, Prompt) else prompt,
@@ -692,7 +706,9 @@ class Autoloop:
         `policy` applies only to this SDK step invocation. The supplied step object
         is not mutated. `message` is the task or run request. `input` is typed input
         for the synthetic invocation when applicable, and `params` are workflow
-        parameters for that synthetic invocation.
+        parameters for that synthetic invocation. `provider_questions` is an
+        SDK/runtime behavior option and remains distinct from simple authoring
+        `control_routes` on the step definition.
         """
 
         invocation_policy = _normalize_sdk_policy_input(policy)
@@ -745,6 +761,12 @@ class Autoloop:
         provider_questions: bool | None = None,
         retention: RetentionPolicy | None = None,
     ) -> StepResult:
+        """Build and run one prompt step.
+
+        `prompt` is the provider instruction for the step, while `message` is the
+        task or run request. `policy` attaches to the constructed step as its
+        authored policy before invocation-local layering.
+        """
         step_def = PromptStep(
             name=name,
             producer=_normalize_prompt(prompt),
@@ -792,6 +814,12 @@ class Autoloop:
         provider_questions: bool | None = None,
         retention: RetentionPolicy | None = None,
     ) -> StepResult:
+        """Build and run one produce/verify step.
+
+        `producer` and `verifier` are provider instructions, while `message` is the
+        task or run request. `policy` attaches to the constructed step as its
+        authored policy before invocation-local layering.
+        """
         step_def = ProduceVerifyStep(
             name=name,
             producer=_normalize_prompt(producer),
@@ -835,6 +863,11 @@ class Autoloop:
         max_steps: int | None = None,
         retention: RetentionPolicy | None = None,
     ) -> StepResult:
+        """Build and run one Python step.
+
+        `message` is the task or run request for the synthetic invocation. `policy`
+        attaches to the constructed step as its authored provider-operation policy.
+        """
         step_def = PythonStep(
             name=name,
             handler=handler,
@@ -874,6 +907,12 @@ class Autoloop:
         provider_questions: bool | None = None,
         retention: RetentionPolicy | None = None,
     ) -> StepResult:
+        """Build and run one child-workflow step.
+
+        `message` is the outer task or run request for the synthetic invocation.
+        `child_message` is the child workflow request when it differs. `policy`
+        attaches to the constructed child-workflow step as its authored policy.
+        """
         step_def = ChildWorkflowStep(
             name=name,
             workflow=workflow,
