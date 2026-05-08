@@ -38,7 +38,7 @@ phases:
       - "Replace duplicated policy enums/helpers in `autoloop/simple.py` with imports and re-exports from `autoloop.policy`."
       - "Update workflow, step, and inline operation normalization/typing to accept `PolicyInput` while keeping internal compatibility with concrete core policy objects."
       - "Update compiler validation and fingerprinting so public `Policy.to_layer_payload()` participates in workflow/step topology fingerprints."
-      - "Update root-package exports to re-export public policy names and stop exporting `PolicyOverride`."
+      - "Implement the exact module export matrix: `autoloop.policy.__all__` includes `PolicyInput` and `resolve_policy_layer`, `autoloop.sdk` re-exports `PolicyInput`, `autoloop.__init__` and `autoloop.simple` re-export only the shared policy facade/enums, and no public module exports `PolicyOverride`."
     out_of_scope:
       - "Do not introduce new policy abstractions outside `autoloop.policy`."
       - "Do not let SDK run policy affect workflow topology hash."
@@ -50,7 +50,7 @@ phases:
       - id: "AC-2"
         text: "Compiler cache and topology fingerprinting remain deterministic and change when authored workflow/step `Policy` layers differ."
       - id: "AC-3"
-        text: "Public imports from `autoloop`, `autoloop.policy`, `autoloop.simple`, and `autoloop.sdk` expose the required shared policy names and no public `PolicyOverride` export remains."
+        text: "Module-specific imports and `__all__` contents match the spec exactly: `PolicyInput` appears in `autoloop.policy` and `autoloop.sdk` only, `resolve_policy_layer` is in `autoloop.policy.__all__`, and no public `PolicyOverride` export remains."
     deliverables:
       - "Simple-surface and compiler integration for shared policy acceptance and fingerprinting."
       - "Updated root/simple export expectations aligned with the new public surface."
@@ -67,6 +67,7 @@ phases:
     in_scope:
       - "Update `Autoloop.__init__`, `run`, `step`, helper methods, and direct operations to use `workspace`, `input`, `params`, and `policy: PolicyInput`."
       - "Add SDK client default policy and SDK run policy wiring through `RunnerOptions` and `ProviderPolicyResolver` instead of hand-merging in the SDK."
+      - "Keep the public path contract explicit: `workspace` is the actual project root, `.autoloop` remains `state_root`, and provider filesystem policy paths stay relative to `workspace` rather than `.autoloop`."
       - "Ensure inline operations inside workflow steps inherit the resolved current-step policy and that direct SDK operations use the shared resolver/path without workflow-step inheritance."
       - "Apply `client.step(..., policy=...)` as an invocation-local layer after the authored step policy without mutating the original step object."
       - "Support simple-style `writes=(Md(...), Json(...), Text(...), Raw(...))` as the canonical SDK helper shape."
@@ -81,7 +82,7 @@ phases:
       - id: "AC-2"
         text: "Direct SDK operations, workflow runs, inline operations, and synthetic step invocations all resolve effective provider policy through one consistent merge-order contract."
       - id: "AC-3"
-        text: "Reusing a step object after a `client.step(..., policy=...)` call does not retain the invocation-local policy."
+        text: "Workspace-path semantics remain correct: `workspace` is the project root, `.autoloop` is only state storage, `Policy(allow_write=\"reports/\")` stays workspace-relative, and reusing a step object after `client.step(..., policy=...)` does not retain the invocation-local policy."
     deliverables:
       - "SDK signature, docstring, and runtime wiring updates aligned with the spec."
       - "Resolver-owned merge-order support for runtime config, SDK default policy, workflow policy, run policy, step policy, and inline explicit policy."
@@ -96,7 +97,7 @@ phases:
     objective: "Update regression coverage and public-surface expectations to the new greenfield contract, then validate the cross-cutting change set."
     status: "planned"
     in_scope:
-      - "Rewrite or add focused tests for exports, enum validation, sparse inheritance, dangerous access, SDK naming removals, SDK default/run policy precedence, and invocation-local step policy behavior."
+      - "Rewrite or add focused tests for the exact export matrix, enum validation, sparse inheritance, dangerous access, SDK naming removals, workspace-vs-state-root path semantics, SDK default/run policy precedence, and invocation-local step policy behavior."
       - "Run the required targeted test commands from the spec and any new `test_policy.py` / `test_sdk_policy.py` files if added."
       - "Refresh docstrings and public examples so they consistently show `Policy` as the only public facade and distinguish `prompt` from `message` plus `control_routes` from `provider_questions`."
     out_of_scope:
@@ -108,7 +109,7 @@ phases:
       - id: "AC-1"
         text: "Targeted policy, runtime, simple, and SDK suites cover the new contract and stop asserting removed public compatibility layers."
       - id: "AC-2"
-        text: "Docstrings and public examples consistently use `Policy`, `workspace`, `input`, `params`, and the simple-style `writes` vocabulary required by the spec."
+        text: "Docstrings, public examples, and focused tests consistently encode `Policy`, `workspace`, `input`, `params`, the simple-style `writes` vocabulary, and the workspace-vs-state-root distinction required by the spec."
       - id: "AC-3"
         text: "Validation evidence shows the required targeted test commands pass, with any additional fallout explicitly triaged before closure."
     deliverables:

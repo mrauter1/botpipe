@@ -21,6 +21,7 @@ Implement the superseding greenfield public policy surface exactly as specified:
   - Re-export shared policy names from `autoloop.policy`.
   - Rename public SDK constructor/input parameters to `workspace`, `input`, and `params`.
   - Add `default_policy` and run-level / operation-level / step-invocation `policy: PolicyInput`.
+  - Preserve the public distinction `workspace = actual project root` and `state_root = workspace / ".autoloop"`; policy filesystem paths must stay relative to `workspace`, not `.autoloop`.
   - Preserve step-object immutability by using an invocation-local wrapper/copy when `client.step(..., policy=...)` needs an extra layer.
 - `autoloop/core/compiler.py`, `autoloop/core/steps.py`, and workflow validation/discovery surfaces
   - Accept `PolicyInput` anywhere authored workflow/step/operation policies are stored or validated.
@@ -36,6 +37,7 @@ Implement the superseding greenfield public policy surface exactly as specified:
 - `autoloop.simple.Policy(...)` currently returns a fully materialized `ProviderPolicy` seeded from `SYSTEM_DEFAULT_PROVIDER_POLICY`; `simple.PolicyOverride(...)` is a separate public sparse override facade. This is the primary behavior break.
 - `autoloop.simple` currently owns duplicated policy enums and flat lowering helpers; `autoloop/__init__.py` re-exports `PolicyOverride`, and existing surface tests assert it.
 - `autoloop.sdk.Autoloop` still exposes `root=` and positional `typed_input`, and helper methods still use mapping-style `writes` plus concrete-policy-only typing.
+- The SDK currently derives `state_dir` from the resolved root, so a rename to `workspace` must keep the public contract explicit: `workspace` is the user project root, while `.autoloop` remains internal runtime state rooted under that workspace.
 - `ProviderPolicyResolver` currently merges only `SYSTEM_DEFAULT_PROVIDER_POLICY -> runtime config default -> workflow -> step`, and inline operations inherit only the current compiled step policy plus explicit override.
 - Compiler fingerprinting currently understands only `ProviderPolicy` and `ProviderPolicyOverride` JSON payloads, so public `Policy` needs deterministic payload support without changing topology semantics for SDK run policy.
 
@@ -43,11 +45,18 @@ Implement the superseding greenfield public policy surface exactly as specified:
 
 - Public `Policy(...)` stores only authored fields, treats `read_only=False` as unset, and resolves against an ambient or explicit base without eagerly filling defaults.
 - `Policy.resolve(base=None)` resolves against `SYSTEM_DEFAULT_PROVIDER_POLICY`; `Policy(base=<Policy|ProviderPolicy|None>)` recursively resolves explicit bases with cycle protection.
+- Public `workspace` always means the actual project/repository working directory; `.autoloop` is only the internal `state_root = workspace / ".autoloop"` and must never become the basis for public policy path relativity.
+- Filesystem policy paths such as `allow_write="reports/"` remain relative to the effective workspace root unless absolute paths are intentionally supplied and allowed by the core policy layer.
 - Raw strings must be rejected for enum-backed public `Policy(...)` fields; internal serialized core policy values remain strings.
 - Concrete `ProviderPolicy` remains a complete core policy object, not a public inheriting layer.
 - Final provider policy validation remains the hard enforcement boundary and must still catch cross-layer dangerous-access conflicts after merging.
 - SDK run policy must affect effective execution policy but must not affect workflow topology hash.
 - Inline operations inside workflow execution inherit the current resolved step policy before applying explicit operation policy; direct SDK operations do not inherit workflow-step state.
+- The module export matrix must match the spec exactly:
+  - `autoloop.policy.__all__` exports `Policy`, `PolicyInput`, all public enums, and `resolve_policy_layer`
+  - `autoloop.sdk` re-exports `PolicyInput` plus the shared policy facade/enums
+  - `autoloop.__init__` and `autoloop.simple` re-export the policy facade/enums only, without `PolicyInput`
+  - no public module exports `PolicyOverride`
 
 ## Milestones
 
@@ -67,12 +76,20 @@ Implement the superseding greenfield public policy surface exactly as specified:
 - Replace simple-surface duplicated policy definitions with imports/re-exports from `autoloop.policy`.
 - Update workflow/step/operation normalization to accept `Policy`, `ProviderPolicy`, `ProviderPolicyOverride`, or `None`.
 - Update workflow validation, compiled step/workflow typing, and topology fingerprinting so public `Policy` payloads are JSON-serializable, deterministic, and participate in compile caching where authored workflow/step policy changes topology.
+- Implement the exact public export contract rather than a generic re-export:
+  - `autoloop.policy.__all__` must include `PolicyInput` and `resolve_policy_layer`
+  - `autoloop.sdk` must re-export `PolicyInput`
+  - `autoloop.__init__` and `autoloop.simple` must not leak `PolicyInput`
 - Keep dependency direction one-way: `autoloop.policy` may depend on core policy types, but must not import `simple` or `sdk`.
 
 ### 3. SDK and runtime merge-order alignment
 
 - Update `Autoloop.__init__` to use `workspace=` and accept `default_policy: PolicyInput = None`; remove public `root=` compatibility.
 - Update `Autoloop.run(...)` and `Autoloop.step(...)` to use `input=` and `params=` with `policy: PolicyInput = None`; remove public `typed_input=` and `parameters=` compatibility.
+- Keep workspace semantics explicit in code, docstrings, and tests:
+  - `workspace` is the user repository/project root
+  - `state_root` remains `workspace / ".autoloop"`
+  - policy filesystem relativity and path-validation tests must stay anchored to `workspace`, not `state_root`
 - Re-export shared policy names from `autoloop.sdk` and root package, and remove public `PolicyOverride` from exported surfaces and examples.
 - Extend `RunnerOptions` and `ProviderPolicyResolver` so resolver-owned merge order is:
   - `SYSTEM_DEFAULT_PROVIDER_POLICY`
@@ -90,8 +107,10 @@ Implement the superseding greenfield public policy surface exactly as specified:
 - Rewrite public-surface tests that currently assert `PolicyOverride`, `root=`, or `typed_input=` compatibility so they instead assert the intentional breakage from this spec.
 - Add focused tests for:
   - imports/re-exports from `autoloop`, `autoloop.policy`, `autoloop.simple`, and `autoloop.sdk`
+  - exact module `__all__` coverage, including `PolicyInput` being present in `autoloop.policy` and `autoloop.sdk` only, plus `resolve_policy_layer` in `autoloop.policy.__all__`
   - enum rejection for raw strings
   - sparse inheritance and explicit-base resolution
+  - workspace-vs-state-root path semantics, including `Policy(allow_write="reports/")` and `Autoloop(workspace=tmp_path)` path-relativity assertions
   - SDK client default policy, run policy, and `client.step(..., policy=...)` precedence
   - topology fingerprint changes for authored workflow/step `Policy` layers only
 - Run the required targeted suites from the spec, plus `tests/unit/test_policy.py` and `tests/runtime/test_sdk_policy.py` if created.
@@ -109,6 +128,9 @@ Implement the superseding greenfield public policy surface exactly as specified:
 - Public surface and SDK coverage:
   - `pytest tests/unit/test_simple_surface.py`
   - `pytest tests/unit/test_sdk_facade.py`
+- Explicit contract assertions to include inside the targeted coverage:
+  - exact module export / `__all__` matrix for `autoloop.policy`, `autoloop.sdk`, `autoloop.simple`, and `autoloop.__init__`
+  - workspace-path relativity tests proving `workspace` is the project root and `.autoloop` is only state storage
 - If merge-order or fingerprint changes fan out beyond the targeted suites, run the broader affected buckets before closing because compiler cache, runtime resolver behavior, and root exports are cross-cutting.
 
 ## Compatibility / Intentional Behavior Break
@@ -132,6 +154,10 @@ Implement the superseding greenfield public policy surface exactly as specified:
   - Control: make `ProviderPolicyResolver` and shared policy helpers the only merge owners; SDK should pass layers, not merged policies.
 - Risk: removing `PolicyOverride` and renaming SDK arguments will break a large number of existing tests and exports in ways that obscure real regressions.
   - Control: update public-surface tests first in the implementation sequence and keep compatibility removals explicit in failure triage.
+- Risk: a surface-only rename from `root` to `workspace` could leave policy path relativity anchored to `.autoloop` or `state_dir`, causing a silent public-contract regression.
+  - Control: keep workspace/state-root semantics explicit in invariants, docstrings, resolver tests, and SDK path-relativity assertions.
+- Risk: module imports can appear to work while still violating the exact `__all__` / re-export contract requested by the spec.
+  - Control: treat the export matrix as an explicit acceptance item and assert module-specific `__all__` contents rather than only ad hoc imports.
 - Risk: topology hashing could become unstable if `Policy.to_layer_payload()` includes non-deterministic or non-JSON-safe values.
   - Control: normalize enums to strings, paths to strings, tuples/lists to deterministic order, and serialize explicit bases recursively.
 - Risk: dangerous-access interactions can regress if same-layer and cross-layer validation are split inconsistently.
