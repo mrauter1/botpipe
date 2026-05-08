@@ -6,3 +6,5 @@
 - Phase Directory Key: sdk-runtime-alignment
 - Phase Title: SDK And Runtime Alignment
 - Scope: phase-local authoritative verifier artifact
+
+- Added runtime SDK policy coverage for the full inline-operation merge stack and for the workspace-vs-state-root contract when `allow_write="reports/"` is applied through the SDK. Re-ran the focused SDK/runtime subset after the additions.
