@@ -2101,3 +2101,61 @@ No open issues in this phase scope.
 <loop-control>
 {"schema":"docloop.loop_control/v1","kind":"promise","promise":"COMPLETE"}
 </loop-control>
+
+
+---
+run_id=run-20260508T205237Z-432ec7b1 | entry=session_turn | pair=audit | phase=producer | cycle=1 | attempt=1 | thread_id=019e0966-d251-7230-a830-41deb412e426
+---
+provider=codex
+mode=start
+template=/home/rauter/.local/share/pipx/venvs/autoloop/lib/python3.12/site-packages/autoloop/templates/audit_producer.md
+session_id=019e0966-d251-7230-a830-41deb412e426
+
+
+---
+run_id=run-20260508T205237Z-432ec7b1 | entry=phase_output | pair=audit | phase=producer | process=codex-agent | cycle=1 | attempt=1 | thread_id=019e0966-d251-7230-a830-41deb412e426
+---
+I’m auditing the run-local rename work against the original request, clarifications, artifacts, and final environment state first. Then I’ll write the audit outputs under the run’s `artifacts/audit` directory only.
+
+I’ve got the authoritative request and decision trail. Next I’m checking the implementation/test artifacts, the changed smoke test, and the live `.venv` state to decide whether any material gap remains.
+
+The artifact story is consistent so far, but I still need independent proof from the final checkout and `.venv`, not only the phase notes. I’m running the requested environment checks and a narrow scan for any accidental legacy CLI/package alias surface.
+
+The independent checks already confirm the live install state is repaired. I’m waiting for the focused smoke file to finish, then I’ll write the audit report and follow-up request based on whether anything material is still missing.
+
+I’m doing a last scope check against the working tree so the audit doesn’t accidentally attribute unrelated dirt to this run. After that I’ll write the audit artifacts with either a clean closeout or a focused follow-up request.
+
+I’ve concluded there isn’t a material gap left in the requested run-local scope. I’m writing the audit artifacts now: a gap report documenting the evidence, a no-follow-up revised request, and the machine-readable result.
+
+The audit artifacts are written. I’m doing a quick verification pass on those files and the JSON shape so the handoff is clean for the verifier.
+
+The file contents are correct. One verification command failed only because plain `python` is not on this shell path, so I’m re-running the JSON parse with the repo venv interpreter to close that loop cleanly.
+
+Scope considered
+
+Run-local audit of the Botlane rename request using the immutable request, authoritative raw log clarifications, `decisions.txt`, plan/implement/test artifacts, `pyproject.toml`, `tests/runtime/test_wheel_packaging_smoke.py`, the strictness guard context, and the final `.venv` install state. I ignored unrelated dirty files outside this run’s scope.
+
+What I analyzed
+
+I compared the requested outcomes against the final packaging metadata, the added wheel and repo-local editable-install smoke coverage, and independent run-local checks. I verified `./.venv/bin/pip show botlane-v3-surface`, `./.venv/bin/pip show autoloop-v3-surface`, `.venv/bin/botlane`, absence of `.venv/bin/autoloop`, installed `entry_points.txt`, and `./.venv/bin/pytest -q tests/runtime/test_wheel_packaging_smoke.py` (`2 passed`).
+
+What I changed
+
+I wrote the audit artifacts in `/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/additional-botlane-rename-requirements-discovere-28c3ecb0/runs/run-20260508T205237Z-432ec7b1/artifacts/audit`:
+- `gap_report.md`
+- `revised_request.md`
+- `audit_result.json`
+- `criteria.md`
+- `feedback.md`
+
+Key findings / decisions
+
+No material unresolved gaps remain in the requested run-local scope. The active repo virtualenv is installed as `botlane-v3-surface`, exposes `botlane`, does not expose `autoloop`, and the focused smoke coverage now proves both the fresh-wheel and repo-local editable-install surfaces. The only notable differences were justified by the recorded decisions: packaging smoke now runs from an isolated working directory to avoid false positives, and the repo-local proof is intentionally scoped to the existing run-local `.venv`.
+
+Open issues / next step
+
+No follow-up implementation run is required. `audit_result.json` records `material_gaps_found: false`, and `revised_request.md` states that no follow-up implementation is needed.
+
+<loop-control>
+{"schema":"docloop.loop_control/v1","kind":"promise","promise":"INCOMPLETE"}
+</loop-control>

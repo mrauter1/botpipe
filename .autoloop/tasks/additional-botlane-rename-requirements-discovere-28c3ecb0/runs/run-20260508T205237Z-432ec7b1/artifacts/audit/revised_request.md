@@ -1,1 +1,1 @@
-# revised_request.md
+No follow-up implementation is required. The run-local Botlane rename request is satisfied: the active repository `.venv` is installed as `botlane-v3-surface`, exposes `botlane`, does not expose `autoloop`, and focused packaging smoke now proves both the fresh-wheel and repo-local editable-install surfaces.
