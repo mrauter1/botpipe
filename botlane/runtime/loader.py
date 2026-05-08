@@ -44,8 +44,9 @@ from botlane.core.workflow_catalog import (
     workflow_search_roots,
 )
 
-_NAMED_CATALOG_REFERENCE_ATTR = "__autoloop_named_catalog_reference__"
-_NAMED_CATALOG_SOURCE_ROOT_ATTR = "__autoloop_named_catalog_source_root__"
+_NAMED_CATALOG_REFERENCE_ATTR = "__botlane_named_catalog_reference__"
+_NAMED_CATALOG_SOURCE_ROOT_ATTR = "__botlane_named_catalog_source_root__"
+_WORKSPACE_MODULE_NAMESPACE = "_botlane_workspace_workflows"
 
 
 class WorkflowManifestError(ValueError):
@@ -1323,7 +1324,7 @@ def _load_isolated_python_module(source_path: Path) -> ModuleType:
         package_source_root = _isolated_package_source_root(source_path)
         package_module_name, module_name = _isolated_package_module_name(source_path)
         _evict_isolated_namespace(package_module_name)
-        _ensure_namespace_package("_autoloop_workspace_workflows", ())
+        _ensure_namespace_package(_WORKSPACE_MODULE_NAMESPACE, ())
         _ensure_namespace_package(
             ".".join(package_module_name.split(".")[:2]),
             (str(package_source_root),),
@@ -1379,7 +1380,7 @@ def _evict_stale_repo_workflow_modules(module_name: str, root_path: Path) -> Non
 def _isolated_package_module_name(source_path: Path) -> tuple[str, str]:
     workflow_id = _sanitize_identifier(source_path.parent.name or source_path.stem)
     package_digest = sha1(str(_isolated_package_source_root(source_path)).encode("utf-8")).hexdigest()[:12]
-    package_module = f"_autoloop_workspace_workflows.{package_digest}.{workflow_id}"
+    package_module = f"{_WORKSPACE_MODULE_NAMESPACE}.{package_digest}.{workflow_id}"
     if source_path.name == "__init__.py":
         return package_module, package_module
     return package_module, f"{package_module}.{source_path.stem}"
@@ -1392,7 +1393,7 @@ def _isolated_package_source_root(source_path: Path) -> Path:
 def _isolated_module_name(source_path: Path) -> str:
     workflow_id = _sanitize_identifier(source_path.stem)
     digest = sha1(str(source_path.resolve()).encode("utf-8")).hexdigest()[:12]
-    return f"_autoloop_workspace_workflows.{digest}.{workflow_id}"
+    return f"{_WORKSPACE_MODULE_NAMESPACE}.{digest}.{workflow_id}"
 
 
 def _sanitize_identifier(value: str) -> str:
@@ -1468,19 +1469,19 @@ def _no_bytecode_writes():
 
 
 def _cleanup_workflow_pycache(root_path: Path) -> None:
-    workspace_root = root_path / ".autoloop" / "workflows"
-    if not workspace_root.is_dir():
-        return
-    for pycache_dir in sorted(workspace_root.rglob("__pycache__"), reverse=True):
-        if not pycache_dir.is_dir():
+    for search_root in workflow_search_roots(root_path):
+        if search_root.kind != "workspace" or search_root.import_prefix is not None or not search_root.path.is_dir():
             continue
-        for candidate in pycache_dir.iterdir():
-            if candidate.is_file():
-                candidate.unlink()
-        try:
-            pycache_dir.rmdir()
-        except OSError:
-            continue
+        for pycache_dir in sorted(search_root.path.rglob("__pycache__"), reverse=True):
+            if not pycache_dir.is_dir():
+                continue
+            for candidate in pycache_dir.iterdir():
+                if candidate.is_file():
+                    candidate.unlink()
+            try:
+                pycache_dir.rmdir()
+            except OSError:
+                continue
 
 
 __all__ = [

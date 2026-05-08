@@ -34,14 +34,14 @@ EXIT_RESOLUTION_ERROR = 3
 
 _WORKSPACE_HELP = (
     "Workspace directory. Package workflows are loaded from the installed botlane package; "
-    "workspace workflows are loaded from the workspace workflow directory."
+    "workspace workflows are loaded from `.botlane/workflows/`."
 )
 
 
 def build_arg_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(
         prog="botlane",
-        description="Run workflows through the filesystem botlane runtime.",
+        description="Run workflows through the filesystem Botlane runtime.",
     )
     subparsers = parser.add_subparsers(dest="command", required=True)
 
@@ -180,7 +180,7 @@ def build_arg_parser() -> argparse.ArgumentParser:
     init_workflow = init_subparsers.add_parser(
         "workflow",
         parents=[common],
-        help="Create a workflow scaffold in the workspace workflow directory.",
+        help="Create a workflow scaffold in `.botlane/workflows/`.",
     )
     init_workflow.add_argument("name", help="Workflow name.")
     init_workflow.add_argument(
@@ -491,7 +491,7 @@ def _handle_init_workflow(args: argparse.Namespace, *, provider_factory: Callabl
     if not workflow_name.replace("_", "").isalnum() or workflow_name[0].isdigit():
         raise ConfigError("workflow name must be a valid Python package identifier using letters, digits, or underscores")
 
-    workflows_root = root / ".autoloop" / "workflows"
+    workflows_root = root / ".botlane" / "workflows"
     workflows_root.mkdir(parents=True, exist_ok=True)
 
     class_name = _workflow_class_name(workflow_name)

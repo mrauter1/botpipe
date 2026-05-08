@@ -187,7 +187,7 @@ def _sdk_client(tmp_path: Path, provider: object) -> Botlane:
     return Botlane(
         workspace=tmp_path,
         provider=provider,
-        state_dir=tmp_path / ".autoloop",
+        state_dir=tmp_path / ".botlane",
         runtime_config=RuntimeConfig(git_tracking=GitTrackingRuntimeConfig(enabled=False, commit_policy="off")),
     )
 
@@ -196,7 +196,7 @@ def _sdk_client_at_root(tmp_path: Path, provider: object, *, retention: Retentio
     return Botlane(
         workspace=tmp_path,
         provider=provider,
-        state_dir=tmp_path / ".autoloop",
+        state_dir=tmp_path / ".botlane",
         runtime_config=RuntimeConfig(git_tracking=GitTrackingRuntimeConfig(enabled=False, commit_policy="off")),
         retention=retention,
     )
@@ -595,7 +595,7 @@ def test_sdk_step_supports_directly_resolvable_strict_child_workflow_steps(tmp_p
     client = Botlane(
         workspace=tmp_path,
         provider=ScriptedLLMProvider(),
-        state_dir=tmp_path / ".autoloop",
+        state_dir=tmp_path / ".botlane",
         runtime_config=RuntimeConfig(git_tracking=GitTrackingRuntimeConfig(enabled=False, commit_policy="off")),
     )
 
@@ -667,12 +667,12 @@ def test_sdk_constructor_uses_workspace_and_rejects_root_keyword(tmp_path: Path)
     client = Botlane(
         workspace=tmp_path,
         provider=ScriptedLLMProvider(),
-        state_dir=tmp_path / ".autoloop",
+        state_dir=tmp_path / ".botlane",
         runtime_config=RuntimeConfig(git_tracking=GitTrackingRuntimeConfig(enabled=False, commit_policy="off")),
     )
 
     assert client.workspace == tmp_path.resolve()
-    assert client.state_dir == (tmp_path / ".autoloop").resolve()
+    assert client.state_dir == (tmp_path / ".botlane").resolve()
 
     with pytest.raises(TypeError, match="root"):
         Botlane(root=tmp_path)  # type: ignore[call-arg]
@@ -687,7 +687,7 @@ def test_sdk_constructor_rejects_invalid_default_policy_with_public_wording(tmp_
             workspace=tmp_path,
             default_policy="ask",  # type: ignore[arg-type]
             provider=ScriptedLLMProvider(),
-            state_dir=tmp_path / ".autoloop",
+            state_dir=tmp_path / ".botlane",
             runtime_config=RuntimeConfig(
                 git_tracking=GitTrackingRuntimeConfig(enabled=False, commit_policy="off")
             ),
@@ -734,7 +734,7 @@ def test_sdk_public_docstrings_encode_workspace_policy_and_runtime_behavior_cont
 
     assert init_doc is not None
     assert "actual project or repository working directory" in init_doc
-    assert "`.autoloop` state directory" in init_doc
+    assert "`.botlane` state directory" in init_doc
     assert "SDK client-level" in init_doc
     assert "not a hard security cap" in init_doc
 
@@ -842,10 +842,10 @@ def test_sdk_step_result_value_stays_none_even_when_workflow_result_has_output(
         debug=SDKDebugInfo(
             task_id="sdk-noop",
             run_id="run-1",
-            task_dir=tmp_path / ".autoloop" / "tasks" / "sdk-noop",
-            workflow_dir=tmp_path / ".autoloop" / "tasks" / "sdk-noop" / "workflow",
-            run_dir=tmp_path / ".autoloop" / "tasks" / "sdk-noop" / "runs" / "run-1",
-            events_file=tmp_path / ".autoloop" / "tasks" / "sdk-noop" / "runs" / "run-1" / "events.jsonl",
+            task_dir=tmp_path / ".botlane" / "tasks" / "sdk-noop",
+            workflow_dir=tmp_path / ".botlane" / "tasks" / "sdk-noop" / "workflow",
+            run_dir=tmp_path / ".botlane" / "tasks" / "sdk-noop" / "runs" / "run-1",
+            events_file=tmp_path / ".botlane" / "tasks" / "sdk-noop" / "runs" / "run-1" / "events.jsonl",
             trace_file=None,
             checkpoint_file=None,
         ),
@@ -1142,7 +1142,7 @@ def test_sdk_run_too_many_pauses_keeps_task_scratch_by_default(tmp_path: Path) -
 
 def test_sdk_cleanup_only_targets_valid_completed_sdk_task_directories(tmp_path: Path) -> None:
     client = _sdk_client_at_root(tmp_path, ScriptedLLMProvider())
-    tasks_root = tmp_path / ".autoloop" / "tasks"
+    tasks_root = tmp_path / ".botlane" / "tasks"
     valid = tasks_root / "sdk-completed"
     failed = tasks_root / "sdk-failed"
     invalid = tasks_root / "manual-task"
@@ -1156,7 +1156,7 @@ def test_sdk_cleanup_only_targets_valid_completed_sdk_task_directories(tmp_path:
             "created_at": "2026-05-01T00:00:00Z",
             "retention_mode": "delete_task_scratch",
         }
-        (task_dir / ".autoloop-sdk-task.json").write_text(json.dumps(sentinel) + "\n", encoding="utf-8")
+        (task_dir / ".botlane-sdk-task.json").write_text(json.dumps(sentinel) + "\n", encoding="utf-8")
         run_dir = task_dir / "wf_test" / "runs" / "run-1"
         run_dir.mkdir(parents=True, exist_ok=True)
         (run_dir / "run.json").write_text(json.dumps({"status": status, "terminal": terminal}) + "\n", encoding="utf-8")
@@ -1180,16 +1180,44 @@ def test_sdk_cleanup_only_targets_valid_completed_sdk_task_directories(tmp_path:
     assert invalid.exists()
 
 
-def test_sdk_cleanup_honors_older_than_and_include_failed_opt_in(tmp_path: Path) -> None:
+def test_sdk_cleanup_reads_legacy_state_root_and_legacy_sentinel_names(tmp_path: Path) -> None:
     client = _sdk_client_at_root(tmp_path, ScriptedLLMProvider())
     tasks_root = tmp_path / ".autoloop" / "tasks"
+    legacy_task = tasks_root / "sdk-legacy"
+    legacy_task.mkdir(parents=True, exist_ok=True)
+    (legacy_task / ".autoloop-sdk-task.json").write_text(
+        json.dumps(
+            {
+                "schema": "botlane.sdk_task/v1",
+                "generated_by": "botlane.sdk",
+                "task_id": "sdk-legacy",
+                "created_at": "2026-05-01T00:00:00Z",
+                "retention_mode": "delete_task_scratch",
+            }
+        )
+        + "\n",
+        encoding="utf-8",
+    )
+    run_dir = legacy_task / "wf_test" / "runs" / "run-1"
+    run_dir.mkdir(parents=True, exist_ok=True)
+    (run_dir / "run.json").write_text(json.dumps({"status": "completed", "terminal": FINISH}) + "\n", encoding="utf-8")
+
+    result = client.cleanup()
+
+    assert legacy_task in result.deleted
+    assert legacy_task.exists() is False
+
+
+def test_sdk_cleanup_honors_older_than_and_include_failed_opt_in(tmp_path: Path) -> None:
+    client = _sdk_client_at_root(tmp_path, ScriptedLLMProvider())
+    tasks_root = tmp_path / ".botlane" / "tasks"
     old_completed = tasks_root / "sdk-old-completed"
     new_completed = tasks_root / "sdk-new-completed"
     old_failed = tasks_root / "sdk-old-failed"
 
     def seed_task(task_dir: Path, *, status: str, terminal: str, created_at: str) -> None:
         task_dir.mkdir(parents=True, exist_ok=True)
-        (task_dir / ".autoloop-sdk-task.json").write_text(
+        (task_dir / ".botlane-sdk-task.json").write_text(
             json.dumps(
                 {
                     "schema": "botlane.sdk_task/v1",
@@ -1230,12 +1258,12 @@ def test_sdk_cleanup_honors_older_than_and_include_failed_opt_in(tmp_path: Path)
 
 
 def test_safe_delete_sdk_task_dir_refuses_unsafe_candidates(tmp_path: Path) -> None:
-    tasks_root = tmp_path / ".autoloop" / "tasks"
+    tasks_root = tmp_path / ".botlane" / "tasks"
     tasks_root.mkdir(parents=True, exist_ok=True)
 
     non_sdk = tasks_root / "manual-task"
     non_sdk.mkdir()
-    (non_sdk / ".autoloop-sdk-task.json").write_text(
+    (non_sdk / ".botlane-sdk-task.json").write_text(
         json.dumps(
             {
                 "schema": "botlane.sdk_task/v1",
@@ -1256,7 +1284,7 @@ def test_safe_delete_sdk_task_dir_refuses_unsafe_candidates(tmp_path: Path) -> N
 
     mismatched = tasks_root / "sdk-mismatched"
     mismatched.mkdir()
-    (mismatched / ".autoloop-sdk-task.json").write_text(
+    (mismatched / ".botlane-sdk-task.json").write_text(
         json.dumps(
             {
                 "schema": "botlane.sdk_task/v1",
@@ -1272,7 +1300,7 @@ def test_safe_delete_sdk_task_dir_refuses_unsafe_candidates(tmp_path: Path) -> N
 
     wrong_schema = tasks_root / "sdk-wrong-schema"
     wrong_schema.mkdir()
-    (wrong_schema / ".autoloop-sdk-task.json").write_text(
+    (wrong_schema / ".botlane-sdk-task.json").write_text(
         json.dumps(
             {
                 "schema": "botlane.sdk_task/v0",
@@ -1288,7 +1316,7 @@ def test_safe_delete_sdk_task_dir_refuses_unsafe_candidates(tmp_path: Path) -> N
 
     wrong_owner = tasks_root / "sdk-wrong-owner"
     wrong_owner.mkdir()
-    (wrong_owner / ".autoloop-sdk-task.json").write_text(
+    (wrong_owner / ".botlane-sdk-task.json").write_text(
         json.dumps(
             {
                 "schema": "botlane.sdk_task/v1",
@@ -1304,7 +1332,7 @@ def test_safe_delete_sdk_task_dir_refuses_unsafe_candidates(tmp_path: Path) -> N
 
     outside = tmp_path / "sdk-outside"
     outside.mkdir()
-    (outside / ".autoloop-sdk-task.json").write_text(
+    (outside / ".botlane-sdk-task.json").write_text(
         json.dumps(
             {
                 "schema": "botlane.sdk_task/v1",

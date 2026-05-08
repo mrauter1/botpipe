@@ -479,7 +479,7 @@ def test_resolve_runtime_config_reads_full_auto_runtime_policy(
 ) -> None:
     config_root = tmp_path / "repo"
     config_root.mkdir()
-    (config_root / "autoloop.yaml").write_text("runtime:\n  full_auto: true\n", encoding="utf-8")
+    (config_root / "botlane.yaml").write_text("runtime:\n  full_auto: true\n", encoding="utf-8")
     monkeypatch.setattr(runtime_config, "user_config_dir", lambda: tmp_path / "missing-user-config")
 
     resolved = resolve_runtime_config(config_root, _runtime_args())
@@ -493,7 +493,7 @@ def test_resolve_runtime_config_reads_valid_nested_runtime_policy_without_pyyaml
 ) -> None:
     config_root = tmp_path / "repo"
     config_root.mkdir()
-    (config_root / "autoloop.yaml").write_text(
+    (config_root / "botlane.yaml").write_text(
         "runtime:\n  full_auto: true\n  tracing:\n    include_state_snapshots: false\n",
         encoding="utf-8",
     )
@@ -510,7 +510,7 @@ def test_load_runtime_config_file_without_pyyaml_rejects_indented_child_under_sc
     tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    config_path = tmp_path / "autoloop.yaml"
+    config_path = tmp_path / "botlane.yaml"
     config_path.write_text("runtime: true\n  full_auto: false\n", encoding="utf-8")
     monkeypatch.setattr(runtime_config, "yaml", None)
 
@@ -522,7 +522,7 @@ def test_load_runtime_config_file_without_pyyaml_rejects_overindented_sibling_ma
     tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    config_path = tmp_path / "autoloop.yaml"
+    config_path = tmp_path / "botlane.yaml"
     config_path.write_text("provider:\n  name: codex\n    model: gpt-5\n", encoding="utf-8")
     monkeypatch.setattr(runtime_config, "yaml", None)
 
@@ -806,7 +806,7 @@ def test_parse_runtime_config_rejects_invalid_git_commit_policy(tmp_path: Path) 
     with pytest.raises(ConfigError, match=r"runtime\.git_tracking\.commit_policy"):
         runtime_config.parse_runtime_config(
             {"runtime": {"git_tracking": {"commit_policy": "invalid"}}},
-            tmp_path / "autoloop.yaml",
+            tmp_path / "botlane.yaml",
         )
 
 
@@ -814,7 +814,7 @@ def test_parse_runtime_config_rejects_non_mapping_git_tracking_section(tmp_path:
     with pytest.raises(ConfigError, match=r"runtime\.git_tracking must be a mapping"):
         runtime_config.parse_runtime_config(
             {"runtime": {"git_tracking": False}},
-            tmp_path / "autoloop.yaml",
+            tmp_path / "botlane.yaml",
         )
 
 
@@ -822,7 +822,7 @@ def test_parse_runtime_config_rejects_non_mapping_tracing_section(tmp_path: Path
     with pytest.raises(ConfigError, match=r"runtime\.tracing must be a mapping"):
         runtime_config.parse_runtime_config(
             {"runtime": {"tracing": False}},
-            tmp_path / "autoloop.yaml",
+            tmp_path / "botlane.yaml",
         )
 
 
@@ -866,8 +866,8 @@ def test_resolve_runtime_config_merges_runtime_file_overrides_and_preserves_defa
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     global_config_dir = tmp_path / "global-config"
-    local_config_path = tmp_path / "autoloop.yaml"
-    global_config_path = global_config_dir / "autoloop.yaml"
+    local_config_path = tmp_path / "botlane.yaml"
+    global_config_path = global_config_dir / "botlane.yaml"
     global_config_dir.mkdir(parents=True)
     global_config_path.write_text("", encoding="utf-8")
     local_config_path.write_text("", encoding="utf-8")
@@ -906,8 +906,8 @@ def test_resolve_runtime_config_routes_generic_file_overrides_to_selected_provid
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     global_config_dir = tmp_path / "global-config"
-    local_config_path = tmp_path / "autoloop.yaml"
-    global_config_path = global_config_dir / "autoloop.yaml"
+    local_config_path = tmp_path / "botlane.yaml"
+    global_config_path = global_config_dir / "botlane.yaml"
     global_config_dir.mkdir(parents=True)
     global_config_path.write_text("", encoding="utf-8")
     local_config_path.write_text("", encoding="utf-8")
@@ -947,8 +947,8 @@ def test_resolve_runtime_config_preserves_later_provider_specific_override_prece
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     global_config_dir = tmp_path / "global-config"
-    local_config_path = tmp_path / "autoloop.yaml"
-    global_config_path = global_config_dir / "autoloop.yaml"
+    local_config_path = tmp_path / "botlane.yaml"
+    global_config_path = global_config_dir / "botlane.yaml"
     global_config_dir.mkdir(parents=True)
     global_config_path.write_text("", encoding="utf-8")
     local_config_path.write_text("", encoding="utf-8")
@@ -988,7 +988,7 @@ def test_resolve_runtime_config_applies_generic_file_override_to_cli_selected_pr
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     global_config_dir = tmp_path / "global-config"
-    global_config_path = global_config_dir / "autoloop.yaml"
+    global_config_path = global_config_dir / "botlane.yaml"
     global_config_dir.mkdir(parents=True)
     global_config_path.write_text("", encoding="utf-8")
 
@@ -1019,8 +1019,8 @@ def test_resolve_runtime_config_applies_cli_override_after_provider_specific_fil
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     global_config_dir = tmp_path / "global-config"
-    local_config_path = tmp_path / "autoloop.yaml"
-    global_config_path = global_config_dir / "autoloop.yaml"
+    local_config_path = tmp_path / "botlane.yaml"
+    global_config_path = global_config_dir / "botlane.yaml"
     global_config_dir.mkdir(parents=True)
     global_config_path.write_text("", encoding="utf-8")
     local_config_path.write_text("", encoding="utf-8")

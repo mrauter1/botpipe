@@ -25,7 +25,7 @@ def _clear_workflow_modules() -> None:
             or name.startswith("workflows.")
             or name == "botlane.workflows"
             or name.startswith("botlane.workflows.")
-            or name.startswith("_autoloop_workspace_workflows.")
+            or name.startswith("_botlane_workspace_workflows.")
         ):
             sys.modules.pop(name, None)
 
@@ -61,7 +61,7 @@ def _write_workspace_flow(
     class_name: str = "LocalWorkflow",
     source: str | None = None,
 ) -> Path:
-    package_dir = root / ".autoloop" / "workflows" / workflow_id
+    package_dir = root / ".botlane" / "workflows" / workflow_id
     package_dir.mkdir(parents=True, exist_ok=True)
     if manifest:
         aliases_source = ", ".join(f'"{alias}"' for alias in aliases)
@@ -142,7 +142,7 @@ class {class_name}(Workflow):
 
 
 def _write_workspace_single_file(root: Path, workflow_id: str, *, class_name: str = "SingleWorkflow") -> Path:
-    source_path = root / ".autoloop" / "workflows" / f"{workflow_id}.py"
+    source_path = root / ".botlane" / "workflows" / f"{workflow_id}.py"
     source_path.parent.mkdir(parents=True, exist_ok=True)
     source_path.write_text(
         f"""
@@ -218,12 +218,46 @@ def test_workflow_search_roots_include_repo_workspace_and_package_roots(
 
     roots = workflow_search_roots(tmp_path)
 
-    assert tuple(root.kind for root in roots) == ("workspace", "workspace", "package")
+    assert tuple(root.kind for root in roots) == ("workspace", "workspace", "workspace", "package")
     assert roots[0].path == tmp_path / "workflows"
     assert roots[0].import_prefix == "workflows"
-    assert roots[1].path == tmp_path / ".autoloop" / "workflows"
-    assert roots[2].path == package_root
-    assert roots[0].precedence > roots[1].precedence > roots[2].precedence
+    assert roots[1].path == tmp_path / ".botlane" / "workflows"
+    assert roots[2].path == tmp_path / ".autoloop" / "workflows"
+    assert roots[3].path == package_root
+    assert roots[0].precedence > roots[1].precedence > roots[2].precedence > roots[3].precedence
+
+
+def test_discover_workflow_catalog_reads_legacy_workspace_root_when_present(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    _configure_package_root(monkeypatch, tmp_path)
+    package_dir = tmp_path / ".autoloop" / "workflows" / "legacy_demo"
+    package_dir.mkdir(parents=True, exist_ok=True)
+    (package_dir / "workflow.toml").write_text(
+        'name = "legacy_demo"\n'
+        'title = "Legacy Demo"\n'
+        'description = "legacy workspace workflow"\n',
+        encoding="utf-8",
+    )
+    (package_dir / "flow.py").write_text(
+        (
+            "from __future__ import annotations\n\n"
+            "from botlane import Workflow, python_step\n\n"
+            "class LegacyDemo(Workflow):\n"
+            '    name = "legacy_demo"\n\n'
+            '    @python_step(name="start")\n'
+            "    def start(ctx):\n"
+            "        return None\n"
+        ),
+        encoding="utf-8",
+    )
+
+    entries = discover_workflow_catalog(tmp_path)
+
+    assert len(entries) == 1
+    assert entries[0].workflow_name == "legacy_demo"
+    assert entries[0].source_root == tmp_path / ".autoloop" / "workflows"
 
 
 def test_discover_workflow_catalog_allows_missing_search_roots(
@@ -243,7 +277,7 @@ def test_discover_workflow_catalog_rejects_non_directory_search_root(
     tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    workspace_root = tmp_path / ".autoloop" / "workflows"
+    workspace_root = tmp_path / ".botlane" / "workflows"
     workspace_root.parent.mkdir(parents=True, exist_ok=True)
     workspace_root.write_text("not a directory\n", encoding="utf-8")
     missing_package_root = tmp_path / "installed" / "botlane" / "workflows"
@@ -457,7 +491,7 @@ def test_unknown_bare_name_lists_searched_roots(
     message = str(excinfo.value)
     assert "missing_workflow" in message
     assert str(tmp_path) in message
-    assert str(tmp_path / ".autoloop" / "workflows") in message
+    assert str(tmp_path / ".botlane" / "workflows") in message
     assert str(package_root) in message
 
 
@@ -497,7 +531,7 @@ class ExternalDemo(Workflow):
 
 
 def test_workspace_relative_imports_use_isolated_module_namespace(tmp_path: Path) -> None:
-    package_dir = tmp_path / ".autoloop" / "workflows" / "relative_demo"
+    package_dir = tmp_path / ".botlane" / "workflows" / "relative_demo"
     package_dir.mkdir(parents=True, exist_ok=True)
     (package_dir / "workflow.toml").write_text(
         'name = "relative_demo"\n'
@@ -552,12 +586,12 @@ class RelativeDemo(Workflow):
     resolved = resolve_workflow_reference(tmp_path, "relative_demo")
 
     assert resolved.reference.source_root_kind == "workspace"
-    assert resolved.workflow_cls.__module__.startswith("_autoloop_workspace_workflows.")
+    assert resolved.workflow_cls.__module__.startswith("_botlane_workspace_workflows.")
     assert resolved.workflow_cls.__module__.endswith(".relative_demo.flow")
 
 
 def test_manifest_class_field_selects_specific_workflow_class(tmp_path: Path) -> None:
-    package_dir = tmp_path / ".autoloop" / "workflows" / "classed"
+    package_dir = tmp_path / ".botlane" / "workflows" / "classed"
     package_dir.mkdir(parents=True, exist_ok=True)
     (package_dir / "workflow.toml").write_text(
         'name = "classed"\n'
@@ -598,7 +632,7 @@ class SelectedWorkflow(Workflow):
 
 
 def test_manifest_module_field_selects_declared_module(tmp_path: Path) -> None:
-    package_dir = tmp_path / ".autoloop" / "workflows" / "module_override"
+    package_dir = tmp_path / ".botlane" / "workflows" / "module_override"
     package_dir.mkdir(parents=True, exist_ok=True)
     (package_dir / "workflow.toml").write_text(
         'name = "module_override"\n'
@@ -649,7 +683,7 @@ class ModuleOverrideWorkflow(Workflow):
 
 
 def test_manifest_without_module_falls_back_to_workflow_py_when_flow_missing(tmp_path: Path) -> None:
-    package_dir = tmp_path / ".autoloop" / "workflows" / "workflow_only"
+    package_dir = tmp_path / ".botlane" / "workflows" / "workflow_only"
     package_dir.mkdir(parents=True, exist_ok=True)
     (package_dir / "workflow.toml").write_text(
         'name = "workflow_only"\n'

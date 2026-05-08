@@ -28,8 +28,8 @@ def _clear_generated_modules() -> None:
             or name.startswith("workflows.")
             or name == "botlane.workflows"
             or name.startswith("botlane.workflows.")
-            or name == "_autoloop_workspace_workflows"
-            or name.startswith("_autoloop_workspace_workflows.")
+            or name == "_botlane_workspace_workflows"
+            or name.startswith("_botlane_workspace_workflows.")
         ):
             sys.modules.pop(name, None)
 
@@ -42,7 +42,7 @@ def _isolate_generated_modules():
 
 
 def _workspace_catalog_root(root: Path) -> Path:
-    return root / ".autoloop" / "workflows"
+    return root / ".botlane" / "workflows"
 
 
 def _write_workspace_flow(
@@ -168,7 +168,7 @@ class ReleaseReview(Workflow):
 
     assert result.terminal == "FINISH"
 
-    workflow_dir = tmp_path / ".autoloop" / "tasks" / "single-file-task" / "wf_release_review"
+    workflow_dir = tmp_path / ".botlane" / "tasks" / "single-file-task" / "wf_release_review"
     run_dir = next((workflow_dir / "runs").iterdir())
     context_payload = json.loads((run_dir / "context.json").read_text(encoding="utf-8"))
     workflow_meta = json.loads((workflow_dir / "workflow.json").read_text(encoding="utf-8"))
@@ -184,7 +184,7 @@ class ReleaseReview(Workflow):
     assert workflow_meta["workflow"]["manifest_path"] is None
     assert workflow_meta["workflow"]["class_name"] == "ReleaseReview"
     assert workflow_meta["workflow"]["authoring_shape"] == "single_file"
-    assert workflow_meta["workflow"]["module_name"].startswith("_autoloop_workspace_workflows.")
+    assert workflow_meta["workflow"]["module_name"].startswith("_botlane_workspace_workflows.")
     assert run_meta["workflow"]["name"] == "release_review"
     assert run_meta["workflow"]["reference"] == "examples/release_review.py"
     assert run_meta["workflow"]["source_path"] == "examples/release_review.py"
@@ -247,7 +247,7 @@ class ReleaseReview(Workflow):
     assert resolved_by_name.reference.authoring_shape == "manifest_package"
     assert resolved_by_directory.reference.source_path == explicit_package_dir / "flow.py"
     assert resolved_by_directory.parameters_cls is not None
-    assert resolved_by_directory.parameters_cls.__module__.startswith("_autoloop_workspace_workflows.")
+    assert resolved_by_directory.parameters_cls.__module__.startswith("_botlane_workspace_workflows.")
     assert resolved_by_directory.parameters_cls.__module__.endswith(".release_review.specs")
 
     provider = ScriptedLLMProvider(
@@ -281,7 +281,7 @@ class ReleaseReview(Workflow):
     )
 
     assert result.terminal == "FINISH"
-    workflow_dir = tmp_path / ".autoloop" / "tasks" / "flow-package-task" / "wf_release_review"
+    workflow_dir = tmp_path / ".botlane" / "tasks" / "flow-package-task" / "wf_release_review"
     run_dir = next((workflow_dir / "runs").iterdir())
     context_payload = json.loads((run_dir / "context.json").read_text(encoding="utf-8"))
 
@@ -468,7 +468,7 @@ class ModuleReviewWorkflow(Workflow):
 
     resolved = resolve_workflow_reference(tmp_path, "workflows/module_review/flow.py:ModuleReviewWorkflow")
     assert resolved.parameters_cls is not None
-    assert resolved.parameters_cls.__module__.startswith("_autoloop_workspace_workflows.")
+    assert resolved.parameters_cls.__module__.startswith("_botlane_workspace_workflows.")
     assert resolved.parameters_cls.__module__.endswith(".module_review.specs")
 
     result = run_workflow_package(
@@ -483,7 +483,7 @@ class ModuleReviewWorkflow(Workflow):
     )
 
     assert result.terminal == "FINISH"
-    workflow_dir = tmp_path / ".autoloop" / "tasks" / "module-task" / "wf_module_review"
+    workflow_dir = tmp_path / ".botlane" / "tasks" / "module-task" / "wf_module_review"
     run_dir = next((workflow_dir / "runs").iterdir())
     assert (run_dir / "module.json").read_text(encoding="utf-8") == "module_review"
 
@@ -537,10 +537,10 @@ class ModuleReviewWorkflow(Workflow):
         resolved = resolve_workflow_reference(tmp_path, ModuleReviewWorkflow)
 
     assert resolved.workflow_cls is not ModuleReviewWorkflow
-    assert resolved.workflow_cls.__module__.startswith("_autoloop_workspace_workflows.")
+    assert resolved.workflow_cls.__module__.startswith("_botlane_workspace_workflows.")
     assert resolved.workflow_cls.__module__.endswith(".module_review.flow")
     assert resolved.parameters_cls is not None
-    assert resolved.parameters_cls.__module__.startswith("_autoloop_workspace_workflows.")
+    assert resolved.parameters_cls.__module__.startswith("_botlane_workspace_workflows.")
     assert resolved.parameters_cls.__module__.endswith(".module_review.specs")
 
 
@@ -780,13 +780,13 @@ class NoParamsWorkflow(Workflow):
     assert class_params.parameters_cls is not None
     assert class_params.parameters_cls.__qualname__.endswith("ClassParamsWorkflow.Params")
     assert module_params.parameters_cls is not None
-    assert module_params.parameters_cls.__module__.startswith("_autoloop_workspace_workflows.")
+    assert module_params.parameters_cls.__module__.startswith("_botlane_workspace_workflows.")
     assert module_params.parameters_cls.__module__.endswith(".module_params.flow")
     assert package_params.parameters_cls is not None
-    assert package_params.parameters_cls.__module__.startswith("_autoloop_workspace_workflows.")
+    assert package_params.parameters_cls.__module__.startswith("_botlane_workspace_workflows.")
     assert package_params.parameters_cls.__module__.endswith(".package_params.specs")
     assert legacy_params.parameters_cls is not None
-    assert legacy_params.parameters_cls.__module__.startswith("_autoloop_workspace_workflows.")
+    assert legacy_params.parameters_cls.__module__.startswith("_botlane_workspace_workflows.")
     assert legacy_params.parameters_cls.__module__.endswith(".params")
     assert no_params.parameters_cls is None
 

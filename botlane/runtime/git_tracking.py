@@ -281,22 +281,22 @@ class RuntimeGitTracker:
         return payload
 
     def _init_commit_message(self) -> str:
-        return f"autoloop: init {self._workflow_name} {self._run_id}"
+        return f"botlane: init {self._workflow_name} {self._run_id}"
 
     def _step_commit_message(self, *, sequence: int, step_name: str) -> str:
-        return f"autoloop: step {self._workflow_name} {self._run_id} {sequence} {step_name}"
+        return f"botlane: step {self._workflow_name} {self._run_id} {sequence} {step_name}"
 
     def _finish_commit_message(self, *, terminal: str | None) -> str:
-        return f"autoloop: finish {self._workflow_name} {self._run_id} {terminal or 'unknown'}"
+        return f"botlane: finish {self._workflow_name} {self._run_id} {terminal or 'unknown'}"
 
     def _fatal_commit_message(self) -> str:
-        return f"autoloop: fatal {self._workflow_name} {self._run_id}"
+        return f"botlane: fatal {self._workflow_name} {self._run_id}"
 
     def _flush_runtime_metadata(self) -> None:
         self._repo.commit_all(self._metadata_commit_message())
 
     def _metadata_commit_message(self) -> str:
-        return f"autoloop: metadata {self._workflow_name} {self._run_id}"
+        return f"botlane: metadata {self._workflow_name} {self._run_id}"
 
 
 def _utcnow() -> str:

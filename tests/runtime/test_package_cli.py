@@ -84,7 +84,7 @@ def _init_repo(root: Path) -> None:
     _git(root, "init")
     _git(root, "config", "user.email", "test@example.com")
     _git(root, "config", "user.name", "Test")
-    _git(root, "add", ".autoloop")
+    _git(root, "add", ".botlane")
     _git(root, "commit", "-m", "baseline")
 
 
@@ -99,7 +99,7 @@ def _write_workflow_package(
     workflow_source: str | None = None,
     export_parameters: bool = False,
 ) -> Path:
-    workflows_root = root / ".autoloop" / "workflows"
+    workflows_root = root / ".botlane" / "workflows"
     workflows_root.mkdir(parents=True, exist_ok=True)
     (workflows_root / "__init__.py").write_text("__all__ = []\n", encoding="utf-8")
 
@@ -326,9 +326,9 @@ class Params(BaseModel):
     assert payload["name"] == "review"
     assert payload["aliases"] == ["reviewer"]
     assert payload["authoring_shape"] == "manifest_package"
-    assert payload["source_path"] == str(tmp_path / ".autoloop" / "workflows" / "review_workflow" / "workflow.py")
-    assert payload["manifest_path"] == str(tmp_path / ".autoloop" / "workflows" / "review_workflow" / "workflow.toml")
-    assert payload["workflow_py_path"] == str(tmp_path / ".autoloop" / "workflows" / "review_workflow" / "workflow.py")
+    assert payload["source_path"] == str(tmp_path / ".botlane" / "workflows" / "review_workflow" / "workflow.py")
+    assert payload["manifest_path"] == str(tmp_path / ".botlane" / "workflows" / "review_workflow" / "workflow.toml")
+    assert payload["workflow_py_path"] == str(tmp_path / ".botlane" / "workflows" / "review_workflow" / "workflow.py")
     assert payload["parameters_supported"] is True
     assert payload["workflow_class"] == "ReviewWorkflow"
     assert payload["state_model"].endswith("ReviewWorkflow.State")
@@ -430,8 +430,8 @@ def test_cli_workflow_resolution_rejects_same_tier_name_alias_collisions_and_amb
 
     assert duplicate_key_exit == cli.EXIT_RESOLUTION_ERROR
     assert "duplicate workflow resolution key 'shared'" in duplicate_key_captured.err
-    assert str(tmp_path / ".autoloop" / "workflows" / "review_pkg" / "workflow.py") in duplicate_key_captured.err
-    assert str(tmp_path / ".autoloop" / "workflows" / "shared_pkg" / "workflow.py") in duplicate_key_captured.err
+    assert str(tmp_path / ".botlane" / "workflows" / "review_pkg" / "workflow.py") in duplicate_key_captured.err
+    assert str(tmp_path / ".botlane" / "workflows" / "shared_pkg" / "workflow.py") in duplicate_key_captured.err
 
     _write_workflow_package(
         tmp_path,
@@ -453,8 +453,8 @@ def test_cli_workflow_resolution_rejects_same_tier_name_alias_collisions_and_amb
 
     assert ambiguous_exit == cli.EXIT_RESOLUTION_ERROR
     assert "duplicate workflow resolution key 'common'" in ambiguous_captured.err
-    assert str(tmp_path / ".autoloop" / "workflows" / "audit_pkg" / "workflow.py") in ambiguous_captured.err
-    assert str(tmp_path / ".autoloop" / "workflows" / "reviewer_pkg" / "workflow.py") in ambiguous_captured.err
+    assert str(tmp_path / ".botlane" / "workflows" / "audit_pkg" / "workflow.py") in ambiguous_captured.err
+    assert str(tmp_path / ".botlane" / "workflows" / "reviewer_pkg" / "workflow.py") in ambiguous_captured.err
 
 
 def test_cli_workflows_list_includes_manifest_and_inferred_workflows_without_imports(
@@ -468,7 +468,7 @@ def test_cli_workflows_list_includes_manifest_and_inferred_workflows_without_imp
         class_name="ManifestReviewWorkflow",
         aliases=("manifest_alias",),
     )
-    single_file = tmp_path / ".autoloop" / "workflows" / "single_review.py"
+    single_file = tmp_path / ".botlane" / "workflows" / "single_review.py"
     single_file.write_text(
         'raise AssertionError("single-file workflow should not import during list")\n',
         encoding="utf-8",
@@ -485,8 +485,8 @@ def test_cli_workflows_list_includes_manifest_and_inferred_workflows_without_imp
         "description": "Workflow test package.",
         "manifest_present": True,
         "name": "manifest_review",
-        "package_folder": str(tmp_path / ".autoloop" / "workflows" / "manifest_review"),
-        "source_path": str(tmp_path / ".autoloop" / "workflows" / "manifest_review" / "workflow.py"),
+        "package_folder": str(tmp_path / ".botlane" / "workflows" / "manifest_review"),
+        "source_path": str(tmp_path / ".botlane" / "workflows" / "manifest_review" / "workflow.py"),
         "source_root_kind": "workspace",
         "shadowed": False,
         "shadowed_by": None,
@@ -498,7 +498,7 @@ def test_cli_workflows_list_includes_manifest_and_inferred_workflows_without_imp
         "description": "",
         "manifest_present": False,
         "name": "single_review",
-        "package_folder": str(tmp_path / ".autoloop" / "workflows"),
+        "package_folder": str(tmp_path / ".botlane" / "workflows"),
         "source_path": str(single_file),
         "source_root_kind": "workspace",
         "shadowed": False,
@@ -571,7 +571,7 @@ class Params(BaseModel):
     run_payload = json.loads(capsys.readouterr().out)
 
     assert run_exit == 0
-    run_dir = tmp_path / ".autoloop" / "tasks" / "task-json" / "wf_typed_review" / "runs" / run_payload["run_id"]
+    run_dir = tmp_path / ".botlane" / "tasks" / "task-json" / "wf_typed_review" / "runs" / run_payload["run_id"]
     run_metadata = json.loads((run_dir / "run.json").read_text(encoding="utf-8"))
     assert run_metadata["workflow_params"] == {
         "mode": "strict",
@@ -788,7 +788,7 @@ class Params(BaseModel):
     assert run_output["pending_input"]["question"] == "What value?"
     run_id = run_output["run_id"]
 
-    run_dir = tmp_path / ".autoloop" / "tasks" / "task-42" / "wf_review" / "runs" / run_id
+    run_dir = tmp_path / ".botlane" / "tasks" / "task-42" / "wf_review" / "runs" / run_id
     assert len(list((run_dir.parent).iterdir())) == 1
 
     show_exit = cli.main(["runs", "show", "review", "task-42", "--workspace", str(tmp_path)])
@@ -867,7 +867,7 @@ def test_cli_runs_list_filters_legacy_paused_run_metadata_as_awaiting_input(
         class_name="ReviewWorkflow",
     )
 
-    run_dir = tmp_path / ".autoloop" / "tasks" / "task-legacy" / "wf_review" / "runs" / "run-legacy"
+    run_dir = tmp_path / ".botlane" / "tasks" / "task-legacy" / "wf_review" / "runs" / "run-legacy"
     run_dir.mkdir(parents=True, exist_ok=True)
     (run_dir / "run.json").write_text(
         json.dumps(
@@ -1064,15 +1064,15 @@ def test_cli_rejects_invalid_or_unsupported_workflow_params(
 @pytest.mark.parametrize(
     ("shape", "expected_relpaths"),
     [
-        ("single", (".autoloop/workflows/child_workflow.py",)),
-        ("flow-specs", (".autoloop/workflows/child_workflow/flow.py", ".autoloop/workflows/child_workflow/specs.py")),
+        ("single", (".botlane/workflows/child_workflow.py",)),
+        ("flow-specs", (".botlane/workflows/child_workflow/flow.py", ".botlane/workflows/child_workflow/specs.py")),
         (
             "package",
             (
-                ".autoloop/workflows/child_workflow/flow.py",
-                ".autoloop/workflows/child_workflow/specs.py",
-                ".autoloop/workflows/child_workflow/__init__.py",
-                ".autoloop/workflows/child_workflow/workflow.toml",
+                ".botlane/workflows/child_workflow/flow.py",
+                ".botlane/workflows/child_workflow/specs.py",
+                ".botlane/workflows/child_workflow/__init__.py",
+                ".botlane/workflows/child_workflow/workflow.toml",
             ),
         ),
     ],
@@ -1095,24 +1095,24 @@ def test_cli_init_workflow_scaffolds_supported_shapes_and_rejects_duplicates(
         assert (tmp_path / relative_path).exists()
 
     source_path = (
-        tmp_path / ".autoloop" / "workflows" / "child_workflow.py"
+        tmp_path / ".botlane" / "workflows" / "child_workflow.py"
         if shape == "single"
-        else tmp_path / ".autoloop" / "workflows" / "child_workflow" / "flow.py"
+        else tmp_path / ".botlane" / "workflows" / "child_workflow" / "flow.py"
     )
     source = source_path.read_text(encoding="utf-8")
     _assert_bootstrap_scaffold_contract(source)
 
     if shape == "package":
-        assert (tmp_path / ".autoloop" / "workflows" / "child_workflow" / "prompts" / "README.md").exists()
-        assert (tmp_path / ".autoloop" / "workflows" / "child_workflow" / "assets" / ".gitkeep").exists()
+        assert (tmp_path / ".botlane" / "workflows" / "child_workflow" / "prompts" / "README.md").exists()
+        assert (tmp_path / ".botlane" / "workflows" / "child_workflow" / "assets" / ".gitkeep").exists()
     elif shape == "flow-specs":
-        package_dir = tmp_path / ".autoloop" / "workflows" / "child_workflow"
+        package_dir = tmp_path / ".botlane" / "workflows" / "child_workflow"
         assert not (package_dir / "__init__.py").exists()
         assert not (package_dir / "workflow.toml").exists()
         assert not (package_dir / "prompts").exists()
         assert not (package_dir / "assets").exists()
     else:
-        assert not (tmp_path / ".autoloop" / "workflows" / "child_workflow").exists()
+        assert not (tmp_path / ".botlane" / "workflows" / "child_workflow").exists()
 
     compiled = compile_workflow(resolve_workflow_reference(tmp_path, "child_workflow").workflow_cls)
     assert compiled.workflow_name == "child_workflow"
@@ -1132,10 +1132,10 @@ def test_cli_init_workflow_defaults_to_package_shape(tmp_path: Path, capsys) -> 
     assert exit_code == 0
     payload = json.loads(captured.out)
     assert payload["shape"] == "package"
-    flow_path = tmp_path / ".autoloop" / "workflows" / "child_workflow" / "flow.py"
+    flow_path = tmp_path / ".botlane" / "workflows" / "child_workflow" / "flow.py"
     assert flow_path.exists()
-    assert (tmp_path / ".autoloop" / "workflows" / "child_workflow" / "specs.py").exists()
-    assert (tmp_path / ".autoloop" / "workflows" / "child_workflow" / "workflow.toml").exists()
+    assert (tmp_path / ".botlane" / "workflows" / "child_workflow" / "specs.py").exists()
+    assert (tmp_path / ".botlane" / "workflows" / "child_workflow" / "workflow.toml").exists()
     _assert_bootstrap_scaffold_contract(flow_path.read_text(encoding="utf-8"))
 
     compiled = compile_workflow(resolve_workflow_reference(tmp_path, "child_workflow").workflow_cls)

@@ -69,7 +69,7 @@ def test_run_creates_task_workflow_run_layout_and_immutable_request_snapshots(tm
         options=_runner_options(tmp_path, task_id="task-1", message="First message"),
     )
 
-    task_dir = tmp_path / ".autoloop" / "tasks" / "task-1"
+    task_dir = tmp_path / ".botlane" / "tasks" / "task-1"
     workflow_dir = task_dir / "wf_snapshot_demo"
     runs_dir = workflow_dir / "runs"
     first_run_dir = next(runs_dir.iterdir())
@@ -82,13 +82,13 @@ def test_run_creates_task_workflow_run_layout_and_immutable_request_snapshots(tm
     assert (task_dir / "request.md").read_text(encoding="utf-8") == "First message\n"
     assert (first_run_dir / "request.md").read_text(encoding="utf-8") == "First message\n"
     assert (workflow_dir / "workflow.json").exists()
-    assert task_meta["messages_file"] == ".autoloop/tasks/task-1/messages.jsonl"
-    assert task_meta["request_file"] == ".autoloop/tasks/task-1/request.md"
+    assert task_meta["messages_file"] == ".botlane/tasks/task-1/messages.jsonl"
+    assert task_meta["request_file"] == ".botlane/tasks/task-1/request.md"
     assert first_run_meta["status"] == "success"
-    assert first_run_meta["task_folder"] == ".autoloop/tasks/task-1"
-    assert first_run_meta["workflow_folder"] == ".autoloop/tasks/task-1/wf_snapshot_demo"
-    assert first_run_meta["run_folder"] == f".autoloop/tasks/task-1/wf_snapshot_demo/runs/{first_run_dir.name}"
-    assert first_run_meta["request_file"] == f".autoloop/tasks/task-1/wf_snapshot_demo/runs/{first_run_dir.name}/request.md"
+    assert first_run_meta["task_folder"] == ".botlane/tasks/task-1"
+    assert first_run_meta["workflow_folder"] == ".botlane/tasks/task-1/wf_snapshot_demo"
+    assert first_run_meta["run_folder"] == f".botlane/tasks/task-1/wf_snapshot_demo/runs/{first_run_dir.name}"
+    assert first_run_meta["request_file"] == f".botlane/tasks/task-1/wf_snapshot_demo/runs/{first_run_dir.name}/request.md"
 
     second_result = run_workflow_package(
         "snapshot_demo",
@@ -178,7 +178,7 @@ def test_runtime_context_and_prompt_resolution_use_workflow_scope_and_package_ro
         ),
     )
 
-    task_dir = tmp_path / ".autoloop" / "tasks" / "context-task"
+    task_dir = tmp_path / ".botlane" / "tasks" / "context-task"
     workflow_dir = task_dir / "wf_context_demo"
     run_dir = next((workflow_dir / "runs").iterdir())
     payload = json.loads((run_dir / "context.json").read_text(encoding="utf-8"))
@@ -194,7 +194,7 @@ def test_runtime_context_and_prompt_resolution_use_workflow_scope_and_package_ro
     assert Path(payload["prompt_path"]) == tmp_path / "workflows" / "context_demo" / "prompts" / "ask.md"
     assert (workflow_dir / "workflow-note.txt").read_text(encoding="utf-8") == "workflow-scoped\n"
     assert run_meta["workflow_params"] == {"mode": "strict"}
-    assert run_meta["workflow_folder"] == ".autoloop/tasks/context-task/wf_context_demo"
+    assert run_meta["workflow_folder"] == ".botlane/tasks/context-task/wf_context_demo"
 
 
 def test_run_metadata_records_topology_hashes_and_artifact_contract_paths(tmp_path: Path) -> None:
@@ -206,7 +206,7 @@ def test_run_metadata_records_topology_hashes_and_artifact_contract_paths(tmp_pa
         options=_runner_options(tmp_path, task_id="task-topology", message="Record topology metadata"),
     )
 
-    run_dir = next((tmp_path / ".autoloop" / "tasks" / "task-topology" / "wf_topology_demo" / "runs").iterdir())
+    run_dir = next((tmp_path / ".botlane" / "tasks" / "task-topology" / "wf_topology_demo" / "runs").iterdir())
     run_meta = json.loads((run_dir / "run.json").read_text(encoding="utf-8"))
     topology = run_meta["topology"]
 
@@ -290,7 +290,7 @@ def test_runtime_inspection_loaders_filter_status_and_require_disambiguation(tmp
 
 
 def test_runtime_inspection_loaders_migrate_schema_less_run_metadata_and_topology(tmp_path: Path) -> None:
-    run_dir = tmp_path / ".autoloop" / "tasks" / "task-1" / "wf_demo" / "runs" / "run-1"
+    run_dir = tmp_path / ".botlane" / "tasks" / "task-1" / "wf_demo" / "runs" / "run-1"
     run_dir.mkdir(parents=True)
     (run_dir / "run.json").write_text(
         json.dumps({"workflow_name": "demo", "run_id": "run-1"}, indent=2) + "\n",
@@ -324,7 +324,7 @@ def test_resume_warns_and_continues_when_saved_topology_hash_differs(tmp_path: P
     )
 
     run_dir = next(
-        (tmp_path / ".autoloop" / "tasks" / "task-topology-resume" / "wf_resume_topology_demo" / "runs").iterdir()
+        (tmp_path / ".botlane" / "tasks" / "task-topology-resume" / "wf_resume_topology_demo" / "runs").iterdir()
     )
     (run_dir / "topology.json").unlink()
     run_meta_file = run_dir / "run.json"
@@ -400,7 +400,7 @@ def test_resume_rejects_unsupported_embedded_topology_schema_when_topology_file_
     )
 
     run_dir = next(
-        (tmp_path / ".autoloop" / "tasks" / "task-topology-schema" / "wf_resume_topology_schema_demo" / "runs").iterdir()
+        (tmp_path / ".botlane" / "tasks" / "task-topology-schema" / "wf_resume_topology_schema_demo" / "runs").iterdir()
     )
     (run_dir / "topology.json").unlink()
     run_meta_file = run_dir / "run.json"
@@ -441,7 +441,7 @@ def test_resume_topology_mismatch_can_fail_in_strict_mode(tmp_path: Path) -> Non
     )
 
     run_dir = next(
-        (tmp_path / ".autoloop" / "tasks" / "task-topology-strict" / "wf_resume_topology_strict_demo" / "runs").iterdir()
+        (tmp_path / ".botlane" / "tasks" / "task-topology-strict" / "wf_resume_topology_strict_demo" / "runs").iterdir()
     )
     workflow_file = tmp_path / "workflows" / "resume_topology_strict_demo" / "workflow.py"
     workflow_file.write_text(
@@ -538,7 +538,7 @@ def test_resume_preserves_persisted_workflow_params_when_not_resupplied(tmp_path
         ),
     )
 
-    workflow_dir = tmp_path / ".autoloop" / "tasks" / "task-params" / "wf_resume_params_demo"
+    workflow_dir = tmp_path / ".botlane" / "tasks" / "task-params" / "wf_resume_params_demo"
     run_dir = next((workflow_dir / "runs").iterdir())
     paused_meta = json.loads((run_dir / "run.json").read_text(encoding="utf-8"))
 
@@ -609,7 +609,7 @@ def test_resume_ignores_explicit_workflow_param_override_for_existing_run(tmp_pa
         ),
     )
 
-    workflow_dir = tmp_path / ".autoloop" / "tasks" / "task-override" / "wf_resume_override_demo"
+    workflow_dir = tmp_path / ".botlane" / "tasks" / "task-override" / "wf_resume_override_demo"
     run_dir = next((workflow_dir / "runs").iterdir())
 
     resumed = run_workflow_package(
@@ -682,8 +682,8 @@ def test_resume_context_message_uses_run_local_request_snapshot_not_mutated_task
         ),
     )
 
-    workflow_dir = tmp_path / ".autoloop" / "tasks" / "task-message" / "wf_resume_message_demo"
-    task_dir = tmp_path / ".autoloop" / "tasks" / "task-message"
+    workflow_dir = tmp_path / ".botlane" / "tasks" / "task-message" / "wf_resume_message_demo"
+    task_dir = tmp_path / ".botlane" / "tasks" / "task-message"
     run_dir = next((workflow_dir / "runs").iterdir())
     paused_context = json.loads((run_dir / "context.json").read_text(encoding="utf-8"))
 
@@ -778,8 +778,8 @@ def test_resume_context_preserves_run_message_and_raw_input_fields(tmp_path: Pat
         ),
     )
 
-    workflow_dir = tmp_path / ".autoloop" / "tasks" / "task-typed-input-message" / "wf_resume_typed_input_demo"
-    task_dir = tmp_path / ".autoloop" / "tasks" / "task-typed-input-message"
+    workflow_dir = tmp_path / ".botlane" / "tasks" / "task-typed-input-message" / "wf_resume_typed_input_demo"
+    task_dir = tmp_path / ".botlane" / "tasks" / "task-typed-input-message"
     run_dir = next((workflow_dir / "runs").iterdir())
     paused_context = json.loads((run_dir / "context.json").read_text(encoding="utf-8"))
     paused_meta = json.loads((run_dir / "run.json").read_text(encoding="utf-8"))
@@ -902,7 +902,7 @@ class Params(BaseModel):
         ),
     )
 
-    workflow_dir = tmp_path / ".autoloop" / "tasks" / "task-typed-new" / "wf_typed_params_demo"
+    workflow_dir = tmp_path / ".botlane" / "tasks" / "task-typed-new" / "wf_typed_params_demo"
     run_dir = next((workflow_dir / "runs").iterdir())
     payload = json.loads((run_dir / "context.json").read_text(encoding="utf-8"))
 
@@ -954,7 +954,7 @@ class Params(BaseModel):
         ),
     )
 
-    workflow_dir = tmp_path / ".autoloop" / "tasks" / "task-typed-normalized" / "wf_typed_normalized_demo"
+    workflow_dir = tmp_path / ".botlane" / "tasks" / "task-typed-normalized" / "wf_typed_normalized_demo"
     run_dir = next((workflow_dir / "runs").iterdir())
     payload = json.loads((run_dir / "context.json").read_text(encoding="utf-8"))
     run_meta = json.loads((run_dir / "run.json").read_text(encoding="utf-8"))
@@ -1021,7 +1021,7 @@ class Params(BaseModel):
         ),
     )
 
-    workflow_dir = tmp_path / ".autoloop" / "tasks" / "task-typed-resume" / "wf_typed_resume_demo"
+    workflow_dir = tmp_path / ".botlane" / "tasks" / "task-typed-resume" / "wf_typed_resume_demo"
     run_dir = next((workflow_dir / "runs").iterdir())
 
     resumed = run_workflow_package(
@@ -1074,7 +1074,7 @@ class Params(BaseModel):
             ),
         )
 
-    assert not (tmp_path / ".autoloop").exists()
+    assert not (tmp_path / ".botlane").exists()
 
 
 def test_list_run_records_normalizes_legacy_paused_status_for_public_filters(tmp_path: Path) -> None:
@@ -1125,7 +1125,7 @@ def test_run_metadata_keeps_blocked_status_distinct_from_awaiting_input(tmp_path
         options=_runner_options(tmp_path, task_id="blocked-task", message="Check dependency status"),
     )
 
-    run_dir = next((tmp_path / ".autoloop" / "tasks" / "blocked-task" / "wf_blocked_demo" / "runs").iterdir())
+    run_dir = next((tmp_path / ".botlane" / "tasks" / "blocked-task" / "wf_blocked_demo" / "runs").iterdir())
     run_meta = json.loads((run_dir / "run.json").read_text(encoding="utf-8"))
     blocked_records = list_run_records(
         tmp_path,
@@ -1171,6 +1171,35 @@ def test_run_record_projects_legacy_pending_question_as_pending_input(tmp_path: 
     assert len(records) == 1
     assert records[0].pending_input == {"question": "Who owns the gate?"}
     assert records[0].pending_question == "Who owns the gate?"
+
+
+def test_list_run_records_reads_legacy_state_root_when_botlane_root_is_absent(tmp_path: Path) -> None:
+    task_dir = tmp_path / ".autoloop" / "tasks" / "legacy-task"
+    workflow_dir = task_dir / "wf_legacy_demo"
+    run_dir = workflow_dir / "runs" / "run-legacy"
+    run_dir.mkdir(parents=True, exist_ok=True)
+    (run_dir / "request.md").write_text("Legacy run.\n", encoding="utf-8")
+    (run_dir / "run.json").write_text(
+        json.dumps(
+            {
+                "created_at": "2026-05-01T00:00:00+00:00",
+                "run_id": "run-legacy",
+                "status": "success",
+                "task_id": "legacy-task",
+                "updated_at": "2026-05-01T00:01:00+00:00",
+                "workflow_name": "legacy_demo",
+            },
+            indent=2,
+            sort_keys=True,
+        )
+        + "\n",
+        encoding="utf-8",
+    )
+
+    records = list_run_records(tmp_path, workflow_name="legacy_demo", task_id="legacy-task")
+
+    assert len(records) == 1
+    assert records[0].run_dir == run_dir
 
 
 def test_workspace_lists_grouped_workflow_run_summaries_with_deterministic_filters(tmp_path: Path) -> None:
@@ -1516,7 +1545,7 @@ def test_context_invoke_workflow_accepts_imported_main_workflow_classes_and_reco
         options=_runner_options(tmp_path, task_id="subworkflow-class-task", message="Parent request"),
     )
 
-    task_dir = tmp_path / ".autoloop" / "tasks" / "subworkflow-class-task"
+    task_dir = tmp_path / ".botlane" / "tasks" / "subworkflow-class-task"
     parent_run_dir = next((task_dir / "wf_parent_class" / "runs").iterdir())
     child_run_dir = next((task_dir / "wf_child_success" / "runs").iterdir())
     parent_payload = json.loads((parent_run_dir / "summary.json").read_text(encoding="utf-8"))
@@ -1628,7 +1657,7 @@ def test_composition_helpers_keep_child_invocation_explicit_and_adopt_selected_a
         options=_runner_options(tmp_path, task_id="subworkflow-helper-task", message="Parent request"),
     )
 
-    task_dir = tmp_path / ".autoloop" / "tasks" / "subworkflow-helper-task"
+    task_dir = tmp_path / ".botlane" / "tasks" / "subworkflow-helper-task"
     parent_workflow_dir = task_dir / "wf_parent_composed"
     parent_run_dir = next((parent_workflow_dir / "runs").iterdir())
     child_run_dir = next((task_dir / "wf_child_success" / "runs").iterdir())
@@ -1697,7 +1726,7 @@ def test_context_invoke_workflow_by_name_creates_isolated_child_runs_without_inh
         options=_runner_options(tmp_path, task_id="subworkflow-name-task", message="Parent request"),
     )
 
-    task_dir = tmp_path / ".autoloop" / "tasks" / "subworkflow-name-task"
+    task_dir = tmp_path / ".botlane" / "tasks" / "subworkflow-name-task"
     parent_run_dir = next((task_dir / "wf_parent_name" / "runs").iterdir())
 
     resumed_parent = run_workflow_package(
@@ -1792,7 +1821,7 @@ def test_context_invoke_workflow_records_stable_child_metadata_shape_for_fatal_c
             options=_runner_options(tmp_path, task_id="subworkflow-fatal-task", message="Parent request"),
         )
 
-    task_dir = tmp_path / ".autoloop" / "tasks" / "subworkflow-fatal-task"
+    task_dir = tmp_path / ".botlane" / "tasks" / "subworkflow-fatal-task"
     parent_run_dir = next((task_dir / "wf_parent_failing" / "runs").iterdir())
     child_run_dir = next((task_dir / "wf_child_failing" / "runs").iterdir())
     task_messages = [
@@ -1835,7 +1864,7 @@ def test_context_invoke_workflow_supports_typed_child_input_and_output(tmp_path:
         options=_runner_options(tmp_path, task_id="subworkflow-typed-task", message="Parent request"),
     )
 
-    task_dir = tmp_path / ".autoloop" / "tasks" / "subworkflow-typed-task"
+    task_dir = tmp_path / ".botlane" / "tasks" / "subworkflow-typed-task"
     parent_run_dir = next((task_dir / "wf_parent_typed" / "runs").iterdir())
     child_run_dir = next((task_dir / "wf_child_typed" / "runs").iterdir())
     parent_payload = json.loads((parent_run_dir / "summary.json").read_text(encoding="utf-8"))
@@ -1889,7 +1918,7 @@ def test_context_invoke_workflow_records_typed_child_output_validation_failures(
         options=_runner_options(tmp_path, task_id="subworkflow-typed-invalid-task", message="Parent request"),
     )
 
-    task_dir = tmp_path / ".autoloop" / "tasks" / "subworkflow-typed-invalid-task"
+    task_dir = tmp_path / ".botlane" / "tasks" / "subworkflow-typed-invalid-task"
     parent_run_dir = next((task_dir / "wf_parent_typed_invalid" / "runs").iterdir())
     child_run_dir = next((task_dir / "wf_child_typed_invalid" / "runs").iterdir())
     parent_payload = json.loads((parent_run_dir / "summary.json").read_text(encoding="utf-8"))
@@ -1960,7 +1989,7 @@ def _write_run_summary_record(
     error: str | None = None,
     pending_question: str | None = None,
 ) -> Path:
-    task_dir = root / ".autoloop" / "tasks" / task_id
+    task_dir = root / ".botlane" / "tasks" / task_id
     workflow_dir = task_dir / f"wf_{workflow_name}"
     run_dir = workflow_dir / "runs" / run_id
     run_dir.mkdir(parents=True, exist_ok=True)
@@ -1992,7 +2021,7 @@ def _write_task_operation_record(
     request_text: str,
     messages: list[tuple[str, str]],
 ) -> Path:
-    task_dir = root / ".autoloop" / "tasks" / task_id
+    task_dir = root / ".botlane" / "tasks" / task_id
     task_dir.mkdir(parents=True, exist_ok=True)
     (task_dir / "request.md").write_text(request_text, encoding="utf-8")
     (task_dir / "messages.jsonl").write_text(
@@ -2006,8 +2035,8 @@ def _write_task_operation_record(
         json.dumps(
             {
                 "created_at": created_at,
-                "messages_file": str(Path(".autoloop") / "tasks" / task_id / "messages.jsonl"),
-                "request_file": str(Path(".autoloop") / "tasks" / task_id / "request.md"),
+                "messages_file": str(Path(".botlane") / "tasks" / task_id / "messages.jsonl"),
+                "request_file": str(Path(".botlane") / "tasks" / task_id / "request.md"),
                 "request_updated_at": messages[-1][0] if messages else updated_at,
                 "task_id": task_id,
                 "updated_at": updated_at,

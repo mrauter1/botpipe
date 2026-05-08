@@ -27,7 +27,7 @@ def _sdk_client(
         provider=provider,
         default_policy=default_policy,
         provider_policy_config=provider_policy_config,
-        state_dir=tmp_path / ".autoloop" if state_dir is None else state_dir,
+        state_dir=tmp_path / ".botlane" if state_dir is None else state_dir,
         runtime_config=RuntimeConfig(git_tracking=GitTrackingRuntimeConfig(enabled=False, commit_policy="off")),
     )
 

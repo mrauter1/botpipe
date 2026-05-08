@@ -32,7 +32,7 @@ def _init_repo(root: Path) -> None:
 
 
 def _run_dir(root: Path) -> Path:
-    return root / ".autoloop" / "tasks" / "task-1" / "wf_demo" / "runs" / "run-1"
+    return root / ".botlane" / "tasks" / "task-1" / "wf_demo" / "runs" / "run-1"
 
 
 def test_git_tracking_disabled_does_not_require_repo(tmp_path: Path) -> None:
@@ -146,9 +146,9 @@ def test_git_tracking_run_policy_commits_at_run_boundaries(tmp_path: Path) -> No
     assert step_payload["created_commit"] is False
     assert finish_payload["created_commit"] is True
     assert log_messages == [
-        "autoloop: metadata demo run-1",
-        "autoloop: finish demo run-1 FINISH",
-        "autoloop: init demo run-1",
+        "botlane: metadata demo run-1",
+        "botlane: finish demo run-1 FINISH",
+        "botlane: init demo run-1",
         "init",
     ]
     assert finish_payload["terminal"] == "FINISH"
@@ -190,10 +190,10 @@ def test_git_tracking_step_policy_commits_after_each_step(tmp_path: Path) -> Non
     assert after_step["event_type"] == "step_committed"
     assert after_step["created_commit"] is True
     assert log_messages == [
-        "autoloop: metadata demo run-1",
-        "autoloop: finish demo run-1 FINISH",
-        "autoloop: step demo run-1 1 ask",
-        "autoloop: init demo run-1",
+        "botlane: metadata demo run-1",
+        "botlane: finish demo run-1 FINISH",
+        "botlane: step demo run-1 1 ask",
+        "botlane: init demo run-1",
         "init",
     ]
     assert _git(tmp_path, "status", "--porcelain=v1", "--untracked-files=all").strip() == ""
@@ -223,7 +223,7 @@ def test_git_tracking_commit_all_tracks_untracked_files(tmp_path: Path) -> None:
         for line in _git(tmp_path, "show", "--name-only", "--format=", "HEAD").splitlines()
         if line.strip()
     }
-    assert ".autoloop/tasks/task-1/wf_demo/runs/run-1/untracked.txt" in committed_files
+    assert ".botlane/tasks/task-1/wf_demo/runs/run-1/untracked.txt" in committed_files
 
 
 def test_git_tracking_runtime_failure_policy_record_and_continue_disables_tracking_after_commit_error(
@@ -405,9 +405,9 @@ def test_git_tracking_fatal_commits_and_records_run_metadata(tmp_path: Path) -> 
     assert lines[-1]["commit_after_run"] == payload["commit_after_run"]
     assert run_meta["git_tracking"]["commit_after_run"] == payload["commit_after_run"]
     assert log_messages == [
-        "autoloop: metadata demo run-1",
-        "autoloop: fatal demo run-1",
-        "autoloop: init demo run-1",
+        "botlane: metadata demo run-1",
+        "botlane: fatal demo run-1",
+        "botlane: init demo run-1",
         "init",
     ]
     assert _git(tmp_path, "status", "--porcelain=v1", "--untracked-files=all").strip() == ""

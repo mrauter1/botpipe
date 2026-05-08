@@ -21,7 +21,7 @@ def _clear_workflow_modules() -> None:
         if (
             name == "botlane.workflows"
             or name.startswith("botlane.workflows.")
-            or name.startswith("_autoloop_workspace_workflows.")
+            or name.startswith("_botlane_workspace_workflows.")
         ):
             sys.modules.pop(name, None)
 
@@ -45,7 +45,7 @@ def _configure_package_root(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> 
 
 
 def _write_workspace_workflow(root: Path, workflow_id: str, *, aliases: tuple[str, ...] = ()) -> Path:
-    package_dir = root / ".autoloop" / "workflows" / workflow_id
+    package_dir = root / ".botlane" / "workflows" / workflow_id
     package_dir.mkdir(parents=True, exist_ok=True)
     aliases_source = ", ".join(f'"{alias}"' for alias in aliases)
     (package_dir / "workflow.toml").write_text(
@@ -144,7 +144,7 @@ def test_workspace_run_metadata_records_origin_fields(tmp_path: Path) -> None:
     )
 
     assert result.terminal == "FINISH"
-    workflow_dir = tmp_path / ".autoloop" / "tasks" / "task-local-demo" / "wf_local_demo"
+    workflow_dir = tmp_path / ".botlane" / "tasks" / "task-local-demo" / "wf_local_demo"
     run_dir = next((workflow_dir / "runs").iterdir())
     workflow_meta = json.loads((workflow_dir / "workflow.json").read_text(encoding="utf-8"))
     run_meta = json.loads((run_dir / "run.json").read_text(encoding="utf-8"))
@@ -153,16 +153,16 @@ def test_workspace_run_metadata_records_origin_fields(tmp_path: Path) -> None:
         assert payload["name"] == "local_demo"
         assert payload["reference"] == "local_demo"
         assert payload["source_root_kind"] == "workspace"
-        assert payload["source_root"] == ".autoloop/workflows"
-        assert payload["package_folder"] == ".autoloop/workflows/local_demo"
+        assert payload["source_root"] == ".botlane/workflows"
+        assert payload["package_folder"] == ".botlane/workflows/local_demo"
         assert payload["package_name"] == "local_demo"
         assert payload["package_module"] is None
         assert payload["workflow_module"] is None
-        assert payload["source_path"] == ".autoloop/workflows/local_demo/flow.py"
-        assert payload["manifest_path"] == ".autoloop/workflows/local_demo/workflow.toml"
+        assert payload["source_path"] == ".botlane/workflows/local_demo/flow.py"
+        assert payload["manifest_path"] == ".botlane/workflows/local_demo/workflow.toml"
 
-    assert workflow_meta["package_folder"] == ".autoloop/workflows/local_demo"
-    assert run_meta["package_folder"] == ".autoloop/workflows/local_demo"
+    assert workflow_meta["package_folder"] == ".botlane/workflows/local_demo"
+    assert run_meta["package_folder"] == ".botlane/workflows/local_demo"
     assert package_dir.exists()
 
 
@@ -205,7 +205,7 @@ class ExplicitDemo(Workflow):
     )
 
     assert result.terminal == "FINISH"
-    workflow_dir = tmp_path / ".autoloop" / "tasks" / "task-explicit-demo" / "wf_explicit_demo"
+    workflow_dir = tmp_path / ".botlane" / "tasks" / "task-explicit-demo" / "wf_explicit_demo"
     run_dir = next((workflow_dir / "runs").iterdir())
     payload = json.loads((run_dir / "run.json").read_text(encoding="utf-8"))["workflow"]
 
@@ -262,7 +262,7 @@ class SingleExplicitWorkflow(Workflow):
     )
 
     assert result.terminal == "FINISH"
-    run_dir = next((tmp_path / ".autoloop" / "tasks" / "task-single-explicit" / "wf_single_explicit" / "runs").iterdir())
+    run_dir = next((tmp_path / ".botlane" / "tasks" / "task-single-explicit" / "wf_single_explicit" / "runs").iterdir())
     payload = json.loads((run_dir / "run.json").read_text(encoding="utf-8"))["workflow"]
 
     assert payload["reference"] == str(external_file)
@@ -298,7 +298,7 @@ def test_package_run_metadata_records_package_modules(tmp_path: Path, monkeypatc
     )
 
     assert result.terminal == "FINISH"
-    run_dir = next((tmp_path / ".autoloop" / "tasks" / "task-package-demo" / "wf_package_demo" / "runs").iterdir())
+    run_dir = next((tmp_path / ".botlane" / "tasks" / "task-package-demo" / "wf_package_demo" / "runs").iterdir())
     payload = json.loads((run_dir / "run.json").read_text(encoding="utf-8"))["workflow"]
 
     assert payload["source_root_kind"] == "package"
@@ -355,7 +355,7 @@ def test_cli_workflows_list_show_and_all_emit_shadow_and_source_metadata(
     assert exit_code == 0
     assert payload["name"] == "shared_demo"
     assert payload["source_root_kind"] == "workspace"
-    assert payload["source_root"] == str(tmp_path / ".autoloop" / "workflows")
+    assert payload["source_root"] == str(tmp_path / ".botlane" / "workflows")
     assert payload["package_folder"] == str(workspace_dir)
     assert payload["package_module"] is None
     assert payload["workflow_module"] is None
@@ -390,7 +390,7 @@ def test_cli_init_workflow_scaffolds_under_dot_autoloop_workflows(tmp_path: Path
     exit_code = cli.main(["init", "workflow", "demo", "--workspace", str(tmp_path)])
     payload = json.loads(capsys.readouterr().out)
 
-    package_dir = tmp_path / ".autoloop" / "workflows" / "demo"
+    package_dir = tmp_path / ".botlane" / "workflows" / "demo"
 
     assert exit_code == 0
     assert payload["shape"] == "package"
@@ -420,4 +420,4 @@ def test_cli_workflows_list_help_describes_package_and_dot_autoloop_roots(capsys
     assert "workspace directory" in help_text.lower()
     assert "package workflows are loaded" in help_text.lower()
     assert "workspace workflow directory" in help_text
-    assert ".autoloop/workflows/" not in help_text
+    assert ".botlane/workflows/" not in help_text
