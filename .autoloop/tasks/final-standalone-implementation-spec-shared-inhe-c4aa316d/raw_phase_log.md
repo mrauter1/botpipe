@@ -1139,3 +1139,54 @@ No open issues from this review. Phase can close as complete.
 <loop-control>
 {"schema":"docloop.loop_control/v1","kind":"promise","promise":"COMPLETE"}
 </loop-control>
+
+
+---
+run_id=run-20260508T141115Z-6c430e1a | entry=session_turn | pair=test | phase=producer | cycle=1 | attempt=1 | thread_id=019e0854-49f5-7e41-ae2f-199bac1cd6c7
+---
+provider=codex
+mode=resume
+template=/home/rauter/.local/share/pipx/venvs/autoloop/lib/python3.12/site-packages/autoloop/templates/test_producer.md
+session_id=019e0854-49f5-7e41-ae2f-199bac1cd6c7
+
+
+---
+run_id=run-20260508T141115Z-6c430e1a | entry=phase_output | pair=test | phase=producer | process=codex-agent | cycle=1 | attempt=1 | thread_id=019e0854-49f5-7e41-ae2f-199bac1cd6c7
+---
+I’m checking the phase-local test surface and artifacts first to see whether the current regression coverage already satisfies the contract or needs one more focused addition. I’ll inspect the active test strategy/feedback files, the updated tests, and the reviewer validation evidence before deciding whether to touch repository tests again.
+
+The current tests already cover most of the phase contract. I’m making one small addition so the new direct-operation docstrings are pinned too; that closes the only obvious untested part of the docstring refresh without widening scope.
+
+I’ve added the missing direct-operation docstring assertions. Next I’m rerunning the impacted SDK facade test file and then the full required targeted suite so the test-phase artifacts can record fresh evidence from this turn.
+
+The focused and required suites are green after the extra docstring assertions. I’m recording the behavior-to-test coverage map and the test-phase summary next so the audit artifacts reflect exactly what this turn validated.
+
+Scope considered
+
+Phase-local regression-cleanup only: the public policy/SDK/simple regression tests, the refreshed SDK docstrings, and the active test artifacts under the `test/phases/regression-cleanup` directory.
+
+What I analyzed
+
+I reviewed the updated coverage in `tests/unit/test_policy.py`, `tests/unit/test_sdk_facade.py`, and `tests/runtime/test_sdk_policy.py`, checked the implementation notes and reviewer evidence, and looked for any remaining unpinned part of the docstring/public-surface contract. The only gap I found was that the new direct-operation docstrings for `Autoloop.llm()` and `Autoloop.classify()` were updated in code but not explicitly asserted in tests.
+
+What I changed
+
+I extended `tests/unit/test_sdk_facade.py` so `test_sdk_public_docstrings_encode_workspace_policy_and_runtime_behavior_contract` now also pins the `Autoloop.llm()` and `Autoloop.classify()` docstrings. I updated the phase artifacts:
+- `artifacts/test/phases/regression-cleanup/test_strategy.md`
+- `artifacts/test/phases/regression-cleanup/feedback.md`
+
+Validation:
+- `.venv/bin/pytest tests/unit/test_sdk_facade.py tests/unit/test_policy.py tests/runtime/test_sdk_policy.py tests/unit/test_simple_surface.py -q`
+- `.venv/bin/pytest tests/unit/test_provider_policy.py tests/runtime/test_provider_policy_steps.py tests/runtime/test_provider_policy_emitters.py tests/runtime/test_provider_policy_config.py tests/unit/test_simple_surface.py tests/unit/test_sdk_facade.py tests/unit/test_policy.py tests/runtime/test_sdk_policy.py -q`
+
+Results:
+- Focused rerun: `155 passed`
+- Required targeted suites: `212 passed`
+
+Key findings / decisions
+
+The phase contract is now fully pinned in tests for both workflow/step docstrings and direct SDK operation docstrings. I kept the change minimal and deterministic, reused the existing SDK facade docstring test instead of adding a new parallel test, and did not broaden into unrelated documentation or runtime behavior.
+
+Open issues / next step
+
+No open issues in phase scope. The targeted regression suite is green, and the test strategy plus feedback artifacts now reflect the final coverage map and validation evidence.

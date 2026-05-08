@@ -657,6 +657,8 @@ def test_sdk_public_docstrings_encode_workspace_policy_and_runtime_behavior_cont
     init_doc = Autoloop.__init__.__doc__
     run_doc = Autoloop.run.__doc__
     step_doc = Autoloop.step.__doc__
+    llm_doc = Autoloop.llm.__doc__
+    classify_doc = Autoloop.classify.__doc__
     prompt_step_doc = Autoloop.prompt_step.__doc__
     workflow_step_doc = Autoloop.workflow_step.__doc__
 
@@ -678,6 +680,16 @@ def test_sdk_public_docstrings_encode_workspace_policy_and_runtime_behavior_cont
     assert "not mutated" in step_doc
     assert "`provider_questions` is an" in step_doc
     assert "`control_routes`" in step_doc
+
+    assert llm_doc is not None
+    assert "`prompt` is the provider instruction" in llm_doc
+    assert "runtime config defaults" in llm_doc
+    assert "SDK client default policy" in llm_doc
+
+    assert classify_doc is not None
+    assert "`prompt` is the provider instruction" in classify_doc
+    assert "runtime config defaults" in classify_doc
+    assert "SDK client default policy" in classify_doc
 
     assert prompt_step_doc is not None
     assert "`prompt` is the provider instruction" in prompt_step_doc
