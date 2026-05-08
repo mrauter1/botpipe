@@ -698,3 +698,57 @@ Open issues / next step
 
 - No open issues inside this phase scope.
 - I did not run the full repository test suite; only the targeted runtime CLI suites above.
+
+
+---
+run_id=run-20260508T173757Z-dbc5e2d0 | entry=session_turn | pair=implement | phase=verifier | cycle=1 | attempt=1 | thread_id=019e08c0-fd19-7d83-8d47-b301dba7c66b
+---
+provider=codex
+mode=resume
+template=/home/rauter/.local/share/pipx/venvs/autoloop/lib/python3.12/site-packages/autoloop/templates/implement_verifier.md
+session_id=019e08c0-fd19-7d83-8d47-b301dba7c66b
+
+
+---
+run_id=run-20260508T173757Z-dbc5e2d0 | entry=phase_output | pair=implement | phase=verifier | process=codex-agent | cycle=1 | attempt=1 | thread_id=019e08c0-fd19-7d83-8d47-b301dba7c66b
+---
+I’m reviewing the runtime CLI workspace-flag phase now. I’ll verify the changed parser, touched docs, and regression coverage against the acceptance criteria before I update the phase artifacts.
+
+The phase artifacts are still blank, so I’m validating the final repo state directly rather than trusting the notes. Next I’m checking for residual `--root` exposure in the runtime CLI surface and rerunning the focused tests.
+
+The core behavior is passing, but I’m checking one more public-surface detail in the help output itself. The parser still uses `dest="root"`, which can leak into argparse’s metavar unless it’s overridden.
+
+I found one user-visible gap: the required flag rename is correct, but argparse still renders the placeholder as `ROOT` in help output because `dest="root"` is reused without a custom metavar. I’m recording that as a blocking review finding and marking the criteria accordingly.
+
+Scope considered
+
+- Phase-local runtime CLI workspace-flag review only: [autoloop/runtime/cli.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/autoloop/runtime/cli.py), [tests/runtime/test_package_cli.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/tests/runtime/test_package_cli.py), [tests/runtime/test_runtime_cli_metadata_integration.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/tests/runtime/test_runtime_cli_metadata_integration.py), [docs/authoring.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/docs/authoring.md), and the active phase artifacts.
+
+What I analyzed
+
+- The authoritative phase contract, implementation notes, and run decisions.
+- The final parser state for the shared `common` and `mutate` parent parsers.
+- Residual `--root` and `--workspace` references in touched runtime CLI files and docs.
+- Focused runtime CLI validation via `./.venv/bin/pytest tests/runtime/test_package_cli.py tests/runtime/test_runtime_cli_metadata_integration.py`.
+
+What I reviewed
+
+- Required `--workspace` enforcement and legacy `--root` rejection across covered public entry points.
+- Public help text wording, including actual rendered argparse help output.
+- Touched docs/examples for the CLI rename.
+- Test coverage quality for the acceptance criteria.
+
+Key findings / decisions
+
+- I recorded one blocking finding in [feedback.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/below-is-the-revised-standalone-correction-spec-a9877342/runs/run-20260508T173757Z-dbc5e2d0/artifacts/implement/phases/runtime-cli-workspace-flag/feedback.md): help output still renders `--workspace ROOT` because the parser keeps `dest="root"` without overriding the metavar.
+- That means AC-2 is not fully satisfied yet: the public help surface still leaks the removed root terminology even though the flag name itself was renamed.
+- I updated [criteria.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/below-is-the-revised-standalone-correction-spec-a9877342/runs/run-20260508T173757Z-dbc5e2d0/artifacts/implement/phases/runtime-cli-workspace-flag/criteria.md) accordingly.
+
+Open issues / next step
+
+- Fix the shared `--workspace` arguments to render `WORKSPACE` instead of `ROOT` in help output, then strengthen the help assertions to reject `ROOT` explicitly.
+- After that, rerun the focused runtime CLI suite and update the phase artifacts to complete.
+
+<loop-control>
+{"schema":"docloop.loop_control/v1","kind":"promise","promise":"INCOMPLETE"}
+</loop-control>
