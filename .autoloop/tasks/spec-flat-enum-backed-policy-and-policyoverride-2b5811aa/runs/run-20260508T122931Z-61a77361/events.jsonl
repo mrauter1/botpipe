@@ -29,3 +29,6 @@
 {"ts": "2026-05-08T12:50:54.031367+00:00", "run_id": "run-20260508T122931Z-61a77361", "seq": 29, "event_type": "phase_finished", "pair": "test", "phase": "producer", "cycle": 1, "attempt": 1, "empty_output": false, "phase_id": "flat-policy-facade"}
 {"ts": "2026-05-08T12:51:37.508915+00:00", "run_id": "run-20260508T122931Z-61a77361", "seq": 30, "event_type": "phase_finished", "pair": "test", "phase": "verifier", "cycle": 1, "attempt": 1, "empty_output": false, "phase_id": "flat-policy-facade"}
 {"ts": "2026-05-08T12:51:37.580195+00:00", "run_id": "run-20260508T122931Z-61a77361", "seq": 31, "event_type": "pair_completed", "pair": "test", "cycle": 1, "attempt": 1, "phase_id": "flat-policy-facade"}
+{"ts": "2026-05-08T12:51:37.690512+00:00", "run_id": "run-20260508T122931Z-61a77361", "seq": 32, "event_type": "phase_completed", "pair": "test", "phase_id": "flat-policy-facade", "phase_mode": "single"}
+{"ts": "2026-05-08T12:51:37.693774+00:00", "run_id": "run-20260508T122931Z-61a77361", "seq": 33, "event_type": "pair_started", "pair": "audit", "phase_id": null}
+{"ts": "2026-05-08T12:51:37.693977+00:00", "run_id": "run-20260508T122931Z-61a77361", "seq": 34, "event_type": "cycle_started", "pair": "audit", "cycle": 1, "attempt": 1, "phase_id": null}
