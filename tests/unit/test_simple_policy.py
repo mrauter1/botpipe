@@ -6,6 +6,8 @@ import autoloop
 import autoloop.policy as public_policy
 import autoloop.sdk as sdk
 import autoloop.simple as simple
+from autoloop.core.primitives import Event
+from autoloop.core.steps import PythonStep
 from autoloop.core.provider_policy import ProviderPolicy, ProviderPolicyOverride
 from autoloop.policy import PermissionMode, Policy
 
@@ -113,6 +115,61 @@ def test_policy_input_export_matrix_matches_phase_contract() -> None:
         exec("from autoloop.simple import ProviderPolicyInput")
     with pytest.raises(AttributeError):
         getattr(simple, "ProviderPolicyInput")
+
+
+def test_policy_module_export_lists_match_public_surface_contract() -> None:
+    assert tuple(public_policy.__all__) == (
+        "Policy",
+        "PolicyInput",
+        "ProviderName",
+        "ModelEffort",
+        "ModelVerbosity",
+        "ReasoningSummary",
+        "SandboxMode",
+        "NetworkMode",
+        "PermissionMode",
+        "resolve_policy_layer",
+    )
+    assert "PolicyOverride" not in public_policy.__all__
+    assert "PolicyOverride" not in sdk.__all__
+    assert "PolicyOverride" not in simple.__all__
+
+    for name in (
+        "Policy",
+        "ProviderName",
+        "ModelEffort",
+        "ModelVerbosity",
+        "ReasoningSummary",
+        "SandboxMode",
+        "NetworkMode",
+        "PermissionMode",
+    ):
+        assert name in sdk.__all__
+        assert name in simple.__all__
+
+    assert "PolicyInput" in sdk.__all__
+    assert "PolicyInput" not in simple.__all__
+
+
+def test_public_policy_validation_wording_hides_internal_override_types() -> None:
+    with pytest.raises(TypeError, match=r"policy must be a Policy or core provider policy object, or None"):
+        simple.step("Draft.", policy="ask")  # type: ignore[arg-type]
+
+    with pytest.raises(
+        TypeError,
+        match=r"provider_policy must be a Policy or core provider policy object, or None",
+    ):
+        PythonStep(
+            name="capture",
+            handler=lambda _ctx: Event("done"),
+            provider_policy="ask",  # type: ignore[arg-type]
+        )
+
+    with pytest.raises(
+        TypeError,
+        match=r"policy layer must be a Policy or core provider policy object, or None",
+    ):
+        public_policy.resolve_policy_layer(public_policy.SYSTEM_DEFAULT_PROVIDER_POLICY, "ask")  # type: ignore[arg-type]
 
 
 def test_simple_declarations_accept_public_policy_layers() -> None:

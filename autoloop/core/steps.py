@@ -428,4 +428,4 @@ class BranchGroupStep(Step):
 def _normalize_provider_policy(policy: ProviderPolicyInput) -> ProviderPolicyInput:
     if policy is None or isinstance(policy, (Policy, ProviderPolicy, ProviderPolicyOverride)):
         return policy
-    raise TypeError("provider_policy must be a Policy, ProviderPolicy, ProviderPolicyOverride, or None")
+    raise TypeError("provider_policy must be a Policy or core provider policy object, or None")

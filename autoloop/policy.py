@@ -525,7 +525,7 @@ def resolve_policy_layer(
         return merge_provider_policies(base, layer)
     if isinstance(layer, ProviderPolicy):
         return merge_provider_policies(base, layer)
-    raise TypeError("policy layer must be a Policy, ProviderPolicy, ProviderPolicyOverride, or None")
+    raise TypeError("policy layer must be a Policy or core provider policy object, or None")
 
 
 __all__ = [

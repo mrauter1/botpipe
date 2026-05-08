@@ -797,7 +797,7 @@ def _artifact_reference_name(reference: Artifact | ArtifactSpec) -> str:
 def _normalize_provider_policy(policy: _SimplePolicyInput) -> _SimplePolicyInput:
     if policy is None or isinstance(policy, (Policy, _CoreProviderPolicy, _CoreProviderPolicyOverride)):
         return policy
-    raise TypeError("policy must be a Policy, ProviderPolicy, ProviderPolicyOverride, or None")
+    raise TypeError("policy must be a Policy or core provider policy object, or None")
 
 
 def _normalize_simple_prompt(prompt: PromptInput) -> Prompt:

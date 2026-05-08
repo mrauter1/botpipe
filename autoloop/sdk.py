@@ -1142,7 +1142,7 @@ def _normalize_sdk_policy_input(
 ) -> PolicyInput:
     if policy is None or isinstance(policy, (Policy, ProviderPolicy, ProviderPolicyOverride)):
         return policy
-    raise TypeError(f"{field_name} must be a Policy, ProviderPolicy, ProviderPolicyOverride, or None")
+    raise TypeError(f"{field_name} must be a Policy or core provider policy object, or None")
 
 
 def _sdk_step_invocation_layer(

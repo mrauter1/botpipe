@@ -360,9 +360,7 @@ def _validate_workflow_policy(workflow_cls: type[Any]) -> PolicyInput:
     if workflow_policy is None:
         return None
     if not isinstance(workflow_policy, (Policy, ProviderPolicy, ProviderPolicyOverride)):
-        raise WorkflowValidationError(
-            f"{workflow_cls.__name__}.policy must be a Policy, ProviderPolicy, or ProviderPolicyOverride"
-        )
+        raise WorkflowValidationError(f"{workflow_cls.__name__}.policy must be a Policy or core provider policy object")
     return workflow_policy
 
 

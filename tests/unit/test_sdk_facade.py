@@ -636,6 +636,22 @@ def test_sdk_constructor_uses_workspace_and_rejects_root_keyword(tmp_path: Path)
         Autoloop(root=tmp_path)  # type: ignore[call-arg]
 
 
+def test_sdk_constructor_rejects_invalid_default_policy_with_public_wording(tmp_path: Path) -> None:
+    with pytest.raises(
+        TypeError,
+        match=r"default_policy must be a Policy or core provider policy object, or None",
+    ):
+        Autoloop(
+            workspace=tmp_path,
+            default_policy="ask",  # type: ignore[arg-type]
+            provider=ScriptedLLMProvider(),
+            state_dir=tmp_path / ".autoloop",
+            runtime_config=RuntimeConfig(
+                git_tracking=GitTrackingRuntimeConfig(enabled=False, commit_policy="off")
+            ),
+        )
+
+
 def test_sdk_run_rejects_removed_typed_input_and_parameters_keywords(tmp_path: Path) -> None:
     client = _sdk_client(tmp_path, ScriptedLLMProvider())
 
@@ -648,6 +664,18 @@ def test_sdk_run_rejects_removed_typed_input_and_parameters_keywords(tmp_path: P
     with pytest.raises(TypeError, match="parameters"):
         client.run(  # type: ignore[call-arg]
             _SDKParamsWorkflow,
+            "Ship it.",
+            parameters={"mode": "strict"},
+        )
+    with pytest.raises(TypeError, match="typed_input"):
+        client.step(  # type: ignore[call-arg]
+            simple.python_step(lambda _ctx: Event("done"), name="noop"),
+            "Ship it.",
+            typed_input=_SDKPauseWorkflow.Input(topic="release"),
+        )
+    with pytest.raises(TypeError, match="parameters"):
+        client.step(  # type: ignore[call-arg]
+            simple.python_step(lambda _ctx: Event("done"), name="noop"),
             "Ship it.",
             parameters={"mode": "strict"},
         )

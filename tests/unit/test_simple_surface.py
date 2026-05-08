@@ -596,7 +596,7 @@ def test_simple_workflow_policy_must_be_a_provider_policy() -> None:
 
     with pytest.raises(
         WorkflowValidationError,
-        match=r"InvalidPolicyWorkflow\.policy must be a Policy, ProviderPolicy, or ProviderPolicyOverride",
+        match=r"InvalidPolicyWorkflow\.policy must be a Policy or core provider policy object",
     ):
         get_workflow_definition(InvalidPolicyWorkflow)
 
