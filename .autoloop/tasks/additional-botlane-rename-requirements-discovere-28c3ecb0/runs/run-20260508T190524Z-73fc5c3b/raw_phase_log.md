@@ -833,3 +833,85 @@ Update or replace the stale CLI metadata integration test so it asserts Botlane 
 <loop-control>
 {"schema":"docloop.loop_control/v1","kind":"promise","promise":"INCOMPLETE"}
 </loop-control>
+
+
+---
+run_id=run-20260508T190524Z-73fc5c3b | entry=session_turn | pair=test | phase=producer | cycle=2 | attempt=1 | thread_id=019e0916-8e98-7b41-a2e9-9a6a5f5047d8
+---
+provider=codex
+mode=resume
+template=/home/rauter/.local/share/pipx/venvs/autoloop/lib/python3.12/site-packages/autoloop/templates/test_producer.md
+session_id=019e0916-8e98-7b41-a2e9-9a6a5f5047d8
+
+
+---
+run_id=run-20260508T190524Z-73fc5c3b | entry=phase_output | pair=test | phase=producer | process=codex-agent | cycle=2 | attempt=1 | thread_id=019e0916-8e98-7b41-a2e9-9a6a5f5047d8
+---
+I’m addressing the blocking audit finding in the CLI integration tests now. The scope is narrow: fix the stale legacy help expectation, then update the phase test artifacts to reflect the corrected coverage surface.
+
+The stale expectation is confined to one runtime CLI integration file, so I’m fixing that directly instead of adding another overlapping test. I’m also updating the coverage map so the integration-level help contract is recorded alongside the unit-style CLI help checks.
+
+The stale integration contract is fixed. I’m doing a narrow validation pass on the touched runtime test file and then I’ll close this test-authoring cycle with the updated coverage artifacts.
+
+Scope considered
+
+Active test phase only: the blocking audit finding in the runtime CLI integration tests, plus the phase test artifacts that describe CLI/runtime identity coverage.
+
+What I analyzed
+
+I rechecked the stale CLI integration expectations in [tests/runtime/test_runtime_cli_metadata_integration.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/tests/runtime/test_runtime_cli_metadata_integration.py) against the confirmed Botlane help contract and compared them with the newer CLI identity coverage already added in [tests/runtime/test_package_cli.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/tests/runtime/test_package_cli.py). I also reviewed the current [test_strategy.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/additional-botlane-rename-requirements-discovere-28c3ecb0/runs/run-20260508T190524Z-73fc5c3b/artifacts/test/phases/rewrite-runtime-and-workspace-identity/test_strategy.md) and [feedback.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/additional-botlane-rename-requirements-discovere-28c3ecb0/runs/run-20260508T190524Z-73fc5c3b/artifacts/test/phases/rewrite-runtime-and-workspace-identity/feedback.md) entries for consistency.
+
+What I changed
+
+I updated the stale integration tests in `tests/runtime/test_runtime_cli_metadata_integration.py` so they now assert Botlane wording, `.botlane/workflows/` presence, and absence of legacy `autoloop` text. I also renamed the affected test names from `dot_autoloop` to `dot_botlane` so the file no longer advertises the wrong contract. In the phase artifacts, I extended `test_strategy.md` to include this integration-level CLI help coverage and appended a feedback entry noting that the audit finding was addressed.
+
+Key findings / decisions
+
+The blocker was real: the old integration test contradicted the intended Botlane help surface and would have either failed or encouraged future drift back to legacy wording. Fixing the existing integration test was better than adding another overlapping test because it restores a single consistent contract across the runtime CLI suite.
+
+Open issues / next step
+
+`python3 -m compileall` passed for the touched runtime CLI integration test file. I still could not run `pytest` here because `/usr/bin/python3` does not have `pytest` installed, so the next step is to rerun the focused runtime tests in an environment with test dependencies available.
+
+
+---
+run_id=run-20260508T190524Z-73fc5c3b | entry=session_turn | pair=test | phase=verifier | cycle=2 | attempt=1 | thread_id=019e0916-8e98-7b41-a2e9-9a6a5f5047d8
+---
+provider=codex
+mode=resume
+template=/home/rauter/.local/share/pipx/venvs/autoloop/lib/python3.12/site-packages/autoloop/templates/test_verifier.md
+session_id=019e0916-8e98-7b41-a2e9-9a6a5f5047d8
+
+
+---
+run_id=run-20260508T190524Z-73fc5c3b | entry=phase_output | pair=test | phase=verifier | process=codex-agent | cycle=2 | attempt=1 | thread_id=019e0916-8e98-7b41-a2e9-9a6a5f5047d8
+---
+Re-running the test audit after the CLI integration fix. I’m checking the corrected runtime-facing tests and then I’ll update the audit artifacts to reflect whether any blocking contradictions remain.
+
+The corrected CLI integration test now matches the Botlane contract, and the broader suite still covers the legacy-read and console-script constraints. I’m marking the audit artifacts complete and recording that `TST-001` is resolved.
+
+The audit artifacts are updated. I’m doing a final read to confirm the criteria are fully checked and the feedback log shows the blocker as resolved before I return `COMPLETE`.
+
+Scope considered
+
+Active test phase only: the runtime/workspace identity coverage for CLI help text, workspace-root messaging, legacy-read compatibility, and the adjacent tests that enforce the packaged `botlane` surface.
+
+What I analyzed
+
+I rechecked the corrected integration test in `tests/runtime/test_runtime_cli_metadata_integration.py`, the direct CLI help assertions in `tests/runtime/test_package_cli.py`, the legacy config fallback tests in `tests/runtime/test_provider_policy_config.py`, the workspace/root compatibility tests in `tests/runtime/test_workflow_catalog_roots.py` and `tests/runtime/test_workspace_and_context.py`, and the wheel smoke coverage in `tests/runtime/test_wheel_packaging_smoke.py`. I also verified the phase `test_strategy.md` against the actual suite.
+
+What I reviewed
+
+The prior blocker is resolved. The runtime CLI integration test now aligns with the Botlane help contract instead of contradicting it, and the broader suite still covers the remaining acceptance-critical surfaces: no `autoloop` console script in the wheel, no `autoloop` import/module entrypoint, `.botlane` over `.autoloop` workspace precedence, mixed-root resume behavior, and legacy config/SDK read compatibility.
+
+Key findings / decisions
+
+No blocking findings remain. I updated [criteria.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/additional-botlane-rename-requirements-discovere-28c3ecb0/runs/run-20260508T190524Z-73fc5c3b/artifacts/test/phases/rewrite-runtime-and-workspace-identity/criteria.md) to fully checked and appended to [feedback.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/additional-botlane-rename-requirements-discovere-28c3ecb0/runs/run-20260508T190524Z-73fc5c3b/artifacts/test/phases/rewrite-runtime-and-workspace-identity/feedback.md) that `TST-001` is resolved.
+
+Open issues / next step
+
+The remaining gap is environmental, not audit-blocking: this session still lacks `pytest`, so execution proof remains limited to authored coverage review and compile checks. The next practical step is to rerun the focused runtime tests in a dependency-complete environment.
+
+<loop-control>
+{"schema":"docloop.loop_control/v1","kind":"promise","promise":"COMPLETE"}
+</loop-control>
