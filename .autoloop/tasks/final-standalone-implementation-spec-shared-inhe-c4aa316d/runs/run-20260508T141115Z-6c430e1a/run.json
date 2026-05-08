@@ -16,14 +16,14 @@
       "regression-cleanup"
     ],
     "explicit": true,
-    "current_phase_index": 2,
-    "current_phase_id": "sdk-runtime-alignment"
+    "current_phase_index": 3,
+    "current_phase_id": "regression-cleanup"
   },
   "phase_status": {
     "shared-policy-core": "completed",
     "compiler-simple-integration": "completed",
-    "sdk-runtime-alignment": "in_progress",
-    "regression-cleanup": "planned"
+    "sdk-runtime-alignment": "completed",
+    "regression-cleanup": "in_progress"
   },
   "phase_history": [
     {
@@ -57,6 +57,19 @@
       "run_id": "run-20260508T141115Z-6c430e1a",
       "status": "in_progress",
       "ts": "2026-05-08T14:48:47.145197+00:00"
+    },
+    {
+      "phase_id": "sdk-runtime-alignment",
+      "run_id": "run-20260508T141115Z-6c430e1a",
+      "status": "completed",
+      "ts": "2026-05-08T16:03:21.522432+00:00",
+      "pair": "test"
+    },
+    {
+      "phase_id": "regression-cleanup",
+      "run_id": "run-20260508T141115Z-6c430e1a",
+      "status": "in_progress",
+      "ts": "2026-05-08T16:03:21.525804+00:00"
     }
   ]
 }
