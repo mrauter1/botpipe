@@ -214,3 +214,46 @@ The necessary behavior change was small and centralized: only `Policy.to_layer_p
 
 **Open issues / next step**
 Syntax validation passed with `python3 -m py_compile` for the touched files. I could not run `pytest` because this environment is missing `pytest` and project deps like `pydantic`, so the next step is to run the targeted suites in the project’s real test environment.
+
+
+---
+run_id=run-20260508T173757Z-dbc5e2d0 | entry=session_turn | pair=implement | phase=verifier | cycle=1 | attempt=1 | thread_id=019e08b0-65e6-70f1-91d9-b5bfac7dbe44
+---
+provider=codex
+mode=resume
+template=/home/rauter/.local/share/pipx/venvs/autoloop/lib/python3.12/site-packages/autoloop/templates/implement_verifier.md
+session_id=019e08b0-65e6-70f1-91d9-b5bfac7dbe44
+
+
+---
+run_id=run-20260508T173757Z-dbc5e2d0 | entry=phase_output | pair=implement | phase=verifier | process=codex-agent | cycle=1 | attempt=1 | thread_id=019e08b0-65e6-70f1-91d9-b5bfac7dbe44
+---
+I’m reviewing the phase-local implementation against the active acceptance criteria. I’ll inspect the criteria and the exact diff first, then I’ll update the review artifacts with any blocking or non-blocking findings.
+
+The phase notes show an explicit phase-scope deferral, so I’m reviewing only the serialization/fingerprint behavior and the tests that are supposed to prove it. I’m pulling the exact implementations and test assertions now to check for gaps against AC-1 through AC-3.
+
+I don’t see a phase-local correctness gap in the serializer or compiler changes. I’m updating the verifier artifacts to reflect a clean review, with explicit note that there were no findings for this phase.
+
+Scope considered
+
+Phase-local review only for `policy-payload-fingerprints`, as defined by the active contract: `Policy.to_layer_payload()`, compiler payload/fingerprint helpers, and the targeted unit coverage proving AC-1 through AC-3.
+
+What I analyzed
+
+I reviewed the implementation in `autoloop/policy.py`, `autoloop/core/compiler.py`, and `tests/unit/test_policy.py`, plus the phase notes and run decisions. I also searched the repo for remaining serialized kind literals to confirm the phase-owned paths no longer emit the legacy public labels.
+
+What I reviewed
+
+`Policy.to_layer_payload()` now emits nested public bases as `policy_layer` and concrete provider bases as `provider_policy`. `_policy_input_payload(...)` now emits `policy_layer`, `provider_policy`, and `provider_policy_override`, and `_policy_input_fingerprint(...)` now hashes the unified payload for every non-`None` policy input, including `ProviderPolicy`. The added tests cover nested public bases, concrete provider bases, explicit kind labels, deterministic fingerprints for identical authored layers, and kind-driven fingerprint differences.
+
+Key findings / decisions
+
+No phase-local findings. I updated `criteria.md` to checked and recorded in `feedback.md` that the implementation satisfies AC-1 through AC-3 for this phase.
+
+Open issues / next step
+
+No blocking issues for this phase. Broader SDK/simple wording and runtime CLI cleanup remain outside this phase’s accepted scope and should be reviewed in their own phases.
+
+<loop-control>
+{"schema":"docloop.loop_control/v1","kind":"promise","promise":"COMPLETE"}
+</loop-control>
