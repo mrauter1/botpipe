@@ -547,3 +547,51 @@ Key findings / decisions
 Open issues / next step
 
 - No open test-author blocker remains in this phase-local scope.
+
+
+---
+run_id=run-20260508T122931Z-61a77361 | entry=session_turn | pair=test | phase=verifier | cycle=1 | attempt=1 | thread_id=019e0796-5bd9-76d1-b337-56047d273185
+---
+provider=codex
+mode=resume
+template=/home/rauter/.local/share/pipx/venvs/autoloop/lib/python3.12/site-packages/autoloop/templates/test_verifier.md
+session_id=019e0796-5bd9-76d1-b337-56047d273185
+
+
+---
+run_id=run-20260508T122931Z-61a77361 | entry=phase_output | pair=test | phase=verifier | process=codex-agent | cycle=1 | attempt=1 | thread_id=019e0796-5bd9-76d1-b337-56047d273185
+---
+I’m auditing the updated policy tests against the clarified dangerous-access contract and the requested regression slice first, then I’ll update the test-phase criteria and feedback artifacts accordingly.
+
+The test suite now covers both the clarified failure path and the clarified explicit-compatible manual path, and the regression slice is green. I’m marking the audit complete and leaving a short status note in the feedback artifact.
+
+Scope considered
+
+- The updated flat-policy tests in `tests/unit/test_simple_policy.py`, the phase-local test strategy/feedback artifacts, the run-local clarification ledger, and the requested regression slice.
+
+What I analyzed
+
+- Whether the clarified QA-2 contract is fully covered at both the success and failure edges.
+- Whether the added tests would catch a reintroduction of the old silent `ask` rewrite or an accidental over-tightening that rejects explicit compatible manual danger access.
+
+What I reviewed
+
+- The dangerous-access unit coverage, the behavior-to-test map in `test_strategy.md`, the feedback artifact entry, and the full requested pytest command result.
+
+Key findings / decisions
+
+- No blocking audit findings remain.
+- The test suite now covers:
+  manual `danger_full_access` rejection without `permission_mode`,
+  explicit compatible manual danger access using `PermissionMode.ASK`,
+  and the existing `FULL_AUTO_UNSANDBOXED` inference path.
+- The documented regression slice passed:
+  `./.venv/bin/python -m pytest tests/unit/test_simple_surface.py tests/unit/test_provider_policy.py tests/runtime/test_provider_policy_steps.py tests/runtime/test_provider_policy_emitters.py tests/runtime/test_provider_policy_config.py tests/unit/test_simple_policy.py`
+
+Open issues / next step
+
+- No open test-audit issues remain in the reviewed phase-local scope.
+
+<loop-control>
+{"schema":"docloop.loop_control/v1","kind":"promise","promise":"COMPLETE"}
+</loop-control>

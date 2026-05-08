@@ -500,3 +500,98 @@ Open issues / next step
 <loop-control>
 {"schema":"docloop.loop_control/v1","kind":"promise","promise":"COMPLETE"}
 </loop-control>
+
+
+---
+run_id=run-20260508T122931Z-61a77361 | entry=session_turn | pair=test | phase=producer | cycle=1 | attempt=1 | thread_id=019e0796-5bd9-76d1-b337-56047d273185
+---
+provider=codex
+mode=resume
+template=/home/rauter/.local/share/pipx/venvs/autoloop/lib/python3.12/site-packages/autoloop/templates/test_producer.md
+session_id=019e0796-5bd9-76d1-b337-56047d273185
+
+
+---
+run_id=run-20260508T122931Z-61a77361 | entry=phase_output | pair=test | phase=producer | process=codex-agent | cycle=1 | attempt=1 | thread_id=019e0796-5bd9-76d1-b337-56047d273185
+---
+I’m checking the current test-phase artifacts and the already-added coverage first. Then I’ll add only the missing regression tests around the clarified manual-danger contract and record the coverage map in the phase artifacts.
+
+The current tests already pin the failure path, but they don’t yet cover the clarified happy path for manual danger access with an explicit compatible permission mode. I’m adding that now so the narrowed contract is fully exercised.
+
+The test additions are in. I’m rerunning the same regression slice the implementer used so the phase artifacts point at one coherent, current validation result.
+
+The only meaningful risk from this test-only turn is that the added happy-path assertions could expose a hidden mismatch in the clarified dangerous-access branch. I’m waiting on the runtime and policy suites to finish before I close out the artifacts.
+
+Scope considered
+
+- `tests/unit/test_simple_policy.py` plus the phase-local test artifacts in `artifacts/test/phases/flat-policy-facade`, with regression validation against the existing policy/runtime suites.
+
+What I analyzed
+
+- The clarified QA-2 dangerous-access contract, the current unit coverage around manual `danger_full_access`, and whether the narrowed behavior already had both happy-path and failure-path assertions.
+
+What I changed
+
+- Added unit coverage in [tests/unit/test_simple_policy.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/tests/unit/test_simple_policy.py) for the clarified happy path: manual `sandbox_mode=SandboxMode.DANGER_FULL_ACCESS` remains valid when paired with an explicit compatible `permission_mode` (`PermissionMode.ASK`), for both `Policy(...)` and `PolicyOverride(...)`.
+- Updated [test_strategy.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/spec-flat-enum-backed-policy-and-policyoverride-2b5811aa/runs/run-20260508T122931Z-61a77361/artifacts/test/phases/flat-policy-facade/test_strategy.md) with a behavior-to-test coverage map, preserved invariants, edge/failure paths, flake controls, and known gaps.
+- Appended a concise summary entry to [feedback.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/spec-flat-enum-backed-policy-and-policyoverride-2b5811aa/runs/run-20260508T122931Z-61a77361/artifacts/test/phases/flat-policy-facade/feedback.md).
+- Appended the non-obvious test coverage decision to [decisions.txt](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/spec-flat-enum-backed-policy-and-policyoverride-2b5811aa/runs/run-20260508T122931Z-61a77361/decisions.txt) under the current turn header.
+
+Key findings / decisions
+
+- The test suite now pins both sides of QA-2:
+  manual `danger_full_access` is rejected without `permission_mode`, and explicit compatible manual danger access stays valid without reintroducing the old silent rewrite.
+- Validation passed with:
+  `./.venv/bin/python -m pytest tests/unit/test_simple_surface.py tests/unit/test_provider_policy.py tests/runtime/test_provider_policy_steps.py tests/runtime/test_provider_policy_emitters.py tests/runtime/test_provider_policy_config.py tests/unit/test_simple_policy.py`
+
+Open issues / next step
+
+- No open test-author blocker remains in this phase-local scope.
+
+
+---
+run_id=run-20260508T122931Z-61a77361 | entry=session_turn | pair=test | phase=verifier | cycle=1 | attempt=1 | thread_id=019e0796-5bd9-76d1-b337-56047d273185
+---
+provider=codex
+mode=resume
+template=/home/rauter/.local/share/pipx/venvs/autoloop/lib/python3.12/site-packages/autoloop/templates/test_verifier.md
+session_id=019e0796-5bd9-76d1-b337-56047d273185
+
+
+---
+run_id=run-20260508T122931Z-61a77361 | entry=phase_output | pair=test | phase=verifier | process=codex-agent | cycle=1 | attempt=1 | thread_id=019e0796-5bd9-76d1-b337-56047d273185
+---
+I’m auditing the updated policy tests against the clarified dangerous-access contract and the requested regression slice first, then I’ll update the test-phase criteria and feedback artifacts accordingly.
+
+The test suite now covers both the clarified failure path and the clarified explicit-compatible manual path, and the regression slice is green. I’m marking the audit complete and leaving a short status note in the feedback artifact.
+
+Scope considered
+
+- The updated flat-policy tests in `tests/unit/test_simple_policy.py`, the phase-local test strategy/feedback artifacts, the run-local clarification ledger, and the requested regression slice.
+
+What I analyzed
+
+- Whether the clarified QA-2 contract is fully covered at both the success and failure edges.
+- Whether the added tests would catch a reintroduction of the old silent `ask` rewrite or an accidental over-tightening that rejects explicit compatible manual danger access.
+
+What I reviewed
+
+- The dangerous-access unit coverage, the behavior-to-test map in `test_strategy.md`, the feedback artifact entry, and the full requested pytest command result.
+
+Key findings / decisions
+
+- No blocking audit findings remain.
+- The test suite now covers:
+  manual `danger_full_access` rejection without `permission_mode`,
+  explicit compatible manual danger access using `PermissionMode.ASK`,
+  and the existing `FULL_AUTO_UNSANDBOXED` inference path.
+- The documented regression slice passed:
+  `./.venv/bin/python -m pytest tests/unit/test_simple_surface.py tests/unit/test_provider_policy.py tests/runtime/test_provider_policy_steps.py tests/runtime/test_provider_policy_emitters.py tests/runtime/test_provider_policy_config.py tests/unit/test_simple_policy.py`
+
+Open issues / next step
+
+- No open test-audit issues remain in the reviewed phase-local scope.
+
+<loop-control>
+{"schema":"docloop.loop_control/v1","kind":"promise","promise":"COMPLETE"}
+</loop-control>
