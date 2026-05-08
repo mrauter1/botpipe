@@ -477,7 +477,18 @@ def test_sdk_step_supports_core_python_step_instances(tmp_path: Path) -> None:
     assert result.artifacts.snapshot.read_json() == {"message": "Handle the typed request.", "topic": "release"}
 
 
-def test_sdk_step_accepts_input_and_params_for_synthetic_workflows(tmp_path: Path) -> None:
+@pytest.mark.parametrize(
+    ("params_value", "expected"),
+    [
+        ({"mode": "strict", "reviewers": ["alice"]}, {"mode": "strict", "reviewers": ["alice"]}),
+        (_SDKParamsWorkflow.Params(mode="focused", reviewers=["bob"]), {"mode": "focused", "reviewers": ["bob"]}),
+    ],
+)
+def test_sdk_step_accepts_input_and_params_for_synthetic_workflows(
+    tmp_path: Path,
+    params_value: BaseModel | dict[str, object],
+    expected: dict[str, object],
+) -> None:
     snapshot = simple.Json("snapshot")
 
     @simple.python_step(writes=[snapshot], routes={"done": FINISH})
@@ -497,13 +508,13 @@ def test_sdk_step_accepts_input_and_params_for_synthetic_workflows(tmp_path: Pat
         capture,
         message="Handle the typed request.",
         input=_SDKTypedInput(topic="release"),
-        params={"mode": "strict", "reviewers": ["alice"]},
+        params=params_value,
     )
 
     assert result.ok is True
     assert result.artifacts.snapshot.read_json() == {
-        "params": {"mode": "strict", "reviewers": ["alice"]},
-        "workflow_params": {"mode": "strict", "reviewers": ["alice"]},
+        "params": expected,
+        "workflow_params": expected,
         "input_dump": {"message": "Handle the typed request.", "topic": "release"},
     }
 
