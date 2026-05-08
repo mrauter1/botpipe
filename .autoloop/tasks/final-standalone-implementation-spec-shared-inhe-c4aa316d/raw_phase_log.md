@@ -415,3 +415,61 @@ Open issues / next step
   - `.venv/bin/python -m pytest tests/unit/test_policy.py tests/unit/test_simple_policy.py tests/unit/test_simple_surface.py tests/runtime/test_provider_policy_steps.py`
   - `.venv/bin/python -m pytest tests/unit/test_provider_policy.py tests/runtime/test_provider_policy_emitters.py tests/runtime/test_provider_policy_config.py tests/unit/test_sdk_facade.py`
 - No additional producer-side blockers remain in this phase-local scope.
+
+
+---
+run_id=run-20260508T141115Z-6c430e1a | entry=session_turn | pair=implement | phase=verifier | cycle=2 | attempt=1 | thread_id=019e07f4-78a0-79f0-9681-b0d48a911120
+---
+provider=codex
+mode=resume
+template=/home/rauter/.local/share/pipx/venvs/autoloop/lib/python3.12/site-packages/autoloop/templates/implement_verifier.md
+session_id=019e07f4-78a0-79f0-9681-b0d48a911120
+
+
+---
+run_id=run-20260508T141115Z-6c430e1a | entry=phase_output | pair=implement | phase=verifier | process=codex-agent | cycle=2 | attempt=1 | thread_id=019e07f4-78a0-79f0-9681-b0d48a911120
+---
+I’m reviewing the producer’s follow-up against the two blocking findings and the phase acceptance criteria. I’ll recheck the exact danger-access and public-surface behaviors, then update the review artifacts only.
+
+The implementation lines up with the intended fix points. I’m running a short verifier-side smoke check now to confirm the two previous failures are gone from the actual runtime behavior, not just from the rewritten tests.
+
+The smoke checks match the intended resolution, and the current turn’s decision ledger explicitly captures the one semantic adjustment needed to reconcile the dangerous-manual example with the inherited default policy. I’m closing the review artifacts as complete with no remaining findings.
+
+Scope considered
+
+- Phase-local `shared-policy-core` review only.
+- Re-review focused on the two prior blocking findings in `autoloop/policy.py` and `autoloop/simple.py`, plus the added regression coverage and phase-local notes.
+- I updated only the active review artifacts: `criteria.md` and `feedback.md`.
+
+What I analyzed
+
+- The dangerous-manual resolution path in `autoloop/policy.py`, including the new `_dangerous_manual_permission_override(...)` adjustment and how it composes with sparse override lowering.
+- The public import surface in `autoloop/simple.py` to confirm the core override type is no longer re-exported through module globals.
+- The new regression tests in `tests/unit/test_policy.py` and `tests/unit/test_simple_policy.py`.
+- The current run-local decision recorded in `decisions.txt` for the dangerous-manual compatibility rule.
+
+What I reviewed
+
+- Verifier-side smoke behavior for `Policy(sandbox_mode=SandboxMode.DANGER_FULL_ACCESS).resolve()`.
+- Verifier-side import behavior for `from autoloop.simple import ProviderPolicyOverride`.
+- The focused pytest slice covering the two repaired failures.
+- Whether the phase acceptance criteria are now satisfied without introducing new phase-local risks.
+
+Key findings / decisions
+
+- No remaining blocking findings in this phase-local scope.
+- `Policy(sandbox_mode=SandboxMode.DANGER_FULL_ACCESS).resolve()` now produces a valid dangerous-manual policy with `permissions.mode == "ask"`, `allow_dangerous_bypass is True`, and `sandbox.mode == "danger_full_access"`.
+- `autoloop.simple` no longer exposes `ProviderPolicyOverride` as a public import path, while internal compatibility remains covered by tests.
+- I marked all criteria complete and appended a closure note to `feedback.md`.
+
+Open issues / next step
+
+- No additional verifier findings for `shared-policy-core`.
+- Verifier checks run this pass:
+  - `.venv/bin/python - <<'PY' ... Policy(sandbox_mode=SandboxMode.DANGER_FULL_ACCESS).resolve() ... PY`
+  - `.venv/bin/python - <<'PY' ... from autoloop.simple import ProviderPolicyOverride ... PY`
+  - `.venv/bin/python -m pytest tests/unit/test_policy.py tests/unit/test_simple_policy.py`
+
+<loop-control>
+{"schema":"docloop.loop_control/v1","kind":"promise","promise":"COMPLETE"}
+</loop-control>
