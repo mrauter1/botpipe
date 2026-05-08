@@ -419,4 +419,5 @@ def test_cli_workflows_list_help_describes_package_and_dot_autoloop_roots(capsys
     assert "ROOT" not in help_text
     assert "workspace directory" in help_text.lower()
     assert "package workflows are loaded" in help_text.lower()
-    assert ".autoloop/workflows/." in help_text
+    assert "workspace workflow directory" in help_text
+    assert ".autoloop/workflows/" not in help_text

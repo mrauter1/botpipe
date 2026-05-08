@@ -1,4 +1,4 @@
-"""Autoloop-v1 workflow package."""
+"""Botlane-v1 workflow package."""
 
 from __future__ import annotations
 
@@ -10,8 +10,8 @@ from botlane import Event, FAIL, FINISH, Outcome, Prompt, Session, Workflow, pro
 from botlane.core import Artifact
 from botlane.extensions import SessionPaths
 
-from .conventions import AutoloopV1SessionPathStrategy, phase_dir_key
-from .parity import AutoloopV1Parity
+from .conventions import BotlaneV1SessionPathStrategy, phase_dir_key
+from .parity import BotlaneV1Parity
 
 
 class Phase(BaseModel):
@@ -31,10 +31,10 @@ def _after_plan(ctx):
     return None
 
 
-class AutoloopV1(Workflow):
-    """Minimal Autoloop-v1 workflow rebuilt on the general runtime."""
+class BotlaneV1(Workflow):
+    """Minimal Botlane-v1 workflow rebuilt on the general runtime."""
 
-    name = "autoloop_v1"
+    name = "botlane_v1"
 
     class State(BaseModel):
         phases: list[Phase] = Field(default_factory=list)
@@ -75,8 +75,8 @@ class AutoloopV1(Workflow):
     )
 
     extensions = (
-        SessionPaths(AutoloopV1SessionPathStrategy()),
-        AutoloopV1Parity(),
+        SessionPaths(BotlaneV1SessionPathStrategy()),
+        BotlaneV1Parity(),
     )
 
     @python_step(

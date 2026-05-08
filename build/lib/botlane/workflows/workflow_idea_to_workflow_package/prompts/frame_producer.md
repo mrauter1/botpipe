@@ -9,7 +9,7 @@
 - Compare a small set of strong candidate additions for the current request, explicitly including the workflow-builder itself, then author the selection artifacts that justify the single best addition.
 
 ### Current work item
-- This work item decides what Autoloop should build in this cycle before any package design starts.
+- This work item decides what Botlane should build in this cycle before any package design starts.
 - Keep the work at the candidate-comparison boundary. Do not design package files yet.
 
 ## Artifact Contract
@@ -19,13 +19,13 @@
 | `request` | Read | authoritative run request snapshot. |
 | `invocation_contract` | Read | authoritative workflow parameters and requested target package identity. |
 | `framework_architecture_doc` | Read | , `framework_authoring_doc`, `workflow_instructions`: current framework doctrine and authoring rules. |
-| `existing_workflow_manifest` | Read | , `existing_workflow_definition`, `existing_workflow_prompts`: current package conventions from `autoloop_v1`. |
+| `existing_workflow_manifest` | Read | , `existing_workflow_definition`, `existing_workflow_prompts`: current package conventions from `botlane_v1`. |
 | `candidate_comparison` | Write | Overwrite. |
 | `selected_workflow_brief` | Write | Overwrite. |
 
 ### Artifact Notes
 - Use the exact filesystem paths bound to these artifact names in the runtime request:
-- Inspect the current `autoloop/workflows/` package in the repository if you need broader inventory context, but treat the listed artifacts as the minimum required read set.
+- Inspect the current installed workflow package inventory in the repository if you need broader context, but treat the listed artifacts as the minimum required read set.
 - Do not create package files, tests, docs, or prompt files in this step.
 
 ## Output Requirements
@@ -33,7 +33,7 @@
 ### Artifact handling
 - `candidate_comparison` must compare at least three strong candidates.
 - One candidate must be `workflow_idea_to_workflow_package` unless the repository already has a strong workflow-builder.
-- For each candidate, record: problem solved, likely sponsor/user, why multi-turn helps, terminal outcome, why Autoloop fits, and key framework pressure revealed.
+- For each candidate, record: problem solved, likely sponsor/user, why multi-turn helps, terminal outcome, why Botlane fits, and key framework pressure revealed.
 - `selected_workflow_brief` must name the chosen addition, state whether it is end-to-end or a reusable building block, and explain why the other candidates were deferred or rejected.
 
 ### Expected outcome
@@ -43,7 +43,7 @@
 ## Evidence
 
 - The comparison must explicitly include the workflow-builder.
-- The brief must explain why the chosen addition matters, who would sponsor it, why Autoloop is a fit, and what terminal outcome it should produce.
+- The brief must explain why the chosen addition matters, who would sponsor it, why Botlane is a fit, and what terminal outcome it should produce.
 - The artifacts must stay consistent with the current repository architecture and not rely on retired pre-greenfield source-tree paths.
 
 ## Routes

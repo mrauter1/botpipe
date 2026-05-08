@@ -1,4 +1,4 @@
-"""Workflow-owned Autoloop-v1 parity extension."""
+"""Workflow-owned Botlane-v1 parity extension."""
 
 from __future__ import annotations
 
@@ -15,7 +15,7 @@ from botlane.core.compiler import CompiledWorkflow, compile_workflow
 from botlane.core.extensions import RunBinding, StepFinish, StepStart, TerminalFinish
 from botlane.runtime.stores.filesystem import ensure_session_payload_placeholder, load_session_payload, set_pending_session_note
 
-from .conventions import autoloop_v1_session_path
+from .conventions import botlane_v1_session_path
 
 
 DECISIONS_VERSION = 1
@@ -24,24 +24,24 @@ _DECISIONS_ATTR_RE = re.compile(r'([a-zA-Z0-9_]+)="([^"]*)"')
 
 
 @dataclass(frozen=True, slots=True)
-class AutoloopV1Parity:
-    """Workflow-owned parity extension for the Autoloop-v1 package."""
+class BotlaneV1Parity:
+    """Workflow-owned parity extension for the Botlane-v1 package."""
 
     workflow_cls: type[Any] | None = None
 
-    def bind(self, binding: RunBinding) -> "_BoundAutoloopV1ParityExtension":
+    def bind(self, binding: RunBinding) -> "_BoundBotlaneV1ParityExtension":
         workflow_cls = self.workflow_cls
         if workflow_cls is None:
-            from .workflow import AutoloopV1
+            from .workflow import BotlaneV1
 
-            workflow_cls = AutoloopV1
+            workflow_cls = BotlaneV1
         compiled = compile_workflow(workflow_cls)
-        runtime = _AutoloopV1ParityRuntime.create(compiled=compiled, binding=binding)
-        return _BoundAutoloopV1ParityExtension(runtime)
+        runtime = _BotlaneV1ParityRuntime.create(compiled=compiled, binding=binding)
+        return _BoundBotlaneV1ParityExtension(runtime)
 
 
 @dataclass(slots=True)
-class _AutoloopV1ParityRuntime:
+class _BotlaneV1ParityRuntime:
     compiled: CompiledWorkflow
     binding: RunBinding
     task_raw_log: Path
@@ -51,7 +51,7 @@ class _AutoloopV1ParityRuntime:
     last_turn_kind: dict[tuple[str, str | None], str] = field(default_factory=dict)
 
     @classmethod
-    def create(cls, *, compiled: CompiledWorkflow, binding: RunBinding) -> "_AutoloopV1ParityRuntime":
+    def create(cls, *, compiled: CompiledWorkflow, binding: RunBinding) -> "_BotlaneV1ParityRuntime":
         task_raw_log = binding.task_folder / "raw_phase_log.md"
         run_raw_log = binding.run_folder / "raw_phase_log.md"
         decisions_file = binding.task_folder / "decisions.txt"
@@ -63,7 +63,7 @@ class _AutoloopV1ParityRuntime:
         if not decisions_file.exists():
             decisions_file.write_text("", encoding="utf-8")
 
-        ensure_session_payload_placeholder(autoloop_v1_session_path(binding.run_folder, "plan_session", None))
+        ensure_session_payload_placeholder(botlane_v1_session_path(binding.run_folder, "plan_session", None))
         return cls(
             compiled=compiled,
             binding=binding,
@@ -200,7 +200,7 @@ class _AutoloopV1ParityRuntime:
         )
         session_file = None
         if step.session_name is not None:
-            session_file = autoloop_v1_session_path(
+            session_file = botlane_v1_session_path(
                 self.binding.run_folder,
                 step.session_name,
                 self._scope_for_step(step.session_name, event.state),
@@ -269,7 +269,7 @@ class _AutoloopV1ParityRuntime:
         step = self.compiled.steps.get(step_name)
         if step is None or step.session_name is None:
             return None
-        session_file = autoloop_v1_session_path(
+        session_file = botlane_v1_session_path(
             self.binding.run_folder,
             step.session_name,
             self._scope_for_step(step.session_name, state),
@@ -279,8 +279,8 @@ class _AutoloopV1ParityRuntime:
         return session_id if isinstance(session_id, str) else None
 
 
-class _BoundAutoloopV1ParityExtension:
-    def __init__(self, runtime: _AutoloopV1ParityRuntime) -> None:
+class _BoundBotlaneV1ParityExtension:
+    def __init__(self, runtime: _BotlaneV1ParityRuntime) -> None:
         self._runtime = runtime
 
     def before_step(self, event: StepStart) -> None:
@@ -521,4 +521,4 @@ def _latest_event_seq(events_file: Path) -> int:
     return latest
 
 
-__all__ = ["AutoloopV1Parity"]
+__all__ = ["BotlaneV1Parity"]

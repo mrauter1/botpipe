@@ -1,6 +1,6 @@
-# Autoloop-v1 Prompts
+# Botlane-v1 Prompts
 
-Package-local prompts for the Autoloop-v1 workflow live in this directory.
+Package-local prompts for the Botlane-v1 workflow live in this directory.
 
 ## Shared README Boundary
 

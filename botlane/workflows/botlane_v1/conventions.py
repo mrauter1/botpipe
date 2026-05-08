@@ -1,4 +1,4 @@
-"""Workflow-owned Autoloop-v1 naming and path conventions."""
+"""Workflow-owned Botlane-v1 naming and path conventions."""
 
 from __future__ import annotations
 
@@ -23,7 +23,7 @@ def phase_dir_key(phase_id: str) -> str:
     return f"_pid-{normalized.encode('utf-8').hex()}"
 
 
-def autoloop_v1_session_path(run_dir: Path, ref_name: str, scope: str | None) -> Path:
+def botlane_v1_session_path(run_dir: Path, ref_name: str, scope: str | None) -> Path:
     sessions_dir = run_dir / "sessions"
     if ref_name == "plan_session" and scope is None:
         return sessions_dir / "plan.json"
@@ -34,11 +34,11 @@ def autoloop_v1_session_path(run_dir: Path, ref_name: str, scope: str | None) ->
     return sessions_dir / "scopes" / scope_key(scope) / f"{ref_name}.json"
 
 
-class AutoloopV1SessionPathStrategy:
-    """Workflow-owned session naming policy for Autoloop-v1 parity."""
+class BotlaneV1SessionPathStrategy:
+    """Workflow-owned session naming policy for Botlane-v1 parity."""
 
     def path_for(self, run_dir: Path, ref_name: str, scope: str | None) -> Path:
-        return autoloop_v1_session_path(run_dir, ref_name, scope)
+        return botlane_v1_session_path(run_dir, ref_name, scope)
 
 
-__all__ = ["AutoloopV1SessionPathStrategy", "autoloop_v1_session_path", "phase_dir_key"]
+__all__ = ["BotlaneV1SessionPathStrategy", "botlane_v1_session_path", "phase_dir_key"]

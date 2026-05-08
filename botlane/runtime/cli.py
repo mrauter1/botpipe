@@ -34,7 +34,7 @@ EXIT_RESOLUTION_ERROR = 3
 
 _WORKSPACE_HELP = (
     "Workspace directory. Package workflows are loaded from the installed botlane package; "
-    "workspace workflows are loaded from .autoloop/workflows/."
+    "workspace workflows are loaded from the workspace workflow directory."
 )
 
 
@@ -180,7 +180,7 @@ def build_arg_parser() -> argparse.ArgumentParser:
     init_workflow = init_subparsers.add_parser(
         "workflow",
         parents=[common],
-        help="Create a workflow scaffold under .autoloop/workflows/.",
+        help="Create a workflow scaffold in the workspace workflow directory.",
     )
     init_workflow.add_argument("name", help="Workflow name.")
     init_workflow.add_argument(
