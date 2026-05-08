@@ -339,3 +339,113 @@ No blocking test coverage gaps remain for this phase. The only outstanding item 
 <loop-control>
 {"schema":"docloop.loop_control/v1","kind":"promise","promise":"COMPLETE"}
 </loop-control>
+
+
+---
+run_id=run-20260508T173757Z-dbc5e2d0 | entry=session_turn | pair=implement | phase=producer | cycle=1 | attempt=1 | thread_id=019e08b6-b80c-7ff0-ace1-633bbcb6bb47
+---
+provider=codex
+mode=start
+template=/home/rauter/.local/share/pipx/venvs/autoloop/lib/python3.12/site-packages/autoloop/templates/implement_producer.md
+session_id=019e08b6-b80c-7ff0-ace1-633bbcb6bb47
+
+
+---
+run_id=run-20260508T173757Z-dbc5e2d0 | entry=phase_output | pair=implement | phase=producer | process=codex-agent | cycle=1 | attempt=1 | thread_id=019e08b6-b80c-7ff0-ace1-633bbcb6bb47
+---
+I’m implementing the `public-surface-cleanup` phase only. First I’m reading the phase artifacts and the relevant policy/SDK/simple/runtime code paths to find the exact public validation, export, and test surfaces that still need tightening.
+
+The current leak points are concentrated in `sdk.py`, `simple.py`, `core/steps.py`, and `core/discovery.py`. I’m reading those exact normalization paths and the existing facade tests next so I can tighten wording without widening this phase into unrelated runtime behavior.
+
+The exports already match the requested surface; the remaining work is mostly message cleanup and making the regression tests explicit about removed public names and sequence-style writes. I’m checking the existing `run`/`step` keyword rejection coverage before I patch anything.
+
+I’ve confirmed the main message leaks are only a handful of explicit `TypeError`/`WorkflowValidationError` strings, so this should stay small. Next I’m patching those messages and expanding the facade tests to lock the exact public contract in place.
+
+I’m at the edit point now. I’m checking the local git state once so I can avoid colliding with unrelated changes, then I’ll patch only the policy wording/tests and leave runtime CLI untouched in this phase.
+
+I found a large unrelated dirty worktree, so I’m keeping the blast radius tight to the few public-surface files and their tests. Before editing I’m checking the synthetic-step parameter path so the new regression test proves the real `client.step(..., params=...)` contract instead of a weaker proxy.
+
+I’m patching five code paths and the narrow facade tests now. The edits are limited to public wording, explicit removed-keyword coverage for `client.step(...)`, and export regression assertions; I’m not modifying runtime CLI in this phase.
+
+The code patch is in. I’m running a tight verification pass now: first the changed-message and facade tests, then I’ll update the phase notes and decisions ledger with the exact scope and any deliberate non-changes.
+
+`pytest` isn’t installed in this environment, so I can’t execute the unit suite directly. I’m still doing a Python-level smoke check of the exact public paths I changed so we at least verify imports and the new error wording end to end.
+
+I’ve finished the code/test patch and verified it compiles. I’m writing the phase artifacts now so the next turn has a precise record of what changed, what stayed intentionally untouched, and the validation limits from this environment.
+
+Scope considered
+
+Public-surface cleanup only for policy wording, exports, and SDK/simple regression coverage. I left runtime CLI unchanged in this phase and recorded that in the run artifacts.
+
+What I analyzed
+
+I traced the public policy validation paths in [autoloop/sdk.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/autoloop/sdk.py), [autoloop/simple.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/autoloop/simple.py), [autoloop/core/steps.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/autoloop/core/steps.py), [autoloop/core/discovery.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/autoloop/core/discovery.py), and [autoloop/policy.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/autoloop/policy.py), then checked the existing facade tests in [tests/unit/test_sdk_facade.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/tests/unit/test_sdk_facade.py), [tests/unit/test_simple_surface.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/tests/unit/test_simple_surface.py), and [tests/unit/test_simple_policy.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/tests/unit/test_simple_policy.py).
+
+What I changed
+
+I replaced leaked `ProviderPolicyOverride` wording in public-facing validation errors with `Policy or core provider policy object` across SDK/simple/core discovery/step normalization and the public `resolve_policy_layer(...)` helper.
+
+I strengthened regression coverage to:
+- reject removed `typed_input=` and `parameters=` on both `client.run(...)` and `client.step(...)`
+- assert invalid `default_policy=` uses the new public wording
+- lock the `autoloop.policy` export list and confirm `PolicyOverride` stays absent from public `__all__`
+- assert the simple workflow policy validation error uses the cleaned wording
+- keep public SDK helper coverage sequence-based for writes
+
+I also updated the phase-local [implementation_notes.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/below-is-the-revised-standalone-correction-spec-a9877342/runs/run-20260508T173757Z-dbc5e2d0/artifacts/implement/phases/public-surface-cleanup/implementation_notes.md) and appended the non-obvious scope decisions to [decisions.txt](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/below-is-the-revised-standalone-correction-spec-a9877342/runs/run-20260508T173757Z-dbc5e2d0/decisions.txt).
+
+Key findings / decisions
+
+The existing public exports were already compliant, so I preserved them and added regression tests instead of widening or reshaping the surface.
+
+A large unrelated dirty worktree is present, but I kept edits confined to the phase-owned files above.
+
+Open issues / next step
+
+`python3 -m py_compile` passed for all touched code and tests. I could not run `pytest` here because the environment is missing `pytest`, and direct import smoke checks are also blocked because `pydantic` is not installed. The next step is to run the targeted unit suite in an environment with project test dependencies:
+`tests/unit/test_sdk_facade.py`, `tests/unit/test_simple_surface.py`, and `tests/unit/test_simple_policy.py`.
+
+
+---
+run_id=run-20260508T173757Z-dbc5e2d0 | entry=session_turn | pair=implement | phase=verifier | cycle=1 | attempt=1 | thread_id=019e08b6-b80c-7ff0-ace1-633bbcb6bb47
+---
+provider=codex
+mode=resume
+template=/home/rauter/.local/share/pipx/venvs/autoloop/lib/python3.12/site-packages/autoloop/templates/implement_verifier.md
+session_id=019e08b6-b80c-7ff0-ace1-633bbcb6bb47
+
+
+---
+run_id=run-20260508T173757Z-dbc5e2d0 | entry=phase_output | pair=implement | phase=verifier | process=codex-agent | cycle=1 | attempt=1 | thread_id=019e08b6-b80c-7ff0-ace1-633bbcb6bb47
+---
+I’m reviewing the public-surface-cleanup diff and the phase artifacts first. I’ll verify each acceptance criterion against the actual code and test coverage, then update `criteria.md` and `feedback.md` with any concrete gaps.
+
+I found a likely AC-3 gap around `client.step(..., params=...)`, and I’m checking whether it’s only missing test coverage or whether the implementation itself still rejects non-empty params for synthetic step workflows.
+
+I confirmed the main issue is real, not just missing coverage: `client.step(..., params={"mode": "strict"})` still routes through a synthetic workflow with no `Params` model, so non-empty params are rejected. I’m recording that as a blocking finding and updating the phase criteria accordingly.
+
+Scope considered
+
+Phase-local review of the public-surface-cleanup diff only: public policy wording paths, export/tests, and adjacent SDK step/run contract code needed to verify AC-1 through AC-3.
+
+What I analyzed
+
+I checked the changed validation paths in `autoloop/sdk.py`, `autoloop/simple.py`, `autoloop/core/steps.py`, `autoloop/core/discovery.py`, and `autoloop/policy.py`, then traced the `client.step(..., params=...)` execution path through `_build_synthetic_step_workflow`, `_coerce_sdk_params`, and `coerce_workflow_parameter_mapping(...)` in `autoloop/runtime/loader.py`.
+
+What I reviewed
+
+I audited the new regression coverage in `tests/unit/test_sdk_facade.py`, `tests/unit/test_simple_surface.py`, and `tests/unit/test_simple_policy.py`, and updated the active review artifacts:
+- `criteria.md`
+- `feedback.md`
+
+Key findings / decisions
+
+I recorded one blocking finding: the implementation still does not satisfy the required `client.step(..., params=...)` public contract. Non-empty step params are still rejected because synthetic step workflows are created without a `Params` model, and the added tests do not catch that gap.
+
+Open issues / next step
+
+Implement synthetic `Params` support for `client.step(...)` in the same place synthetic `Input` is created, then add a direct success-path regression test for `client.step(..., input=..., params=...)`. The review remains incomplete until that is fixed.
+
+<loop-control>
+{"schema":"docloop.loop_control/v1","kind":"promise","promise":"INCOMPLETE"}
+</loop-control>
