@@ -8,3 +8,37 @@ workspace=/home/rauter/autoloop_v3_bkp/autoloop_v3
 pairs=plan,implement,test,audit
 request_file=/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/below-is-the-revised-standalone-correction-spec-a9877342/runs/run-20260508T173757Z-dbc5e2d0/request.md
 session_mode=persistent
+
+
+---
+run_id=run-20260508T173757Z-dbc5e2d0 | entry=session_turn | pair=plan | phase=producer | cycle=1 | attempt=1 | thread_id=019e08aa-e8bf-7933-be5b-9947798a2263
+---
+provider=codex
+mode=start
+template=/home/rauter/.local/share/pipx/venvs/autoloop/lib/python3.12/site-packages/autoloop/templates/plan_producer.md
+session_id=019e08aa-e8bf-7933-be5b-9947798a2263
+
+
+---
+run_id=run-20260508T173757Z-dbc5e2d0 | entry=phase_output | pair=plan | phase=producer | process=codex-agent | cycle=1 | attempt=1 | thread_id=019e08aa-e8bf-7933-be5b-9947798a2263
+---
+I’m treating the pasted correction spec as the implementation contract and starting by checking the authoritative run artifacts plus the policy/SDK/CLI surfaces it touches. Then I’ll write the plan artifacts around the actual repository structure and regression risks.
+
+I’ve confirmed there are no later clarifications in the run log, so the pasted spec is the active contract. Now I’m mapping it onto the actual policy serialization, fingerprinting, SDK/simple exports, and runtime CLI entry points to keep the plan implementation-ready rather than generic.
+
+The first pass shows the core changes are concentrated, not scattered: `autoloop/policy.py`, `autoloop/core/compiler.py`, `autoloop/sdk.py`, `autoloop/core/steps.py`, `autoloop/core/discovery.py`, `autoloop/runtime/cli.py`, plus a focused test set. I’m reading the exact signatures and exports now so the plan can call out which compatibility breaks are already enforced versus which ones still need code and test work.
+
+I’ve verified the public export matrix is mostly already aligned: `autoloop.policy.__all__` matches the spec, `autoloop.simple.__all__` already omits `PolicyInput`, and the SDK constructor already uses `workspace`. The remaining planning work is mostly about the mismatched serialized kinds, the compiler shortcut, public-facing error wording, and the runtime CLI’s still-public `--root` flag.
+
+I have enough context to write the actual plan now. The plan will split the work into core policy serialization/fingerprinting, public surface/message cleanup, and the CLI rename, because those are the real regression boundaries in this repo.
+
+The plan artifacts are written. I’m doing a quick validation pass now for YAML shape, decision-block placement, and whether the plan stayed inside the actual repo boundaries instead of drifting into unrelated runtime internals.
+
+Updated the planning artifacts for this run.
+
+[plan.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/below-is-the-revised-standalone-correction-spec-a9877342/runs/run-20260508T173757Z-dbc5e2d0/artifacts/plan/plan.md) now contains a concrete three-phase implementation plan:
+1. policy payload kind and fingerprint unification,
+2. public SDK/simple/error-surface cleanup,
+3. runtime CLI `--workspace` rename and regression coverage.
+
+[phase_plan.yaml](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/below-is-the-revised-standalone-correction-spec-a9877342/runs/run-20260508T173757Z-dbc5e2d0/artifacts/plan/phase_plan.yaml), [feedback.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/below-is-the-revised-standalone-correction-spec-a9877342/runs/run-20260508T173757Z-dbc5e2d0/artifacts/plan/feedback.md), and [decisions.txt](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/below-is-the-revised-standalone-correction-spec-a9877342/runs/run-20260508T173757Z-dbc5e2d0/decisions.txt) were updated to match. Key repo findings captured in the plan: `autoloop/policy.py` and `autoloop/core/compiler.py` still use legacy kind labels, compiler fingerprinting still special-cases `ProviderPolicy`, public-facing errors still leak `ProviderPolicyOverride`, and `autoloop/runtime/cli.py` still exposes public `--root`. No tests were run; this turn only produced the implementation plan.
