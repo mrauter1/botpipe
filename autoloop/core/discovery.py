@@ -11,6 +11,8 @@ from typing import Any
 
 from pydantic import BaseModel
 
+from autoloop.policy import Policy, PolicyInput
+
 from .artifacts import Artifact
 from .branch_groups.lowering import build_branch_group_declaration_spec, declared_internal_route_tags
 from .branch_groups.models import BranchStepDeclarationSpec
@@ -35,7 +37,7 @@ from .descriptors import (
 from .errors import WorkflowValidationError
 from .primitives import AWAIT_INPUT, FAIL, FINISH, GLOBAL, SELF
 from .prompts import resolve_prompt_reference
-from .provider_policy import ProviderPolicy
+from .provider_policy import ProviderPolicy, ProviderPolicyOverride
 from .providers.retries import ProviderRetryPolicy
 from .routes import Route, _replace_route, normalize_route_spec
 from .sessions import DEFAULT_SESSION_NAME
@@ -72,7 +74,7 @@ class _EmptyWorkflowState(BaseModel):
 class WorkflowDefinition:
     workflow_cls: type[Any]
     workflow_name: str
-    workflow_policy: ProviderPolicy | None
+    workflow_policy: PolicyInput
     state_cls: type[BaseModel]
     parameters_cls: type[BaseModel] | None
     entry: Step
@@ -353,12 +355,14 @@ def _validate_simple_authoring_models(workflow_cls: type[Any]) -> None:
         raise WorkflowValidationError(f"{workflow_cls.__name__}.Params must inherit from pydantic.BaseModel")
 
 
-def _validate_workflow_policy(workflow_cls: type[Any]) -> ProviderPolicy | None:
+def _validate_workflow_policy(workflow_cls: type[Any]) -> PolicyInput:
     workflow_policy = getattr(workflow_cls, "policy", None)
     if workflow_policy is None:
         return None
-    if not isinstance(workflow_policy, ProviderPolicy):
-        raise WorkflowValidationError(f"{workflow_cls.__name__}.policy must be a ProviderPolicy")
+    if not isinstance(workflow_policy, (Policy, ProviderPolicy, ProviderPolicyOverride)):
+        raise WorkflowValidationError(
+            f"{workflow_cls.__name__}.policy must be a Policy, ProviderPolicy, or ProviderPolicyOverride"
+        )
     return workflow_policy
 
 

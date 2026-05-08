@@ -4,14 +4,12 @@ from __future__ import annotations
 
 from pathlib import Path
 
+from autoloop.policy import PolicyInput, resolve_policy_layer
 from autoloop.core.compiler import CompiledStep
 from autoloop.core.context import Context
 from autoloop.core.provider_policy import (
     ProviderPolicy,
-    ProviderPolicyOverride,
     ResolvedProviderPolicy,
-    SYSTEM_DEFAULT_PROVIDER_POLICY,
-    merge_provider_policies,
     validate_against_strict_policy,
 )
 
@@ -30,7 +28,7 @@ class ProviderPolicyResolver:
         self,
         *,
         config: ResolvedRuntimeConfig,
-        workflow_policy: ProviderPolicy | None,
+        workflow_policy: PolicyInput,
         workspace_root: Path,
     ) -> None:
         self._config = config
@@ -42,7 +40,7 @@ class ProviderPolicyResolver:
         return self._config
 
     @property
-    def workflow_policy(self) -> ProviderPolicy | None:
+    def workflow_policy(self) -> PolicyInput:
         return self._workflow_policy
 
     @property
@@ -50,31 +48,21 @@ class ProviderPolicyResolver:
         return self._workspace_root
 
     def resolve_for_step(self, step: CompiledStep) -> ResolvedProviderPolicy:
-        return self._validate(
-            merge_provider_policies(
-                SYSTEM_DEFAULT_PROVIDER_POLICY,
-                self._config.provider_policy.default,
-                self._workflow_policy,
-                step.provider_policy,
-            ),
-            step_name=step.name,
-        )
+        candidate = resolve_policy_layer(self._config.provider_policy.default, self._workflow_policy)
+        candidate = resolve_policy_layer(candidate, step.provider_policy)
+        return self._validate(candidate, step_name=step.name)
 
     def resolve_for_operation(
         self,
         ctx: Context,
-        explicit_policy: ProviderPolicy | ProviderPolicyOverride | None = None,
+        explicit_policy: PolicyInput = None,
     ) -> ResolvedProviderPolicy:
         inherited_policy = getattr(ctx, "_provider_policy", None)
         if isinstance(inherited_policy, ProviderPolicy):
-            candidate = merge_provider_policies(inherited_policy, explicit_policy)
+            candidate = resolve_policy_layer(inherited_policy, explicit_policy)
         else:
-            candidate = merge_provider_policies(
-                SYSTEM_DEFAULT_PROVIDER_POLICY,
-                self._config.provider_policy.default,
-                self._workflow_policy,
-                explicit_policy,
-            )
+            candidate = resolve_policy_layer(self._config.provider_policy.default, self._workflow_policy)
+            candidate = resolve_policy_layer(candidate, explicit_policy)
         return self._validate(candidate, step_name=getattr(ctx, "_step_name", None))
 
     def _validate(self, policy: ProviderPolicy, *, step_name: str | None) -> ResolvedProviderPolicy:
@@ -88,7 +76,7 @@ class ProviderPolicyResolver:
 
 def create_provider_policy_resolver(
     *,
-    workflow_policy: ProviderPolicy | None,
+    workflow_policy: PolicyInput,
     workspace_root: Path,
     provider_policy: ProviderPolicyRuntimeConfig | None = None,
     runtime: RuntimeConfig | None = None,

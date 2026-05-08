@@ -16,6 +16,17 @@ from uuid import uuid4
 from pydantic import BaseModel, ValidationError
 
 import autoloop.simple as simple
+from autoloop.policy import (
+    ModelEffort,
+    ModelVerbosity,
+    NetworkMode,
+    PermissionMode,
+    Policy,
+    PolicyInput,
+    ProviderName,
+    ReasoningSummary,
+    SandboxMode,
+)
 from autoloop.core import Workflow as CoreWorkflow
 from autoloop.core.artifacts import Artifact, CompiledArtifact, resolve_artifact_template
 from autoloop.core.compiler import CompiledWorkflow, compile_workflow
@@ -24,7 +35,6 @@ from autoloop.core.errors import WorkflowCompilationError, WorkflowExecutionErro
 from autoloop.core.operations import classify_call, llm_call
 from autoloop.core.primitives import AWAIT_INPUT, FAIL, FINISH, SELF, Event, Outcome
 from autoloop.core.prompts import Prompt
-from autoloop.core.provider_policy import ProviderPolicy, ProviderPolicyOverride
 from autoloop.core.providers.protocols import LLMProvider, validate_llm_provider
 from autoloop.core.providers.retries import ProviderRetryPolicy
 from autoloop.core.steps import BranchGroupStep, ChildWorkflowStep, ProduceVerifyStep, PromptStep, PythonStep, Session, Step
@@ -596,7 +606,7 @@ class Autoloop:
         *,
         returns: Any = str,
         retry: int = 3,
-        policy: ProviderPolicy | ProviderPolicyOverride | None = None,
+        policy: PolicyInput = None,
     ) -> Any:
         try:
             return llm_call(
@@ -616,7 +626,7 @@ class Autoloop:
         *,
         choices: Sequence[str],
         retry: int = 3,
-        policy: ProviderPolicy | ProviderPolicyOverride | None = None,
+        policy: PolicyInput = None,
     ) -> str:
         try:
             return classify_call(
@@ -1646,6 +1656,15 @@ __all__ = [
     "StaticInput",
     "StepResult",
     "TooManyPauses",
+    "Policy",
+    "PolicyInput",
+    "ProviderName",
+    "ModelEffort",
+    "ModelVerbosity",
+    "ReasoningSummary",
+    "SandboxMode",
+    "NetworkMode",
+    "PermissionMode",
     "RetentionInfo",
     "RetentionPolicy",
     "WorkflowInputError",

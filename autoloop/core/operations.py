@@ -14,6 +14,8 @@ from typing import TYPE_CHECKING, Any, Callable, Literal, Mapping, Sequence
 
 from pydantic import BaseModel, TypeAdapter
 
+from autoloop.policy import PolicyInput, resolve_policy_layer
+
 from .context import Context
 from .errors import (
     ProviderExecutionError,
@@ -24,9 +26,7 @@ from .artifacts import render_runtime_template
 from .mappings import normalize_mapping
 from .provider_policy import (
     ProviderPolicy,
-    ProviderPolicyOverride,
     ResolvedProviderPolicy,
-    merge_provider_policies,
     policy_fingerprint,
 )
 from .prompts import Prompt, PromptRegistry, ResolvedPrompt, resolve_prompt_reference
@@ -85,7 +85,7 @@ def llm_call(
     context: Context | None = None,
     run_folder: Path | None = None,
     callsite: str | None = None,
-    policy: ProviderPolicy | ProviderPolicyOverride | None = None,
+    policy: PolicyInput = None,
 ) -> Any:
     runtime = _resolve_runtime(
         provider=provider,
@@ -111,7 +111,7 @@ def classify_call(
     context: Context | None = None,
     run_folder: Path | None = None,
     callsite: str | None = None,
-    policy: ProviderPolicy | ProviderPolicyOverride | None = None,
+    policy: PolicyInput = None,
 ) -> str:
     normalized_choices = _normalize_choices(choices)
     runtime = _resolve_runtime(
@@ -231,7 +231,7 @@ def _run_operation(
     *,
     spec: OperationStepSpec,
     callsite: str | None,
-    explicit_policy: ProviderPolicy | ProviderPolicyOverride | None = None,
+    explicit_policy: PolicyInput = None,
 ) -> Any:
     max_attempts = _normalize_retry(retry=spec.retry)
     resolved_prompt = _resolve_prompt(spec.prompt, runtime=runtime)
@@ -533,7 +533,7 @@ def _record_context_value(ctx: Context, *, step_name: str, value: Any) -> None:
 def _resolve_effective_operation_policy(
     runtime: OperationRuntime,
     *,
-    explicit_policy: ProviderPolicy | ProviderPolicyOverride | None,
+    explicit_policy: PolicyInput,
 ) -> ResolvedProviderPolicy | None:
     resolver = runtime.provider_policy_resolver
     if resolver is not None and runtime.context is not None:
@@ -557,10 +557,7 @@ def _resolve_effective_operation_policy(
     if explicit_policy is None:
         return runtime.policy
     base_policy = runtime.policy or ProviderPolicy()
-    return explicit_policy if isinstance(explicit_policy, ProviderPolicy) and runtime.policy is None else merge_provider_policies(
-        base_policy,
-        explicit_policy,
-    )
+    return resolve_policy_layer(base_policy, explicit_policy)
 
 
 def _emit_operation_policy_event(
@@ -568,7 +565,7 @@ def _emit_operation_policy_event(
     event_type: str,
     *,
     policy: ResolvedProviderPolicy | None,
-    explicit_policy: ProviderPolicy | ProviderPolicyOverride | None,
+    explicit_policy: PolicyInput,
 ) -> None:
     if runtime.event_sink is None:
         return

@@ -220,7 +220,7 @@ def test_flat_override_policy_is_accepted_for_inline_llm_calls(tmp_path: Path) -
         def inspect(ctx):
             summary = simple.llm(
                 "Summarize risks.",
-                policy=simple.PolicyOverride(
+                policy=simple.Policy(
                     effort=simple.ModelEffort.LOW,
                     read_only=True,
                 ),
@@ -253,7 +253,7 @@ def test_flat_dangerous_override_policy_is_accepted_for_inline_llm_calls(tmp_pat
         def inspect(ctx):
             summary = simple.llm(
                 "Run unrestricted analysis.",
-                policy=simple.PolicyOverride(
+                policy=simple.Policy(
                     permission_mode=simple.PermissionMode.FULL_AUTO_UNSANDBOXED,
                 ),
             )

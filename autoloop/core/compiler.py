@@ -12,6 +12,8 @@ from typing import Any, Callable, Mapping
 
 from pydantic import BaseModel
 
+from autoloop.policy import Policy, PolicyInput
+
 from .artifacts import CompiledArtifact
 from .branch_groups.models import (
     BranchGroupDeclarationSpec,
@@ -92,7 +94,7 @@ class CompiledStep:
     step_state_fields: tuple[str, ...]
     step_item_state_model: type[BaseModel] | None
     step_item_state_fields: tuple[str, ...]
-    provider_policy: ProviderPolicy | ProviderPolicyOverride | None = None
+    provider_policy: PolicyInput = None
     branch_group: Any | None = None
     route_table: dict[str, "CompiledRoute"] | None = None
 
@@ -146,7 +148,7 @@ class CompiledWorkflow:
     artifacts: dict[str, CompiledArtifact]
     artifacts_by_qualified_name: dict[str, CompiledArtifact]
     extensions: tuple[WorkflowExtension, ...]
-    provider_policy: ProviderPolicy | None
+    provider_policy: PolicyInput
     source_hash: str | None
     topology_hash: str
 
@@ -1585,17 +1587,22 @@ def _callable_name(value: object | None) -> str | None:
 
 
 def _policy_input_payload(
-    policy: ProviderPolicy | ProviderPolicyOverride | None,
+    policy: PolicyInput,
 ) -> dict[str, Any] | None:
     if policy is None:
         return None
+    if isinstance(policy, Policy):
+        return {
+            "kind": "layer",
+            "payload": policy.to_layer_payload(),
+        }
     return {
         "kind": "policy" if isinstance(policy, ProviderPolicy) else "override",
         "payload": policy.model_dump(mode="json", warnings=False),
     }
 
 
-def _policy_input_fingerprint(policy: ProviderPolicy | ProviderPolicyOverride | None) -> str | None:
+def _policy_input_fingerprint(policy: PolicyInput) -> str | None:
     if policy is None:
         return None
     if isinstance(policy, ProviderPolicy):
@@ -1612,10 +1619,10 @@ def _policy_input_fingerprint(policy: ProviderPolicy | ProviderPolicyOverride | 
 
 
 def _validated_compiled_policy(
-    policy: ProviderPolicy | ProviderPolicyOverride | None,
+    policy: PolicyInput,
     *,
     owner: str,
-) -> ProviderPolicy | ProviderPolicyOverride | None:
+) -> PolicyInput:
     payload = _policy_input_payload(policy)
     if payload is None:
         return None

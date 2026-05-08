@@ -83,7 +83,6 @@ def test_autoloop_root_exports_only_the_canonical_public_surface() -> None:
         "FAIL",
         "SELF",
         "Policy",
-        "PolicyOverride",
         "ProviderName",
         "ModelEffort",
         "ModelVerbosity",
@@ -571,8 +570,8 @@ def test_simple_declarations_store_only_canonical_write_fields() -> None:
 
 
 def test_simple_policy_authoring_surfaces_preserve_policy_objects_on_declarations_and_lowered_steps() -> None:
-    workflow_policy = ProviderPolicy(permissions=PermissionPolicy(mode="full_auto_sandboxed"))
-    step_policy = ProviderPolicyOverride(permissions=PermissionPolicy(mode="ask"))
+    workflow_policy = simple.Policy(permission_mode=simple.PermissionMode.FULL_AUTO_SANDBOXED)
+    step_policy = simple.Policy(permission_mode=simple.PermissionMode.ASK)
 
     class PolicyWorkflow(simple.Workflow):
         policy = workflow_policy
@@ -595,7 +594,10 @@ def test_simple_workflow_policy_must_be_a_provider_policy() -> None:
         policy = "ask"
         draft = simple.step("Draft the note.")
 
-    with pytest.raises(WorkflowValidationError, match=r"InvalidPolicyWorkflow\.policy must be a ProviderPolicy"):
+    with pytest.raises(
+        WorkflowValidationError,
+        match=r"InvalidPolicyWorkflow\.policy must be a Policy, ProviderPolicy, or ProviderPolicyOverride",
+    ):
         get_workflow_definition(InvalidPolicyWorkflow)
 
 

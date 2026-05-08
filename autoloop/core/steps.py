@@ -8,6 +8,8 @@ from itertools import count
 from pathlib import Path
 from typing import TYPE_CHECKING, Any, Literal, Mapping, Sequence
 
+from autoloop.policy import Policy, PolicyInput
+
 from .provider_policy import ProviderPolicy, ProviderPolicyOverride
 from .primitives import Event
 from .prompts import PromptSpec
@@ -33,7 +35,7 @@ class ControlRoutes:
 
 _DEFAULT_PROVIDER_CONTROL_ROUTES = ControlRoutes(question="auto")
 _DEFAULT_NON_PROVIDER_CONTROL_ROUTES = ControlRoutes(question="never")
-ProviderPolicyInput = ProviderPolicy | ProviderPolicyOverride | None
+ProviderPolicyInput = PolicyInput
 
 
 def normalize_control_routes(
@@ -424,6 +426,6 @@ class BranchGroupStep(Step):
 
 
 def _normalize_provider_policy(policy: ProviderPolicyInput) -> ProviderPolicyInput:
-    if policy is None or isinstance(policy, (ProviderPolicy, ProviderPolicyOverride)):
+    if policy is None or isinstance(policy, (Policy, ProviderPolicy, ProviderPolicyOverride)):
         return policy
-    raise TypeError("provider_policy must be a ProviderPolicy, ProviderPolicyOverride, or None")
+    raise TypeError("provider_policy must be a Policy, ProviderPolicy, ProviderPolicyOverride, or None")
