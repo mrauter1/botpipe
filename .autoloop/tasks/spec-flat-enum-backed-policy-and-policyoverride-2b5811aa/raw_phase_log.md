@@ -253,3 +253,47 @@ Key findings / decisions
 Open issues / next step
 
 - No open blocker from the requested scope.
+
+
+---
+run_id=run-20260508T122931Z-61a77361 | entry=session_turn | pair=implement | phase=verifier | cycle=1 | attempt=1 | thread_id=019e0796-5bd9-76d1-b337-56047d273185
+---
+provider=codex
+mode=resume
+template=/home/rauter/.local/share/pipx/venvs/autoloop/lib/python3.12/site-packages/autoloop/templates/implement_verifier.md
+session_id=019e0796-5bd9-76d1-b337-56047d273185
+
+
+---
+run_id=run-20260508T122931Z-61a77361 | entry=phase_output | pair=implement | phase=verifier | process=codex-agent | cycle=1 | attempt=1 | thread_id=019e0796-5bd9-76d1-b337-56047d273185
+---
+I’m reviewing the implementation against the phase contract and the changed policy surface first, then I’ll update the criteria and feedback artifacts with any concrete findings.
+
+I found a likely intent mismatch around manual danger-full-access lowering. I’m verifying the exact runtime payload shape now so the feedback can cite the concrete regression surface, not just the code path.
+
+I have one material finding. It’s not about syntax or test failure; it’s a semantic drift from the requested dangerous-manual-access contract that the current tests don’t pin down.
+
+Scope considered
+
+- Changed policy surface in `autoloop/simple.py`, root exports in `autoloop/__init__.py`, new/updated policy tests, the phase contract, and the run-local decision ledger.
+
+What I analyzed
+
+- The flat lowering helper, dangerous-access inference path, sparse override behavior, export surface, and the targeted regression coverage added for workflow compilation and inline operation policies.
+
+What I reviewed
+
+- Request conformance for `Policy(...)` / `PolicyOverride(...)`, enum strictness, full-vs-sparse payload construction, dangerous-access semantics, and whether the added tests actually pin the requested behavior.
+
+Key findings / decisions
+
+- One blocking finding was added to [feedback.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/spec-flat-enum-backed-policy-and-policyoverride-2b5811aa/runs/run-20260508T122931Z-61a77361/artifacts/implement/phases/flat-policy-facade/feedback.md): the implementation silently rewrites manual `danger_full_access` to `permissions.mode='ask'`, which contradicts the requested contract and makes the override non-sparse by changing outer permission mode during merge.
+- [criteria.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/spec-flat-enum-backed-policy-and-policyoverride-2b5811aa/runs/run-20260508T122931Z-61a77361/artifacts/implement/phases/flat-policy-facade/criteria.md) was updated accordingly.
+
+Open issues / next step
+
+- Resolve `IMP-001` by removing the implicit `PermissionMode.ASK` rewrite and aligning dangerous-manual-access lowering with confirmed intent, or explicitly pause for clarification instead of silently changing permission mode.
+
+<loop-control>
+{"schema":"docloop.loop_control/v1","kind":"promise","promise":"INCOMPLETE"}
+</loop-control>
