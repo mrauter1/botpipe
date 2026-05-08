@@ -42,3 +42,42 @@ Updated the planning artifacts for this run.
 3. runtime CLI `--workspace` rename and regression coverage.
 
 [phase_plan.yaml](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/below-is-the-revised-standalone-correction-spec-a9877342/runs/run-20260508T173757Z-dbc5e2d0/artifacts/plan/phase_plan.yaml), [feedback.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/below-is-the-revised-standalone-correction-spec-a9877342/runs/run-20260508T173757Z-dbc5e2d0/artifacts/plan/feedback.md), and [decisions.txt](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/below-is-the-revised-standalone-correction-spec-a9877342/runs/run-20260508T173757Z-dbc5e2d0/decisions.txt) were updated to match. Key repo findings captured in the plan: `autoloop/policy.py` and `autoloop/core/compiler.py` still use legacy kind labels, compiler fingerprinting still special-cases `ProviderPolicy`, public-facing errors still leak `ProviderPolicyOverride`, and `autoloop/runtime/cli.py` still exposes public `--root`. No tests were run; this turn only produced the implementation plan.
+
+
+---
+run_id=run-20260508T173757Z-dbc5e2d0 | entry=session_turn | pair=plan | phase=verifier | cycle=1 | attempt=1 | thread_id=019e08aa-e8bf-7933-be5b-9947798a2263
+---
+provider=codex
+mode=resume
+template=/home/rauter/.local/share/pipx/venvs/autoloop/lib/python3.12/site-packages/autoloop/templates/plan_verifier.md
+session_id=019e08aa-e8bf-7933-be5b-9947798a2263
+
+
+---
+run_id=run-20260508T173757Z-dbc5e2d0 | entry=phase_output | pair=plan | phase=verifier | process=codex-agent | cycle=1 | attempt=1 | thread_id=019e08aa-e8bf-7933-be5b-9947798a2263
+---
+I’m auditing the plan against the active correction spec and the repo surfaces it actually touches, starting with whether every explicit removal and required behavior break made it into the plan artifacts. Then I’ll mark the criteria and append only the findings that materially affect safe implementation.
+
+One gap is concrete: the CLI phase still treats `--workspace` as a rename, not as a required flag, even though the spec makes that requirement explicit when `autoloop/runtime/cli.py` is in scope. I’m recording that as blocking because the current plan would still allow an implementation that silently keeps the old optional-root behavior.
+
+I’ve recorded one blocking gap and one narrower follow-up. I’m checking the criteria and feedback files once more so the final verifier state matches the findings exactly.
+
+Scope considered
+The active correction spec, the current plan artifacts, the runtime-owned phase metadata, the run decision ledger, and the repo surfaces the plan claims to touch: `autoloop/policy.py`, `autoloop/core/compiler.py`, `autoloop/sdk.py`, `autoloop/simple.py`, `autoloop/core/steps.py`, `autoloop/core/discovery.py`, and `autoloop/runtime/cli.py`.
+
+What I analyzed
+I checked the plan against the explicit spec requirements for payload kind names, compiler fingerprint behavior, public error wording, SDK/simple naming strictness, runtime CLI `--workspace`, export guarantees, and required test coverage. I also compared the plan’s CLI phase against the current runtime CLI behavior, which still defaults `--root` to `Path.cwd()`.
+
+What I reviewed
+I updated `criteria.md` to reflect that the plan is not yet complete, and I appended prioritized findings to `feedback.md`. I did not modify source code or the shared decisions ledger.
+
+Key findings / decisions
+PLAN-001 is blocking: the plan does not make `--workspace` explicitly required on covered runtime CLI commands, even though the spec requires that if `autoloop/runtime/cli.py` is in scope.
+PLAN-002 is non-blocking: the validation matrix should explicitly name `client.step(..., typed_input=...)` and `client.step(..., parameters=...)` rejection tests.
+
+Open issues / next step
+The planner needs to revise the plan so the CLI phase requires `--workspace` rather than only renaming/accepting it, and ideally make the step-keyword rejection coverage explicit in the validation section. After that, the plan can be re-verified.
+
+<loop-control>
+{"schema":"docloop.loop_control/v1","kind":"promise","promise":"INCOMPLETE"}
+</loop-control>
