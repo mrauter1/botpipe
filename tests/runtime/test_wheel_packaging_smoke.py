@@ -65,12 +65,16 @@ def test_built_wheel_installs_public_botlane_package_and_cli(tmp_path: Path) -> 
         "\n".join(
             (
                 "import botlane",
+                "import importlib.util",
                 "from botlane import FINISH, Route, Workflow, step",
+                "from botlane.workflows.botlane_v1 import BotlaneV1",
                 "from botlane.runtime import cli",
                 "assert Workflow is not None",
                 "assert step is not None",
                 "assert Route is not None",
                 "assert FINISH == 'FINISH'",
+                "assert BotlaneV1.name == 'botlane_v1'",
+                "assert importlib.util.find_spec('botlane.workflows.autoloop_v1') is None",
                 "assert callable(cli.main)",
             )
         ),

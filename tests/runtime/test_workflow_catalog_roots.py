@@ -277,6 +277,27 @@ def test_discover_workflow_catalog_returns_workspace_and_package_source_kinds(
     assert entries["single_demo"].authoring_shape == "single_file"
 
 
+def test_distributed_package_catalog_exposes_botlane_v1_and_rejects_autoloop_v1(tmp_path: Path) -> None:
+    entries = {entry.workflow_name: entry for entry in discover_workflow_catalog(tmp_path)}
+    entry = entries["botlane_v1"]
+
+    assert entry.source_root_kind == "package"
+    assert entry.package_module == "botlane.workflows.botlane_v1"
+    assert entry.workflow_module == "botlane.workflows.botlane_v1.workflow"
+    assert entry.aliases == ("botlane-v1",)
+
+    resolved_by_name = resolve_workflow_reference(tmp_path, "botlane_v1")
+    resolved_by_alias = resolve_workflow_reference(tmp_path, "botlane-v1")
+
+    assert resolved_by_name.reference.package_dir == entry.package_dir
+    assert resolved_by_name.reference.workflow_module == "botlane.workflows.botlane_v1.workflow"
+    assert resolved_by_alias.reference.package_dir == entry.package_dir
+    assert resolved_by_alias.reference.workflow_name == "botlane_v1"
+
+    with pytest.raises(WorkflowDiscoveryError, match="unknown workflow 'autoloop_v1'"):
+        resolve_workflow_reference(tmp_path, "autoloop_v1")
+
+
 def test_discover_repo_local_catalog_entries_use_workflows_namespace_defaults_and_repo_tests(
     tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,
