@@ -14,7 +14,10 @@ from autoloop.core.branch_groups.declarations import FanIn
 from autoloop.core.context import context_runtime
 from autoloop.core.effects import Effects, WorklistEffect
 from autoloop.core.operations import OperationStepSpec, classify_call, execute_step_operation, llm_call
-from autoloop.core.provider_policy import ProviderPolicy, ProviderPolicyOverride
+from autoloop.core.provider_policy import (
+    ProviderPolicy as _CoreProviderPolicy,
+    ProviderPolicyOverride as _CoreProviderPolicyOverride,
+)
 from autoloop.core.primitives import AWAIT_INPUT, Event, FAIL, FINISH, Goto, Outcome, RequestInput, SELF, Fail
 from autoloop.core.prompts import Prompt
 from autoloop.core.routes import Route
@@ -793,7 +796,7 @@ def _artifact_reference_name(reference: Artifact | ArtifactSpec) -> str:
 
 
 def _normalize_provider_policy(policy: ProviderPolicyInput) -> ProviderPolicyInput:
-    if policy is None or isinstance(policy, (Policy, ProviderPolicy, ProviderPolicyOverride)):
+    if policy is None or isinstance(policy, (Policy, _CoreProviderPolicy, _CoreProviderPolicyOverride)):
         return policy
     raise TypeError("policy must be a Policy, ProviderPolicy, ProviderPolicyOverride, or None")
 

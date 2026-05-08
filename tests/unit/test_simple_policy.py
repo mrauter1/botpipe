@@ -85,6 +85,10 @@ def test_policy_rejects_removed_public_policy_override_symbol() -> None:
         exec("from autoloop import PolicyOverride")
     with pytest.raises(AttributeError):
         getattr(simple, "PolicyOverride")
+    with pytest.raises(ImportError):
+        exec("from autoloop.simple import ProviderPolicyOverride")
+    with pytest.raises(AttributeError):
+        getattr(simple, "ProviderPolicyOverride")
 
 
 def test_simple_declarations_accept_public_policy_layers() -> None:

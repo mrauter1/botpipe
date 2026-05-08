@@ -110,6 +110,13 @@ def test_policy_same_layer_validation_and_dangerous_access() -> None:
     assert dangerous.permissions.allow_dangerous_bypass is True
     assert dangerous.sandbox.mode == "danger_full_access"
 
+    dangerous_manual = public_policy.Policy(
+        sandbox_mode=public_policy.SandboxMode.DANGER_FULL_ACCESS
+    ).resolve()
+    assert dangerous_manual.permissions.mode == "ask"
+    assert dangerous_manual.permissions.allow_dangerous_bypass is True
+    assert dangerous_manual.sandbox.mode == "danger_full_access"
+
 
 def test_resolve_policy_layer_accepts_policy_inputs_and_detects_cycles() -> None:
     base = ProviderPolicy()
@@ -162,3 +169,24 @@ def test_policy_layer_payload_and_compiler_fingerprint_support_public_policy() -
     compiled = compile_workflow(DocsPatchWorkflow)
     assert isinstance(compiled.provider_policy, public_policy.Policy)
     assert compiled.provider_policy.to_layer_payload()["effort"] == "medium"
+
+
+def test_compile_and_resolve_dangerous_manual_workflow_policy() -> None:
+    class DangerousManualWorkflow(Workflow):
+        policy = public_policy.Policy(
+            sandbox_mode=public_policy.SandboxMode.DANGER_FULL_ACCESS,
+            effort=public_policy.ModelEffort.HIGH,
+        )
+
+        inspect = step("Inspect only.", routes={"done": FINISH})
+
+    compiled = compile_workflow(DangerousManualWorkflow)
+    resolved = public_policy.resolve_policy_layer(
+        SYSTEM_DEFAULT_PROVIDER_POLICY,
+        compiled.provider_policy,
+    )
+
+    assert resolved.model.effort == "high"
+    assert resolved.permissions.mode == "ask"
+    assert resolved.permissions.allow_dangerous_bypass is True
+    assert resolved.sandbox.mode == "danger_full_access"

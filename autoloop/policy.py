@@ -461,6 +461,25 @@ def _policy_layer_to_override(policy: Policy) -> ProviderPolicyOverride:
     return ProviderPolicyOverride.model_validate(payload)
 
 
+def _dangerous_manual_permission_override(
+    policy: Policy,
+    *,
+    base: ProviderPolicy,
+) -> ProviderPolicyOverride | None:
+    if policy._authored.get("sandbox_mode") != SandboxMode.DANGER_FULL_ACCESS.value:
+        return None
+    if "permission_mode" in policy._authored:
+        return None
+    if base.permissions.mode != PermissionMode.FULL_AUTO_SANDBOXED.value:
+        return None
+    return ProviderPolicyOverride(
+        permissions={
+            "mode": PermissionMode.ASK.value,
+            "allow_dangerous_bypass": True,
+        }
+    )
+
+
 def _resolve_policy_with_base(
     policy: Policy,
     base: ProviderPolicy,
@@ -477,7 +496,19 @@ def _resolve_policy_with_base(
             effective_base = _resolve_policy_with_base(policy.base, base, seen=seen)
         elif isinstance(policy.base, ProviderPolicy):
             effective_base = policy.base
-        return merge_provider_policies(effective_base, _policy_layer_to_override(policy))
+        override = _policy_layer_to_override(policy)
+        manual_dangerous_override = _dangerous_manual_permission_override(policy, base=effective_base)
+        if manual_dangerous_override is not None:
+            override_payload = override.model_dump(mode="python", warnings=False, exclude_none=True)
+            permissions_payload = dict(override_payload.get("permissions") or {})
+            permissions_payload = {
+                "mode": PermissionMode.ASK.value,
+                "allow_dangerous_bypass": True,
+                **permissions_payload,
+            }
+            override_payload["permissions"] = permissions_payload
+            override = ProviderPolicyOverride.model_validate(override_payload)
+        return merge_provider_policies(effective_base, override)
     finally:
         seen.remove(policy_id)
 
