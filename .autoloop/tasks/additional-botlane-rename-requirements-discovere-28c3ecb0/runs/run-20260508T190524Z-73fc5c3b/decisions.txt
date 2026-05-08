@@ -1,0 +1,5 @@
+<autoloop-decisions-header version="1" block_seq="1" owner="planner" phase_id="task-global" pair="plan" turn_seq="1" run_id="run-20260508T190524Z-73fc5c3b" ts="2026-05-08T19:05:24.820141+00:00" />
+The rename is an intentional breaking change: do not keep `autoloop` or `autoloop_optimizer` import aliases, do not install an `autoloop` CLI, and do not preserve a mixed-brand runtime compatibility layer.
+Machine-facing identity includes config filenames, SDK sentinel files and payload tags, generated marker/header prefixes, and serialized metadata, not just package imports and help text.
+The final strictness grep gate must cover maintained source, workflow packages, tests, docs, examples, and embedded fixture strings, with only a minimal explicit allowlist for historical text.
+Automation-owned run artifacts under `.autoloop/tasks/**` and similar generated state remain out of scope for the product rename and should be excluded from the live-tree grep proof.
