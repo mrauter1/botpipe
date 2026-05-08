@@ -211,6 +211,71 @@ def test_python_step_policy_affects_inline_operations_and_explicit_override_wins
     assert execution.result.state.verdict == "ship"
 
 
+def test_flat_override_policy_is_accepted_for_inline_llm_calls(tmp_path: Path) -> None:
+    class OperationWorkflow(simple.Workflow):
+        class State(BaseModel):
+            summary: str = ""
+
+        @simple.python_step
+        def inspect(ctx):
+            summary = simple.llm(
+                "Summarize risks.",
+                policy=simple.PolicyOverride(
+                    effort=simple.ModelEffort.LOW,
+                    read_only=True,
+                ),
+            )
+            ctx.state = ctx.state.model_copy(update={"summary": summary})
+            return None
+
+    provider = ScriptedLLMProvider(operation_turns=["summary"])
+    execution = _run_with_runner(
+        tmp_path,
+        OperationWorkflow,
+        provider,
+        task_id="flat-inline-policy-override",
+    )
+
+    assert execution.result.terminal == FINISH
+    assert provider.calls[0].policy is not None
+    assert provider.calls[0].policy.model.effort == "low"
+    assert provider.calls[0].policy.sandbox.mode == "read_only"
+    assert provider.calls[0].policy.sandbox.workspace.filesystem.allow_write == ()
+    assert execution.result.state.summary == "summary"
+
+
+def test_flat_dangerous_override_policy_is_accepted_for_inline_llm_calls(tmp_path: Path) -> None:
+    class OperationWorkflow(simple.Workflow):
+        class State(BaseModel):
+            summary: str = ""
+
+        @simple.python_step
+        def inspect(ctx):
+            summary = simple.llm(
+                "Run unrestricted analysis.",
+                policy=simple.PolicyOverride(
+                    permission_mode=simple.PermissionMode.FULL_AUTO_UNSANDBOXED,
+                ),
+            )
+            ctx.state = ctx.state.model_copy(update={"summary": summary})
+            return None
+
+    provider = ScriptedLLMProvider(operation_turns=["summary"])
+    execution = _run_with_runner(
+        tmp_path,
+        OperationWorkflow,
+        provider,
+        task_id="flat-inline-dangerous-policy-override",
+    )
+
+    assert execution.result.terminal == FINISH
+    assert provider.calls[0].policy is not None
+    assert provider.calls[0].policy.permissions.mode == "full_auto_unsandboxed"
+    assert provider.calls[0].policy.permissions.allow_dangerous_bypass is True
+    assert provider.calls[0].policy.sandbox.mode == "danger_full_access"
+    assert execution.result.state.summary == "summary"
+
+
 def test_workflow_step_policy_applies_to_inline_operations_in_hooks(tmp_path: Path) -> None:
     workflow_policy = ProviderPolicy(
         permissions=PermissionPolicy(mode="full_auto_sandboxed"),

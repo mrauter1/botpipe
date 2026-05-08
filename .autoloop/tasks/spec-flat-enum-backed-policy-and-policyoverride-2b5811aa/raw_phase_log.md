@@ -178,3 +178,78 @@ phase_mode=single
 phase_ids=flat-policy-facade
 explicit=True
 current_phase_index=0
+
+
+---
+run_id=run-20260508T122931Z-61a77361 | entry=session_turn | pair=implement | phase=producer | cycle=1 | attempt=1 | thread_id=019e0796-5bd9-76d1-b337-56047d273185
+---
+provider=codex
+mode=start
+template=/home/rauter/.local/share/pipx/venvs/autoloop/lib/python3.12/site-packages/autoloop/templates/implement_producer.md
+session_id=019e0796-5bd9-76d1-b337-56047d273185
+
+
+---
+run_id=run-20260508T122931Z-61a77361 | entry=phase_output | pair=implement | phase=producer | process=codex-agent | cycle=1 | attempt=1 | thread_id=019e0796-5bd9-76d1-b337-56047d273185
+---
+I’m implementing the flat `Policy(...)` / `PolicyOverride(...)` facade in the existing policy surface, then I’ll add the focused export and regression tests the phase contract calls for.
+
+I’ve got the phase plan and the current surface. Next I’m tracing the existing policy normalization and nearby tests so the facade lowers into the current schema without widening anything else.
+
+I’ve confirmed the current simple surface only accepts nested policy objects today. I’m now wiring the new facade into `autoloop/simple.py` itself so the rest of the compiler and runtime keep seeing the same canonical policy classes.
+
+I’ve narrowed the blast radius to `autoloop/simple.py`, root exports, and policy-focused tests. Before editing I’m checking workspace state so I don’t trample unrelated local changes.
+
+Plan:
+1. Add enum types, coercion helpers, and one shared lowering helper in `autoloop/simple.py`.
+2. Export the new public facade from `autoloop/simple.py` and `autoloop/__init__.py`.
+3. Add focused unit/runtime tests for lowering, sparsity, dangerous-access inference, imports, and operation/workflow integration.
+4. Run the required pytest slice, then update the phase notes and decision ledger with any non-obvious implementation choices.
+
+I’m at the edit point now. The main risk is sparse override construction: it has to expose nested defaults on the object while still omitting untouched fields during merge, so I’m keeping the lowering logic centralized and payload-driven rather than widening any core schema.
+
+The facade code is in place. I’m wiring exports now, then I’ll add the behavior-heavy tests around inference, sparse overrides, and compile/runtime integration.
+
+I’m adding a dedicated unit file rather than spreading assertions across unrelated suites. That keeps the policy contract explicit and lets the existing runtime suites stay focused on merge/emitter behavior.
+
+I’ve covered the compile-time contract in unit tests. I’m adding two small runtime cases now so inline `llm(..., policy=PolicyOverride(...))` exercises the existing operation policy path with the new facade objects.
+
+The public behavior is mostly covered, but the helper coercion contract is also part of the spec. I’m adding direct helper tests for tuple and mapping normalization so bytes, `Path`, dedupe, and empty-key handling stay pinned down.
+
+The code and tests are wired. I’m running the focused policy tests first to catch shape or sparsity issues before I spend time on the broader runtime/emitter regression slice.
+
+`pytest` isn’t on `PATH` here, so I’m checking the project’s Python entrypoint next and will run the suite through that instead.
+
+One new unit test failed; I’m pulling the traceback now and I’ll fix that directly before moving on to the full regression slice.
+
+I hit a real schema constraint: the current core policy model rejects `full_auto_sandboxed + danger_full_access`. I’m making the flat facade lower manual danger access to a compatible manual permission mode instead of touching the core schema, which keeps the engine-facing validator unchanged.
+
+The broader regression slice is running now. I’ve cleared the new unit coverage; what remains is watching for runtime merge or emitter fallout from the new lowering rules.
+
+The requested test slice passed. I’m doing the close-out work now: capturing the one non-obvious lowering decision in the run ledger and writing the phase notes with scope, invariants, and validation.
+
+Scope considered
+
+- [autoloop/simple.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/autoloop/simple.py), [autoloop/__init__.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/autoloop/__init__.py), targeted policy tests, and the phase-local notes/decision artifacts only.
+
+What I analyzed
+
+- The existing simple authoring surface, `_normalize_provider_policy`, core `ProviderPolicy` / `ProviderPolicyOverride` validation rules, merge behavior, and the provider-policy runtime/emitter regression suites.
+
+What I changed
+
+- Added flat enum-backed `Policy(...)` and `PolicyOverride(...)` helpers plus public enums in [autoloop/simple.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/autoloop/simple.py).
+- Added shared coercion/lowering helpers for enum validation, tuple normalization, mapping coercion, read-only/workspace-write/network inference, and dangerous-access handling.
+- Exported the new public names from [autoloop/__init__.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/autoloop/__init__.py) and `autoloop.simple.__all__`.
+- Added focused coverage in [tests/unit/test_simple_policy.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/tests/unit/test_simple_policy.py), updated [tests/unit/test_simple_surface.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/tests/unit/test_simple_surface.py), and added runtime inline-operation coverage in [tests/runtime/test_provider_policy_steps.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/tests/runtime/test_provider_policy_steps.py).
+- Updated the phase implementation notes and appended the non-obvious lowering decision to the run decisions ledger.
+
+Key findings / decisions
+
+- The unchanged core validator rejects `permissions.mode='full_auto_sandboxed'` together with `sandbox.mode='danger_full_access'`. To keep the facade valid without changing core schema, explicit `sandbox_mode=SandboxMode.DANGER_FULL_ACCESS` with no explicit `permission_mode` lowers to manual `permissions.mode='ask'` plus `allow_dangerous_bypass=True`.
+- Requested validation passed with:
+  `./.venv/bin/python -m pytest tests/unit/test_simple_surface.py tests/unit/test_provider_policy.py tests/runtime/test_provider_policy_steps.py tests/runtime/test_provider_policy_emitters.py tests/runtime/test_provider_policy_config.py tests/unit/test_simple_policy.py`
+
+Open issues / next step
+
+- No open blocker from the requested scope.
