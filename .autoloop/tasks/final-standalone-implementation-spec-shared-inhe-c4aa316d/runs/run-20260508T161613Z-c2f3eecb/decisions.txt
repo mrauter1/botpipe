@@ -1,0 +1,3 @@
+<autoloop-decisions-header version="1" block_seq="1" owner="planner" phase_id="task-global" pair="plan" turn_seq="1" run_id="run-20260508T161613Z-c2f3eecb" ts="2026-05-08T16:16:14.355989+00:00" />
+Remove only the leaked autoloop.simple aliases for PolicyInput and ProviderPolicyInput; autoloop.policy and autoloop.sdk remain the canonical public export sites.
+Preserve simple declaration/runtime acceptance of Policy, ProviderPolicy, ProviderPolicyOverride, and None by using internal/private typing support instead of public alias bindings.
