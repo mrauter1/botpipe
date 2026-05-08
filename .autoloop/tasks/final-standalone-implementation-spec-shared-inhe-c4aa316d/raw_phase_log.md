@@ -170,3 +170,12 @@ No open verification issues remain. The planning artifacts are complete and read
 <loop-control>
 {"schema":"docloop.loop_control/v1","kind":"promise","promise":"COMPLETE"}
 </loop-control>
+
+
+---
+run_id=run-20260508T141115Z-6c430e1a | entry=phase_scope_resolved
+---
+phase_mode=single
+phase_ids=shared-policy-core,compiler-simple-integration,sdk-runtime-alignment,regression-cleanup
+explicit=True
+current_phase_index=0
