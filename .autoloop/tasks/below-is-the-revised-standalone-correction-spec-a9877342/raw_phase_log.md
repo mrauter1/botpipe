@@ -115,3 +115,41 @@ The plan now treats required `--workspace` behavior as a contractual public brea
 
 Open issues / next step
 The blocking verifier finding should now be resolved. The next step is a verifier pass against the revised plan artifacts.
+
+
+---
+run_id=run-20260508T173757Z-dbc5e2d0 | entry=session_turn | pair=plan | phase=verifier | cycle=2 | attempt=1 | thread_id=019e08aa-e8bf-7933-be5b-9947798a2263
+---
+provider=codex
+mode=resume
+template=/home/rauter/.local/share/pipx/venvs/autoloop/lib/python3.12/site-packages/autoloop/templates/plan_verifier.md
+session_id=019e08aa-e8bf-7933-be5b-9947798a2263
+
+
+---
+run_id=run-20260508T173757Z-dbc5e2d0 | entry=phase_output | pair=plan | phase=verifier | process=codex-agent | cycle=2 | attempt=1 | thread_id=019e08aa-e8bf-7933-be5b-9947798a2263
+---
+I’m re-running the plan audit after the producer revisions, focusing on whether the earlier blocking CLI requirement is now explicit in both the narrative and phase contract, and whether the SDK step keyword rejections are now concretely testable.
+
+The revised plan closes the specific gap the prior verifier call raised: `--workspace` is now a required public flag with omission failure, not just a rename. I’m marking the criteria accordingly and recording that the previous findings are resolved.
+
+I’ve updated the gating checklist and recorded the resolution state in feedback. I’m doing one last pass on those two files so the final promise matches the artifact state exactly.
+
+Scope considered
+The active correction spec, the updated planning artifacts, the verifier-owned criteria file, the shared decisions ledger, and the repo surfaces the plan names as in scope: policy serialization, compiler fingerprinting, SDK/simple validation surfaces, and runtime CLI.
+
+What I analyzed
+I re-checked the revised plan against the earlier blocking CLI finding and the follow-up SDK validation note. I verified that the narrative plan, machine-readable phase contract, compatibility notes, and validation matrix now explicitly require `--workspace`, treat omission as a usage failure, reject `--root`, and call out the removed `client.step(..., typed_input=...)` and `client.step(..., parameters=...)` checks.
+
+What I reviewed
+I updated [criteria.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/below-is-the-revised-standalone-correction-spec-a9877342/runs/run-20260508T173757Z-dbc5e2d0/artifacts/plan/criteria.md) so all verification gates are checked, and I appended a verification result entry to [feedback.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/below-is-the-revised-standalone-correction-spec-a9877342/runs/run-20260508T173757Z-dbc5e2d0/artifacts/plan/feedback.md) confirming that the prior findings are resolved. I did not modify source code or the shared decisions ledger.
+
+Key findings / decisions
+No remaining blocking findings. The plan now matches the spec’s required runtime CLI break and makes the removed SDK step keywords explicitly testable.
+
+Open issues / next step
+The planning artifacts are ready to hand off. The next step is implementation against the now-complete plan.
+
+<loop-control>
+{"schema":"docloop.loop_control/v1","kind":"promise","promise":"COMPLETE"}
+</loop-control>
