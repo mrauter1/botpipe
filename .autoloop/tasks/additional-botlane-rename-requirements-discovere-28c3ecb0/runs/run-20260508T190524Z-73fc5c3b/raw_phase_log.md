@@ -555,3 +555,105 @@ This test phase is complete from the auditor side. Later phases should add the c
 <loop-control>
 {"schema":"docloop.loop_control/v1","kind":"promise","promise":"COMPLETE"}
 </loop-control>
+
+
+---
+run_id=run-20260508T190524Z-73fc5c3b | entry=session_turn | pair=implement | phase=producer | cycle=1 | attempt=1 | thread_id=019e0916-8e98-7b41-a2e9-9a6a5f5047d8
+---
+provider=codex
+mode=start
+template=/home/rauter/.local/share/pipx/venvs/autoloop/lib/python3.12/site-packages/autoloop/templates/implement_producer.md
+session_id=019e0916-8e98-7b41-a2e9-9a6a5f5047d8
+
+
+---
+run_id=run-20260508T190524Z-73fc5c3b | entry=phase_output | pair=implement | phase=producer | process=codex-agent | cycle=1 | attempt=1 | thread_id=019e0916-8e98-7b41-a2e9-9a6a5f5047d8
+---
+I’m treating the active phase as runtime/workspace identity only: I’ll inspect the phase artifacts, current rename state, and the CLI/workspace loader code paths before changing anything.
+
+I’ve got the phase contract and prior decisions. Next I’m locating the remaining runtime/workspace identity references so I can change the shared paths and loaders together instead of piecemeal.
+
+The broad grep shows a lot of later-phase docs and schema work still pending, so I’m narrowing to phase-relevant runtime, loader, config, workspace, catalog, and focused tests. After that I’ll patch the shared constants first so new writes move consistently.
+
+Plan for this phase:
+1. Audit the shared runtime identity seams: state root, config discovery, workflow catalog roots, dynamic module namespace, CLI text, and legacy command paths.
+2. Patch the shared constants and loaders so new writes use Botlane names while readers still accept legacy `.autoloop` and old config filenames.
+3. Update focused tests for CLI metadata, workspace paths, loader/catalog namespaces, and compatibility reads.
+4. Run the targeted runtime test slice, then record implementation notes and any non-obvious decisions.
+
+I’ve confirmed the main behavioral risk: if I only flip the write paths, resume/list/SDK cleanup would stop seeing legacy `.autoloop` state. I’m now patching shared path resolution so writes go to `.botlane` while readers enumerate both roots and prefer the new one.
+
+I’m editing the shared runtime code now: state-root resolution, workflow search roots, dynamic namespace prefixes, config discovery, CLI scaffold paths, and SDK sentinel handling. After that I’ll sweep the focused tests onto the new `.botlane` defaults and keep explicit legacy-read cases where they matter.
+
+The first patch missed a few exact contexts, so I’m reloading the touched files and applying the runtime changes in smaller chunks.
+
+I’ve reached the expected blast radius: the runtime code is switched, and the remaining work is aligning the runtime-facing tests with `.botlane` defaults while preserving a few explicit legacy-read cases. I’m doing the obvious bulk replacements first, then I’ll fix the handful of tests whose assertions depend on root ordering or compatibility semantics.
+
+The code and the first-pass test rewrites are in place. I’m running the focused runtime slice now to catch the non-trivial fallout: root ordering, legacy fallback behavior, and SDK cleanup semantics.
+
+`pytest` isn’t available in the bare interpreter here. I’m checking the repo for the expected virtualenv or test runner and will use that instead, rather than guessing.
+
+`pytest` still isn’t installed, so I’m replacing that with direct Python assertions against the renamed seams: config discovery, search-root ordering, legacy state reads, and SDK cleanup over old sentinel files.
+
+I’ve finished the code changes and the focused test updates. Since the environment is missing `pytest` and even runtime deps like `pydantic`, I’m doing the close-out pass with static verification, a diff audit, and then I’ll record the implementation decisions and checklist mapping.
+
+Scope considered
+
+Active phase only: runtime and workspace identity. I limited code changes to CLI/runtime/workspace loaders, config discovery, SDK state handling, and the focused runtime/SDK tests that encode those contracts.
+
+What I analyzed
+
+I traced the Botlane rename seams through [botlane/runtime/workspace.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/botlane/runtime/workspace.py), [botlane/core/workflow_catalog.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/botlane/core/workflow_catalog.py), [botlane/runtime/loader.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/botlane/runtime/loader.py), [botlane/runtime/runner.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/botlane/runtime/runner.py), [botlane/runtime/config.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/botlane/runtime/config.py), [botlane/runtime/cli.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/botlane/runtime/cli.py), [botlane/sdk.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/botlane/sdk.py), and the runtime-facing tests that still encoded `.autoloop`, legacy config names, or `_autoloop_workspace_workflows`.
+
+What I changed
+
+New writes now go to `.botlane`, `.botlane/workflows`, `_botlane_workspace_workflows`, Botlane-branded CLI/runtime text, `botlane.yaml`/`botlane.config`, Botlane git-tracking messages, Botlane Codex temp prefixes, and `.botlane-sdk-task.json`. Read compatibility remains for legacy `.autoloop` state, old config filenames and config dir, legacy workspace workflow roots, legacy SDK sentinels, and resume/list flows over old runs. I also updated the focused runtime/SDK tests and added explicit legacy-read compatibility coverage. Phase notes and decisions were recorded in the authoritative artifacts.
+
+Key findings / decisions
+
+Runtime readers now enumerate `.botlane` first and `.autoloop` second, with dedupe to avoid double-listing migrated runs. Resume falls back to legacy state only when the requested run is missing from `.botlane`, and canonical Botlane config files win when both Botlane and legacy filenames exist.
+
+Open issues / next step
+
+Static validation passed with `python3 -m compileall botlane tests`. I could not run `pytest` or runtime smoke checks here because this environment is missing `pytest` and runtime deps such as `pydantic`. The next phase should take the remaining schema/artifact identity and repo-wide strictness cleanup.
+
+
+---
+run_id=run-20260508T190524Z-73fc5c3b | entry=session_turn | pair=implement | phase=verifier | cycle=1 | attempt=1 | thread_id=019e0916-8e98-7b41-a2e9-9a6a5f5047d8
+---
+provider=codex
+mode=resume
+template=/home/rauter/.local/share/pipx/venvs/autoloop/lib/python3.12/site-packages/autoloop/templates/implement_verifier.md
+session_id=019e0916-8e98-7b41-a2e9-9a6a5f5047d8
+
+
+---
+run_id=run-20260508T190524Z-73fc5c3b | entry=phase_output | pair=implement | phase=verifier | process=codex-agent | cycle=1 | attempt=1 | thread_id=019e0916-8e98-7b41-a2e9-9a6a5f5047d8
+---
+I’m reviewing the phase-local runtime/workspace rename diff against the acceptance criteria and compatibility rules first, then I’ll update the reviewer artifacts with concrete findings only.
+
+I found two material compatibility regressions in the review pass: one in workflow discovery precedence, and one in resume selection across mixed `.botlane`/`.autoloop` state. I’m pinning the exact lines now and then I’ll update the criteria and feedback artifacts.
+
+Scope considered
+
+Active phase only: runtime/workspace identity changes plus their focused tests and reviewer artifacts.
+
+What I analyzed
+
+I reviewed the runtime/workspace rename paths in `botlane/runtime/*`, `botlane/core/workflow_catalog.py`, `botlane/core/context.py`, `botlane/core/workflow_capabilities.py`, `botlane/sdk.py`, the phase implementation notes, and the focused runtime/SDK tests that were rewritten around `.botlane`, legacy config fallback, and legacy SDK sentinels.
+
+What I reviewed
+
+I checked the implementation against P2-AC1 through P2-AC3, with extra attention to cross-root precedence, resume selection, and the clarified requirement that legacy `.autoloop` inputs remain readable during transition while new writes become Botlane-only. I updated the phase feedback artifact with two blocking findings and one non-blocking validation-gap note. The criteria file remains with all boxes unchecked because the blockers materially affect correctness, behavioral safety, and compatibility.
+
+Key findings / decisions
+
+The most serious regression is that workflow discovery now advertises separate `.botlane` and `.autoloop` search-root precedence, but effective catalog ordering still ignores that precedence, so a legacy `.autoloop` workflow can shadow the canonical `.botlane` one. The second blocker is resume selection: once any `.botlane` run exists for a task/workflow, `resume` stops considering newer or only-resumable legacy `.autoloop` runs, which breaks the required transition compatibility.
+
+Open issues / next step
+
+Fix `IMP-001` by making effective catalog ordering honor the declared search-root precedence. Fix `IMP-002` by selecting resume candidates across both readable state roots and then binding the chosen root. After that, rerun the focused runtime/SDK tests in an environment that actually has `pytest` and runtime dependencies installed.
+
+<loop-control>
+{"schema":"docloop.loop_control/v1","kind":"promise","promise":"INCOMPLETE"}
+</loop-control>
