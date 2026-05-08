@@ -496,3 +496,44 @@ The reviewer’s blocker was valid: this was not just missing coverage, the publ
 Open issues / next step
 
 `python3 -m py_compile` passed on the touched files. `pytest` still could not run here because the environment lacks `pytest`, so the next step is to rerun the targeted unit suite in a dependency-complete environment.
+
+
+---
+run_id=run-20260508T173757Z-dbc5e2d0 | entry=session_turn | pair=implement | phase=verifier | cycle=2 | attempt=1 | thread_id=019e08b6-b80c-7ff0-ace1-633bbcb6bb47
+---
+provider=codex
+mode=resume
+template=/home/rauter/.local/share/pipx/venvs/autoloop/lib/python3.12/site-packages/autoloop/templates/implement_verifier.md
+session_id=019e08b6-b80c-7ff0-ace1-633bbcb6bb47
+
+
+---
+run_id=run-20260508T173757Z-dbc5e2d0 | entry=phase_output | pair=implement | phase=verifier | process=codex-agent | cycle=2 | attempt=1 | thread_id=019e08b6-b80c-7ff0-ace1-633bbcb6bb47
+---
+I’ve rechecked the fixed step-params path and the updated regression coverage. I’m clearing the criteria now and noting in the feedback artifact that the prior blocker was resolved in this review cycle.
+
+Scope considered
+
+Phase-local review of the public-surface-cleanup implementation, with focused regression analysis on the reviewer-reported `client.step(..., params=...)` gap and the public wording/export/test surfaces tied to AC-1 through AC-3.
+
+What I analyzed
+
+I re-traced `Autoloop.step(...)` in `autoloop/sdk.py`, especially `_build_synthetic_step_workflow(...)` and its params flow, and checked the updated regression coverage in `tests/unit/test_sdk_facade.py`. I also rechecked the earlier wording/export changes in `autoloop/simple.py`, `autoloop/core/steps.py`, `autoloop/core/discovery.py`, `autoloop/policy.py`, `tests/unit/test_simple_surface.py`, and `tests/unit/test_simple_policy.py`.
+
+What I reviewed
+
+I updated the reviewer-owned artifacts:
+- `criteria.md`: all criteria now accurately pass
+- `feedback.md`: prior blocker retained as history and marked resolved via a cycle 2 review note
+
+Key findings / decisions
+
+The prior blocker is resolved. Synthetic SDK step workflows now synthesize `Params` when explicit step params are supplied, and there is direct regression coverage proving `client.step(..., input=..., params=...)` succeeds while preserving the public sequence-style helper pattern. I found no remaining blocking or non-blocking issues in this phase scope.
+
+Open issues / next step
+
+No code-review blockers remain for this phase. Runtime validation is still environment-limited because `pytest` is unavailable here, but the implementation and review artifacts are consistent with the accepted phase contract.
+
+<loop-control>
+{"schema":"docloop.loop_control/v1","kind":"promise","promise":"COMPLETE"}
+</loop-control>
