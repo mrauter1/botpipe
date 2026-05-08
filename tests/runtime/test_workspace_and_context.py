@@ -1202,6 +1202,59 @@ def test_list_run_records_reads_legacy_state_root_when_botlane_root_is_absent(tm
     assert records[0].run_dir == run_dir
 
 
+def test_resume_without_run_id_uses_latest_run_across_botlane_and_legacy_state_roots(tmp_path: Path) -> None:
+    _write_pause_resume_workflow_package(tmp_path, "mixed_root_resume_demo", "MixedRootResumeWorkflow")
+    provider = ScriptedLLMProvider(
+        llm_turns=[
+            Outcome(raw_output="Need answer", tag="question", question="Botlane run?"),
+            Outcome(raw_output="Need answer", tag="question", question="Legacy run?"),
+            Outcome(raw_output="Answered", tag="answered", payload={"answer": "legacy-answer"}),
+        ]
+    )
+
+    first = run_workflow_package(
+        "mixed_root_resume_demo",
+        provider=provider,
+        options=_runner_options(
+            tmp_path,
+            task_id="task-mixed-root",
+            message="Create botlane run first",
+        ),
+    )
+    botlane_workflow_dir = tmp_path / ".botlane" / "tasks" / "task-mixed-root" / "wf_mixed_root_resume_demo"
+    botlane_run_dir = next((botlane_workflow_dir / "runs").iterdir())
+
+    second = run_workflow_package(
+        "mixed_root_resume_demo",
+        provider=provider,
+        options=_runner_options(
+            tmp_path,
+            task_id="task-mixed-root",
+            message="Create legacy run second",
+            state_dir=tmp_path / ".autoloop",
+        ),
+    )
+    legacy_workflow_dir = tmp_path / ".autoloop" / "tasks" / "task-mixed-root" / "wf_mixed_root_resume_demo"
+    legacy_run_dir = next((legacy_workflow_dir / "runs").iterdir())
+
+    resumed = run_workflow_package(
+        "mixed_root_resume_demo",
+        provider=provider,
+        options=_runner_options(
+            tmp_path,
+            task_id="task-mixed-root",
+            resume=True,
+            answer="legacy-answer",
+        ),
+    )
+
+    assert first.terminal == "AWAIT_INPUT"
+    assert second.terminal == "AWAIT_INPUT"
+    assert resumed.terminal == "FINISH"
+    assert resumed.run_id == legacy_run_dir.name
+    assert resumed.run_id != botlane_run_dir.name
+
+
 def test_workspace_lists_grouped_workflow_run_summaries_with_deterministic_filters(tmp_path: Path) -> None:
     paused_dir = _write_run_summary_record(
         tmp_path,

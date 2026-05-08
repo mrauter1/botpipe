@@ -71,11 +71,11 @@ from .workspace import (
     ensure_workflow_workspace,
     latest_run_id,
     next_observability_sequence,
+    resolve_run_record,
     resolve_run_workspace,
     write_parent_run_metadata,
     update_run_metadata,
     open_existing_run,
-    legacy_state_root,
     resolve_task_workspace,
     resolve_workflow_workspace,
     resolve_run_workflow_input,
@@ -616,6 +616,17 @@ def _plan_workspaces(
     reference: WorkflowReference,
 ) -> PlannedRunContext:
     state_dir = _resolved_state_dir(options)
+    resume_run_id = options.run_id
+    if options.resume and options.state_dir is None:
+        resume_record = resolve_run_record(
+            options.root,
+            workflow_name=compiled.workflow_name,
+            task_id=options.task_id,
+            run_id=options.run_id,
+            selector="latest",
+        )
+        state_dir = resume_record.task_dir.parent.parent
+        resume_run_id = resume_record.run_id
     task_workspace = resolve_task_workspace(options.root, options.task_id, state_dir=state_dir)
     workflow_workspace = resolve_workflow_workspace(
         task_workspace,
@@ -633,29 +644,6 @@ def _plan_workspaces(
         package_module=reference.package_module,
         workflow_module=reference.workflow_module,
     )
-    if options.resume and options.state_dir is None and not _resume_run_available(workflow_workspace, options.run_id):
-        fallback_state_dir = legacy_state_root(options.root.resolve())
-        if fallback_state_dir != task_workspace.state_root:
-            fallback_task_workspace = resolve_task_workspace(options.root, options.task_id, state_dir=fallback_state_dir)
-            fallback_workflow_workspace = resolve_workflow_workspace(
-                fallback_task_workspace,
-                compiled.workflow_name,
-                package_dir=reference.package_dir,
-                reference=reference.original,
-                source_path=reference.source_path,
-                manifest_path=reference.manifest_path,
-                module_name=reference.module_name,
-                class_name=reference.class_name,
-                authoring_shape=reference.authoring_shape,
-                source_root_kind=reference.source_root_kind,
-                source_root=reference.source_root,
-                package_name=reference.package_name,
-                package_module=reference.package_module,
-                workflow_module=reference.workflow_module,
-            )
-            if _resume_run_available(fallback_workflow_workspace, options.run_id):
-                task_workspace = fallback_task_workspace
-                workflow_workspace = fallback_workflow_workspace
     _assert_workflow_identity_consistency(task_workspace, compiled.workflow_name, reference)
     if not options.resume:
         return PlannedRunContext(
@@ -664,7 +652,7 @@ def _plan_workspaces(
             run_workspace=resolve_run_workspace(workflow_workspace, options.run_id or create_run_id()),
         )
 
-    run_id = options.run_id or latest_run_id(workflow_workspace.runs_dir)
+    run_id = resume_run_id or latest_run_id(workflow_workspace.runs_dir)
     if run_id is None:
         raise FileNotFoundError(f"no runs exist under {workflow_workspace.runs_dir}")
     run_workspace = resolve_run_workspace(workflow_workspace, run_id)
@@ -714,14 +702,6 @@ def validate_resume_state(run_dir: Path) -> None:
             "This run only has persisted session or event state, which the generic runtime does not reconstruct into "
             "engine checkpoints. Resume it with the workflow-owned harness that created it or start a new run."
         )
-
-
-def _resume_run_available(workflow_workspace: WorkflowWorkspace, run_id: str | None) -> bool:
-    if not workflow_workspace.runs_dir.is_dir():
-        return False
-    if run_id is None:
-        return latest_run_id(workflow_workspace.runs_dir) is not None
-    return (workflow_workspace.runs_dir / run_id).is_dir()
 
 
 def _resume_topology_mismatch_warning(

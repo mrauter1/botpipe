@@ -436,11 +436,7 @@ def _effective_catalog(
 
 
 def _resolution_precedence(entry: WorkflowCatalogEntry) -> int:
-    if entry.source_root_kind == "package":
-        return 10
-    if entry.import_prefix == "workflows":
-        return 20
-    return 30
+    return entry.precedence
 
 
 def _resolution_keys(entry: WorkflowCatalogEntry) -> tuple[str, ...]:

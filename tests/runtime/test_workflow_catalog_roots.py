@@ -260,6 +260,62 @@ def test_discover_workflow_catalog_reads_legacy_workspace_root_when_present(
     assert entries[0].source_root == tmp_path / ".autoloop" / "workflows"
 
 
+def test_workflow_resolution_prefers_botlane_workspace_root_over_legacy_root(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    _configure_package_root(monkeypatch, tmp_path)
+    _write_workspace_flow(
+        tmp_path,
+        "shared_demo",
+        source="""
+from __future__ import annotations
+
+from botlane import Workflow, python_step
+
+
+class SharedWorkflow(Workflow):
+    name = "shared_demo"
+    marker = "botlane"
+
+    @python_step(name="start")
+    def start(ctx):
+        return None
+""".strip(),
+    )
+    legacy_dir = tmp_path / ".autoloop" / "workflows" / "shared_demo"
+    legacy_dir.mkdir(parents=True, exist_ok=True)
+    (legacy_dir / "workflow.toml").write_text(
+        'name = "shared_demo"\n'
+        'title = "Shared Demo"\n'
+        'description = "legacy workspace workflow"\n',
+        encoding="utf-8",
+    )
+    (legacy_dir / "flow.py").write_text(
+        """
+from __future__ import annotations
+
+from botlane import Workflow, python_step
+
+
+class SharedWorkflow(Workflow):
+    name = "shared_demo"
+    marker = "legacy"
+
+    @python_step(name="start")
+    def start(ctx):
+        return None
+""".strip()
+        + "\n",
+        encoding="utf-8",
+    )
+
+    resolved = resolve_workflow_reference(tmp_path, "shared_demo")
+
+    assert resolved.workflow_cls.marker == "botlane"
+    assert resolved.reference.source_root == tmp_path / ".botlane" / "workflows"
+
+
 def test_discover_workflow_catalog_allows_missing_search_roots(
     tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,

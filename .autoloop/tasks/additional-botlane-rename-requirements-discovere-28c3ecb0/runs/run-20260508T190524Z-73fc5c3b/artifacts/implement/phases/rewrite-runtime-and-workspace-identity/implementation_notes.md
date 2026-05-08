@@ -13,9 +13,10 @@
 
 ## Symbols touched
 - Workspace/state: `STATE_DIRNAME`, `legacy_state_root()`, `readable_state_roots()`, `resolve_resume_state_root()`, `list_task_records()`, `list_run_records()`
-- Catalog/loading: `workspace_workflows_root()`, `workflow_search_roots()`, `_WORKSPACE_MODULE_NAMESPACE`, `_cleanup_workflow_pycache()`
+- Catalog/loading: `workspace_workflows_root()`, `workflow_search_roots()`, `_resolution_precedence()`, `_WORKSPACE_MODULE_NAMESPACE`, `_cleanup_workflow_pycache()`
 - CLI/runtime identity: `_WORKSPACE_HELP`, `build_arg_parser()`, `_handle_init_workflow()`, runtime git commit message helpers, Codex schema tempfile prefix, child workflow thread name prefix
 - Config/SDK: `CONFIG_FILENAMES`, `legacy_user_config_dir()`, `discover_config_file()`, `resolve_runtime_config()`, SDK sentinel helpers, `_promotion_base_dir()`
+- Resume selection: `_plan_workspaces()`, `resolve_run_record()`
 
 ## Checklist mapping
 - Plan milestone 2 / P2-AC1: Botlane-only CLI help, scaffold path, runtime labels, git metadata strings, and Codex temp-file prefix.
@@ -29,6 +30,7 @@
 - Checked-in repo `workflows/` remains the highest-precedence workspace discovery root.
 - An explicit `state_dir` remains authoritative and disables automatic legacy fallback.
 - Legacy compatibility paths are readers/fallbacks only; new writes stay Botlane-only.
+- Cross-root `resume` selection now follows the same latest-run ordering as public run lookup instead of a separate root-presence heuristic.
 
 ## Intended behavior changes
 - New runtime and SDK state writes move to `.botlane`.
@@ -42,15 +44,19 @@
 
 ## Expected side effects
 - Resume/list/summary flows can see both `.botlane` and `.autoloop` state during transition.
+- When the same workflow exists in both workspace roots, `.botlane/workflows` now consistently wins over `.autoloop/workflows`.
 - When both Botlane and legacy config filenames exist in the same directory, Botlane config wins.
 - SDK cleanup can remove legacy SDK task directories without requiring a manual sentinel rename first.
 
 ## Validation performed
 - `python3 -m compileall botlane tests`
+- `python3 -m compileall botlane/core/workflow_catalog.py botlane/runtime/runner.py tests/runtime/test_workflow_catalog_roots.py tests/runtime/test_workspace_and_context.py`
 - Could not run `pytest`: `pytest` is not installed in this environment.
 - Could not run runtime-level smoke scripts: the environment is also missing runtime dependencies such as `pydantic`.
 
 ## Deduplication / centralization decisions
 - Centralized dual-root runtime reads through `readable_state_roots()` instead of scattering `.botlane` / `.autoloop` probes.
+- Centralized workspace-root shadowing on the catalog entry `precedence` field instead of keeping a second hard-coded precedence map.
 - Centralized config precedence in `discover_config_file()` instead of duplicating Botlane-vs-legacy filename checks at each call site.
+- Centralized resume root selection through `resolve_run_record()` instead of a separate `.botlane`-then-legacy heuristic in the runner.
 - Centralized SDK sentinel compatibility in `_sdk_task_sentinel_path()` so cleanup and safe-delete share the same fallback behavior.
