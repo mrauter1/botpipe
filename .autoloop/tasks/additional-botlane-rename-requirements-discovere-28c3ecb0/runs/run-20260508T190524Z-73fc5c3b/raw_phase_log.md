@@ -1369,3 +1369,126 @@ The implementation needs either to rename the remaining maintained legacy-brande
 <loop-control>
 {"schema":"docloop.loop_control/v1","kind":"promise","promise":"INCOMPLETE"}
 </loop-control>
+
+
+---
+run_id=run-20260508T190524Z-73fc5c3b | entry=session_turn | pair=implement | phase=producer | cycle=2 | attempt=1 | thread_id=019e0943-ff31-72a3-a94a-bb192b9cb63e
+---
+provider=codex
+mode=resume
+template=/home/rauter/.local/share/pipx/venvs/autoloop/lib/python3.12/site-packages/autoloop/templates/implement_producer.md
+session_id=019e0943-ff31-72a3-a94a-bb192b9cb63e
+
+
+---
+run_id=run-20260508T190524Z-73fc5c3b | entry=phase_output | pair=implement | phase=producer | process=codex-agent | cycle=2 | attempt=1 | thread_id=019e0943-ff31-72a3-a94a-bb192b9cb63e
+---
+The blocker is broader than three root files: the recursive wrapper and its templates still carry live `autoloop`, `.autoloop`, and `AUTOLOOP` surfaces, so the current grep gate is only passing by omission. I’m mapping the remaining live matches now so I can fix the actual surfaces and then replace the narrowed scan with a real repo-level proof.
+
+The repo-wide raw grep mixed tracked product files with untracked legacy material. I’m checking which of the reviewer-callout paths are actually versioned, because the phase rules explicitly tell me not to absorb unrelated dirty files into scope, and that determines whether the fix is “rename more files” or “make the gate track maintained files precisely.”
+
+The reviewer finding is valid for the recursive wrapper and the root review/spec docs if we treat them as maintained rename surfaces. I’m fixing that directly: rewriting those files to Botlane form and then widening the strictness gate to cover them, so AC2 is satisfied by proof instead of by omission.
+
+The first pass cleaned the literal CLI/path prose, but the recursive wrapper still has `AUTOLOOP` and `autoloop` embedded in identifiers and self-references. I’m checking the remaining exact matches so I can decide whether to finish that rename inside the wrapper or keep the proof focused on the user-visible/serialized surfaces only.
+
+The remaining live matches are all inside the recursive wrapper itself, so I’m going to finish that rename cleanly rather than rely on word-boundary gaps. That means renaming the wrapper’s own file/directory references to Botlane form and then pointing the strictness scan at the renamed root.
+
+The recursive wrapper path rename is in place, but the script still has legacy-named shell identifiers. I’m finishing that internal rename now so the file doesn’t keep leaking `AUTOLOOP`/`autoloop` through function and variable names.
+
+The remaining work is proof cleanup, not runtime logic: I’m rewriting the one corrupted root note and then extending the strictness gate to cover the renamed recursive wrapper plus the root review/spec docs, so the scan matches the actual maintained files in this worktree.
+
+The renamed wrapper and root docs are now clean on the exact legacy-brand tokens. I’m checking for any stale `recursive_autoloop`/`run_recursive_autoloop` references outside historical docs before I rerun the proof suite.
+
+The active scan roots are updated and the renamed wrapper is clean on the legacy-brand tokens. I’m checking for any downstream references to the old recursive path and then rerunning the strictness and proof tests against the broadened scan.
+
+The broadened legacy-token scan is clean across the maintained roots, including the renamed recursive wrapper and root docs. I’m waiting on the two focused pytest runs now and will then refresh the implementation notes and decision ledger to reflect the expanded proof scope.
+
+The broadened scan exposed one real compatibility-proof leak in the recursive wrapper templates: they still mention removed `route_infos`-era surfaces. I’m fixing those template phrases directly and then rerunning strictness.
+
+The template leak is patched. I’m rerunning strictness first, then I’ll let the wheel/workspace run finish and update the notes/ledger with the justified recursive-wrapper expansion to close the reviewer finding cleanly.
+
+The proof suite is green again after bringing the recursive wrapper and root review/spec docs into the maintained scan. I’m doing one final legacy-token sweep on the exact maintained scope and then I’ll refresh the notes/decisions so the next reviewer sees why those previously untracked surfaces were intentionally pulled into this phase.
+
+I’ve got the final proof state: the maintained-scope scan is now clean and the targeted suites pass. I’m updating the implementation notes and ledger to reflect the reviewer-driven expansion into the recursive wrapper and root review/spec docs, including the explicit justification for touching those untracked surfaces.
+
+Scope considered
+
+Phase-local proof surfaces only: strictness/grep enforcement, wheel smoke, runtime workspace/schema proof, root review/spec docs that still carried live Botlane-facing examples, the maintained recursive wrapper/templates, and the required phase artifacts.
+
+What I analyzed
+
+I reviewed the verifier finding against the phase contract and the dirty-worktree rule, then traced the remaining live legacy-brand matches. The real maintained gap was the recursive wrapper/template set plus the root review/spec docs; the bulk of `legacy_docs/` remained historical scratch outside this phase’s proof surface.
+
+What I changed
+
+I renamed the recursive wrapper surface from `recursive_autoloop` content to `recursive_botlane`, including the shell script, template directory references, CLI/path prose, and shell identifiers. I rewrote the remaining root review/spec docs to Botlane-only text, extended the strictness scan roots in [tests/strictness/test_no_compat.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/tests/strictness/test_no_compat.py) to include `recursive_botlane/` plus `Review15.md`, `review16.md`, and `rebrand.md`, and kept the earlier wheel/runtime proof changes in place. I also updated [implementation_notes.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/additional-botlane-rename-requirements-discovere-28c3ecb0/runs/run-20260508T190524Z-73fc5c3b/artifacts/implement/phases/prove-botlane-only-surface/implementation_notes.md) and appended the non-obvious scope decision under the latest header in [decisions.txt](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/additional-botlane-rename-requirements-discovere-28c3ecb0/runs/run-20260508T190524Z-73fc5c3b/decisions.txt).
+
+Key findings / decisions
+
+The maintained-scope legacy-brand scan is now clean across `botlane/`, `botlane_optimizer/`, `docs/`, `recursive_botlane/`, `tests/`, `pyproject.toml`, `MANIFEST.in`, `Review15.md`, `review16.md`, `rebrand.md`, and `Workflow_Instructions.md`.
+
+Validation passed:
+- `.venv/bin/python -m pytest -q tests/strictness/test_no_compat.py`
+- `.venv/bin/python -m pytest -q tests/runtime/test_wheel_packaging_smoke.py tests/runtime/test_workspace_and_context.py -k 'test_built_wheel_installs_public_botlane_package_and_cli or run_creates_task_workflow_run_layout_and_immutable_request_snapshots or run_metadata_records_topology_hashes_and_artifact_contract_paths'`
+- The maintained-scope `rg` sweep for `autoloop|Autoloop|AUTOLOOP|\.autoloop|autoloop_optimizer|_autoloop_workspace_workflows` returned no matches.
+
+Open issues / next step
+
+I did not rename the historical scratch files under `legacy_docs/`; the implementation notes now call those out explicitly as out of proof scope for this phase. The next step is verifier re-review against the widened maintained-scope gate.
+
+
+---
+run_id=run-20260508T190524Z-73fc5c3b | entry=session_turn | pair=implement | phase=verifier | cycle=2 | attempt=1 | thread_id=019e0943-ff31-72a3-a94a-bb192b9cb63e
+---
+provider=codex
+mode=resume
+template=/home/rauter/.local/share/pipx/venvs/autoloop/lib/python3.12/site-packages/autoloop/templates/implement_verifier.md
+session_id=019e0943-ff31-72a3-a94a-bb192b9cb63e
+
+
+---
+run_id=run-20260508T190524Z-73fc5c3b | entry=phase_output | pair=implement | phase=verifier | process=codex-agent | cycle=2 | attempt=1 | thread_id=019e0943-ff31-72a3-a94a-bb192b9cb63e
+---
+I’m checking the final proof state rather than re-litigating the earlier blocker. The core questions now are whether the widened scan is clean, whether the recursive wrapper rename introduced regressions, and whether any remaining exclusions are justified by the phase rules.
+
+I’m re-reviewing the phase artifacts against the updated proof scope and focused validation, then I’ll update the verifier-owned criteria and feedback only.
+
+I’ve got the current artifact state. Next I’m checking the actual diff and re-running the maintained-scope branding proof so the criteria reflect the code, not just the notes.
+
+The maintained-scope grep is clean. I’m waiting on the focused pytest batch and then I’ll decide whether any blocker remains or this can be marked complete.
+
+The core proof files look coherent. I’m checking one remaining policy edge now: whether the `legacy_docs/` exclusion is still too broad for the accepted grep rule, or whether it’s genuinely historical-only.
+
+The recursive wrapper/root-doc gap is fixed, but there’s still one policy-level blocker: the grep proof excludes `legacy_docs/**` wholesale even though that directory still contains many live legacy-brand specs and examples, and it isn’t encoded as a narrow changelog/history allowlist. I’m updating the review artifacts to reflect that.
+
+The artifact update is in place. I’m doing one quick readback, then I’ll close this review as incomplete with the single remaining blocker called out precisely.
+
+Scope considered
+
+Phase-local re-review of the updated proof surfaces: `tests/strictness/test_no_compat.py`, the focused runtime/wheel proof tests, the maintained recursive wrapper/docs that were added to the scan, the shared decisions ledger, and the verifier-owned artifacts in the active phase directory.
+
+What I analyzed
+
+I checked the updated implementation against P4-AC1 through P4-AC3 and the clarified rename policy. I re-ran the maintained-scope branding grep and the focused pytest batch covering strictness, wheel install, and runtime `.botlane`/`botlane.*` emission proof.
+
+What I reviewed
+
+I updated [criteria.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/additional-botlane-rename-requirements-discovere-28c3ecb0/runs/run-20260508T190524Z-73fc5c3b/artifacts/implement/phases/prove-botlane-only-surface/criteria.md) and appended the cycle-2 re-review result to [feedback.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/additional-botlane-rename-requirements-discovere-28c3ecb0/runs/run-20260508T190524Z-73fc5c3b/artifacts/implement/phases/prove-botlane-only-surface/feedback.md).
+
+Focused validation passed:
+- `rg ... botlane botlane_optimizer docs recursive_botlane tests pyproject.toml MANIFEST.in Review15.md review16.md rebrand.md Workflow_Instructions.md` returned no matches
+- `.venv/bin/python -m pytest -q tests/strictness/test_no_compat.py tests/runtime/test_wheel_packaging_smoke.py tests/runtime/test_workspace_and_context.py -k 'test_built_wheel_installs_public_botlane_package_and_cli or run_creates_task_workflow_run_layout_and_immutable_request_snapshots or run_metadata_records_topology_hashes_and_artifact_contract_paths'` -> `3 passed, 71 deselected`
+
+Key findings / decisions
+
+`IMP-001` is resolved: the recursive wrapper and root review/spec docs are now covered and Botlane-only.
+
+`IMP-003` is blocking: the final branding proof still excludes `legacy_docs/**` wholesale, but that directory contains many tracked non-generated files with live `autoloop`, `.autoloop`, `autoloop_optimizer`, and `Autoloop*` references. That exclusion is broader than the accepted policy, which only permits automation-owned generated state and explicitly named changelog/history files to remain outside the grep gate.
+
+Open issues / next step
+
+This phase should stay incomplete until `legacy_docs/**` is either brought under the strictness scan and rewritten, or narrowed to a centralized explicit history-file allowlist enforced by the test.
+
+<loop-control>
+{"schema":"docloop.loop_control/v1","kind":"promise","promise":"INCOMPLETE"}
+</loop-control>
