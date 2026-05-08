@@ -453,3 +453,50 @@ Key findings / decisions
 Open issues / next step
 
 - No open implementer blocker remains in this phase-local scope.
+
+
+---
+run_id=run-20260508T122931Z-61a77361 | entry=session_turn | pair=implement | phase=verifier | cycle=2 | attempt=3 | thread_id=019e0796-5bd9-76d1-b337-56047d273185
+---
+provider=codex
+mode=resume
+template=/home/rauter/.local/share/pipx/venvs/autoloop/lib/python3.12/site-packages/autoloop/templates/implement_verifier.md
+session_id=019e0796-5bd9-76d1-b337-56047d273185
+
+
+---
+run_id=run-20260508T122931Z-61a77361 | entry=phase_output | pair=implement | phase=verifier | process=codex-agent | cycle=2 | attempt=3 | thread_id=019e0796-5bd9-76d1-b337-56047d273185
+---
+I’m reviewing the clarified dangerous-access path and the exact test updates now. If the blocking semantic drift is resolved, I’ll mark the criteria complete and leave an audit trail in the review artifact.
+
+The clarified contract still has to survive the full requested regression slice. I’m letting the rest of the policy/runtime suites finish before I finalize the review artifacts.
+
+The prior blocking issue is resolved under the explicit clarification, and the requested regression slice is green. I’m marking the criteria complete and leaving a short review-trail note in the feedback artifact.
+
+Scope considered
+
+- The clarified dangerous-access branch in `autoloop/simple.py`, the focused unit/runtime policy tests, the implementation notes, and the run-local clarification/decision ledger.
+
+What I analyzed
+
+- Whether the prior blocking issue around silent `permissions.mode='ask'` rewriting was removed.
+- Whether the clarified contract from QA-2 is now reflected consistently in lowering, sparse override behavior, notes, and the requested regression slice.
+
+What I reviewed
+
+- The updated dangerous-access validation path, the revised `tests/unit/test_simple_policy.py` expectations, the implementation notes, and the full requested pytest command output.
+
+Key findings / decisions
+
+- `IMP-001` is resolved: manual `danger_full_access` no longer silently rewrites permission mode.
+- QA-2’s clarified contract is now implemented: explicit `sandbox_mode=SandboxMode.DANGER_FULL_ACCESS` without an explicit compatible `permission_mode` raises `ValueError`.
+- The requested regression slice passed:
+  `./.venv/bin/python -m pytest tests/unit/test_simple_surface.py tests/unit/test_provider_policy.py tests/runtime/test_provider_policy_steps.py tests/runtime/test_provider_policy_emitters.py tests/runtime/test_provider_policy_config.py tests/unit/test_simple_policy.py`
+
+Open issues / next step
+
+- No open findings remain in the reviewed phase-local scope.
+
+<loop-control>
+{"schema":"docloop.loop_control/v1","kind":"promise","promise":"COMPLETE"}
+</loop-control>

@@ -25,3 +25,5 @@ I’m checking the request snapshot and the raw phase log to answer this compati
 The implementation log already shows the conflict: unchanged core validation forbids preserving the existing default permission mode with `danger_full_access`, and the verifier rejected the silent rewrite to `ask`. I’m checking the rest of the run log and the core validator to confirm whether anything later resolved that contradiction.
 
 YES
+<autoloop-decisions-header version="1" block_seq="8" owner="implementer" phase_id="flat-policy-facade" pair="implement" turn_seq="4" run_id="run-20260508T122931Z-61a77361" ts="2026-05-08T12:47:01.539899+00:00" />
+Per clarification QA-2, sandbox_mode=SandboxMode.DANGER_FULL_ACCESS without an explicit compatible permission_mode is now rejected by the flat facade instead of silently rewriting permissions.mode; this intentionally narrows the original dangerous-manual example to preserve sparse semantics and avoid unconfirmed permission-mode changes under the unchanged core schema.
