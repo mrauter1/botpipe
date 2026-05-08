@@ -616,3 +616,44 @@ Runtime readers now enumerate `.botlane` first and `.autoloop` second, with dedu
 Open issues / next step
 
 Static validation passed with `python3 -m compileall botlane tests`. I could not run `pytest` or runtime smoke checks here because this environment is missing `pytest` and runtime deps such as `pydantic`. The next phase should take the remaining schema/artifact identity and repo-wide strictness cleanup.
+
+
+---
+run_id=run-20260508T190524Z-73fc5c3b | entry=session_turn | pair=implement | phase=verifier | cycle=1 | attempt=1 | thread_id=019e0916-8e98-7b41-a2e9-9a6a5f5047d8
+---
+provider=codex
+mode=resume
+template=/home/rauter/.local/share/pipx/venvs/autoloop/lib/python3.12/site-packages/autoloop/templates/implement_verifier.md
+session_id=019e0916-8e98-7b41-a2e9-9a6a5f5047d8
+
+
+---
+run_id=run-20260508T190524Z-73fc5c3b | entry=phase_output | pair=implement | phase=verifier | process=codex-agent | cycle=1 | attempt=1 | thread_id=019e0916-8e98-7b41-a2e9-9a6a5f5047d8
+---
+I’m reviewing the phase-local runtime/workspace rename diff against the acceptance criteria and compatibility rules first, then I’ll update the reviewer artifacts with concrete findings only.
+
+I found two material compatibility regressions in the review pass: one in workflow discovery precedence, and one in resume selection across mixed `.botlane`/`.autoloop` state. I’m pinning the exact lines now and then I’ll update the criteria and feedback artifacts.
+
+Scope considered
+
+Active phase only: runtime/workspace identity changes plus their focused tests and reviewer artifacts.
+
+What I analyzed
+
+I reviewed the runtime/workspace rename paths in `botlane/runtime/*`, `botlane/core/workflow_catalog.py`, `botlane/core/context.py`, `botlane/core/workflow_capabilities.py`, `botlane/sdk.py`, the phase implementation notes, and the focused runtime/SDK tests that were rewritten around `.botlane`, legacy config fallback, and legacy SDK sentinels.
+
+What I reviewed
+
+I checked the implementation against P2-AC1 through P2-AC3, with extra attention to cross-root precedence, resume selection, and the clarified requirement that legacy `.autoloop` inputs remain readable during transition while new writes become Botlane-only. I updated the phase feedback artifact with two blocking findings and one non-blocking validation-gap note. The criteria file remains with all boxes unchecked because the blockers materially affect correctness, behavioral safety, and compatibility.
+
+Key findings / decisions
+
+The most serious regression is that workflow discovery now advertises separate `.botlane` and `.autoloop` search-root precedence, but effective catalog ordering still ignores that precedence, so a legacy `.autoloop` workflow can shadow the canonical `.botlane` one. The second blocker is resume selection: once any `.botlane` run exists for a task/workflow, `resume` stops considering newer or only-resumable legacy `.autoloop` runs, which breaks the required transition compatibility.
+
+Open issues / next step
+
+Fix `IMP-001` by making effective catalog ordering honor the declared search-root precedence. Fix `IMP-002` by selecting resume candidates across both readable state roots and then binding the chosen root. After that, rerun the focused runtime/SDK tests in an environment that actually has `pytest` and runtime dependencies installed.
+
+<loop-control>
+{"schema":"docloop.loop_control/v1","kind":"promise","promise":"INCOMPLETE"}
+</loop-control>
