@@ -55,3 +55,6 @@
 {"ts": "2026-05-08T18:14:08.340283+00:00", "run_id": "run-20260508T173757Z-dbc5e2d0", "seq": 55, "event_type": "phase_completed", "pair": "test", "phase_id": "runtime-cli-workspace-flag", "phase_mode": "single"}
 {"ts": "2026-05-08T18:14:08.343015+00:00", "run_id": "run-20260508T173757Z-dbc5e2d0", "seq": 56, "event_type": "pair_started", "pair": "audit", "phase_id": null}
 {"ts": "2026-05-08T18:14:08.343278+00:00", "run_id": "run-20260508T173757Z-dbc5e2d0", "seq": 57, "event_type": "cycle_started", "pair": "audit", "cycle": 1, "attempt": 1, "phase_id": null}
+{"ts": "2026-05-08T18:18:07.886695+00:00", "run_id": "run-20260508T173757Z-dbc5e2d0", "seq": 58, "event_type": "phase_finished", "pair": "audit", "phase": "producer", "cycle": 1, "attempt": 1, "empty_output": false, "phase_id": null}
+{"ts": "2026-05-08T18:19:07.449421+00:00", "run_id": "run-20260508T173757Z-dbc5e2d0", "seq": 59, "event_type": "phase_finished", "pair": "audit", "phase": "verifier", "cycle": 1, "attempt": 1, "empty_output": false, "phase_id": null}
+{"ts": "2026-05-08T18:19:07.505167+00:00", "run_id": "run-20260508T173757Z-dbc5e2d0", "seq": 60, "event_type": "pair_completed", "pair": "audit", "cycle": 1, "attempt": 1, "phase_id": null}
