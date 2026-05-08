@@ -506,3 +506,52 @@ Validation passed:
 with `122 passed in 12.75s`.
 
 Next step is test-auditor review.
+
+
+---
+run_id=run-20260508T190524Z-73fc5c3b | entry=session_turn | pair=test | phase=verifier | cycle=1 | attempt=1 | thread_id=019e0902-f571-7e41-ba14-ff59a745a024
+---
+provider=codex
+mode=resume
+template=/home/rauter/.local/share/pipx/venvs/autoloop/lib/python3.12/site-packages/autoloop/templates/test_verifier.md
+session_id=019e0902-f571-7e41-ba14-ff59a745a024
+
+
+---
+run_id=run-20260508T190524Z-73fc5c3b | entry=phase_output | pair=test | phase=verifier | process=codex-agent | cycle=1 | attempt=1 | thread_id=019e0902-f571-7e41-ba14-ff59a745a024
+---
+I’m auditing the new phase-local tests against the rename scope, with priority on whether they actually lock the `botlane` public/package identity and avoid normalizing later-phase `.autoloop` behavior. I’ll start from the test artifacts, then read the added tests and validation slice before deciding whether the audit criteria can close.
+
+The test strategy and decisions align with the phase boundary. I’m reading the exact new assertions now, especially the live-package and wheel-smoke checks, to make sure they catch the intended regression without binding later-phase `.autoloop` behavior or adding environment-sensitive assumptions.
+
+The assertions look phase-correct so far: they target the live bundled workflow rename and the built-wheel surface without pinning deferred `.autoloop` runtime behavior. I’m just waiting on the auditor rerun to confirm the coverage is green end to end before I close the artifact criteria.
+
+The rerun passed. I’m marking the audit criteria complete and appending a short audit note that there are no remaining blocking coverage gaps in this phase; the added tests now protect the shipped `botlane_v1` rename at both source-tree and built-wheel levels.
+
+Scope considered
+
+Phase-local audit of the new tests for the package/public API rename only: public `botlane` exports, CLI help identity, bundled workflow package rename to `botlane_v1`, and built-wheel/install regression protection. I treated `.autoloop` workspace-path and schema migration checks as later-phase scope unless the new tests accidentally normalized them.
+
+What I analyzed
+
+I reviewed the phase test strategy, the test feedback artifact, the run decisions, the added assertions in [tests/runtime/test_workflow_catalog_roots.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/tests/runtime/test_workflow_catalog_roots.py) and [tests/runtime/test_wheel_packaging_smoke.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/tests/runtime/test_wheel_packaging_smoke.py), and the adjacent existing coverage in `test_runtime_cli_metadata_integration.py` and `test_simple_surface.py`.
+
+What I reviewed
+
+I reran the declared validation slice:
+`.venv/bin/pytest tests/runtime/test_workflow_catalog_roots.py tests/runtime/test_wheel_packaging_smoke.py tests/runtime/test_runtime_cli_metadata_integration.py tests/unit/test_simple_surface.py -q`
+Result: `122 passed in 12.40s`.
+
+I updated [criteria.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/additional-botlane-rename-requirements-discovere-28c3ecb0/runs/run-20260508T190524Z-73fc5c3b/artifacts/test/phases/rename-package-and-public-api/criteria.md) to checked and appended the audit result to [feedback.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/additional-botlane-rename-requirements-discovere-28c3ecb0/runs/run-20260508T190524Z-73fc5c3b/artifacts/test/phases/rename-package-and-public-api/feedback.md).
+
+Key findings / decisions
+
+No blocking audit findings remain. The added tests cover the material regression seam that was previously easiest to miss: a stale shipped `autoloop_v1` workflow surface surviving inside the checked-in package or wheel even while synthetic package fixtures pass. The tests also respect the phase boundary by not normalizing deferred `.autoloop` runtime/schema behavior.
+
+Open issues / next step
+
+This test phase is complete from the auditor side. Later phases should add the corresponding `.botlane` workspace-path, generated-namespace, and `botlane.*` schema assertions when those behaviors are actually migrated.
+
+<loop-control>
+{"schema":"docloop.loop_control/v1","kind":"promise","promise":"COMPLETE"}
+</loop-control>

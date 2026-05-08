@@ -457,3 +457,101 @@ This phase is complete from the verifier side. The next phase should pick up the
 <loop-control>
 {"schema":"docloop.loop_control/v1","kind":"promise","promise":"COMPLETE"}
 </loop-control>
+
+
+---
+run_id=run-20260508T190524Z-73fc5c3b | entry=session_turn | pair=test | phase=producer | cycle=1 | attempt=1 | thread_id=019e0902-f571-7e41-ba14-ff59a745a024
+---
+provider=codex
+mode=resume
+template=/home/rauter/.local/share/pipx/venvs/autoloop/lib/python3.12/site-packages/autoloop/templates/test_producer.md
+session_id=019e0902-f571-7e41-ba14-ff59a745a024
+
+
+---
+run_id=run-20260508T190524Z-73fc5c3b | entry=phase_output | pair=test | phase=producer | process=codex-agent | cycle=1 | attempt=1 | thread_id=019e0902-f571-7e41-ba14-ff59a745a024
+---
+I’m reviewing the existing test coverage for the phase-scoped rename, with focus on the new `botlane` package identity, CLI help text, and the renamed bundled workflow package surface. Then I’ll add only the missing regression tests and update the phase test artifacts.
+
+There’s already good coverage for `BotlaneSDKError`, the CLI help wording, and wheel/install negative checks. The obvious remaining gap is explicit regression coverage for the renamed bundled workflow package surface itself, so I’m reading the workflow catalog/reference tests to slot that in without broad churn.
+
+The cleanest missing regression check is against the real bundled package root, not another synthetic package fixture. I’m adding one runtime catalog/resolution test for `botlane_v1` plus a wheel-smoke import check so a future stale rename can’t hide behind the temporary test package helpers.
+
+I’ve confirmed the live package root can resolve `botlane_v1` and reject `autoloop_v1`, which is exactly the regression seam the synthetic package fixtures don’t cover. I’m adding that test plus an installed-wheel import assertion now, then I’ll record the coverage map and test-phase notes.
+
+The new tests are in. I’m running the smallest validation slice that exercises the added live-package and installed-wheel checks together with the adjacent CLI/public-surface coverage, so we catch any coupling before handing this to the test auditor.
+
+The validation passed. I’m adding one test-phase ledger note now because the live-package versus synthetic-fixture distinction is the non-obvious part of this coverage, and it matters if someone later trims the tests without realizing what regression seam they were protecting.
+
+Scope considered
+
+Phase-local test coverage for the package/public API rename only: `botlane` public exports, CLI help identity, the bundled workflow package rename to `botlane_v1`, and installed-wheel/package regression checks. I left `.autoloop` workspace-path migration and schema identity checks out because those belong to later phases.
+
+What I analyzed
+
+I reviewed the current test artifacts, the run decisions, and the existing coverage in `tests/unit/test_simple_surface.py`, `tests/runtime/test_runtime_cli_metadata_integration.py`, `tests/runtime/test_workflow_catalog_roots.py`, and `tests/runtime/test_wheel_packaging_smoke.py`. The main remaining gap was explicit regression coverage for the shipped bundled workflow surface itself: positive `botlane_v1` resolution and negative `autoloop_v1` rejection.
+
+What I changed
+
+I added a live-package catalog test in [tests/runtime/test_workflow_catalog_roots.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/tests/runtime/test_workflow_catalog_roots.py) that asserts the checked-in package exposes `botlane_v1` through `botlane.workflows.botlane_v1`, resolves the `botlane-v1` alias, and rejects `autoloop_v1`. I expanded [tests/runtime/test_wheel_packaging_smoke.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/tests/runtime/test_wheel_packaging_smoke.py) so the built wheel must import `botlane.workflows.botlane_v1` and must not expose `botlane.workflows.autoloop_v1`. I also updated [test_strategy.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/additional-botlane-rename-requirements-discovere-28c3ecb0/runs/run-20260508T190524Z-73fc5c3b/artifacts/test/phases/rename-package-and-public-api/test_strategy.md), appended the test summary to [feedback.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/additional-botlane-rename-requirements-discovere-28c3ecb0/runs/run-20260508T190524Z-73fc5c3b/artifacts/test/phases/rename-package-and-public-api/feedback.md), and recorded the non-obvious test decision in [decisions.txt](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/additional-botlane-rename-requirements-discovere-28c3ecb0/runs/run-20260508T190524Z-73fc5c3b/decisions.txt).
+
+Key findings / decisions
+
+The important coverage distinction is live shipped package versus synthetic temp-package fixtures: the latter already covered generic package discovery, but they would not catch a stale checked-in `autoloop_v1` bundle. The new tests lock both the source-tree package root and the built wheel to the renamed `botlane_v1` identity.
+
+Open issues / next step
+
+Validation passed:
+`.venv/bin/pytest tests/runtime/test_workflow_catalog_roots.py tests/runtime/test_wheel_packaging_smoke.py tests/runtime/test_runtime_cli_metadata_integration.py tests/unit/test_simple_surface.py -q`
+with `122 passed in 12.75s`.
+
+Next step is test-auditor review.
+
+
+---
+run_id=run-20260508T190524Z-73fc5c3b | entry=session_turn | pair=test | phase=verifier | cycle=1 | attempt=1 | thread_id=019e0902-f571-7e41-ba14-ff59a745a024
+---
+provider=codex
+mode=resume
+template=/home/rauter/.local/share/pipx/venvs/autoloop/lib/python3.12/site-packages/autoloop/templates/test_verifier.md
+session_id=019e0902-f571-7e41-ba14-ff59a745a024
+
+
+---
+run_id=run-20260508T190524Z-73fc5c3b | entry=phase_output | pair=test | phase=verifier | process=codex-agent | cycle=1 | attempt=1 | thread_id=019e0902-f571-7e41-ba14-ff59a745a024
+---
+I’m auditing the new phase-local tests against the rename scope, with priority on whether they actually lock the `botlane` public/package identity and avoid normalizing later-phase `.autoloop` behavior. I’ll start from the test artifacts, then read the added tests and validation slice before deciding whether the audit criteria can close.
+
+The test strategy and decisions align with the phase boundary. I’m reading the exact new assertions now, especially the live-package and wheel-smoke checks, to make sure they catch the intended regression without binding later-phase `.autoloop` behavior or adding environment-sensitive assumptions.
+
+The assertions look phase-correct so far: they target the live bundled workflow rename and the built-wheel surface without pinning deferred `.autoloop` runtime behavior. I’m just waiting on the auditor rerun to confirm the coverage is green end to end before I close the artifact criteria.
+
+The rerun passed. I’m marking the audit criteria complete and appending a short audit note that there are no remaining blocking coverage gaps in this phase; the added tests now protect the shipped `botlane_v1` rename at both source-tree and built-wheel levels.
+
+Scope considered
+
+Phase-local audit of the new tests for the package/public API rename only: public `botlane` exports, CLI help identity, bundled workflow package rename to `botlane_v1`, and built-wheel/install regression protection. I treated `.autoloop` workspace-path and schema migration checks as later-phase scope unless the new tests accidentally normalized them.
+
+What I analyzed
+
+I reviewed the phase test strategy, the test feedback artifact, the run decisions, the added assertions in [tests/runtime/test_workflow_catalog_roots.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/tests/runtime/test_workflow_catalog_roots.py) and [tests/runtime/test_wheel_packaging_smoke.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/tests/runtime/test_wheel_packaging_smoke.py), and the adjacent existing coverage in `test_runtime_cli_metadata_integration.py` and `test_simple_surface.py`.
+
+What I reviewed
+
+I reran the declared validation slice:
+`.venv/bin/pytest tests/runtime/test_workflow_catalog_roots.py tests/runtime/test_wheel_packaging_smoke.py tests/runtime/test_runtime_cli_metadata_integration.py tests/unit/test_simple_surface.py -q`
+Result: `122 passed in 12.40s`.
+
+I updated [criteria.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/additional-botlane-rename-requirements-discovere-28c3ecb0/runs/run-20260508T190524Z-73fc5c3b/artifacts/test/phases/rename-package-and-public-api/criteria.md) to checked and appended the audit result to [feedback.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/additional-botlane-rename-requirements-discovere-28c3ecb0/runs/run-20260508T190524Z-73fc5c3b/artifacts/test/phases/rename-package-and-public-api/feedback.md).
+
+Key findings / decisions
+
+No blocking audit findings remain. The added tests cover the material regression seam that was previously easiest to miss: a stale shipped `autoloop_v1` workflow surface surviving inside the checked-in package or wheel even while synthetic package fixtures pass. The tests also respect the phase boundary by not normalizing deferred `.autoloop` runtime/schema behavior.
+
+Open issues / next step
+
+This test phase is complete from the auditor side. Later phases should add the corresponding `.botlane` workspace-path, generated-namespace, and `botlane.*` schema assertions when those behaviors are actually migrated.
+
+<loop-control>
+{"schema":"docloop.loop_control/v1","kind":"promise","promise":"COMPLETE"}
+</loop-control>
