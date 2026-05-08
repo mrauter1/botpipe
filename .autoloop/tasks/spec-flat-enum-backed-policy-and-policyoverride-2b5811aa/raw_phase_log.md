@@ -353,3 +353,57 @@ I’m checking the current policy schema and the raw implementation notes to res
 I found the exact conflict in the core validator and I’m checking the current facade implementation plus the run-local review note that flagged the silent rewrite as blocking.
 
 NO
+
+
+---
+run_id=run-20260508T122931Z-61a77361 | entry=session_turn | pair=implement | phase=producer | cycle=2 | attempt=2 | thread_id=019e0796-5bd9-76d1-b337-56047d273185
+---
+provider=codex
+mode=resume
+template=/home/rauter/.local/share/pipx/venvs/autoloop/lib/python3.12/site-packages/autoloop/templates/implement_producer.md
+session_id=019e0796-5bd9-76d1-b337-56047d273185
+
+
+---
+run_id=run-20260508T122931Z-61a77361 | entry=phase_output | pair=implement | phase=producer | process=codex-agent | cycle=2 | attempt=2 | thread_id=019e0796-5bd9-76d1-b337-56047d273185
+---
+Scope considered
+
+- The new clarification, the reviewer’s blocking finding, the dangerous-access lowering in `autoloop/simple.py`, and the unchanged `ProviderPolicy` validator in `autoloop/core/provider_policy.py`.
+
+What I analyzed
+
+- Whether the new `NO` answer is enough to safely implement a concrete fix without changing the core schema or inventing another undocumented fallback.
+- The remaining options for `Policy(sandbox_mode=SandboxMode.DANGER_FULL_ACCESS)` now that silently coercing to `permissions.mode='ask'` is explicitly rejected.
+
+What I changed
+
+- No files edited this turn.
+
+Key findings / decisions
+
+- The clarification removes the current `ask` fallback, but it does not resolve what the facade should do instead for workflow-level `Policy(sandbox_mode=SandboxMode.DANGER_FULL_ACCESS)`.
+- Under the unchanged core schema, preserving the default/current permission mode in that case is still invalid, so any fix now requires choosing between rejecting the call or changing some other written requirement.
+
+Open issues / next step
+
+- I need one more explicit direction on whether the manual-danger flat facade should now raise when `permission_mode` is omitted, despite the original example showing that shape as valid.
+
+<loop-control>
+{"schema":"docloop.loop_control/v1","kind":"question","question":"WARNING: You answered NO to the silent `permissions.mode='ask'` fallback, but with the unchanged core schema there is still no valid way for `Policy(sandbox_mode=SandboxMode.DANGER_FULL_ACCESS)` to preserve the default/current permission mode. Should I make manual dangerous sandbox access invalid unless the author also provides an explicit compatible `permission_mode` (for example `PermissionMode.FULL_AUTO_UNSANDBOXED`), even though the original request’s `DangerousManualWorkflow` example would then no longer compile? Answer YES or NO.","best_supposition":"Yes. Reject manual danger-full-access when `permission_mode` is omitted, because silently changing permission mode was explicitly rejected and the unchanged core schema leaves no valid preserve-default implementation."}
+</loop-control>
+
+
+---
+run_id=run-20260508T122931Z-61a77361 | entry=clarification | pair=implement | phase=producer | cycle=2 | attempt=2 | source=auto
+---
+Question:
+WARNING: You answered NO to the silent `permissions.mode='ask'` fallback, but with the unchanged core schema there is still no valid way for `Policy(sandbox_mode=SandboxMode.DANGER_FULL_ACCESS)` to preserve the default/current permission mode. Should I make manual dangerous sandbox access invalid unless the author also provides an explicit compatible `permission_mode` (for example `PermissionMode.FULL_AUTO_UNSANDBOXED`), even though the original request’s `DangerousManualWorkflow` example would then no longer compile? Answer YES or NO.
+Best supposition: Yes. Reject manual danger-full-access when `permission_mode` is omitted, because silently changing permission mode was explicitly rejected and the unchanged core schema leaves no valid preserve-default implementation.
+
+Answer:
+I’m checking the request snapshot and the raw phase log to answer this compatibility question against the repo’s stated requirements, then I’ll give the narrow YES/NO outcome.
+
+The implementation log already shows the conflict: unchanged core validation forbids preserving the existing default permission mode with `danger_full_access`, and the verifier rejected the silent rewrite to `ask`. I’m checking the rest of the run log and the core validator to confirm whether anything later resolved that contradiction.
+
+YES
