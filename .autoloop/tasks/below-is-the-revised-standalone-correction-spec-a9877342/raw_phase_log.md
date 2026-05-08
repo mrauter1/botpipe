@@ -805,3 +805,54 @@ Open issues / next step
 
 - No open issues remain in this phase-local scope.
 - The updated implementation is ready for the next verifier pass.
+
+
+---
+run_id=run-20260508T173757Z-dbc5e2d0 | entry=session_turn | pair=implement | phase=verifier | cycle=2 | attempt=1 | thread_id=019e08c0-fd19-7d83-8d47-b301dba7c66b
+---
+provider=codex
+mode=resume
+template=/home/rauter/.local/share/pipx/venvs/autoloop/lib/python3.12/site-packages/autoloop/templates/implement_verifier.md
+session_id=019e08c0-fd19-7d83-8d47-b301dba7c66b
+
+
+---
+run_id=run-20260508T173757Z-dbc5e2d0 | entry=phase_output | pair=implement | phase=verifier | process=codex-agent | cycle=2 | attempt=1 | thread_id=019e08c0-fd19-7d83-8d47-b301dba7c66b
+---
+I’m doing the close-out review pass now: confirm the final help output, rerun the focused runtime CLI suite, and then update only the review artifacts if the blocking issue is truly resolved.
+
+The help surface now renders exactly as the reviewer asked. I’m waiting on the same focused runtime suite to finish, and if it stays green I’ll clear the review artifacts with no remaining findings.
+
+I’ve verified the fix locally: help now shows `--workspace WORKSPACE`, the legacy `ROOT` leak is gone, and the focused runtime CLI suite passes. I’m updating the review artifacts to reflect that there are no remaining findings in this phase.
+
+Scope considered
+
+- Phase-local runtime CLI workspace-flag review only: [autoloop/runtime/cli.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/autoloop/runtime/cli.py), [tests/runtime/test_package_cli.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/tests/runtime/test_package_cli.py), [tests/runtime/test_runtime_cli_metadata_integration.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/tests/runtime/test_runtime_cli_metadata_integration.py), [docs/authoring.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/docs/authoring.md), and the active phase review artifacts.
+
+What I analyzed
+
+- The current parser state for the shared `--workspace` arguments.
+- The rendered argparse help output for `workflows list`.
+- The updated runtime CLI help assertions and the focused validation recorded in [implementation_notes.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/below-is-the-revised-standalone-correction-spec-a9877342/runs/run-20260508T173757Z-dbc5e2d0/artifacts/implement/phases/runtime-cli-workspace-flag/implementation_notes.md).
+
+What I reviewed
+
+- AC-1: required `--workspace`, omission failure, and `--root` rejection across covered public entry points.
+- AC-2: public help text now using workspace terminology, including the rendered metavar.
+- AC-3: touched public examples no longer advertising `--root`.
+- Focused regression coverage via `./.venv/bin/pytest tests/runtime/test_package_cli.py tests/runtime/test_runtime_cli_metadata_integration.py`.
+
+Key findings / decisions
+
+- The previous blocking issue is resolved: help now renders `--workspace WORKSPACE`, and `ROOT` no longer appears in the public help surface I checked.
+- The focused runtime CLI suite passed cleanly.
+- I updated [criteria.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/below-is-the-revised-standalone-correction-spec-a9877342/runs/run-20260508T173757Z-dbc5e2d0/artifacts/implement/phases/runtime-cli-workspace-flag/criteria.md) to fully checked and appended the resolution note in [feedback.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/below-is-the-revised-standalone-correction-spec-a9877342/runs/run-20260508T173757Z-dbc5e2d0/artifacts/implement/phases/runtime-cli-workspace-flag/feedback.md).
+
+Open issues / next step
+
+- No remaining findings in this phase-local scope.
+- This phase is ready to close.
+
+<loop-control>
+{"schema":"docloop.loop_control/v1","kind":"promise","promise":"COMPLETE"}
+</loop-control>
