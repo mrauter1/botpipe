@@ -62,3 +62,6 @@
 {"ts": "2026-05-08T16:09:09.902941+00:00", "run_id": "run-20260508T141115Z-6c430e1a", "seq": 62, "event_type": "phase_finished", "pair": "test", "phase": "producer", "cycle": 1, "attempt": 1, "empty_output": false, "phase_id": "regression-cleanup"}
 {"ts": "2026-05-08T16:09:56.287539+00:00", "run_id": "run-20260508T141115Z-6c430e1a", "seq": 63, "event_type": "phase_finished", "pair": "test", "phase": "verifier", "cycle": 1, "attempt": 1, "empty_output": false, "phase_id": "regression-cleanup"}
 {"ts": "2026-05-08T16:09:56.355932+00:00", "run_id": "run-20260508T141115Z-6c430e1a", "seq": 64, "event_type": "pair_completed", "pair": "test", "cycle": 1, "attempt": 1, "phase_id": "regression-cleanup"}
+{"ts": "2026-05-08T16:09:56.503237+00:00", "run_id": "run-20260508T141115Z-6c430e1a", "seq": 65, "event_type": "phase_completed", "pair": "test", "phase_id": "regression-cleanup", "phase_mode": "single"}
+{"ts": "2026-05-08T16:09:56.505515+00:00", "run_id": "run-20260508T141115Z-6c430e1a", "seq": 66, "event_type": "pair_started", "pair": "audit", "phase_id": null}
+{"ts": "2026-05-08T16:09:56.505696+00:00", "run_id": "run-20260508T141115Z-6c430e1a", "seq": 67, "event_type": "cycle_started", "pair": "audit", "cycle": 1, "attempt": 1, "phase_id": null}
