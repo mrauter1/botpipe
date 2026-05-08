@@ -14,3 +14,6 @@
 
 - IMP-002 `blocking` [botlane/workflows/autoloop_v1/__init__.py, botlane/workflows/autoloop_v1/workflow.py, botlane/workflows/autoloop_v1/workflow.toml]
   The distributed `botlane` package still contains a maintained public import path and exported symbol with Autoloop branding: `botlane.workflows.autoloop_v1`, `AutoloopV1`, and alias `autoloop-v1`. That violates P1-AC1’s requirement that no maintained public import path or exported symbol still use Autoloop branding after this phase. Minimal fix: rename or remove this packaged public surface within the `botlane/workflows/autoloop_v1` slice so the shipped package does not expose `Autoloop*` names.
+
+- IMP-003 `non-blocking` [phase re-review]
+  Re-review of cycle 2 found IMP-001 and IMP-002 resolved. No remaining blocking findings were identified within the phase-local acceptance boundary; the surviving Autoloop strings under workspace/schema/config surfaces and the `botlane_v1` parity artifact markers match the documented later-phase deferrals and compatibility decision in the run ledger.

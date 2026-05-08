@@ -349,3 +349,111 @@ Address the two blocking findings, then rerun the focused package/public-surface
 <loop-control>
 {"schema":"docloop.loop_control/v1","kind":"promise","promise":"INCOMPLETE"}
 </loop-control>
+
+
+---
+run_id=run-20260508T190524Z-73fc5c3b | entry=session_turn | pair=implement | phase=producer | cycle=2 | attempt=1 | thread_id=019e0902-f571-7e41-ba14-ff59a745a024
+---
+provider=codex
+mode=resume
+template=/home/rauter/.local/share/pipx/venvs/autoloop/lib/python3.12/site-packages/autoloop/templates/implement_producer.md
+session_id=019e0902-f571-7e41-ba14-ff59a745a024
+
+
+---
+run_id=run-20260508T190524Z-73fc5c3b | entry=phase_output | pair=implement | phase=producer | process=codex-agent | cycle=2 | attempt=1 | thread_id=019e0902-f571-7e41-ba14-ff59a745a024
+---
+I’m addressing the reviewer’s two blocking points only: the public CLI help still prints `autoloop`, and the shipped package still exposes `botlane.workflows.autoloop_v1` / `AutoloopV1`. I’m tracing those exact surfaces and the tests around them before editing so I don’t spill into the later workspace/schema phase.
+
+I’m addressing the two blocking review findings now. First I’m tracing the remaining maintained `autoloop` public surfaces in the CLI text and packaged workflow modules so I can make the minimal phase-scoped rename without crossing into the later workspace/schema migration work.
+
+I found the review hits exactly where expected: public CLI help still mentions `.autoloop/workflows/`, and the packaged reference workflow is still branded `autoloop_v1`. I’m now tightening the rename to those maintained surfaces and the few code references that would break once that package folder moves.
+
+The packaged workflow rename has a slightly larger blast radius than the verifier note alone because the builder workflow points at that reference package by path. I’m checking those maintained references now so the rename lands coherently instead of breaking the in-repo package generator.
+
+I’ve narrowed the edits to three buckets: CLI help strings, the packaged reference workflow rename, and the builder workflow’s references to that package. I’m checking the run artifacts now so I can record the scope boundary cleanly and only append a decision if this turn adds something non-obvious.
+
+I’ve got the edit set. I’m renaming the packaged workflow module now and then I’ll patch the public names and CLI text in place, while keeping the legacy runtime/session file semantics inside that workflow unchanged for compatibility and phase scope.
+
+I’ve confirmed the remaining `autoloop_v1` references are all inside the renamed package itself plus one builder prompt. I’m patching those together so the public package path, exported class, manifest name, and package-consumer references all converge on `botlane_v1` in one step.
+
+The public symbol/path rename is in place, but the workflow package still carries an `Autoloop-v1` prompt README title. I’m cleaning that package-local wording too so the installed package doesn’t keep leaking the old brand through maintained assets.
+
+The source-side rename is consistent now. I’m doing one more pass over generated packaging byproducts and then running the focused validation suite, because stale `build/` or `*.egg-info` state can reintroduce old names into wheel smoke even when the source tree is clean.
+
+The focused suite is running. I’ve already cleared the regenerated wheel metadata so the remaining signal should be about the real source changes, not stale packaging output.
+
+The targeted validation passed. I’m updating the phase notes and decisions ledger now with the two non-obvious scope choices from this turn: generic CLI wording until the actual workspace-path migration lands, and keeping the workflow parity internals on legacy artifact/header tokens for read compatibility.
+
+I’ve recorded the scope decisions and validation. I’m doing one last targeted grep over the phase surfaces so the handoff back to review is based on the live source tree, not just the passing tests.
+
+I noticed the directory move carried `__pycache__` files along because they were present in the old tracked tree. I’m dropping those generated files from the new package path so the review surface stays source-only.
+
+Scope considered
+
+Phase-local follow-up on the two blocking review findings only: public CLI/help identity in [botlane/runtime/cli.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/botlane/runtime/cli.py) and the bundled workflow package/public symbols under [botlane/workflows/botlane_v1](/home/rauter/autoloop_v3_bkp/autoloop_v3/botlane/workflows/botlane_v1). I kept actual `.autoloop` workspace write paths and broader schema/artifact migration deferred to later phases.
+
+What I analyzed
+
+I reviewed the reviewer findings in `feedback.md`, traced the remaining live `autoloop_v1` and CLI help references, checked the builder workflow’s dependency on the bundled reference package, and re-read the run decisions to stay within the clarified compatibility boundary for existing `.autoloop` artifacts.
+
+What I changed
+
+I changed CLI help text to Botlane-only generic wording so it no longer advertises `.autoloop/workflows/`, while leaving the underlying workspace path behavior unchanged for this phase. I renamed the bundled reference workflow package from `autoloop_v1` to `botlane_v1`, renamed its exported class/symbols to `BotlaneV1`, updated its manifest/alias/title, and rewired the workflow-builder package to reference the new package path. I also updated the focused test expectations, removed regenerated `build/` and `botlane_v3_surface.egg-info/`, and recorded the scope decisions in [implementation_notes.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/additional-botlane-rename-requirements-discovere-28c3ecb0/runs/run-20260508T190524Z-73fc5c3b/artifacts/implement/phases/rename-package-and-public-api/implementation_notes.md) plus [decisions.txt](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/additional-botlane-rename-requirements-discovere-28c3ecb0/runs/run-20260508T190524Z-73fc5c3b/decisions.txt).
+
+Key findings / decisions
+
+CLI help now avoids promising `.botlane` paths before the actual workspace-path migration exists; it uses “workspace workflow directory” instead. The renamed `botlane_v1` package is now the maintained public package identity, but its parity runtime intentionally keeps legacy raw-log header/session semantics so existing Autoloop-branded run artifacts remain readable during the transition.
+
+Open issues / next step
+
+Focused validation passed: `.venv/bin/pytest tests/runtime/test_runtime_cli_metadata_integration.py tests/runtime/test_package_cli.py tests/runtime/test_workflow_reference_resolution.py tests/runtime/test_workflow_catalog_roots.py tests/runtime/test_wheel_packaging_smoke.py tests/contract/engine/test_core_contracts.py -q` with `105 passed in 15.36s`. The next step is verifier review; later phases still need the real `.autoloop` workspace-path and artifact/schema migrations.
+
+
+---
+run_id=run-20260508T190524Z-73fc5c3b | entry=session_turn | pair=implement | phase=verifier | cycle=2 | attempt=1 | thread_id=019e0902-f571-7e41-ba14-ff59a745a024
+---
+provider=codex
+mode=resume
+template=/home/rauter/.local/share/pipx/venvs/autoloop/lib/python3.12/site-packages/autoloop/templates/implement_verifier.md
+session_id=019e0902-f571-7e41-ba14-ff59a745a024
+
+
+---
+run_id=run-20260508T190524Z-73fc5c3b | entry=phase_output | pair=implement | phase=verifier | process=codex-agent | cycle=2 | attempt=1 | thread_id=019e0902-f571-7e41-ba14-ff59a745a024
+---
+I’m re-reviewing the producer’s follow-up against the two prior blockers and the phase boundary. I’m starting with the review artifacts plus the touched package/CLI surfaces so I can decide whether the acceptance boxes can be closed without pulling in later-phase workspace migration work.
+
+I’ve got the phase artifacts and the implementer’s scope decisions. Next I’m reading the touched public/package files and running a focused search for remaining Autoloop-branded maintained import/export surfaces inside `botlane`, because that is the actual acceptance boundary for this phase.
+
+The remaining live `autoloop` hits under `botlane/` are all in out-of-phase workspace/schema/config surfaces or the explicitly preserved parity artifact markers. I’m running the focused validation slice myself now to confirm the public CLI/package changes still hold from a clean reviewer pass.
+
+The focused tests passed cleanly. I’m closing the review artifacts now: criteria goes green, and I’m appending a re-review note to feedback that the prior blockers are resolved and the remaining legacy strings are deferred by phase scope rather than missed package/public API work.
+
+Scope considered
+
+Phase-local re-review of the package/public API rename only: `botlane` packaging metadata and CLI identity, maintained public imports/exports, and the bundled workflow package rename from `autoloop_v1` to `botlane_v1`. I treated workspace-path, schema, config, and broader docs/fixture rename work as later-phase scope unless it created a direct package/public API regression.
+
+What I analyzed
+
+I reviewed the updated implementation notes and run decisions, re-checked the prior blockers in [botlane/runtime/cli.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/botlane/runtime/cli.py) and [botlane/workflows/botlane_v1](/home/rauter/autoloop_v3_bkp/autoloop_v3/botlane/workflows/botlane_v1), inspected the builder workflow’s references to that bundled package, and ran a focused `rg` over `botlane/` for remaining Autoloop-branded maintained import/export surfaces.
+
+What I reviewed
+
+I reran the focused validation slice:
+`.venv/bin/pytest tests/runtime/test_runtime_cli_metadata_integration.py tests/runtime/test_package_cli.py tests/runtime/test_workflow_reference_resolution.py tests/runtime/test_workflow_catalog_roots.py tests/runtime/test_wheel_packaging_smoke.py tests/contract/engine/test_core_contracts.py -q`
+Result: `105 passed in 14.85s`.
+
+I updated [criteria.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/additional-botlane-rename-requirements-discovere-28c3ecb0/runs/run-20260508T190524Z-73fc5c3b/artifacts/implement/phases/rename-package-and-public-api/criteria.md) to checked and appended the re-review result to [feedback.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/additional-botlane-rename-requirements-discovere-28c3ecb0/runs/run-20260508T190524Z-73fc5c3b/artifacts/implement/phases/rename-package-and-public-api/feedback.md).
+
+Key findings / decisions
+
+No blocking findings remain in this phase. The previous blockers are resolved: public CLI help no longer advertises `autoloop`, and the shipped package no longer exposes `botlane.workflows.autoloop_v1` or `AutoloopV1`. The remaining `autoloop` strings under workspace/schema/config surfaces and the preserved `botlane_v1` parity artifact markers are consistent with the explicit later-phase deferrals and compatibility decision already recorded in the run ledger.
+
+Open issues / next step
+
+This phase is complete from the verifier side. The next phase should pick up the deferred runtime workspace-path, generated-namespace, and schema/artifact identity migration work.
+
+<loop-control>
+{"schema":"docloop.loop_control/v1","kind":"promise","promise":"COMPLETE"}
+</loop-control>
