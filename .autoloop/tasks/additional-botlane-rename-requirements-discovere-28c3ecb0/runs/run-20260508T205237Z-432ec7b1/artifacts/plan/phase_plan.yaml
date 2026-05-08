@@ -1,4 +1,37 @@
 version: 1
 task_id: additional-botlane-rename-requirements-discovere-28c3ecb0
 request_snapshot_ref: /home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/additional-botlane-rename-requirements-discovere-28c3ecb0/runs/run-20260508T205237Z-432ec7b1/request.md
-phases: []
+phases:
+  - phase_id: "editable-install-refresh-and-proof"
+    title: "Refresh Editable Install And Prove It"
+    objective: "Replace the stale Autoloop-branded editable install in the shared repo virtualenv and add durable proof that the active `.venv` now exposes only Botlane packaging and CLI identity."
+    status: "planned"
+    in_scope:
+      - "Remove the stale `autoloop-v3-surface` editable install state from the active repository `.venv`."
+      - "Reinstall the current repository as `botlane-v3-surface` in editable mode for the shared repo virtualenv."
+      - "Add or extend automated validation so the active repo `.venv` is checked directly for distribution and console-script identity."
+      - "Re-run focused packaging and install checks against the shared repo environment."
+    out_of_scope:
+      - "Broad Botlane rename work already completed in the maintained source tree."
+      - "Adding `autoloop` import aliases or CLI aliases."
+      - "Changing the legacy-read compatibility policy for `.autoloop`, legacy config names, or persisted `autoloop.*` artifacts."
+    dependencies: []
+    acceptance_criteria:
+      - id: "AC-1"
+        text: "The active repo `.venv` reports `botlane-v3-surface` as the installed editable distribution and no longer reports `autoloop-v3-surface`."
+      - id: "AC-2"
+        text: "The active repo `.venv` installs `botlane`, does not install `autoloop`, and its installed entry-point metadata matches the Botlane CLI."
+      - id: "AC-3"
+        text: "Focused automated validation proves the active shared repo virtualenv state in addition to the existing fresh-wheel smoke path."
+    deliverables:
+      - "Updated run-local validation coverage for editable-install identity in the shared repo virtualenv."
+      - "A repaired active `.venv` whose installed distribution and console script match the Botlane rename."
+      - "Focused verification evidence covering both shell checks and automated proof."
+    risks:
+      - "A plain editable reinstall may leave stale Autoloop dist-info or script residue if the old install is not removed cleanly first."
+      - "Repo-local validation can become brittle if it assumes the wrong interpreter or path layout."
+      - "Wheel smoke alone can still pass while the shared repo `.venv` remains wrong if active-environment proof is not added."
+    rollback:
+      - "If mixed-brand editable metadata remains after reinstall, remove the conflicting editable install artifacts and recreate the repo `.venv` cleanly."
+      - "If the new proof is too path-fragile, replace it with simpler direct assertions against the active repo `.venv` rather than adding more install infrastructure."
+      - "Do not revert by reintroducing `autoloop` package or CLI aliases."
