@@ -23,3 +23,7 @@
 {"ts": "2026-05-08T14:41:37.577454+00:00", "run_id": "run-20260508T141115Z-6c430e1a", "seq": 23, "event_type": "phase_finished", "pair": "test", "phase": "producer", "cycle": 1, "attempt": 1, "empty_output": false, "phase_id": "shared-policy-core"}
 {"ts": "2026-05-08T14:42:13.985308+00:00", "run_id": "run-20260508T141115Z-6c430e1a", "seq": 24, "event_type": "phase_finished", "pair": "test", "phase": "verifier", "cycle": 1, "attempt": 1, "empty_output": false, "phase_id": "shared-policy-core"}
 {"ts": "2026-05-08T14:42:14.059060+00:00", "run_id": "run-20260508T141115Z-6c430e1a", "seq": 25, "event_type": "pair_completed", "pair": "test", "cycle": 1, "attempt": 1, "phase_id": "shared-policy-core"}
+{"ts": "2026-05-08T14:42:14.183018+00:00", "run_id": "run-20260508T141115Z-6c430e1a", "seq": 26, "event_type": "phase_completed", "pair": "test", "phase_id": "shared-policy-core", "phase_mode": "single"}
+{"ts": "2026-05-08T14:42:14.186650+00:00", "run_id": "run-20260508T141115Z-6c430e1a", "seq": 27, "event_type": "phase_started", "phase_id": "compiler-simple-integration", "phase_mode": "single"}
+{"ts": "2026-05-08T14:42:14.188445+00:00", "run_id": "run-20260508T141115Z-6c430e1a", "seq": 28, "event_type": "pair_started", "pair": "implement", "phase_id": "compiler-simple-integration"}
+{"ts": "2026-05-08T14:42:14.188551+00:00", "run_id": "run-20260508T141115Z-6c430e1a", "seq": 29, "event_type": "cycle_started", "pair": "implement", "cycle": 1, "attempt": 1, "phase_id": "compiler-simple-integration"}
