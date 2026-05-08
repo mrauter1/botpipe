@@ -582,3 +582,60 @@ Open issues / next step
 <loop-control>
 {"schema":"docloop.loop_control/v1","kind":"promise","promise":"COMPLETE"}
 </loop-control>
+
+
+---
+run_id=run-20260508T141115Z-6c430e1a | entry=session_turn | pair=implement | phase=producer | cycle=1 | attempt=1 | thread_id=019e080a-0516-7c00-bdba-b70d5e945a5d
+---
+provider=codex
+mode=start
+template=/home/rauter/.local/share/pipx/venvs/autoloop/lib/python3.12/site-packages/autoloop/templates/implement_producer.md
+session_id=019e080a-0516-7c00-bdba-b70d5e945a5d
+
+
+---
+run_id=run-20260508T141115Z-6c430e1a | entry=phase_output | pair=implement | phase=producer | process=codex-agent | cycle=1 | attempt=1 | thread_id=019e080a-0516-7c00-bdba-b70d5e945a5d
+---
+I’m starting with the phase artifacts and the policy/compiler/simple surfaces they reference, then I’ll trace the current shared-policy implementation into compilation and exports before editing.
+
+The phase artifact is mostly a stub, so I’m reading the live code paths directly: shared policy module, simple surface, compiler/fingerprinting, and root exports. After that I’ll patch only the phase-scoped integration surfaces and tests.
+
+I’ve confirmed the shared policy core is already present. The remaining work is on the public/simple/compiler edges: export shape, authoring acceptance, and topology fingerprinting behavior.
+
+I have enough context to start verification. I’m running the phase-relevant unit tests now to expose the concrete integration gaps before editing, rather than guessing at them.
+
+`pytest` isn’t on `PATH` here, so I’m checking the project’s Python invocation pattern and then I’ll rerun the same targeted suites with the correct entrypoint.
+
+The environment has `python3` but no installed `pytest`. I’m checking for the repository’s local virtualenv or runner so I can still validate with the project’s intended toolchain.
+
+The initial policy/simple/compiler-facing tests are green so far. I’m extending coverage to the broader SDK/runtime surface now, because the phase contract still depends on export shape and compiled-policy behavior outside those three files.
+
+The phase-specific surfaces are green. I’m running the remaining minimum policy suite from the spec so the handoff isn’t relying on partial verification.
+
+I’m writing the phase artifact now. There was no additional code delta needed in this turn because the prior shared-policy-core changes already covered the compiler/simple integration contract, and the targeted suites confirmed it.
+
+Scope considered
+
+Phase-local `compiler-simple-integration` scope only: simple authoring surface, compiler/discovery/step policy acceptance, topology fingerprinting, and the public export matrix. I did not pull unrelated dirty files into scope.
+
+What I analyzed
+
+I inspected `autoloop/policy.py`, `autoloop/simple.py`, `autoloop/core/compiler.py`, `autoloop/core/discovery.py`, `autoloop/core/steps.py`, `autoloop/__init__.py`, and the relevant unit/runtime tests. I then verified the live behavior with:
+`./.venv/bin/python -m pytest tests/unit/test_policy.py tests/unit/test_simple_policy.py tests/unit/test_simple_surface.py`
+`./.venv/bin/python -m pytest tests/runtime/test_provider_policy_steps.py`
+`./.venv/bin/python -m pytest tests/unit/test_sdk_facade.py tests/runtime/test_provider_policy_emitters.py tests/runtime/test_provider_policy_config.py`
+`./.venv/bin/python -m pytest tests/unit/test_provider_policy.py`
+
+What I changed
+
+No additional repository source changes were needed in this turn. The prior `shared-policy-core` implementation already covered the compiler/simple integration contract. I updated the phase artifacts only:
+[implementation_notes.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/final-standalone-implementation-spec-shared-inhe-c4aa316d/runs/run-20260508T141115Z-6c430e1a/artifacts/implement/phases/compiler-simple-integration/implementation_notes.md)
+[decisions.txt](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/final-standalone-implementation-spec-shared-inhe-c4aa316d/runs/run-20260508T141115Z-6c430e1a/decisions.txt)
+
+Key findings / decisions
+
+The requested phase behavior is already present: `PolicyInput` is accepted on workflow/step/operation surfaces, public `Policy` participates in compiler fingerprint payloads, and the export matrix matches the spec, including no public `PolicyOverride`. All targeted verification passed.
+
+Open issues / next step
+
+No open implementation issue in this phase. The next phase can build on the current worktree without additional compiler/simple integration changes.
