@@ -1,1 +1,5 @@
-{}
+{
+  "material_gaps_found": false,
+  "summary": "No material gaps remain; the shared-policy export cleanup matches the request and the required validation passes.",
+  "revised_request_path": "/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/final-standalone-implementation-spec-shared-inhe-c4aa316d/runs/run-20260508T161613Z-c2f3eecb/artifacts/audit/revised_request.md"
+}
