@@ -313,3 +313,130 @@ Open issues / next step
 <loop-control>
 {"schema":"docloop.loop_control/v1","kind":"promise","promise":"COMPLETE"}
 </loop-control>
+
+
+---
+run_id=run-20260508T161613Z-c2f3eecb | entry=session_turn | pair=audit | phase=producer | cycle=1 | attempt=1 | thread_id=019e0866-f624-7ab3-9090-4b4e93b2743b
+---
+provider=codex
+mode=start
+template=/home/rauter/.local/share/pipx/venvs/autoloop/lib/python3.12/site-packages/autoloop/templates/audit_producer.md
+session_id=019e0866-f624-7ab3-9090-4b4e93b2743b
+
+
+---
+run_id=run-20260508T161613Z-c2f3eecb | entry=phase_output | pair=audit | phase=producer | process=codex-agent | cycle=1 | attempt=1 | thread_id=019e0866-f624-7ab3-9090-4b4e93b2743b
+---
+I’m auditing the completed run against the original request, authoritative clarifications, and the final code/tests, then I’ll write the audit artifacts under the run-local `artifacts/audit` directory only.
+
+The phase logs show the intended cleanup was implemented and tested. I’m checking the final code and the exact test files now so the audit is based on the repository state, not only prior summaries.
+
+I’ve confirmed the final module surface change is present. Next I’m checking the phase artifacts and repository-wide references so I can distinguish resolved behavior from any remaining contract leaks or coverage gaps.
+
+I’m running the contract checks directly in the current workspace now. That gives the audit concrete evidence for the import behavior and confirms the final test results instead of relying on earlier phase claims.
+
+The direct import checks already match the requested contract. One pytest command is complete; I’m waiting on the broader 155-test run to finish so the audit can cite current validation, not stale phase output.
+
+I have enough context to write the audit. Before editing the run-local audit artifacts, I’m pulling exact line references for the public surface and tests so the gap report can cite concrete evidence instead of paraphrasing.
+
+I’m writing the run-local audit artifacts now. The evidence points to a clean pass: the requested surface removals are present, the canonical exports remain intact, the accepted inputs are still covered, and the required pytest commands pass in the current workspace.
+
+The audit artifacts are written. I’m doing a final readback of the run-local files now to verify the content and JSON shape before I return the required loop-control result.
+
+Scope considered
+
+- Run-local intent audit for the shared-policy export cleanup, using the immutable request, `raw_phase_log.md`, `decisions.txt`, pair artifacts, final code, and the required tests.
+- Scope stayed limited to audit artifacts under `.autoloop/.../artifacts/audit` plus read-only inspection of the codebase and prior run artifacts.
+
+What I analyzed
+
+- Final public-surface code in `autoloop/simple.py`, `autoloop/policy.py`, `autoloop/sdk.py`, and `autoloop/__init__.py`.
+- Regression coverage in `tests/unit/test_simple_policy.py` and the required validation targets.
+- Recorded run decisions showing no superseding clarification changed the original request.
+- Current workspace validation:
+  - `./.venv/bin/pytest tests/unit/test_simple_policy.py` -> 8 passed
+  - `./.venv/bin/pytest tests/unit/test_simple_surface.py tests/unit/test_policy.py tests/runtime/test_sdk_policy.py tests/unit/test_sdk_facade.py` -> 155 passed
+
+What I changed
+
+- Wrote [gap_report.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/final-standalone-implementation-spec-shared-inhe-c4aa316d/runs/run-20260508T161613Z-c2f3eecb/artifacts/audit/gap_report.md).
+- Wrote [revised_request.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/final-standalone-implementation-spec-shared-inhe-c4aa316d/runs/run-20260508T161613Z-c2f3eecb/artifacts/audit/revised_request.md).
+- Wrote [audit_result.json](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/final-standalone-implementation-spec-shared-inhe-c4aa316d/runs/run-20260508T161613Z-c2f3eecb/artifacts/audit/audit_result.json).
+- Updated [criteria.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/final-standalone-implementation-spec-shared-inhe-c4aa316d/runs/run-20260508T161613Z-c2f3eecb/artifacts/audit/criteria.md) and [feedback.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/final-standalone-implementation-spec-shared-inhe-c4aa316d/runs/run-20260508T161613Z-c2f3eecb/artifacts/audit/feedback.md).
+
+Key findings / decisions
+
+- No material gaps remain.
+- `autoloop.simple` no longer exposes `PolicyInput` or `ProviderPolicyInput`; direct attribute lookup raises `AttributeError`.
+- `PolicyInput` remains publicly exported from `autoloop.policy` and `autoloop.sdk`.
+- Simple declarations still accept `Policy`, `ProviderPolicy`, `ProviderPolicyOverride`, and `None`.
+- `audit_result.json` correctly records `material_gaps_found: false`, so no follow-up implementation request is needed.
+
+Open issues / next step
+
+- No open implementation issues for this request.
+- Audit producer output remains `INCOMPLETE` by instruction so the verifier can control pair completion.
+
+<loop-control>
+{"schema":"docloop.loop_control/v1","kind":"promise","promise":"INCOMPLETE"}
+</loop-control>
+
+
+---
+run_id=run-20260508T161613Z-c2f3eecb | entry=session_turn | pair=audit | phase=verifier | cycle=1 | attempt=1 | thread_id=019e0866-f624-7ab3-9090-4b4e93b2743b
+---
+provider=codex
+mode=resume
+template=/home/rauter/.local/share/pipx/venvs/autoloop/lib/python3.12/site-packages/autoloop/templates/audit_verifier.md
+session_id=019e0866-f624-7ab3-9090-4b4e93b2743b
+
+
+---
+run_id=run-20260508T161613Z-c2f3eecb | entry=phase_output | pair=audit | phase=verifier | process=codex-agent | cycle=1 | attempt=1 | thread_id=019e0866-f624-7ab3-9090-4b4e93b2743b
+---
+I’m verifying the audit artifacts against the request, decisions, final code, and current test evidence now. The first pass suggests the audit classification is correct, and I’m checking whether anything in the report overstates or misses the actual contract.
+
+The audit artifacts themselves look coherent. I’m doing a small independent verification pass against the live code and required tests now so the verifier verdict is grounded in the current repository state rather than only the producer’s write-up.
+
+The independent checks line up with the audit so far. I’m waiting on the longer pytest command to complete, then I’ll append the verifier verdict to the audit feedback and leave the criteria fully checked.
+
+The live verification pass is complete: the contract checks pass and both required pytest commands succeed in this verifier turn. I’m recording a clean audit-verifier result in the run-local feedback now.
+
+Scope considered
+
+- Run-local verification of the intent-audit artifacts only, plus read-only checks of the immutable request, raw log, decisions ledger, final code surface, and required tests.
+- Scope remained limited to the audit artifact directory for edits.
+
+What I analyzed
+
+- `request.md`, `raw_phase_log.md`, and `decisions.txt` for the authoritative intent ledger and any superseding clarifications.
+- `gap_report.md`, `revised_request.md`, `audit_result.json`, `criteria.md`, and `feedback.md`.
+- Final public-surface behavior in `autoloop.simple`, `autoloop.policy`, and `autoloop.sdk`.
+- Independent verification:
+  - direct import/attribute surface check for `PolicyInput` and `ProviderPolicyInput`
+  - `./.venv/bin/pytest tests/unit/test_simple_policy.py`
+  - `./.venv/bin/pytest tests/unit/test_simple_surface.py tests/unit/test_policy.py tests/runtime/test_sdk_policy.py tests/unit/test_sdk_facade.py`
+
+What I reviewed
+
+- `gap_report.md` accurately supports the conclusion that no material gaps remain.
+- `revised_request.md` is appropriate for `material_gaps_found: false` and does not ask for unnecessary follow-up work.
+- `audit_result.json` is valid and accurately reports `material_gaps_found` as `false`.
+- `criteria.md` is correctly fully checked for a `COMPLETE` audit-verifier result.
+- `feedback.md` now includes the verifier verdict.
+
+Key findings / decisions
+
+- No blocking findings.
+- The audit did not miss a material unresolved gap or misclassify any unjustified difference.
+- The verifier independently reconfirmed the requested surface contract and both required pytest commands.
+- Appended `AUD-001` as a `non-blocking` clean verifier result in `artifacts/audit/feedback.md`.
+
+Open issues / next step
+
+- No open audit-verifier issues.
+- Audit verification is complete.
+
+<loop-control>
+{"schema":"docloop.loop_control/v1","kind":"promise","promise":"COMPLETE"}
+</loop-control>

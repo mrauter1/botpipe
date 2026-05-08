@@ -20,3 +20,6 @@
 {"ts": "2026-05-08T16:23:45.184252+00:00", "run_id": "run-20260508T161613Z-c2f3eecb", "seq": 20, "event_type": "phase_completed", "pair": "test", "phase_id": "simple-policy-export-cleanup", "phase_mode": "single"}
 {"ts": "2026-05-08T16:23:45.188150+00:00", "run_id": "run-20260508T161613Z-c2f3eecb", "seq": 21, "event_type": "pair_started", "pair": "audit", "phase_id": null}
 {"ts": "2026-05-08T16:23:45.188358+00:00", "run_id": "run-20260508T161613Z-c2f3eecb", "seq": 22, "event_type": "cycle_started", "pair": "audit", "cycle": 1, "attempt": 1, "phase_id": null}
+{"ts": "2026-05-08T16:25:50.851069+00:00", "run_id": "run-20260508T161613Z-c2f3eecb", "seq": 23, "event_type": "phase_finished", "pair": "audit", "phase": "producer", "cycle": 1, "attempt": 1, "empty_output": false, "phase_id": null}
+{"ts": "2026-05-08T16:26:57.023687+00:00", "run_id": "run-20260508T161613Z-c2f3eecb", "seq": 24, "event_type": "phase_finished", "pair": "audit", "phase": "verifier", "cycle": 1, "attempt": 1, "empty_output": false, "phase_id": null}
+{"ts": "2026-05-08T16:26:57.082846+00:00", "run_id": "run-20260508T161613Z-c2f3eecb", "seq": 25, "event_type": "pair_completed", "pair": "audit", "cycle": 1, "attempt": 1, "phase_id": null}
