@@ -6,7 +6,7 @@
   "provider_metadata": {},
   "model_override": null,
   "effort_override": null,
-  "pending_clarification_note": null,
+  "pending_clarification_note": "Question:\nWARNING: The request requires `Policy(sandbox_mode=SandboxMode.DANGER_FULL_ACCESS)` / `PolicyOverride(sandbox_mode=SandboxMode.DANGER_FULL_ACCESS)` to preserve the existing/default permission mode unless the author explicitly overrides it, but the unchanged core `ProviderPolicy` validator rejects the current default `permissions.mode='full_auto_sandboxed'` when paired with `sandbox.mode='danger_full_access'`. Should I intentionally keep the schema-compatible fallback that rewrites this case to `permissions.mode='ask'`, even though that contradicts the written preserve-default requirement and makes the override non-sparse? Answer YES or NO.\nBest supposition: No. We should not silently rewrite permission mode; this conflict needs explicit product direction before changing the facade contract.\n\nAnswer:\nI\u2019m checking the current policy schema and the raw implementation notes to resolve the conflict against the written requirement before answering.\n\nI found the exact conflict in the core validator and I\u2019m checking the current facade implementation plus the run-local review note that flagged the silent rewrite as blocking.\n\nNO",
   "created_at": "2026-05-08T12:35:54.548538+00:00",
-  "last_used_at": "2026-05-08T12:45:14.684736+00:00"
+  "last_used_at": "2026-05-08T12:45:48.506322+00:00"
 }

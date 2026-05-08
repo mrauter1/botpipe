@@ -297,3 +297,59 @@ Open issues / next step
 <loop-control>
 {"schema":"docloop.loop_control/v1","kind":"promise","promise":"INCOMPLETE"}
 </loop-control>
+
+
+---
+run_id=run-20260508T122931Z-61a77361 | entry=session_turn | pair=implement | phase=producer | cycle=2 | attempt=1 | thread_id=019e0796-5bd9-76d1-b337-56047d273185
+---
+provider=codex
+mode=resume
+template=/home/rauter/.local/share/pipx/venvs/autoloop/lib/python3.12/site-packages/autoloop/templates/implement_producer.md
+session_id=019e0796-5bd9-76d1-b337-56047d273185
+
+
+---
+run_id=run-20260508T122931Z-61a77361 | entry=phase_output | pair=implement | phase=producer | process=codex-agent | cycle=2 | attempt=1 | thread_id=019e0796-5bd9-76d1-b337-56047d273185
+---
+I reviewed the verifier feedback and the current lowering path. There’s a direct conflict between the requested dangerous-manual-access semantics and the unchanged core `ProviderPolicy` validator, so I’m verifying that conflict before deciding whether I can safely patch it without a clarification.
+
+Scope considered
+
+- The verifier feedback, the dangerous-access lowering path in `autoloop/simple.py`, the unchanged `ProviderPolicy` cross-field validator, and the run-local decisions ledger.
+
+What I analyzed
+
+- Whether `sandbox_mode=SandboxMode.DANGER_FULL_ACCESS` can both preserve the existing/default permission mode and still validate against the unchanged core schema.
+- The reviewer’s blocking case for `PolicyOverride(...)`, where silently forcing `permissions.mode='ask'` makes the override non-sparse and can stomp an outer permission mode during merge.
+
+What I changed
+
+- No files edited this turn.
+
+Key findings / decisions
+
+- The current request is internally conflicted for the manual-danger case: the spec requires preserving the existing/default permission mode, but the unchanged core `ProviderPolicy` validator rejects the current default `full_auto_sandboxed` mode when paired with `danger_full_access`.
+- Any fix here is an intentional contract choice, not a mechanical bug fix. Silently coercing to `ask` is a behavior change; preserving the default mode is invalid under the unchanged core schema.
+
+Open issues / next step
+
+- Clarification is required before I can safely resolve `IMP-001` without silently changing the requested public semantics.
+
+<loop-control>
+{"schema":"docloop.loop_control/v1","kind":"question","question":"WARNING: The request requires `Policy(sandbox_mode=SandboxMode.DANGER_FULL_ACCESS)` / `PolicyOverride(sandbox_mode=SandboxMode.DANGER_FULL_ACCESS)` to preserve the existing/default permission mode unless the author explicitly overrides it, but the unchanged core `ProviderPolicy` validator rejects the current default `permissions.mode='full_auto_sandboxed'` when paired with `sandbox.mode='danger_full_access'`. Should I intentionally keep the schema-compatible fallback that rewrites this case to `permissions.mode='ask'`, even though that contradicts the written preserve-default requirement and makes the override non-sparse? Answer YES or NO.","best_supposition":"No. We should not silently rewrite permission mode; this conflict needs explicit product direction before changing the facade contract."}
+</loop-control>
+
+
+---
+run_id=run-20260508T122931Z-61a77361 | entry=clarification | pair=implement | phase=producer | cycle=2 | attempt=1 | source=auto
+---
+Question:
+WARNING: The request requires `Policy(sandbox_mode=SandboxMode.DANGER_FULL_ACCESS)` / `PolicyOverride(sandbox_mode=SandboxMode.DANGER_FULL_ACCESS)` to preserve the existing/default permission mode unless the author explicitly overrides it, but the unchanged core `ProviderPolicy` validator rejects the current default `permissions.mode='full_auto_sandboxed'` when paired with `sandbox.mode='danger_full_access'`. Should I intentionally keep the schema-compatible fallback that rewrites this case to `permissions.mode='ask'`, even though that contradicts the written preserve-default requirement and makes the override non-sparse? Answer YES or NO.
+Best supposition: No. We should not silently rewrite permission mode; this conflict needs explicit product direction before changing the facade contract.
+
+Answer:
+I’m checking the current policy schema and the raw implementation notes to resolve the conflict against the written requirement before answering.
+
+I found the exact conflict in the core validator and I’m checking the current facade implementation plus the run-local review note that flagged the silent rewrite as blocking.
+
+NO
