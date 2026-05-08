@@ -688,3 +688,102 @@ No open issue in this phase. This review is complete.
 <loop-control>
 {"schema":"docloop.loop_control/v1","kind":"promise","promise":"COMPLETE"}
 </loop-control>
+
+
+---
+run_id=run-20260508T141115Z-6c430e1a | entry=session_turn | pair=test | phase=producer | cycle=1 | attempt=1 | thread_id=019e080a-0516-7c00-bdba-b70d5e945a5d
+---
+provider=codex
+mode=resume
+template=/home/rauter/.local/share/pipx/venvs/autoloop/lib/python3.12/site-packages/autoloop/templates/test_producer.md
+session_id=019e080a-0516-7c00-bdba-b70d5e945a5d
+
+
+---
+run_id=run-20260508T141115Z-6c430e1a | entry=phase_output | pair=test | phase=producer | process=codex-agent | cycle=1 | attempt=1 | thread_id=019e080a-0516-7c00-bdba-b70d5e945a5d
+---
+I’m checking the existing policy/simple/compiler tests for direct coverage of the phase acceptance criteria, then I’ll add only the missing regression assertions and update the phase test artifacts.
+
+I found three concrete gaps in the current regression coverage for this phase: no direct test that inline `llm/classify` accept public `Policy`, no direct topology-hash assertion for authored public `Policy` layers, and no direct export-matrix assertion for `PolicyInput`. I’m adding those now.
+
+The new coverage caught a real phase-scope contract break: `autoloop.simple` still exposes `PolicyInput` at module level even though the spec says it must only appear in `autoloop.policy` and `autoloop.sdk`. I’m recording that in the phase test artifacts instead of weakening the assertion.
+
+I’ve got the phase outcome: two new regression checks pass, and one new export-matrix test fails for a real spec violation. I’m updating the test strategy and feedback with that coverage map and the exact failure.
+
+Scope considered
+
+Phase-local `compiler-simple-integration` test scope only: shared public policy acceptance on simple/compiler surfaces, topology fingerprinting with public `Policy`, and the exact export matrix.
+
+What I analyzed
+
+I reviewed the current coverage in `tests/unit/test_policy.py`, `tests/unit/test_simple_policy.py`, `tests/runtime/test_provider_policy_steps.py`, the phase contract, and the existing implementation state in `autoloop.policy` and `autoloop.simple`.
+
+What I changed
+
+I added three targeted regression checks:
+[tests/unit/test_simple_policy.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/tests/unit/test_simple_policy.py)
+[tests/unit/test_policy.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/tests/unit/test_policy.py)
+[tests/runtime/test_provider_policy_steps.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/tests/runtime/test_provider_policy_steps.py)
+
+I also updated the phase artifacts:
+[test_strategy.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/final-standalone-implementation-spec-shared-inhe-c4aa316d/runs/run-20260508T141115Z-6c430e1a/artifacts/test/phases/compiler-simple-integration/test_strategy.md)
+[feedback.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/final-standalone-implementation-spec-shared-inhe-c4aa316d/runs/run-20260508T141115Z-6c430e1a/artifacts/test/phases/compiler-simple-integration/feedback.md)
+
+Key findings / decisions
+
+The new runtime test for inline `simple.llm(..., policy=Policy(...))` / `simple.classify(..., policy=Policy(...))` passes, and the new topology-hash test for authored public `Policy` layers passes. The new export-matrix test fails for a real phase-scope bug: `from autoloop.simple import PolicyInput` still succeeds, but the spec requires `PolicyInput` to be public only from `autoloop.policy` and `autoloop.sdk`.
+
+Open issues / next step
+
+The implementation needs a follow-up source fix to stop publicly exposing `PolicyInput` from `autoloop.simple`, then rerun:
+`./.venv/bin/python -m pytest tests/unit/test_simple_policy.py tests/unit/test_policy.py`
+`./.venv/bin/python -m pytest tests/runtime/test_provider_policy_steps.py`
+
+
+---
+run_id=run-20260508T141115Z-6c430e1a | entry=session_turn | pair=test | phase=verifier | cycle=1 | attempt=1 | thread_id=019e080a-0516-7c00-bdba-b70d5e945a5d
+---
+provider=codex
+mode=resume
+template=/home/rauter/.local/share/pipx/venvs/autoloop/lib/python3.12/site-packages/autoloop/templates/test_verifier.md
+session_id=019e080a-0516-7c00-bdba-b70d5e945a5d
+
+
+---
+run_id=run-20260508T141115Z-6c430e1a | entry=phase_output | pair=test | phase=verifier | process=codex-agent | cycle=1 | attempt=1 | thread_id=019e080a-0516-7c00-bdba-b70d5e945a5d
+---
+I’m auditing the new phase-local tests and the recorded strategy against the compiler/simple integration contract, then I’ll mark the criteria and call out any coverage or reliability gaps in the phase feedback.
+
+The added tests look scoped and deterministic. I’m confirming the reported pass/fail behavior myself so the audit reflects actual test quality rather than just the strategy note.
+
+The audit result is clean: the new coverage is deterministic, phase-scoped, and it exposes the right contract break without normalizing it. I’m marking the criteria complete and recording that there are no test-quality findings.
+
+Scope considered
+
+Phase-local `compiler-simple-integration` test scope only: the new coverage added for public `Policy` acceptance, topology hashing, and the `PolicyInput` export matrix.
+
+What I analyzed
+
+I reviewed the active test strategy and feedback artifacts, the authoritative decisions ledger, and the added assertions in [tests/unit/test_simple_policy.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/tests/unit/test_simple_policy.py), [tests/unit/test_policy.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/tests/unit/test_policy.py), and [tests/runtime/test_provider_policy_steps.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/tests/runtime/test_provider_policy_steps.py).
+
+What I reviewed
+
+I reran:
+`./.venv/bin/python -m pytest tests/unit/test_simple_policy.py tests/unit/test_policy.py`
+`./.venv/bin/python -m pytest tests/runtime/test_provider_policy_steps.py`
+
+I updated:
+[criteria.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/final-standalone-implementation-spec-shared-inhe-c4aa316d/runs/run-20260508T141115Z-6c430e1a/artifacts/test/phases/compiler-simple-integration/criteria.md)
+[feedback.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/final-standalone-implementation-spec-shared-inhe-c4aa316d/runs/run-20260508T141115Z-6c430e1a/artifacts/test/phases/compiler-simple-integration/feedback.md)
+
+Key findings / decisions
+
+No blocking or non-blocking test-quality findings. The added tests are deterministic, phase-scoped, and they expose the correct phase bug: `autoloop.simple` still publicly exposes `PolicyInput`. The runtime inline-operation coverage passes, and the export-matrix failure is the expected implementation signal rather than a test flaw.
+
+Open issues / next step
+
+No open audit issue in the tests themselves. The next step is an implementation fix for the `autoloop.simple` export leak, followed by rerunning the failing unit command.
+
+<loop-control>
+{"schema":"docloop.loop_control/v1","kind":"promise","promise":"COMPLETE"}
+</loop-control>
