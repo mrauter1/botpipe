@@ -206,3 +206,12 @@ No open verification issues remain on the planning artifacts for this run.
 <loop-control>
 {"schema":"docloop.loop_control/v1","kind":"promise","promise":"COMPLETE"}
 </loop-control>
+
+
+---
+run_id=run-20260508T190524Z-73fc5c3b | entry=phase_scope_resolved
+---
+phase_mode=single
+phase_ids=rename-package-and-public-api,rewrite-runtime-and-workspace-identity,rewrite-schemas-workflows-and-fixtures,prove-botlane-only-surface
+explicit=True
+current_phase_index=0
