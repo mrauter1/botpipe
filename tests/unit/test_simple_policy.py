@@ -97,6 +97,7 @@ def test_policy_input_export_matrix_matches_phase_contract() -> None:
     assert "PolicyInput" in sdk.__all__
     assert "PolicyInput" not in autoloop.__all__
     assert "PolicyInput" not in simple.__all__
+    assert "ProviderPolicyInput" not in simple.__all__
 
     assert sdk.PolicyInput is public_policy.PolicyInput
 
@@ -108,6 +109,10 @@ def test_policy_input_export_matrix_matches_phase_contract() -> None:
         exec("from autoloop.simple import PolicyInput")
     with pytest.raises(AttributeError):
         getattr(simple, "PolicyInput")
+    with pytest.raises(ImportError):
+        exec("from autoloop.simple import ProviderPolicyInput")
+    with pytest.raises(AttributeError):
+        getattr(simple, "ProviderPolicyInput")
 
 
 def test_simple_declarations_accept_public_policy_layers() -> None:

@@ -32,7 +32,6 @@ from autoloop.policy import (
     NetworkMode,
     PermissionMode,
     Policy,
-    PolicyInput,
     ProviderName,
     ReasoningSummary,
     SandboxMode,
@@ -41,7 +40,7 @@ from autoloop.policy import (
 
 PromptInput = str | Path | Prompt
 RouteMapping = Mapping[str, Route | object]
-ProviderPolicyInput = PolicyInput
+_SimplePolicyInput = Policy | _CoreProviderPolicy | _CoreProviderPolicyOverride | None
 
 
 class EmptyState(BaseModel):
@@ -58,7 +57,7 @@ class Workflow:
     extensions: tuple[object, ...] = ()
     Params = EmptyParams
     State = EmptyState
-    policy: ProviderPolicyInput = None
+    policy: _SimplePolicyInput = None
 
 
 @dataclass(frozen=True, slots=True)
@@ -170,7 +169,7 @@ class StepDeclaration(_NamedDeclaration):
         retry: Any | None = None,
         session: Any | None = None,
         control_routes: ControlRoutes | bool = True,
-        policy: ProviderPolicyInput = None,
+        policy: _SimplePolicyInput = None,
     ) -> None:
         super().__init__(name=name)
         self.prompt = _normalize_simple_prompt(prompt)
@@ -223,7 +222,7 @@ class ProduceVerifyStepDeclaration(_NamedDeclaration):
         session: Any | None = None,
         verifier_session: Any | None = None,
         control_routes: ControlRoutes | bool = True,
-        policy: ProviderPolicyInput = None,
+        policy: _SimplePolicyInput = None,
     ) -> None:
         super().__init__(name=name)
         self.producer_prompt = _normalize_simple_prompt(producer_prompt)
@@ -274,7 +273,7 @@ class PythonStepDeclaration(_NamedDeclaration):
         before: Any | None = None,
         after: Any | None = None,
         control_routes: ControlRoutes | bool = True,
-        policy: ProviderPolicyInput = None,
+        policy: _SimplePolicyInput = None,
     ) -> None:
         super().__init__(name=name)
         self.fn = fn
@@ -312,7 +311,7 @@ class _WorkflowStepDeclaration(_NamedDeclaration):
         before: Any | None = None,
         after: Any | None = None,
         control_routes: ControlRoutes | bool = True,
-        policy: ProviderPolicyInput = None,
+        policy: _SimplePolicyInput = None,
     ) -> None:
         super().__init__(name=name)
         self.workflow = workflow
@@ -499,7 +498,7 @@ def step(
     retry: Any | None = None,
     session: Any | None = None,
     control_routes: ControlRoutes | bool = True,
-    policy: ProviderPolicyInput = None,
+    policy: _SimplePolicyInput = None,
 ) -> StepDeclaration:
     return StepDeclaration(
         prompt,
@@ -544,7 +543,7 @@ def produce_verify_step(
     session: Any | None = None,
     verifier_session: Any | None = None,
     control_routes: ControlRoutes | bool = True,
-    policy: ProviderPolicyInput = None,
+    policy: _SimplePolicyInput = None,
 ) -> ProduceVerifyStepDeclaration:
     return ProduceVerifyStepDeclaration(
         producer_prompt,
@@ -584,7 +583,7 @@ def python_step(
     before: Any | None = None,
     after: Any | None = None,
     control_routes: ControlRoutes | bool = True,
-    policy: ProviderPolicyInput = None,
+    policy: _SimplePolicyInput = None,
 ) -> PythonStepDeclaration | Any:
     if fn is None:
         def decorator(inner: Any) -> PythonStepDeclaration:
@@ -707,7 +706,7 @@ def workflow_step(
     before: Any | None = None,
     after: Any | None = None,
     control_routes: ControlRoutes | bool = True,
-    policy: ProviderPolicyInput = None,
+    policy: _SimplePolicyInput = None,
 ) -> _WorkflowStepDeclaration:
     return _WorkflowStepDeclaration(
         workflow,
@@ -795,7 +794,7 @@ def _artifact_reference_name(reference: Artifact | ArtifactSpec) -> str:
     return name.strip()
 
 
-def _normalize_provider_policy(policy: ProviderPolicyInput) -> ProviderPolicyInput:
+def _normalize_provider_policy(policy: _SimplePolicyInput) -> _SimplePolicyInput:
     if policy is None or isinstance(policy, (Policy, _CoreProviderPolicy, _CoreProviderPolicyOverride)):
         return policy
     raise TypeError("policy must be a Policy, ProviderPolicy, ProviderPolicyOverride, or None")
@@ -838,7 +837,7 @@ class LLMOperation:
         prompt_registry: Any | None = None,
         context: Any | None = None,
         run_folder: Path | None = None,
-        policy: ProviderPolicyInput = None,
+        policy: _SimplePolicyInput = None,
     ) -> Any:
         normalized_prompt = _normalize_simple_prompt(prompt)
         return llm_call(
@@ -889,7 +888,7 @@ class ClassifyOperation:
         prompt_registry: Any | None = None,
         context: Any | None = None,
         run_folder: Path | None = None,
-        policy: ProviderPolicyInput = None,
+        policy: _SimplePolicyInput = None,
     ) -> str:
         normalized_prompt = _normalize_simple_prompt(prompt)
         return classify_call(

@@ -1461,3 +1461,64 @@ phase_mode=single
 phase_ids=simple-policy-export-cleanup
 explicit=True
 current_phase_index=0
+
+
+---
+run_id=run-20260508T161613Z-c2f3eecb | entry=session_turn | pair=implement | phase=producer | cycle=1 | attempt=1 | thread_id=019e0862-cb54-7a82-b93d-898c486428a1
+---
+provider=codex
+mode=start
+template=/home/rauter/.local/share/pipx/venvs/autoloop/lib/python3.12/site-packages/autoloop/templates/implement_producer.md
+session_id=019e0862-cb54-7a82-b93d-898c486428a1
+
+
+---
+run_id=run-20260508T161613Z-c2f3eecb | entry=phase_output | pair=implement | phase=producer | process=codex-agent | cycle=1 | attempt=1 | thread_id=019e0862-cb54-7a82-b93d-898c486428a1
+---
+I’m checking the phase artifacts and the current `autoloop.simple` surface first, then I’ll make the smallest export cleanup that preserves the existing policy-acceptance behavior.
+
+I’ve confirmed the task-specific artifacts and found a large unrelated dirty tree, so I’m limiting scope to `autoloop.simple` plus the policy surface tests the phase calls for.
+
+I’ve got the current leak: `autoloop.simple` imports `PolicyInput` publicly and assigns `ProviderPolicyInput = PolicyInput`. I’m reading the local normalization paths now so I can remove only those bindings and leave behavior intact.
+
+The only `ProviderPolicyInput` usages are local to `autoloop.simple`, so this can stay a private typing alias there without changing any external contracts. I’m patching `simple.py` and tightening the surface tests to assert both leaked names are gone.
+
+I’m editing the module now. The change is limited to replacing the public alias bindings with a private in-module alias and extending the surface test to lock both removed names out of `autoloop.simple`.
+
+The code change is in place and the public names are no longer bound in `autoloop.simple`. I’m running the exact required pytest commands now to check the export matrix and the policy/runtime regression surface together.
+
+The first required test target passed. The broader surface run is still in flight and has already cleared the simple-surface and policy suites; I’m waiting for the SDK-facing coverage to finish.
+
+I’ve finished validation. I’m updating the phase artifacts now with the exact files changed, the preserved invariants, and the one non-obvious implementation decision so later turns don’t reintroduce the public aliases.
+
+Scope considered
+
+- `autoloop.simple` public namespace cleanup, adjacent policy-acceptance paths, and the phase-owned regression tests/artifacts only.
+- Ignored the large unrelated dirty tree outside this phase scope.
+
+What I analyzed
+
+- [`autoloop/simple.py`](/home/rauter/autoloop_v3_bkp/autoloop_v3/autoloop/simple.py) for the leaked `PolicyInput` import and `ProviderPolicyInput` alias.
+- [`tests/unit/test_simple_policy.py`](/home/rauter/autoloop_v3_bkp/autoloop_v3/tests/unit/test_simple_policy.py) and [`tests/unit/test_simple_surface.py`](/home/rauter/autoloop_v3_bkp/autoloop_v3/tests/unit/test_simple_surface.py) for the public-surface contract.
+- [`autoloop/policy.py`](/home/rauter/autoloop_v3_bkp/autoloop_v3/autoloop/policy.py), [`autoloop/sdk.py`](/home/rauter/autoloop_v3_bkp/autoloop_v3/autoloop/sdk.py), and [`autoloop/__init__.py`](/home/rauter/autoloop_v3_bkp/autoloop_v3/autoloop/__init__.py) to confirm canonical `PolicyInput` exports stay unchanged.
+
+What I changed
+
+- In [`autoloop/simple.py`](/home/rauter/autoloop_v3_bkp/autoloop_v3/autoloop/simple.py), removed the public `PolicyInput` import and the public `ProviderPolicyInput` alias, replacing them with a private `_SimplePolicyInput` alias used only for internal annotations.
+- In [`tests/unit/test_simple_policy.py`](/home/rauter/autoloop_v3_bkp/autoloop_v3/tests/unit/test_simple_policy.py), extended the export-matrix test to assert `autoloop.simple` does not expose `ProviderPolicyInput` and that importing it fails.
+- Updated the phase artifacts:
+  [`implementation_notes.md`](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/final-standalone-implementation-spec-shared-inhe-c4aa316d/runs/run-20260508T161613Z-c2f3eecb/artifacts/implement/phases/simple-policy-export-cleanup/implementation_notes.md)
+  and [`decisions.txt`](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/final-standalone-implementation-spec-shared-inhe-c4aa316d/runs/run-20260508T161613Z-c2f3eecb/decisions.txt).
+
+Key findings / decisions
+
+- The leak was entirely local to `autoloop.simple`; `autoloop.policy` and `autoloop.sdk` were already the correct canonical export sites.
+- A private local alias preserves accepted inputs for simple declarations and inline operations: `Policy`, `ProviderPolicy`, `ProviderPolicyOverride`, and `None`.
+- Validation passed:
+  `./.venv/bin/pytest tests/unit/test_simple_policy.py`
+  `./.venv/bin/pytest tests/unit/test_simple_surface.py tests/unit/test_policy.py tests/runtime/test_sdk_policy.py tests/unit/test_sdk_facade.py`
+
+Open issues / next step
+
+- No open issues in this phase scope.
+- The requested export cleanup is implemented and the required regression coverage passed.
