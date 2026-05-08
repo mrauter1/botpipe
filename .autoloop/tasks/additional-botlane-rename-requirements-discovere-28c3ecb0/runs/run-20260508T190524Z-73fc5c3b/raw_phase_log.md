@@ -1689,3 +1689,121 @@ This test audit is complete. The only follow-up is the non-blocking strategy-tra
 <loop-control>
 {"schema":"docloop.loop_control/v1","kind":"promise","promise":"COMPLETE"}
 </loop-control>
+
+
+---
+run_id=run-20260508T190524Z-73fc5c3b | entry=session_turn | pair=audit | phase=producer | cycle=1 | attempt=1 | thread_id=019e0958-c037-7a92-98a6-c892d0ba9bf8
+---
+provider=codex
+mode=start
+template=/home/rauter/.local/share/pipx/venvs/autoloop/lib/python3.12/site-packages/autoloop/templates/audit_producer.md
+session_id=019e0958-c037-7a92-98a6-c892d0ba9bf8
+
+
+---
+run_id=run-20260508T190524Z-73fc5c3b | entry=phase_output | pair=audit | phase=producer | process=codex-agent | cycle=1 | attempt=1 | thread_id=019e0958-c037-7a92-98a6-c892d0ba9bf8
+---
+I’m auditing the completed Botlane rename work against the original request, raw log clarifications, decisions, and final code/tests. First I’ll read the authoritative artifacts and then verify the repo state for any remaining `autoloop`-branded behavior or missing strictness coverage.
+
+I’ve got the authoritative clarification trail now, including the explicit decision to keep reading legacy `.autoloop` inputs while making new outputs Botlane-only. Next I’m checking the final code and strictness suite for residual live `autoloop` surfaces versus deliberate legacy-read and negative-test coverage.
+
+The broad grep is clean in maintained product surfaces and noisy only in `legacy_docs/`, which matches the explicit history carveout. I’m checking the test/verifier artifacts and a few live code paths now to decide whether any request items were left unimplemented versus intentionally deferred by the clarification trail.
+
+I’ve confirmed the public surface and packaging metadata are Botlane-branded, and the workspace layer now writes `.botlane` while retaining a legacy reader. I’m doing one more targeted pass over live files and smoke behavior to make sure there isn’t a missed request item hiding behind the broad history allowlist.
+
+The targeted scans are coming back clean: the maintained tree no longer carries raw `Autoloop` or `autoloop.*` branding, and the schema registry is Botlane-first with a centralized legacy-read alias. I’m checking the last two risk areas now: legacy import/migration commands and whether the audit needs to call out any residual compatibility-only flags or references.
+
+I’ve reviewed the verifier artifacts for every phase. No implementation-phase blockers remain; the only open note is a non-blocking validation-environment gap from an earlier runtime phase that later phases appear to have covered with real `pytest` runs. I’m running a small independent audit check set now so the report can cite final-state evidence, not just prior phase notes.
+
+I found one concrete divergence that the phase artifacts did not catch: the repo’s active virtualenv still has a legacy `autoloop` console script. That matters because the request explicitly required the legacy executable to be absent, and the current wheel smoke only proves a fresh install, not the run-local environment. I’m checking whether `botlane` is also installed there and whether this is just a stale editable-install artifact or a deeper packaging miss.
+
+The main unresolved gap is now clear: the source tree is renamed, but the active editable install in `.venv` is still `autoloop-v3-surface`, which leaves a broken `autoloop` console script and no `botlane` console script. I’m checking whether that stale install state is reinforced by any maintained setup/bootstrap files, or whether the follow-up can be scoped to install/validation workflow changes plus a local reinstall step.
+
+I have the audit conclusion. The code and maintained docs/tests satisfy the rename intent, but the active editable install in `.venv` was never migrated: it still advertises `autoloop-v3-surface`, ships an `autoloop` entry point, and does not install `botlane`. I’m writing the audit artifacts now with that gap as the follow-up.
+
+The audit artifacts are written. I’m doing a quick readback now to confirm the report, follow-up request, and JSON result all line up with the same single material gap and don’t overstate anything beyond the evidence.
+
+Scope considered
+
+Original request, authoritative raw-log clarifications, decisions ledger, phase implementation/test artifacts, maintained source/tests/docs, and the run-local editable environment under `.venv`.
+
+What I analyzed
+
+- Verified the clarified intent boundary: legacy `.autoloop` / `autoloop.*` inputs stay readable, but no `autoloop` import or CLI alias may remain.
+- Read the implement/test verifier artifacts for all phases and checked the final maintained surfaces in `botlane/`, `botlane_optimizer/`, docs, tests, and packaging metadata.
+- Ran independent audit checks: `tests/strictness/test_no_compat.py` passed (`41 passed`), `import autoloop` and `import autoloop_optimizer` both fail, and `python -m autoloop` fails.
+
+What I changed
+
+- Wrote [gap_report.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/additional-botlane-rename-requirements-discovere-28c3ecb0/runs/run-20260508T190524Z-73fc5c3b/artifacts/audit/gap_report.md)
+- Wrote [revised_request.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/additional-botlane-rename-requirements-discovere-28c3ecb0/runs/run-20260508T190524Z-73fc5c3b/artifacts/audit/revised_request.md)
+- Wrote [audit_result.json](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/additional-botlane-rename-requirements-discovere-28c3ecb0/runs/run-20260508T190524Z-73fc5c3b/artifacts/audit/audit_result.json)
+
+Key findings / decisions
+
+- The maintained source tree and strictness proof are substantially aligned with the rename request: package roots, public symbols, runtime identity, workspace writes, generated module namespace, schema IDs, and maintained docs/tests are Botlane-branded.
+- The remaining material gap is the active editable install in `.venv`: `.venv/bin/autoloop` still exists, `.venv/bin/botlane` is missing, `pip show autoloop-v3-surface` still succeeds, and `.venv/.../entry_points.txt` still registers `autoloop = autoloop.runtime.cli:main`.
+- That gap is not justified by any later clarification. The clarification preserved legacy readable inputs, not a legacy installed CLI or legacy editable package metadata.
+- Historical `legacy_docs/*.md` references and automation-owned `.autoloop/tasks/**` state are justified exclusions per the recorded decisions and strictness allowlist.
+
+Open issues / next step
+
+- Follow-up work is required. The next run should migrate the active repo editable install from `autoloop-v3-surface` to `botlane-v3-surface`, remove the stale `autoloop` console script, install `botlane`, and add validation that checks the active run-local environment in addition to fresh-wheel smoke.
+
+<loop-control>
+{"schema":"docloop.loop_control/v1","kind":"promise","promise":"INCOMPLETE"}
+</loop-control>
+
+
+---
+run_id=run-20260508T190524Z-73fc5c3b | entry=session_turn | pair=audit | phase=verifier | cycle=1 | attempt=1 | thread_id=019e0958-c037-7a92-98a6-c892d0ba9bf8
+---
+provider=codex
+mode=resume
+template=/home/rauter/.local/share/pipx/venvs/autoloop/lib/python3.12/site-packages/autoloop/templates/audit_verifier.md
+session_id=019e0958-c037-7a92-98a6-c892d0ba9bf8
+
+
+---
+run_id=run-20260508T190524Z-73fc5c3b | entry=phase_output | pair=audit | phase=verifier | process=codex-agent | cycle=1 | attempt=1 | thread_id=019e0958-c037-7a92-98a6-c892d0ba9bf8
+---
+I’m verifying the audit artifacts against the request, clarifications, and final repo state. First I’m reading the audit criteria/feedback scaffolding and rechecking the reported `.venv` packaging gap so I can decide whether the audit is complete or missed anything material.
+
+The audit report and JSON are internally consistent so far. I’m checking the revised follow-up request directly now and then I’ll either mark the audit complete or append findings if it’s too vague to drive the next run.
+
+I’ve confirmed the reported gap directly from the active `.venv`, and the revised request is specific enough to drive the next run. No audit-quality defects are showing up, so I’m updating the audit criteria to complete and appending a verifier closure note to feedback.
+
+The verifier artifacts are updated. I’m doing one last readback to confirm all criteria are checked, the feedback note is appended cleanly, and there’s no mismatch with the `COMPLETE` outcome before I return it.
+
+Scope considered
+
+The immutable request, raw-log clarification, decisions ledger, audit artifacts, final maintained source/tests, and the active run-local `.venv` install state.
+
+What I analyzed
+
+- Verified the producer’s gap classification against the clarified intent.
+- Re-checked the active editable install evidence: `autoloop-v3-surface` still installed, `autoloop` console entry still present, `botlane` script absent.
+- Confirmed the revised request targets that specific unresolved gap and preserves the explicit legacy-read clarification.
+
+What I reviewed
+
+- [gap_report.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/additional-botlane-rename-requirements-discovere-28c3ecb0/runs/run-20260508T190524Z-73fc5c3b/artifacts/audit/gap_report.md)
+- [revised_request.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/additional-botlane-rename-requirements-discovere-28c3ecb0/runs/run-20260508T190524Z-73fc5c3b/artifacts/audit/revised_request.md)
+- [audit_result.json](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/additional-botlane-rename-requirements-discovere-28c3ecb0/runs/run-20260508T190524Z-73fc5c3b/artifacts/audit/audit_result.json)
+- Updated [criteria.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/additional-botlane-rename-requirements-discovere-28c3ecb0/runs/run-20260508T190524Z-73fc5c3b/artifacts/audit/criteria.md) so every checkbox is checked.
+- Appended a verifier note to [feedback.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/additional-botlane-rename-requirements-discovere-28c3ecb0/runs/run-20260508T190524Z-73fc5c3b/artifacts/audit/feedback.md).
+
+Key findings / decisions
+
+- No blocking audit defects were found.
+- The producer correctly identified a real material gap: the maintained tree is Botlane-branded, but the active repo `.venv` still exposes legacy editable-install metadata and the `autoloop` console entry.
+- `audit_result.json` is valid and consistent with the report and revised request.
+- The revised request is direct enough to drive the next run.
+
+Open issues / next step
+
+The audit is complete. The next run should address the stale run-local editable install state described in `revised_request.md`.
+
+<loop-control>
+{"schema":"docloop.loop_control/v1","kind":"promise","promise":"COMPLETE"}
+</loop-control>

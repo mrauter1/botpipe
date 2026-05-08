@@ -83,3 +83,6 @@
 {"ts": "2026-05-08T20:47:51.116969+00:00", "run_id": "run-20260508T190524Z-73fc5c3b", "seq": 83, "event_type": "phase_completed", "pair": "test", "phase_id": "prove-botlane-only-surface", "phase_mode": "single"}
 {"ts": "2026-05-08T20:47:51.121070+00:00", "run_id": "run-20260508T190524Z-73fc5c3b", "seq": 84, "event_type": "pair_started", "pair": "audit", "phase_id": null}
 {"ts": "2026-05-08T20:47:51.121348+00:00", "run_id": "run-20260508T190524Z-73fc5c3b", "seq": 85, "event_type": "cycle_started", "pair": "audit", "cycle": 1, "attempt": 1, "phase_id": null}
+{"ts": "2026-05-08T20:51:40.024410+00:00", "run_id": "run-20260508T190524Z-73fc5c3b", "seq": 86, "event_type": "phase_finished", "pair": "audit", "phase": "producer", "cycle": 1, "attempt": 1, "empty_output": false, "phase_id": null}
+{"ts": "2026-05-08T20:52:37.140050+00:00", "run_id": "run-20260508T190524Z-73fc5c3b", "seq": 87, "event_type": "phase_finished", "pair": "audit", "phase": "verifier", "cycle": 1, "attempt": 1, "empty_output": false, "phase_id": null}
+{"ts": "2026-05-08T20:52:37.209026+00:00", "run_id": "run-20260508T190524Z-73fc5c3b", "seq": 88, "event_type": "pair_completed", "pair": "audit", "cycle": 1, "attempt": 1, "phase_id": null}
