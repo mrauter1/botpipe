@@ -252,9 +252,15 @@ def test_policy_payload_and_fingerprint_are_deterministic_for_identical_authored
         base=ProviderPolicy(model={"effort": "low"}),
         allow_write=("reports/", "src/"),
     )
+    authored_different = public_policy.Policy(
+        base=public_policy.Policy(effort=public_policy.ModelEffort.HIGH),
+        allow_write=("reports/", "src/"),
+    )
 
     assert left.to_layer_payload() == right.to_layer_payload()
     assert _policy_input_fingerprint(left) == _policy_input_fingerprint(right)
+    assert left.to_layer_payload() != authored_different.to_layer_payload()
+    assert _policy_input_fingerprint(left) != _policy_input_fingerprint(authored_different)
     assert _policy_input_payload(left) != _policy_input_payload(different)
     assert _policy_input_fingerprint(left) != _policy_input_fingerprint(different)
 

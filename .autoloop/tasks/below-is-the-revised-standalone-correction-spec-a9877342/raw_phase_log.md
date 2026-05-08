@@ -257,3 +257,44 @@ No blocking issues for this phase. Broader SDK/simple wording and runtime CLI cl
 <loop-control>
 {"schema":"docloop.loop_control/v1","kind":"promise","promise":"COMPLETE"}
 </loop-control>
+
+
+---
+run_id=run-20260508T173757Z-dbc5e2d0 | entry=session_turn | pair=test | phase=producer | cycle=1 | attempt=1 | thread_id=019e08b0-65e6-70f1-91d9-b5bfac7dbe44
+---
+provider=codex
+mode=resume
+template=/home/rauter/.local/share/pipx/venvs/autoloop/lib/python3.12/site-packages/autoloop/templates/test_producer.md
+session_id=019e08b0-65e6-70f1-91d9-b5bfac7dbe44
+
+
+---
+run_id=run-20260508T173757Z-dbc5e2d0 | entry=phase_output | pair=test | phase=producer | process=codex-agent | cycle=1 | attempt=1 | thread_id=019e08b0-65e6-70f1-91d9-b5bfac7dbe44
+---
+I’m validating the phase-owned test coverage and tightening it only where the payload-kind acceptance criteria still have a gap. I’ll inspect the current unit tests and the phase test artifacts first, then update the strategy and summary artifacts alongside any test refinement.
+
+The existing unit coverage is close, but I want one more assertion that different authored public policy fields also change the payload/fingerprint, not just different policy kinds. I’m making that small refinement and then I’ll document the exact coverage map in the phase strategy artifact.
+
+I’ve tightened the deterministic coverage with an authored-field delta check. Next I’m recording the coverage map and re-running the static validation path that’s available in this environment.
+
+The available validation path is still limited by the environment, so I’m capturing that explicitly in the test artifacts. I’m also documenting why the extra authored-field delta assertion was added, since that closes the main remaining AC-3 regression gap.
+
+Scope considered
+
+Phase-local test work for `policy-payload-fingerprints` only: unit coverage around `Policy.to_layer_payload()`, compiler payload kinds, and compiler fingerprint behavior.
+
+What I analyzed
+
+I reviewed the phase-owned coverage in [tests/unit/test_policy.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/tests/unit/test_policy.py:174), the run decisions, and the empty phase test artifacts. I checked that the existing tests already covered nested public bases, concrete provider bases, unified payload kinds, and the removal of the old `ProviderPolicy` fingerprint shortcut.
+
+What I changed
+
+I strengthened [tests/unit/test_policy.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/tests/unit/test_policy.py:242) with one additional AC-3 assertion: different authored public policy fields now explicitly have to change both payload and fingerprint, not just different wrapper kinds. I also updated the phase artifacts with an explicit coverage map in [test_strategy.md](</home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/below-is-the-revised-standalone-correction-spec-a9877342/runs/run-20260508T173757Z-dbc5e2d0/artifacts/test/phases/policy-payload-fingerprints/test_strategy.md:10>) and a concise summary in [feedback.md](</home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/below-is-the-revised-standalone-correction-spec-a9877342/runs/run-20260508T173757Z-dbc5e2d0/artifacts/test/phases/policy-payload-fingerprints/feedback.md:10>).
+
+Key findings / decisions
+
+I recorded one non-obvious test decision in `decisions.txt`: AC-3 coverage should assert both authored-field deltas and kind-label deltas so either class of regression changes the compiler fingerprint. The test strategy now documents behaviors covered, preserved invariants, edge/failure paths, flake controls, and the current validation gap.
+
+Open issues / next step
+
+`python3 -m py_compile tests/unit/test_policy.py autoloop/policy.py autoloop/core/compiler.py` passed. `python3 -m pytest tests/unit/test_policy.py` could not run here because `pytest` is not installed, so the next step is to execute the targeted unit suite in the project’s real test environment.
