@@ -305,3 +305,47 @@ The package-root rename forced a small adjacent change set in workflow discovery
 Open issues / next step
 
 Focused validation passed: `.venv/bin/pytest tests/unit/test_simple_surface.py tests/unit/test_sdk_facade.py tests/runtime/test_sdk_policy.py tests/runtime/test_workflow_catalog_roots.py tests/runtime/test_runtime_cli_metadata_integration.py tests/runtime/test_workflow_reference_resolution.py tests/strictness/test_no_compat.py tests/runtime/test_wheel_packaging_smoke.py -q` with `230 passed`. Next phase should pick up the remaining `.autoloop` workspace/runtime identity and schema/artifact renames; I recorded the scope boundary and packaging-artifact issue in [implementation_notes.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/additional-botlane-rename-requirements-discovere-28c3ecb0/runs/run-20260508T190524Z-73fc5c3b/artifacts/implement/phases/rename-package-and-public-api/implementation_notes.md) and the run decisions ledger.
+
+
+---
+run_id=run-20260508T190524Z-73fc5c3b | entry=session_turn | pair=implement | phase=verifier | cycle=1 | attempt=1 | thread_id=019e0902-f571-7e41-ba14-ff59a745a024
+---
+provider=codex
+mode=resume
+template=/home/rauter/.local/share/pipx/venvs/autoloop/lib/python3.12/site-packages/autoloop/templates/implement_verifier.md
+session_id=019e0902-f571-7e41-ba14-ff59a745a024
+
+
+---
+run_id=run-20260508T190524Z-73fc5c3b | entry=phase_output | pair=implement | phase=verifier | process=codex-agent | cycle=1 | attempt=1 | thread_id=019e0902-f571-7e41-ba14-ff59a745a024
+---
+I’m reviewing the phase-scoped Botlane package/public API rename against the active criteria, implementation notes, and the changed package/test surfaces. First I’m reading the phase artifacts and checking the current diff for criteria compliance and any blocking regressions.
+
+The implementation notes claim P1-AC2 is complete, so I’m checking that directly against the live CLI/package surface instead of the notes. I’m also scanning for maintained import/export surfaces that still carry `Autoloop` branding inside the renamed `botlane` tree.
+
+I found two blocking scope violations against the active phase contract, both on the maintained public/package surface rather than later-phase runtime internals. I’m recording them in the verifier artifacts now and leaving the criteria unchecked.
+
+Scope considered
+
+Phase-local review of the package/public API rename only: package roots, packaging metadata, console entry point/help surface, and maintained public import/export paths inside the shipped `botlane` package. I treated later `.autoloop` workspace/schema migration work as out of scope unless it leaked into the public package/CLI contract.
+
+What I analyzed
+
+I read the active criteria, feedback, implementation notes, and decisions ledger, then inspected the changed packaging and public-surface files: `pyproject.toml`, `botlane/__init__.py`, `botlane/sdk.py`, `botlane/runtime/cli.py`, package workflow discovery/loading, wheel smoke, strictness coverage, and the packaged workflow subtree under `botlane/workflows/`.
+
+What I reviewed
+
+I updated the review artifact at [feedback.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/additional-botlane-rename-requirements-discovere-28c3ecb0/runs/run-20260508T190524Z-73fc5c3b/artifacts/implement/phases/rename-package-and-public-api/feedback.md) with 2 blocking findings. I left the criteria boxes in [criteria.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/additional-botlane-rename-requirements-discovere-28c3ecb0/runs/run-20260508T190524Z-73fc5c3b/artifacts/implement/phases/rename-package-and-public-api/criteria.md) unchecked because the phase acceptance criteria are not yet met.
+
+Key findings / decisions
+
+- `IMP-001` blocking: [botlane/runtime/cli.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/botlane/runtime/cli.py) still advertises `autoloop` in public help text (`.autoloop/workflows/` and scaffold help), so P1-AC2 is not satisfied.
+- `IMP-002` blocking: the shipped package still exposes `botlane.workflows.autoloop_v1`, `AutoloopV1`, and alias `autoloop-v1`, so P1-AC1 is not satisfied.
+
+Open issues / next step
+
+Address the two blocking findings, then rerun the focused package/public-surface validation. In its current state, this phase should be treated as not complete.
+
+<loop-control>
+{"schema":"docloop.loop_control/v1","kind":"promise","promise":"INCOMPLETE"}
+</loop-control>
