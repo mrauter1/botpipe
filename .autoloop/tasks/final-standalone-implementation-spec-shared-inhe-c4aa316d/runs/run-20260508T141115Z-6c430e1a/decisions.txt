@@ -1,0 +1,4 @@
+<autoloop-decisions-header version="1" block_seq="1" owner="planner" phase_id="task-global" pair="plan" turn_seq="1" run_id="run-20260508T141115Z-6c430e1a" ts="2026-05-08T14:11:15.921425+00:00" />
+Treat `autoloop.policy.Policy` as the only public policy facade; keep `ProviderPolicyOverride` accepted internally for compatibility but remove any public export, constructor, example, or test expectation named `PolicyOverride`.
+Make `autoloop/runtime/provider_policy_resolver.py` the single merge-order owner for runtime config default policy, SDK client default policy, workflow policy, SDK run policy, step policy, and inline explicit operation policy; SDK methods should pass layers through `RunnerOptions` rather than pre-merging them.
+The spec requires intentional public API breaks: reject SDK `root=` and `typed_input=` compatibility, do not add `parameters=`, and reject raw strings for enum-backed public `Policy(...)` fields.
