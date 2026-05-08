@@ -16,12 +16,12 @@
       "prove-botlane-only-surface"
     ],
     "explicit": true,
-    "current_phase_index": 0,
-    "current_phase_id": "rename-package-and-public-api"
+    "current_phase_index": 1,
+    "current_phase_id": "rewrite-runtime-and-workspace-identity"
   },
   "phase_status": {
-    "rename-package-and-public-api": "in_progress",
-    "rewrite-runtime-and-workspace-identity": "planned",
+    "rename-package-and-public-api": "completed",
+    "rewrite-runtime-and-workspace-identity": "in_progress",
     "rewrite-schemas-workflows-and-fixtures": "planned",
     "prove-botlane-only-surface": "planned"
   },
@@ -31,6 +31,19 @@
       "run_id": "run-20260508T190524Z-73fc5c3b",
       "status": "in_progress",
       "ts": "2026-05-08T19:14:08.607324+00:00"
+    },
+    {
+      "phase_id": "rename-package-and-public-api",
+      "run_id": "run-20260508T190524Z-73fc5c3b",
+      "status": "completed",
+      "ts": "2026-05-08T19:35:32.997447+00:00",
+      "pair": "test"
+    },
+    {
+      "phase_id": "rewrite-runtime-and-workspace-identity",
+      "run_id": "run-20260508T190524Z-73fc5c3b",
+      "status": "in_progress",
+      "ts": "2026-05-08T19:35:32.999276+00:00"
     }
   ]
 }
