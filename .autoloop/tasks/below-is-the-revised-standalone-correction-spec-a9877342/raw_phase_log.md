@@ -81,3 +81,37 @@ The planner needs to revise the plan so the CLI phase requires `--workspace` rat
 <loop-control>
 {"schema":"docloop.loop_control/v1","kind":"promise","promise":"INCOMPLETE"}
 </loop-control>
+
+
+---
+run_id=run-20260508T173757Z-dbc5e2d0 | entry=session_turn | pair=plan | phase=producer | cycle=2 | attempt=1 | thread_id=019e08aa-e8bf-7933-be5b-9947798a2263
+---
+provider=codex
+mode=resume
+template=/home/rauter/.local/share/pipx/venvs/autoloop/lib/python3.12/site-packages/autoloop/templates/plan_producer.md
+session_id=019e08aa-e8bf-7933-be5b-9947798a2263
+
+
+---
+run_id=run-20260508T173757Z-dbc5e2d0 | entry=phase_output | pair=plan | phase=producer | process=codex-agent | cycle=2 | attempt=1 | thread_id=019e08aa-e8bf-7933-be5b-9947798a2263
+---
+I’m revising the plan against the verifier’s blocking feedback, with focus on the runtime CLI requirement and the missing explicit `client.step(...)` rejection checks. I’ll only touch the planning artifacts and the current decision block.
+
+I have the two precise edits to make: tighten the CLI phase from “rename” to “required flag with omission failure,” and make the removed `client.step(...)` keyword rejections explicit in the validation contract. Then I’ll record the adjustment in feedback and the current decision block.
+
+The plan artifacts are revised. I’m checking the exact CLI wording and the new validation bullets once so the next verifier pass can clear the blocking issue instead of finding a softer version of the same gap.
+
+Scope considered
+The active correction spec, the verifier feedback in `feedback.md`, the current plan artifacts, and the repo surfaces already identified as in scope for the plan: policy serialization, compiler fingerprinting, SDK/simple validation surfaces, and runtime CLI.
+
+What I analyzed
+I checked the blocking verifier finding against the current plan text and phase contract, then re-checked the non-blocking SDK validation gap. The main issue was that the plan allowed `--workspace` to be optional in practice, which conflicted with the spec’s explicit requirement once `autoloop/runtime/cli.py` is in scope.
+
+What I changed
+I updated [plan.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/below-is-the-revised-standalone-correction-spec-a9877342/runs/run-20260508T173757Z-dbc5e2d0/artifacts/plan/plan.md) so the runtime CLI phase now requires `--workspace`, treats omission as a usage failure, and explicitly rejects retaining the current default-to-`cwd` behavior. I updated [phase_plan.yaml](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/below-is-the-revised-standalone-correction-spec-a9877342/runs/run-20260508T173757Z-dbc5e2d0/artifacts/plan/phase_plan.yaml) to encode that requirement in scope, acceptance criteria, deliverables, and risks. I also strengthened the validation section to explicitly call out `client.step(..., typed_input=...)` and `client.step(..., parameters=...)` rejection tests, appended a resolution note to [feedback.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/below-is-the-revised-standalone-correction-spec-a9877342/runs/run-20260508T173757Z-dbc5e2d0/artifacts/plan/feedback.md), and recorded the non-obvious constraints under the current turn’s header in [decisions.txt](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/below-is-the-revised-standalone-correction-spec-a9877342/runs/run-20260508T173757Z-dbc5e2d0/decisions.txt).
+
+Key findings / decisions
+The plan now treats required `--workspace` behavior as a contractual public break, not just a rename. The SDK validation contract now explicitly covers removed keyword rejection at both `run(...)` and `step(...)` entry points.
+
+Open issues / next step
+The blocking verifier finding should now be resolved. The next step is a verifier pass against the revised plan artifacts.
