@@ -1322,3 +1322,50 @@ I recorded two non-obvious decisions in the phase ledger: the maintained brandin
 Open issues / next step
 
 Literal legacy text still exists outside the maintained proof scope in root review/spec artifacts and `recursive_autoloop/`. If you want the requirement interpreted as true repo-wide zero legacy branding outside explicitly historical files, that cleanup needs a separate follow-up decision or phase.
+
+
+---
+run_id=run-20260508T190524Z-73fc5c3b | entry=session_turn | pair=implement | phase=verifier | cycle=1 | attempt=1 | thread_id=019e0943-ff31-72a3-a94a-bb192b9cb63e
+---
+provider=codex
+mode=resume
+template=/home/rauter/.local/share/pipx/venvs/autoloop/lib/python3.12/site-packages/autoloop/templates/implement_verifier.md
+session_id=019e0943-ff31-72a3-a94a-bb192b9cb63e
+
+
+---
+run_id=run-20260508T190524Z-73fc5c3b | entry=phase_output | pair=implement | phase=verifier | process=codex-agent | cycle=1 | attempt=1 | thread_id=019e0943-ff31-72a3-a94a-bb192b9cb63e
+---
+I’m auditing the proof-phase diffs against the acceptance criteria and the clarified rename policy. First I’m reading the phase review artifacts and the exact changed surfaces so I can decide whether the current proof actually blocks regressions or only narrows the scan.
+
+The main risk is already visible from the repo-wide scan: the new proof narrows the grep policy instead of meeting the stated AC for all maintained non-history surfaces. I’m checking the exact scan implementation and the `MANIFEST.in` workaround now so I can write precise findings with file-level fix directions.
+
+The review is converging on one material blocker: the implementation notes explicitly narrow AC2 to a maintained-tree subset, but the accepted contract does not allow that carveout. I’m pulling exact line references now so the feedback is precise and stable.
+
+I have one blocking finding and one smaller maintainability note. I’m writing them into the review artifacts now, leaving the criteria unchecked because AC2 is not satisfied under the accepted contract.
+
+Scope considered
+
+Phase-local review only: the changed proof surfaces in `MANIFEST.in`, repo-root `__init__.py`, `tests/strictness/test_no_compat.py`, `tests/runtime/test_wheel_packaging_smoke.py`, `tests/runtime/test_workspace_and_context.py`, plus the active phase artifacts and shared decisions ledger.
+
+What I analyzed
+
+I compared the implementation against the phase contract, the clarified compatibility policy, and P4-AC1 through P4-AC3. I also ran a repo-level legacy-branding scan on maintained non-generated files to verify whether the new strictness gate actually proves the requested Botlane-only surface.
+
+What I reviewed
+
+I updated [feedback.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/additional-botlane-rename-requirements-discovere-28c3ecb0/runs/run-20260508T190524Z-73fc5c3b/artifacts/implement/phases/prove-botlane-only-surface/feedback.md) with one blocking finding and one non-blocking note. I left the criteria checkboxes unchecked in [criteria.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/additional-botlane-rename-requirements-discovere-28c3ecb0/runs/run-20260508T190524Z-73fc5c3b/artifacts/implement/phases/prove-botlane-only-surface/criteria.md) because AC2 is not met.
+
+Key findings / decisions
+
+IMP-001 is blocking: the new grep proof narrows scan scope to a maintained-tree subset that excludes tracked non-generated, non-history files still containing live `autoloop` branding, including `recursive_autoloop/` and root spec docs like `rebrand.md`. That contradicts the accepted requirement that the final gate fail on active legacy branding outside automation-owned generated state and explicitly historical changelog text.
+
+IMP-002 is non-blocking: `MANIFEST.in` now uses `prune .auto*loop`, which works around literal branding but makes the manifest rule broader and less auditable than an explicit exclusion strategy.
+
+Open issues / next step
+
+The implementation needs either to rename the remaining maintained legacy-branded files and extend the strictness gate to cover them, or to move/classify those files into a documented changelog/history allowlist that the grep test enforces centrally. Until that is resolved, this phase should remain incomplete.
+
+<loop-control>
+{"schema":"docloop.loop_control/v1","kind":"promise","promise":"INCOMPLETE"}
+</loop-control>
