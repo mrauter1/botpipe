@@ -50,3 +50,46 @@ Updated the run-local planning artifacts:
 The plan is implementation-ready and split into four phases: shared `autoloop.policy` core, compiler/simple integration, SDK/runtime merge-order and naming alignment, and regression cleanup/validation. It makes the required intentional breaks explicit: remove public `PolicyOverride`, reject SDK `root=` and `typed_input=`, avoid `parameters=`, and reject raw enum strings in public `Policy(...)`.
 
 I also validated that `phase_plan.yaml` parses successfully and contains the expected four ordered phases.
+
+
+---
+run_id=run-20260508T141115Z-6c430e1a | entry=session_turn | pair=plan | phase=verifier | cycle=1 | attempt=1 | thread_id=019e07ed-abdc-7763-90a5-9e25036024dd
+---
+provider=codex
+mode=resume
+template=/home/rauter/.local/share/pipx/venvs/autoloop/lib/python3.12/site-packages/autoloop/templates/plan_verifier.md
+session_id=019e07ed-abdc-7763-90a5-9e25036024dd
+
+
+---
+run_id=run-20260508T141115Z-6c430e1a | entry=phase_output | pair=plan | phase=verifier | process=codex-agent | cycle=1 | attempt=1 | thread_id=019e07ed-abdc-7763-90a5-9e25036024dd
+---
+I found two material gaps rather than structural file problems: the written plan does not explicitly lock down workspace-vs-state-root path semantics, and it underspecifies the exact module-by-module export contract the spec requires. I’m marking the criteria accordingly and appending those findings to the verifier feedback log.
+
+I’ve marked the plan as not yet complete because the missing items are both public-contract issues, not polish: path semantics around `workspace` and the exact module export matrix. I’m doing one final readback of the updated criteria and feedback so the close-out status matches the artifacts exactly.
+
+Scope considered
+
+Run-local planning artifacts for the shared inheriting `Policy(...)` / SDK-simple alignment spec, plus repo surfaces needed to verify dependency and regression coverage: `autoloop/simple.py`, `autoloop/sdk.py`, `autoloop/__init__.py`, `autoloop/core/compiler.py`, `autoloop/runtime/provider_policy_resolver.py`, `autoloop/runtime/runner.py`, and the relevant policy/simple/SDK/runtime tests.
+
+What I analyzed
+
+I checked the authoritative request/spec, confirmed there were no later clarification entries in the raw log, reviewed the planner’s `plan.md` and `phase_plan.yaml` against the spec’s required behavior breaks and invariants, and validated that `phase_plan.yaml` is parseable YAML with four ordered phases and non-empty required lists.
+
+What I reviewed
+
+I updated [criteria.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/final-standalone-implementation-spec-shared-inhe-c4aa316d/runs/run-20260508T141115Z-6c430e1a/artifacts/plan/criteria.md) to reflect the current state, and appended two blocking findings to [feedback.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/final-standalone-implementation-spec-shared-inhe-c4aa316d/runs/run-20260508T141115Z-6c430e1a/artifacts/plan/feedback.md): one for missing explicit `workspace` vs `.autoloop` path-semantics coverage, and one for an underspecified module-by-module export contract.
+
+Key findings / decisions
+
+`PLAN-001` is blocking because the plan renames the public SDK surface to `workspace` but never explicitly locks down the spec’s required path semantics or the corresponding path-relativity tests. That leaves a plausible failure mode where implementation keeps interpreting policy paths relative to `.autoloop` or `state_dir`.
+
+`PLAN-002` is blocking because the plan does not spell out the exact `__all__` / re-export matrix the spec requires across `autoloop.policy`, `autoloop.sdk`, `autoloop.simple`, and `autoloop.__init__`. “Imports work” is not precise enough for this contract.
+
+Open issues / next step
+
+The planner should revise the artifacts to add explicit invariant, acceptance, and validation coverage for workspace/state-root path semantics and the exact export matrix. After that, this plan can be re-verified quickly.
+
+<loop-control>
+{"schema":"docloop.loop_control/v1","kind":"promise","promise":"INCOMPLETE"}
+</loop-control>
