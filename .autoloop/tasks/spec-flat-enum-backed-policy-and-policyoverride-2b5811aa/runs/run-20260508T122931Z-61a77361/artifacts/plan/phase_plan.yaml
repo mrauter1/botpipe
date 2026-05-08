@@ -1,4 +1,38 @@
 version: 1
 task_id: spec-flat-enum-backed-policy-and-policyoverride-2b5811aa
 request_snapshot_ref: /home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/spec-flat-enum-backed-policy-and-policyoverride-2b5811aa/runs/run-20260508T122931Z-61a77361/request.md
-phases: []
+phases:
+  - phase_id: "flat-policy-facade"
+    title: "Implement Flat Policy Facade"
+    objective: "Add enum-backed Policy and PolicyOverride helpers that lower into the existing nested provider policy schema without changing engine-facing policy types or runtime policy semantics."
+    status: "planned"
+    in_scope:
+      - "Add flat public enums and Policy/PolicyOverride helpers in autoloop/simple.py."
+      - "Centralize flat-field coercion, inference, and incompatibility validation in one shared lowering helper."
+      - "Export new public names from autoloop/simple.py and autoloop/__init__.py."
+      - "Add targeted unit and runtime tests for lowering, sparsity, dangerous-access inference, exports, and operation/workflow integration."
+    out_of_scope:
+      - "Changing autoloop/core/provider_policy.py schema definitions or validators."
+      - "Changing provider emitters, runtime config parsing, merge order, or strict-policy semantics."
+      - "Adding alternate constructors, uppercase aliases, namespaced kwargs, or raw-string support for enum-backed facade fields."
+    dependencies: []
+    acceptance_criteria:
+      - id: "AC-1"
+        text: "Policy() returns a complete ProviderPolicy layered from SYSTEM_DEFAULT_PROVIDER_POLICY, while PolicyOverride() returns a sparse ProviderPolicyOverride containing only supplied or implied sections."
+      - id: "AC-2"
+        text: "All enum-backed facade fields accept only the new public enums and raise TypeError for raw strings in both Policy and PolicyOverride."
+      - id: "AC-3"
+        text: "Dangerous-access, read-only, workspace-write, and limited-network inference rules match the spec and produce coherent nested payloads without modifying the core schema."
+      - id: "AC-4"
+        text: "Workflow compilation, step policy compilation, merge behavior, operation normalization, and required export/import tests pass under the targeted pytest suite."
+    deliverables:
+      - "Updated autoloop/simple.py flat policy facade and helper logic."
+      - "Updated autoloop/__init__.py public exports and __all__."
+      - "Focused policy facade tests in unit/runtime suites."
+    risks:
+      - "Override sparsity can regress if untouched sandbox or permissions sections are materialized."
+      - "Facade inference can conflict with existing dangerous-access validation if compatibility checks are incomplete."
+      - "Public-surface ordering can regress test expectations if __all__ changes are not synchronized."
+    rollback:
+      - "Revert simple-surface helper/export additions and remove the new flat-facade tests."
+      - "Leave core provider policy schema and runtime layers untouched, keeping rollback local to the authoring facade."
