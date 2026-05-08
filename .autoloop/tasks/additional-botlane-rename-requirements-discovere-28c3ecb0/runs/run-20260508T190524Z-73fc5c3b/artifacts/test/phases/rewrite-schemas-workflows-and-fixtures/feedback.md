@@ -8,3 +8,4 @@
 - Scope: phase-local authoritative verifier artifact
 
 - Added `tests/runtime/test_history.py::test_context_history_accepts_legacy_runtime_trace_schema_alias` to cover legacy persisted `autoloop.runtime_trace` payload reads at the `Context.history` consumer boundary, and recorded the full behavior-to-test map in `test_strategy.md`.
+- TST-001 | non-blocking | Audit recheck confirmed the added history compatibility test passes with the strictness gate (`49 passed`) and does not reintroduce raw maintained-tree Autoloop branding. No additional coverage or reliability issues were identified in phase scope.

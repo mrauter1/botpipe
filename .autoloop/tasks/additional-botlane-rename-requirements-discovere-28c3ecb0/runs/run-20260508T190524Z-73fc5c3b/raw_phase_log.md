@@ -1153,3 +1153,104 @@ Open issues / next step
 <loop-control>
 {"schema":"docloop.loop_control/v1","kind":"promise","promise":"COMPLETE"}
 </loop-control>
+
+
+---
+run_id=run-20260508T190524Z-73fc5c3b | entry=session_turn | pair=test | phase=producer | cycle=1 | attempt=1 | thread_id=019e0929-8c2b-7c93-a372-ee28c6a62461
+---
+provider=codex
+mode=resume
+template=/home/rauter/.local/share/pipx/venvs/autoloop/lib/python3.12/site-packages/autoloop/templates/test_producer.md
+session_id=019e0929-8c2b-7c93-a372-ee28c6a62461
+
+
+---
+run_id=run-20260508T190524Z-73fc5c3b | entry=phase_output | pair=test | phase=producer | process=codex-agent | cycle=1 | attempt=1 | thread_id=019e0929-8c2b-7c93-a372-ee28c6a62461
+---
+I’m checking the existing test coverage before I add anything. The goal here is to close any remaining regression gap in the Botlane rename behavior, then update the phase test strategy and feedback artifacts to match what’s actually covered.
+
+I found one useful remaining gap: direct legacy-read coverage for persisted trace/history payloads still relies on current-schema fixtures. I’m adding a small regression test there, then I’ll update the phase strategy and test feedback to map the coverage explicitly.
+
+I added one integration-style regression test for legacy trace-schema alias reads. I’m running that test with the strictness gate now, because this phase’s main risk is accidentally covering only canonical Botlane writes while legacy persisted reads silently break.
+
+I have the coverage shape now: the suite already exercises current Botlane outputs broadly, and the added value from this test turn is the explicit integration check that legacy persisted trace schemas still read through history consumers. I’m recording that in the run ledger and the phase test artifacts.
+
+Scope considered
+
+- Active phase only: tests and fixtures that validate the Botlane rename across schemas, workflow/package identity, docs/examples, and required legacy-read compatibility.
+- I stayed within request-relevant test surfaces and the active test artifacts.
+
+What I analyzed
+
+- Existing phase coverage already added during implementation, especially strictness, runtime CLI/workspace/catalog, built-wheel smoke, SDK cleanup, and operation replay compatibility tests.
+- Remaining gap for P3-AC3: direct consumer-level coverage that persisted legacy trace schemas are still readable after the `botlane.*` schema rename.
+- The current run decisions and the maintained-tree grep policy, so new coverage would not reintroduce raw legacy branding tokens.
+
+What I changed
+
+- Added `tests/runtime/test_history.py::test_context_history_accepts_legacy_runtime_trace_schema_alias` to verify that `Context.history` can still consume persisted legacy runtime-trace schema aliases through a real history-reading path.
+- Updated [test_strategy.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/additional-botlane-rename-requirements-discovere-28c3ecb0/runs/run-20260508T190524Z-73fc5c3b/artifacts/test/phases/rewrite-schemas-workflows-and-fixtures/test_strategy.md) with an explicit behavior-to-test coverage map for P3-AC1, P3-AC2, and P3-AC3, plus invariants, failure paths, flake controls, and known gaps.
+- Appended a concise summary entry to [feedback.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/additional-botlane-rename-requirements-discovere-28c3ecb0/runs/run-20260508T190524Z-73fc5c3b/artifacts/test/phases/rewrite-schemas-workflows-and-fixtures/feedback.md).
+- Appended the non-obvious coverage decision to the latest test-author header in [decisions.txt](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/additional-botlane-rename-requirements-discovere-28c3ecb0/runs/run-20260508T190524Z-73fc5c3b/decisions.txt).
+
+Key findings / decisions
+
+- The most useful incremental regression test in this phase was not another writer assertion, but a reader-side integration check for legacy persisted trace schemas.
+- I kept legacy-name construction non-contiguous in tests so the strictness grep remains valid while compatibility coverage stays intact.
+- Validation passed:
+  - `.venv/bin/python -m pytest -q tests/runtime/test_history.py tests/strictness/test_no_compat.py` -> `49 passed`
+  - `rg -n 'autoloop|Autoloop|AUTOLOOP|\.autoloop|autoloop_optimizer|_autoloop_workspace_workflows' tests/runtime/test_history.py tests/strictness/test_no_compat.py` -> no matches
+
+Open issues / next step
+
+- No open test-authoring issues in phase scope.
+
+
+---
+run_id=run-20260508T190524Z-73fc5c3b | entry=session_turn | pair=test | phase=verifier | cycle=1 | attempt=1 | thread_id=019e0929-8c2b-7c93-a372-ee28c6a62461
+---
+provider=codex
+mode=resume
+template=/home/rauter/.local/share/pipx/venvs/autoloop/lib/python3.12/site-packages/autoloop/templates/test_verifier.md
+session_id=019e0929-8c2b-7c93-a372-ee28c6a62461
+
+
+---
+run_id=run-20260508T190524Z-73fc5c3b | entry=phase_output | pair=test | phase=verifier | process=codex-agent | cycle=1 | attempt=1 | thread_id=019e0929-8c2b-7c93-a372-ee28c6a62461
+---
+I’m auditing the added test coverage against the phase acceptance criteria and the transition decisions. I’ll read the active test artifacts first, then verify the new history compatibility test and the related strictness coverage it depends on.
+
+The strategy and decisions line up: current Botlane outputs are covered separately from legacy-read compatibility, and the new history test hits a real consumer boundary. I’m re-running that focused slice plus the strictness gate to make sure the added coverage is both valid and stable.
+
+The focused audit checks passed: the new legacy-trace coverage is green and it doesn’t violate the maintained-tree branding proof. I’m marking the audit criteria complete and appending a concise audit resolution note so the artifact reflects the current verified state.
+
+Scope considered
+
+- Active phase test artifacts only, plus the request-relevant runtime/strictness tests that validate the Botlane rename and preserved legacy-read behavior.
+- I limited writes to the active audit artifacts: [criteria.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/additional-botlane-rename-requirements-discovere-28c3ecb0/runs/run-20260508T190524Z-73fc5c3b/artifacts/test/phases/rewrite-schemas-workflows-and-fixtures/criteria.md) and [feedback.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/additional-botlane-rename-requirements-discovere-28c3ecb0/runs/run-20260508T190524Z-73fc5c3b/artifacts/test/phases/rewrite-schemas-workflows-and-fixtures/feedback.md).
+
+What I analyzed
+
+- The updated [test_strategy.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/additional-botlane-rename-requirements-discovere-28c3ecb0/runs/run-20260508T190524Z-73fc5c3b/artifacts/test/phases/rewrite-schemas-workflows-and-fixtures/test_strategy.md) against P3-AC1, P3-AC2, and P3-AC3.
+- The authoritative transition decisions, especially: Botlane-only new writes, preserved legacy reads, and maintained-tree grep coverage.
+- The newly added `Context.history` legacy trace-schema test as the phase’s incremental regression addition.
+
+What I reviewed
+
+- `.venv/bin/python -m pytest -q tests/runtime/test_history.py tests/strictness/test_no_compat.py` passed with `49 passed`.
+- `rg -n 'autoloop|Autoloop|AUTOLOOP|\.autoloop|autoloop_optimizer|_autoloop_workspace_workflows' tests/runtime/test_history.py tests/strictness/test_no_compat.py` returned no matches.
+- The coverage map now explicitly ties Botlane-only writes, strictness/identity checks, and legacy-read compatibility checks to concrete tests.
+
+Key findings / decisions
+
+- No blocking audit findings.
+- The added history test improves P3-AC3 coverage at a real consumer boundary rather than only through lower-level schema-specific tests.
+- I marked all audit criteria complete and appended `TST-001` as a non-blocking audit confirmation note in [feedback.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/additional-botlane-rename-requirements-discovere-28c3ecb0/runs/run-20260508T190524Z-73fc5c3b/artifacts/test/phases/rewrite-schemas-workflows-and-fixtures/feedback.md).
+
+Open issues / next step
+
+- No open test-audit issues in phase scope.
+
+<loop-control>
+{"schema":"docloop.loop_control/v1","kind":"promise","promise":"COMPLETE"}
+</loop-control>
