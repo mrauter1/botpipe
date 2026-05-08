@@ -1317,3 +1317,51 @@ A follow-up run is required to finish the simple-surface export cleanup: remove 
 <loop-control>
 {"schema":"docloop.loop_control/v1","kind":"promise","promise":"INCOMPLETE"}
 </loop-control>
+
+
+---
+run_id=run-20260508T141115Z-6c430e1a | entry=session_turn | pair=audit | phase=verifier | cycle=1 | attempt=1 | thread_id=019e085a-511f-77d0-8f23-41deb7382815
+---
+provider=codex
+mode=resume
+template=/home/rauter/.local/share/pipx/venvs/autoloop/lib/python3.12/site-packages/autoloop/templates/audit_verifier.md
+session_id=019e085a-511f-77d0-8f23-41deb7382815
+
+
+---
+run_id=run-20260508T141115Z-6c430e1a | entry=phase_output | pair=audit | phase=verifier | process=codex-agent | cycle=1 | attempt=1 | thread_id=019e085a-511f-77d0-8f23-41deb7382815
+---
+I’m verifying the audit artifacts against the request, decisions ledger, and the final code/tests. I’ll review the written report, revised request, and result JSON first, then update the audit criteria and append any verifier findings under stable IDs.
+
+The audit report is focused and evidence-backed. I’m independently re-validating the one reported unresolved gap now so the verifier decision rests on current behavior rather than only the producer’s recorded command output.
+
+I’ve independently confirmed the reported export leak and the failing regression test. No blocking defects are apparent in the audit artifacts themselves, so I’m marking the audit complete and appending a short verifier closure note with the evidence I checked.
+
+Scope considered
+
+Run-local verification of the audit artifacts in `artifacts/audit`, against the immutable request, raw log, decisions ledger, final code, and the policy-surface tests needed to confirm the reported gap.
+
+What I analyzed
+
+I reviewed `gap_report.md`, `revised_request.md`, `audit_result.json`, `criteria.md`, `feedback.md`, and `decisions.txt`, then independently rechecked the final simple-policy surface in `autoloop/simple.py` and reran `./.venv/bin/pytest tests/unit/test_simple_policy.py -q` plus a direct import probe for `PolicyInput` / `ProviderPolicyInput`.
+
+What I reviewed
+
+I updated:
+
+- `/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/final-standalone-implementation-spec-shared-inhe-c4aa316d/runs/run-20260508T141115Z-6c430e1a/artifacts/audit/criteria.md`
+- `/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/final-standalone-implementation-spec-shared-inhe-c4aa316d/runs/run-20260508T141115Z-6c430e1a/artifacts/audit/feedback.md`
+
+Key findings / decisions
+
+The audit is accurate. The reported unresolved gap is real: `autoloop.simple` still exposes `PolicyInput` and `ProviderPolicyInput`, and `tests/unit/test_simple_policy.py::test_policy_input_export_matrix_matches_phase_contract` still fails for that reason. The gap report classifies that issue correctly, the revised request is a direct next-run request for exactly that cleanup, and `audit_result.json` matches the artifact content.
+
+No blocking audit-quality defects were found. I appended one non-blocking verifier note documenting the independent confirmation.
+
+Open issues / next step
+
+No verifier corrections are required. The audit artifacts are complete, all criteria are checked, and the next step is the follow-up implementation requested in `revised_request.md`.
+
+<loop-control>
+{"schema":"docloop.loop_control/v1","kind":"promise","promise":"COMPLETE"}
+</loop-control>
