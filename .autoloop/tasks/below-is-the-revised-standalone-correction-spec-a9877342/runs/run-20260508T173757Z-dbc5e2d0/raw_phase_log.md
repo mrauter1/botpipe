@@ -153,3 +153,12 @@ The planning artifacts are ready to hand off. The next step is implementation ag
 <loop-control>
 {"schema":"docloop.loop_control/v1","kind":"promise","promise":"COMPLETE"}
 </loop-control>
+
+
+---
+run_id=run-20260508T173757Z-dbc5e2d0 | entry=phase_scope_resolved
+---
+phase_mode=single
+phase_ids=policy-payload-fingerprints,public-surface-cleanup,runtime-cli-workspace-flag
+explicit=True
+current_phase_index=0
