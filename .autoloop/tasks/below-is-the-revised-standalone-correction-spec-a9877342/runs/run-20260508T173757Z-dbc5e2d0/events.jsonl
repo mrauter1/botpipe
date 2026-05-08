@@ -20,3 +20,7 @@
 {"ts": "2026-05-08T17:50:18.441558+00:00", "run_id": "run-20260508T173757Z-dbc5e2d0", "seq": 20, "event_type": "phase_finished", "pair": "test", "phase": "producer", "cycle": 1, "attempt": 1, "empty_output": false, "phase_id": "policy-payload-fingerprints"}
 {"ts": "2026-05-08T17:50:52.058469+00:00", "run_id": "run-20260508T173757Z-dbc5e2d0", "seq": 21, "event_type": "phase_finished", "pair": "test", "phase": "verifier", "cycle": 1, "attempt": 1, "empty_output": false, "phase_id": "policy-payload-fingerprints"}
 {"ts": "2026-05-08T17:50:52.154726+00:00", "run_id": "run-20260508T173757Z-dbc5e2d0", "seq": 22, "event_type": "pair_completed", "pair": "test", "cycle": 1, "attempt": 1, "phase_id": "policy-payload-fingerprints"}
+{"ts": "2026-05-08T17:50:52.289694+00:00", "run_id": "run-20260508T173757Z-dbc5e2d0", "seq": 23, "event_type": "phase_completed", "pair": "test", "phase_id": "policy-payload-fingerprints", "phase_mode": "single"}
+{"ts": "2026-05-08T17:50:52.291494+00:00", "run_id": "run-20260508T173757Z-dbc5e2d0", "seq": 24, "event_type": "phase_started", "phase_id": "public-surface-cleanup", "phase_mode": "single"}
+{"ts": "2026-05-08T17:50:52.292672+00:00", "run_id": "run-20260508T173757Z-dbc5e2d0", "seq": 25, "event_type": "pair_started", "pair": "implement", "phase_id": "public-surface-cleanup"}
+{"ts": "2026-05-08T17:50:52.292829+00:00", "run_id": "run-20260508T173757Z-dbc5e2d0", "seq": 26, "event_type": "cycle_started", "pair": "implement", "cycle": 1, "attempt": 1, "phase_id": "public-surface-cleanup"}
