@@ -31,6 +31,7 @@ from autoloop import (
     WorkflowParameterError,
     WorkflowInputError,
 )
+from autoloop.policy import ModelEffort, Policy
 from autoloop.core.primitives import Event, Outcome, RequestInput
 from autoloop.core.prompts import Prompt
 from autoloop.core.providers.retries import ProviderRetryPolicy
@@ -184,7 +185,7 @@ class _SDKDeclaredWriteContextWorkflow(simple.Workflow):
 
 def _sdk_client(tmp_path: Path, provider: object) -> Autoloop:
     return Autoloop(
-        root=tmp_path,
+        workspace=tmp_path,
         provider=provider,
         state_dir=tmp_path / ".autoloop",
         runtime_config=RuntimeConfig(git_tracking=GitTrackingRuntimeConfig(enabled=False, commit_policy="off")),
@@ -193,7 +194,7 @@ def _sdk_client(tmp_path: Path, provider: object) -> Autoloop:
 
 def _sdk_client_at_root(tmp_path: Path, provider: object, *, retention: RetentionPolicy | None = None) -> Autoloop:
     return Autoloop(
-        root=tmp_path,
+        workspace=tmp_path,
         provider=provider,
         state_dir=tmp_path / ".autoloop",
         runtime_config=RuntimeConfig(git_tracking=GitTrackingRuntimeConfig(enabled=False, commit_policy="off")),
@@ -217,8 +218,8 @@ def test_sdk_run_handles_typed_input_pause_loop_and_debug_artifacts(tmp_path: Pa
 
     result = client.run(
         _SDKPauseWorkflow,
-        "Ship the release safely.",
-        _SDKPauseWorkflow.Input(topic="release"),
+        message="Ship the release safely.",
+        input=_SDKPauseWorkflow.Input(topic="release"),
         on_input=approve,
     )
 
@@ -245,6 +246,20 @@ def test_sdk_run_handles_typed_input_pause_loop_and_debug_artifacts(tmp_path: Pa
     assert result.debug.task_dir.exists() is False
 
 
+def test_sdk_run_accepts_mapping_input_keyword(tmp_path: Path) -> None:
+    client = _sdk_client(tmp_path, ScriptedLLMProvider())
+
+    result = client.run(
+        _SDKPauseWorkflow,
+        message="Ship the release safely.",
+        input={"topic": "release"},
+        on_input=StaticInput({"approved": True}),
+    )
+
+    assert result.ok is True
+    assert result.state.approved is True
+
+
 def test_sdk_run_preserves_explicit_none_message(tmp_path: Path) -> None:
     client = _sdk_client(tmp_path, ScriptedLLMProvider())
 
@@ -257,10 +272,10 @@ def test_sdk_run_preserves_explicit_none_message(tmp_path: Path) -> None:
     assert result.artifacts.empty_message_snapshot.read_text() == "captured"
 
 
-def test_sdk_run_rejects_plain_dict_third_argument(tmp_path: Path) -> None:
+def test_sdk_run_rejects_removed_third_positional_input(tmp_path: Path) -> None:
     client = _sdk_client(tmp_path, ScriptedLLMProvider())
 
-    with pytest.raises(WorkflowInputError, match="received dict"):
+    with pytest.raises(TypeError, match="positional"):
         client.run(_SDKPauseWorkflow, "Ship it.", {"topic": "release"})  # type: ignore[arg-type]
 
 
@@ -270,8 +285,8 @@ def test_sdk_run_wraps_resume_schema_mismatch_as_input_response_validation_error
     with pytest.raises(InputResponseValidationError, match="Approve the release"):
         client.run(
             _SDKPauseWorkflow,
-            "Ship the release safely.",
-            _SDKPauseWorkflow.Input(topic="release"),
+            message="Ship the release safely.",
+            input=_SDKPauseWorkflow.Input(topic="release"),
             on_input=StaticInput({"approved": "yes"}),
         )
 
@@ -329,8 +344,8 @@ def test_sdk_run_keeps_direct_request_input_when_provider_questions_disabled(tmp
     with pytest.raises(InputRequired, match="Approve the release") as exc_info:
         client.run(
             _SDKPauseWorkflow,
-            "Ship the release safely.",
-            _SDKPauseWorkflow.Input(topic="release"),
+            message="Ship the release safely.",
+            input=_SDKPauseWorkflow.Input(topic="release"),
             provider_questions=False,
         )
     assert exc_info.value.partial.retention is not None
@@ -454,8 +469,8 @@ def test_sdk_step_supports_core_python_step_instances(tmp_path: Path) -> None:
 
     result = client.step(
         declaration,
-        "Handle the typed request.",
-        _SDKTypedInput(topic="release"),
+        message="Handle the typed request.",
+        input=_SDKTypedInput(topic="release"),
     )
 
     assert result.ok is True
@@ -536,7 +551,7 @@ def test_sdk_step_supports_directly_resolvable_strict_child_workflow_steps(tmp_p
         message="{ctx.message}",
     )
     client = Autoloop(
-        root=tmp_path,
+        workspace=tmp_path,
         provider=ScriptedLLMProvider(),
         state_dir=tmp_path / ".autoloop",
         runtime_config=RuntimeConfig(git_tracking=GitTrackingRuntimeConfig(enabled=False, commit_policy="off")),
@@ -592,7 +607,7 @@ def test_sdk_sync_entrypoints_normalize_active_event_loop_failures(tmp_path: Pat
 
     async def invoke() -> None:
         for call in (
-            lambda: client.run(_SDKPauseWorkflow, "Ship it.", _SDKPauseWorkflow.Input(topic="release")),
+            lambda: client.run(_SDKPauseWorkflow, "Ship it.", input=_SDKPauseWorkflow.Input(topic="release")),
             lambda: client.step(simple.python_step(lambda _ctx: Event("done"), name="noop"), "Ship it."),
         ):
             with pytest.raises(SDKExecutionError, match="active event loop"):
@@ -603,7 +618,39 @@ def test_sdk_sync_entrypoints_normalize_active_event_loop_failures(tmp_path: Pat
 
 def test_sdk_constructor_rejects_unknown_provider_name(tmp_path: Path) -> None:
     with pytest.raises(SDKExecutionError, match="could not resolve SDK provider"):
-        Autoloop(root=tmp_path, provider="not-a-provider")
+        Autoloop(workspace=tmp_path, provider="not-a-provider")
+
+
+def test_sdk_constructor_uses_workspace_and_rejects_root_keyword(tmp_path: Path) -> None:
+    client = Autoloop(
+        workspace=tmp_path,
+        provider=ScriptedLLMProvider(),
+        state_dir=tmp_path / ".autoloop",
+        runtime_config=RuntimeConfig(git_tracking=GitTrackingRuntimeConfig(enabled=False, commit_policy="off")),
+    )
+
+    assert client.workspace == tmp_path.resolve()
+    assert client.state_dir == (tmp_path / ".autoloop").resolve()
+
+    with pytest.raises(TypeError, match="root"):
+        Autoloop(root=tmp_path)  # type: ignore[call-arg]
+
+
+def test_sdk_run_rejects_removed_typed_input_and_parameters_keywords(tmp_path: Path) -> None:
+    client = _sdk_client(tmp_path, ScriptedLLMProvider())
+
+    with pytest.raises(TypeError, match="typed_input"):
+        client.run(  # type: ignore[call-arg]
+            _SDKPauseWorkflow,
+            "Ship it.",
+            typed_input=_SDKPauseWorkflow.Input(topic="release"),
+        )
+    with pytest.raises(TypeError, match="parameters"):
+        client.run(  # type: ignore[call-arg]
+            _SDKParamsWorkflow,
+            "Ship it.",
+            parameters={"mode": "strict"},
+        )
 
 
 def test_sdk_public_exports_include_revised_sdk_surface() -> None:
@@ -623,8 +670,8 @@ def test_sdk_run_exposes_result_artifact_metadata_and_helpers(tmp_path: Path) ->
 
     result = client.run(
         _SDKSchemaArtifactWorkflow,
-        "Ship the release safely.",
-        _SDKSchemaArtifactWorkflow.Input(topic="release"),
+        message="Ship the release safely.",
+        input=_SDKSchemaArtifactWorkflow.Input(topic="release"),
     )
 
     artifact = result.artifact("artifact_snapshot")
@@ -723,10 +770,12 @@ def test_sdk_helper_entrypoints_build_core_steps_and_delegate_to_client_step(
         client.prompt_step(
             "Prompt {input.message}",
             "Ship it.",
-            typed_input,
+            input=typed_input,
             name="prompt_helper",
+            writes=(simple.Md("report"),),
             routes={"done": FINISH},
             retry=5,
+            policy=Policy(effort=ModelEffort.LOW),
             retention=retention,
         )
         is sentinel
@@ -736,10 +785,11 @@ def test_sdk_helper_entrypoints_build_core_steps_and_delegate_to_client_step(
             producer="Draft",
             verifier="Review",
             message="Ship it.",
-            typed_input=typed_input,
+            input=typed_input,
             name="pair_helper",
             routes={"accepted": FINISH, "needs_rework": SELF},
             retry=ProviderRetryPolicy(max_attempts=4),
+            policy=Policy(effort=ModelEffort.HIGH),
             retention=retention,
         )
         is sentinel
@@ -748,9 +798,10 @@ def test_sdk_helper_entrypoints_build_core_steps_and_delegate_to_client_step(
         client.python_step(
             lambda _ctx: Event("done"),
             "Ship it.",
-            typed_input,
+            input=typed_input,
             name="python_helper",
             routes={"done": FINISH},
+            policy=Policy(effort=ModelEffort.MEDIUM),
             retention=retention,
         )
         is sentinel
@@ -759,11 +810,12 @@ def test_sdk_helper_entrypoints_build_core_steps_and_delegate_to_client_step(
         client.workflow_step(
             ChildWorkflow,
             "Outer message",
-            typed_input,
+            input=typed_input,
             child_message="Child message",
             name="workflow_helper",
             params={"mode": "review"},
             routes={"done": FINISH},
+            policy=Policy(read_only=True),
             retention=retention,
         )
         is sentinel
@@ -775,7 +827,12 @@ def test_sdk_helper_entrypoints_build_core_steps_and_delegate_to_client_step(
     assert prompt_step.producer.text == "Prompt {input.message}"
     assert isinstance(prompt_step.retry_policy, ProviderRetryPolicy)
     assert prompt_step.retry_policy.max_attempts == 5
-    assert prompt_args == ("Ship it.", typed_input)
+    assert isinstance(prompt_step.provider_policy, Policy)
+    assert prompt_step.provider_policy.to_layer_payload() == {"effort": "low"}
+    assert "report" in prompt_step.writes
+    assert prompt_args == ()
+    assert prompt_kwargs["message"] == "Ship it."
+    assert prompt_kwargs["input"] is typed_input
     assert prompt_kwargs["routes"] == {"done": FINISH}
     assert prompt_kwargs["retention"] is retention
 
@@ -785,14 +842,22 @@ def test_sdk_helper_entrypoints_build_core_steps_and_delegate_to_client_step(
     assert pair_step.producer.text == "Draft"
     assert pair_step.verifier.text == "Review"
     assert pair_step.retry_policy == ProviderRetryPolicy(max_attempts=4)
-    assert pair_args == ("Ship it.", typed_input)
+    assert isinstance(pair_step.provider_policy, Policy)
+    assert pair_step.provider_policy.to_layer_payload() == {"effort": "high"}
+    assert pair_args == ()
+    assert pair_kwargs["message"] == "Ship it."
+    assert pair_kwargs["input"] is typed_input
     assert pair_kwargs["routes"] == {"accepted": FINISH, "needs_rework": SELF}
     assert pair_kwargs["retention"] is retention
 
     python_step, python_args, python_kwargs = captured[2]
     assert isinstance(python_step, PythonStep)
     assert python_step.name == "python_helper"
-    assert python_args == ("Ship it.", typed_input)
+    assert isinstance(python_step.provider_policy, Policy)
+    assert python_step.provider_policy.to_layer_payload() == {"effort": "medium"}
+    assert python_args == ()
+    assert python_kwargs["message"] == "Ship it."
+    assert python_kwargs["input"] is typed_input
     assert python_kwargs["routes"] == {"done": FINISH}
     assert python_kwargs["retention"] is retention
 
@@ -803,7 +868,11 @@ def test_sdk_helper_entrypoints_build_core_steps_and_delegate_to_client_step(
     assert workflow_step.message == "Child message"
     assert workflow_step.input is typed_input
     assert workflow_step.params == {"mode": "review"}
-    assert workflow_args == ("Outer message", typed_input)
+    assert isinstance(workflow_step.provider_policy, Policy)
+    assert workflow_step.provider_policy.to_layer_payload() == {"read_only": True}
+    assert workflow_args == ()
+    assert workflow_kwargs["message"] == "Outer message"
+    assert workflow_kwargs["input"] is typed_input
     assert workflow_kwargs["routes"] == {"done": FINISH}
     assert workflow_kwargs["retention"] is retention
 
@@ -943,8 +1012,8 @@ def test_sdk_run_too_many_pauses_keeps_task_scratch_by_default(tmp_path: Path) -
     with pytest.raises(TooManyPauses, match="max_pauses=0") as exc_info:
         client.run(
             _SDKPauseWorkflow,
-            "Ship the release safely.",
-            _SDKPauseWorkflow.Input(topic="release"),
+            message="Ship the release safely.",
+            input=_SDKPauseWorkflow.Input(topic="release"),
             on_input=StaticInput({"approved": True}),
             max_pauses=0,
         )
@@ -1146,7 +1215,7 @@ def test_sdk_runtime_prompt_rendering_supports_input_and_ctx_message(tmp_path: P
 
     client.step(simple.step("Echo {input.message}", name="echo_input"), "hello")
     client.step(simple.step("Echo {ctx.message}", name="echo_ctx"), "hello")
-    client.prompt_step("Echo {input.topic} / {input.message}", "hello", _SDKTypedInput(topic="Acme"))
+    client.prompt_step("Echo {input.topic} / {input.message}", "hello", input=_SDKTypedInput(topic="Acme"))
 
     assert seen == ["Echo hello", "Echo hello", "Echo Acme / hello"]
 
@@ -1208,7 +1277,7 @@ def test_sdk_python_step_helper_executes_and_honors_retention_override(tmp_path:
         lambda ctx: (ctx.artifacts.report.write_text(ctx.message or ""), Event("done"))[1],
         "keep scratch",
         name="python_helper",
-        writes={"report": report.materialize("python_helper")},
+        writes=(report,),
         retention=retention,
     )
 
@@ -1239,7 +1308,7 @@ def test_sdk_workflow_step_renders_child_message_with_input_placeholders(tmp_pat
     result = client.workflow_step(
         ChildWorkflow,
         "outer-message",
-        _SDKTypedInput(topic="Acme"),
+        input=_SDKTypedInput(topic="Acme"),
         child_message="Child {input.topic} / {input.message}",
     )
 

@@ -787,3 +787,82 @@ No open audit issue in the tests themselves. The next step is an implementation 
 <loop-control>
 {"schema":"docloop.loop_control/v1","kind":"promise","promise":"COMPLETE"}
 </loop-control>
+
+
+---
+run_id=run-20260508T141115Z-6c430e1a | entry=session_turn | pair=implement | phase=producer | cycle=1 | attempt=1 | thread_id=019e0810-03ca-7d63-94af-b0895960b1ef
+---
+provider=codex
+mode=start
+template=/home/rauter/.local/share/pipx/venvs/autoloop/lib/python3.12/site-packages/autoloop/templates/implement_producer.md
+session_id=019e0810-03ca-7d63-94af-b0895960b1ef
+
+
+---
+run_id=run-20260508T141115Z-6c430e1a | entry=phase_output | pair=implement | phase=producer | process=codex-agent | cycle=1 | attempt=1 | thread_id=019e0810-03ca-7d63-94af-b0895960b1ef
+---
+I’m working the `sdk-runtime-alignment` phase: first I’m reading the phase artifacts and the current SDK/runtime policy code paths to see what the earlier phases already landed and where the merge-order and naming gaps still are.
+
+The plan and decisions already lock in the public API breaks and central resolver ownership. I’m checking the current workspace for what the prior phases changed and which SDK/runtime surfaces still need edits in this phase.
+
+I’ve confirmed the gap is still concentrated in `autoloop/sdk.py` and the runner/resolver wiring. Next I’m reading those modules directly so I can patch signatures and merge-order once, instead of layering ad hoc fixes into the SDK.
+
+I’ve narrowed the implementation to three concrete changes: the SDK signatures/input coercion, invocation-local step policy layering, and runner/resolver support for SDK default/run layers. I’m reading `autoloop/policy.py` now because the safest way to layer `client.step(..., policy=...)` is to reuse the public sparse-policy data instead of inventing a second merge path.
+
+I have enough context to start patching. I’m changing the shared runtime wiring first so the SDK can pass policy layers through one resolver path, then I’ll update the SDK surface on top of that.
+
+The runtime wiring and SDK surface are patched. I’m running a fast syntax pass before I touch the tests, because the signature changes are broad enough that one syntax error would make the rest of the test failures noisy.
+
+The SDK tests still reflect the removed `root=` and `typed_input=` surface. I’m rewriting those call sites now and adding the explicit regression checks the spec asks for: `root=`, `typed_input=`, and `parameters=` must fail, while `workspace=`, `input=`, and `params=` must work.
+
+I’ve updated the visible SDK surface tests to the new public names. Next I’m running the unit SDK file to catch any remaining missed call sites before I add the merge-order tests.
+
+The main surface and the new SDK policy tests are in place. I’m doing another syntax-only pass over the touched modules and tests before I update the run artifacts.
+
+The repo’s Python environment is missing both `pytest` and `pydantic`, so I can’t execute the requested test suites yet. I’m checking whether `pip` is available so I can install the minimal test dependencies and actually run the phase’s target commands instead of stopping at syntax-only verification.
+
+The first test run flushed out two real issues: one expectation mismatch in the helper-call test, and one recursion bug from deep-copying core `Step` instances for invocation-local policy layering. I’m fixing both directly rather than papering over them in the tests.
+
+The recursion isn’t from the test, it’s from Python’s generic copy helpers interacting badly with `Step.__getattr__`. I’m replacing that with a package-local shallow clone that copies stored attributes directly, which is all this use case needs.
+
+The broader regression run found one compatibility miss in an existing runtime test helper: it still instantiates `ProviderPolicyResolver` with the old constructor. I’m fixing that helper and rerunning the full target suite.
+
+I’ve finished the code and the targeted regression pass. I’m updating the phase artifacts now with the exact blast radius, the merge-order decisions, and the verification results so the next turn doesn’t have to rediscover any of this.
+
+Scope considered
+
+- SDK public surface alignment for `workspace`, `input`, `params`, and shared `Policy`.
+- Runner/resolver merge order for runtime config default policy, SDK client default policy, workflow policy, SDK run policy, step policy, and inline/direct operation policy.
+- Invocation-local `client.step(..., policy=...)` behavior and helper `writes=(...)` alignment.
+
+What I analyzed
+
+- [autoloop/sdk.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/autoloop/sdk.py)
+- [autoloop/runtime/provider_policy_resolver.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/autoloop/runtime/provider_policy_resolver.py)
+- [autoloop/runtime/runner.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/autoloop/runtime/runner.py)
+- [autoloop/core/operations.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/autoloop/core/operations.py)
+- [autoloop/core/engine.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/autoloop/core/engine.py)
+- Existing SDK and provider-policy tests, plus the phase artifacts and decision ledger.
+
+What I changed
+
+- Updated [autoloop/sdk.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/autoloop/sdk.py) so the public SDK now uses `workspace=`, `default_policy=`, `input=`, `params=`, and `policy=`. Public `root=`, `typed_input=`, and `parameters=` compatibility is gone.
+- Wired `default_policy` and per-run `policy` through [RunnerOptions](/home/rauter/autoloop_v3_bkp/autoloop_v3/autoloop/runtime/runner.py) into [ProviderPolicyResolver](/home/rauter/autoloop_v3_bkp/autoloop_v3/autoloop/runtime/provider_policy_resolver.py), making the resolver the single merge-order owner.
+- Changed direct SDK `llm()` and `classify()` to use the same resolver path via [autoloop/core/operations.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/autoloop/core/operations.py), so they inherit runtime-config and SDK default policy before explicit operation policy.
+- Implemented invocation-local `client.step(..., policy=...)` layering without mutating the caller’s step object.
+- Aligned helper methods with simple-style artifact specs and authored `policy=` support.
+- Updated [tests/unit/test_sdk_facade.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/tests/unit/test_sdk_facade.py), [tests/runtime/test_sdk_policy.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/tests/runtime/test_sdk_policy.py), and [tests/runtime/test_provider_policy_steps.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/tests/runtime/test_provider_policy_steps.py).
+- Updated the phase notes and decisions files.
+
+Key findings / decisions
+
+- Direct SDK operations were the main place still bypassing shared policy resolution; that is now closed.
+- Generic copy helpers recurse on core `Step` objects because of `Step.__getattr__`; the SDK now uses a package-local shallow clone for invocation-local wrapping.
+- I used a local `.venv-test` because the base Python environment did not have `pytest` or `pydantic`.
+
+Open issues / next step
+
+- No open code issues in the phase scope.
+- Validation passed:
+  - `.venv-test/bin/python -m pytest tests/unit/test_provider_policy.py tests/runtime/test_provider_policy_steps.py tests/runtime/test_provider_policy_emitters.py tests/runtime/test_provider_policy_config.py tests/unit/test_simple_surface.py tests/unit/test_sdk_facade.py tests/unit/test_policy.py tests/runtime/test_sdk_policy.py -q`
+  - Result: `208 passed in 3.87s`

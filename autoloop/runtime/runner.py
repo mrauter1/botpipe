@@ -13,6 +13,7 @@ from typing import Any, Callable, Literal
 
 from pydantic import BaseModel, ValidationError
 
+from autoloop.policy import PolicyInput
 from autoloop.core.artifacts import resolve_artifact_template
 from autoloop.core.compiler import CompiledArtifact, CompiledWorkflow, compile_workflow
 from autoloop.core.context import ChildWorkflowResult, _DEFAULT_MESSAGE
@@ -99,6 +100,8 @@ class RunnerOptions:
     record_task_message: bool = True
     runtime_config: RuntimeConfig = field(default_factory=RuntimeConfig)
     provider_policy_config: ProviderPolicyRuntimeConfig = field(default_factory=ProviderPolicyRuntimeConfig)
+    sdk_default_policy: PolicyInput = None
+    run_policy: PolicyInput = None
 
 
 @dataclass(frozen=True, slots=True)
@@ -271,7 +274,9 @@ def _execute_compiled_workflow(
         trace_writer.runtime_event(event_type=event_type, **payload)
 
     provider_policy_resolver = create_provider_policy_resolver(
+        sdk_default_policy=options.sdk_default_policy,
         workflow_policy=prepared.compiled.provider_policy,
+        run_policy=options.run_policy,
         workspace_root=prepared.task_workspace.root,
         provider_policy=options.provider_policy_config,
         runtime=options.runtime_config,
@@ -827,6 +832,9 @@ def _build_workflow_invoker(
                 parent_run=run_workspace,
                 record_task_message=False,
                 runtime_config=options.runtime_config,
+                provider_policy_config=options.provider_policy_config,
+                sdk_default_policy=options.sdk_default_policy,
+                run_policy=options.run_policy,
             ),
         )
         return _build_child_workflow_result(execution)

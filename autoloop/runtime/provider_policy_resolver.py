@@ -28,11 +28,15 @@ class ProviderPolicyResolver:
         self,
         *,
         config: ResolvedRuntimeConfig,
+        sdk_default_policy: PolicyInput,
         workflow_policy: PolicyInput,
+        run_policy: PolicyInput,
         workspace_root: Path,
     ) -> None:
         self._config = config
+        self._sdk_default_policy = sdk_default_policy
         self._workflow_policy = workflow_policy
+        self._run_policy = run_policy
         self._workspace_root = workspace_root.resolve(strict=False)
 
     @property
@@ -44,26 +48,39 @@ class ProviderPolicyResolver:
         return self._workflow_policy
 
     @property
+    def sdk_default_policy(self) -> PolicyInput:
+        return self._sdk_default_policy
+
+    @property
+    def run_policy(self) -> PolicyInput:
+        return self._run_policy
+
+    @property
     def workspace_root(self) -> Path:
         return self._workspace_root
 
     def resolve_for_step(self, step: CompiledStep) -> ResolvedProviderPolicy:
-        candidate = resolve_policy_layer(self._config.provider_policy.default, self._workflow_policy)
+        candidate = self._base_candidate()
         candidate = resolve_policy_layer(candidate, step.provider_policy)
         return self._validate(candidate, step_name=step.name)
 
     def resolve_for_operation(
         self,
-        ctx: Context,
+        ctx: Context | None,
         explicit_policy: PolicyInput = None,
     ) -> ResolvedProviderPolicy:
-        inherited_policy = getattr(ctx, "_provider_policy", None)
+        inherited_policy = None if ctx is None else getattr(ctx, "_provider_policy", None)
         if isinstance(inherited_policy, ProviderPolicy):
             candidate = resolve_policy_layer(inherited_policy, explicit_policy)
         else:
-            candidate = resolve_policy_layer(self._config.provider_policy.default, self._workflow_policy)
+            candidate = self._base_candidate()
             candidate = resolve_policy_layer(candidate, explicit_policy)
-        return self._validate(candidate, step_name=getattr(ctx, "_step_name", None))
+        return self._validate(candidate, step_name=None if ctx is None else getattr(ctx, "_step_name", None))
+
+    def _base_candidate(self) -> ProviderPolicy:
+        candidate = resolve_policy_layer(self._config.provider_policy.default, self._sdk_default_policy)
+        candidate = resolve_policy_layer(candidate, self._workflow_policy)
+        return resolve_policy_layer(candidate, self._run_policy)
 
     def _validate(self, policy: ProviderPolicy, *, step_name: str | None) -> ResolvedProviderPolicy:
         return validate_against_strict_policy(
@@ -76,8 +93,10 @@ class ProviderPolicyResolver:
 
 def create_provider_policy_resolver(
     *,
+    sdk_default_policy: PolicyInput = None,
     workflow_policy: PolicyInput,
     workspace_root: Path,
+    run_policy: PolicyInput = None,
     provider_policy: ProviderPolicyRuntimeConfig | None = None,
     runtime: RuntimeConfig | None = None,
     provider: ProviderConfig | None = None,
@@ -90,6 +109,8 @@ def create_provider_policy_resolver(
             runtime=runtime or RuntimeConfig(),
             provider_policy=provider_policy or ProviderPolicyRuntimeConfig(),
         ),
+        sdk_default_policy=sdk_default_policy,
         workflow_policy=workflow_policy,
+        run_policy=run_policy,
         workspace_root=workspace_root,
     )

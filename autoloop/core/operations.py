@@ -86,12 +86,14 @@ def llm_call(
     run_folder: Path | None = None,
     callsite: str | None = None,
     policy: PolicyInput = None,
+    provider_policy_resolver: "ProviderPolicyResolver | None" = None,
 ) -> Any:
     runtime = _resolve_runtime(
         provider=provider,
         prompt_registry=prompt_registry,
         context=context,
         run_folder=run_folder,
+        provider_policy_resolver=provider_policy_resolver,
     )
     return _run_operation(
         runtime,
@@ -112,6 +114,7 @@ def classify_call(
     run_folder: Path | None = None,
     callsite: str | None = None,
     policy: PolicyInput = None,
+    provider_policy_resolver: "ProviderPolicyResolver | None" = None,
 ) -> str:
     normalized_choices = _normalize_choices(choices)
     runtime = _resolve_runtime(
@@ -119,6 +122,7 @@ def classify_call(
         prompt_registry=prompt_registry,
         context=context,
         run_folder=run_folder,
+        provider_policy_resolver=provider_policy_resolver,
     )
     return _run_operation(
         runtime,
@@ -178,6 +182,7 @@ def _resolve_runtime(
     prompt_registry: PromptRegistry | None,
     context: Context | None,
     run_folder: Path | None,
+    provider_policy_resolver: "ProviderPolicyResolver | None",
 ) -> OperationRuntime:
     ambient = _CURRENT_OPERATION_RUNTIME.get()
     if ambient is not None:
@@ -202,7 +207,11 @@ def _resolve_runtime(
             default_session_name=ambient.default_session_name,
             replay_mismatch_behavior=ambient.replay_mismatch_behavior,
             policy=ambient.policy,
-            provider_policy_resolver=ambient.provider_policy_resolver,
+            provider_policy_resolver=(
+                ambient.provider_policy_resolver
+                if provider_policy_resolver is None
+                else provider_policy_resolver
+            ),
             occurrence_counts=ambient.occurrence_counts,
             event_sink=ambient.event_sink,
         )
@@ -221,7 +230,7 @@ def _resolve_runtime(
         step_visit=_step_visit(context),
         replay_mismatch_behavior="warn",
         policy=None if context is None else getattr(context, "_provider_policy", None),
-        provider_policy_resolver=None,
+        provider_policy_resolver=provider_policy_resolver,
         event_sink=None,
     )
 
@@ -536,7 +545,7 @@ def _resolve_effective_operation_policy(
     explicit_policy: PolicyInput,
 ) -> ResolvedProviderPolicy | None:
     resolver = runtime.provider_policy_resolver
-    if resolver is not None and runtime.context is not None:
+    if resolver is not None:
         try:
             resolved = resolver.resolve_for_operation(runtime.context, explicit_policy=explicit_policy)
         except WorkflowExecutionError:

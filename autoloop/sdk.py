@@ -13,7 +13,7 @@ from pathlib import Path
 from typing import Any, Literal
 from uuid import uuid4
 
-from pydantic import BaseModel, ValidationError
+from pydantic import BaseModel, ValidationError, create_model
 
 import autoloop.simple as simple
 from autoloop.policy import (
@@ -33,6 +33,7 @@ from autoloop.core.compiler import CompiledWorkflow, compile_workflow
 from autoloop.core.context import Context
 from autoloop.core.errors import WorkflowCompilationError, WorkflowExecutionError, exception_failure_context
 from autoloop.core.operations import classify_call, llm_call
+from autoloop.core.provider_policy import ProviderPolicy, ProviderPolicyOverride
 from autoloop.core.primitives import AWAIT_INPUT, FAIL, FINISH, SELF, Event, Outcome
 from autoloop.core.prompts import Prompt
 from autoloop.core.providers.protocols import LLMProvider, validate_llm_provider
@@ -58,6 +59,7 @@ from autoloop.runtime.loader import (
     resolve_workflow_reference,
 )
 from autoloop.runtime.provider_backends import resolve_provider_backend
+from autoloop.runtime.provider_policy_resolver import create_provider_policy_resolver
 from autoloop.runtime.runner import RunExecution, RunnerOptions, execute_workflow_package
 from autoloop.runtime.workspace import primary_state_root, resolve_task_workspace
 
@@ -438,7 +440,8 @@ class Autoloop:
     def __init__(
         self,
         *,
-        root: str | Path = ".",
+        workspace: str | Path = ".",
+        default_policy: PolicyInput = None,
         provider: str | LLMProvider | None = None,
         model: str | None = None,
         model_effort: str | None = None,
@@ -447,16 +450,32 @@ class Autoloop:
         state_dir: str | Path | None = None,
         retention: RetentionPolicy | None = None,
     ) -> None:
-        self.root = Path(root).resolve()
-        self.runtime_config = runtime_config or RuntimeConfig()
-        self.provider_policy_config = provider_policy_config or ProviderPolicyRuntimeConfig()
+        """Initialize an SDK client rooted at a workspace.
+
+        `workspace` is the actual project or repository working directory, not the
+        internal `.autoloop` state directory. `default_policy` is an SDK client-level
+        policy layer; unset values inherit from runtime config defaults and system
+        defaults at resolution time. Like other public `Policy(...)` layers, it is
+        not a hard security cap.
+        """
+
+        self.workspace = Path(workspace).resolve()
+        self.root = self.workspace
+        self.default_policy = _normalize_sdk_policy_input(default_policy, field_name="default_policy")
+        resolved_config = resolve_runtime_config(self.root, argparse.Namespace())
+        self.runtime_config = runtime_config or resolved_config.runtime
+        self.provider_policy_config = provider_policy_config or resolved_config.provider_policy
         self.state_dir = primary_state_root(self.root) if state_dir is None else Path(state_dir).resolve()
         self.retention = retention or RetentionPolicy.sdk_default()
-        self._provider = _resolve_sdk_provider(
-            root=self.root,
+        self._provider_config = _provider_config_with_overrides(
+            resolved_config.provider,
             provider=provider,
             model=model,
             model_effort=model_effort,
+        )
+        self._provider = _resolve_sdk_provider(
+            provider=provider,
+            provider_config=self._provider_config,
             runtime_config=self.runtime_config,
             provider_policy_config=self.provider_policy_config,
         )
@@ -465,9 +484,9 @@ class Autoloop:
         self,
         workflow: type[object] | str,
         message: str | None = None,
-        typed_input: BaseModel | None = None,
-        /,
         *,
+        policy: PolicyInput = None,
+        input: BaseModel | Mapping[str, Any] | None = None,
         params: BaseModel | Mapping[str, Any] | None = None,
         on_input: InputHandler | None = None,
         max_pauses: int = 8,
@@ -476,15 +495,24 @@ class Autoloop:
         options: RunOptions | None = None,
         retention: RetentionPolicy | None = None,
     ) -> WorkflowResult:
+        """Run one workflow.
+
+        `message` is the task or run request. `input` is typed workflow input, and
+        `params` are workflow parameters. `policy` is a per-run policy layer whose
+        unset values inherit from SDK client defaults, workflow policy, runtime
+        config policy, and system defaults. It is not a hard security cap.
+        """
+
         if message is not None and not isinstance(message, str):
             raise WorkflowInputError(f"message must be str | None; received {type(message).__name__}")
         if isinstance(max_pauses, bool) or not isinstance(max_pauses, int) or max_pauses < 0:
             raise SDKExecutionError(f"max_pauses must be an integer >= 0; received {max_pauses!r}")
         if options is not None and not isinstance(options, RunOptions):
             raise SDKExecutionError(f"options must be RunOptions | None; received {type(options).__name__}")
+        normalized_policy = _normalize_sdk_policy_input(policy)
 
         resolved, compiled = _resolve_and_compile_workflow(self.root, workflow)
-        structured_input = _coerce_sdk_typed_input(compiled, typed_input)
+        structured_input = _coerce_sdk_input(compiled, input)
         structured_params = _coerce_sdk_params(resolved.parameters_cls, params, workflow_name=compiled.workflow_name)
         effective_provider_questions = provider_questions if provider_questions is not None else on_input is not None
         effective_retention = retention or self.retention
@@ -529,6 +557,8 @@ class Autoloop:
                         record_task_message=options.record_task_message if options is not None else True,
                         runtime_config=runtime_config,
                         provider_policy_config=self.provider_policy_config,
+                        sdk_default_policy=self.default_policy,
+                        run_policy=normalized_policy,
                     ),
                 )
             except Exception as exc:
@@ -616,6 +646,7 @@ class Autoloop:
                 provider=self._provider,
                 run_folder=_sdk_operation_dir(self.root, self.state_dir, kind="llm"),
                 policy=policy,
+                provider_policy_resolver=self._direct_operation_policy_resolver(),
             )
         except Exception as exc:
             raise _wrap_sdk_execution_error(exc, operation_name="llm") from exc
@@ -636,6 +667,7 @@ class Autoloop:
                 provider=self._provider,
                 run_folder=_sdk_operation_dir(self.root, self.state_dir, kind="classify"),
                 policy=policy,
+                provider_policy_resolver=self._direct_operation_policy_resolver(),
             )
         except Exception as exc:
             raise _wrap_sdk_execution_error(exc, operation_name="classify") from exc
@@ -644,9 +676,9 @@ class Autoloop:
         self,
         step_def: Step | object,
         message: str | None = None,
-        typed_input: BaseModel | None = None,
-        /,
         *,
+        policy: PolicyInput = None,
+        input: BaseModel | Mapping[str, Any] | None = None,
         params: BaseModel | Mapping[str, Any] | None = None,
         routes: Mapping[str, Any] | None = None,
         on_input: InputHandler | None = None,
@@ -655,17 +687,33 @@ class Autoloop:
         provider_questions: bool | None = None,
         retention: RetentionPolicy | None = None,
     ) -> StepResult:
-        workflow_cls = _build_synthetic_step_workflow(self.root, step_def, typed_input, routes=routes)
+        """Run one step through a synthetic one-step workflow.
+
+        `policy` applies only to this SDK step invocation. The supplied step object
+        is not mutated. `message` is the task or run request. `input` is typed input
+        for the synthetic invocation when applicable, and `params` are workflow
+        parameters for that synthetic invocation.
+        """
+
+        invocation_policy = _normalize_sdk_policy_input(policy)
+        effective_step, workflow_policy = _sdk_step_invocation_layer(step_def, invocation_policy)
+        workflow_cls = _build_synthetic_step_workflow(
+            self.root,
+            effective_step,
+            input,
+            routes=routes,
+            workflow_policy=workflow_policy,
+        )
         workflow_result = self.run(
             workflow_cls,
-            message,
-            typed_input,
+            message=message,
             params=params,
             on_input=on_input,
             max_pauses=max_pauses,
             max_steps=max_steps,
             provider_questions=provider_questions,
             retention=retention,
+            input=input,
         )
         return StepResult(
             ok=workflow_result.ok,
@@ -681,16 +729,16 @@ class Autoloop:
         self,
         prompt: str | Prompt,
         message: str | None = None,
-        typed_input: BaseModel | None = None,
-        /,
         *,
+        input: BaseModel | Mapping[str, Any] | None = None,
         name: str = "prompt",
-        writes: Mapping[str, Artifact] | None = None,
+        writes: Sequence[Artifact | simple.ArtifactSpec] = (),
         reads: Sequence[Artifact | str | Path] = (),
         requires: Sequence[Artifact | str | Path] = (),
         routes: Mapping[str, Any] | None = None,
         session: Session | None = None,
         retry: int | ProviderRetryPolicy | None = None,
+        policy: PolicyInput = None,
         on_input: InputHandler | None = None,
         max_pauses: int = 8,
         max_steps: int | None = None,
@@ -700,23 +748,24 @@ class Autoloop:
         step_def = PromptStep(
             name=name,
             producer=_normalize_prompt(prompt),
-            writes=writes,
+            writes=_normalize_sdk_writes(name, writes),
             reads=reads,
             requires=requires,
             route_metadata=None,
             session=session,
             retry_policy=_normalize_retry_policy(retry),
+            provider_policy=_normalize_sdk_policy_input(policy),
         )
         return self.step(
             step_def,
-            message,
-            typed_input,
+            message=message,
             routes=routes,
             on_input=on_input,
             max_pauses=max_pauses,
             max_steps=max_steps,
             provider_questions=provider_questions,
             retention=retention,
+            input=input,
         )
 
     def produce_verify_step(
@@ -725,10 +774,10 @@ class Autoloop:
         producer: str | Prompt,
         verifier: str | Prompt,
         message: str | None = None,
-        typed_input: BaseModel | None = None,
+        input: BaseModel | Mapping[str, Any] | None = None,
         name: str = "produce_verify",
-        writes: Mapping[str, Artifact] | None = None,
-        verifier_writes: Mapping[str, Artifact] | None = None,
+        writes: Sequence[Artifact | simple.ArtifactSpec] = (),
+        verifier_writes: Sequence[Artifact | simple.ArtifactSpec] = (),
         reads: Sequence[Artifact | str | Path] = (),
         requires: Sequence[Artifact | str | Path] = (),
         verifier_requires: Sequence[Artifact | str | Path] = (),
@@ -736,6 +785,7 @@ class Autoloop:
         session: Session | None = None,
         verifier_session: Session | None = None,
         retry: int | ProviderRetryPolicy | None = None,
+        policy: PolicyInput = None,
         on_input: InputHandler | None = None,
         max_pauses: int = 8,
         max_steps: int | None = None,
@@ -746,39 +796,40 @@ class Autoloop:
             name=name,
             producer=_normalize_prompt(producer),
             verifier=_normalize_prompt(verifier),
-            producer_writes=writes,
-            verifier_writes=verifier_writes,
+            producer_writes=_normalize_sdk_writes(name, writes),
+            verifier_writes=_normalize_sdk_writes(name, verifier_writes),
             reads=reads,
             requires=requires,
             verifier_requires=verifier_requires,
             session=session,
             verifier_session=verifier_session,
             retry_policy=_normalize_retry_policy(retry),
+            provider_policy=_normalize_sdk_policy_input(policy),
         )
         return self.step(
             step_def,
-            message,
-            typed_input,
+            message=message,
             routes=routes,
             on_input=on_input,
             max_pauses=max_pauses,
             max_steps=max_steps,
             provider_questions=provider_questions,
             retention=retention,
+            input=input,
         )
 
     def python_step(
         self,
         handler: Callable[..., Any],
         message: str | None = None,
-        typed_input: BaseModel | None = None,
-        /,
         *,
+        input: BaseModel | Mapping[str, Any] | None = None,
         name: str = "python",
-        writes: Mapping[str, Artifact] | None = None,
+        writes: Sequence[Artifact | simple.ArtifactSpec] = (),
         reads: Sequence[Artifact | str | Path] = (),
         requires: Sequence[Artifact | str | Path] = (),
         routes: Mapping[str, Any] | None = None,
+        policy: PolicyInput = None,
         on_input: InputHandler | None = None,
         max_pauses: int = 8,
         max_steps: int | None = None,
@@ -787,35 +838,36 @@ class Autoloop:
         step_def = PythonStep(
             name=name,
             handler=handler,
-            writes=writes,
+            writes=_normalize_sdk_writes(name, writes),
             reads=reads,
             requires=requires,
+            provider_policy=_normalize_sdk_policy_input(policy),
         )
         return self.step(
             step_def,
-            message,
-            typed_input,
+            message=message,
             routes=routes,
             on_input=on_input,
             max_pauses=max_pauses,
             max_steps=max_steps,
             retention=retention,
+            input=input,
         )
 
     def workflow_step(
         self,
         workflow: type[CoreWorkflow] | str,
         message: str | None = None,
-        typed_input: BaseModel | None = None,
-        /,
         *,
+        input: BaseModel | Mapping[str, Any] | None = None,
         child_message: str | None = None,
         name: str = "workflow",
         params: BaseModel | Mapping[str, Any] | None = None,
-        writes: Mapping[str, Artifact] | None = None,
+        writes: Sequence[Artifact | simple.ArtifactSpec] = (),
         reads: Sequence[Artifact | str | Path] = (),
         requires: Sequence[Artifact | str | Path] = (),
         routes: Mapping[str, Any] | None = None,
+        policy: PolicyInput = None,
         on_input: InputHandler | None = None,
         max_pauses: int = 8,
         max_steps: int | None = None,
@@ -826,22 +878,23 @@ class Autoloop:
             name=name,
             workflow=workflow,
             message=message if child_message is None else child_message,
-            input=typed_input,
+            input=input,
             params=_materialize_child_workflow_params(params),
-            writes=writes,
+            writes=_normalize_sdk_writes(name, writes),
             reads=reads,
             requires=requires,
+            provider_policy=_normalize_sdk_policy_input(policy),
         )
         return self.step(
             step_def,
-            message,
-            typed_input,
+            message=message,
             routes=routes,
             on_input=on_input,
             max_pauses=max_pauses,
             max_steps=max_steps,
             provider_questions=provider_questions,
             retention=retention,
+            input=input,
         )
 
     def cleanup(
@@ -902,6 +955,17 @@ class Autoloop:
             dry_run=dry_run,
         )
 
+    def _direct_operation_policy_resolver(self):
+        return create_provider_policy_resolver(
+            sdk_default_policy=self.default_policy,
+            workflow_policy=None,
+            run_policy=None,
+            workspace_root=self.root,
+            provider_policy=self.provider_policy_config,
+            runtime=self.runtime_config,
+            provider=self._provider_config,
+        )
+
 
 def serialize_input_response(value: InputResponse) -> str:
     try:
@@ -924,34 +988,20 @@ def serialize_input_response(value: InputResponse) -> str:
 
 def _resolve_sdk_provider(
     *,
-    root: Path,
     provider: str | LLMProvider | None,
-    model: str | None,
-    model_effort: str | None,
+    provider_config: ProviderConfig,
     runtime_config: RuntimeConfig,
     provider_policy_config: ProviderPolicyRuntimeConfig,
 ) -> LLMProvider:
     if provider is not None and not isinstance(provider, str):
-        if model is not None or model_effort is not None:
-            raise SDKExecutionError(
-                "model and model_effort overrides are only supported when provider is a built-in provider name or None"
-            )
         try:
             return validate_llm_provider(provider)
         except Exception as exc:
             raise SDKExecutionError(f"invalid provider object {type(provider).__name__!r}: {exc}", original_error=exc) from exc
 
     try:
-        resolved = resolve_runtime_config(root, argparse.Namespace())
-        provider_name = provider.strip() if isinstance(provider, str) else resolved.provider.name
-        effective_provider_config = _provider_config_with_overrides(
-            resolved.provider,
-            provider_name=provider_name,
-            model=model,
-            model_effort=model_effort,
-        )
         backend_config = ResolvedRuntimeConfig(
-            provider=effective_provider_config,
+            provider=provider_config,
             runtime=runtime_config,
             provider_policy=provider_policy_config,
         )
@@ -965,10 +1015,17 @@ def _resolve_sdk_provider(
 def _provider_config_with_overrides(
     base: ProviderConfig,
     *,
-    provider_name: str,
+    provider: str | LLMProvider | None,
     model: str | None,
     model_effort: str | None,
 ) -> ProviderConfig:
+    if provider is not None and not isinstance(provider, str):
+        if model is not None or model_effort is not None:
+            raise SDKExecutionError(
+                "model and model_effort overrides are only supported when provider is a built-in provider name or None"
+            )
+        return base
+    provider_name = provider.strip() if isinstance(provider, str) else base.name
     updated = replace(base, name=provider_name)
     if model is None and model_effort is None:
         return updated
@@ -998,25 +1055,20 @@ def _resolve_and_compile_workflow(root: Path, workflow: type[object] | str) -> t
         raise
 
 
-def _coerce_sdk_typed_input(
+def _coerce_sdk_input(
     compiled: CompiledWorkflow,
-    typed_input: BaseModel | None,
+    input: BaseModel | Mapping[str, Any] | None,
 ) -> dict[str, Any] | None:
     workflow_name = compiled.workflow_cls.__name__
     input_model = compiled.input_model
-    if typed_input is not None and not isinstance(typed_input, BaseModel):
-        raise WorkflowInputError(
-            f"{workflow_name} expects {workflow_name}.Input as the third positional argument; "
-            f"received {type(typed_input).__name__}"
-        )
     if input_model is None:
-        if typed_input is not None:
+        if input is not None:
             raise WorkflowInputError(
-                f"{workflow_name} does not declare Input and does not accept typed input; "
-                f"received {type(typed_input).__name__}"
+                f"{workflow_name} does not declare Input and does not accept input=...; "
+                f"received {type(input).__name__}"
             )
         return None
-    if typed_input is None:
+    if input is None:
         try:
             default_input = input_model()
         except ValidationError as exc:
@@ -1025,12 +1077,88 @@ def _coerce_sdk_typed_input(
                 f"{', '.join(sorted(_missing_validation_fields(exc)))}"
             ) from exc
         return default_input.model_dump(mode="json")
-    if type(typed_input) is not input_model:
+    if isinstance(input, BaseModel):
+        if type(input) is not input_model:
+            raise WorkflowInputError(
+                f"{workflow_name} expects input= of exact type {input_model.__module__}.{input_model.__qualname__} "
+                f"or a mapping; received {type(input).__module__}.{type(input).__qualname__}"
+            )
+        return input.model_dump(mode="json")
+    if not isinstance(input, Mapping):
         raise WorkflowInputError(
-            f"{workflow_name} expects typed input of exact type {input_model.__module__}.{input_model.__qualname__}; "
-            f"received {type(typed_input).__module__}.{type(typed_input).__qualname__}"
+            f"{workflow_name} input must be a mapping, {workflow_name}.Input instance, or None; "
+            f"received {type(input).__name__}"
         )
-    return typed_input.model_dump(mode="json")
+    try:
+        validated = input_model.model_validate(dict(input))
+    except ValidationError as exc:
+        raise WorkflowInputError(f"{workflow_name} input is invalid: {exc}") from exc
+    return validated.model_dump(mode="json")
+
+
+def _normalize_sdk_policy_input(
+    policy: PolicyInput,
+    *,
+    field_name: str = "policy",
+) -> PolicyInput:
+    if policy is None or isinstance(policy, (Policy, ProviderPolicy, ProviderPolicyOverride)):
+        return policy
+    raise TypeError(f"{field_name} must be a Policy, ProviderPolicy, ProviderPolicyOverride, or None")
+
+
+def _sdk_step_invocation_layer(
+    step_def: Step | object,
+    invocation_policy: PolicyInput,
+) -> tuple[Step | object, PolicyInput]:
+    if invocation_policy is None:
+        return step_def, None
+    layered_step = _shallow_sdk_clone(step_def)
+    if isinstance(layered_step, Step):
+        authored_policy = layered_step.provider_policy
+        layered_step.provider_policy = invocation_policy
+        return layered_step, authored_policy
+    authored_policy = getattr(layered_step, "policy", None)
+    setattr(layered_step, "policy", invocation_policy)
+    return layered_step, authored_policy
+
+
+def _shallow_sdk_clone(value: object) -> object:
+    clone = object.__new__(value.__class__)
+    if hasattr(value, "__dict__"):
+        clone.__dict__.update(value.__dict__)
+    for cls in value.__class__.mro():
+        slots = getattr(cls, "__slots__", ())
+        if isinstance(slots, str):
+            slots = (slots,)
+        for slot in slots:
+            if slot in {"__dict__", "__weakref__"}:
+                continue
+            if hasattr(value, slot):
+                object.__setattr__(clone, slot, getattr(value, slot))
+    return clone
+
+
+def _normalize_sdk_writes(
+    step_name: str,
+    writes: Sequence[Artifact | simple.ArtifactSpec],
+) -> dict[str, Artifact] | None:
+    if not writes:
+        return None
+    normalized: dict[str, Artifact] = {}
+    for item in writes:
+        if isinstance(item, Artifact):
+            artifact = item
+        elif isinstance(item, simple.ArtifactSpec):
+            artifact = item.materialize(step_name)
+        else:
+            raise TypeError("writes entries must be Artifact or simple artifact specs such as Md(...)")
+        artifact_name = artifact.name
+        if not isinstance(artifact_name, str) or not artifact_name.strip():
+            raise ValueError("writes artifacts must have a stable non-empty name")
+        if artifact_name in normalized and normalized[artifact_name] is not artifact:
+            raise ValueError(f"duplicate write artifact name {artifact_name!r}")
+        normalized[artifact_name] = artifact
+    return normalized
 
 
 def _coerce_sdk_params(
@@ -1524,17 +1652,25 @@ def _task_dir_appears_failed_or_awaiting_input(task_dir: Path) -> bool:
 def _build_synthetic_step_workflow(
     root: Path,
     step_def: Step | object,
-    typed_input: BaseModel | None,
+    input: BaseModel | Mapping[str, Any] | None,
     *,
     routes: Mapping[str, Any] | None,
+    workflow_policy: PolicyInput = None,
 ) -> type[simple.Workflow]:
     _validate_step_declaration_supported(root, step_def)
     attrs: dict[str, Any] = {
         "__module__": __name__,
         "State": _SDKStepState,
     }
-    if typed_input is not None:
-        attrs["Input"] = type(typed_input)
+    if workflow_policy is not None:
+        attrs["policy"] = workflow_policy
+    if isinstance(input, BaseModel):
+        attrs["Input"] = type(input)
+    elif isinstance(input, Mapping):
+        attrs["Input"] = create_model(
+            f"SDKStepInput_{uuid4().hex[:8]}",
+            **{str(key): (Any, ...) for key in input},
+        )
     if isinstance(step_def, Step):
         attrs["entry"] = step_def
         attrs[step_def.name] = step_def

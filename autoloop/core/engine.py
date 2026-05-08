@@ -259,7 +259,9 @@ class Engine:
             from autoloop.runtime.provider_policy_resolver import create_provider_policy_resolver
 
             self.provider_policy_resolver = create_provider_policy_resolver(
+                sdk_default_policy=None,
                 workflow_policy=self.compiled.provider_policy,
+                run_policy=None,
                 workspace_root=_resolve_context_root(
                     root=root,
                     task_folder=task_folder,

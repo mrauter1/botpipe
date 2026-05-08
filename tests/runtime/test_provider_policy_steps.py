@@ -88,7 +88,9 @@ def _provider_policy_resolver(
             runtime=_runtime_config(),
             provider_policy=_provider_policy_runtime_config(strict=strict),
         ),
+        sdk_default_policy=None,
         workflow_policy=compiled.provider_policy,
+        run_policy=None,
         workspace_root=tmp_path,
     )
 
