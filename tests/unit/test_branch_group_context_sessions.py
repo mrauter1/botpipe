@@ -8,22 +8,22 @@ from pathlib import Path
 import pytest
 from pydantic import BaseModel
 
-import autoloop.simple as simple
-from autoloop.core.branch_groups.context import (
+import botlane.simple as simple
+from botlane.core.branch_groups.context import (
     BranchMetadata,
     FanInMetadata,
     create_branch_context,
     create_fan_in_context,
 )
-from autoloop.core.branch_groups.sessions import BranchSessionStoreView
-from autoloop.core.context import Context, context_runtime
-from autoloop.core.engine import Engine, StepFinalizationRecord
-from autoloop.core.engine_collaborators import StepExecutionResult
-from autoloop.core.errors import WorkflowExecutionError
-from autoloop.core.providers.fake import ScriptedLLMProvider
-from autoloop.core.sessions import Continuity
-from autoloop.core.stores import InMemoryCheckpointStore, InMemorySessionStore, SessionBinding
-from autoloop.core.worklists import Worklist
+from botlane.core.branch_groups.sessions import BranchSessionStoreView
+from botlane.core.context import Context, context_runtime
+from botlane.core.engine import Engine, StepFinalizationRecord
+from botlane.core.engine_collaborators import StepExecutionResult
+from botlane.core.errors import WorkflowExecutionError
+from botlane.core.providers.fake import ScriptedLLMProvider
+from botlane.core.sessions import Continuity
+from botlane.core.stores import InMemoryCheckpointStore, InMemorySessionStore, SessionBinding
+from botlane.core.worklists import Worklist
 
 
 class _State(BaseModel):

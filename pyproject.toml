@@ -3,7 +3,7 @@ requires = ["setuptools>=68"]
 build-backend = "setuptools.build_meta"
 
 [project]
-name = "autoloop-v3-surface"
+name = "botlane-v3-surface"
 version = "0.0.0"
 requires-python = ">=3.12"
 dependencies = [
@@ -11,12 +11,12 @@ dependencies = [
 ]
 
 [project.scripts]
-autoloop = "autoloop.runtime.cli:main"
+botlane = "botlane.runtime.cli:main"
 
 [tool.setuptools.packages.find]
-include = ["autoloop*", "autoloop_optimizer*"]
+include = ["botlane*", "botlane_optimizer*"]
 
 [tool.setuptools.package-data]
-autoloop = [
+botlane = [
   "workflows/**/*",
 ]

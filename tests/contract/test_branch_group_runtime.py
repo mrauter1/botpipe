@@ -8,15 +8,15 @@ from pathlib import Path
 import pytest
 from pydantic import BaseModel
 
-from autoloop.core.branch_groups import runtime as branch_group_runtime
-from autoloop.core.engine import Engine
-from autoloop.core.errors import WorkflowExecutionError
-from autoloop.core.primitives import Event, Goto, Outcome, RequestInput
-from autoloop.core.providers.fake import ScriptedLLMProvider
-from autoloop.core.providers.models import LLMRequest, OutcomeResponse, ProducerRequest, ProducerResponse, VerifierRequest
-from autoloop.core.stores import InMemoryCheckpointStore, InMemorySessionStore
-from autoloop.core.stores.protocols import SessionBinding
-import autoloop.simple as simple
+from botlane.core.branch_groups import runtime as branch_group_runtime
+from botlane.core.engine import Engine
+from botlane.core.errors import WorkflowExecutionError
+from botlane.core.primitives import Event, Goto, Outcome, RequestInput
+from botlane.core.providers.fake import ScriptedLLMProvider
+from botlane.core.providers.models import LLMRequest, OutcomeResponse, ProducerRequest, ProducerResponse, VerifierRequest
+from botlane.core.stores import InMemoryCheckpointStore, InMemorySessionStore
+from botlane.core.stores.protocols import SessionBinding
+import botlane.simple as simple
 
 
 def _workspace(tmp_path: Path) -> tuple[Path, Path]:

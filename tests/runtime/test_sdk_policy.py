@@ -4,14 +4,14 @@ from pathlib import Path
 
 from pydantic import BaseModel
 
-import autoloop.simple as simple
-from autoloop import FINISH, Autoloop
-from autoloop.core.provider_policy import PermissionPolicy, ProviderPolicy
-from autoloop.core.primitives import Event, Outcome
-from autoloop.core.providers.fake import ScriptedLLMProvider
-from autoloop.core.steps import PromptStep
-from autoloop.policy import ModelEffort, PermissionMode, Policy
-from autoloop.runtime.config import GitTrackingRuntimeConfig, ProviderPolicyRuntimeConfig, RuntimeConfig
+import botlane.simple as simple
+from botlane import FINISH, Botlane
+from botlane.core.provider_policy import PermissionPolicy, ProviderPolicy
+from botlane.core.primitives import Event, Outcome
+from botlane.core.providers.fake import ScriptedLLMProvider
+from botlane.core.steps import PromptStep
+from botlane.policy import ModelEffort, PermissionMode, Policy
+from botlane.runtime.config import GitTrackingRuntimeConfig, ProviderPolicyRuntimeConfig, RuntimeConfig
 
 
 def _sdk_client(
@@ -21,8 +21,8 @@ def _sdk_client(
     default_policy: Policy | None = None,
     provider_policy_config: ProviderPolicyRuntimeConfig | None = None,
     state_dir: Path | None = None,
-) -> Autoloop:
-    return Autoloop(
+) -> Botlane:
+    return Botlane(
         workspace=tmp_path,
         provider=provider,
         default_policy=default_policy,

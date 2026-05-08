@@ -4,41 +4,41 @@ from pathlib import Path
 from typing import cast
 import pytest
 from pydantic import BaseModel, Field
-from autoloop.core.compiler import compile_workflow
-from autoloop.core.artifacts import Artifact, render_runtime_template, resolve_artifact_template
-from autoloop.core.context import ChildWorkflowResult, Context
-from autoloop.core.engine import Engine
-from autoloop.core.errors import (
+from botlane.core.compiler import compile_workflow
+from botlane.core.artifacts import Artifact, render_runtime_template, resolve_artifact_template
+from botlane.core.context import ChildWorkflowResult, Context
+from botlane.core.engine import Engine
+from botlane.core.errors import (
     MissingArtifactError,
     ProviderExecutionError,
     WorkflowExecutionError,
     WorkflowValidationError,
 )
-import autoloop.core.lowering as workflow_lowering
-from autoloop.core.extensions import RunBinding, StepFinish, StepStart, TerminalFinish
-from autoloop.core.operations import _load_replay_store
-from autoloop.core.prompts import Prompt
-from autoloop.core.schema_registry import OPERATION_REPLAY_SCHEMA
-from autoloop.core import AWAIT_INPUT, FAIL, FINISH, GLOBAL, Workflow
-from autoloop.core.primitives import Checkpoint, Event, Fail, Goto, Outcome, RequestInput
-from autoloop.core.providers.fake import ScriptedLLMProvider
-from autoloop.core.providers.models import (
+import botlane.core.lowering as workflow_lowering
+from botlane.core.extensions import RunBinding, StepFinish, StepStart, TerminalFinish
+from botlane.core.operations import _load_replay_store
+from botlane.core.prompts import Prompt
+from botlane.core.schema_registry import OPERATION_REPLAY_SCHEMA
+from botlane.core import AWAIT_INPUT, FAIL, FINISH, GLOBAL, Workflow
+from botlane.core.primitives import Checkpoint, Event, Fail, Goto, Outcome, RequestInput
+from botlane.core.providers.fake import ScriptedLLMProvider
+from botlane.core.providers.models import (
     OutcomeResponse,
     ProducerResponse,
     RuntimeInteractionPolicy,
     StepProviderUsage,
     TokenUsage,
 )
-from autoloop.core.providers.rendered import RenderedLLMProvider
-from autoloop.core.providers.retries import ProviderRetryPolicy
-from autoloop.core.providers.turns import ProviderTurnResult, RenderedProviderTurn
-from autoloop.core.routes import Route
-from autoloop.core.sessions import Continuity, SessionKey
-from autoloop.core.steps import PromptStep, ProduceVerifyStep, Session, PythonStep, ChildWorkflowStep
-from autoloop.core.worklists import Selector, WorkItem, Worklist
-from autoloop.simple import Effects, Json, Md, ValidationResult, Workflow as SimpleWorkflow, WorklistEffect, classify, llm, produce_verify_step, python_step, step, validation_step, workflow_step
-from autoloop.core.stores import InMemoryCheckpointStore, InMemorySessionStore, SessionBinding, SessionSnapshot
-from autoloop.runtime.prompts import FilesystemPromptRegistry
+from botlane.core.providers.rendered import RenderedLLMProvider
+from botlane.core.providers.retries import ProviderRetryPolicy
+from botlane.core.providers.turns import ProviderTurnResult, RenderedProviderTurn
+from botlane.core.routes import Route
+from botlane.core.sessions import Continuity, SessionKey
+from botlane.core.steps import PromptStep, ProduceVerifyStep, Session, PythonStep, ChildWorkflowStep
+from botlane.core.worklists import Selector, WorkItem, Worklist
+from botlane.simple import Effects, Json, Md, ValidationResult, Workflow as SimpleWorkflow, WorklistEffect, classify, llm, produce_verify_step, python_step, step, validation_step, workflow_step
+from botlane.core.stores import InMemoryCheckpointStore, InMemorySessionStore, SessionBinding, SessionSnapshot
+from botlane.runtime.prompts import FilesystemPromptRegistry
 PACKAGE_ROOT = Path(__file__).resolve().parents[2]
 def _chain_hooks(*hooks):
     active = tuple(hook for hook in hooks if hook is not None)

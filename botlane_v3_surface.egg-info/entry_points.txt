@@ -1,0 +1,2 @@
+[console_scripts]
+botlane = botlane.runtime.cli:main

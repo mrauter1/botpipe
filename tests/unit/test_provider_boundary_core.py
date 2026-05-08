@@ -6,9 +6,9 @@ from dataclasses import dataclass
 
 import pytest
 
-from autoloop.core.errors import ProviderExecutionError
-from autoloop.core.prompts import ResolvedPrompt
-from autoloop.core.providers.models import (
+from botlane.core.errors import ProviderExecutionError
+from botlane.core.prompts import ResolvedPrompt
+from botlane.core.providers.models import (
     LLMRequest,
     OperationRequest,
     OutcomeResponse,
@@ -21,14 +21,14 @@ from autoloop.core.providers.models import (
     TokenUsage,
     VerifierRequest,
 )
-from autoloop.core.providers.fake import ScriptedLLMProvider
-from autoloop.core.providers.parsing import parse_outcome_json
-from autoloop.core.providers.protocols import validate_llm_provider, validate_provider_transport
-from autoloop.core.providers.rendered import RenderedLLMProvider
-from autoloop.core.providers.rendering import ProviderPromptRenderPolicy, render_provider_turn_with_policy
-from autoloop.core.providers.rendering import render_provider_turn
-from autoloop.core.providers.turns import ProviderTurnResult, RenderedProviderTurn
-from autoloop.core.stores.protocols import SessionBinding
+from botlane.core.providers.fake import ScriptedLLMProvider
+from botlane.core.providers.parsing import parse_outcome_json
+from botlane.core.providers.protocols import validate_llm_provider, validate_provider_transport
+from botlane.core.providers.rendered import RenderedLLMProvider
+from botlane.core.providers.rendering import ProviderPromptRenderPolicy, render_provider_turn_with_policy
+from botlane.core.providers.rendering import render_provider_turn
+from botlane.core.providers.turns import ProviderTurnResult, RenderedProviderTurn
+from botlane.core.stores.protocols import SessionBinding
 
 
 def _session_binding(session_id: str = "provider-session-1") -> SessionBinding:

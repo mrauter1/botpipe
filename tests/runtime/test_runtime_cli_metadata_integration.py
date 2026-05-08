@@ -7,20 +7,20 @@ from pathlib import Path
 
 import pytest
 
-import autoloop
-from autoloop.core.providers.fake import ScriptedLLMProvider
-from autoloop.runtime import cli
-from autoloop.runtime.config import GitTrackingRuntimeConfig, RuntimeConfig
-from autoloop.runtime.loader import resolve_workflow_reference
-from autoloop.runtime.runner import RunnerOptions, run_workflow_package
+import botlane
+from botlane.core.providers.fake import ScriptedLLMProvider
+from botlane.runtime import cli
+from botlane.runtime.config import GitTrackingRuntimeConfig, RuntimeConfig
+from botlane.runtime.loader import resolve_workflow_reference
+from botlane.runtime.runner import RunnerOptions, run_workflow_package
 
 
 def _clear_workflow_modules() -> None:
     importlib.invalidate_caches()
     for name in list(sys.modules):
         if (
-            name == "autoloop.workflows"
-            or name.startswith("autoloop.workflows.")
+            name == "botlane.workflows"
+            or name.startswith("botlane.workflows.")
             or name.startswith("_autoloop_workspace_workflows.")
         ):
             sys.modules.pop(name, None)
@@ -34,12 +34,12 @@ def _isolate_workflow_modules():
 
 
 def _configure_package_root(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> Path:
-    package_base = tmp_path / "installed" / "autoloop"
+    package_base = tmp_path / "installed" / "botlane"
     package_root = package_base / "workflows"
     package_root.mkdir(parents=True, exist_ok=True)
     (package_root / "__init__.py").write_text("__all__ = []\n", encoding="utf-8")
-    monkeypatch.setattr(autoloop, "__path__", [str(package_base), *list(autoloop.__path__)], raising=False)
-    monkeypatch.setattr("autoloop.core.workflow_catalog.package_workflows_root", lambda: package_root.resolve())
+    monkeypatch.setattr(botlane, "__path__", [str(package_base), *list(botlane.__path__)], raising=False)
+    monkeypatch.setattr("botlane.core.workflow_catalog.package_workflows_root", lambda: package_root.resolve())
     importlib.invalidate_caches()
     return package_root
 
@@ -68,7 +68,7 @@ def _write_workspace_workflow(root: Path, workflow_id: str, *, aliases: tuple[st
         f"""
 from __future__ import annotations
 
-from autoloop import Event, FINISH, Workflow, python_step
+from botlane import Event, FINISH, Workflow, python_step
 
 
 class {workflow_id.title().replace("_", "")}Workflow(Workflow):
@@ -109,7 +109,7 @@ def _write_package_workflow(package_root: Path, workflow_id: str, *, aliases: tu
         f"""
 from __future__ import annotations
 
-from autoloop import Event, FINISH, Workflow, python_step
+from botlane import Event, FINISH, Workflow, python_step
 
 
 class {class_name}(Workflow):
@@ -179,7 +179,7 @@ def test_explicit_manifest_run_metadata_normalizes_external_origin(tmp_path: Pat
         """
 from __future__ import annotations
 
-from autoloop import Event, FINISH, Workflow, python_step
+from botlane import Event, FINISH, Workflow, python_step
 
 
 class ExplicitDemo(Workflow):
@@ -230,7 +230,7 @@ def test_explicit_python_file_run_metadata_uses_absolute_origin_outside_workspac
         """
 from __future__ import annotations
 
-from autoloop import Event, FINISH, Workflow, python_step
+from botlane import Event, FINISH, Workflow, python_step
 
 
 class SingleExplicitWorkflow(Workflow):
@@ -283,8 +283,8 @@ def test_package_run_metadata_records_package_modules(tmp_path: Path, monkeypatc
 
     resolved = resolve_workflow_reference(tmp_path, "package_demo")
     assert resolved.source_root_kind == "package"
-    assert resolved.package_module == "autoloop.workflows.package_demo"
-    assert resolved.workflow_module == "autoloop.workflows.package_demo.flow"
+    assert resolved.package_module == "botlane.workflows.package_demo"
+    assert resolved.workflow_module == "botlane.workflows.package_demo.flow"
 
     result = run_workflow_package(
         "package_demo",
@@ -302,11 +302,11 @@ def test_package_run_metadata_records_package_modules(tmp_path: Path, monkeypatc
     payload = json.loads((run_dir / "run.json").read_text(encoding="utf-8"))["workflow"]
 
     assert payload["source_root_kind"] == "package"
-    assert payload["package_folder"] == "installed/autoloop/workflows/package_demo"
+    assert payload["package_folder"] == "installed/botlane/workflows/package_demo"
     assert payload["package_name"] == "package_demo"
-    assert payload["package_module"] == "autoloop.workflows.package_demo"
-    assert payload["workflow_module"] == "autoloop.workflows.package_demo.flow"
-    assert payload["source_root"] == "installed/autoloop/workflows"
+    assert payload["package_module"] == "botlane.workflows.package_demo"
+    assert payload["workflow_module"] == "botlane.workflows.package_demo.flow"
+    assert payload["source_root"] == "installed/botlane/workflows"
 
 
 def test_cli_workflows_list_show_and_all_emit_shadow_and_source_metadata(
@@ -380,8 +380,8 @@ def test_cli_workflows_show_emits_package_source_metadata(
     assert payload["source_root"] == str(package_root)
     assert payload["package_folder"] == str(package_dir)
     assert payload["package_name"] == "package_show"
-    assert payload["package_module"] == "autoloop.workflows.package_show"
-    assert payload["workflow_module"] == "autoloop.workflows.package_show.flow"
+    assert payload["package_module"] == "botlane.workflows.package_show"
+    assert payload["workflow_module"] == "botlane.workflows.package_show.flow"
     assert payload["shadowed"] is False
     assert payload["shadowed_by"] is None
 

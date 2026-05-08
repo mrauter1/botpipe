@@ -6,16 +6,16 @@ from pathlib import Path
 import pytest
 from pydantic import BaseModel, Field
 
-import autoloop.core.compiler as workflow_compiler
-from autoloop.core import FINISH, Workflow
-from autoloop.core.engine import Engine
-from autoloop.core.errors import WorkflowExecutionError
-from autoloop.core.primitives import Outcome
-from autoloop.core.providers.fake import ScriptedLLMProvider
-from autoloop.core.steps import PromptStep
-from autoloop.core.stores import InMemoryCheckpointStore, InMemorySessionStore
-from autoloop.simple import Effects
-from autoloop.stdlib import (
+import botlane.core.compiler as workflow_compiler
+from botlane.core import FINISH, Workflow
+from botlane.core.engine import Engine
+from botlane.core.errors import WorkflowExecutionError
+from botlane.core.primitives import Outcome
+from botlane.core.providers.fake import ScriptedLLMProvider
+from botlane.core.steps import PromptStep
+from botlane.core.stores import InMemoryCheckpointStore, InMemorySessionStore
+from botlane.simple import Effects
+from botlane.stdlib import (
     ProgressBoard,
     ProgressItem,
     SKIPPABLE_WORK_STATUS_POLICY,

@@ -23,7 +23,7 @@ def _venv_bin(venv_dir: Path, name: str) -> str:
     return str(venv_dir / "bin" / name)
 
 
-def test_built_wheel_installs_public_autoloop_package_and_cli(tmp_path: Path) -> None:
+def test_built_wheel_installs_public_botlane_package_and_cli(tmp_path: Path) -> None:
     dist_dir = tmp_path / "dist"
     dist_dir.mkdir(parents=True, exist_ok=True)
     _run(
@@ -44,16 +44,19 @@ def test_built_wheel_installs_public_autoloop_package_and_cli(tmp_path: Path) ->
     venv.EnvBuilder(with_pip=True).create(venv_dir)
     pip = _venv_bin(venv_dir, "pip")
     python = _venv_bin(venv_dir, "python")
+    botlane = _venv_bin(venv_dir, "botlane")
     autoloop = _venv_bin(venv_dir, "autoloop")
 
     _run(pip, "install", str(wheels[-1]))
 
-    help_result = _run(autoloop, "--help")
-    assert "autoloop" in help_result.stdout
+    assert not Path(autoloop).exists()
+
+    help_result = _run(botlane, "--help")
+    assert "botlane" in help_result.stdout
     assert "workflows" in help_result.stdout
     assert "run" in help_result.stdout
 
-    workflow_help_result = _run(autoloop, "workflows", "--help")
+    workflow_help_result = _run(botlane, "workflows", "--help")
     assert "list" in workflow_help_result.stdout
 
     import_check = _run(
@@ -61,9 +64,9 @@ def test_built_wheel_installs_public_autoloop_package_and_cli(tmp_path: Path) ->
         "-c",
         "\n".join(
             (
-                "import autoloop",
-                "from autoloop import FINISH, Route, Workflow, step",
-                "from autoloop.runtime import cli",
+                "import botlane",
+                "from botlane import FINISH, Route, Workflow, step",
+                "from botlane.runtime import cli",
                 "assert Workflow is not None",
                 "assert step is not None",
                 "assert Route is not None",
@@ -73,3 +76,45 @@ def test_built_wheel_installs_public_autoloop_package_and_cli(tmp_path: Path) ->
         ),
     )
     assert import_check.returncode == 0
+
+    old_import_check = subprocess.run(
+        [
+            python,
+            "-c",
+            "\n".join(
+                (
+                    "import importlib",
+                    "importlib.import_module('autoloop')",
+                )
+            ),
+        ],
+        check=False,
+        capture_output=True,
+        text=True,
+    )
+    assert old_import_check.returncode != 0
+
+    old_optimizer_import_check = subprocess.run(
+        [
+            python,
+            "-c",
+            "\n".join(
+                (
+                    "import importlib",
+                    "importlib.import_module('autoloop_optimizer')",
+                )
+            ),
+        ],
+        check=False,
+        capture_output=True,
+        text=True,
+    )
+    assert old_optimizer_import_check.returncode != 0
+
+    old_module_run = subprocess.run(
+        [python, "-m", "autoloop"],
+        check=False,
+        capture_output=True,
+        text=True,
+    )
+    assert old_module_run.returncode != 0

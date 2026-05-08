@@ -8,16 +8,16 @@ from pathlib import Path
 
 import pytest
 
-from autoloop.core.providers.rendered import RenderedLLMProvider
-from autoloop.core.providers.turns import ProviderTurnResult, RenderedProviderTurn
-from autoloop.core.stores.protocols import SessionBinding
-from autoloop.runtime import cli
-from autoloop.runtime import providers as runtime_providers
-from autoloop.runtime.providers.claude import ClaudeProvider, ClaudeTransport, build_claude_provider
-import autoloop.runtime.providers.claude as claude_runtime_provider
-from autoloop.runtime.providers.codex import CodexCLICommand, CodexProvider, CodexTransport, build_codex_provider
-import autoloop.runtime.providers.codex as codex_runtime_provider
-from autoloop.runtime.config import (
+from botlane.core.providers.rendered import RenderedLLMProvider
+from botlane.core.providers.turns import ProviderTurnResult, RenderedProviderTurn
+from botlane.core.stores.protocols import SessionBinding
+from botlane.runtime import cli
+from botlane.runtime import providers as runtime_providers
+from botlane.runtime.providers.claude import ClaudeProvider, ClaudeTransport, build_claude_provider
+import botlane.runtime.providers.claude as claude_runtime_provider
+from botlane.runtime.providers.codex import CodexCLICommand, CodexProvider, CodexTransport, build_codex_provider
+import botlane.runtime.providers.codex as codex_runtime_provider
+from botlane.runtime.config import (
     ClaudeProviderConfig,
     CodexProviderConfig,
     ConfigError,
@@ -26,9 +26,9 @@ from autoloop.runtime.config import (
     RuntimeConfig,
     resolve_runtime_config,
 )
-import autoloop.runtime.config as runtime_config
-from autoloop.runtime.provider_backends import resolve_provider_backend
-import autoloop.runtime.provider_backends as provider_backends
+import botlane.runtime.config as runtime_config
+from botlane.runtime.provider_backends import resolve_provider_backend
+import botlane.runtime.provider_backends as provider_backends
 
 
 CLAUDE_HEADLESS_HELP = "--print\n-p\n--output-format\n--resume\n--model\n--settings\n--add-dir\n"

@@ -4,11 +4,11 @@ from pathlib import Path
 
 from pydantic import BaseModel
 
-from autoloop import FINISH, Md, Prompt, Route, Workflow, produce_verify_step, step
-from autoloop.core.engine import Engine
-from autoloop.core.primitives import Outcome
-from autoloop.core.providers.fake import ScriptedLLMProvider
-from autoloop.core.stores import InMemoryCheckpointStore, InMemorySessionStore
+from botlane import FINISH, Md, Prompt, Route, Workflow, produce_verify_step, step
+from botlane.core.engine import Engine
+from botlane.core.primitives import Outcome
+from botlane.core.providers.fake import ScriptedLLMProvider
+from botlane.core.stores import InMemoryCheckpointStore, InMemorySessionStore
 
 
 def _workspace(tmp_path: Path) -> tuple[Path, Path]:

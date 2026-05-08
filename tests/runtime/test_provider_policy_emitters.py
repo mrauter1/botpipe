@@ -6,8 +6,8 @@ import tomllib
 
 import pytest
 
-from autoloop.core.errors import ProviderExecutionError
-from autoloop.core.provider_policy import (
+from botlane.core.errors import ProviderExecutionError
+from botlane.core.provider_policy import (
     PermissionPolicy,
     ProviderPolicy,
     ProviderPolicyOverride,
@@ -19,8 +19,8 @@ from autoloop.core.provider_policy import (
     WorkspacePolicy,
     merge_provider_policies,
 )
-from autoloop.runtime.providers.claude_policy import ClaudeCapabilities, ClaudePolicyEmitter
-from autoloop.runtime.providers.codex_policy import CodexPolicyEmitter
+from botlane.runtime.providers.claude_policy import ClaudeCapabilities, ClaudePolicyEmitter
+from botlane.runtime.providers.codex_policy import CodexPolicyEmitter
 
 
 def _emit(

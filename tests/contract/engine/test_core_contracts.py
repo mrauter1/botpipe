@@ -73,8 +73,8 @@ def test_runtime_extensions_bind_before_workflow_extensions(tmp_path: Path):
         "workflow:terminal:FINISH",
     ]
 def test_extension_core_modules_remain_autoloop_agnostic():
-    engine_text = (PACKAGE_ROOT / "autoloop" / "core" / "engine.py").read_text(encoding="utf-8")
-    extension_text = (PACKAGE_ROOT / "autoloop" / "core" / "extensions.py").read_text(encoding="utf-8")
+    engine_text = (PACKAGE_ROOT / "botlane" / "core" / "engine.py").read_text(encoding="utf-8")
+    extension_text = (PACKAGE_ROOT / "botlane" / "core" / "extensions.py").read_text(encoding="utf-8")
     corpus = f"{engine_text}\n{extension_text}"
 
     for forbidden in (

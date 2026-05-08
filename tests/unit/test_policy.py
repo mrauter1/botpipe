@@ -5,14 +5,14 @@ import json
 
 import pytest
 
-import autoloop.policy as public_policy
-from autoloop import FINISH, Workflow, step
-from autoloop.core.compiler import (
+import botlane.policy as public_policy
+from botlane import FINISH, Workflow, step
+from botlane.core.compiler import (
     _policy_input_fingerprint,
     _policy_input_payload,
     compile_workflow,
 )
-from autoloop.core.provider_policy import (
+from botlane.core.provider_policy import (
     ProviderPolicy,
     ProviderPolicyOverride,
     SYSTEM_DEFAULT_PROVIDER_POLICY,
@@ -27,7 +27,7 @@ def _payload_fingerprint(payload: dict[str, object]) -> str:
 
 
 def test_public_policy_imports_and_all() -> None:
-    from autoloop import (
+    from botlane import (
         ModelEffort,
         ModelVerbosity,
         NetworkMode,
@@ -37,7 +37,7 @@ def test_public_policy_imports_and_all() -> None:
         ReasoningSummary,
         SandboxMode,
     )
-    from autoloop.policy import Policy as ModulePolicy
+    from botlane.policy import Policy as ModulePolicy
 
     assert Policy is ModulePolicy is public_policy.Policy
     assert public_policy.__all__ == [

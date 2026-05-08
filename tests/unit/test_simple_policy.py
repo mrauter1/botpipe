@@ -2,18 +2,18 @@ from __future__ import annotations
 
 import pytest
 
-import autoloop
-import autoloop.policy as public_policy
-import autoloop.sdk as sdk
-import autoloop.simple as simple
-from autoloop.core.primitives import Event
-from autoloop.core.steps import PythonStep
-from autoloop.core.provider_policy import ProviderPolicy, ProviderPolicyOverride
-from autoloop.policy import PermissionMode, Policy
+import botlane
+import botlane.policy as public_policy
+import botlane.sdk as sdk
+import botlane.simple as simple
+from botlane.core.primitives import Event
+from botlane.core.steps import PythonStep
+from botlane.core.provider_policy import ProviderPolicy, ProviderPolicyOverride
+from botlane.policy import PermissionMode, Policy
 
 
 def test_policy_surface_exports_shared_policy_symbols() -> None:
-    from autoloop import (
+    from botlane import (
         ModelEffort,
         ModelVerbosity,
         NetworkMode,
@@ -23,7 +23,7 @@ def test_policy_surface_exports_shared_policy_symbols() -> None:
         ReasoningSummary,
         SandboxMode,
     )
-    from autoloop.simple import (
+    from botlane.simple import (
         ModelEffort as SimpleModelEffort,
         ModelVerbosity as SimpleModelVerbosity,
         NetworkMode as SimpleNetworkMode,
@@ -34,14 +34,14 @@ def test_policy_surface_exports_shared_policy_symbols() -> None:
         SandboxMode as SimpleSandboxMode,
     )
 
-    assert RootPolicy is autoloop.Policy is simple.Policy is Policy is SimplePolicy
-    assert ProviderName is autoloop.ProviderName is simple.ProviderName is SimpleProviderName
-    assert ModelEffort is autoloop.ModelEffort is simple.ModelEffort is SimpleModelEffort
-    assert ModelVerbosity is autoloop.ModelVerbosity is simple.ModelVerbosity is SimpleModelVerbosity
-    assert ReasoningSummary is autoloop.ReasoningSummary is simple.ReasoningSummary is SimpleReasoningSummary
-    assert SandboxMode is autoloop.SandboxMode is simple.SandboxMode is SimpleSandboxMode
-    assert NetworkMode is autoloop.NetworkMode is simple.NetworkMode is SimpleNetworkMode
-    assert RootPermissionMode is autoloop.PermissionMode is simple.PermissionMode is SimplePermissionMode
+    assert RootPolicy is botlane.Policy is simple.Policy is Policy is SimplePolicy
+    assert ProviderName is botlane.ProviderName is simple.ProviderName is SimpleProviderName
+    assert ModelEffort is botlane.ModelEffort is simple.ModelEffort is SimpleModelEffort
+    assert ModelVerbosity is botlane.ModelVerbosity is simple.ModelVerbosity is SimpleModelVerbosity
+    assert ReasoningSummary is botlane.ReasoningSummary is simple.ReasoningSummary is SimpleReasoningSummary
+    assert SandboxMode is botlane.SandboxMode is simple.SandboxMode is SimpleSandboxMode
+    assert NetworkMode is botlane.NetworkMode is simple.NetworkMode is SimpleNetworkMode
+    assert RootPermissionMode is botlane.PermissionMode is simple.PermissionMode is SimplePermissionMode
 
     for name in (
         "Policy",
@@ -53,9 +53,9 @@ def test_policy_surface_exports_shared_policy_symbols() -> None:
         "NetworkMode",
         "PermissionMode",
     ):
-        assert name in autoloop.__all__
+        assert name in botlane.__all__
 
-    assert "PolicyOverride" not in autoloop.__all__
+    assert "PolicyOverride" not in botlane.__all__
     assert "PolicyOverride" not in simple.__all__
 
 
@@ -97,7 +97,7 @@ def test_policy_rejects_removed_public_policy_override_symbol() -> None:
 def test_policy_input_export_matrix_matches_phase_contract() -> None:
     assert "PolicyInput" in public_policy.__all__
     assert "PolicyInput" in sdk.__all__
-    assert "PolicyInput" not in autoloop.__all__
+    assert "PolicyInput" not in botlane.__all__
     assert "PolicyInput" not in simple.__all__
     assert "ProviderPolicyInput" not in simple.__all__
 
@@ -106,7 +106,7 @@ def test_policy_input_export_matrix_matches_phase_contract() -> None:
     with pytest.raises(ImportError):
         exec("from autoloop import PolicyInput")
     with pytest.raises(AttributeError):
-        getattr(autoloop, "PolicyInput")
+        getattr(botlane, "PolicyInput")
     with pytest.raises(ImportError):
         exec("from autoloop.simple import PolicyInput")
     with pytest.raises(AttributeError):

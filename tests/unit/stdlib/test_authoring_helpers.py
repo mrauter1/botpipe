@@ -17,31 +17,31 @@ def test_stdlib_modules_remain_pure_authoring_helpers() -> None:
         re.compile(r"\bimport\s+workflows(?:\.|\b)"),
     )
     for relative_path in (
-        "autoloop/stdlib/composition.py",
-        "autoloop/stdlib/control.py",
-        "autoloop/stdlib/json_artifacts.py",
-        "autoloop/stdlib/lifecycle.py",
-        "autoloop/stdlib/parameters.py",
-        "autoloop/stdlib/prompts.py",
-        "autoloop/stdlib/state/cursor.py",
-        "autoloop/stdlib/validation.py",
+        "botlane/stdlib/composition.py",
+        "botlane/stdlib/control.py",
+        "botlane/stdlib/json_artifacts.py",
+        "botlane/stdlib/lifecycle.py",
+        "botlane/stdlib/parameters.py",
+        "botlane/stdlib/prompts.py",
+        "botlane/stdlib/state/cursor.py",
+        "botlane/stdlib/validation.py",
     ):
         text = (PACKAGE_ROOT / relative_path).read_text(encoding="utf-8")
         assert not any(pattern.search(text) for pattern in runtime_import_patterns)
         assert not any(pattern.search(text) for pattern in workflow_import_patterns)
-    assert not (PACKAGE_ROOT / "autoloop" / "stdlib" / "contracts.py").exists()
-    assert not (PACKAGE_ROOT / "autoloop" / "stdlib" / "steps.py").exists()
+    assert not (PACKAGE_ROOT / "botlane" / "stdlib" / "contracts.py").exists()
+    assert not (PACKAGE_ROOT / "botlane" / "stdlib" / "steps.py").exists()
     for relative_path in (
-        "autoloop/stdlib/_selected_workflow.py",
-        "autoloop/stdlib/adaptation.py",
-        "autoloop/stdlib/candidate_surfaces.py",
-        "autoloop/stdlib/company.py",
-        "autoloop/stdlib/decomposition.py",
-        "autoloop/stdlib/diagnostics.py",
-        "autoloop/stdlib/evaluation.py",
-        "autoloop/stdlib/portfolio.py",
-        "autoloop/stdlib/refinement.py",
-        "autoloop/stdlib/route_" + "infos.py",
+        "botlane/stdlib/_selected_workflow.py",
+        "botlane/stdlib/adaptation.py",
+        "botlane/stdlib/candidate_surfaces.py",
+        "botlane/stdlib/company.py",
+        "botlane/stdlib/decomposition.py",
+        "botlane/stdlib/diagnostics.py",
+        "botlane/stdlib/evaluation.py",
+        "botlane/stdlib/portfolio.py",
+        "botlane/stdlib/refinement.py",
+        "botlane/stdlib/route_" + "infos.py",
     ):
         assert not (PACKAGE_ROOT / relative_path).exists()
 def test_active_consumer_runtime_fixtures_avoid_legacy_authoring_tokens() -> None:
@@ -52,8 +52,8 @@ def test_active_consumer_runtime_fixtures_avoid_legacy_authoring_tokens() -> Non
 def test_retained_stdlib_authoring_test_stays_free_of_repo_owned_workflow_package_params() -> None:
     tree = ast.parse(Path(__file__).read_text(encoding="utf-8"))
     forbidden_modules = {
-        "autoloop.workflows.workflow_and_eval_to_refined_workflow_package.params",
-        "autoloop.workflows.workflow_package_to_composable_building_blocks.params",
+        "botlane.workflows.workflow_and_eval_to_refined_workflow_package.params",
+        "botlane.workflows.workflow_package_to_composable_building_blocks.params",
     }
 
     for node in ast.walk(tree):

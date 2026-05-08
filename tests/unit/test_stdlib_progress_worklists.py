@@ -6,12 +6,12 @@ from pathlib import Path
 import pytest
 from pydantic import BaseModel
 
-from autoloop.core.artifacts import Artifact
-from autoloop.core.context import Context
-from autoloop.core.errors import WorkflowExecutionError
-from autoloop.core.stores import InMemorySessionStore
-from autoloop.core.worklists import WorkItem
-from autoloop.stdlib import (
+from botlane.core.artifacts import Artifact
+from botlane.core.context import Context
+from botlane.core.errors import WorkflowExecutionError
+from botlane.core.stores import InMemorySessionStore
+from botlane.core.worklists import WorkItem
+from botlane.stdlib import (
     ProgressBoard,
     ProgressItem,
     ProgressJsonCollectionSource,

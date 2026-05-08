@@ -7,17 +7,17 @@ from pathlib import Path
 
 import pytest
 
-from autoloop import Outcome
-from autoloop.core.providers.fake import ScriptedLLMProvider
-from autoloop.runtime.config import GitTrackingRuntimeConfig, RuntimeConfig
-from autoloop.runtime.inspection import load_run_history, load_run_record, load_run_topology
-from autoloop.runtime.runner import RunnerOptions, run_workflow_package
+from botlane import Outcome
+from botlane.core.providers.fake import ScriptedLLMProvider
+from botlane.runtime.config import GitTrackingRuntimeConfig, RuntimeConfig
+from botlane.runtime.inspection import load_run_history, load_run_record, load_run_topology
+from botlane.runtime.runner import RunnerOptions, run_workflow_package
 
 
 def _clear_workflow_modules() -> None:
     importlib.invalidate_caches()
     for name in list(sys.modules):
-        if name == "workflows" or name.startswith("workflows.") or name == "autoloop.workflows" or name.startswith("autoloop.workflows."):
+        if name == "workflows" or name.startswith("workflows.") or name == "botlane.workflows" or name.startswith("botlane.workflows."):
             sys.modules.pop(name, None)
 
 
@@ -73,7 +73,7 @@ from __future__ import annotations
 
 from pydantic import BaseModel
 
-from autoloop import (
+from botlane import (
     FINISH,
     Fail,
     Goto,

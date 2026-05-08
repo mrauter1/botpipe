@@ -3,16 +3,16 @@ from __future__ import annotations
 import json
 from pathlib import Path
 
-import autoloop.simple as simple
-import autoloop.core.route_reporting as route_reporting_helpers
+import botlane.simple as simple
+import botlane.core.route_reporting as route_reporting_helpers
 from pydantic import BaseModel
 
-from autoloop import AWAIT_INPUT, FINISH, Md, Prompt, Route, StateVar, Workflow, Worklist, produce_verify_step, python_step, step
-from autoloop.core import Artifact, FAIL, GLOBAL, Workflow as CoreWorkflow
-from autoloop.core.compiler import compile_workflow
-from autoloop.core.providers.retries import ProviderRetryPolicy
-from autoloop.core.steps import PromptStep
-from autoloop.runtime.static_graph import (
+from botlane import AWAIT_INPUT, FINISH, Md, Prompt, Route, StateVar, Workflow, Worklist, produce_verify_step, python_step, step
+from botlane.core import Artifact, FAIL, GLOBAL, Workflow as CoreWorkflow
+from botlane.core.compiler import compile_workflow
+from botlane.core.providers.retries import ProviderRetryPolicy
+from botlane.core.steps import PromptStep
+from botlane.runtime.static_graph import (
     ROUTE_TABLE_FILENAME,
     TOPOLOGY_FILENAME,
     write_static_step_graph,
@@ -20,7 +20,7 @@ from autoloop.runtime.static_graph import (
     workflow_static_step_graph_payload,
     workflow_topology_payload,
 )
-from autoloop.core.schema_registry import WORKFLOW_STATIC_STEP_GRAPH_SCHEMA
+from botlane.core.schema_registry import WORKFLOW_STATIC_STEP_GRAPH_SCHEMA
 
 
 class _AssessmentPayload(BaseModel):

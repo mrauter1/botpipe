@@ -10,9 +10,9 @@ from pathlib import Path
 
 import pytest
 
-from autoloop.core.compiler import compile_workflow
-from autoloop.runtime import cli
-from autoloop.runtime.loader import resolve_workflow_reference
+from botlane.core.compiler import compile_workflow
+from botlane.runtime import cli
+from botlane.runtime.loader import resolve_workflow_reference
 
 
 PUBLIC_PROVIDER_FACTORY_FLAG = "--provider" + "-factory"
@@ -51,7 +51,7 @@ def _provider_factory(**_: object) -> _UnusedProvider:
 
 
 def _assert_bootstrap_scaffold_contract(source: str) -> None:
-    assert 'from autoloop import Event, FINISH, Workflow, python_step' in source
+    assert 'from botlane import Event, FINISH, Workflow, python_step' in source
     assert '@python_step(name="bootstrap", routes={"ready": FINISH})' in source
     assert "def bootstrap(ctx):" in source
     assert 'ctx.state = ctx.state.model_copy(update={"ready": True})' in source
@@ -131,7 +131,7 @@ from __future__ import annotations
 
 from pydantic import BaseModel
 
-from autoloop import Event, FINISH, Workflow, python_step
+from botlane import Event, FINISH, Workflow, python_step
 
 
 class {class_name}(Workflow):
@@ -175,7 +175,7 @@ import json
 
 from pydantic import BaseModel
 
-from autoloop import AWAIT_INPUT, Event, FINISH, Workflow, python_step
+from botlane import AWAIT_INPUT, Event, FINISH, Workflow, python_step
 
 
 class {class_name}(Workflow):

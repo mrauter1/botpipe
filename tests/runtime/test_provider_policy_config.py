@@ -5,9 +5,9 @@ from pathlib import Path
 
 import pytest
 
-from autoloop.core.provider_policy import SYSTEM_DEFAULT_PROVIDER_POLICY
-from autoloop.runtime.config import ConfigError, resolve_runtime_config
-import autoloop.runtime.config as runtime_config
+from botlane.core.provider_policy import SYSTEM_DEFAULT_PROVIDER_POLICY
+from botlane.runtime.config import ConfigError, resolve_runtime_config
+import botlane.runtime.config as runtime_config
 
 
 def _runtime_args(**overrides: object) -> argparse.Namespace:

@@ -7,17 +7,17 @@ from pathlib import Path
 
 import pytest
 
-from autoloop.core.errors import WorkflowExecutionError
-from autoloop.core.providers.fake import ScriptedLLMProvider
-from autoloop.runtime.config import GitTrackingRuntimeConfig, RuntimeConfig
-from autoloop.runtime.loader import (
+from botlane.core.errors import WorkflowExecutionError
+from botlane.core.providers.fake import ScriptedLLMProvider
+from botlane.runtime.config import GitTrackingRuntimeConfig, RuntimeConfig
+from botlane.runtime.loader import (
     ResolvedWorkflow,
     WorkflowDiscoveryError,
     inspect_workflow_reference,
     resolve_workflow_reference,
 )
-from autoloop.runtime.runner import RunnerOptions, run_workflow_package
-from autoloop.core.primitives import Outcome
+from botlane.runtime.runner import RunnerOptions, run_workflow_package
+from botlane.core.primitives import Outcome
 
 
 def _clear_generated_modules() -> None:
@@ -26,8 +26,8 @@ def _clear_generated_modules() -> None:
         if (
             name == "workflows"
             or name.startswith("workflows.")
-            or name == "autoloop.workflows"
-            or name.startswith("autoloop.workflows.")
+            or name == "botlane.workflows"
+            or name.startswith("botlane.workflows.")
             or name == "_autoloop_workspace_workflows"
             or name.startswith("_autoloop_workspace_workflows.")
         ):
@@ -75,7 +75,7 @@ def _write_workspace_flow(
         source = f"""
 from __future__ import annotations
 
-from autoloop import Workflow, python_step
+from botlane import Workflow, python_step
 
 
 class {workflow_id.title().replace("_", "")}Workflow(Workflow):
@@ -96,7 +96,7 @@ def _write_workspace_single_file(root: Path, workflow_id: str, *, source: str | 
         source = f"""
 from __future__ import annotations
 
-from autoloop import Workflow, python_step
+from botlane import Workflow, python_step
 
 
 class {workflow_id.title().replace("_", "")}Workflow(Workflow):
@@ -121,7 +121,7 @@ from __future__ import annotations
 
 from pydantic import BaseModel
 
-from autoloop import Prompt, Raw, Workflow, step
+from botlane import Prompt, Raw, Workflow, step
 
 
 class ReleaseReview(Workflow):
@@ -216,7 +216,7 @@ from __future__ import annotations
 
 from pydantic import BaseModel
 
-from autoloop import Prompt, Raw, Workflow, step
+from botlane import Prompt, Raw, Workflow, step
 
 from .specs import Params
 
@@ -299,7 +299,7 @@ def test_bare_workflow_names_are_not_shadowed_by_unrelated_repo_paths(tmp_path: 
         source="""
 from __future__ import annotations
 
-from autoloop import Workflow, python_step
+from botlane import Workflow, python_step
 
 
 class DemoWorkflow(Workflow):
@@ -326,7 +326,7 @@ def test_manifest_aliases_resolve_from_workspace_catalog_root_only(tmp_path: Pat
         """
 from __future__ import annotations
 
-from autoloop import Workflow, python_step
+from botlane import Workflow, python_step
 
 
 class ReleaseReview(Workflow):
@@ -352,7 +352,7 @@ class ReleaseReview(Workflow):
         source="""
 from __future__ import annotations
 
-from autoloop import Workflow, python_step
+from botlane import Workflow, python_step
 
 
 class ReleaseReview(Workflow):
@@ -380,7 +380,7 @@ def test_simple_declaration_workflow_is_discoverable_by_path_module_name_and_cap
         """
 from __future__ import annotations
 
-from autoloop.simple import Workflow, step
+from botlane.simple import Workflow, step
 
 
 class SimpleExample(Workflow):
@@ -395,7 +395,7 @@ class SimpleExample(Workflow):
         source="""
 from __future__ import annotations
 
-from autoloop.simple import Workflow, step
+from botlane.simple import Workflow, step
 
 
 class SimpleExample(Workflow):
@@ -449,7 +449,7 @@ class Params(BaseModel):
         """
 from __future__ import annotations
 
-from autoloop import Workflow, python_step
+from botlane import Workflow, python_step
 from .specs import Params
 
 
@@ -514,7 +514,7 @@ class Params(BaseModel):
         """
 from __future__ import annotations
 
-from autoloop import Workflow, python_step
+from botlane import Workflow, python_step
 from .specs import Params
 
 
@@ -551,7 +551,7 @@ def test_file_reference_requires_class_name_when_multiple_workflows_exist(tmp_pa
         """
 from __future__ import annotations
 
-from autoloop import Workflow, python_step
+from botlane import Workflow, python_step
 
 
 class AlphaWorkflow(Workflow):
@@ -592,7 +592,7 @@ def test_named_references_fail_when_inferred_candidates_conflict(tmp_path: Path)
         """
 from __future__ import annotations
 
-from autoloop import Workflow, python_step
+from botlane import Workflow, python_step
 
 
 class PackageReleaseReview(Workflow):
@@ -611,7 +611,7 @@ class PackageReleaseReview(Workflow):
         source="""
 from __future__ import annotations
 
-from autoloop import Workflow, python_step
+from botlane import Workflow, python_step
 
 
 class FileReleaseReview(Workflow):
@@ -640,7 +640,7 @@ from __future__ import annotations
 
 from pydantic import BaseModel
 
-from autoloop import Workflow, python_step
+from botlane import Workflow, python_step
 
 
 class ClassParamsWorkflow(Workflow):
@@ -663,7 +663,7 @@ from __future__ import annotations
 
 from pydantic import BaseModel
 
-from autoloop import Workflow, python_step
+from botlane import Workflow, python_step
 
 
 class Params(BaseModel):
@@ -703,7 +703,7 @@ class Params(BaseModel):
         """
 from __future__ import annotations
 
-from autoloop import Workflow, python_step
+from botlane import Workflow, python_step
 
 from .specs import Params
 
@@ -737,7 +737,7 @@ class Params(BaseModel):
         """
 from __future__ import annotations
 
-from autoloop import Workflow, python_step
+from botlane import Workflow, python_step
 
 
 class LegacyParamsWorkflow(Workflow):
@@ -756,7 +756,7 @@ class LegacyParamsWorkflow(Workflow):
         """
 from __future__ import annotations
 
-from autoloop import Workflow, python_step
+from botlane import Workflow, python_step
 
 
 class NoParamsWorkflow(Workflow):
@@ -828,7 +828,7 @@ class Params(BaseModel):
         """
 from __future__ import annotations
 
-from autoloop import Workflow, python_step
+from botlane import Workflow, python_step
 
 from .specs import Params
 
@@ -861,7 +861,7 @@ def test_workflow_origin_collisions_fail_before_run_history_is_merged(tmp_path: 
             """
 from __future__ import annotations
 
-from autoloop import Workflow, python_step
+from botlane import Workflow, python_step
 
 
 class ReleaseReview(Workflow):

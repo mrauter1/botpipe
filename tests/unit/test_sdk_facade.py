@@ -8,16 +8,16 @@ from pathlib import Path
 import pytest
 from pydantic import BaseModel
 
-import autoloop
-import autoloop.simple as simple
-import autoloop.sdk as sdk_module
-from autoloop import (
+import botlane
+import botlane.simple as simple
+import botlane.sdk as sdk_module
+from botlane import (
     AWAIT_INPUT,
     FAIL,
     FINISH,
     SELF,
     ArtifactMap,
-    Autoloop,
+    Botlane,
     InputRequest,
     InputRequired,
     InputResponseValidationError,
@@ -31,14 +31,14 @@ from autoloop import (
     WorkflowParameterError,
     WorkflowInputError,
 )
-from autoloop.policy import ModelEffort, Policy
-from autoloop.core.primitives import Event, Outcome, RequestInput
-from autoloop.core.prompts import Prompt
-from autoloop.core.providers.retries import ProviderRetryPolicy
-from autoloop.core.routes import Route
-from autoloop.core.providers.fake import ScriptedLLMProvider
-from autoloop.core.steps import ChildWorkflowStep, ProduceVerifyStep, PromptStep, PythonStep
-from autoloop.runtime.config import GitTrackingRuntimeConfig, RuntimeConfig
+from botlane.policy import ModelEffort, Policy
+from botlane.core.primitives import Event, Outcome, RequestInput
+from botlane.core.prompts import Prompt
+from botlane.core.providers.retries import ProviderRetryPolicy
+from botlane.core.routes import Route
+from botlane.core.providers.fake import ScriptedLLMProvider
+from botlane.core.steps import ChildWorkflowStep, ProduceVerifyStep, PromptStep, PythonStep
+from botlane.runtime.config import GitTrackingRuntimeConfig, RuntimeConfig
 
 
 class _SDKApprovalInput(BaseModel):
@@ -183,8 +183,8 @@ class _SDKDeclaredWriteContextWorkflow(simple.Workflow):
         return Event("done")
 
 
-def _sdk_client(tmp_path: Path, provider: object) -> Autoloop:
-    return Autoloop(
+def _sdk_client(tmp_path: Path, provider: object) -> Botlane:
+    return Botlane(
         workspace=tmp_path,
         provider=provider,
         state_dir=tmp_path / ".autoloop",
@@ -192,8 +192,8 @@ def _sdk_client(tmp_path: Path, provider: object) -> Autoloop:
     )
 
 
-def _sdk_client_at_root(tmp_path: Path, provider: object, *, retention: RetentionPolicy | None = None) -> Autoloop:
-    return Autoloop(
+def _sdk_client_at_root(tmp_path: Path, provider: object, *, retention: RetentionPolicy | None = None) -> Botlane:
+    return Botlane(
         workspace=tmp_path,
         provider=provider,
         state_dir=tmp_path / ".autoloop",
@@ -592,7 +592,7 @@ def test_sdk_step_supports_directly_resolvable_strict_child_workflow_steps(tmp_p
         workflow=ChildWorkflow,
         message="{ctx.message}",
     )
-    client = Autoloop(
+    client = Botlane(
         workspace=tmp_path,
         provider=ScriptedLLMProvider(),
         state_dir=tmp_path / ".autoloop",
@@ -660,11 +660,11 @@ def test_sdk_sync_entrypoints_normalize_active_event_loop_failures(tmp_path: Pat
 
 def test_sdk_constructor_rejects_unknown_provider_name(tmp_path: Path) -> None:
     with pytest.raises(SDKExecutionError, match="could not resolve SDK provider"):
-        Autoloop(workspace=tmp_path, provider="not-a-provider")
+        Botlane(workspace=tmp_path, provider="not-a-provider")
 
 
 def test_sdk_constructor_uses_workspace_and_rejects_root_keyword(tmp_path: Path) -> None:
-    client = Autoloop(
+    client = Botlane(
         workspace=tmp_path,
         provider=ScriptedLLMProvider(),
         state_dir=tmp_path / ".autoloop",
@@ -675,7 +675,7 @@ def test_sdk_constructor_uses_workspace_and_rejects_root_keyword(tmp_path: Path)
     assert client.state_dir == (tmp_path / ".autoloop").resolve()
 
     with pytest.raises(TypeError, match="root"):
-        Autoloop(root=tmp_path)  # type: ignore[call-arg]
+        Botlane(root=tmp_path)  # type: ignore[call-arg]
 
 
 def test_sdk_constructor_rejects_invalid_default_policy_with_public_wording(tmp_path: Path) -> None:
@@ -683,7 +683,7 @@ def test_sdk_constructor_rejects_invalid_default_policy_with_public_wording(tmp_
         TypeError,
         match=r"default_policy must be a Policy or core provider policy object, or None",
     ):
-        Autoloop(
+        Botlane(
             workspace=tmp_path,
             default_policy="ask",  # type: ignore[arg-type]
             provider=ScriptedLLMProvider(),
@@ -724,13 +724,13 @@ def test_sdk_run_rejects_removed_typed_input_and_parameters_keywords(tmp_path: P
 
 
 def test_sdk_public_docstrings_encode_workspace_policy_and_runtime_behavior_contract() -> None:
-    init_doc = Autoloop.__init__.__doc__
-    run_doc = Autoloop.run.__doc__
-    step_doc = Autoloop.step.__doc__
-    llm_doc = Autoloop.llm.__doc__
-    classify_doc = Autoloop.classify.__doc__
-    prompt_step_doc = Autoloop.prompt_step.__doc__
-    workflow_step_doc = Autoloop.workflow_step.__doc__
+    init_doc = Botlane.__init__.__doc__
+    run_doc = Botlane.run.__doc__
+    step_doc = Botlane.step.__doc__
+    llm_doc = Botlane.llm.__doc__
+    classify_doc = Botlane.classify.__doc__
+    prompt_step_doc = Botlane.prompt_step.__doc__
+    workflow_step_doc = Botlane.workflow_step.__doc__
 
     assert init_doc is not None
     assert "actual project or repository working directory" in init_doc
@@ -770,15 +770,15 @@ def test_sdk_public_docstrings_encode_workspace_policy_and_runtime_behavior_cont
 
 
 def test_sdk_public_exports_include_revised_sdk_surface() -> None:
-    assert autoloop.Step is sdk_module.Step
-    assert autoloop.PromptStep is PromptStep
-    assert autoloop.ProduceVerifyStep is ProduceVerifyStep
-    assert autoloop.PythonStep is PythonStep
-    assert autoloop.ChildWorkflowStep is ChildWorkflowStep
-    assert autoloop.ResultArtifact is ResultArtifact
-    assert autoloop.RetentionPolicy is RetentionPolicy
-    assert autoloop.RetentionInfo is sdk_module.RetentionInfo
-    assert autoloop.CleanupResult is sdk_module.CleanupResult
+    assert botlane.Step is sdk_module.Step
+    assert botlane.PromptStep is PromptStep
+    assert botlane.ProduceVerifyStep is ProduceVerifyStep
+    assert botlane.PythonStep is PythonStep
+    assert botlane.ChildWorkflowStep is ChildWorkflowStep
+    assert botlane.ResultArtifact is ResultArtifact
+    assert botlane.RetentionPolicy is RetentionPolicy
+    assert botlane.RetentionInfo is sdk_module.RetentionInfo
+    assert botlane.CleanupResult is sdk_module.CleanupResult
 
 
 def test_sdk_run_exposes_result_artifact_metadata_and_helpers(tmp_path: Path) -> None:
@@ -1150,8 +1150,8 @@ def test_sdk_cleanup_only_targets_valid_completed_sdk_task_directories(tmp_path:
     def seed_task(task_dir: Path, *, status: str, terminal: str, task_id: str | None = None) -> None:
         task_dir.mkdir(parents=True, exist_ok=True)
         sentinel = {
-            "schema": "autoloop.sdk_task/v1",
-            "generated_by": "autoloop.sdk",
+            "schema": "botlane.sdk_task/v1",
+            "generated_by": "botlane.sdk",
             "task_id": task_id or task_dir.name,
             "created_at": "2026-05-01T00:00:00Z",
             "retention_mode": "delete_task_scratch",
@@ -1192,8 +1192,8 @@ def test_sdk_cleanup_honors_older_than_and_include_failed_opt_in(tmp_path: Path)
         (task_dir / ".autoloop-sdk-task.json").write_text(
             json.dumps(
                 {
-                    "schema": "autoloop.sdk_task/v1",
-                    "generated_by": "autoloop.sdk",
+                    "schema": "botlane.sdk_task/v1",
+                    "generated_by": "botlane.sdk",
                     "task_id": task_dir.name,
                     "created_at": created_at,
                     "retention_mode": "delete_task_scratch",
@@ -1238,8 +1238,8 @@ def test_safe_delete_sdk_task_dir_refuses_unsafe_candidates(tmp_path: Path) -> N
     (non_sdk / ".autoloop-sdk-task.json").write_text(
         json.dumps(
             {
-                "schema": "autoloop.sdk_task/v1",
-                "generated_by": "autoloop.sdk",
+                "schema": "botlane.sdk_task/v1",
+                "generated_by": "botlane.sdk",
                 "task_id": "manual-task",
             }
         )
@@ -1259,8 +1259,8 @@ def test_safe_delete_sdk_task_dir_refuses_unsafe_candidates(tmp_path: Path) -> N
     (mismatched / ".autoloop-sdk-task.json").write_text(
         json.dumps(
             {
-                "schema": "autoloop.sdk_task/v1",
-                "generated_by": "autoloop.sdk",
+                "schema": "botlane.sdk_task/v1",
+                "generated_by": "botlane.sdk",
                 "task_id": "sdk-other",
             }
         )
@@ -1275,8 +1275,8 @@ def test_safe_delete_sdk_task_dir_refuses_unsafe_candidates(tmp_path: Path) -> N
     (wrong_schema / ".autoloop-sdk-task.json").write_text(
         json.dumps(
             {
-                "schema": "autoloop.sdk_task/v0",
-                "generated_by": "autoloop.sdk",
+                "schema": "botlane.sdk_task/v0",
+                "generated_by": "botlane.sdk",
                 "task_id": "sdk-wrong-schema",
             }
         )
@@ -1291,7 +1291,7 @@ def test_safe_delete_sdk_task_dir_refuses_unsafe_candidates(tmp_path: Path) -> N
     (wrong_owner / ".autoloop-sdk-task.json").write_text(
         json.dumps(
             {
-                "schema": "autoloop.sdk_task/v1",
+                "schema": "botlane.sdk_task/v1",
                 "generated_by": "someone-else",
                 "task_id": "sdk-wrong-owner",
             }
@@ -1307,8 +1307,8 @@ def test_safe_delete_sdk_task_dir_refuses_unsafe_candidates(tmp_path: Path) -> N
     (outside / ".autoloop-sdk-task.json").write_text(
         json.dumps(
             {
-                "schema": "autoloop.sdk_task/v1",
-                "generated_by": "autoloop.sdk",
+                "schema": "botlane.sdk_task/v1",
+                "generated_by": "botlane.sdk",
                 "task_id": "sdk-outside",
             }
         )

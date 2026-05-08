@@ -8,25 +8,25 @@ from pathlib import Path
 import pytest
 from pydantic import BaseModel
 
-from autoloop.core.compiler import compile_workflow
-from autoloop.core import FINISH, Workflow
-from autoloop.core.providers.fake import ScriptedLLMProvider
-from autoloop.core.providers.retries import ProviderRetryPolicy
-from autoloop.core.schema_registry import CHILD_RUN_SUMMARY_SCHEMA, RUN_METADATA_SCHEMA, WORKFLOW_TOPOLOGY_SCHEMA
-from autoloop.core.steps import PromptStep
-from autoloop.runtime.config import GitTrackingRuntimeConfig, RuntimeConfig
-from autoloop.core.errors import WorkflowExecutionError
-from autoloop.runtime.loader import WorkflowParameterError
-from autoloop.runtime.loader import resolve_workflow_reference
-from autoloop.runtime.inspection import (
+from botlane.core.compiler import compile_workflow
+from botlane.core import FINISH, Workflow
+from botlane.core.providers.fake import ScriptedLLMProvider
+from botlane.core.providers.retries import ProviderRetryPolicy
+from botlane.core.schema_registry import CHILD_RUN_SUMMARY_SCHEMA, RUN_METADATA_SCHEMA, WORKFLOW_TOPOLOGY_SCHEMA
+from botlane.core.steps import PromptStep
+from botlane.runtime.config import GitTrackingRuntimeConfig, RuntimeConfig
+from botlane.core.errors import WorkflowExecutionError
+from botlane.runtime.loader import WorkflowParameterError
+from botlane.runtime.loader import resolve_workflow_reference
+from botlane.runtime.inspection import (
     list_runs as inspection_list_runs,
     load_run_history as inspection_load_run_history,
     load_run_metadata as inspection_load_run_metadata,
     load_run_record as inspection_load_run_record,
     load_run_topology as inspection_load_run_topology,
 )
-from autoloop.runtime.runner import RunnerOptions, run_workflow_package
-from autoloop.runtime.workspace import (
+from botlane.runtime.runner import RunnerOptions, run_workflow_package
+from botlane.runtime.workspace import (
     create_run,
     ensure_workspace,
     ensure_workflow_workspace,
@@ -35,7 +35,7 @@ from autoloop.runtime.workspace import (
     list_workflow_run_summaries,
     resolve_run_workflow_input,
 )
-from autoloop.core.primitives import Outcome
+from botlane.core.primitives import Outcome
 
 
 def _clear_workflow_modules() -> None:
@@ -340,7 +340,7 @@ from __future__ import annotations
 
 from pydantic import BaseModel
 
-from autoloop import AWAIT_INPUT, FINISH, Prompt, Raw, Workflow, python_step, step
+from botlane import AWAIT_INPUT, FINISH, Prompt, Raw, Workflow, python_step, step
 
 
 class ResumeTopologyWorkflow(Workflow):
@@ -450,7 +450,7 @@ from __future__ import annotations
 
 from pydantic import BaseModel
 
-from autoloop import AWAIT_INPUT, FINISH, Prompt, Raw, Workflow, python_step, step
+from botlane import AWAIT_INPUT, FINISH, Prompt, Raw, Workflow, python_step, step
 
 
 class ResumeTopologyStrictWorkflow(Workflow):
@@ -2035,7 +2035,7 @@ from __future__ import annotations
 
 from pydantic import BaseModel
 
-from autoloop import FINISH, Workflow, python_step
+from botlane import FINISH, Workflow, python_step
 
 
 class {class_name}(Workflow):
@@ -2068,7 +2068,7 @@ from __future__ import annotations
 
 from pydantic import BaseModel
 
-from autoloop import FINISH, Workflow, python_step
+from botlane import FINISH, Workflow, python_step
 
 
 class CompileCacheWorkflow(Workflow):
@@ -2116,7 +2116,7 @@ from __future__ import annotations
 
 from pydantic import BaseModel
 
-from autoloop import Prompt, Raw, Workflow, step
+from botlane import Prompt, Raw, Workflow, step
 
 
 class {class_name}(Workflow):
@@ -2175,7 +2175,7 @@ from __future__ import annotations
 
 from pydantic import BaseModel
 
-from autoloop import AWAIT_INPUT, FINISH, Prompt, Raw, Workflow, step
+from botlane import AWAIT_INPUT, FINISH, Prompt, Raw, Workflow, step
 
 
 class {class_name}(Workflow):
@@ -2219,7 +2219,7 @@ from __future__ import annotations
 
 from pydantic import BaseModel
 
-from autoloop import AWAIT_INPUT, FINISH, Prompt, Raw, Workflow, step
+from botlane import AWAIT_INPUT, FINISH, Prompt, Raw, Workflow, step
 
 
 class {class_name}(Workflow):
@@ -2261,7 +2261,7 @@ from __future__ import annotations
 
 from pydantic import BaseModel
 
-from autoloop import AWAIT_INPUT, Prompt, Workflow, step
+from botlane import AWAIT_INPUT, Prompt, Workflow, step
 
 
 class {class_name}(Workflow):
@@ -2310,7 +2310,7 @@ from __future__ import annotations
 
 from pydantic import BaseModel
 
-from autoloop import Prompt, Raw, Session, Workflow, step
+from botlane import Prompt, Raw, Session, Workflow, step
 
 
 class ChildWorkflow(Workflow):
@@ -2344,7 +2344,7 @@ import json
 
 from pydantic import BaseModel
 
-from autoloop import Event, FINISH, Session, Workflow, python_step
+from botlane import Event, FINISH, Session, Workflow, python_step
 from workflows.child_success import ChildWorkflow
 
 
@@ -2400,8 +2400,8 @@ import json
 
 from pydantic import BaseModel
 
-from autoloop import Event, FINISH, Workflow, python_step
-from autoloop.stdlib import adopt_child_artifacts, require_child_workflow_result, run_child_workflow
+from botlane import Event, FINISH, Workflow, python_step
+from botlane.stdlib import adopt_child_artifacts, require_child_workflow_result, run_child_workflow
 
 
 class ParentCompositionHelperWorkflow(Workflow):
@@ -2479,7 +2479,7 @@ from __future__ import annotations
 
 from pydantic import BaseModel
 
-from autoloop import AWAIT_INPUT, Prompt, Raw, Session, Workflow, step
+from botlane import AWAIT_INPUT, Prompt, Raw, Session, Workflow, step
 
 
 class ChildPauseWorkflow(Workflow):
@@ -2518,7 +2518,7 @@ import json
 
 from pydantic import BaseModel
 
-from autoloop import AWAIT_INPUT, Event, FINISH, Workflow, python_step
+from botlane import AWAIT_INPUT, Event, FINISH, Workflow, python_step
 
 
 class ParentNameWorkflow(Workflow):
@@ -2567,7 +2567,7 @@ from __future__ import annotations
 
 from pydantic import BaseModel
 
-from autoloop import FINISH, Workflow, python_step
+from botlane import FINISH, Workflow, python_step
 
 
 class ChildFailingWorkflow(Workflow):
@@ -2620,7 +2620,7 @@ import json
 
 from pydantic import BaseModel
 
-from autoloop import Event, FINISH, Raw, Workflow, python_step
+from botlane import Event, FINISH, Raw, Workflow, python_step
 
 
 class ChildTypedWorkflow(Workflow):
@@ -2680,7 +2680,7 @@ import json
 
 from pydantic import BaseModel
 
-from autoloop import Event, FINISH, Workflow, python_step
+from botlane import Event, FINISH, Workflow, python_step
 from workflows.{child_package_name} import ChildTypedWorkflow
 
 
@@ -2734,7 +2734,7 @@ from __future__ import annotations
 
 from pydantic import BaseModel
 
-from autoloop import Event, FINISH, Workflow, python_step
+from botlane import Event, FINISH, Workflow, python_step
 
 
 class ParentFailingWorkflow(Workflow):

@@ -365,7 +365,7 @@ from __future__ import annotations
 
 from pydantic import BaseModel
 
-from autoloop import Json, Prompt, Workflow, step
+from botlane import Json, Prompt, Workflow, step
 
 
 class ReviewPayload(BaseModel):

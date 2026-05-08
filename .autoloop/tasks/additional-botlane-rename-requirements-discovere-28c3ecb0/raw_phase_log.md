@@ -215,3 +215,93 @@ phase_mode=single
 phase_ids=rename-package-and-public-api,rewrite-runtime-and-workspace-identity,rewrite-schemas-workflows-and-fixtures,prove-botlane-only-surface
 explicit=True
 current_phase_index=0
+
+
+---
+run_id=run-20260508T190524Z-73fc5c3b | entry=session_turn | pair=implement | phase=producer | cycle=1 | attempt=1 | thread_id=019e0902-f571-7e41-ba14-ff59a745a024
+---
+provider=codex
+mode=start
+template=/home/rauter/.local/share/pipx/venvs/autoloop/lib/python3.12/site-packages/autoloop/templates/implement_producer.md
+session_id=019e0902-f571-7e41-ba14-ff59a745a024
+
+
+---
+run_id=run-20260508T190524Z-73fc5c3b | entry=phase_output | pair=implement | phase=producer | process=codex-agent | cycle=1 | attempt=1 | thread_id=019e0902-f571-7e41-ba14-ff59a745a024
+---
+I’m implementing the phase-scoped package/public API rename only: package roots, packaging metadata, console entry point, and branded public exports. First I’m reading the phase artifacts and locating current `autoloop`/`Autoloop` package surfaces so I can keep the blast radius inside this phase.
+
+I’ve got the phase contract and the clarified compatibility boundary. Next I’m mapping the current package roots, exported symbols, and packaging metadata so the rename stays limited to the public/package surface and doesn’t drift into the later runtime/workspace phase.
+
+The repo has a lot of unrelated dirty state, so I’m keeping to the maintained `autoloop` and `autoloop_optimizer` trees plus packaging/test surfaces that directly import them. I also confirmed this phase cannot stop at metadata: renaming the roots requires updating internal imports everywhere those roots are referenced, otherwise the package stops importing at all.
+
+I’ve narrowed the necessary code path: this phase needs a real filesystem root rename, not just symbol aliases, because `pyproject`, package discovery, the CLI entry point, and every import chain currently hang off `autoloop`/`autoloop_optimizer`. I’m checking the remaining packaging/runtime entry files now so I can rename the tree once and then do the import/symbol rewrite consistently.
+
+I found the one place where the phase boundary needs a practical extension: package-workflow resolution strings like `autoloop.workflows` are coupled to the package root rename, so I’ll update package-side import namespaces that are required for `botlane` to import and execute. I’m still leaving workspace-state names like `.autoloop` and `_autoloop_workspace_workflows` for the later phase unless a direct dependency forces them.
+
+I have enough context to edit safely. Plan:
+1. Rename the package roots and update packaging metadata/entry points.
+2. Rewrite static imports plus the branded public SDK surface (`Botlane`, `BotlaneSDKError`, `__all__`, related tests).
+3. Patch the package-coupled runtime/test strings that must follow the root rename, then run focused validation and document the phase decisions.
+
+I’m starting the filesystem/package rewrite now: moving the package roots, updating discovery/entry-point metadata, and bulk-fixing static imports before I patch the remaining branded symbols by hand.
+
+The bulk import rewrite exposed the next mechanical layer: many files still reference the old package names as Python identifiers, even where the import line already changed. I’m doing a token-level codemod now so I can rename those identifiers and the public class/exception names without touching unrelated string literals like `.autoloop` or schema IDs.
+
+The first pass failed because this environment doesn’t provide `python` on `PATH`; I’m rerunning the same codemod with `python3`.
+
+I’ve separated the remaining work into two groups: package-root strings that are hard dependencies of `botlane` importing correctly, and test/public-surface strings that still assert the old names. I’m patching those explicitly now rather than doing another broad replace, so the later workspace/schema phases keep clear ownership.
+
+I’m applying a narrower string rewrite now against the package/public-API files and the tests that directly prove those surfaces. This pass excludes schema/state-heavy files so I don’t accidentally pull later phases forward.
+
+The package-root and public-symbol passes are mostly clean now: what’s left in the scoped files is mainly intentional `.autoloop` workspace state, which belongs to the later migration phase. I’m checking the strictness and smoke coverage next so this phase still proves the breaking package/CLI rename.
+
+The strictness file already tracks the maintained tree under `botlane`, but it still doesn’t prove the old package names are gone. I’m adding a small set of direct negative checks there and tightening the wheel smoke so this phase explicitly covers the broken old import/CLI surface.
+
+I’m making the last test-layer edits now: one strictness block for old-package import absence, and one wheel-smoke block that proves only `botlane` installs as the public package/CLI.
+
+The code paths are patched; I’m in the verification loop now with the package/public-surface tests that are most likely to break from this rename: public exports, package workflow discovery, SDK surface, strictness, and the wheel smoke.
+
+The repo environment doesn’t have `pytest` on the default `python3`, so I’m checking for the project’s existing virtualenv/test runner instead of guessing.
+
+I found a local `.venv`; I’m rerunning the focused suite against that interpreter so the checks use the project environment.
+
+Most of the focused suite is green. Two failures are left in the validation slice; I’m pulling the traceback and fixing those before I wrap up.
+
+Two failures are from existing SDK cleanup tests drifting against the current cleanup contract, and one is from the new wheel negative check being too strict about the exact stderr path. I’m checking the cleanup predicate and then I’ll align the tests with the actual SDK semantics instead of masking a behavior change.
+
+The cleanup failures are straightforward: the SDK sentinel moved to `botlane.sdk_task/v1`, but those tests were still seeding the old payload. I’m updating the fixtures to the new schema/generator strings and relaxing the wheel negative check to assert the failure condition itself instead of a brittle stderr detail.
+
+The remaining failure is informative: `import autoloop` still succeeds in the wheel-smoke subprocess, so I’m checking whether that’s coming from the wheel contents or from the local checkout leaking onto `sys.path` during the test.
+
+The wheel is still pulling in `autoloop`, and the artifact listing shows why: stale packaging artifacts are still present in-tree and setuptools is packaging them. I’m cleaning the source packaging metadata so the built wheel only contains `botlane`/`botlane_optimizer`.
+
+The stale legacy wheel metadata is the culprit, not the code tree. I’m removing the old `autoloop_v3_surface.egg-info` package metadata so setuptools stops materializing `autoloop` into new wheels.
+
+The stale egg-info wasn’t the whole story. I’m rechecking the rebuilt wheel contents directly; if `autoloop` is still present, the remaining source of truth is the build artifact cache rather than the package metadata files.
+
+The rebuilt wheel is still inheriting the stale `build/` tree, which still contains the old `autoloop` packages. I’m removing those generated packaging artifacts so the source tree is the only input to future wheel builds.
+
+The focused validation slice is effectively done; I’m waiting on the final pytest exit and then I’ll record the implementation notes/decisions before closing the phase.
+
+I’ve finished the implementation and validation. I’m recording the non-obvious boundary decisions now: package-coupled `botlane.workflows` strings were pulled into this phase because the root rename would otherwise break importability, while `.autoloop` workspace/state and broader schema renames remain intentionally deferred.
+
+Scope considered
+
+Phase-scoped package/public API rename only: package roots, packaging metadata, console entry point, branded public exports, and the package-coupled workflow-import strings required to keep `botlane` importable. I intentionally left `.autoloop` workspace/state paths and broad `autoloop.*` schema/artifact rewrites for later phases.
+
+What I analyzed
+
+I traced the current package surface through [pyproject.toml](/home/rauter/autoloop_v3_bkp/autoloop_v3/pyproject.toml), [botlane/__init__.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/botlane/__init__.py), [botlane/sdk.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/botlane/sdk.py), package workflow discovery in [botlane/core/workflow_catalog.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/botlane/core/workflow_catalog.py) and [botlane/runtime/loader.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/botlane/runtime/loader.py), plus the focused public-surface tests and wheel smoke.
+
+What I changed
+
+I renamed the source roots to `botlane/` and `botlane_optimizer/`, switched packaging metadata and the console script to `botlane`, renamed the public SDK facade/exported exception to `Botlane` and `BotlaneSDKError`, and updated maintained imports/tests to the new package names. I also updated package-installed workflow namespace strings from `autoloop.workflows` to `botlane.workflows`, and removed stale `build/` plus legacy `autoloop_v3_surface.egg-info/` artifacts because they were still leaking `autoloop` into built wheels.
+
+Key findings / decisions
+
+The package-root rename forced a small adjacent change set in workflow discovery/loading: leaving `autoloop.workflows` in place would have broken installed package resolution even if the filesystem roots were renamed. I kept `.autoloop` runtime/state paths, `_autoloop_workspace_workflows`, and broader `autoloop.*` schemas deferred by design; changing those here would have crossed the phase boundary without the underlying migration work.
+
+Open issues / next step
+
+Focused validation passed: `.venv/bin/pytest tests/unit/test_simple_surface.py tests/unit/test_sdk_facade.py tests/runtime/test_sdk_policy.py tests/runtime/test_workflow_catalog_roots.py tests/runtime/test_runtime_cli_metadata_integration.py tests/runtime/test_workflow_reference_resolution.py tests/strictness/test_no_compat.py tests/runtime/test_wheel_packaging_smoke.py -q` with `230 passed`. Next phase should pick up the remaining `.autoloop` workspace/runtime identity and schema/artifact renames; I recorded the scope boundary and packaging-artifact issue in [implementation_notes.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/additional-botlane-rename-requirements-discovere-28c3ecb0/runs/run-20260508T190524Z-73fc5c3b/artifacts/implement/phases/rename-package-and-public-api/implementation_notes.md) and the run decisions ledger.

@@ -5,13 +5,13 @@ import json
 from hashlib import sha256
 from pathlib import Path
 
-import autoloop.simple as simple
+import botlane.simple as simple
 import pytest
 from pydantic import BaseModel
 
-from autoloop.core.extensions import HookRouteRedirect, RunBinding, StepFinish, StepStart, TerminalFinish
-from autoloop.core.providers.fake import ScriptedLLMProvider
-from autoloop.core.providers.models import (
+from botlane.core.extensions import HookRouteRedirect, RunBinding, StepFinish, StepStart, TerminalFinish
+from botlane.core.providers.fake import ScriptedLLMProvider
+from botlane.core.providers.models import (
     LLMRequest,
     OutcomeResponse,
     ProducerRequest,
@@ -20,12 +20,12 @@ from autoloop.core.providers.models import (
     TokenUsage,
     VerifierRequest,
 )
-from autoloop.core.primitives import Event, Outcome
-from autoloop.runtime.config import GitTrackingRuntimeConfig, RuntimeConfig, TracingRuntimeConfig
-from autoloop.runtime.runner import RunnerOptions, execute_workflow_package
-from autoloop.core.schema_registry import RUNTIME_TRACE_SCHEMA, RUN_METADATA_SCHEMA, WORKFLOW_STATIC_STEP_GRAPH_SCHEMA
-from autoloop.runtime.tracing import RuntimeTraceError, RuntimeTraceWriter
-from autoloop.runtime.workspace import next_observability_sequence
+from botlane.core.primitives import Event, Outcome
+from botlane.runtime.config import GitTrackingRuntimeConfig, RuntimeConfig, TracingRuntimeConfig
+from botlane.runtime.runner import RunnerOptions, execute_workflow_package
+from botlane.core.schema_registry import RUNTIME_TRACE_SCHEMA, RUN_METADATA_SCHEMA, WORKFLOW_STATIC_STEP_GRAPH_SCHEMA
+from botlane.runtime.tracing import RuntimeTraceError, RuntimeTraceWriter
+from botlane.runtime.workspace import next_observability_sequence
 
 
 class _State(BaseModel):

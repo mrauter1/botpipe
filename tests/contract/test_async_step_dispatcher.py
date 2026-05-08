@@ -7,13 +7,13 @@ from pathlib import Path
 
 from pydantic import BaseModel
 
-import autoloop.simple as simple
-from autoloop.core.context import Context, context_runtime
-from autoloop.core.engine import Engine
-from autoloop.core.providers.models import LLMRequest, OutcomeResponse, ProducerRequest, ProducerResponse, VerifierRequest
-from autoloop.core.primitives import Event, Outcome
-from autoloop.core.providers.fake import ScriptedLLMProvider
-from autoloop.core.stores import InMemoryCheckpointStore, InMemorySessionStore
+import botlane.simple as simple
+from botlane.core.context import Context, context_runtime
+from botlane.core.engine import Engine
+from botlane.core.providers.models import LLMRequest, OutcomeResponse, ProducerRequest, ProducerResponse, VerifierRequest
+from botlane.core.primitives import Event, Outcome
+from botlane.core.providers.fake import ScriptedLLMProvider
+from botlane.core.stores import InMemoryCheckpointStore, InMemorySessionStore
 
 
 def _build_step_context(engine: Engine, tmp_path: Path, *, step_name: str) -> tuple[object, Context]:

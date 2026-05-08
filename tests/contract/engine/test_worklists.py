@@ -1221,7 +1221,7 @@ def test_scoped_item_state_and_step_item_state_resume_from_checkpoint(tmp_path: 
     assert result.state.seen == ["alpha", "beta"]
     assert result.state.resumed_visits == 2
 def test_resume_ignores_legacy_null_worklist_selection_payloads(tmp_path: Path):
-    from autoloop.runtime.stores.filesystem import FilesystemCheckpointStore
+    from botlane.runtime.stores.filesystem import FilesystemCheckpointStore
 
     class LegacyNullSelectionWorkflow(Workflow):
         class State(BaseModel):

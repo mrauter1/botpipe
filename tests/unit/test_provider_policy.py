@@ -5,7 +5,7 @@ from pathlib import Path
 import pytest
 from pydantic import ValidationError
 
-from autoloop.core.provider_policy import (
+from botlane.core.provider_policy import (
     SYSTEM_DEFAULT_PROVIDER_POLICY,
     PermissionPolicy,
     ProviderPolicy,

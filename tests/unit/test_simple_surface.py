@@ -7,20 +7,20 @@ import re
 import pytest
 from pydantic import BaseModel, Field
 
-import autoloop
-import autoloop.simple as simple
-import autoloop.core as core
-import autoloop.core.steps as core_steps
-import autoloop.core.validation as core_validation
-from autoloop.core.branch_groups.models import BranchGroupDeclarationSpec, CompiledBranchGroupSpec
-from autoloop.core.compiler import compile_workflow
-from autoloop.core.context import Context
-from autoloop.core.discovery import get_workflow_definition
-from autoloop.core.engine import Engine
-from autoloop.core.errors import WorkflowExecutionError, WorkflowValidationError
-from autoloop.core.providers.fake import ScriptedLLMProvider
-from autoloop.core.provider_policy import PermissionPolicy, ProviderPolicy, ProviderPolicyOverride
-from autoloop.core.stores import InMemoryCheckpointStore, InMemorySessionStore
+import botlane
+import botlane.simple as simple
+import botlane.core as core
+import botlane.core.steps as core_steps
+import botlane.core.validation as core_validation
+from botlane.core.branch_groups.models import BranchGroupDeclarationSpec, CompiledBranchGroupSpec
+from botlane.core.compiler import compile_workflow
+from botlane.core.context import Context
+from botlane.core.discovery import get_workflow_definition
+from botlane.core.engine import Engine
+from botlane.core.errors import WorkflowExecutionError, WorkflowValidationError
+from botlane.core.providers.fake import ScriptedLLMProvider
+from botlane.core.provider_policy import PermissionPolicy, ProviderPolicy, ProviderPolicyOverride
+from botlane.core.stores import InMemoryCheckpointStore, InMemorySessionStore
 
 
 REMOVED_WORKFLOW_STEP = "Workflow" + "Step"
@@ -42,7 +42,7 @@ def _import_from(module_name: str, symbol: str) -> object:
 
 
 def test_autoloop_root_exports_only_the_canonical_public_surface() -> None:
-    assert tuple(autoloop.__all__) == (
+    assert tuple(botlane.__all__) == (
         "Workflow",
         "step",
         "produce_verify_step",
@@ -90,7 +90,7 @@ def test_autoloop_root_exports_only_the_canonical_public_surface() -> None:
         "SandboxMode",
         "NetworkMode",
         "PermissionMode",
-        "Autoloop",
+        "Botlane",
         "WorkflowResult",
         "StepResult",
         "ArtifactMap",
@@ -101,7 +101,7 @@ def test_autoloop_root_exports_only_the_canonical_public_surface() -> None:
         "InputRequest",
         "HandledInput",
         "SDKDebugInfo",
-        "AutoloopSDKError",
+        "BotlaneSDKError",
         "WorkflowInputError",
         "WorkflowParameterError",
         "InputRequired",
@@ -114,15 +114,15 @@ def test_autoloop_root_exports_only_the_canonical_public_surface() -> None:
         "BestSuppositionInput",
     )
 
-    for symbol in autoloop.__all__:
-        assert _import_from("autoloop", symbol) is getattr(autoloop, symbol)
+    for symbol in botlane.__all__:
+        assert _import_from("botlane", symbol) is getattr(botlane, symbol)
 
-    assert autoloop.StateVar is simple.StateVar
-    assert autoloop.Step is core_steps.Step
-    assert autoloop.PromptStep is core_steps.PromptStep
-    assert autoloop.ProduceVerifyStep is core_steps.ProduceVerifyStep
-    assert autoloop.PythonStep is core_steps.PythonStep
-    assert autoloop.ChildWorkflowStep is core_steps.ChildWorkflowStep
+    assert botlane.StateVar is simple.StateVar
+    assert botlane.Step is core_steps.Step
+    assert botlane.PromptStep is core_steps.PromptStep
+    assert botlane.ProduceVerifyStep is core_steps.ProduceVerifyStep
+    assert botlane.PythonStep is core_steps.PythonStep
+    assert botlane.ChildWorkflowStep is core_steps.ChildWorkflowStep
 
 
 def test_effect_exports_and_route_helpers_are_public() -> None:
@@ -246,7 +246,7 @@ def test_removed_root_public_symbols_fail_to_import() -> None:
         REMOVED_PARAM,
     ):
         with pytest.raises(ImportError):
-            _import_from("autoloop", symbol)
+            _import_from("botlane", symbol)
 
 
 def test_removed_simple_aliases_are_absent() -> None:
@@ -276,7 +276,7 @@ def test_removed_simple_symbols_fail_to_import() -> None:
         REMOVED_WORKFLOW_STEP,
     ):
         with pytest.raises(ImportError):
-            _import_from("autoloop.simple", symbol)
+            _import_from("botlane.simple", symbol)
 
 
 def test_operation_surface_singletons_expose_public_runtime_types() -> None:
@@ -287,15 +287,15 @@ def test_operation_surface_singletons_expose_public_runtime_types() -> None:
 
 
 def test_runtime_control_exports_are_canonical_and_validate_basic_fields() -> None:
-    assert autoloop.RequestInput(question="What changed?").question == "What changed?"
-    assert autoloop.Goto(target="publish").target == "publish"
-    assert autoloop.Fail(reason="stop").reason == "stop"
+    assert botlane.RequestInput(question="What changed?").question == "What changed?"
+    assert botlane.Goto(target="publish").target == "publish"
+    assert botlane.Fail(reason="stop").reason == "stop"
 
     with pytest.raises(ValueError):
-        autoloop.RequestInput(question="  ")
+        botlane.RequestInput(question="  ")
 
     with pytest.raises(ValueError):
-        autoloop.Fail(reason="  ")
+        botlane.Fail(reason="  ")
 
 
 def test_core_top_level_surface_excludes_quarantined_legacy_names() -> None:
@@ -326,17 +326,17 @@ def test_core_top_level_surface_excludes_quarantined_legacy_names() -> None:
         "Route",
         "Workflow",
     ):
-        assert _import_from("autoloop.core", symbol) is getattr(core, symbol)
+        assert _import_from("botlane.core", symbol) is getattr(core, symbol)
 
 
 def test_core_module_identity_remains_canonical() -> None:
-    import autoloop.core.workflow_capabilities as core_capabilities
+    import botlane.core.workflow_capabilities as core_capabilities
 
     assert core.validation is core_validation
     assert core.steps is core_steps
-    assert core_capabilities.__name__ == "autoloop.core.workflow_capabilities"
-    assert core.Workflow is _import_from("autoloop.core", "Workflow")
-    assert core_steps.Step is _import_from("autoloop.core.steps", "Step")
+    assert core_capabilities.__name__ == "botlane.core.workflow_capabilities"
+    assert core.Workflow is _import_from("botlane.core", "Workflow")
+    assert core_steps.Step is _import_from("botlane.core.steps", "Step")
 
 
 def test_legacy_core_import_usage_is_absent_from_active_python_files() -> None:
@@ -348,7 +348,7 @@ def test_legacy_core_import_usage_is_absent_from_active_python_files() -> None:
         re.compile(r"\bimport\s+core\._compat(?:\.|\b)"),
     )
     candidates = (
-        "autoloop",
+        "botlane",
         "core",
         "extensions",
         "stdlib",

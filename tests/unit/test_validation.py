@@ -3,18 +3,18 @@ from __future__ import annotations
 import pytest
 from pydantic import BaseModel, Field
 
-from autoloop.core.compiler import compile_workflow
-from autoloop.core.artifacts import Artifact
-from autoloop.core.effects import Effects, WorklistEffect
-from autoloop.core.errors import RoutingError, WorkflowCompilationError, WorkflowValidationError
-from autoloop.core.extensions import RunBinding
-from autoloop.core.primitives import Event, Goto
-from autoloop.core.providers.retries import ProviderRetryPolicy
-from autoloop.core.route_required_writes import effective_route_required_writes, explicit_route_required_writes
-from autoloop.core.routes import Route
-from autoloop.core.steps import ControlRoutes, PromptStep, ProduceVerifyStep, Session, PythonStep, ChildWorkflowStep
-from autoloop.core.worklists import Selector, Worklist
-from autoloop.stdlib.validation import (
+from botlane.core.compiler import compile_workflow
+from botlane.core.artifacts import Artifact
+from botlane.core.effects import Effects, WorklistEffect
+from botlane.core.errors import RoutingError, WorkflowCompilationError, WorkflowValidationError
+from botlane.core.extensions import RunBinding
+from botlane.core.primitives import Event, Goto
+from botlane.core.providers.retries import ProviderRetryPolicy
+from botlane.core.route_required_writes import effective_route_required_writes, explicit_route_required_writes
+from botlane.core.routes import Route
+from botlane.core.steps import ControlRoutes, PromptStep, ProduceVerifyStep, Session, PythonStep, ChildWorkflowStep
+from botlane.core.worklists import Selector, Worklist
+from botlane.stdlib.validation import (
     contains_hidden_execution_signal,
     deduped_string_list_fields,
     extract_workflow_names_from_capability_snapshot,
@@ -38,7 +38,7 @@ from autoloop.stdlib.validation import (
     validate_no_hidden_execution_signal,
     validate_publication_boundary,
 )
-from autoloop.core import AWAIT_INPUT, FAIL, FINISH, GLOBAL, SELF, Workflow
+from botlane.core import AWAIT_INPUT, FAIL, FINISH, GLOBAL, SELF, Workflow
 
 
 
@@ -258,7 +258,7 @@ def test_global_question_routes_compile_with_step_specific_provider_visibility()
     assert compiled.routes["run"]["question"].provider_visible_full_auto is False
 
 
-LEGACY_ROUTE_KEYWORD = "route_" "contracts"
+LEGACY_ROUTE_KEYWORD = "route_"  "contracts"
 
 
 @pytest.mark.parametrize(
@@ -354,7 +354,7 @@ def test_validation_rejects_invalid_destinations():
 
 
 def test_validation_rejects_legacy_success_terminal_string():
-    legacy_finish = "SU" "CCESS"
+    legacy_finish = "SU"  "CCESS"
 
     with pytest.raises(WorkflowValidationError, match="invalid transition destination"):
 
@@ -372,11 +372,11 @@ def test_validation_rejects_legacy_success_terminal_string():
 
 
 def test_board_mutation_is_not_exported_from_public_modules():
-    import autoloop
-    import autoloop.core as core
+    import botlane
+    import botlane.core as core
     board_mutation_name = "Board" + "Mutation"
 
-    assert not hasattr(autoloop, board_mutation_name)
+    assert not hasattr(botlane, board_mutation_name)
     assert not hasattr(core, board_mutation_name)
 
 

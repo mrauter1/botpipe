@@ -6,11 +6,11 @@ from pathlib import Path
 import pytest
 from pydantic import BaseModel
 
-from autoloop.core.context import Context
-from autoloop.core.history import StepInstanceKey
-from autoloop.core.primitives import AWAIT_INPUT
-from autoloop.core.schema_registry import RUNTIME_TRACE_SCHEMA
-from autoloop.core.stores import InMemorySessionStore
+from botlane.core.context import Context
+from botlane.core.history import StepInstanceKey
+from botlane.core.primitives import AWAIT_INPUT
+from botlane.core.schema_registry import RUNTIME_TRACE_SCHEMA
+from botlane.core.stores import InMemorySessionStore
 
 
 class _State(BaseModel):

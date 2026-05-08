@@ -7,7 +7,7 @@ from types import SimpleNamespace
 
 import pytest
 
-from autoloop_optimizer.optimization import (
+from botlane_optimizer.optimization import (
     OptimizationArtifactSpec,
     build_step_trace_metrics,
     collect_optimization_publication_surface,
@@ -24,7 +24,7 @@ from autoloop_optimizer.optimization import (
     write_optimization_refinement_evidence,
     write_selected_workflow_source_manifest,
 )
-from autoloop.core.schema_registry import RUN_METADATA_SCHEMA
+from botlane.core.schema_registry import RUN_METADATA_SCHEMA
 
 
 def test_parse_run_ref_accepts_task_slash_run() -> None:

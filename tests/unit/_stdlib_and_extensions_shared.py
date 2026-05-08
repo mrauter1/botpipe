@@ -8,21 +8,21 @@ import subprocess
 import sys
 from pathlib import Path
 from types import SimpleNamespace
-import autoloop.core.route_reporting as route_reporting_helpers
-import autoloop_optimizer._selected_workflow as selected_workflow_helpers
-import autoloop_optimizer.adaptation as adaptation_helpers
-import autoloop_optimizer.candidate_surfaces as candidate_surface_helpers
-import autoloop_optimizer.company as company_helpers
-import autoloop_optimizer.decomposition as decomposition_helpers
-import autoloop_optimizer.diagnostics as diagnostics_helpers
-import autoloop_optimizer.evaluation as evaluation_helpers
-import autoloop.stdlib.json_artifacts as json_artifact_helpers
-import autoloop_optimizer.parameters as parameter_helpers
-import autoloop_optimizer.portfolio as portfolio_helpers
-import autoloop_optimizer.refinement as refinement_helpers
-import autoloop.stdlib.validation as validation_helpers
-from autoloop_optimizer.adaptation import write_selected_workflow_capability_snapshot
-from autoloop_optimizer.candidate_surfaces import (
+import botlane.core.route_reporting as route_reporting_helpers
+import botlane_optimizer._selected_workflow as selected_workflow_helpers
+import botlane_optimizer.adaptation as adaptation_helpers
+import botlane_optimizer.candidate_surfaces as candidate_surface_helpers
+import botlane_optimizer.company as company_helpers
+import botlane_optimizer.decomposition as decomposition_helpers
+import botlane_optimizer.diagnostics as diagnostics_helpers
+import botlane_optimizer.evaluation as evaluation_helpers
+import botlane.stdlib.json_artifacts as json_artifact_helpers
+import botlane_optimizer.parameters as parameter_helpers
+import botlane_optimizer.portfolio as portfolio_helpers
+import botlane_optimizer.refinement as refinement_helpers
+import botlane.stdlib.validation as validation_helpers
+from botlane_optimizer.adaptation import write_selected_workflow_capability_snapshot
+from botlane_optimizer.candidate_surfaces import (
     derive_candidate_surface_manifest,
     materialize_baseline_surface,
     normalize_candidate_surface_boundary,
@@ -32,37 +32,37 @@ from autoloop_optimizer.candidate_surfaces import (
     validate_candidate_surface_manifest,
     validate_candidate_surface_overlay,
 )
-from autoloop_optimizer.company import write_company_operation_snapshot
-from autoloop_optimizer.decomposition import write_selected_workflow_decomposition_surface
-from autoloop_optimizer.diagnostics import write_selected_workflow_run_history_snapshot
-from autoloop_optimizer.evaluation import write_validated_eval_case_manifest
-from autoloop_optimizer.portfolio import (
+from botlane_optimizer.company import write_company_operation_snapshot
+from botlane_optimizer.decomposition import write_selected_workflow_decomposition_surface
+from botlane_optimizer.diagnostics import write_selected_workflow_run_history_snapshot
+from botlane_optimizer.evaluation import write_validated_eval_case_manifest
+from botlane_optimizer.portfolio import (
     write_workflow_capability_snapshot,
     write_workflow_portfolio_health_snapshot,
     write_workflow_portfolio_snapshot,
 )
-from autoloop_optimizer.refinement import write_selected_workflow_authoring_surface
+from botlane_optimizer.refinement import write_selected_workflow_authoring_surface
 import pytest
 from pydantic import BaseModel
-from autoloop.core import Context
-from autoloop.core.context import ChildWorkflowResult
-from autoloop.core.workflow_capabilities import (
+from botlane.core import Context
+from botlane.core.context import ChildWorkflowResult
+from botlane.core.workflow_capabilities import (
     inspect_workflow_reference,
     selected_workflow_authoring_surface_payload,
     selected_workflow_capability_payload,
     selected_workflow_decomposition_surface_payload,
 )
-from autoloop.extensions.session_paths import SessionPaths, extract_session_path_strategy
-from autoloop.extensions.git.filters import (
+from botlane.extensions.session_paths import SessionPaths, extract_session_path_strategy
+from botlane.extensions.git.filters import (
     delta_pathspecs,
     filter_delta_by_pathspecs,
     filter_delta_by_prefixes,
     workflow_workspace_pathspec,
 )
-from autoloop.extensions.git.policy import GitChange, GitCommitPlan, GitDelta
-from autoloop.extensions.git.repo import GitRepo
-from autoloop.core.stores import InMemorySessionStore
-from autoloop.stdlib import (
+from botlane.extensions.git.policy import GitChange, GitCommitPlan, GitDelta
+from botlane.extensions.git.repo import GitRepo
+from botlane.core.stores import InMemorySessionStore
+from botlane.stdlib import (
     JsonArtifactSpec,
     PromptBundle,
     ValidationIssue,
@@ -102,7 +102,7 @@ from autoloop.stdlib import (
     write_publication_receipt,
     write_workflow_json,
 )
-from autoloop_optimizer import (
+from botlane_optimizer import (
     PortfolioReviewParameters,
     SelectedWorkflowTaskFramingParameters,
     SelectedWorkflowTaskFramingWithEvidenceParameters,
@@ -110,12 +110,12 @@ from autoloop_optimizer import (
     TaskFramingWithEvidenceParameters,
     write_validated_workflow_parameters,
 )
-from autoloop import Route, SELF
-from autoloop.stdlib.state import SequenceCursor
-from autoloop.core.extensions import RunBinding
-from autoloop.runtime.loader import WorkflowParameterError, coerce_workflow_parameter_mapping, resolve_workflow_reference
-from autoloop.core import AWAIT_INPUT, FAIL, FINISH, GLOBAL
-from autoloop.core.primitives import Event, Outcome
+from botlane import Route, SELF
+from botlane.stdlib.state import SequenceCursor
+from botlane.core.extensions import RunBinding
+from botlane.runtime.loader import WorkflowParameterError, coerce_workflow_parameter_mapping, resolve_workflow_reference
+from botlane.core import AWAIT_INPUT, FAIL, FINISH, GLOBAL
+from botlane.core.primitives import Event, Outcome
 PACKAGE_ROOT = Path(__file__).resolve().parents[2]
 REMOVED_CONTRACTS_PATH = "contracts" + "_path"
 REMOVED_CONTRACTS_PATH_REPO_RELATIVE = "contracts" + "_path_repo_relative"
@@ -237,7 +237,7 @@ def _build_child_result(tmp_path: Path, output_artifacts: dict[str, Path]) -> Ch
     child_task_folder = tmp_path / ".autoloop" / "tasks" / "task-1"
     child_workflow_folder = child_task_folder / "wf_investigation_request_to_evidence_pack"
     child_run_folder = child_workflow_folder / "runs" / "child-run-1"
-    child_package_folder = tmp_path / "autoloop" / "workflows" / "investigation_request_to_evidence_pack"
+    child_package_folder = tmp_path / "botlane" / "workflows" / "investigation_request_to_evidence_pack"
     child_run_folder.mkdir(parents=True, exist_ok=True)
     child_workflow_folder.mkdir(parents=True, exist_ok=True)
     child_package_folder.mkdir(parents=True, exist_ok=True)
@@ -338,7 +338,7 @@ from __future__ import annotations
 
 from pydantic import BaseModel, Field
 
-from autoloop import FINISH, Md, Prompt, Route, SELF, Workflow, produce_verify_step
+from botlane import FINISH, Md, Prompt, Route, SELF, Workflow, produce_verify_step
 
 
 class AssessmentPayload(BaseModel):
@@ -416,7 +416,7 @@ from __future__ import annotations
 
 from pydantic import BaseModel
 
-from autoloop import Json, Prompt, Workflow, step
+from botlane import Json, Prompt, Workflow, step
 
 
 class ReviewPayload(BaseModel):
