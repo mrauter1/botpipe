@@ -9,3 +9,4 @@
 
 - Added runtime CLI regression coverage for the shared help surface across `workflows list`, `runs list`, `logs`, and `init workflow`, asserting `--workspace WORKSPACE` and rejecting both `--root` and `ROOT`.
 - Revalidated the focused runtime CLI suite with `./.venv/bin/pytest tests/runtime/test_package_cli.py tests/runtime/test_runtime_cli_metadata_integration.py` (49 passed).
+- Audit cycle 1: no additional findings. The shared help-surface matrix, omission failures, legacy-flag rejection paths, and focused runtime CLI suite all validated cleanly.

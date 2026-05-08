@@ -856,3 +856,104 @@ Open issues / next step
 <loop-control>
 {"schema":"docloop.loop_control/v1","kind":"promise","promise":"COMPLETE"}
 </loop-control>
+
+
+---
+run_id=run-20260508T173757Z-dbc5e2d0 | entry=session_turn | pair=test | phase=producer | cycle=1 | attempt=1 | thread_id=019e08c0-fd19-7d83-8d47-b301dba7c66b
+---
+provider=codex
+mode=resume
+template=/home/rauter/.local/share/pipx/venvs/autoloop/lib/python3.12/site-packages/autoloop/templates/test_producer.md
+session_id=019e08c0-fd19-7d83-8d47-b301dba7c66b
+
+
+---
+run_id=run-20260508T173757Z-dbc5e2d0 | entry=phase_output | pair=test | phase=producer | process=codex-agent | cycle=1 | attempt=1 | thread_id=019e08c0-fd19-7d83-8d47-b301dba7c66b
+---
+I’m validating the runtime CLI test coverage as its own phase now. I’ll inspect the current help/argparse coverage, add only the missing regression checks if there’s a gap, then update the phase test artifacts to match the final test surface.
+
+The current tests cover one common-parent help path and the mutating help paths. I’m adding a small common-surface help matrix for `runs`, `logs`, and `init workflow` so the shared `--workspace WORKSPACE` rendering is guarded across separate command trees, not just `workflows list`.
+
+I’ve added the extra common-help coverage. Running the focused runtime CLI tests now to make sure the new matrix stays deterministic and doesn’t over-assume command-specific help formatting.
+
+The expanded runtime CLI suite is green. I’m recording the final behavior-to-test map and a short test-phase summary in the active artifacts so the audit trail matches the repo state.
+
+Scope considered
+
+- Phase-local runtime CLI workspace-flag test coverage only: [tests/runtime/test_package_cli.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/tests/runtime/test_package_cli.py), [tests/runtime/test_runtime_cli_metadata_integration.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/tests/runtime/test_runtime_cli_metadata_integration.py), and the active test artifacts [test_strategy.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/below-is-the-revised-standalone-correction-spec-a9877342/runs/run-20260508T173757Z-dbc5e2d0/artifacts/test/phases/runtime-cli-workspace-flag/test_strategy.md) and [feedback.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/below-is-the-revised-standalone-correction-spec-a9877342/runs/run-20260508T173757Z-dbc5e2d0/artifacts/test/phases/runtime-cli-workspace-flag/feedback.md).
+
+What I analyzed
+
+- The current runtime CLI regression tests for required `--workspace`, legacy `--root` rejection, and help-text rendering.
+- The remaining help-surface coverage across command trees that share the non-mutating `common` parser parent.
+- The final implementation and reviewer-approved behavior for `--workspace WORKSPACE`.
+
+What I changed
+
+- Added [test_cli_common_workspace_help_surfaces_render_workspace_metavar](/home/rauter/autoloop_v3_bkp/autoloop_v3/tests/runtime/test_package_cli.py:231) to cover `workflows list`, `runs list`, `logs`, and `init workflow` help output with `--workspace WORKSPACE`, and to reject both `--root` and `ROOT`.
+- Updated [test_strategy.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/below-is-the-revised-standalone-correction-spec-a9877342/runs/run-20260508T173757Z-dbc5e2d0/artifacts/test/phases/runtime-cli-workspace-flag/test_strategy.md) with an explicit behavior-to-test map, preserved invariants, failure paths, stabilization notes, and known gaps.
+- Appended a concise test-phase summary to [feedback.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/below-is-the-revised-standalone-correction-spec-a9877342/runs/run-20260508T173757Z-dbc5e2d0/artifacts/test/phases/runtime-cli-workspace-flag/feedback.md).
+
+Key findings / decisions
+
+- The extra help-surface matrix is the only meaningful remaining gap worth covering in this phase; broader runtime behavior was already well-covered by the implementation-phase tests.
+- The help regression checks remain deterministic because they use parser output and isolated temp workspaces only.
+- Validation passed with `./.venv/bin/pytest tests/runtime/test_package_cli.py tests/runtime/test_runtime_cli_metadata_integration.py` and the focused suite now reports 49 passing tests.
+
+Open issues / next step
+
+- No open issues in this phase-local test scope.
+- The updated test surface is ready for audit.
+
+
+---
+run_id=run-20260508T173757Z-dbc5e2d0 | entry=session_turn | pair=test | phase=verifier | cycle=1 | attempt=1 | thread_id=019e08c0-fd19-7d83-8d47-b301dba7c66b
+---
+provider=codex
+mode=resume
+template=/home/rauter/.local/share/pipx/venvs/autoloop/lib/python3.12/site-packages/autoloop/templates/test_verifier.md
+session_id=019e08c0-fd19-7d83-8d47-b301dba7c66b
+
+
+---
+run_id=run-20260508T173757Z-dbc5e2d0 | entry=phase_output | pair=test | phase=verifier | process=codex-agent | cycle=1 | attempt=1 | thread_id=019e08c0-fd19-7d83-8d47-b301dba7c66b
+---
+I’m auditing the runtime CLI test phase now. I’ll verify the added coverage against the phase contract, check the focused suite result, and then update only the test audit artifacts with either remaining gaps or a clean pass.
+
+The coverage map and the repo tests line up so far. I’m running the same focused suite once from the audit side to confirm the added help-surface matrix stays stable before I mark the test criteria complete.
+
+The focused audit run is in progress without early failures. Once it finishes, I’ll either log the gap or clear the audit artifacts as complete.
+
+I’ve confirmed the help matrix and focused suite are stable. There are no remaining audit gaps in the phase-local test scope, so I’m marking the criteria complete and leaving a short audit note in feedback.
+
+Scope considered
+
+- Phase-local runtime CLI workspace-flag test audit only: [tests/runtime/test_package_cli.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/tests/runtime/test_package_cli.py), [tests/runtime/test_runtime_cli_metadata_integration.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/tests/runtime/test_runtime_cli_metadata_integration.py), [test_strategy.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/below-is-the-revised-standalone-correction-spec-a9877342/runs/run-20260508T173757Z-dbc5e2d0/artifacts/test/phases/runtime-cli-workspace-flag/test_strategy.md), and the active test audit artifacts.
+
+What I analyzed
+
+- The behavior-to-test coverage map for AC-1 through AC-3.
+- The concrete runtime CLI tests covering required `--workspace`, legacy `--root` rejection, and help rendering across shared parser branches.
+- The focused suite result for `tests/runtime/test_package_cli.py` and `tests/runtime/test_runtime_cli_metadata_integration.py`.
+
+What I reviewed
+
+- Coverage depth for changed behavior and preserved invariants.
+- Failure-path coverage for missing `--workspace` and rejected `--root`.
+- Reliability of the new help-surface matrix and whether it avoids flaky assumptions.
+- Alignment between the tests and the confirmed greenfield CLI behavior.
+
+Key findings / decisions
+
+- No blocking or non-blocking audit findings remain in this phase-local test scope.
+- The added help-surface matrix materially improves regression protection across separate command trees that share the `common` parser parent.
+- I updated [criteria.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/below-is-the-revised-standalone-correction-spec-a9877342/runs/run-20260508T173757Z-dbc5e2d0/artifacts/test/phases/runtime-cli-workspace-flag/criteria.md) to fully checked and appended a short clean-audit note to [feedback.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/below-is-the-revised-standalone-correction-spec-a9877342/runs/run-20260508T173757Z-dbc5e2d0/artifacts/test/phases/runtime-cli-workspace-flag/feedback.md).
+
+Open issues / next step
+
+- No open issues in this phase-local audit scope.
+- The test phase is ready to close.
+
+<loop-control>
+{"schema":"docloop.loop_control/v1","kind":"promise","promise":"COMPLETE"}
+</loop-control>
