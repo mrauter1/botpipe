@@ -1190,3 +1190,54 @@ The phase contract is now fully pinned in tests for both workflow/step docstring
 Open issues / next step
 
 No open issues in phase scope. The targeted regression suite is green, and the test strategy plus feedback artifacts now reflect the final coverage map and validation evidence.
+
+
+---
+run_id=run-20260508T141115Z-6c430e1a | entry=session_turn | pair=test | phase=verifier | cycle=1 | attempt=1 | thread_id=019e0854-49f5-7e41-ae2f-199bac1cd6c7
+---
+provider=codex
+mode=resume
+template=/home/rauter/.local/share/pipx/venvs/autoloop/lib/python3.12/site-packages/autoloop/templates/test_verifier.md
+session_id=019e0854-49f5-7e41-ae2f-199bac1cd6c7
+
+
+---
+run_id=run-20260508T141115Z-6c430e1a | entry=phase_output | pair=test | phase=verifier | process=codex-agent | cycle=1 | attempt=1 | thread_id=019e0854-49f5-7e41-ae2f-199bac1cd6c7
+---
+I’m auditing the phase-local regression tests and the active test artifacts first. I’ll compare the updated coverage map against the changed behavior, check the targeted tests directly, and confirm the validation evidence before deciding whether there are any blocking audit gaps.
+
+The coverage map and the changed tests line up with the earlier decisions. I’m rerunning the required targeted suite from the auditor side now so the criteria checkboxes are backed by direct verification instead of only the producer notes.
+
+The auditor-side rerun is green, and I don’t see any missing changed-behavior coverage or flaky assertions in phase scope. I’m marking the audit criteria complete and recording that there were no blocking or non-blocking findings.
+
+Scope considered
+
+Phase-local regression-cleanup only: the changed regression tests in `tests/unit/test_sdk_facade.py`, the surrounding policy/SDK/runtime coverage named in the test strategy, the active test artifacts, and the run-local decisions that define the intended greenfield contract.
+
+What I analyzed
+
+I checked the updated test strategy against the changed behavior, reviewed the added docstring assertions in `tests/unit/test_sdk_facade.py` and the existing policy coverage in `tests/unit/test_policy.py`, and compared that coverage to the explicit decisions about `Policy`, `workspace`, removed SDK compatibility paths, workspace-vs-state-root semantics, and the `provider_questions` vs `control_routes` distinction.
+
+What I reviewed
+
+I reran the required targeted suite from the auditor side:
+
+`.venv/bin/pytest tests/unit/test_provider_policy.py tests/runtime/test_provider_policy_steps.py tests/runtime/test_provider_policy_emitters.py tests/runtime/test_provider_policy_config.py tests/unit/test_simple_surface.py tests/unit/test_sdk_facade.py tests/unit/test_policy.py tests/runtime/test_sdk_policy.py -q`
+
+Result: `212 passed in 3.99s`
+
+I also updated the active audit artifacts:
+- `criteria.md`: all boxes checked
+- `feedback.md`: recorded no audit findings and the auditor-side validation evidence
+
+Key findings / decisions
+
+No blocking or non-blocking findings. The tests cover the changed behavior at the right level, pin the direct-operation docstring wording that was newly introduced, preserve the intentional compatibility removals required by the spec, and remain deterministic by relying on existing fake/scripted providers rather than timing or environment-sensitive behavior.
+
+Open issues / next step
+
+No open issues in phase scope. The test audit can close as complete.
+
+<loop-control>
+{"schema":"docloop.loop_control/v1","kind":"promise","promise":"COMPLETE"}
+</loop-control>
