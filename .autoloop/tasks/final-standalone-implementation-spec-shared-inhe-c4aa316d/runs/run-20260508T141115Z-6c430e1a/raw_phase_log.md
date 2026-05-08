@@ -917,3 +917,105 @@ No open issues in this phase scope.
 <loop-control>
 {"schema":"docloop.loop_control/v1","kind":"promise","promise":"COMPLETE"}
 </loop-control>
+
+
+---
+run_id=run-20260508T141115Z-6c430e1a | entry=session_turn | pair=test | phase=producer | cycle=1 | attempt=1 | thread_id=019e0810-03ca-7d63-94af-b0895960b1ef
+---
+provider=codex
+mode=resume
+template=/home/rauter/.local/share/pipx/venvs/autoloop/lib/python3.12/site-packages/autoloop/templates/test_producer.md
+session_id=019e0810-03ca-7d63-94af-b0895960b1ef
+
+
+---
+run_id=run-20260508T141115Z-6c430e1a | entry=phase_output | pair=test | phase=producer | process=codex-agent | cycle=1 | attempt=1 | thread_id=019e0810-03ca-7d63-94af-b0895960b1ef
+---
+I’m treating this as a focused test pass on the SDK/runtime alignment surface. I’ll review the active strategy artifacts, inspect the existing coverage that landed with implementation, then add any missing regression tests before updating the phase test artifacts.
+
+The existing tests already cover the public keyword breaks and step-object reuse. The two gaps worth pinning are the full resolver stack on inline operations and a workspace-root-sensitive write policy path through the SDK.
+
+I’ve settled on two additions: one test that pins the full resolver stack on inline operations, and one that proves the SDK keeps `workspace` as the provider context root even when `state_dir` is elsewhere. I’m editing the runtime SDK policy tests and the phase artifacts now.
+
+The new tests are in place. I’m running the focused runtime SDK policy file now to make sure the coverage additions are deterministic and don’t depend on the broader suite ordering.
+
+The focused tests passed, including the broader SDK/provider-policy subset. I’m recording the exact coverage map and the test additions in the phase artifacts, then I’ll close out with the validation summary.
+
+Scope considered
+
+Phase-local test coverage for SDK/runtime alignment only: SDK entrypoint naming, resolver-owned merge order, inline/direct operation inheritance, invocation-local `client.step(..., policy=...)` behavior, and the workspace vs state-root path contract.
+
+What I analyzed
+
+I reviewed the active phase artifacts, the run decisions ledger, the implementation-facing SDK/runtime changes, and the existing SDK/provider-policy tests in [tests/runtime/test_sdk_policy.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/tests/runtime/test_sdk_policy.py), [tests/unit/test_sdk_facade.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/tests/unit/test_sdk_facade.py), and [tests/runtime/test_provider_policy_steps.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/tests/runtime/test_provider_policy_steps.py).
+
+What I changed
+
+I expanded [tests/runtime/test_sdk_policy.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/tests/runtime/test_sdk_policy.py) with two runtime regression tests:
+- one that pins the full inline-operation merge stack across runtime-config default, SDK default, workflow, run, step, and explicit operation layers
+- one that pins `workspace` as `context.root` and preserves relative `allow_write="reports/"` even when `state_dir` is elsewhere
+
+I also updated [test_strategy.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/final-standalone-implementation-spec-shared-inhe-c4aa316d/runs/run-20260508T141115Z-6c430e1a/artifacts/test/phases/sdk-runtime-alignment/test_strategy.md), appended the phase test summary to [feedback.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/final-standalone-implementation-spec-shared-inhe-c4aa316d/runs/run-20260508T141115Z-6c430e1a/artifacts/test/phases/sdk-runtime-alignment/feedback.md), and recorded the non-obvious test decisions in [decisions.txt](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/final-standalone-implementation-spec-shared-inhe-c4aa316d/runs/run-20260508T141115Z-6c430e1a/decisions.txt).
+
+Key findings / decisions
+
+The main remaining regression risk was not basic keyword coverage, which already existed, but layered precedence across inline operations and the workspace/state-root distinction. Those are now pinned directly in runtime tests.
+
+Validation performed:
+- `.venv-test/bin/python -m pytest tests/runtime/test_sdk_policy.py -q`
+- `.venv-test/bin/python -m pytest tests/unit/test_sdk_facade.py tests/runtime/test_provider_policy_steps.py tests/runtime/test_sdk_policy.py -q`
+
+Open issues / next step
+
+No open issues in this phase scope.
+
+<loop-control>
+{"schema":"docloop.loop_control/v1","kind":"promise","promise":"COMPLETE"}
+</loop-control>
+
+
+---
+run_id=run-20260508T141115Z-6c430e1a | entry=session_turn | pair=test | phase=verifier | cycle=1 | attempt=1 | thread_id=019e0810-03ca-7d63-94af-b0895960b1ef
+---
+provider=codex
+mode=resume
+template=/home/rauter/.local/share/pipx/venvs/autoloop/lib/python3.12/site-packages/autoloop/templates/test_verifier.md
+session_id=019e0810-03ca-7d63-94af-b0895960b1ef
+
+
+---
+run_id=run-20260508T141115Z-6c430e1a | entry=phase_output | pair=test | phase=verifier | process=codex-agent | cycle=1 | attempt=1 | thread_id=019e0810-03ca-7d63-94af-b0895960b1ef
+---
+I’m auditing the added SDK/runtime tests against the phase contract now. I’ll check the new coverage for merge-order and workspace-path semantics, verify the strategy artifact matches what was actually added, then update the audit artifacts.
+
+I’ve got the new tests and strategy in view. The only question left is whether there’s any material blind spot left in regression coverage; the initial pass suggests the additions are targeted and stable rather than overfitted.
+
+Scope considered
+
+Phase-local audit of the SDK/runtime alignment test coverage only: public SDK naming changes, resolver-owned policy merge order, inline/direct SDK operation inheritance, invocation-local step policy behavior, and the workspace vs state-root contract.
+
+What I analyzed
+
+I reviewed the active test artifacts, the run decisions ledger, the updated runtime test file [tests/runtime/test_sdk_policy.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/tests/runtime/test_sdk_policy.py), and adjacent coverage in [tests/unit/test_sdk_facade.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/tests/unit/test_sdk_facade.py) and [tests/runtime/test_provider_policy_steps.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/tests/runtime/test_provider_policy_steps.py).
+
+What I reviewed
+
+I checked that the added tests actually pin the remaining high-risk behaviors: the full inline-operation merge stack, `workspace` staying as `context.root` when `state_dir` differs, preserved relative `allow_write="reports/"`, and the existing rejection coverage for removed SDK keywords. I also re-ran:
+- `.venv-test/bin/python -m pytest tests/runtime/test_sdk_policy.py tests/unit/test_sdk_facade.py tests/runtime/test_provider_policy_steps.py -q`
+
+What I reviewed against the artifacts:
+- [criteria.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/final-standalone-implementation-spec-shared-inhe-c4aa316d/runs/run-20260508T141115Z-6c430e1a/artifacts/test/phases/sdk-runtime-alignment/criteria.md)
+- [feedback.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/final-standalone-implementation-spec-shared-inhe-c4aa316d/runs/run-20260508T141115Z-6c430e1a/artifacts/test/phases/sdk-runtime-alignment/feedback.md)
+- [test_strategy.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/final-standalone-implementation-spec-shared-inhe-c4aa316d/runs/run-20260508T141115Z-6c430e1a/artifacts/test/phases/sdk-runtime-alignment/test_strategy.md)
+
+Key findings / decisions
+
+No blocking or non-blocking audit findings. The added tests are targeted, deterministic, and materially improve regression detection for the phase-specific runtime wiring.
+
+Open issues / next step
+
+No open issues in this phase scope.
+
+<loop-control>
+{"schema":"docloop.loop_control/v1","kind":"promise","promise":"COMPLETE"}
+</loop-control>
