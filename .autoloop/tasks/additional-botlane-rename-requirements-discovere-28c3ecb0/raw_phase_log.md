@@ -784,3 +784,52 @@ The phase already had strong coverage for `.botlane` vs `.autoloop` workflow pre
 Open issues / next step
 
 `python3 -m compileall` passed for the two touched test files. A targeted `pytest` run could not execute here because `/usr/bin/python3` does not have `pytest` installed, so the next step is to run the focused runtime tests in a dependency-complete environment.
+
+
+---
+run_id=run-20260508T190524Z-73fc5c3b | entry=session_turn | pair=test | phase=verifier | cycle=1 | attempt=1 | thread_id=019e0916-8e98-7b41-a2e9-9a6a5f5047d8
+---
+provider=codex
+mode=resume
+template=/home/rauter/.local/share/pipx/venvs/autoloop/lib/python3.12/site-packages/autoloop/templates/test_verifier.md
+session_id=019e0916-8e98-7b41-a2e9-9a6a5f5047d8
+
+
+---
+run_id=run-20260508T190524Z-73fc5c3b | entry=phase_output | pair=test | phase=verifier | process=codex-agent | cycle=1 | attempt=1 | thread_id=019e0916-8e98-7b41-a2e9-9a6a5f5047d8
+---
+Auditing the new phase tests against the runtime/workspace rename requirements now. I’m checking whether the added coverage actually protects the changed behavior and whether any material regression surface is still untested before I touch the audit artifacts.
+
+I’ve confirmed the newly added tests cover help-text branding and config fallback. I’m checking one remaining high-risk surface now: whether the test suite actually enforces removal of the legacy `autoloop` console script, since that is explicit in the phase acceptance criteria.
+
+I found an adjacent test surface that still looks risky: older CLI metadata integration tests may still assert `.autoloop` paths and legacy help text. I’m checking those now because stale expectations there would materially undermine this phase’s test signal.
+
+I found one material test contradiction already: an older CLI integration test still expects help output to avoid `.botlane/workflows/`, which is the opposite of the confirmed Botlane identity contract. I’m doing one broader pass over the runtime-facing tests for any other phase-relevant stale expectations before I finalize the audit.
+
+I found a material adjacent-test contradiction in the runtime CLI suite, so this audit will stay incomplete. I’m recording that blocker in the audit artifacts now and leaving the criteria unchecked accordingly.
+
+The blocker is recorded. I’m doing one final read of the audit artifacts so the closeout matches the actual test state before I return `INCOMPLETE`.
+
+Scope considered
+
+Active test phase only: runtime/workspace identity coverage and the adjacent runtime-facing tests that exercise CLI help, workspace roots, config fallback, and legacy-read compatibility.
+
+What I analyzed
+
+I reviewed the new tests in `tests/runtime/test_package_cli.py` and `tests/runtime/test_provider_policy_config.py`, the existing phase-relevant coverage in `tests/runtime/test_workflow_catalog_roots.py`, `tests/runtime/test_workspace_and_context.py`, `tests/unit/test_sdk_facade.py`, and the broader packaging contract in `tests/runtime/test_wheel_packaging_smoke.py`. I also checked the test strategy artifact against the actual suite.
+
+What I reviewed
+
+The new coverage is directionally correct: it adds Botlane CLI branding assertions and legacy global-config fallback coverage, while the existing suite already covers `.botlane` over `.autoloop` workflow precedence, mixed-root resume selection, legacy SDK sentinel handling, and absence of the `autoloop` console script in wheel smoke. However, an older CLI metadata integration test still encodes the opposite help-text contract.
+
+Key findings / decisions
+
+`TST-001` is blocking. [tests/runtime/test_runtime_cli_metadata_integration.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/tests/runtime/test_runtime_cli_metadata_integration.py) still asserts that `.botlane/workflows/` must not appear in help output, which directly contradicts the confirmed phase requirement and the new CLI identity test. Because of that stale expectation, the request-relevant test surface is internally inconsistent and does not yet provide clean regression protection.
+
+Open issues / next step
+
+Update or replace the stale CLI metadata integration test so it asserts Botlane wording and `.botlane/workflows/` presence, then rerun the focused runtime tests in an environment with `pytest` available. Until that contradiction is removed, this audit should remain incomplete.
+
+<loop-control>
+{"schema":"docloop.loop_control/v1","kind":"promise","promise":"INCOMPLETE"}
+</loop-control>
