@@ -199,7 +199,15 @@ def test_policy_can_disable_network() -> None:
 
 
 def test_dangerous_workflow_level_policy_inference_and_validation() -> None:
+    manual_policy = simple.Policy(
+        sandbox_mode=simple.SandboxMode.DANGER_FULL_ACCESS,
+        permission_mode=simple.PermissionMode.ASK,
+    )
     permission_policy = simple.Policy(permission_mode=simple.PermissionMode.FULL_AUTO_UNSANDBOXED)
+
+    assert manual_policy.permissions.mode == "ask"
+    assert manual_policy.permissions.allow_dangerous_bypass is True
+    assert manual_policy.sandbox.mode == "danger_full_access"
 
     assert permission_policy.permissions.mode == "full_auto_unsandboxed"
     assert permission_policy.permissions.allow_dangerous_bypass is True
@@ -273,10 +281,20 @@ def test_override_merge_clears_and_replaces_write_roots() -> None:
 
 
 def test_dangerous_override_inference_and_validation() -> None:
+    manual_override = simple.PolicyOverride(
+        sandbox_mode=simple.SandboxMode.DANGER_FULL_ACCESS,
+        permission_mode=simple.PermissionMode.ASK,
+    )
     permission_override = simple.PolicyOverride(
         permission_mode=simple.PermissionMode.FULL_AUTO_UNSANDBOXED
     )
     resolved = merge_provider_policies(SYSTEM_DEFAULT_PROVIDER_POLICY, permission_override)
+
+    assert manual_override.sandbox is not None
+    assert manual_override.sandbox.mode == "danger_full_access"
+    assert manual_override.permissions is not None
+    assert manual_override.permissions.mode == "ask"
+    assert manual_override.permissions.allow_dangerous_bypass is True
 
     assert permission_override.sandbox is not None
     assert permission_override.sandbox.mode == "danger_full_access"
