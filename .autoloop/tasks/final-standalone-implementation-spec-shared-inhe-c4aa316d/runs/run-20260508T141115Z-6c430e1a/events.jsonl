@@ -56,3 +56,6 @@
 {"ts": "2026-05-08T16:06:51.918228+00:00", "run_id": "run-20260508T141115Z-6c430e1a", "seq": 56, "event_type": "phase_finished", "pair": "implement", "phase": "producer", "cycle": 1, "attempt": 1, "empty_output": false, "phase_id": "regression-cleanup"}
 {"ts": "2026-05-08T16:07:45.760319+00:00", "run_id": "run-20260508T141115Z-6c430e1a", "seq": 57, "event_type": "phase_finished", "pair": "implement", "phase": "verifier", "cycle": 1, "attempt": 1, "empty_output": false, "phase_id": "regression-cleanup"}
 {"ts": "2026-05-08T16:07:45.832955+00:00", "run_id": "run-20260508T141115Z-6c430e1a", "seq": 58, "event_type": "pair_completed", "pair": "implement", "cycle": 1, "attempt": 1, "phase_id": "regression-cleanup"}
+{"ts": "2026-05-08T16:07:45.988953+00:00", "run_id": "run-20260508T141115Z-6c430e1a", "seq": 59, "event_type": "phase_deferred", "pair": "implement", "phase_mode": "single", "phase_id": "regression-cleanup", "reason": "awaiting enabled test pair completion"}
+{"ts": "2026-05-08T16:07:45.990265+00:00", "run_id": "run-20260508T141115Z-6c430e1a", "seq": 60, "event_type": "pair_started", "pair": "test", "phase_id": "regression-cleanup"}
+{"ts": "2026-05-08T16:07:45.990389+00:00", "run_id": "run-20260508T141115Z-6c430e1a", "seq": 61, "event_type": "cycle_started", "pair": "test", "cycle": 1, "attempt": 1, "phase_id": "regression-cleanup"}
