@@ -1,0 +1,5 @@
+<autoloop-decisions-header version="1" block_seq="1" owner="planner" phase_id="task-global" pair="plan" turn_seq="1" run_id="run-20260508T173757Z-dbc5e2d0" ts="2026-05-08T17:37:58.019805+00:00" />
+Treat runtime CLI flag renaming as in scope because autoloop/runtime/cli.py is part of the touched public surface and the active spec explicitly removes public --root compatibility when that file is included.
+Compiler and topology fingerprinting must stop special-casing concrete ProviderPolicy and instead hash the unified serialized payload so kind-label changes are guaranteed to affect topology hashes.
+Public-facing policy normalization errors should use Policy or core provider policy object wording; ProviderPolicyOverride remains acceptable only for core/internal diagnostics where the user explicitly supplied a core type.
+Current __all__ exports for autoloop.policy, autoloop, autoloop.sdk, and autoloop.simple already appear spec-compliant, so implementation should preserve them and add regression tests rather than widening the public surface.
