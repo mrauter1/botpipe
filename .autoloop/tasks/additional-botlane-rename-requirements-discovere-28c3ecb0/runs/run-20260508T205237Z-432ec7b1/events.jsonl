@@ -20,3 +20,6 @@
 {"ts": "2026-05-08T21:03:13.159345+00:00", "run_id": "run-20260508T205237Z-432ec7b1", "seq": 20, "event_type": "phase_completed", "pair": "test", "phase_id": "editable-install-refresh-and-proof", "phase_mode": "single"}
 {"ts": "2026-05-08T21:03:13.162198+00:00", "run_id": "run-20260508T205237Z-432ec7b1", "seq": 21, "event_type": "pair_started", "pair": "audit", "phase_id": null}
 {"ts": "2026-05-08T21:03:13.162362+00:00", "run_id": "run-20260508T205237Z-432ec7b1", "seq": 22, "event_type": "cycle_started", "pair": "audit", "cycle": 1, "attempt": 1, "phase_id": null}
+{"ts": "2026-05-08T21:07:19.727616+00:00", "run_id": "run-20260508T205237Z-432ec7b1", "seq": 23, "event_type": "phase_finished", "pair": "audit", "phase": "producer", "cycle": 1, "attempt": 1, "empty_output": false, "phase_id": null}
+{"ts": "2026-05-08T21:09:03.328770+00:00", "run_id": "run-20260508T205237Z-432ec7b1", "seq": 24, "event_type": "phase_finished", "pair": "audit", "phase": "verifier", "cycle": 1, "attempt": 1, "empty_output": false, "phase_id": null}
+{"ts": "2026-05-08T21:09:03.460730+00:00", "run_id": "run-20260508T205237Z-432ec7b1", "seq": 25, "event_type": "pair_completed", "pair": "audit", "cycle": 1, "attempt": 1, "phase_id": null}
