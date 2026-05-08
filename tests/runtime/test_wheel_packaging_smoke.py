@@ -3,6 +3,7 @@ from __future__ import annotations
 import subprocess
 import sys
 import venv
+import zipfile
 from pathlib import Path
 
 
@@ -42,6 +43,13 @@ def test_built_wheel_installs_public_botlane_package_and_cli(tmp_path: Path) -> 
 
     wheels = sorted(dist_dir.glob("*.whl"))
     assert wheels, "python -m pip wheel did not produce a wheel"
+    with zipfile.ZipFile(wheels[-1]) as wheel_archive:
+        names = wheel_archive.namelist()
+
+    assert any(name.startswith("botlane/") for name in names)
+    assert any(name.startswith("botlane/workflows/botlane_v1/") for name in names)
+    assert not any(name.startswith(f"{LEGACY_PRODUCT}/") for name in names)
+    assert not any(name.startswith(f"{LEGACY_OPTIMIZER}/") for name in names)
 
     venv_dir = tmp_path / "venv"
     venv.EnvBuilder(with_pip=True).create(venv_dir)
@@ -58,9 +66,11 @@ def test_built_wheel_installs_public_botlane_package_and_cli(tmp_path: Path) -> 
     assert "botlane" in help_result.stdout
     assert "workflows" in help_result.stdout
     assert "run" in help_result.stdout
+    assert LEGACY_PRODUCT not in help_result.stdout
 
     workflow_help_result = _run(botlane, "workflows", "--help")
     assert "list" in workflow_help_result.stdout
+    assert LEGACY_PRODUCT not in workflow_help_result.stdout
 
     import_check = _run(
         python,
@@ -69,14 +79,18 @@ def test_built_wheel_installs_public_botlane_package_and_cli(tmp_path: Path) -> 
             (
                 "import botlane",
                 "import importlib.util",
+                "import importlib.metadata",
                 "from botlane import FINISH, Route, Workflow, step",
                 "from botlane.workflows.botlane_v1 import BotlaneV1",
                 "from botlane.runtime import cli",
+                "scripts = {entry.name: entry.value for entry in importlib.metadata.entry_points(group='console_scripts')}",
                 "assert Workflow is not None",
                 "assert step is not None",
                 "assert Route is not None",
                 "assert FINISH == 'FINISH'",
                 "assert BotlaneV1.name == 'botlane_v1'",
+                "assert 'botlane' in scripts",
+                f"assert '{LEGACY_PRODUCT}' not in scripts",
                 f"assert importlib.util.find_spec('botlane.workflows.{LEGACY_WORKFLOW_V1}') is None",
                 "assert callable(cli.main)",
             )

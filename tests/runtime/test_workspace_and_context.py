@@ -89,11 +89,13 @@ def test_run_creates_task_workflow_run_layout_and_immutable_request_snapshots(tm
     assert first_result.terminal == "FINISH"
     assert (task_dir / "messages.jsonl").exists()
     assert not (first_run_dir / "messages.jsonl").exists()
+    assert not (tmp_path / LEGACY_STATE_DIRNAME).exists()
     assert (task_dir / "request.md").read_text(encoding="utf-8") == "First message\n"
     assert (first_run_dir / "request.md").read_text(encoding="utf-8") == "First message\n"
     assert (workflow_dir / "workflow.json").exists()
     assert task_meta["messages_file"] == ".botlane/tasks/task-1/messages.jsonl"
     assert task_meta["request_file"] == ".botlane/tasks/task-1/request.md"
+    assert first_run_meta["schema"] == RUN_METADATA_SCHEMA
     assert first_run_meta["status"] == "success"
     assert first_run_meta["task_folder"] == ".botlane/tasks/task-1"
     assert first_run_meta["workflow_folder"] == ".botlane/tasks/task-1/wf_snapshot_demo"
@@ -219,14 +221,19 @@ def test_run_metadata_records_topology_hashes_and_artifact_contract_paths(tmp_pa
     run_dir = next((tmp_path / ".botlane" / "tasks" / "task-topology" / "wf_topology_demo" / "runs").iterdir())
     run_meta = json.loads((run_dir / "run.json").read_text(encoding="utf-8"))
     topology = run_meta["topology"]
+    topology_payload = json.loads((run_dir / topology["artifacts"]["topology"]).read_text(encoding="utf-8"))
 
     assert result.terminal == "FINISH"
+    assert run_meta["schema"] == RUN_METADATA_SCHEMA
     assert isinstance(topology["source_hash"], str)
     assert isinstance(topology["topology_hash"], str)
     assert topology["entry"] == "start"
     assert topology["artifacts"]["topology"] == "topology.json"
     assert topology["artifacts"]["prompt_refs"] == "prompt_refs.json"
     assert (run_dir / topology["artifacts"]["topology"]).exists()
+    assert topology_payload["schema"] == WORKFLOW_TOPOLOGY_SCHEMA
+    assert LEGACY_PRODUCT + "." not in json.dumps(run_meta, sort_keys=True)
+    assert LEGACY_PRODUCT + "." not in json.dumps(topology_payload, sort_keys=True)
 
 
 def test_runtime_inspection_loaders_filter_status_and_require_disambiguation(tmp_path: Path) -> None:

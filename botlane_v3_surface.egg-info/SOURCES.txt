@@ -112,6 +112,7 @@ botlane/workflows/botlane_v1/conventions.py
 botlane/workflows/botlane_v1/parity.py
 botlane/workflows/botlane_v1/workflow.py
 botlane/workflows/botlane_v1/workflow.toml
+botlane/workflows/botlane_v1/assets/.gitkeep
 botlane/workflows/botlane_v1/prompts/README.md
 botlane/workflows/botlane_v1/prompts/implement_producer.md
 botlane/workflows/botlane_v1/prompts/implement_verifier.md
