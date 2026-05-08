@@ -4,6 +4,7 @@ import pytest
 
 import autoloop
 import autoloop.policy as public_policy
+import autoloop.sdk as sdk
 import autoloop.simple as simple
 from autoloop.core.provider_policy import ProviderPolicy, ProviderPolicyOverride
 from autoloop.policy import PermissionMode, Policy
@@ -89,6 +90,24 @@ def test_policy_rejects_removed_public_policy_override_symbol() -> None:
         exec("from autoloop.simple import ProviderPolicyOverride")
     with pytest.raises(AttributeError):
         getattr(simple, "ProviderPolicyOverride")
+
+
+def test_policy_input_export_matrix_matches_phase_contract() -> None:
+    assert "PolicyInput" in public_policy.__all__
+    assert "PolicyInput" in sdk.__all__
+    assert "PolicyInput" not in autoloop.__all__
+    assert "PolicyInput" not in simple.__all__
+
+    assert sdk.PolicyInput is public_policy.PolicyInput
+
+    with pytest.raises(ImportError):
+        exec("from autoloop import PolicyInput")
+    with pytest.raises(AttributeError):
+        getattr(autoloop, "PolicyInput")
+    with pytest.raises(ImportError):
+        exec("from autoloop.simple import PolicyInput")
+    with pytest.raises(AttributeError):
+        getattr(simple, "PolicyInput")
 
 
 def test_simple_declarations_accept_public_policy_layers() -> None:

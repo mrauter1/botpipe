@@ -211,6 +211,44 @@ def test_python_step_policy_affects_inline_operations_and_explicit_override_wins
     assert execution.result.state.verdict == "ship"
 
 
+def test_inline_operations_accept_public_policy_layers(tmp_path: Path) -> None:
+    class OperationWorkflow(simple.Workflow):
+        class State(BaseModel):
+            summary: str = ""
+            verdict: str = ""
+
+        @simple.python_step
+        def implement(ctx):
+            summary = simple.llm(
+                "Summarize.",
+                policy=simple.Policy(permission_mode=simple.PermissionMode.ASK),
+            )
+            verdict = simple.classify(
+                "Choose.",
+                choices=["ship", "hold"],
+                policy=simple.Policy(permission_mode=simple.PermissionMode.FULL_AUTO_SANDBOXED),
+            )
+            ctx.state = ctx.state.model_copy(update={"summary": summary, "verdict": verdict})
+            return None
+
+    provider = ScriptedLLMProvider(operation_turns=["summary", "ship"])
+    execution = _run_with_runner(
+        tmp_path,
+        OperationWorkflow,
+        provider,
+        task_id="public-policy-operations",
+    )
+
+    assert execution.result.terminal == FINISH
+    assert [call.kind for call in provider.calls] == ["operation", "operation"]
+    assert provider.calls[0].policy is not None
+    assert provider.calls[1].policy is not None
+    assert provider.calls[0].policy.permissions.mode == "ask"
+    assert provider.calls[1].policy.permissions.mode == "full_auto_sandboxed"
+    assert execution.result.state.summary == "summary"
+    assert execution.result.state.verdict == "ship"
+
+
 def test_flat_override_policy_is_accepted_for_inline_llm_calls(tmp_path: Path) -> None:
     class OperationWorkflow(simple.Workflow):
         class State(BaseModel):

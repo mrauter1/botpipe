@@ -171,6 +171,33 @@ def test_policy_layer_payload_and_compiler_fingerprint_support_public_policy() -
     assert compiled.provider_policy.to_layer_payload()["effort"] == "medium"
 
 
+def test_public_policy_changes_participate_in_topology_hash_for_workflow_and_step_layers() -> None:
+    class WorkflowLow(Workflow):
+        policy = public_policy.Policy(effort=public_policy.ModelEffort.LOW)
+        implement = step("Update the code.", routes={"done": FINISH})
+
+    class WorkflowHigh(Workflow):
+        policy = public_policy.Policy(effort=public_policy.ModelEffort.HIGH)
+        implement = step("Update the code.", routes={"done": FINISH})
+
+    class StepLow(Workflow):
+        implement = step(
+            "Inspect the code.",
+            policy=public_policy.Policy(effort=public_policy.ModelEffort.LOW),
+            routes={"done": FINISH},
+        )
+
+    class StepHigh(Workflow):
+        implement = step(
+            "Inspect the code.",
+            policy=public_policy.Policy(effort=public_policy.ModelEffort.HIGH),
+            routes={"done": FINISH},
+        )
+
+    assert compile_workflow(WorkflowLow).topology_hash != compile_workflow(WorkflowHigh).topology_hash
+    assert compile_workflow(StepLow).topology_hash != compile_workflow(StepHigh).topology_hash
+
+
 def test_compile_and_resolve_dangerous_manual_workflow_policy() -> None:
     class DangerousManualWorkflow(Workflow):
         policy = public_policy.Policy(
