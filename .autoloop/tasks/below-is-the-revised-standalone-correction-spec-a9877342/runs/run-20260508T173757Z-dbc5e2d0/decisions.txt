@@ -13,3 +13,5 @@ AC-3 coverage should assert both authored-field deltas and kind-label deltas so 
 <autoloop-decisions-header version="1" block_seq="5" owner="implementer" phase_id="public-surface-cleanup" pair="implement" turn_seq="1" run_id="run-20260508T173757Z-dbc5e2d0" ts="2026-05-08T17:50:52.431997+00:00" />
 This phase keeps runtime CLI files unchanged because the active phase contract is limited to public policy wording, exports, and SDK/simple regression coverage; CLI flag migration remains task-global work outside this phase-local edit set.
 Public normalization and discovery errors should collapse ProviderPolicy and ProviderPolicyOverride into the user-facing phrase "core provider policy object" while preserving internal compatibility with both core types.
+<autoloop-decisions-header version="1" block_seq="6" owner="test_author" phase_id="public-surface-cleanup" pair="test" turn_seq="1" run_id="run-20260508T173757Z-dbc5e2d0" ts="2026-05-08T18:00:12.413190+00:00" />
+AC-3 step-params coverage should exercise both mapping and BaseModel invocation params because synthetic SDK step workflows now branch on params type when synthesizing `Params`.

@@ -578,3 +578,52 @@ The important branch to lock was not just “step params work”, but “step pa
 Open issues / next step
 
 `python3 -m py_compile` passed for the touched test files. I could not run `pytest` here because the environment still lacks `pytest`, so the next step is to execute the targeted unit suite in a dependency-complete environment.
+
+
+---
+run_id=run-20260508T173757Z-dbc5e2d0 | entry=session_turn | pair=test | phase=verifier | cycle=1 | attempt=1 | thread_id=019e08b6-b80c-7ff0-ace1-633bbcb6bb47
+---
+provider=codex
+mode=resume
+template=/home/rauter/.local/share/pipx/venvs/autoloop/lib/python3.12/site-packages/autoloop/templates/test_verifier.md
+session_id=019e08b6-b80c-7ff0-ace1-633bbcb6bb47
+
+
+---
+run_id=run-20260508T173757Z-dbc5e2d0 | entry=phase_output | pair=test | phase=verifier | process=codex-agent | cycle=1 | attempt=1 | thread_id=019e08b6-b80c-7ff0-ace1-633bbcb6bb47
+---
+I’m auditing the test coverage and the phase test artifacts against AC-1 through AC-3 now. I’ll verify the changed tests hit both the public contract and the new synthetic-step params branches, then I’ll update the audit artifacts accordingly.
+
+The updated tests cover the intended public wording, export surface, removed-keyword failures, and both branches of the new step-params path. I don’t see a material coverage or flake gap in this phase scope, so I’m marking the audit complete and recording that there are no new findings.
+
+Scope considered
+
+Phase-local audit of the public-surface-cleanup test work only: public policy wording assertions, public export assertions, removed SDK keyword rejection coverage, and the preserved `client.run(...)` / `client.step(...)` input+params contract.
+
+What I analyzed
+
+I checked the changed tests in `tests/unit/test_sdk_facade.py`, `tests/unit/test_simple_surface.py`, and `tests/unit/test_simple_policy.py`, plus the phase test strategy and the run decisions. I focused on whether the tests cover both changed behavior and preserved behavior with material regression risk, especially the new synthetic-step params handling for both mapping and `BaseModel` params.
+
+What I reviewed
+
+I updated the audit artifacts:
+- `criteria.md`: all audit criteria now pass
+- `feedback.md`: appended an audit note confirming there are no new findings
+
+Key findings / decisions
+
+No blocking or non-blocking audit findings remain in this phase scope. The tests cover:
+- cleaned public wording without leaking `ProviderPolicyOverride`
+- public export guarantees and continued absence of `PolicyOverride`
+- removed `typed_input=` / `parameters=` rejection on both run and step entry points
+- `client.run(..., params=...)` and `client.step(..., input=..., params=...)`
+- both synthetic-step params branches: mapping and `BaseModel`
+- stable, deterministic setup using `ScriptedLLMProvider`
+
+Open issues / next step
+
+The only remaining limitation is environment-related: `pytest` was not executable in this workspace because the interpreter lacks the test dependency set. That is not a coverage defect in the tests themselves.
+
+<loop-control>
+{"schema":"docloop.loop_control/v1","kind":"promise","promise":"COMPLETE"}
+</loop-control>
