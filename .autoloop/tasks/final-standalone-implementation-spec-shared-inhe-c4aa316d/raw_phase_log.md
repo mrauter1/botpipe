@@ -1577,3 +1577,54 @@ Open issues / next step
 <loop-control>
 {"schema":"docloop.loop_control/v1","kind":"promise","promise":"COMPLETE"}
 </loop-control>
+
+
+---
+run_id=run-20260508T161613Z-c2f3eecb | entry=session_turn | pair=test | phase=producer | cycle=1 | attempt=1 | thread_id=019e0862-cb54-7a82-b93d-898c486428a1
+---
+provider=codex
+mode=resume
+template=/home/rauter/.local/share/pipx/venvs/autoloop/lib/python3.12/site-packages/autoloop/templates/test_producer.md
+session_id=019e0862-cb54-7a82-b93d-898c486428a1
+
+
+---
+run_id=run-20260508T161613Z-c2f3eecb | entry=phase_output | pair=test | phase=producer | process=codex-agent | cycle=1 | attempt=1 | thread_id=019e0862-cb54-7a82-b93d-898c486428a1
+---
+I’m checking the current phase test artifacts and the existing policy-surface tests first, then I’ll add any missing regression coverage before updating the test strategy and feedback.
+
+I found one remaining coverage gap relative to AC-3: the simple policy tests exercised `Policy` and `ProviderPolicyOverride`, but not direct `ProviderPolicy` or explicit `None`. I’m adding that narrow regression guard now, then I’ll rerun the phase test targets and record the coverage map.
+
+The added regression test passed, and the broader command is already through the simple-surface and policy suites again. I’m waiting for the SDK-facing portion to finish before I write the final test-phase artifacts.
+
+I have full validation now. I’m recording the coverage map and the exact test additions in the phase artifacts, including the AC-3 gap I closed for `ProviderPolicy` and `None`.
+
+Scope considered
+
+- Phase-scoped test coverage for the `autoloop.simple` policy export cleanup only.
+- Focused on `tests/unit/test_simple_policy.py` plus the phase-owned `test_strategy.md` and `feedback.md` artifacts.
+
+What I analyzed
+
+- Existing simple policy surface tests against AC-1 through AC-4.
+- The current implementation and decisions ledger to confirm the intended preserved inputs were `Policy`, `ProviderPolicy`, `ProviderPolicyOverride`, and `None`.
+- The remaining coverage gap: tests already covered `Policy` and `ProviderPolicyOverride`, but not direct `ProviderPolicy` or explicit `None`.
+
+What I changed
+
+- Added `test_simple_declarations_accept_provider_policy_and_none` to [`tests/unit/test_simple_policy.py`](/home/rauter/autoloop_v3_bkp/autoloop_v3/tests/unit/test_simple_policy.py).
+- Appended the non-obvious test decision under the current test-author header in [`decisions.txt`](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/final-standalone-implementation-spec-shared-inhe-c4aa316d/runs/run-20260508T161613Z-c2f3eecb/decisions.txt).
+- Filled out the explicit behavior-to-test coverage map in [`test_strategy.md`](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/final-standalone-implementation-spec-shared-inhe-c4aa316d/runs/run-20260508T161613Z-c2f3eecb/artifacts/test/phases/simple-policy-export-cleanup/test_strategy.md).
+- Appended a concise test summary to [`feedback.md`](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/final-standalone-implementation-spec-shared-inhe-c4aa316d/runs/run-20260508T161613Z-c2f3eecb/artifacts/test/phases/simple-policy-export-cleanup/feedback.md).
+
+Key findings / decisions
+
+- The only meaningful remaining regression gap was AC-3 coverage for direct `ProviderPolicy` and explicit `None`; that is now locked by a dedicated unit test.
+- Validation passed:
+  `./.venv/bin/pytest tests/unit/test_simple_policy.py`
+  `./.venv/bin/pytest tests/unit/test_simple_surface.py tests/unit/test_policy.py tests/runtime/test_sdk_policy.py tests/unit/test_sdk_facade.py`
+
+Open issues / next step
+
+- No open issues in this phase scope.
+- Test coverage and phase artifacts are updated for the simple policy export cleanup.

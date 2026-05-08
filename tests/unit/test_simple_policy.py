@@ -126,6 +126,19 @@ def test_simple_declarations_accept_public_policy_layers() -> None:
     assert isinstance(PolicyWorkflow.draft.policy, Policy)
 
 
+def test_simple_declarations_accept_provider_policy_and_none() -> None:
+    provider_policy = ProviderPolicy(permissions={"mode": "ask"})
+    no_policy_declaration = simple.step("No policy.", policy=None)
+
+    class PolicyWorkflow(simple.Workflow):
+        policy = None
+        draft = simple.step("Draft.", policy=provider_policy)
+
+    assert PolicyWorkflow.policy is None
+    assert PolicyWorkflow.draft.policy is provider_policy
+    assert no_policy_declaration.policy is None
+
+
 def test_simple_declarations_keep_internal_override_compatibility() -> None:
     override = ProviderPolicyOverride(permissions={"mode": "ask"})
     declaration = simple.step("Draft.", policy=override)
