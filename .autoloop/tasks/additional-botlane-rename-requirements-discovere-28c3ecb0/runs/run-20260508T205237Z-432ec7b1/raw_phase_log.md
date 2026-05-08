@@ -87,3 +87,12 @@ No plan corrections are required. The next step is implementation of the single 
 <loop-control>
 {"schema":"docloop.loop_control/v1","kind":"promise","promise":"COMPLETE"}
 </loop-control>
+
+
+---
+run_id=run-20260508T205237Z-432ec7b1 | entry=phase_scope_resolved
+---
+phase_mode=single
+phase_ids=editable-install-refresh-and-proof
+explicit=True
+current_phase_index=0
