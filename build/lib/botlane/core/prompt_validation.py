@@ -2,25 +2,20 @@
 
 from __future__ import annotations
 
-import re
 from collections.abc import Sequence
 from pathlib import Path
 from typing import Any
 
 from .discovery import _simple_prompt_search_roots, _simple_prompt_text
 from .errors import WorkflowValidationError
-
-
-_PROMPT_PLACEHOLDER_RE = re.compile(r"\{([^{}]+)\}")
+from .placeholders import parse_placeholders
 
 
 def analyze_simple_prompt_references(prompt: object, *, workflow_cls: type[Any]) -> tuple[str, ...]:
     text = _simple_prompt_text(prompt, search_roots=_simple_prompt_search_roots(workflow_cls))
     if not text:
         return ()
-    return tuple(
-        dict.fromkeys(reference.strip() for reference in _PROMPT_PLACEHOLDER_RE.findall(text) if reference.strip())
-    )
+    return tuple(dict.fromkeys(ref.raw for ref in parse_placeholders(text, source="simple_prompt") if ref.raw))
 
 
 def simple_prompt_search_roots(workflow_cls: type[Any]) -> tuple[Path, ...]:

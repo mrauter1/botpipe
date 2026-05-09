@@ -231,6 +231,15 @@ def compile_workflow(workflow_cls: type[Any]) -> CompiledWorkflow:
     return compiled
 
 
+def compile_workflow_plan(workflow_cls: type[Any]) -> Any:
+    """Compile a validated workflow class into the internal workflow-plan adapter."""
+
+    compiled = compile_workflow(workflow_cls)
+    from .plan_adapters import workflow_plan_from_compiled
+
+    return workflow_plan_from_compiled(compiled)
+
+
 def _compile_steps(
     definition: WorkflowDefinition,
     inventory: dict[str, ArtifactInventoryRecord],

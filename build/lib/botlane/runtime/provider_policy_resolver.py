@@ -12,6 +12,7 @@ from botlane.core.provider_policy import (
     ResolvedProviderPolicy,
     validate_against_strict_policy,
 )
+from botlane.core.provider_policy_resolution import ProviderPolicyResolverProtocol
 
 from .config import (
     ProviderConfig,
@@ -21,7 +22,7 @@ from .config import (
 )
 
 
-class ProviderPolicyResolver:
+class ProviderPolicyResolver(ProviderPolicyResolverProtocol):
     """Resolve effective provider policy for steps and inline operations."""
 
     def __init__(

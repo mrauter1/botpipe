@@ -1470,7 +1470,7 @@ def _no_bytecode_writes():
 
 def _cleanup_workflow_pycache(root_path: Path) -> None:
     for search_root in workflow_search_roots(root_path):
-        if search_root.kind != "workspace" or search_root.import_prefix is not None or not search_root.path.is_dir():
+        if search_root.kind != "workspace" or not search_root.path.is_dir():
             continue
         for pycache_dir in sorted(search_root.path.rglob("__pycache__"), reverse=True):
             if not pycache_dir.is_dir():

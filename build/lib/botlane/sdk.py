@@ -29,7 +29,7 @@ from botlane.policy import (
 )
 from botlane.core import Workflow as CoreWorkflow
 from botlane.core.artifacts import Artifact, CompiledArtifact, resolve_artifact_template
-from botlane.core.compiler import CompiledWorkflow, compile_workflow
+from botlane.core.compiler import CompiledWorkflow, compile_workflow, compile_workflow_plan
 from botlane.core.context import Context
 from botlane.core.errors import WorkflowCompilationError, WorkflowExecutionError, exception_failure_context
 from botlane.core.operations import classify_call, llm_call
@@ -39,6 +39,7 @@ from botlane.core.prompts import Prompt
 from botlane.core.providers.protocols import LLMProvider, validate_llm_provider
 from botlane.core.providers.retries import ProviderRetryPolicy
 from botlane.core.steps import BranchGroupStep, ChildWorkflowStep, ProduceVerifyStep, PromptStep, PythonStep, Session, Step
+from botlane.core.step_plans import SingleStepPlan
 from botlane.core.stores.protocols import SessionSnapshot
 from botlane.core.stores.session_store import InMemorySessionStore
 from botlane.runtime.config import (
@@ -61,7 +62,7 @@ from botlane.runtime.loader import (
 from botlane.runtime.provider_backends import resolve_provider_backend
 from botlane.runtime.provider_policy_resolver import create_provider_policy_resolver
 from botlane.runtime.runner import RunExecution, RunnerOptions, execute_workflow_package
-from botlane.runtime.workspace import primary_state_root, readable_state_roots, resolve_task_workspace
+from botlane.runtime.workspace import primary_state_root, resolve_task_workspace
 
 
 InputResponse = str | BaseModel | Mapping[str, Any] | Sequence[Any] | int | float | bool | None
@@ -69,7 +70,6 @@ InputHandler = Callable[["InputRequest"], InputResponse]
 _TASK_ID_SAFE_RE = re.compile(r"[^a-z0-9]+")
 _ACTIVE_LOOP_HINT = "Use an async SDK entrypoint instead."
 SDK_TASK_SENTINEL_FILENAME = ".botlane-sdk-task.json"
-LEGACY_SDK_TASK_SENTINEL_FILENAME = "." + "auto" + "loop-sdk-task.json"
 
 
 @dataclass(frozen=True, slots=True)
@@ -1298,10 +1298,7 @@ def _sdk_tasks_root(root: Path, state_dir: Path) -> Path:
 
 
 def _sdk_readable_tasks_roots(root: Path, state_dir: Path) -> tuple[Path, ...]:
-    primary = primary_state_root(root.resolve())
-    if state_dir.resolve() != primary:
-        return (_sdk_tasks_root(root, state_dir.resolve()),)
-    return tuple(state_root / "tasks" for state_root in readable_state_roots(root))
+    return (_sdk_tasks_root(root, state_dir.resolve()),)
 
 
 def _sdk_artifact_context(execution: RunExecution, *, message: str | None) -> Any:
@@ -1509,13 +1506,7 @@ def _promotion_base_dir(*, root: Path, task_id: str, policy: RetentionPolicy) ->
 
 
 def _sdk_task_sentinel_path(task_dir: Path) -> Path:
-    primary = task_dir / SDK_TASK_SENTINEL_FILENAME
-    if primary.is_file():
-        return primary
-    legacy = task_dir / LEGACY_SDK_TASK_SENTINEL_FILENAME
-    if legacy.is_file():
-        return legacy
-    return primary
+    return task_dir / SDK_TASK_SENTINEL_FILENAME
 
 
 def _uniquify_path(path: Path) -> Path:
@@ -1756,6 +1747,34 @@ def _build_synthetic_step_workflow(
     attrs[step_name] = step_def
     name = f"SDKStepWorkflow_{step_name}_{uuid4().hex[:8]}"
     return type(name, (simple.Workflow,), attrs)
+
+
+def _build_single_step_plan(
+    root: Path,
+    step_def: Step | object,
+    input: BaseModel | Mapping[str, Any] | None,
+    params: BaseModel | Mapping[str, Any] | None,
+    *,
+    routes: Mapping[str, Any] | None,
+    workflow_policy: PolicyInput = None,
+) -> SingleStepPlan:
+    workflow_cls = _build_synthetic_step_workflow(
+        root,
+        step_def,
+        input,
+        params,
+        routes=routes,
+        workflow_policy=workflow_policy,
+    )
+    workflow_plan = compile_workflow_plan(workflow_cls)
+    entry_step_name = workflow_plan.entry_step_name
+    return SingleStepPlan(
+        step=workflow_plan.steps[entry_step_name],
+        input_model=workflow_plan.input_model,
+        params_model=workflow_plan.parameters_cls,
+        routes=dict(workflow_plan.routes.get(entry_step_name, {})),
+        workflow_policy=workflow_plan.provider_policy,
+    )
 
 
 class _SDKStepState(BaseModel):

@@ -19,6 +19,7 @@ from ..primitives import Event
 from .context import BranchMetadata, FanInMetadata, create_branch_context, create_fan_in_context
 from .manifest import branch_group_paths, build_branch_manifest, render_branch_group_context, write_branch_group_evidence
 from .outcomes import select_branch_group_outcome
+from .results import BranchArtifactObservation, BranchResult
 from .sessions import BranchSessionStoreView
 
 if TYPE_CHECKING:
@@ -427,28 +428,28 @@ class BranchGroupRuntime:
         )
         artifacts = self._collect_branch_artifacts(compiled_step, branch_context)
         provider_session, provider_sessions = self._provider_session_snapshot(compiled_step, branch_context)
-        return {
-            "name": branch.name,
-            "index": branch.index,
-            "input": branch.input,
-            "step_name": compiled_step.name,
-            "status": status,
-            "route": route,
-            "destination": destination,
-            "runtime_control": runtime_control,
-            "reason": reason,
-            "question": question,
-            "artifacts": artifacts,
-            "raw_output_path": raw_output_path,
-            "raw_output_paths": raw_output_paths,
-            "provider_session": provider_session,
-            "provider_sessions": provider_sessions,
-            "error": error,
-            "started_at": started_at.isoformat(),
-            "finished_at": finished_at.isoformat(),
-            "duration_ms": _duration_ms(started_at, finished_at),
-            "usage": _serialize_usage(step_result.provider_usage),
-        }
+        return BranchResult(
+            name=branch.name,
+            index=branch.index,
+            input=branch.input,
+            step_name=compiled_step.name,
+            status=status,
+            route=route,
+            destination=destination,
+            runtime_control=runtime_control,
+            reason=reason,
+            question=question,
+            artifacts=artifacts,
+            raw_output_path=raw_output_path,
+            raw_output_paths=raw_output_paths,
+            provider_session=provider_session,
+            provider_sessions=provider_sessions,
+            error=error,
+            started_at=started_at.isoformat(),
+            finished_at=finished_at.isoformat(),
+            duration_ms=_duration_ms(started_at, finished_at),
+            usage=_serialize_usage(step_result.provider_usage),
+        ).to_manifest_dict()
 
     def _failed_branch_result(
         self,
@@ -468,28 +469,28 @@ class BranchGroupRuntime:
             context=branch_context,
         )
         provider_session, provider_sessions = self._provider_session_snapshot(compiled_step, branch_context)
-        return {
-            "name": branch.name,
-            "index": branch.index,
-            "input": branch.input,
-            "step_name": compiled_step.name,
-            "status": "failed",
-            "route": None,
-            "destination": None,
-            "runtime_control": None,
-            "reason": str(exc),
-            "question": None,
-            "artifacts": self._collect_branch_artifacts(compiled_step, branch_context),
-            "raw_output_path": raw_output_path,
-            "raw_output_paths": raw_output_paths,
-            "provider_session": provider_session,
-            "provider_sessions": provider_sessions,
-            "error": _serialize_exception(self._engine, exc),
-            "started_at": started_at.isoformat(),
-            "finished_at": finished_at.isoformat(),
-            "duration_ms": _duration_ms(started_at, finished_at),
-            "usage": {},
-        }
+        return BranchResult(
+            name=branch.name,
+            index=branch.index,
+            input=branch.input,
+            step_name=compiled_step.name,
+            status="failed",
+            route=None,
+            destination=None,
+            runtime_control=None,
+            reason=str(exc),
+            question=None,
+            artifacts=self._collect_branch_artifacts(compiled_step, branch_context),
+            raw_output_path=raw_output_path,
+            raw_output_paths=raw_output_paths,
+            provider_session=provider_session,
+            provider_sessions=provider_sessions,
+            error=_serialize_exception(self._engine, exc),
+            started_at=started_at.isoformat(),
+            finished_at=finished_at.isoformat(),
+            duration_ms=_duration_ms(started_at, finished_at),
+            usage={},
+        ).to_manifest_dict()
 
     def _write_branch_raw_outputs(
         self,
@@ -518,23 +519,23 @@ class BranchGroupRuntime:
                 primary_path = relative
         return primary_path, raw_paths
 
-    def _collect_branch_artifacts(self, step: "CompiledStep", context: "Context") -> list[dict[str, Any]]:
+    def _collect_branch_artifacts(self, step: "CompiledStep", context: "Context") -> tuple[BranchArtifactObservation, ...]:
         artifacts = self._engine._resolve_artifacts(context)
-        branch_artifacts: list[dict[str, Any]] = []
+        branch_artifacts: list[BranchArtifactObservation] = []
         for name in step.writes:
             handle = artifacts[name]
             validation = validate_artifact_handle(handle)
             branch_artifacts.append(
-                {
-                    "name": handle.name,
-                    "path": _relative_to_root(handle.path, context=context),
-                    "kind": None if handle.artifact is None else handle.artifact.kind,
-                    "exists": handle.exists(),
-                    "validation": "ok" if validation.ok else "failed",
-                    "validation_errors": list(validation.errors),
-                }
+                BranchArtifactObservation(
+                    name=handle.name,
+                    path=_relative_to_root(handle.path, context=context),
+                    kind=None if handle.artifact is None else handle.artifact.kind,
+                    exists=handle.exists(),
+                    validation="ok" if validation.ok else "failed",
+                    validation_errors=tuple(validation.errors),
+                )
             )
-        return branch_artifacts
+        return tuple(branch_artifacts)
 
     def _provider_session_snapshot(self, step: "CompiledStep", context: "Context") -> tuple[str | None, dict[str, str]]:
         sessions: dict[str, str] = {}
@@ -789,92 +790,92 @@ def _cancelled_branch_result(
 ) -> dict[str, Any]:
     started = _utc_now() if started_at is None else started_at
     finished = _utc_now()
-    return {
-        "name": branch.name,
-        "index": branch.index,
-        "input": branch.input,
-        "step_name": branch.step.name,
-        "status": "cancelled",
-        "route": None,
-        "destination": None,
-        "runtime_control": None,
-        "reason": "Cancellation requested after fail_fast.",
-        "question": None,
-        "artifacts": [],
-        "raw_output_path": None,
-        "raw_output_paths": {},
-        "provider_session": None,
-        "provider_sessions": {},
-        "error": {
+    return BranchResult(
+        name=branch.name,
+        index=branch.index,
+        input=branch.input,
+        step_name=branch.step.name,
+        status="cancelled",
+        route=None,
+        destination=None,
+        runtime_control=None,
+        reason="Cancellation requested after fail_fast.",
+        question=None,
+        artifacts=(),
+        raw_output_path=None,
+        raw_output_paths={},
+        provider_session=None,
+        provider_sessions={},
+        error={
             "type": "Cancelled",
             "message": "Branch execution was cancelled before completion.",
             "failure_context": None,
             "retry_kind": None,
             "retry_exhausted": False,
         },
-        "started_at": started.isoformat(),
-        "finished_at": finished.isoformat(),
-        "duration_ms": _duration_ms(started, finished),
-        "usage": {},
-        "cancellation_requested": True,
-        "cancellation_completed": True,
-        "cancellation_supported": True,
-    }
+        started_at=started.isoformat(),
+        finished_at=finished.isoformat(),
+        duration_ms=_duration_ms(started, finished),
+        usage={},
+        cancellation_requested=True,
+        cancellation_completed=True,
+        cancellation_supported=True,
+    ).to_manifest_dict()
 
 
 def _unexpected_branch_failure_result(engine: "Engine", *, spec: Any, branch: Any, exc: Exception) -> dict[str, Any]:
     now = _utc_now().isoformat()
-    return {
-        "name": branch.name,
-        "index": branch.index,
-        "input": branch.input,
-        "step_name": branch.step.name,
-        "status": "failed",
-        "route": None,
-        "destination": None,
-        "runtime_control": None,
-        "reason": str(exc),
-        "question": None,
-        "artifacts": [],
-        "raw_output_path": None,
-        "raw_output_paths": {},
-        "provider_session": None,
-        "provider_sessions": {},
-        "error": _serialize_exception(engine, exc),
-        "started_at": now,
-        "finished_at": now,
-        "duration_ms": 0,
-        "usage": {},
-    }
+    return BranchResult(
+        name=branch.name,
+        index=branch.index,
+        input=branch.input,
+        step_name=branch.step.name,
+        status="failed",
+        route=None,
+        destination=None,
+        runtime_control=None,
+        reason=str(exc),
+        question=None,
+        artifacts=(),
+        raw_output_path=None,
+        raw_output_paths={},
+        provider_session=None,
+        provider_sessions={},
+        error=_serialize_exception(engine, exc),
+        started_at=now,
+        finished_at=now,
+        duration_ms=0,
+        usage={},
+    ).to_manifest_dict()
 
 
 def _skipped_branch_result(*, spec: Any, branch: Any, context: "Context") -> dict[str, Any]:
     now = _utc_now().isoformat()
-    return {
-        "name": branch.name,
-        "index": branch.index,
-        "input": branch.input,
-        "step_name": branch.step.name,
-        "status": "skipped",
-        "route": None,
-        "destination": None,
-        "runtime_control": None,
-        "reason": "Branch was not scheduled because fail_fast stopped new branch launches.",
-        "question": None,
-        "artifacts": [],
-        "raw_output_path": None,
-        "raw_output_paths": {},
-        "provider_session": None,
-        "provider_sessions": {},
-        "error": None,
-        "started_at": now,
-        "finished_at": now,
-        "duration_ms": 0,
-        "usage": {},
-        "cancellation_requested": False,
-        "cancellation_completed": False,
-        "cancellation_supported": True,
-    }
+    return BranchResult(
+        name=branch.name,
+        index=branch.index,
+        input=branch.input,
+        step_name=branch.step.name,
+        status="skipped",
+        route=None,
+        destination=None,
+        runtime_control=None,
+        reason="Branch was not scheduled because fail_fast stopped new branch launches.",
+        question=None,
+        artifacts=(),
+        raw_output_path=None,
+        raw_output_paths={},
+        provider_session=None,
+        provider_sessions={},
+        error=None,
+        started_at=now,
+        finished_at=now,
+        duration_ms=0,
+        usage={},
+        cancellation_requested=False,
+        cancellation_completed=False,
+        cancellation_supported=True,
+    ).to_manifest_dict()
 
 
 def _composite_status(step_result: StepExecutionResult) -> str:

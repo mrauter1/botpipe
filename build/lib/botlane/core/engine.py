@@ -10,10 +10,11 @@ import importlib
 import inspect
 import json
 from pathlib import Path
-from typing import TYPE_CHECKING, Any, Callable, Literal, Mapping
+from typing import Any, Callable, Literal, Mapping
 from uuid import uuid4
 
 from pydantic import BaseModel, TypeAdapter
+from botlane.policy import resolve_policy_layer
 
 from .artifacts import Artifact, ArtifactHandle, ResolvedArtifacts, render_runtime_template, resolve_artifact_template
 from .branch_groups.runtime import BranchGroupRuntime
@@ -50,12 +51,20 @@ from .errors import (
     exception_retry_kind,
     replace_execution_error,
 )
+from .execution_services import ExecutionServices
 from .operations import serialize_context_values
 from .outcome_contract import (
     is_question_style_route,
     normalize_route_fields_for_route,
     project_questions_markdown,
 )
+from .provider_policy import (
+    ProviderPolicy,
+    ResolvedProviderPolicy,
+    SYSTEM_DEFAULT_PROVIDER_POLICY,
+    validate_against_strict_policy,
+)
+from .provider_policy_resolution import ProviderPolicyResolverProtocol
 from .primitives import AWAIT_INPUT, Checkpoint, Event, FAIL, FINISH, Fail, Goto, Outcome, PendingHandoff, RequestInput
 from .prompts import Prompt, PromptRegistry, ResolvedPrompt
 from .providers.models import (
@@ -81,9 +90,6 @@ from .stores.protocols import (
 from .statuses import route_is_replan, route_is_rework
 from .steps import ChildWorkflowStep
 from .worklists import Selection, SelectionSnapshot
-
-if TYPE_CHECKING:
-    from botlane.runtime.provider_policy_resolver import ProviderPolicyResolver
 
 
 @dataclass(frozen=True, slots=True)
@@ -140,6 +146,200 @@ class _DirectRuntimeControl:
     source_hook: str | None = None
     source_phase: str | None = None
 
+class _DefaultProviderPolicyResolver(ProviderPolicyResolverProtocol):
+    """Core-local fallback for direct Engine usage without runtime config."""
+
+    def __init__(
+        self,
+        *,
+        workflow_policy: object,
+        workspace_root: Path,
+    ) -> None:
+        self._workflow_policy = workflow_policy
+        self._workspace_root = workspace_root
+
+    def resolve_for_step(self, step: Any) -> ResolvedProviderPolicy:
+        candidate = self._base_candidate()
+        candidate = resolve_policy_layer(candidate, getattr(step, "provider_policy", None))
+        return self._validate(candidate, step_name=getattr(step, "name", None))
+
+    def resolve_for_operation(
+        self,
+        ctx: Any | None,
+        explicit_policy: object = None,
+    ) -> ResolvedProviderPolicy:
+        inherited_policy = None if ctx is None else getattr(ctx, "_provider_policy", None)
+        if isinstance(inherited_policy, ProviderPolicy):
+            candidate = resolve_policy_layer(inherited_policy, explicit_policy)
+        else:
+            candidate = self._base_candidate()
+            candidate = resolve_policy_layer(candidate, explicit_policy)
+        return self._validate(candidate, step_name=None if ctx is None else getattr(ctx, "_step_name", None))
+
+    def _base_candidate(self) -> ProviderPolicy:
+        return resolve_policy_layer(SYSTEM_DEFAULT_PROVIDER_POLICY, self._workflow_policy)
+
+    def _validate(self, policy: ProviderPolicy, *, step_name: str | None) -> ResolvedProviderPolicy:
+        return validate_against_strict_policy(
+            policy,
+            None,
+            step_name=step_name,
+            workspace_root=self._workspace_root,
+        )
+
+
+class _EngineArtifactService:
+    """Temporary artifact bridge for phased execution-service migration.
+
+    TODO(execution-services): move artifact ownership out of Engine private methods
+    as StepDispatcher and BranchGroupRuntime stop reaching through Engine directly.
+    """
+
+    def __init__(self, engine: "Engine") -> None:
+        self._engine = engine
+
+    def resolve_artifacts(self, context: Context) -> ResolvedArtifacts:
+        return self._engine._resolve_artifacts(context)
+
+    def enforce_artifact_contracts(
+        self,
+        step: CompiledStep,
+        context: Context,
+        artifacts: ResolvedArtifacts,
+        *,
+        route_tag: str,
+        state: BaseModel,
+        error_cls: type[Exception],
+        provider_attributable: bool,
+    ) -> None:
+        self._engine._enforce_artifact_contracts(
+            step,
+            context,
+            artifacts,
+            route_tag=route_tag,
+            state=state,
+            error_cls=error_cls,
+            provider_attributable=provider_attributable,
+        )
+
+
+class _EngineRouteService:
+    """Temporary route bridge for phased execution-service migration.
+
+    TODO(execution-services): migrate route ownership from Engine private helpers into
+    narrow services as HookRunner and StepDispatcher are moved off Engine.
+    """
+
+    def __init__(self, engine: "Engine") -> None:
+        self._engine = engine
+
+    def validate_event(
+        self,
+        step: CompiledStep,
+        event: Event,
+        *,
+        provider_attributable: bool,
+        error_cls: type[Exception],
+    ) -> None:
+        self._engine._validate_event(
+            step,
+            event,
+            provider_attributable=provider_attributable,
+            error_cls=error_cls,
+        )
+
+    def annotate_execution_error(self, exc: Exception, **kwargs: Any) -> Exception:
+        return self._engine._annotate_execution_error(exc, **kwargs)
+
+    def ensure_hook_redirect_limit(
+        self,
+        step: CompiledStep,
+        *,
+        candidate_route: str | None,
+        redirects: Sequence[HookRouteRedirect],
+    ) -> None:
+        self._engine._ensure_hook_redirect_limit(step, candidate_route=candidate_route, redirects=redirects)
+
+    def normalize_direct_runtime_control(
+        self,
+        *,
+        step: CompiledStep,
+        context: Context,
+        control: RequestInput | Goto | Fail,
+        hook_name: str,
+        hook_phase: str,
+    ) -> _DirectRuntimeControl:
+        return self._engine._normalize_direct_runtime_control(
+            step=step,
+            context=context,
+            control=control,
+            hook_name=hook_name,
+            hook_phase=hook_phase,
+        )
+
+    def compiled_route_for_step(self, step: CompiledStep, route_tag: str) -> CompiledRoute:
+        return self._engine._compiled_route_for_step(step, route_tag)
+
+    def event_context_payload(self, event: Event) -> dict[str, Any]:
+        return self._engine._event_context_payload(event)
+
+    def pending_input_from_event(self, *, source_step: str, event: Event) -> PendingInput:
+        return self._engine._pending_input_from_event(source_step=source_step, event=event)
+
+    def schedule_direct_control_handoffs(
+        self,
+        pending_handoffs: tuple[PendingHandoff, ...],
+        *,
+        control: _DirectRuntimeControl,
+        context: Context,
+        source_step: str,
+    ) -> tuple[PendingHandoff, ...]:
+        return self._engine._schedule_direct_control_handoffs(
+            pending_handoffs,
+            control=control,
+            context=context,
+            source_step=source_step,
+        )
+
+    def schedule_route_handoffs(
+        self,
+        pending_handoffs: tuple[PendingHandoff, ...],
+        *,
+        route: CompiledRoute,
+        event: Event,
+        destination: str,
+        context: Context,
+        source_step: str,
+    ) -> tuple[PendingHandoff, ...]:
+        return self._engine._schedule_route_handoffs(
+            pending_handoffs,
+            route=route,
+            event=event,
+            destination=destination,
+            context=context,
+            source_step=source_step,
+        )
+
+
+class _EngineStateService:
+    """Temporary state bridge for phased execution-service migration.
+
+    TODO(execution-services): fold these runtime-state helpers into a dedicated
+    state service once HookRunner and BranchGroupRuntime stop depending on Engine.
+    """
+
+    def __init__(self, engine: "Engine") -> None:
+        self._engine = engine
+
+    def clone_state(self, state: BaseModel) -> BaseModel:
+        return self._engine._clone_state(state)
+
+    def update_final_step_runtime_state(self, step: CompiledStep, store: Any, event: Event) -> None:
+        self._engine._update_final_step_runtime_state(step, store, event)
+
+    def update_final_item_runtime_state(self, store: Any, event: Event) -> None:
+        self._engine._update_final_item_runtime_state(store, event)
+
 
 class Engine:
     """Strict workflow engine."""
@@ -159,7 +359,7 @@ class Engine:
         runtime_extension_factories: Sequence[Callable[[RunBinding], BoundWorkflowExtension]] = (),
         hook_event_sink: Callable[[str, Mapping[str, Any]], None] | None = None,
         runtime_event_sink: Callable[[str, Mapping[str, Any]], None] | None = None,
-        provider_policy_resolver: "ProviderPolicyResolver | None" = None,
+        provider_policy_resolver: ProviderPolicyResolverProtocol | None = None,
     ) -> None:
         self.compiled = workflow if isinstance(workflow, CompiledWorkflow) else compile_workflow(workflow)
         self.provider = validate_llm_provider(provider)
@@ -172,10 +372,19 @@ class Engine:
         self.hook_event_sink = hook_event_sink
         self.runtime_event_sink = runtime_event_sink
         self.provider_policy_resolver = provider_policy_resolver
-        self.step_dispatcher = StepDispatcher(self)
-        self.route_finalizer = RouteFinalizer(self)
         self.hook_runner = HookRunner(self)
-        self.artifact_guard = ArtifactGuard(self)
+        self.execution_services = ExecutionServices(
+            artifacts=_EngineArtifactService(self),
+            routes=_EngineRouteService(self),
+            hooks=self.hook_runner,
+            state=_EngineStateService(self),
+        )
+        self.artifact_guard = ArtifactGuard(self.execution_services)
+        self.route_finalizer = RouteFinalizer(
+            self.execution_services,
+            artifact_inventory=self.compiled.artifacts_by_qualified_name,
+        )
+        self.step_dispatcher = StepDispatcher(self)
         self.state_runtime = StateRuntime(self)
         self.session_runtime = SessionRuntime(self)
         self.checkpoint_manager = CheckpointManager(self)
@@ -256,12 +465,8 @@ class Engine:
         resolved_package_folder = package_folder or (root.resolve() if root is not None else task_folder)
         previous_provider_policy_resolver = self.provider_policy_resolver
         if previous_provider_policy_resolver is None:
-            from botlane.runtime.provider_policy_resolver import create_provider_policy_resolver
-
-            self.provider_policy_resolver = create_provider_policy_resolver(
-                sdk_default_policy=None,
+            self.provider_policy_resolver = _DefaultProviderPolicyResolver(
                 workflow_policy=self.compiled.provider_policy,
-                run_policy=None,
                 workspace_root=_resolve_context_root(
                     root=root,
                     task_folder=task_folder,

@@ -5,6 +5,7 @@ from __future__ import annotations
 import importlib
 import inspect
 import sys
+import tempfile
 from collections.abc import Mapping, Sequence
 from contextlib import contextmanager
 from dataclasses import asdict, dataclass, is_dataclass
@@ -966,7 +967,21 @@ def _resolved_from_workflow_class(
     catalog_entry: WorkflowCatalogEntry | None,
     source_path: Path,
 ) -> _CapabilityResolvedWorkflow:
+    module = sys.modules.get(workflow_cls.__module__)
     compiled = compile_workflow(workflow_cls)
+    package_dir = catalog_entry.package_dir if catalog_entry is not None else source_path.parent
+    package_module_name = None if catalog_entry is None else catalog_entry.package_module
+    parameters_cls = compiled.parameters_cls
+    if isinstance(module, ModuleType):
+        resolved_parameters = _resolve_repo_module_parameters_cls(
+            root_path,
+            workflow_cls,
+            module,
+            package_dir=package_dir,
+            package_module_name=package_module_name,
+        )
+        if resolved_parameters is not None:
+            parameters_cls = resolved_parameters
     if catalog_entry is not None:
         reference = _CapabilityResolvedReference(
             original=original,
@@ -1011,7 +1026,7 @@ def _resolved_from_workflow_class(
     return _CapabilityResolvedWorkflow(
         reference=reference,
         workflow_cls=workflow_cls,
-        parameters_cls=compiled.parameters_cls,
+        parameters_cls=parameters_cls,
     )
 
 
@@ -1096,7 +1111,8 @@ def _load_isolated_workflow_module(source_path: Path) -> ModuleType:
         raise WorkflowCapabilityInspectionError(f"could not load workflow module from {source_path}")
     module = importlib.util.module_from_spec(spec)
     sys.modules[module_name] = module
-    spec.loader.exec_module(module)
+    with _no_bytecode_writes():
+        spec.loader.exec_module(module)
     return module
 
 
@@ -1578,7 +1594,8 @@ def _import_discovered_module(module_name: str, root_path: Path) -> ModuleType:
     importlib.invalidate_caches()
     _evict_stale_workflow_modules(module_name, root_path)
     with _repo_root_on_syspath(root_path):
-        return importlib.import_module(module_name)
+        with _no_bytecode_writes():
+            return importlib.import_module(module_name)
 
 
 def _evict_stale_workflow_modules(module_name: str, root_path: Path) -> None:
@@ -1623,6 +1640,20 @@ def _module_origin_path(module: ModuleType) -> Path | None:
     if isinstance(origin, str) and origin:
         return Path(origin).resolve()
     return None
+
+
+@contextmanager
+def _no_bytecode_writes():
+    original = sys.dont_write_bytecode
+    original_prefix = getattr(sys, "pycache_prefix", None)
+    sys.dont_write_bytecode = True
+    with tempfile.TemporaryDirectory(prefix="botlane-capability-pyc-") as pycache_root:
+        sys.pycache_prefix = pycache_root
+        try:
+            yield
+        finally:
+            sys.dont_write_bytecode = original
+            sys.pycache_prefix = original_prefix
 
 
 def _parameter_field_default(field: Any) -> Any:

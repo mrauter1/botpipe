@@ -13,9 +13,11 @@ from weakref import WeakKeyDictionary
 from pydantic import BaseModel, ConfigDict
 
 from .branch_groups.context import BranchMetadata, FanInMetadata, StateCell
+from .execution_frame import ExecutionFrame, _DEFAULT_FRAME_MESSAGE
 from .errors import WorkflowExecutionError
 from .mappings import normalize_mapping
 from .primitives import Event
+from .run_paths import RunIdentity, RunPaths
 from .sessions import Continuity, DEFAULT_SESSION_NAME, SessionKey, derive_session_key
 from .step_state import reserved_item_state_field_names, reserved_step_state_field_names
 from .stores.protocols import SessionBinding, is_run_key_bound_to_slot
@@ -31,7 +33,7 @@ if TYPE_CHECKING:
 
 OutputT = TypeVar("OutputT")
 _CONTEXT_RUNTIMES: "WeakKeyDictionary[Context, _ContextRuntime]" = WeakKeyDictionary()
-_DEFAULT_MESSAGE = object()
+_DEFAULT_MESSAGE = _DEFAULT_FRAME_MESSAGE
 
 
 @dataclass(frozen=True, slots=True)
@@ -255,44 +257,77 @@ class Context:
         self.workflow_folder = workflow_folder
         self.run_folder = run_folder
         self.package_folder = package_folder
-        self._request_file = Path(request_file) if request_file is not None else run_folder / "request.md"
+        resolved_request_file = Path(request_file) if request_file is not None else run_folder / "request.md"
         if task_request_file is not None:
-            self._task_request_file = Path(task_request_file)
+            resolved_task_request_file = Path(task_request_file)
         else:
             candidate = task_folder / "request.md"
-            self._task_request_file = candidate if candidate.exists() else None
-        self._state_cell = state_cell or StateCell(state)
-        self._state = self._state_cell.value
-        self._session_store = session_store
-        self._session_definitions = normalize_mapping(session_definitions)
-        self._worklists = normalize_mapping(worklists)
-        self._selections = selections if selections is not None else {}
-        self._selection_snapshots = selection_snapshots if selection_snapshots is not None else {}
-        self._active_worklist = active_worklist
-        self._params = params if params is not None else EmptyParameters()
-        self._workflow_params = normalize_mapping(workflow_params)
-        self._message = message
-        self._input_fields = workflow_input
-        self._workflow_invoker = workflow_invoker
-        self._answer = answer
-        self._input_response = input_response
-        self._step_name = step_name
+            resolved_task_request_file = candidate if candidate.exists() else None
+        state_cell_value = state_cell or StateCell(state)
+        normalized_session_definitions = normalize_mapping(session_definitions)
+        normalized_worklists = normalize_mapping(worklists)
+        normalized_workflow_params = normalize_mapping(workflow_params)
+        normalized_values = values if isinstance(values, dict) else normalize_mapping(values)
+        self._request_file = Path(request_file) if request_file is not None else run_folder / "request.md"
         self._default_session_name = default_session_name
-        self._artifacts = artifacts
-        self._values = values if isinstance(values, dict) else normalize_mapping(values)
-        self._route = route
-        self._event = None
-        self._outcome = outcome
-        self._meta = meta
-        self._step_state = step_state_store if step_state_store is not None else {}
-        self._item_state = item_state_store
-        self._step_item_state = step_item_state_store
-        self._branch = branch
-        self._fan_in = fan_in
-        self._step_execution_id = step_execution_id
+        self._run_paths = RunPaths(
+            root=self.root,
+            task_folder=self.task_folder,
+            workflow_folder=self.workflow_folder,
+            run_folder=self.run_folder,
+            package_folder=self.package_folder,
+            request_file=resolved_request_file,
+            task_request_file=resolved_task_request_file,
+            run_meta_file=self.run_folder / "run.json",
+            events_file=self.run_folder / "events.jsonl",
+            checkpoint_file=self.run_folder / "checkpoint.json",
+            sessions_dir=self.run_folder / "sessions",
+            trace_file=self.run_folder / "trace.jsonl",
+            raw_dir=self.run_folder / "raw",
+        )
+        self._run_identity = RunIdentity(
+            task_id=self.task_id,
+            run_id=self.run_id,
+            workflow_name=self.workflow_name,
+            paths=self._run_paths,
+        )
+        self._execution_frame = ExecutionFrame(
+            identity=self._run_identity,
+            state_cell=state_cell_value,
+            params=params if params is not None else EmptyParameters(),
+            workflow_params=normalized_workflow_params,
+            message=message,
+            input_fields=workflow_input,
+            answer=answer,
+            input_response=input_response,
+            session_store=session_store,
+            session_definitions=normalized_session_definitions,
+            worklists=normalized_worklists,
+            selections=selections if selections is not None else {},
+            selection_snapshots=selection_snapshots if selection_snapshots is not None else {},
+            active_worklist=active_worklist,
+            artifacts=artifacts,
+            values=normalized_values,
+            route=route,
+            event=None,
+            outcome=outcome,
+            meta=meta,
+            step_name=step_name,
+            step_execution_id=step_execution_id,
+            step_state=step_state_store if step_state_store is not None else {},
+            item_state=item_state_store,
+            step_item_state=step_item_state_store,
+            branch=branch,
+            fan_in=fan_in,
+            runtime_event_sink=runtime_event_sink,
+            workflow_invoker=workflow_invoker,
+        )
+        self._sync_legacy_fields_from_execution_frame(
+            request_file=resolved_request_file,
+            task_request_file=resolved_task_request_file,
+        )
         self._history: HistoryReader | None = None
         self._worklist_items_cache: dict[str, tuple[Any, ...]] = {}
-        self._runtime_event_sink = runtime_event_sink
         self._worklist_selection_sync: Callable[[str], None] | None = None
         self._worklist_selection_resolver: Callable[[str], "Selection[Any]"] | None = None
         self._execution_source_hook: str | None = None
@@ -300,33 +335,85 @@ class Context:
         self._execution_hook_invocation_id: str | None = None
         _CONTEXT_RUNTIMES[self] = _ContextRuntime(self)
 
+    def _sync_legacy_fields_from_execution_frame(
+        self,
+        *,
+        request_file: Path | None = None,
+        task_request_file: Path | None = None,
+    ) -> None:
+        frame = self._execution_frame
+        previous_request_file = getattr(self, "_request_file", None)
+        previous_task_request_file = getattr(self, "_task_request_file", None)
+        self._request_file = frame.identity.paths.request_file if frame.identity and frame.identity.paths is not None else (
+            previous_request_file if request_file is None else request_file
+        )
+        self._task_request_file = (
+            frame.identity.paths.task_request_file
+            if frame.identity and frame.identity.paths is not None
+            else previous_task_request_file if task_request_file is None else task_request_file
+        )
+        self._state_cell = frame.state_cell
+        self._state = None if frame.state_cell is None else frame.state_cell.value
+        self._session_store = frame.session_store
+        self._session_definitions = {} if frame.session_definitions is None else frame.session_definitions
+        self._worklists = {} if frame.worklists is None else frame.worklists
+        self._selections = {} if frame.selections is None else frame.selections
+        self._selection_snapshots = {} if frame.selection_snapshots is None else frame.selection_snapshots
+        self._active_worklist = frame.active_worklist
+        self._params = frame.params if frame.params is not None else EmptyParameters()
+        self._workflow_params = {} if frame.workflow_params is None else frame.workflow_params
+        self._message = frame.message
+        self._input_fields = frame.input_fields
+        self._workflow_invoker = frame.workflow_invoker
+        self._answer = frame.answer
+        self._input_response = frame.input_response
+        self._step_name = frame.step_name
+        self._artifacts = frame.artifacts
+        self._values = {} if frame.values is None else frame.values
+        self._route = frame.route
+        self._event = frame.event
+        self._outcome = frame.outcome
+        self._meta = frame.meta
+        self._step_state = {} if frame.step_state is None else frame.step_state
+        self._item_state = frame.item_state
+        self._step_item_state = frame.step_item_state
+        self._branch = frame.branch
+        self._fan_in = frame.fan_in
+        self._step_execution_id = frame.step_execution_id
+        self._runtime_event_sink = frame.runtime_event_sink
+
     @property
     def state(self) -> BaseModel:
-        return self._state_cell.value
+        if self._execution_frame.state_cell is None:
+            raise WorkflowExecutionError("context state is unavailable")
+        return self._execution_frame.state_cell.value
 
     @state.setter
     def state(self, value: BaseModel) -> None:
-        self._state = self._state_cell.set(value)
+        self._execution_frame.set_state(value)
+        self._sync_legacy_fields_from_execution_frame()
 
     @property
     def state_cell(self) -> StateCell:
-        return self._state_cell
+        if self._execution_frame.state_cell is None:
+            raise WorkflowExecutionError("context state cell is unavailable")
+        return self._execution_frame.state_cell
 
     @property
     def answer(self) -> str | None:
-        return self._answer
+        return self._execution_frame.answer
 
     @property
     def input_response(self) -> Any | None:
-        return self._input_response
+        return self._execution_frame.input_response
 
     @property
     def params(self) -> BaseModel:
-        return self._params
+        return self._execution_frame.params if self._execution_frame.params is not None else EmptyParameters()
 
     @property
     def workflow_params(self) -> dict[str, Any]:
-        return dict(self._workflow_params)
+        return dict(self._execution_frame.workflow_params or {})
 
     @property
     def request_file(self) -> Path:
@@ -338,60 +425,60 @@ class Context:
 
     @property
     def message(self) -> str | None:
-        if self._message is _DEFAULT_MESSAGE:
+        if self._execution_frame.message is _DEFAULT_MESSAGE:
             return self.request.text
-        return self._message
+        return self._execution_frame.message
 
     @property
     def input_fields(self) -> BaseModel | None:
-        return self._input_fields
+        return self._execution_frame.input_fields
 
     @property
     def input(self) -> WorkflowInputView:
-        resolved_message = self._message
+        resolved_message = self._execution_frame.message
         if resolved_message is _DEFAULT_MESSAGE:
             resolved_message = self.request.text if self.request_file.exists() else None
-        return WorkflowInputView(message=resolved_message, fields=self._input_fields)
+        return WorkflowInputView(message=resolved_message, fields=self._execution_frame.input_fields)
 
     @property
     def artifacts(self) -> "ResolvedArtifacts | None":
-        return self._artifacts
+        return self._execution_frame.artifacts
 
     @property
     def values(self) -> NamespaceProxy:
-        return NamespaceProxy(self._values)
+        return NamespaceProxy(self._execution_frame.values)
 
     @property
     def branch(self) -> NamespaceProxy:
-        if self._branch is None:
+        if self._execution_frame.branch is None:
             raise WorkflowExecutionError("branch metadata is only available during branch execution")
-        return NamespaceProxy(self._branch)
+        return NamespaceProxy(self._execution_frame.branch)
 
     @property
     def fan_in(self) -> NamespaceProxy:
-        if self._fan_in is None:
+        if self._execution_frame.fan_in is None:
             raise WorkflowExecutionError("fan_in metadata is only available during fan-in execution")
-        return NamespaceProxy(self._fan_in)
+        return NamespaceProxy(self._execution_frame.fan_in)
 
     @property
     def route(self) -> NamespaceProxy | None:
-        if self._route is None:
+        if self._execution_frame.route is None:
             return None
-        return NamespaceProxy(self._route)
+        return NamespaceProxy(self._execution_frame.route)
 
     @property
     def outcome(self) -> Any | None:
-        if self._outcome is None:
+        if self._execution_frame.outcome is None:
             return None
-        if isinstance(self._outcome, Mapping):
-            return NamespaceProxy(self._outcome)
-        return self._outcome
+        if isinstance(self._execution_frame.outcome, Mapping):
+            return NamespaceProxy(self._execution_frame.outcome)
+        return self._execution_frame.outcome
 
     @property
     def event(self) -> NamespaceProxy | None:
-        if self._event is None:
+        if self._execution_frame.event is None:
             return None
-        return NamespaceProxy(self._event)
+        return NamespaceProxy(self._execution_frame.event)
 
     @property
     def run(self) -> NamespaceProxy:
@@ -403,7 +490,7 @@ class Context:
 
     @property
     def meta(self) -> NamespaceProxy:
-        return NamespaceProxy(self._meta or {})
+        return NamespaceProxy(self._execution_frame.meta or {})
 
     @property
     def history(self) -> "HistoryReader":
@@ -415,20 +502,24 @@ class Context:
 
     @property
     def step_state(self) -> StateView:
-        return StateView(self._step_state, runtime_fields=_step_runtime_fields(self._step_state))
+        step_state = self._execution_frame.step_state if self._execution_frame.step_state is not None else {}
+        return StateView(step_state, runtime_fields=_step_runtime_fields(step_state))
 
     @property
     def item_state(self) -> StateView:
-        if isinstance(self._item_state, (BaseModel, dict)):
-            return StateView(self._item_state, runtime_fields=reserved_item_state_field_names())
+        if isinstance(self._execution_frame.item_state, (BaseModel, dict)):
+            return StateView(self._execution_frame.item_state, runtime_fields=reserved_item_state_field_names())
         raise WorkflowExecutionError(
             "item_state is only available when there is an active scoped worklist item"
         )
 
     @property
     def step_item_state(self) -> StateView:
-        if isinstance(self._step_item_state, (BaseModel, dict)):
-            return StateView(self._step_item_state, runtime_fields=_step_runtime_fields(self._step_item_state))
+        if isinstance(self._execution_frame.step_item_state, (BaseModel, dict)):
+            return StateView(
+                self._execution_frame.step_item_state,
+                runtime_fields=_step_runtime_fields(self._execution_frame.step_item_state),
+            )
         raise WorkflowExecutionError(
             "step_item_state is only available when there is an active scoped worklist item"
         )
@@ -654,12 +745,13 @@ def _resolve_context_root(*, root: Path | None, task_folder: Path, package_folde
     for marker in (
         ("botlane", "workflows"),
         (".botlane", "workflows"),
-        ("." + "auto" + "loop", "workflows"),
         ("workflows",),
     ):
         marker_length = len(marker)
         for index in range(len(parts) - marker_length, -1, -1):
             if parts[index : index + marker_length] != marker:
+                continue
+            if marker == ("workflows",) and index > 0 and parts[index - 1].startswith("."):
                 continue
             return Path(*parts[:index]).resolve()
     return task_folder.resolve()
@@ -681,66 +773,95 @@ class _ContextRuntime:
         self._context = context
 
     def set_state(self, state: BaseModel) -> None:
-        self._context._state = self._context._state_cell.set(state)
+        self._context._execution_frame.set_state(state)
+        self._context._sync_legacy_fields_from_execution_frame()
 
     def set_answer(self, answer: str | None) -> None:
-        self._context._answer = answer
+        self._context._execution_frame.answer = answer
+        self._context._sync_legacy_fields_from_execution_frame()
 
     def set_input_response(self, input_response: Any | None) -> None:
-        self._context._input_response = input_response
+        self._context._execution_frame.input_response = input_response
+        self._context._sync_legacy_fields_from_execution_frame()
 
     def set_artifacts(self, artifacts: "ResolvedArtifacts | None") -> None:
-        self._context._artifacts = artifacts
+        self._context._execution_frame.set_artifacts(artifacts)
+        self._context._sync_legacy_fields_from_execution_frame()
 
     def set_values(self, values: Mapping[str, Any] | None) -> None:
-        self._context._values = values if isinstance(values, dict) else normalize_mapping(values)
+        self._context._execution_frame.set_values(
+            values if isinstance(values, dict) else normalize_mapping(values)
+        )
+        self._context._sync_legacy_fields_from_execution_frame()
 
     def set_route(self, route: Mapping[str, Any] | Any | None) -> None:
-        self._context._route = route
+        self._context._execution_frame.set_route(route)
+        self._context._sync_legacy_fields_from_execution_frame()
 
     def set_outcome(self, outcome: Mapping[str, Any] | Any | None) -> None:
-        self._context._outcome = outcome
+        self._context._execution_frame.set_outcome(outcome)
+        self._context._sync_legacy_fields_from_execution_frame()
 
     def set_event(self, event: Mapping[str, Any] | Any | None) -> None:
-        self._context._event = event
+        self._context._execution_frame.set_event(event)
+        self._context._sync_legacy_fields_from_execution_frame()
 
     def set_meta(self, meta: Mapping[str, Any] | Any | None) -> None:
-        self._context._meta = meta
+        self._context._execution_frame.set_meta(meta)
+        self._context._sync_legacy_fields_from_execution_frame()
 
     def set_step_state_store(self, state: BaseModel | dict[str, Any]) -> None:
-        self._context._step_state = state
+        self._context._execution_frame.set_step_state(state)
+        self._context._sync_legacy_fields_from_execution_frame()
 
     def set_item_state_store(self, state: BaseModel | dict[str, Any] | None) -> None:
-        self._context._item_state = state
+        self._context._execution_frame.set_item_state(state)
+        self._context._sync_legacy_fields_from_execution_frame()
 
     def set_step_item_state_store(self, state: BaseModel | dict[str, Any] | None) -> None:
-        self._context._step_item_state = state
+        self._context._execution_frame.set_step_item_state(state)
+        self._context._sync_legacy_fields_from_execution_frame()
 
     def set_session_store(self, session_store: SessionStore) -> None:
-        self._context._session_store = session_store
+        self._context._execution_frame.session_store = session_store
+        self._context._sync_legacy_fields_from_execution_frame()
 
     def set_branch(self, branch: BranchMetadata | None) -> None:
-        self._context._branch = branch
+        self._context._execution_frame.branch = branch
+        self._context._sync_legacy_fields_from_execution_frame()
 
     def set_fan_in(self, fan_in: FanInMetadata | None) -> None:
-        self._context._fan_in = fan_in
+        self._context._execution_frame.fan_in = fan_in
+        self._context._sync_legacy_fields_from_execution_frame()
 
     def set_step_execution_id(self, step_execution_id: str | None) -> None:
-        self._context._step_execution_id = step_execution_id
+        self._context._execution_frame.step_execution_id = step_execution_id
+        self._context._sync_legacy_fields_from_execution_frame()
 
     def set_selection(self, worklist: "Worklist[Any] | str", selection: "Selection[Any]") -> None:
         worklist_name = self._context._worklist_name(worklist)
-        self._context._selections[worklist_name] = selection
-        self._context._selection_snapshots.pop(worklist_name, None)
+        frame = self._context._execution_frame
+        if frame.selections is None:
+            frame.selections = {}
+        frame.selections[worklist_name] = selection
+        if frame.selection_snapshots is None:
+            frame.selection_snapshots = {}
+        frame.selection_snapshots.pop(worklist_name, None)
+        self._context._sync_legacy_fields_from_execution_frame()
 
     def set_active_worklist(self, worklist: "Worklist[Any] | str | None") -> None:
-        self._context._active_worklist = None if worklist is None else self._context._worklist_name(worklist)
+        self._context._execution_frame.active_worklist = (
+            None if worklist is None else self._context._worklist_name(worklist)
+        )
+        self._context._sync_legacy_fields_from_execution_frame()
 
     def set_selections(self, selections: dict[str, "Selection[Any]"]) -> None:
-        self._context._selections = selections
+        self._context._execution_frame.selections = selections
+        self._context._sync_legacy_fields_from_execution_frame()
 
     def set_selection_snapshots(self, snapshots: dict[str, "SelectionSnapshot"]) -> None:
-        self._context._selection_snapshots = snapshots
+        self._context._execution_frame.selection_snapshots = snapshots
+        self._context._sync_legacy_fields_from_execution_frame()
 
     def set_worklist_selection_sync(self, callback: Callable[[str], None] | None) -> None:
         self._context._worklist_selection_sync = callback

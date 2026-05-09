@@ -1,0 +1,815 @@
+"""Internal placeholder parsing values.
+
+Not part of the public botlane authoring API.
+"""
+
+from __future__ import annotations
+
+import re
+from collections.abc import Mapping
+from dataclasses import dataclass
+from pathlib import Path
+from typing import Any
+
+from .context_placeholders import CTX_MODEL_ROOTS, CTX_NESTED_FIELDS, CTX_SCALAR_FIELDS, validate_safe_ctx_reference
+from .errors import WorkflowExecutionError, WorkflowValidationError
+
+
+_PLACEHOLDER_RE = re.compile(r"\{([^{}]+)\}")
+_FORBIDDEN_CTX_SEGMENT_CHARS = frozenset({'"', "'", "(", ")", "[", "]"})
+
+SIMPLE_CONTEXT_BARE_NAMES = frozenset(
+    {
+        "answer",
+        "artifacts",
+        "input",
+        "item",
+        "package_folder",
+        "params",
+        "request_file",
+        "run_folder",
+        "state",
+        "task_folder",
+        "workflow_folder",
+        "workflow_params",
+    }
+)
+
+
+@dataclass(frozen=True, slots=True)
+class PlaceholderRef:
+    raw: str
+    root: str
+    path: tuple[str, ...]
+    source: str
+
+
+def parse_placeholders(text: str, *, source: str) -> tuple[PlaceholderRef, ...]:
+    refs: list[PlaceholderRef] = []
+    for match in _PLACEHOLDER_RE.finditer(text):
+        raw = match.group(1).strip()
+        if raw:
+            root, *path = raw.split(".")
+            refs.append(PlaceholderRef(raw=raw, root=root, path=tuple(path), source=source))
+            continue
+        refs.append(PlaceholderRef(raw="", root="", path=(), source=source))
+    return tuple(refs)
+
+
+def validate_placeholder_ref(
+    ref: PlaceholderRef,
+    *,
+    surface: str,
+    symbols: Any,
+) -> str | None:
+    if not isinstance(symbols, Mapping) or symbols.get("kind") != "simple_prompt":
+        raise ValueError("validate_placeholder_ref currently supports simple_prompt symbols only")
+    return _validate_simple_prompt_reference(ref, surface=surface, symbols=symbols)
+
+
+def render_placeholder_ref(ref: PlaceholderRef, context: Any) -> Any:
+    return _resolve_placeholder_ref(ref, context, placeholder_label="placeholder")
+
+
+def render_template_with_refs(
+    template: str,
+    refs: tuple[PlaceholderRef, ...],
+    context: Any,
+    *,
+    replace_roots: frozenset[str] | None = None,
+    placeholder_label: str,
+) -> str:
+    matches = list(_PLACEHOLDER_RE.finditer(template))
+    if len(matches) != len(refs):
+        raise ValueError("placeholder refs do not match template placeholders")
+
+    rendered: list[str] = []
+    cursor = 0
+    for match, ref in zip(matches, refs, strict=True):
+        rendered.append(template[cursor : match.start()])
+        cursor = match.end()
+        if not ref.raw:
+            rendered.append(match.group(0) if replace_roots is not None else "")
+            continue
+        if replace_roots is not None and ref.root not in replace_roots:
+            rendered.append(match.group(0))
+            continue
+        value = _resolve_placeholder_ref(ref, context, placeholder_label=placeholder_label)
+        if ref.root == "ctx":
+            rendered.append(_render_prompt_value(value, ref=ref, placeholder_label=placeholder_label))
+        else:
+            rendered.append("" if value is None else str(value))
+    rendered.append(template[cursor:])
+    return "".join(rendered)
+
+
+def _validate_simple_prompt_reference(
+    ref: PlaceholderRef,
+    *,
+    surface: str,
+    symbols: Mapping[str, Any],
+) -> str | None:
+    step_name = symbols["step_name"]
+    if _validate_branch_placeholder_reference(
+        ref.raw,
+        step_name=step_name,
+        allowed=bool(symbols.get("allow_branch_placeholders", False)),
+    ):
+        return None
+    if _validate_fan_in_placeholder_reference(
+        ref.raw,
+        step_name=step_name,
+        allowed=bool(symbols.get("allow_fan_in_placeholders", False)),
+    ):
+        return None
+    if ref.raw == "message":
+        raise WorkflowValidationError(f"{surface} {{message}} is unknown; use {{ctx.message}}")
+    if ref.raw == "ctx":
+        raise WorkflowValidationError(f"{surface} {{ctx}} must qualify a runtime context field")
+    if ref.root == "ctx":
+        return _validate_ctx_prompt_reference(ref, surface=surface, symbols=symbols)
+
+    parts = _ref_parts(ref)
+    if len(parts) == 1:
+        name = parts[0]
+        state_fields = symbols["state_fields"]
+        parameter_fields = symbols["parameter_fields"]
+        input_fields = symbols["input_fields"]
+        own_outputs = symbols["own_outputs"]
+        artifact_name_counts = symbols["artifact_name_counts"]
+        context_collision = (
+            name in state_fields
+            or name in parameter_fields
+            or name in input_fields
+            or name in SIMPLE_CONTEXT_BARE_NAMES
+        )
+        artifact_count = artifact_name_counts.get(name, 0)
+        if artifact_count > 1 or (artifact_count == 1 and context_collision):
+            raise WorkflowValidationError(f"{surface} {{{ref.raw}}} is ambiguous; qualify the artifact reference")
+        if artifact_count == 1:
+            return name if name not in own_outputs else None
+        if context_collision:
+            return None
+        raise WorkflowValidationError(f"{surface} {{{ref.raw}}} is unknown")
+
+    root, second, *rest = parts
+    if root == "params":
+        if second not in symbols["parameter_fields"]:
+            raise WorkflowValidationError(f"{surface} {{{ref.raw}}} references unknown params field {second!r}")
+        return None
+    if root == "self":
+        if second not in symbols["own_outputs"]:
+            raise WorkflowValidationError(f"{surface} {{{ref.raw}}} references unknown self artifact {second!r}")
+        return None
+    if root == "state":
+        if second not in symbols["state_fields"]:
+            raise WorkflowValidationError(f"{surface} {{{ref.raw}}} references unknown state field {second!r}")
+        return None
+    if root == "input":
+        if second == "message" and not rest:
+            return None
+        if second not in symbols["input_fields"]:
+            raise WorkflowValidationError(f"{surface} {{{ref.raw}}} references unknown input field {second!r}")
+        return None
+    if root == "run":
+        if second not in {"id"}:
+            raise WorkflowValidationError(f"{surface} {{{ref.raw}}} references unknown run field {second!r}")
+        return None
+    if root == "workflow":
+        if second not in {"folder"}:
+            raise WorkflowValidationError(f"{surface} {{{ref.raw}}} references unknown workflow field {second!r}")
+        return None
+    if root == "item":
+        return _validate_item_prompt_reference(ref, surface=surface, symbols=symbols, second=second, rest=rest)
+    if root == "worklist":
+        return _validate_worklist_prompt_reference(ref, surface=surface, symbols=symbols, worklist_name=second, rest=rest)
+    if root in {"artifacts", "step"} and not rest:
+        return _validate_simple_prompt_reference(
+            _placeholder_ref(second, source=ref.source),
+            surface=surface,
+            symbols=symbols,
+        )
+
+    step_output_names = symbols["step_output_names"]
+    if root not in step_output_names:
+        raise WorkflowValidationError(f"{surface} {{{ref.raw}}} references unknown step {root!r}")
+    if second == "value":
+        return None
+    if second == "state":
+        if not rest:
+            raise WorkflowValidationError(f"{surface} {{{ref.raw}}} must qualify a step state field")
+        field_name = rest[0]
+        if field_name not in symbols["step_state_fields"].get(root, frozenset()):
+            raise WorkflowValidationError(
+                f"{surface} {{{ref.raw}}} references unknown state field {field_name!r} on step {root!r}"
+            )
+        return None
+    if second == "item_state":
+        if not rest:
+            raise WorkflowValidationError(f"{surface} {{{ref.raw}}} must qualify a step item_state field")
+        field_name = rest[0]
+        available_fields = symbols["step_item_state_fields"].get(root, frozenset())
+        if not available_fields:
+            raise WorkflowValidationError(
+                f"{surface} {{{ref.raw}}} requires scoped step {root!r} to declare item_state or use built-in scoped runtime state"
+            )
+        if field_name not in available_fields:
+            raise WorkflowValidationError(
+                f"{surface} {{{ref.raw}}} references unknown item_state field {field_name!r} on step {root!r}"
+            )
+        return None
+    if second == "meta":
+        return None
+    if second not in step_output_names[root]:
+        raise WorkflowValidationError(
+            f"{surface} {{{ref.raw}}} references unknown artifact {second!r} on step {root!r}"
+        )
+    return None if root == step_name else f"{root}.{second}"
+
+
+def _validate_item_prompt_reference(
+    ref: PlaceholderRef,
+    *,
+    surface: str,
+    symbols: Mapping[str, Any],
+    second: str,
+    rest: list[str],
+) -> None:
+    scope_name = symbols["scope_name"]
+    if scope_name is None:
+        raise WorkflowValidationError(f"{surface} {{{ref.raw}}} requires scope=... on the same step")
+    if second in {"id", "title", "status", "dir_key"} and not rest:
+        return None
+    if second == "payload":
+        return None
+    if second != "state" or not rest:
+        raise WorkflowValidationError(
+            f"{surface} {{{ref.raw}}} must use item.id, item.title, item.status, item.dir_key, item.payload, item.payload.<path>, or item.state.<field>"
+        )
+    field_name = rest[0]
+    available_fields = symbols["worklist_item_state_fields"].get(scope_name, frozenset())
+    if not available_fields:
+        raise WorkflowValidationError(
+            f"{surface} {{{ref.raw}}} requires worklist {scope_name!r} to declare item_state"
+        )
+    if field_name not in available_fields:
+        raise WorkflowValidationError(
+            f"{surface} {{{ref.raw}}} references unknown item state field {field_name!r} on worklist {scope_name!r}"
+        )
+    return None
+
+
+def _validate_worklist_prompt_reference(
+    ref: PlaceholderRef,
+    *,
+    surface: str,
+    symbols: Mapping[str, Any],
+    worklist_name: str,
+    rest: list[str],
+) -> None:
+    worklist_item_state_fields = symbols["worklist_item_state_fields"]
+    if worklist_name not in worklist_item_state_fields:
+        raise WorkflowValidationError(f"{surface} {{{ref.raw}}} references unknown worklist {worklist_name!r}")
+    if not rest:
+        raise WorkflowValidationError(f"{surface} {{{ref.raw}}} must qualify a worklist runtime field")
+    worklist_field, *worklist_rest = rest
+    if worklist_field == "current":
+        if not worklist_rest:
+            raise WorkflowValidationError(f"{surface} {{{ref.raw}}} must qualify a current work item field")
+        current_field, *current_rest = worklist_rest
+        if current_field in {"id", "title", "status", "dir_key"} and not current_rest:
+            return None
+        if current_field == "payload":
+            return None
+        raise WorkflowValidationError(
+            f"{surface} {{{ref.raw}}} must use worklist.<name>.current.id, .title, .status, .dir_key, .payload, or .payload.<path>"
+        )
+    if worklist_field in {"item_ids", "current_index", "is_exhausted"} and not worklist_rest:
+        return None
+    raise WorkflowValidationError(
+        f"{surface} {{{ref.raw}}} must use worklist.<name>.current..., worklist.<name>.item_ids, worklist.<name>.current_index, or worklist.<name>.is_exhausted"
+    )
+
+
+def _validate_ctx_prompt_reference(
+    ref: PlaceholderRef,
+    *,
+    surface: str,
+    symbols: Mapping[str, Any],
+) -> None:
+    model_labels = {
+        "input": "Input",
+        "state": "State",
+        "params": "Params",
+    }
+    qualifier_labels = {
+        "request": "request",
+        "input": "input",
+        "state": "state",
+        "params": "params",
+    }
+    parts = _ref_parts(ref)
+    if len(parts) == 2 and parts[1] in qualifier_labels:
+        raise WorkflowValidationError(
+            f"{surface} {{{ref.raw}}} must qualify a {qualifier_labels[parts[1]]} field"
+        )
+    try:
+        validated = validate_safe_ctx_reference(ref.raw)
+    except ValueError as exc:
+        if len(parts) == 3 and parts[1] in CTX_MODEL_ROOTS and _is_safe_field_candidate(parts[2]):
+            field_name = parts[2]
+            available_fields = {
+                "input": symbols["input_fields"],
+                "state": symbols["state_fields"],
+                "params": symbols["parameter_fields"],
+            }[parts[1]]
+            if field_name not in available_fields:
+                raise WorkflowValidationError(
+                    f"{surface} {{{ref.raw}}} references unknown {model_labels[parts[1]]} field {field_name!r}"
+                ) from exc
+        raise WorkflowValidationError(f"{surface} {{{ref.raw}}} is not a supported safe dotted path") from exc
+
+    root_name = validated[1]
+    if root_name in CTX_SCALAR_FIELDS or root_name in CTX_NESTED_FIELDS:
+        return None
+    field_name = validated[2]
+    if root_name == "input" and field_name == "message":
+        return None
+    available_fields = {
+        "input": symbols["input_fields"],
+        "state": symbols["state_fields"],
+        "params": symbols["parameter_fields"],
+    }[root_name]
+    if field_name not in available_fields:
+        raise WorkflowValidationError(
+            f"{surface} {{{ref.raw}}} references unknown {model_labels[root_name]} field {field_name!r}"
+        )
+    return None
+
+
+def _resolve_placeholder_ref(
+    ref: PlaceholderRef,
+    context: Any,
+    *,
+    placeholder_label: str,
+) -> Any:
+    if not ref.raw:
+        return ""
+    if ref.root == "ctx":
+        return _resolve_ctx_placeholder(ref, context, placeholder_label=placeholder_label)
+    if ref.root == "task_id":
+        current: Any = context.task_id
+    elif ref.root == "run_id":
+        current = context.run_id
+    elif ref.root == "workflow_name":
+        current = context.workflow_name
+    elif ref.root == "task_folder":
+        current = context.task_folder
+    elif ref.root == "workflow_folder":
+        current = context.workflow_folder
+    elif ref.root == "run_folder":
+        current = context.run_folder
+    elif ref.root == "package_folder":
+        current = context.package_folder
+    elif ref.root == "root":
+        current = context.root
+    elif ref.root == "request_file":
+        current = context.request_file
+    elif ref.root == "params":
+        current = context.params
+    elif ref.root == "workflow_params":
+        current = context.workflow_params
+    elif ref.root == "input":
+        if ref.path:
+            return _resolve_input_placeholder(ref, context, placeholder_label=placeholder_label)
+        current = context.input
+    elif ref.root == "state":
+        current = context.state
+    elif ref.root == "item":
+        return _resolve_item_placeholder(ref, context, placeholder_label=placeholder_label)
+    elif ref.root == "worklist":
+        return _resolve_worklist_placeholder(ref, context, placeholder_label=placeholder_label)
+    elif ref.root == "branch":
+        if getattr(context, "_branch", None) is None:
+            return "{" + ref.raw + "}"
+        current = context.branch
+    elif ref.root == "fan_in":
+        if getattr(context, "_fan_in", None) is None:
+            return "{" + ref.raw + "}"
+        current = context.fan_in
+    else:
+        return ""
+    for part in ref.path:
+        if current is None:
+            return ""
+        if isinstance(current, Mapping):
+            current = current.get(part, "")
+        else:
+            current = getattr(current, part, "")
+    return "" if current is None else current
+
+
+def _resolve_input_placeholder(
+    ref: PlaceholderRef,
+    context: Any,
+    *,
+    placeholder_label: str,
+) -> Any:
+    parts = _ref_parts(ref)
+    if len(parts) < 2:
+        return context.input
+    if parts[1] != "message" and context.input_fields is None:
+        raise WorkflowExecutionError(
+            f"{placeholder_label} {{{ref.raw}}} requires workflow input, but no input was provided"
+        )
+    current: Any = context.input
+    for part in parts[1:]:
+        if current is None:
+            return ""
+        if isinstance(current, Mapping):
+            if part not in current:
+                raise WorkflowExecutionError(
+                    f"{placeholder_label} {{{ref.raw}}} references unknown input field {part!r}"
+                )
+            current = current[part]
+            continue
+        try:
+            current = getattr(current, part)
+        except AttributeError as exc:
+            raise WorkflowExecutionError(
+                f"{placeholder_label} {{{ref.raw}}} references unknown input field {part!r}"
+            ) from exc
+    return "" if current is None else current
+
+
+def _resolve_ctx_placeholder(
+    ref: PlaceholderRef,
+    context: Any,
+    *,
+    placeholder_label: str,
+) -> Any:
+    try:
+        parts = validate_safe_ctx_reference(ref.raw)
+    except ValueError as exc:
+        raise WorkflowExecutionError(
+            f"{placeholder_label} {{{ref.raw}}} is not a supported safe dotted path"
+        ) from exc
+    view = _PromptContextView(context)
+    root_name = parts[1]
+    if root_name in CTX_MODEL_ROOTS:
+        field_name = parts[2]
+        if root_name == "input" and field_name != "message" and context.input_fields is None:
+            raise WorkflowExecutionError(
+                f"ctx.{root_name}.{field_name} requires workflow input, but no input was provided"
+            )
+        current = getattr(view, root_name)
+        if current is None:
+            raise WorkflowExecutionError(
+                f"{placeholder_label} {{{ref.raw}}} requires an available runtime value before {field_name!r}"
+            )
+        try:
+            return _lookup_runtime_value(current, field_name)
+        except (AttributeError, KeyError, TypeError) as exc:
+            raise WorkflowExecutionError(
+                f"{placeholder_label} {{{ref.raw}}} references unknown runtime field {field_name!r}"
+            ) from exc
+    current: Any = view
+    for part in parts[1:]:
+        current = _lookup_runtime_value(current, part)
+    return current
+
+
+def _resolve_item_placeholder(
+    ref: PlaceholderRef,
+    context: Any,
+    *,
+    placeholder_label: str,
+) -> Any:
+    active_worklist = getattr(context, "_active_worklist", None)
+    try:
+        current = context.item
+    except WorkflowExecutionError as exc:
+        if isinstance(active_worklist, str) and active_worklist:
+            raise WorkflowExecutionError(
+                f"{placeholder_label} {{{ref.raw}}} could not load active worklist {active_worklist!r}: {exc}"
+            ) from exc
+        raise WorkflowExecutionError(
+            f"{placeholder_label} {{{ref.raw}}} could not resolve an active scoped work item: {exc}"
+        ) from exc
+    if current is None:
+        raise WorkflowExecutionError(
+            f"{placeholder_label} {{{ref.raw}}} requires an active scoped work item"
+        )
+    return _resolve_work_item_path(
+        current,
+        context=context,
+        ref=ref,
+        parts=list(ref.path),
+        placeholder_label=placeholder_label,
+        worklist_name=active_worklist if isinstance(active_worklist, str) else None,
+    )
+
+
+def _resolve_worklist_placeholder(
+    ref: PlaceholderRef,
+    context: Any,
+    *,
+    placeholder_label: str,
+) -> Any:
+    parts = _ref_parts(ref)
+    if len(parts) < 2 or not parts[1]:
+        raise WorkflowExecutionError(
+            f"{placeholder_label} {{{ref.raw}}} must specify a declared worklist name"
+        )
+    worklist_name = parts[1]
+    try:
+        selection = context.ensure_selection(worklist_name)
+    except WorkflowExecutionError as exc:
+        raise WorkflowExecutionError(
+            f"{placeholder_label} {{{ref.raw}}} could not load worklist {worklist_name!r}: {exc}"
+        ) from exc
+    remaining = list(parts[2:])
+    if not remaining:
+        return selection
+    field_name, *rest = remaining
+    if field_name == "current":
+        current = selection.current
+        if current is None:
+            raise WorkflowExecutionError(
+                f"{placeholder_label} {{{ref.raw}}} requires a current item on worklist {worklist_name!r}"
+            )
+        return _resolve_work_item_path(
+            current,
+            context=context,
+            ref=ref,
+            parts=rest,
+            placeholder_label=placeholder_label,
+            worklist_name=worklist_name,
+        )
+    if field_name == "item_ids":
+        return tuple(item.id for item in selection.items)
+    if field_name == "current_index":
+        return selection.current_index
+    if field_name == "is_exhausted":
+        return selection.current is None
+    return _resolve_runtime_path(
+        selection,
+        ref=ref,
+        parts=remaining,
+        placeholder_label=placeholder_label,
+        payload_path=None,
+        worklist_name=worklist_name,
+    )
+
+
+def _resolve_work_item_path(
+    item: Any,
+    *,
+    context: Any,
+    ref: PlaceholderRef,
+    parts: list[str],
+    placeholder_label: str,
+    worklist_name: str | None,
+) -> Any:
+    if not parts:
+        return item
+    field_name, *rest = parts
+    if field_name == "payload":
+        payload = _work_item_payload_root(item)
+        if not rest:
+            return payload
+        return _resolve_runtime_path(
+            payload,
+            ref=ref,
+            parts=rest,
+            placeholder_label=placeholder_label,
+            payload_path=[],
+            worklist_name=worklist_name,
+        )
+    if field_name == "state":
+        try:
+            item_state = context.item_state
+        except WorkflowExecutionError as exc:
+            suffix = f" on worklist {worklist_name!r}" if worklist_name else ""
+            raise WorkflowExecutionError(
+                f"{placeholder_label} {{{ref.raw}}} could not resolve active item state{suffix}: {exc}"
+            ) from exc
+        if not rest:
+            return item_state
+        return _resolve_runtime_path(
+            item_state,
+            ref=ref,
+            parts=rest,
+            placeholder_label=placeholder_label,
+            payload_path=None,
+            worklist_name=worklist_name,
+        )
+    if field_name in {"id", "title", "status", "dir_key"}:
+        value = _work_item_field(item, field_name)
+        if not rest:
+            return value
+        return _resolve_runtime_path(
+            value,
+            ref=ref,
+            parts=rest,
+            placeholder_label=placeholder_label,
+            payload_path=None,
+            worklist_name=worklist_name,
+        )
+    suffix = f" on worklist {worklist_name!r}" if worklist_name else ""
+    raise WorkflowExecutionError(
+        f"{placeholder_label} {{{ref.raw}}} references unsupported work item field {field_name!r}{suffix}"
+    )
+
+
+def _resolve_runtime_path(
+    current: Any,
+    *,
+    ref: PlaceholderRef,
+    parts: list[str],
+    placeholder_label: str,
+    payload_path: list[str] | None,
+    worklist_name: str | None = None,
+) -> Any:
+    value = current
+    traversed = list(payload_path or [])
+    suffix = f" on worklist {worklist_name!r}" if worklist_name else ""
+    for part in parts:
+        if value is None:
+            if payload_path is not None:
+                missing_path = ".".join((*traversed, part))
+                raise WorkflowExecutionError(
+                    f"{placeholder_label} {{{ref.raw}}} references missing payload path {missing_path!r}{suffix}"
+                )
+            raise WorkflowExecutionError(
+                f"{placeholder_label} {{{ref.raw}}} requires an available runtime value before {part!r}{suffix}"
+            )
+        try:
+            value = _lookup_runtime_value(value, part)
+        except (AttributeError, KeyError, TypeError) as exc:
+            if payload_path is not None:
+                missing_path = ".".join((*traversed, part))
+                raise WorkflowExecutionError(
+                    f"{placeholder_label} {{{ref.raw}}} references missing payload path {missing_path!r}{suffix}"
+                ) from exc
+            raise WorkflowExecutionError(
+                f"{placeholder_label} {{{ref.raw}}} references unknown runtime field {part!r}{suffix}"
+            ) from exc
+        if payload_path is not None:
+            traversed.append(part)
+    return value
+
+
+def _render_prompt_value(value: Any, *, ref: PlaceholderRef, placeholder_label: str) -> str:
+    if value is None:
+        return ""
+    if isinstance(value, (str, int, float, bool, Path)):
+        return str(value)
+    raise WorkflowExecutionError(
+        f"{placeholder_label} {{{ref.raw}}} resolved to a non-scalar value"
+    )
+
+
+def _lookup_runtime_value(current: Any, part: str) -> Any:
+    if isinstance(current, Mapping):
+        if part not in current:
+            raise KeyError(part)
+        return current[part]
+    if not hasattr(current, part):
+        raise AttributeError(part)
+    return getattr(current, part)
+
+
+def _work_item_field(item: Any, field_name: str) -> Any:
+    if isinstance(item, Mapping):
+        return item.get(field_name)
+    return getattr(item, field_name, None)
+
+
+def _work_item_payload_root(item: Any) -> Any:
+    payload = _work_item_field(item, "payload")
+    if not isinstance(payload, Mapping):
+        return payload
+    envelope_fields = {"id", "title", "status", "dir_key"}
+    if "payload" in payload and envelope_fields.intersection(payload.keys()):
+        return payload["payload"]
+    return payload
+
+
+class _PromptContextView:
+    def __init__(self, context: Any) -> None:
+        self._context = context
+
+    @property
+    def message(self) -> Any:
+        return self._context.message
+
+    @property
+    def request(self) -> Any:
+        return self._context.request
+
+    @property
+    def request_file(self) -> Any:
+        return self._context.request_file
+
+    @property
+    def input(self) -> Any:
+        return self._context.input
+
+    @property
+    def state(self) -> Any:
+        return self._context.state
+
+    @property
+    def params(self) -> Any:
+        return self._context.params
+
+    @property
+    def task_id(self) -> Any:
+        return self._context.task_id
+
+    @property
+    def run_id(self) -> Any:
+        return self._context.run_id
+
+    @property
+    def workflow_name(self) -> Any:
+        return self._context.workflow_name
+
+    @property
+    def task_folder(self) -> Any:
+        return self._context.task_folder
+
+    @property
+    def workflow_folder(self) -> Any:
+        return self._context.workflow_folder
+
+    @property
+    def run_folder(self) -> Any:
+        return self._context.run_folder
+
+    @property
+    def package_folder(self) -> Any:
+        return self._context.package_folder
+
+    @property
+    def root(self) -> Any:
+        return self._context.root
+
+    @property
+    def run(self) -> Any:
+        return type("RunView", (), {"id": self._context.run_id, "folder": self._context.run_folder})()
+
+    @property
+    def workflow(self) -> Any:
+        return type(
+            "WorkflowView",
+            (),
+            {"name": self._context.workflow_name, "folder": self._context.workflow_folder},
+        )()
+
+
+def _placeholder_ref(expression: str, *, source: str) -> PlaceholderRef:
+    raw = expression.strip()
+    if not raw:
+        return PlaceholderRef(raw="", root="", path=(), source=source)
+    root, *path = raw.split(".")
+    return PlaceholderRef(raw=raw, root=root, path=tuple(path), source=source)
+
+
+def _ref_parts(ref: PlaceholderRef) -> tuple[str, ...]:
+    if not ref.raw:
+        return ()
+    return (ref.root, *ref.path)
+
+
+def _is_safe_field_candidate(segment: str) -> bool:
+    return (
+        bool(segment)
+        and not segment.startswith("_")
+        and "__" not in segment
+        and not any(character.isspace() for character in segment)
+        and not any(character in _FORBIDDEN_CTX_SEGMENT_CHARS for character in segment)
+    )
+
+
+def _validate_branch_placeholder_reference(reference: str, *, step_name: str, allowed: bool) -> bool:
+    from .branch_groups.validation import validate_branch_placeholder_reference
+
+    return validate_branch_placeholder_reference(reference, step_name=step_name, allowed=allowed)
+
+
+def _validate_fan_in_placeholder_reference(reference: str, *, step_name: str, allowed: bool) -> bool:
+    from .branch_groups.validation import validate_fan_in_placeholder_reference
+
+    return validate_fan_in_placeholder_reference(reference, step_name=step_name, allowed=allowed)
+
+
+__all__ = [
+    "PlaceholderRef",
+    "SIMPLE_CONTEXT_BARE_NAMES",
+    "parse_placeholders",
+    "render_placeholder_ref",
+    "render_template_with_refs",
+    "validate_placeholder_ref",
+]

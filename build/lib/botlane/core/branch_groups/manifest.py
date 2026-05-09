@@ -31,7 +31,7 @@ def build_branch_manifest(
     started_at: str,
     finished_at: str,
     duration_ms: int,
-    branches: list[Mapping[str, Any]],
+    branches: list[object],
 ) -> dict[str, Any]:
     return {
         "schema": "botlane.branch_results/v1",
@@ -43,12 +43,12 @@ def build_branch_manifest(
         "concurrency": spec.concurrency,
         "settle": spec.settle,
         "success_routes": list(spec.success_routes),
-        "branches": list(branches),
+        "branches": [_branch_payload(branch) for branch in branches],
     }
 
 
 def render_branch_group_context(manifest: Mapping[str, Any]) -> str:
-    branches = list(manifest.get("branches", []))
+    branches = [_branch_payload(branch) for branch in manifest.get("branches", [])]
     counts = _status_counts(branches)
     failed_branches = [branch for branch in branches if branch.get("status") == "failed"]
     needs_input_branches = [branch for branch in branches if branch.get("status") == "needs_input"]
@@ -197,3 +197,14 @@ def branch_error_summary(branch: Mapping[str, Any]) -> str | None:
     error_type = error.get("type", "Error")
     message = error.get("message", "") or "(no message)"
     return f"{error_type}: {message}"
+
+
+def _branch_payload(branch: object) -> dict[str, Any]:
+    if isinstance(branch, Mapping):
+        return dict(branch)
+    to_manifest_dict = getattr(branch, "to_manifest_dict", None)
+    if callable(to_manifest_dict):
+        payload = to_manifest_dict()
+        if isinstance(payload, Mapping):
+            return dict(payload)
+    raise TypeError(f"unsupported branch manifest entry {type(branch)!r}")
