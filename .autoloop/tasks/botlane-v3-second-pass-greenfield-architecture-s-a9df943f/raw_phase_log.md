@@ -2139,3 +2139,63 @@ Open issues / next step
   - `.venv/bin/python -m pytest tests/runtime/test_runtime_static_graph.py::test_topology_artifacts_are_written_additively_with_canonical_finish_surface -q`
   - `.venv/bin/python -m pytest tests/contract/engine/test_prompt_context.py -q`
 - Next step is verifier re-review of the phase artifacts and updated compiler/engine boundary.
+
+
+---
+run_id=run-20260509T125912Z-8deb38fd | entry=session_turn | pair=implement | phase=verifier | cycle=2 | attempt=1 | thread_id=019e0d43-3dc9-76f0-90b1-4d54c4f1a863
+---
+provider=codex
+mode=resume
+template=/home/rauter/.local/share/pipx/venvs/autoloop/lib/python3.12/site-packages/autoloop/templates/implement_verifier.md
+session_id=019e0d43-3dc9-76f0-90b1-4d54c4f1a863
+
+
+---
+run_id=run-20260509T125912Z-8deb38fd | entry=phase_output | pair=implement | phase=verifier | process=codex-agent | cycle=2 | attempt=1 | thread_id=019e0d43-3dc9-76f0-90b1-4d54c4f1a863
+---
+I’m checking one adjacent public surface before I mark the phase complete: the producer preserved direct `Engine(...)` behavior, but the SDK compiles workflows through a different path. If invalid child-workflow message placeholders now escape there as validation errors instead of the existing SDK-wrapped execution failure, that would still be a user-facing regression.
+
+The SDK path does look different: `Botlane.run(...)` compiles before execution and does not normalize `WorkflowValidationError` there. I’m checking whether that already leaked raw validation errors before this phase or whether the new child-message validation created a fresh SDK-facing incompatibility.
+
+I want a concrete repro before I write a finding. If the SDK now leaks raw `WorkflowValidationError` for an invalid child-workflow message placeholder, that’s materially different from both the engine path and the SDK’s usual error-wrapping contract.
+
+I have a concrete SDK regression now, not just a theoretical concern: `Botlane.run(...)` leaks raw `WorkflowValidationError` for the new compile-time child-message validation. I’m confirming whether `Botlane.step(...)` is affected through the same path, then I’ll write the blocking finding and leave the criteria incomplete.
+
+The phase still isn’t complete. The compiler-side centralization is fixed, but it introduced a new public-surface inconsistency: SDK entrypoints now leak raw validation errors for child-workflow message placeholders because they compile before the usual SDK execution wrapper. I’m recording that as the remaining blocking finding.
+
+Scope considered
+
+- Phase-local re-review of the `placeholder-reference-graph` implementation.
+- Changed runtime/compiler surfaces relevant to placeholder validation and adjacent public entrypoints: `botlane/core/compiler.py`, `botlane/core/engine.py`, and `botlane/sdk.py`.
+- Active phase review artifacts only: [criteria.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/botlane-v3-second-pass-greenfield-architecture-s-a9df943f/runs/run-20260509T125912Z-8deb38fd/artifacts/implement/phases/placeholder-reference-graph/criteria.md), [feedback.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/botlane-v3-second-pass-greenfield-architecture-s-a9df943f/runs/run-20260509T125912Z-8deb38fd/artifacts/implement/phases/placeholder-reference-graph/feedback.md), and [implementation_notes.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/botlane-v3-second-pass-greenfield-architecture-s-a9df943f/runs/run-20260509T125912Z-8deb38fd/artifacts/implement/phases/placeholder-reference-graph/implementation_notes.md).
+
+What I analyzed
+
+- The new compiler-side placeholder validation in `botlane/core/compiler.py`.
+- The new direct-engine normalization in `botlane/core/engine.py`.
+- The SDK compile path in `botlane/sdk.py`, especially `_resolve_and_compile_workflow(...)` and how `Botlane.run(...)` / `Botlane.step(...)` surface failures.
+- Focused public-surface repros for invalid child-workflow message placeholders via direct SDK calls.
+
+What I reviewed
+
+- `IMP-001` is resolved: compiler-side validation now covers `workflow_step_message` and `artifact_template` refs.
+- A new public-surface regression remains: SDK entrypoints now leak raw `WorkflowValidationError` for the newly compile-time-validated child-workflow message placeholders.
+- I updated [feedback.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/botlane-v3-second-pass-greenfield-architecture-s-a9df943f/runs/run-20260509T125912Z-8deb38fd/artifacts/implement/phases/placeholder-reference-graph/feedback.md) with `IMP-002` and left [criteria.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/botlane-v3-second-pass-greenfield-architecture-s-a9df943f/runs/run-20260509T125912Z-8deb38fd/artifacts/implement/phases/placeholder-reference-graph/criteria.md) incomplete.
+
+Key findings / decisions
+
+- `IMP-002` is blocking. `Botlane.run(...)` and `Botlane.step(...)` now raise raw `WorkflowValidationError` for invalid child-workflow message placeholders because SDK compilation happens before the usual SDK execution wrapper.
+- Concrete repros from the current tree:
+  - `Botlane.run(Parent, message="hello")` where `Parent.launch = workflow_step(Child, message="{ctx.state.missing}")`
+  - `Botlane.step(simple.workflow_step(Child, name="launch", message="{ctx.state.missing}"), message="hello")`
+- Both currently raise `WorkflowValidationError: workflow step 'launch' message placeholder {ctx.state.missing} references unknown State field 'missing'`.
+- That is a user-facing compatibility regression against the frozen SDK behavior and exception-wrapping requirements, even though the direct `Engine(...)` path was preserved.
+
+Open issues / next step
+
+- Producer should fix the SDK compile boundary so compile-time placeholder-validation failures flow through the same SDK-facing error contract as other invocation failures.
+- After that, rerun the same two SDK repros and update the phase criteria accordingly.
+
+<loop-control>
+{"schema":"docloop.loop_control/v1","kind":"promise","promise":"INCOMPLETE"}
+</loop-control>
