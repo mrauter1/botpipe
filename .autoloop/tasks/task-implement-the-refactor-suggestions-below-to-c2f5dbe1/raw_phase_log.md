@@ -405,3 +405,76 @@ Open issues / next step
 <loop-control>
 {"schema":"docloop.loop_control/v1","kind":"promise","promise":"COMPLETE"}
 </loop-control>
+
+
+---
+run_id=run-20260509T124548Z-f67cf8d4 | entry=session_turn | pair=implement | phase=producer | cycle=1 | attempt=1 | thread_id=019e0cd5-521f-7d82-95d2-393e92f69ab8
+---
+provider=codex
+mode=start
+template=/home/rauter/.local/share/pipx/venvs/autoloop/lib/python3.12/site-packages/autoloop/templates/implement_producer.md
+session_id=019e0cd5-521f-7d82-95d2-393e92f69ab8
+
+
+---
+run_id=run-20260509T124548Z-f67cf8d4 | entry=phase_output | pair=implement | phase=producer | process=codex-agent | cycle=1 | attempt=1 | thread_id=019e0cd5-521f-7d82-95d2-393e92f69ab8
+---
+I’m starting with the active phase artifacts and the four target modules to pin down the accepted scope, current structure, and regression surfaces before editing.
+
+I’ve confirmed the phase boundaries and prior policy decisions. Next I’m reading the current implementations and the most relevant tests so the refactors stay behavior-identical.
+
+I have the main implementations. Now I’m tracing the adjacent helpers and existing regression tests that constrain exact behavior, especially for inventory conflicts and placeholder wording.
+
+The current tests already lock a lot of wording and serialization. I’m checking the lighter-covered inventory and plan-adapter cases now so I can add direct regression coverage where the phase contract asks for it.
+
+I have enough context to implement. Plan is: 1) split placeholder dispatch and artifact inventory into private helpers/builders, 2) refactor compiled-step rebuilding and branch-group rendering around registries/section helpers, 3) add direct regression tests, then run the targeted suites.
+
+Before editing inventory, I’m checking the `Artifact` binding behavior so the builder keeps the same rebind semantics and qualified-name updates.
+
+I’m starting edits in the placeholder validator and inventory collector. The goal is to split the current control flow without changing any wording, fallback path, or artifact binding behavior.
+
+Next I’m restructuring compiled-step rebuilding and branch-group context rendering. I’m keeping the emitted `CompiledStep` fields and markdown line order exactly as they are now, while moving the branching into private builders.
+
+I’ve finished the core refactors. I’m adding a small amount of direct coverage around the new dispatch and the inventory builder, then I’ll run the targeted suites to catch any parity drift.
+
+I’ve added the direct inventory coverage the phase asked for. Running the focused unit and contract suites now to catch any syntax, type, or parity regressions before I update the phase notes.
+
+The repo environment doesn’t expose `pytest` or `python` under those names. I’m locating the available interpreter/tooling and rerunning the same focused validation through that entrypoint.
+
+`python3` is available but this environment doesn’t have `pytest` installed into it. I’m checking for a project-local virtualenv or test runner so I can still execute the targeted suites instead of stopping at compile-only validation.
+
+The focused suite is mostly green so far; two new inventory tests are failing. I’m reading those failures and patching the builder/tests against the actual current behavior instead of guessing.
+
+I’ve fixed the builder/type mismatch and moved the conflict assertions to the actual failure point, which is class validation. Rerunning the same focused suites now.
+
+The code changes are green on the targeted suites. I’m recording the phase-specific implementation notes and the non-obvious decisions that future turns would otherwise have to rediscover.
+
+I’m writing the implementation notes against the phase checklist now. I’m also recording one decision about preserving current alias semantics and artifact traversal order, because both are easy places for a later turn to drift.
+
+I’m doing a last pass on the touched symbols and file locations so the close-out can point to the exact refactor entrypoints and the new direct regression coverage.
+
+**Scope considered**
+- Phase-local work only: placeholder validation, artifact inventory, compiled step rebuilding, and branch-group context rendering.
+- I reviewed the active phase artifacts, the current implementations, and the parity tests that lock wording, diagnostics, and serialized output.
+
+**What I analyzed**
+- Shared placeholder validation flow in [placeholders.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/botlane/core/placeholders.py:106) and the thin discovery wrapper in [discovery.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/botlane/core/discovery.py:1109).
+- Artifact binding/conflict behavior in [inventory.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/botlane/core/inventory.py:43), compiled-step reconstruction in [plan_adapters.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/botlane/core/plan_adapters.py:327), and branch-group markdown rendering in [manifest.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/botlane/core/branch_groups/manifest.py:50).
+- Existing parity coverage in `tests/unit/test_placeholder_refs.py`, `tests/unit/test_simple_surface.py`, `tests/unit/test_step_plans.py`, `tests/unit/test_route_contracts.py`, and `tests/contract/test_branch_result_serialization.py`.
+
+**What I changed**
+- Split simple-prompt validation into a dispatcher plus root-specific helpers, with the root registry in [placeholders.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/botlane/core/placeholders.py:969). The discovery-side wrapper stayed unchanged because it was already thin.
+- Replaced the nested inventory closure with a private builder in [inventory.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/botlane/core/inventory.py:82), keeping the same traversal order, conflict messages, producer rebind behavior, and workflow-level ownership rules.
+- Refactored `compiled_step_from_step_plan` into shared common-kwargs/fallback helpers plus a plan-type builder registry in [plan_adapters.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/botlane/core/plan_adapters.py:577).
+- Broke branch-group context generation into section renderers in [manifest.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/botlane/core/branch_groups/manifest.py:64) without changing the markdown output.
+- Added direct regression coverage for alias dispatch in [test_placeholder_refs.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/tests/unit/test_placeholder_refs.py:137) and new inventory-specific coverage in [test_inventory.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/tests/unit/test_inventory.py:19).
+
+**Key findings / decisions**
+- `artifacts.<name>` and `step.<name>` still route through the existing bare-reference semantics to preserve ambiguity and own-output behavior exactly.
+- Inventory registration order matters: workflow artifacts/logs still register before step writes so shared passive artifacts can rebind to a producer step exactly as before.
+- I updated the phase notes in [implementation_notes.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/task-implement-the-refactor-suggestions-below-to-c2f5dbe1/runs/run-20260509T124548Z-f67cf8d4/artifacts/implement/phases/authoring-and-builder-reducers/implementation_notes.md:1) and appended the non-obvious preservation rules under the current turn header in [decisions.txt](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/task-implement-the-refactor-suggestions-below-to-c2f5dbe1/runs/run-20260509T124548Z-f67cf8d4/decisions.txt:10).
+
+**Open issues / next step**
+- No open issues from this phase-local slice.
+- Validation passed with `119` targeted tests: `tests/unit/test_placeholder_refs.py`, `tests/unit/test_simple_surface.py`, `tests/unit/test_inventory.py`, `tests/unit/test_step_plans.py`, `tests/unit/test_route_contracts.py`, and `tests/contract/test_branch_result_serialization.py`.
+- I also ran `.venv/bin/python -m compileall` on the touched modules and the new direct inventory test.
