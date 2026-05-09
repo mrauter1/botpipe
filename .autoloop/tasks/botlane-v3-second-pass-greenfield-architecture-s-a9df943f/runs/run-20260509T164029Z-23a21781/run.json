@@ -15,12 +15,12 @@
       "canonical-single-step-and-finalization"
     ],
     "explicit": true,
-    "current_phase_index": 0,
-    "current_phase_id": "route-authority-cutover"
+    "current_phase_index": 1,
+    "current_phase_id": "execution-services-cutover"
   },
   "phase_status": {
-    "route-authority-cutover": "in_progress",
-    "execution-services-cutover": "planned",
+    "route-authority-cutover": "completed",
+    "execution-services-cutover": "in_progress",
     "canonical-single-step-and-finalization": "planned"
   },
   "phase_history": [
@@ -29,6 +29,19 @@
       "run_id": "run-20260509T164029Z-23a21781",
       "status": "in_progress",
       "ts": "2026-05-09T16:44:43.864563+00:00"
+    },
+    {
+      "phase_id": "route-authority-cutover",
+      "run_id": "run-20260509T164029Z-23a21781",
+      "status": "completed",
+      "ts": "2026-05-09T17:10:26.300659+00:00",
+      "pair": "test"
+    },
+    {
+      "phase_id": "execution-services-cutover",
+      "run_id": "run-20260509T164029Z-23a21781",
+      "status": "in_progress",
+      "ts": "2026-05-09T17:10:26.303784+00:00"
     }
   ]
 }

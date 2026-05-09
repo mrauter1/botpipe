@@ -20,3 +20,7 @@
 {"ts": "2026-05-09T17:09:14.394748+00:00", "run_id": "run-20260509T164029Z-23a21781", "seq": 20, "event_type": "phase_finished", "pair": "test", "phase": "producer", "cycle": 1, "attempt": 1, "empty_output": false, "phase_id": "route-authority-cutover"}
 {"ts": "2026-05-09T17:10:26.064110+00:00", "run_id": "run-20260509T164029Z-23a21781", "seq": 21, "event_type": "phase_finished", "pair": "test", "phase": "verifier", "cycle": 1, "attempt": 1, "empty_output": false, "phase_id": "route-authority-cutover"}
 {"ts": "2026-05-09T17:10:26.171758+00:00", "run_id": "run-20260509T164029Z-23a21781", "seq": 22, "event_type": "pair_completed", "pair": "test", "cycle": 1, "attempt": 1, "phase_id": "route-authority-cutover"}
+{"ts": "2026-05-09T17:10:26.301411+00:00", "run_id": "run-20260509T164029Z-23a21781", "seq": 23, "event_type": "phase_completed", "pair": "test", "phase_id": "route-authority-cutover", "phase_mode": "single"}
+{"ts": "2026-05-09T17:10:26.305098+00:00", "run_id": "run-20260509T164029Z-23a21781", "seq": 24, "event_type": "phase_started", "phase_id": "execution-services-cutover", "phase_mode": "single"}
+{"ts": "2026-05-09T17:10:26.309706+00:00", "run_id": "run-20260509T164029Z-23a21781", "seq": 25, "event_type": "pair_started", "pair": "implement", "phase_id": "execution-services-cutover"}
+{"ts": "2026-05-09T17:10:26.310001+00:00", "run_id": "run-20260509T164029Z-23a21781", "seq": 26, "event_type": "cycle_started", "pair": "implement", "cycle": 1, "attempt": 1, "phase_id": "execution-services-cutover"}
