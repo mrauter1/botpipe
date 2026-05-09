@@ -31,20 +31,24 @@
   `Context._run_paths`
   `Context._run_identity`
   `Engine.provider_policy_resolver`
+  `_DefaultProviderPolicyResolver`
   `OperationRuntime.provider_policy_resolver`
+  `inspect_workflow_reference`
+  `_resolve_reference`
+  `_resolved_from_catalog_entry`
+  `_resolve_workflow_class_reference`
 - Checklist mapping:
   Plan milestone 2 completed for the approved phase scope.
   Added the four primitive modules and the AST-aware core/runtime boundary test.
   Updated runtime `ProviderPolicyResolver` and core typing to use the new protocol.
   Deferred route, step, and workflow adapter bodies beyond ArtifactId conversions.
 - Assumptions:
-  Import-statement strictness is the enforceable boundary for this milestone, so `importlib` lookup is acceptable as an interim compatibility bridge.
   Private Context-backed `RunPaths` and `RunIdentity` are sufficient initial integration until the later ExecutionFrame phase.
 - Preserved invariants:
   No public root exports changed.
   No `botlane.core.__all__` changes.
   No SDK/simple signature changes.
-  No runtime execution flow changes beyond provider-policy resolver lookup plumbing.
+  No `botlane/core` runtime imports remain outside `TYPE_CHECKING`.
 - Intended behavior changes:
   None for public users; this is internal typing, identity, and strictness coverage only.
 - Known non-changes:
@@ -62,6 +66,9 @@
   `.venv/bin/python -m pytest tests/unit/test_simple_surface.py`
   `.venv/bin/python -m pytest tests/unit/test_sdk_facade.py`
   `.venv/bin/python -m pytest tests/strictness/test_no_compat.py`
+  `.venv/bin/python -m pytest tests/runtime/test_workflow_reference_resolution.py`
+  `.venv/bin/python -m pytest tests/unit/optimizer/test_selected_workflow_helpers.py`
+  `.venv/bin/python -m pytest tests/unit/test_artifact_ids.py tests/unit/test_run_paths.py tests/runtime/test_provider_policy_core_protocol.py tests/strictness/test_core_runtime_boundary.py tests/unit/test_simple_surface.py tests/unit/test_sdk_facade.py tests/strictness/test_no_compat.py tests/runtime/test_workflow_reference_resolution.py tests/unit/optimizer/test_selected_workflow_helpers.py`
 - Deduplication / centralization:
   Centralized ArtifactId conversion logic in `botlane/core/plan_adapters.py`.
-  Centralized runtime-loader lookup in `workflow_capabilities.py` and default provider-policy resolver lookup in `engine.py` to remove direct core runtime imports without broad refactors.
+  Centralized the core-only fallback provider-policy path in `engine.py` and the catalog-aware workflow capability resolution path in `workflow_capabilities.py` so the boundary fix does not depend on `botlane.runtime`.

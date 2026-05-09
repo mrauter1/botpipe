@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import importlib
+import inspect
 import sys
 from collections.abc import Mapping, Sequence
 from contextlib import contextmanager
@@ -11,19 +12,21 @@ from datetime import date, datetime, time
 from enum import Enum
 from pathlib import Path
 from copy import deepcopy
+from hashlib import sha1
 from types import ModuleType, UnionType
 from typing import Annotated, Any, Union, get_args, get_origin
 
 from pydantic import BaseModel
 
 from .compiler import CompiledWorkflow, compile_workflow
+from .descriptors import effective_parameters_model
 from .route_reporting import (
     payload_contract_for_route,
     provider_response_contract_for_routes,
     route_fields_contract_for_route,
 )
 from .validation import is_workflow_class
-from .workflow_catalog import AuthoringShape, WorkflowCatalogEntry, discover_workflow_catalog
+from .workflow_catalog import AuthoringShape, WorkflowCatalogEntry, discover_workflow_catalog, workflow_search_roots
 
 
 class WorkflowCapabilityInspectionError(LookupError):
@@ -37,6 +40,34 @@ class WorkflowLoadedPackage:
     workflow_cls: type[Any]
     parameters_cls: type[Any] | None
     compiled: CompiledWorkflow
+
+
+@dataclass(frozen=True, slots=True)
+class _CapabilityResolvedReference:
+    original: str
+    kind: str
+    workflow_name: str
+    title: str | None
+    description: str | None
+    aliases: tuple[str, ...]
+    class_name: str | None
+    module_name: str | None
+    source_path: Path | None
+    package_dir: Path
+    manifest_path: Path | None
+    authoring_shape: AuthoringShape
+    source_root_kind: str
+    source_root: Path | None = None
+    package_name: str | None = None
+    package_module: str | None = None
+    workflow_module: str | None = None
+
+
+@dataclass(frozen=True, slots=True)
+class _CapabilityResolvedWorkflow:
+    reference: _CapabilityResolvedReference
+    workflow_cls: type[Any]
+    parameters_cls: type[Any] | None
 
 
 @dataclass(frozen=True, slots=True)
@@ -515,10 +546,8 @@ def selected_workflow_decomposition_surface_payload(
 
 def _inspect_catalog_entry(root_path: Path, entry: WorkflowCatalogEntry) -> WorkflowCapabilityEntry:
     if entry.source_root_kind == "package" and entry.workflow_module is not None and entry.package_module is not None:
-        WorkflowReference = _runtime_loader_attr("WorkflowReference")
-        ResolvedWorkflow = _runtime_loader_attr("ResolvedWorkflow")
         loaded = load_workflow_package_contract(root_path, entry)
-        reference = WorkflowReference(
+        reference = _CapabilityResolvedReference(
             original=entry.workflow_name,
             kind="catalog_name",
             workflow_name=entry.workflow_name,
@@ -537,7 +566,11 @@ def _inspect_catalog_entry(root_path: Path, entry: WorkflowCatalogEntry) -> Work
             package_module=entry.package_module,
             workflow_module=entry.workflow_module,
         )
-        resolved = ResolvedWorkflow(reference=reference, workflow_cls=loaded.workflow_cls, parameters_cls=loaded.parameters_cls)
+        resolved = _CapabilityResolvedWorkflow(
+            reference=reference,
+            workflow_cls=loaded.workflow_cls,
+            parameters_cls=loaded.parameters_cls,
+        )
         compiled = loaded.compiled
     else:
         resolved = _resolve_reference(root_path, str(entry.source_path))
@@ -657,18 +690,424 @@ def _catalog_entry_for_reference(root_path: Path, reference) -> WorkflowCatalogE
 
 
 def _resolve_reference(root_path: Path, reference: str | type[Any]):
-    WorkflowDiscoveryError = _runtime_loader_attr("WorkflowDiscoveryError")
-    WorkflowManifestError = _runtime_loader_attr("WorkflowManifestError")
-    resolve_workflow_reference = _runtime_loader_attr("resolve_workflow_reference")
-    try:
-        return resolve_workflow_reference(root_path, reference)
-    except (WorkflowDiscoveryError, WorkflowManifestError) as exc:
-        raise WorkflowCapabilityInspectionError(str(exc)) from exc
+    if isinstance(reference, str):
+        base_reference, requested_class_name = _split_reference_class(reference)
+        if _is_path_reference(base_reference):
+            return _resolve_path_reference(
+                root_path,
+                original_reference=reference,
+                raw_path_reference=base_reference,
+                requested_class_name=requested_class_name,
+            )
+        if "." in base_reference:
+            return _resolve_module_reference(
+                root_path,
+                original_reference=reference,
+                module_name=base_reference,
+                requested_class_name=requested_class_name,
+            )
+        return _resolve_named_reference(
+            root_path,
+            original_reference=reference,
+            workflow_reference=base_reference,
+            requested_class_name=requested_class_name,
+        )
+    if not isinstance(reference, type):
+        raise WorkflowCapabilityInspectionError(f"unsupported workflow reference {reference!r}")
+    return _resolve_workflow_class_reference(root_path, reference)
 
 
-def _runtime_loader_attr(name: str) -> Any:
-    runtime_loader = importlib.import_module("botlane.runtime.loader")
-    return getattr(runtime_loader, name)
+def _resolve_named_reference(
+    root_path: Path,
+    *,
+    original_reference: str,
+    workflow_reference: str,
+    requested_class_name: str | None,
+) -> _CapabilityResolvedWorkflow:
+    entry = _catalog_entry_for_named_reference(root_path, workflow_reference)
+    if entry is None:
+        searched_roots = ", ".join(str(search_root.path) for search_root in workflow_search_roots(root_path))
+        raise WorkflowCapabilityInspectionError(
+            f"unknown workflow {workflow_reference!r} for workspace root {root_path}; searched roots: {searched_roots}"
+        )
+    return _resolved_from_catalog_entry(
+        root_path,
+        entry,
+        original=original_reference,
+        kind="catalog_name",
+        requested_class_name=requested_class_name,
+    )
+
+
+def _resolve_path_reference(
+    root_path: Path,
+    *,
+    original_reference: str,
+    raw_path_reference: str,
+    requested_class_name: str | None,
+) -> _CapabilityResolvedWorkflow:
+    path = _resolve_reference_path(root_path, raw_path_reference)
+    if not path.exists():
+        raise WorkflowCapabilityInspectionError(f"workflow path {path} does not exist")
+    entry = _catalog_entry_for_explicit_path(root_path, path)
+    if entry is not None:
+        kind = "workflow_directory" if path.is_dir() else "python_file"
+        return _resolved_from_catalog_entry(
+            root_path,
+            entry,
+            original=original_reference,
+            kind=kind,
+            requested_class_name=requested_class_name,
+        )
+    if path.is_dir():
+        for candidate in (path / "flow.py", path / "workflow.py"):
+            if candidate.is_file():
+                return _resolved_from_source_path(
+                    root_path,
+                    source_path=candidate,
+                    original=original_reference,
+                    kind="workflow_directory",
+                    requested_class_name=requested_class_name,
+                )
+        raise WorkflowCapabilityInspectionError(
+            f"workflow directory {path} must contain flow.py or workflow.py"
+        )
+    if path.suffix == ".toml":
+        for candidate in (path.parent / "flow.py", path.parent / "workflow.py"):
+            if candidate.is_file():
+                return _resolved_from_source_path(
+                    root_path,
+                    source_path=candidate,
+                    original=original_reference,
+                    kind="python_file",
+                    requested_class_name=requested_class_name,
+                )
+        raise WorkflowCapabilityInspectionError(f"workflow manifest {path} does not point to a loadable source file")
+    if path.suffix != ".py":
+        raise WorkflowCapabilityInspectionError(
+            f"workflow path {path} must be a Python file, workflow.toml, or directory"
+        )
+    return _resolved_from_source_path(
+        root_path,
+        source_path=path,
+        original=original_reference,
+        kind="python_file",
+        requested_class_name=requested_class_name,
+    )
+
+
+def _resolve_module_reference(
+    root_path: Path,
+    *,
+    original_reference: str,
+    module_name: str,
+    requested_class_name: str | None,
+) -> _CapabilityResolvedWorkflow:
+    module = _import_discovered_module(module_name, root_path)
+    workflow_cls = locate_workflow_class(module, class_name=requested_class_name)
+    source_path = _module_origin_path(module)
+    if source_path is None:
+        raise WorkflowCapabilityInspectionError(f"workflow module {module_name!r} does not have a filesystem source path")
+    entry = _catalog_entry_for_source_path(root_path, source_path.resolve())
+    return _resolved_from_workflow_class(
+        root_path,
+        workflow_cls,
+        original=original_reference,
+        kind="python_module",
+        catalog_entry=entry,
+        source_path=source_path.resolve(),
+    )
+
+
+def _resolve_workflow_class_reference(
+    root_path: Path,
+    workflow_cls: type[Any],
+) -> _CapabilityResolvedWorkflow:
+    source_path = Path(inspect.getfile(workflow_cls)).resolve()
+    entry = _catalog_entry_for_source_path(root_path, source_path)
+    if entry is not None:
+        return _resolved_from_catalog_entry(
+            root_path,
+            entry,
+            original=f"{workflow_cls.__module__}.{workflow_cls.__name__}",
+            kind="workflow_class",
+            requested_class_name=workflow_cls.__name__,
+        )
+    return _resolved_from_workflow_class(
+        root_path,
+        workflow_cls,
+        original=f"{workflow_cls.__module__}.{workflow_cls.__name__}",
+        kind="workflow_class",
+        catalog_entry=entry,
+        source_path=source_path,
+    )
+
+
+def _resolved_from_catalog_entry(
+    root_path: Path,
+    entry: WorkflowCatalogEntry,
+    *,
+    original: str,
+    kind: str,
+    requested_class_name: str | None,
+) -> _CapabilityResolvedWorkflow:
+    if entry.source_root_kind == "package" and entry.workflow_module is not None and entry.package_module is not None:
+        loaded = load_workflow_package_contract(root_path, entry)
+        if requested_class_name is not None and loaded.workflow_cls.__name__ != requested_class_name:
+            raise WorkflowCapabilityInspectionError(
+                f"workflow reference {original!r} resolved to {loaded.workflow_cls.__name__!r}; "
+                f"class {requested_class_name!r} was not found"
+            )
+        return _CapabilityResolvedWorkflow(
+            reference=_CapabilityResolvedReference(
+                original=original,
+                kind=kind,
+                workflow_name=entry.workflow_name,
+                title=entry.title,
+                description=entry.description,
+                aliases=entry.aliases,
+                class_name=loaded.workflow_cls.__name__,
+                module_name=loaded.workflow_cls.__module__,
+                source_path=entry.source_path,
+                package_dir=entry.package_dir,
+                manifest_path=entry.manifest_path,
+                authoring_shape=entry.authoring_shape,
+                source_root_kind=entry.source_root_kind,
+                source_root=entry.source_root,
+                package_name=entry.package_name,
+                package_module=entry.package_module,
+                workflow_module=entry.workflow_module,
+            ),
+            workflow_cls=loaded.workflow_cls,
+            parameters_cls=loaded.parameters_cls,
+        )
+    target_class_name = requested_class_name or entry.manifest_class
+    if entry.workflow_module is not None:
+        module = _import_discovered_module(entry.workflow_module, root_path)
+        workflow_cls = locate_workflow_class(module, class_name=target_class_name)
+        if entry.manifest_path is not None:
+            _apply_manifest_name_override(workflow_cls, entry.manifest_path)
+        if _should_load_catalog_entry_via_repo_module(entry, kind=kind):
+            parameters_cls = _resolve_repo_module_parameters_cls(
+                root_path,
+                workflow_cls,
+                module,
+                package_dir=entry.package_dir,
+                package_module_name=entry.package_module,
+            )
+            return _CapabilityResolvedWorkflow(
+                reference=_CapabilityResolvedReference(
+                    original=original,
+                    kind=kind,
+                    workflow_name=entry.workflow_name,
+                    title=entry.title,
+                    description=entry.description,
+                    aliases=entry.aliases,
+                    class_name=workflow_cls.__name__,
+                    module_name=workflow_cls.__module__,
+                    source_path=entry.source_path,
+                    package_dir=entry.package_dir,
+                    manifest_path=entry.manifest_path,
+                    authoring_shape=entry.authoring_shape,
+                    source_root_kind=entry.source_root_kind,
+                    source_root=entry.source_root,
+                    package_name=entry.package_name,
+                    package_module=entry.package_module,
+                    workflow_module=entry.workflow_module,
+                ),
+                workflow_cls=workflow_cls,
+                parameters_cls=parameters_cls,
+            )
+        return _resolved_from_workflow_class(
+            root_path,
+            workflow_cls,
+            original=original,
+            kind=kind,
+            catalog_entry=entry,
+            source_path=entry.source_path,
+        )
+    return _resolved_from_source_path(
+        root_path,
+        source_path=entry.source_path,
+        original=original,
+        kind=kind,
+        requested_class_name=target_class_name,
+        catalog_entry=entry,
+    )
+
+
+def _resolved_from_source_path(
+    root_path: Path,
+    *,
+    source_path: Path,
+    original: str,
+    kind: str,
+    requested_class_name: str | None,
+    catalog_entry: WorkflowCatalogEntry | None = None,
+) -> _CapabilityResolvedWorkflow:
+    module = _load_isolated_workflow_module(source_path)
+    workflow_cls = locate_workflow_class(module, class_name=requested_class_name)
+    return _resolved_from_workflow_class(
+        root_path,
+        workflow_cls,
+        original=original,
+        kind=kind,
+        catalog_entry=catalog_entry,
+        source_path=source_path.resolve(),
+    )
+
+
+def _resolved_from_workflow_class(
+    root_path: Path,
+    workflow_cls: type[Any],
+    *,
+    original: str,
+    kind: str,
+    catalog_entry: WorkflowCatalogEntry | None,
+    source_path: Path,
+) -> _CapabilityResolvedWorkflow:
+    compiled = compile_workflow(workflow_cls)
+    if catalog_entry is not None:
+        reference = _CapabilityResolvedReference(
+            original=original,
+            kind=kind,
+            workflow_name=catalog_entry.workflow_name,
+            title=catalog_entry.title,
+            description=catalog_entry.description,
+            aliases=catalog_entry.aliases,
+            class_name=workflow_cls.__name__,
+            module_name=workflow_cls.__module__,
+            source_path=catalog_entry.source_path,
+            package_dir=catalog_entry.package_dir,
+            manifest_path=catalog_entry.manifest_path,
+            authoring_shape=catalog_entry.authoring_shape,
+            source_root_kind=catalog_entry.source_root_kind,
+            source_root=catalog_entry.source_root,
+            package_name=catalog_entry.package_name,
+            package_module=catalog_entry.package_module,
+            workflow_module=catalog_entry.workflow_module,
+        )
+    else:
+        package_dir = source_path.parent
+        reference = _CapabilityResolvedReference(
+            original=original,
+            kind=kind,
+            workflow_name=compiled.workflow_name,
+            title=None,
+            description=None,
+            aliases=(),
+            class_name=workflow_cls.__name__,
+            module_name=workflow_cls.__module__,
+            source_path=source_path,
+            package_dir=package_dir,
+            manifest_path=None,
+            authoring_shape=_authoring_shape_for_source_path(source_path),
+            source_root_kind="workspace",
+            source_root=root_path,
+            package_name=package_dir.name,
+            package_module=None,
+            workflow_module=None,
+        )
+    return _CapabilityResolvedWorkflow(
+        reference=reference,
+        workflow_cls=workflow_cls,
+        parameters_cls=compiled.parameters_cls,
+    )
+
+
+def _split_reference_class(reference: str) -> tuple[str, str | None]:
+    base_reference, separator, requested_class_name = reference.partition(":")
+    if not separator:
+        return reference, None
+    if not requested_class_name.strip():
+        raise WorkflowCapabilityInspectionError(f"workflow reference {reference!r} must use a non-empty class name")
+    return base_reference, requested_class_name.strip()
+
+
+def _is_path_reference(reference: str) -> bool:
+    return (
+        reference.startswith(".")
+        or reference.startswith("/")
+        or "/" in reference
+        or "\\" in reference
+        or reference.endswith(".py")
+        or reference.endswith(".toml")
+    )
+
+
+def _resolve_reference_path(root_path: Path, reference: str) -> Path:
+    candidate = Path(reference)
+    if candidate.is_absolute():
+        return candidate.resolve()
+    return (root_path / candidate).resolve()
+
+
+def _catalog_entry_for_named_reference(root_path: Path, workflow_reference: str) -> WorkflowCatalogEntry | None:
+    for entry in discover_workflow_catalog(root_path):
+        if entry.workflow_name == workflow_reference or workflow_reference in entry.aliases:
+            return entry
+    return None
+
+
+def _catalog_entry_for_explicit_path(root_path: Path, path: Path) -> WorkflowCatalogEntry | None:
+    resolved_path = path.resolve()
+    for entry in discover_workflow_catalog(root_path, include_shadowed=True):
+        candidates = {
+            entry.source_path.resolve(),
+            entry.package_dir.resolve(),
+        }
+        if entry.manifest_path is not None:
+            candidates.add(entry.manifest_path.resolve())
+        if entry.flow_path is not None:
+            candidates.add(entry.flow_path.resolve())
+        if entry.workflow_py_path is not None:
+            candidates.add(entry.workflow_py_path.resolve())
+        if resolved_path in candidates:
+            return entry
+    return None
+
+
+def _catalog_entry_for_source_path(root_path: Path, source_path: Path) -> WorkflowCatalogEntry | None:
+    return _catalog_entry_for_explicit_path(root_path, source_path)
+
+
+def _should_load_catalog_entry_via_repo_module(
+    entry: WorkflowCatalogEntry,
+    *,
+    kind: str,
+) -> bool:
+    return (
+        kind in {"catalog_name", "workflow_class"}
+        and entry.source_root_kind == "workspace"
+        and entry.import_prefix == "workflows"
+        and entry.workflow_module is not None
+        and entry.package_module is not None
+    )
+
+
+def _load_isolated_workflow_module(source_path: Path) -> ModuleType:
+    source_path = source_path.resolve()
+    module_name = f"_botlane_capability_{sha1(str(source_path).encode('utf-8')).hexdigest()[:12]}"
+    for cached_name in tuple(sys.modules):
+        if cached_name == module_name or cached_name.startswith(f"{module_name}."):
+            sys.modules.pop(cached_name, None)
+    spec = importlib.util.spec_from_file_location(module_name, source_path)
+    if spec is None or spec.loader is None:
+        raise WorkflowCapabilityInspectionError(f"could not load workflow module from {source_path}")
+    module = importlib.util.module_from_spec(spec)
+    sys.modules[module_name] = module
+    spec.loader.exec_module(module)
+    return module
+
+
+def _authoring_shape_for_source_path(source_path: Path) -> AuthoringShape:
+    if source_path.name == "flow.py":
+        return "flow_package"
+    if source_path.name == "workflow.py":
+        return "workflow_package"
+    if source_path.name == "__init__.py":
+        return "manifest_package"
+    return "single_file"
 
 
 def _compiled_artifact_capability(name: str, artifact) -> WorkflowArtifactCapability:
@@ -1045,6 +1484,94 @@ def _validate_package_exports(
             f"workflow package {entry.package_name!r} must include 'Params' in __all__ when it is exported"
         )
     return parameters_cls
+
+
+def _resolve_repo_module_parameters_cls(
+    root_path: Path,
+    workflow_cls: type[Any],
+    module: ModuleType,
+    *,
+    package_dir: Path,
+    package_module_name: str | None,
+) -> type[Any] | None:
+    class_parameters = effective_parameters_model(workflow_cls)
+    if class_parameters is not None:
+        return _require_parameter_type(class_parameters, f"{workflow_cls.__name__}.Params")
+
+    module_params = getattr(module, "Params", None)
+    if module_params is not None:
+        return _require_parameter_type(module_params, f"{module.__name__}.Params")
+    if getattr(module, "Parameters", None) is not None:
+        raise WorkflowCapabilityInspectionError("Use Params, not Parameters.")
+
+    if package_module_name is not None:
+        exported = _load_repo_package_exported_parameters(root_path, package_module_name)
+        if exported is not None:
+            return exported
+
+    return _load_repo_parameters_from_params_py(
+        root_path,
+        package_dir,
+        package_module_name=package_module_name,
+    )
+
+
+def _load_repo_package_exported_parameters(root_path: Path, package_module_name: str) -> type[Any] | None:
+    package_module = _import_discovered_module(package_module_name, root_path)
+    exported = getattr(package_module, "Params", None)
+    if exported is None:
+        if getattr(package_module, "Parameters", None) is not None:
+            raise WorkflowCapabilityInspectionError("Use Params, not Parameters.")
+        return None
+    parameters_cls = _require_parameter_type(exported, f"{package_module_name}.Params")
+    package_all = getattr(package_module, "__all__", None)
+    if not isinstance(package_all, list):
+        raise WorkflowCapabilityInspectionError(f"workflow package {package_module_name!r} must define __all__ as a list")
+    if "Params" not in package_all:
+        raise WorkflowCapabilityInspectionError(
+            f"workflow package {package_module_name!r} must include 'Params' in __all__ when it is exported"
+        )
+    return parameters_cls
+
+
+def _load_repo_parameters_from_params_py(
+    root_path: Path,
+    package_dir: Path,
+    *,
+    package_module_name: str | None,
+) -> type[Any] | None:
+    params_path = package_dir / "params.py"
+    if not params_path.is_file():
+        return None
+    if package_module_name is not None:
+        params_module = _import_discovered_module(f"{package_module_name}.params", root_path)
+    else:
+        params_module = _load_isolated_workflow_module(params_path)
+    parameters_cls = getattr(params_module, "Params", None)
+    if parameters_cls is None:
+        if getattr(params_module, "Parameters", None) is not None:
+            raise WorkflowCapabilityInspectionError("Use Params, not Parameters.")
+        return None
+    return _require_parameter_type(parameters_cls, f"{params_module.__name__}.Params")
+
+
+def _require_parameter_type(candidate: Any, label: str) -> type[Any]:
+    if not isinstance(candidate, type):
+        raise WorkflowCapabilityInspectionError(f"workflow parameter symbol {label!r} must be a type")
+    return candidate
+
+
+def _apply_manifest_name_override(workflow_cls: type[Any], manifest_path: Path) -> None:
+    declared_name = getattr(workflow_cls, "name", None)
+    if isinstance(declared_name, str) and declared_name.strip():
+        return
+    try:
+        manifest = read_workflow_manifest(manifest_path, require_title_description=False)
+    except Exception:
+        return
+    manifest_name = manifest.get("name")
+    if isinstance(manifest_name, str) and manifest_name.strip():
+        setattr(workflow_cls, "name", manifest_name.strip())
 
 
 def _import_discovered_module(module_name: str, root_path: Path) -> ModuleType:

@@ -528,3 +528,85 @@ Open issues / next step
 <loop-control>
 {"schema":"docloop.loop_control/v1","kind":"promise","promise":"INCOMPLETE"}
 </loop-control>
+
+
+---
+run_id=run-20260509T045359Z-e2586b1f | entry=session_turn | pair=implement | phase=producer | cycle=2 | attempt=1 | thread_id=019e0b26-c7f5-7f41-8aef-b4659169d826
+---
+provider=codex
+mode=resume
+template=/home/rauter/.local/share/pipx/venvs/autoloop/lib/python3.12/site-packages/autoloop/templates/implement_producer.md
+session_id=019e0b26-c7f5-7f41-8aef-b4659169d826
+
+
+---
+run_id=run-20260509T045359Z-e2586b1f | entry=phase_output | pair=implement | phase=producer | process=codex-agent | cycle=2 | attempt=1 | thread_id=019e0b26-c7f5-7f41-8aef-b4659169d826
+---
+The reviewer’s point is valid: the AST test is green, but the boundary is still being crossed semantically. I’m reworking this to remove the runtime lookups from `botlane/core` instead of just hiding them.
+
+The harder part is `workflow_capabilities`: that core API currently leans on the runtime resolver for arbitrary references. I’m checking exactly which `inspect_workflow_reference(...)` cases are exercised so I can replace that dependency with the smallest internal resolver that preserves behavior.
+
+I’ve got the repair direction. `Engine` can use a small core-local default resolver for the zero-config case, and `workflow_capabilities` can resolve the handful of supported reference shapes directly from catalog/module/path state without touching `botlane.runtime`.
+
+The runtime lookups are out of `Engine`, and `workflow_capabilities` now has its own local reference resolution path. I’m checking the remaining `botlane/core` boundary and then rerunning the milestone tests plus the reference-inspection cases most likely to regress.
+
+The boundary scan is clean now. The first regression pass found at least one workflow-inspection failure, so I’m pulling that traceback before I rerun the full milestone bucket.
+
+Review feedback is pointing at the boundary fix itself, so I’m tightening the core/runtime split without widening scope. I’m checking the local resolver changes in `workflow_capabilities.py` and the new core-local policy resolver path, then I’ll patch only the failing compatibility surfaces and rerun the targeted suite.
+
+The failing surface is confined to the local workflow reference resolver I introduced to remove the runtime import. I’m reading the resolver helpers and the package-reference tests together, because the bug is now compatibility drift rather than a broad architectural issue.
+
+The local resolver is now too shallow for catalog-backed workflows. I’m comparing it directly to the runtime loader’s reference resolution so I can restore parity without reintroducing any core-to-runtime dependency.
+
+I have the concrete drift now: single-file references broke because `root_path` wasn’t threaded through, and named repo-package workflows lost `Params` because the local capability resolver compiled the class directly instead of following the repo-module/package-export path. I’m patching `workflow_capabilities.py` to mirror that runtime behavior locally, without bringing runtime imports back into `botlane/core`.
+
+I’ve narrowed the fix to one module. The next edit is purely compatibility repair inside `workflow_capabilities.py`: preserve repo-package parameter discovery and named-catalog semantics, while keeping `botlane/core` free of any runtime imports.
+
+The runtime reference-resolution bucket is back to green. One optimizer helper case is still failing, so I’m pulling the exact assertion now rather than widening the patch.
+
+The remaining failure path is `inspect_workflow_reference(root, workflow_cls)`. That call was still taking the bare compiled-class route, so it dropped package `Params` and catalog metadata. I’m switching imported classes that map to catalog entries back through the catalog-aware resolver.
+
+The compatibility drift is fixed in the targeted buckets. I’m rerunning the full phase validation set now, plus the two adjacent workflow-resolution suites I touched, to make sure the no-runtime-import repair didn’t create a narrow green path.
+
+The broader phase suite found a real regression outside the boundary checks: the new core-local fallback resolver doesn’t handle the “no policy at all” case the way the runtime path did. I’m comparing it against the existing runtime resolver now and patching just that defaulting behavior.
+
+The defaulting bug is isolated to the core fallback resolver. I’m aligning its base-candidate behavior with the runtime resolver so `Engine(...)` without an injected runtime policy still starts from the standard system default instead of `None`.
+
+The fallback resolver regression is cleared. I’m rerunning the full phase suite one more time so the final state reflects both fixes together: the boundary repair and the restored direct-`Engine` policy defaulting.
+
+I’ve finished the code changes. I’m updating the phase notes and the turn-local decision block now so the artifact trail reflects the final boundary approach, not the reviewer-rejected interim one.
+
+Scope considered
+
+- Phase-local `boundary-primitives-and-strictness` only.
+- I limited new code changes to [engine.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/botlane/core/engine.py), [workflow_capabilities.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/botlane/core/workflow_capabilities.py), and the active phase artifacts in `.autoloop/.../implementation_notes.md` and `decisions.txt`.
+- I ignored unrelated dirty workspace changes outside this phase scope.
+
+What I analyzed
+
+- Reviewer finding `IMP-001` in the active [feedback.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/botlane-internal-architecture-refactor-spec-this-3778d915/runs/run-20260509T045359Z-e2586b1f/artifacts/implement/phases/boundary-primitives-and-strictness/feedback.md).
+- Core/runtime boundary paths in `botlane/core/engine.py` and `botlane/core/workflow_capabilities.py`.
+- Runtime loader parity for workflow reference inspection, especially repo-package `Params`, aliases, and manifest metadata.
+- Direct `Engine(...)` policy-defaulting behavior after replacing the runtime-backed resolver path.
+
+What I changed
+
+- Replaced the semantic runtime bridge in [engine.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/botlane/core/engine.py) with a core-local `_DefaultProviderPolicyResolver` that starts from `SYSTEM_DEFAULT_PROVIDER_POLICY` and preserves direct `Engine(...)` behavior without importing `botlane.runtime`.
+- Reworked [workflow_capabilities.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/botlane/core/workflow_capabilities.py) so catalog-backed repo workflows are resolved locally in core, including repo-package `Params` discovery and imported-class inspection parity.
+- Routed imported workflow classes with matching catalog entries back through catalog-aware resolution so selected-workflow helper payloads stay identical to the runtime loader path.
+- Updated the active [implementation_notes.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/botlane-internal-architecture-refactor-spec-this-3778d915/runs/run-20260509T045359Z-e2586b1f/artifacts/implement/phases/boundary-primitives-and-strictness/implementation_notes.md) and appended the non-obvious final decisions under the current turn header in [decisions.txt](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/botlane-internal-architecture-refactor-spec-this-3778d915/runs/run-20260509T045359Z-e2586b1f/decisions.txt).
+
+Key findings / decisions
+
+- The reviewer was correct: replacing `from botlane.runtime ...` with `importlib.import_module(...)` still violated the intended boundary.
+- The safe fix was not to move ownership into runtime again, but to keep the needed compatibility logic inside `botlane/core`.
+- That boundary fix exposed one regression in direct `Engine(...)` execution: a missing default policy base. I repaired that by aligning the core fallback resolver with the runtime resolver’s defaulting model.
+- `botlane/core` now has no runtime imports outside `TYPE_CHECKING`, and the strictness grep/test stays green.
+
+Open issues / next step
+
+- Producer-side phase work is complete for the current reviewer finding.
+- Validation passed:
+  `.venv/bin/python -m pytest tests/unit/test_artifact_ids.py tests/unit/test_run_paths.py tests/runtime/test_provider_policy_core_protocol.py tests/strictness/test_core_runtime_boundary.py tests/unit/test_simple_surface.py tests/unit/test_sdk_facade.py tests/strictness/test_no_compat.py tests/runtime/test_workflow_reference_resolution.py tests/unit/optimizer/test_selected_workflow_helpers.py`
+- Result: `267 passed in 37.43s`.
+- Next step is verifier re-review of this phase.

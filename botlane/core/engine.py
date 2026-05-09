@@ -14,6 +14,7 @@ from typing import Any, Callable, Literal, Mapping
 from uuid import uuid4
 
 from pydantic import BaseModel, TypeAdapter
+from botlane.policy import resolve_policy_layer
 
 from .artifacts import Artifact, ArtifactHandle, ResolvedArtifacts, render_runtime_template, resolve_artifact_template
 from .branch_groups.runtime import BranchGroupRuntime
@@ -55,6 +56,12 @@ from .outcome_contract import (
     is_question_style_route,
     normalize_route_fields_for_route,
     project_questions_markdown,
+)
+from .provider_policy import (
+    ProviderPolicy,
+    ResolvedProviderPolicy,
+    SYSTEM_DEFAULT_PROVIDER_POLICY,
+    validate_against_strict_policy,
 )
 from .provider_policy_resolution import ProviderPolicyResolverProtocol
 from .primitives import AWAIT_INPUT, Checkpoint, Event, FAIL, FINISH, Fail, Goto, Outcome, PendingHandoff, RequestInput
@@ -138,22 +145,46 @@ class _DirectRuntimeControl:
     source_hook: str | None = None
     source_phase: str | None = None
 
+class _DefaultProviderPolicyResolver(ProviderPolicyResolverProtocol):
+    """Core-local fallback for direct Engine usage without runtime config."""
 
-def _create_default_provider_policy_resolver(
-    *,
-    workflow_policy: object,
-    workspace_root: Path,
-) -> ProviderPolicyResolverProtocol:
-    runtime_provider_policy_resolver = importlib.import_module(
-        "botlane.runtime.provider_policy_resolver"
-    )
-    factory = getattr(runtime_provider_policy_resolver, "create_provider_policy_resolver")
-    return factory(
-        sdk_default_policy=None,
-        workflow_policy=workflow_policy,
-        run_policy=None,
-        workspace_root=workspace_root,
-    )
+    def __init__(
+        self,
+        *,
+        workflow_policy: object,
+        workspace_root: Path,
+    ) -> None:
+        self._workflow_policy = workflow_policy
+        self._workspace_root = workspace_root
+
+    def resolve_for_step(self, step: Any) -> ResolvedProviderPolicy:
+        candidate = self._base_candidate()
+        candidate = resolve_policy_layer(candidate, getattr(step, "provider_policy", None))
+        return self._validate(candidate, step_name=getattr(step, "name", None))
+
+    def resolve_for_operation(
+        self,
+        ctx: Any | None,
+        explicit_policy: object = None,
+    ) -> ResolvedProviderPolicy:
+        inherited_policy = None if ctx is None else getattr(ctx, "_provider_policy", None)
+        if isinstance(inherited_policy, ProviderPolicy):
+            candidate = resolve_policy_layer(inherited_policy, explicit_policy)
+        else:
+            candidate = self._base_candidate()
+            candidate = resolve_policy_layer(candidate, explicit_policy)
+        return self._validate(candidate, step_name=None if ctx is None else getattr(ctx, "_step_name", None))
+
+    def _base_candidate(self) -> ProviderPolicy:
+        return resolve_policy_layer(SYSTEM_DEFAULT_PROVIDER_POLICY, self._workflow_policy)
+
+    def _validate(self, policy: ProviderPolicy, *, step_name: str | None) -> ResolvedProviderPolicy:
+        return validate_against_strict_policy(
+            policy,
+            None,
+            step_name=step_name,
+            workspace_root=self._workspace_root,
+        )
 
 
 class Engine:
@@ -271,7 +302,7 @@ class Engine:
         resolved_package_folder = package_folder or (root.resolve() if root is not None else task_folder)
         previous_provider_policy_resolver = self.provider_policy_resolver
         if previous_provider_policy_resolver is None:
-            self.provider_policy_resolver = _create_default_provider_policy_resolver(
+            self.provider_policy_resolver = _DefaultProviderPolicyResolver(
                 workflow_policy=self.compiled.provider_policy,
                 workspace_root=_resolve_context_root(
                     root=root,
