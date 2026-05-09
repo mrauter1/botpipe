@@ -164,10 +164,13 @@ def test_route_finalization_exposes_route_decision_for_finish_routes(tmp_path: P
     result = asyncio.run(engine.step_dispatcher.execute_async(step, context, context.state, ()))
 
     assert result.route_decision is not None
+    assert result.action == result.route_decision.action
     assert result.route_decision.final_route == "done"
     assert result.route_decision.contract is not None
     assert result.route_decision.contract.tag == "done"
     assert type(result.route_decision.action).__name__ == "Finish"
+    assert type(result.action).__name__ == "Finish"
+    assert not hasattr(result, "finalization")
 
 
 def test_route_finalization_exposes_route_decision_for_await_input_routes(tmp_path: Path) -> None:
@@ -200,9 +203,13 @@ def test_route_finalization_exposes_route_decision_for_await_input_routes(tmp_pa
     result = asyncio.run(engine.step_dispatcher.execute_async(step, context, context.state, ()))
 
     assert result.route_decision is not None
+    assert result.action == result.route_decision.action
     assert result.route_decision.final_route == "question"
     assert result.route_decision.contract is not None
     assert result.route_decision.contract.tag == "question"
     assert result.pending_input is not None
     assert type(result.route_decision.action).__name__ == "AwaitInput"
+    assert type(result.action).__name__ == "AwaitInput"
     assert result.route_decision.action.pending_input == result.pending_input
+    assert result.action.pending_input == result.pending_input
+    assert not hasattr(result, "finalization")

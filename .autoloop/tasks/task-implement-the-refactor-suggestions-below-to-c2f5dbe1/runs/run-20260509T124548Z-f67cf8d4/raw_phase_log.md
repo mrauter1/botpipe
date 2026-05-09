@@ -898,3 +898,57 @@ Open issues / next step
 
 - No remaining phase-local implementation blockers are known in the current tree.
 - Next step is rerunning the verifier against the updated artifacts and passing test state.
+
+
+---
+run_id=run-20260509T124548Z-f67cf8d4 | entry=session_turn | pair=implement | phase=verifier | cycle=3 | attempt=1 | thread_id=019e0ce8-ee70-7b01-8577-e4e1d171aaa2
+---
+provider=codex
+mode=resume
+template=/home/rauter/.local/share/pipx/venvs/autoloop/lib/python3.12/site-packages/autoloop/templates/implement_verifier.md
+session_id=019e0ce8-ee70-7b01-8577-e4e1d171aaa2
+
+
+---
+run_id=run-20260509T124548Z-f67cf8d4 | entry=phase_output | pair=implement | phase=verifier | process=codex-agent | cycle=3 | attempt=1 | thread_id=019e0ce8-ee70-7b01-8577-e4e1d171aaa2
+---
+Re-reviewing the current phase state against the last blockers, then I’ll update the review artifacts to either clear the phase or record any remaining risk.
+
+I’ve confirmed the structural fixes in the code and test file. Running the phase-local validation now to decide whether the criteria can be fully checked.
+
+The current phase-local evidence is enough to clear the review. I’m updating the criteria to complete and appending a resolution note so the feedback history stays append-only.
+
+Scope considered
+
+- Phase-local re-review of the runtime/discovery extraction deliverable in `botlane/core/engine.py`, `botlane/core/discovery.py`, the targeted test file, and the active phase artifacts only.
+
+What I analyzed
+
+- The previously reported restore/init fatal-context regression path in `Engine.run_async`.
+- The collaborator contract at the top of `engine.py` to confirm the route-finalization type drift is gone.
+- The executable status of the targeted parity test file and the implementation notes documenting the current validation state.
+
+What I reviewed
+
+- Updated [criteria.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/task-implement-the-refactor-suggestions-below-to-c2f5dbe1/runs/run-20260509T124548Z-f67cf8d4/artifacts/implement/phases/runtime-and-discovery-extraction/criteria.md) to mark all review criteria complete.
+- Appended `IMP-005` to [feedback.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/task-implement-the-refactor-suggestions-below-to-c2f5dbe1/runs/run-20260509T124548Z-f67cf8d4/artifacts/implement/phases/runtime-and-discovery-extraction/feedback.md) to record that the earlier blockers are now resolved.
+- Re-ran validation:
+  - `.venv/bin/python -m py_compile botlane/core/engine.py botlane/core/discovery.py tests/unit/test_runtime_and_discovery_extraction.py`
+  - `.venv/bin/python -m pytest tests/unit/test_runtime_and_discovery_extraction.py -q`
+  - Result: `3 passed in 0.37s`
+
+Key findings / decisions
+
+- No blocking findings remain in the current workspace.
+- `IMP-001` is resolved: `run_async()` now keeps a live `_RunLoopState` through restore/init, preserving fatal terminal context on initialization-path failures.
+- `IMP-002` and `IMP-004` are resolved: the phase-local test target now imports and runs successfully, and `engine.py` imports collaborator-owned `_StepRouteResult` rather than the stale `_RouteResolution` alias.
+- The implementation remains within the accepted phase scope and preserves the documented runtime/discovery invariants.
+
+Open issues / next step
+
+- No phase-local issues remain from this review pass.
+- Next step is to treat the runtime-and-discovery-extraction phase as complete and move on to downstream integration or broader suite validation if needed.
+
+<loop-control>
+{"schema":"docloop.loop_control/v1","kind":"promise","promise":"COMPLETE"}
+</loop-control>
