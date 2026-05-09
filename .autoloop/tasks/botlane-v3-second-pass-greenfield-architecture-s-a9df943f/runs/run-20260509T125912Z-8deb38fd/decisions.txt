@@ -1,1 +1,4 @@
 <autoloop-decisions-header version="1" block_seq="1" owner="planner" phase_id="task-global" pair="plan" turn_seq="1" run_id="run-20260509T125912Z-8deb38fd" ts="2026-05-09T12:59:12.627374+00:00" />
+Phase 2 must land as one atomic compiler and runtime cutover because engine_collaborators, SDK, runtime loader/runner/static_graph, and branch runtime still depend on compiled objects and plan adapters today.
+Use the existing canonical-looking modules for the second-pass types and fix their field shapes in place rather than adding parallel plan/runtime modules.
+Keep SingleStepPlan as the only one-step execution architecture; remove compile_workflow_plan and any synthetic one-step fallback instead of maintaining two internal paths.

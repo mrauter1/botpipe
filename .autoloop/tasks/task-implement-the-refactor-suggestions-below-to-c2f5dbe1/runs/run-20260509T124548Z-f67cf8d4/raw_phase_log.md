@@ -303,3 +303,105 @@ Open issues / next step
 <loop-control>
 {"schema":"docloop.loop_control/v1","kind":"promise","promise":"COMPLETE"}
 </loop-control>
+
+
+---
+run_id=run-20260509T124548Z-f67cf8d4 | entry=session_turn | pair=test | phase=producer | cycle=1 | attempt=1 | thread_id=019e0cca-d75f-78b3-8234-0179e453eea6
+---
+provider=codex
+mode=resume
+template=/home/rauter/.local/share/pipx/venvs/autoloop/lib/python3.12/site-packages/autoloop/templates/test_producer.md
+session_id=019e0cca-d75f-78b3-8234-0179e453eea6
+
+
+---
+run_id=run-20260509T124548Z-f67cf8d4 | entry=phase_output | pair=test | phase=producer | process=codex-agent | cycle=1 | attempt=1 | thread_id=019e0cca-d75f-78b3-8234-0179e453eea6
+---
+I’m checking the active test artifacts and the current policy/emitter tests first. The main question for this phase is whether we need any extra regression coverage beyond the implementation-time additions, especially on the simple-policy surface the phase deliverables call out explicitly.
+
+I found one useful coverage gap that’s still within scope: the runtime tests don’t directly lock Claude’s native effective-enforcement report, and the simple-policy suite still doesn’t exercise the exact validation messages on the `simple.Policy(...)` surface. I’m adding those tests now, then I’ll update the phase test artifacts and rerun the focused slice.
+
+The new tests are in. I’m running the focused runtime and policy suites in a temporary local venv again so I can verify the added effective-enforcement and simple-surface assertions without depending on the system Python state.
+
+The focused suites passed cleanly. I’m removing the temporary venv now so this turn leaves only the intended source, test, and phase-artifact changes.
+
+I’ve finished the code-side test work. I’m updating the phase test artifacts now with the behavior-to-coverage map, the extra simple-surface/effective-report decisions, and a concise summary of the added tests.
+
+Scope considered
+- Phase-local provider-policy translator testing only.
+- Updated focused regression coverage in `tests/runtime/test_provider_policy_emitters.py` and `tests/unit/test_simple_policy.py`.
+- Updated only the allowed phase artifacts: `test_strategy.md`, `feedback.md`, and the current-turn block in `decisions.txt`.
+
+What I analyzed
+- The refactored Codex and Claude emitter paths, with emphasis on permission-mode translation, capability-report parity, and effective-enforcement reporting.
+- The public/simple policy validation surfaces to confirm the refactor did not drift exact user-facing incompatibility messages.
+- Existing provider-policy tests to avoid redundant churn and target the remaining gaps.
+
+What I changed
+- Added a Claude native effective-enforcement regression test at [tests/runtime/test_provider_policy_emitters.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/tests/runtime/test_provider_policy_emitters.py:425).
+- Added exact-message coverage for the `simple.Policy(...)` surface at [tests/unit/test_simple_policy.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/tests/unit/test_simple_policy.py:223).
+- Updated the behavior-to-coverage map in [test_strategy.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/task-implement-the-refactor-suggestions-below-to-c2f5dbe1/runs/run-20260509T124548Z-f67cf8d4/artifacts/test/phases/provider-policy-translators/test_strategy.md:1).
+- Appended the test summary in [feedback.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/task-implement-the-refactor-suggestions-below-to-c2f5dbe1/runs/run-20260509T124548Z-f67cf8d4/artifacts/test/phases/provider-policy-translators/feedback.md:1).
+- Recorded the non-obvious test-scope decisions in [decisions.txt](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/task-implement-the-refactor-suggestions-below-to-c2f5dbe1/runs/run-20260509T124548Z-f67cf8d4/decisions.txt:12).
+
+Key findings / decisions
+- The main remaining gap was capability-report parity on Claude’s native enforcement path, so I added a direct assertion for `effective_enforcement`.
+- The simple-policy deliverable needed explicit regression coverage on the `simple.Policy(...)` surface, so I added exact-message checks there rather than duplicating the full `test_policy.py` matrix.
+- Validation run:
+  - `.autoloop_test_venv/bin/python -m pytest tests/runtime/test_provider_policy_emitters.py tests/unit/test_policy.py tests/unit/test_simple_policy.py tests/runtime/test_provider_policy_config.py`
+  - Result: `77 passed`
+
+Open issues / next step
+- No open issues in this phase.
+- The test slice now covers provider-policy payload/CLI parity, effective-enforcement parity, and both public/simple policy validation wording for the refactored area.
+
+<loop-control>
+{"schema":"docloop.loop_control/v1","kind":"promise","promise":"COMPLETE"}
+</loop-control>
+
+
+---
+run_id=run-20260509T124548Z-f67cf8d4 | entry=session_turn | pair=test | phase=verifier | cycle=1 | attempt=1 | thread_id=019e0cca-d75f-78b3-8234-0179e453eea6
+---
+provider=codex
+mode=resume
+template=/home/rauter/.local/share/pipx/venvs/autoloop/lib/python3.12/site-packages/autoloop/templates/test_verifier.md
+session_id=019e0cca-d75f-78b3-8234-0179e453eea6
+
+
+---
+run_id=run-20260509T124548Z-f67cf8d4 | entry=phase_output | pair=test | phase=verifier | process=codex-agent | cycle=1 | attempt=1 | thread_id=019e0cca-d75f-78b3-8234-0179e453eea6
+---
+I’m auditing the provider-policy test slice against the phase contract first: reading the test artifacts, then checking the new runtime/simple-policy coverage to see whether any material regression path is still untested or normalized incorrectly.
+
+I’ve got the artifact intent and the test-author decisions. I’m reading the concrete test bodies now to verify they actually lock the claimed parity paths and don’t silently normalize any unsupported behavior.
+
+The added tests are aligned with the phase intent and they target the high-risk seams introduced by the refactor. I’m marking the audit artifacts now; I don’t see any blocking or non-blocking test-quality issues in this slice.
+
+Scope considered
+- Phase-local test audit only for the provider-policy translator slice.
+- Reviewed the active test artifacts and the changed tests in `tests/runtime/test_provider_policy_emitters.py`, `tests/unit/test_policy.py`, and `tests/unit/test_simple_policy.py`.
+- Updated only the audit-owned artifacts in the active phase directory.
+
+What I analyzed
+- The phase contract, acceptance criteria, and run decisions for required regression coverage.
+- The behavior-to-coverage map in `test_strategy.md`.
+- The concrete test bodies that were added for Claude effective-enforcement parity and `simple.Policy(...)` exact-message parity.
+
+What I reviewed
+- Coverage of new/changed behavior: Codex mode mapping, unsupported/lossy paths, Claude mode/CLI/effective-enforcement paths, and public/simple policy validation wording.
+- Failure-path depth: unsupported permission modes, disabled sandbox handling, dangerous-bypass incompatibility, limited-network-without-domains, and read-only/write conflicts.
+- Reliability: deterministic tmp-path usage, exact tuple/string assertions only where ordering is contractual, and no timing/network dependencies.
+
+Key findings / decisions
+- No blocking findings.
+- No non-blocking findings.
+- `criteria.md` is fully checked and `feedback.md` records a clean audit result.
+
+Open issues / next step
+- No open issues in this phase.
+- The provider-policy translator test slice is complete from a test-audit perspective.
+
+<loop-control>
+{"schema":"docloop.loop_control/v1","kind":"promise","promise":"COMPLETE"}
+</loop-control>
