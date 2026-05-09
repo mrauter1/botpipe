@@ -791,3 +791,52 @@ Validation passed:
 **Open issues / next step**
 
 No blocker remains in this phase. The one warning in `tests/unit/test_provider_boundary_core.py:661` was present during the full-suite rerun and is unchanged by this work.
+
+
+---
+run_id=run-20260509T033701Z-27394e99 | entry=session_turn | pair=implement | phase=verifier | cycle=1 | attempt=1 | thread_id=019e0ad5-7cc7-72c1-ab1f-9e5b7fa297c3
+---
+provider=codex
+mode=resume
+template=/home/rauter/.local/share/pipx/venvs/autoloop/lib/python3.12/site-packages/autoloop/templates/implement_verifier.md
+session_id=019e0ad5-7cc7-72c1-ab1f-9e5b7fa297c3
+
+
+---
+run_id=run-20260509T033701Z-27394e99 | entry=phase_output | pair=implement | phase=verifier | process=codex-agent | cycle=1 | attempt=1 | thread_id=019e0ad5-7cc7-72c1-ab1f-9e5b7fa297c3
+---
+I’m auditing the implementation against the phase contract now. First I’m reading the reviewer artifacts and the scoped diffs so I can verify the new artifact policy, exception inventory, and validation claims before I touch `criteria.md` or `feedback.md`.
+
+The implementation notes and decision ledger line up with the accepted plan. I’m spot-checking the new strictness helpers and inventories directly now to make sure the exception policy matches what the tests actually enforce.
+
+I found one material miss already: the maintained gap ledger still contains `recursive_autoloop/`, and the new strictness patterns don’t look for that token. I’m checking whether that is isolated or part of a broader pattern before I write the finding.
+
+I found a real blocker: the implementation leaves one `recursive_autoloop/` literal in a maintained recursive-memory file, and the new strictness patterns never scan for that token. I’m recording that in the reviewer artifacts and marking the phase incomplete.
+
+Scope considered
+
+Phase-local review of the strictness policy change in `tests/strictness/test_no_compat.py`, the maintained repo-root recursive-memory files that were edited, the active implementation notes, and the run-local decision ledger. I kept unrelated dirty files out of scope.
+
+What I analyzed
+
+I checked the new artifact-policy inventories, the exact exception sets for the recursive-memory tree and active current-run tree, and the updated recursive-memory docs/script against the request’s no-compat contract. I also compared the implemented legacy-branding scanner against the actual remaining literals in the maintained recursive-memory files.
+
+What I reviewed
+
+I reviewed the updated strictness helpers/tests, the cleaned recursive-memory files, the implementation notes, and the recorded validation claims. I also spot-checked the maintained recursive-memory tree with a direct `recursive_autoloop` search to confirm the scanner’s effective coverage.
+
+Key findings / decisions
+
+I recorded one blocking finding in `feedback.md` as `IMP-001`.
+
+The blocker is that the implementation still leaves `recursive_autoloop/` in `.autoloop_recursive/framework_gap_ledger.md:216`, and the new `LEGACY_BRANDING_PATTERNS` in `tests/strictness/test_no_compat.py` do not scan for `recursive_autoloop`. That means the targeted strictness suite can pass while a required legacy token remains in maintained in-contract artifact content, which misses AC-2 and weakens the regression coverage requested in AC-1/AC-3.
+
+I updated `criteria.md` to leave `Correctness / Intent Fidelity` and `Maintainability / Validation` unchecked and marked the remaining dimensions that still hold.
+
+Open issues / next step
+
+Minimal next step: remove the remaining `recursive_autoloop/` literal from the maintained gap ledger and extend the repo-root branding scan to fail on `recursive_autoloop` as an exact forbidden legacy token, then rerun the strictness slice and full pytest suite.
+
+<loop-control>
+{"schema":"docloop.loop_control/v1","kind":"promise","promise":"INCOMPLETE"}
+</loop-control>
