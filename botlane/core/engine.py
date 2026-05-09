@@ -921,6 +921,11 @@ class Engine:
                 )
             failure_state = step_result.state
             failure_handoffs = step_result.pending_handoffs
+            loop.state = step_result.state
+            loop.pending_handoffs = step_result.pending_handoffs
+            loop.last_event = step_result.event
+            loop.last_outcome = step_result.outcome
+            loop.last_transition = step_result.transition
             self._emit_after_step_notification(env, frame, state_before, step_result)
         except Exception as exc:
             loop.checkpoint = self._save_loop_checkpoint(

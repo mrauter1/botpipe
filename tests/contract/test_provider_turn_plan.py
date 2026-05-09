@@ -3,16 +3,19 @@ from __future__ import annotations
 import asyncio
 from dataclasses import dataclass
 from pathlib import Path
+from typing import get_args
 
 from pydantic import BaseModel
 
 import botlane.simple as simple
+from botlane.core.compiler import compile_workflow
 from botlane.core.context import Context
 from botlane.core.engine import Engine
 from botlane.core.primitives import Outcome
 from botlane.core.providers.fake import ScriptedLLMProvider
 from botlane.core.providers.rendered import RenderedLLMProvider
 from botlane.core.providers.turns import ProviderTurnResult, RenderedProviderTurn
+from botlane.core.step_plans import ProduceVerifyStepPlan, PromptStepPlan, ProviderTurnKind
 from botlane.core.stores import InMemoryCheckpointStore, InMemorySessionStore
 
 
@@ -66,6 +69,30 @@ def _build_step_context(engine: Engine, tmp_path: Path, *, step_name: str) -> tu
     context._execution_frame.set_values(context._values)
     context._execution_frame.set_meta({"step": {"name": step.name, "kind": step.kind, "visits": 1, "last_route": None}})
     return step, context
+
+
+def test_compiler_emits_provider_turn_plans_for_provider_backed_steps() -> None:
+    class ProviderWorkflow(simple.Workflow):
+        class State(BaseModel):
+            pass
+
+        ask = simple.step("Ask the provider.", name="ask", routes={"next": "review"})
+        review = simple.produce_verify_step(
+            producer_prompt="Draft the report.",
+            verifier_prompt="Review the report.",
+            name="review",
+            routes={"accepted": simple.FINISH},
+        )
+
+    compiled = compile_workflow(ProviderWorkflow)
+
+    assert isinstance(compiled.steps["ask"], PromptStepPlan)
+    assert compiled.steps["ask"].turn.kind == "llm"
+    assert isinstance(compiled.steps["review"], ProduceVerifyStepPlan)
+    assert compiled.steps["review"].producer.kind == "producer"
+    assert compiled.steps["review"].verifier.kind == "verifier"
+    assert set(get_args(ProviderTurnKind)) == {"llm", "producer", "verifier"}
+    assert "operation" not in get_args(ProviderTurnKind)
 
 
 def test_prompt_provider_turn_plan_keeps_rendered_transport_boundary(tmp_path: Path) -> None:

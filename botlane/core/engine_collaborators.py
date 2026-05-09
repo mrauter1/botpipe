@@ -161,20 +161,6 @@ class ProviderExecResult:
     outcome: Outcome | None = None
 
 
-def _prompt_step_plan_for_execution(engine: "Engine", step: StepPlan) -> PromptStepPlan | None:
-    del engine
-    if isinstance(step, PromptStepPlan):
-        return step
-    return None
-
-
-def _pair_step_plan_for_execution(engine: "Engine", step: StepPlan) -> ProduceVerifyStepPlan | None:
-    del engine
-    if isinstance(step, ProduceVerifyStepPlan):
-        return step
-    return None
-
-
 def _compiled_read_name(value: ReadRef) -> str:
     if isinstance(value, ArtifactId):
         return value.qualified_name
@@ -193,10 +179,6 @@ def _compiled_require_name(value: RequireRef) -> str:
 
 def _compiled_write_name(value: WriteRef) -> str:
     return value.qualified_name
-
-
-def _turn_has_supported_required_refs(turn: ProviderTurnPlan) -> bool:
-    return all(isinstance(value, ArtifactId) for value in turn.io.requires)
 
 
 def _route_action_from_direct_control(result: _StepRouteResult) -> RouteAction:
@@ -221,7 +203,7 @@ class ProviderContractBuilder:
 
     def control_contract(
         self,
-        step: StepPlan,
+        step: PromptStepPlan,
         *,
         context: "Context",
         artifacts: ResolvedArtifacts,
@@ -229,43 +211,21 @@ class ProviderContractBuilder:
         max_attempts: int,
         retry_feedback: str | None,
         route_handoff: str | None,
-        turn: ProviderTurnPlan | None = None,
     ) -> dict[str, Any]:
-        if turn is not None and _turn_has_supported_required_refs(turn):
-            return self._provider_turn_contract(
-                step,
-                turn,
-                context=context,
-                artifacts=artifacts,
-                attempt=attempt,
-                max_attempts=max_attempts,
-                retry_feedback=retry_feedback,
-                route_handoff=route_handoff,
-            )
-        routes = self.routes(step)
-        response_schema, response_schema_simplified = build_provider_outcome_schema(
-            routes=routes,
-            expected_output_schema=step.expected_output_schema,
+        return self._provider_turn_contract(
+            step,
+            step.turn,
+            context=context,
+            artifacts=artifacts,
+            attempt=attempt,
+            max_attempts=max_attempts,
+            retry_feedback=retry_feedback,
+            route_handoff=route_handoff,
         )
-        return {
-            "expected_output_schema": deepcopy(step.expected_output_schema),
-            "available_routes": self.available_routes(step),
-            "routes": deepcopy(routes),
-            "readable_artifacts": self.readable_refs(step.reads, artifacts, context=context),
-            "required_artifacts": self.artifact_refs(step.requires, artifacts),
-            "writable_artifacts": self.artifact_refs(step.writes, artifacts),
-            "route_required_writes": self.route_required_writes(step),
-            "response_schema": response_schema,
-            "response_schema_simplified": response_schema_simplified,
-            "retry_feedback": retry_feedback,
-            "route_handoff": route_handoff,
-            "attempt": attempt,
-            "max_attempts": max_attempts,
-        }
 
     def pair_producer_contract(
         self,
-        step: StepPlan,
+        step: ProduceVerifyStepPlan,
         *,
         context: "Context",
         artifacts: ResolvedArtifacts,
@@ -273,38 +233,21 @@ class ProviderContractBuilder:
         max_attempts: int,
         retry_feedback: str | None,
         route_handoff: str | None,
-        turn: ProviderTurnPlan | None = None,
     ) -> dict[str, Any]:
-        if turn is not None and _turn_has_supported_required_refs(turn):
-            return self._provider_turn_contract(
-                step,
-                turn,
-                context=context,
-                artifacts=artifacts,
-                attempt=attempt,
-                max_attempts=max_attempts,
-                retry_feedback=retry_feedback,
-                route_handoff=route_handoff,
-            )
-        return {
-            "expected_output_schema": None,
-            "available_routes": (),
-            "routes": {},
-            "readable_artifacts": self.readable_refs(step.producer_reads, artifacts, context=context),
-            "required_artifacts": self.artifact_refs(step.producer_requires, artifacts),
-            "writable_artifacts": self.artifact_refs(step.producer_writes, artifacts),
-            "route_required_writes": {},
-            "response_schema": None,
-            "response_schema_simplified": False,
-            "retry_feedback": retry_feedback,
-            "route_handoff": route_handoff,
-            "attempt": attempt,
-            "max_attempts": max_attempts,
-        }
+        return self._provider_turn_contract(
+            step,
+            step.producer,
+            context=context,
+            artifacts=artifacts,
+            attempt=attempt,
+            max_attempts=max_attempts,
+            retry_feedback=retry_feedback,
+            route_handoff=route_handoff,
+        )
 
     def pair_verifier_contract(
         self,
-        step: StepPlan,
+        step: ProduceVerifyStepPlan,
         *,
         context: "Context",
         artifacts: ResolvedArtifacts,
@@ -312,41 +255,17 @@ class ProviderContractBuilder:
         max_attempts: int,
         retry_feedback: str | None,
         route_handoff: str | None,
-        turn: ProviderTurnPlan | None = None,
     ) -> dict[str, Any]:
-        if turn is not None and _turn_has_supported_required_refs(turn):
-            return self._provider_turn_contract(
-                step,
-                turn,
-                context=context,
-                artifacts=artifacts,
-                attempt=attempt,
-                max_attempts=max_attempts,
-                retry_feedback=retry_feedback,
-                route_handoff=route_handoff,
-            )
-        readable_names = tuple(dict.fromkeys(step.verifier_reads))
-        writable_names = step.verifier_writes or step.writes
-        routes = self.routes(step)
-        response_schema, response_schema_simplified = build_provider_outcome_schema(
-            routes=routes,
-            expected_output_schema=step.expected_output_schema,
+        return self._provider_turn_contract(
+            step,
+            step.verifier,
+            context=context,
+            artifacts=artifacts,
+            attempt=attempt,
+            max_attempts=max_attempts,
+            retry_feedback=retry_feedback,
+            route_handoff=route_handoff,
         )
-        return {
-            "expected_output_schema": deepcopy(step.expected_output_schema),
-            "available_routes": self.available_routes(step),
-            "routes": deepcopy(routes),
-            "readable_artifacts": self.readable_refs(readable_names, artifacts, context=context),
-            "required_artifacts": self.artifact_refs(step.verifier_requires, artifacts),
-            "writable_artifacts": self.artifact_refs(writable_names, artifacts),
-            "route_required_writes": self.route_required_writes(step),
-            "response_schema": response_schema,
-            "response_schema_simplified": response_schema_simplified,
-            "retry_feedback": retry_feedback,
-            "route_handoff": route_handoff,
-            "attempt": attempt,
-            "max_attempts": max_attempts,
-        }
 
     def _provider_turn_contract(
         self,
@@ -571,7 +490,7 @@ class ProviderContractBuilder:
 
 
 class StepDispatcher:
-    """Dispatches one compiled step through the engine execution path."""
+    """Dispatches one workflow step plan through the engine execution path."""
 
     def __init__(self, engine: "Engine") -> None:
         self._engine = engine
@@ -858,24 +777,22 @@ class StepDispatcher:
 
     async def _execute_pair_step_async(
         self,
-        step: StepPlan,
+        step: ProduceVerifyStepPlan,
         context: "Context",
         state: BaseModel,
         pending_handoffs: tuple["PendingHandoff", ...],
         *,
         route_mode: RouteMode,
     ) -> StepExecutionResult:
-        pair_plan = _pair_step_plan_for_execution(self._engine, step)
         baseline_session = self._engine._resolve_session(step, context)
         route_handoff, remaining_pending_handoffs = self._engine._matching_pending_handoffs(step, context, pending_handoffs)
         retry_feedback: str | None = None
-        max_attempts = pair_plan.producer.retry_policy.max_attempts if pair_plan is not None else step.retry_policy.max_attempts
+        max_attempts = step.producer.retry_policy.max_attempts
         for attempt in range(1, max_attempts + 1):
             artifacts = self._engine._resolve_artifacts(context)
             try:
                 pair_result = await self._run_pair_step_async(
                     step,
-                    pair_plan,
                     context,
                     state,
                     artifacts,
@@ -976,24 +893,22 @@ class StepDispatcher:
 
     async def _execute_llm_step_async(
         self,
-        step: StepPlan,
+        step: PromptStepPlan,
         context: "Context",
         state: BaseModel,
         pending_handoffs: tuple["PendingHandoff", ...],
         *,
         route_mode: RouteMode,
     ) -> StepExecutionResult:
-        prompt_plan = _prompt_step_plan_for_execution(self._engine, step)
         baseline_session = self._engine._resolve_session(step, context)
         route_handoff, remaining_pending_handoffs = self._engine._matching_pending_handoffs(step, context, pending_handoffs)
         retry_feedback: str | None = None
-        max_attempts = prompt_plan.turn.retry_policy.max_attempts if prompt_plan is not None else step.retry_policy.max_attempts
+        max_attempts = step.turn.retry_policy.max_attempts
         for attempt in range(1, max_attempts + 1):
             artifacts = self._engine._resolve_artifacts(context)
             try:
                 llm_result = await self._run_llm_step_async(
                     step,
-                    prompt_plan,
                     context,
                     artifacts,
                     baseline_session,
@@ -1044,8 +959,7 @@ class StepDispatcher:
 
     async def _run_pair_step_async(
         self,
-        step: StepPlan,
-        plan: ProduceVerifyStepPlan | None,
+        step: ProduceVerifyStepPlan,
         context: "Context",
         state: BaseModel,
         artifacts: ResolvedArtifacts,
@@ -1102,10 +1016,7 @@ class StepDispatcher:
                 source_phase="before_producer",
             )
 
-        producer_prompt = self._engine._resolve_prompt(
-            plan.producer.prompt if plan is not None else step.producer_prompt,
-            context=context,
-        )
+        producer_prompt = self._engine._resolve_prompt(step.producer.prompt, context=context)
         self._engine._emit_provider_attempt_event(
             "provider_attempt_started",
             step=step,
@@ -1129,7 +1040,6 @@ class StepDispatcher:
                     max_attempts=max_attempts,
                     retry_feedback=retry_feedback,
                     route_handoff=route_handoff,
-                    turn=None if plan is None else plan.producer,
                 ),
             )
             producer_response = await self._call_provider(
@@ -1250,10 +1160,7 @@ class StepDispatcher:
                     source_hook=getattr(step.before_verifier_hook, "__name__", type(step.before_verifier_hook).__name__),
                     source_phase="before_verifier",
                 )
-            verifier_prompt = self._engine._resolve_prompt(
-                plan.verifier.prompt if plan is not None else step.verifier_prompt,
-                context=context,
-            )
+            verifier_prompt = self._engine._resolve_prompt(step.verifier.prompt, context=context)
             verifier_session = self._engine._resolve_pair_review_session(
                 step,
                 context,
@@ -1277,15 +1184,14 @@ class StepDispatcher:
                     policy=_context_provider_policy(context),
                     **self._engine.provider_contract_builder.pair_verifier_contract(
                         step,
-                        context=context,
-                        artifacts=review_artifacts,
-                        attempt=attempt,
-                        max_attempts=max_attempts,
-                        retry_feedback=retry_feedback,
-                        route_handoff=route_handoff,
-                        turn=None if plan is None else plan.verifier,
-                    ),
-                )
+                    context=context,
+                    artifacts=review_artifacts,
+                    attempt=attempt,
+                    max_attempts=max_attempts,
+                    retry_feedback=retry_feedback,
+                    route_handoff=route_handoff,
+                ),
+            )
                 verifier_response = await self._call_provider(
                     call=lambda provider: provider.run_verifier(verifier_request),
                 )
@@ -1339,8 +1245,7 @@ class StepDispatcher:
 
     async def _run_llm_step_async(
         self,
-        step: StepPlan,
-        plan: PromptStepPlan | None,
+        step: PromptStepPlan,
         context: "Context",
         artifacts: ResolvedArtifacts,
         session: "SessionBinding | None",
@@ -1353,10 +1258,7 @@ class StepDispatcher:
         consumed_pending_handoffs: tuple["PendingHandoff", ...],
         restorable_pending_handoffs: tuple["PendingHandoff", ...],
     ) -> ProviderExecResult:
-        prompt = self._engine._resolve_prompt(
-            plan.turn.prompt if plan is not None else step.producer_prompt,
-            context=context,
-        )
+        prompt = self._engine._resolve_prompt(step.turn.prompt, context=context)
         self._engine._emit_provider_attempt_event(
             "provider_attempt_started",
             step=step,
@@ -1380,7 +1282,6 @@ class StepDispatcher:
                     max_attempts=max_attempts,
                     retry_feedback=retry_feedback,
                     route_handoff=route_handoff,
-                    turn=None if plan is None else plan.turn,
                 ),
             )
             response = await self._call_provider(

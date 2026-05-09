@@ -2444,3 +2444,65 @@ Open issues / next step
 <loop-control>
 {"schema":"docloop.loop_control/v1","kind":"promise","promise":"COMPLETE"}
 </loop-control>
+
+
+---
+run_id=run-20260509T125912Z-8deb38fd | entry=session_turn | pair=implement | phase=producer | cycle=1 | attempt=1 | thread_id=019e0d60-9795-78f2-a556-d305c102d2c5
+---
+provider=codex
+mode=start
+template=/home/rauter/.local/share/pipx/venvs/autoloop/lib/python3.12/site-packages/autoloop/templates/implement_producer.md
+session_id=019e0d60-9795-78f2-a556-d305c102d2c5
+
+
+---
+run_id=run-20260509T125912Z-8deb38fd | entry=phase_output | pair=implement | phase=producer | process=codex-agent | cycle=1 | attempt=1 | thread_id=019e0d60-9795-78f2-a556-d305c102d2c5
+---
+Provider-turn cutover is the active scope. I’m reading the phase artifacts and the current provider execution path first, then I’ll patch the runtime and targeted tests around `ProviderTurnPlan`, transport boundaries, and any remaining fallback paths.
+
+The phase artifacts are mostly empty, and the session file path from the preamble doesn’t exist as written. I’m checking the actual session location and reading the provider execution modules and tests next to find remaining non-canonical paths.
+
+I’ve confirmed the worktree is very dirty outside this phase, so I’m isolating changes to provider-turn execution, its direct tests, and the phase notes only. Next I’m reading the dispatcher/provider collaborators and the existing provider-turn contract tests to find the remaining legacy branches.
+
+The remaining legacy path is inside `engine_collaborators.py`: prompt and pair execution still tolerate `plan is None`, still read old step fields, and the contract builder conditionally drops back to non-turn data. I’m narrowing edits there, then I’ll add/rename focused contract coverage so this phase explicitly locks the no-fallback execution path plus retry/session/usage behavior.
+
+I have enough context to patch now. The code changes are limited to removing the provider-step fallback branches from `engine_collaborators.py`, tightening those execution paths to concrete step-plan variants, and replacing the old adapter-named contract test with a canonical provider-turn-plan test file.
+
+The runtime path is patched. I’m running the provider-turn contract file plus the adjacent retry, session, and provider-policy suites, because those are the main regression surfaces this phase is supposed to preserve.
+
+The sandbox doesn’t have `pytest` or `python` on those names. I’m checking the available interpreter entrypoints and rerunning the same validation with the repo’s actual Python executable.
+
+One targeted suite failed. I’m pulling the specific traceback and then I’ll patch only that regression surface before rerunning the same set.
+
+The failure is an adjacent runtime bug: if an `after_step` extension raises, the loop still holds the pre-step snapshot, so the fatal terminal event and checkpoint report stale state. I’m fixing that by staging the just-finished step result onto the loop before extension notifications fire.
+
+The focused validation is green now. I’m recording the phase notes and the one non-obvious runtime decision from this slice, then I’ll close with the scoped summary and exact validation that passed.
+
+Scope considered
+
+- Provider-turn cutover only: prompt and produce/verify execution in [engine_collaborators.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/botlane/core/engine_collaborators.py), adjacent terminal/checkpoint behavior in [engine.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/botlane/core/engine.py), and the phase contract tests in [test_provider_turn_plan.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/tests/contract/test_provider_turn_plan.py).
+- I intentionally stayed out of unrelated dirty worktree changes.
+
+What I analyzed
+
+- The active phase artifacts, plan, and decisions ledger.
+- The provider-backed step path in `StepDispatcher` and `ProviderContractBuilder`.
+- Existing provider boundary, retry, session, and policy tests to confirm the no-fallback cutover would not regress transport behavior.
+
+What I changed
+
+- Removed internal fallback execution paths for provider-backed prompt and pair steps in [engine_collaborators.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/botlane/core/engine_collaborators.py): these paths now require typed `PromptStepPlan` / `ProduceVerifyStepPlan` and always build requests from `ProviderTurnPlan`.
+- Deleted the optional-turn / legacy-step-field branches in provider contract building and provider execution.
+- Replaced the adapter-named contract file with [test_provider_turn_plan.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/tests/contract/test_provider_turn_plan.py) and kept the rendered transport boundary assertions there.
+- Fixed an adjacent runtime bug in [engine.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/botlane/core/engine.py): if an `after_step` extension raises, the loop now preserves the just-completed step state/event/outcome for fatal terminal reporting and checkpointing.
+
+Key findings / decisions
+
+- The remaining non-canonical behavior was localized to `engine_collaborators.py`; compiler output was already emitting `ProviderTurnPlan`.
+- Removing the fallback was safe because provider-backed compiled steps already lower to typed step-plan variants.
+- The extension-failure bug surfaced only after tightening the validation sweep; I recorded it because it affects checkpoint/terminal correctness, not just this phase’s tests.
+
+Open issues / next step
+
+- Focused validation is green: `99 passed` across the provider-turn contract, retry, session, provider-policy, and runtime-provider suites.
+- I did not run the full repository test suite in this turn.
