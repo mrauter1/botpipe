@@ -764,6 +764,50 @@ def test_sdk_step_preserves_explicit_routes_for_core_steps(tmp_path: Path) -> No
     assert route_table["repair"].summary == "retry once"
 
 
+def test_sdk_single_step_workflow_plan_delegates_to_compiler_builder(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    step_def = PromptStep(name="prompt", producer=Prompt.inline("Prompt"))
+    captured: dict[str, object] = {}
+    sentinel = object()
+
+    def fake_compile_single_step_workflow_plan(
+        step_def_arg,
+        *,
+        input_model,
+        params_model,
+        routes,
+        workflow_policy=None,
+    ):
+        captured["step_def"] = step_def_arg
+        captured["input_model"] = input_model
+        captured["params_model"] = params_model
+        captured["routes"] = routes
+        captured["workflow_policy"] = workflow_policy
+        return sentinel
+
+    monkeypatch.setattr(sdk_module, "_compile_single_step_workflow_plan", fake_compile_single_step_workflow_plan)
+
+    result = sdk_module._build_single_step_workflow_plan(
+        tmp_path,
+        step_def,
+        _SDKTypedInput(topic="release"),
+        {"mode": "focused"},
+        routes={"done": FINISH},
+    )
+
+    assert result is sentinel
+    assert captured["step_def"] is step_def
+    assert captured["input_model"] is _SDKTypedInput
+    params_model = captured["params_model"]
+    assert isinstance(params_model, type)
+    assert issubclass(params_model, BaseModel)
+    assert tuple(params_model.model_fields) == ("mode",)
+    assert captured["routes"] == {"done": FINISH}
+    assert captured["workflow_policy"] is None
+
+
 def test_sdk_step_supports_directly_resolvable_strict_child_workflow_steps(tmp_path: Path) -> None:
     class ChildWorkflow(simple.Workflow):
         class State(BaseModel):

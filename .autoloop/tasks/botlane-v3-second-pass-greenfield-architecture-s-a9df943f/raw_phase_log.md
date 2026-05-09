@@ -2940,3 +2940,56 @@ Open issues / next step
 <loop-control>
 {"schema":"docloop.loop_control/v1","kind":"promise","promise":"COMPLETE"}
 </loop-control>
+
+
+---
+run_id=run-20260509T125912Z-8deb38fd | entry=session_turn | pair=test | phase=producer | cycle=1 | attempt=1 | thread_id=019e0d6a-0a1a-7b51-bac5-3dded18dc199
+---
+provider=codex
+mode=resume
+template=/home/rauter/.local/share/pipx/venvs/autoloop/lib/python3.12/site-packages/autoloop/templates/test_producer.md
+session_id=019e0d6a-0a1a-7b51-bac5-3dded18dc199
+
+
+---
+run_id=run-20260509T125912Z-8deb38fd | entry=phase_output | pair=test | phase=producer | process=codex-agent | cycle=1 | attempt=1 | thread_id=019e0d6a-0a1a-7b51-bac5-3dded18dc199
+---
+I’m reviewing the phase-local SDK single-step coverage now. The main question is whether the current tests already pin the ownership change and the `SELF` route lowering fix, or whether there are still gaps that would let the old duplicated path drift back in.
+
+I’ve identified two concrete coverage gaps worth closing: one test to pin that the SDK helper really delegates to the compiler-owned single-step builder, and one plan-level assertion that `needs_rework` lowers to the current step instead of leaking the literal `SELF` sentinel. I’m adding those now and then I’ll update the phase strategy artifact to map them explicitly.
+
+I’ve added the two regression tests: one for the compiler-owned delegation boundary, one for plan-level `SELF` lowering on simple produce/verify steps. I’m recording that coverage decision and then running the focused suites again.
+
+The added tests are green. I’m updating the phase strategy artifact with a behavior-to-coverage map and then appending a short feedback note that captures exactly what was added and why.
+
+Scope considered
+
+- Phase-local SDK single-step cutover only.
+- Changed and adjacent test surfaces: `tests/unit/test_sdk_facade.py`, `tests/contract/test_single_step_plan_equivalence.py`, and `tests/contract/engine/test_child_workflows.py`.
+- Phase artifacts `test_strategy.md`, `feedback.md`, and the current `decisions.txt` turn header.
+
+What I analyzed
+
+- The implemented compiler-owned single-step path and the latest decisions for this phase.
+- Existing focused SDK single-step coverage to find gaps around the ownership move and the `SELF` lowering fix.
+- Adjacent child-workflow coverage because the shared one-step path still feeds that execution surface.
+
+What I changed
+
+- Added a unit test in `tests/unit/test_sdk_facade.py` that pins `sdk._build_single_step_workflow_plan(...)` to the compiler-owned helper boundary and verifies forwarded inferred models and explicit routes.
+- Added a contract test in `tests/contract/test_single_step_plan_equivalence.py` that asserts simple produce/verify `needs_rework` lowers to the current step name rather than leaking a literal `SELF` target.
+- Updated `test_strategy.md` with a behavior-to-coverage map and appended a concise summary entry to the phase `feedback.md`.
+- Appended the non-obvious coverage decisions under the active `decisions.txt` header for this turn.
+
+Key findings / decisions
+
+- The main regression risks for this phase are now pinned directly: compiler-owned delegation and plan-level `SELF` lowering for simple pair steps.
+- I kept the test additions deterministic by using monkeypatches and existing scripted/fake providers only.
+- Focused validation passed:
+- `.venv/bin/python -m pytest -q tests/unit/test_sdk_facade.py tests/contract/test_single_step_plan_equivalence.py tests/contract/test_sdk_single_step_execution.py`
+- `.venv/bin/python -m pytest -q tests/contract/engine/test_child_workflows.py`
+
+Open issues / next step
+
+- No blocking test gaps remain within the phase scope.
+- I did not run the full repo `pytest` suite in this turn.

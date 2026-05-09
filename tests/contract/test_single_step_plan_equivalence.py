@@ -147,6 +147,23 @@ def test_single_step_workflow_plan_uses_single_step_as_entry(tmp_path: Path) -> 
     assert tuple(workflow_plan.routes["draft"]) == ("done", "question")
 
 
+def test_single_step_workflow_plan_lowers_simple_pair_rework_to_current_step(tmp_path: Path) -> None:
+    workflow_plan = sdk_module._build_single_step_workflow_plan(
+        tmp_path,
+        simple.produce_verify_step(
+            producer_prompt="Draft {input.topic}.",
+            verifier_prompt="Review {input.topic}.",
+            name="review",
+        ),
+        _SingleStepTypedInput(topic="release"),
+        _SingleStepParams(mode="focused"),
+        routes=None,
+    )
+
+    assert workflow_plan.routes["review"]["accepted"].target == FINISH
+    assert workflow_plan.routes["review"]["needs_rework"].target.step_name == "review"
+
+
 def test_single_step_plan_preserves_policy_layering_and_explicit_routes(tmp_path: Path) -> None:
     authored_policy = Policy(effort=ModelEffort.LOW)
     invocation_policy = Policy(effort=ModelEffort.HIGH)
