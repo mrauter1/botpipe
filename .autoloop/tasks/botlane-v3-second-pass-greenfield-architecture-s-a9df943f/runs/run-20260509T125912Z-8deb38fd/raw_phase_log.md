@@ -1281,3 +1281,57 @@ Open issues / next step
 - `tests/contract/engine/test_worklists.py -k legacy_null_worklist_selection_payloads`
 - `tests/runtime/test_workspace_and_context.py` (`32 passed`)
 - I did not run the full repository suite in this phase.
+
+
+---
+run_id=run-20260509T125912Z-8deb38fd | entry=session_turn | pair=implement | phase=verifier | cycle=1 | attempt=1 | thread_id=019e0d1d-3ee2-7851-97bb-7adbbdfcd948
+---
+provider=codex
+mode=resume
+template=/home/rauter/.local/share/pipx/venvs/autoloop/lib/python3.12/site-packages/autoloop/templates/implement_verifier.md
+session_id=019e0d1d-3ee2-7851-97bb-7adbbdfcd948
+
+
+---
+run_id=run-20260509T125912Z-8deb38fd | entry=phase_output | pair=implement | phase=verifier | process=codex-agent | cycle=1 | attempt=1 | thread_id=019e0d1d-3ee2-7851-97bb-7adbbdfcd948
+---
+I’m reviewing the phase-local context/frame changes against the execution-frame-authority criteria first, then I’ll inspect the touched code paths and validation notes for regressions before I write criteria and feedback artifacts.
+
+I’m checking the internal alias semantics now, especially places that still mutate underscore fields like `_values` or `_selections`. That’s the main regression surface after replacing mirrored fields with `__getattr__` lookups.
+
+I found one material conformance issue: the phase contract said to remove `context_runtime(...)` mutation helpers, but the implementation kept `_ContextRuntime` and all those mutation entrypoints. I’m recording that as blocking and marking the criteria to match.
+
+Scope considered
+
+- Phase-local review artifacts in `.autoloop/.../execution-frame-authority/`.
+- Diffed changes in [botlane/core/context.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/botlane/core/context.py), [botlane/core/branch_groups/context.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/botlane/core/branch_groups/context.py), and [tests/unit/test_execution_frame_context_parity.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/tests/unit/test_execution_frame_context_parity.py).
+- Adjacent call sites in `botlane/core/engine.py`, `botlane/core/worklists.py`, and branch runtime/helpers for regression analysis.
+
+What I analyzed
+
+- Whether `ExecutionFrame` became the sole mutable runtime store.
+- Whether branch/fan-in child contexts are created through `child_for_branch(...)` / `child_for_fan_in(...)`.
+- Whether the old sidecar and helper mutation paths were actually removed versus only rewired.
+- The implementation notes and recorded validation for phase conformance.
+
+What I reviewed
+
+- `Context.__getattr__`, `_legacy_frame_attr(...)`, `_ContextRuntime`, and `context_runtime(...)`.
+- Child-context bookkeeping in `_inherit_child_runtime_bookkeeping(...)`.
+- Remaining mutation entrypoints from engine/worklist/branch code into context/frame state.
+- Criteria and feedback artifacts, which I updated.
+
+Key findings / decisions
+
+- Blocking: `context_runtime(...)` mutation helpers were not removed. The implementation deleted the `WeakKeyDictionary` sidecar and mirror syncing, but it kept `_ContextRuntime` plus the existing mutation entrypoints/call sites. That conflicts with the active phase contract and leaves a parallel compatibility facade in place.
+- I marked `Correctness / Intent Fidelity`, `Technical Debt / Simplicity`, and `Maintainability / Validation` unchecked in [criteria.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/botlane-v3-second-pass-greenfield-architecture-s-a9df943f/runs/run-20260509T125912Z-8deb38fd/artifacts/implement/phases/execution-frame-authority/criteria.md).
+- I appended `IMP-001` to [feedback.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/botlane-v3-second-pass-greenfield-architecture-s-a9df943f/runs/run-20260509T125912Z-8deb38fd/artifacts/implement/phases/execution-frame-authority/feedback.md).
+
+Open issues / next step
+
+- Remove `_ContextRuntime` / `context_runtime(...)` mutation entrypoints for this phase and retarget the remaining engine/worklist/branch callers to `ExecutionFrame` methods or explicit frame-backed helpers.
+- After that, rerun the focused phase validation and update the criteria to all checked only if the helper layer is actually gone.
+
+<loop-control>
+{"schema":"docloop.loop_control/v1","kind":"promise","promise":"INCOMPLETE"}
+</loop-control>
