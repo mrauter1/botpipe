@@ -402,3 +402,76 @@ Open issues / next step
 <loop-control>
 {"schema":"docloop.loop_control/v1","kind":"promise","promise":"COMPLETE"}
 </loop-control>
+
+
+---
+run_id=run-20260509T031006Z-b1998ef3 | entry=session_turn | pair=audit | phase=producer | cycle=1 | attempt=1 | thread_id=019e0ac8-f364-7192-a2c0-9ab3e0db7402
+---
+provider=codex
+mode=start
+template=/home/rauter/.local/share/pipx/venvs/autoloop/lib/python3.12/site-packages/autoloop/templates/audit_producer.md
+session_id=019e0ac8-f364-7192-a2c0-9ab3e0db7402
+
+
+---
+run_id=run-20260509T031006Z-b1998ef3 | entry=phase_output | pair=audit | phase=producer | process=codex-agent | cycle=1 | attempt=1 | thread_id=019e0ac8-f364-7192-a2c0-9ab3e0db7402
+---
+I’m auditing the completed run against the original request, clarifications, and final codebase, then I’ll write the run-local gap report, revised request, and audit result under the audit artifacts directory only.
+
+I’ve got the request and decision history. Next I’m checking the test artifacts and the final runtime/test files directly so the audit is based on the actual code and recorded validation, not just the implementation summary.
+
+The implementation notes are specific enough to audit against. I’m validating those claims on the code itself now, plus a repo scan for remaining legacy names outside the declared allowlist.
+
+I’ve confirmed the main touched files. I’m pulling the exact function bodies and running the literal/hidden-construction scans directly, so any unresolved gap is grounded in current behavior rather than summaries.
+
+The broad literal scan is clean in active code except for `tests/strictness/test_no_compat.py` and `legacy_docs`, which matches the intended allowlist. I’m narrowing to the exact behavior and scanner assertions now, plus verifying the current tree with the project interpreter instead of the shell default.
+
+The key bodies line up with the intended Botlane-only behavior. I’m waiting on the targeted pytest bucket now and then I’ll compare that with any remaining repo-level gaps or overreach, especially the extra workflow catalog change.
+
+I found one area that needs a harder look: the strictness scanner doesn’t list repo-root `.autoloop` as an active scan root, even though the request explicitly called out removing any default `.autoloop` exclusion. I’m checking whether that intent was actually satisfied or only sidestepped by narrowing the roots.
+
+I’ve confirmed one likely intent gap around the scanner’s root selection. I’m running the current smoke/full validation once more and checking the tail of the authoritative log for any later clarification that would justify that gap before I write the audit.
+
+The direct smoke checks match the Botlane-only contract. I’m re-running the full suite now so the audit result reflects the current tree, then I’ll write the gap classification and next-run request based on that plus the scanner-root issue.
+
+I’ve got the likely gap classification: the implementation satisfies the behavior changes and the full suite is green, but the strictness scanner still omits repo-root `.autoloop` content by construction, which falls short of the explicit scanner-scope request. I’m drafting the audit artifacts around that evidence now.
+
+I have the final classification: the runtime/test work is complete and validated, but the repo-wide literal-confinement contract is still incomplete for active Autoloop artifact trees. I’m writing the audit files with that narrower follow-up request now.
+
+The audit artifacts are written. I’m doing one verification pass on the files themselves so the final summary and loop-control result match exactly what landed on disk.
+
+Scope considered
+
+- Audited the immutable request, the authoritative raw log, the run decisions, the plan/implement/test artifacts, the final runtime/test code, and the active Autoloop artifact trees.
+- Revalidated the current tree with targeted pytest, direct import/CLI smoke checks, and a fresh full `pytest -q` run.
+
+What I analyzed
+
+- Confirmed the delivered runtime/test behavior: Botlane-only context root detection, Botlane-only simple-flow sentinel handling, `.botlane` overlay exclusion, hidden legacy-name construction checks, negative legacy import/CLI behavior, and the adjacent `.botlane/workflows` precedence fix.
+- Compared the repo-wide literal-confinement and scanner-scope requirements against the actual strictness scan roots and the current contents of `.autoloop` and `.autoloop_recursive`.
+
+What I changed
+
+- Wrote [gap_report.md](</home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/task-complete-botlane-no-compat-follow-up-goal-f-95d8ae7d/runs/run-20260509T031006Z-b1998ef3/artifacts/audit/gap_report.md>).
+- Wrote [revised_request.md](</home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/task-complete-botlane-no-compat-follow-up-goal-f-95d8ae7d/runs/run-20260509T031006Z-b1998ef3/artifacts/audit/revised_request.md>).
+- Wrote [audit_result.json](</home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/task-complete-botlane-no-compat-follow-up-goal-f-95d8ae7d/runs/run-20260509T031006Z-b1998ef3/artifacts/audit/audit_result.json>) with `material_gaps_found: true`.
+- Updated [criteria.md](</home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/task-complete-botlane-no-compat-follow-up-goal-f-95d8ae7d/runs/run-20260509T031006Z-b1998ef3/artifacts/audit/criteria.md>) and [feedback.md](</home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/task-complete-botlane-no-compat-follow-up-goal-f-95d8ae7d/runs/run-20260509T031006Z-b1998ef3/artifacts/audit/feedback.md>) to reflect the audit result.
+
+Key findings / decisions
+
+- The runtime/test cleanup itself is complete and currently green. Revalidation passed:
+  - targeted bucket: `114 passed`
+  - full suite: `1195 passed, 1 warning`
+  - legacy imports/module entrypoint fail as expected; Botlane help succeeds without legacy branding
+- Material gaps remain in the repo-wide no-compat contract:
+  - `tests/strictness/test_no_compat.py` still omits `.autoloop` and `.autoloop_recursive` from its active scan roots, so those trees are not enforced by the strictness scanners.
+  - active non-historical artifact trees still contain legacy Autoloop names, including `.autoloop_recursive/rerun_command.sh`, `.autoloop_recursive/framework_evolution_charter.md`, `.autoloop_recursive/framework_roadmap.md`, and current `.autoloop/tasks/...` artifacts.
+- The extra `botlane/core/workflow_catalog.py` precedence fix is justified, not a gap: it was required to restore a green full suite and matches the Botlane workspace intent.
+
+Open issues / next step
+
+- Follow-up implementation is still required. The next run should close the scanner-root loophole and either migrate or explicitly, narrowly isolate active `.autoloop` / `.autoloop_recursive` artifact trees so old-name literals are no longer present outside `tests/strictness/test_no_compat.py` and `legacy_docs/*.md`.
+
+<loop-control>
+{"schema":"docloop.loop_control/v1","kind":"promise","promise":"INCOMPLETE"}
+</loop-control>
