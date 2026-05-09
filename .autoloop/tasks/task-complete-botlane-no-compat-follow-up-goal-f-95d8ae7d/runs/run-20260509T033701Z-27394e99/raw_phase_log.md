@@ -166,3 +166,12 @@ No open blocking issues remain. The plan artifacts are ready for downstream impl
 <loop-control>
 {"schema":"docloop.loop_control/v1","kind":"promise","promise":"COMPLETE"}
 </loop-control>
+
+
+---
+run_id=run-20260509T033701Z-27394e99 | entry=phase_scope_resolved
+---
+phase_mode=single
+phase_ids=tighten-no-compat-artifact-scope
+explicit=True
+current_phase_index=0
