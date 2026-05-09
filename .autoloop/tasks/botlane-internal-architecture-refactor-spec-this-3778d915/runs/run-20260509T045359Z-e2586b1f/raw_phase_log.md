@@ -782,3 +782,129 @@ Open issues / next step
 <loop-control>
 {"schema":"docloop.loop_control/v1","kind":"promise","promise":"COMPLETE"}
 </loop-control>
+
+
+---
+run_id=run-20260509T045359Z-e2586b1f | entry=session_turn | pair=implement | phase=producer | cycle=1 | attempt=1 | thread_id=019e0b48-c497-7620-84a2-52940f5bc8f1
+---
+provider=codex
+mode=start
+template=/home/rauter/.local/share/pipx/venvs/autoloop/lib/python3.12/site-packages/autoloop/templates/implement_producer.md
+session_id=019e0b48-c497-7620-84a2-52940f5bc8f1
+
+
+---
+run_id=run-20260509T045359Z-e2586b1f | entry=phase_output | pair=implement | phase=producer | process=codex-agent | cycle=1 | attempt=1 | thread_id=019e0b48-c497-7620-84a2-52940f5bc8f1
+---
+I’m scoping the route-contract-adapters phase against the phase artifacts and current compiler/route code first, then I’ll implement the internal route contract layer with adapter tests while preserving compiled-route behavior.
+
+I have the phase scope and prior decisions. Next I’m reading the current compiled-route model, route consumers, and the existing route tests so the adapter layer matches today’s metadata exactly.
+
+The current route metadata lives entirely in `CompiledRoute` plus a few compiler helpers. I’m pulling the exact compile and visibility logic now so the typed contract round-trip preserves every field that today feeds providers and validation.
+
+I’ve confirmed the compiler already encodes all route semantics we need. I’m checking the inventory and required-write payload helpers next so the adapter uses the same artifact ownership rules instead of inventing new resolution.
+
+Plan for this phase:
+1. Add `botlane/core/route_contracts.py` with the internal contract/action dataclasses and narrow route-view helpers only.
+2. Replace the `plan_adapters.py` route stubs with real `CompiledRoute` adapters that preserve metadata and use inventory-aware required-write conversion.
+3. Add focused unit coverage for route target/action mapping, inventory-backed required writes, disabled/runtime-control preservation, and adapter round-trips.
+4. Run the new route tests plus the nearby regression buckets that freeze public compatibility.
+
+I’ve got the adapter shape pinned down. I’m editing the new internal route-contract module and wiring `plan_adapters.py` to convert `CompiledRoute` without changing any public exports or compiler behavior.
+
+The core conversion code is in place. I’m adding focused unit tests now for route target/action mapping, inventory-backed required writes, explicit-empty overrides, and the derived route-view helpers.
+
+The new route tests are in. I’m running the adapter-focused suite first, then the nearby public-compatibility buckets to catch any regression from the new internal module or adapter imports.
+
+The environment doesn’t expose `python`; I’m switching to `python3` for validation and rerunning the same buckets.
+
+There is a local `.venv`, so I’m validating through that interpreter instead of the system Python.
+
+The new route suite passed. The broader compatibility run is still in flight; I’m waiting for the full result before I touch notes or decisions.
+
+The only failure is the existing compatibility strictness scan: it now flags the intentional internal `RouteContract`/`route_contracts` names everywhere, including the new module. I’m checking that test’s scope next so I can narrow it to public-compat regressions instead of blocking the approved internal architecture names.
+
+The compatibility scan is outdated rather than the implementation itself. I’m enumerating exactly which files it flags so I can scope a minimal allowlist to the new internal architecture surfaces, not weaken the broader regression guard.
+
+I’ve isolated the scan fallout to five intentional hits in the new internal files and their test. I’m tightening the strictness test with a token-specific allowlist so it still blocks compatibility leaks elsewhere in the tree.
+
+The allowlist patch is in. I’m re-running the strictness check plus the broader compatibility buckets to confirm the internal route names are the only accepted exceptions.
+
+The tests are green. I’m doing one small cleanup pass on the new adapter signatures so they match the intended internal API directly instead of keeping the temporary variadic stub shape.
+
+I’m at the documentation and handoff pass now. I’m recording the non-obvious adapter decisions and updating the phase notes with the exact files, invariants, and validation that passed.
+
+**Scope considered**
+- Phase-local `route-contract-adapters` work only: internal route contract values, `CompiledRoute` adapters, focused tests, and the strictness scan adjustment needed for the approved internal names.
+- I ignored unrelated dirty files already present elsewhere in the workspace.
+
+**What I analyzed**
+- Current route compilation and visibility logic in [compiler.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/botlane/core/compiler.py).
+- Inventory resolution and required-write ownership in [inventory.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/botlane/core/inventory.py) and [route_required_writes.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/botlane/core/route_required_writes.py).
+- The compatibility strictness guard in [test_no_compat.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/tests/strictness/test_no_compat.py).
+
+**What I changed**
+- Added internal typed route values and helpers in [route_contracts.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/botlane/core/route_contracts.py): `RouteContract`, `RouteDecision`, `RouteAction` variants, and derived route-tag helpers.
+- Replaced the routing stubs in [plan_adapters.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/botlane/core/plan_adapters.py) with real `CompiledRoute` adapters, including inventory-backed `required_writes` conversion and the required missing-inventory failure for non-empty writes.
+- Added focused coverage in [test_route_contracts.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/tests/unit/test_route_contracts.py).
+- Narrowed the compatibility scan in [test_no_compat.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/tests/strictness/test_no_compat.py) so the newly approved internal `RouteContract` / `route_contracts` names are allowed only in the internal module, adapter, and dedicated unit test.
+
+**Key findings / decisions**
+- `CompiledRoute.required_writes` must stay inventory-resolved through adapters; no qualified-name dot splitting was introduced.
+- Explicit empty required-write overrides are preserved as internal explicit/effective empty tuples.
+- The existing compatibility scan was too broad for this phase; a token-specific allowlist was the minimal safe fix.
+
+**Open issues / next step**
+- Engine/runtime consumers still use `CompiledRoute`; `RouteAction` is not wired into execution yet.
+- Next phase should build the typed step/workflow plan layer on top of these adapters.
+
+Validation:
+- `./.venv/bin/python -m pytest tests/unit/test_route_contracts.py tests/unit/test_artifact_ids.py`
+- `./.venv/bin/python -m pytest tests/unit/test_simple_surface.py tests/unit/test_sdk_facade.py tests/strictness/test_no_compat.py`
+
+
+---
+run_id=run-20260509T045359Z-e2586b1f | entry=session_turn | pair=implement | phase=verifier | cycle=1 | attempt=1 | thread_id=019e0b48-c497-7620-84a2-52940f5bc8f1
+---
+provider=codex
+mode=resume
+template=/home/rauter/.local/share/pipx/venvs/autoloop/lib/python3.12/site-packages/autoloop/templates/implement_verifier.md
+session_id=019e0b48-c497-7620-84a2-52940f5bc8f1
+
+
+---
+run_id=run-20260509T045359Z-e2586b1f | entry=phase_output | pair=implement | phase=verifier | process=codex-agent | cycle=1 | attempt=1 | thread_id=019e0b48-c497-7620-84a2-52940f5bc8f1
+---
+I’m validating the route adapter changes against the targeted suites now and checking whether the strictness-test adjustment stays narrowly scoped to the approved internal names.
+
+Targeted validation passed cleanly. I don’t have blocking findings; I’m marking the review artifacts complete and recording a no-findings entry in the feedback log.
+
+Scope considered
+- Phase-local review of the `route-contract-adapters` implementation only.
+- Reviewed request/phase contract, implementation notes, decisions ledger, touched source files, new tests, and the strictness-test adjustment.
+
+What I analyzed
+- Internal route contract/value-object design in `botlane/core/route_contracts.py`.
+- `CompiledRoute` adapter logic in `botlane/core/plan_adapters.py`, especially target mapping and inventory-backed `required_writes`.
+- New route adapter coverage in `tests/unit/test_route_contracts.py`.
+- The compatibility-scan allowlist change in `tests/strictness/test_no_compat.py`.
+
+What I reviewed
+- Acceptance-criteria fit: internal `RouteContract`/`RouteDecision` existence, round-trip preservation, and clear failure when inventory is missing for non-empty required writes.
+- Regression risk around public exports, public route authoring, and existing compatibility strictness.
+- Validation results:
+  - `./.venv/bin/python -m pytest tests/unit/test_route_contracts.py tests/unit/test_artifact_ids.py -q`
+  - `./.venv/bin/python -m pytest tests/unit/test_simple_surface.py tests/unit/test_sdk_facade.py tests/strictness/test_no_compat.py -q`
+
+Key findings / decisions
+- No blocking or non-blocking defects found in phase scope.
+- The strictness-test allowlist remains narrow and limited to the newly approved internal route-contract names in the internal module, adapter, and dedicated unit test.
+- Review artifacts were updated: all criteria boxes checked and a no-findings feedback entry appended.
+
+Open issues / next step
+- No review blockers for this phase.
+- Next phase can proceed to step/workflow plan adapters on top of this route-contract layer.
+
+<loop-control>
+{"schema":"docloop.loop_control/v1","kind":"promise","promise":"COMPLETE"}
+</loop-control>

@@ -861,3 +861,50 @@ I’m at the documentation and handoff pass now. I’m recording the non-obvious
 Validation:
 - `./.venv/bin/python -m pytest tests/unit/test_route_contracts.py tests/unit/test_artifact_ids.py`
 - `./.venv/bin/python -m pytest tests/unit/test_simple_surface.py tests/unit/test_sdk_facade.py tests/strictness/test_no_compat.py`
+
+
+---
+run_id=run-20260509T045359Z-e2586b1f | entry=session_turn | pair=implement | phase=verifier | cycle=1 | attempt=1 | thread_id=019e0b48-c497-7620-84a2-52940f5bc8f1
+---
+provider=codex
+mode=resume
+template=/home/rauter/.local/share/pipx/venvs/autoloop/lib/python3.12/site-packages/autoloop/templates/implement_verifier.md
+session_id=019e0b48-c497-7620-84a2-52940f5bc8f1
+
+
+---
+run_id=run-20260509T045359Z-e2586b1f | entry=phase_output | pair=implement | phase=verifier | process=codex-agent | cycle=1 | attempt=1 | thread_id=019e0b48-c497-7620-84a2-52940f5bc8f1
+---
+I’m validating the route adapter changes against the targeted suites now and checking whether the strictness-test adjustment stays narrowly scoped to the approved internal names.
+
+Targeted validation passed cleanly. I don’t have blocking findings; I’m marking the review artifacts complete and recording a no-findings entry in the feedback log.
+
+Scope considered
+- Phase-local review of the `route-contract-adapters` implementation only.
+- Reviewed request/phase contract, implementation notes, decisions ledger, touched source files, new tests, and the strictness-test adjustment.
+
+What I analyzed
+- Internal route contract/value-object design in `botlane/core/route_contracts.py`.
+- `CompiledRoute` adapter logic in `botlane/core/plan_adapters.py`, especially target mapping and inventory-backed `required_writes`.
+- New route adapter coverage in `tests/unit/test_route_contracts.py`.
+- The compatibility-scan allowlist change in `tests/strictness/test_no_compat.py`.
+
+What I reviewed
+- Acceptance-criteria fit: internal `RouteContract`/`RouteDecision` existence, round-trip preservation, and clear failure when inventory is missing for non-empty required writes.
+- Regression risk around public exports, public route authoring, and existing compatibility strictness.
+- Validation results:
+  - `./.venv/bin/python -m pytest tests/unit/test_route_contracts.py tests/unit/test_artifact_ids.py -q`
+  - `./.venv/bin/python -m pytest tests/unit/test_simple_surface.py tests/unit/test_sdk_facade.py tests/strictness/test_no_compat.py -q`
+
+Key findings / decisions
+- No blocking or non-blocking defects found in phase scope.
+- The strictness-test allowlist remains narrow and limited to the newly approved internal route-contract names in the internal module, adapter, and dedicated unit test.
+- Review artifacts were updated: all criteria boxes checked and a no-findings feedback entry appended.
+
+Open issues / next step
+- No review blockers for this phase.
+- Next phase can proceed to step/workflow plan adapters on top of this route-contract layer.
+
+<loop-control>
+{"schema":"docloop.loop_control/v1","kind":"promise","promise":"COMPLETE"}
+</loop-control>
