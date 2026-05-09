@@ -4,3 +4,7 @@
 {"ts": "2026-05-09T02:42:42.659429+00:00", "run_id": "run-20260509T023831Z-4d6542b3", "seq": 4, "event_type": "phase_finished", "pair": "plan", "phase": "producer", "cycle": 1, "attempt": 1, "empty_output": false, "phase_id": null}
 {"ts": "2026-05-09T02:44:28.364643+00:00", "run_id": "run-20260509T023831Z-4d6542b3", "seq": 5, "event_type": "phase_finished", "pair": "plan", "phase": "verifier", "cycle": 1, "attempt": 1, "empty_output": false, "phase_id": null}
 {"ts": "2026-05-09T02:44:28.453960+00:00", "run_id": "run-20260509T023831Z-4d6542b3", "seq": 6, "event_type": "pair_completed", "pair": "plan", "cycle": 1, "attempt": 1, "phase_id": null}
+{"ts": "2026-05-09T02:44:28.718956+00:00", "run_id": "run-20260509T023831Z-4d6542b3", "seq": 7, "event_type": "phase_scope_resolved", "phase_mode": "single", "phase_ids": ["remove-runtime-compatibility", "harden-strictness-and-negative-tests", "audit-and-validate"], "explicit": true, "current_phase_index": 0}
+{"ts": "2026-05-09T02:44:28.919301+00:00", "run_id": "run-20260509T023831Z-4d6542b3", "seq": 8, "event_type": "phase_started", "phase_id": "remove-runtime-compatibility", "phase_mode": "single"}
+{"ts": "2026-05-09T02:44:28.923222+00:00", "run_id": "run-20260509T023831Z-4d6542b3", "seq": 9, "event_type": "pair_started", "pair": "implement", "phase_id": "remove-runtime-compatibility"}
+{"ts": "2026-05-09T02:44:28.923479+00:00", "run_id": "run-20260509T023831Z-4d6542b3", "seq": 10, "event_type": "cycle_started", "pair": "implement", "cycle": 1, "attempt": 1, "phase_id": "remove-runtime-compatibility"}

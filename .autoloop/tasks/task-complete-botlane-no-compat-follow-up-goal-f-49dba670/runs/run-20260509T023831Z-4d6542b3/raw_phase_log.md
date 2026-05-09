@@ -81,3 +81,12 @@ No verifier-side open issues remain for the planning artifacts. The run can proc
 <loop-control>
 {"schema":"docloop.loop_control/v1","kind":"promise","promise":"COMPLETE"}
 </loop-control>
+
+
+---
+run_id=run-20260509T023831Z-4d6542b3 | entry=phase_scope_resolved
+---
+phase_mode=single
+phase_ids=remove-runtime-compatibility,harden-strictness-and-negative-tests,audit-and-validate
+explicit=True
+current_phase_index=0
