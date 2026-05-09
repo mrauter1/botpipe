@@ -160,3 +160,12 @@ The planning artifacts are complete for this run-local plan turn. The next step 
 <loop-control>
 {"schema":"docloop.loop_control/v1","kind":"promise","promise":"COMPLETE"}
 </loop-control>
+
+
+---
+run_id=run-20260509T031006Z-b1998ef3 | entry=phase_scope_resolved
+---
+phase_mode=single
+phase_ids=botlane-no-compat-contract-lock
+explicit=True
+current_phase_index=0
