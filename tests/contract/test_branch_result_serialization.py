@@ -255,7 +255,7 @@ def test_branch_manifest_schema_context_and_outcome_remain_stable() -> None:
         branches=[completed.to_manifest_dict(), needs_input],
     )
     context_text = render_branch_group_context(manifest)
-    event = select_branch_group_outcome(spec, manifest.to_dict(), context=None)
+    event = select_branch_group_outcome(spec, manifest, context=None)
 
     assert isinstance(manifest, BranchManifest)
     assert manifest.schema == "botlane.branch_results/v1"
@@ -265,6 +265,63 @@ def test_branch_manifest_schema_context_and_outcome_remain_stable() -> None:
     assert event.tag == "question"
     assert event.question == "cost: Approve cost review?"
     assert event.reason == "One or more branches need input."
+
+
+def test_branch_manifest_custom_outcome_still_receives_mapping_payload_when_manifest_is_typed() -> None:
+    completed = BranchResult(
+        name="security",
+        index=0,
+        input={"area": "security"},
+        step_name="security_review",
+        status="completed",
+        route="done",
+        destination="publish",
+        runtime_control=None,
+        reason=None,
+        question=None,
+        artifacts=(),
+        raw_output_path=None,
+        raw_output_paths={},
+        provider_session=None,
+        provider_sessions={},
+        error=None,
+        started_at="2026-05-09T08:00:00+00:00",
+        finished_at="2026-05-09T08:00:01+00:00",
+        duration_ms=1000,
+        usage={},
+    )
+    seen: dict[str, object] = {}
+
+    def aggregate(manifest_payload: dict[str, object]) -> object:
+        seen["payload"] = manifest_payload
+        return select_branch_group_outcome(
+            SimpleNamespace(success_routes=("done",), outcome="all_done", name="reviews"),
+            manifest_payload,
+            context=None,
+        )
+
+    spec = SimpleNamespace(
+        kind="parallel",
+        name="reviews",
+        concurrency=2,
+        settle="wait_all",
+        success_routes=("done",),
+        outcome=aggregate,
+    )
+    manifest = build_branch_manifest(
+        spec=spec,
+        started_at="2026-05-09T08:00:00+00:00",
+        finished_at="2026-05-09T08:00:01+00:00",
+        duration_ms=1000,
+        branches=[completed],
+    )
+
+    event = select_branch_group_outcome(spec, manifest, context=None)
+
+    assert event.tag == "done"
+    assert isinstance(seen["payload"], dict)
+    assert seen["payload"]["schema"] == "botlane.branch_results/v1"
+    assert seen["payload"]["branches"][0]["name"] == "security"
 
 
 def test_render_branch_group_context_preserves_empty_section_fallbacks() -> None:

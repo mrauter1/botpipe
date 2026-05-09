@@ -146,6 +146,60 @@ class _DirectRuntimeControl:
     source_hook: str | None = None
     source_phase: str | None = None
 
+
+@dataclass(frozen=True, slots=True)
+class _RunEnvironment:
+    task_id: str
+    run_id: str
+    task_folder: Path
+    workflow_folder: Path
+    run_folder: Path
+    package_folder: Path
+    root: Path | None
+    request_file: Path | None
+    task_request_file: Path | None
+    params: BaseModel | None
+    workflow_params: Mapping[str, Any] | None
+    message: str | None | object
+    workflow_input: BaseModel | None
+    workflow_invoker: Callable[..., Any] | None
+    binding: RunBinding
+    extensions: tuple[BoundWorkflowExtension, ...]
+    previous_provider_policy_resolver: ProviderPolicyResolverProtocol | None
+
+
+@dataclass(slots=True)
+class _RunLoopState:
+    history: list[str]
+    current_step_name: str | None
+    state: BaseModel | None
+    current_answer: str | None
+    current_input_response: Any | None
+    selections: dict[str, Selection[Any]]
+    selection_snapshots: dict[str, SelectionSnapshot]
+    values: dict[str, Any]
+    step_states: dict[str, BaseModel | dict[str, Any]]
+    item_states: dict[str, BaseModel | dict[str, Any]]
+    step_item_states: dict[str, dict[str, BaseModel | dict[str, Any]]]
+    pending_handoffs: tuple[PendingHandoff, ...] = ()
+    checkpoint: Checkpoint | None = None
+    terminal_failure_handled: bool = False
+    last_event: Event | None = None
+    last_outcome: Outcome | None = None
+    last_transition: "StepFinalizationRecord | None" = None
+
+
+@dataclass(frozen=True, slots=True)
+class _StepFrame:
+    step: CompiledStep
+    context: Context
+    step_state_store: BaseModel | dict[str, Any]
+    step_item_state_store: BaseModel | dict[str, Any] | None
+    step_visit: int
+    scope_name: str | None
+    item_id: str | None
+    step_execution_id: str
+
 class _DefaultProviderPolicyResolver(ProviderPolicyResolverProtocol):
     """Core-local fallback for direct Engine usage without runtime config."""
 

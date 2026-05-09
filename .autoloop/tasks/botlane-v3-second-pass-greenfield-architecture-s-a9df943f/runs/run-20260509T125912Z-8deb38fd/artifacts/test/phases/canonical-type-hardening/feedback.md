@@ -6,3 +6,5 @@
 - Phase Directory Key: canonical-type-hardening
 - Phase Title: Canonical Type Hardening
 - Scope: phase-local authoritative verifier artifact
+
+- Added direct typed-manifest coverage in `tests/contract/test_branch_result_serialization.py` for `select_branch_group_outcome(...)`, including the preserved mapping-shaped payload contract for custom outcome aggregators when the runtime builds `BranchManifest`.
