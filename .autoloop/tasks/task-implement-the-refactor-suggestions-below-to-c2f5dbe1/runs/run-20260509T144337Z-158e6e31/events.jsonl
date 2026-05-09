@@ -20,3 +20,4 @@
 {"ts": "2026-05-09T14:57:39.202413+00:00", "run_id": "run-20260509T144337Z-158e6e31", "seq": 20, "event_type": "phase_completed", "pair": "test", "phase_id": "unify-runtime-context-mutators", "phase_mode": "single"}
 {"ts": "2026-05-09T14:57:39.206620+00:00", "run_id": "run-20260509T144337Z-158e6e31", "seq": 21, "event_type": "pair_started", "pair": "audit", "phase_id": null}
 {"ts": "2026-05-09T14:57:39.207395+00:00", "run_id": "run-20260509T144337Z-158e6e31", "seq": 22, "event_type": "cycle_started", "pair": "audit", "cycle": 1, "attempt": 1, "phase_id": null}
+{"ts": "2026-05-09T14:59:50.642617+00:00", "run_id": "run-20260509T144337Z-158e6e31", "seq": 23, "event_type": "phase_finished", "pair": "audit", "phase": "producer", "cycle": 1, "attempt": 1, "empty_output": false, "phase_id": null}

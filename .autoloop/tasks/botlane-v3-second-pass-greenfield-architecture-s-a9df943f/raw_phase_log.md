@@ -1778,3 +1778,53 @@ Open issues / next step
 
 - Focused validation is green: `.venv/bin/python -m pytest tests/contract/test_branch_result_runtime.py tests/contract/test_branch_result_serialization.py tests/contract/test_branch_group_runtime.py tests/unit/test_branch_group_context_sessions.py -q` with `43 passed`.
 - No additional phase-local issues found from this reviewer feedback slice.
+
+
+---
+run_id=run-20260509T125912Z-8deb38fd | entry=session_turn | pair=implement | phase=verifier | cycle=2 | attempt=1 | thread_id=019e0d36-7afc-75e3-9a6e-3011fe4ea348
+---
+provider=codex
+mode=resume
+template=/home/rauter/.local/share/pipx/venvs/autoloop/lib/python3.12/site-packages/autoloop/templates/implement_verifier.md
+session_id=019e0d36-7afc-75e3-9a6e-3011fe4ea348
+
+
+---
+run_id=run-20260509T125912Z-8deb38fd | entry=phase_output | pair=implement | phase=verifier | process=codex-agent | cycle=2 | attempt=1 | thread_id=019e0d36-7afc-75e3-9a6e-3011fe4ea348
+---
+I’m re-reviewing only the follow-up fix for the public fan-in results boundary. First I’m checking the updated runtime path, the strengthened contract test, and the review artifacts so I can confirm whether the blocking regression is actually resolved.
+
+The fix matches the reviewer’s direction. I’m doing one independent rerun of the branch-focused suite and a quick public-surface spot check so the review artifacts can move back to complete without relying only on the implementation notes.
+
+The follow-up suite is green, and the strengthened fan-in contract now covers the regression path directly. I’m clearing the old blocking state in the review artifacts and marking the phase complete.
+
+Scope considered
+
+- Phase-local follow-up review for `branch-typed-evidence`.
+- Re-reviewed the fan-in public boundary in [runtime.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/botlane/core/branch_groups/runtime.py) and the strengthened contract coverage in [test_branch_group_runtime.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/tests/contract/test_branch_group_runtime.py).
+
+What I analyzed
+
+- The reviewer-reported regression path through `ctx.fan_in.results`.
+- Whether the internal typed manifest cutover still holds while the public fan-in payload stays public-neutral.
+- Whether the fix stays within the phase scope and the run-local decisions.
+
+What I reviewed
+
+- Source change: `FanInMetadata.results` now receives `manifest.to_dict()` at the public fan-in boundary.
+- Contract change: fan-in runtime test now asserts `ctx.fan_in.results` is a mapping-shaped `NamespaceProxy`, exposes the expected schema, and preserves branch names.
+- Independent validation: `.venv/bin/python -m pytest tests/contract/test_branch_result_runtime.py tests/contract/test_branch_result_serialization.py tests/contract/test_branch_group_runtime.py tests/unit/test_branch_group_context_sessions.py -q` passed with `43 passed in 0.85s`.
+
+Key findings / decisions
+
+- The prior blocking finding `IMP-001` is resolved.
+- No new blocking or non-blocking findings were identified in this follow-up review.
+- Updated [criteria.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/botlane-v3-second-pass-greenfield-architecture-s-a9df943f/runs/run-20260509T125912Z-8deb38fd/artifacts/implement/phases/branch-typed-evidence/criteria.md) to fully checked and appended a resolution note to [feedback.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/botlane-v3-second-pass-greenfield-architecture-s-a9df943f/runs/run-20260509T125912Z-8deb38fd/artifacts/implement/phases/branch-typed-evidence/feedback.md).
+
+Open issues / next step
+
+- No open issues remain in this phase-local review slice.
+
+<loop-control>
+{"schema":"docloop.loop_control/v1","kind":"promise","promise":"COMPLETE"}
+</loop-control>
