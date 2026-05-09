@@ -3304,3 +3304,129 @@ Open issues / next step
 <loop-control>
 {"schema":"docloop.loop_control/v1","kind":"promise","promise":"COMPLETE"}
 </loop-control>
+
+
+---
+run_id=run-20260509T125912Z-8deb38fd | entry=session_turn | pair=audit | phase=producer | cycle=1 | attempt=1 | thread_id=019e0d94-1443-72c3-a1d9-a71ea423e43f
+---
+provider=codex
+mode=start
+template=/home/rauter/.local/share/pipx/venvs/autoloop/lib/python3.12/site-packages/autoloop/templates/audit_producer.md
+session_id=019e0d94-1443-72c3-a1d9-a71ea423e43f
+
+
+---
+run_id=run-20260509T125912Z-8deb38fd | entry=phase_output | pair=audit | phase=producer | process=codex-agent | cycle=1 | attempt=1 | thread_id=019e0d94-1443-72c3-a1d9-a71ea423e43f
+---
+I’m auditing the completed run against the original request, the authoritative clarifications, the recorded decisions, and the final code/tests. First I’m gathering the run artifacts and checking the codebase for the specific architecture and strictness targets the request names.
+
+I have the run structure. Next I’m reading the authoritative request/log/decisions and then I’ll spot-check the implementation against the named invariants: compiled-object removal, plan/runtime cutover, exports, placeholder centralization, branch typing, and strictness coverage.
+
+I’ve got the decision ledger. Now I’m checking whether the final tree actually matches those decisions and the spec, instead of relying on the phase notes alone.
+
+The branch/runtime surface is partly matching the new model. I’m checking whether the remaining details are true runtime cutovers or just typed veneers over legacy internals, because that distinction is where most of the likely gaps are.
+
+I’m now checking the higher-risk non-surface requirements: service boundaries, placeholder centralization, stale identity strings, and whether the strictness tests actually prove the spec rather than only checking a subset.
+
+I’ve found at least two architecture-level mismatches already: the runtime still routes collaborators through `Engine` bridge services, and the SDK one-step path still constructs both `SingleStepPlan` and `WorkflowPlan` instead of choosing one canonical architecture. I’m validating whether there are any more gaps of the same class, then I’ll write the audit artifacts.
+
+The suite is still running. While that finishes, I’m checking whether the remaining spec-heavy constraints are actually enforced by tests or only described in phase notes.
+
+The full test suite is green, which rules out accidental regressions. The remaining question is stricter: whether the final architecture matches the exact greenfield constraints, especially where the suite now appears to codify deviations.
+
+I have the main unresolved gaps. I’m collecting exact file/line evidence now so the audit report and revised request are precise and directly actionable.
+
+I’ve validated the code-level evidence. I’m reading the phase-local implementation/test notes for the areas that still look incomplete so the audit distinguishes intentional tradeoffs from unresolved gaps.
+
+I’m writing the run-local audit artifacts now: a concise evidence-backed gap report, a focused next-run request for the remaining architecture mismatches, and the machine-readable audit result.
+
+The audit artifacts are written. I’m doing a final readback and JSON validation now so the report, follow-up request, and machine result are internally consistent.
+
+Scope considered
+
+- The immutable request snapshot, the authoritative raw phase log, the decisions ledger, phase implementation notes, the final codebase, and the relevant tests.
+- I also ran the full suite with `.venv/bin/pytest -q`; it finished `1278 passed, 1 warning`.
+
+What I analyzed
+
+- Public export and identity freezes, compiler/workflow-plan cutover, route ownership, execution-frame and execution-services boundaries, branch evidence typing, placeholder centralization, and SDK one-step execution.
+- Whether any later clarification in the raw log actually superseded the original greenfield constraints. I did not find one.
+
+What I changed
+
+- Wrote [gap_report.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/botlane-v3-second-pass-greenfield-architecture-s-a9df943f/runs/run-20260509T125912Z-8deb38fd/artifacts/audit/gap_report.md).
+- Wrote [revised_request.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/botlane-v3-second-pass-greenfield-architecture-s-a9df943f/runs/run-20260509T125912Z-8deb38fd/artifacts/audit/revised_request.md).
+- Wrote [audit_result.json](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/botlane-v3-second-pass-greenfield-architecture-s-a9df943f/runs/run-20260509T125912Z-8deb38fd/artifacts/audit/audit_result.json).
+
+Key findings / decisions
+
+- The rewrite is functionally green and the big removal goals landed: `compile_workflow(...)` returns `WorkflowPlan`, public exports are preserved, and `Compiled*` source objects plus `plan_adapters.py` are gone.
+- Material unresolved gaps remain.
+- `StepPlan` still stores private `_route_table` data and runtime still prefers that cache, so `WorkflowPlan.routes` is not the sole route authority.
+- `ExecutionServices` is still backed by `Engine` bridge objects, and key collaborators still hold `Engine` directly instead of depending only on narrow services.
+- `Botlane.step(...)` still builds both `SingleStepPlan` and a one-step `WorkflowPlan`, so the one-step path is still a hybrid rather than one canonical architecture.
+- `StepExecutionResult` still carries a parallel `transition` record beyond the canonical `route_decision` / `action` flow.
+- Because of those gaps, `audit_result.json` is set to `material_gaps_found: true`.
+
+Open issues / next step
+
+- The next run should be a focused architecture-conformance cleanup for route ownership, execution-service boundaries, one-step execution unification, and removal of the residual parallel transition representation.
+- The follow-up request is in [revised_request.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/botlane-v3-second-pass-greenfield-architecture-s-a9df943f/runs/run-20260509T125912Z-8deb38fd/artifacts/audit/revised_request.md).
+
+<loop-control>
+{"schema":"docloop.loop_control/v1","kind":"promise","promise":"INCOMPLETE"}
+</loop-control>
+
+
+---
+run_id=run-20260509T125912Z-8deb38fd | entry=session_turn | pair=audit | phase=verifier | cycle=1 | attempt=1 | thread_id=019e0d94-1443-72c3-a1d9-a71ea423e43f
+---
+provider=codex
+mode=resume
+template=/home/rauter/.local/share/pipx/venvs/autoloop/lib/python3.12/site-packages/autoloop/templates/audit_verifier.md
+session_id=019e0d94-1443-72c3-a1d9-a71ea423e43f
+
+
+---
+run_id=run-20260509T125912Z-8deb38fd | entry=phase_output | pair=audit | phase=verifier | process=codex-agent | cycle=1 | attempt=1 | thread_id=019e0d94-1443-72c3-a1d9-a71ea423e43f
+---
+I’ve rechecked the audit artifacts against the code and the request. I’m updating the verifier criteria and feedback now; at this point I’m not seeing a blocking defect in the audit itself.
+
+The verifier artifacts are updated. I’m doing a quick readback so the criteria state, feedback note, and completion status line up exactly.
+
+Scope considered
+
+- The immutable request, the authoritative raw log, the decisions ledger, the audit artifacts, the final codebase, and the relevant tests.
+- I also relied on the full-suite result already validated in the audit: `.venv/bin/pytest -q` -> `1278 passed, 1 warning`.
+
+What I analyzed
+
+- Whether the audit compared intent against the final implementation and tests with enough depth.
+- Whether the reported unresolved gaps are real, materially important, and not contradicted by later clarification.
+- Whether the follow-up request is direct and scoped only to the remaining gaps.
+- Whether `audit_result.json` matches the report.
+
+What I reviewed
+
+- [gap_report.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/botlane-v3-second-pass-greenfield-architecture-s-a9df943f/runs/run-20260509T125912Z-8deb38fd/artifacts/audit/gap_report.md)
+- [revised_request.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/botlane-v3-second-pass-greenfield-architecture-s-a9df943f/runs/run-20260509T125912Z-8deb38fd/artifacts/audit/revised_request.md)
+- [audit_result.json](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/botlane-v3-second-pass-greenfield-architecture-s-a9df943f/runs/run-20260509T125912Z-8deb38fd/artifacts/audit/audit_result.json)
+- [criteria.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/botlane-v3-second-pass-greenfield-architecture-s-a9df943f/runs/run-20260509T125912Z-8deb38fd/artifacts/audit/criteria.md)
+- [feedback.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/botlane-v3-second-pass-greenfield-architecture-s-a9df943f/runs/run-20260509T125912Z-8deb38fd/artifacts/audit/feedback.md)
+
+Key findings / decisions
+
+- No blocking verifier findings.
+- The audit correctly treats the rewrite as functionally green but architecturally incomplete.
+- The reported gaps are supported by the codebase: duplicate step-plan route tables, `Engine`-backed execution-service bridges, hybrid one-step SDK architecture, and the residual parallel `transition` record on `StepExecutionResult`.
+- `revised_request.md` is a valid direct next-run request for those unresolved gaps.
+- I updated [criteria.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/botlane-v3-second-pass-greenfield-architecture-s-a9df943f/runs/run-20260509T125912Z-8deb38fd/artifacts/audit/criteria.md) to all checked and appended a non-blocking verifier note to [feedback.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/botlane-v3-second-pass-greenfield-architecture-s-a9df943f/runs/run-20260509T125912Z-8deb38fd/artifacts/audit/feedback.md).
+
+Open issues / next step
+
+- No audit-artifact correction is required.
+- The next run should implement the follow-up request already written in [revised_request.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/botlane-v3-second-pass-greenfield-architecture-s-a9df943f/runs/run-20260509T125912Z-8deb38fd/artifacts/audit/revised_request.md).
+
+<loop-control>
+{"schema":"docloop.loop_control/v1","kind":"promise","promise":"COMPLETE"}
+</loop-control>
