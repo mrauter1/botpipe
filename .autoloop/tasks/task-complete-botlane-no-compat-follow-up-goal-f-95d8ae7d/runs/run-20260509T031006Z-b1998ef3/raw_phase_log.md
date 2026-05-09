@@ -306,3 +306,99 @@ Open issues / next step
 <loop-control>
 {"schema":"docloop.loop_control/v1","kind":"promise","promise":"COMPLETE"}
 </loop-control>
+
+
+---
+run_id=run-20260509T031006Z-b1998ef3 | entry=session_turn | pair=test | phase=producer | cycle=1 | attempt=1 | thread_id=019e0abd-4bea-79d2-a9fd-bcdd4e74e85c
+---
+provider=codex
+mode=resume
+template=/home/rauter/.local/share/pipx/venvs/autoloop/lib/python3.12/site-packages/autoloop/templates/test_producer.md
+session_id=019e0abd-4bea-79d2-a9fd-bcdd4e74e85c
+
+
+---
+run_id=run-20260509T031006Z-b1998ef3 | entry=phase_output | pair=test | phase=producer | process=codex-agent | cycle=1 | attempt=1 | thread_id=019e0abd-4bea-79d2-a9fd-bcdd4e74e85c
+---
+I’m treating the implemented test changes as the working set and verifying them against the phase contract before I touch the test-phase artifacts. I’ll inspect the updated runtime/strictness/optimizer tests, then record the behavior-to-test map and a concise feedback summary based on what is already covered.
+
+The implemented tests already cover the requested behaviors, so I’m documenting that coverage rather than introducing duplicate repo test code. I’m updating the test-phase strategy artifact with the explicit behavior map and appending a concise feedback entry that points to the concrete regression tests and smokes now in place.
+
+I’m adding one test-phase decision entry because there’s a non-obvious coverage choice worth preserving: the `.botlane/workflows` precedence contract is intentionally covered by the existing runtime catalog/reference suites rather than duplicating it in the strictness file.
+
+Scope considered
+
+- Reviewed the implemented test coverage in `tests/strictness/test_no_compat.py`, `tests/unit/optimizer/test_candidate_surfaces.py`, and the adjacent runtime suites covering workflow catalog precedence.
+- Updated only the allowed test-phase artifacts plus the current turn’s decision block in `decisions.txt`.
+
+What I analyzed
+
+- Hidden legacy-name construction coverage and Botlane-only import/CLI smoke coverage in `tests/strictness/test_no_compat.py`.
+- The `.botlane` overlay regression in `tests/unit/optimizer/test_candidate_surfaces.py`.
+- The existing runtime catalog/reference suites that cover the adjacent `.botlane/workflows` precedence invariant needed for the full suite to stay green.
+
+What I changed
+
+- Updated [test_strategy.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/task-complete-botlane-no-compat-follow-up-goal-f-95d8ae7d/runs/run-20260509T031006Z-b1998ef3/artifacts/test/phases/botlane-no-compat-contract-lock/test_strategy.md) with an explicit behavior-to-test coverage map, preserved invariants, edge cases, failure paths, and known gaps.
+- Appended a concise coverage summary to [feedback.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/task-complete-botlane-no-compat-follow-up-goal-f-95d8ae7d/runs/run-20260509T031006Z-b1998ef3/artifacts/test/phases/botlane-no-compat-contract-lock/feedback.md).
+- Appended one test-phase decision to `decisions.txt` documenting why the `.botlane/workflows` precedence contract is intentionally covered by the runtime catalog/reference suites instead of duplicating it in strictness tests.
+
+Key findings / decisions
+
+- The repository test files already contain the needed no-compat and overlay regressions; I did not add duplicate repo test code in this turn.
+- Coverage now explicitly maps to the requested contract: hidden Autoloop-name construction, Botlane-only import/help behavior, `.botlane` overlay exclusion, legacy schema rejection, and the named-resolution precedence invariant.
+- The remaining full-suite warning is documented as out of scope and not normalized by new expectations.
+
+Open issues / next step
+
+- No test-author blocker remains for this phase.
+- The next step is test-auditor review of the updated strategy/feedback artifacts against the recorded validation evidence.
+
+
+---
+run_id=run-20260509T031006Z-b1998ef3 | entry=session_turn | pair=test | phase=verifier | cycle=1 | attempt=1 | thread_id=019e0abd-4bea-79d2-a9fd-bcdd4e74e85c
+---
+provider=codex
+mode=resume
+template=/home/rauter/.local/share/pipx/venvs/autoloop/lib/python3.12/site-packages/autoloop/templates/test_verifier.md
+session_id=019e0abd-4bea-79d2-a9fd-bcdd4e74e85c
+
+
+---
+run_id=run-20260509T031006Z-b1998ef3 | entry=phase_output | pair=test | phase=verifier | process=codex-agent | cycle=1 | attempt=1 | thread_id=019e0abd-4bea-79d2-a9fd-bcdd4e74e85c
+---
+I’m auditing the changed test coverage first, then I’ll update the phase-local criteria and feedback artifacts to match the evidence. I’ll focus on the overlay regression, strictness scanner cases, Botlane-only smoke coverage, and the adjacent workflow-resolution regression surface that the strategy intentionally relies on.
+
+The coverage is coherent: the changed behavior has direct regression tests, the preserved no-compat contract is still exercised in strictness, and the adjacent `.botlane/workflows` precedence behavior is covered in the right runtime layer. I’m marking the audit criteria complete and appending an explicit no-findings note to the feedback artifact.
+
+Scope considered
+
+- Audited the request-relevant test coverage in `tests/strictness/test_no_compat.py`, `tests/unit/optimizer/test_candidate_surfaces.py`, and the adjacent runtime workflow-catalog/reference suites.
+- Audited the phase-local test artifacts: `criteria.md`, `feedback.md`, `test_strategy.md`, and the run-local `decisions.txt`.
+
+What I analyzed
+
+- Strictness coverage for hidden legacy-name construction, Botlane-only imports, legacy import/module-entrypoint failure, and Botlane help branding.
+- Overlay regression coverage for `.botlane` exclusion under the actual copied source root.
+- The intentional separation between no-compat strictness coverage and the existing runtime suites that protect `.botlane/workflows` named-resolution precedence.
+
+What I reviewed
+
+- The strategy artifact accurately maps changed behavior, preserved invariants, edge cases, and known gaps.
+- The implemented tests would catch the requested regressions: hidden Autoloop-name reconstruction, accidental `.botlane` overlay copies, legacy import/module-entrypoint resurfacing, and Botlane help branding drift.
+- The fallback help invocation is documented and does not silently normalize a compatibility regression because existing console-script and wheel smoke coverage still owns the packaging surface.
+
+Key findings / decisions
+
+- No blocking findings.
+- No non-blocking findings.
+- Updated `criteria.md` to all checked and appended an explicit no-findings audit note to `feedback.md`.
+
+Open issues / next step
+
+- No test-audit blocker remains for this phase.
+- The phase can conclude with the current coverage and validation evidence as recorded.
+
+<loop-control>
+{"schema":"docloop.loop_control/v1","kind":"promise","promise":"COMPLETE"}
+</loop-control>
