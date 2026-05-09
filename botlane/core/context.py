@@ -341,7 +341,8 @@ class Context:
         normalized_worklists = normalize_mapping(worklists)
         normalized_workflow_params = normalize_mapping(workflow_params)
         normalized_values = values if isinstance(values, dict) else normalize_mapping(values)
-        self._request_file = Path(request_file) if request_file is not None else run_folder / "request.md"
+        self._request_file = resolved_request_file
+        self._task_request_file = resolved_task_request_file
         self._default_session_name = default_session_name
         self._run_paths = RunPaths(
             root=self.root,
@@ -379,6 +380,7 @@ class Context:
             selections=selections if selections is not None else {},
             selection_snapshots=selection_snapshots if selection_snapshots is not None else {},
             active_worklist=active_worklist,
+            worklist_items_cache={},
             artifacts=artifacts,
             values=normalized_values,
             route=route,
@@ -395,65 +397,12 @@ class Context:
             runtime_event_sink=runtime_event_sink,
             workflow_invoker=workflow_invoker,
         )
-        self._sync_legacy_fields_from_execution_frame(
-            request_file=resolved_request_file,
-            task_request_file=resolved_task_request_file,
-        )
         self._history: HistoryReader | None = None
-        self._worklist_items_cache: dict[str, tuple[Any, ...]] = {}
-        self._worklist_selection_sync: Callable[[str], None] | None = None
-        self._worklist_selection_resolver: Callable[[str], "Selection[Any]"] | None = None
-        self._execution_source_hook: str | None = None
-        self._execution_source_phase: str | None = None
-        self._execution_hook_invocation_id: str | None = None
-        _CONTEXT_RUNTIMES[self] = _ContextRuntime(self)
 
-    def _sync_legacy_fields_from_execution_frame(
-        self,
-        *,
-        request_file: Path | None = None,
-        task_request_file: Path | None = None,
-    ) -> None:
-        frame = self._execution_frame
-        previous_request_file = getattr(self, "_request_file", None)
-        previous_task_request_file = getattr(self, "_task_request_file", None)
-        self._request_file = frame.identity.paths.request_file if frame.identity and frame.identity.paths is not None else (
-            previous_request_file if request_file is None else request_file
-        )
-        self._task_request_file = (
-            frame.identity.paths.task_request_file
-            if frame.identity and frame.identity.paths is not None
-            else previous_task_request_file if task_request_file is None else task_request_file
-        )
-        self._state_cell = frame.state_cell
-        self._state = None if frame.state_cell is None else frame.state_cell.value
-        self._session_store = frame.session_store
-        self._session_definitions = {} if frame.session_definitions is None else frame.session_definitions
-        self._worklists = {} if frame.worklists is None else frame.worklists
-        self._selections = {} if frame.selections is None else frame.selections
-        self._selection_snapshots = {} if frame.selection_snapshots is None else frame.selection_snapshots
-        self._active_worklist = frame.active_worklist
-        self._params = frame.params if frame.params is not None else EmptyParameters()
-        self._workflow_params = {} if frame.workflow_params is None else frame.workflow_params
-        self._message = frame.message
-        self._input_fields = frame.input_fields
-        self._workflow_invoker = frame.workflow_invoker
-        self._answer = frame.answer
-        self._input_response = frame.input_response
-        self._step_name = frame.step_name
-        self._artifacts = frame.artifacts
-        self._values = {} if frame.values is None else frame.values
-        self._route = frame.route
-        self._event = frame.event
-        self._outcome = frame.outcome
-        self._meta = frame.meta
-        self._step_state = {} if frame.step_state is None else frame.step_state
-        self._item_state = frame.item_state
-        self._step_item_state = frame.step_item_state
-        self._branch = frame.branch
-        self._fan_in = frame.fan_in
-        self._step_execution_id = frame.step_execution_id
-        self._runtime_event_sink = frame.runtime_event_sink
+    def __getattr__(self, name: str) -> Any:
+        if name.startswith("_"):
+            return _legacy_frame_attr(self, name)
+        raise AttributeError(name)
 
     @property
     def state(self) -> BaseModel:
@@ -464,7 +413,6 @@ class Context:
     @state.setter
     def state(self, value: BaseModel) -> None:
         self._execution_frame.set_state(value)
-        self._sync_legacy_fields_from_execution_frame()
 
     @property
     def state_cell(self) -> StateCell:
@@ -847,103 +795,77 @@ class _ContextRuntime:
 
     def set_state(self, state: BaseModel) -> None:
         self._context._execution_frame.set_state(state)
-        self._context._sync_legacy_fields_from_execution_frame()
 
     def set_answer(self, answer: str | None) -> None:
         self._context._execution_frame.answer = answer
-        self._context._sync_legacy_fields_from_execution_frame()
 
     def set_input_response(self, input_response: Any | None) -> None:
         self._context._execution_frame.input_response = input_response
-        self._context._sync_legacy_fields_from_execution_frame()
 
     def set_artifacts(self, artifacts: "ResolvedArtifacts | None") -> None:
         self._context._execution_frame.set_artifacts(artifacts)
-        self._context._sync_legacy_fields_from_execution_frame()
 
     def set_values(self, values: Mapping[str, Any] | None) -> None:
         self._context._execution_frame.set_values(
             values if isinstance(values, dict) else normalize_mapping(values)
         )
-        self._context._sync_legacy_fields_from_execution_frame()
 
     def set_route(self, route: Mapping[str, Any] | Any | None) -> None:
         self._context._execution_frame.set_route(route)
-        self._context._sync_legacy_fields_from_execution_frame()
 
     def set_outcome(self, outcome: Mapping[str, Any] | Any | None) -> None:
         self._context._execution_frame.set_outcome(outcome)
-        self._context._sync_legacy_fields_from_execution_frame()
 
     def set_event(self, event: Mapping[str, Any] | Any | None) -> None:
         self._context._execution_frame.set_event(event)
-        self._context._sync_legacy_fields_from_execution_frame()
 
     def set_meta(self, meta: Mapping[str, Any] | Any | None) -> None:
         self._context._execution_frame.set_meta(meta)
-        self._context._sync_legacy_fields_from_execution_frame()
 
     def set_step_state_store(self, state: BaseModel | dict[str, Any]) -> None:
         self._context._execution_frame.set_step_state(state)
-        self._context._sync_legacy_fields_from_execution_frame()
 
     def set_item_state_store(self, state: BaseModel | dict[str, Any] | None) -> None:
         self._context._execution_frame.set_item_state(state)
-        self._context._sync_legacy_fields_from_execution_frame()
 
     def set_step_item_state_store(self, state: BaseModel | dict[str, Any] | None) -> None:
         self._context._execution_frame.set_step_item_state(state)
-        self._context._sync_legacy_fields_from_execution_frame()
 
     def set_session_store(self, session_store: SessionStore) -> None:
-        self._context._execution_frame.session_store = session_store
-        self._context._sync_legacy_fields_from_execution_frame()
+        self._context._execution_frame.set_session_store(session_store)
 
     def set_branch(self, branch: BranchMetadata | None) -> None:
-        self._context._execution_frame.branch = branch
-        self._context._sync_legacy_fields_from_execution_frame()
+        self._context._execution_frame.set_branch(branch)
 
     def set_fan_in(self, fan_in: FanInMetadata | None) -> None:
-        self._context._execution_frame.fan_in = fan_in
-        self._context._sync_legacy_fields_from_execution_frame()
+        self._context._execution_frame.set_fan_in(fan_in)
 
     def set_step_execution_id(self, step_execution_id: str | None) -> None:
-        self._context._execution_frame.step_execution_id = step_execution_id
-        self._context._sync_legacy_fields_from_execution_frame()
+        self._context._execution_frame.set_step_execution_id(step_execution_id)
 
     def set_selection(self, worklist: "Worklist[Any] | str", selection: "Selection[Any]") -> None:
         worklist_name = self._context._worklist_name(worklist)
-        frame = self._context._execution_frame
-        if frame.selections is None:
-            frame.selections = {}
-        frame.selections[worklist_name] = selection
-        if frame.selection_snapshots is None:
-            frame.selection_snapshots = {}
-        frame.selection_snapshots.pop(worklist_name, None)
-        self._context._sync_legacy_fields_from_execution_frame()
+        self._context._execution_frame.set_selection(worklist_name, selection)
 
     def set_active_worklist(self, worklist: "Worklist[Any] | str | None") -> None:
-        self._context._execution_frame.active_worklist = (
+        self._context._execution_frame.set_active_worklist(
             None if worklist is None else self._context._worklist_name(worklist)
         )
-        self._context._sync_legacy_fields_from_execution_frame()
 
     def set_selections(self, selections: dict[str, "Selection[Any]"]) -> None:
-        self._context._execution_frame.selections = selections
-        self._context._sync_legacy_fields_from_execution_frame()
+        self._context._execution_frame.set_selections(selections)
 
     def set_selection_snapshots(self, snapshots: dict[str, "SelectionSnapshot"]) -> None:
-        self._context._execution_frame.selection_snapshots = snapshots
-        self._context._sync_legacy_fields_from_execution_frame()
+        self._context._execution_frame.set_selection_snapshots(snapshots)
 
     def set_worklist_selection_sync(self, callback: Callable[[str], None] | None) -> None:
-        self._context._worklist_selection_sync = callback
+        self._context._execution_frame.set_worklist_selection_sync(callback)
 
     def set_worklist_selection_resolver(
         self,
         callback: Callable[[str], "Selection[Any]"] | None,
     ) -> None:
-        self._context._worklist_selection_resolver = callback
+        self._context._execution_frame.set_worklist_selection_resolver(callback)
 
     def set_execution_source(
         self,
@@ -952,14 +874,17 @@ class _ContextRuntime:
         phase: str | None,
         invocation_id: str | None,
     ) -> None:
-        self._context._execution_source_hook = hook_name
-        self._context._execution_source_phase = phase
-        self._context._execution_hook_invocation_id = invocation_id
+        self._context._execution_frame.set_execution_source(
+            hook_name=hook_name,
+            phase=phase,
+            invocation_id=invocation_id,
+        )
 
     def sync_scoped_state_after_worklist_selection_change(self, worklist: "Worklist[Any] | str") -> None:
-        if self._context._worklist_selection_sync is None:
+        callback = self._context._execution_frame.worklist_selection_sync
+        if callback is None:
             return
-        self._context._worklist_selection_sync(self._context._worklist_name(worklist))
+        callback(self._context._worklist_name(worklist))
 
     def emit_worklist_runtime_event(
         self,
@@ -1083,18 +1008,14 @@ class _ContextRuntime:
         self._context._runtime_event_sink(event_type, event_payload)
 
     def get_cached_worklist_items(self, worklist_name: str) -> tuple[Any, ...] | None:
-        return self._context._worklist_items_cache.get(worklist_name)
+        return self._context._execution_frame.get_cached_worklist_items(worklist_name)
 
     def cache_worklist_items(self, worklist_name: str, items: tuple[Any, ...]) -> tuple[Any, ...]:
-        self._context._worklist_items_cache[worklist_name] = items
-        return items
+        return self._context._execution_frame.cache_worklist_items(worklist_name, items)
 
 
 def context_runtime(context: Context) -> _ContextRuntime:
-    try:
-        return _CONTEXT_RUNTIMES[context]
-    except KeyError as exc:  # pragma: no cover - only reachable for malformed synthetic contexts
-        raise WorkflowExecutionError("runtime helpers are unavailable on this context") from exc
+    return _ContextRuntime(context)
 
 
 def _runtime_visits(state: BaseModel | dict[str, Any] | None) -> int | None:

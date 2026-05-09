@@ -13,6 +13,7 @@
 - `Engine.run_async` `FAIL` terminal checkpoint parity: `tests/unit/test_runtime_and_discovery_extraction.py::test_engine_fail_terminal_saves_checkpoint_and_emits_terminal_state`
 - `Engine.run_async` `FINISH` terminal checkpoint parity: `tests/unit/test_runtime_and_discovery_extraction.py::test_engine_finish_terminal_skips_checkpoint_and_emits_terminal_state`
 - `describe_workflow_class` default entry ordering and global session resolution: `tests/unit/test_runtime_and_discovery_extraction.py::test_describe_workflow_class_preserves_default_entry_order_and_global_session`
+- `describe_workflow_class` simple-step lowering order and route wiring: `tests/unit/test_runtime_and_discovery_extraction.py::test_describe_workflow_class_lowers_simple_step_declarations_in_order`
 - `describe_workflow_class` duplicate detection during namespace scan: `tests/unit/test_runtime_and_discovery_extraction.py::test_describe_workflow_class_rejects_duplicate_step_names`
 
 ## Preserved Invariants Checked
@@ -21,6 +22,7 @@
 - `FINISH` still emits terminal completion without leaving a checkpoint behind on the happy path.
 - Max-step exhaustion still emits `fatal` without synthesizing a new checkpoint.
 - Discovery still picks the first declared step as the default entry and still binds `global_session` as the default session.
+- Discovery still lowers `simple.python_step(...)` declarations into core steps in declaration order and resolves their default route wiring.
 - Discovery still rejects duplicate step names at workflow class construction time.
 
 ## Existing Broader Coverage Reused
@@ -29,6 +31,7 @@
 
 ## Edge Cases / Failure Paths
 - Invalid resumed input payload after an `AWAIT_INPUT` checkpoint
+- Lowered simple-step declarations with implicit chaining and explicit terminal routing
 - Duplicate workflow step names during discovery scan
 - Terminal paths with and without persisted checkpoints
 

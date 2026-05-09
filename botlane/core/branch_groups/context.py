@@ -231,9 +231,8 @@ def _inherit_child_runtime_bookkeeping(parent: "Context", child: "Context") -> N
     from ..context import context_runtime
 
     runtime = context_runtime(child)
-    runtime.set_selection_snapshots(dict(parent._selection_snapshots))
     runtime.set_worklist_selection_resolver(_child_worklist_selection_resolver(child))
-    child._worklist_items_cache = dict(parent._worklist_items_cache)
+    child._execution_frame.worklist_items_cache = dict(parent._worklist_items_cache)
 
 
 def _child_worklist_selection_resolver(child: "Context"):

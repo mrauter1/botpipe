@@ -4,6 +4,7 @@ from pathlib import Path
 
 from pydantic import BaseModel
 
+import botlane.core.context as context_module
 from botlane.core.branch_groups.context import (
     BranchMetadata,
     FanInMetadata,
@@ -75,6 +76,10 @@ def test_context_synthesizes_execution_frame_and_preserves_default_message_senti
     assert none_ctx.message is None
     assert none_ctx.input.message is None
     assert none_ctx.input.topic == "release"
+
+
+def test_context_module_has_no_weakref_runtime_sidecar() -> None:
+    assert not hasattr(context_module, "_CONTEXT_RUNTIMES")
 
 
 def test_context_runtime_mutators_update_execution_frame_and_legacy_fields(tmp_path: Path) -> None:

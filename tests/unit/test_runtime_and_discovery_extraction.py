@@ -35,6 +35,7 @@ for _name in (
     setattr(_sdk, _name, type(_name, (), {}))
 sys.modules.setdefault("botlane.sdk", _sdk)
 
+from botlane import simple
 from botlane.core import FAIL, FINISH, Workflow
 from botlane.core.discovery import describe_workflow_class
 from botlane.core.engine import Engine
@@ -306,6 +307,25 @@ def test_describe_workflow_class_preserves_default_entry_order_and_global_sessio
     assert tuple(step.name for step in definition.steps) == ("draft", "publish")
     assert definition.default_session_name == "global"
     assert definition.sessions_by_name["global"] is DiscoveryWorkflow.global_session
+
+
+def test_describe_workflow_class_lowers_simple_step_declarations_in_order() -> None:
+    class SimpleDiscoveryWorkflow(simple.Workflow):
+        draft = simple.python_step(lambda ctx: simple.Event("done"), name="draft")
+        publish = simple.python_step(
+            lambda ctx: simple.Event("done"),
+            name="publish",
+            routes={"done": simple.FINISH},
+        )
+
+    definition = describe_workflow_class(SimpleDiscoveryWorkflow)
+    publish = definition.steps_by_name["publish"]
+
+    assert definition.workflow_name == "simple_discovery_workflow"
+    assert definition.entry.name == "draft"
+    assert tuple(step.name for step in definition.steps) == ("draft", "publish")
+    assert definition.transitions[definition.entry]["done"] is publish
+    assert definition.transitions[publish]["done"] == FINISH
 
 
 def test_describe_workflow_class_rejects_duplicate_step_names() -> None:
