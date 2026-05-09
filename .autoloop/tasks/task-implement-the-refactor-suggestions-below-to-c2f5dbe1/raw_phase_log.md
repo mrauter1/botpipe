@@ -952,3 +952,72 @@ Open issues / next step
 <loop-control>
 {"schema":"docloop.loop_control/v1","kind":"promise","promise":"COMPLETE"}
 </loop-control>
+
+
+---
+run_id=run-20260509T124548Z-f67cf8d4 | entry=session_turn | pair=test | phase=producer | cycle=1 | attempt=1 | thread_id=019e0ce8-ee70-7b01-8577-e4e1d171aaa2
+---
+provider=codex
+mode=resume
+template=/home/rauter/.local/share/pipx/venvs/autoloop/lib/python3.12/site-packages/autoloop/templates/test_producer.md
+session_id=019e0ce8-ee70-7b01-8577-e4e1d171aaa2
+
+
+---
+run_id=run-20260509T124548Z-f67cf8d4 | entry=phase_output | pair=test | phase=producer | process=codex-agent | cycle=1 | attempt=1 | thread_id=019e0ce8-ee70-7b01-8577-e4e1d171aaa2
+---
+I’m reviewing the phase-local runtime/discovery coverage against the acceptance criteria first, then I’ll add only the missing parity tests and update the test strategy artifact to map them explicitly.
+
+The current phase-local file only covers max-step, resume-failure, and one discovery path. I’m checking existing runtime-control patterns so I can add the missing terminal/checkpoint coverage without inventing a new test harness.
+
+I’ve confirmed that broader contract tests already cover `goto`, many `AWAIT_INPUT`/`FAIL` controls, and hook ordering. I’m adding only the gaps that are still phase-specific here: direct `FINISH`/`FAIL` checkpoint parity and discovery duplicate detection.
+
+I have the minimal test delta now: tighten the existing pause/fatal test, add explicit `FAIL` and `FINISH` checkpoint parity cases, and add one direct discovery duplicate-name regression test. After that I’ll map the remaining acceptance branches to the broader contract suite in the phase strategy.
+
+I’m editing the focused phase test file now: one assertion tightener for `AWAIT_INPUT`, two terminal/checkpoint parity tests, and one discovery duplicate-name regression test. After that I’ll update the phase strategy and feedback artifacts.
+
+The focused test file is updated. I’m running it now before I write the strategy map so I only record coverage that actually passes.
+
+The new duplicate-name assertion is hitting exactly the right validation path; it just fires at class creation time because the metaclass compiles immediately. I’m tightening that test around the actual raise point and rerunning.
+
+The duplicate-name test is patched to assert at the metaclass boundary, which is the actual discovery behavior here. Re-running the focused file now.
+
+The focused file now passes. I’m recording the coverage map and summary artifacts, then I’ll do one final validation line that matches what I’m documenting.
+
+I’ve updated the strategy/feedback artifacts. One small decision remains worth preserving: this phase-local file stays focused on checkpoint/discovery branches and explicitly reuses the existing contract suite for `goto`/hook sequencing instead of cloning that harness.
+
+The last step is just validation that matches the strategy artifact: compile the focused file and rerun the focused test target once.
+
+Scope considered
+
+- Phase-local test work for the runtime/discovery extraction only: [tests/unit/test_runtime_and_discovery_extraction.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/tests/unit/test_runtime_and_discovery_extraction.py), [test_strategy.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/task-implement-the-refactor-suggestions-below-to-c2f5dbe1/runs/run-20260509T124548Z-f67cf8d4/artifacts/test/phases/runtime-and-discovery-extraction/test_strategy.md), [feedback.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/task-implement-the-refactor-suggestions-below-to-c2f5dbe1/runs/run-20260509T124548Z-f67cf8d4/artifacts/test/phases/runtime-and-discovery-extraction/feedback.md), and the phase decision ledger entry.
+
+What I analyzed
+
+- The current phase-local coverage against AC-1 and AC-2.
+- Existing runtime-control contract tests to avoid duplicating the larger `goto` and hook-order harness unnecessarily.
+- The extracted runtime paths that still needed direct parity assertions in the focused phase-local file.
+
+What I changed
+
+- Expanded [test_runtime_and_discovery_extraction.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/tests/unit/test_runtime_and_discovery_extraction.py):
+  - tightened the existing `AWAIT_INPUT` resume-failure test to assert the initial pause terminal and terminal event payload
+  - added explicit `FAIL` terminal checkpoint parity coverage
+  - added explicit `FINISH` terminal no-checkpoint coverage
+  - added direct discovery duplicate-step-name validation coverage
+- Updated [test_strategy.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/task-implement-the-refactor-suggestions-below-to-c2f5dbe1/runs/run-20260509T124548Z-f67cf8d4/artifacts/test/phases/runtime-and-discovery-extraction/test_strategy.md) with a behavior-to-test map, preserved invariants, reused broader coverage, and known gaps.
+- Appended a concise summary entry to [feedback.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/task-implement-the-refactor-suggestions-below-to-c2f5dbe1/runs/run-20260509T124548Z-f67cf8d4/artifacts/test/phases/runtime-and-discovery-extraction/feedback.md).
+- Appended a test-scoping decision to [decisions.txt](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/task-implement-the-refactor-suggestions-below-to-c2f5dbe1/runs/run-20260509T124548Z-f67cf8d4/decisions.txt).
+
+Key findings / decisions
+
+- The focused phase-local file now covers the extracted terminal/checkpoint branches directly: max-step fatal, `AWAIT_INPUT` resume failure, `FAIL`, and `FINISH`.
+- Discovery coverage now directly exercises both preserved default-entry/global-session behavior and duplicate-step rejection during namespace scan.
+- I kept `goto` checkpoint sequencing and hook-notification parity mapped to the existing contract suite instead of cloning that broader harness into the phase-local unit file.
+
+Open issues / next step
+
+- Focused validation now passes:
+  - `.venv/bin/python -m py_compile tests/unit/test_runtime_and_discovery_extraction.py`
+  - `.venv/bin/python -m pytest tests/unit/test_runtime_and_discovery_extraction.py -q` → `6 passed`
+- Next step is the test-phase verifier pass against the updated strategy and focused test coverage.
