@@ -23,3 +23,6 @@
 {"ts": "2026-05-09T03:30:01.364017+00:00", "run_id": "run-20260509T031006Z-b1998ef3", "seq": 23, "event_type": "phase_completed", "pair": "test", "phase_id": "botlane-no-compat-contract-lock", "phase_mode": "single"}
 {"ts": "2026-05-09T03:30:01.365916+00:00", "run_id": "run-20260509T031006Z-b1998ef3", "seq": 24, "event_type": "pair_started", "pair": "audit", "phase_id": null}
 {"ts": "2026-05-09T03:30:01.366002+00:00", "run_id": "run-20260509T031006Z-b1998ef3", "seq": 25, "event_type": "cycle_started", "pair": "audit", "cycle": 1, "attempt": 1, "phase_id": null}
+{"ts": "2026-05-09T03:36:06.045335+00:00", "run_id": "run-20260509T031006Z-b1998ef3", "seq": 26, "event_type": "phase_finished", "pair": "audit", "phase": "producer", "cycle": 1, "attempt": 1, "empty_output": false, "phase_id": null}
+{"ts": "2026-05-09T03:37:00.823792+00:00", "run_id": "run-20260509T031006Z-b1998ef3", "seq": 27, "event_type": "phase_finished", "pair": "audit", "phase": "verifier", "cycle": 1, "attempt": 1, "empty_output": false, "phase_id": null}
+{"ts": "2026-05-09T03:37:00.955715+00:00", "run_id": "run-20260509T031006Z-b1998ef3", "seq": 28, "event_type": "pair_completed", "pair": "audit", "cycle": 1, "attempt": 1, "phase_id": null}
