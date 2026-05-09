@@ -177,3 +177,12 @@ Open issues / next step
 <loop-control>
 {"schema":"docloop.loop_control/v1","kind":"promise","promise":"COMPLETE"}
 </loop-control>
+
+
+---
+run_id=run-20260509T125912Z-8deb38fd | entry=phase_scope_resolved
+---
+phase_mode=single
+phase_ids=public-freeze,canonical-type-hardening,atomic-plan-runtime-cutover,execution-frame-authority,branch-typed-evidence,placeholder-reference-graph,provider-turn-cutover,sdk-single-step-cutover,strictness-cleanup
+explicit=True
+current_phase_index=0
