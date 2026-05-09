@@ -567,7 +567,7 @@ class BranchGroupRuntime:
         if fan_in_step is None:
             raise WorkflowExecutionError(f"branch group {spec.name!r} is missing its compiled fan-in step")
         metadata = FanInMetadata(
-            results=manifest,
+            results=manifest.to_dict(),
             results_path=results_path,
             context_path=context_path,
             context_text=context_text,

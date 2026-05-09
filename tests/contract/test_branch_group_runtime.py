@@ -194,6 +194,11 @@ def test_parallel_branch_group_with_fan_in_routes_through_fan_in_and_exposes_hel
                 seen.update(
                     {
                         "branch_count": request.context.fan_in.branch_count,
+                        "results_type": type(request.context.fan_in.results).__name__,
+                        "results_schema": request.context.fan_in.results.schema,
+                        "results_branch_names": tuple(
+                            branch["name"] for branch in request.context.fan_in.results.branches
+                        ),
                         "results_path": request.context.fan_in.results_path,
                         "context_path": request.context.fan_in.context_path,
                         "context_text": request.context.fan_in.context_text,
@@ -222,6 +227,9 @@ def test_parallel_branch_group_with_fan_in_routes_through_fan_in_and_exposes_hel
     assert result.last_event is not None
     assert result.last_event.tag == "approved"
     assert seen["branch_count"] == 2
+    assert seen["results_type"] == "NamespaceProxy"
+    assert seen["results_schema"] == "botlane.branch_results/v1"
+    assert seen["results_branch_names"] == ("security", "cost")
     expected_results_path = _branch_group_dir(task_folder, FanInWorkflow, "reviews") / "results.json"
     expected_context_path = _branch_group_dir(task_folder, FanInWorkflow, "reviews") / "context.md"
     assert seen["results_path"] == expected_results_path

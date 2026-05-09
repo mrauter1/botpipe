@@ -14,6 +14,7 @@
 - `botlane/core/branch_groups/outcomes.py`
 - `tests/unit/test_branch_group_context_sessions.py`
 - `tests/contract/test_branch_result_runtime.py`
+- `tests/contract/test_branch_group_runtime.py`
 
 ## Symbols touched
 
@@ -40,13 +41,14 @@
 ## Assumptions
 
 - Keeping custom branch outcome callbacks on a mapping-shaped manifest payload is still required by existing tests and earlier phase decisions.
-- `FanInMetadata.results` may carry a typed `BranchManifest` because no current runtime/public contract requires it to be a plain dict.
+- `ctx.fan_in.results` is part of the public fan-in execution surface and must stay public-neutral even while typed `BranchManifest` remains the internal authority.
 
 ## Preserved invariants
 
 - Persisted branch evidence schema remains `botlane.branch_results/v1`.
 - Persisted `results.json` and `context.md` shapes/content remain compatible with existing contract tests.
 - Fail-fast skipped/cancelled semantics are unchanged.
+- `ctx.fan_in.results` remains mapping-shaped for user code instead of leaking `BranchManifest`.
 
 ## Intended behavior changes
 
@@ -60,8 +62,8 @@
 
 ## Expected side effects
 
-- Fan-in metadata now carries the typed manifest in-memory, reducing ad hoc dict handling in branch-runtime consumers.
 - Built-in branch outcome aggregation and branch context rendering avoid redundant manifest dict round-trips.
+- Fan-in metadata keeps a mapping-shaped results payload at the public context boundary while readable evidence files and typed internal manifest behavior stay unchanged.
 
 ## Validation performed
 
@@ -71,3 +73,4 @@
 ## Deduplication / centralization decisions
 
 - Centralized mapping-to-typed coercion in `coerce_branch_manifest(...)` and `_coerce_branch_result(...)` so runtime consumers stop reimplementing manifest parsing.
+- Public fan-in results now use the canonical `BranchManifest.to_dict()` serializer instead of a separate ad hoc payload builder.
