@@ -22,16 +22,16 @@
       "single-step-parity-and-cleanup"
     ],
     "explicit": true,
-    "current_phase_index": 4,
-    "current_phase_id": "execution-frame-context-migration"
+    "current_phase_index": 5,
+    "current_phase_id": "provider-turn-and-route-finalization"
   },
   "phase_status": {
     "freeze-public-compatibility": "completed",
     "boundary-primitives-and-strictness": "completed",
     "route-contract-adapters": "completed",
     "step-and-workflow-plans": "completed",
-    "execution-frame-context-migration": "in_progress",
-    "provider-turn-and-route-finalization": "planned",
+    "execution-frame-context-migration": "completed",
+    "provider-turn-and-route-finalization": "in_progress",
     "execution-services-and-collaborators": "planned",
     "placeholder-reference-graph": "planned",
     "branch-results-locators-and-policy-rules": "planned",
@@ -95,6 +95,19 @@
       "run_id": "run-20260509T045359Z-e2586b1f",
       "status": "in_progress",
       "ts": "2026-05-09T06:30:17.815213+00:00"
+    },
+    {
+      "phase_id": "execution-frame-context-migration",
+      "run_id": "run-20260509T045359Z-e2586b1f",
+      "status": "completed",
+      "ts": "2026-05-09T06:53:35.363581+00:00",
+      "pair": "test"
+    },
+    {
+      "phase_id": "provider-turn-and-route-finalization",
+      "run_id": "run-20260509T045359Z-e2586b1f",
+      "status": "in_progress",
+      "ts": "2026-05-09T06:53:35.366378+00:00"
     }
   ]
 }
