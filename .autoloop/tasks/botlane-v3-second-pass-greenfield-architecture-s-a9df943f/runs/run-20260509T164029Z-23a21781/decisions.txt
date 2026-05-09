@@ -1,0 +1,5 @@
+<autoloop-decisions-header version="1" block_seq="1" owner="planner" phase_id="task-global" pair="plan" turn_seq="1" run_id="run-20260509T164029Z-23a21781" ts="2026-05-09T16:40:30.438081+00:00" />
+Treat `WorkflowPlan.routes` as the only step-local effective route authority and `WorkflowPlan.global_routes` as the only global authority; consumers may merge them for fallback lookup but step plans must not own copied route tables.
+Finish the service-boundary cutover by replacing Engine-backed collaborator dependencies with narrow Engine-free services, not by moving Engine private methods behind a renamed god object.
+Collapse `Botlane.step(...)` onto one compiled one-step `WorkflowPlan`; any surviving single-step inspection metadata must be derived from that plan instead of produced by a second parallel compilation.
+Preserve `RunResult.last_transition` and runner/workspace `finalization` payload shapes after removing `StepExecutionResult.transition` by deriving the summary at the engine boundary from canonical route-decision data.
