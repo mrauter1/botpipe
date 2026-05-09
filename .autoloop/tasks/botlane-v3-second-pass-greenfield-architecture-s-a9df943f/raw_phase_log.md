@@ -3439,3 +3439,32 @@ workspace=/home/rauter/autoloop_v3_bkp/autoloop_v3
 pairs=plan,implement,test,audit
 request_file=/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/botlane-v3-second-pass-greenfield-architecture-s-a9df943f/runs/run-20260509T164029Z-23a21781/request.md
 session_mode=persistent
+
+
+---
+run_id=run-20260509T164029Z-23a21781 | entry=session_turn | pair=plan | phase=producer | cycle=1 | attempt=1 | thread_id=019e0d9c-a924-72a2-863c-a56201d140af
+---
+provider=codex
+mode=start
+template=/home/rauter/.local/share/pipx/venvs/autoloop/lib/python3.12/site-packages/autoloop/templates/plan_producer.md
+session_id=019e0d9c-a924-72a2-863c-a56201d140af
+
+
+---
+run_id=run-20260509T164029Z-23a21781 | entry=phase_output | pair=plan | phase=producer | process=codex-agent | cycle=1 | attempt=1 | thread_id=019e0d9c-a924-72a2-863c-a56201d140af
+---
+I’m treating this as a run-local planning turn: first I’m checking the authoritative request/log artifacts and the current architecture around routes, execution services, and one-step execution so the plan lines up with the actual codebase state.
+
+The planning artifacts are basically empty, so I’m mapping the live architecture before I write anything. Next I’m tracing where `WorkflowPlan.routes`, `ExecutionServices`, `SingleStepPlan`, and `StepExecutionResult` are still split across old/new paths.
+
+I’ve confirmed the main split points in live code: step plans still own `_route_table`, services are still thin `Engine` facades, `Botlane.step(...)` still compiles both `SingleStepPlan` and `WorkflowPlan`, and branch/runtime code still reads `StepExecutionResult.transition`. I’m drilling into call sites and strictness coverage now so the plan can sequence the cutover without breaking route behavior.
+
+The strictness side is still too weak for the remaining cleanup: there’s no guard today against `_route_table`, engine-backed collaborators, or dual one-step builders. I’m reading the existing engine/service tests now so the written plan can specify the exact contract additions instead of generic “add tests”.
+
+I have enough context to write the plan. I’m updating the run-local artifacts with a 3-phase implementation sequence: first remove route ownership from step plans, then finish the service-boundary cutover away from `Engine`, then collapse SDK one-step execution and remove `StepExecutionResult.transition` while preserving `RunResult.last_transition` and runtime finalization payloads.
+
+The artifacts are written. I’m doing a quick validation pass on the generated plan files now to make sure the YAML shape, dependency ordering, and decision entries match the run contract before I close the turn.
+
+Updated the run-local planning artifacts in [plan.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/botlane-v3-second-pass-greenfield-architecture-s-a9df943f/runs/run-20260509T164029Z-23a21781/artifacts/plan/plan.md), [phase_plan.yaml](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/botlane-v3-second-pass-greenfield-architecture-s-a9df943f/runs/run-20260509T164029Z-23a21781/artifacts/plan/phase_plan.yaml), [feedback.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/botlane-v3-second-pass-greenfield-architecture-s-a9df943f/runs/run-20260509T164029Z-23a21781/artifacts/plan/feedback.md), and [decisions.txt](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/botlane-v3-second-pass-greenfield-architecture-s-a9df943f/runs/run-20260509T164029Z-23a21781/decisions.txt).
+
+The plan is now implementation-ready and split into 3 ordered phases: `WorkflowPlan` route-authority cutover, Engine-free `ExecutionServices` migration, and canonical SDK one-step plus `StepExecutionResult.transition` removal. It also locks two key non-obvious constraints: preserve `RunResult.last_transition` / persisted `finalization` payloads, and derive any remaining single-step metadata from one compiled `WorkflowPlan` rather than keeping dual internal architectures alive. No tests were run on this planning turn.
