@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from typing import Any
 
 from .artifacts import Artifact
@@ -22,152 +22,47 @@ class ArtifactInventoryRecord:
     producer_steps: tuple[str, ...]
 
 
+@dataclass(slots=True)
+class MutableArtifactRecord:
+    artifact: Artifact
+    name: str
+    qualified_name: str
+    owner_step: str | None
+    workflow_level: bool = False
+    producer_steps: list[str] = field(default_factory=list)
+
+
+@dataclass(frozen=True, slots=True)
+class _ArtifactBinding:
+    artifact_id: int
+    name: str
+    qualified_name: str
+    allow_producer_rebind: bool
+
+
 def collect_artifact_inventory(definition: Any) -> dict[str, ArtifactInventoryRecord]:
     """Collect artifact registry metadata keyed by canonical reference."""
 
-    workflow_level_names_to_identity: dict[str, int] = {}
-    qualified_names_to_identity: dict[str, int] = {}
-    records_by_identity: dict[int, dict[str, Any]] = {}
-    all_steps = tuple(nested_step for step in definition.steps for nested_step in _iter_inventory_steps(step))
-    steps_by_name = {step.name: step for step in all_steps}
-
-    def register(
-        artifact: Artifact,
-        *,
-        fallback_name: str,
-        workflow_level: bool = False,
-        producer_step: str | None = None,
-    ) -> None:
-        if artifact.name is None:
-            artifact.bind_name(fallback_name)
-        artifact_id = id(artifact)
-        name = artifact.name or fallback_name
-        if name in definition.reserved_step_pseudo_fields:
-            raise WorkflowValidationError(
-                f"artifact name {name!r} is reserved because it collides with prompt pseudo-fields"
-            )
-        existing_record = records_by_identity.get(artifact_id)
-        workflow_level_declared = bool(existing_record and existing_record["workflow_level"])
-        allow_producer_rebind = bool(
-            existing_record
-            and not workflow_level_declared
-            and not existing_record["producer_steps"]
-            and existing_record["owner_step"] is None
-            and producer_step is not None
-        )
-
-        if workflow_level or workflow_level_declared:
-            artifact.owner_step = None
-            artifact.owner = None
-            artifact.qualified_name = name
-        elif producer_step is not None and artifact.owner_step is None:
-            artifact.bind_owner_step(producer_step)
-            artifact.owner = steps_by_name[producer_step]
-        elif artifact.qualified_name is None:
-            artifact.qualified_name = name
-
-        qualified_name = artifact.qualified_name or name
-        if allow_producer_rebind and existing_record is not None and existing_record["qualified_name"] != qualified_name:
-            old_qualified_name = existing_record["qualified_name"]
-            if qualified_names_to_identity.get(old_qualified_name) == artifact_id:
-                del qualified_names_to_identity[old_qualified_name]
-        if workflow_level:
-            existing_identity = workflow_level_names_to_identity.get(name)
-            if existing_identity is not None and existing_identity != artifact_id:
-                if producer_step is None:
-                    raise WorkflowValidationError(f"duplicate artifact name {name!r}")
-                _raise_workflow_level_artifact_conflict_error(
-                    artifact_name=name,
-                    workflow_level_record=records_by_identity.get(existing_identity),
-                    conflicting_artifact=artifact,
-                    conflicting_qualified_name=qualified_name,
-                    producer_step=producer_step,
-                )
-            workflow_level_names_to_identity[name] = artifact_id
-        elif producer_step is not None:
-            existing_identity = workflow_level_names_to_identity.get(name)
-            if existing_identity is not None and existing_identity != artifact_id:
-                _raise_workflow_level_artifact_conflict_error(
-                    artifact_name=name,
-                    workflow_level_record=records_by_identity.get(existing_identity),
-                    conflicting_artifact=artifact,
-                    conflicting_qualified_name=qualified_name,
-                    producer_step=producer_step,
-                )
-        existing_identity = qualified_names_to_identity.get(qualified_name)
-        if existing_identity is not None and existing_identity != artifact_id:
-            existing_duplicate = records_by_identity.get(existing_identity)
-            if (
-                existing_duplicate is not None
-                and existing_duplicate.get("owner_step") == artifact.owner_step
-                and _artifacts_equivalent(existing_duplicate["artifact"], artifact)
-            ):
-                if producer_step is not None and producer_step not in existing_duplicate["producer_steps"]:
-                    existing_duplicate["producer_steps"].append(producer_step)
-                return
-            _raise_duplicate_qualified_artifact_name_error(
-                qualified_name=qualified_name,
-                existing_record=existing_duplicate,
-                conflicting_artifact=artifact,
-            )
-        qualified_names_to_identity[qualified_name] = artifact_id
-        record = records_by_identity.setdefault(
-            artifact_id,
-            {
-                "artifact": artifact,
-                "name": name,
-                "qualified_name": qualified_name,
-                "owner_step": artifact.owner_step,
-                "workflow_level": False,
-                "producer_steps": [],
-            },
-        )
-        if record["name"] != name:
-            raise WorkflowValidationError(f"artifact name drift detected for {artifact!r}")
-        if record["qualified_name"] != qualified_name:
-            if allow_producer_rebind:
-                record["qualified_name"] = qualified_name
-                record["owner_step"] = artifact.owner_step
-            else:
-                raise WorkflowValidationError(f"artifact qualified-name drift detected for {artifact!r}")
-        if record["owner_step"] != artifact.owner_step:
-            if allow_producer_rebind:
-                record["owner_step"] = artifact.owner_step
-            else:
-                raise WorkflowValidationError(f"artifact owner-step drift detected for {artifact!r}")
-        if workflow_level:
-            record["workflow_level"] = True
-        if producer_step is not None and producer_step not in record["producer_steps"]:
-            record["producer_steps"].append(producer_step)
+    builder = _ArtifactInventoryBuilder(definition)
 
     for attr_name, artifact in definition.workflow_artifacts.items():
-        register(artifact, fallback_name=attr_name, workflow_level=True)
+        builder.register_workflow_artifact(attr_name, artifact)
     for index, artifact in enumerate(definition.workflow_log_artifacts, start=1):
-        register(artifact, fallback_name=f"workflow__log_{index}")
+        builder.register_log_artifact(f"workflow__log_{index}", artifact)
     for step in definition.steps:
         for nested_step in _iter_inventory_steps(step):
             for write_name, artifact in nested_step.writes.items():
-                register(artifact, fallback_name=write_name, producer_step=nested_step.name)
+                builder.register_step_artifact(nested_step.name, write_name, artifact)
             for index, artifact in enumerate(nested_step.reads, start=1):
                 if isinstance(artifact, Artifact):
-                    register(artifact, fallback_name=f"{nested_step.name}__read_{index}")
+                    builder.register_reference_artifact(f"{nested_step.name}__read_{index}", artifact)
             for index, artifact in enumerate(nested_step.requires, start=1):
                 if isinstance(artifact, Artifact):
-                    register(artifact, fallback_name=f"{nested_step.name}__require_{index}")
+                    builder.register_reference_artifact(f"{nested_step.name}__require_{index}", artifact)
             for index, artifact in enumerate(nested_step.log_artifacts, start=1):
-                register(artifact, fallback_name=f"{nested_step.name}__log_{index}")
+                builder.register_log_artifact(f"{nested_step.name}__log_{index}", artifact)
 
-    return {
-        record["qualified_name"]: ArtifactInventoryRecord(
-            artifact=record["artifact"],
-            name=record["name"],
-            qualified_name=record["qualified_name"],
-            owner_step=record["owner_step"],
-            workflow_level=record["workflow_level"],
-            producer_steps=tuple(record["producer_steps"]),
-        )
-        for record in records_by_identity.values()
-    }
+    return builder.build()
 
 
 def _iter_inventory_steps(step: Step) -> tuple[Step, ...]:
@@ -182,6 +77,236 @@ def _iter_inventory_steps(step: Step) -> tuple[Step, ...]:
     if isinstance(fan_in_step, Step):
         nested.append(fan_in_step)
     return tuple(nested)
+
+
+class _ArtifactInventoryBuilder:
+    def __init__(self, definition: Any) -> None:
+        self._definition = definition
+        self._workflow_level_names_to_identity: dict[str, int] = {}
+        self._qualified_names_to_identity: dict[str, int] = {}
+        self._records_by_identity: dict[int, MutableArtifactRecord] = {}
+        all_steps = tuple(nested_step for step in definition.steps for nested_step in _iter_inventory_steps(step))
+        self._steps_by_name = {step.name: step for step in all_steps}
+
+    def register_workflow_artifact(self, name: str, artifact: Artifact) -> None:
+        self._register(artifact, fallback_name=name, workflow_level=True)
+
+    def register_step_artifact(self, step_name: str, name: str, artifact: Artifact) -> None:
+        self._register(artifact, fallback_name=name, producer_step=step_name)
+
+    def register_reference_artifact(self, fallback_name: str, artifact: Artifact) -> None:
+        self._register(artifact, fallback_name=fallback_name)
+
+    def register_log_artifact(self, fallback_name: str, artifact: Artifact) -> None:
+        self._register(artifact, fallback_name=fallback_name)
+
+    def build(self) -> dict[str, ArtifactInventoryRecord]:
+        return {
+            record.qualified_name: ArtifactInventoryRecord(
+                artifact=record.artifact,
+                name=record.name,
+                qualified_name=record.qualified_name,
+                owner_step=record.owner_step,
+                workflow_level=record.workflow_level,
+                producer_steps=tuple(record.producer_steps),
+            )
+            for record in self._records_by_identity.values()
+        }
+
+    def _register(
+        self,
+        artifact: Artifact,
+        *,
+        fallback_name: str,
+        workflow_level: bool = False,
+        producer_step: str | None = None,
+    ) -> None:
+        binding = self._bind_artifact_identity(
+            artifact,
+            fallback_name=fallback_name,
+            workflow_level=workflow_level,
+            producer_step=producer_step,
+        )
+        if binding.allow_producer_rebind:
+            self._drop_rebound_qualified_name(binding.artifact_id, binding.qualified_name)
+        self._check_workflow_name_conflict(
+            artifact=artifact,
+            artifact_id=binding.artifact_id,
+            name=binding.name,
+            qualified_name=binding.qualified_name,
+            workflow_level=workflow_level,
+            producer_step=producer_step,
+        )
+        if self._check_qualified_name_conflict(
+            artifact=artifact,
+            artifact_id=binding.artifact_id,
+            qualified_name=binding.qualified_name,
+            producer_step=producer_step,
+        ):
+            return
+        self._qualified_names_to_identity[binding.qualified_name] = binding.artifact_id
+        record = self._upsert_record(
+            artifact=artifact,
+            artifact_id=binding.artifact_id,
+            name=binding.name,
+            qualified_name=binding.qualified_name,
+            allow_producer_rebind=binding.allow_producer_rebind,
+        )
+        if workflow_level:
+            record.workflow_level = True
+        self._record_producer_step(record, producer_step)
+
+    def _bind_artifact_identity(
+        self,
+        artifact: Artifact,
+        *,
+        fallback_name: str,
+        workflow_level: bool,
+        producer_step: str | None,
+    ) -> _ArtifactBinding:
+        if artifact.name is None:
+            artifact.bind_name(fallback_name)
+        artifact_id = id(artifact)
+        name = artifact.name or fallback_name
+        self._check_reserved_name(name)
+        existing_record = self._records_by_identity.get(artifact_id)
+        workflow_level_declared = bool(existing_record and existing_record.workflow_level)
+        allow_producer_rebind = bool(
+            existing_record
+            and not workflow_level_declared
+            and not existing_record.producer_steps
+            and existing_record.owner_step is None
+            and producer_step is not None
+        )
+
+        if workflow_level or workflow_level_declared:
+            artifact.owner_step = None
+            artifact.owner = None
+            artifact.qualified_name = name
+        elif producer_step is not None and artifact.owner_step is None:
+            artifact.bind_owner_step(producer_step)
+            artifact.owner = self._steps_by_name[producer_step]
+        elif artifact.qualified_name is None:
+            artifact.qualified_name = name
+
+        return _ArtifactBinding(
+            artifact_id=artifact_id,
+            name=name,
+            qualified_name=artifact.qualified_name or name,
+            allow_producer_rebind=allow_producer_rebind,
+        )
+
+    def _check_reserved_name(self, name: str) -> None:
+        if name in self._definition.reserved_step_pseudo_fields:
+            raise WorkflowValidationError(
+                f"artifact name {name!r} is reserved because it collides with prompt pseudo-fields"
+            )
+
+    def _drop_rebound_qualified_name(self, artifact_id: int, qualified_name: str) -> None:
+        existing_record = self._records_by_identity.get(artifact_id)
+        if existing_record is None or existing_record.qualified_name == qualified_name:
+            return
+        old_qualified_name = existing_record.qualified_name
+        if self._qualified_names_to_identity.get(old_qualified_name) == artifact_id:
+            del self._qualified_names_to_identity[old_qualified_name]
+
+    def _check_workflow_name_conflict(
+        self,
+        *,
+        artifact: Artifact,
+        artifact_id: int,
+        name: str,
+        qualified_name: str,
+        workflow_level: bool,
+        producer_step: str | None,
+    ) -> None:
+        if workflow_level:
+            existing_identity = self._workflow_level_names_to_identity.get(name)
+            if existing_identity is not None and existing_identity != artifact_id:
+                if producer_step is None:
+                    raise WorkflowValidationError(f"duplicate artifact name {name!r}")
+                _raise_workflow_level_artifact_conflict_error(
+                    artifact_name=name,
+                    workflow_level_record=self._records_by_identity.get(existing_identity),
+                    conflicting_artifact=artifact,
+                    conflicting_qualified_name=qualified_name,
+                    producer_step=producer_step,
+                )
+            self._workflow_level_names_to_identity[name] = artifact_id
+            return
+        if producer_step is None:
+            return
+        existing_identity = self._workflow_level_names_to_identity.get(name)
+        if existing_identity is not None and existing_identity != artifact_id:
+            _raise_workflow_level_artifact_conflict_error(
+                artifact_name=name,
+                workflow_level_record=self._records_by_identity.get(existing_identity),
+                conflicting_artifact=artifact,
+                conflicting_qualified_name=qualified_name,
+                producer_step=producer_step,
+            )
+
+    def _check_qualified_name_conflict(
+        self,
+        *,
+        artifact: Artifact,
+        artifact_id: int,
+        qualified_name: str,
+        producer_step: str | None,
+    ) -> bool:
+        existing_identity = self._qualified_names_to_identity.get(qualified_name)
+        if existing_identity is None or existing_identity == artifact_id:
+            return False
+        existing_record = self._records_by_identity.get(existing_identity)
+        if (
+            existing_record is not None
+            and existing_record.owner_step == artifact.owner_step
+            and _artifacts_equivalent(existing_record.artifact, artifact)
+        ):
+            self._record_producer_step(existing_record, producer_step)
+            return True
+        _raise_duplicate_qualified_artifact_name_error(
+            qualified_name=qualified_name,
+            existing_record=existing_record,
+            conflicting_artifact=artifact,
+        )
+
+    def _upsert_record(
+        self,
+        *,
+        artifact: Artifact,
+        artifact_id: int,
+        name: str,
+        qualified_name: str,
+        allow_producer_rebind: bool,
+    ) -> MutableArtifactRecord:
+        record = self._records_by_identity.setdefault(
+            artifact_id,
+            MutableArtifactRecord(
+                artifact=artifact,
+                name=name,
+                qualified_name=qualified_name,
+                owner_step=artifact.owner_step,
+            ),
+        )
+        if record.name != name:
+            raise WorkflowValidationError(f"artifact name drift detected for {artifact!r}")
+        if record.qualified_name != qualified_name:
+            if allow_producer_rebind:
+                record.qualified_name = qualified_name
+                record.owner_step = artifact.owner_step
+            else:
+                raise WorkflowValidationError(f"artifact qualified-name drift detected for {artifact!r}")
+        if record.owner_step != artifact.owner_step:
+            if allow_producer_rebind:
+                record.owner_step = artifact.owner_step
+            else:
+                raise WorkflowValidationError(f"artifact owner-step drift detected for {artifact!r}")
+        return record
+
+    def _record_producer_step(self, record: MutableArtifactRecord, producer_step: str | None) -> None:
+        if producer_step is not None and producer_step not in record.producer_steps:
+            record.producer_steps.append(producer_step)
 
 def _raise_workflow_level_artifact_conflict_error(
     *,

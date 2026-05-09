@@ -10,7 +10,6 @@ from pydantic import BaseModel, Field
 import botlane
 import botlane.simple as simple
 import botlane.core as core
-import botlane.core.branch_groups as branch_groups
 import botlane.core.steps as core_steps
 import botlane.core.validation as core_validation
 from botlane.core.branch_groups.models import BranchGroupDeclarationSpec, CompiledBranchGroupSpec
@@ -36,140 +35,12 @@ REMOVED_REVIEW_STEP = "review" + "_" + "step"
 REMOVED_DO_REVIEW_STEP = "do" + "_" + "review" + "_" + "step"
 REMOVED_SYSTEM_STEP_ALIAS = "system" + "_" + "step"
 REMOVED_VERIFIER_WRITES = "review_" + "writes"
+
+
 def _import_from(module_name: str, symbol: str) -> object:
     namespace: dict[str, object] = {}
     exec(f"from {module_name} import {symbol} as imported_symbol", namespace)
     return namespace["imported_symbol"]
-
-
-def test_root_exports_only_the_canonical_public_surface() -> None:
-    assert tuple(botlane.__all__) == (
-        "Workflow",
-        "step",
-        "produce_verify_step",
-        "python_step",
-        "validation_step",
-        "workflow_step",
-        "Step",
-        "PromptStep",
-        "ProduceVerifyStep",
-        "PythonStep",
-        "ChildWorkflowStep",
-        "parallel",
-        "fan_out",
-        "llm",
-        "classify",
-        "ControlRoutes",
-        "Effects",
-        "Prompt",
-        "Md",
-        "Json",
-        "Text",
-        "Raw",
-        "Route",
-        "Session",
-        "Continuity",
-        "FanIn",
-        "Worklist",
-        "WorklistEffect",
-        "StateVar",
-        "ValidationResult",
-        "Event",
-        "Outcome",
-        "RequestInput",
-        "Goto",
-        "Fail",
-        "FINISH",
-        "AWAIT_INPUT",
-        "FAIL",
-        "SELF",
-        "Policy",
-        "ProviderName",
-        "ModelEffort",
-        "ModelVerbosity",
-        "ReasoningSummary",
-        "SandboxMode",
-        "NetworkMode",
-        "PermissionMode",
-        "Botlane",
-        "WorkflowResult",
-        "StepResult",
-        "ArtifactMap",
-        "ResultArtifact",
-        "RetentionPolicy",
-        "RetentionInfo",
-        "CleanupResult",
-        "InputRequest",
-        "HandledInput",
-        "SDKDebugInfo",
-        "BotlaneSDKError",
-        "WorkflowInputError",
-        "WorkflowParameterError",
-        "InputRequired",
-        "TooManyPauses",
-        "InputResponseValidationError",
-        "SDKExecutionError",
-        "ConsoleInput",
-        "StaticInput",
-        "MappingInput",
-        "BestSuppositionInput",
-    )
-
-    for symbol in botlane.__all__:
-        assert _import_from("botlane", symbol) is getattr(botlane, symbol)
-
-    assert botlane.StateVar is simple.StateVar
-    assert botlane.Step is core_steps.Step
-    assert botlane.PromptStep is core_steps.PromptStep
-    assert botlane.ProduceVerifyStep is core_steps.ProduceVerifyStep
-    assert botlane.PythonStep is core_steps.PythonStep
-    assert botlane.ChildWorkflowStep is core_steps.ChildWorkflowStep
-
-
-def test_core_module_all_is_frozen() -> None:
-    assert tuple(core.__all__) == (
-        "AWAIT_INPUT",
-        "Artifact",
-        "Continuity",
-        "Context",
-        "ControlRoutes",
-        "FAIL",
-        "Effects",
-        "Fail",
-        "FINISH",
-        "GLOBAL",
-        "Goto",
-        "Prompt",
-        "ProviderRetryPolicy",
-        "RequestInput",
-        "RuntimeInteractionPolicy",
-        "Route",
-        "Selector",
-        "SELF",
-        "Session",
-        "ValidationResult",
-        "Workflow",
-        "WorkItem",
-        "WorklistEffect",
-        "Worklist",
-    )
-
-
-def test_branch_groups_module_all_is_frozen() -> None:
-    assert tuple(branch_groups.__all__) == (
-        "BranchGroupDeclarationSpec",
-        "BranchMetadata",
-        "BranchSessionStoreView",
-        "BranchStepDeclarationSpec",
-        "CompiledBranchGroupSpec",
-        "CompiledBranchStepSpec",
-        "FanIn",
-        "FanInHelperReference",
-        "FanInMetadata",
-        "StateCell",
-        "branch_group_paths",
-        "select_branch_group_outcome",
-    )
 
 
 def test_effect_exports_and_route_helpers_are_public() -> None:
@@ -273,6 +144,52 @@ def test_validation_result_helpers_render_expected_shape() -> None:
     assert invalid.ok is False
     assert invalid.message == "Fix the draft."
     assert invalid.details == ("Add references.", "Resolve TODOs.")
+
+
+def test_simple_authoring_examples_preserve_route_sentinel_contracts() -> None:
+    class AuthoringChildWorkflow(simple.Workflow):
+        @simple.python_step(routes={"done": simple.FINISH})
+        def capture(_ctx):
+            return simple.Event("done")
+
+    class PublicAuthoringWorkflow(simple.Workflow):
+        draft = simple.step(
+            "Draft the note.",
+            name="draft",
+            writes=[simple.Md("draft")],
+        )
+        review = simple.produce_verify_step(
+            producer_prompt="Review {draft.draft}.",
+            verifier_prompt="Decide whether it is ready.",
+            name="review",
+            producer_writes=[simple.Md("candidate")],
+            verifier_writes=[simple.Md("decision")],
+        )
+        publish = simple.python_step(
+            lambda _ctx: simple.Event("done"),
+            name="publish",
+            routes={
+                "done": simple.FINISH,
+                "question": simple.AWAIT_INPUT,
+                "failed": simple.FAIL,
+                "repair": simple.Route(target=simple.SELF, summary="retry once"),
+            },
+            control_routes=False,
+        )
+        child = simple.workflow_step(AuthoringChildWorkflow, name="child")
+
+    compiled = compile_workflow(PublicAuthoringWorkflow)
+
+    assert tuple(compiled.steps) == ("draft", "review", "publish", "child")
+    assert compiled.routes["draft"]["done"].target == "review"
+    assert compiled.routes["review"]["accepted"].target == "publish"
+    assert compiled.routes["review"]["needs_rework"].target == "review"
+    assert compiled.routes["publish"]["done"].target == "FINISH"
+    assert compiled.routes["publish"]["question"].target == "AWAIT_INPUT"
+    assert compiled.routes["publish"]["failed"].target == "FAIL"
+    assert compiled.routes["publish"]["repair"].target == "publish"
+    assert compiled.routes["publish"]["repair"].summary == "retry once"
+    assert compiled.routes["child"]["done"].target == "FINISH"
 
 
 def test_removed_root_public_symbols_fail_to_import() -> None:

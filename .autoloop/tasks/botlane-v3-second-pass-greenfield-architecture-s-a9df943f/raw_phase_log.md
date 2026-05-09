@@ -186,3 +186,62 @@ phase_mode=single
 phase_ids=public-freeze,canonical-type-hardening,atomic-plan-runtime-cutover,execution-frame-authority,branch-typed-evidence,placeholder-reference-graph,provider-turn-cutover,sdk-single-step-cutover,strictness-cleanup
 explicit=True
 current_phase_index=0
+
+
+---
+run_id=run-20260509T125912Z-8deb38fd | entry=session_turn | pair=implement | phase=producer | cycle=1 | attempt=1 | thread_id=019e0cd9-e732-74c2-ad7a-6659e4bd0ab6
+---
+provider=codex
+mode=start
+template=/home/rauter/.local/share/pipx/venvs/autoloop/lib/python3.12/site-packages/autoloop/templates/implement_producer.md
+session_id=019e0cd9-e732-74c2-ad7a-6659e4bd0ab6
+
+
+---
+run_id=run-20260509T125912Z-8deb38fd | entry=phase_output | pair=implement | phase=producer | process=codex-agent | cycle=1 | attempt=1 | thread_id=019e0cd9-e732-74c2-ad7a-6659e4bd0ab6
+---
+I’m treating this as the phase-local `public-freeze` implementation: first I’ll read the active phase artifacts and inspect the existing public-surface tests, SDK facade tests, and export modules to freeze the current behavior before any internal rewrite lands.
+
+I’ve got the phase artifacts and the current plan. Next I’m reading the export surfaces and the existing freeze-style tests so the new assertions match the repository’s actual public contract instead of speculating.
+
+The export surfaces are straightforward, but the current freeze coverage is spread across `test_simple_surface.py` and `test_sdk_facade.py`. I’m separating that into dedicated public-surface and identity tests without broadening scope into the phase-2 internals.
+
+I’ve narrowed the changes to four test areas: a dedicated `test_public_surface.py`, a small authoring-freeze addition in `test_simple_surface.py`, SDK signature freezes in `test_sdk_facade.py`, and a focused `test_botlane_identity.py` for `.botlane` / package naming invariants.
+
+I have enough context to edit. I’m adding the dedicated export/identity freeze tests first, then I’ll trim the duplicated export assertions out of `test_simple_surface.py` and add the narrow phase-0 authoring coverage there.
+
+The main test edits are in place. I’m doing a quick pass over the changed files now to catch any obvious syntax or scope mistakes before I try the targeted test slice.
+
+The changed files compile cleanly. I found a local `.venv`, so I’m using that interpreter for the phase-targeted pytest slice instead of the bare system `python3`, which is missing project deps.
+
+The public-freeze slice is green: `156 passed, 1 skipped`. I’m finishing the phase artifacts now by recording the scoped decisions and the implementation notes for later phases.
+
+Scope considered
+
+- Phase-local `public-freeze` only: public exports, simple authoring/route sentinel behavior, SDK entrypoint surface, and Botlane identity invariants.
+- No compiler/runtime implementation code was changed.
+
+What I analyzed
+
+- Public export modules: [botlane/__init__.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/botlane/__init__.py), [botlane/core/__init__.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/botlane/core/__init__.py), [botlane/core/branch_groups/__init__.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/botlane/core/branch_groups/__init__.py)
+- Existing freeze coverage in [tests/unit/test_simple_surface.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/tests/unit/test_simple_surface.py) and [tests/unit/test_sdk_facade.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/tests/unit/test_sdk_facade.py)
+- Identity-bearing source paths in [botlane/sdk.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/botlane/sdk.py), [botlane/runtime/workspace.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/botlane/runtime/workspace.py), and [botlane/core/branch_groups/manifest.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/botlane/core/branch_groups/manifest.py)
+
+What I changed
+
+- Added dedicated export freeze tests in [tests/unit/test_public_surface.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/tests/unit/test_public_surface.py)
+- Moved `__all__` freezes out of [tests/unit/test_simple_surface.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/tests/unit/test_simple_surface.py) and added a focused public authoring/route-sentinel workflow freeze there
+- Added SDK signature and non-mutating invocation-policy freeze coverage in [tests/unit/test_sdk_facade.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/tests/unit/test_sdk_facade.py)
+- Added identity strictness coverage in [tests/strictness/test_botlane_identity.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/tests/strictness/test_botlane_identity.py)
+- Updated the phase artifacts in [implementation_notes.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/botlane-v3-second-pass-greenfield-architecture-s-a9df943f/runs/run-20260509T125912Z-8deb38fd/artifacts/implement/phases/public-freeze/implementation_notes.md) and [decisions.txt](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/botlane-v3-second-pass-greenfield-architecture-s-a9df943f/runs/run-20260509T125912Z-8deb38fd/decisions.txt)
+
+Key findings / decisions
+
+- The existing suite already covered most public behavior; Phase 0 only needed dedicated freeze placement and a few missing contract assertions.
+- The post-cutover branch-group export assertion is present but intentionally skipped until Phase 2, so current behavior is documented without forcing early removal of compiled exports.
+- Validation passed with `.venv/bin/pytest tests/unit/test_public_surface.py tests/unit/test_simple_surface.py tests/unit/test_sdk_facade.py tests/strictness/test_botlane_identity.py -q`: `156 passed, 1 skipped`.
+
+Open issues / next step
+
+- No blocker in Phase 0.
+- Next step is Phase 1 canonical type hardening; the skipped branch-group export target should stay disabled until the Phase 2 atomic cutover.

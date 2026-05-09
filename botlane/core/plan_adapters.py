@@ -325,6 +325,16 @@ def step_plan_from_compiled_step(*args: Any, **kwargs: Any) -> Any:
 
 
 def compiled_step_from_step_plan(*args: Any, **kwargs: Any) -> Any:
+    plan, routes = _parse_compiled_step_from_step_plan_args(args, kwargs)
+    original_compiled = _compiled_step_parity(plan)
+    common_kwargs = _compiled_step_common_kwargs(plan, routes, original_compiled=original_compiled)
+    return _compiled_step_builder_for_plan(plan)(plan, common_kwargs, original_compiled)
+
+
+def _parse_compiled_step_from_step_plan_args(
+    args: tuple[Any, ...],
+    kwargs: dict[str, Any],
+) -> tuple[StepPlan, Mapping[str, RouteContract]]:
     plan = cast(StepPlan, kwargs.pop("plan", args[0] if args else None))
     routes = cast(Mapping[str, RouteContract], kwargs.pop("routes"))
     if kwargs:
@@ -332,25 +342,18 @@ def compiled_step_from_step_plan(*args: Any, **kwargs: Any) -> Any:
         raise TypeError(f"unexpected keyword arguments: {unexpected}")
     if plan is None:
         raise TypeError("plan is required")
+    return plan, routes
 
-    route_table = {tag: compiled_route_from_route_contract(route) for tag, route in routes.items()}
+
+def _compiled_step_common_kwargs(
+    plan: StepPlan,
+    routes: Mapping[str, RouteContract],
+    *,
+    original_compiled: CompiledStep | None,
+) -> dict[str, Any]:
     header = plan.header
-    original_compiled = _compiled_step_parity(plan)
-    authored_routes = tuple(
-        tag for tag, route in routes.items() if route.inheritance_source != "framework_default"
-    )
-    available_routes = tuple(tag for tag, route in routes.items() if not route.disabled)
-    runtime_control_routes = tuple(
-        tag for tag, route in routes.items() if not route.disabled and route.is_runtime_control
-    )
-    provider_visible_routes_interactive = tuple(
-        tag for tag, route in routes.items() if not route.disabled and route.provider.visible_interactive
-    )
-    provider_visible_routes_full_auto = tuple(
-        tag for tag, route in routes.items() if not route.disabled and route.provider.visible_full_auto
-    )
-
-    common_kwargs = dict(
+    route_table = {tag: compiled_route_from_route_contract(route) for tag, route in routes.items()}
+    return dict(
         name=header.name,
         kind=header.kind,
         step=original_compiled.step if original_compiled is not None else header.original_step,
@@ -360,11 +363,19 @@ def compiled_step_from_step_plan(*args: Any, **kwargs: Any) -> Any:
         requires=_compiled_requires_from_step_io(header.io),
         writes=_compiled_writes_from_step_io(header.io),
         log_artifacts=_compiled_log_artifacts_from_step_io(header.io),
-        available_routes=available_routes,
-        authored_routes=authored_routes,
-        runtime_control_routes=runtime_control_routes,
-        provider_visible_routes_interactive=provider_visible_routes_interactive,
-        provider_visible_routes_full_auto=provider_visible_routes_full_auto,
+        available_routes=tuple(tag for tag, route in routes.items() if not route.disabled),
+        authored_routes=tuple(
+            tag for tag, route in routes.items() if route.inheritance_source != "framework_default"
+        ),
+        runtime_control_routes=tuple(
+            tag for tag, route in routes.items() if not route.disabled and route.is_runtime_control
+        ),
+        provider_visible_routes_interactive=tuple(
+            tag for tag, route in routes.items() if not route.disabled and route.provider.visible_interactive
+        ),
+        provider_visible_routes_full_auto=tuple(
+            tag for tag, route in routes.items() if not route.disabled and route.provider.visible_full_auto
+        ),
         before_hook=header.hooks.before,
         after_hook=header.hooks.after,
         before_producer_hook=header.hooks.before_producer,
@@ -378,148 +389,198 @@ def compiled_step_from_step_plan(*args: Any, **kwargs: Any) -> Any:
         provider_policy=header.provider_policy,
         route_table=route_table,
     )
-    if isinstance(plan, PromptStepPlan):
-        turn_io = plan.turn.io
-        return CompiledStep(
-            **common_kwargs,
-            expected_output_schema=plan.turn.expected_output_schema,
-            retry_policy=plan.turn.retry_policy,
-            prompt=plan.turn.prompt,
-            producer_prompt=plan.turn.prompt,
-            verifier_prompt=None,
-            producer_reads=(
-                original_compiled.producer_reads
-                if original_compiled is not None
-                else _compiled_reads_from_step_io(turn_io)
-            ),
-            producer_requires=(
-                original_compiled.producer_requires
-                if original_compiled is not None
-                else _compiled_requires_from_step_io(turn_io)
-            ),
-            producer_writes=_compiled_writes_from_step_io(turn_io),
-            verifier_reads=(),
-            verifier_requires=(),
-            verifier_writes=(),
-            verifier_session_name=None,
-            expected_output_validator=plan.turn.expected_output_validator,
-            python_handler=None,
-            branch_group=None,
-        )
-    if isinstance(plan, ProduceVerifyStepPlan):
-        return CompiledStep(
-            **common_kwargs,
-            expected_output_schema=plan.producer.expected_output_schema,
-            retry_policy=plan.producer.retry_policy,
-            prompt=None,
-            producer_prompt=plan.producer.prompt,
-            verifier_prompt=plan.verifier.prompt,
-            producer_reads=(
-                original_compiled.producer_reads
-                if original_compiled is not None
-                else _compiled_reads_from_step_io(plan.producer.io)
-            ),
-            producer_requires=(
-                original_compiled.producer_requires
-                if original_compiled is not None
-                else _compiled_requires_from_step_io(plan.producer.io)
-            ),
-            producer_writes=_compiled_writes_from_step_io(plan.producer.io),
-            verifier_reads=(
-                original_compiled.verifier_reads
-                if original_compiled is not None
-                else _compiled_reads_from_step_io(plan.verifier.io)
-            ),
-            verifier_requires=(
-                original_compiled.verifier_requires
-                if original_compiled is not None
-                else _compiled_requires_from_step_io(plan.verifier.io)
-            ),
-            verifier_writes=_compiled_writes_from_step_io(plan.verifier.io),
-            verifier_session_name=plan.verifier_session_name,
-            expected_output_validator=plan.producer.expected_output_validator,
-            python_handler=None,
-            branch_group=None,
-        )
-    if isinstance(plan, PythonStepPlan):
-        return CompiledStep(
-            **common_kwargs,
-            expected_output_schema=None,
-            retry_policy=original_compiled.retry_policy if original_compiled is not None else ProviderRetryPolicy(max_attempts=1),
-            prompt=None,
-            producer_prompt=None,
-            verifier_prompt=None,
-            producer_reads=(
-                original_compiled.producer_reads
-                if original_compiled is not None
-                else _compiled_reads_from_step_io(header.io)
-            ),
-            producer_requires=(
-                original_compiled.producer_requires
-                if original_compiled is not None
-                else _compiled_requires_from_step_io(header.io)
-            ),
-            producer_writes=_compiled_writes_from_step_io(header.io),
-            verifier_reads=(),
-            verifier_requires=(),
-            verifier_writes=(),
-            verifier_session_name=None,
-            expected_output_validator=None,
-            python_handler=plan.handler,
-            branch_group=None,
-        )
-    if isinstance(plan, ChildWorkflowStepPlan):
-        return CompiledStep(
-            **common_kwargs,
-            expected_output_schema=None,
-            retry_policy=original_compiled.retry_policy if original_compiled is not None else ProviderRetryPolicy(max_attempts=1),
-            prompt=None,
-            producer_prompt=None,
-            verifier_prompt=None,
-            producer_reads=(
-                original_compiled.producer_reads
-                if original_compiled is not None
-                else _compiled_reads_from_step_io(header.io)
-            ),
-            producer_requires=(
-                original_compiled.producer_requires
-                if original_compiled is not None
-                else _compiled_requires_from_step_io(header.io)
-            ),
-            producer_writes=_compiled_writes_from_step_io(header.io),
-            verifier_reads=(),
-            verifier_requires=(),
-            verifier_writes=(),
-            verifier_session_name=None,
-            expected_output_validator=None,
-            python_handler=None,
-            branch_group=None,
-        )
-    if isinstance(plan, BranchGroupStepPlan):
-        branch_group = (
-            original_compiled.branch_group
-            if original_compiled is not None and original_compiled.branch_group is not None
-            else _compiled_branch_group_from_plan(plan.branch_group)
-        )
-        return CompiledStep(
-            **common_kwargs,
-            expected_output_schema=None,
-            retry_policy=original_compiled.retry_policy if original_compiled is not None else ProviderRetryPolicy(),
-            prompt=None,
-            producer_prompt=None,
-            verifier_prompt=None,
-            producer_reads=(),
-            producer_requires=(),
-            producer_writes=(),
-            verifier_reads=(),
-            verifier_requires=(),
-            verifier_writes=(),
-            verifier_session_name=None,
-            expected_output_validator=None,
-            python_handler=None,
-            branch_group=branch_group,
-        )
-    raise TypeError(f"unsupported step plan {type(plan)!r}")
+
+
+def _compiled_step_builder_for_plan(
+    plan: StepPlan,
+) -> Any:
+    builder = _COMPILED_STEP_PLAN_BUILDERS.get(type(plan))
+    if builder is None:
+        raise TypeError(f"unsupported step plan {type(plan)!r}")
+    return builder
+
+
+def _build_prompt_compiled_step(
+    plan: PromptStepPlan,
+    common_kwargs: dict[str, Any],
+    original_compiled: CompiledStep | None,
+) -> CompiledStep:
+    return CompiledStep(
+        **common_kwargs,
+        expected_output_schema=plan.turn.expected_output_schema,
+        retry_policy=plan.turn.retry_policy,
+        prompt=plan.turn.prompt,
+        producer_prompt=plan.turn.prompt,
+        verifier_prompt=None,
+        producer_reads=_producer_reads(original_compiled, plan.turn.io),
+        producer_requires=_producer_requires(original_compiled, plan.turn.io),
+        producer_writes=_compiled_writes_from_step_io(plan.turn.io),
+        verifier_reads=(),
+        verifier_requires=(),
+        verifier_writes=(),
+        verifier_session_name=None,
+        expected_output_validator=plan.turn.expected_output_validator,
+        python_handler=None,
+        branch_group=None,
+    )
+
+
+def _build_produce_verify_compiled_step(
+    plan: ProduceVerifyStepPlan,
+    common_kwargs: dict[str, Any],
+    original_compiled: CompiledStep | None,
+) -> CompiledStep:
+    return CompiledStep(
+        **common_kwargs,
+        expected_output_schema=plan.producer.expected_output_schema,
+        retry_policy=plan.producer.retry_policy,
+        prompt=None,
+        producer_prompt=plan.producer.prompt,
+        verifier_prompt=plan.verifier.prompt,
+        producer_reads=_producer_reads(original_compiled, plan.producer.io),
+        producer_requires=_producer_requires(original_compiled, plan.producer.io),
+        producer_writes=_compiled_writes_from_step_io(plan.producer.io),
+        verifier_reads=_verifier_reads(original_compiled, plan.verifier.io),
+        verifier_requires=_verifier_requires(original_compiled, plan.verifier.io),
+        verifier_writes=_compiled_writes_from_step_io(plan.verifier.io),
+        verifier_session_name=plan.verifier_session_name,
+        expected_output_validator=plan.producer.expected_output_validator,
+        python_handler=None,
+        branch_group=None,
+    )
+
+
+def _build_python_compiled_step(
+    plan: PythonStepPlan,
+    common_kwargs: dict[str, Any],
+    original_compiled: CompiledStep | None,
+) -> CompiledStep:
+    return CompiledStep(
+        **common_kwargs,
+        expected_output_schema=None,
+        retry_policy=_compiled_retry_policy(original_compiled, default=ProviderRetryPolicy(max_attempts=1)),
+        prompt=None,
+        producer_prompt=None,
+        verifier_prompt=None,
+        producer_reads=_producer_reads(original_compiled, plan.header.io),
+        producer_requires=_producer_requires(original_compiled, plan.header.io),
+        producer_writes=_compiled_writes_from_step_io(plan.header.io),
+        verifier_reads=(),
+        verifier_requires=(),
+        verifier_writes=(),
+        verifier_session_name=None,
+        expected_output_validator=None,
+        python_handler=plan.handler,
+        branch_group=None,
+    )
+
+
+def _build_child_workflow_compiled_step(
+    plan: ChildWorkflowStepPlan,
+    common_kwargs: dict[str, Any],
+    original_compiled: CompiledStep | None,
+) -> CompiledStep:
+    return CompiledStep(
+        **common_kwargs,
+        expected_output_schema=None,
+        retry_policy=_compiled_retry_policy(original_compiled, default=ProviderRetryPolicy(max_attempts=1)),
+        prompt=None,
+        producer_prompt=None,
+        verifier_prompt=None,
+        producer_reads=_producer_reads(original_compiled, plan.header.io),
+        producer_requires=_producer_requires(original_compiled, plan.header.io),
+        producer_writes=_compiled_writes_from_step_io(plan.header.io),
+        verifier_reads=(),
+        verifier_requires=(),
+        verifier_writes=(),
+        verifier_session_name=None,
+        expected_output_validator=None,
+        python_handler=None,
+        branch_group=None,
+    )
+
+
+def _build_branch_group_compiled_step(
+    plan: BranchGroupStepPlan,
+    common_kwargs: dict[str, Any],
+    original_compiled: CompiledStep | None,
+) -> CompiledStep:
+    return CompiledStep(
+        **common_kwargs,
+        expected_output_schema=None,
+        retry_policy=_compiled_retry_policy(original_compiled, default=ProviderRetryPolicy()),
+        prompt=None,
+        producer_prompt=None,
+        verifier_prompt=None,
+        producer_reads=(),
+        producer_requires=(),
+        producer_writes=(),
+        verifier_reads=(),
+        verifier_requires=(),
+        verifier_writes=(),
+        verifier_session_name=None,
+        expected_output_validator=None,
+        python_handler=None,
+        branch_group=_compiled_branch_group_for_plan(plan, original_compiled),
+    )
+
+
+def _compiled_branch_group_for_plan(
+    plan: BranchGroupStepPlan,
+    original_compiled: CompiledStep | None,
+) -> CompiledBranchGroupSpec:
+    if original_compiled is not None and original_compiled.branch_group is not None:
+        return original_compiled.branch_group
+    return _compiled_branch_group_from_plan(plan.branch_group)
+
+
+def _producer_reads(original_compiled: CompiledStep | None, io: StepIO) -> tuple[str, ...]:
+    return (
+        original_compiled.producer_reads
+        if original_compiled is not None
+        else _compiled_reads_from_step_io(io)
+    )
+
+
+def _producer_requires(original_compiled: CompiledStep | None, io: StepIO) -> tuple[str, ...]:
+    return (
+        original_compiled.producer_requires
+        if original_compiled is not None
+        else _compiled_requires_from_step_io(io)
+    )
+
+
+def _verifier_reads(original_compiled: CompiledStep | None, io: StepIO) -> tuple[str, ...]:
+    return (
+        original_compiled.verifier_reads
+        if original_compiled is not None
+        else _compiled_reads_from_step_io(io)
+    )
+
+
+def _verifier_requires(original_compiled: CompiledStep | None, io: StepIO) -> tuple[str, ...]:
+    return (
+        original_compiled.verifier_requires
+        if original_compiled is not None
+        else _compiled_requires_from_step_io(io)
+    )
+
+
+def _compiled_retry_policy(
+    original_compiled: CompiledStep | None,
+    *,
+    default: ProviderRetryPolicy,
+) -> ProviderRetryPolicy:
+    return original_compiled.retry_policy if original_compiled is not None else default
+
+
+_COMPILED_STEP_PLAN_BUILDERS = {
+    PromptStepPlan: _build_prompt_compiled_step,
+    ProduceVerifyStepPlan: _build_produce_verify_compiled_step,
+    PythonStepPlan: _build_python_compiled_step,
+    ChildWorkflowStepPlan: _build_child_workflow_compiled_step,
+    BranchGroupStepPlan: _build_branch_group_compiled_step,
+}
 
 
 def workflow_plan_from_compiled(*args: Any, **kwargs: Any) -> Any:

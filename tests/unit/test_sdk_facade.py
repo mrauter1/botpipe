@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import asyncio
+import inspect
 import json
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
@@ -199,6 +200,117 @@ def _sdk_client_at_root(tmp_path: Path, provider: object, *, retention: Retentio
         state_dir=tmp_path / ".botlane",
         runtime_config=RuntimeConfig(git_tracking=GitTrackingRuntimeConfig(enabled=False, commit_policy="off")),
         retention=retention,
+    )
+
+
+def test_sdk_entrypoint_signatures_are_frozen() -> None:
+    def signature_items(method: object) -> tuple[tuple[str, inspect._ParameterKind], ...]:
+        return tuple((name, parameter.kind) for name, parameter in inspect.signature(method).parameters.items())
+
+    assert signature_items(Botlane.run) == (
+        ("self", inspect.Parameter.POSITIONAL_OR_KEYWORD),
+        ("workflow", inspect.Parameter.POSITIONAL_OR_KEYWORD),
+        ("message", inspect.Parameter.POSITIONAL_OR_KEYWORD),
+        ("policy", inspect.Parameter.KEYWORD_ONLY),
+        ("input", inspect.Parameter.KEYWORD_ONLY),
+        ("params", inspect.Parameter.KEYWORD_ONLY),
+        ("on_input", inspect.Parameter.KEYWORD_ONLY),
+        ("max_pauses", inspect.Parameter.KEYWORD_ONLY),
+        ("max_steps", inspect.Parameter.KEYWORD_ONLY),
+        ("provider_questions", inspect.Parameter.KEYWORD_ONLY),
+        ("options", inspect.Parameter.KEYWORD_ONLY),
+        ("retention", inspect.Parameter.KEYWORD_ONLY),
+    )
+    assert signature_items(Botlane.step) == (
+        ("self", inspect.Parameter.POSITIONAL_OR_KEYWORD),
+        ("step_def", inspect.Parameter.POSITIONAL_OR_KEYWORD),
+        ("message", inspect.Parameter.POSITIONAL_OR_KEYWORD),
+        ("policy", inspect.Parameter.KEYWORD_ONLY),
+        ("input", inspect.Parameter.KEYWORD_ONLY),
+        ("params", inspect.Parameter.KEYWORD_ONLY),
+        ("routes", inspect.Parameter.KEYWORD_ONLY),
+        ("on_input", inspect.Parameter.KEYWORD_ONLY),
+        ("max_pauses", inspect.Parameter.KEYWORD_ONLY),
+        ("max_steps", inspect.Parameter.KEYWORD_ONLY),
+        ("provider_questions", inspect.Parameter.KEYWORD_ONLY),
+        ("retention", inspect.Parameter.KEYWORD_ONLY),
+    )
+    assert signature_items(Botlane.prompt_step) == (
+        ("self", inspect.Parameter.POSITIONAL_OR_KEYWORD),
+        ("prompt", inspect.Parameter.POSITIONAL_OR_KEYWORD),
+        ("message", inspect.Parameter.POSITIONAL_OR_KEYWORD),
+        ("input", inspect.Parameter.KEYWORD_ONLY),
+        ("name", inspect.Parameter.KEYWORD_ONLY),
+        ("writes", inspect.Parameter.KEYWORD_ONLY),
+        ("reads", inspect.Parameter.KEYWORD_ONLY),
+        ("requires", inspect.Parameter.KEYWORD_ONLY),
+        ("routes", inspect.Parameter.KEYWORD_ONLY),
+        ("session", inspect.Parameter.KEYWORD_ONLY),
+        ("retry", inspect.Parameter.KEYWORD_ONLY),
+        ("policy", inspect.Parameter.KEYWORD_ONLY),
+        ("on_input", inspect.Parameter.KEYWORD_ONLY),
+        ("max_pauses", inspect.Parameter.KEYWORD_ONLY),
+        ("max_steps", inspect.Parameter.KEYWORD_ONLY),
+        ("provider_questions", inspect.Parameter.KEYWORD_ONLY),
+        ("retention", inspect.Parameter.KEYWORD_ONLY),
+    )
+    assert signature_items(Botlane.produce_verify_step) == (
+        ("self", inspect.Parameter.POSITIONAL_OR_KEYWORD),
+        ("producer", inspect.Parameter.KEYWORD_ONLY),
+        ("verifier", inspect.Parameter.KEYWORD_ONLY),
+        ("message", inspect.Parameter.KEYWORD_ONLY),
+        ("input", inspect.Parameter.KEYWORD_ONLY),
+        ("name", inspect.Parameter.KEYWORD_ONLY),
+        ("writes", inspect.Parameter.KEYWORD_ONLY),
+        ("verifier_writes", inspect.Parameter.KEYWORD_ONLY),
+        ("reads", inspect.Parameter.KEYWORD_ONLY),
+        ("requires", inspect.Parameter.KEYWORD_ONLY),
+        ("verifier_requires", inspect.Parameter.KEYWORD_ONLY),
+        ("routes", inspect.Parameter.KEYWORD_ONLY),
+        ("session", inspect.Parameter.KEYWORD_ONLY),
+        ("verifier_session", inspect.Parameter.KEYWORD_ONLY),
+        ("retry", inspect.Parameter.KEYWORD_ONLY),
+        ("policy", inspect.Parameter.KEYWORD_ONLY),
+        ("on_input", inspect.Parameter.KEYWORD_ONLY),
+        ("max_pauses", inspect.Parameter.KEYWORD_ONLY),
+        ("max_steps", inspect.Parameter.KEYWORD_ONLY),
+        ("provider_questions", inspect.Parameter.KEYWORD_ONLY),
+        ("retention", inspect.Parameter.KEYWORD_ONLY),
+    )
+    assert signature_items(Botlane.python_step) == (
+        ("self", inspect.Parameter.POSITIONAL_OR_KEYWORD),
+        ("handler", inspect.Parameter.POSITIONAL_OR_KEYWORD),
+        ("message", inspect.Parameter.POSITIONAL_OR_KEYWORD),
+        ("input", inspect.Parameter.KEYWORD_ONLY),
+        ("name", inspect.Parameter.KEYWORD_ONLY),
+        ("writes", inspect.Parameter.KEYWORD_ONLY),
+        ("reads", inspect.Parameter.KEYWORD_ONLY),
+        ("requires", inspect.Parameter.KEYWORD_ONLY),
+        ("routes", inspect.Parameter.KEYWORD_ONLY),
+        ("policy", inspect.Parameter.KEYWORD_ONLY),
+        ("on_input", inspect.Parameter.KEYWORD_ONLY),
+        ("max_pauses", inspect.Parameter.KEYWORD_ONLY),
+        ("max_steps", inspect.Parameter.KEYWORD_ONLY),
+        ("retention", inspect.Parameter.KEYWORD_ONLY),
+    )
+    assert signature_items(Botlane.workflow_step) == (
+        ("self", inspect.Parameter.POSITIONAL_OR_KEYWORD),
+        ("workflow", inspect.Parameter.POSITIONAL_OR_KEYWORD),
+        ("message", inspect.Parameter.POSITIONAL_OR_KEYWORD),
+        ("input", inspect.Parameter.KEYWORD_ONLY),
+        ("child_message", inspect.Parameter.KEYWORD_ONLY),
+        ("name", inspect.Parameter.KEYWORD_ONLY),
+        ("params", inspect.Parameter.KEYWORD_ONLY),
+        ("writes", inspect.Parameter.KEYWORD_ONLY),
+        ("reads", inspect.Parameter.KEYWORD_ONLY),
+        ("requires", inspect.Parameter.KEYWORD_ONLY),
+        ("routes", inspect.Parameter.KEYWORD_ONLY),
+        ("policy", inspect.Parameter.KEYWORD_ONLY),
+        ("on_input", inspect.Parameter.KEYWORD_ONLY),
+        ("max_pauses", inspect.Parameter.KEYWORD_ONLY),
+        ("max_steps", inspect.Parameter.KEYWORD_ONLY),
+        ("provider_questions", inspect.Parameter.KEYWORD_ONLY),
+        ("retention", inspect.Parameter.KEYWORD_ONLY),
     )
 
 
@@ -537,6 +649,77 @@ def test_sdk_step_supports_core_python_steps_with_explicit_terminal_route_metada
     assert result.route == "approved"
     assert result.value is None
     assert result.workflow_result.status == "completed"
+
+
+def test_sdk_step_applies_invocation_local_policy_without_mutating_supplied_step(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    client = _sdk_client(tmp_path, ScriptedLLMProvider())
+    authored_policy = Policy(effort=ModelEffort.LOW)
+    invocation_policy = Policy(effort=ModelEffort.HIGH)
+    declaration = PythonStep(
+        name="capture",
+        handler=lambda _ctx: Event("done"),
+        provider_policy=authored_policy,
+    )
+    captured: dict[str, object] = {}
+    fake_result = WorkflowResult(
+        ok=True,
+        status="completed",
+        terminal=FINISH,
+        state=_SDKResultState(),
+        output=None,
+        output_validation_error=None,
+        artifacts=ArtifactMap({}),
+        history=(),
+        last_event=Event("done"),
+        last_outcome=None,
+        handled_inputs=(),
+        debug=SDKDebugInfo(
+            task_id="sdk-policy",
+            run_id="run-1",
+            task_dir=tmp_path / ".botlane" / "tasks" / "sdk-policy",
+            workflow_dir=tmp_path / ".botlane" / "tasks" / "sdk-policy" / "workflow",
+            run_dir=tmp_path / ".botlane" / "tasks" / "sdk-policy" / "workflow" / "runs" / "run-1",
+            events_file=tmp_path / ".botlane" / "tasks" / "sdk-policy" / "workflow" / "runs" / "run-1" / "events.jsonl",
+            trace_file=None,
+            checkpoint_file=None,
+        ),
+        retention=None,
+    )
+
+    def fake_build_synthetic_step_workflow(root, step_def, input, params, *, routes, workflow_policy=None):
+        captured["root"] = root
+        captured["step_def"] = step_def
+        captured["input"] = input
+        captured["params"] = params
+        captured["routes"] = routes
+        captured["workflow_policy"] = workflow_policy
+        return object()
+
+    monkeypatch.setattr(sdk_module, "_build_synthetic_step_workflow", fake_build_synthetic_step_workflow)
+    monkeypatch.setattr(client, "run", lambda *args, **kwargs: fake_result)
+
+    result = client.step(
+        declaration,
+        "Handle the request.",
+        policy=invocation_policy,
+        input=_SDKTypedInput(topic="release"),
+    )
+
+    assert result.ok is True
+    assert result.workflow_result is fake_result
+    assert declaration.provider_policy is authored_policy
+    assert declaration.provider_policy.to_layer_payload() == {"effort": "low"}
+    assert captured["step_def"] is not declaration
+    assert isinstance(captured["step_def"], PythonStep)
+    assert captured["workflow_policy"] is authored_policy
+    assert captured["routes"] is None
+    layered_step = captured["step_def"]
+    assert isinstance(layered_step, PythonStep)
+    assert layered_step.provider_policy is invocation_policy
+    assert layered_step.provider_policy.to_layer_payload() == {"effort": "high"}
 
 
 def test_default_routes_for_supported_core_steps() -> None:

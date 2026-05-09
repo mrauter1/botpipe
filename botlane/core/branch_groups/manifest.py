@@ -49,12 +49,20 @@ def build_branch_manifest(
 
 def render_branch_group_context(manifest: Mapping[str, Any]) -> str:
     branches = [_branch_payload(branch) for branch in manifest.get("branches", [])]
-    counts = _status_counts(branches)
-    failed_branches = [branch for branch in branches if branch.get("status") == "failed"]
-    needs_input_branches = [branch for branch in branches if branch.get("status") == "needs_input"]
-    cancelled_branches = [branch for branch in branches if branch.get("status") == "cancelled"]
-    skipped_branches = [branch for branch in branches if branch.get("status") == "skipped"]
-    lines = [
+    sections = [
+        _render_branch_group_header(manifest, branches),
+        _render_completion_summary(branches),
+        _render_route_summary(branches),
+        _render_failure_summary(branches),
+        _render_needs_input_summary(branches),
+        _render_cancellation_summary(branches),
+        *(_render_branch_detail(branch) for branch in branches),
+    ]
+    return "\n".join(_flatten_sections(sections)) + "\n"
+
+
+def _render_branch_group_header(manifest: Mapping[str, Any], branches: list[Mapping[str, Any]]) -> list[str]:
+    return [
         f"# Branch Group: {manifest.get('name', '')}",
         "",
         f"- Kind: {manifest.get('kind', '')}",
@@ -65,6 +73,12 @@ def render_branch_group_context(manifest: Mapping[str, Any]) -> str:
         f"- Finished: {manifest.get('finished_at', '')}",
         f"- Duration ms: {manifest.get('duration_ms', 0)}",
         "",
+    ]
+
+
+def _render_completion_summary(branches: list[Mapping[str, Any]]) -> list[str]:
+    counts = _status_counts(branches)
+    return [
         "## Completion Summary",
         "",
         f"- Completed: {counts['completed']}",
@@ -73,112 +87,150 @@ def render_branch_group_context(manifest: Mapping[str, Any]) -> str:
         f"- Cancelled: {counts['cancelled']}",
         f"- Skipped: {counts['skipped']}",
         "",
-        "## Route Summary",
-        "",
     ]
-    route_counts: dict[str, int] = {}
-    for branch in branches:
-        route_name = branch.get("route")
-        if isinstance(route_name, str) and route_name:
-            route_counts[route_name] = route_counts.get(route_name, 0) + 1
+
+
+def _render_route_summary(branches: list[Mapping[str, Any]]) -> list[str]:
+    lines = ["## Route Summary", ""]
+    route_counts = _route_counts(branches)
     if route_counts:
         for route_name in sorted(route_counts):
             lines.append(f"- {route_name}: {route_counts[route_name]}")
     else:
         lines.append("- No branch route events were produced.")
-    lines.extend(
-        [
-            "",
-            "## Failure Summary",
-            "",
-            f"- Failed branches: {counts['failed']}",
-        ]
-    )
-    if failed_branches:
-        for branch in failed_branches:
+    return lines
+
+
+def _render_failure_summary(branches: list[Mapping[str, Any]]) -> list[str]:
+    counts = _status_counts(branches)
+    failed_branches = [branch for branch in branches if branch.get("status") == "failed"]
+    return [
+        "",
+        "## Failure Summary",
+        "",
+        f"- Failed branches: {counts['failed']}",
+        *_render_list_or_none(
+            failed_branches,
+            _render_failed_branch_summary,
+        ),
+    ]
+
+
+def _render_needs_input_summary(branches: list[Mapping[str, Any]]) -> list[str]:
+    counts = _status_counts(branches)
+    needs_input_branches = [branch for branch in branches if branch.get("status") == "needs_input"]
+    return [
+        "",
+        "## Needs Input Summary",
+        "",
+        f"- Branches awaiting input: {counts['needs_input']}",
+        "",
+        "## Needs Input Details",
+        "",
+        *_render_list_or_none(needs_input_branches, _render_needs_input_branch_summary),
+    ]
+
+
+def _render_cancellation_summary(branches: list[Mapping[str, Any]]) -> list[str]:
+    counts = _status_counts(branches)
+    cancelled_branches = [branch for branch in branches if branch.get("status") == "cancelled"]
+    skipped_branches = [branch for branch in branches if branch.get("status") == "skipped"]
+    return [
+        "",
+        "## Cancellation Summary",
+        "",
+        f"- Cancelled branches: {counts['cancelled']}",
+        f"- Skipped branches: {counts['skipped']}",
+        "",
+        "## Cancellation Details",
+        "",
+        *_render_list_or_none(
+            [*cancelled_branches, *skipped_branches],
+            _render_cancelled_branch_summary,
+        ),
+    ]
+
+
+def _render_branch_detail(branch: Mapping[str, Any]) -> list[str]:
+    lines = [
+        "",
+        f"## Branch: {branch.get('name', '')}",
+        "",
+        f"- Index: {branch.get('index', '')}",
+        f"- Step: {branch.get('step_name', '')}",
+        f"- Input: `{json.dumps(branch.get('input'), ensure_ascii=False, sort_keys=True)}`",
+        f"- Status: {branch.get('status', '')}",
+        f"- Route: {branch.get('route') or '(none)'}",
+        f"- Destination: {branch.get('destination') or '(none)'}",
+        f"- Runtime control: {branch.get('runtime_control') or '(none)'}",
+        f"- Reason: {branch.get('reason') or '(none)'}",
+        f"- Question: {branch.get('question') or '(none)'}",
+        f"- Provider session: {branch.get('provider_session') or '(none)'}",
+        f"- Raw output path: {branch.get('raw_output_path') or '(none)'}",
+    ]
+    raw_output_paths = branch.get("raw_output_paths")
+    if isinstance(raw_output_paths, Mapping) and raw_output_paths:
+        lines.append("- Raw output files:")
+        for label, value in sorted(raw_output_paths.items()):
+            lines.append(f"  - {label}: {value}")
+    artifacts = branch.get("artifacts") or []
+    if artifacts:
+        lines.append("- Artifacts:")
+        for artifact in artifacts:
             lines.append(
-                f"- {branch.get('name', '')}: {branch_error_summary(branch) or branch.get('reason') or '(no error summary)'}"
+                "  - "
+                + f"{artifact.get('name', '')}: {artifact.get('path', '')} "
+                + f"(kind={artifact.get('kind', '')}, exists={artifact.get('exists', False)}, "
+                + f"validation={artifact.get('validation', '')})"
             )
     else:
-        lines.append("- None.")
-    lines.extend(
-        [
-            "",
-            "## Needs Input Summary",
-            "",
-            f"- Branches awaiting input: {counts['needs_input']}",
-            "",
-            "## Needs Input Details",
-            "",
-        ]
-    )
-    if needs_input_branches:
-        for branch in needs_input_branches:
-            lines.append(
-                f"- {branch.get('name', '')}: {branch.get('question') or branch.get('reason') or 'Input required.'}"
-            )
+        lines.append("- Artifacts: (none)")
+    error = branch.get("error")
+    if isinstance(error, Mapping):
+        lines.append("- Error summary:")
+        lines.append("  - " + (branch_error_summary(branch) or "(no error summary)"))
     else:
-        lines.append("- None.")
-    lines.extend(
-        [
-            "",
-            "## Cancellation Summary",
-            "",
-            f"- Cancelled branches: {counts['cancelled']}",
-            f"- Skipped branches: {counts['skipped']}",
-            "",
-            "## Cancellation Details",
-            "",
-        ]
-    )
-    if cancelled_branches or skipped_branches:
-        for branch in (*cancelled_branches, *skipped_branches):
-            lines.append(f"- {branch.get('name', '')}: {branch.get('reason') or branch.get('status', '')}")
-    else:
-        lines.append("- None.")
+        lines.append("- Error summary: (none)")
+    return lines
+
+
+def _flatten_sections(sections: list[list[str]]) -> list[str]:
+    return [line for section in sections for line in section]
+
+
+def _route_counts(branches: list[Mapping[str, Any]]) -> dict[str, int]:
+    route_counts: dict[str, int] = {}
     for branch in branches:
-        lines.extend(
-            [
-                "",
-                f"## Branch: {branch.get('name', '')}",
-                "",
-                f"- Index: {branch.get('index', '')}",
-                f"- Step: {branch.get('step_name', '')}",
-                f"- Input: `{json.dumps(branch.get('input'), ensure_ascii=False, sort_keys=True)}`",
-                f"- Status: {branch.get('status', '')}",
-                f"- Route: {branch.get('route') or '(none)'}",
-                f"- Destination: {branch.get('destination') or '(none)'}",
-                f"- Runtime control: {branch.get('runtime_control') or '(none)'}",
-                f"- Reason: {branch.get('reason') or '(none)'}",
-                f"- Question: {branch.get('question') or '(none)'}",
-                f"- Provider session: {branch.get('provider_session') or '(none)'}",
-                f"- Raw output path: {branch.get('raw_output_path') or '(none)'}",
-            ]
-        )
-        raw_output_paths = branch.get("raw_output_paths")
-        if isinstance(raw_output_paths, Mapping) and raw_output_paths:
-            lines.append("- Raw output files:")
-            for label, value in sorted(raw_output_paths.items()):
-                lines.append(f"  - {label}: {value}")
-        artifacts = branch.get("artifacts") or []
-        if artifacts:
-            lines.append("- Artifacts:")
-            for artifact in artifacts:
-                lines.append(
-                    "  - "
-                    + f"{artifact.get('name', '')}: {artifact.get('path', '')} "
-                    + f"(kind={artifact.get('kind', '')}, exists={artifact.get('exists', False)}, "
-                    + f"validation={artifact.get('validation', '')})"
-                )
-        else:
-            lines.append("- Artifacts: (none)")
-        error = branch.get("error")
-        if isinstance(error, Mapping):
-            lines.append("- Error summary:")
-            lines.append("  - " + (branch_error_summary(branch) or "(no error summary)"))
-        else:
-            lines.append("- Error summary: (none)")
-    return "\n".join(lines) + "\n"
+        route_name = branch.get("route")
+        if isinstance(route_name, str) and route_name:
+            route_counts[route_name] = route_counts.get(route_name, 0) + 1
+    return route_counts
+
+
+def _render_list_or_none(
+    items: list[Mapping[str, Any]],
+    render_item: Any,
+) -> list[str]:
+    if not items:
+        return ["- None."]
+    lines: list[str] = []
+    for item in items:
+        lines.extend(render_item(item))
+    return lines
+
+
+def _render_failed_branch_summary(branch: Mapping[str, Any]) -> list[str]:
+    return [
+        f"- {branch.get('name', '')}: {branch_error_summary(branch) or branch.get('reason') or '(no error summary)'}"
+    ]
+
+
+def _render_needs_input_branch_summary(branch: Mapping[str, Any]) -> list[str]:
+    return [f"- {branch.get('name', '')}: {branch.get('question') or branch.get('reason') or 'Input required.'}"]
+
+
+def _render_cancelled_branch_summary(branch: Mapping[str, Any]) -> list[str]:
+    return [f"- {branch.get('name', '')}: {branch.get('reason') or branch.get('status', '')}"]
 
 
 def _status_counts(branches: list[Mapping[str, Any]]) -> dict[str, int]:
