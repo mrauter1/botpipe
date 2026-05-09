@@ -908,3 +908,72 @@ Open issues / next step
 <loop-control>
 {"schema":"docloop.loop_control/v1","kind":"promise","promise":"COMPLETE"}
 </loop-control>
+
+
+---
+run_id=run-20260509T045359Z-e2586b1f | entry=session_turn | pair=test | phase=producer | cycle=1 | attempt=1 | thread_id=019e0b48-c497-7620-84a2-52940f5bc8f1
+---
+provider=codex
+mode=resume
+template=/home/rauter/.local/share/pipx/venvs/autoloop/lib/python3.12/site-packages/autoloop/templates/test_producer.md
+session_id=019e0b48-c497-7620-84a2-52940f5bc8f1
+
+
+---
+run_id=run-20260509T045359Z-e2586b1f | entry=phase_output | pair=test | phase=producer | process=codex-agent | cycle=1 | attempt=1 | thread_id=019e0b48-c497-7620-84a2-52940f5bc8f1
+---
+I’m checking whether the existing new route tests cover the compiler-produced route tables or only manual `CompiledRoute` instances. If there’s a gap, I’ll add one focused parity test and then update the phase test artifacts.
+
+The current route tests are good on pure adapter behavior, but they don’t yet prove round-trips against a real compiler-produced route table. I’m adding one focused compile-based parity test for that gap.
+
+I found one worthwhile gap: the new route adapter suite doesn’t exercise a real `compile_workflow(...)` route table. I’m adding a single compiler-backed parity test rather than broadening the suite further.
+
+The new compiler-backed parity test is in, but I need one small import cleanup before running it. After that I’ll validate and update the phase test artifacts.
+
+I’ve closed the import cleanup. Running the focused route suite now, then the nearby regression buckets to confirm the compiler-backed parity case doesn’t destabilize anything else.
+
+The failure is just the authoring surface mismatch: I used the public simple `Workflow` with raw `transitions`, which the discovery layer correctly rejects. I’m switching the test to the core `Workflow` class used by the compiler/validation suites.
+
+The second failure is a real topology rule, not a flaky test: handoff metadata can’t target a `PythonStep`. I’m switching the target to a prompt step so the parity test stays within valid current behavior.
+
+The remaining failure is environment-specific and valid: raw route-field mappings need optional `jsonschema`, which this environment doesn’t have. I’m switching the compiler-backed test to use the built-in `Route.question()` route-fields contract instead of encoding a dependency-sensitive custom mapping.
+
+The compiler-backed route table carries the current normalized runtime-control flag as-is, and for an inherited global `question` route that flag is not the value I assumed. I’m changing the test to assert parity with the compiler output instead of baking in a new behavior.
+
+The compiler-backed parity case now passes. I’m letting the broader regression bucket finish, then I’ll update the phase test strategy and feedback with the exact behavior coverage added.
+
+The regression bucket found one strictness hit introduced by the new test names, not by behavior. I’m renaming the test and helper workflow to avoid expanding the allowlist any further.
+
+The strictness hit is gone after the rename. I’m waiting on the broad regression bucket, then I’ll write the behavior-to-coverage map and the concise test feedback entry.
+
+The validation is clean. I’m recording the exact coverage map and a short feedback entry now, including the stabilization note that these tests stay purely local and deterministic.
+
+Scope considered
+- Phase-local route-contract-adapters test scope only.
+- Existing new route adapter tests, adjacent compiler/validation patterns, and the active phase test artifacts.
+
+What I analyzed
+- `tests/unit/test_route_contracts.py` for current adapter coverage.
+- Compiler-facing route behaviors in `tests/unit/test_validation.py` to mirror valid workflow declarations.
+- The strictness scan behavior in `tests/strictness/test_no_compat.py` to avoid normalizing compatibility regressions.
+
+What I changed
+- Refined [tests/unit/test_route_contracts.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/tests/unit/test_route_contracts.py) with one additional compiler-backed parity test:
+  - `test_compiled_route_adapter_round_trip_matches_compiler_normalized_routes`
+  - It exercises `compile_workflow(...)`, inventory collection, inherited `question`, disabled routes, payload-schema parity, and required-write resolution against real compiled routes.
+- Updated the phase coverage map in [test_strategy.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/botlane-internal-architecture-refactor-spec-this-3778d915/runs/run-20260509T045359Z-e2586b1f/artifacts/test/phases/route-contract-adapters/test_strategy.md).
+- Appended a concise test summary to [feedback.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/botlane-internal-architecture-refactor-spec-this-3778d915/runs/run-20260509T045359Z-e2586b1f/artifacts/test/phases/route-contract-adapters/feedback.md).
+
+Key findings / decisions
+- The original new tests covered direct adapter behavior well, but they did not prove parity against actual compiler-normalized route tables.
+- The compiler-backed test had to stay within current validated behavior:
+  - core `Workflow`, not simple `Workflow`, because raw `transitions` are invalid on the simple surface
+  - prompt-step target for `handoff`, because `handoff` to `PythonStep` is intentionally rejected
+  - built-in helper route fields instead of raw custom route-field mappings, because this environment does not include the optional `jsonschema` dependency
+- Validation passed:
+  - `./.venv/bin/python -m pytest tests/unit/test_route_contracts.py -q`
+  - `./.venv/bin/python -m pytest tests/unit/test_artifact_ids.py tests/unit/test_simple_surface.py tests/unit/test_sdk_facade.py tests/strictness/test_no_compat.py -q`
+
+Open issues / next step
+- Engine-loop `RouteAction` consumption remains intentionally untested here because it is out of scope for this phase.
+- A later workflow-plan phase should add parity tests for route-view helpers against real `WorkflowPlan.routes` once that type exists.

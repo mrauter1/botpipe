@@ -3,13 +3,16 @@ from __future__ import annotations
 from types import SimpleNamespace
 
 import pytest
+from pydantic import BaseModel
 
 from botlane.core.artifacts import Artifact
-from botlane.core.compiler import CompiledRoute
+from botlane.core import Workflow
+from botlane.core.compiler import CompiledRoute, compile_workflow
+from botlane.core.discovery import WorkflowDefinition, get_workflow_definition
 from botlane.core.identifiers import ArtifactId
-from botlane.core.inventory import ArtifactInventoryRecord
+from botlane.core.inventory import ArtifactInventoryRecord, collect_artifact_inventory
 from botlane.core.plan_adapters import compiled_route_from_route_contract, route_contract_from_compiled_route
-from botlane.core.primitives import AWAIT_INPUT, FAIL, FINISH
+from botlane.core.primitives import AWAIT_INPUT, FAIL, FINISH, GLOBAL
 from botlane.core.route_contracts import (
     AwaitInput,
     Continue,
@@ -20,6 +23,8 @@ from botlane.core.route_contracts import (
     route_action_for_contract,
     runtime_control_route_tags,
 )
+from botlane.core.steps import PromptStep
+from botlane import Route
 
 
 def _inventory_record(
@@ -225,3 +230,71 @@ def test_route_view_helpers_derive_tags_from_plan_route_tables() -> None:
     assert runtime_control_route_tags(plan, "ask") == ("question",)
     assert provider_visible_route_tags(plan, "ask", mode="interactive") == ("done", "question")
     assert provider_visible_route_tags(plan, "ask", mode="full_auto") == ("done",)
+
+
+def test_compiled_route_adapter_round_trip_matches_compiler_normalized_routes() -> None:
+    class RoutePayload(BaseModel):
+        approved: bool
+
+    class CompiledRouteParityWorkflow(Workflow):
+        class State(BaseModel):
+            pass
+
+        ask = PromptStep(
+            name="ask",
+            producer="ask.md",
+            writes={"report": Artifact("{run_folder}/report.md")},
+        )
+        review = PromptStep(name="review", producer="review.md")
+        entry = ask
+        transitions = {
+            ask: {
+                "publish": Route.to(
+                    review,
+                    summary="publish the generated report",
+                    required_writes=("report",),
+                    handoff="Send the report to the user.",
+                    provider_visibility="interactive_only",
+                    payload_schema=RoutePayload,
+                ),
+                "failed": Route.disabled(),
+            },
+            review: {"done": FINISH},
+            GLOBAL: {"question": Route.question()},
+        }
+
+    definition: WorkflowDefinition = get_workflow_definition(CompiledRouteParityWorkflow)
+    inventory = collect_artifact_inventory(definition)
+    compiled = compile_workflow(CompiledRouteParityWorkflow)
+
+    publish = compiled.routes["ask"]["publish"]
+    question = compiled.routes["ask"]["question"]
+    failed = compiled.routes["ask"]["failed"]
+
+    publish_contract = route_contract_from_compiled_route(publish, inventory=inventory)
+    question_contract = route_contract_from_compiled_route(question)
+    failed_contract = route_contract_from_compiled_route(failed)
+
+    assert publish_contract.target.kind == "step"
+    assert publish_contract.target.step_name == "review"
+    assert publish_contract.summary == publish.summary
+    assert publish_contract.handoff == publish.handoff
+    assert publish_contract.required_writes.declared == (
+        ArtifactId("step", name="report", step="ask"),
+    )
+    assert publish_contract.is_runtime_control == publish.is_runtime_control
+    assert publish_contract.provider.visibility == publish.provider_visibility
+    assert publish_contract.payload.schema == publish.payload_schema
+    assert publish_contract.route_fields.schema is None
+
+    assert question_contract.target.kind == "await_input"
+    assert question_contract.is_runtime_control == question.is_runtime_control
+    assert question_contract.provider.visibility == question.provider_visibility
+    assert question_contract.route_fields.schema == question.route_fields_schema
+
+    assert failed_contract.target.kind == "disabled"
+    assert failed_contract.disabled is True
+
+    assert compiled_route_from_route_contract(publish_contract) == publish
+    assert compiled_route_from_route_contract(question_contract) == question
+    assert compiled_route_from_route_contract(failed_contract) == failed
