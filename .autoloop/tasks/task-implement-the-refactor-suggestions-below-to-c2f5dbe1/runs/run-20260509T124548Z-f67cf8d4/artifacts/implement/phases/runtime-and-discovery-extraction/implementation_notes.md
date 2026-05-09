@@ -74,8 +74,10 @@
 ## Validation Performed
 - `py_compile`: `.venv/bin/python -m py_compile botlane/core/engine.py botlane/core/discovery.py tests/unit/test_runtime_and_discovery_extraction.py`
 - Targeted pytest: `.venv/bin/python -m pytest tests/unit/test_runtime_and_discovery_extraction.py -q` → `3 passed`
+- Revalidated after the reviewer-reported collaborator import drift: `.venv/bin/python -m py_compile botlane/core/engine.py botlane/core/discovery.py tests/unit/test_runtime_and_discovery_extraction.py && .venv/bin/python -m pytest tests/unit/test_runtime_and_discovery_extraction.py -q` → `3 passed`
 
 ## Dedup / Centralization Decisions
 - Centralized context construction and checkpoint persistence in `Engine` helpers instead of repeating the same `Context(...)` and `_save_checkpoint(...)` argument lists across resume/init/terminal paths.
 - Centralized workflow discovery into explicit base, scan, lower, graph, session, and build helpers instead of keeping namespace scan and graph resolution intertwined in one function.
 - Kept the `botlane.sdk` stub local to the new test module so source code stays phase-scoped while the added runtime/discovery coverage remains executable.
+- Kept route-finalization result typing anchored to collaborator-owned `_StepRouteResult` instead of reintroducing a second private alias in `Engine`, so branch-group runtime and engine finalization continue to share one contract.
