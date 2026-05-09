@@ -21,7 +21,7 @@ from .branch_groups.runtime import BranchGroupRuntime
 from .compiler import compile_workflow
 from .context import Context, _DEFAULT_MESSAGE, _resolve_context_root, context_runtime
 from .engine_collaborators import (
-    _RouteResolution,
+    _StepRouteResult,
     ArtifactGuard,
     CheckpointManager,
     HookRunner,
@@ -83,6 +83,7 @@ from .route_contracts import (
     Finish as FinishAction,
     RouteAction,
     RouteContract,
+    RouteDecision,
     route_target_value,
 )
 from .route_required_writes import (
@@ -932,7 +933,7 @@ class Engine:
         step_result: StepExecutionResult,
     ) -> None:
         state_after = step_result.state
-        last_transition = step_result.finalization
+        last_transition = step_result.transition
         assert last_transition is not None
         hook_route_override_from = None
         hook_route_override_to = None
@@ -985,16 +986,21 @@ class Engine:
         loop.pending_handoffs = step_result.pending_handoffs
         loop.last_event = step_result.event
         loop.last_outcome = step_result.outcome
-        loop.last_transition = step_result.finalization
-        destination = step_result.destination
+        loop.last_transition = step_result.transition
+        action = step_result.action
         loop.current_answer = None
         loop.current_input_response = None
-        if destination == FINISH:
+        if isinstance(action, FinishAction):
             return self._finish_terminal(env, loop, frame)
-        if destination == AWAIT_INPUT:
+        if isinstance(action, AwaitInputAction):
             return self._await_input_terminal(env, loop, frame, step_result=step_result)
-        if destination == FAIL:
+        if isinstance(action, FailAction):
             return self._fail_terminal(env, loop, frame)
+        if not isinstance(action, Continue):
+            raise WorkflowExecutionError(
+                f"step {frame.step.name!r} completed without a canonical route action"
+            )
+        destination = action.target_step
         if loop.last_transition is not None and loop.last_transition.runtime_control == "goto":
             loop.checkpoint = self._save_loop_checkpoint(
                 loop,
@@ -3423,10 +3429,42 @@ class Engine:
             event=None,
             outcome=None,
             pending_handoffs=pending_handoffs,
+            route_decision=RouteDecision(
+                final_route=None,
+                contract=None,
+                action=(
+                    FinishAction(reason=control.control or "finish")
+                    if control.destination == FINISH
+                    else AwaitInputAction(pending_input=pending_input)
+                    if control.destination == AWAIT_INPUT
+                    else FailAction(reason=control.control)
+                    if control.destination == FAIL
+                    else Continue(
+                        target_step=control.target_step or control.destination,
+                        reason=control.control or "route",
+                    )
+                ),
+                runtime_control=control.control,
+                provider_attributable=False,
+                source_hook=control.source_hook,
+                source_phase=control.source_phase,
+            ),
+            action=(
+                FinishAction(reason=control.control or "finish")
+                if control.destination == FINISH
+                else AwaitInputAction(pending_input=pending_input)
+                if control.destination == AWAIT_INPUT
+                else FailAction(reason=control.control)
+                if control.destination == FAIL
+                else Continue(
+                    target_step=control.target_step or control.destination,
+                    reason=control.control or "route",
+                )
+            ),
             producer_raw_output=producer_raw_output,
             verifier_raw_output=verifier_raw_output,
             provider_usage=provider_usage,
-            finalization=finalization,
+            transition=finalization,
             pending_input=pending_input,
         )
 
@@ -3434,7 +3472,7 @@ class Engine:
         self,
         *,
         step: StepPlan,
-        route_finalization: _RouteResolution,
+        route_finalization: _StepRouteResult,
         outcome: Outcome | None = None,
         producer_raw_output: str | None = None,
         verifier_raw_output: str | None = None,
@@ -3466,7 +3504,7 @@ class Engine:
             producer_raw_output=producer_raw_output,
             verifier_raw_output=verifier_raw_output,
             provider_usage=provider_usage,
-            finalization=finalization,
+            transition=finalization,
             pending_input=route_finalization.pending_input,
             route_decision=route_finalization.decision,
             action=None if route_finalization.decision is None else route_finalization.decision.action,

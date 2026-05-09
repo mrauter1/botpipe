@@ -98,7 +98,7 @@ class StepFinalizationRequest:
 
 
 @dataclass(frozen=True, slots=True)
-class _RouteResolution:
+class _StepRouteResult:
     state: BaseModel
     destination: str
     finalized_event: Event | None
@@ -130,7 +130,7 @@ class StepExecutionResult:
     producer_raw_output: str | None = None
     verifier_raw_output: str | None = None
     provider_usage: StepProviderUsage | None = None
-    finalization: "StepFinalizationRecord | None" = None
+    transition: "StepFinalizationRecord | None" = None
     pending_input: PendingInput | None = None
 
 
@@ -200,7 +200,7 @@ def _turn_has_supported_required_refs(turn: ProviderTurnPlan) -> bool:
     return all(isinstance(value, ArtifactId) for value in turn.io.requires)
 
 
-def _route_action_from_direct_control(result: _RouteResolution) -> RouteAction:
+def _route_action_from_direct_control(result: _StepRouteResult) -> RouteAction:
     if result.destination == FINISH:
         return FinishAction(reason=result.runtime_control or "finish")
     if result.destination == AWAIT_INPUT:
@@ -695,10 +695,10 @@ class StepDispatcher:
         *,
         route_mode: RouteMode,
         request: StepFinalizationRequest,
-    ) -> _RouteResolution:
+    ) -> _StepRouteResult:
         if route_mode == "capture":
             return self._engine.route_finalizer.capture(request)
-        return self._engine.route_finalizer.finalize(request)
+        return self._engine.route_finalizer.finalize_result(request)
 
     async def _call_provider(
         self,
@@ -1468,7 +1468,7 @@ class RouteFinalizer:
         self,
         *,
         route: RouteContract,
-        result: _RouteResolution,
+        result: _StepRouteResult,
     ) -> RouteDecision:
         return RouteDecision(
             final_route=result.final_route,
@@ -1485,7 +1485,7 @@ class RouteFinalizer:
         )
 
     @staticmethod
-    def _route_decision_for_direct_control(result: _RouteResolution) -> RouteDecision:
+    def _route_decision_for_direct_control(result: _StepRouteResult) -> RouteDecision:
         return RouteDecision(
             final_route=result.final_route,
             contract=None,
@@ -1497,7 +1497,7 @@ class RouteFinalizer:
             source_phase=result.source_phase,
         )
 
-    def capture(self, request: StepFinalizationRequest) -> _RouteResolution:
+    def capture(self, request: StepFinalizationRequest) -> _StepRouteResult:
         step = request.step
         context = request.context
         candidate_event = request.candidate_event
@@ -1559,7 +1559,7 @@ class RouteFinalizer:
                 hook_name=getattr(request.after_hook or step.after_hook, "__name__", type(request.after_hook or step.after_hook).__name__),
                 hook_phase=request.after_hook_phase,
             )
-            result = _RouteResolution(
+            result = _StepRouteResult(
                 state=final_state,
                 destination=direct_control.destination,
                 finalized_event=None,
@@ -1624,7 +1624,7 @@ class RouteFinalizer:
         self._state.update_final_step_runtime_state(step, getattr(context, "_step_state", None), final_event)
         self._state.update_final_step_runtime_state(step, getattr(context, "_step_item_state", None), final_event)
         self._state.update_final_item_runtime_state(getattr(context, "_item_state", None), final_event)
-        result = _RouteResolution(
+        result = _StepRouteResult(
             state=final_state,
             destination=destination,
             finalized_event=final_event,
@@ -1644,7 +1644,7 @@ class RouteFinalizer:
         )
         return replace(result, decision=self._route_decision_for_route(route=final_route, result=result))
 
-    def finalize(self, request: StepFinalizationRequest) -> _RouteResolution:
+    def finalize_result(self, request: StepFinalizationRequest) -> _StepRouteResult:
         step = request.step
         context = request.context
         candidate_event = request.candidate_event
@@ -1712,7 +1712,7 @@ class RouteFinalizer:
                 context=context,
                 source_step=step.name,
             )
-            result = _RouteResolution(
+            result = _StepRouteResult(
                 state=final_state,
                 destination=direct_control.destination,
                 finalized_event=None,
@@ -1781,7 +1781,7 @@ class RouteFinalizer:
                         context=context,
                         source_step=step.name,
                     )
-                    result = _RouteResolution(
+                    result = _StepRouteResult(
                         state=final_state,
                         destination=direct_control.destination,
                         finalized_event=None,
@@ -1833,7 +1833,7 @@ class RouteFinalizer:
         self._state.update_final_step_runtime_state(step, getattr(context, "_step_state", None), final_event)
         self._state.update_final_step_runtime_state(step, getattr(context, "_step_item_state", None), final_event)
         self._state.update_final_item_runtime_state(getattr(context, "_item_state", None), final_event)
-        result = _RouteResolution(
+        result = _StepRouteResult(
             state=final_state,
             destination=destination,
             finalized_event=final_event,
@@ -1859,6 +1859,9 @@ class RouteFinalizer:
             ),
         )
         return replace(result, decision=self._route_decision_for_route(route=final_route, result=result))
+
+    def finalize(self, request: StepFinalizationRequest) -> RouteDecision:
+        return self.finalize_result(request).decision
 
 
 class HookRunner:
