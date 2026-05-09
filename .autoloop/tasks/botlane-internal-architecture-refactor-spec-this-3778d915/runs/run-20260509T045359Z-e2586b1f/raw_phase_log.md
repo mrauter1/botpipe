@@ -1288,3 +1288,111 @@ Open issues / next step
 <loop-control>
 {"schema":"docloop.loop_control/v1","kind":"promise","promise":"COMPLETE"}
 </loop-control>
+
+
+---
+run_id=run-20260509T045359Z-e2586b1f | entry=session_turn | pair=test | phase=producer | cycle=1 | attempt=1 | thread_id=019e0b56-735d-7c20-8aa5-b760d0b9b9a6
+---
+provider=codex
+mode=resume
+template=/home/rauter/.local/share/pipx/venvs/autoloop/lib/python3.12/site-packages/autoloop/templates/test_producer.md
+session_id=019e0b56-735d-7c20-8aa5-b760d0b9b9a6
+
+
+---
+run_id=run-20260509T045359Z-e2586b1f | entry=phase_output | pair=test | phase=producer | process=codex-agent | cycle=1 | attempt=1 | thread_id=019e0b56-735d-7c20-8aa5-b760d0b9b9a6
+---
+This test turn is about locking in the updated plan-adapter behavior, especially the new explicit branch-group parity path and its failure mode. I’m reviewing the current tests and the phase test strategy first, then I’ll add the missing regression coverage and update the test artifacts.
+
+The main remaining gap is the failure path the reviewer called out: if branch-group nested parity is missing, the adapter should fail loudly instead of silently degrading. I’m adding that regression test now and then I’ll document the coverage map in the phase test artifacts.
+
+I’ve added the explicit branch-group failure-path regression test. Next I’m running the focused unit coverage to make sure the new assertion is deterministic and the success-path parity tests still hold.
+
+The focused suite is green with the new failure-path coverage. I’m recording the exact behavior-to-test map now so later phases keep the branch-group parity contract and its loud-failure path intact.
+
+Scope considered
+
+- Phase-local test coverage for `step-and-workflow-plans`.
+- Focused on `tests/unit/test_step_plans.py`, `tests/unit/test_workflow_plan_adapters.py`, and the phase test artifacts.
+- Reviewed the latest adapter decisions in `decisions.txt` to align tests with the explicit private parity-carrier design.
+
+What I analyzed
+
+- Existing typed step-plan and workflow-plan adapter tests.
+- The producer/verifier outcome that moved compiled parity off `StepHeader.original_step` and onto private `_compiled_step` fields.
+- The remaining regression gap around branch-group reconstruction when nested parity metadata is missing.
+
+What I changed
+
+- Added a new failure-path regression test in [test_step_plans.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/tests/unit/test_step_plans.py) that strips nested branch parity metadata and asserts `compiled_step_from_step_plan(...)` raises a clear `ValueError` instead of silently producing invalid branch-group compiled metadata.
+- Updated [test_strategy.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/botlane-internal-architecture-refactor-spec-this-3778d915/runs/run-20260509T045359Z-e2586b1f/artifacts/test/phases/step-and-workflow-plans/test_strategy.md) with an explicit behavior-to-coverage map, preserved invariants, edge cases, failure paths, flake controls, and known gaps.
+- Appended a concise summary to [feedback.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/botlane-internal-architecture-refactor-spec-this-3778d915/runs/run-20260509T045359Z-e2586b1f/artifacts/test/phases/step-and-workflow-plans/feedback.md).
+- Added one test decision line under the latest test-author header in [decisions.txt](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/botlane-internal-architecture-refactor-spec-this-3778d915/runs/run-20260509T045359Z-e2586b1f/decisions.txt).
+
+Key findings / decisions
+
+- The main missing coverage was the failure path for nested branch-group parity loss.
+- That path is now locked down so later adapter changes cannot regress to silent `branch_group=None`-style degradation.
+- Focused validation passed:
+  - `.venv/bin/python -m pytest tests/unit/test_step_plans.py tests/unit/test_workflow_plan_adapters.py`
+
+Open issues / next step
+
+- No test-phase blocker remains in this phase scope.
+- Remaining gap is unchanged from the strategy note: this turn validates adapter-layer invariants, not full runtime execution.
+
+
+---
+run_id=run-20260509T045359Z-e2586b1f | entry=session_turn | pair=test | phase=verifier | cycle=1 | attempt=1 | thread_id=019e0b56-735d-7c20-8aa5-b760d0b9b9a6
+---
+provider=codex
+mode=resume
+template=/home/rauter/.local/share/pipx/venvs/autoloop/lib/python3.12/site-packages/autoloop/templates/test_verifier.md
+session_id=019e0b56-735d-7c20-8aa5-b760d0b9b9a6
+
+
+---
+run_id=run-20260509T045359Z-e2586b1f | entry=phase_output | pair=test | phase=verifier | process=codex-agent | cycle=1 | attempt=1 | thread_id=019e0b56-735d-7c20-8aa5-b760d0b9b9a6
+---
+I’m auditing the new adapter-layer tests and the test strategy against the phase contract, with special attention to the branch-group parity regression path and whether the preserved invariants are actually encoded. After that I’ll update only the audit artifacts.
+
+The coverage map lines up with the actual tests, and the new failure-path case is the right regression trap for this change. I’m running the focused adapter tests once from the audit side before I close the criteria.
+
+The focused audit run is green and I don’t see a material coverage or reliability gap within phase scope. I’m marking the audit criteria complete and appending a closure note to the feedback artifact.
+
+Scope considered
+
+- Phase-local audit for `step-and-workflow-plans`.
+- Reviewed the updated unit coverage in `tests/unit/test_step_plans.py` and `tests/unit/test_workflow_plan_adapters.py`, plus the phase `test_strategy.md`.
+- Updated only the active audit artifacts: `criteria.md` and `feedback.md`.
+
+What I analyzed
+
+- Whether the tests cover the changed adapter behavior introduced by the explicit private `_compiled_step` parity carriers.
+- Whether preserved invariants from the phase contract are encoded, especially topology-hash parity, route-table parity, and canonical route ownership away from `StepHeader`.
+- Whether the new branch-group failure path is tested loudly rather than allowing silent invalid reconstruction.
+
+What I reviewed
+
+- Success-path typed plan lowering across prompt, produce/verify, python, child-workflow, and branch-group cases.
+- Branch-group parity rebuild when top-level parity is removed.
+- Branch-group failure behavior when nested parity metadata is removed.
+- WorkflowPlan round-trip parity, route-table parity, and copied-map immutability.
+- Focused audit validation:
+  - `.venv/bin/python -m pytest tests/unit/test_step_plans.py tests/unit/test_workflow_plan_adapters.py`
+
+Key findings / decisions
+
+- No blocking audit findings remain in this phase scope.
+- The new failure-path test closes the most material remaining regression gap for this change.
+- The test strategy artifact accurately maps the implemented coverage to the changed behaviors and notes the scoped runtime gap without normalizing a regression.
+
+Open issues / next step
+
+- Criteria were marked complete.
+- Feedback was appended with an audit closure note.
+- Remaining gap is already declared in the strategy as out of scope for this turn: full runtime execution beyond the adapter layer.
+
+<loop-control>
+{"schema":"docloop.loop_control/v1","kind":"promise","promise":"COMPLETE"}
+</loop-control>
