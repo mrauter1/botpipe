@@ -1558,3 +1558,58 @@ Open issues / next step
 - `./.venv/bin/python -m pytest -q tests/unit/test_execution_frame_context_parity.py tests/unit/test_primitives_and_stores.py tests/contract/test_provider_turn_plan_adapter.py tests/contract/test_async_step_dispatcher.py tests/contract/engine/test_execution_services.py tests/runtime/test_workspace_and_context.py`
 - I did not run the full repository suite.
 - The known broader-file gap remains documented in `test_strategy.md`: `tests/unit/test_branch_group_context_sessions.py` still has two unrelated stale assertions from earlier architecture work, outside this phase-local slice.
+
+
+---
+run_id=run-20260509T125912Z-8deb38fd | entry=session_turn | pair=test | phase=verifier | cycle=1 | attempt=1 | thread_id=019e0d1d-3ee2-7851-97bb-7adbbdfcd948
+---
+provider=codex
+mode=resume
+template=/home/rauter/.local/share/pipx/venvs/autoloop/lib/python3.12/site-packages/autoloop/templates/test_verifier.md
+session_id=019e0d1d-3ee2-7851-97bb-7adbbdfcd948
+
+
+---
+run_id=run-20260509T125912Z-8deb38fd | entry=phase_output | pair=test | phase=verifier | process=codex-agent | cycle=1 | attempt=1 | thread_id=019e0d1d-3ee2-7851-97bb-7adbbdfcd948
+---
+I’m auditing the phase-local test additions against the execution-frame-authority contract. I’ll verify that the new assertions actually cover the removed helper path and child-frame behavior, then I’ll update the audit artifacts with either a clean pass or concrete gaps.
+
+The new assertions line up with the intended risks: direct helper-symbol absence, child-frame locality, and the nested branch-step route fallback. I’m running the touched tests plus the focused validation slice to confirm the coverage claims in the strategy artifact.
+
+The focused validation is green and the strategy artifact matches the exercised coverage. I’m marking the audit criteria complete and appending a short audit note so the artifact trail records that no coverage gaps remain in this phase slice.
+
+Scope considered
+
+- Phase-local test audit for `execution-frame-authority`, focused on [tests/unit/test_execution_frame_context_parity.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/tests/unit/test_execution_frame_context_parity.py), [tests/contract/test_async_step_dispatcher.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/tests/contract/test_async_step_dispatcher.py), and the supporting focused suite named in the strategy artifact.
+- Audit artifacts [criteria.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/botlane-v3-second-pass-greenfield-architecture-s-a9df943f/runs/run-20260509T125912Z-8deb38fd/artifacts/test/phases/execution-frame-authority/criteria.md), [feedback.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/botlane-v3-second-pass-greenfield-architecture-s-a9df943f/runs/run-20260509T125912Z-8deb38fd/artifacts/test/phases/execution-frame-authority/feedback.md), and [test_strategy.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/botlane-v3-second-pass-greenfield-architecture-s-a9df943f/runs/run-20260509T125912Z-8deb38fd/artifacts/test/phases/execution-frame-authority/test_strategy.md).
+
+What I analyzed
+
+- Whether the new tests directly cover the phase contract, not just indirectly through broader suites.
+- Whether the helper-removal assertions catch the concrete regression risk from the prior implement-review cycle.
+- Whether the added async branch-group coverage is deterministic and actually localizes the nested route-visibility fallback risk.
+
+What I reviewed
+
+- The new symbol-absence and child-frame locality assertions in `test_execution_frame_context_parity.py`.
+- The strengthened async branch-group contract in `test_async_step_dispatcher.py`.
+- The focused validation commands reported by the test author, which I reran:
+- `./.venv/bin/python -m pytest -q tests/unit/test_execution_frame_context_parity.py tests/contract/test_async_step_dispatcher.py`
+- `./.venv/bin/python -m pytest -q tests/unit/test_execution_frame_context_parity.py tests/unit/test_primitives_and_stores.py tests/contract/test_provider_turn_plan_adapter.py tests/contract/test_async_step_dispatcher.py tests/contract/engine/test_execution_services.py tests/runtime/test_workspace_and_context.py`
+
+Key findings / decisions
+
+- No blocking findings.
+- Coverage is appropriate for the phase slice: the tests now directly assert helper removal from `botlane.core.context`, child-frame-local bookkeeping, and the nested branch-step provider-route fallback that previously regressed async branch-group dispatch.
+- Reliability is good: temp-path setup, in-memory stores, and deterministic fake-provider behavior avoid flake risks.
+
+Open issues / next step
+
+- I updated the audit artifacts to complete:
+- all checkboxes in `criteria.md` are now checked
+- `feedback.md` includes a non-blocking audit-pass note
+- No further phase-local test additions are required from this audit pass.
+
+<loop-control>
+{"schema":"docloop.loop_control/v1","kind":"promise","promise":"COMPLETE"}
+</loop-control>

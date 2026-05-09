@@ -3,3 +3,4 @@ Context should become the canonical executable runtime mutator facade; keep Exec
 Unify worklist selection mutation, selection-snapshot invalidation, and scoped item-state refresh behind one Context path reused by engine lazy selection, worklist runtime helpers, and branch-group child selection resolvers.
 The cited failing tests and the full acceptance batch are already green in this workspace; treat the task as behavior-preserving contract consolidation, not a user-visible runtime behavior change.
 Hotspot 9 remains deferred because the current plan does not require opening botlane/core/workflow_capabilities.py.
+<autoloop-decisions-header version="1" block_seq="2" owner="implementer" phase_id="unify-runtime-context-mutators" pair="implement" turn_seq="1" run_id="run-20260509T144337Z-158e6e31" ts="2026-05-09T14:48:21.090056+00:00" />
