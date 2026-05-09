@@ -2758,3 +2758,58 @@ Open issues / next step
 - `.venv/bin/python -m pytest -q tests/unit/test_sdk_facade.py tests/contract/test_single_step_plan_equivalence.py tests/contract/test_sdk_single_step_execution.py`
 - `.venv/bin/python -m pytest -q tests/contract/engine/test_child_workflows.py`
 - I did not run the full repo `pytest` suite in this turn.
+
+
+---
+run_id=run-20260509T125912Z-8deb38fd | entry=session_turn | pair=implement | phase=verifier | cycle=1 | attempt=1 | thread_id=019e0d6a-0a1a-7b51-bac5-3dded18dc199
+---
+provider=codex
+mode=resume
+template=/home/rauter/.local/share/pipx/venvs/autoloop/lib/python3.12/site-packages/autoloop/templates/implement_verifier.md
+session_id=019e0d6a-0a1a-7b51-bac5-3dded18dc199
+
+
+---
+run_id=run-20260509T125912Z-8deb38fd | entry=phase_output | pair=implement | phase=verifier | process=codex-agent | cycle=1 | attempt=1 | thread_id=019e0d6a-0a1a-7b51-bac5-3dded18dc199
+---
+I’m reviewing the phase artifacts and the touched SDK/runtime paths now. I’m checking the acceptance criteria against the actual diff and looking for any remaining regression or architecture-drift risk before I update the phase criteria and feedback.
+
+Reviewing the SDK single-step cutover artifacts and the changed one-step execution path now. I’m checking whether the implementation satisfies the phase contract without duplicating compiler ownership or drifting SDK behavior.
+
+The main risk area is now clear: the SDK path no longer falls back to a synthetic workflow, but it appears to have taken on compiler responsibilities directly. I’m pulling exact code references before I record the finding in the review artifacts.
+
+I have the exact SDK references. I’m checking the compiler side once more so the review note is precise about ownership drift rather than just stylistic duplication.
+
+I found one blocking issue and it’s architectural rather than cosmetic: the SDK now constructs its own one-step workflow plan by calling compiler/discovery internals directly. I’m recording that in the review artifacts and leaving the criteria unchecked accordingly.
+
+Scope considered
+
+- Phase-local SDK single-step cutover only.
+- Changed runtime surfaces relevant to the phase: `botlane/sdk.py`, `botlane/runtime/runner.py`, `botlane/core/engine.py`, and the added/updated SDK single-step tests.
+- Active review artifacts: `criteria.md`, `feedback.md`, `implementation_notes.md`, and `decisions.txt`.
+
+What I analyzed
+
+- The new `Botlane.step(...)` path in [botlane/sdk.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/botlane/sdk.py:741).
+- The new prebuilt-plan runtime entrypoint in [botlane/runtime/runner.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/botlane/runtime/runner.py:175).
+- The child-workflow adjustment in [botlane/core/engine.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/botlane/core/engine.py:1310).
+- The dedicated contract coverage in `tests/unit/test_sdk_facade.py`, `tests/contract/test_single_step_plan_equivalence.py`, `tests/contract/test_sdk_single_step_execution.py`, and `tests/contract/engine/test_child_workflows.py`.
+
+What I reviewed
+
+- `Botlane.step(...)` now executes through `SingleStepPlan` instead of the old synthetic workflow fallback.
+- The implementation preserves the expected public signatures and result shape.
+- The focused test set passed, including the child-workflow contract suite.
+- I updated `feedback.md` with one blocking finding. `criteria.md` remains fully unchecked because that finding is still open.
+
+Key findings / decisions
+
+- `IMP-001` blocking: [botlane/sdk.py:1827](/home/rauter/autoloop_v3_bkp/autoloop_v3/botlane/sdk.py:1827) makes the SDK own a second compilation path by rebuilding a one-step `WorkflowPlan` from compiler/discovery internals. That duplicates compiler ownership and creates drift risk for route lowering, artifact inventory, reference-graph construction, topology hashing, and future step lowering changes. The minimal fix is to move one-step plan/workflow-plan construction behind compiler-owned code and keep `botlane/sdk.py` as a thin caller.
+
+Open issues / next step
+
+- Address `IMP-001` by centralizing single-step plan construction in compiler-owned code, then rerun the focused SDK single-step and child-workflow tests and re-review the phase artifacts.
+
+<loop-control>
+{"schema":"docloop.loop_control/v1","kind":"promise","promise":"INCOMPLETE"}
+</loop-control>
