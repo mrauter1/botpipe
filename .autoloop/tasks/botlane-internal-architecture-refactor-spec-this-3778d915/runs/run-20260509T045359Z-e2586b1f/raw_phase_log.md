@@ -2227,3 +2227,105 @@ Open issues / next step
 <loop-control>
 {"schema":"docloop.loop_control/v1","kind":"promise","promise":"COMPLETE"}
 </loop-control>
+
+
+---
+run_id=run-20260509T045359Z-e2586b1f | entry=session_turn | pair=test | phase=producer | cycle=1 | attempt=1 | thread_id=019e0b93-dab0-7e93-a14b-9a9419ebe6ec
+---
+provider=codex
+mode=resume
+template=/home/rauter/.local/share/pipx/venvs/autoloop/lib/python3.12/site-packages/autoloop/templates/test_producer.md
+session_id=019e0b93-dab0-7e93-a14b-9a9419ebe6ec
+
+
+---
+run_id=run-20260509T045359Z-e2586b1f | entry=phase_output | pair=test | phase=producer | process=codex-agent | cycle=1 | attempt=1 | thread_id=019e0b93-dab0-7e93-a14b-9a9419ebe6ec
+---
+I’m reviewing the changed execution-service seam and the existing new tests first, then I’ll fill any material coverage gaps and update the phase test artifacts with a behavior-to-test map.
+
+The main gap in the new seam tests is constructor failure coverage. I’m adding deterministic tests for the explicit guardrails on missing required services, since those are new behavior in this phase and the current engine contract tests only cover the happy paths.
+
+The added guardrail tests passed with the adjacent route, runtime-control, and strictness suites. I’m recording the coverage map and the non-obvious test-scoping decision now in the phase test artifacts.
+
+Scope considered
+- `tests/contract/engine/test_execution_services.py`
+- Adjacent regression buckets `tests/contract/engine/test_routes.py`, `tests/contract/engine/test_runtime_controls.py`, and `tests/strictness/test_no_compat.py`
+- Phase-local test artifacts `test_strategy.md` and `feedback.md`
+- The latest execution-services phase decisions in `decisions.txt`
+
+What I analyzed
+- The new service seam around `ArtifactGuard` and `RouteFinalizer`
+- The implementer-added seam tests to find missing happy-path, edge-case, and failure-path coverage
+- Existing engine route/runtime-control suites to avoid duplicating already-covered runtime behavior
+- Strictness exposure from the new internal-module test surface
+
+What I changed
+- Extended `tests/contract/engine/test_execution_services.py` with constructor guardrail tests:
+  - `ArtifactGuard` rejects missing `ExecutionServices.artifacts`
+  - `RouteFinalizer` rejects missing `artifacts`, `routes`, `hooks`, and `state`
+- Updated the phase `test_strategy.md` with an explicit behavior-to-test coverage map, preserved invariants, edge cases, failure paths, flake notes, and known gaps
+- Appended a concise summary entry to the phase `feedback.md`
+- Appended one test-scoping decision under the current test-author header in `decisions.txt`
+
+Key findings / decisions
+- The main uncovered seam risk was constructor failure behavior for partially populated `ExecutionServices`; that is now covered directly.
+- I intentionally did not add heavier stub tests for `RouteFinalizer.finalize(...)` runtime-control branches because the existing deterministic engine suites already exercise those behaviors after the new wiring.
+- The added tests stay deterministic and local: no timing, network, or filesystem race dependence beyond the existing temp-workspace helpers.
+
+Open issues / next step
+- Later phases should add collaborator-specific tests as more engine-coupled components migrate off `Engine`.
+- This phase’s test work remains focused on the first seam only; it does not broaden coverage to later deferred collaborators.
+
+<loop-control>
+{"schema":"docloop.loop_control/v1","kind":"promise","promise":"COMPLETE"}
+</loop-control>
+
+
+---
+run_id=run-20260509T045359Z-e2586b1f | entry=session_turn | pair=test | phase=verifier | cycle=1 | attempt=1 | thread_id=019e0b93-dab0-7e93-a14b-9a9419ebe6ec
+---
+provider=codex
+mode=resume
+template=/home/rauter/.local/share/pipx/venvs/autoloop/lib/python3.12/site-packages/autoloop/templates/test_verifier.md
+session_id=019e0b93-dab0-7e93-a14b-9a9419ebe6ec
+
+
+---
+run_id=run-20260509T045359Z-e2586b1f | entry=phase_output | pair=test | phase=verifier | process=codex-agent | cycle=1 | attempt=1 | thread_id=019e0b93-dab0-7e93-a14b-9a9419ebe6ec
+---
+I’m auditing the phase-local test additions and the strategy artifact now, then I’ll update the audit criteria and feedback based on whether the new tests actually close the material seam-level regression risks without adding flake or normalizing regressions.
+
+The phase-local tests are appropriately scoped and deterministic, and the existing engine contract suites cover the remaining runtime behavior that this seam depends on. I’m marking the audit criteria complete and recording a no-findings note rather than inventing a weak suggestion.
+
+Scope considered
+- Phase-local test artifacts under `artifacts/test/phases/execution-services-and-collaborators`
+- The added seam tests in `tests/contract/engine/test_execution_services.py`
+- The adjacent regression suites referenced by the test strategy: `test_routes.py`, `test_runtime_controls.py`, and `test_no_compat.py`
+- The latest phase decisions relevant to test scoping
+
+What I analyzed
+- Whether the new tests cover the changed collaborator seam at the right level
+- Whether preserved route/runtime behavior is still protected through adjacent existing suites
+- Whether edge cases and failure paths for the new `ExecutionServices` dependency checks are covered
+- Whether the new tests add flake risk or silently normalize a behavior regression
+
+What I reviewed
+- Happy-path delegation coverage for `ArtifactGuard`
+- Happy-path service-backed capture coverage for `RouteFinalizer`
+- Failure-path constructor coverage for missing `ExecutionServices` dependencies
+- The phase `test_strategy.md` coverage map and stated known gaps
+- The phase `feedback.md` summary entry
+
+Key findings / decisions
+- No blocking findings.
+- No non-blocking findings beyond a recorded `TST-000` no-findings note.
+- The phase-local tests are appropriately scoped: they cover the newly introduced seam behavior directly, while existing deterministic engine route/runtime-control suites cover the heavier runtime scenarios after wiring.
+- The test strategy’s known gap is acceptable because it defers duplicate stub-heavy coverage only where broader contract suites already protect the migrated behavior.
+
+Open issues / next step
+- Later phases should expand seam-specific tests as additional collaborators move off direct `Engine` coupling.
+- Full-suite test auditing remains a later milestone; this audit was limited to the execution-services phase scope and its cited regression buckets.
+
+<loop-control>
+{"schema":"docloop.loop_control/v1","kind":"promise","promise":"COMPLETE"}
+</loop-control>
