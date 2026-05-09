@@ -21,8 +21,8 @@
       "strictness-cleanup"
     ],
     "explicit": true,
-    "current_phase_index": 6,
-    "current_phase_id": "provider-turn-cutover"
+    "current_phase_index": 7,
+    "current_phase_id": "sdk-single-step-cutover"
   },
   "phase_status": {
     "public-freeze": "completed",
@@ -31,8 +31,8 @@
     "execution-frame-authority": "completed",
     "branch-typed-evidence": "completed",
     "placeholder-reference-graph": "completed",
-    "provider-turn-cutover": "in_progress",
-    "sdk-single-step-cutover": "planned",
+    "provider-turn-cutover": "completed",
+    "sdk-single-step-cutover": "in_progress",
     "strictness-cleanup": "planned"
   },
   "phase_history": [
@@ -119,6 +119,19 @@
       "run_id": "run-20260509T125912Z-8deb38fd",
       "status": "in_progress",
       "ts": "2026-05-09T15:34:53.779115+00:00"
+    },
+    {
+      "phase_id": "provider-turn-cutover",
+      "run_id": "run-20260509T125912Z-8deb38fd",
+      "status": "completed",
+      "ts": "2026-05-09T15:45:12.943034+00:00",
+      "pair": "test"
+    },
+    {
+      "phase_id": "sdk-single-step-cutover",
+      "run_id": "run-20260509T125912Z-8deb38fd",
+      "status": "in_progress",
+      "ts": "2026-05-09T15:45:12.946184+00:00"
     }
   ]
 }
