@@ -7,9 +7,11 @@ from pydantic import BaseModel
 import botlane.simple as simple
 from botlane.core.compiler import compile_workflow
 from botlane.core.context import Context
+from botlane.core.engine import Engine
 from botlane.core.provider_policy import PermissionPolicy, ProviderPolicy, ProviderPolicyOverride
 from botlane.core.provider_policy_resolution import ProviderPolicyResolverProtocol
-from botlane.core.stores import InMemorySessionStore
+from botlane.core.providers.fake import ScriptedLLMProvider
+from botlane.core.stores import InMemoryCheckpointStore, InMemorySessionStore
 from botlane.runtime.config import (
     GitTrackingRuntimeConfig,
     ProviderConfig,
@@ -66,3 +68,45 @@ def test_runtime_provider_policy_resolver_satisfies_core_protocol(tmp_path: Path
     assert isinstance(resolver, ProviderPolicyResolverProtocol)
     assert resolver.resolve_for_step(compiled.steps["draft"]).permissions.mode == "full_auto_sandboxed"
     assert resolver.resolve_for_operation(ctx, explicit_policy=operation_policy).permissions.mode == "auto_edit"
+
+
+def test_engine_without_explicit_runtime_resolver_uses_core_fallback_policy_resolution(tmp_path: Path) -> None:
+    workflow_policy = ProviderPolicy(permissions=PermissionPolicy(mode="ask"))
+
+    class PolicyWorkflow(simple.Workflow):
+        class State(BaseModel):
+            summary: str = ""
+
+        policy = workflow_policy
+
+        @simple.python_step
+        def draft(ctx):
+            summary = simple.llm("Summarize.")
+            ctx.state = ctx.state.model_copy(update={"summary": summary})
+            return None
+
+    task_folder = tmp_path / "task"
+    run_folder = tmp_path / "run"
+    task_folder.mkdir()
+    run_folder.mkdir()
+
+    provider = ScriptedLLMProvider(operation_turns=["summary"])
+    result = Engine(
+        compile_workflow(PolicyWorkflow),
+        provider=provider,
+        session_store=InMemorySessionStore(),
+        checkpoint_store=InMemoryCheckpointStore(),
+    ).run(
+        task_id="task-1",
+        run_id="run-1",
+        task_folder=task_folder,
+        run_folder=run_folder,
+        root=tmp_path,
+    )
+
+    assert result.terminal == "FINISH"
+    assert result.state.summary == "summary"
+    assert len(provider.calls) == 1
+    assert provider.calls[0].kind == "operation"
+    assert provider.calls[0].policy is not None
+    assert provider.calls[0].policy.permissions.mode == "ask"

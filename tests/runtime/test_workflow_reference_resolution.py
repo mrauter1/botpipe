@@ -371,6 +371,66 @@ class ReleaseReview(Workflow):
     assert resolved.reference.workflow_name == "release_review"
 
 
+def test_inspecting_imported_repo_catalog_class_preserves_aliases_and_exported_params(tmp_path: Path) -> None:
+    workflows_root = tmp_path / "workflows"
+    workflows_root.mkdir(parents=True, exist_ok=True)
+    workflows_root.joinpath("__init__.py").write_text("__all__ = []\n", encoding="utf-8")
+
+    package_dir = workflows_root / "release_review"
+    package_dir.mkdir(parents=True, exist_ok=True)
+    package_dir.joinpath("workflow.toml").write_text(
+        'name = "release_review"\n'
+        'title = "Release Review"\n'
+        'description = "repo workflow"\n'
+        'aliases = ["review-release"]\n',
+        encoding="utf-8",
+    )
+    package_dir.joinpath("specs.py").write_text(
+        """
+from pydantic import BaseModel
+
+
+class Params(BaseModel):
+    mode: str = "strict"
+""".strip()
+        + "\n",
+        encoding="utf-8",
+    )
+    package_dir.joinpath("__init__.py").write_text(
+        "from .flow import ReleaseReview\nfrom .specs import Params\n__all__ = ['ReleaseReview', 'Params']\n",
+        encoding="utf-8",
+    )
+    package_dir.joinpath("flow.py").write_text(
+        """
+from __future__ import annotations
+
+from botlane import Workflow, python_step
+from .specs import Params
+
+
+class ReleaseReview(Workflow):
+    name = "release_review"
+    Params = Params
+
+    @python_step(name="start")
+    def start(ctx):
+        return None
+""".strip()
+        + "\n",
+        encoding="utf-8",
+    )
+
+    resolved = resolve_workflow_reference(tmp_path, "review-release")
+    inspected = inspect_workflow_reference(tmp_path, resolved.workflow_cls)
+
+    assert inspected.workflow_name == "release_review"
+    assert inspected.authoring_shape == "manifest_package"
+    assert inspected.aliases == ("review-release",)
+    assert inspected.parameters_supported is True
+    assert inspected.parameters_model == "workflows.release_review.specs.Params"
+    assert [field.name for field in inspected.parameters] == ["mode"]
+
+
 def test_simple_declaration_workflow_is_discoverable_by_path_module_name_and_capability_inspection(tmp_path: Path) -> None:
     workflows_root = tmp_path / "workflows"
     workflows_root.mkdir(parents=True, exist_ok=True)

@@ -667,3 +667,59 @@ Open issues / next step
 <loop-control>
 {"schema":"docloop.loop_control/v1","kind":"promise","promise":"COMPLETE"}
 </loop-control>
+
+
+---
+run_id=run-20260509T045359Z-e2586b1f | entry=session_turn | pair=test | phase=producer | cycle=1 | attempt=1 | thread_id=019e0b26-c7f5-7f41-8aef-b4659169d826
+---
+provider=codex
+mode=resume
+template=/home/rauter/.local/share/pipx/venvs/autoloop/lib/python3.12/site-packages/autoloop/templates/test_producer.md
+session_id=019e0b26-c7f5-7f41-8aef-b4659169d826
+
+
+---
+run_id=run-20260509T045359Z-e2586b1f | entry=phase_output | pair=test | phase=producer | process=codex-agent | cycle=1 | attempt=1 | thread_id=019e0b26-c7f5-7f41-8aef-b4659169d826
+---
+I’m treating this as a regression-hardening pass for the phase, not a new feature phase. I’m checking the current test strategy and the repaired boundary-adjacent behavior so I can add only the minimum tests that would have caught the review-cycle regressions.
+
+The main regression risks were not in the new primitives themselves, but in the two compatibility repairs added to satisfy the boundary rule. I’m checking the existing workflow-reference tests for the cleanest place to add one focused imported-class inspection test, and then I’ll decide whether a second new test is still necessary or whether existing simple-surface coverage already locks the policy-fallback path.
+
+I found two small, focused gaps that would have caught the review-cycle regressions directly. I’m adding one test for the core-local fallback policy path and one for imported-class workflow inspection preserving catalog-backed params and aliases.
+
+The new tests are green in isolation. I’m running the phase validation bundle now so the strategy and feedback reflect coverage that actually holds with the existing milestone suite, not just the new cases alone.
+
+The coverage is in place and the phase bundle is green. I’m recording the exact behavior-to-test map in the phase strategy file and a short summary in the test feedback artifact.
+
+Scope considered
+
+- Phase-local `boundary-primitives-and-strictness` test work only.
+- I focused on the new primitive coverage plus the two boundary-fix regression surfaces that changed during implementation review: core fallback policy resolution and imported workflow-class capability inspection.
+- I did not touch reviewer-owned test `criteria.md`.
+
+What I analyzed
+
+- Existing phase tests in `tests/unit/test_artifact_ids.py`, `tests/unit/test_run_paths.py`, `tests/runtime/test_provider_policy_core_protocol.py`, and `tests/strictness/test_core_runtime_boundary.py`.
+- The repaired implementation paths in `botlane/core/engine.py` and `botlane/core/workflow_capabilities.py`.
+- Existing adjacent regression coverage in `tests/unit/test_simple_surface.py` and `tests/runtime/test_workflow_reference_resolution.py`.
+- The active phase test artifacts: `test_strategy.md` and `feedback.md`.
+
+What I changed
+
+- Added a focused regression test to [tests/runtime/test_provider_policy_core_protocol.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/tests/runtime/test_provider_policy_core_protocol.py) that proves direct `Engine(...)` usage without an injected runtime resolver still resolves policy through the new core-local fallback and does not regress into the `None`-policy crash.
+- Added a focused regression test to [tests/runtime/test_workflow_reference_resolution.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/tests/runtime/test_workflow_reference_resolution.py) that proves inspecting an imported repo catalog workflow class preserves manifest-backed aliases, authoring shape, and exported `Params` metadata.
+- Updated the phase [test_strategy.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/botlane-internal-architecture-refactor-spec-this-3778d915/runs/run-20260509T045359Z-e2586b1f/artifacts/test/phases/boundary-primitives-and-strictness/test_strategy.md) with a behavior-to-coverage map, edge cases, failure paths, stabilization notes, and known gaps.
+- Appended a concise summary to the phase [feedback.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/botlane-internal-architecture-refactor-spec-this-3778d915/runs/run-20260509T045359Z-e2586b1f/artifacts/test/phases/boundary-primitives-and-strictness/feedback.md).
+
+Key findings / decisions
+
+- The primitive/deliverable tests already covered the nominal milestone well; the highest remaining regression risk was in the reviewer-driven boundary repair, not in `ArtifactId` or `RunPaths` themselves.
+- I added coverage exactly for the two regressions that surfaced during implementation review, rather than widening into later-phase route/plan behavior.
+- I did not append to `decisions.txt`; no new non-obvious test-only decision was necessary beyond what the updated strategy already records.
+
+Open issues / next step
+
+- No open test-author blockers for this phase.
+- Validation passed:
+  `.venv/bin/python -m pytest tests/unit/test_artifact_ids.py tests/unit/test_run_paths.py tests/runtime/test_provider_policy_core_protocol.py tests/strictness/test_core_runtime_boundary.py tests/unit/test_simple_surface.py tests/unit/test_sdk_facade.py tests/strictness/test_no_compat.py tests/runtime/test_workflow_reference_resolution.py`
+- Result: `245 passed in 34.58s`.
