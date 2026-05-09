@@ -2324,3 +2324,123 @@ Open issues / next step
 <loop-control>
 {"schema":"docloop.loop_control/v1","kind":"promise","promise":"COMPLETE"}
 </loop-control>
+
+
+---
+run_id=run-20260509T125912Z-8deb38fd | entry=session_turn | pair=test | phase=producer | cycle=1 | attempt=1 | thread_id=019e0d43-3dc9-76f0-90b1-4d54c4f1a863
+---
+provider=codex
+mode=resume
+template=/home/rauter/.local/share/pipx/venvs/autoloop/lib/python3.12/site-packages/autoloop/templates/test_producer.md
+session_id=019e0d43-3dc9-76f0-90b1-4d54c4f1a863
+
+
+---
+run_id=run-20260509T125912Z-8deb38fd | entry=phase_output | pair=test | phase=producer | process=codex-agent | cycle=1 | attempt=1 | thread_id=019e0d43-3dc9-76f0-90b1-4d54c4f1a863
+---
+I’m reviewing the finalized phase changes and the existing test surface first so I only add phase-relevant coverage. The focus here is placeholder validation centralization, compiler-owned reference graphs, and the preserved SDK-facing error contracts around those new compile-time paths.
+
+I’ve confirmed the focused phase checks are already green. I’m scanning for one remaining regression-prone gap in the test surface: compile-time missing-input placeholder validation is now centralized, so I want one direct compiler-level assertion in addition to the SDK-facing checks before I update the test strategy.
+
+I found a small compiler-level gap worth covering directly: the new centralized validator changed the missing-input wording path, but we only pin that through the SDK right now. I’m adding one phase-local compiler test that spans the relevant surfaces so the contract doesn’t drift if the SDK wrapper changes later.
+
+The added compiler-level coverage is behaving as intended; one expectation just had the wrong qualified artifact name. I’m correcting that and then I’ll update the phase test artifacts with the explicit coverage map.
+
+I have the test changes locked now. I’m writing the phase-local strategy and feedback artifacts next, and I’m recording one non-obvious test decision in the run ledger: the missing-input wording now needs direct compiler coverage across prompt, workflow-step message, and artifact-template surfaces, not just SDK wrapping.
+
+Scope considered
+
+- Phase-local test work for `placeholder-reference-graph`.
+- Changed placeholder/compiler/SDK surfaces only, plus the phase test artifacts [test_strategy.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/botlane-v3-second-pass-greenfield-architecture-s-a9df943f/runs/run-20260509T125912Z-8deb38fd/artifacts/test/phases/placeholder-reference-graph/test_strategy.md) and [feedback.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/botlane-v3-second-pass-greenfield-architecture-s-a9df943f/runs/run-20260509T125912Z-8deb38fd/artifacts/test/phases/placeholder-reference-graph/feedback.md).
+
+What I analyzed
+
+- Existing phase-relevant tests in [test_placeholder_refs.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/tests/unit/test_placeholder_refs.py) and [test_sdk_facade.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/tests/unit/test_sdk_facade.py).
+- The finalized placeholder decisions in [decisions.txt](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/botlane-v3-second-pass-greenfield-architecture-s-a9df943f/runs/run-20260509T125912Z-8deb38fd/decisions.txt), especially compiler-owned validation and preserved SDK error contracts.
+- Focused regression surfaces for:
+  - compiler-time invalid workflow-step messages
+  - compiler-time invalid artifact templates
+  - missing-input-model wording across centralized placeholder validation
+  - SDK wrapping of placeholder compile failures
+
+What I changed
+
+- Added a compiler-level parametrized regression test in [test_placeholder_refs.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/tests/unit/test_placeholder_refs.py) that asserts missing-input-model failures across:
+  - prompt placeholders
+  - workflow-step message placeholders
+  - artifact-template placeholders
+- Updated [test_strategy.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/botlane-v3-second-pass-greenfield-architecture-s-a9df943f/runs/run-20260509T125912Z-8deb38fd/artifacts/test/phases/placeholder-reference-graph/test_strategy.md) with an explicit behavior-to-test coverage map, edge cases, failure paths, preserved invariants, and known gaps.
+- Appended a concise summary to [feedback.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/botlane-v3-second-pass-greenfield-architecture-s-a9df943f/runs/run-20260509T125912Z-8deb38fd/artifacts/test/phases/placeholder-reference-graph/feedback.md).
+- Added the non-obvious test decision under the current test-author header in [decisions.txt](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/botlane-v3-second-pass-greenfield-architecture-s-a9df943f/runs/run-20260509T125912Z-8deb38fd/decisions.txt).
+
+Key findings / decisions
+
+- The missing-input wording change needed direct compiler-level coverage, not just SDK-level checks, because the shared placeholder validator is now canonical.
+- I kept the added tests deterministic and phase-local; they do not normalize the unrelated `ChildWorkflowStepPlan.step` runtime bug.
+
+Open issues / next step
+
+- Focused validation passed:
+  - `.venv/bin/python -m pytest tests/unit/test_placeholder_refs.py -k "missing_input_model_for_all_placeholder_surfaces or invalid_workflow_step_message_placeholder or invalid_artifact_template_placeholder" -q`
+  - `.venv/bin/python -m pytest tests/unit/test_sdk_facade.py -k "wraps_invalid_child_workflow_message_placeholder or prompt_step_missing_input_field_fails_clearly" -q`
+  - `.venv/bin/python -m pytest tests/contract/engine/test_child_workflows.py -k invalid_ctx_field -q`
+- Known gap documented in the strategy artifact:
+  - broader SDK child-workflow happy-path coverage still trips the unrelated pre-existing `ChildWorkflowStepPlan` `.step` failure outside this phase scope.
+
+
+---
+run_id=run-20260509T125912Z-8deb38fd | entry=session_turn | pair=test | phase=verifier | cycle=1 | attempt=1 | thread_id=019e0d43-3dc9-76f0-90b1-4d54c4f1a863
+---
+provider=codex
+mode=resume
+template=/home/rauter/.local/share/pipx/venvs/autoloop/lib/python3.12/site-packages/autoloop/templates/test_verifier.md
+session_id=019e0d43-3dc9-76f0-90b1-4d54c4f1a863
+
+
+---
+run_id=run-20260509T125912Z-8deb38fd | entry=phase_output | pair=test | phase=verifier | process=codex-agent | cycle=1 | attempt=1 | thread_id=019e0d43-3dc9-76f0-90b1-4d54c4f1a863
+---
+I’m auditing the added test surface against the finalized phase behavior now. The main check is whether the new tests actually pin the centralized compiler validation and preserved SDK-facing contracts, rather than only exercising one wrapper path.
+
+The combined smoke command only exercised a narrow subset, so I’m rerunning the three focused selections separately to confirm the claimed coverage actually passes on the intended files.
+
+The focused phase-local tests pass as claimed, and the added compiler-level cases close the main coverage gap I was looking for. I’m marking the audit complete and leaving one non-blocking audit note instead of inventing a blocker.
+
+Scope considered
+
+- Phase-local audit of the `placeholder-reference-graph` test work only.
+- Changed and request-relevant test surfaces in `tests/unit/test_placeholder_refs.py` and `tests/unit/test_sdk_facade.py`, plus the phase artifacts [test_strategy.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/botlane-v3-second-pass-greenfield-architecture-s-a9df943f/runs/run-20260509T125912Z-8deb38fd/artifacts/test/phases/placeholder-reference-graph/test_strategy.md), [feedback.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/botlane-v3-second-pass-greenfield-architecture-s-a9df943f/runs/run-20260509T125912Z-8deb38fd/artifacts/test/phases/placeholder-reference-graph/feedback.md), and [criteria.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/botlane-v3-second-pass-greenfield-architecture-s-a9df943f/runs/run-20260509T125912Z-8deb38fd/artifacts/test/phases/placeholder-reference-graph/criteria.md).
+
+What I analyzed
+
+- The direct compiler-level placeholder failure coverage added in `test_placeholder_refs.py`.
+- The preserved SDK-facing error-contract coverage added in `test_sdk_facade.py`.
+- The behavior-to-test mapping and declared known gap in `test_strategy.md`.
+- The finalized placeholder-related decisions in [decisions.txt](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/botlane-v3-second-pass-greenfield-architecture-s-a9df943f/runs/run-20260509T125912Z-8deb38fd/decisions.txt).
+
+What I reviewed
+
+- Focused phase-local tests pass as claimed:
+  - `.venv/bin/python -m pytest tests/unit/test_placeholder_refs.py -k "missing_input_model_for_all_placeholder_surfaces or invalid_workflow_step_message_placeholder or invalid_artifact_template_placeholder" -q`
+  - `.venv/bin/python -m pytest tests/unit/test_sdk_facade.py -k "wraps_invalid_child_workflow_message_placeholder or prompt_step_missing_input_field_fails_clearly" -q`
+  - `.venv/bin/python -m pytest tests/contract/engine/test_child_workflows.py -k invalid_ctx_field -q`
+- The added tests pin both the centralized compiler behavior and the preserved SDK-facing wrapper behavior, rather than relying on only one path.
+- I updated [criteria.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/botlane-v3-second-pass-greenfield-architecture-s-a9df943f/runs/run-20260509T125912Z-8deb38fd/artifacts/test/phases/placeholder-reference-graph/criteria.md) to complete and appended a non-blocking audit note to [feedback.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/botlane-v3-second-pass-greenfield-architecture-s-a9df943f/runs/run-20260509T125912Z-8deb38fd/artifacts/test/phases/placeholder-reference-graph/feedback.md).
+
+Key findings / decisions
+
+- No blocking test-audit findings.
+- Coverage is appropriately layered:
+  - compiler-level failure paths for prompt, workflow-step message, and artifact-template missing-input validation
+  - SDK-level preserved exception contract checks
+  - existing engine-level invalid workflow-step message checks retained
+- The documented known gap is acceptable for this phase because it is an unrelated pre-existing child-workflow happy-path runtime failure, not a missing regression test for the placeholder/reference-graph changes.
+
+Open issues / next step
+
+- Phase-local test audit is complete.
+- The unrelated `ChildWorkflowStepPlan` `.step` happy-path failure remains outside this phase scope and is already documented in the strategy artifact.
+
+<loop-control>
+{"schema":"docloop.loop_control/v1","kind":"promise","promise":"COMPLETE"}
+</loop-control>
