@@ -474,3 +474,57 @@ Open issues / next step
   `tests/unit/test_artifact_ids.py`, `tests/unit/test_run_paths.py`, `tests/runtime/test_provider_policy_core_protocol.py`, `tests/strictness/test_core_runtime_boundary.py`, `tests/unit/test_simple_surface.py`, `tests/unit/test_sdk_facade.py`, and `tests/strictness/test_no_compat.py`.
 - I did not run the full suite yet.
 - Next phase should start route contracts and expand `plan_adapters.py` from the current ArtifactId-only implementation.
+
+
+---
+run_id=run-20260509T045359Z-e2586b1f | entry=session_turn | pair=implement | phase=verifier | cycle=1 | attempt=1 | thread_id=019e0b26-c7f5-7f41-8aef-b4659169d826
+---
+provider=codex
+mode=resume
+template=/home/rauter/.local/share/pipx/venvs/autoloop/lib/python3.12/site-packages/autoloop/templates/implement_verifier.md
+session_id=019e0b26-c7f5-7f41-8aef-b4659169d826
+
+
+---
+run_id=run-20260509T045359Z-e2586b1f | entry=phase_output | pair=implement | phase=verifier | process=codex-agent | cycle=1 | attempt=1 | thread_id=019e0b26-c7f5-7f41-8aef-b4659169d826
+---
+I’m reviewing only the boundary-primitives phase output: checking the new primitive modules, the core/runtime boundary cleanup, and whether the phase stayed inside scope without baking in regressions or debt.
+
+I have the phase contract and the implementer’s notes. Next I’m reading the actual edited files directly, because this workspace has a lot of unrelated dirt and untracked files, and I only want findings tied to the approved phase scope.
+
+I found one material issue tied directly to the phase contract: the strictness boundary is only being satisfied syntactically, not semantically. I’m recording that as a blocking finding and leaving the criteria unchecked.
+
+Scope considered
+
+- Phase-local review of `boundary-primitives-and-strictness` only.
+- Production changes reviewed in `botlane/core`, `botlane/runtime/provider_policy_resolver.py`, and the four new test files for this phase.
+- I ignored unrelated dirty/untracked workspace changes outside the approved phase scope.
+
+What I analyzed
+
+- The new primitive modules: `identifiers.py`, `run_paths.py`, `provider_policy_resolution.py`, and `plan_adapters.py`.
+- The core/runtime boundary cleanup in `engine.py`, `operations.py`, and `workflow_capabilities.py`.
+- The implementer’s phase notes and the run-local decisions ledger.
+- The new AST strictness test and the targeted validation intent for this milestone.
+
+What I reviewed
+
+- Whether AC-1 is actually satisfied, not just whether the new test passes.
+- Whether `ArtifactId`, `RunPaths`, `RunIdentity`, and the provider policy resolver protocol exist with reasonable tests.
+- Whether the implementation stayed within the intended architectural boundary instead of hiding it behind indirection.
+- Whether the changes introduced avoidable debt or misleading validation.
+
+Key findings / decisions
+
+- I recorded 1 blocking finding in `feedback.md`.
+- The main issue is that `botlane/core` still imports `botlane.runtime` at runtime via `importlib.import_module(...)` in `engine.py` and `workflow_capabilities.py`.
+- That satisfies the AST scanner syntactically, but it does not satisfy the explicit phase intent or acceptance criterion that `botlane/core` have no runtime imports outside `TYPE_CHECKING`.
+
+Open issues / next step
+
+- Fix the blocking boundary violation by moving those runtime-owned lookups behind runtime entrypoints or injected adapters/factories, rather than dynamically importing runtime modules from `botlane/core`.
+- After that, rerun the same milestone validation and then this phase should be ready to mark complete.
+
+<loop-control>
+{"schema":"docloop.loop_control/v1","kind":"promise","promise":"INCOMPLETE"}
+</loop-control>

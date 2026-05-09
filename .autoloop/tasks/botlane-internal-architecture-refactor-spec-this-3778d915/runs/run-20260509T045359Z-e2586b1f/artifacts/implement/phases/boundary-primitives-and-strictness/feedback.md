@@ -6,3 +6,8 @@
 - Phase Directory Key: boundary-primitives-and-strictness
 - Phase Title: Boundary Primitives
 - Scope: phase-local authoritative verifier artifact
+
+## Findings
+
+- IMP-001 | blocking | `botlane/core/engine.py::_create_default_provider_policy_resolver`, `botlane/core/workflow_capabilities.py::_runtime_loader_attr`
+  The phase contract and acceptance criteria require `botlane/core` to have no runtime imports outside `TYPE_CHECKING`, but these new helpers still import `botlane.runtime` at runtime through `importlib.import_module(...)`. That means the core/runtime dependency leak still exists; the new AST test only stops direct `import` syntax and can be bypassed by the current implementation. Concrete risk: future core code can continue depending on runtime-owned loader/provider-policy behavior while the strictness suite reports the boundary as clean, defeating the architectural guarantee this phase was supposed to establish. Minimal fix: move these runtime-owned lookups behind runtime entrypoints or injected adapters/factories, and keep core modules typed only against core protocols instead of dynamically loading runtime modules from inside `botlane/core`.
