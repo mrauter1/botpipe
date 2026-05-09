@@ -22,15 +22,15 @@
       "single-step-parity-and-cleanup"
     ],
     "explicit": true,
-    "current_phase_index": 3,
-    "current_phase_id": "step-and-workflow-plans"
+    "current_phase_index": 4,
+    "current_phase_id": "execution-frame-context-migration"
   },
   "phase_status": {
     "freeze-public-compatibility": "completed",
     "boundary-primitives-and-strictness": "completed",
     "route-contract-adapters": "completed",
-    "step-and-workflow-plans": "in_progress",
-    "execution-frame-context-migration": "planned",
+    "step-and-workflow-plans": "completed",
+    "execution-frame-context-migration": "in_progress",
     "provider-turn-and-route-finalization": "planned",
     "execution-services-and-collaborators": "planned",
     "placeholder-reference-graph": "planned",
@@ -82,6 +82,19 @@
       "run_id": "run-20260509T045359Z-e2586b1f",
       "status": "in_progress",
       "ts": "2026-05-09T06:04:34.600909+00:00"
+    },
+    {
+      "phase_id": "step-and-workflow-plans",
+      "run_id": "run-20260509T045359Z-e2586b1f",
+      "status": "completed",
+      "ts": "2026-05-09T06:30:17.812391+00:00",
+      "pair": "test"
+    },
+    {
+      "phase_id": "execution-frame-context-migration",
+      "run_id": "run-20260509T045359Z-e2586b1f",
+      "status": "in_progress",
+      "ts": "2026-05-09T06:30:17.815213+00:00"
     }
   ]
 }
