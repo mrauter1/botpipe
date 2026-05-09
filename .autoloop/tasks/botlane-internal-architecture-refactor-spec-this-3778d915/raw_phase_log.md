@@ -2174,3 +2174,56 @@ Open issues / next step
 <loop-control>
 {"schema":"docloop.loop_control/v1","kind":"promise","promise":"COMPLETE"}
 </loop-control>
+
+
+---
+run_id=run-20260509T045359Z-e2586b1f | entry=session_turn | pair=implement | phase=verifier | cycle=1 | attempt=1 | thread_id=019e0b93-dab0-7e93-a14b-9a9419ebe6ec
+---
+provider=codex
+mode=resume
+template=/home/rauter/.local/share/pipx/venvs/autoloop/lib/python3.12/site-packages/autoloop/templates/implement_verifier.md
+session_id=019e0b93-dab0-7e93-a14b-9a9419ebe6ec
+
+
+---
+run_id=run-20260509T045359Z-e2586b1f | entry=phase_output | pair=implement | phase=verifier | process=codex-agent | cycle=1 | attempt=1 | thread_id=019e0b93-dab0-7e93-a14b-9a9419ebe6ec
+---
+I’m reviewing the phase diff and the implementation notes now, then I’ll update the phase criteria and feedback artifacts based on whether the execution-service seam actually reduces `Engine` private coupling without widening behavior risk.
+
+I’ve got the implementation notes and decisions. Next I’m reading the actual source diff and sanity-checking the new service boundaries, including whether the out-of-phase parity fixes stayed narrowly targeted and behavior-preserving.
+
+I’m at the final review step. The migrated seam looks behavior-safe after the contract and strictness coverage, and I haven’t found a material correctness or architecture violation that warrants a blocking or non-blocking finding.
+
+Scope considered
+- Phase-local review artifacts under `execution-services-and-collaborators`
+- Request-relevant source changes in `botlane/core/execution_services.py`, `botlane/core/engine.py`, `botlane/core/engine_collaborators.py`, `botlane/core/plan_adapters.py`
+- Focused contract coverage added for the migrated seam
+- Phase implementation notes and run decisions ledger
+
+What I analyzed
+- Whether `ArtifactGuard` and `RouteFinalizer` actually stopped depending on `Engine` directly
+- Whether the new `ExecutionServices` shell stayed narrow instead of becoming an engine-shaped wrapper
+- Whether the out-of-phase parity fixes in `plan_adapters.py` were required, localized, and behavior-preserving
+- Whether the recorded validation covered the touched regression surfaces
+
+What I reviewed
+- Service protocol definitions and engine bridge adapters
+- `Engine` collaborator construction order and injected dependencies
+- `RouteFinalizer` behavior after migration from direct engine access to route/artifact/hook/state services
+- `ArtifactGuard` delegation
+- Added contract tests for the new seam
+- Implementation notes and criteria/feedback artifact completeness
+
+Key findings / decisions
+- No blocking findings.
+- No non-blocking findings beyond a recorded `IMP-000` no-findings note.
+- The implementation meets the phase objective: direct `Engine` private-method coupling is reduced for the first prescribed collaborators without introducing a broad execute-everything service layer.
+- The parity fixes in `plan_adapters.py` are justified by validation and remain aligned with prior decisions about preserving provider-turn and fan-in behavior.
+
+Open issues / next step
+- Subsequent phases should continue the ordered collaborator migration for `HookRunner`, `StepDispatcher`, `BranchGroupRuntime`, and the remaining engine-coupled helpers.
+- Full-suite validation remains a later milestone; this review relied on the targeted contract, strictness, and facade coverage documented in the implementation notes.
+
+<loop-control>
+{"schema":"docloop.loop_control/v1","kind":"promise","promise":"COMPLETE"}
+</loop-control>
