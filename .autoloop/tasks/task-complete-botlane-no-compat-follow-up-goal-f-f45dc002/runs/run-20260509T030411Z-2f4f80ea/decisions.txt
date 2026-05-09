@@ -1,0 +1,4 @@
+<autoloop-decisions-header version="1" block_seq="1" owner="planner" phase_id="task-global" pair="plan" turn_seq="1" run_id="run-20260509T030411Z-2f4f80ea" ts="2026-05-09T03:04:11.757783+00:00" />
+Treat `.autoloop` run artifacts as out-of-scope repository metadata for this task; maintained-tree legacy scans should stay on product roots plus the exact historical-doc allowlist rather than task-log directories.
+The currently named production hotspots already match the requested Botlane-only behavior, so the follow-up phase should prefer regression-proofing and validation over no-op runtime edits.
+Use `.venv/bin/python` for required pytest validation in this repository because `python` is not available on `PATH` in the current environment.

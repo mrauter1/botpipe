@@ -2,3 +2,39 @@ version: 1
 task_id: task-complete-botlane-no-compat-follow-up-goal-f-f45dc002
 request_snapshot_ref: /home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/task-complete-botlane-no-compat-follow-up-goal-f-f45dc002/runs/run-20260509T030411Z-2f4f80ea/request.md
 phases: []
+phases:
+  - phase_id: "botlane-no-compat-contract-lock"
+    title: "Lock Botlane-Only Contract"
+    objective: "Finish the no-compat follow-up by keeping runtime code Botlane-only, adding the missing regression proofs, and rerunning maintained-tree scan and package smoke validation."
+    status: "planned"
+    in_scope:
+      - "Reconfirm `botlane/core/context.py`, `botlane/core/discovery.py`, and `botlane_optimizer/candidate_surfaces.py` remain free of legacy Autoloop fallbacks or hidden legacy string construction."
+      - "Tighten `tests/strictness/test_no_compat.py` so legacy literals stay isolated there and the AST scanner explicitly proves detection of split/add/join/adjacent legacy-name construction patterns."
+      - "Add dedicated optimizer overlay regression coverage proving `repo_root/.botlane` is excluded from validation overlays while candidate files still copy into the overlay."
+      - "Strengthen packaging and runtime smoke coverage for `botlane_optimizer` imports, legacy import failures, and Botlane-only CLI help output, then rerun the required pytest and scan commands."
+    out_of_scope:
+      - "Editing `.autoloop` task artifacts, prior run logs, or other non-product repository metadata."
+      - "Broadening the historical allowlist beyond the existing exact `legacy_docs/` inventory."
+      - "Adding any compatibility alias, migration shim, or legacy namespace forwarding."
+    dependencies: []
+    acceptance_criteria:
+      - id: "AC-1"
+        text: "Production runtime code recognizes only Botlane workspace and simple-flow markers, and no maintained production file reconstructs legacy Autoloop names indirectly."
+      - id: "AC-2"
+        text: "Strictness tests confine literal legacy names to `tests/strictness/test_no_compat.py` plus the exact historical-doc allowlist and explicitly catch hidden construction of `autoloop`, `.autoloop`, `autoloop_optimizer`, `_autoloop_workspace_workflows`, and related capitalized/env forms."
+      - id: "AC-3"
+        text: "Optimizer overlay regression coverage proves `validate_candidate_surface_overlay` does not copy `repo_root/.botlane` while still copying candidate workflow files and compiling from the overlay root."
+      - id: "AC-4"
+        text: "Validation evidence includes maintained-tree literal scans, hidden-construction strictness checks, positive `botlane` and `botlane_optimizer` import smoke, negative `autoloop` and `autoloop_optimizer` import smoke, `python -m autoloop` failure, `botlane --help` success, and a full pytest pass."
+    deliverables:
+      - "Updated `tests/strictness/test_no_compat.py` coverage for hidden legacy construction, legacy rejection, and Botlane-only import/CLI identity checks."
+      - "Updated `tests/unit/optimizer/test_candidate_surfaces.py` regression coverage for `.botlane` overlay exclusion."
+      - "Updated packaging/runtime smoke coverage proving the public install surface is `botlane` plus `botlane_optimizer`, not legacy Autoloop namespaces."
+      - "Validation output from maintained-tree scans and `.venv/bin/python -m pytest` runs."
+    risks:
+      - "New help-text assertions may be brittle if they depend on full argparse wording instead of stable tokens."
+      - "Broader hidden-construction cases may false-positive if the exact self-test and historical-doc exclusions are not preserved."
+      - "Unnecessary edits to already-correct runtime files could reintroduce workspace-root or sentinel regressions."
+    rollback:
+      - "Revert only newly added test assertions that prove environment-specific or over-broad while keeping the Botlane-only runtime contract intact."
+      - "If a production-file edit is required, keep it local and revert just that file rather than restoring any removed compatibility path."
