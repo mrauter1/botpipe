@@ -8,7 +8,7 @@ import pytest
 from pydantic import BaseModel
 
 from botlane.core import FINISH, Workflow
-from botlane.core.context import Context, context_runtime
+from botlane.core.context import Context
 from botlane.core.engine import Engine
 from botlane.core.engine_collaborators import (
     ArtifactGuard,
@@ -145,13 +145,12 @@ def _build_step_context(engine: Engine, tmp_path: Path, *, step_name: str) -> tu
         default_session_name=engine.compiled.default_session_name,
         values={},
     )
-    runtime = context_runtime(context)
-    runtime.set_worklist_selection_resolver(lambda worklist_name: (_ for _ in ()).throw(AssertionError(worklist_name)))
+    context._set_worklist_selection_resolver(lambda worklist_name: (_ for _ in ()).throw(AssertionError(worklist_name)))
     step_state_store = engine._ensure_step_state_store({}, step)
     engine._increment_step_runtime_state(step_state_store)
-    runtime.set_step_state_store(step_state_store)
-    runtime.set_values(context._values)
-    runtime.set_meta({"step": {"name": step.name, "kind": step.kind, "visits": 1, "last_route": None}})
+    context._set_step_state_store(step_state_store)
+    context._set_values(context._values)
+    context._set_meta({"step": {"name": step.name, "kind": step.kind, "visits": 1, "last_route": None}})
     return step, context
 
 

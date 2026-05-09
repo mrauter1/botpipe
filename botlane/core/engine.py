@@ -719,7 +719,7 @@ class Engine:
             selection_snapshots=loop.selection_snapshots,
             values=loop.values,
         )
-        self._configure_context_runtime(context)
+        self._configure_context_frame(context)
         if self.compiled.default_session_open:
             context.open_session(self.compiled.default_session_name)
         loop.state = context.state
@@ -769,7 +769,7 @@ class Engine:
             runtime_event_sink=runtime_event_sink,
         )
 
-    def _configure_context_runtime(self, context: Context) -> Any:
+    def _configure_context_frame(self, context: Context) -> Context:
         context._set_worklist_selection_resolver(
             lambda worklist_name, *, _context=context: self.state_runtime.ensure_worklist_selection(
                 _context,
@@ -812,7 +812,7 @@ class Engine:
             input_response=loop.current_input_response,
             runtime_event_sink=self.runtime_event_sink,
         )
-        runtime = self._configure_context_runtime(context)
+        runtime = self._configure_context_frame(context)
         step_state_store = self._ensure_step_state_store(loop.step_states, step)
         self._increment_step_runtime_state(step_state_store)
         runtime._set_step_state_store(step_state_store)

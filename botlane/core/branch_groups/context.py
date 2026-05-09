@@ -221,11 +221,11 @@ def _create_child_context(
         fan_in=child_frame.fan_in,
         step_execution_id=child_frame.step_execution_id,
     )
-    _inherit_child_runtime_bookkeeping(parent, child)
+    _inherit_child_frame_bookkeeping(parent, child)
     return child
 
 
-def _inherit_child_runtime_bookkeeping(parent: "Context", child: "Context") -> None:
+def _inherit_child_frame_bookkeeping(parent: "Context", child: "Context") -> None:
     """Initialize branch-local runtime bookkeeping from a parent context."""
 
     child._set_worklist_selection_resolver(_child_worklist_selection_resolver(child))

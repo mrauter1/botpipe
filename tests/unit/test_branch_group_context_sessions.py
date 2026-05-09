@@ -16,7 +16,7 @@ from botlane.core.branch_groups.context import (
     create_fan_in_context,
 )
 from botlane.core.branch_groups.sessions import BranchSessionStoreView
-from botlane.core.context import Context, context_runtime
+from botlane.core.context import Context
 from botlane.core.engine import Engine, StepFinalizationRecord
 from botlane.core.engine_collaborators import StepExecutionResult
 from botlane.core.errors import WorkflowExecutionError
@@ -75,7 +75,7 @@ def test_branch_context_shares_state_cell_values_and_branch_metadata(tmp_path: P
     assert parent.state.counter == 1
     assert parent.state_cell.version == 1
 
-    context_runtime(branch).set_state(branch.state.model_copy(update={"counter": 2}))
+    branch._set_state(branch.state.model_copy(update={"counter": 2}))
     assert parent.state.counter == 2
     assert parent.state_cell.version == 2
 
@@ -103,9 +103,8 @@ def test_fan_in_context_exposes_metadata_and_branch_execution_ids(tmp_path: Path
         branch=BranchMetadata(name="security", index=0, group="reviews", input={}, count=2),
         session_store=BranchSessionStoreView(parent._session_store, namespace="reviews.security"),
     )
-    runtime = context_runtime(branch)
-    runtime.set_step_state_store({"visits": 3})
-    runtime.emit_runtime_event("branch_started")
+    branch._set_step_state_store({"visits": 3})
+    branch._emit_runtime_event("branch_started")
 
     assert emitted[-1][1]["step_execution_id"] == "reviews:security:assess:3"
 

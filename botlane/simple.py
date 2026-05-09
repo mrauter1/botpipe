@@ -11,7 +11,6 @@ from pydantic import BaseModel
 
 from botlane.core import Artifact
 from botlane.core.branch_groups.declarations import FanIn
-from botlane.core.context import context_runtime
 from botlane.core.effects import Effects, WorklistEffect
 from botlane.core.operations import OperationStepSpec, classify_call, execute_step_operation, llm_call
 from botlane.core.provider_policy import (
@@ -646,13 +645,12 @@ def validation_step(
                 return Event("failed", reason=f"{type(exc).__name__}: {exc}")
             if not isinstance(result, ValidationResult):
                 raise TypeError(f"validation_step {step_name!r} must return ValidationResult")
-            runtime = context_runtime(ctx)
             if ctx.artifacts is None:
                 raise RuntimeError("validation_step requires runtime artifact handles")
             feedback_name = _artifact_reference_name(feedback)
             feedback_handle = getattr(ctx.artifacts, feedback_name)
             if result.ok:
-                runtime.emit_runtime_event(
+                ctx._emit_runtime_event(
                     "validation_step_passed",
                     feedback_artifact=str(feedback_handle.path),
                     message=None,
@@ -660,7 +658,7 @@ def validation_step(
                 )
                 return Event(success)
             feedback_handle.write_text(render_validation_feedback(result))
-            runtime.emit_runtime_event(
+            ctx._emit_runtime_event(
                 "validation_step_failed_repairable",
                 feedback_artifact=str(feedback_handle.path),
                 message=result.message,

@@ -11,7 +11,7 @@ from botlane.core.branch_groups.context import (
     create_branch_context,
     create_fan_in_context,
 )
-from botlane.core.context import Context, _DEFAULT_MESSAGE, context_runtime
+from botlane.core.context import Context, _DEFAULT_MESSAGE
 from botlane.core.execution_frame import _DEFAULT_FRAME_MESSAGE
 from botlane.core.stores import InMemorySessionStore
 from botlane.core.worklists import SelectionSnapshot, WorkItemSnapshot, Worklist
@@ -82,21 +82,20 @@ def test_context_module_has_no_weakref_runtime_sidecar() -> None:
     assert not hasattr(context_module, "_CONTEXT_RUNTIMES")
 
 
-def test_context_runtime_mutators_update_execution_frame_and_legacy_fields(tmp_path: Path) -> None:
+def test_context_frame_mutators_update_execution_frame_and_legacy_fields(tmp_path: Path) -> None:
     ctx = _make_context(tmp_path, values={"shared": "root"})
-    runtime = context_runtime(ctx)
 
-    runtime.set_values({"shared": "updated", "count": 2})
-    runtime.set_route({"tag": "done"})
-    runtime.set_event({"tag": "progress"})
-    runtime.set_outcome({"status": "ok"})
-    runtime.set_meta({"source": "test"})
-    runtime.set_answer("42")
-    runtime.set_input_response({"approved": True})
-    runtime.set_step_state_store({"visits": 1, "last_route": None, "last_reason": None})
-    runtime.set_item_state_store({"status": "queued"})
-    runtime.set_step_item_state_store({"visits": 2, "last_route": "done", "last_reason": None})
-    runtime.set_state(ctx.state.model_copy(update={"counter": 3}))
+    ctx._set_values({"shared": "updated", "count": 2})
+    ctx._set_route({"tag": "done"})
+    ctx._set_event({"tag": "progress"})
+    ctx._set_outcome({"status": "ok"})
+    ctx._set_meta({"source": "test"})
+    ctx._set_answer("42")
+    ctx._set_input_response({"approved": True})
+    ctx._set_step_state_store({"visits": 1, "last_route": None, "last_reason": None})
+    ctx._set_item_state_store({"status": "queued"})
+    ctx._set_step_item_state_store({"visits": 2, "last_route": "done", "last_reason": None})
+    ctx._set_state(ctx.state.model_copy(update={"counter": 3}))
 
     assert ctx._execution_frame.values == {"shared": "updated", "count": 2}
     assert ctx._values == {"shared": "updated", "count": 2}
@@ -128,11 +127,10 @@ def test_worklist_runtime_mutators_keep_frame_and_public_selection_in_sync(tmp_p
             )
         },
     )
-    runtime = context_runtime(ctx)
     selection = gates.initial_selection(ctx)
 
-    runtime.set_selection("gate", selection)
-    runtime.set_active_worklist("gate")
+    ctx._set_selection("gate", selection)
+    ctx._set_active_worklist("gate")
 
     assert ctx._execution_frame.selections == {"gate": selection}
     assert ctx._execution_frame.selection_snapshots == {}
@@ -182,7 +180,7 @@ def test_branch_child_context_uses_child_frame_and_preserves_shared_state(tmp_pa
 
     branch.values.shared = "branch"
     branch.state = branch.state.model_copy(update={"counter": 5})
-    context_runtime(branch).set_selection_snapshots({})
+    branch._set_selection_snapshots({})
 
     assert parent.values.shared == "branch"
     assert parent.state.counter == 5
