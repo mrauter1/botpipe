@@ -15,6 +15,7 @@ from botlane.core.branch_groups.context import (
     create_branch_context,
     create_fan_in_context,
 )
+from botlane.core.branch_groups.results import BranchResult
 from botlane.core.branch_groups.sessions import BranchSessionStoreView
 from botlane.core.context import Context
 from botlane.core.engine import Engine, StepFinalizationRecord
@@ -459,13 +460,14 @@ def test_branch_result_payload_builder_does_not_double_increment_rework_count(tm
             event=simple.Event("needs_rework", reason="Retry the branch."),
             outcome=None,
             pending_handoffs=(),
-            finalization=StepFinalizationRecord(final_route="needs_rework"),
+            transition=StepFinalizationRecord(final_route="needs_rework"),
         ),
         branch_dir=parent.workflow_folder / "_branch_groups" / spec.name / "branches" / branch.name,
         started_at=datetime.now(timezone.utc),
     )
 
-    assert payload["route"] == "needs_rework"
+    assert isinstance(payload, BranchResult)
+    assert payload.route == "needs_rework"
     assert step_state_store.rework_count == 1
 
 
@@ -521,8 +523,9 @@ def test_failed_branch_result_reads_provider_session_snapshot_once(tmp_path: Pat
     )
 
     assert calls == 1
-    assert payload["provider_session"] == "branch-session"
-    assert payload["provider_sessions"] == {"producer": "branch-session"}
+    assert isinstance(payload, BranchResult)
+    assert payload.provider_session == "branch-session"
+    assert payload.provider_sessions == {"producer": "branch-session"}
 
 
 def test_branch_runtime_rejects_scoped_compiled_branches_defensively(tmp_path: Path) -> None:
