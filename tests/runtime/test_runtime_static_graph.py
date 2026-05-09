@@ -114,7 +114,7 @@ def test_static_step_graph_includes_route_metadata_and_schema_presence(tmp_path:
     assert assessment["route_hook_locations"] == []
 
 
-def test_branch_group_payloads_are_additive_in_static_graph_and_topology() -> None:
+def test_branch_group_payloads_are_additive_in_static_graph_and_topology(tmp_path: Path) -> None:
     class BranchGroupTopologyWorkflow(Workflow):
         class State(BaseModel):
             pass
@@ -136,6 +136,8 @@ def test_branch_group_payloads_are_additive_in_static_graph_and_topology() -> No
 
     static_payload = workflow_static_step_graph_payload(compiled)
     topology_payload = workflow_topology_payload(compiled)
+    write_topology_artifacts(tmp_path, compiled)
+    route_table = (tmp_path / ROUTE_TABLE_FILENAME).read_text(encoding="utf-8")
     static_reviews = next(step_payload for step_payload in static_payload["steps"] if step_payload["name"] == "reviews")
     topology_reviews = next(step_payload for step_payload in topology_payload["steps"] if step_payload["name"] == "reviews")
 
@@ -151,6 +153,7 @@ def test_branch_group_payloads_are_additive_in_static_graph_and_topology() -> No
     assert static_reviews["branch_group"]["branches"][1]["step"]["name"] == "cost_review"
     assert static_reviews["branch_group"]["fan_in_step"]["name"] == "combine_reviews"
     assert static_reviews["branch_group"]["fan_in_step"]["routes"]["approved"]["target"] == "FINISH"
+    assert set(static_payload["transitions"]["steps"]) == {"reviews", "publish"}
 
     assert topology_reviews["branch_group"]["kind"] == "parallel"
     assert topology_reviews["branch_group"]["outcome_policy"] == "all_done"
@@ -160,6 +163,9 @@ def test_branch_group_payloads_are_additive_in_static_graph_and_topology() -> No
     assert topology_reviews["branch_group"]["exposed_routes"] == ["approved", "needs_revision"]
     assert topology_reviews["branch_group"]["branches"][0]["step"]["routes"][0]["tag"] == "done"
     assert topology_reviews["branch_group"]["fan_in_step"]["routes"][0]["tag"] == "approved"
+    assert "| security_review |" not in route_table
+    assert "| cost_review |" not in route_table
+    assert "| combine_reviews |" not in route_table
 
 
 def test_branch_group_surface_payloads_expose_mechanical_outcome_metadata() -> None:

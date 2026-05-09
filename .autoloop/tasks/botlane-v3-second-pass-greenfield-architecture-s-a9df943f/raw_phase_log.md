@@ -3728,3 +3728,55 @@ No open issue remains in this phase review. The route-authority cutover is compl
 <loop-control>
 {"schema":"docloop.loop_control/v1","kind":"promise","promise":"COMPLETE"}
 </loop-control>
+
+
+---
+run_id=run-20260509T164029Z-23a21781 | entry=session_turn | pair=test | phase=producer | cycle=1 | attempt=1 | thread_id=019e0da0-8784-72b0-83b6-f50148343400
+---
+provider=codex
+mode=resume
+template=/home/rauter/.local/share/pipx/venvs/autoloop/lib/python3.12/site-packages/autoloop/templates/test_producer.md
+session_id=019e0da0-8784-72b0-83b6-f50148343400
+
+
+---
+run_id=run-20260509T164029Z-23a21781 | entry=phase_output | pair=test | phase=producer | process=codex-agent | cycle=1 | attempt=1 | thread_id=019e0da0-8784-72b0-83b6-f50148343400
+---
+I’m treating this as a phase-local test hardening pass. First I’m reading the current test artifacts and checking which route-authority behaviors are already covered so I only add tests for the remaining high-risk preservation points.
+
+The existing tests already cover nested branch-group payloads and the new AST strictness path. The main uncovered preservation point is the run-local decision that top-level transition and route-table exports must still hide internal branch steps even though those routes now live in `WorkflowPlan.routes`. I’m adding one focused regression test for that surface.
+
+I’m making one focused test edit in `tests/runtime/test_runtime_static_graph.py`: it will lock the new canonical-plan behavior together with the preserved top-level export boundary, which is the highest-risk regression point that was not directly asserted yet.
+
+I’ve made the coverage change. I’m running the targeted static-graph test first, then I’ll run the full suite once to make sure the test-phase artifact can cite a clean end-to-end result rather than a partial pass.
+
+The tests are green, including full `pytest`. I’m updating the phase test artifacts now with the explicit coverage map and the new regression guard, then I’ll drop the temporary virtualenv again so the workspace only carries intentional test changes.
+
+Scope considered
+
+Phase-local test authoring for the route-authority cutover only. I focused on the remaining regression surface introduced by the canonical `WorkflowPlan.routes` change: internal branch/fan-in routes now exist in the plan, but top-level exports must still stay filtered to top-level workflow steps.
+
+What I analyzed
+
+I reviewed the current route-authority tests, the run-local decisions, and the static-graph coverage already added during implementation. The main uncovered preserved-behavior seam was the top-level export boundary for `workflow_static_step_graph_payload` and `route_table.md` after internal branch routes were moved into `WorkflowPlan.routes`.
+
+What I changed
+
+I updated [tests/runtime/test_runtime_static_graph.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/tests/runtime/test_runtime_static_graph.py) so `test_branch_group_payloads_are_additive_in_static_graph_and_topology` now also asserts:
+- nested branch and fan-in routes remain present in the nested payloads,
+- top-level `static_payload["transitions"]["steps"]` still contains only top-level steps,
+- `route_table.md` does not leak `security_review`, `cost_review`, or `combine_reviews` rows.
+
+I also updated [test_strategy.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/botlane-v3-second-pass-greenfield-architecture-s-a9df943f/runs/run-20260509T164029Z-23a21781/artifacts/test/phases/route-authority-cutover/test_strategy.md), appended a concise summary to [feedback.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/botlane-v3-second-pass-greenfield-architecture-s-a9df943f/runs/run-20260509T164029Z-23a21781/artifacts/test/phases/route-authority-cutover/feedback.md), and recorded the non-obvious coverage decision in `decisions.txt`.
+
+Key findings / decisions
+
+The highest-value added regression guard was not another route-authority happy-path test; it was the preserved top-level export boundary after internal branch routes were promoted into the canonical plan. That is now explicitly covered.
+
+Validation:
+- `tests/runtime/test_runtime_static_graph.py`: `19 passed`
+- Full `pytest -q`: `1279 passed, 1 warning`
+
+Open issues / next step
+
+No open issue remains in this phase-local test slice. The existing warning in `tests/unit/test_provider_boundary_core.py` is unchanged and outside this phase’s scope.
