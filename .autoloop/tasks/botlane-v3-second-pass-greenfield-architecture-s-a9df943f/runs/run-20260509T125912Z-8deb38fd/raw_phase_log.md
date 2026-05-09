@@ -1729,3 +1729,52 @@ Open issues / next step
 <loop-control>
 {"schema":"docloop.loop_control/v1","kind":"promise","promise":"INCOMPLETE"}
 </loop-control>
+
+
+---
+run_id=run-20260509T125912Z-8deb38fd | entry=session_turn | pair=implement | phase=producer | cycle=2 | attempt=1 | thread_id=019e0d36-7afc-75e3-9a6e-3011fe4ea348
+---
+provider=codex
+mode=resume
+template=/home/rauter/.local/share/pipx/venvs/autoloop/lib/python3.12/site-packages/autoloop/templates/implement_producer.md
+session_id=019e0d36-7afc-75e3-9a6e-3011fe4ea348
+
+
+---
+run_id=run-20260509T125912Z-8deb38fd | entry=phase_output | pair=implement | phase=producer | process=codex-agent | cycle=2 | attempt=1 | thread_id=019e0d36-7afc-75e3-9a6e-3011fe4ea348
+---
+I’m fixing the reviewer’s public-surface regression only. The change is to keep typed manifests authoritative internally while restoring a public-neutral payload on `ctx.fan_in.results`, then add coverage for that exact boundary.
+
+I’ve confirmed the exact regression path. I’m patching `_run_fan_in` to restore a mapping-shaped public payload and extending the existing fan-in contract test to assert that `ctx.fan_in.results` stays public-neutral while the readable artifact paths still work.
+
+The fix is in. I’m rerunning the branch-focused suite, including the fan-in contract test that now asserts the public `ctx.fan_in.results` boundary directly.
+
+The focused suite is green again. I’m updating the phase notes to reflect that the typed internal cutover now stops at the public fan-in metadata boundary, which was the reviewer’s only blocking issue.
+
+Scope considered
+
+- Phase-local fix for reviewer finding `IMP-001` in `branch-typed-evidence`.
+- Touched only the branch fan-in public boundary and its contract coverage.
+
+What I analyzed
+
+- The reviewer’s repro and the `ctx.fan_in.results` access path through `Context.fan_in -> NamespaceProxy -> FanInMetadata.results`.
+- The typed branch runtime path to confirm `BranchManifest` should stay internal while public fan-in metadata stays mapping-shaped.
+- Existing fan-in contract coverage to add an assertion at the actual public boundary.
+
+What I changed
+
+- In [runtime.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/botlane/core/branch_groups/runtime.py), changed `FanInMetadata.results` back to a public-neutral payload via `manifest.to_dict()` inside `_run_fan_in`, while keeping typed `BranchManifest` authoritative for internal runtime logic.
+- In [test_branch_group_runtime.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/tests/contract/test_branch_group_runtime.py), extended the fan-in contract test to assert `request.context.fan_in.results` stays mapping-shaped (`NamespaceProxy` over a dict payload), preserves schema, and exposes branch names as expected.
+- Updated the phase implementation notes and appended the non-obvious boundary decision to the current turn’s decision block.
+
+Key findings / decisions
+
+- The reviewer’s blocking issue was valid: `ctx.fan_in.results` had started leaking the internal `BranchManifest` type.
+- The fix preserves the public fan-in metadata surface without undoing the typed internal branch manifest cutover.
+- Public payload conversion now goes through the canonical `BranchManifest.to_dict()` serializer rather than any ad hoc dict builder.
+
+Open issues / next step
+
+- Focused validation is green: `.venv/bin/python -m pytest tests/contract/test_branch_result_runtime.py tests/contract/test_branch_result_serialization.py tests/contract/test_branch_group_runtime.py tests/unit/test_branch_group_context_sessions.py -q` with `43 passed`.
+- No additional phase-local issues found from this reviewer feedback slice.

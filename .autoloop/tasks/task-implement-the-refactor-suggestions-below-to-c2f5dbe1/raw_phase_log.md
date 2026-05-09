@@ -1981,3 +1981,54 @@ No further test changes are needed for this phase-local slice. Clear the unrelat
 <loop-control>
 {"schema":"docloop.loop_control/v1","kind":"promise","promise":"COMPLETE"}
 </loop-control>
+
+
+---
+run_id=run-20260509T144337Z-158e6e31 | entry=session_turn | pair=audit | phase=producer | cycle=1 | attempt=1 | thread_id=019e0d3e-7ecb-7e82-b28f-8eed06662029
+---
+provider=codex
+mode=start
+template=/home/rauter/.local/share/pipx/venvs/autoloop/lib/python3.12/site-packages/autoloop/templates/audit_producer.md
+session_id=019e0d3e-7ecb-7e82-b28f-8eed06662029
+
+
+---
+run_id=run-20260509T144337Z-158e6e31 | entry=phase_output | pair=audit | phase=producer | process=codex-agent | cycle=1 | attempt=1 | thread_id=019e0d3e-7ecb-7e82-b28f-8eed06662029
+---
+Auditing the completed run against the original request, clarifications, artifacts, and current codebase. I’m starting by reading the authoritative request/log/decision files and the run artifacts to determine whether any material behavior gaps remain.
+
+I’ve confirmed the request and the recorded execution narrative. Next I’m checking the implementation and test artifacts against the live worktree and the current test state, because the key audit question is whether the run actually left the requested behavior restored or only documented around it.
+
+The worktree is heavily dirty outside this run, so I’m constraining the audit to the run-local files plus the scoped runtime/context files and cited tests. I’m reading the implementation and test artifacts next, then I’ll verify the live code paths and rerun the acceptance batch if the current workspace allows it.
+
+The live code does contain the new `Context` mutator facade and the added parity tests. The remaining audit question is whether the acceptance batch is actually green now or whether the run only passed earlier under a cleaner workspace state, so I’m finishing that rerun before writing the gap report.
+
+The audit is down to artifact writing. The implementation satisfies the requested contract slice and the acceptance batch is green in the current workspace, so I’m recording this as no material follow-up, while preserving the one non-material cache-bookkeeping exception in the gap report.
+
+The audit artifacts are written. I’m doing a final sanity check on the generated files and JSON, then I’ll return the required plain-text audit summary with the canonical loop-control block.
+
+One sanity check failed only because `python` is not on PATH in this shell; the artifact itself still needs validation with the repo virtualenv. I’m rerunning the JSON parse through `.venv/bin/python` and then closing the audit.
+
+Scope considered
+
+The immutable request snapshot, the authoritative raw phase log, `decisions.txt`, the run-local plan/implement/test artifacts, the scoped runtime/context source files, `tests/unit/test_execution_frame_context_parity.py`, the three named regression targets, and the supplied acceptance batch in the current final workspace.
+
+What I analyzed
+
+I compared the requested contract consolidation against the recorded execution decisions and the live code paths in `botlane/core/context.py`, `engine.py`, `engine_collaborators.py`, `worklists.py`, `branch_groups/context.py`, and `branch_groups/runtime.py`. I also verified the current workspace state by rerunning `tests/unit/test_execution_frame_context_parity.py -q` and the full requested acceptance command.
+
+What I changed
+
+I wrote the audit artifacts in `.autoloop/.../artifacts/audit`: `gap_report.md`, `revised_request.md`, `audit_result.json`, and updated `criteria.md` and `feedback.md`. The audit records that no follow-up implementation run is required and that `audit_result.json` is valid.
+
+Key findings / decisions
+
+The requested executable mutator-surface consolidation is present: `Context` now provides the shared private mutator facade and the engine/worklist/branch-group executable paths route through it. The final workspace acceptance rerun passed with `217 passed in 1.33s`, and the added parity suite passed with `9 passed in 0.44s`. No material unresolved gaps remain. The only residual inconsistency is a direct child `worklist_items_cache` copy in branch-group bookkeeping, which is non-material cache setup rather than the requested runtime state/selection contract.
+
+Open issues / next step
+
+No follow-up implementation request is needed. Optional future cleanup, only if this area is reopened, is to hide the branch-child `worklist_items_cache` copy behind a tiny private `Context` helper for cosmetic consistency.
+
+<loop-control>
+{"schema":"docloop.loop_control/v1","kind":"promise","promise":"INCOMPLETE"}
+</loop-control>
