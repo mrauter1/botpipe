@@ -1006,3 +1006,50 @@ Validation: `./.venv/bin/python -m pytest tests/strictness/test_no_compat.py` ->
 Open issues / next step
 
 No test-phase blocker remains. The next step is test-auditor review of the added direct regression coverage and the updated test-phase artifact inventory.
+
+
+---
+run_id=run-20260509T033701Z-27394e99 | entry=session_turn | pair=test | phase=verifier | cycle=1 | attempt=1 | thread_id=019e0ad5-7cc7-72c1-ab1f-9e5b7fa297c3
+---
+provider=codex
+mode=resume
+template=/home/rauter/.local/share/pipx/venvs/autoloop/lib/python3.12/site-packages/autoloop/templates/test_verifier.md
+session_id=019e0ad5-7cc7-72c1-ab1f-9e5b7fa297c3
+
+
+---
+run_id=run-20260509T033701Z-27394e99 | entry=phase_output | pair=test | phase=verifier | process=codex-agent | cycle=1 | attempt=1 | thread_id=019e0ad5-7cc7-72c1-ab1f-9e5b7fa297c3
+---
+I’m auditing the added strictness coverage and the updated test-phase artifacts now. First I’m checking the strategy/feedback and the new helper-level regression test to see whether they fully protect the changed no-compat policy without creating new flake or inventory drift risks.
+
+The coverage shape looks right on inspection. I’m doing one independent rerun of the strictness slice now so the audit closeout reflects current behavior, not only the producer’s report.
+
+The targeted strictness slice passed independently. I’m updating the audit artifacts now to mark the test phase complete and record that no new scoped findings remain.
+
+Scope considered
+
+Phase-local audit of the added strictness regression test in `tests/strictness/test_no_compat.py`, plus the active test artifacts `test_strategy.md` and `feedback.md`. I stayed on the no-compat artifact-policy regression surface and did not broaden into unrelated test areas.
+
+What I analyzed
+
+I checked whether the new helper-level test actually closes the specific legacy-wrapper-token gap that previously slipped through the broader artifact-tree scans. I also reviewed whether the updated test-phase artifact inventory and clean-file expectations stay aligned with the current-run policy the strictness suite now enforces.
+
+What I reviewed
+
+I reviewed the new `test_text_branding_scanner_flags_expected_legacy_tokens` coverage, the surrounding inventory/assertion tests, the test strategy coverage map, and the feedback summary. I also reran `./.venv/bin/python -m pytest tests/strictness/test_no_compat.py` independently and observed `72 passed`.
+
+Key findings / decisions
+
+No new scoped findings.
+
+The added helper-level regression test is valuable and targeted: it directly guards the legacy recursive-wrapper token while the existing integration tests continue to guard the exact repo-root artifact inventories and clean-vs-exception policy.
+
+The test-phase artifacts now stay consistent with the active current-run clean-file policy, so the new regression test does not reintroduce the same inventory drift that the underlying strictness suite is supposed to catch.
+
+Open issues / next step
+
+No test-phase blocker remains. The targeted strictness slice passed independently, and the audit artifacts are updated to complete.
+
+<loop-control>
+{"schema":"docloop.loop_control/v1","kind":"promise","promise":"COMPLETE"}
+</loop-control>
