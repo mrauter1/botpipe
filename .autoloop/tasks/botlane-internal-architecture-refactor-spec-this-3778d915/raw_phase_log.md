@@ -977,3 +977,59 @@ Key findings / decisions
 Open issues / next step
 - Engine-loop `RouteAction` consumption remains intentionally untested here because it is out of scope for this phase.
 - A later workflow-plan phase should add parity tests for route-view helpers against real `WorkflowPlan.routes` once that type exists.
+
+
+---
+run_id=run-20260509T045359Z-e2586b1f | entry=session_turn | pair=test | phase=verifier | cycle=1 | attempt=1 | thread_id=019e0b48-c497-7620-84a2-52940f5bc8f1
+---
+provider=codex
+mode=resume
+template=/home/rauter/.local/share/pipx/venvs/autoloop/lib/python3.12/site-packages/autoloop/templates/test_verifier.md
+session_id=019e0b48-c497-7620-84a2-52940f5bc8f1
+
+
+---
+run_id=run-20260509T045359Z-e2586b1f | entry=phase_output | pair=test | phase=verifier | process=codex-agent | cycle=1 | attempt=1 | thread_id=019e0b48-c497-7620-84a2-52940f5bc8f1
+---
+I’m auditing the new route-contract test coverage and the phase test artifacts first, then I’ll rerun the targeted validation buckets to check that the added parity case is stable and scoped correctly.
+
+The coverage map looks consistent with the changed behavior. I’m rerunning the focused route suite and the adjacent regression bucket once myself before I mark the audit artifacts.
+
+The focused route suite passed. I’m waiting on the broader regression bucket now; if it stays clean, I’ll mark the test-audit criteria complete with no findings.
+
+The regression bucket passed cleanly. I don’t have audit findings; I’m marking the criteria complete and appending a concise no-findings audit entry to the phase feedback log.
+
+Scope considered
+- Phase-local audit of the `route-contract-adapters` test work only.
+- Reviewed the changed route adapter tests, the phase test strategy and feedback artifacts, and the relevant decisions ledger entries for this phase.
+
+What I analyzed
+- `tests/unit/test_route_contracts.py` for direct adapter coverage, failure-path coverage, and compiler-backed parity.
+- `artifacts/test/phases/route-contract-adapters/test_strategy.md` for behavior-to-coverage mapping and stated gaps.
+- `tests/strictness/test_no_compat.py` expectations indirectly through the regression bucket to ensure the added test coverage does not normalize compatibility drift.
+
+What I reviewed
+- Coverage against the phase contract:
+  - target/action mapping
+  - metadata round-trips
+  - required-write inventory resolution and missing-inventory failure
+  - explicit-empty override behavior
+  - disabled-route and runtime-control handling
+  - compiler-produced parity via `compile_workflow(...)`
+- Stability and flake risk: all added tests remain pure unit/compiler tests with no timing, ordering, network, or subprocess sensitivity.
+- Validation rerun:
+  - `./.venv/bin/python -m pytest tests/unit/test_route_contracts.py -q`
+  - `./.venv/bin/python -m pytest tests/unit/test_artifact_ids.py tests/unit/test_simple_surface.py tests/unit/test_sdk_facade.py tests/strictness/test_no_compat.py -q`
+
+Key findings / decisions
+- No blocking or non-blocking audit defects found.
+- The compiler-backed parity test materially improves regression protection beyond manual `CompiledRoute` fixtures alone.
+- The test strategy accurately documents the environment-sensitive choice to avoid optional-`jsonschema` custom route-field mappings in the compiler-backed case.
+
+Open issues / next step
+- No audit blockers for this phase.
+- Later phases should extend parity coverage to `WorkflowPlan`-backed route views and any eventual engine consumption of `RouteAction`.
+
+<loop-control>
+{"schema":"docloop.loop_control/v1","kind":"promise","promise":"COMPLETE"}
+</loop-control>

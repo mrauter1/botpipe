@@ -8,3 +8,4 @@
 - Scope: phase-local authoritative verifier artifact
 
 - Added and refined `tests/unit/test_route_contracts.py` coverage for direct adapter behavior plus one compiler-backed parity case, then revalidated adjacent regression buckets (`test_artifact_ids`, `test_simple_surface`, `test_sdk_facade`, `test_no_compat`) with all tests passing locally.
+- TST-000 `non-blocking`: No audit findings. The test suite covers direct adapter behavior, compiler-produced parity, failure paths, and preserved compatibility invariants without introducing flaky assumptions; targeted validation passed locally.
