@@ -3522,3 +3522,74 @@ phase_mode=single
 phase_ids=route-authority-cutover,execution-services-cutover,canonical-single-step-and-finalization
 explicit=True
 current_phase_index=0
+
+
+---
+run_id=run-20260509T164029Z-23a21781 | entry=session_turn | pair=implement | phase=producer | cycle=1 | attempt=1 | thread_id=019e0da0-8784-72b0-83b6-f50148343400
+---
+provider=codex
+mode=start
+template=/home/rauter/.local/share/pipx/venvs/autoloop/lib/python3.12/site-packages/autoloop/templates/implement_producer.md
+session_id=019e0da0-8784-72b0-83b6-f50148343400
+
+
+---
+run_id=run-20260509T164029Z-23a21781 | entry=phase_output | pair=implement | phase=producer | process=codex-agent | cycle=1 | attempt=1 | thread_id=019e0da0-8784-72b0-83b6-f50148343400
+---
+I’m treating this as a phase-scoped refactor around route authority only. First I’m reading the phase artifacts and tracing the current route ownership path through the compiler, step plans, and route inspection surfaces before making edits.
+
+The phase artifacts are thin, so I’m deriving scope from the contract and tracing the actual callers now. Current code still has copied route ownership in `step_plans.py`, compiler injection of `_route_table`, and step-inspection/runtime consumers reading that compatibility layer directly.
+
+I have the core shape now. The real issue is `_BaseStepPlan` computing route views from a copied `_route_table`, while `WorkflowPlan` already has the canonical data. I’m tracing every maintained consumer of those step properties next so I can move the derivation to plan-backed helpers in one slice instead of leaving a hidden fallback behind.
+
+I’ve confirmed the structural constraint: step plans do not have enough context to own correct route views once copied tables are removed. I’m reading the compiler/lowering path now to verify whether `compiled.routes[step]` already contains the step-local effective set with global fallback folded in, because that decides whether the maintained consumers can switch over without behavior drift.
+
+I’ve verified the important semantic point: `compiled.routes[step]` is already the effective per-step route table, including inherited global and framework-default routes in the right precedence order. That means the copied step route table can be deleted without changing route behavior, and the remaining work is mainly consumer rewiring plus test/strictness coverage.
+
+I’m at the edit point now. The only non-obvious behavioral constraint is branch-group route ordering: `compiled.routes` has the right effective membership, but `available_routes` previously reapplied `branch_group.composite_route_tags`. I’m preserving that ordering explicitly in plan-backed helpers instead of falling back to copied step state.
+
+I’m removing the copied route state now and rewiring the maintained consumers onto plan-backed helpers. After that I’ll sweep the internal tests that were asserting those removed step-plan convenience properties directly.
+
+I’ve applied the main source refactor. Next I’m sweeping for any remaining `_route_table` / step-route-property reads in maintained code and then I’ll update the internal assertions that were tied to the removed compatibility layer.
+
+The compatibility reads are gone from maintained code. I’m running the focused route-authority tests now to catch any ordering drift or helper mistakes before I update the run artifacts.
+
+`pytest` isn’t installed in the current interpreter, so I’m bootstrapping the minimal test runner locally and then I’ll rerun the focused suite.
+
+One focused regression showed up in the static-graph branch-group payload. The fan-in nested step was still using a maintained helper path that assumed step-owned route views; I’m fixing that specific nested surface and rerunning the same suite.
+
+The failing static-graph case exposed the real remaining gap: internal branch-group steps were still carrying their own local route knowledge because they were never added to `WorkflowPlan.routes`. I’m moving those internal step route tables into the canonical plan as well, then I’ll filter public top-level route listings so nested internals don’t leak into user-facing summaries.
+
+The route-authority slice is green on the focused route/runtime set. I’m adding one more verification pass over the capability/optimizer surfaces because `WorkflowCapabilityEntry` now builds its step route views from plan routes rather than step-local copies.
+
+The consumer rewiring looks stable, including capability payloads and branch-group runtime. I’m running the full suite now because the phase contract explicitly calls for keeping `pytest` green, and the nested-route change touches compile-time surfaces broadly enough to justify the final sweep.
+
+The full suite found one remaining contract test that was asserting the pre-cutover internal shape directly: it expected branch substeps to be absent from `WorkflowPlan.routes`. I’m updating that contract to the new canonical route-authority model and rerunning the full suite.
+
+The refactor is green across the full suite now. I’m doing the final bookkeeping pass: checking the exact diff surface, then updating `implementation_notes.md` and the turn decision ledger with the non-obvious architectural choices from this slice.
+
+I’ve got the functional end state. I’m cleaning up the temporary test environment I created so the only intentional changes left are the route-authority refactor and the associated contract updates.
+
+Scope considered
+
+Phase-local route-authority cutover only. I touched the compiler, route helpers, engine route lookup, static-graph/capability consumers, and the route-focused contracts/tests needed to enforce that `WorkflowPlan.routes` is the sole effective step-route authority. I did not do the later service-boundary, SDK one-step, or `StepExecutionResult` cleanup milestones.
+
+What I analyzed
+
+I traced route ownership from `botlane/core/compiler.py` into `botlane/core/step_plans.py`, `botlane/core/engine.py`, `botlane/core/engine_collaborators.py`, `botlane/runtime/static_graph.py`, and `botlane/core/workflow_capabilities.py`. The key gap was that step plans still carried `_route_table`, and branch-group internal steps were only able to expose routes because they kept their own copied route state.
+
+What I changed
+
+I removed `_route_table` / `_effective_route_table` and all step-plan route-view properties from [botlane/core/step_plans.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/botlane/core/step_plans.py). Route-tag helpers now live in [botlane/core/route_contracts.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/botlane/core/route_contracts.py), and runtime/inspection consumers were rewired to derive views from `WorkflowPlan.routes` plus `WorkflowPlan.global_routes` only.
+
+I also moved branch/fan-in internal step route tables into [botlane/core/compiler.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/botlane/core/compiler.py) so nested branch-group runtime and inspection surfaces use the same canonical plan authority. Public top-level exports in [botlane/runtime/static_graph.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/botlane/runtime/static_graph.py) and [botlane/core/workflow_capabilities.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/botlane/core/workflow_capabilities.py) still filter to top-level workflow steps, so nested internals do not leak into user-facing summaries. I updated the route/strictness tests and the phase artifacts in `implementation_notes.md` and `decisions.txt`.
+
+Key findings / decisions
+
+Branch-group composite route ordering needed explicit preservation once step-owned route tables were removed; that ordering is now reapplied from branch-group metadata while the underlying route membership still comes from `WorkflowPlan.routes`. Internal branch and fan-in steps now exist in `WorkflowPlan.routes` even though they remain absent from `WorkflowPlan.steps`; this is what lets nested runtime and inspection surfaces stay canonical without reviving copied step ownership.
+
+Validation: full suite green with `.venv-test/bin/python -m pytest -q` before cleanup, `1278 passed, 1 warning`. The warning is the existing coroutine warning in `tests/unit/test_provider_boundary_core.py`.
+
+Open issues / next step
+
+No open issue in this phase slice. The remaining requested work is the later service-boundary cutover, one-step SDK collapse, and `StepExecutionResult` finalization cleanup, which I left untouched by scope.

@@ -10,9 +10,11 @@ from botlane.core.discovery import get_workflow_definition
 from botlane.core.route_contracts import (
     RouteContract,
     available_route_tags,
+    compiled_route_tags,
     provider_visible_route_tags,
     route_target_value,
     runtime_control_route_tags,
+    suppressed_route_tags,
 )
 from botlane.core.route_reporting import (
     payload_contract_for_route,
@@ -80,7 +82,7 @@ def workflow_static_step_graph_payload(compiled: WorkflowPlan) -> dict[str, Any]
                 "verifier_writes": [_json_value(value) for value in step.verifier_writes],
                 "writes": [_json_value(value) for value in step.writes],
                 "log_artifacts": [_json_value(value) for value in step.log_artifacts],
-                "available_routes": list(available_route_tags(compiled, step.name)),
+                "available_routes": list(_step_available_route_tags(compiled, step)),
                 "authored_routes": list(_authored_route_tags(compiled, step)),
                 "compiled_route_tags": list(_compiled_route_tags(compiled, step)),
                 "suppressed_route_tags": list(_suppressed_route_tags(compiled, step)),
@@ -103,7 +105,7 @@ def workflow_static_step_graph_payload(compiled: WorkflowPlan) -> dict[str, Any]
                         route=compiled.routes.get(step.name, {}).get(route_name) or compiled.global_routes.get(route_name),
                         expected_output_schema=step.expected_output_schema,
                     )
-                    for route_name in available_route_tags(compiled, step.name)
+                    for route_name in _step_available_route_tags(compiled, step)
                 },
                 "compiled_routes": {
                     route_name: _topology_route_payload(
@@ -112,7 +114,7 @@ def workflow_static_step_graph_payload(compiled: WorkflowPlan) -> dict[str, Any]
                         route_tag=route_name,
                         route=compiled.routes.get(step.name, {}).get(route_name),
                         expected_output_schema=step.expected_output_schema,
-                        available=route_name in available_route_tags(compiled, step.name),
+                        available=route_name in _step_available_route_tags(compiled, step),
                     )
                     for route_name in _compiled_route_tags(compiled, step)
                 },
@@ -132,7 +134,8 @@ def workflow_static_step_graph_payload(compiled: WorkflowPlan) -> dict[str, Any]
                     route_tag: route_target_value(compiled_route.target)
                     for route_tag, compiled_route in routes.items()
                 }
-                for step_name, routes in compiled.routes.items()
+                for step_name, step in compiled.steps.items()
+                for routes in (compiled.routes.get(step_name, {}),)
             },
             "global": {
                 route_tag: route_target_value(compiled_route.target)
@@ -171,7 +174,7 @@ def workflow_topology_payload(compiled: WorkflowPlan) -> dict[str, Any]:
                 "writes": [_json_value(value) for value in step.writes],
                 "log_artifacts": [_json_value(value) for value in step.log_artifacts],
                 "prompt_references": list(_prompt_references(compiled, step)),
-                "available_routes": list(available_route_tags(compiled, step.name)),
+                "available_routes": list(_step_available_route_tags(compiled, step)),
                 "authored_routes": list(_authored_route_tags(compiled, step)),
                 "compiled_route_tags": list(_compiled_route_tags(compiled, step)),
                 "suppressed_route_tags": list(_suppressed_route_tags(compiled, step)),
@@ -204,7 +207,7 @@ def workflow_topology_payload(compiled: WorkflowPlan) -> dict[str, Any]:
                         route=compiled.routes.get(step.name, {}).get(route_tag) or compiled.global_routes.get(route_tag),
                         expected_output_schema=step.expected_output_schema,
                     )
-                    for route_tag in available_route_tags(compiled, step.name)
+                    for route_tag in _step_available_route_tags(compiled, step)
                 ],
                 "compiled_routes": [
                     _topology_route_payload(
@@ -213,7 +216,7 @@ def workflow_topology_payload(compiled: WorkflowPlan) -> dict[str, Any]:
                         route_tag=route_tag,
                         route=compiled.routes.get(step.name, {}).get(route_tag),
                         expected_output_schema=step.expected_output_schema,
-                        available=route_tag in available_route_tags(compiled, step.name),
+                        available=route_tag in _step_available_route_tags(compiled, step),
                     )
                     for route_tag in _compiled_route_tags(compiled, step)
                 ],
@@ -649,13 +652,11 @@ def _authored_route_tags(compiled: WorkflowPlan, step: StepPlan) -> tuple[str, .
 
 
 def _compiled_route_tags(compiled: WorkflowPlan, step: StepPlan) -> tuple[str, ...]:
-    route_table = _step_route_table(compiled, step)
-    return tuple(route_table.keys())
+    return compiled_route_tags(compiled, step.name)
 
 
 def _suppressed_route_tags(compiled: WorkflowPlan, step: StepPlan) -> tuple[str, ...]:
-    route_table = _step_route_table(compiled, step)
-    return tuple(tag for tag, route in route_table.items() if route.disabled)
+    return suppressed_route_tags(compiled, step.name)
 
 
 def _provider_route_map(compiled: WorkflowPlan, step: StepPlan, *, policy: str) -> dict[str, RouteContract]:
@@ -673,20 +674,16 @@ def _provider_route_map(compiled: WorkflowPlan, step: StepPlan, *, policy: str) 
 
 
 def _step_route_table(compiled: WorkflowPlan, step: StepPlan) -> dict[str, RouteContract]:
-    workflow_routes = compiled.routes.get(step.name)
-    if workflow_routes is not None:
-        return dict(workflow_routes)
-    return dict(step._effective_route_table)
+    return dict(compiled.routes.get(step.name, {}))
 
 
 def _step_available_route_tags(compiled: WorkflowPlan, step: StepPlan) -> tuple[str, ...]:
-    workflow_tags = available_route_tags(compiled, step.name)
-    return workflow_tags or step.available_routes
+    composite_route_tags = step.branch_group.composite_route_tags if step.branch_group is not None else ()
+    return available_route_tags(compiled, step.name, composite_route_tags=composite_route_tags)
 
 
 def _step_runtime_control_route_tags(compiled: WorkflowPlan, step: StepPlan) -> tuple[str, ...]:
-    workflow_tags = runtime_control_route_tags(compiled, step.name)
-    return workflow_tags or step.runtime_control_routes
+    return runtime_control_route_tags(compiled, step.name)
 
 
 def _step_provider_visible_route_tags(
@@ -695,12 +692,7 @@ def _step_provider_visible_route_tags(
     *,
     mode: str,
 ) -> tuple[str, ...]:
-    workflow_tags = provider_visible_route_tags(compiled, step.name, mode=mode)
-    if workflow_tags:
-        return workflow_tags
-    if mode == "interactive":
-        return step.provider_visible_routes_interactive
-    return step.provider_visible_routes_full_auto
+    return provider_visible_route_tags(compiled, step.name, mode=mode)
 
 
 def _provider_response_contracts(compiled: WorkflowPlan, step: StepPlan) -> dict[str, Any]:
@@ -775,7 +767,7 @@ def _route_hook_locations(compiled: WorkflowPlan, step: StepPlan) -> list[dict[s
         if hook is None:
             continue
         locations.append({"hook": hook_phase, "callable": _callable_name(hook)})
-    for route_tag in available_route_tags(compiled, step.name):
+    for route_tag in _step_available_route_tags(compiled, step):
         route = route_table.get(route_tag) or compiled.global_routes.get(route_tag)
         if route is None or route.on_taken is None:
             continue
@@ -883,8 +875,9 @@ def _route_table_text(compiled: WorkflowPlan) -> str:
         "| Step | Route | Preset | Source | Target | Visibility | State | Payload Schema | Route Fields Schema | Explicit Required Writes | Effective Required Writes | Handoff | On Taken |",
         "| --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |",
     ]
-    for step_name, routes in compiled.routes.items():
-        expected_output_schema = compiled.steps[step_name].expected_output_schema if step_name in compiled.steps else None
+    for step_name, step in compiled.steps.items():
+        routes = compiled.routes.get(step_name, {})
+        expected_output_schema = step.expected_output_schema
         for route_tag, route in routes.items():
             route_view = _route_view_payload(
                 compiled,
@@ -920,7 +913,8 @@ def _route_table_text(compiled: WorkflowPlan) -> str:
 
 def _topology_mermaid(compiled: WorkflowPlan) -> str:
     lines = ["flowchart TD"]
-    for step_name, routes in compiled.routes.items():
+    for step_name, step in compiled.steps.items():
+        routes = compiled.routes.get(step_name, {})
         for route_tag, route in routes.items():
             hook = f" / {_callable_name(route.on_taken)}" if route.on_taken is not None else ""
             visibility = f" [{_mermaid_route_labels(route)}]"
@@ -987,7 +981,8 @@ def _compile_report_text(compiled: WorkflowPlan) -> str:
             "## Route Contracts",
             *(
                 _route_contract_line(compiled, step_name, route_tag, route)
-                for step_name, routes in compiled.routes.items()
+                for step_name, step in compiled.steps.items()
+                for routes in (compiled.routes.get(step_name, {}),)
                 for route_tag, route in routes.items()
             ),
             *(
@@ -1051,7 +1046,7 @@ def _step_route_view_line(compiled: WorkflowPlan, step: StepPlan) -> str:
     suppressed = ", ".join(f"`{route}`" for route in _suppressed_route_tags(compiled, step)) or "none"
     provider_contracts = _provider_response_contracts(compiled, step)
     return (
-        f"- `{step.name}`: compiled={compiled_routes}; available={', '.join(f'`{route}`' for route in available_route_tags(compiled, step.name)) or 'none'}; "
+        f"- `{step.name}`: compiled={compiled_routes}; available={', '.join(f'`{route}`' for route in _step_available_route_tags(compiled, step)) or 'none'}; "
         f"suppressed={suppressed}; provider_visible_interactive={interactive}; provider_visible_full_auto={full_auto}; "
         f"provider_schema_fallback(interactive/full_auto)=`{provider_contracts['interactive']['schema_simplified']}`/`{provider_contracts['full_auto']['schema_simplified']}`; "
         f"legacy_authored={authored}; legacy_runtime_control={runtime_control}"

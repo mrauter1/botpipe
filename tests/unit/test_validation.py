@@ -5,11 +5,14 @@ from pydantic import BaseModel, Field
 
 from botlane.core.compiler import compile_workflow
 from botlane.core.artifacts import Artifact
+from botlane.core.discovery import get_workflow_definition
 from botlane.core.effects import Effects, WorklistEffect
 from botlane.core.errors import RoutingError, WorkflowCompilationError, WorkflowValidationError
 from botlane.core.extensions import RunBinding
+from botlane.core.lowering import step_authored_route_tags
 from botlane.core.primitives import Event, Goto
 from botlane.core.providers.retries import ProviderRetryPolicy
+from botlane.core.route_contracts import available_route_tags, provider_visible_route_tags, runtime_control_route_tags
 from botlane.core.route_required_writes import effective_route_required_writes, explicit_route_required_writes
 from botlane.core.routes import Route
 from botlane.core.steps import ControlRoutes, PromptStep, ProduceVerifyStep, Session, PythonStep, ChildWorkflowStep
@@ -175,27 +178,27 @@ def test_core_control_routes_compile_provider_visibility_and_non_provider_defaul
 
     compiled = compile_workflow(ControlRoutesWorkflow)
 
-    assert compiled.steps["ask"].runtime_control_routes == ("question",)
-    assert compiled.steps["ask"].provider_visible_routes_interactive == ("done", "question")
-    assert compiled.steps["ask"].provider_visible_routes_full_auto == ("done",)
+    assert runtime_control_route_tags(compiled, "ask") == ("question",)
+    assert provider_visible_route_tags(compiled, "ask", mode="interactive") == ("done", "question")
+    assert provider_visible_route_tags(compiled, "ask", mode="full_auto") == ("done",)
 
-    assert compiled.steps["always"].runtime_control_routes == ("question",)
-    assert compiled.steps["always"].provider_visible_routes_interactive == ("done", "question")
-    assert compiled.steps["always"].provider_visible_routes_full_auto == ("done", "question")
+    assert runtime_control_route_tags(compiled, "always") == ("question",)
+    assert provider_visible_route_tags(compiled, "always", mode="interactive") == ("done", "question")
+    assert provider_visible_route_tags(compiled, "always", mode="full_auto") == ("done", "question")
 
-    assert compiled.steps["silent"].runtime_control_routes == ()
-    assert compiled.steps["silent"].provider_visible_routes_interactive == ("done",)
-    assert compiled.steps["silent"].provider_visible_routes_full_auto == ("done",)
+    assert runtime_control_route_tags(compiled, "silent") == ()
+    assert provider_visible_route_tags(compiled, "silent", mode="interactive") == ("done",)
+    assert provider_visible_route_tags(compiled, "silent", mode="full_auto") == ("done",)
 
     assert set(compiled.routes["run"]) == {"done"}
-    assert compiled.steps["run"].runtime_control_routes == ()
-    assert compiled.steps["run"].provider_visible_routes_interactive == ()
-    assert compiled.steps["run"].provider_visible_routes_full_auto == ()
+    assert runtime_control_route_tags(compiled, "run") == ()
+    assert provider_visible_route_tags(compiled, "run", mode="interactive") == ()
+    assert provider_visible_route_tags(compiled, "run", mode="full_auto") == ()
 
     assert set(compiled.routes["launch"]) == {"done"}
-    assert compiled.steps["launch"].runtime_control_routes == ()
-    assert compiled.steps["launch"].provider_visible_routes_interactive == ()
-    assert compiled.steps["launch"].provider_visible_routes_full_auto == ()
+    assert runtime_control_route_tags(compiled, "launch") == ()
+    assert provider_visible_route_tags(compiled, "launch", mode="interactive") == ()
+    assert provider_visible_route_tags(compiled, "launch", mode="full_auto") == ()
 
 
 def test_route_helper_defaults_and_global_suppression_compile_from_route_metadata() -> None:
@@ -241,10 +244,10 @@ def test_route_helper_defaults_and_global_suppression_compile_from_route_metadat
     assert blocked.route_fields_schema is not None
     assert blocked.route_fields_schema["required"] == ["reason"]
 
-    assert compiled.steps["ask"].available_routes == ("done", "question", "blocked")
-    assert compiled.steps["ask"].provider_visible_routes_interactive == ("done", "question", "blocked")
-    assert compiled.steps["ask"].provider_visible_routes_full_auto == ("done",)
-    assert "failed" not in compiled.steps["ask"].available_routes
+    assert available_route_tags(compiled, "ask") == ("done", "question", "blocked")
+    assert provider_visible_route_tags(compiled, "ask", mode="interactive") == ("done", "question", "blocked")
+    assert provider_visible_route_tags(compiled, "ask", mode="full_auto") == ("done",)
+    assert "failed" not in available_route_tags(compiled, "ask")
     assert compiled.routes["ask"]["failed"].disabled is True
     with pytest.raises(RoutingError, match=r"route 'failed' is disabled for step 'ask'"):
         compiled.route("ask", "failed")
@@ -266,11 +269,11 @@ def test_global_question_routes_compile_with_step_specific_provider_visibility()
 
     compiled = compile_workflow(GlobalQuestionVisibilityWorkflow)
 
-    assert compiled.steps["ask"].available_routes == ("done", "question")
-    assert compiled.steps["ask"].provider_visible_routes_interactive == ("done", "question")
-    assert compiled.steps["run"].available_routes == ("done", "question")
-    assert compiled.steps["run"].provider_visible_routes_interactive == ()
-    assert compiled.steps["run"].provider_visible_routes_full_auto == ()
+    assert available_route_tags(compiled, "ask") == ("done", "question")
+    assert provider_visible_route_tags(compiled, "ask", mode="interactive") == ("done", "question")
+    assert available_route_tags(compiled, "run") == ("done", "question")
+    assert provider_visible_route_tags(compiled, "run", mode="interactive") == ()
+    assert provider_visible_route_tags(compiled, "run", mode="full_auto") == ()
     assert compiled.routes["run"]["question"].inheritance_source == "global"
     assert compiled.routes["run"]["question"].provider_visible_interactive is False
     assert compiled.routes["run"]["question"].provider_visible_full_auto is False
@@ -936,10 +939,11 @@ def test_compilation_exposes_step_control_contracts():
 
     compiled = compile_workflow(ContractWorkflow)
     compiled_step = compiled.steps["ask"]
+    definition = get_workflow_definition(ContractWorkflow)
 
-    assert compiled_step.available_routes == ("done", "failed", "question")
-    assert compiled_step.authored_routes == ("done", "failed")
-    assert compiled_step.runtime_control_routes == ("question",)
+    assert available_route_tags(compiled, "ask") == ("done", "failed", "question")
+    assert step_authored_route_tags(definition, definition.steps_by_name["ask"]) == ("done", "failed")
+    assert runtime_control_route_tags(compiled, "ask") == ("question",)
     assert compiled_step.reads == ()
     assert compiled_step.expected_output_schema is not None
     assert compiled_step.expected_output_schema["type"] == "object"
@@ -990,13 +994,13 @@ def test_explicit_prompt_blocked_and_failed_routes_remain_authored_only() -> Non
         }
 
     compiled = compile_workflow(ExplicitPromptRoutesWorkflow)
-    compiled_step = compiled.steps["ask"]
+    definition = get_workflow_definition(ExplicitPromptRoutesWorkflow)
 
-    assert compiled_step.available_routes == ("done", "blocked", "failed", "question")
-    assert compiled_step.authored_routes == ("done", "blocked", "failed")
-    assert compiled_step.runtime_control_routes == ("question",)
-    assert compiled_step.provider_visible_routes_interactive == ("done", "blocked", "question")
-    assert compiled_step.provider_visible_routes_full_auto == ("done", "blocked")
+    assert available_route_tags(compiled, "ask") == ("done", "blocked", "failed", "question")
+    assert step_authored_route_tags(definition, definition.steps_by_name["ask"]) == ("done", "blocked", "failed")
+    assert runtime_control_route_tags(compiled, "ask") == ("question",)
+    assert provider_visible_route_tags(compiled, "ask", mode="interactive") == ("done", "blocked", "question")
+    assert provider_visible_route_tags(compiled, "ask", mode="full_auto") == ("done", "blocked")
     assert compiled.routes["ask"]["blocked"].is_runtime_control is False
     assert compiled.routes["ask"]["failed"].is_runtime_control is False
     assert compiled.routes["ask"]["blocked"].provider_visible_interactive is True
@@ -1021,13 +1025,13 @@ def test_explicit_produce_verify_blocked_and_failed_routes_remain_authored_only(
         }
 
     compiled = compile_workflow(ExplicitProduceVerifyRoutesWorkflow)
-    compiled_step = compiled.steps["review"]
+    definition = get_workflow_definition(ExplicitProduceVerifyRoutesWorkflow)
 
-    assert compiled_step.available_routes == ("approved", "blocked", "failed", "question")
-    assert compiled_step.authored_routes == ("approved", "blocked", "failed")
-    assert compiled_step.runtime_control_routes == ("question",)
-    assert compiled_step.provider_visible_routes_interactive == ("approved", "failed", "question")
-    assert compiled_step.provider_visible_routes_full_auto == ("approved", "failed")
+    assert available_route_tags(compiled, "review") == ("approved", "blocked", "failed", "question")
+    assert step_authored_route_tags(definition, definition.steps_by_name["review"]) == ("approved", "blocked", "failed")
+    assert runtime_control_route_tags(compiled, "review") == ("question",)
+    assert provider_visible_route_tags(compiled, "review", mode="interactive") == ("approved", "failed", "question")
+    assert provider_visible_route_tags(compiled, "review", mode="full_auto") == ("approved", "failed")
     assert compiled.routes["review"]["blocked"].is_runtime_control is False
     assert compiled.routes["review"]["failed"].is_runtime_control is False
     assert compiled.routes["review"]["blocked"].provider_visible_interactive is False

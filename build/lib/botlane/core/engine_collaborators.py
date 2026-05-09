@@ -44,7 +44,6 @@ from .route_contracts import (
     RouteContract,
     RouteAction,
     RouteDecision,
-    available_route_tags,
     provider_visible_route_tags,
     route_action_for_contract,
     route_target_value,
@@ -484,9 +483,8 @@ class ProviderContractBuilder:
     def available_routes(self, step: StepPlan) -> tuple[str, ...]:
         if self._engine.interaction_policy.allow_provider_questions:
             routes = provider_visible_route_tags(self._engine.compiled, step.name, mode="interactive")
-            return routes or step.provider_visible_routes_interactive
-        routes = provider_visible_route_tags(self._engine.compiled, step.name, mode="full_auto")
-        return routes or step.provider_visible_routes_full_auto
+            return routes
+        return provider_visible_route_tags(self._engine.compiled, step.name, mode="full_auto")
 
 
 class StepDispatcher:

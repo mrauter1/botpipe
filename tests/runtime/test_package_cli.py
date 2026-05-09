@@ -11,6 +11,9 @@ from pathlib import Path
 import pytest
 
 from botlane.core.compiler import compile_workflow
+from botlane.core.discovery import get_workflow_definition
+from botlane.core.lowering import step_authored_route_tags
+from botlane.core.route_contracts import available_route_tags, runtime_control_route_tags
 from botlane.runtime import cli
 from botlane.runtime.loader import resolve_workflow_reference
 
@@ -62,10 +65,12 @@ def _assert_bootstrap_scaffold_contract(source: str) -> None:
 
 
 def _assert_compiled_bootstrap_contract(compiled) -> None:
+    definition = get_workflow_definition(compiled.workflow_cls)
+    authored_step = definition.steps_by_name["bootstrap"]
     assert compiled.entry_step_name == "bootstrap"
-    assert compiled.steps["bootstrap"].available_routes == ("ready",)
-    assert compiled.steps["bootstrap"].authored_routes == ("ready",)
-    assert compiled.steps["bootstrap"].runtime_control_routes == ()
+    assert available_route_tags(compiled, "bootstrap") == ("ready",)
+    assert step_authored_route_tags(definition, authored_step) == ("ready",)
+    assert runtime_control_route_tags(compiled, "bootstrap") == ()
     assert compiled.route("bootstrap", "ready").target == "FINISH"
     assert tuple(inspect.signature(compiled.steps["bootstrap"].python_handler).parameters) == ("ctx",)
 

@@ -8,6 +8,7 @@ from botlane.core import Workflow
 from botlane.core.artifacts import Artifact
 from botlane.core.compiler import compile_workflow
 from botlane.core.identifiers import ArtifactId
+from botlane.core.route_contracts import available_route_tags
 from botlane.core.step_plans import (
     BranchGroupStepPlan,
     ChildWorkflowStepPlan,
@@ -123,7 +124,8 @@ def test_compile_workflow_emits_typed_step_plan_variants() -> None:
     assert prompt_plan.turn.kind == "llm"
     assert isinstance(prompt_plan.reads[0], ArtifactId)
     assert isinstance(prompt_plan.reads[1], ExternalRead)
-    assert prompt_plan.available_routes == ("done", "question")
+    assert available_route_tags(compiled, "prompt") == ("done", "question")
+    assert not hasattr(prompt_plan, "_route_table")
     assert not hasattr(prompt_plan.header, "original_step")
 
     assert isinstance(pair_plan, ProduceVerifyStepPlan)

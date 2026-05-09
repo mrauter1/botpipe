@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from typing import Any
 
-from .route_contracts import RouteContract, required_write_names
+from .route_contracts import RouteContract, available_route_tags, required_write_names
 
 def explicit_route_required_writes(route: Any | None) -> tuple[str, ...] | None:
     """Return the explicit required-write override for one route contract."""
@@ -68,7 +68,8 @@ def effective_route_required_writes_map(
     if step is None:
         return {}
     result: dict[str, tuple[str, ...]] = {}
-    for route_tag in step.available_routes:
+    composite_route_tags = step.branch_group.composite_route_tags if step.branch_group is not None else ()
+    for route_tag in available_route_tags(compiled, step_name, composite_route_tags=composite_route_tags):
         route = compiled.routes.get(step_name, {}).get(route_tag) or compiled.global_routes.get(route_tag)
         if route is None:
             continue

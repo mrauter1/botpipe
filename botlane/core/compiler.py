@@ -296,7 +296,6 @@ def _compile_steps(
 ) -> dict[str, StepPlan]:
     compiled_steps: dict[str, StepPlan] = {}
     for step in definition.steps:
-        route_table = dict(routes.get(step.name, {}))
         expected_output_schema, expected_output_validator = _compile_expected_output_contract(step)
         reads = tuple(
             _compile_read_reference(artifact_reference, inventory, step=step)
@@ -474,7 +473,6 @@ def _compile_steps(
                     if getattr(step, "verifier_session", None) is not None
                     else None
                 ),
-                _route_table=route_table,
             )
         elif isinstance(step, PromptStep):
             compiled_steps[step.name] = PromptStepPlan(
@@ -493,13 +491,11 @@ def _compile_steps(
                     expected_output_schema=expected_output_schema,
                     expected_output_validator=expected_output_validator,
                 ),
-                _route_table=route_table,
             )
         elif isinstance(step, PythonStep):
             compiled_steps[step.name] = PythonStepPlan(
                 header=header,
                 handler=_compile_system_handler(step),
-                _route_table=route_table,
             )
         elif isinstance(step, ChildWorkflowStep):
             compiled_steps[step.name] = ChildWorkflowStepPlan(
@@ -509,18 +505,17 @@ def _compile_steps(
                 message_from=step.message_from,
                 params=dict(step.params),
                 input=step.input,
-                _route_table=route_table,
             )
         elif isinstance(step, BranchGroupStep):
-            compiled_branch_group = _compile_branch_group_internal_steps(
+            compiled_branch_group, nested_routes = _compile_branch_group_internal_steps(
                 definition,
                 step.branch_group,
                 inventory=inventory,
             )
+            routes.update(nested_routes)
             compiled_steps[step.name] = BranchGroupStepPlan(
                 header=header,
                 branch_group=compiled_branch_group,
-                _route_table=route_table,
             )
         else:
             raise WorkflowCompilationError(f"unsupported step type {type(step)!r}")
@@ -818,33 +813,36 @@ def _compile_branch_group_internal_steps(
     branch_group: BranchGroupDeclarationSpec,
     *,
     inventory: dict[str, ArtifactInventoryRecord],
-) -> BranchGroupPlan:
-    compiled_branches = tuple(
-        BranchPlan(
-            name=branch.name,
-            index=branch.index,
-            input=branch.input,
-            step=_compile_branch_group_internal_step(
-                definition,
-                branch.step,
-                inventory=inventory,
-            ),
+) -> tuple[BranchGroupPlan, dict[str, dict[str, RouteContract]]]:
+    nested_routes: dict[str, dict[str, RouteContract]] = {}
+    compiled_branches: list[BranchPlan] = []
+    for branch in branch_group.branches:
+        compiled_step, branch_routes = _compile_branch_group_internal_step(
+            definition,
+            branch.step,
+            inventory=inventory,
         )
-        for branch in branch_group.branches
-    )
-    compiled_fan_in_step = (
-        None
-        if branch_group.fan_in_step is None
-        else _compile_branch_group_internal_step(
+        nested_routes[compiled_step.name] = branch_routes
+        compiled_branches.append(
+            BranchPlan(
+                name=branch.name,
+                index=branch.index,
+                input=branch.input,
+                step=compiled_step,
+            )
+        )
+    compiled_fan_in_step: StepPlan | None = None
+    if branch_group.fan_in_step is not None:
+        compiled_fan_in_step, fan_in_routes = _compile_branch_group_internal_step(
             definition,
             branch_group.fan_in_step,
             inventory=inventory,
         )
-    )
+        nested_routes[compiled_fan_in_step.name] = fan_in_routes
     return BranchGroupPlan(
         name=branch_group.name,
         kind=branch_group.kind,
-        branches=compiled_branches,
+        branches=tuple(compiled_branches),
         concurrency=branch_group.concurrency,
         settle=branch_group.settle,
         success_routes=branch_group.success_routes,
@@ -853,7 +851,7 @@ def _compile_branch_group_internal_steps(
         composite_route_tags=branch_group.composite_route_tags,
         default_chain_route=branch_group.default_chain_route,
         rework_chain_route=branch_group.rework_chain_route,
-    )
+    ), nested_routes
 
 
 def _compile_branch_group_internal_step(
@@ -861,7 +859,7 @@ def _compile_branch_group_internal_step(
     step: Step,
     *,
     inventory: dict[str, ArtifactInventoryRecord],
-) -> StepPlan:
+) -> tuple[StepPlan, dict[str, RouteContract]]:
     internal_definition = WorkflowDefinition(
         workflow_cls=definition.workflow_cls,
         workflow_name=definition.workflow_name,
@@ -888,7 +886,7 @@ def _compile_branch_group_internal_step(
         inventory,
         compiled_routes,
     )[step.name]
-    return compiled_step
+    return compiled_step, compiled_routes[step.name]
 
 
 def _internal_single_step_authored_routes(
@@ -1780,11 +1778,12 @@ def _topology_hash_payload(compiled: WorkflowPlan) -> dict[str, Any]:
                     step_name=step_name,
                     route_tag=tag,
                     route=route,
-                    expected_output_schema=compiled.steps[step_name].expected_output_schema,
+                    expected_output_schema=step.expected_output_schema,
                 )
                 for tag, route in routes.items()
             }
-            for step_name, routes in compiled.routes.items()
+            for step_name, step in compiled.steps.items()
+            for routes in (compiled.routes.get(step_name, {}),)
         },
         "global_routes": {
             tag: _topology_hash_route_payload(
@@ -1810,7 +1809,8 @@ def _topology_hash_step_payload(
     authored_step: Step | None,
 ) -> dict[str, Any]:
     step_routes = compiled.routes.get(step.name, {})
-    available_routes = available_route_tags(compiled, step.name)
+    composite_route_tags = step.branch_group.composite_route_tags if step.branch_group is not None else ()
+    available_routes = available_route_tags(compiled, step.name, composite_route_tags=composite_route_tags)
     definition = get_workflow_definition(compiled.workflow_cls)
     payload = {
         "name": step.name,

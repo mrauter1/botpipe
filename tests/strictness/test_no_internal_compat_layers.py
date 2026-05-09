@@ -29,6 +29,9 @@ REMOVED_INTERNAL_TOKENS = (
     "_DirectRuntime" + "Control",
     "RouteFinalization" + "Result",
     "original_" + "step",
+    "\"_route_table\"",
+    "_route_table=",
+    "_effective_" + "route_table",
 )
 REMOVED_INTERNAL_PATHS = (
     REPO_ROOT / "botlane" / "core" / ("plan_" + "adapters.py"),

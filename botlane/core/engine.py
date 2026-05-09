@@ -85,6 +85,7 @@ from .route_contracts import (
     RouteAction,
     RouteContract,
     RouteDecision,
+    compiled_route_tags,
     route_target_value,
 )
 from .route_required_writes import (
@@ -1630,20 +1631,9 @@ class Engine:
         )
 
     def _route_table_for_step(self, step: StepPlan) -> dict[str, RouteContract]:
-        route_table = getattr(step, "_route_table", None)
-        if route_table is not None:
-            return dict(route_table)
-        route_table = dict(self.compiled.global_routes)
-        route_table.update(self.compiled.routes.get(step.name, {}))
-        return route_table
+        return dict(self.compiled.routes.get(step.name, {}))
 
     def _compiled_route_for_step(self, step: StepPlan, route_tag: str) -> RouteContract:
-        route_table = getattr(step, "_route_table", None)
-        if route_table is not None:
-            compiled_route = route_table.get(route_tag)
-            if compiled_route is None:
-                raise RoutingError(f"no route for step {step.name!r} and tag {route_tag!r}")
-            return compiled_route
         return self.compiled.route(step.name, route_tag)
 
     def _should_validate_optional_output(self, handle: ArtifactHandle) -> bool:
@@ -2924,14 +2914,14 @@ class Engine:
             return Event("blocked", reason=reason)
         raise WorkflowExecutionError(f"child workflow returned unsupported terminal {terminal!r}")
 
-    @staticmethod
     def _ensure_child_workflow_route_declared(
+        self,
         step: StepPlan,
         *,
         child_terminal: str,
         mapped_route: str,
     ) -> None:
-        available_routes = tuple(getattr(step, "_route_table", {}) or ())
+        available_routes = compiled_route_tags(self.compiled, step.name)
         if mapped_route in available_routes:
             return
         declared_routes = ", ".join(available_routes) or "<none>"

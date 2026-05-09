@@ -5,13 +5,12 @@ Not part of the public botlane authoring API.
 
 from __future__ import annotations
 
-from dataclasses import dataclass, field
+from dataclasses import dataclass
 from pathlib import Path
 from typing import TYPE_CHECKING, Any, Callable, Literal, TypeAlias
 
 from .identifiers import ArtifactId
 from .providers.retries import ProviderRetryPolicy
-from .route_contracts import route_target_value
 
 if TYPE_CHECKING:
     from .route_contracts import RouteContract
@@ -96,68 +95,6 @@ class ProviderTurnPlan:
 
 class _BaseStepPlan:
     header: StepHeader
-
-    @property
-    def _effective_route_table(self) -> dict[str, "RouteContract"]:
-        route_table = getattr(self, "_route_table", None)
-        if route_table is None:
-            return {}
-        return route_table
-
-    @property
-    def available_routes(self) -> tuple[str, ...]:
-        ordered_tags = tuple(tag for tag, route in self._effective_route_table.items() if not route.disabled)
-        branch_group = self.branch_group
-        if branch_group is None or not branch_group.composite_route_tags:
-            return ordered_tags
-        composite_order = tuple(tag for tag in branch_group.composite_route_tags if tag in ordered_tags)
-        extras = tuple(tag for tag in ordered_tags if tag not in composite_order)
-        return (*composite_order, *extras)
-
-    @property
-    def authored_routes(self) -> tuple[str, ...]:
-        authored_tags = tuple(
-            tag
-            for tag, route in self._effective_route_table.items()
-            if route.inheritance_source != "framework_default"
-        )
-        branch_group = self.branch_group
-        if branch_group is None or not branch_group.composite_route_tags:
-            return authored_tags
-        composite_order = tuple(tag for tag in branch_group.composite_route_tags if tag in authored_tags)
-        extras = tuple(tag for tag in authored_tags if tag not in composite_order)
-        return (*composite_order, *extras)
-
-    @property
-    def runtime_control_routes(self) -> tuple[str, ...]:
-        return tuple(
-            tag
-            for tag, route in self._effective_route_table.items()
-            if not route.disabled and route.is_runtime_control
-        )
-
-    @property
-    def provider_visible_routes_interactive(self) -> tuple[str, ...]:
-        return tuple(
-            tag
-            for tag, route in self._effective_route_table.items()
-            if not route.disabled and route.provider_visible_interactive
-        )
-
-    @property
-    def provider_visible_routes_full_auto(self) -> tuple[str, ...]:
-        return tuple(
-            tag
-            for tag, route in self._effective_route_table.items()
-            if not route.disabled and route.provider_visible_full_auto
-        )
-
-    @property
-    def route_table(self) -> dict[str, str | None]:
-        return {
-            tag: route_target_value(route.target)
-            for tag, route in self._effective_route_table.items()
-        }
 
     @property
     def name(self) -> str:
@@ -308,7 +245,6 @@ class _BaseStepPlan:
 class PromptStepPlan(_BaseStepPlan):
     header: StepHeader
     turn: ProviderTurnPlan
-    _route_table: dict[str, "RouteContract"] | None = field(default=None, repr=False, compare=False)
 
     @property
     def prompt(self) -> Any | None:
@@ -337,7 +273,6 @@ class ProduceVerifyStepPlan(_BaseStepPlan):
     producer: ProviderTurnPlan
     verifier: ProviderTurnPlan
     verifier_session_name: str | None = None
-    _route_table: dict[str, "RouteContract"] | None = field(default=None, repr=False, compare=False)
 
     @property
     def producer_prompt(self) -> Any | None:
@@ -388,7 +323,6 @@ class ProduceVerifyStepPlan(_BaseStepPlan):
 class PythonStepPlan(_BaseStepPlan):
     header: StepHeader
     handler: Callable[..., Any]
-    _route_table: dict[str, "RouteContract"] | None = field(default=None, repr=False, compare=False)
 
     @property
     def python_handler(self) -> Callable[..., Any] | None:
@@ -403,7 +337,6 @@ class ChildWorkflowStepPlan(_BaseStepPlan):
     message_from: Any
     params: dict[str, Any]
     input: Any
-    _route_table: dict[str, "RouteContract"] | None = field(default=None, repr=False, compare=False)
 
 
 @dataclass(frozen=True, slots=True)
@@ -433,7 +366,6 @@ class BranchGroupPlan:
 class BranchGroupStepPlan(_BaseStepPlan):
     header: StepHeader
     branch_group: BranchGroupPlan
-    _route_table: dict[str, "RouteContract"] | None = field(default=None, repr=False, compare=False)
 
     @property
     def retry_policy(self) -> ProviderRetryPolicy:

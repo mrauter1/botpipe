@@ -147,7 +147,7 @@ def test_step_dispatcher_execute_async_finalize_runs_branch_group_inside_event_l
     branch_steps = step.branch_group.branches
     assert branch_steps
     for branch in branch_steps:
-        assert branch.step.name not in engine.compiled.routes
+        assert branch.step.name in engine.compiled.routes
         assert engine.provider_contract_builder.available_routes(branch.step) == ("done", "question")
 
     result = asyncio.run(engine.step_dispatcher.execute_async(step, context, context.state, (), route_mode="finalize"))

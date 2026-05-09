@@ -5,6 +5,7 @@ Not part of the public botlane authoring API.
 
 from __future__ import annotations
 
+from collections.abc import Sequence
 from dataclasses import dataclass
 from typing import TYPE_CHECKING, Any, Callable, Literal, TypeAlias
 
@@ -205,13 +206,43 @@ def required_write_names(contract: RouteContract) -> tuple[str, ...]:
     return tuple(artifact_id.qualified_name for artifact_id in contract.required_writes.declared)
 
 
-def available_route_tags(plan: Any, step_name: str) -> tuple[str, ...]:
-    route_table = getattr(plan, "routes", {}).get(step_name, {})
-    return tuple(tag for tag, route in route_table.items() if not route.disabled)
+def _step_route_table(plan: Any, step_name: str) -> dict[str, RouteContract]:
+    return getattr(plan, "routes", {}).get(step_name, {})
+
+
+def _ordered_route_tags(
+    route_tags: tuple[str, ...],
+    *,
+    composite_route_tags: Sequence[str] = (),
+) -> tuple[str, ...]:
+    if not composite_route_tags:
+        return route_tags
+    composite_order = tuple(tag for tag in composite_route_tags if tag in route_tags)
+    extras = tuple(tag for tag in route_tags if tag not in composite_order)
+    return (*composite_order, *extras)
+
+
+def compiled_route_tags(plan: Any, step_name: str) -> tuple[str, ...]:
+    return tuple(_step_route_table(plan, step_name).keys())
+
+
+def available_route_tags(
+    plan: Any,
+    step_name: str,
+    *,
+    composite_route_tags: Sequence[str] = (),
+) -> tuple[str, ...]:
+    route_tags = tuple(tag for tag, route in _step_route_table(plan, step_name).items() if not route.disabled)
+    return _ordered_route_tags(route_tags, composite_route_tags=composite_route_tags)
+
+
+def suppressed_route_tags(plan: Any, step_name: str) -> tuple[str, ...]:
+    route_table = _step_route_table(plan, step_name)
+    return tuple(tag for tag, route in route_table.items() if route.disabled)
 
 
 def runtime_control_route_tags(plan: Any, step_name: str) -> tuple[str, ...]:
-    route_table = getattr(plan, "routes", {}).get(step_name, {})
+    route_table = _step_route_table(plan, step_name)
     return tuple(
         tag
         for tag, route in route_table.items()
@@ -225,7 +256,7 @@ def provider_visible_route_tags(
     *,
     mode: Literal["interactive", "full_auto"],
 ) -> tuple[str, ...]:
-    route_table = getattr(plan, "routes", {}).get(step_name, {})
+    route_table = _step_route_table(plan, step_name)
     if mode == "interactive":
         return tuple(
             tag

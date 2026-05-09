@@ -15,12 +15,14 @@ from pathlib import Path
 from copy import deepcopy
 from hashlib import sha1
 from types import ModuleType, UnionType
-from typing import Annotated, Any, Union, get_args, get_origin
+from typing import Annotated, Any, Literal, Union, get_args, get_origin
 
 from pydantic import BaseModel
 
 from .compiler import compile_workflow
 from .descriptors import effective_parameters_model
+from .discovery import get_workflow_definition
+from .lowering import step_authored_route_tags
 from .route_reporting import (
     payload_contract_for_route,
     provider_response_contract_for_routes,
@@ -660,7 +662,8 @@ def _capability_entry_from_resolved(resolved, compiled: WorkflowPlan, catalog_en
         ),
         routes={
             step_name: {tag: route_target_value(route.target) for tag, route in routes.items()}
-            for step_name, routes in compiled.routes.items()
+            for step_name, step in compiled.steps.items()
+            for routes in (compiled.routes.get(step_name, {}),)
         },
         global_routes={tag: route_target_value(route.target) for tag, route in compiled.global_routes.items()},
         compiled_global_routes=_compiled_routes(
@@ -671,6 +674,7 @@ def _capability_entry_from_resolved(resolved, compiled: WorkflowPlan, catalog_en
         ),
         steps=tuple(
             _step_capability(
+                compiled,
                 step,
                 default_session_name=compiled.default_session_name,
                 step_routes=compiled.routes.get(step.name, {}),
@@ -1178,36 +1182,82 @@ def _compiled_routes(
     return routes
 
 
-def _provider_route_map(step: Any, *, policy: str) -> dict[str, Any]:
-    visible_tags = (
-        step.provider_visible_routes_interactive
-        if policy == "interactive"
-        else step.provider_visible_routes_full_auto
-    )
-    route_table = getattr(step, "_route_table", None) or {}
+def _composite_route_tags(step: Any) -> tuple[str, ...]:
+    branch_group = getattr(step, "branch_group", None)
+    if branch_group is None:
+        return ()
+    return branch_group.composite_route_tags
+
+
+def _available_route_tags(step_routes: Mapping[str, Any], *, composite_route_tags: tuple[str, ...]) -> tuple[str, ...]:
+    route_tags = tuple(tag for tag, route in step_routes.items() if not route.disabled)
+    if not composite_route_tags:
+        return route_tags
+    composite_order = tuple(tag for tag in composite_route_tags if tag in route_tags)
+    extras = tuple(tag for tag in route_tags if tag not in composite_order)
+    return (*composite_order, *extras)
+
+
+def _provider_visible_route_tags(
+    step_routes: Mapping[str, Any],
+    *,
+    mode: Literal["interactive", "full_auto"],
+) -> tuple[str, ...]:
+    if mode == "interactive":
+        return tuple(
+            tag for tag, route in step_routes.items() if not route.disabled and route.provider_visible_interactive
+        )
+    return tuple(tag for tag, route in step_routes.items() if not route.disabled and route.provider_visible_full_auto)
+
+
+def _runtime_control_route_tags(step_routes: Mapping[str, Any]) -> tuple[str, ...]:
+    return tuple(tag for tag, route in step_routes.items() if not route.disabled and route.is_runtime_control)
+
+
+def _step_authored_routes(compiled: WorkflowPlan, step: Any) -> tuple[str, ...]:
+    definition = get_workflow_definition(compiled.workflow_cls)
+    authored_step = next((candidate for candidate in definition.steps if candidate.name == step.name), None)
+    if authored_step is None:
+        return ()
+    return step_authored_route_tags(definition, authored_step)
+
+
+def _provider_route_map(
+    *,
+    visible_tags: tuple[str, ...],
+    step_routes: Mapping[str, Any],
+) -> dict[str, Any]:
     return {
-        route_tag: route_table[route_tag]
+        route_tag: step_routes[route_tag]
         for route_tag in visible_tags
-        if route_tag in route_table and not route_table[route_tag].disabled
+        if route_tag in step_routes and not step_routes[route_tag].disabled
     }
 
 
 def _step_capability(
+    compiled: WorkflowPlan,
     step,
     *,
     default_session_name: str,
     step_routes: Mapping[str, Any],
     global_routes: Mapping[str, Any],
 ) -> WorkflowStepCapability:
+    composite_route_tags = _composite_route_tags(step)
+    available_routes = _available_route_tags(step_routes, composite_route_tags=composite_route_tags)
+    authored_routes = _step_authored_routes(compiled, step)
+    compiled_tags = tuple(step_routes.keys())
+    suppressed_tags = tuple(tag for tag, route in step_routes.items() if route.disabled)
+    interactive_visible_routes = _provider_visible_route_tags(step_routes, mode="interactive")
+    full_auto_visible_routes = _provider_visible_route_tags(step_routes, mode="full_auto")
+    runtime_control_routes = _runtime_control_route_tags(step_routes)
     routes = _compiled_routes(
-        step.available_routes,
+        available_routes,
         step_routes=step_routes,
         global_routes=global_routes,
         expected_output_schema=step.expected_output_schema,
     )
-    compiled_route_tags = tuple((getattr(step, "_route_table", None) or {}).keys())
     compiled_routes = _compiled_routes(
-        compiled_route_tags,
+        compiled_tags,
         step_routes=step_routes,
         global_routes=global_routes,
         expected_output_schema=step.expected_output_schema,
@@ -1220,20 +1270,20 @@ def _step_capability(
         requires=step.requires,
         writes=step.writes,
         log_artifacts=step.log_artifacts,
-        available_routes=step.available_routes,
-        authored_routes=step.authored_routes,
-        compiled_route_tags=compiled_route_tags,
-        suppressed_route_tags=tuple(tag for tag, route in compiled_routes.items() if route.disabled),
-        runtime_control_routes=step.runtime_control_routes,
-        provider_visible_routes_interactive=step.provider_visible_routes_interactive,
-        provider_visible_routes_full_auto=step.provider_visible_routes_full_auto,
+        available_routes=available_routes,
+        authored_routes=authored_routes,
+        compiled_route_tags=compiled_tags,
+        suppressed_route_tags=suppressed_tags,
+        runtime_control_routes=runtime_control_routes,
+        provider_visible_routes_interactive=interactive_visible_routes,
+        provider_visible_routes_full_auto=full_auto_visible_routes,
         provider_response_contracts={
             "interactive": provider_response_contract_for_routes(
-                routes=_provider_route_map(step, policy="interactive"),
+                routes=_provider_route_map(visible_tags=interactive_visible_routes, step_routes=step_routes),
                 expected_output_schema=step.expected_output_schema,
             ),
             "full_auto": provider_response_contract_for_routes(
-                routes=_provider_route_map(step, policy="full_auto"),
+                routes=_provider_route_map(visible_tags=full_auto_visible_routes, step_routes=step_routes),
                 expected_output_schema=step.expected_output_schema,
             ),
         },

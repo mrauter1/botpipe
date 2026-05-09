@@ -20,7 +20,7 @@ from botlane.core.engine import Engine
 from botlane.core.errors import WorkflowExecutionError, WorkflowValidationError
 from botlane.core.providers.fake import ScriptedLLMProvider
 from botlane.core.provider_policy import PermissionPolicy, ProviderPolicy, ProviderPolicyOverride
-from botlane.core.route_contracts import route_target_value
+from botlane.core.route_contracts import available_route_tags, route_target_value, runtime_control_route_tags
 from botlane.core.stores import InMemoryCheckpointStore, InMemorySessionStore
 
 
@@ -707,8 +707,8 @@ def test_parallel_branch_group_compiles_as_one_external_step_with_ordered_intern
     assert compiled.steps["reviews"].branch_group is not None
     assert "security_review" not in compiled.steps
     assert "cost_review" not in compiled.steps
-    assert "security_review" not in compiled.routes
-    assert "cost_review" not in compiled.routes
+    assert "security_review" in compiled.routes
+    assert "cost_review" in compiled.routes
     assert route_target_value(compiled.routes["reviews"]["done"].target) == "publish"
     branch_group = compiled.steps["reviews"].branch_group
     assert branch_group is not None
@@ -739,7 +739,11 @@ def test_parallel_branch_group_propagates_explicit_fan_in_routes_to_outer_routes
 
     compiled = compile_workflow(FanInRoutesWorkflow)
 
-    assert compiled.steps["assess"].available_routes == ("approved", "needs_revision")
+    assert available_route_tags(
+        compiled,
+        "assess",
+        composite_route_tags=compiled.steps["assess"].branch_group.composite_route_tags,
+    ) == ("approved", "needs_revision")
     assert compiled.routes["assess"]["approved"].target == "FINISH"
     assert compiled.routes["assess"]["needs_revision"].target == "assess"
 
@@ -758,7 +762,11 @@ def test_parallel_branch_group_without_fan_in_materializes_mechanical_outcome_ro
 
     compiled = compile_workflow(MechanicalOutcomeWorkflow)
 
-    assert compiled.steps["assess"].available_routes == ("done", "partial", "question", "failed")
+    assert available_route_tags(
+        compiled,
+        "assess",
+        composite_route_tags=compiled.steps["assess"].branch_group.composite_route_tags,
+    ) == ("done", "partial", "question", "failed")
     assert compiled.routes["assess"]["done"].target == "publish"
     assert compiled.routes["assess"]["partial"].target == "publish"
     assert compiled.routes["assess"]["question"].target == "AWAIT_INPUT"
@@ -1232,10 +1240,10 @@ def test_simple_workflow_injects_canonical_default_routes_by_step_kind() -> None
     assert compiled.routes["child"]["done"].target == "verdict"
     assert set(compiled.routes["verdict"]) == {"done"}
     assert compiled.routes["verdict"]["done"].target == "FINISH"
-    assert compiled.steps["start"].runtime_control_routes == ("question",)
-    assert compiled.steps["review"].runtime_control_routes == ("question",)
-    assert compiled.steps["decide"].runtime_control_routes == ()
-    assert compiled.steps["child"].runtime_control_routes == ()
+    assert runtime_control_route_tags(compiled, "start") == ("question",)
+    assert runtime_control_route_tags(compiled, "review") == ("question",)
+    assert runtime_control_route_tags(compiled, "decide") == ()
+    assert runtime_control_route_tags(compiled, "child") == ()
 
 
 def test_simple_workflow_respects_control_routes_false_and_custom_semantic_routes() -> None:
