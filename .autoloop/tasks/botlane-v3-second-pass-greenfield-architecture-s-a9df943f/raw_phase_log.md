@@ -2993,3 +2993,57 @@ Open issues / next step
 
 - No blocking test gaps remain within the phase scope.
 - I did not run the full repo `pytest` suite in this turn.
+
+
+---
+run_id=run-20260509T125912Z-8deb38fd | entry=session_turn | pair=test | phase=verifier | cycle=1 | attempt=1 | thread_id=019e0d6a-0a1a-7b51-bac5-3dded18dc199
+---
+provider=codex
+mode=resume
+template=/home/rauter/.local/share/pipx/venvs/autoloop/lib/python3.12/site-packages/autoloop/templates/test_verifier.md
+session_id=019e0d6a-0a1a-7b51-bac5-3dded18dc199
+
+
+---
+run_id=run-20260509T125912Z-8deb38fd | entry=phase_output | pair=test | phase=verifier | process=codex-agent | cycle=1 | attempt=1 | thread_id=019e0d6a-0a1a-7b51-bac5-3dded18dc199
+---
+Auditing the new phase-local tests now. I’m checking whether the added cases actually pin the changed SDK behavior and the adjacent regression surfaces, not just whether they happen to pass.
+
+The strategy and decisions line up with the new tests. I’m rerunning the focused SDK single-step suites and the adjacent child-workflow contract once more so the audit can clear both coverage quality and stability from direct evidence.
+
+The focused re-run is green and the added tests directly cover the changed boundary and the sentinel-lowering regression surface. I’m marking the audit criteria complete and appending a no-findings audit note to the phase feedback.
+
+Scope considered
+
+- Phase-local SDK single-step cutover tests only.
+- Changed test files `tests/unit/test_sdk_facade.py` and `tests/contract/test_single_step_plan_equivalence.py`, plus the active phase artifacts `test_strategy.md` and `feedback.md`.
+- Adjacent regression surface `tests/contract/engine/test_child_workflows.py` because the one-step path still feeds typed child-workflow execution.
+
+What I analyzed
+
+- The new delegation test for `sdk._build_single_step_workflow_plan(...)` to verify it pins the compiler-owned boundary rather than a local implementation detail.
+- The new plan-level `needs_rework -> current step` assertion to confirm it covers the sentinel-lowering regression that surfaced during implementation.
+- The phase decisions and strategy to ensure the added coverage matches the intended architecture and preserved SDK behavior.
+
+What I reviewed
+
+- The added tests cover the changed ownership boundary and the adjacent route-lowering regression risk directly.
+- The strategy artifact accurately maps changed behavior, preserved invariants, edge cases, and stability notes.
+- Audit re-run passed:
+- `.venv/bin/python -m pytest -q tests/unit/test_sdk_facade.py tests/contract/test_single_step_plan_equivalence.py tests/contract/test_sdk_single_step_execution.py`
+- `.venv/bin/python -m pytest -q tests/contract/engine/test_child_workflows.py`
+
+Key findings / decisions
+
+- No blocking or non-blocking audit findings.
+- The delegation test is appropriately scoped: it protects against reintroducing SDK-local workflow-plan construction without overfitting compiler internals.
+- The `SELF` lowering test meaningfully strengthens regression protection by asserting the final route target rather than only route tags.
+
+Open issues / next step
+
+- No open audit issues for this phase.
+- I updated `criteria.md` to fully checked and appended a no-findings audit note to `feedback.md`.
+
+<loop-control>
+{"schema":"docloop.loop_control/v1","kind":"promise","promise":"COMPLETE"}
+</loop-control>
