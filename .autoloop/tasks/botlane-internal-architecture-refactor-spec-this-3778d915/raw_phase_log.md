@@ -1859,3 +1859,57 @@ Open issues / next step
 
 - The pre-existing `tests/strictness/test_no_compat.py` environment leak remains unchanged: the venv still exposes an importable legacy `autoloop` package.
 - The phase is ready for re-review against `IMP-001`.
+
+
+---
+run_id=run-20260509T045359Z-e2586b1f | entry=session_turn | pair=implement | phase=verifier | cycle=2 | attempt=1 | thread_id=019e0b83-527d-7200-87b5-3be58b23f713
+---
+provider=codex
+mode=resume
+template=/home/rauter/.local/share/pipx/venvs/autoloop/lib/python3.12/site-packages/autoloop/templates/implement_verifier.md
+session_id=019e0b83-527d-7200-87b5-3be58b23f713
+
+
+---
+run_id=run-20260509T045359Z-e2586b1f | entry=phase_output | pair=implement | phase=verifier | process=codex-agent | cycle=2 | attempt=1 | thread_id=019e0b83-527d-7200-87b5-3be58b23f713
+---
+Re-reviewing the narrowed adapter fallback and the new contract coverage. I’m checking that the known parity-gap fallback is now explicit, that unexpected adapter failures are surfaced, and that the phase-local acceptance criteria are now actually demonstrated.
+
+The remaining pass is clean. I’m marking the reviewer artifact accordingly: criteria complete and feedback updated to note that the earlier blocking finding no longer reproduces after the targeted fix.
+
+Scope considered
+
+- Phase-local re-review for `provider-turn-and-route-finalization`.
+- Runtime change in [botlane/core/engine_collaborators.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/botlane/core/engine_collaborators.py:162).
+- Contract coverage in [tests/contract/test_provider_turn_plan_adapter.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/tests/contract/test_provider_turn_plan_adapter.py:1).
+- Reviewer artifacts updated in the active phase directory.
+
+What I analyzed
+
+- The narrowed provider-turn adapter fallback policy.
+- The new regression tests for the explicit parity-gap fallback and the unexpected-error path.
+- The implementation notes and prior `IMP-001` finding to confirm the original failure mode no longer reproduces.
+
+What I reviewed
+
+- `_allows_provider_turn_plan_fallback()` and `_provider_turn_step_plan_for_execution()` now centralize the allowlisted fallback.
+- `_prompt_step_plan_for_execution()` and `_pair_step_plan_for_execution()` no longer swallow arbitrary exceptions.
+- The new tests demonstrate:
+  - rendered-turn transport parity still holds
+  - known parity-gap fallback remains supported
+  - unexpected adapter failures are surfaced
+
+Key findings / decisions
+
+- `IMP-001` is resolved.
+- No additional blocking or non-blocking findings were identified in this cycle.
+- `criteria.md` was updated to all checked boxes, and `feedback.md` now records that the earlier blocking finding no longer reproduces.
+
+Open issues / next step
+
+- No phase-local review blockers remain.
+- The previously noted environment leak in `tests/strictness/test_no_compat.py` is unchanged and remains outside this phase’s code changes.
+
+<loop-control>
+{"schema":"docloop.loop_control/v1","kind":"promise","promise":"COMPLETE"}
+</loop-control>

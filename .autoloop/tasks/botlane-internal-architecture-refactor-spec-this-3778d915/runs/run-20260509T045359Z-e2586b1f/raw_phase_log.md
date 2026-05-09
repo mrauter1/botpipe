@@ -1795,3 +1795,121 @@ Open issues / next step
 <loop-control>
 {"schema":"docloop.loop_control/v1","kind":"promise","promise":"INCOMPLETE"}
 </loop-control>
+
+
+---
+run_id=run-20260509T045359Z-e2586b1f | entry=session_turn | pair=implement | phase=producer | cycle=2 | attempt=1 | thread_id=019e0b83-527d-7200-87b5-3be58b23f713
+---
+provider=codex
+mode=resume
+template=/home/rauter/.local/share/pipx/venvs/autoloop/lib/python3.12/site-packages/autoloop/templates/implement_producer.md
+session_id=019e0b83-527d-7200-87b5-3be58b23f713
+
+
+---
+run_id=run-20260509T045359Z-e2586b1f | entry=phase_output | pair=implement | phase=producer | process=codex-agent | cycle=2 | attempt=1 | thread_id=019e0b83-527d-7200-87b5-3be58b23f713
+---
+I’m tightening the adapter selection rather than broadening the phase. The next step is to replace the blanket fallback with an explicit, parity-scoped condition and add a regression test that proves unexpected adapter failures are not silently swallowed.
+
+The adapter itself only raises a handful of specific `ValueError`s. I’m matching those against the documented parity gap so the fallback can be explicit and local instead of masking every failure mode in the step-plan bridge.
+
+I’ve got the fix shape: one explicit fallback policy for the documented parity gap, and tests for both sides of it. That keeps the phase scoped while making adapter regressions loud instead of silently disappearing behind the legacy path.
+
+I’m editing the dispatcher-side adapter selection now. The change is small: explicit fallback only for the documented parity gap, and new tests that prove both the fallback and the failure path.
+
+The code change is in place. I’m validating the new behavior in two directions now: known parity-gap fallback still works, and unexpected adapter failures now break loudly instead of disappearing behind the legacy path.
+
+The system Python here doesn’t have `pytest`, so I’m rerunning with the repo’s virtualenv interpreter to keep validation on the same environment the earlier phase used.
+
+I’ve got green targeted validation. I’m updating the phase notes now so the turn records the narrowed fallback policy, the added regression coverage, and the exact test runs that passed.
+
+Scope considered
+
+- Phase-local fix for `provider-turn-and-route-finalization`.
+- Changed runtime path in [botlane/core/engine_collaborators.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/botlane/core/engine_collaborators.py:162).
+- Phase contract tests in [tests/contract/test_provider_turn_plan_adapter.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/tests/contract/test_provider_turn_plan_adapter.py:1).
+- Updated phase notes in [implementation_notes.md](</home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/botlane-internal-architecture-refactor-spec-this-3778d915/runs/run-20260509T045359Z-e2586b1f/artifacts/implement/phases/provider-turn-and-route-finalization/implementation_notes.md>).
+
+What I analyzed
+
+- The reviewer’s `IMP-001` finding in the phase feedback.
+- The prompt/pair adapter selection helpers that were swallowing all `step_plan_from_compiled_step(...)` failures.
+- The adapter error shapes emitted by `plan_adapters.py` to separate the documented parity gap from unexpected regressions.
+- Existing provider-turn and route-finalization contract coverage.
+
+What I changed
+
+- Replaced the blanket adapter fallback in [engine_collaborators.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/botlane/core/engine_collaborators.py:170) with an explicit allowlist:
+  - known parity-gap `ValueError` cases still fall back to the legacy compiled-step path
+  - unexpected adapter failures now raise instead of being silently hidden
+- Centralized that policy in `_allows_provider_turn_plan_fallback()` and `_provider_turn_step_plan_for_execution()`.
+- Added two contract tests:
+  - known parity-gap fallback still preserves the rendered-turn transport boundary
+  - unexpected adapter failures are surfaced rather than swallowed
+
+Key findings / decisions
+
+- The documented fallback remains, but only for explicit inventory-resolution parity gaps.
+- Wrong-plan-type returns are now treated as hard errors instead of quietly disabling the new path.
+- Targeted validation passed:
+  - `/home/rauter/autoloop_v3/.venv/bin/pytest tests/contract/test_provider_turn_plan_adapter.py`
+  - `/home/rauter/autoloop_v3/.venv/bin/pytest tests/contract/test_async_step_dispatcher.py tests/contract/engine/test_routes.py tests/contract/engine/test_runtime_controls.py`
+
+Open issues / next step
+
+- The pre-existing `tests/strictness/test_no_compat.py` environment leak remains unchanged: the venv still exposes an importable legacy `autoloop` package.
+- The phase is ready for re-review against `IMP-001`.
+
+
+---
+run_id=run-20260509T045359Z-e2586b1f | entry=session_turn | pair=implement | phase=verifier | cycle=2 | attempt=1 | thread_id=019e0b83-527d-7200-87b5-3be58b23f713
+---
+provider=codex
+mode=resume
+template=/home/rauter/.local/share/pipx/venvs/autoloop/lib/python3.12/site-packages/autoloop/templates/implement_verifier.md
+session_id=019e0b83-527d-7200-87b5-3be58b23f713
+
+
+---
+run_id=run-20260509T045359Z-e2586b1f | entry=phase_output | pair=implement | phase=verifier | process=codex-agent | cycle=2 | attempt=1 | thread_id=019e0b83-527d-7200-87b5-3be58b23f713
+---
+Re-reviewing the narrowed adapter fallback and the new contract coverage. I’m checking that the known parity-gap fallback is now explicit, that unexpected adapter failures are surfaced, and that the phase-local acceptance criteria are now actually demonstrated.
+
+The remaining pass is clean. I’m marking the reviewer artifact accordingly: criteria complete and feedback updated to note that the earlier blocking finding no longer reproduces after the targeted fix.
+
+Scope considered
+
+- Phase-local re-review for `provider-turn-and-route-finalization`.
+- Runtime change in [botlane/core/engine_collaborators.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/botlane/core/engine_collaborators.py:162).
+- Contract coverage in [tests/contract/test_provider_turn_plan_adapter.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/tests/contract/test_provider_turn_plan_adapter.py:1).
+- Reviewer artifacts updated in the active phase directory.
+
+What I analyzed
+
+- The narrowed provider-turn adapter fallback policy.
+- The new regression tests for the explicit parity-gap fallback and the unexpected-error path.
+- The implementation notes and prior `IMP-001` finding to confirm the original failure mode no longer reproduces.
+
+What I reviewed
+
+- `_allows_provider_turn_plan_fallback()` and `_provider_turn_step_plan_for_execution()` now centralize the allowlisted fallback.
+- `_prompt_step_plan_for_execution()` and `_pair_step_plan_for_execution()` no longer swallow arbitrary exceptions.
+- The new tests demonstrate:
+  - rendered-turn transport parity still holds
+  - known parity-gap fallback remains supported
+  - unexpected adapter failures are surfaced
+
+Key findings / decisions
+
+- `IMP-001` is resolved.
+- No additional blocking or non-blocking findings were identified in this cycle.
+- `criteria.md` was updated to all checked boxes, and `feedback.md` now records that the earlier blocking finding no longer reproduces.
+
+Open issues / next step
+
+- No phase-local review blockers remain.
+- The previously noted environment leak in `tests/strictness/test_no_compat.py` is unchanged and remains outside this phase’s code changes.
+
+<loop-control>
+{"schema":"docloop.loop_control/v1","kind":"promise","promise":"COMPLETE"}
+</loop-control>
