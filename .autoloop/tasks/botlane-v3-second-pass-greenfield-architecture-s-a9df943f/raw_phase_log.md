@@ -2886,3 +2886,57 @@ Open issues / next step
 - `.venv/bin/python -m pytest -q tests/unit/test_sdk_facade.py tests/contract/test_single_step_plan_equivalence.py tests/contract/test_sdk_single_step_execution.py`
 - `.venv/bin/python -m pytest -q tests/contract/engine/test_child_workflows.py`
 - I did not run the full repo `pytest` suite in this turn.
+
+
+---
+run_id=run-20260509T125912Z-8deb38fd | entry=session_turn | pair=implement | phase=verifier | cycle=2 | attempt=1 | thread_id=019e0d6a-0a1a-7b51-bac5-3dded18dc199
+---
+provider=codex
+mode=resume
+template=/home/rauter/.local/share/pipx/venvs/autoloop/lib/python3.12/site-packages/autoloop/templates/implement_verifier.md
+session_id=019e0d6a-0a1a-7b51-bac5-3dded18dc199
+
+
+---
+run_id=run-20260509T125912Z-8deb38fd | entry=phase_output | pair=implement | phase=verifier | process=codex-agent | cycle=2 | attempt=1 | thread_id=019e0d6a-0a1a-7b51-bac5-3dded18dc199
+---
+Re-reviewing the phase after the producer’s follow-up changes now. I’m checking whether the compiler-owned single-step path actually removed the duplicated ownership and whether the focused regression coverage is sufficient to clear the remaining review artifact state.
+
+The duplicated SDK compiler path is gone from the diff, and the decisions ledger matches the intended ownership change. I’m rerunning the focused SDK suite plus the adjacent child-workflow contract before I clear the review artifacts.
+
+The re-run is clean. I’m updating the review artifacts to reflect that `IMP-001` is resolved and that there are no remaining findings in this phase scope, then I’ll close the loop as complete.
+
+Scope considered
+
+- Phase-local SDK single-step cutover only.
+- Changed implementation in `botlane/core/compiler.py` and `botlane/sdk.py`, plus the existing adjacent child-workflow path that this phase still exercises.
+- Active review artifacts `criteria.md`, `feedback.md`, `implementation_notes.md`, and the current `decisions.txt` block.
+
+What I analyzed
+
+- The new compiler-owned single-step helpers in `botlane/core/compiler.py`.
+- The reduced SDK helper chain in `botlane/sdk.py` to confirm it no longer orchestrates compiler/discovery internals directly.
+- The phase decisions and prior blocking finding `IMP-001` to verify the ownership drift was actually removed rather than wrapped.
+
+What I reviewed
+
+- The duplicated SDK compilation path identified in `IMP-001` is gone from the current diff.
+- The producer’s follow-up decision entries align with the implementation and the phase contract.
+- Validation re-run passed:
+- `.venv/bin/python -m pytest -q tests/unit/test_sdk_facade.py tests/contract/test_single_step_plan_equivalence.py tests/contract/test_sdk_single_step_execution.py`
+- `.venv/bin/python -m pytest -q tests/contract/engine/test_child_workflows.py`
+
+Key findings / decisions
+
+- No remaining blocking or non-blocking findings in this phase scope.
+- `IMP-001` is addressed: one-step `WorkflowPlan` / `SingleStepPlan` construction is now compiler-owned, while `sdk.py` is a thin validation-and-delegation layer again.
+- I updated `criteria.md` to fully checked and appended a cycle-2 resolution note to `feedback.md`.
+
+Open issues / next step
+
+- No open review issues for this phase.
+- This phase is ready to close from the verifier side.
+
+<loop-control>
+{"schema":"docloop.loop_control/v1","kind":"promise","promise":"COMPLETE"}
+</loop-control>
