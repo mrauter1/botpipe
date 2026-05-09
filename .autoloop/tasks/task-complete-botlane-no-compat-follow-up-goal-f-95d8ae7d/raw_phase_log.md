@@ -1463,3 +1463,57 @@ Open issues / next step
 
 - No blocking issues remain for this scope.
 - The full suite warning is from `tests/unit/test_provider_boundary_core.py:661`; it did not fail the run.
+
+
+---
+run_id=run-20260509T041550Z-4b0707de | entry=session_turn | pair=implement | phase=verifier | cycle=1 | attempt=1 | thread_id=019e0af7-2806-7420-b8d1-ea347b3defd6
+---
+provider=codex
+mode=resume
+template=/home/rauter/.local/share/pipx/venvs/autoloop/lib/python3.12/site-packages/autoloop/templates/implement_verifier.md
+session_id=019e0af7-2806-7420-b8d1-ea347b3defd6
+
+
+---
+run_id=run-20260509T041550Z-4b0707de | entry=phase_output | pair=implement | phase=verifier | process=codex-agent | cycle=1 | attempt=1 | thread_id=019e0af7-2806-7420-b8d1-ea347b3defd6
+---
+I’m reviewing the implementation diff against the phase contract and the validation evidence now. I’ll inspect the strictness changes, the new run-local audit/session artifacts, and the review artifacts before I update `criteria.md` and `feedback.md`.
+
+I found a likely end-of-run contract gap and I’m checking the concrete runtime evidence now. The current implementation validated against the files that exist mid-implement turn, but the phase metadata already advertises a phase session file path, and the previous completed run for this same task produced additional phase/test artifacts.
+
+The runtime has now materialized the phase session file, and it is not in the active-run inventory sets. I’m rerunning the strictness slice against the current post-implement tree to confirm the regression scenario before I write the review finding.
+
+The review has a concrete blocking regression now: the scoped strictness slice no longer passes once the runtime-written phase session file appears. I’m recording that finding in the review artifacts and marking the criteria accordingly.
+
+Scope considered
+
+- [tests/strictness/test_no_compat.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/tests/strictness/test_no_compat.py:245)
+- The current run-local audit/session artifacts under `run-20260509T041550Z-4b0707de`
+- [criteria.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/task-complete-botlane-no-compat-follow-up-goal-f-95d8ae7d/runs/run-20260509T041550Z-4b0707de/artifacts/implement/phases/finalize-current-run-artifact-contract/criteria.md) and [feedback.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/task-complete-botlane-no-compat-follow-up-goal-f-95d8ae7d/runs/run-20260509T041550Z-4b0707de/artifacts/implement/phases/finalize-current-run-artifact-contract/feedback.md)
+- The authoritative active session file path and run decisions
+
+What I analyzed
+
+- The active-run inventory/exception sets and the walker assertion updates.
+- The runtime-created current run files after implementation, especially `sessions/phases/finalize-current-run-artifact-contract.json`.
+- The post-implementation strictness slice against the current filesystem state.
+
+What I reviewed
+
+- Validation evidence claimed in [implementation_notes.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/task-complete-botlane-no-compat-follow-up-goal-f-95d8ae7d/runs/run-20260509T041550Z-4b0707de/artifacts/implement/phases/finalize-current-run-artifact-contract/implementation_notes.md:61).
+- The live presence and contents of [sessions/phases/finalize-current-run-artifact-contract.json](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/task-complete-botlane-no-compat-follow-up-goal-f-95d8ae7d/runs/run-20260509T041550Z-4b0707de/sessions/phases/finalize-current-run-artifact-contract.json:1).
+- A fresh rerun of `./.venv/bin/python -m pytest tests/strictness/test_no_compat.py -q` after that runtime-owned file existed.
+
+Key findings / decisions
+
+- `IMP-001` is blocking: the active current-run inventory was derived from a mid-implement snapshot and omits `sessions/phases/finalize-current-run-artifact-contract.json`.
+- That omission is already user-visible: rerunning the scoped strictness slice now fails `test_active_repo_root_artifact_policy_inventories_are_explicit` with `1 failed, 71 passed`.
+- I updated the review artifacts to reflect the blocking status and left criteria unchecked where the regression invalidates the final-state contract.
+
+Open issues / next step
+
+- Fix the inventory to classify `sessions/phases/finalize-current-run-artifact-contract.json`, rebuild the exact current-run file set from the post-runtime state, and rerun scoped/full validation after the runtime-owned files are present.
+
+<loop-control>
+{"schema":"docloop.loop_control/v1","kind":"promise","promise":"INCOMPLETE"}
+</loop-control>
