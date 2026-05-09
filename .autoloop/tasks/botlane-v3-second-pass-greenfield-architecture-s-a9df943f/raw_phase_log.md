@@ -404,3 +404,79 @@ Open issues / next step
 <loop-control>
 {"schema":"docloop.loop_control/v1","kind":"promise","promise":"COMPLETE"}
 </loop-control>
+
+
+---
+run_id=run-20260509T125912Z-8deb38fd | entry=session_turn | pair=implement | phase=producer | cycle=1 | attempt=1 | thread_id=019e0ce2-74d0-7282-8aa6-faff99e1eb7d
+---
+provider=codex
+mode=start
+template=/home/rauter/.local/share/pipx/venvs/autoloop/lib/python3.12/site-packages/autoloop/templates/implement_producer.md
+session_id=019e0ce2-74d0-7282-8aa6-faff99e1eb7d
+
+
+---
+run_id=run-20260509T125912Z-8deb38fd | entry=phase_output | pair=implement | phase=producer | process=codex-agent | cycle=1 | attempt=1 | thread_id=019e0ce2-74d0-7282-8aa6-faff99e1eb7d
+---
+I’m starting with the phase artifacts and the current canonical type modules, then I’ll map the required shape changes before editing.
+
+I’ve got the phase contract and prior decisions. Next I’m reading the current canonical modules to identify the minimum shape changes that fit this phase without prematurely cutting runtime consumers over.
+
+The current type modules are only partially aligned: `WorkflowPlan` still has string-keyed artifact maps, `StepHeader` and step variants still carry authored-step and compiled backrefs, and branch/reference shapes are underspecified. I’m checking the related unit tests now so the edits land with the right assertions for this phase.
+
+Plan for this phase:
+1. Add `artifact_plan.py` and update `workflow_plan.py`, `reference_graph.py`, and branch manifest types to the canonical shapes.
+2. Retarget `step_plans.py` and `plan_adapters.py` so internal plans expose the new metadata layout without changing public exports.
+3. Update the focused unit/contract tests for the new internal shapes, then run the phase test subset.
+
+I’ve got enough context to edit. I’m adding the canonical artifact-plan module first, then I’ll retarget the internal plan dataclasses and adapters around it while keeping the current runtime bridge intact for this phase.
+
+I’m in the adapter layer now. The main compatibility choice for this phase is to keep compiled-plan reconstruction available only when a plan still carries explicit parity metadata, instead of keeping `original_step` on the canonical header shape.
+
+I’ve changed the internal shapes. Now I’m updating the focused tests so they assert the new canonical fields directly instead of the old adapter-era ones.
+
+I’ve finished the shape changes and I’m doing one last pass on the service boundary module so the canonical interfaces are documented in code before I run the phase tests.
+
+I’m running the focused phase subset now. If anything breaks, I’ll use that to tighten the adapter details instead of broadening the scope.
+
+`pytest` isn’t on the shell path here, so I’m switching to `python -m pytest` and using that as the validation path for this repo.
+
+The core phase subset is green. I’m running a small regression ring around exports and execution-services because those modules were adjacent to the type changes.
+
+Those regression tests are still running. I’m waiting on the result before I write the phase notes and decisions.
+
+**Scope considered**
+
+- Phase-local `canonical-type-hardening` only.
+- Canonical internal type modules, their adapter bridge, and focused tests around plan shapes, branch manifests, and export safety.
+- I avoided unrelated dirty files and did not start the Phase 2 compiled-object removal.
+
+**What I analyzed**
+
+- Phase artifacts and prior decisions in `.autoloop/.../canonical-type-hardening/`.
+- Current implementations of [artifact_plan.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/botlane/core/artifact_plan.py), [workflow_plan.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/botlane/core/workflow_plan.py), [step_plans.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/botlane/core/step_plans.py), [route_contracts.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/botlane/core/route_contracts.py), [reference_graph.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/botlane/core/reference_graph.py), [execution_services.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/botlane/core/execution_services.py), [plan_adapters.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/botlane/core/plan_adapters.py), and [manifest.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/botlane/core/branch_groups/manifest.py).
+- Existing focused tests covering artifact IDs, route contracts, placeholders, step plans, workflow-plan adapters, branch serialization, public exports, SDK facade, and execution-services behavior.
+
+**What I changed**
+
+- Added canonical internal artifact metadata in [artifact_plan.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/botlane/core/artifact_plan.py) with `ArtifactSpec`.
+- Hardened [workflow_plan.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/botlane/core/workflow_plan.py) to use `ArtifactId`-keyed inventory, explicit public/qualified artifact indexes, `ReferenceGraph.empty()`, and `WorkflowPlan.new_state()`.
+- Hardened [step_plans.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/botlane/core/step_plans.py) with `StepSource`, metadata-only `StepHeader.source`, narrowed `ProviderTurnKind`, and typed branch-group kind literals.
+- Added typed `BranchManifest` in [manifest.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/botlane/core/branch_groups/manifest.py) while keeping rendering and evidence writing compatible at the boundary.
+- Retargeted [plan_adapters.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/botlane/core/plan_adapters.py) so compiled workflows bridge into the new canonical plan shapes and back.
+- Updated focused tests to assert the new internal fields instead of adapter-era `original_step`/string-keyed artifact assumptions.
+
+**Key findings / decisions**
+
+- Canonical plan inventory now lives as `dict[ArtifactId, ArtifactSpec]`, with `public_artifacts` and `artifacts_by_qualified_name` as separate index maps.
+- `StepHeader.original_step` was removed now; compiled reconstruction depends on explicit `_compiled_step` parity metadata instead of recovering authored steps from the header.
+- `build_branch_manifest(...)` now returns a typed `BranchManifest`, but the persisted schema remains `botlane.branch_results/v1`.
+- Public exports were left unchanged; no internal plan/runtime types were added to `botlane.__all__`, `botlane.core.__all__`, or `botlane.core.branch_groups.__all__`.
+
+**Open issues / next step**
+
+- Phase 2 still needs the atomic compiler/runtime cutover and the actual removal of compiled objects, `plan_adapters.py`, and `_compiled_step` parity metadata.
+- I did not run the full suite. I ran:
+- `.venv/bin/python -m pytest tests/unit/test_artifact_ids.py tests/unit/test_route_contracts.py tests/unit/test_placeholder_refs.py tests/unit/test_step_plans.py tests/unit/test_workflow_plan_adapters.py tests/contract/test_branch_result_serialization.py -q`
+- `.venv/bin/python -m pytest tests/unit/test_public_surface.py tests/unit/test_sdk_facade.py tests/contract/engine/test_execution_services.py -q`
+- Result: `103 passed, 1 skipped`.

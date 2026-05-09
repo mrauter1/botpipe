@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from types import SimpleNamespace
 
-from botlane.core.branch_groups.manifest import build_branch_manifest, render_branch_group_context
+from botlane.core.branch_groups.manifest import BranchManifest, build_branch_manifest, render_branch_group_context
 from botlane.core.branch_groups.outcomes import select_branch_group_outcome
 from botlane.core.branch_groups.results import BranchArtifactObservation, BranchResult
 
@@ -255,10 +255,11 @@ def test_branch_manifest_schema_context_and_outcome_remain_stable() -> None:
         branches=[completed.to_manifest_dict(), needs_input],
     )
     context_text = render_branch_group_context(manifest)
-    event = select_branch_group_outcome(spec, manifest, context=None)
+    event = select_branch_group_outcome(spec, manifest.to_dict(), context=None)
 
-    assert manifest["schema"] == "botlane.branch_results/v1"
-    assert [branch["name"] for branch in manifest["branches"]] == ["security", "cost"]
+    assert isinstance(manifest, BranchManifest)
+    assert manifest.schema == "botlane.branch_results/v1"
+    assert [branch.name for branch in manifest.branches] == ["security", "cost"]
     assert "## Needs Input Details" in context_text
     assert "- cost: Approve cost review?" in context_text
     assert event.tag == "question"
