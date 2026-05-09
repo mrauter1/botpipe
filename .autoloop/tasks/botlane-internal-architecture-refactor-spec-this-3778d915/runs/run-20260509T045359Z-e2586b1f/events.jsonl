@@ -20,3 +20,7 @@
 {"ts": "2026-05-09T05:11:11.853095+00:00", "run_id": "run-20260509T045359Z-e2586b1f", "seq": 20, "event_type": "phase_finished", "pair": "test", "phase": "producer", "cycle": 1, "attempt": 1, "empty_output": false, "phase_id": "freeze-public-compatibility"}
 {"ts": "2026-05-09T05:12:30.315609+00:00", "run_id": "run-20260509T045359Z-e2586b1f", "seq": 21, "event_type": "phase_finished", "pair": "test", "phase": "verifier", "cycle": 1, "attempt": 1, "empty_output": false, "phase_id": "freeze-public-compatibility"}
 {"ts": "2026-05-09T05:12:30.445975+00:00", "run_id": "run-20260509T045359Z-e2586b1f", "seq": 22, "event_type": "pair_completed", "pair": "test", "cycle": 1, "attempt": 1, "phase_id": "freeze-public-compatibility"}
+{"ts": "2026-05-09T05:12:30.579773+00:00", "run_id": "run-20260509T045359Z-e2586b1f", "seq": 23, "event_type": "phase_completed", "pair": "test", "phase_id": "freeze-public-compatibility", "phase_mode": "single"}
+{"ts": "2026-05-09T05:12:30.582742+00:00", "run_id": "run-20260509T045359Z-e2586b1f", "seq": 24, "event_type": "phase_started", "phase_id": "boundary-primitives-and-strictness", "phase_mode": "single"}
+{"ts": "2026-05-09T05:12:30.584481+00:00", "run_id": "run-20260509T045359Z-e2586b1f", "seq": 25, "event_type": "pair_started", "pair": "implement", "phase_id": "boundary-primitives-and-strictness"}
+{"ts": "2026-05-09T05:12:30.584577+00:00", "run_id": "run-20260509T045359Z-e2586b1f", "seq": 26, "event_type": "cycle_started", "pair": "implement", "cycle": 1, "attempt": 1, "phase_id": "boundary-primitives-and-strictness"}
