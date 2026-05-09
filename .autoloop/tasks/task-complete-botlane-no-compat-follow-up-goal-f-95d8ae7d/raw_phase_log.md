@@ -253,3 +253,56 @@ Key findings / decisions
 Open issues / next step
 
 - No functional blockers remain. The only remaining signal is an existing warning in `tests/unit/test_provider_boundary_core.py` about an un-awaited coroutine.
+
+
+---
+run_id=run-20260509T031006Z-b1998ef3 | entry=session_turn | pair=implement | phase=verifier | cycle=1 | attempt=1 | thread_id=019e0abd-4bea-79d2-a9fd-bcdd4e74e85c
+---
+provider=codex
+mode=resume
+template=/home/rauter/.local/share/pipx/venvs/autoloop/lib/python3.12/site-packages/autoloop/templates/implement_verifier.md
+session_id=019e0abd-4bea-79d2-a9fd-bcdd4e74e85c
+
+
+---
+run_id=run-20260509T031006Z-b1998ef3 | entry=phase_output | pair=implement | phase=verifier | process=codex-agent | cycle=1 | attempt=1 | thread_id=019e0abd-4bea-79d2-a9fd-bcdd4e74e85c
+---
+I’m reviewing only the request-relevant diffs plus the phase-local artifacts first. I’ll verify the implemented behavior against the contract, update the criteria checkboxes to match the evidence, append any findings to the feedback file, and then return the loop-control result.
+
+The phase-local notes and run decisions are consistent with the requested scope. I’m now spot-checking the actual runtime and test code paths that carry the contract: overlay ignore handling, strictness scanner coverage, negative runtime smokes, and the named workflow precedence fix that was needed to keep the full suite green.
+
+I’ve finished the code-path spot checks. The overlay behavior, strictness coverage, schema rejection, and runtime precedence fix all line up with the phase contract, and the recorded validation is sufficient. I’m marking the criteria complete and leaving the feedback artifact with an explicit no-findings review note.
+
+Scope considered
+
+- Reviewed the request-relevant runtime and test diffs in `botlane_optimizer/candidate_surfaces.py`, `botlane/core/workflow_catalog.py`, `tests/strictness/test_no_compat.py`, `tests/unit/optimizer/test_candidate_surfaces.py`, and `tests/runtime/test_workflow_catalog_roots.py`.
+- Reviewed the active phase artifacts: `criteria.md`, `feedback.md`, `implementation_notes.md`, and the run-local `decisions.txt`.
+
+What I analyzed
+
+- Overlay copy behavior and ignore patterns in `validate_candidate_surface_overlay(...)`.
+- Hidden legacy-name construction scanning coverage and the strictness self-exclusion / historical allowlist rules.
+- Negative runtime/package smoke coverage for legacy imports, module entrypoint absence, and Botlane help text.
+- Workflow catalog precedence after the full-suite runtime regression fix.
+
+What I reviewed
+
+- `.botlane` is now excluded from overlay copies and no hidden `.autoloop` ignore remains.
+- Named workflow resolution now prefers `.botlane/workflows` over repo-local `workflows/`, while explicit repo-local path/module references remain intact.
+- The strictness suite still confines literal legacy names to `tests/strictness/test_no_compat.py` plus the audited `legacy_docs/*.md` allowlist and now exercises the requested hidden-construction forms.
+- Validation evidence is sufficient and coherent: targeted pytest buckets, import/CLI smoke commands, maintained-tree literal scan, and a full `1195 passed` pytest run.
+
+Key findings / decisions
+
+- No blocking findings.
+- No non-blocking findings.
+- Updated `criteria.md` to all checked and appended an explicit no-findings review note to `feedback.md`.
+
+Open issues / next step
+
+- No implementation blockers remain for this phase.
+- The full suite still reports one unrelated warning, but it is not introduced by these diffs and does not block completion.
+
+<loop-control>
+{"schema":"docloop.loop_control/v1","kind":"promise","promise":"COMPLETE"}
+</loop-control>
