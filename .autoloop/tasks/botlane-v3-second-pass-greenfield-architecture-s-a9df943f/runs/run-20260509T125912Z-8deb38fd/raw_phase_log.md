@@ -2676,3 +2676,140 @@ Open issues / next step
 <loop-control>
 {"schema":"docloop.loop_control/v1","kind":"promise","promise":"COMPLETE"}
 </loop-control>
+
+
+---
+run_id=run-20260509T125912Z-8deb38fd | entry=session_turn | pair=implement | phase=producer | cycle=1 | attempt=1 | thread_id=019e0d6a-0a1a-7b51-bac5-3dded18dc199
+---
+provider=codex
+mode=start
+template=/home/rauter/.local/share/pipx/venvs/autoloop/lib/python3.12/site-packages/autoloop/templates/implement_producer.md
+session_id=019e0d6a-0a1a-7b51-bac5-3dded18dc199
+
+
+---
+run_id=run-20260509T125912Z-8deb38fd | entry=phase_output | pair=implement | phase=producer | process=codex-agent | cycle=1 | attempt=1 | thread_id=019e0d6a-0a1a-7b51-bac5-3dded18dc199
+---
+I’m working the `sdk-single-step-cutover` phase. First I’m reading the phase artifacts and the current SDK/runtime code paths so I can remove any fallback one-step path without disturbing the existing `Botlane.step(...)` contract.
+
+The current SDK still advertises a synthetic one-step workflow path in `botlane/sdk.py`, and there are dedicated equivalence tests still comparing `SingleStepPlan` against that fallback. I’m drilling into those code paths now to convert the SDK to one canonical route and then I’ll update the contract tests to match.
+
+I’ve confirmed the remaining fallback is localized: `Botlane.step(...)` still calls `_build_synthetic_step_workflow(...)`, and the tests explicitly patch and compare against that path. Next I’m tracing how `SingleStepPlan` is executed so I can switch the SDK over without widening the runtime surface.
+
+The runtime doesn’t currently consume `SingleStepPlan` anywhere outside the SDK module; it’s just a data carrier today. I’m inspecting the engine setup next so I can choose the narrowest canonical execution path instead of inventing a parallel mini-runner.
+
+I’ve reached the design boundary for this phase. `SingleStepPlan` exists, but nothing in the runtime executes it yet, so the cutover is not just deleting a helper call; it needs a canonical one-step execution path that still preserves pause/resume, retention, provider-question handling, and `WorkflowResult` assembly.
+
+There’s a workable narrow cutover: build `SingleStepPlan`, derive a one-step `WorkflowPlan` directly from it, and run that plan through the existing runtime runner and engine. That removes the synthetic class and compiler fallback while preserving the full run loop for input pauses, retention, and artifact handling.
+
+The remaining risk is plan construction, not execution. If `_build_single_step_plan(...)` still routes through a synthetic workflow class, the phase isn’t actually cut over. I’m checking whether the compiler already has a smaller step-lowering path I can reuse instead of duplicating single-step compilation logic in the SDK.
+
+I’ve got the implementation shape. The safest version is to keep the existing SDK run loop intact, swap only the one-step plan construction and execution inputs, and update the tests so they assert direct `SingleStepPlan` compilation/execution instead of synthetic-workflow parity.
+
+I’m starting the edits now. The code change is confined to the SDK one-step path plus a narrow runner helper, and then I’ll rewrite the phase-specific tests so they assert the canonical direct-plan path instead of the removed synthetic workflow fallback.
+
+I’ve switched the SDK over to the new direct-plan path in code. I’m validating the module now because this change touched the shared run loop and several private helpers, so I want syntax and obvious wiring issues cleared before I move on to the test rewrite.
+
+I’ve moved from implementation to contract cleanup. The remaining work is to delete the tests that codify the old synthetic fallback and replace them with direct assertions on `SingleStepPlan` and one-step workflow-plan execution.
+
+The modules compile cleanly now. I’m running the phase-focused SDK tests next to catch any behavioral drift in the new direct one-step path before I touch the phase notes and decisions.
+
+The focused suite is still running, but the first batch is green so far. I’m waiting on the rest of the SDK contract cases before I finalize the notes and ledger updates.
+
+The focused tests exposed two real compatibility gaps in the new path. One is route lowering for core `Step` instances with explicit `route_metadata`; the other is child-workflow execution still expecting the legacy `step.step` accessor on `ChildWorkflowStepPlan`. I’m fixing those next and rerunning the same slice.
+
+The compatibility fixes are in. I’m rerunning the full phase-focused set now; once that lands clean, I’ll update the implementation notes and the decisions ledger with the final shape of the single-step path.
+
+The phase suite is green. Because I touched `Engine._run_workflow_step(...)` as an adjacent compatibility fix, I’m running the child-workflow contract slice once before I close the phase so that change isn’t left unverified.
+
+The direct path and the adjacent child-workflow compatibility fix are both verified now. I’m recording the non-obvious decisions and the phase notes next so later turns don’t drift back toward the removed synthetic one-step path.
+
+Scope considered
+
+- `botlane/sdk.py` one-step execution path and helper facades
+- `botlane/runtime/runner.py` internal execution entrypoint for prebuilt plans
+- `botlane/core/engine.py` child-workflow typed-plan compatibility surface
+- Phase-local SDK tests and adjacent child-workflow contracts
+- Phase artifacts: `implementation_notes.md` and `decisions.txt`
+
+What I analyzed
+
+- The existing `Botlane.step(...)` path still built a synthetic workflow class and delegated through `Botlane.run(...)`.
+- `SingleStepPlan` existed only as a data carrier; the runtime had no direct execution entrypoint for a prebuilt one-step plan.
+- Child-workflow execution in the engine still expected authored-step-shaped metadata (`step.step`, mapping-shaped writes), which breaks once SDK one-step execution uses typed `ChildWorkflowStepPlan`.
+
+What I changed
+
+- Reworked `Botlane.step(...)` to build a direct `SingleStepPlan` plus one-step `WorkflowPlan`, then execute that plan through a shared `_run_compiled_plan(...)` path instead of compiling/running a synthetic workflow fallback.
+- Added `execute_workflow_plan(...)` in `botlane/runtime/runner.py` so the SDK can run a prebuilt `WorkflowPlan` through the normal runner/engine stack.
+- Built one-step workflow plans directly in `botlane/sdk.py`, including typed input/params models, route lowering, artifact inventory, reference graph, and workflow metadata.
+- Updated `Engine._run_workflow_step(...)` and child-workflow output writing to consume typed `ChildWorkflowStepPlan` data and plan-time write refs.
+- Replaced the old synthetic-fallback tests with direct single-step plan and execution coverage in `tests/contract/test_single_step_plan_equivalence.py` and new `tests/contract/test_sdk_single_step_execution.py`, and updated `tests/unit/test_sdk_facade.py` to assert the new path.
+
+Key findings / decisions
+
+- The canonical SDK one-step architecture is now `SingleStepPlan`-based; `Botlane.step(...)` no longer compiles or runs a synthetic workflow fallback.
+- A private identity workflow class is still used only as `WorkflowPlan.workflow_cls` metadata so static graph/topology/runtime metadata keep working without reintroducing the old fallback path.
+- The adjacent engine fix for child workflows was required to keep typed `ChildWorkflowStepPlan` execution compatible once the SDK stopped passing authored `ChildWorkflowStep` objects through the old path.
+
+Open issues / next step
+
+- Focused validation passed:
+- `.venv/bin/python -m pytest -q tests/unit/test_sdk_facade.py tests/contract/test_single_step_plan_equivalence.py tests/contract/test_sdk_single_step_execution.py`
+- `.venv/bin/python -m pytest -q tests/contract/engine/test_child_workflows.py`
+- I did not run the full repo `pytest` suite in this turn.
+
+
+---
+run_id=run-20260509T125912Z-8deb38fd | entry=session_turn | pair=implement | phase=verifier | cycle=1 | attempt=1 | thread_id=019e0d6a-0a1a-7b51-bac5-3dded18dc199
+---
+provider=codex
+mode=resume
+template=/home/rauter/.local/share/pipx/venvs/autoloop/lib/python3.12/site-packages/autoloop/templates/implement_verifier.md
+session_id=019e0d6a-0a1a-7b51-bac5-3dded18dc199
+
+
+---
+run_id=run-20260509T125912Z-8deb38fd | entry=phase_output | pair=implement | phase=verifier | process=codex-agent | cycle=1 | attempt=1 | thread_id=019e0d6a-0a1a-7b51-bac5-3dded18dc199
+---
+I’m reviewing the phase artifacts and the touched SDK/runtime paths now. I’m checking the acceptance criteria against the actual diff and looking for any remaining regression or architecture-drift risk before I update the phase criteria and feedback.
+
+Reviewing the SDK single-step cutover artifacts and the changed one-step execution path now. I’m checking whether the implementation satisfies the phase contract without duplicating compiler ownership or drifting SDK behavior.
+
+The main risk area is now clear: the SDK path no longer falls back to a synthetic workflow, but it appears to have taken on compiler responsibilities directly. I’m pulling exact code references before I record the finding in the review artifacts.
+
+I have the exact SDK references. I’m checking the compiler side once more so the review note is precise about ownership drift rather than just stylistic duplication.
+
+I found one blocking issue and it’s architectural rather than cosmetic: the SDK now constructs its own one-step workflow plan by calling compiler/discovery internals directly. I’m recording that in the review artifacts and leaving the criteria unchecked accordingly.
+
+Scope considered
+
+- Phase-local SDK single-step cutover only.
+- Changed runtime surfaces relevant to the phase: `botlane/sdk.py`, `botlane/runtime/runner.py`, `botlane/core/engine.py`, and the added/updated SDK single-step tests.
+- Active review artifacts: `criteria.md`, `feedback.md`, `implementation_notes.md`, and `decisions.txt`.
+
+What I analyzed
+
+- The new `Botlane.step(...)` path in [botlane/sdk.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/botlane/sdk.py:741).
+- The new prebuilt-plan runtime entrypoint in [botlane/runtime/runner.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/botlane/runtime/runner.py:175).
+- The child-workflow adjustment in [botlane/core/engine.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/botlane/core/engine.py:1310).
+- The dedicated contract coverage in `tests/unit/test_sdk_facade.py`, `tests/contract/test_single_step_plan_equivalence.py`, `tests/contract/test_sdk_single_step_execution.py`, and `tests/contract/engine/test_child_workflows.py`.
+
+What I reviewed
+
+- `Botlane.step(...)` now executes through `SingleStepPlan` instead of the old synthetic workflow fallback.
+- The implementation preserves the expected public signatures and result shape.
+- The focused test set passed, including the child-workflow contract suite.
+- I updated `feedback.md` with one blocking finding. `criteria.md` remains fully unchecked because that finding is still open.
+
+Key findings / decisions
+
+- `IMP-001` blocking: [botlane/sdk.py:1827](/home/rauter/autoloop_v3_bkp/autoloop_v3/botlane/sdk.py:1827) makes the SDK own a second compilation path by rebuilding a one-step `WorkflowPlan` from compiler/discovery internals. That duplicates compiler ownership and creates drift risk for route lowering, artifact inventory, reference-graph construction, topology hashing, and future step lowering changes. The minimal fix is to move one-step plan/workflow-plan construction behind compiler-owned code and keep `botlane/sdk.py` as a thin caller.
+
+Open issues / next step
+
+- Address `IMP-001` by centralizing single-step plan construction in compiler-owned code, then rerun the focused SDK single-step and child-workflow tests and re-review the phase artifacts.
+
+<loop-control>
+{"schema":"docloop.loop_control/v1","kind":"promise","promise":"INCOMPLETE"}
+</loop-control>
