@@ -610,3 +610,60 @@ Open issues / next step
   `.venv/bin/python -m pytest tests/unit/test_artifact_ids.py tests/unit/test_run_paths.py tests/runtime/test_provider_policy_core_protocol.py tests/strictness/test_core_runtime_boundary.py tests/unit/test_simple_surface.py tests/unit/test_sdk_facade.py tests/strictness/test_no_compat.py tests/runtime/test_workflow_reference_resolution.py tests/unit/optimizer/test_selected_workflow_helpers.py`
 - Result: `267 passed in 37.43s`.
 - Next step is verifier re-review of this phase.
+
+
+---
+run_id=run-20260509T045359Z-e2586b1f | entry=session_turn | pair=implement | phase=verifier | cycle=2 | attempt=1 | thread_id=019e0b26-c7f5-7f41-8aef-b4659169d826
+---
+provider=codex
+mode=resume
+template=/home/rauter/.local/share/pipx/venvs/autoloop/lib/python3.12/site-packages/autoloop/templates/implement_verifier.md
+session_id=019e0b26-c7f5-7f41-8aef-b4659169d826
+
+
+---
+run_id=run-20260509T045359Z-e2586b1f | entry=phase_output | pair=implement | phase=verifier | process=codex-agent | cycle=2 | attempt=1 | thread_id=019e0b26-c7f5-7f41-8aef-b4659169d826
+---
+I’m reviewing only the active phase scope and the reviewer-relevant diffs. First I’m checking the phase criteria and the repaired boundary paths, then I’ll rerun the milestone validation before updating the review artifacts.
+
+I’ve checked the repaired code paths directly. I’m running the same milestone-plus-adjacent validation the implementer used so the review outcome is based on observed behavior, not just the patch shape.
+
+The validation set is clean and the original blocker is fixed. I’m updating the review artifacts now: all criteria to checked, and a short resolution note in the feedback log so the prior blocking finding has an explicit verifier close-out.
+
+Scope considered
+
+- Phase-local review of `boundary-primitives-and-strictness` only.
+- I reviewed the repaired boundary implementation in `botlane/core`, the protocol wiring in `botlane/runtime/provider_policy_resolver.py`, the phase notes, and the phase-owned review artifacts.
+- I ignored unrelated dirty workspace changes outside the active phase scope.
+
+What I analyzed
+
+- The repaired core/runtime boundary in `botlane/core/engine.py` and `botlane/core/workflow_capabilities.py`.
+- The new primitive modules and the scoped integration points already introduced for this phase.
+- The implementation notes and the run-local decisions ledger for consistency with the accepted plan.
+- The exact validation set relevant to this phase and its adjacent workflow-resolution compatibility surface.
+
+What I reviewed
+
+- Whether AC-1 is now actually satisfied: `ArtifactId`, `RunPaths`, `RunIdentity`, and `ProviderPolicyResolverProtocol` exist with tests.
+- Whether `botlane/core` still depended on `botlane.runtime` semantically after the reviewer’s first finding.
+- Whether the cycle-2 repair introduced regressions, especially around direct `Engine(...)` usage and selected-workflow capability inspection.
+- Whether the final implementation stays within the approved milestone scope without widening into route-contract or engine-rewrite work.
+
+Key findings / decisions
+
+- No blocking findings remain.
+- The original `IMP-001` issue is fixed: the runtime import bridge was removed from `botlane/core`.
+- The cycle-2 repair initially introduced a simple-surface regression in the core-local fallback policy resolver, but the final implementation corrected that and the targeted validation suite passed.
+- I updated `criteria.md` to fully checked and appended a resolution note for `IMP-001` in `feedback.md`.
+
+Open issues / next step
+
+- No open review blockers for this phase.
+- Validation rerun passed:
+  `.venv/bin/python -m pytest tests/unit/test_artifact_ids.py tests/unit/test_run_paths.py tests/runtime/test_provider_policy_core_protocol.py tests/strictness/test_core_runtime_boundary.py tests/unit/test_simple_surface.py tests/unit/test_sdk_facade.py tests/strictness/test_no_compat.py tests/runtime/test_workflow_reference_resolution.py tests/unit/optimizer/test_selected_workflow_helpers.py`
+- Result: `267 passed in 37.45s`.
+
+<loop-control>
+{"schema":"docloop.loop_control/v1","kind":"promise","promise":"COMPLETE"}
+</loop-control>
