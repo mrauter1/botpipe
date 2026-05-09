@@ -3,6 +3,7 @@
 ## Intent and non-negotiables
 
 - Preserve the public Botlane API, SDK behavior, persisted `.botlane` identity, and user-facing route authoring.
+- Preserve the public Botlane SDK helper methods `Botlane.prompt_step(...)`, `Botlane.produce_verify_step(...)`, `Botlane.python_step(...)`, and `Botlane.workflow_step(...)` alongside `Botlane.run(...)` and `Botlane.step(...)`.
 - Remove internal compiled compatibility objects, `plan_adapters.py`, `compile_workflow_plan(...)`, `_COMPILED_WORKFLOW_CACHE`, dict-shaped branch runtime internals, duplicated placeholder parsers, and any authored-step backreferences in runtime plans.
 - Treat `WorkflowPlan` as the only compiled workflow representation and `ExecutionFrame` as the only mutable runtime backing store.
 - Keep the compiler/runtime cutover atomic. A mixed compiled-plan runtime is not a supported intermediate state.
@@ -16,12 +17,14 @@
 - `botlane/core/branch_groups/runtime.py` still consumes compiled branch metadata and keeps branch results as dicts internally, even though `BranchResult` and `BranchManifest` modules exist.
 - `botlane/sdk.py`, `botlane/runtime/{loader,runner,static_graph,tracing,provider_policy_resolver}.py`, `botlane/core/workflow_capabilities.py`, and `botlane/workflows/botlane_v1/parity.py` all type against compiled workflow objects today and must move in the same cutover.
 - Existing tests already freeze root/core exports in `tests/unit/test_simple_surface.py` and adapter parity in `tests/unit/test_workflow_plan_adapters.py`; those tests need to be split and re-aimed instead of duplicated.
+- The repo does not currently have `botlane/core/artifact_plan.py`, so the plan must explicitly introduce it as the canonical home for `ArtifactSpec` and artifact inventory metadata when `artifacts.py` is reduced to public-handle and template-delegate responsibilities.
 
 ## Chosen implementation directions
 
 - Canonical one-step execution path: keep `SingleStepPlan`, remove all other one-step fallback paths, and stop routing SDK one-step execution through `compile_workflow_plan(...)`.
-- Reuse the existing canonical-looking modules (`step_plans.py`, `workflow_plan.py`, `route_contracts.py`, `execution_frame.py`, `execution_services.py`, `branch_groups/results.py`, `branch_groups/manifest.py`) by correcting their shapes instead of adding parallel modules.
+- Reuse the existing canonical-looking modules (`step_plans.py`, `workflow_plan.py`, `route_contracts.py`, `execution_frame.py`, `execution_services.py`, `branch_groups/results.py`, `branch_groups/manifest.py`) by correcting their shapes, but add `botlane/core/artifact_plan.py` because the spec requires artifact metadata to move out of `artifacts.py`.
 - Keep operations on a separate canonical path unless fully migrated. Do not keep `"operation"` in `ProviderTurnKind` after provider-turn cutover unless the full operation-turn migration and tests are completed in the same slice.
+- Treat `artifacts.py` as the public artifact-handle and template-delegate surface only after the cutover. Preserve `ArtifactHandle.artifact` behavior explicitly while moving canonical artifact metadata and inventory to `artifact_plan.py`.
 
 ## Ordered phases
 
@@ -29,12 +32,13 @@
 
 Scope
 - Add `tests/unit/test_public_surface.py` and move the export-freeze assertions out of `tests/unit/test_simple_surface.py` into a dedicated surface test.
-- Add current-signature assertions for `Botlane.run(...)` and `Botlane.step(...)`.
-- Add/extend identity assertions for `.botlane`, `.botlane-sdk-task.json`, `botlane.sdk_task/v1`, `botlane.branch_results/v1`, and `botlane_optimizer` imports from `botlane`.
+- Keep or add Phase 0 assertions for simple public authoring examples, route-sentinel authoring (`FINISH`, `AWAIT_INPUT`, `FAIL`, `SELF`, `Route(...)`), and the current branch-group export surface before any internals move.
+- Add current-signature and current-behavior assertions for `Botlane.run(...)`, `Botlane.step(...)`, `Botlane.prompt_step(...)`, `Botlane.produce_verify_step(...)`, `Botlane.python_step(...)`, and `Botlane.workflow_step(...)`.
+- Add `tests/strictness/test_botlane_identity.py` in Phase 0 and use it to freeze `.botlane`, `.botlane-sdk-task.json`, `botlane.sdk_task/v1`, `botlane.branch_results/v1`, and `botlane_optimizer` imports from `botlane`.
 - Keep a Phase 0 assertion for the current `botlane.core.branch_groups.__all__`; stage the target post-cutover assertion but do not enable it yet.
 
 Validation
-- `pytest tests/unit/test_public_surface.py tests/unit/test_sdk_facade.py tests/runtime/test_workspace_and_context.py tests/strictness/test_botlane_identity.py -q`
+- `pytest tests/unit/test_public_surface.py tests/unit/test_simple_surface.py tests/unit/test_sdk_facade.py tests/runtime/test_workspace_and_context.py tests/strictness/test_botlane_identity.py -q`
 
 Rollback
 - Revert only newly added freeze tests if they expose misunderstanding of the current public contract.
@@ -42,13 +46,15 @@ Rollback
 ### Phase 1: Canonical type hardening
 
 Scope
+- Add `botlane/core/artifact_plan.py` as the canonical home for `ArtifactSpec`, ArtifactId-keyed artifact inventory maps, and related artifact-plan helpers.
 - Finish the internal shapes of `ArtifactId`, `ArtifactSpec`, `WorkflowPlan`, `StepSource`, `StepHeader`, `ProviderTurnPlan`, `ExecutionServices`, `BranchResult`, `BranchManifest`, and `ReferenceGraph`.
 - Update `workflow_plan.py` to use `artifacts: dict[ArtifactId, ArtifactSpec]`, `public_artifacts: dict[str, ArtifactId]`, and required metadata fields.
 - Update `step_plans.py` so the target field layout is explicit before the runtime cutover, but defer removal of legacy fields until the atomic cutover.
+- Define the post-cutover boundary: `artifacts.py` keeps public handle behavior and template delegates, while `artifact_plan.py` owns canonical metadata and inventory.
 - Keep these types internal only; do not expose them through `botlane.__all__`, `botlane.core.__all__`, or `botlane.core.branch_groups.__all__`.
 
 Validation
-- `pytest tests/unit/test_artifact_ids.py tests/unit/test_route_contracts.py tests/unit/test_placeholder_refs.py tests/unit/test_step_plans.py -q`
+- `pytest tests/unit/test_artifact_ids.py tests/unit/test_route_contracts.py tests/unit/test_placeholder_refs.py tests/unit/test_step_plans.py tests/unit/test_sdk_facade.py -q`
 
 Rollback
 - Revert any shape change that forces public imports or runtime consumers to depend on unfinished plan types.
@@ -100,6 +106,7 @@ Rollback
 Scope
 - Centralize placeholder parsing, validation, and rendering in `botlane/core/placeholders.py`.
 - Reduce `botlane/core/artifacts.py` to thin delegates and remove duplicated parser symbols and `_resolve_*` helpers.
+- Preserve `ArtifactHandle.artifact` public behavior while `ArtifactSpec` and artifact inventory stay in `artifact_plan.py`.
 - Make the compiler attach `ReferenceGraph` to `WorkflowPlan` and stop reparsing prompt strings at runtime for inferred artifact reads.
 - Update discovery and branch/fan-in placeholder validation paths to use the same parser and full surface coverage.
 
@@ -128,7 +135,7 @@ Rollback
 Scope
 - Keep `SingleStepPlan` as the only one-step execution architecture.
 - Remove the synthetic workflow fallback and any dependency on `compile_workflow_plan(...)`.
-- Preserve invocation-local policy layering, `provider_questions` defaulting, pause/resume behavior, retention handling, `StepResult(value=None, workflow_result=...)`, and existing SDK error wrapping.
+- Preserve invocation-local policy layering, `provider_questions` defaulting, pause/resume behavior, retention handling, `StepResult(value=None, workflow_result=...)`, existing SDK error wrapping, and parity for `Botlane.prompt_step(...)`, `Botlane.produce_verify_step(...)`, `Botlane.python_step(...)`, and `Botlane.workflow_step(...)`.
 
 Validation
 - `pytest tests/unit/test_sdk_facade.py tests/contract/test_sdk_single_step_execution.py tests/contract/test_single_step_plan_equivalence.py -q`
@@ -139,7 +146,7 @@ Rollback
 ### Phase 8: Strictness and cleanup
 
 Scope
-- Add `tests/strictness/test_no_internal_compat_layers.py`, finish `tests/strictness/test_core_runtime_boundary.py`, and add `tests/strictness/test_botlane_identity.py`.
+- Add `tests/strictness/test_no_internal_compat_layers.py`, finish `tests/strictness/test_core_runtime_boundary.py`, and expand the Phase 0 `tests/strictness/test_botlane_identity.py` into its final strictness form.
 - Remove or replace adapter-era tests such as `tests/unit/test_workflow_plan_adapters.py` and any assertions that preserve compiled objects or compatibility wrappers.
 - Run the repo-wide stale-identity scan for `autoloop`, `.autoloop`, stale schema IDs, and forbidden public `RouteContract` aliases.
 - Finish with a full `pytest` run only after all earlier phases are green.
@@ -161,7 +168,9 @@ Rollback
 - `BranchGroupRuntime._run_branches(...) -> dict[int, BranchResult]`
 - `build_branch_manifest(...) -> BranchManifest`
 - `render_branch_group_context(...)` accepts `BranchManifest` or final serialized manifest dict only at the rendering boundary.
-- `Botlane.step(...)` executes through `SingleStepPlan` and the same step-dispatch/runtime contracts as workflow execution.
+- `artifact_plan.py` owns canonical artifact metadata and inventory; `artifacts.py` keeps public artifact-handle behavior plus thin template delegates.
+- `ArtifactHandle.artifact` public behavior remains unchanged.
+- `Botlane.step(...)`, `Botlane.prompt_step(...)`, `Botlane.produce_verify_step(...)`, `Botlane.python_step(...)`, and `Botlane.workflow_step(...)` execute through the preserved single-step/runtime contracts without helper-specific fallback paths.
 
 ## Regression controls and risk register
 

@@ -102,3 +102,28 @@ Open issues / next step
 <loop-control>
 {"schema":"docloop.loop_control/v1","kind":"promise","promise":"INCOMPLETE"}
 </loop-control>
+
+
+---
+run_id=run-20260509T125912Z-8deb38fd | entry=session_turn | pair=plan | phase=producer | cycle=2 | attempt=1 | thread_id=019e0cd2-0e4d-7981-99c0-997fdc6e0011
+---
+provider=codex
+mode=resume
+template=/home/rauter/.local/share/pipx/venvs/autoloop/lib/python3.12/site-packages/autoloop/templates/plan_producer.md
+session_id=019e0cd2-0e4d-7981-99c0-997fdc6e0011
+
+
+---
+run_id=run-20260509T125912Z-8deb38fd | entry=phase_output | pair=plan | phase=producer | process=codex-agent | cycle=2 | attempt=1 | thread_id=019e0cd2-0e4d-7981-99c0-997fdc6e0011
+---
+I’m revising the plan against the verifier’s blocking findings, starting with the phase contract and the specific public-surface gaps it identified so the next verification pass can close cleanly.
+
+I’ve got the concrete fixes: Phase 0 needs to freeze authoring examples and route sentinels, the SDK helper facades need explicit preservation in the phase contract, `artifact_plan.py` needs to be named as the canonical artifact-metadata home, and the identity-test sequencing has to be made consistent.
+
+I’ve applied the verifier-driven corrections. I’m checking the revised artifacts for internal consistency now, especially the Phase 0/Phase 8 test sequencing and the new artifact-module ownership language.
+
+Updated the planning artifacts to address the verifier’s four blocking findings.
+
+[plan.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/botlane-v3-second-pass-greenfield-architecture-s-a9df943f/runs/run-20260509T125912Z-8deb38fd/artifacts/plan/plan.md) now explicitly freezes Phase 0 simple authoring examples and route-sentinel behavior, preserves the full Botlane SDK helper surface, names `botlane/core/artifact_plan.py` as the canonical artifact-metadata home, preserves `ArtifactHandle.artifact`, and fixes the Phase 0 versus Phase 8 identity-test sequencing. [phase_plan.yaml](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/botlane-v3-second-pass-greenfield-architecture-s-a9df943f/runs/run-20260509T125912Z-8deb38fd/artifacts/plan/phase_plan.yaml) was updated to mirror those changes in the ordered phase contract.
+
+I also appended a concise change note to [feedback.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/botlane-v3-second-pass-greenfield-architecture-s-a9df943f/runs/run-20260509T125912Z-8deb38fd/artifacts/plan/feedback.md) and recorded the non-obvious constraints for later turns in [decisions.txt](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/botlane-v3-second-pass-greenfield-architecture-s-a9df943f/runs/run-20260509T125912Z-8deb38fd/decisions.txt). I did not run tests in this turn.
