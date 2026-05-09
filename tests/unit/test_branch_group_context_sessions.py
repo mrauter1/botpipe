@@ -75,7 +75,7 @@ def test_branch_context_shares_state_cell_values_and_branch_metadata(tmp_path: P
     assert parent.state.counter == 1
     assert parent.state_cell.version == 1
 
-    branch._set_state(branch.state.model_copy(update={"counter": 2}))
+    branch._execution_frame.set_state(branch.state.model_copy(update={"counter": 2}))
     assert parent.state.counter == 2
     assert parent.state_cell.version == 2
 
@@ -103,7 +103,7 @@ def test_fan_in_context_exposes_metadata_and_branch_execution_ids(tmp_path: Path
         branch=BranchMetadata(name="security", index=0, group="reviews", input={}, count=2),
         session_store=BranchSessionStoreView(parent._session_store, namespace="reviews.security"),
     )
-    branch._set_step_state_store({"visits": 3})
+    branch._execution_frame.set_step_state({"visits": 3})
     branch._emit_runtime_event("branch_started")
 
     assert emitted[-1][1]["step_execution_id"] == "reviews:security:assess:3"

@@ -85,17 +85,17 @@ def test_context_module_has_no_weakref_runtime_sidecar() -> None:
 def test_context_frame_mutators_update_execution_frame_and_legacy_fields(tmp_path: Path) -> None:
     ctx = _make_context(tmp_path, values={"shared": "root"})
 
-    ctx._set_values({"shared": "updated", "count": 2})
-    ctx._set_route({"tag": "done"})
-    ctx._set_event({"tag": "progress"})
-    ctx._set_outcome({"status": "ok"})
-    ctx._set_meta({"source": "test"})
-    ctx._set_answer("42")
-    ctx._set_input_response({"approved": True})
-    ctx._set_step_state_store({"visits": 1, "last_route": None, "last_reason": None})
-    ctx._set_item_state_store({"status": "queued"})
-    ctx._set_step_item_state_store({"visits": 2, "last_route": "done", "last_reason": None})
-    ctx._set_state(ctx.state.model_copy(update={"counter": 3}))
+    ctx._execution_frame.set_values({"shared": "updated", "count": 2})
+    ctx._execution_frame.set_route({"tag": "done"})
+    ctx._execution_frame.set_event({"tag": "progress"})
+    ctx._execution_frame.set_outcome({"status": "ok"})
+    ctx._execution_frame.set_meta({"source": "test"})
+    ctx._execution_frame.answer = "42"
+    ctx._execution_frame.input_response = {"approved": True}
+    ctx._execution_frame.set_step_state({"visits": 1, "last_route": None, "last_reason": None})
+    ctx._execution_frame.set_item_state({"status": "queued"})
+    ctx._execution_frame.set_step_item_state({"visits": 2, "last_route": "done", "last_reason": None})
+    ctx._execution_frame.set_state(ctx.state.model_copy(update={"counter": 3}))
 
     assert ctx._execution_frame.values == {"shared": "updated", "count": 2}
     assert ctx._values == {"shared": "updated", "count": 2}
@@ -129,8 +129,8 @@ def test_worklist_runtime_mutators_keep_frame_and_public_selection_in_sync(tmp_p
     )
     selection = gates.initial_selection(ctx)
 
-    ctx._set_selection("gate", selection)
-    ctx._set_active_worklist("gate")
+    ctx._execution_frame.set_selection("gate", selection)
+    ctx._execution_frame.set_active_worklist("gate")
 
     assert ctx._execution_frame.selections == {"gate": selection}
     assert ctx._execution_frame.selection_snapshots == {}
@@ -180,7 +180,7 @@ def test_branch_child_context_uses_child_frame_and_preserves_shared_state(tmp_pa
 
     branch.values.shared = "branch"
     branch.state = branch.state.model_copy(update={"counter": 5})
-    branch._set_selection_snapshots({})
+    branch._execution_frame.set_selection_snapshots({})
 
     assert parent.values.shared == "branch"
     assert parent.state.counter == 5

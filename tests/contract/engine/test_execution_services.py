@@ -145,12 +145,14 @@ def _build_step_context(engine: Engine, tmp_path: Path, *, step_name: str) -> tu
         default_session_name=engine.compiled.default_session_name,
         values={},
     )
-    context._set_worklist_selection_resolver(lambda worklist_name: (_ for _ in ()).throw(AssertionError(worklist_name)))
+    context._execution_frame.set_worklist_selection_resolver(
+        lambda worklist_name: (_ for _ in ()).throw(AssertionError(worklist_name))
+    )
     step_state_store = engine._ensure_step_state_store({}, step)
     engine._increment_step_runtime_state(step_state_store)
-    context._set_step_state_store(step_state_store)
-    context._set_values(context._values)
-    context._set_meta({"step": {"name": step.name, "kind": step.kind, "visits": 1, "last_route": None}})
+    context._execution_frame.set_step_state(step_state_store)
+    context._execution_frame.set_values(context._values)
+    context._execution_frame.set_meta({"step": {"name": step.name, "kind": step.kind, "visits": 1, "last_route": None}})
     return step, context
 
 
