@@ -3197,3 +3197,110 @@ Open issues / next step
 <loop-control>
 {"schema":"docloop.loop_control/v1","kind":"promise","promise":"COMPLETE"}
 </loop-control>
+
+
+---
+run_id=run-20260509T125912Z-8deb38fd | entry=session_turn | pair=test | phase=producer | cycle=1 | attempt=1 | thread_id=019e0d81-c0de-7d70-9814-9a0bf81af2f5
+---
+provider=codex
+mode=resume
+template=/home/rauter/.local/share/pipx/venvs/autoloop/lib/python3.12/site-packages/autoloop/templates/test_producer.md
+session_id=019e0d81-c0de-7d70-9814-9a0bf81af2f5
+
+
+---
+run_id=run-20260509T125912Z-8deb38fd | entry=phase_output | pair=test | phase=producer | process=codex-agent | cycle=1 | attempt=1 | thread_id=019e0d81-c0de-7d70-9814-9a0bf81af2f5
+---
+I’m validating the phase-local test coverage against the strictness-cleanup contract first. I’ll inspect the current test artifact templates, confirm the new strictness and regression tests cover the implemented behavior, then update the test strategy and feedback artifacts.
+
+I’ve confirmed the critical regression surfaces are already exercised by the repo tests. I’m adding one small assertion to pin the new disabled-route suppression error text directly, then I’ll update the phase test strategy and feedback artifacts with the coverage map.
+
+I’m validating the two new/strengthened assertions first, then I’ll rerun the full suite so the test artifact records a fresh green result for the current workspace state rather than relying on the earlier producer pass.
+
+The focused assertions passed, and the full suite is running again. I’m using this pass as the authoritative validation point for the test-phase artifacts since I added two more regression assertions after the producer run.
+
+The rerun is past the strictness and optimizer slices that were touched here. I’m waiting for completion, then I’ll write the behavior-to-test coverage map and a concise feedback summary with the final validation results.
+
+I have the fresh green suite result: `1278 passed, 1 warning`. I’m updating the test strategy and feedback artifacts now with the explicit coverage map, the two extra regression assertions added this turn, and the final validation command history.
+
+Scope considered
+
+- Phase-local `strictness-cleanup` test deliverables, the current repo test diffs, the active phase artifacts, and the latest run decisions under block `22`.
+
+What I analyzed
+
+- The new strictness tests in `tests/strictness/`.
+- The regression fixes that changed route suppression, typed-ref serialization, placeholder validation timing, and hidden `Context` mutator names.
+- Existing optimizer and validation tests to confirm those behaviors were already covered or needed one more assertion.
+
+What I changed
+
+- Updated [test_strategy.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/botlane-v3-second-pass-greenfield-architecture-s-a9df943f/runs/run-20260509T125912Z-8deb38fd/artifacts/test/phases/strictness-cleanup/test_strategy.md) with an explicit behavior-to-test coverage map for AC-1 and AC-2, preserved invariants, edge/failure paths, determinism notes, and validation commands.
+- Updated [feedback.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/botlane-v3-second-pass-greenfield-architecture-s-a9df943f/runs/run-20260509T125912Z-8deb38fd/artifacts/test/phases/strictness-cleanup/feedback.md) with a concise summary of the test additions and rerun results.
+- Strengthened `tests/unit/test_validation.py` to pin the disabled step-local route suppression error text.
+- Strengthened `tests/unit/optimizer/test_selected_workflow_helpers.py` to assert selected-workflow capability payloads serialize typed `reads` / `requires` / `writes` / `log_artifacts` back to string lists.
+- Re-ran `.venv/bin/python -m pytest -q` successfully.
+
+Key findings / decisions
+
+- The existing strictness, validation, engine, and optimizer tests already covered most of the phase-local behavior after the producer pass; this turn only needed two focused regression assertions plus the phase artifact updates.
+- I appended a test decision under block `22` so later turns retain the reason for pinning the disabled-route error text and the typed-ref JSON serialization boundary.
+- Current authoritative validation result: `1278 passed, 1 warning`.
+
+Open issues / next step
+
+- No blocking test gaps remain for this phase.
+- The only remaining note is the pre-existing `RuntimeWarning` in `tests/unit/test_provider_boundary_core.py`, which remains non-blocking because the full suite is green.
+
+
+---
+run_id=run-20260509T125912Z-8deb38fd | entry=session_turn | pair=test | phase=verifier | cycle=1 | attempt=1 | thread_id=019e0d81-c0de-7d70-9814-9a0bf81af2f5
+---
+provider=codex
+mode=resume
+template=/home/rauter/.local/share/pipx/venvs/autoloop/lib/python3.12/site-packages/autoloop/templates/test_verifier.md
+session_id=019e0d81-c0de-7d70-9814-9a0bf81af2f5
+
+
+---
+run_id=run-20260509T125912Z-8deb38fd | entry=phase_output | pair=test | phase=verifier | process=codex-agent | cycle=1 | attempt=1 | thread_id=019e0d81-c0de-7d70-9814-9a0bf81af2f5
+---
+I’m auditing the phase-local test outputs now: the updated tests, the test strategy coverage map, and the fresh validation evidence. Then I’ll mark the criteria and append any remaining coverage or reliability findings to the test feedback artifact.
+
+I’m auditing the strictness-cleanup test artifacts and the small set of phase-local test changes now. I’ll confirm the coverage against the changed behaviors, update the audit criteria and feedback, and keep the review scoped to the active test artifact directory.
+
+The phase artifacts are consistent with the latest run decisions. I’m checking the concrete assertions in the two added regression tests now to make sure the audit criteria can be marked from evidence, not just the strategy summary.
+
+The coverage is narrower than a broad suite diff review, but it does cover the phase’s actual changed behavior and preserved boundaries directly. I’m updating the audit artifacts now: all criteria pass, and I’m recording the only remaining non-blocking note about the pre-existing warning.
+
+Scope considered
+
+- The `strictness-cleanup` test-phase deliverables, the phase-local strategy and feedback artifacts, the latest strictness/identity tests, and the two focused regression assertions added for route suppression and typed-ref JSON serialization.
+
+What I analyzed
+
+- [test_strategy.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/botlane-v3-second-pass-greenfield-architecture-s-a9df943f/runs/run-20260509T125912Z-8deb38fd/artifacts/test/phases/strictness-cleanup/test_strategy.md)
+- The latest run decisions, especially block `22` for the phase-local coverage intent.
+- `tests/strictness/test_no_internal_compat_layers.py`, `tests/strictness/test_core_runtime_boundary.py`, `tests/strictness/test_botlane_identity.py`, `tests/unit/test_validation.py`, and `tests/unit/optimizer/test_selected_workflow_helpers.py`.
+
+What I reviewed
+
+- AC-1 coverage is present and appropriately targeted: removed internal symbols, stale identity strings, and runtime-import boundary checks are all covered directly.
+- The added regression assertions pin the two phase-local behavior risks called out in the decisions ledger: disabled local-route suppression wording and string-shaped JSON serialization for selected-workflow typed refs.
+- Reliability is acceptable for this phase: coverage is local, deterministic, synchronous, and backed by the recorded full-suite rerun of `.venv/bin/python -m pytest -q` with `1278 passed, 1 warning`.
+- I updated [criteria.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/botlane-v3-second-pass-greenfield-architecture-s-a9df943f/runs/run-20260509T125912Z-8deb38fd/artifacts/test/phases/strictness-cleanup/criteria.md) to mark all criteria satisfied and appended one non-blocking audit note to [feedback.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/botlane-v3-second-pass-greenfield-architecture-s-a9df943f/runs/run-20260509T125912Z-8deb38fd/artifacts/test/phases/strictness-cleanup/feedback.md).
+
+Key findings / decisions
+
+- No blocking findings.
+- `TST-001` was recorded as non-blocking for the pre-existing `RuntimeWarning` in `tests/unit/test_provider_boundary_core.py::test_fake_provider_rejects_awaitable_sync_operation_responses`.
+- The phase criteria can be fully checked without stretching intent or normalizing an unconfirmed behavior change.
+
+Open issues / next step
+
+- No blocking follow-up remains for this phase.
+- The only remaining note is optional warning cleanup if the team wants a fully warning-free suite.
+
+<loop-control>
+{"schema":"docloop.loop_control/v1","kind":"promise","promise":"COMPLETE"}
+</loop-control>

@@ -3251,3 +3251,56 @@ Open issues / next step
 
 - No blocking test gaps remain for this phase.
 - The only remaining note is the pre-existing `RuntimeWarning` in `tests/unit/test_provider_boundary_core.py`, which remains non-blocking because the full suite is green.
+
+
+---
+run_id=run-20260509T125912Z-8deb38fd | entry=session_turn | pair=test | phase=verifier | cycle=1 | attempt=1 | thread_id=019e0d81-c0de-7d70-9814-9a0bf81af2f5
+---
+provider=codex
+mode=resume
+template=/home/rauter/.local/share/pipx/venvs/autoloop/lib/python3.12/site-packages/autoloop/templates/test_verifier.md
+session_id=019e0d81-c0de-7d70-9814-9a0bf81af2f5
+
+
+---
+run_id=run-20260509T125912Z-8deb38fd | entry=phase_output | pair=test | phase=verifier | process=codex-agent | cycle=1 | attempt=1 | thread_id=019e0d81-c0de-7d70-9814-9a0bf81af2f5
+---
+I’m auditing the phase-local test outputs now: the updated tests, the test strategy coverage map, and the fresh validation evidence. Then I’ll mark the criteria and append any remaining coverage or reliability findings to the test feedback artifact.
+
+I’m auditing the strictness-cleanup test artifacts and the small set of phase-local test changes now. I’ll confirm the coverage against the changed behaviors, update the audit criteria and feedback, and keep the review scoped to the active test artifact directory.
+
+The phase artifacts are consistent with the latest run decisions. I’m checking the concrete assertions in the two added regression tests now to make sure the audit criteria can be marked from evidence, not just the strategy summary.
+
+The coverage is narrower than a broad suite diff review, but it does cover the phase’s actual changed behavior and preserved boundaries directly. I’m updating the audit artifacts now: all criteria pass, and I’m recording the only remaining non-blocking note about the pre-existing warning.
+
+Scope considered
+
+- The `strictness-cleanup` test-phase deliverables, the phase-local strategy and feedback artifacts, the latest strictness/identity tests, and the two focused regression assertions added for route suppression and typed-ref JSON serialization.
+
+What I analyzed
+
+- [test_strategy.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/botlane-v3-second-pass-greenfield-architecture-s-a9df943f/runs/run-20260509T125912Z-8deb38fd/artifacts/test/phases/strictness-cleanup/test_strategy.md)
+- The latest run decisions, especially block `22` for the phase-local coverage intent.
+- `tests/strictness/test_no_internal_compat_layers.py`, `tests/strictness/test_core_runtime_boundary.py`, `tests/strictness/test_botlane_identity.py`, `tests/unit/test_validation.py`, and `tests/unit/optimizer/test_selected_workflow_helpers.py`.
+
+What I reviewed
+
+- AC-1 coverage is present and appropriately targeted: removed internal symbols, stale identity strings, and runtime-import boundary checks are all covered directly.
+- The added regression assertions pin the two phase-local behavior risks called out in the decisions ledger: disabled local-route suppression wording and string-shaped JSON serialization for selected-workflow typed refs.
+- Reliability is acceptable for this phase: coverage is local, deterministic, synchronous, and backed by the recorded full-suite rerun of `.venv/bin/python -m pytest -q` with `1278 passed, 1 warning`.
+- I updated [criteria.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/botlane-v3-second-pass-greenfield-architecture-s-a9df943f/runs/run-20260509T125912Z-8deb38fd/artifacts/test/phases/strictness-cleanup/criteria.md) to mark all criteria satisfied and appended one non-blocking audit note to [feedback.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/botlane-v3-second-pass-greenfield-architecture-s-a9df943f/runs/run-20260509T125912Z-8deb38fd/artifacts/test/phases/strictness-cleanup/feedback.md).
+
+Key findings / decisions
+
+- No blocking findings.
+- `TST-001` was recorded as non-blocking for the pre-existing `RuntimeWarning` in `tests/unit/test_provider_boundary_core.py::test_fake_provider_rejects_awaitable_sync_operation_responses`.
+- The phase criteria can be fully checked without stretching intent or normalizing an unconfirmed behavior change.
+
+Open issues / next step
+
+- No blocking follow-up remains for this phase.
+- The only remaining note is optional warning cleanup if the team wants a fully warning-free suite.
+
+<loop-control>
+{"schema":"docloop.loop_control/v1","kind":"promise","promise":"COMPLETE"}
+</loop-control>
