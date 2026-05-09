@@ -84,3 +84,6 @@
 {"ts": "2026-05-09T15:00:35.010825+00:00", "run_id": "run-20260509T125912Z-8deb38fd", "seq": 84, "event_type": "phase_deferred", "pair": "implement", "phase_mode": "single", "phase_id": "branch-typed-evidence", "reason": "awaiting enabled test pair completion"}
 {"ts": "2026-05-09T15:00:35.012617+00:00", "run_id": "run-20260509T125912Z-8deb38fd", "seq": 85, "event_type": "pair_started", "pair": "test", "phase_id": "branch-typed-evidence"}
 {"ts": "2026-05-09T15:00:35.012905+00:00", "run_id": "run-20260509T125912Z-8deb38fd", "seq": 86, "event_type": "cycle_started", "pair": "test", "cycle": 1, "attempt": 1, "phase_id": "branch-typed-evidence"}
+{"ts": "2026-05-09T15:01:59.397366+00:00", "run_id": "run-20260509T125912Z-8deb38fd", "seq": 87, "event_type": "phase_finished", "pair": "test", "phase": "producer", "cycle": 1, "attempt": 1, "empty_output": false, "phase_id": "branch-typed-evidence"}
+{"ts": "2026-05-09T15:02:49.931642+00:00", "run_id": "run-20260509T125912Z-8deb38fd", "seq": 88, "event_type": "phase_finished", "pair": "test", "phase": "verifier", "cycle": 1, "attempt": 1, "empty_output": false, "phase_id": "branch-typed-evidence"}
+{"ts": "2026-05-09T15:02:50.049098+00:00", "run_id": "run-20260509T125912Z-8deb38fd", "seq": 89, "event_type": "pair_completed", "pair": "test", "cycle": 1, "attempt": 1, "phase_id": "branch-typed-evidence"}
