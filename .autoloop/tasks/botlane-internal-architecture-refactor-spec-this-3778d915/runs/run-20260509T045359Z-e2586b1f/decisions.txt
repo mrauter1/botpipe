@@ -3,3 +3,6 @@ Treat WorkflowPlan as a tested adapter layer first; Engine migration stays optio
 Reuse botlane/runtime/workspace.py and botlane/runtime/loader.py as the integration anchors for RunPaths/RunIdentity and WorkflowLocator instead of introducing parallel path or resolution systems.
 Keep CompiledWorkflow, CompiledStep, and CompiledRoute as compatibility facades throughout intermediate phases; all new compiled-plan conversions must stay centralized in botlane/core/plan_adapters.py.
 Add the AST-aware no-core-runtime-import strictness test only after verifying botlane/core already has no runtime imports outside TYPE_CHECKING, so the first milestone remains low-risk and behavior-preserving.
+<autoloop-decisions-header version="1" block_seq="2" owner="implementer" phase_id="freeze-public-compatibility" pair="implement" turn_seq="1" run_id="run-20260509T045359Z-e2586b1f" ts="2026-05-09T04:59:58.523489+00:00" />
+Keep the freeze-public-compatibility phase test-only: add regression assertions in existing suites and leave runtime/SDK production code unchanged.
+Treat current `tests/strictness/test_no_compat.py` failures around repo-local doc inventory (`Review15.md`, `review16.md`, `rebrand.md`, `followup.md`) as pre-existing workspace drift outside this phase.

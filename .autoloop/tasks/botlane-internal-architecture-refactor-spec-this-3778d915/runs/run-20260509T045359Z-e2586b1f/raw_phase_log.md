@@ -99,3 +99,110 @@ phase_mode=single
 phase_ids=freeze-public-compatibility,boundary-primitives-and-strictness,route-contract-adapters,step-and-workflow-plans,execution-frame-context-migration,provider-turn-and-route-finalization,execution-services-and-collaborators,placeholder-reference-graph,branch-results-locators-and-policy-rules,single-step-parity-and-cleanup
 explicit=True
 current_phase_index=0
+
+
+---
+run_id=run-20260509T045359Z-e2586b1f | entry=session_turn | pair=implement | phase=producer | cycle=1 | attempt=1 | thread_id=019e0b1b-4dc6-7202-bcd6-ac3c5559f5ef
+---
+provider=codex
+mode=start
+template=/home/rauter/.local/share/pipx/venvs/autoloop/lib/python3.12/site-packages/autoloop/templates/implement_producer.md
+session_id=019e0b1b-4dc6-7202-bcd6-ac3c5559f5ef
+
+
+---
+run_id=run-20260509T045359Z-e2586b1f | entry=phase_output | pair=implement | phase=producer | process=codex-agent | cycle=1 | attempt=1 | thread_id=019e0b1b-4dc6-7202-bcd6-ac3c5559f5ef
+---
+I’m treating this as the phase-0 compatibility freeze only: audit the current public-surface coverage, compare it to the phase artifacts, and add only the missing regression tests before touching anything else.
+
+I’ve got the phase contract and plan. Next I’m checking the existing compatibility tests and the current public package surfaces to see exactly what freeze coverage is missing.
+
+The repo is already dirty, including some of the test files in scope. I’m reading those files directly and working with the current state rather than assuming the checked-in baseline.
+
+I’ve confirmed a lot of freeze coverage already exists. What’s still missing looks narrower: explicit `botlane.core.__all__`/`branch_groups.__all__` snapshots, dataclass positional compatibility checks, and a few persistence/unsupported-surface assertions that the phase calls out directly.
+
+I’ve narrowed the edits to test-only freeze coverage. I’m adding explicit snapshots for the internal module `__all__` surfaces and positional-construction checks for the compatibility dataclasses, without touching runtime behavior.
+
+The freeze coverage is in place. I’m running the touched compatibility suites first to catch any field-order or snapshot mistakes before I update the phase notes.
+
+The touched suites are green. I’m running the compatibility strictness bucket as a sanity check that these freeze assertions didn’t disturb the broader no-compat contract.
+
+`test_no_compat` is already red in this workspace, and the failures appeared before any of the new assertions would matter. I’m pulling the failure details now to separate pre-existing breakage from anything introduced here.
+
+The strictness file is failing for repository-local documentation inventory reasons unrelated to the new freeze assertions. I’m leaving that scope alone and documenting it as an existing workspace blocker instead of folding unrelated dirty docs into this phase.
+
+I’m recording the scope and the one blocker explicitly so later phases don’t mistake this turn for a runtime change or chase the unrelated strictness failures.
+
+Scope considered
+- Phase-local `freeze-public-compatibility` only.
+- Limited changes to regression tests and phase artifacts; no runtime or SDK production code changes.
+- Left unrelated dirty documentation inventory out of scope.
+
+What I analyzed
+- Existing freeze coverage in `tests/unit/test_simple_surface.py`, `tests/unit/test_sdk_facade.py`, `tests/unit/stdlib/test_composition_helpers.py`, and `tests/strictness/test_no_compat.py`.
+- Current `botlane.core.__all__` and `botlane.core.branch_groups.__all__` snapshots in [botlane/core/__init__.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/botlane/core/__init__.py:1) and [botlane/core/branch_groups/__init__.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/botlane/core/branch_groups/__init__.py:1).
+- Positional constructor surfaces for `ChildWorkflowResult` and the public SDK result dataclasses in [botlane/core/context.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/botlane/core/context.py:55) and [botlane/sdk.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/botlane/sdk.py:161).
+
+What I changed
+- Added exact `botlane.core.__all__` and `botlane.core.branch_groups.__all__` freeze assertions in [tests/unit/test_simple_surface.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/tests/unit/test_simple_surface.py:129).
+- Added positional-construction coverage for `ChildWorkflowResult` in [tests/unit/test_simple_surface.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/tests/unit/test_simple_surface.py:348).
+- Added positional-construction coverage for `SDKDebugInfo`, `RetentionInfo`, `CleanupResult`, `WorkflowResult`, `InputRequest`, `HandledInput`, and `StepResult` in [tests/unit/test_sdk_facade.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/tests/unit/test_sdk_facade.py:784).
+- Added canonical SDK sentinel identity coverage for `.botlane/tasks/.../.botlane-sdk-task.json` in [tests/unit/test_sdk_facade.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/tests/unit/test_sdk_facade.py:1320).
+- Updated the phase notes and run decisions artifacts.
+
+Key findings / decisions
+- This phase stayed test-only by design.
+- Passed:
+  - `.venv/bin/python -m pytest tests/unit/test_simple_surface.py`
+  - `.venv/bin/python -m pytest tests/unit/test_sdk_facade.py`
+  - `.venv/bin/python -m pytest tests/unit/stdlib/test_composition_helpers.py`
+- `tests/strictness/test_no_compat.py` is currently failing for pre-existing repo-local doc inventory drift, not for the new freeze assertions. The failing expectations are around `Review15.md`, `review16.md`, `rebrand.md`, and `followup.md`.
+
+Open issues / next step
+- If this phase must end with a fully green compatibility baseline, the next turn should explicitly decide whether those repo-local doc files belong in the strictness allowlists or should be removed/renamed outside this phase’s scope.
+
+
+---
+run_id=run-20260509T045359Z-e2586b1f | entry=session_turn | pair=implement | phase=verifier | cycle=1 | attempt=1 | thread_id=019e0b1b-4dc6-7202-bcd6-ac3c5559f5ef
+---
+provider=codex
+mode=resume
+template=/home/rauter/.local/share/pipx/venvs/autoloop/lib/python3.12/site-packages/autoloop/templates/implement_verifier.md
+session_id=019e0b1b-4dc6-7202-bcd6-ac3c5559f5ef
+
+
+---
+run_id=run-20260509T045359Z-e2586b1f | entry=phase_output | pair=implement | phase=verifier | process=codex-agent | cycle=1 | attempt=1 | thread_id=019e0b1b-4dc6-7202-bcd6-ac3c5559f5ef
+---
+I’m reviewing only the phase-local freeze-compatibility work: the test additions, the phase notes, and whether they actually cover the spec without pulling unrelated dirty files into scope.
+
+I’ve isolated the likely phase blocker: the implementation added good freeze assertions, but the required strictness baseline still isn’t green. I’m confirming that independently before I mark criteria or file findings.
+
+I’ve confirmed the added tests are sound and pass. The only material issue is phase completion: one of the named compatibility buckets is still red, so this is a validation blocker rather than a code-quality problem in the new assertions themselves.
+
+Scope considered
+- Phase-local `freeze-public-compatibility` work only.
+- Reviewed the added test coverage, phase notes, criteria state, and the required validation buckets relevant to this phase.
+
+What I analyzed
+- The implementation notes and run-local decisions for scope and claimed validation.
+- The test additions in `tests/unit/test_simple_surface.py` and `tests/unit/test_sdk_facade.py`.
+- The required validation buckets the phase depends on, especially `tests/strictness/test_no_compat.py`.
+
+What I reviewed
+- Confirmed the new freeze assertions are targeted and remain test-only.
+- Re-ran:
+  - `.venv/bin/python -m pytest tests/unit/test_simple_surface.py tests/unit/test_sdk_facade.py tests/unit/stdlib/test_composition_helpers.py` → passed
+  - `.venv/bin/python -m pytest tests/strictness/test_no_compat.py -q` → 3 failures
+- Updated [criteria.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/botlane-internal-architecture-refactor-spec-this-3778d915/runs/run-20260509T045359Z-e2586b1f/artifacts/implement/phases/freeze-public-compatibility/criteria.md) and appended the review finding to [feedback.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/botlane-internal-architecture-refactor-spec-this-3778d915/runs/run-20260509T045359Z-e2586b1f/artifacts/implement/phases/freeze-public-compatibility/feedback.md).
+
+Key findings / decisions
+- `IMP-001` blocking: the touched test additions are fine, but the phase cannot be marked complete because the required compatibility baseline is still not validated while `tests/strictness/test_no_compat.py` remains red.
+- I did not find a regression or design problem in the newly added freeze assertions themselves.
+
+Open issues / next step
+- Resolve or explicitly scope out the current `test_no_compat.py` doc-inventory failures before claiming this phase as the validated baseline for later refactor phases.
+
+<loop-control>
+{"schema":"docloop.loop_control/v1","kind":"promise","promise":"INCOMPLETE"}
+</loop-control>
