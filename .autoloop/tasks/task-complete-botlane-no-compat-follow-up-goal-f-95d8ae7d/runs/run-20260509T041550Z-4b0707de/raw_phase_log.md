@@ -251,3 +251,118 @@ Open issues / next step
 <loop-control>
 {"schema":"docloop.loop_control/v1","kind":"promise","promise":"INCOMPLETE"}
 </loop-control>
+
+
+---
+run_id=run-20260509T041550Z-4b0707de | entry=session_turn | pair=implement | phase=producer | cycle=2 | attempt=1 | thread_id=019e0af7-2806-7420-b8d1-ea347b3defd6
+---
+provider=codex
+mode=resume
+template=/home/rauter/.local/share/pipx/venvs/autoloop/lib/python3.12/site-packages/autoloop/templates/implement_producer.md
+session_id=019e0af7-2806-7420-b8d1-ea347b3defd6
+
+
+---
+run_id=run-20260509T041550Z-4b0707de | entry=phase_output | pair=implement | phase=producer | process=codex-agent | cycle=2 | attempt=1 | thread_id=019e0af7-2806-7420-b8d1-ea347b3defd6
+---
+I’m addressing the reviewer’s concrete regression now. First I’m rechecking the live current-run inventory and the phase session file contents so I can update the exact-path contract against the post-runtime file set rather than the earlier mid-turn snapshot.
+
+The phase session file is clean, so I’m classifying it as required-clean and updating the phase notes/decision ledger to make it explicit that the active-run inventory has to be taken from the post-runtime file set, not the earlier implement snapshot.
+
+The policy is updated for the post-runtime inventory now. I’m rerunning the strictness slice and the targeted artifact scan first; if both are clean again, I’ll rerun the full suite and then refresh the validation lines in the phase notes.
+
+The post-runtime strictness slice is green again and the targeted artifact scan is clean. I’m running the full suite once more so the validation evidence matches the actual final-state inventory.
+
+The full suite has already crossed back through `tests/strictness/test_no_compat.py` cleanly with the post-runtime inventory fix in place. I’m letting the remaining unit coverage finish before I rewrite the validation section in the phase notes.
+
+The final reruns are green again. I’m updating the phase notes to replace the temporary “pending rerun” placeholders with the actual post-fix results, then I’ll summarize the resolved reviewer finding and the final validation state.
+
+Scope considered
+
+- [tests/strictness/test_no_compat.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/tests/strictness/test_no_compat.py:245)
+- The live current-run inventory for `run-20260509T041550Z-4b0707de`, including [sessions/phases/finalize-current-run-artifact-contract.json](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/task-complete-botlane-no-compat-follow-up-goal-f-95d8ae7d/runs/run-20260509T041550Z-4b0707de/sessions/phases/finalize-current-run-artifact-contract.json:1)
+- Reviewer feedback in [feedback.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/task-complete-botlane-no-compat-follow-up-goal-f-95d8ae7d/runs/run-20260509T041550Z-4b0707de/artifacts/implement/phases/finalize-current-run-artifact-contract/feedback.md:1)
+- The shared decision ledger and phase implementation notes
+
+What I analyzed
+
+- The reviewer’s failing case against the post-runtime filesystem, not the earlier mid-turn snapshot.
+- The current run’s exact file inventory after the runtime wrote the phase session file.
+- Whether the phase session JSON could stay required-clean under the existing branding rules.
+
+What I changed
+
+- Added `sessions/phases/finalize-current-run-artifact-contract.json` to `ACTIVE_CURRENT_RUN_REQUIRED_CLEAN_RELATIVE_PATHS` in [tests/strictness/test_no_compat.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/tests/strictness/test_no_compat.py:262).
+- Appended a turn-2 decision in [decisions.txt](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/task-complete-botlane-no-compat-follow-up-goal-f-95d8ae7d/runs/run-20260509T041550Z-4b0707de/decisions.txt:8) to lock the post-runtime inventory rule.
+- Updated [implementation_notes.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/task-complete-botlane-no-compat-follow-up-goal-f-95d8ae7d/runs/run-20260509T041550Z-4b0707de/artifacts/implement/phases/finalize-current-run-artifact-contract/implementation_notes.md:1) so the notes reflect the reviewer regression, the fix, and the final rerun results.
+
+Key findings / decisions
+
+- The reviewer’s blocking regression was valid: the runtime-created phase session file appeared after the earlier validation pass and broke the inventory equality test.
+- That file is legacy-name-clean, so it remains in the required-clean set rather than becoming an exception.
+- Final validation after the fix:
+  - `./.venv/bin/python -m pytest tests/strictness/test_no_compat.py -q` -> `72 passed`
+  - targeted literal legacy-name scan over the active artifact contract -> `OK`
+  - `./.venv/bin/python -m pytest` -> `1204 passed, 1 warning`
+
+Open issues / next step
+
+- No code-side blocking issue remains in this phase scope.
+- Reviewer-owned [criteria.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/task-complete-botlane-no-compat-follow-up-goal-f-95d8ae7d/runs/run-20260509T041550Z-4b0707de/artifacts/implement/phases/finalize-current-run-artifact-contract/criteria.md:1) and [feedback.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/task-complete-botlane-no-compat-follow-up-goal-f-95d8ae7d/runs/run-20260509T041550Z-4b0707de/artifacts/implement/phases/finalize-current-run-artifact-contract/feedback.md:1) still reflect the earlier finding until the verifier reruns.
+
+
+---
+run_id=run-20260509T041550Z-4b0707de | entry=session_turn | pair=implement | phase=verifier | cycle=2 | attempt=1 | thread_id=019e0af7-2806-7420-b8d1-ea347b3defd6
+---
+provider=codex
+mode=resume
+template=/home/rauter/.local/share/pipx/venvs/autoloop/lib/python3.12/site-packages/autoloop/templates/implement_verifier.md
+session_id=019e0af7-2806-7420-b8d1-ea347b3defd6
+
+
+---
+run_id=run-20260509T041550Z-4b0707de | entry=phase_output | pair=implement | phase=verifier | process=codex-agent | cycle=2 | attempt=1 | thread_id=019e0af7-2806-7420-b8d1-ea347b3defd6
+---
+I’m re-reviewing the post-fix state now. I’ll verify the updated active-run inventory against the live current-run tree, confirm the validation evidence, and then update the review artifacts to reflect whether the blocking finding is resolved.
+
+I have the updated inventory set and the live tree. I’m rerunning the scoped strictness slice and the full suite from the verifier side so the review outcome is based on the current post-fix state, not only on the producer’s recorded results.
+
+The scoped strictness slice is green again from the verifier side: `72 passed`. I’m letting the full suite finish so I can clear or keep the review finding based on current evidence rather than the previous stale state.
+
+The verifier reruns are clean: `72 passed` for the strictness slice and `1204 passed, 1 warning` for the full suite. I’m updating the review artifacts now to mark the earlier finding as resolved and to set the criteria to the current verified state.
+
+Scope considered
+
+- [tests/strictness/test_no_compat.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/tests/strictness/test_no_compat.py:245)
+- The live current-run file inventory for `run-20260509T041550Z-4b0707de`
+- [implementation_notes.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/task-complete-botlane-no-compat-follow-up-goal-f-95d8ae7d/runs/run-20260509T041550Z-4b0707de/artifacts/implement/phases/finalize-current-run-artifact-contract/implementation_notes.md:1)
+- The phase review artifacts [criteria.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/task-complete-botlane-no-compat-follow-up-goal-f-95d8ae7d/runs/run-20260509T041550Z-4b0707de/artifacts/implement/phases/finalize-current-run-artifact-contract/criteria.md:1) and [feedback.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/task-complete-botlane-no-compat-follow-up-goal-f-95d8ae7d/runs/run-20260509T041550Z-4b0707de/artifacts/implement/phases/finalize-current-run-artifact-contract/feedback.md:1)
+
+What I analyzed
+
+- The producer’s fix for the runtime-written phase session file classification.
+- The active current-run required-clean versus exact-exception sets against the live post-runtime tree.
+- The producer’s updated validation narrative and decision ledger entries.
+
+What I reviewed
+
+- Fresh verifier reruns of `./.venv/bin/python -m pytest tests/strictness/test_no_compat.py -q` and `./.venv/bin/python -m pytest`.
+- The resolved `IMP-001` scenario against `sessions/phases/finalize-current-run-artifact-contract.json`.
+- Whether any new blocking issue was introduced by the post-runtime inventory correction.
+
+Key findings / decisions
+
+- No blocking findings remain.
+- `IMP-001` is resolved: the runtime-owned phase session file is now explicitly classified as required-clean and the active current-run inventory matches the live file set.
+- Verifier validation matches the producer’s updated notes:
+  - `./.venv/bin/python -m pytest tests/strictness/test_no_compat.py -q` -> `72 passed`
+  - `./.venv/bin/python -m pytest` -> `1204 passed, 1 warning`
+
+Open issues / next step
+
+- No implementation-side follow-up is required in this phase scope.
+- The remaining pytest warning is the same non-failing runtime warning from `tests/unit/test_provider_boundary_core.py:661`.
+
+<loop-control>
+{"schema":"docloop.loop_control/v1","kind":"promise","promise":"COMPLETE"}
+</loop-control>
