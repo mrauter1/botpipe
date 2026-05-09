@@ -3,6 +3,7 @@ from __future__ import annotations
 from dataclasses import replace
 
 import botlane.simple as simple
+import pytest
 from pydantic import BaseModel
 
 from botlane import FINISH
@@ -228,3 +229,37 @@ def test_branch_group_step_plan_keeps_nested_plan_shapes_and_fan_in_helpers() ->
         },
     )
     assert rebuilt_without_top_level_parity == branch_step
+
+
+def test_branch_group_step_plan_raises_if_nested_parity_metadata_is_missing() -> None:
+    compiled = compile_workflow(_BranchPlanWorkflow)
+    plan = step_plan_from_compiled_step(
+        compiled.steps["reviews"],
+        routes={
+            tag: route_contract_from_compiled_route(route, inventory=compiled.artifacts_by_qualified_name)
+            for tag, route in compiled.routes["reviews"].items()
+        },
+        inventory=compiled.artifacts_by_qualified_name,
+    )
+    assert isinstance(plan, BranchGroupStepPlan)
+
+    branch_without_parity = replace(plan.branch_group.branches[0].step, _compiled_step=None)
+    branch_group_without_nested_parity = replace(
+        plan.branch_group,
+        branches=(
+            replace(plan.branch_group.branches[0], step=branch_without_parity),
+            *plan.branch_group.branches[1:],
+        ),
+    )
+
+    with pytest.raises(
+        ValueError,
+        match="branch-group nested compiled-step reconstruction requires adapter parity metadata",
+    ):
+        compiled_step_from_step_plan(
+            replace(plan, _compiled_step=None, branch_group=branch_group_without_nested_parity),
+            routes={
+                tag: route_contract_from_compiled_route(route, inventory=compiled.artifacts_by_qualified_name)
+                for tag, route in compiled.routes["reviews"].items()
+            },
+        )

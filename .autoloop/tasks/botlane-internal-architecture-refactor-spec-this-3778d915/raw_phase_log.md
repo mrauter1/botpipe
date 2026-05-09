@@ -1288,3 +1288,55 @@ Open issues / next step
 <loop-control>
 {"schema":"docloop.loop_control/v1","kind":"promise","promise":"COMPLETE"}
 </loop-control>
+
+
+---
+run_id=run-20260509T045359Z-e2586b1f | entry=session_turn | pair=test | phase=producer | cycle=1 | attempt=1 | thread_id=019e0b56-735d-7c20-8aa5-b760d0b9b9a6
+---
+provider=codex
+mode=resume
+template=/home/rauter/.local/share/pipx/venvs/autoloop/lib/python3.12/site-packages/autoloop/templates/test_producer.md
+session_id=019e0b56-735d-7c20-8aa5-b760d0b9b9a6
+
+
+---
+run_id=run-20260509T045359Z-e2586b1f | entry=phase_output | pair=test | phase=producer | process=codex-agent | cycle=1 | attempt=1 | thread_id=019e0b56-735d-7c20-8aa5-b760d0b9b9a6
+---
+This test turn is about locking in the updated plan-adapter behavior, especially the new explicit branch-group parity path and its failure mode. I’m reviewing the current tests and the phase test strategy first, then I’ll add the missing regression coverage and update the test artifacts.
+
+The main remaining gap is the failure path the reviewer called out: if branch-group nested parity is missing, the adapter should fail loudly instead of silently degrading. I’m adding that regression test now and then I’ll document the coverage map in the phase test artifacts.
+
+I’ve added the explicit branch-group failure-path regression test. Next I’m running the focused unit coverage to make sure the new assertion is deterministic and the success-path parity tests still hold.
+
+The focused suite is green with the new failure-path coverage. I’m recording the exact behavior-to-test map now so later phases keep the branch-group parity contract and its loud-failure path intact.
+
+Scope considered
+
+- Phase-local test coverage for `step-and-workflow-plans`.
+- Focused on `tests/unit/test_step_plans.py`, `tests/unit/test_workflow_plan_adapters.py`, and the phase test artifacts.
+- Reviewed the latest adapter decisions in `decisions.txt` to align tests with the explicit private parity-carrier design.
+
+What I analyzed
+
+- Existing typed step-plan and workflow-plan adapter tests.
+- The producer/verifier outcome that moved compiled parity off `StepHeader.original_step` and onto private `_compiled_step` fields.
+- The remaining regression gap around branch-group reconstruction when nested parity metadata is missing.
+
+What I changed
+
+- Added a new failure-path regression test in [test_step_plans.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/tests/unit/test_step_plans.py) that strips nested branch parity metadata and asserts `compiled_step_from_step_plan(...)` raises a clear `ValueError` instead of silently producing invalid branch-group compiled metadata.
+- Updated [test_strategy.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/botlane-internal-architecture-refactor-spec-this-3778d915/runs/run-20260509T045359Z-e2586b1f/artifacts/test/phases/step-and-workflow-plans/test_strategy.md) with an explicit behavior-to-coverage map, preserved invariants, edge cases, failure paths, flake controls, and known gaps.
+- Appended a concise summary to [feedback.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/botlane-internal-architecture-refactor-spec-this-3778d915/runs/run-20260509T045359Z-e2586b1f/artifacts/test/phases/step-and-workflow-plans/feedback.md).
+- Added one test decision line under the latest test-author header in [decisions.txt](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/botlane-internal-architecture-refactor-spec-this-3778d915/runs/run-20260509T045359Z-e2586b1f/decisions.txt).
+
+Key findings / decisions
+
+- The main missing coverage was the failure path for nested branch-group parity loss.
+- That path is now locked down so later adapter changes cannot regress to silent `branch_group=None`-style degradation.
+- Focused validation passed:
+  - `.venv/bin/python -m pytest tests/unit/test_step_plans.py tests/unit/test_workflow_plan_adapters.py`
+
+Open issues / next step
+
+- No test-phase blocker remains in this phase scope.
+- Remaining gap is unchanged from the strategy note: this turn validates adapter-layer invariants, not full runtime execution.
