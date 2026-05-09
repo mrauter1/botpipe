@@ -4,9 +4,11 @@ import asyncio
 from dataclasses import dataclass
 from pathlib import Path
 
+import pytest
 from pydantic import BaseModel
 
 import botlane.simple as simple
+from botlane.core import engine_collaborators
 from botlane.core.context import Context, context_runtime
 from botlane.core.engine import Engine
 from botlane.core.primitives import Outcome
@@ -144,6 +146,77 @@ def test_produce_verify_provider_turn_plan_keeps_rendered_transport_boundary(tmp
     assert all(isinstance(turn, RenderedProviderTurn) for turn in seen_turns)
     assert seen_turns[0].expected_response == "raw_text"
     assert seen_turns[1].expected_response == "outcome_json"
+
+
+def test_prompt_provider_turn_plan_falls_back_for_known_parity_gap(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    class PromptWorkflow(simple.Workflow):
+        class State(BaseModel):
+            pass
+
+        review = simple.step("Review the document.", name="review", routes={"done": simple.FINISH})
+
+    seen_turns: list[RenderedProviderTurn] = []
+    provider = RenderedLLMProvider(_SequencedTransport(raw_texts=['{"tag":"done"}'], seen_turns=seen_turns))
+    engine = Engine(
+        PromptWorkflow,
+        provider=provider,
+        session_store=InMemorySessionStore(),
+        checkpoint_store=InMemoryCheckpointStore(),
+    )
+
+    def _raise_known_parity_gap(*args: object, **kwargs: object) -> object:
+        raise ValueError("unknown compiled required reference 'review.draft'")
+
+    monkeypatch.setattr(engine_collaborators, "step_plan_from_compiled_step", _raise_known_parity_gap)
+
+    result = engine.run(
+        task_id="task-provider-turn-plan",
+        run_id="run-provider-turn-plan",
+        task_folder=tmp_path / "task",
+        run_folder=tmp_path / "run",
+        package_folder=tmp_path / "package",
+        root=tmp_path,
+    )
+
+    assert result.terminal == simple.FINISH
+    assert len(seen_turns) == 1
+    assert isinstance(seen_turns[0], RenderedProviderTurn)
+
+
+def test_prompt_provider_turn_plan_surfaces_unexpected_adapter_errors(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    class PromptWorkflow(simple.Workflow):
+        class State(BaseModel):
+            pass
+
+        review = simple.step("Review the document.", name="review", routes={"done": simple.FINISH})
+
+    engine = Engine(
+        PromptWorkflow,
+        provider=ScriptedLLMProvider(llm_turns=[Outcome(raw_output='{"tag":"done"}', tag="done")]),
+        session_store=InMemorySessionStore(),
+        checkpoint_store=InMemoryCheckpointStore(),
+    )
+
+    def _raise_unexpected(*args: object, **kwargs: object) -> object:
+        raise RuntimeError("unexpected provider-turn adapter failure")
+
+    monkeypatch.setattr(engine_collaborators, "step_plan_from_compiled_step", _raise_unexpected)
+
+    with pytest.raises(RuntimeError, match="unexpected provider-turn adapter failure"):
+        engine.run(
+            task_id="task-provider-turn-plan",
+            run_id="run-provider-turn-plan",
+            task_folder=tmp_path / "task",
+            run_folder=tmp_path / "run",
+            package_folder=tmp_path / "package",
+            root=tmp_path,
+        )
 
 
 def test_route_finalization_exposes_route_decision_for_finish_routes(tmp_path: Path) -> None:

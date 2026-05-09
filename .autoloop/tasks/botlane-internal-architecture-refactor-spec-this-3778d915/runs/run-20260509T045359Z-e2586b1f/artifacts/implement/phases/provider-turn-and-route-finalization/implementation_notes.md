@@ -15,6 +15,8 @@
 
 ## Symbols touched
 
+- `_allows_provider_turn_plan_fallback`
+- `_provider_turn_step_plan_for_execution`
 - `ProviderContractBuilder.control_contract`
 - `ProviderContractBuilder.pair_producer_contract`
 - `ProviderContractBuilder.pair_verifier_contract`
@@ -30,12 +32,13 @@
 ## Checklist mapping
 
 - Phase 6 / provider-turn adapter: prompt and produce/verify execution now attempts a `ProviderTurnPlan` bridge before building the existing `LLMRequest` / `ProducerRequest` / `VerifierRequest` payloads.
+- Reviewer feedback `IMP-001`: narrowed provider-turn adapter fallback to explicit parity-gap `ValueError` cases and added contract coverage that unexpected adapter failures are surfaced.
 - Phase 5 / route finalization adapter: `RouteFinalizationResult` now carries a typed `RouteDecision` bridge while the engine still consumes the legacy fields.
 - Deliverable: added `tests/contract/test_provider_turn_plan_adapter.py`.
 
 ## Assumptions
 
-- Existing compiled steps can still contain non-canonical short-name required refs in some parity paths, so the new turn-plan bridge must fall back cleanly to the compiled-step contract builder when plan adaptation cannot preserve behavior.
+- Existing compiled steps can still contain non-canonical short-name required refs in some parity paths, so the new turn-plan bridge must fall back only for the known inventory-resolution `ValueError` cases that preserve current behavior.
 
 ## Preserved invariants
 
@@ -57,13 +60,15 @@
 
 ## Expected side effects
 
-- Prompt/pair provider-turn planning is opportunistic: when typed plan adaptation succeeds and required refs are artifact-backed, provider contract payloads come from `ProviderTurnPlan`; otherwise the old compiled-step contract path is used unchanged.
+- Prompt/pair provider-turn planning is opportunistic: when typed plan adaptation succeeds and required refs are artifact-backed, provider contract payloads come from `ProviderTurnPlan`; otherwise the old compiled-step contract path is used only for the explicit known parity-gap `ValueError` cases.
+- Unexpected provider-turn plan adaptation failures now surface instead of silently reverting to the legacy compiled-step path.
 - `tests/strictness/test_no_compat.py` now explicitly allows the focused `route_contracts` import in `engine_collaborators.py` required for the route-decision bridge.
 
 ## Validation performed
 
 - `python3 -m compileall botlane/core/engine_collaborators.py tests/contract/test_provider_turn_plan_adapter.py tests/strictness/test_no_compat.py`
 - `/home/rauter/autoloop_v3/.venv/bin/pytest tests/contract/test_provider_turn_plan_adapter.py`
+- `/home/rauter/autoloop_v3/.venv/bin/pytest tests/contract/test_async_step_dispatcher.py tests/contract/engine/test_routes.py tests/contract/engine/test_runtime_controls.py`
 - `/home/rauter/autoloop_v3/.venv/bin/pytest tests/contract/engine/test_runtime_controls.py`
 - `/home/rauter/autoloop_v3/.venv/bin/pytest tests/contract/engine/test_routes.py`
 - `/home/rauter/autoloop_v3/.venv/bin/pytest tests/contract/test_async_step_dispatcher.py tests/unit/test_route_contracts.py tests/unit/test_step_plans.py`

@@ -167,32 +167,44 @@ def _route_contracts_for_step(engine: "Engine", step: "CompiledStep") -> dict[st
     }
 
 
-def _prompt_step_plan_for_execution(engine: "Engine", step: "CompiledStep") -> PromptStepPlan | None:
+def _allows_provider_turn_plan_fallback(exc: Exception) -> bool:
+    if not isinstance(exc, ValueError):
+        return False
+    message = str(exc)
+    return message.startswith("unknown compiled required reference ") or message.startswith(
+        "unknown compiled artifact reference "
+    )
+
+
+def _provider_turn_step_plan_for_execution(engine: "Engine", step: "CompiledStep") -> Any | None:
     try:
-        plan = step_plan_from_compiled_step(
+        return step_plan_from_compiled_step(
             step,
             routes=_route_contracts_for_step(engine, step),
             inventory=engine.compiled.artifacts_by_qualified_name,
         )
-    except Exception:
+    except Exception as exc:
+        if _allows_provider_turn_plan_fallback(exc):
+            return None
+        raise
+
+
+def _prompt_step_plan_for_execution(engine: "Engine", step: "CompiledStep") -> PromptStepPlan | None:
+    plan = _provider_turn_step_plan_for_execution(engine, step)
+    if plan is None:
         return None
     if isinstance(plan, PromptStepPlan):
         return plan
-    return None
+    raise TypeError(f"expected PromptStepPlan for compiled step {step.name!r}, got {type(plan).__name__}")
 
 
 def _pair_step_plan_for_execution(engine: "Engine", step: "CompiledStep") -> ProduceVerifyStepPlan | None:
-    try:
-        plan = step_plan_from_compiled_step(
-            step,
-            routes=_route_contracts_for_step(engine, step),
-            inventory=engine.compiled.artifacts_by_qualified_name,
-        )
-    except Exception:
+    plan = _provider_turn_step_plan_for_execution(engine, step)
+    if plan is None:
         return None
     if isinstance(plan, ProduceVerifyStepPlan):
         return plan
-    return None
+    raise TypeError(f"expected ProduceVerifyStepPlan for compiled step {step.name!r}, got {type(plan).__name__}")
 
 
 def _compiled_read_name(value: ReadRef) -> str:
