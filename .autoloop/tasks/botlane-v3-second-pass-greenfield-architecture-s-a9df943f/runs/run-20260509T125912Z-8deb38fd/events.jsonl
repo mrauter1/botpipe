@@ -106,3 +106,7 @@
 {"ts": "2026-05-09T15:33:38.834553+00:00", "run_id": "run-20260509T125912Z-8deb38fd", "seq": 106, "event_type": "phase_finished", "pair": "test", "phase": "producer", "cycle": 1, "attempt": 1, "empty_output": false, "phase_id": "placeholder-reference-graph"}
 {"ts": "2026-05-09T15:34:53.498241+00:00", "run_id": "run-20260509T125912Z-8deb38fd", "seq": 107, "event_type": "phase_finished", "pair": "test", "phase": "verifier", "cycle": 1, "attempt": 1, "empty_output": false, "phase_id": "placeholder-reference-graph"}
 {"ts": "2026-05-09T15:34:53.625366+00:00", "run_id": "run-20260509T125912Z-8deb38fd", "seq": 108, "event_type": "pair_completed", "pair": "test", "cycle": 1, "attempt": 1, "phase_id": "placeholder-reference-graph"}
+{"ts": "2026-05-09T15:34:53.777775+00:00", "run_id": "run-20260509T125912Z-8deb38fd", "seq": 109, "event_type": "phase_completed", "pair": "test", "phase_id": "placeholder-reference-graph", "phase_mode": "single"}
+{"ts": "2026-05-09T15:34:53.779388+00:00", "run_id": "run-20260509T125912Z-8deb38fd", "seq": 110, "event_type": "phase_started", "phase_id": "provider-turn-cutover", "phase_mode": "single"}
+{"ts": "2026-05-09T15:34:53.782113+00:00", "run_id": "run-20260509T125912Z-8deb38fd", "seq": 111, "event_type": "pair_started", "pair": "implement", "phase_id": "provider-turn-cutover"}
+{"ts": "2026-05-09T15:34:53.782224+00:00", "run_id": "run-20260509T125912Z-8deb38fd", "seq": 112, "event_type": "cycle_started", "pair": "implement", "cycle": 1, "attempt": 1, "phase_id": "provider-turn-cutover"}
