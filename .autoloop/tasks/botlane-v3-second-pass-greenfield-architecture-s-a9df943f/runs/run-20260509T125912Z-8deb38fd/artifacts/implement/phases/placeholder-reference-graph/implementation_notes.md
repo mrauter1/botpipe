@@ -14,7 +14,9 @@
 - `botlane/core/reference_graph.py`
 - `botlane/core/compiler.py`
 - `botlane/core/engine.py`
+- `botlane/sdk.py`
 - `tests/unit/test_placeholder_refs.py`
+- `tests/unit/test_sdk_facade.py`
 
 ## Symbols touched
 
@@ -24,8 +26,10 @@
 - `ReferenceGraph`
 - `ReferenceGraphBuilder`
 - `compile_workflow`
+- `runtime_workflow_validation_message`
 - `_compile_reference_graph`
 - `Engine._compile_runtime_workflow`
+- `_resolve_and_compile_workflow`
 
 ## Checklist mapping
 
@@ -43,6 +47,7 @@
 
 - `artifacts.py` no longer owns placeholder parsing helpers and keeps only delegate entrypoints for runtime template/artifact-template resolution.
 - Direct `Engine(...)` callers still receive `WorkflowExecutionError` with the existing unknown-runtime-field wording when child-workflow message placeholders reference missing `ctx.input` / `ctx.state` / `ctx.params` fields.
+- Public SDK entrypoints still surface placeholder-validation failures through `SDKExecutionError` instead of leaking raw `WorkflowValidationError`.
 - `WorkflowPlan.reference_graph` remains internal and is not exported through public package surfaces.
 
 ## Intended behavior changes
@@ -50,6 +55,7 @@
 - `WorkflowPlan.reference_graph` is now populated from canonical plan data instead of `ReferenceGraph.empty()`.
 - Placeholder validation now supports non-simple surfaces (`workflow_step_message`, `artifact_template`, `runtime_template`, `worklist_context`) through the shared parser/validator entrypoint.
 - Direct `compile_workflow(...)` callers now fail fast on invalid workflow-step message and artifact-template placeholders instead of deferring those malformed references.
+- Compile-time placeholder validation now uses runtime-style missing-input wording for `input.*` / `ctx.input.*` refs when no workflow input model exists.
 
 ## Known non-changes
 
@@ -62,16 +68,20 @@
 - Static-graph/topology prompt-ref artifacts now read from compiler-owned `ReferenceGraph` data, including nested branch and fan-in steps.
 - Inferred artifact reads are now available from the compiled graph without reparsing prompt strings at runtime.
 - Multi-producer artifact templates now validate against any compatible producer-step symbol context instead of failing on the first incompatible producer.
+- SDK-managed placeholder compile failures now normalize through the existing SDK error boundary even when workflow resolution compiles before execution starts.
 
 ## Validation performed
 
 - Passed: `.venv/bin/python -m pytest tests/unit/test_placeholder_refs.py -q`
+- Passed: `.venv/bin/python -m pytest tests/unit/test_sdk_facade.py -k "wraps_invalid_child_workflow_message_placeholder or prompt_step_missing_input_field_fails_clearly" -q`
 - Passed: `.venv/bin/python -m pytest tests/contract/engine/test_child_workflows.py -k invalid_ctx_field -q`
 - Passed: `.venv/bin/python -m pytest tests/runtime/test_runtime_static_graph.py::test_topology_artifacts_are_written_additively_with_canonical_finish_surface -q`
 - Passed: `.venv/bin/python -m pytest tests/contract/engine/test_prompt_context.py -q`
+- Broader spot-check surfaced an unrelated existing failure outside this phase scope in `tests/unit/test_sdk_facade.py -k "strict_child_workflow_steps or wraps_invalid_child_workflow_message_placeholder"`:
+  `test_sdk_step_supports_directly_resolvable_strict_child_workflow_steps` still fails on `ChildWorkflowStepPlan` missing `.step`.
 
 ## Deduplication / centralization decisions
 
 - Placeholder parsing, runtime rendering, and artifact-template resolution now live canonically in `placeholders.py`.
 - Reference-graph collection walks canonical `StepPlan` / `BranchGroupPlan` structures instead of relying on authored-step placeholder backreferences.
-- Compiler-side placeholder-surface validation and engine-side child-workflow message error normalization are kept as one narrow boundary instead of reintroducing duplicate placeholder parsing in runtime callers.
+- Compiler-side placeholder-surface validation and engine/SDK child-workflow message error normalization share the compiler-owned message helper instead of reintroducing duplicate placeholder parsing or diverging exception wording.

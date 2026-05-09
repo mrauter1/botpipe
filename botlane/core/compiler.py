@@ -5,6 +5,7 @@ from __future__ import annotations
 import hashlib
 import inspect
 import json
+import re
 from copy import deepcopy
 from dataclasses import replace
 from pathlib import Path
@@ -80,6 +81,10 @@ from .workflow_plan import WorkflowPlan
 SystemHandler = Callable[[Context], Any]
 
 _WORKFLOW_PLAN_CACHE: dict[tuple[str, str, str], WorkflowPlan] = {}
+_WORKFLOW_STEP_MESSAGE_UNKNOWN_FIELD_RE = re.compile(
+    r"^(?P<prefix>workflow step '.*' message placeholder \{[^}]+\}) "
+    r"references unknown (?:State|Input|Params) field (?P<field>'.*')$"
+)
 
 
 def compile_workflow(workflow_cls: type[Any]) -> WorkflowPlan:
@@ -133,6 +138,16 @@ def compile_workflow(workflow_cls: type[Any]) -> WorkflowPlan:
     if cache_key is not None:
         _WORKFLOW_PLAN_CACHE[cache_key] = plan
     return plan
+
+
+def runtime_workflow_validation_message(exc: WorkflowValidationError) -> str | None:
+    message = str(exc)
+    match = _WORKFLOW_STEP_MESSAGE_UNKNOWN_FIELD_RE.match(message)
+    if match is not None:
+        return f"{match.group('prefix')} references unknown runtime field {match.group('field')}"
+    if "workflow step " in message and " message placeholder {" in message:
+        return message
+    return None
 
 
 def _compile_steps(

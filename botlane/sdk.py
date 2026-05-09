@@ -30,9 +30,9 @@ from botlane.policy import (
 from botlane.core import Workflow as CoreWorkflow
 from botlane.core.artifact_plan import ArtifactSpec
 from botlane.core.artifacts import Artifact, resolve_artifact_template
-from botlane.core.compiler import compile_workflow
+from botlane.core.compiler import compile_workflow, runtime_workflow_validation_message
 from botlane.core.context import Context
-from botlane.core.errors import WorkflowCompilationError, WorkflowExecutionError, exception_failure_context
+from botlane.core.errors import WorkflowCompilationError, WorkflowExecutionError, WorkflowValidationError, exception_failure_context
 from botlane.core.operations import classify_call, llm_call
 from botlane.core.provider_policy import ProviderPolicy, ProviderPolicyOverride
 from botlane.core.primitives import AWAIT_INPUT, FAIL, FINISH, SELF, Event, Outcome
@@ -1096,10 +1096,26 @@ def _provider_config_with_overrides(
 def _resolve_and_compile_workflow(root: Path, workflow: type[object] | str) -> tuple[Any, WorkflowPlan]:
     try:
         resolved = resolve_workflow_reference(root, workflow)
-        return resolved, compile_workflow(resolved.workflow_cls)
+        try:
+            return resolved, compile_workflow(resolved.workflow_cls)
+        except WorkflowValidationError as exc:
+            message = runtime_workflow_validation_message(exc)
+            if message is None and "placeholder {" not in str(exc):
+                raise
+            normalized_error = WorkflowExecutionError(message or str(exc))
+            raise _wrap_sdk_execution_error(
+                normalized_error,
+                workflow_name=resolved.workflow_cls.__name__,
+            ) from exc
     except Exception as exc:
         if isinstance(exc, (WorkflowCompilationError, WorkflowExecutionError)):
             raise
+        if isinstance(exc, WorkflowValidationError):
+            message = runtime_workflow_validation_message(exc)
+            if message is not None or "placeholder {" in str(exc):
+                normalized_error = WorkflowExecutionError(message or str(exc))
+                workflow_name = workflow.__name__ if isinstance(workflow, type) else None
+                raise _wrap_sdk_execution_error(normalized_error, workflow_name=workflow_name) from exc
         if isinstance(exc, WorkflowDiscoveryError):
             raise SDKExecutionError(str(exc), original_error=exc) from exc
         raise

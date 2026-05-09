@@ -316,6 +316,8 @@ def _validate_input_prompt_reference(
     field_name = parts[1]
     if field_name == "message" and len(parts) == 2:
         return None
+    if not symbols["input_fields"]:
+        raise WorkflowValidationError(f"{surface} {{{ref.raw}}} requires workflow input, but no input was provided")
     if field_name not in symbols["input_fields"]:
         raise WorkflowValidationError(f"{surface} {{{ref.raw}}} references unknown input field {field_name!r}")
     return None
@@ -570,6 +572,10 @@ def _validate_ctx_prompt_reference(
                 "state": symbols["state_fields"],
                 "params": symbols["parameter_fields"],
             }[parts[1]]
+            if parts[1] == "input" and not available_fields:
+                raise WorkflowValidationError(
+                    f"{surface} {{{ref.raw}}} requires workflow input, but no input was provided"
+                ) from exc
             if field_name not in available_fields:
                 raise WorkflowValidationError(
                     f"{surface} {{{ref.raw}}} references unknown {model_labels[parts[1]]} field {field_name!r}"
@@ -587,6 +593,8 @@ def _validate_ctx_prompt_reference(
         "state": symbols["state_fields"],
         "params": symbols["parameter_fields"],
     }[root_name]
+    if root_name == "input" and not available_fields:
+        raise WorkflowValidationError(f"{surface} {{{ref.raw}}} requires workflow input, but no input was provided")
     if field_name not in available_fields:
         raise WorkflowValidationError(
             f"{surface} {{{ref.raw}}} references unknown {model_labels[root_name]} field {field_name!r}"

@@ -789,6 +789,41 @@ def test_sdk_step_supports_directly_resolvable_strict_child_workflow_steps(tmp_p
     assert result.workflow_result.status == "completed"
 
 
+def test_sdk_run_wraps_invalid_child_workflow_message_placeholder(tmp_path: Path) -> None:
+    class ChildWorkflow(simple.Workflow):
+        note = simple.step("Child note.")
+
+    class ParentWorkflow(simple.Workflow):
+        class State(BaseModel):
+            status: str = "draft"
+
+        launch = simple.workflow_step(ChildWorkflow, message="{ctx.state.missing}")
+
+    client = _sdk_client(tmp_path, ScriptedLLMProvider())
+
+    with pytest.raises(
+        SDKExecutionError,
+        match=r"workflow step 'launch' message placeholder \{ctx\.state\.missing\} references unknown runtime field 'missing'",
+    ):
+        client.run(ParentWorkflow, message="Run the child workflow.")
+
+
+def test_sdk_step_wraps_invalid_child_workflow_message_placeholder(tmp_path: Path) -> None:
+    class ChildWorkflow(simple.Workflow):
+        note = simple.step("Child note.")
+
+    client = _sdk_client(tmp_path, ScriptedLLMProvider())
+
+    with pytest.raises(
+        SDKExecutionError,
+        match=r"workflow step 'launch' message placeholder \{ctx\.state\.missing\} references unknown runtime field 'missing'",
+    ):
+        client.step(
+            ChildWorkflowStep(name="launch", workflow=ChildWorkflow, message="{ctx.state.missing}"),
+            "Run the child workflow.",
+        )
+
+
 def test_sdk_step_rejects_unresolved_strict_child_workflow_steps(tmp_path: Path) -> None:
     client = _sdk_client(tmp_path, ScriptedLLMProvider())
 

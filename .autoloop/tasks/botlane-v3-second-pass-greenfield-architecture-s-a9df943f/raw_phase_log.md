@@ -2199,3 +2199,75 @@ Open issues / next step
 <loop-control>
 {"schema":"docloop.loop_control/v1","kind":"promise","promise":"INCOMPLETE"}
 </loop-control>
+
+
+---
+run_id=run-20260509T125912Z-8deb38fd | entry=session_turn | pair=implement | phase=producer | cycle=3 | attempt=1 | thread_id=019e0d43-3dc9-76f0-90b1-4d54c4f1a863
+---
+provider=codex
+mode=resume
+template=/home/rauter/.local/share/pipx/venvs/autoloop/lib/python3.12/site-packages/autoloop/templates/implement_producer.md
+session_id=019e0d43-3dc9-76f0-90b1-4d54c4f1a863
+
+
+---
+run_id=run-20260509T125912Z-8deb38fd | entry=phase_output | pair=implement | phase=producer | process=codex-agent | cycle=3 | attempt=1 | thread_id=019e0d43-3dc9-76f0-90b1-4d54c4f1a863
+---
+The remaining issue is in the SDK compile boundary, not the placeholder logic itself. I’m tracing the existing SDK error-wrapping path so I can fix this in one place without introducing a second, divergent exception policy.
+
+There’s a clean single-point fix available: `_resolve_and_compile_workflow(...)` already owns the SDK’s direct compile path, so it should normalize `WorkflowValidationError` there instead of letting compile-time placeholder failures bypass `_wrap_sdk_execution_error(...)`. I’m checking for any second compile path that would need the same treatment.
+
+I’m at the edit step. The safest version is to centralize the message normalization in the compiler module and let both the engine and the SDK consume that shared helper, so the placeholder-validation phase doesn’t leave three different exception policies behind.
+
+I’m adding focused SDK regressions tests now. They only cover the newly introduced compile-time placeholder surface and they pin the public exception type/message without widening into unrelated SDK behavior.
+
+The placeholder and engine contract checks are still green. One of the new SDK tests failed, so I’m looking at the exact mismatch before making any further edits.
+
+The SDK compile path is failing earlier than I expected: `resolve_workflow_reference(...)` compiles imported classes before `_resolve_and_compile_workflow(...)` gets a chance to normalize anything. It also exposed a second compatibility gap: the SDK’s existing `prompt_step("Echo {input.customer}", "hello")` contract still expects the runtime-style “requires workflow input” error, not the compiler’s “unknown input field” message. I’m tracing that message shape now so the SDK wrapper preserves the established public wording instead of just changing the exception class.
+
+The right fix is two-part now: make compile-time placeholder validation use the same “requires workflow input” wording as runtime when there is no input model, and move the SDK normalization to the outer compile boundary so it also catches the loader’s early compile pass. After that, the new SDK tests should line up with the pre-existing SDK prompt-step contract again.
+
+The SDK regressions are fixed on the focused cases. I’m doing one more narrow sweep over the surrounding child-workflow SDK tests and the earlier prompt/static-graph checks before I update the notes and decision ledger.
+
+The broader SDK child-workflow sweep still hits the pre-existing `ChildWorkflowStepPlan.step` runtime bug outside this phase. I’m not widening into that here; I’m recording it as an observed non-change while updating the phase notes and the current-turn decision block for the SDK compile-boundary fix.
+
+I’m recording the final phase-local decisions now. The important one for later turns is that SDK placeholder compile failures are normalized at the SDK boundary, not by adding another placeholder parser or widening the engine workaround.
+
+Scope considered
+
+- Phase-local `placeholder-reference-graph` work only.
+- Reviewer finding `IMP-002` on SDK exception wrapping, plus the adjacent missing-input placeholder wording that the SDK already contract-tests.
+
+What I analyzed
+
+- The SDK compile boundary in [sdk.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/botlane/sdk.py), especially `_resolve_and_compile_workflow(...)`.
+- The shared compile-time placeholder validation path in [compiler.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/botlane/core/compiler.py) and [placeholders.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/botlane/core/placeholders.py).
+- Existing engine behavior in [engine.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/botlane/core/engine.py).
+- Public SDK tests in [test_sdk_facade.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/tests/unit/test_sdk_facade.py) and the active phase artifacts [feedback.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/botlane-v3-second-pass-greenfield-architecture-s-a9df943f/runs/run-20260509T125912Z-8deb38fd/artifacts/implement/phases/placeholder-reference-graph/feedback.md), [implementation_notes.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/botlane-v3-second-pass-greenfield-architecture-s-a9df943f/runs/run-20260509T125912Z-8deb38fd/artifacts/implement/phases/placeholder-reference-graph/implementation_notes.md), and [decisions.txt](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/botlane-v3-second-pass-greenfield-architecture-s-a9df943f/runs/run-20260509T125912Z-8deb38fd/decisions.txt).
+
+What I changed
+
+- Centralized the compile-time workflow-step message normalization helper in [compiler.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/botlane/core/compiler.py) as `runtime_workflow_validation_message(...)`, and switched [engine.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/botlane/core/engine.py) to consume it instead of carrying its own copy.
+- Updated [sdk.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/botlane/sdk.py) so placeholder-related `WorkflowValidationError` failures from both the loader’s early compile pass and the explicit SDK compile pass normalize through the existing `SDKExecutionError` boundary.
+- Updated [placeholders.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/botlane/core/placeholders.py) so compile-time `input.*` and `ctx.input.*` validation against workflows with no `Input` model matches the established runtime wording: “requires workflow input, but no input was provided”.
+- Added focused SDK regression tests in [test_sdk_facade.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/tests/unit/test_sdk_facade.py) for `Botlane.run(...)`, `Botlane.step(...)`, and the existing prompt-step missing-input contract.
+- Updated the authoritative phase notes and turn-local decisions in [implementation_notes.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/botlane-v3-second-pass-greenfield-architecture-s-a9df943f/runs/run-20260509T125912Z-8deb38fd/artifacts/implement/phases/placeholder-reference-graph/implementation_notes.md) and [decisions.txt](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/botlane-v3-second-pass-greenfield-architecture-s-a9df943f/runs/run-20260509T125912Z-8deb38fd/decisions.txt).
+
+Key findings / decisions
+
+- The SDK regression came from `resolve_workflow_reference(...)` compiling workflows before `_resolve_and_compile_workflow(...)` had a chance to normalize exceptions, so fixing only the inner compile call was insufficient.
+- SDK placeholder compile failures now normalize at the SDK boundary instead of introducing a second placeholder parser or widening the engine-only workaround.
+- Missing-input placeholder wording needed to stay runtime-style to preserve the existing SDK prompt-step contract, not just the exception class.
+
+Open issues / next step
+
+- Focused validation passed:
+  - `.venv/bin/python -m pytest tests/unit/test_sdk_facade.py -k "wraps_invalid_child_workflow_message_placeholder or prompt_step_missing_input_field_fails_clearly" -q`
+  - `.venv/bin/python -m pytest tests/unit/test_placeholder_refs.py -q`
+  - `.venv/bin/python -m pytest tests/contract/engine/test_child_workflows.py -k invalid_ctx_field -q`
+  - `.venv/bin/python -m pytest tests/runtime/test_runtime_static_graph.py::test_topology_artifacts_are_written_additively_with_canonical_finish_surface -q`
+  - `.venv/bin/python -m pytest tests/contract/engine/test_prompt_context.py -q`
+- Broader spot-check still exposes an unrelated pre-existing failure outside this phase scope:
+  - `tests/unit/test_sdk_facade.py -k "strict_child_workflow_steps or wraps_invalid_child_workflow_message_placeholder"`
+  - `test_sdk_step_supports_directly_resolvable_strict_child_workflow_steps` still fails because `ChildWorkflowStepPlan` lacks `.step`
+- Next step is verifier re-review of the phase artifacts and updated SDK boundary.

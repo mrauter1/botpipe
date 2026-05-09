@@ -10,7 +10,6 @@ import importlib
 import inspect
 import json
 from pathlib import Path
-import re
 from typing import Any, Callable, Literal, Mapping
 from uuid import uuid4
 
@@ -19,7 +18,7 @@ from botlane.policy import resolve_policy_layer
 
 from .artifacts import Artifact, ArtifactHandle, ResolvedArtifacts, render_runtime_template, resolve_artifact_template
 from .branch_groups.runtime import BranchGroupRuntime
-from .compiler import compile_workflow
+from .compiler import compile_workflow, runtime_workflow_validation_message
 from .context import Context, _DEFAULT_MESSAGE, _resolve_context_root
 from .engine_collaborators import (
     _StepRouteResult,
@@ -409,22 +408,6 @@ class _EngineStateService:
         self._engine._update_final_item_runtime_state(store, event)
 
 
-_WORKFLOW_STEP_MESSAGE_UNKNOWN_FIELD_RE = re.compile(
-    r"^(?P<prefix>workflow step '.*' message placeholder \{[^}]+\}) "
-    r"references unknown (?:State|Input|Params) field (?P<field>'.*')$"
-)
-
-
-def _runtime_workflow_validation_message(exc: WorkflowValidationError) -> str | None:
-    message = str(exc)
-    match = _WORKFLOW_STEP_MESSAGE_UNKNOWN_FIELD_RE.match(message)
-    if match is not None:
-        return f"{match.group('prefix')} references unknown runtime field {match.group('field')}"
-    if "workflow step " in message and " message placeholder {" in message:
-        return message
-    return None
-
-
 class Engine:
     """Strict workflow engine."""
 
@@ -482,7 +465,7 @@ class Engine:
         try:
             return compile_workflow(workflow)
         except WorkflowValidationError as exc:
-            message = _runtime_workflow_validation_message(exc)
+            message = runtime_workflow_validation_message(exc)
             if message is None:
                 raise
             raise WorkflowExecutionError(message) from exc
