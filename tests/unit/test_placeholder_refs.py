@@ -362,6 +362,37 @@ def test_compile_workflow_populates_reference_graph_for_prompt_and_template_surf
     assert [ref.raw for ref in graph.worklist_refs["report"]] == ["worklist.gate.current.payload.status"]
 
 
+def test_compile_workflow_rejects_invalid_workflow_step_message_placeholder() -> None:
+    class Child(simple.Workflow):
+        note = simple.step("Child note.")
+
+    class Parent(simple.Workflow):
+        class State(BaseModel):
+            status: str = "draft"
+
+        launch = simple.workflow_step(Child, message="{ctx.state.missing}")
+
+    with pytest.raises(
+        WorkflowValidationError,
+        match=r"workflow step 'launch' message placeholder \{ctx\.state\.missing\} references unknown State field 'missing'",
+    ):
+        compile_workflow(Parent)
+
+
+def test_compile_workflow_rejects_invalid_artifact_template_placeholder() -> None:
+    class BadArtifactWorkflow(simple.Workflow):
+        note = simple.step(
+            "Draft.",
+            writes=[simple.Md("note", path="reports/{item.payload.foo}.md")],
+        )
+
+    with pytest.raises(
+        WorkflowValidationError,
+        match=r"artifact template 'note\.note' placeholder \{item\.payload\.foo\} requires scope=\.\.\. on the same step",
+    ):
+        compile_workflow(BadArtifactWorkflow)
+
+
 def test_placeholders_module_does_not_import_context_at_runtime() -> None:
     module_path = Path("botlane/core/placeholders.py")
     tree = ast.parse(module_path.read_text(encoding="utf-8"), filename=str(module_path))

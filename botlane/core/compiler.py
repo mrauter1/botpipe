@@ -379,10 +379,6 @@ def _compile_reference_graph(
 ) -> ReferenceGraph:
     step_entries = tuple(_iter_reference_graph_steps(plan.steps.values()))
     step_plans = {step.name: step for step, _, _ in step_entries}
-    step_placeholder_flags = {
-        step.name: (allow_branch_placeholders, allow_fan_in_placeholders)
-        for step, allow_branch_placeholders, allow_fan_in_placeholders in step_entries
-    }
     builder = ReferenceGraphBuilder(step_names=frozenset(step_plans))
     state_fields = frozenset(getattr(plan.state_cls, "model_fields", {}).keys())
     parameter_fields = (
@@ -403,12 +399,8 @@ def _compile_reference_graph(
     step_item_state_fields = {name: frozenset(step.step_item_state_fields) for name, step in step_plans.items()}
     step_output_names = {name: frozenset(artifact_id.name for artifact_id in step.writes) for name, step in step_plans.items()}
     artifact_name_counts = _artifact_name_counts(plan.artifacts.values())
-
-    for step, allow_branch_placeholders, allow_fan_in_placeholders in step_entries:
-        prompt_refs: list[PlaceholderRef] = []
-        inferred_reads: list[ArtifactId] = []
-        prompt_symbols = {
-            "kind": "simple_prompt",
+    step_symbol_contexts = {
+        step.name: {
             "step_name": step.name,
             "own_outputs": frozenset(artifact_id.name for artifact_id in step.writes),
             "state_fields": state_fields,
@@ -423,6 +415,13 @@ def _compile_reference_graph(
             "allow_branch_placeholders": allow_branch_placeholders,
             "allow_fan_in_placeholders": allow_fan_in_placeholders,
         }
+        for step, allow_branch_placeholders, allow_fan_in_placeholders in step_entries
+    }
+
+    for step, _, _ in step_entries:
+        prompt_refs: list[PlaceholderRef] = []
+        inferred_reads: list[ArtifactId] = []
+        prompt_symbols = _placeholder_symbols(step_symbol_contexts[step.name], kind="simple_prompt")
         for prompt_text in _step_prompt_texts(step, workflow_cls=plan.workflow_cls):
             refs = tuple(ref for ref in parse_placeholders(prompt_text, source="prompt") if ref.raw)
             prompt_refs.extend(ref for ref in refs if ref not in prompt_refs)
@@ -439,6 +438,13 @@ def _compile_reference_graph(
         if isinstance(step, ChildWorkflowStepPlan) and isinstance(step.message, str):
             refs = tuple(ref for ref in parse_placeholders(step.message, source="workflow_step_message") if ref.raw)
             if refs:
+                _validate_placeholder_refs(
+                    refs,
+                    surface=f"workflow step {step.name!r} message placeholder",
+                    symbol_candidates=(
+                        _placeholder_symbols(step_symbol_contexts[step.name], kind="workflow_step_message"),
+                    ),
+                )
                 builder.add_prompt_refs(step.name, refs)
         if prompt_refs:
             builder.add_prompt_refs(step.name, tuple(prompt_refs))
@@ -450,34 +456,103 @@ def _compile_reference_graph(
         if not refs:
             continue
         builder.add_artifact_template_refs(artifact_id.qualified_name, refs)
-        owner_step = artifact_spec.owner_step
-        owner_plan = step_plans.get(owner_step) if owner_step is not None else None
-        allow_branch_placeholders, allow_fan_in_placeholders = step_placeholder_flags.get(owner_step or "", (False, False))
-        artifact_template_symbols = {
+        _validate_placeholder_refs(
+            refs,
+            surface=f"artifact template {artifact_id.qualified_name!r} placeholder",
+            symbol_candidates=_artifact_template_symbol_candidates(
+                artifact_spec,
+                step_symbol_contexts=step_symbol_contexts,
+                state_fields=state_fields,
+                parameter_fields=parameter_fields,
+                input_fields=input_fields,
+                worklist_item_state_fields=worklist_item_state_fields,
+                step_state_fields=step_state_fields,
+                step_item_state_fields=step_item_state_fields,
+                step_output_names=step_output_names,
+                artifact_name_counts=artifact_name_counts,
+            ),
+        )
+    return builder.build()
+
+
+def _placeholder_symbols(symbol_context: Mapping[str, Any], *, kind: str) -> dict[str, Any]:
+    return {"kind": kind, **symbol_context}
+
+
+def _validate_placeholder_refs(
+    refs: tuple[PlaceholderRef, ...],
+    *,
+    surface: str,
+    symbol_candidates: tuple[Mapping[str, Any], ...],
+) -> None:
+    for ref in refs:
+        errors: list[WorkflowValidationError] = []
+        for symbols in symbol_candidates:
+            try:
+                validate_placeholder_ref(ref, surface=surface, symbols=symbols)
+                break
+            except WorkflowValidationError as exc:
+                errors.append(exc)
+        else:
+            raise errors[0]
+
+
+def _artifact_template_symbol_candidates(
+    artifact_spec: ArtifactSpec,
+    *,
+    step_symbol_contexts: Mapping[str, Mapping[str, Any]],
+    state_fields: frozenset[str],
+    parameter_fields: frozenset[str],
+    input_fields: frozenset[str],
+    worklist_item_state_fields: Mapping[str, frozenset[str]],
+    step_state_fields: Mapping[str, frozenset[str]],
+    step_item_state_fields: Mapping[str, frozenset[str]],
+    step_output_names: Mapping[str, frozenset[str]],
+    artifact_name_counts: Mapping[str, int],
+) -> tuple[Mapping[str, Any], ...]:
+    if artifact_spec.owner_step is not None and artifact_spec.owner_step in step_symbol_contexts:
+        return (_placeholder_symbols(step_symbol_contexts[artifact_spec.owner_step], kind="artifact_template"),)
+    if artifact_spec.producer_steps:
+        return tuple(
+            _placeholder_symbols(step_symbol_contexts[step_name], kind="artifact_template")
+            for step_name in artifact_spec.producer_steps
+            if step_name in step_symbol_contexts
+        ) or (
+            {
+                "kind": "artifact_template",
+                "step_name": "",
+                "own_outputs": frozenset(),
+                "state_fields": state_fields,
+                "parameter_fields": parameter_fields,
+                "input_fields": input_fields,
+                "scope_name": None,
+                "worklist_item_state_fields": worklist_item_state_fields,
+                "step_state_fields": step_state_fields,
+                "step_item_state_fields": step_item_state_fields,
+                "step_output_names": step_output_names,
+                "artifact_name_counts": artifact_name_counts,
+                "allow_branch_placeholders": False,
+                "allow_fan_in_placeholders": False,
+            },
+        )
+    return (
+        {
             "kind": "artifact_template",
-            "step_name": owner_step or "",
+            "step_name": "",
+            "own_outputs": frozenset(),
             "state_fields": state_fields,
             "parameter_fields": parameter_fields,
             "input_fields": input_fields,
-            "scope_name": None if owner_plan is None else owner_plan.scope_name,
+            "scope_name": None,
             "worklist_item_state_fields": worklist_item_state_fields,
             "step_state_fields": step_state_fields,
             "step_item_state_fields": step_item_state_fields,
             "step_output_names": step_output_names,
             "artifact_name_counts": artifact_name_counts,
-            "allow_branch_placeholders": allow_branch_placeholders,
-            "allow_fan_in_placeholders": allow_fan_in_placeholders,
-        }
-        for ref in refs:
-            try:
-                validate_placeholder_ref(
-                    ref,
-                    surface=f"artifact template {artifact_id.qualified_name!r} placeholder",
-                    symbols=artifact_template_symbols,
-                )
-            except WorkflowValidationError:
-                continue
-    return builder.build()
+            "allow_branch_placeholders": False,
+            "allow_fan_in_placeholders": False,
+        },
+    )
 
 
 def _iter_reference_graph_steps(

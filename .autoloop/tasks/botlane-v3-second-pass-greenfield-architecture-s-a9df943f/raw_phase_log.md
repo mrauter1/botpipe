@@ -2065,3 +2065,77 @@ Open issues / next step
 <loop-control>
 {"schema":"docloop.loop_control/v1","kind":"promise","promise":"INCOMPLETE"}
 </loop-control>
+
+
+---
+run_id=run-20260509T125912Z-8deb38fd | entry=session_turn | pair=implement | phase=producer | cycle=2 | attempt=1 | thread_id=019e0d43-3dc9-76f0-90b1-4d54c4f1a863
+---
+provider=codex
+mode=resume
+template=/home/rauter/.local/share/pipx/venvs/autoloop/lib/python3.12/site-packages/autoloop/templates/implement_producer.md
+session_id=019e0d43-3dc9-76f0-90b1-4d54c4f1a863
+
+
+---
+run_id=run-20260509T125912Z-8deb38fd | entry=phase_output | pair=implement | phase=producer | process=codex-agent | cycle=2 | attempt=1 | thread_id=019e0d43-3dc9-76f0-90b1-4d54c4f1a863
+---
+I’m addressing the reviewer’s blocking gap only: compiler-side placeholder validation still doesn’t enforce `workflow_step_message` and `artifact_template` surfaces. I’m tracing the current discovery/compiler validation paths and then I’ll patch the compile-time surface handling without widening scope.
+
+The reviewer’s requested fix does change invalid-authoring timing, so I’m keeping the patch as narrow as possible: one shared compiler-side surface validator, then only the missing `workflow_step_message` and `artifact_template` compile paths are routed through it.
+
+I’ve patched the compiler path. Next I’m locking the intended behavior with focused compile-failure tests before I touch any broader contract expectations.
+
+The compiler-side validation now behaves as intended in unit coverage. I’m checking the adjacent contract surface that this can legitimately move, because any existing runtime-only expectation needs to be updated explicitly rather than left to fail silently.
+
+Reviewer feedback points at compiler-side placeholder validation, but the current contract tests also encode runtime error behavior for invalid child-workflow message placeholders. I’m checking the exact engine and test surfaces before deciding whether to preserve timing by wrapping or to narrow the compiler change.
+
+The current `engine.py` still has an older child-workflow path that expects authored step metadata on `StepPlan`, so I’m separating that unrelated runtime regression from the placeholder-validation change and checking how invalid child-message placeholders are contract-tested today.
+
+There’s a viable middle path here: keep compiler validation for `compile_workflow(...)` so the phase is actually complete, but preserve the existing engine-facing behavior by translating compile-time child-message placeholder failures back into the established `WorkflowExecutionError` contract on the execution path. I’m checking whether that matches the rest of the engine surface or would over-broaden error wrapping.
+
+I found one genuine regression risk in the current compiler patch beyond the reviewer note: artifact-template validation is iterating producer candidates one by one, which would incorrectly reject templates that are valid for one producing step but not all of them. I’m fixing that at the same time rather than shipping a narrower but brittle change.
+
+I have the smallest behavior-preserving fix path now: keep centralized compiler validation, preserve the engine-facing `WorkflowExecutionError` contract for child-workflow message placeholders, and correct the multi-producer artifact-template validation so it accepts any valid producer context instead of requiring all of them.
+
+I’m at the edit step now. The compiler change needs one correctness tweak anyway, and I can preserve the existing engine contract without widening the runtime surface. After that I’ll rerun the focused placeholder and child-message tests and update the phase notes/decision ledger.
+
+I’ve got the edit shape pinned down. The code changes are confined to the compiler and engine contract boundary, plus the phase notes/decision ledger. After that I’ll rerun the focused unit and contract checks that cover the reviewer finding without dragging in the unrelated child-workflow runtime regression.
+
+The engine boundary change needs one cleanup pass: the helper placement is right, but I dropped the module-level normalization function into the middle of the class body. I’m fixing that placement before running tests.
+
+The focused checks that cover the reviewer finding are green again. I’m doing one small regression sweep on the earlier placeholder/static-graph surfaces before I write the phase notes and the decision entry.
+
+I’m updating the run-local notes now. The decision that matters for later turns is the distinction between direct compiler callers and direct engine callers: compiler surfaces now fail fast on invalid workflow-step messages, but the engine still preserves the established execution-error contract for that surface.
+
+Scope considered
+
+- Phase-local `placeholder-reference-graph` work only.
+- Reviewer finding `IMP-001` plus the adjacent regression surface around child-workflow message placeholder handling.
+
+What I analyzed
+
+- Compiler-side placeholder/reference-graph wiring in [compiler.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/botlane/core/compiler.py).
+- Direct-engine compile boundary in [engine.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/botlane/core/engine.py).
+- Existing placeholder and child-workflow contract tests in [test_placeholder_refs.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/tests/unit/test_placeholder_refs.py) and [test_child_workflows.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/tests/contract/engine/test_child_workflows.py).
+- Active phase artifacts: [feedback.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/botlane-v3-second-pass-greenfield-architecture-s-a9df943f/runs/run-20260509T125912Z-8deb38fd/artifacts/implement/phases/placeholder-reference-graph/feedback.md), [implementation_notes.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/botlane-v3-second-pass-greenfield-architecture-s-a9df943f/runs/run-20260509T125912Z-8deb38fd/artifacts/implement/phases/placeholder-reference-graph/implementation_notes.md), and [decisions.txt](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/botlane-v3-second-pass-greenfield-architecture-s-a9df943f/runs/run-20260509T125912Z-8deb38fd/decisions.txt).
+
+What I changed
+
+- In [compiler.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/botlane/core/compiler.py), kept centralized validation for `workflow_step_message` and `artifact_template` refs and fixed artifact-template validation so multi-producer artifacts validate against any compatible producer context rather than all producer contexts.
+- In [engine.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/botlane/core/engine.py), added a narrow compile boundary wrapper so direct `Engine(...)` callers still get `WorkflowExecutionError` with the established runtime-style wording for invalid child-workflow message placeholders.
+- Kept the compile-time placeholder tests in [test_placeholder_refs.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/tests/unit/test_placeholder_refs.py) and updated the phase notes / decision ledger in [implementation_notes.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/botlane-v3-second-pass-greenfield-architecture-s-a9df943f/runs/run-20260509T125912Z-8deb38fd/artifacts/implement/phases/placeholder-reference-graph/implementation_notes.md) and [decisions.txt](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/botlane-v3-second-pass-greenfield-architecture-s-a9df943f/runs/run-20260509T125912Z-8deb38fd/decisions.txt).
+
+Key findings / decisions
+
+- The reviewer finding was valid: `workflow_step_message` and `artifact_template` surfaces needed to flow through the shared validator instead of being partially recorded or silently ignored.
+- Preserving public behavior required a narrow exception translation at the direct-engine boundary rather than reverting compiler validation.
+- Artifact-template validation had an additional correctness bug for multi-producer artifacts; fixing only the reviewer repro without that adjustment would have introduced a new regression.
+
+Open issues / next step
+
+- Focused validation passed:
+  - `.venv/bin/python -m pytest tests/unit/test_placeholder_refs.py -q`
+  - `.venv/bin/python -m pytest tests/contract/engine/test_child_workflows.py -k invalid_ctx_field -q`
+  - `.venv/bin/python -m pytest tests/runtime/test_runtime_static_graph.py::test_topology_artifacts_are_written_additively_with_canonical_finish_surface -q`
+  - `.venv/bin/python -m pytest tests/contract/engine/test_prompt_context.py -q`
+- Next step is verifier re-review of the phase artifacts and updated compiler/engine boundary.

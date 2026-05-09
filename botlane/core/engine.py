@@ -10,6 +10,7 @@ import importlib
 import inspect
 import json
 from pathlib import Path
+import re
 from typing import Any, Callable, Literal, Mapping
 from uuid import uuid4
 
@@ -43,6 +44,7 @@ from .errors import (
     ProviderExecutionError,
     StepExecutionError,
     WorkflowExecutionError,
+    WorkflowValidationError,
     enrich_execution_error,
     exception_checkpoint_state,
     exception_failure_context,
@@ -407,6 +409,22 @@ class _EngineStateService:
         self._engine._update_final_item_runtime_state(store, event)
 
 
+_WORKFLOW_STEP_MESSAGE_UNKNOWN_FIELD_RE = re.compile(
+    r"^(?P<prefix>workflow step '.*' message placeholder \{[^}]+\}) "
+    r"references unknown (?:State|Input|Params) field (?P<field>'.*')$"
+)
+
+
+def _runtime_workflow_validation_message(exc: WorkflowValidationError) -> str | None:
+    message = str(exc)
+    match = _WORKFLOW_STEP_MESSAGE_UNKNOWN_FIELD_RE.match(message)
+    if match is not None:
+        return f"{match.group('prefix')} references unknown runtime field {match.group('field')}"
+    if "workflow step " in message and " message placeholder {" in message:
+        return message
+    return None
+
+
 class Engine:
     """Strict workflow engine."""
 
@@ -427,7 +445,7 @@ class Engine:
         runtime_event_sink: Callable[[str, Mapping[str, Any]], None] | None = None,
         provider_policy_resolver: ProviderPolicyResolverProtocol | None = None,
     ) -> None:
-        self.compiled = workflow if isinstance(workflow, WorkflowPlan) else compile_workflow(workflow)
+        self.compiled = workflow if isinstance(workflow, WorkflowPlan) else self._compile_runtime_workflow(workflow)
         self.provider = validate_llm_provider(provider)
         self.session_store = session_store
         self.checkpoint_store = checkpoint_store
@@ -458,6 +476,16 @@ class Engine:
         self.workflow_invoker = WorkflowInvoker(self)
         self.provider_contract_builder = ProviderContractBuilder(self)
         self.branch_group_runtime = BranchGroupRuntime(self)
+
+    @staticmethod
+    def _compile_runtime_workflow(workflow: type[Any]) -> WorkflowPlan:
+        try:
+            return compile_workflow(workflow)
+        except WorkflowValidationError as exc:
+            message = _runtime_workflow_validation_message(exc)
+            if message is None:
+                raise
+            raise WorkflowExecutionError(message) from exc
 
     def run(
         self,
