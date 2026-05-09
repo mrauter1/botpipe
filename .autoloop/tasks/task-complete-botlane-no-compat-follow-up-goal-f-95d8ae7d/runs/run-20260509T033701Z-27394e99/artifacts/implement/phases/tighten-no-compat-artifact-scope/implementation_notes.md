@@ -25,6 +25,7 @@
 - `ACTIVE_CURRENT_RUN_RELATIVE_ROOT`
 - `ACTIVE_CURRENT_RUN_EXACT_EXCEPTION_PATHS`
 - `ACTIVE_CURRENT_RUN_REQUIRED_CLEAN_PATHS`
+- `LEGACY_RECURSIVE_WRAPPER`
 - `_iter_repo_root_artifact_policy_files`
 - `_artifact_tree_file_inventory`
 - `_artifact_tree_top_level_entries`
@@ -42,7 +43,7 @@
 ## Assumptions
 
 - The bootstrap seed, recovery state, lock pid, and archived recursive task prompts are historical or runtime-owned records that should stay frozen rather than rewritten in place.
-- The active run's request/log/plan records remain exact operational exceptions because they are authoritative run artifacts, not maintained product docs.
+- The active run's request/log/plan records and reviewer feedback record remain exact operational exceptions because they are authoritative run artifacts, not maintained product docs.
 
 ## Preserved invariants
 
@@ -53,6 +54,7 @@
 
 - Strictness now treats repo-root recursive-memory files and the clean slice of the active run tree as in-contract content.
 - New files under the recursive-memory tree or the active run tree must be either clean and inventoried or added as exact reviewed exceptions.
+- The exact branding scan now treats the legacy recursive wrapper token as forbidden alongside the other old product-name literals.
 
 ## Known non-changes
 

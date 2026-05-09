@@ -840,3 +840,65 @@ Minimal next step: remove the remaining `recursive_autoloop/` literal from the m
 <loop-control>
 {"schema":"docloop.loop_control/v1","kind":"promise","promise":"INCOMPLETE"}
 </loop-control>
+
+
+---
+run_id=run-20260509T033701Z-27394e99 | entry=session_turn | pair=implement | phase=producer | cycle=2 | attempt=1 | thread_id=019e0ad5-7cc7-72c1-ab1f-9e5b7fa297c3
+---
+provider=codex
+mode=resume
+template=/home/rauter/.local/share/pipx/venvs/autoloop/lib/python3.12/site-packages/autoloop/templates/implement_producer.md
+session_id=019e0ad5-7cc7-72c1-ab1f-9e5b7fa297c3
+
+
+---
+run_id=run-20260509T033701Z-27394e99 | entry=phase_output | pair=implement | phase=producer | process=codex-agent | cycle=2 | attempt=1 | thread_id=019e0ad5-7cc7-72c1-ab1f-9e5b7fa297c3
+---
+I’m addressing the reviewer’s blocker now. First I’m confirming the remaining `recursive_autoloop` hit and the exact strictness pattern gap, then I’ll patch both together so the maintained artifact and the regression test close at the same seam.
+
+I confirmed the blocker is isolated: one leftover maintained literal and one missing exact scanner token. I’m patching both together and updating the notes so the final validation reflects the narrowed fix.
+
+The fix is in. I’m rerunning the literal search for `recursive_autoloop` first, then the strictness slice, then the explicit literal scan and full suite so the blocker is closed with fresh validation.
+
+The new token is wired, but the strictness slice has two failures. I’m pulling the failure details now before editing again so I only fix the actual fallout from adding the new pattern.
+
+The fallout is narrow: the runtime created the active phase session JSON after the earlier inventory snapshot, and the reviewer feedback file now legitimately contains the legacy token inside the recorded blocking finding. I’m checking the phase session contents, then I’ll tighten the current-run policy so those reviewer/runtime records are treated explicitly instead of pretending they stay clean.
+
+I’ve got the exact current-run drift now: the phase session file is a clean runtime record, and the reviewer feedback file has to be an explicit exception because it can contain legacy tokens while documenting a blocker. I’m updating the policy and notes to match that reality.
+
+The policy now matches the live current-run artifacts. I’m rerunning the strictness slice again, then the explicit literal scan and the full suite, so the reviewer blocker and the runtime-record drift are both covered in the final proof.
+
+The explicit literal scan is clean. I’m just waiting out the strictness slice before I launch the full suite.
+
+The strictness slice is back to green with the reviewer-driven current-run policy adjustment in place. I’m running the full suite now so the final state is validated after the blocker fix, not before it.
+
+The final full-suite rerun is underway. I’m watching for any fallout beyond the strictness layer, then I’ll update the notes one last time with the post-fix validation evidence.
+
+The full suite is through the strictness slice again with the blocker fix intact. I’m just waiting on the unit tail before I refresh the implementation notes and close the phase.
+
+Scope considered
+
+The reviewer-raised `recursive_autoloop` blocker in [tests/strictness/test_no_compat.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/tests/strictness/test_no_compat.py), the maintained gap ledger [framework_gap_ledger.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop_recursive/framework_gap_ledger.md), and the active current-run artifact policy after the reviewer feedback/session artifacts changed the live inventory.
+
+What I analyzed
+
+I confirmed the remaining maintained-tree hit was isolated to one `recursive_autoloop/` literal in the gap ledger, and that the exact branding scan never matched that token. I also rechecked the active current-run inventory after the reviewer pass and found one new runtime-created session file plus the reviewer feedback file, which legitimately carries the legacy token inside the recorded finding.
+
+What I changed
+
+I added `LEGACY_RECURSIVE_WRAPPER = "recursive_autoloop"` and extended `LEGACY_BRANDING_PATTERNS` to scan for it in [tests/strictness/test_no_compat.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/tests/strictness/test_no_compat.py). I replaced the last maintained `recursive_autoloop/` literal in [framework_gap_ledger.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop_recursive/framework_gap_ledger.md) with `recursive_botlane/`.
+
+I also adjusted the active current-run policy so the reviewer-owned [feedback.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/task-complete-botlane-no-compat-follow-up-goal-f-95d8ae7d/runs/run-20260509T033701Z-27394e99/artifacts/implement/phases/tighten-no-compat-artifact-scope/feedback.md) is an exact exception and the runtime-created phase session JSON is an explicit clean file. I updated [implementation_notes.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/task-complete-botlane-no-compat-follow-up-goal-f-95d8ae7d/runs/run-20260509T033701Z-27394e99/artifacts/implement/phases/tighten-no-compat-artifact-scope/implementation_notes.md) and appended the non-obvious scanner decision to [decisions.txt](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/task-complete-botlane-no-compat-follow-up-goal-f-95d8ae7d/runs/run-20260509T033701Z-27394e99/decisions.txt).
+
+Key findings / decisions
+
+The reviewer blocker was valid: the earlier implementation cleaned the maintained files for `autoloop`/`.autoloop` but still let the legacy wrapper token slip through. The fix keeps the scanner aligned with the stated no-compat policy instead of relying on ad hoc grep coverage.
+
+Validation after the fix:
+- `./.venv/bin/python -m pytest tests/strictness/test_no_compat.py` -> `66 passed`
+- literal legacy-name scan across the maintained product tree plus the in-contract recursive-memory and active-run files -> clean
+- `./.venv/bin/python -m pytest` -> `1198 passed, 1 warning`
+
+Open issues / next step
+
+No blocker remains on the implementation side. The only remaining item is the existing full-suite warning in `tests/unit/test_provider_boundary_core.py:661`, unchanged by this phase, and the next step is verifier re-review of the updated state.
