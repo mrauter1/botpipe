@@ -264,3 +264,53 @@ def test_branch_manifest_schema_context_and_outcome_remain_stable() -> None:
     assert event.tag == "question"
     assert event.question == "cost: Approve cost review?"
     assert event.reason == "One or more branches need input."
+
+
+def test_render_branch_group_context_preserves_empty_section_fallbacks() -> None:
+    manifest = {
+        "schema": "botlane.branch_results/v1",
+        "kind": "parallel",
+        "name": "reviews",
+        "started_at": "2026-05-09T08:00:00+00:00",
+        "finished_at": "2026-05-09T08:00:01+00:00",
+        "duration_ms": 1000,
+        "concurrency": 2,
+        "settle": "wait_all",
+        "success_routes": (),
+        "branches": [
+            {
+                "name": "security",
+                "index": 0,
+                "input": {"area": "security"},
+                "step_name": "security_review",
+                "status": "completed",
+                "route": None,
+                "destination": "publish",
+                "runtime_control": None,
+                "reason": None,
+                "question": None,
+                "artifacts": [],
+                "raw_output_path": None,
+                "raw_output_paths": {},
+                "provider_session": None,
+                "provider_sessions": {},
+                "error": None,
+                "started_at": "2026-05-09T08:00:00+00:00",
+                "finished_at": "2026-05-09T08:00:01+00:00",
+                "duration_ms": 1000,
+                "usage": {},
+            }
+        ],
+    }
+
+    context_text = render_branch_group_context(manifest)
+
+    assert "- Success routes: (none)" in context_text
+    assert "## Route Summary" in context_text
+    assert "- No branch route events were produced." in context_text
+    assert "## Failure Summary" in context_text
+    assert "## Needs Input Details" in context_text
+    assert "## Cancellation Details" in context_text
+    assert context_text.count("- None.") == 3
+    assert "- Artifacts: (none)" in context_text
+    assert "- Error summary: (none)" in context_text

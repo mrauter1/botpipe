@@ -523,3 +523,48 @@ Open issues / next step
 <loop-control>
 {"schema":"docloop.loop_control/v1","kind":"promise","promise":"COMPLETE"}
 </loop-control>
+
+
+---
+run_id=run-20260509T124548Z-f67cf8d4 | entry=session_turn | pair=test | phase=producer | cycle=1 | attempt=1 | thread_id=019e0cd5-521f-7d82-95d2-393e92f69ab8
+---
+provider=codex
+mode=resume
+template=/home/rauter/.local/share/pipx/venvs/autoloop/lib/python3.12/site-packages/autoloop/templates/test_producer.md
+session_id=019e0cd5-521f-7d82-95d2-393e92f69ab8
+
+
+---
+run_id=run-20260509T124548Z-f67cf8d4 | entry=phase_output | pair=test | phase=producer | process=codex-agent | cycle=1 | attempt=1 | thread_id=019e0cd5-521f-7d82-95d2-393e92f69ab8
+---
+I’m checking the current test-phase artifacts and the existing changed-area tests before deciding whether the phase still needs additional repository-side coverage beyond the tests already added during implementation.
+
+The implementation already added the direct inventory and alias tests, but the branch-group renderer still only had one higher-level assertion. I’m adding one focused regression test for the new empty-section/list-helper paths so the refactor is locked from both directions.
+
+I’ve added the missing empty-section renderer check. Running the focused changed-area suites now so the test-phase artifacts reflect an actual verified coverage map, not just intended coverage.
+
+The focused suite is green at `120 passed`. I’m updating the test strategy with the behavior-to-coverage map and recording the exact additions in the test feedback artifact.
+
+Scope considered
+- Phase-local test work for placeholder validation, artifact inventory, compiled-step rebuilding, and branch-group context rendering.
+- Active test artifacts plus the request, implementation notes, and run-local decisions.
+
+What I analyzed
+- The changed-area tests already added in `tests/unit/test_inventory.py` and `tests/unit/test_placeholder_refs.py`.
+- Existing parity coverage in `tests/unit/test_simple_surface.py`, `tests/unit/test_step_plans.py`, `tests/unit/test_route_contracts.py`, and `tests/contract/test_branch_result_serialization.py`.
+- The refactored branch-group renderer to find any remaining untested helper/fallback paths.
+
+What I changed
+- Added one focused regression test to `tests/contract/test_branch_result_serialization.py` for empty-section fallback rendering when there are no route events, failures, needs-input branches, or cancellations.
+- Updated the behavior-to-coverage map in `.autoloop/.../artifacts/test/phases/authoring-and-builder-reducers/test_strategy.md`.
+- Appended the test-phase summary to `.autoloop/.../artifacts/test/phases/authoring-and-builder-reducers/feedback.md`.
+
+Key findings / decisions
+- The implementation-side additions already covered the direct inventory and placeholder alias risks well, so the remaining useful gap was branch-group empty-section rendering after the section-helper split.
+- I kept the validation deterministic and phase-local: no runtime engine or workflow-discovery expansion, since those are explicitly out of scope.
+- Targeted validation passed with `120` tests:
+  `.venv/bin/python -m pytest tests/unit/test_placeholder_refs.py tests/unit/test_simple_surface.py tests/unit/test_inventory.py tests/unit/test_step_plans.py tests/unit/test_route_contracts.py tests/contract/test_branch_result_serialization.py`
+
+Open issues / next step
+- No open issues in this phase-local test slice.
+- If the next phase touches runtime lifecycle or discovery ordering, those areas will need their own direct parity expansion rather than folding more into this phase.

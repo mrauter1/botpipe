@@ -58,10 +58,18 @@ class StepHookSpec:
 
 
 @dataclass(frozen=True, slots=True)
+class StepSource:
+    authoring_kind: str
+    declaration_name: str | None = None
+    source_module: str | None = None
+    source_qualname: str | None = None
+
+
+@dataclass(frozen=True, slots=True)
 class StepHeader:
     name: str
     kind: str
-    original_step: Any
+    source: StepSource | None
     session_name: str | None
     scope_name: str | None
     io: StepIO
@@ -70,7 +78,7 @@ class StepHeader:
     provider_policy: Any
 
 
-ProviderTurnKind: TypeAlias = Literal["llm", "producer", "verifier", "operation"]
+ProviderTurnKind: TypeAlias = Literal["llm", "producer", "verifier"]
 
 
 @dataclass(frozen=True, slots=True)
@@ -129,7 +137,7 @@ class BranchPlan:
 @dataclass(frozen=True, slots=True)
 class BranchGroupPlan:
     name: str
-    kind: str
+    kind: Literal["parallel", "fan_out"]
     branches: tuple[BranchPlan, ...]
     concurrency: int | None
     settle: str
