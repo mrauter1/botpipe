@@ -1233,3 +1233,58 @@ Open issues / next step
 
 - No phase-local blocking issue remains from the reviewer feedback.
 - Next step is verifier rerun for the updated phase artifacts and code.
+
+
+---
+run_id=run-20260509T045359Z-e2586b1f | entry=session_turn | pair=implement | phase=verifier | cycle=2 | attempt=1 | thread_id=019e0b56-735d-7c20-8aa5-b760d0b9b9a6
+---
+provider=codex
+mode=resume
+template=/home/rauter/.local/share/pipx/venvs/autoloop/lib/python3.12/site-packages/autoloop/templates/implement_verifier.md
+session_id=019e0b56-735d-7c20-8aa5-b760d0b9b9a6
+
+
+---
+run_id=run-20260509T045359Z-e2586b1f | entry=phase_output | pair=implement | phase=verifier | process=codex-agent | cycle=2 | attempt=1 | thread_id=019e0b56-735d-7c20-8aa5-b760d0b9b9a6
+---
+I’m reviewing the updated parity-carrier fix against the phase contract and the previous blocking findings. I’ll check the active criteria, verify the revised adapter behavior, and then update only the phase review artifacts.
+
+The structural fix looks aligned with the phase design: canonical route ownership stays on `WorkflowPlan`, and branch-group parity is now explicit instead of hidden on `StepHeader`. I’m running the focused plan-adapter tests once from the reviewer side before I close the criteria.
+
+The focused adapter tests pass under review, and I don’t see a remaining architecture or compatibility problem inside the phase scope. I’m updating the reviewer artifacts to reflect that the earlier blockers are resolved and the phase is complete.
+
+Scope considered
+
+- Phase-local review for `step-and-workflow-plans`.
+- Reviewed the updated implementation in `botlane/core/step_plans.py` and `botlane/core/plan_adapters.py`, the companion test updates in `tests/unit/test_step_plans.py`, the phase `implementation_notes.md`, and the run-local `decisions.txt`.
+- Updated only the active review artifacts: `criteria.md` and `feedback.md`.
+
+What I analyzed
+
+- Whether the producer fix removed the hidden `CompiledStep` bag from `StepHeader` while preserving compiled round-trip parity.
+- Whether branch-group reconstruction now avoids the invalid `branch_group=None` fallback and uses explicit adapter-owned parity state.
+- Whether the fix stays within the accepted phase scope and the recorded decisions.
+
+What I reviewed
+
+- `StepHeader.original_step` ownership and route-table duplication risk.
+- Private `_compiled_step` parity fields on the typed step-plan variants.
+- Branch-group compiled reconstruction behavior in `compiled_step_from_step_plan(...)`.
+- Focused reviewer validation:
+  - `.venv/bin/python -m pytest tests/unit/test_step_plans.py tests/unit/test_workflow_plan_adapters.py`
+
+Key findings / decisions
+
+- The earlier blocking findings are resolved.
+- `StepHeader.original_step` now holds the authored step object, so canonical route ownership remains on `WorkflowPlan.routes`.
+- Exact compiled parity is now explicit and adapter-owned via private step-plan fields, which is acceptable for this phase.
+- Branch-group reconstruction no longer silently degrades to `branch_group=None`.
+
+Open issues / next step
+
+- No blocking issues remain in this phase scope.
+- Criteria were marked complete and the feedback artifact was appended with a closure note.
+
+<loop-control>
+{"schema":"docloop.loop_control/v1","kind":"promise","promise":"COMPLETE"}
+</loop-control>
