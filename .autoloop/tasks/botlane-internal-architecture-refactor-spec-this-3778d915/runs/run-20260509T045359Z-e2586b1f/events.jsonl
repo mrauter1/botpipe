@@ -49,3 +49,7 @@
 {"ts": "2026-05-09T06:03:17.411411+00:00", "run_id": "run-20260509T045359Z-e2586b1f", "seq": 49, "event_type": "phase_finished", "pair": "test", "phase": "producer", "cycle": 1, "attempt": 1, "empty_output": false, "phase_id": "route-contract-adapters"}
 {"ts": "2026-05-09T06:04:34.329530+00:00", "run_id": "run-20260509T045359Z-e2586b1f", "seq": 50, "event_type": "phase_finished", "pair": "test", "phase": "verifier", "cycle": 1, "attempt": 1, "empty_output": false, "phase_id": "route-contract-adapters"}
 {"ts": "2026-05-09T06:04:34.467824+00:00", "run_id": "run-20260509T045359Z-e2586b1f", "seq": 51, "event_type": "pair_completed", "pair": "test", "cycle": 1, "attempt": 1, "phase_id": "route-contract-adapters"}
+{"ts": "2026-05-09T06:04:34.598890+00:00", "run_id": "run-20260509T045359Z-e2586b1f", "seq": 52, "event_type": "phase_completed", "pair": "test", "phase_id": "route-contract-adapters", "phase_mode": "single"}
+{"ts": "2026-05-09T06:04:34.601917+00:00", "run_id": "run-20260509T045359Z-e2586b1f", "seq": 53, "event_type": "phase_started", "phase_id": "step-and-workflow-plans", "phase_mode": "single"}
+{"ts": "2026-05-09T06:04:34.602971+00:00", "run_id": "run-20260509T045359Z-e2586b1f", "seq": 54, "event_type": "pair_started", "pair": "implement", "phase_id": "step-and-workflow-plans"}
+{"ts": "2026-05-09T06:04:34.603066+00:00", "run_id": "run-20260509T045359Z-e2586b1f", "seq": 55, "event_type": "cycle_started", "pair": "implement", "cycle": 1, "attempt": 1, "phase_id": "step-and-workflow-plans"}
