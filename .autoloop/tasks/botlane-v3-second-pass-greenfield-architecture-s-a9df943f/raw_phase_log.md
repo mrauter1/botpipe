@@ -1055,3 +1055,48 @@ Validation run:
 <loop-control>
 {"schema":"docloop.loop_control/v1","kind":"promise","promise":"INCOMPLETE"}
 </loop-control>
+
+
+---
+run_id=run-20260509T125912Z-8deb38fd | entry=session_turn | pair=test | phase=verifier | cycle=1 | attempt=1 | thread_id=019e0cf4-0b68-7da2-95fb-5cff4df28a4a
+---
+provider=codex
+mode=resume
+template=/home/rauter/.local/share/pipx/venvs/autoloop/lib/python3.12/site-packages/autoloop/templates/test_verifier.md
+session_id=019e0cf4-0b68-7da2-95fb-5cff4df28a4a
+
+
+---
+run_id=run-20260509T125912Z-8deb38fd | entry=phase_output | pair=test | phase=verifier | process=codex-agent | cycle=1 | attempt=1 | thread_id=019e0cf4-0b68-7da2-95fb-5cff4df28a4a
+---
+I’m auditing the new phase tests against the exact cutover risks first. I’ll check the added coverage, the test strategy, and the validation evidence before I decide whether the phase test artifact can be marked complete.
+
+The key question is whether the test work itself is sound, not whether the runtime code is already green. I’m rerunning the focused additions and the broader route subset so the audit can distinguish “good regression tests” from “detected implementation failures.”
+
+The focused additions passed again. I’m waiting on the broader route subset only to confirm whether the failures are still implementation regressions rather than flaky coverage.
+
+I’m treating this as a coverage audit, not a code review. The material gap is that the new direct regression guard proves `Continue` precedence, but it still doesn’t directly guard the terminal `RouteAction` branches that AC-2 requires the engine to honor the same way.
+
+Scope considered
+
+Phase `atomic-plan-runtime-cutover` test work only. I reviewed the new/changed tests in [tests/unit/test_engine_route_actions.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/tests/unit/test_engine_route_actions.py) and [tests/contract/test_provider_turn_plan_adapter.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/tests/contract/test_provider_turn_plan_adapter.py), plus the phase artifacts [test_strategy.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/botlane-v3-second-pass-greenfield-architecture-s-a9df943f/runs/run-20260509T125912Z-8deb38fd/artifacts/test/phases/atomic-plan-runtime-cutover/test_strategy.md), [criteria.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/botlane-v3-second-pass-greenfield-architecture-s-a9df943f/runs/run-20260509T125912Z-8deb38fd/artifacts/test/phases/atomic-plan-runtime-cutover/criteria.md), and [feedback.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/botlane-v3-second-pass-greenfield-architecture-s-a9df943f/runs/run-20260509T125912Z-8deb38fd/artifacts/test/phases/atomic-plan-runtime-cutover/feedback.md).
+
+What I analyzed
+
+I checked whether the added coverage directly protects the AC-2 cutover risk: engine control flow must be driven by canonical `RouteAction`, not legacy `destination` strings. I also verified the producer’s claimed validation split by rerunning the focused additions and the broader route/engine subset.
+
+What I reviewed
+
+The focused new coverage passed again: `6 passed`. The broader subset failed again with the same two implementation regressions already noted by the producer: the child-workflow step path still expects removed step metadata, and one artifact-missing error message now exposes `ArtifactId(...)` instead of the prior public-facing artifact name string.
+
+Key findings / decisions
+
+I recorded one blocking test-audit finding in the phase feedback artifact. The added direct regression guard only proves action precedence for `Continue`; it does not directly protect the terminal `RouteAction` branches (`Finish`, `AwaitInput`, `FailAction`) against the same legacy-destination regression. That leaves a material AC-2 gap because the current provider-turn assertions only observe matching `route_decision`/`action` payloads and would not catch `_handle_step_result(...)` reverting to destination-driven terminal control flow.
+
+Open issues / next step
+
+The next test turn should add narrow terminal-action mismatch tests against `_handle_step_result(...)`, then rerun the same focused route/engine subset. I updated the audit criteria to keep `Coverage Quality`, `Regression Protection`, and `Edge Cases / Failure Paths` unchecked, and left `Reliability` plus `Behavioral Intent` checked.
+
+<loop-control>
+{"schema":"docloop.loop_control/v1","kind":"promise","promise":"INCOMPLETE"}
+</loop-control>
