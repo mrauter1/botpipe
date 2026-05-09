@@ -181,3 +181,125 @@ phase_mode=single
 phase_ids=provider-policy-translators,authoring-and-builder-reducers,runtime-and-discovery-extraction,conditional-capability-entry-cleanup
 explicit=True
 current_phase_index=0
+
+
+---
+run_id=run-20260509T124548Z-f67cf8d4 | entry=session_turn | pair=implement | phase=producer | cycle=1 | attempt=1 | thread_id=019e0cca-d75f-78b3-8234-0179e453eea6
+---
+provider=codex
+mode=start
+template=/home/rauter/.local/share/pipx/venvs/autoloop/lib/python3.12/site-packages/autoloop/templates/implement_producer.md
+session_id=019e0cca-d75f-78b3-8234-0179e453eea6
+
+
+---
+run_id=run-20260509T124548Z-f67cf8d4 | entry=phase_output | pair=implement | phase=producer | process=codex-agent | cycle=1 | attempt=1 | thread_id=019e0cca-d75f-78b3-8234-0179e453eea6
+---
+I’m scoping the provider-policy translator phase first: reading the active plan artifacts, the current policy/emitter implementations, and the nearby tests so I can refactor only the approved surface and preserve behavior.
+
+I’ve confirmed the phase scope and invariants. Next I’m reading the three target modules and the existing provider-policy tests to identify the smallest refactor that preserves current outputs and error wording.
+
+The current implementations match the hotspot description closely: large monolithic translators with preserved message strings that we need to keep exact. I’m reading the rest of the policy lowering and the existing emitter tests now so I can refactor around the current assertions instead of guessing at parity.
+
+I have enough context to split this into local helpers without widening scope. I’m checking the remaining emitter helpers and the policy/unit test matrix so I can preserve ordering, defaults, and exact failure cases before I patch anything.
+
+I’ve mapped the existing assertions: most parity checks already cover behavior, but not the full mode/error matrix the phase contract asks for. I’m checking the worktree state and then I’ll patch the three modules plus focused regression tests in one pass.
+
+There’s a very dirty worktree, but the target modules are still isolated enough to edit safely. I’m keeping scope to `botlane/policy.py`, the two emitter modules, and the focused tests only.
+
+I’ve finished the analysis pass. I’m patching the two emitters into small coordinator/helper flows and splitting `Policy` override lowering into authored-copy, effect resolution, and section emitters, then I’ll add focused parity tests for mode mapping and exact validation failures.
+
+The refactor is in place. I’m adding a few high-signal regression tests now: mode-mapping matrices for both emitters, the special unsandboxed cases, and exact public-policy validation messages for the incompatibility branches I split out.
+
+I found one test-side issue while wiring the exact-message assertions: the regex escape needs `re.escape`, not a pytest helper. I’m fixing that and then running the focused policy/emitter test slice before I touch the run artifacts.
+
+The repo doesn’t have a `pytest` shell entrypoint on `PATH`, so I’m switching to `python -m pytest` for verification.
+
+The base interpreter is present, but `pytest` isn’t installed in that environment. I’m locating the project’s test environment or virtualenv instead of guessing, then I’ll run the same focused slice there.
+
+The system Python is missing even the project’s declared dependency set, so the current blocker is environmental, not code-related. I’m installing the minimal local test dependencies (`pydantic`, `pytest`) and then rerunning the focused slice.
+
+The refactor code is holding; the failing cases are all test setup issues because `ProviderPolicy` itself forbids `full_auto_unsandboxed` unless the sandbox is `danger_full_access`. I’m rewriting those cases to use valid resolved policies and replacing the impossible disabled-sandbox case with a valid unsupported-sandbox assertion.
+
+The targeted slice is green. I’m running one more adjacent pass over the simple-policy and provider-policy config tests, because those are the closest regression surfaces for the helper extraction in `policy.py`.
+
+The code changes are verified. I created a temporary virtualenv only to run the tests; I’m deleting that environment now so the worktree stays focused on the requested source and test files.
+
+I’m updating the phase artifacts now. I’m recording the non-obvious implementation decision about preserving message/order parity and capturing the checklist mapping, invariants, and validation commands in `implementation_notes.md`.
+
+Scope considered
+- Phase-local provider-policy translator work only: [codex_policy.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/botlane/runtime/providers/codex_policy.py:101), [claude_policy.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/botlane/runtime/providers/claude_policy.py:104), [policy.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/botlane/policy.py:164), plus focused regressions in [test_provider_policy_emitters.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/tests/runtime/test_provider_policy_emitters.py:234) and [test_policy.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/tests/unit/test_policy.py:203).
+- Out of scope stayed untouched: engine loop, discovery, inventory, placeholders, `build/lib/*`.
+
+What I analyzed
+- The existing monolithic emitters to preserve payload overwrite precedence, unsupported/lossy/unsafe message ordering, and Claude CLI arg ordering.
+- Public `Policy(...)` lowering in `_policy_layer_to_override` to preserve inference and exact incompatibility wording.
+- Adjacent regression surfaces in `tests/runtime/test_provider_policy_emitters.py`, `tests/unit/test_policy.py`, `tests/unit/test_simple_policy.py`, and `tests/runtime/test_provider_policy_config.py`.
+
+What I changed
+- Refactored Codex emission into a small coordinator with private context, translation maps, and focused helpers for model, permission mode, sandbox resolution, filesystem, network, and unsupported-section reporting in [codex_policy.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/botlane/runtime/providers/codex_policy.py:101) and [codex_policy.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/botlane/runtime/providers/codex_policy.py:302).
+- Refactored Claude emission into a private emission context plus helpers for model, instruction/telemetry notes, permission handling, sandbox/filesystem/network emission, env finalization, and effective-enforcement reporting in [claude_policy.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/botlane/runtime/providers/claude_policy.py:104) and [claude_policy.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/botlane/runtime/providers/claude_policy.py:456).
+- Split public policy lowering into explicit model copy, sandbox/network effect resolution, and section emitters in [policy.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/botlane/policy.py:164) and [policy.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/botlane/policy.py:497).
+- Added parity tests for Codex/Claude permission-mode mapping and special error handling, plus exact public-policy validation message coverage in [test_provider_policy_emitters.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/tests/runtime/test_provider_policy_emitters.py:234), [test_provider_policy_emitters.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/tests/runtime/test_provider_policy_emitters.py:384), and [test_policy.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/tests/unit/test_policy.py:203).
+- Updated the run artifacts in [implementation_notes.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/task-implement-the-refactor-suggestions-below-to-c2f5dbe1/runs/run-20260509T124548Z-f67cf8d4/artifacts/implement/phases/provider-policy-translators/implementation_notes.md:1) and [decisions.txt](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/task-implement-the-refactor-suggestions-below-to-c2f5dbe1/runs/run-20260509T124548Z-f67cf8d4/decisions.txt:8).
+
+Key findings / decisions
+- Helper extraction can change behavior if emit order changes, so I kept the original sequencing intact to preserve message ordering and final payload precedence.
+- `ProviderPolicy` itself forbids `full_auto_unsandboxed` unless sandbox mode is `danger_full_access`, so the new emitter tests use valid resolved policies and keep the impossible combinations out of the public-policy path.
+- Validation completed with:
+  - `.autoloop_test_venv/bin/python -m pytest tests/runtime/test_provider_policy_emitters.py tests/unit/test_policy.py`
+  - `.autoloop_test_venv/bin/python -m pytest tests/unit/test_simple_policy.py tests/runtime/test_provider_policy_config.py`
+  - `python3 -m py_compile botlane/policy.py botlane/runtime/providers/codex_policy.py botlane/runtime/providers/claude_policy.py tests/runtime/test_provider_policy_emitters.py tests/unit/test_policy.py`
+
+Open issues / next step
+- No open code issues from this phase.
+- Next sensible phase is the approved authoring/builder cleanup set, starting with placeholder validation or artifact inventory, after this provider-policy slice is accepted.
+
+
+---
+run_id=run-20260509T124548Z-f67cf8d4 | entry=session_turn | pair=implement | phase=verifier | cycle=1 | attempt=1 | thread_id=019e0cca-d75f-78b3-8234-0179e453eea6
+---
+provider=codex
+mode=resume
+template=/home/rauter/.local/share/pipx/venvs/autoloop/lib/python3.12/site-packages/autoloop/templates/implement_verifier.md
+session_id=019e0cca-d75f-78b3-8234-0179e453eea6
+
+
+---
+run_id=run-20260509T124548Z-f67cf8d4 | entry=phase_output | pair=implement | phase=verifier | process=codex-agent | cycle=1 | attempt=1 | thread_id=019e0cca-d75f-78b3-8234-0179e453eea6
+---
+I’m auditing the provider-policy refactor against the phase contract first: reading the review artifacts, then checking the changed policy/emitter code and its new tests for any parity drift, hidden regressions, or unnecessary indirection.
+
+I have the review artifact templates. Next I’m reading the final source in the three touched modules and the new test cases directly, because the key review question is parity drift in helper ordering and edge-case handling rather than diff volume.
+
+The code paths I audited stay within the approved scope and preserve the original control flow order where parity matters. I’m marking the review artifacts accordingly and recording that I found no blocking or non-blocking issues in this phase.
+
+Scope considered
+- Phase-local review only for the provider-policy translator slice.
+- Reviewed source changes in `botlane/runtime/providers/codex_policy.py`, `botlane/runtime/providers/claude_policy.py`, and `botlane/policy.py`.
+- Reviewed added coverage in `tests/runtime/test_provider_policy_emitters.py` and `tests/unit/test_policy.py`.
+- Updated only the active review artifacts: `criteria.md` and `feedback.md`.
+
+What I analyzed
+- Helper extraction boundaries for Codex and Claude emission, with focus on payload overwrite precedence, unsupported/lossy/unsafe ordering, and Claude CLI arg ordering.
+- Public `Policy(...)` lowering split in `_policy_layer_to_override`, with focus on sandbox/network inference and exact incompatibility wording.
+- Phase notes and decisions to verify the implementation stayed within approved scope and preserved the no-compatibility-shims direction.
+
+What I reviewed
+- The refactor kept the original execution order where parity matters.
+- The new private helpers stayed module-local and did not introduce cross-module abstraction or out-of-scope cleanup.
+- The added regression tests cover the newly split paths that are most likely to drift: permission-mode translation and exact public-policy validation messages.
+- `criteria.md` is fully checked and `feedback.md` records that I found no findings.
+
+Key findings / decisions
+- No blocking findings.
+- No non-blocking findings.
+- Review result: implementation satisfies the phase contract and acceptance criteria as written.
+
+Open issues / next step
+- No open issues in this phase.
+- Work can proceed to the next approved refactor phase.
+
+<loop-control>
+{"schema":"docloop.loop_control/v1","kind":"promise","promise":"COMPLETE"}
+</loop-control>

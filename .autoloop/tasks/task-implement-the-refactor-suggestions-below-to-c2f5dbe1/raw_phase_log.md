@@ -254,3 +254,52 @@ Key findings / decisions
 Open issues / next step
 - No open code issues from this phase.
 - Next sensible phase is the approved authoring/builder cleanup set, starting with placeholder validation or artifact inventory, after this provider-policy slice is accepted.
+
+
+---
+run_id=run-20260509T124548Z-f67cf8d4 | entry=session_turn | pair=implement | phase=verifier | cycle=1 | attempt=1 | thread_id=019e0cca-d75f-78b3-8234-0179e453eea6
+---
+provider=codex
+mode=resume
+template=/home/rauter/.local/share/pipx/venvs/autoloop/lib/python3.12/site-packages/autoloop/templates/implement_verifier.md
+session_id=019e0cca-d75f-78b3-8234-0179e453eea6
+
+
+---
+run_id=run-20260509T124548Z-f67cf8d4 | entry=phase_output | pair=implement | phase=verifier | process=codex-agent | cycle=1 | attempt=1 | thread_id=019e0cca-d75f-78b3-8234-0179e453eea6
+---
+I’m auditing the provider-policy refactor against the phase contract first: reading the review artifacts, then checking the changed policy/emitter code and its new tests for any parity drift, hidden regressions, or unnecessary indirection.
+
+I have the review artifact templates. Next I’m reading the final source in the three touched modules and the new test cases directly, because the key review question is parity drift in helper ordering and edge-case handling rather than diff volume.
+
+The code paths I audited stay within the approved scope and preserve the original control flow order where parity matters. I’m marking the review artifacts accordingly and recording that I found no blocking or non-blocking issues in this phase.
+
+Scope considered
+- Phase-local review only for the provider-policy translator slice.
+- Reviewed source changes in `botlane/runtime/providers/codex_policy.py`, `botlane/runtime/providers/claude_policy.py`, and `botlane/policy.py`.
+- Reviewed added coverage in `tests/runtime/test_provider_policy_emitters.py` and `tests/unit/test_policy.py`.
+- Updated only the active review artifacts: `criteria.md` and `feedback.md`.
+
+What I analyzed
+- Helper extraction boundaries for Codex and Claude emission, with focus on payload overwrite precedence, unsupported/lossy/unsafe ordering, and Claude CLI arg ordering.
+- Public `Policy(...)` lowering split in `_policy_layer_to_override`, with focus on sandbox/network inference and exact incompatibility wording.
+- Phase notes and decisions to verify the implementation stayed within approved scope and preserved the no-compatibility-shims direction.
+
+What I reviewed
+- The refactor kept the original execution order where parity matters.
+- The new private helpers stayed module-local and did not introduce cross-module abstraction or out-of-scope cleanup.
+- The added regression tests cover the newly split paths that are most likely to drift: permission-mode translation and exact public-policy validation messages.
+- `criteria.md` is fully checked and `feedback.md` records that I found no findings.
+
+Key findings / decisions
+- No blocking findings.
+- No non-blocking findings.
+- Review result: implementation satisfies the phase contract and acceptance criteria as written.
+
+Open issues / next step
+- No open issues in this phase.
+- Work can proceed to the next approved refactor phase.
+
+<loop-control>
+{"schema":"docloop.loop_control/v1","kind":"promise","promise":"COMPLETE"}
+</loop-control>
