@@ -90,3 +90,12 @@ No verifier-side blocker remains. The planning artifacts are acceptable for impl
 <loop-control>
 {"schema":"docloop.loop_control/v1","kind":"promise","promise":"COMPLETE"}
 </loop-control>
+
+
+---
+run_id=run-20260509T045359Z-e2586b1f | entry=phase_scope_resolved
+---
+phase_mode=single
+phase_ids=freeze-public-compatibility,boundary-primitives-and-strictness,route-contract-adapters,step-and-workflow-plans,execution-frame-context-migration,provider-turn-and-route-finalization,execution-services-and-collaborators,placeholder-reference-graph,branch-results-locators-and-policy-rules,single-step-parity-and-cleanup
+explicit=True
+current_phase_index=0

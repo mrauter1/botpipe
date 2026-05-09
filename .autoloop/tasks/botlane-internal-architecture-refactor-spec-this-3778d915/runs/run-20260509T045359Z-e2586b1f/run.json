@@ -3,5 +3,46 @@
   "created_at": "2026-05-09T04:53:59.271431+00:00",
   "request_file": "/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/botlane-internal-architecture-refactor-spec-this-3778d915/runs/run-20260509T045359Z-e2586b1f/request.md",
   "artifacts_dir": "/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/botlane-internal-architecture-refactor-spec-this-3778d915/runs/run-20260509T045359Z-e2586b1f/artifacts",
-  "provider": "codex"
+  "provider": "codex",
+  "phase_plan_path": "/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/botlane-internal-architecture-refactor-spec-this-3778d915/runs/run-20260509T045359Z-e2586b1f/artifacts/plan/phase_plan.yaml",
+  "phase_plan_version": 1,
+  "active_phase_selection": {
+    "run_id": "run-20260509T045359Z-e2586b1f",
+    "mode": "single",
+    "phase_ids": [
+      "freeze-public-compatibility",
+      "boundary-primitives-and-strictness",
+      "route-contract-adapters",
+      "step-and-workflow-plans",
+      "execution-frame-context-migration",
+      "provider-turn-and-route-finalization",
+      "execution-services-and-collaborators",
+      "placeholder-reference-graph",
+      "branch-results-locators-and-policy-rules",
+      "single-step-parity-and-cleanup"
+    ],
+    "explicit": true,
+    "current_phase_index": 0,
+    "current_phase_id": "freeze-public-compatibility"
+  },
+  "phase_status": {
+    "freeze-public-compatibility": "in_progress",
+    "boundary-primitives-and-strictness": "planned",
+    "route-contract-adapters": "planned",
+    "step-and-workflow-plans": "planned",
+    "execution-frame-context-migration": "planned",
+    "provider-turn-and-route-finalization": "planned",
+    "execution-services-and-collaborators": "planned",
+    "placeholder-reference-graph": "planned",
+    "branch-results-locators-and-policy-rules": "planned",
+    "single-step-parity-and-cleanup": "planned"
+  },
+  "phase_history": [
+    {
+      "phase_id": "freeze-public-compatibility",
+      "run_id": "run-20260509T045359Z-e2586b1f",
+      "status": "in_progress",
+      "ts": "2026-05-09T04:59:58.362615+00:00"
+    }
+  ]
 }
