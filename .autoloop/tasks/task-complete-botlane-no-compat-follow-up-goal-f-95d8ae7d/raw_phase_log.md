@@ -1371,3 +1371,95 @@ phase_mode=single
 phase_ids=finalize-current-run-artifact-contract
 explicit=True
 current_phase_index=0
+
+
+---
+run_id=run-20260509T041550Z-4b0707de | entry=session_turn | pair=implement | phase=producer | cycle=1 | attempt=1 | thread_id=019e0af7-2806-7420-b8d1-ea347b3defd6
+---
+provider=codex
+mode=start
+template=/home/rauter/.local/share/pipx/venvs/autoloop/lib/python3.12/site-packages/autoloop/templates/implement_producer.md
+session_id=019e0af7-2806-7420-b8d1-ea347b3defd6
+
+
+---
+run_id=run-20260509T041550Z-4b0707de | entry=phase_output | pair=implement | phase=producer | process=codex-agent | cycle=1 | attempt=1 | thread_id=019e0af7-2806-7420-b8d1-ea347b3defd6
+---
+I’m reviewing the strictness policy, the active run-local audit/session artifacts, and the phase notes first so I can classify the six final files correctly before editing `tests/strictness/test_no_compat.py`.
+
+I have the plan and current decision ledger. Next I’m locating the active-run policy constants and checking the live contents of the six audit/session files so I can keep the exception set as narrow as the request requires.
+
+The test is still pointed at the prior run, and the expected final audit files are not present yet in the current run directory. I’m checking the current run tree and adjacent prior-run examples now so I can encode the final contract accurately and decide whether I need to create or clean any run-local audit artifacts.
+
+The current run doesn’t have its audit outputs yet, so the final-state inventory cannot pass unless those six files exist in this run. I’m using the prior run’s audit artifacts as the closest contract template and checking which ones carry legacy literals that must stay exact exceptions versus which can be cleaned.
+
+I have the prior-run audit content and the legacy-literal hotspots. Before editing, I’m taking the full current run inventory so the updated exact-path contract matches what actually exists in `run-20260509T041550Z-4b0707de`, including this phase’s artifact and session paths.
+
+The old active-run contract still names the previous phase files and even a phase-session path that does not exist in this run. I’m reading the strictness assertions around those constants now, then I’ll rewrite the active-run sets to match the real current run plus the final audit files we need to add.
+
+Plan:
+1. Repoint the active-run strictness constants to `run-20260509T041550Z-4b0707de` and replace the stale prior-run file list with the current run’s actual files plus the six final audit/session files.
+2. Create the missing current-run `artifacts/audit/*` files and `sessions/audit.json`, keeping everything required-clean free of legacy literals and leaving only `audit_result.json` as an exact per-file exception.
+3. Run the scoped strictness slice, a targeted legacy-literal scan over the active artifact contract, and then the full pytest suite; if that stays green, I’ll record the implementation notes and any non-obvious decision in the run artifacts.
+
+I’m checking the current run’s existing files for legacy literals before I lock the required-clean set. If any plan or phase artifact already carries a removed token, it has to stay an exact file exception under this contract.
+
+I’ve narrowed the unavoidable exception set to the files that already carry path/log/runtime-owned legacy literals: `decisions.txt`, `events.jsonl`, `raw_phase_log.md`, `run.json`, `artifacts/plan/phase_plan.yaml`, `artifacts/plan/plan.md`, and the planned `artifacts/audit/audit_result.json`. I’m editing the strictness sets and writing the missing audit/session artifacts now.
+
+I’m applying the contract update now: repointing the active run root, switching the walker expectations to the current phase path, and materializing the six final audit/session files with clean wording everywhere except the one unavoidable JSON path record.
+
+The main edit is in place. I’m doing a policy sanity pass before tests: checking for any clean file accidentally left in the exception set and re-running the literal scan over the current run tree to catch wording drift in the newly created audit artifacts.
+
+The inventory split is consistent now. I’m running the strictness slice first; if that passes, I’ll run the targeted artifact scan and then the full suite.
+
+The strictness slice is still running. The ad hoc scan command failed only because `python` is not on PATH here; I’ll rerun that with the repo virtualenv once the test process returns.
+
+The scoped strictness slice is green: `72 passed`. I’m running the targeted artifact scan with the virtualenv interpreter now, then the full suite.
+
+The targeted artifact scan is clean. Full pytest is in progress and has cleared the contract and runtime sections so far; I’m letting it run through the rest of the suite before I close out the notes.
+
+The full suite is past the strictness slice and through most unit coverage without a regression. I’m waiting for the last section and the final summary before I wrap the run artifacts.
+
+The code and artifact changes are green. I’m making one last documentation pass to record the actual validation results in the phase notes, then I’ll close out with the scoped summary the run contract asks for.
+
+Scope considered
+
+- [tests/strictness/test_no_compat.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/tests/strictness/test_no_compat.py:245)
+- Current run-local audit artifacts under `artifacts/audit/`
+- Current run-local `sessions/audit.json`
+- Phase notes and run decisions for `run-20260509T041550Z-4b0707de`
+
+What I analyzed
+
+- The active-run strictness constants were still pinned to the prior run and still referenced stale phase/test artifact paths.
+- The current run did not yet contain the six final audit/session files, so the exact inventory could not pass without materializing them.
+- Prior-run audit content showed only `artifacts/audit/audit_result.json` needs an exact exception because its schema stores an absolute revised-request path; `gap_report.md` could be rewritten cleanly.
+
+What I changed
+
+- Repointed the active current-run contract in [tests/strictness/test_no_compat.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/tests/strictness/test_no_compat.py:245) to `run-20260509T041550Z-4b0707de`.
+- Replaced the stale inventory split with the live current-run file set, classifying only `artifacts/audit/audit_result.json`, `artifacts/plan/phase_plan.yaml`, `artifacts/plan/plan.md`, `decisions.txt`, `events.jsonl`, `raw_phase_log.md`, and `run.json` as exact exceptions.
+- Updated the walker assertion so the current phase implementation notes and `request.md` are scanned as required-clean files in [tests/strictness/test_no_compat.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/tests/strictness/test_no_compat.py:623).
+- Created the missing current-run audit/session artifacts:
+  - `artifacts/audit/audit_result.json`
+  - `artifacts/audit/criteria.md`
+  - `artifacts/audit/feedback.md`
+  - `artifacts/audit/gap_report.md`
+  - `artifacts/audit/revised_request.md`
+  - `sessions/audit.json`
+- Recorded the implementation mapping and validation results in [implementation_notes.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/task-complete-botlane-no-compat-follow-up-goal-f-95d8ae7d/runs/run-20260509T041550Z-4b0707de/artifacts/implement/phases/finalize-current-run-artifact-contract/implementation_notes.md:1).
+
+Key findings / decisions
+
+- The six requested end-of-run files are now explicitly inventoried.
+- `sessions/audit.json` and the audit markdown files stay required-clean.
+- `artifacts/audit/audit_result.json` is the only added exact per-file exception.
+- Validation passed:
+  - `./.venv/bin/python -m pytest tests/strictness/test_no_compat.py -q` -> `72 passed`
+  - targeted literal legacy-name scan over the active artifact contract -> `OK`
+  - `./.venv/bin/python -m pytest` -> `1204 passed, 1 warning`
+
+Open issues / next step
+
+- No blocking issues remain for this scope.
+- The full suite warning is from `tests/unit/test_provider_boundary_core.py:661`; it did not fail the run.
