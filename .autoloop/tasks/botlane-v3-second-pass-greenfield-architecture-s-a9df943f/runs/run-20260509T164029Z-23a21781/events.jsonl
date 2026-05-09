@@ -30,3 +30,4 @@
 {"ts": "2026-05-09T17:42:15.783803+00:00", "run_id": "run-20260509T164029Z-23a21781", "seq": 30, "event_type": "phase_deferred", "pair": "implement", "phase_mode": "single", "phase_id": "execution-services-cutover", "reason": "awaiting enabled test pair completion"}
 {"ts": "2026-05-09T17:42:15.785004+00:00", "run_id": "run-20260509T164029Z-23a21781", "seq": 31, "event_type": "pair_started", "pair": "test", "phase_id": "execution-services-cutover"}
 {"ts": "2026-05-09T17:42:15.785105+00:00", "run_id": "run-20260509T164029Z-23a21781", "seq": 32, "event_type": "cycle_started", "pair": "test", "cycle": 1, "attempt": 1, "phase_id": "execution-services-cutover"}
+{"ts": "2026-05-09T17:47:03.084521+00:00", "run_id": "run-20260509T164029Z-23a21781", "seq": 33, "event_type": "run_finished", "status": "interrupted", "exit_code": 130, "followup_run_id": null, "parent_run_id": "run-20260509T125912Z-8deb38fd", "followup_depth": 1}
