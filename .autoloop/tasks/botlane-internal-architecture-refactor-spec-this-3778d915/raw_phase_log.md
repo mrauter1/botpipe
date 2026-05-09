@@ -1113,3 +1113,55 @@ Open issues / next step
 - No blocking phase-local issues remain.
 - Engine consumption of `WorkflowPlan`, provider-turn runtime migration, and later `ExecutionFrame` work remain intentionally deferred.
 - Full `pytest` was not run in this turn.
+
+
+---
+run_id=run-20260509T045359Z-e2586b1f | entry=session_turn | pair=implement | phase=verifier | cycle=1 | attempt=1 | thread_id=019e0b56-735d-7c20-8aa5-b760d0b9b9a6
+---
+provider=codex
+mode=resume
+template=/home/rauter/.local/share/pipx/venvs/autoloop/lib/python3.12/site-packages/autoloop/templates/implement_verifier.md
+session_id=019e0b56-735d-7c20-8aa5-b760d0b9b9a6
+
+
+---
+run_id=run-20260509T045359Z-e2586b1f | entry=phase_output | pair=implement | phase=verifier | process=codex-agent | cycle=1 | attempt=1 | thread_id=019e0b56-735d-7c20-8aa5-b760d0b9b9a6
+---
+I’m reviewing the phase-local implementation against the step/workflow-plan contract now. I’ll inspect the changed plan-adapter modules, the new tests, and the active criteria/feedback artifacts before I decide whether this phase is complete or blocked.
+
+I have two blocking architecture findings. Both are in the adapter seam, and both come from the same shortcut: the new plan layer keeps a live `CompiledStep` bag inside `StepHeader.original_step` so round-trips work without making the typed plan self-contained. That preserves parity today, but it violates the phase contract and leaves future phases with two sources of truth.
+
+Scope considered
+
+- Phase-local review only for `step-and-workflow-plans`.
+- Reviewed the changed implementation in `botlane/core/compiler.py`, `botlane/core/plan_adapters.py`, `botlane/core/step_plans.py`, `botlane/core/workflow_plan.py`, `tests/unit/test_step_plans.py`, `tests/unit/test_workflow_plan_adapters.py`, and the narrow strictness update in `tests/strictness/test_no_compat.py`.
+- Updated the active review artifact at `.autoloop/.../artifacts/implement/phases/step-and-workflow-plans/feedback.md`.
+
+What I analyzed
+
+- Whether the new plan layer actually satisfies the phase contract: typed executable plans, `CompiledStep`/`CompiledWorkflow` round-trips, branch-group-safe shapes, and no duplicated canonical route ownership on `StepHeader`.
+- The implementation notes and run-local decisions, especially the new decision to keep a `CompiledStep` on `StepHeader.original_step`.
+- The adapter shape rather than just the passing tests, because the main risk here is architectural drift hidden behind parity-only round trips.
+
+What I reviewed
+
+- `workflow_plan_from_compiled(...)` and `compiled_workflow_from_plan(...)` for self-contained round-trip behavior.
+- `step_plan_from_compiled_step(...)` and `compiled_step_from_step_plan(...)` for route ownership, branch-group handling, and parity mechanics.
+- `StepHeader` and `BranchGroupPlan` against the accepted design constraints.
+- Criteria file status: left unchecked because blocking findings remain.
+
+Key findings / decisions
+
+- Added 2 blocking findings to the phase feedback artifact.
+- Main issue: the new typed plan layer is not actually self-contained. It relies on stashing the legacy `CompiledStep` bag inside `StepHeader.original_step`, which reintroduces route-table duplication and makes branch-group round-trips depend on a hidden backreference instead of typed plan data.
+- Review status is `INCOMPLETE` until that adapter shortcut is removed or isolated into a dedicated private parity carrier outside `StepHeader`.
+
+Open issues / next step
+
+- Fix `IMP-001` by removing the legacy compiled-step bag from `StepHeader.original_step` and keeping route ownership canonical in `WorkflowPlan.routes`.
+- Fix `IMP-002` by making branch-group round-trip state explicit in typed plan data or a dedicated adapter-owned parity record.
+- After that, rerun the same targeted validation buckets and then reevaluate the criteria.
+
+<loop-control>
+{"schema":"docloop.loop_control/v1","kind":"promise","promise":"INCOMPLETE"}
+</loop-control>
