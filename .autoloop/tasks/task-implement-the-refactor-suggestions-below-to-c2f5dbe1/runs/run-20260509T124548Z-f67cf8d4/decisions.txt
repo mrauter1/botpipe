@@ -3,3 +3,5 @@ No compatibility or legacy shim layers should be added; replace internals direct
 Use `botlane/*` as the refactor source of truth and do not plan direct edits against `build/lib/*` unless a later packaging step explicitly requires regeneration.
 Keep `botlane/core/placeholders.py` as the shared simple-prompt validator implementation and keep `botlane/core/discovery.py` on a thin wrapper so authoring-time and runtime-safe placeholder wording cannot drift apart.
 Do not start `Engine.run_async` or `describe_workflow_class` extraction until provider/policy and authoring/builder phases are passing, because those two areas have the highest regression risk and the weakest direct isolation.
+<autoloop-decisions-header version="1" block_seq="2" owner="planner" phase_id="task-global" pair="plan" turn_seq="2" run_id="run-20260509T124548Z-f67cf8d4" ts="2026-05-09T12:49:11.096685+00:00" />
+Hotspot 9 (`_capability_entry_from_resolved` in `botlane/core/workflow_capabilities.py`) is explicitly deferred unless adjacent capability or discovery work already opens that file; if activated, keep the refactor local and add focused capability-entry parity tests.

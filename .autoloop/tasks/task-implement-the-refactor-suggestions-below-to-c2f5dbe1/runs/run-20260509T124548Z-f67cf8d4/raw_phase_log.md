@@ -88,3 +88,87 @@ Revise the plan so `_capability_entry_from_resolved` is either assigned to a pha
 <loop-control>
 {"schema":"docloop.loop_control/v1","kind":"promise","promise":"INCOMPLETE"}
 </loop-control>
+
+
+---
+run_id=run-20260509T124548Z-f67cf8d4 | entry=session_turn | pair=plan | phase=producer | cycle=2 | attempt=1 | thread_id=019e0cc5-ccab-7410-9ef3-7d5d73ace130
+---
+provider=codex
+mode=resume
+template=/home/rauter/.local/share/pipx/venvs/autoloop/lib/python3.12/site-packages/autoloop/templates/plan_producer.md
+session_id=019e0cc5-ccab-7410-9ef3-7d5d73ace130
+
+
+---
+run_id=run-20260509T124548Z-f67cf8d4 | entry=phase_output | pair=plan | phase=producer | process=codex-agent | cycle=2 | attempt=1 | thread_id=019e0cc5-ccab-7410-9ef3-7d5d73ace130
+---
+I’m revising the plan to close the verifier gap without changing the overall sequence. First I’m checking the current artifacts and the active decisions block so the update stays within this turn’s run-local contract.
+
+I’ve confirmed the verifier’s gap is real in source: `_capability_entry_from_resolved` lives in `botlane/core/workflow_capabilities.py`, and the plan needs an explicit defer rule for it. I’m checking that function now so the correction is concrete instead of just adding a vague placeholder.
+
+I’m updating both the narrative and the phase contract now. The fix is explicit deferment, not a forced extra refactor slice: hotspot 9 stays in scope for the task, but only activates if `workflow_capabilities.py` is already being changed for adjacent reasons.
+
+The fix is in. I’m doing a final consistency pass across the updated plan, phase YAML, feedback trail, and this turn’s decisions block to make sure the conditional deferment is explicit everywhere the verifier reads.
+
+Scope considered
+The immutable request snapshot, the raw run log, the current plan artifacts, the verifier feedback, the current decisions ledger, and the specific source location for `_capability_entry_from_resolved` in `botlane/core/workflow_capabilities.py`.
+
+What I analyzed
+I verified the verifier’s gap against the original hotspot list and confirmed that hotspot 9 existed in source but was not represented in the plan. I also checked the current decisions headers so the new decision could be appended only under this turn’s block.
+
+What I changed
+I updated [plan.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/task-implement-the-refactor-suggestions-below-to-c2f5dbe1/runs/run-20260509T124548Z-f67cf8d4/artifacts/plan/plan.md) to make hotspot 9 explicit as a conditional deferred slice, added its invariant and validation rule, and recorded the related regression risk.
+I updated [phase_plan.yaml](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/task-implement-the-refactor-suggestions-below-to-c2f5dbe1/runs/run-20260509T124548Z-f67cf8d4/artifacts/plan/phase_plan.yaml) with a fourth deferred phase, `conditional-capability-entry-cleanup`, so later turns cannot silently skip or silently broaden `_capability_entry_from_resolved`.
+I appended a closure note to [feedback.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/task-implement-the-refactor-suggestions-below-to-c2f5dbe1/runs/run-20260509T124548Z-f67cf8d4/artifacts/plan/feedback.md) and added the non-obvious deferment rule under this turn’s header in [decisions.txt](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/task-implement-the-refactor-suggestions-below-to-c2f5dbe1/runs/run-20260509T124548Z-f67cf8d4/decisions.txt).
+
+Key findings / decisions
+The verifier’s blocking finding was valid: hotspot 9 had been omitted rather than explicitly deferred.
+The corrected plan now keeps hotspot 9 in scope for the task, but only activates that refactor if adjacent work already opens `botlane/core/workflow_capabilities.py`; otherwise it stays deferred to avoid low-value churn.
+If that deferred slice activates, the plan now requires focused capability-entry parity tests because direct coverage in that area is lighter.
+
+Open issues / next step
+The producer-side correction is complete. The next step is verifier re-review so `criteria.md` can be updated based on the revised plan artifacts.
+
+<loop-control>
+{"schema":"docloop.loop_control/v1","kind":"promise","promise":"COMPLETE"}
+</loop-control>
+
+
+---
+run_id=run-20260509T124548Z-f67cf8d4 | entry=session_turn | pair=plan | phase=verifier | cycle=2 | attempt=1 | thread_id=019e0cc5-ccab-7410-9ef3-7d5d73ace130
+---
+provider=codex
+mode=resume
+template=/home/rauter/.local/share/pipx/venvs/autoloop/lib/python3.12/site-packages/autoloop/templates/plan_verifier.md
+session_id=019e0cc5-ccab-7410-9ef3-7d5d73ace130
+
+
+---
+run_id=run-20260509T124548Z-f67cf8d4 | entry=phase_output | pair=plan | phase=verifier | process=codex-agent | cycle=2 | attempt=1 | thread_id=019e0cc5-ccab-7410-9ef3-7d5d73ace130
+---
+I’m rechecking the corrected plan against the original hotspot list and the verifier’s own blocking note. The question now is narrower: whether hotspot 9 is explicitly represented with a safe deferment contract everywhere the implementation could drift.
+
+The correction is consistent across the narrative plan, the phase contract, and the decisions ledger. I’m marking the criteria complete and recording that the prior blocking item has been re-verified as resolved.
+
+The checklist and feedback trail are updated. I’m doing a final readback of those two verifier-owned artifacts so the closeout matches the actual file state before I return `COMPLETE`.
+
+Scope considered
+The immutable request snapshot, the current narrative plan, the machine-readable phase plan, the verifier criteria and feedback artifacts, the raw run log, and the shared decisions ledger.
+
+What I analyzed
+I rechecked the corrected plan against the original hotspot list, with focus on the previously missing `_capability_entry_from_resolved` requirement. I also verified that the conditional deferment is represented consistently in `plan.md`, `phase_plan.yaml`, and `decisions.txt`, and that the phase ordering and acceptance criteria remain coherent.
+
+What I reviewed
+I updated [criteria.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/task-implement-the-refactor-suggestions-below-to-c2f5dbe1/runs/run-20260509T124548Z-f67cf8d4/artifacts/plan/criteria.md) so all five gates now reflect the corrected plan state. I appended a verification closure entry to [feedback.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/task-implement-the-refactor-suggestions-below-to-c2f5dbe1/runs/run-20260509T124548Z-f67cf8d4/artifacts/plan/feedback.md) confirming that `PLAN-001` is resolved and no blocking planning issues remain.
+
+Key findings / decisions
+The prior blocking finding is resolved. Hotspot 9 is now explicitly covered as a deferred conditional slice, which satisfies the user’s request to keep it in the refactor set while only activating it if adjacent work already opens `botlane/core/workflow_capabilities.py`.
+The plan remains behavior-safe: it preserves existing semantics, keeps rollback and validation expectations explicit, and avoids adding unnecessary abstraction or scope churn.
+All verifier criteria are now satisfied.
+
+Open issues / next step
+No blocking planning issues remain. The planning artifacts are complete and ready for the next loop pair.
+
+<loop-control>
+{"schema":"docloop.loop_control/v1","kind":"promise","promise":"COMPLETE"}
+</loop-control>
