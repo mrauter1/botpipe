@@ -1211,3 +1211,73 @@ No further test-authoring changes are required for this phase audit surface. The
 <loop-control>
 {"schema":"docloop.loop_control/v1","kind":"promise","promise":"COMPLETE"}
 </loop-control>
+
+
+---
+run_id=run-20260509T125912Z-8deb38fd | entry=session_turn | pair=implement | phase=producer | cycle=1 | attempt=1 | thread_id=019e0d1d-3ee2-7851-97bb-7adbbdfcd948
+---
+provider=codex
+mode=start
+template=/home/rauter/.local/share/pipx/venvs/autoloop/lib/python3.12/site-packages/autoloop/templates/implement_producer.md
+session_id=019e0d1d-3ee2-7851-97bb-7adbbdfcd948
+
+
+---
+run_id=run-20260509T125912Z-8deb38fd | entry=phase_output | pair=implement | phase=producer | process=codex-agent | cycle=1 | attempt=1 | thread_id=019e0d1d-3ee2-7851-97bb-7adbbdfcd948
+---
+I’m implementing the `execution-frame-authority` phase. First I’m reading the active phase artifacts and the current context/frame runtime paths to find the remaining sidecar state and child-context call sites before editing.
+
+I’ve confirmed the active phase is narrowly scoped and prior phases already established the plan/runtime cutover. Next I’m tracing the remaining `Context` sidecar usage and every branch or fan-in child-context path so I can remove them without widening the phase.
+
+The remaining coupling is exactly where expected: `Context` still owns a `_ContextRuntime` sidecar, and branch helpers still rehydrate child runtime bookkeeping through that sidecar. I’m drilling into those internals now so I can shift that bookkeeping into `ExecutionFrame` and keep the public surface unchanged.
+
+I have enough context to cut surgically now. The likely shape is: keep `context_runtime(...)` as a thin facade for existing internal callers, but remove the `WeakKeyDictionary`, stop syncing mirrored private fields from the frame, and store child-context bookkeeping directly on the `ExecutionFrame`.
+
+I’ve narrowed the change set to three places: `execution_frame.py`, `context.py`, and branch child-context helpers, plus a small parity-test update. The edit will remove the sidecar cache, keep `context_runtime(...)` only as a thin frame facade for existing internal callers, and move worklist bookkeeping onto `ExecutionFrame`.
+
+The sidecar symbols are out of `context.py`. I’m fixing the last child-context bookkeeping path now so branch and fan-in helpers stop writing fallback state directly onto `Context` instances.
+
+I’ve preserved the existing internal call sites by leaving underscore aliases available, but they’re now dynamic views into the frame rather than mirrored state. I’m adding one explicit regression check for that so this phase can’t drift back to a sidecar later.
+
+The code changes are in place. Test execution is blocked by environment tooling at the moment because `pytest` isn’t on `PATH`; I’m checking the repo’s Python entrypoint next so I can still run the phase suites locally.
+
+I found a local virtualenv for the repo, so I can still run the phase suites even though the system Python lacks `pytest`. I’m validating the focused context/worklist tests against that environment now.
+
+The first validation pass shows the frame-authority changes themselves are green; the only failures came from two older branch-runtime tests in `test_branch_group_context_sessions.py` that still assert pre-phase-2 internals (`finalization=` and `scope_name` on step plans). I’m narrowing the validation set to the actual phase surfaces and letting the long runtime suite finish.
+
+I’ve finished validation of the actual phase surfaces. Next I’m reviewing the diff for any unintended blast radius, then I’ll write the phase notes and record the non-obvious decision about keeping `context_runtime(...)` as a frame-backed facade rather than deleting the call sites outright.
+
+Scope considered
+
+- Active phase artifacts plus [botlane/core/context.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/botlane/core/context.py), [botlane/core/branch_groups/context.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/botlane/core/branch_groups/context.py), and the context/worklist regression tests tied to frame authority.
+
+What I analyzed
+
+- Remaining `WeakKeyDictionary` sidecar usage and `_sync_legacy_fields_from_execution_frame(...)`.
+- How branch and fan-in child contexts inherit selections, snapshots, caches, and request/message state.
+- Internal callers that still use `context_runtime(...)` and underscore context fields.
+
+What I changed
+
+- In [botlane/core/context.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/botlane/core/context.py), removed the weakref runtime sidecar and the legacy frame-to-context mirroring path.
+- Kept `context_runtime(...)`, but it is now a stateless facade that mutates only `ExecutionFrame`.
+- Added dynamic underscore alias resolution via `Context.__getattr__`, so existing internal reads like `_values`, `_selections`, `_selection_snapshots`, `_worklist_items_cache`, `_step_state`, and `_session_store` now read straight from the frame instead of mirrored fields.
+- In [botlane/core/branch_groups/context.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/botlane/core/branch_groups/context.py), kept child context creation on `child_for_branch(...)` / `child_for_fan_in(...)` and moved the remaining bookkeeping to frame-backed cache/resolver setup.
+- In [tests/unit/test_execution_frame_context_parity.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/tests/unit/test_execution_frame_context_parity.py), added a regression check that `_CONTEXT_RUNTIMES` no longer exists.
+- Updated the phase implementation notes and decisions ledger.
+
+Key findings / decisions
+
+- Removing `context_runtime(...)` entirely would widen scope because many internal callers still depend on it; keeping it as a thin frame-backed facade satisfies this phase without reintroducing sidecar state.
+- Child branch/fan-in contexts now inherit snapshot state from the child frame, and only the child-local worklist resolver/cache are patched after construction.
+- A broader run of `tests/unit/test_branch_group_context_sessions.py` still has 2 unrelated stale failures from earlier internals: one still instantiates `StepExecutionResult(finalization=...)`, and one still tries to `replace(..., scope_name=...)` on a step-plan dataclass.
+
+Open issues / next step
+
+- Validation passed with `./.venv/bin/python -m pytest` for:
+- `tests/unit/test_execution_frame_context_parity.py`
+- `tests/unit/test_primitives_and_stores.py`
+- Focused branch-context tests in `tests/unit/test_branch_group_context_sessions.py`
+- `tests/contract/engine/test_worklists.py -k legacy_null_worklist_selection_payloads`
+- `tests/runtime/test_workspace_and_context.py` (`32 passed`)
+- I did not run the full repository suite in this phase.

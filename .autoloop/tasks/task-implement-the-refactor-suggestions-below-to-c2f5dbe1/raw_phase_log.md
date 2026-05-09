@@ -1069,3 +1069,63 @@ Open issues / next step
 <loop-control>
 {"schema":"docloop.loop_control/v1","kind":"promise","promise":"INCOMPLETE"}
 </loop-control>
+
+
+---
+run_id=run-20260509T124548Z-f67cf8d4 | entry=session_turn | pair=test | phase=producer | cycle=2 | attempt=1 | thread_id=019e0ce8-ee70-7b01-8577-e4e1d171aaa2
+---
+provider=codex
+mode=resume
+template=/home/rauter/.local/share/pipx/venvs/autoloop/lib/python3.12/site-packages/autoloop/templates/test_producer.md
+session_id=019e0ce8-ee70-7b01-8577-e4e1d171aaa2
+
+
+---
+run_id=run-20260509T124548Z-f67cf8d4 | entry=phase_output | pair=test | phase=producer | process=codex-agent | cycle=2 | attempt=1 | thread_id=019e0ce8-ee70-7b01-8577-e4e1d171aaa2
+---
+Addressing the single coverage gap now: I’m tracing the simplest declaration-based workflow path that still flows through `describe_workflow_class`, then I’ll add one direct lowering regression test and update the phase strategy to reflect it.
+
+I found a lightweight path for the missing coverage: `botlane.simple.Workflow` plus `simple.python_step(...)` lowers through `describe_workflow_class()` without needing the heavier public SDK harness. I’m adding a direct lowering-order/entry/route assertion on that path now.
+
+I have the direct missing path: a `simple.Workflow` with two `simple.python_step` declarations. That goes through `describe_workflow_class()` lowering and lets me assert lowered order, default entry, and resolved transition wiring without broadening scope.
+
+I’ve added the direct simple-step lowering path. Running the focused file first so I can update the strategy from a real passing result, not an intended one.
+
+The missing coverage is now in place. I’m updating the strategy and audit feedback to show the simple-step lowering path explicitly, and I’ll record why this test uses `simple.Workflow` instead of a heavier compiled harness.
+
+One non-obvious choice is worth preserving: the new lowering test uses `simple.Workflow` directly so it exercises the extracted discovery pass without depending on the larger public compile surface.
+
+The strategy and ledger are updated. I’m doing one last focused validation run so the next audit sees the exact passing state those artifacts now describe.
+
+Scope considered
+
+- Phase-local test work for the runtime/discovery extraction only: [tests/unit/test_runtime_and_discovery_extraction.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/tests/unit/test_runtime_and_discovery_extraction.py), [test_strategy.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/task-implement-the-refactor-suggestions-below-to-c2f5dbe1/runs/run-20260509T124548Z-f67cf8d4/artifacts/test/phases/runtime-and-discovery-extraction/test_strategy.md), [feedback.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/task-implement-the-refactor-suggestions-below-to-c2f5dbe1/runs/run-20260509T124548Z-f67cf8d4/artifacts/test/phases/runtime-and-discovery-extraction/feedback.md), and the phase decision ledger entry.
+
+What I analyzed
+
+- The auditor’s blocker around missing lowered-simple-step coverage in `describe_workflow_class()`.
+- The lightest declaration path that still exercises `_lower_discovered_simple_steps()` directly.
+- Existing broader coverage already reused for `goto` and hook sequencing so I could close only the missing gap.
+
+What I changed
+
+- Added a new direct discovery regression test in [test_runtime_and_discovery_extraction.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/tests/unit/test_runtime_and_discovery_extraction.py):
+  - `test_describe_workflow_class_lowers_simple_step_declarations_in_order`
+  - uses `simple.Workflow` plus `simple.python_step(...)` declarations
+  - asserts lowered step order, default entry, and resolved transition wiring through `describe_workflow_class()`
+- Updated [test_strategy.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/task-implement-the-refactor-suggestions-below-to-c2f5dbe1/runs/run-20260509T124548Z-f67cf8d4/artifacts/test/phases/runtime-and-discovery-extraction/test_strategy.md) to map the simple-step lowering behavior explicitly.
+- Appended a concise follow-up note to [feedback.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/task-implement-the-refactor-suggestions-below-to-c2f5dbe1/runs/run-20260509T124548Z-f67cf8d4/artifacts/test/phases/runtime-and-discovery-extraction/feedback.md).
+- Appended a turn-local test decision to [decisions.txt](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/task-implement-the-refactor-suggestions-below-to-c2f5dbe1/runs/run-20260509T124548Z-f67cf8d4/decisions.txt).
+
+Key findings / decisions
+
+- The missing AC-2 coverage was the lowering path itself, not duplicate detection or default entry resolution; the new test closes that specific gap directly.
+- I kept the test on `simple.Workflow` rather than compiling the workflow end-to-end so it stays anchored to the extracted discovery pass and remains deterministic.
+- Focused validation now passes:
+  - `.venv/bin/python -m py_compile tests/unit/test_runtime_and_discovery_extraction.py`
+  - `.venv/bin/python -m pytest tests/unit/test_runtime_and_discovery_extraction.py -q` → `7 passed`
+
+Open issues / next step
+
+- No remaining phase-local test additions are known from this turn.
+- Next step is the test-phase verifier re-audit against the updated simple-step lowering coverage.
