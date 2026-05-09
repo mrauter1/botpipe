@@ -86,3 +86,83 @@ The producer plan needs a concrete `.autoloop/` policy for active task/run opera
 <loop-control>
 {"schema":"docloop.loop_control/v1","kind":"promise","promise":"INCOMPLETE"}
 </loop-control>
+
+
+---
+run_id=run-20260509T033701Z-27394e99 | entry=session_turn | pair=plan | phase=producer | cycle=2 | attempt=1 | thread_id=019e0acf-5c3b-7221-baf9-5a7afddc84fd
+---
+provider=codex
+mode=resume
+template=/home/rauter/.local/share/pipx/venvs/autoloop/lib/python3.12/site-packages/autoloop/templates/plan_producer.md
+session_id=019e0acf-5c3b-7221-baf9-5a7afddc84fd
+
+
+---
+run_id=run-20260509T033701Z-27394e99 | entry=phase_output | pair=plan | phase=producer | process=codex-agent | cycle=2 | attempt=1 | thread_id=019e0acf-5c3b-7221-baf9-5a7afddc84fd
+---
+I’m updating the plan against the verifier’s blocking point. First I’m checking the current run artifacts and decision ledger so I can patch only the missing `.autoloop/tasks/...` policy instead of widening scope or rewriting the whole plan.
+
+The correction is clear now: the plan needs to name the active `.autoloop/tasks/.../runs/...` slice and treat it as exact operational-record inventory, not collapse `.autoloop` into a non-task invariant. I’m patching the narrative plan, phase contract, feedback history, and the new decision block with that narrower policy.
+
+The plan now names the active `.autoloop/tasks/.../runs/...` slice directly and constrains exceptions to exact current-run files. I’m doing a quick consistency pass to make sure that change landed in the narrative plan, phase contract, feedback history, and the current decision block without altering verifier-owned artifacts.
+
+Scope considered
+
+The immutable request, the verifier’s `PLAN-001` feedback, the current run-local `.autoloop/tasks/.../runs/run-20260509T033701Z-27394e99/` inventory, and the existing plan artifacts.
+
+What I analyzed
+
+I checked the verifier’s blocking point against the actual active `.autoloop` run tree and confirmed the earlier plan was too narrow: it covered top-level `.autoloop_recursive/` well, but it did not explicitly contract the active `.autoloop/tasks/.../runs/...` operational files that the request treats as in scope.
+
+What I changed
+
+I updated [plan.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/task-complete-botlane-no-compat-follow-up-goal-f-95d8ae7d/runs/run-20260509T033701Z-27394e99/artifacts/plan/plan.md) so `.autoloop/` is no longer reduced to a non-task invariant. The plan now names the authoritative active run tree, requires exact-path handling for its operational records, and forbids falling back to `.autoloop/tasks/**`-style exclusions. I aligned [phase_plan.yaml](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/task-complete-botlane-no-compat-follow-up-goal-f-95d8ae7d/runs/run-20260509T033701Z-27394e99/artifacts/plan/phase_plan.yaml), appended the correction note to [feedback.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/task-complete-botlane-no-compat-follow-up-goal-f-95d8ae7d/runs/run-20260509T033701Z-27394e99/artifacts/plan/feedback.md), and recorded the superseding `.autoloop` policy in the current header block of [decisions.txt](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/task-complete-botlane-no-compat-follow-up-goal-f-95d8ae7d/runs/run-20260509T033701Z-27394e99/decisions.txt).
+
+Key findings / decisions
+
+The corrected plan now treats repo-local `.autoloop` active operational content as an explicit exact-inventory policy problem, not as an omitted root. The narrow `.autoloop` exception set is constrained to the exact current-run record inventory (`request.md`, `raw_phase_log.md`, `run.json`, `events.jsonl`, `decisions.txt`, `sessions/plan.json`, and current `artifacts/plan/*`), while everything else under active `.autoloop` scope must be Botlane-clean or out of policy.
+
+Open issues / next step
+
+The next step is verifier review of the updated plan artifacts to confirm `PLAN-001` is resolved and the criteria can be checked without introducing a broader `.autoloop/tasks/**` exclusion.
+
+
+---
+run_id=run-20260509T033701Z-27394e99 | entry=session_turn | pair=plan | phase=verifier | cycle=2 | attempt=1 | thread_id=019e0acf-5c3b-7221-baf9-5a7afddc84fd
+---
+provider=codex
+mode=resume
+template=/home/rauter/.local/share/pipx/venvs/autoloop/lib/python3.12/site-packages/autoloop/templates/plan_verifier.md
+session_id=019e0acf-5c3b-7221-baf9-5a7afddc84fd
+
+
+---
+run_id=run-20260509T033701Z-27394e99 | entry=phase_output | pair=plan | phase=verifier | process=codex-agent | cycle=2 | attempt=1 | thread_id=019e0acf-5c3b-7221-baf9-5a7afddc84fd
+---
+I’ve rechecked the revised plan against the verifier finding and the request. The active `.autoloop/tasks/.../runs/...` policy is now explicit enough to close the earlier loophole, so I’m updating the gate artifacts accordingly.
+
+I’m marking the verification gate complete and recording the resolution of `PLAN-001` in feedback history so later turns do not treat that blocking item as still open.
+
+Scope considered
+
+The immutable request, the updated [plan.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/task-complete-botlane-no-compat-follow-up-goal-f-95d8ae7d/runs/run-20260509T033701Z-27394e99/artifacts/plan/plan.md), [phase_plan.yaml](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/task-complete-botlane-no-compat-follow-up-goal-f-95d8ae7d/runs/run-20260509T033701Z-27394e99/artifacts/plan/phase_plan.yaml), [feedback.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/task-complete-botlane-no-compat-follow-up-goal-f-95d8ae7d/runs/run-20260509T033701Z-27394e99/artifacts/plan/feedback.md), [criteria.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/task-complete-botlane-no-compat-follow-up-goal-f-95d8ae7d/runs/run-20260509T033701Z-27394e99/artifacts/plan/criteria.md), and the shared [decisions.txt](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/task-complete-botlane-no-compat-follow-up-goal-f-95d8ae7d/runs/run-20260509T033701Z-27394e99/decisions.txt).
+
+What I analyzed
+
+I rechecked the prior blocking gap against the revised plan, with focus on whether repo-local `.autoloop/` active operational content is now explicitly contracted instead of being implicitly skipped. I also revalidated the single-phase YAML shape, acceptance criteria, deliverables, risks, and rollback coverage.
+
+What I reviewed
+
+I updated [criteria.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/task-complete-botlane-no-compat-follow-up-goal-f-95d8ae7d/runs/run-20260509T033701Z-27394e99/artifacts/plan/criteria.md) to check all gates and appended the `PLAN-001` resolution note to [feedback.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/task-complete-botlane-no-compat-follow-up-goal-f-95d8ae7d/runs/run-20260509T033701Z-27394e99/artifacts/plan/feedback.md). I did not modify [decisions.txt](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/task-complete-botlane-no-compat-follow-up-goal-f-95d8ae7d/runs/run-20260509T033701Z-27394e99/decisions.txt).
+
+Key findings / decisions
+
+`PLAN-001` is resolved. The plan now explicitly includes the active `.autoloop/tasks/.../runs/run-20260509T033701Z-27394e99/` record set, constrains `.autoloop/` exceptions to exact current-run files, and carries that policy through the narrative plan, phase acceptance criteria, validation, and rollback. No new findings were identified.
+
+Open issues / next step
+
+No open blocking issues remain. The plan artifacts are ready for downstream implementation against the current run contract.
+
+<loop-control>
+{"schema":"docloop.loop_control/v1","kind":"promise","promise":"COMPLETE"}
+</loop-control>
