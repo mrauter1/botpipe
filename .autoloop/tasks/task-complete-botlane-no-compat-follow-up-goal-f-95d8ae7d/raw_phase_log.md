@@ -953,3 +953,56 @@ No phase-local blocker remains. The only residual is the pre-existing full-suite
 <loop-control>
 {"schema":"docloop.loop_control/v1","kind":"promise","promise":"COMPLETE"}
 </loop-control>
+
+
+---
+run_id=run-20260509T033701Z-27394e99 | entry=session_turn | pair=test | phase=producer | cycle=1 | attempt=1 | thread_id=019e0ad5-7cc7-72c1-ab1f-9e5b7fa297c3
+---
+provider=codex
+mode=resume
+template=/home/rauter/.local/share/pipx/venvs/autoloop/lib/python3.12/site-packages/autoloop/templates/test_producer.md
+session_id=019e0ad5-7cc7-72c1-ab1f-9e5b7fa297c3
+
+
+---
+run_id=run-20260509T033701Z-27394e99 | entry=phase_output | pair=test | phase=producer | process=codex-agent | cycle=1 | attempt=1 | thread_id=019e0ad5-7cc7-72c1-ab1f-9e5b7fa297c3
+---
+I’m checking the current strictness tests and the test-phase artifacts now. The main question is whether the new repo-root artifact policy already has direct regression coverage for the legacy wrapper token, or whether that still needs an explicit test.
+
+I’m adding one focused test now: direct helper-level coverage for the legacy wrapper token, so this specific regex regression can’t hide behind the broader artifact-tree integration tests again.
+
+The direct regression test is in. I’m rerunning the strictness slice now so the feedback artifact can record the actual post-change result instead of a planned one.
+
+The new test exposed a real inventory drift in the active current-run policy: the test-phase artifacts were not part of the exact current-run inventory, and the new test feedback file also carries the legacy wrapper token in its summary. I’m pulling the failure details so I can fix the policy rather than masking the signal.
+
+The failures are legitimate policy drift, not test bugs. I’m tightening the current-run clean inventory to include the new test-phase artifacts and rewording the test artifacts to describe the legacy wrapper case without embedding the literal in clean files.
+
+The test-phase artifacts are now folded into the clean current-run inventory and reworded to stay clean. I’m rerunning the strictness slice again to confirm the new direct regression test and the expanded inventory agree.
+
+The targeted strictness slice passed with the new direct helper regression. I’m replacing the placeholder validation note in the test feedback artifact with the actual result, then I’ll close the phase summary.
+
+Scope considered
+
+The strictness test file [tests/strictness/test_no_compat.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/tests/strictness/test_no_compat.py) and the active test-phase artifacts [test_strategy.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/task-complete-botlane-no-compat-follow-up-goal-f-95d8ae7d/runs/run-20260509T033701Z-27394e99/artifacts/test/phases/tighten-no-compat-artifact-scope/test_strategy.md) and [feedback.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/task-complete-botlane-no-compat-follow-up-goal-f-95d8ae7d/runs/run-20260509T033701Z-27394e99/artifacts/test/phases/tighten-no-compat-artifact-scope/feedback.md). I stayed on the no-compat artifact-policy regression surface only.
+
+What I analyzed
+
+I checked whether the current strictness suite had direct regression coverage for the legacy recursive wrapper token after the earlier producer/verifier fixes. I also checked how the active current-run inventory reacts when new test-phase artifacts are created, because those files are inside the same explicit current-run policy the strictness test now enforces.
+
+What I changed
+
+I added a direct helper-level regression test in [tests/strictness/test_no_compat.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/tests/strictness/test_no_compat.py) for `_text_emits_removed_legacy_branding(...)`, with positive coverage for the legacy recursive wrapper token and negative coverage for Botlane-safe replacements.
+
+I also updated the strictness current-run clean inventory to include the new test-phase artifacts, then kept those artifact files clean by rewording them to describe the legacy wrapper case without embedding the literal itself. Finally, I filled out [test_strategy.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/task-complete-botlane-no-compat-follow-up-goal-f-95d8ae7d/runs/run-20260509T033701Z-27394e99/artifacts/test/phases/tighten-no-compat-artifact-scope/test_strategy.md) with the behavior-to-test map and updated [feedback.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/task-complete-botlane-no-compat-follow-up-goal-f-95d8ae7d/runs/run-20260509T033701Z-27394e99/artifacts/test/phases/tighten-no-compat-artifact-scope/feedback.md) with the added coverage and validation result.
+
+Key findings / decisions
+
+The added direct helper test closes a real regression gap: without it, the broader artifact-tree integration tests can still pass while a specific legacy token drops out of `LEGACY_BRANDING_PATTERNS` and only reappears when a maintained file happens to contain it.
+
+The strictness policy now also explicitly accounts for test-phase artifacts in the active current-run inventory, which keeps the exact-path policy honest as the run grows.
+
+Validation: `./.venv/bin/python -m pytest tests/strictness/test_no_compat.py` -> `72 passed`.
+
+Open issues / next step
+
+No test-phase blocker remains. The next step is test-auditor review of the added direct regression coverage and the updated test-phase artifact inventory.
