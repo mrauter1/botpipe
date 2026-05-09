@@ -223,6 +223,71 @@ def test_codex_emitter_uses_warn_mode_for_lossy_read_only_allow_write(tmp_path: 
     )
 
 
+@pytest.mark.parametrize(
+    ("permission_mode", "allow_dangerous_bypass", "expected_policy"),
+    [
+        ("ask", False, "on-request"),
+        ("full_auto_sandboxed", False, "never"),
+        ("full_auto_unsandboxed", True, "never"),
+    ],
+)
+def test_codex_emitter_maps_supported_permission_modes(
+    tmp_path: Path,
+    permission_mode: str,
+    allow_dangerous_bypass: bool,
+    expected_policy: str,
+) -> None:
+    policy = ProviderPolicy(
+        permissions=PermissionPolicy(
+            mode=permission_mode,
+            allow_dangerous_bypass=allow_dangerous_bypass,
+            disable_dangerous_bypass=False if permission_mode == "full_auto_unsandboxed" else True,
+        ),
+        sandbox=SandboxPolicy(
+            mode="danger_full_access" if permission_mode == "full_auto_unsandboxed" else "workspace_write",
+        ),
+    )
+
+    emission = _emit(tmp_path, policy)
+    config = tomllib.loads(emission.config_files["config"].read_text(encoding="utf-8"))
+
+    assert config["approval_policy"] == expected_policy
+
+
+def test_codex_emitter_reports_disabled_sandbox_as_unsupported(tmp_path: Path) -> None:
+    policy = ProviderPolicy(
+        sandbox=SandboxPolicy(
+            enabled=False,
+            required=False,
+            mode="workspace_write",
+        ),
+    )
+
+    emission = _emit(
+        tmp_path,
+        policy,
+        validation=ProviderPolicyValidationConfig(unsupported="warn"),
+    )
+
+    assert emission.capability_report.unsupported == (
+        "sandbox.enabled=False is not supported by Codex policy emission",
+    )
+
+
+def test_codex_emitter_reports_unsupported_permission_modes(tmp_path: Path) -> None:
+    policy = ProviderPolicy(permissions=PermissionPolicy(mode="deny_all"))
+
+    emission = _emit(
+        tmp_path,
+        policy,
+        validation=ProviderPolicyValidationConfig(unsupported="warn"),
+    )
+
+    assert emission.capability_report.unsupported == (
+        "permissions.mode='deny_all' is not supported by Codex policy emission",
+    )
+
+
 def test_claude_emitter_maps_allow_write_and_disable_bypass(tmp_path: Path) -> None:
     workspace_root = tmp_path / "workspace"
     workspace_root.mkdir()
@@ -304,6 +369,57 @@ def test_claude_emitter_maps_network_domains(tmp_path: Path) -> None:
     assert settings["sandbox"]["network"]["deniedDomains"] == ["example.com"]
     assert "WebFetch(domain:github.com)" in settings["permissions"]["allow"]
     assert "WebFetch(domain:example.com)" in settings["permissions"]["deny"]
+
+
+@pytest.mark.parametrize(
+    ("permission_mode", "expected_mode", "expected_cli_args"),
+    [
+        ("ask", "default", ()),
+        ("auto_edit", "acceptEdits", ()),
+        ("full_auto_sandboxed", "auto", ()),
+        ("deny_all", "dontAsk", ()),
+        ("full_auto_unsandboxed", "bypassPermissions", ("--dangerously-skip-permissions",)),
+    ],
+)
+def test_claude_emitter_maps_permission_modes(
+    tmp_path: Path,
+    permission_mode: str,
+    expected_mode: str,
+    expected_cli_args: tuple[str, ...],
+) -> None:
+    policy = ProviderPolicy(
+        permissions=PermissionPolicy(
+            mode=permission_mode,
+            allow_dangerous_bypass=permission_mode == "full_auto_unsandboxed",
+            disable_dangerous_bypass=False if permission_mode == "full_auto_unsandboxed" else True,
+        ),
+        sandbox=SandboxPolicy(
+            mode="danger_full_access" if permission_mode == "full_auto_unsandboxed" else "workspace_write",
+        ),
+    )
+
+    emission = _emit_claude(tmp_path, policy)
+    settings = json.loads(emission.config_files["settings"].read_text(encoding="utf-8"))
+
+    assert settings["permissions"]["defaultMode"] == expected_mode
+    assert tuple(arg for arg in emission.cli_args if arg == "--dangerously-skip-permissions") == expected_cli_args
+
+
+def test_claude_emitter_rejects_unsandboxed_mode_when_disable_bypass_is_enabled(tmp_path: Path) -> None:
+    policy = ProviderPolicy(
+        permissions=PermissionPolicy(
+            mode="full_auto_unsandboxed",
+            allow_dangerous_bypass=True,
+            disable_dangerous_bypass=True,
+        ),
+        sandbox=SandboxPolicy(mode="danger_full_access"),
+    )
+
+    with pytest.raises(
+        ProviderExecutionError,
+        match="provider policy for 'claude' cannot emit full_auto_unsandboxed with disable_dangerous_bypass=True",
+    ):
+        _emit_claude(tmp_path, policy)
 
 
 def test_claude_emitter_marks_filesystem_capability_lossy_when_native_support_is_missing(tmp_path: Path) -> None:

@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from collections.abc import Mapping, Sequence
+from dataclasses import dataclass
 from enum import Enum
 from pathlib import Path
 from typing import Any
@@ -146,6 +147,25 @@ def _policy_section(payload: dict[str, object], *keys: str) -> dict[str, object]
             current[key] = child
         current = child
     return current
+
+
+_MODEL_FIELD_MAP = {
+    "model": ("model", "default"),
+    "provider": ("model", "provider"),
+    "base_url": ("model", "base_url"),
+    "effort": ("model", "effort"),
+    "verbosity": ("model", "verbosity"),
+    "reasoning_summary": ("model", "reasoning_summary"),
+    "model_overrides": ("model", "overrides"),
+}
+
+
+@dataclass(frozen=True)
+class EffectivePolicyModes:
+    sandbox_mode: str | None
+    permission_mode: str | None
+    network_mode: str | None
+    dangerous_access: bool
 
 
 class Policy:
@@ -323,38 +343,14 @@ class Policy:
 PolicyInput = Policy | ProviderPolicy | ProviderPolicyOverride | None
 
 
-def _policy_layer_to_override(policy: Policy) -> ProviderPolicyOverride:
-    authored = policy._authored
-    payload: dict[str, object] = {}
+def _emit_model_override(payload: dict[str, object], authored: Mapping[str, object]) -> None:
+    for authored_key, (*section_keys, target_key) in _MODEL_FIELD_MAP.items():
+        if authored_key not in authored:
+            continue
+        _policy_section(payload, *section_keys)[target_key] = authored[authored_key]
 
-    if any(
-        key in authored
-        for key in (
-            "model",
-            "provider",
-            "base_url",
-            "effort",
-            "verbosity",
-            "reasoning_summary",
-            "model_overrides",
-        )
-    ):
-        model_payload = _policy_section(payload, "model")
-        if "model" in authored:
-            model_payload["default"] = authored["model"]
-        if "provider" in authored:
-            model_payload["provider"] = authored["provider"]
-        if "base_url" in authored:
-            model_payload["base_url"] = authored["base_url"]
-        if "effort" in authored:
-            model_payload["effort"] = authored["effort"]
-        if "verbosity" in authored:
-            model_payload["verbosity"] = authored["verbosity"]
-        if "reasoning_summary" in authored:
-            model_payload["reasoning_summary"] = authored["reasoning_summary"]
-        if "model_overrides" in authored:
-            model_payload["overrides"] = authored["model_overrides"]
 
+def _resolve_effective_sandbox_mode(authored: Mapping[str, object]) -> str | None:
     explicit_sandbox_mode = authored.get("sandbox_mode")
     read_only = authored.get("read_only") is True
     allow_write_authored = "allow_write" in authored
@@ -368,7 +364,26 @@ def _policy_layer_to_override(policy: Policy) -> ProviderPolicyOverride:
         raise ValueError("allow_write cannot be set when sandbox mode is read-only")
     if not read_only and effective_sandbox_mode is None and allow_write_authored:
         effective_sandbox_mode = SandboxMode.WORKSPACE_WRITE.value
+    return effective_sandbox_mode
 
+
+def _resolve_effective_network_mode(authored: Mapping[str, object]) -> str | None:
+    network = authored.get("network")
+    network_domains = authored.get("network_domains")
+    if "network_domains" in authored and network_domains == ():
+        raise ValueError("network_domains must not be empty when provided")
+    effective_network = network
+    if effective_network is None and network_domains is not None:
+        effective_network = NetworkMode.LIMITED.value
+    if effective_network == NetworkMode.LIMITED.value and not network_domains:
+        raise ValueError("network=NetworkMode.LIMITED requires non-empty network_domains")
+    if effective_network in {NetworkMode.FULL.value, NetworkMode.NONE.value} and network_domains:
+        raise ValueError(f"network={effective_network!r} cannot be combined with network_domains")
+    return effective_network
+
+
+def _resolve_policy_effects(authored: Mapping[str, object]) -> EffectivePolicyModes:
+    effective_sandbox_mode = _resolve_effective_sandbox_mode(authored)
     permission_mode = authored.get("permission_mode")
     if permission_mode == PermissionMode.FULL_AUTO_UNSANDBOXED.value:
         if effective_sandbox_mode in {
@@ -391,73 +406,103 @@ def _policy_layer_to_override(policy: Policy) -> ProviderPolicyOverride:
             "permission_mode=PermissionMode.FULL_AUTO_SANDBOXED"
         )
 
-    network = authored.get("network")
-    network_domains = authored.get("network_domains")
-    if "network_domains" in authored and network_domains == ():
-        raise ValueError("network_domains must not be empty when provided")
-    effective_network = network
-    if effective_network is None and network_domains is not None:
-        effective_network = NetworkMode.LIMITED.value
-    if effective_network == NetworkMode.LIMITED.value and not network_domains:
-        raise ValueError("network=NetworkMode.LIMITED requires non-empty network_domains")
-    if effective_network in {NetworkMode.FULL.value, NetworkMode.NONE.value} and network_domains:
-        raise ValueError(
-            f"network={effective_network!r} cannot be combined with network_domains"
-        )
-
+    effective_network = _resolve_effective_network_mode(authored)
     dangerous_access = (
         effective_sandbox_mode == SandboxMode.DANGER_FULL_ACCESS.value
         or permission_mode == PermissionMode.FULL_AUTO_UNSANDBOXED.value
     )
+    return EffectivePolicyModes(
+        sandbox_mode=effective_sandbox_mode,
+        permission_mode=permission_mode if isinstance(permission_mode, str) else None,
+        network_mode=effective_network if isinstance(effective_network, str) else None,
+        dangerous_access=dangerous_access,
+    )
 
-    if any(key in authored for key in ("permission_mode", "allow_permissions", "ask_permissions", "deny_permissions")) or dangerous_access:
-        permissions_payload = _policy_section(payload, "permissions")
-        if permission_mode is not None:
-            permissions_payload["mode"] = permission_mode
-        if "allow_permissions" in authored:
-            permissions_payload["allow"] = authored["allow_permissions"]
-        if "ask_permissions" in authored:
-            permissions_payload["ask"] = authored["ask_permissions"]
-        if "deny_permissions" in authored:
-            permissions_payload["deny"] = authored["deny_permissions"]
-        if dangerous_access:
-            permissions_payload["allow_dangerous_bypass"] = True
 
-    if effective_sandbox_mode is not None:
-        _policy_section(payload, "sandbox")["mode"] = effective_sandbox_mode
+def _emit_permission_override(
+    payload: dict[str, object],
+    authored: Mapping[str, object],
+    effective: EffectivePolicyModes,
+) -> None:
+    if not any(
+        key in authored for key in ("permission_mode", "allow_permissions", "ask_permissions", "deny_permissions")
+    ) and not effective.dangerous_access:
+        return
+    permissions_payload = _policy_section(payload, "permissions")
+    if effective.permission_mode is not None:
+        permissions_payload["mode"] = effective.permission_mode
+    if "allow_permissions" in authored:
+        permissions_payload["allow"] = authored["allow_permissions"]
+    if "ask_permissions" in authored:
+        permissions_payload["ask"] = authored["ask_permissions"]
+    if "deny_permissions" in authored:
+        permissions_payload["deny"] = authored["deny_permissions"]
+    if effective.dangerous_access:
+        permissions_payload["allow_dangerous_bypass"] = True
 
-    if any(key in authored for key in ("allow_read", "deny_read", "allow_write", "deny_write")) or effective_sandbox_mode == SandboxMode.READ_ONLY.value:
-        filesystem_payload = _policy_section(payload, "sandbox", "workspace", "filesystem")
-        if "allow_read" in authored:
-            filesystem_payload["allow_read"] = authored["allow_read"]
-        if "deny_read" in authored:
-            filesystem_payload["deny_read"] = authored["deny_read"]
-        if "allow_write" in authored:
-            filesystem_payload["allow_write"] = authored["allow_write"]
-        if "deny_write" in authored:
-            filesystem_payload["deny_write"] = authored["deny_write"]
-        if effective_sandbox_mode == SandboxMode.READ_ONLY.value:
-            filesystem_payload["allow_write"] = ()
 
-    if any(key in authored for key in ("network", "network_domains", "deny_network_domains", "allow_local_binding")):
-        network_payload = _policy_section(payload, "sandbox", "workspace", "network")
-        if effective_network == NetworkMode.FULL.value:
-            network_payload["enabled"] = True
-            network_payload["mode"] = NetworkMode.FULL.value
-            network_payload["allow_domains"] = ()
-        elif effective_network == NetworkMode.NONE.value:
-            network_payload["enabled"] = False
-            network_payload["mode"] = NetworkMode.NONE.value
-            network_payload["allow_domains"] = ()
-        elif effective_network == NetworkMode.LIMITED.value:
-            network_payload["enabled"] = True
-            network_payload["mode"] = NetworkMode.LIMITED.value
-            network_payload["allow_domains"] = network_domains
-        if "deny_network_domains" in authored:
-            network_payload["deny_domains"] = authored["deny_network_domains"]
-        if "allow_local_binding" in authored:
-            network_payload["allow_local_binding"] = authored["allow_local_binding"]
+def _emit_sandbox_override(payload: dict[str, object], effective: EffectivePolicyModes) -> None:
+    if effective.sandbox_mode is not None:
+        _policy_section(payload, "sandbox")["mode"] = effective.sandbox_mode
 
+
+def _emit_filesystem_override(
+    payload: dict[str, object],
+    authored: Mapping[str, object],
+    effective: EffectivePolicyModes,
+) -> None:
+    if not any(key in authored for key in ("allow_read", "deny_read", "allow_write", "deny_write")) and (
+        effective.sandbox_mode != SandboxMode.READ_ONLY.value
+    ):
+        return
+    filesystem_payload = _policy_section(payload, "sandbox", "workspace", "filesystem")
+    if "allow_read" in authored:
+        filesystem_payload["allow_read"] = authored["allow_read"]
+    if "deny_read" in authored:
+        filesystem_payload["deny_read"] = authored["deny_read"]
+    if "allow_write" in authored:
+        filesystem_payload["allow_write"] = authored["allow_write"]
+    if "deny_write" in authored:
+        filesystem_payload["deny_write"] = authored["deny_write"]
+    if effective.sandbox_mode == SandboxMode.READ_ONLY.value:
+        filesystem_payload["allow_write"] = ()
+
+
+def _emit_network_override(
+    payload: dict[str, object],
+    authored: Mapping[str, object],
+    effective: EffectivePolicyModes,
+) -> None:
+    if not any(key in authored for key in ("network", "network_domains", "deny_network_domains", "allow_local_binding")):
+        return
+    network_payload = _policy_section(payload, "sandbox", "workspace", "network")
+    if effective.network_mode == NetworkMode.FULL.value:
+        network_payload["enabled"] = True
+        network_payload["mode"] = NetworkMode.FULL.value
+        network_payload["allow_domains"] = ()
+    elif effective.network_mode == NetworkMode.NONE.value:
+        network_payload["enabled"] = False
+        network_payload["mode"] = NetworkMode.NONE.value
+        network_payload["allow_domains"] = ()
+    elif effective.network_mode == NetworkMode.LIMITED.value:
+        network_payload["enabled"] = True
+        network_payload["mode"] = NetworkMode.LIMITED.value
+        network_payload["allow_domains"] = authored.get("network_domains")
+    if "deny_network_domains" in authored:
+        network_payload["deny_domains"] = authored["deny_network_domains"]
+    if "allow_local_binding" in authored:
+        network_payload["allow_local_binding"] = authored["allow_local_binding"]
+
+
+def _policy_layer_to_override(policy: Policy) -> ProviderPolicyOverride:
+    authored = policy._authored
+    payload: dict[str, object] = {}
+    _emit_model_override(payload, authored)
+    effective = _resolve_policy_effects(authored)
+    _emit_permission_override(payload, authored, effective)
+    _emit_sandbox_override(payload, effective)
+    _emit_filesystem_override(payload, authored, effective)
+    _emit_network_override(payload, authored, effective)
     return ProviderPolicyOverride.model_validate(payload)
 
 

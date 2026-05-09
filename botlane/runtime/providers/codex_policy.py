@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from copy import deepcopy
+from dataclasses import dataclass, field
 import json
 from pathlib import Path
 from typing import Any
@@ -81,6 +82,144 @@ def _render_toml_document(payload: dict[str, Any]) -> str:
     if nested_sections:
         blocks.append("\n\n".join(nested_sections))
     return ("\n\n".join(blocks) if blocks else "") + "\n"
+
+
+CODEX_PERMISSION_MODES = {
+    "ask": "on-request",
+    "full_auto_sandboxed": "never",
+    "full_auto_unsandboxed": "never",
+}
+
+CODEX_SANDBOX_MODES = {
+    "read_only": "read-only",
+    "workspace_write": "workspace-write",
+    "danger_full_access": "danger-full-access",
+}
+
+
+@dataclass
+class _CodexEmissionContext:
+    payload: dict[str, Any]
+    unsupported: list[str] = field(default_factory=list)
+    lossy: list[str] = field(default_factory=list)
+    unsafe: list[str] = field(default_factory=list)
+
+
+def _init_codex_emission(policy: ResolvedProviderPolicy) -> _CodexEmissionContext:
+    payload = deepcopy(policy.codex)
+    if not isinstance(payload, dict):
+        payload = {}
+    return _CodexEmissionContext(payload=payload)
+
+
+def _emit_codex_model(ctx: _CodexEmissionContext, policy: ResolvedProviderPolicy) -> None:
+    if policy.model.default is not None:
+        ctx.payload["model"] = policy.model.default
+    if policy.model.effort is not None:
+        ctx.payload["model_reasoning_effort"] = policy.model.effort
+    if policy.model.provider is not None:
+        ctx.unsupported.append("model.provider is not supported by Codex policy emission")
+    if policy.model.base_url is not None:
+        ctx.unsupported.append("model.base_url is not supported by Codex policy emission")
+    if policy.model.verbosity is not None:
+        ctx.unsupported.append("model.verbosity is not supported by Codex policy emission")
+    if policy.model.reasoning_summary is not None:
+        ctx.unsupported.append("model.reasoning_summary is not supported by Codex policy emission")
+    if policy.model.overrides:
+        ctx.unsupported.append("model.overrides are not supported by Codex policy emission")
+
+
+def _emit_codex_permission_mode(ctx: _CodexEmissionContext, policy: ResolvedProviderPolicy) -> str:
+    permission_mode = policy.permissions.mode
+    translated = CODEX_PERMISSION_MODES.get(permission_mode)
+    if translated is None:
+        ctx.unsupported.append(f"permissions.mode={permission_mode!r} is not supported by Codex policy emission")
+        return permission_mode
+    if permission_mode == "full_auto_unsandboxed" and not policy.permissions.allow_dangerous_bypass:
+        raise ProviderExecutionError(
+            "provider policy for 'codex' cannot emit full_auto_unsandboxed without allow_dangerous_bypass=True"
+        )
+    ctx.payload["approval_policy"] = translated
+    return permission_mode
+
+
+def _resolve_codex_sandbox_mode(
+    ctx: _CodexEmissionContext,
+    policy: ResolvedProviderPolicy,
+    *,
+    permission_mode: str,
+) -> str | None:
+    if not policy.sandbox.enabled:
+        if policy.sandbox.required:
+            raise ProviderExecutionError(
+                "provider policy for 'codex' cannot emit sandbox.enabled=False when sandbox.required=True"
+            )
+        if permission_mode == "full_auto_unsandboxed":
+            return CODEX_SANDBOX_MODES["danger_full_access"]
+        ctx.unsupported.append("sandbox.enabled=False is not supported by Codex policy emission")
+        return None
+
+    translated = CODEX_SANDBOX_MODES.get(policy.sandbox.mode)
+    if translated is None:
+        ctx.unsupported.append(f"sandbox.mode={policy.sandbox.mode!r} is not supported by Codex policy emission")
+        return None
+    if policy.sandbox.mode == "danger_full_access" and not policy.permissions.allow_dangerous_bypass:
+        raise ProviderExecutionError(
+            "provider policy for 'codex' cannot emit danger_full_access without allow_dangerous_bypass=True"
+        )
+    if policy.sandbox.mode == "read_only" and policy.sandbox.workspace.filesystem.allow_write:
+        ctx.lossy.append("sandbox.mode='read_only' ignores filesystem.allow_write in Codex")
+    return translated
+
+
+def _emit_codex_filesystem(
+    ctx: _CodexEmissionContext,
+    policy: ResolvedProviderPolicy,
+    *,
+    sandbox_mode: str | None,
+) -> None:
+    filesystem = policy.sandbox.workspace.filesystem
+    if sandbox_mode == CODEX_SANDBOX_MODES["workspace_write"]:
+        workspace_payload = dict(ctx.payload.get("sandbox_workspace_write", {}))
+        workspace_payload["writable_roots"] = list(filesystem.allow_write)
+        workspace_payload["network_access"] = bool(policy.sandbox.workspace.network.enabled)
+        ctx.payload["sandbox_workspace_write"] = workspace_payload
+    if filesystem.deny_read:
+        ctx.unsupported.append("sandbox.workspace.filesystem.deny_read is not enforced by Codex")
+    if filesystem.deny_write:
+        ctx.unsupported.append("sandbox.workspace.filesystem.deny_write is not enforced by Codex")
+    if filesystem.allow_read not in {(".",), ()}:
+        ctx.unsafe.append("sandbox.workspace.filesystem.allow_read cannot be narrowed by Codex")
+
+
+def _emit_codex_network(
+    ctx: _CodexEmissionContext,
+    policy: ResolvedProviderPolicy,
+    *,
+    sandbox_mode: str | None,
+) -> None:
+    network = policy.sandbox.workspace.network
+    if network.allow_domains or network.deny_domains:
+        ctx.unsupported.append("sandbox.workspace.network domain allow/deny filters are not enforced by Codex")
+    if network.mode == "limited":
+        ctx.unsafe.append("sandbox.workspace.network.mode='limited' expands to unrestricted network access in Codex")
+    elif sandbox_mode == CODEX_SANDBOX_MODES["workspace_write"] and network.mode in {"none", "full"}:
+        workspace_payload = dict(ctx.payload.get("sandbox_workspace_write", {}))
+        workspace_payload["network_access"] = network.mode == "full"
+        ctx.payload["sandbox_workspace_write"] = workspace_payload
+    if network.allow_local_binding:
+        ctx.unsupported.append("sandbox.workspace.network.allow_local_binding is not enforced by Codex")
+
+
+def _emit_codex_unsupported_sections(ctx: _CodexEmissionContext, policy: ResolvedProviderPolicy) -> None:
+    if policy.permissions.allow or policy.permissions.ask or policy.permissions.deny:
+        ctx.unsupported.append("permission allow/ask/deny rules are not supported by Codex policy emission")
+    if policy.tools.allow or policy.tools.ask or policy.tools.deny:
+        ctx.unsupported.append("tool allow/ask/deny rules are not supported by Codex policy emission")
+    if policy.instructions.files or policy.instructions.inline or policy.instructions.output_style:
+        ctx.unsupported.append("instruction policy fields are not supported by Codex policy emission")
+    if policy.telemetry.enabled or policy.telemetry.exporter or policy.telemetry.headers:
+        ctx.unsupported.append("telemetry policy fields are not supported by Codex policy emission")
 
 
 class CodexPolicyEmitter:
@@ -164,111 +303,17 @@ class CodexPolicyEmitter:
         self,
         policy: ResolvedProviderPolicy,
     ) -> tuple[dict[str, Any], list[str], list[str], list[str]]:
-        unsupported: list[str] = []
-        lossy: list[str] = []
-        unsafe: list[str] = []
-
-        payload = deepcopy(policy.codex)
-        if not isinstance(payload, dict):
-            payload = {}
-
-        if policy.model.default is not None:
-            payload["model"] = policy.model.default
-        if policy.model.effort is not None:
-            payload["model_reasoning_effort"] = policy.model.effort
-        if policy.model.provider is not None:
-            unsupported.append("model.provider is not supported by Codex policy emission")
-        if policy.model.base_url is not None:
-            unsupported.append("model.base_url is not supported by Codex policy emission")
-        if policy.model.verbosity is not None:
-            unsupported.append("model.verbosity is not supported by Codex policy emission")
-        if policy.model.reasoning_summary is not None:
-            unsupported.append("model.reasoning_summary is not supported by Codex policy emission")
-        if policy.model.overrides:
-            unsupported.append("model.overrides are not supported by Codex policy emission")
-
-        permission_mode = policy.permissions.mode
-        if permission_mode == "ask":
-            payload["approval_policy"] = "on-request"
-        elif permission_mode == "full_auto_sandboxed":
-            payload["approval_policy"] = "never"
-        elif permission_mode == "full_auto_unsandboxed":
-            if not policy.permissions.allow_dangerous_bypass:
-                raise ProviderExecutionError(
-                    "provider policy for 'codex' cannot emit full_auto_unsandboxed without allow_dangerous_bypass=True"
-                )
-            payload["approval_policy"] = "never"
-        else:
-            unsupported.append(f"permissions.mode={permission_mode!r} is not supported by Codex policy emission")
-
-        sandbox_mode = None
-        if not policy.sandbox.enabled:
-            if policy.sandbox.required:
-                raise ProviderExecutionError(
-                    "provider policy for 'codex' cannot emit sandbox.enabled=False when sandbox.required=True"
-                )
-            if permission_mode == "full_auto_unsandboxed":
-                sandbox_mode = "danger-full-access"
-            else:
-                unsupported.append("sandbox.enabled=False is not supported by Codex policy emission")
-        elif policy.sandbox.mode == "read_only":
-            sandbox_mode = "read-only"
-            if policy.sandbox.workspace.filesystem.allow_write:
-                lossy.append("sandbox.mode='read_only' ignores filesystem.allow_write in Codex")
-        elif policy.sandbox.mode == "workspace_write":
-            sandbox_mode = "workspace-write"
-        elif policy.sandbox.mode == "danger_full_access":
-            if not policy.permissions.allow_dangerous_bypass:
-                raise ProviderExecutionError(
-                    "provider policy for 'codex' cannot emit danger_full_access without allow_dangerous_bypass=True"
-                )
-            sandbox_mode = "danger-full-access"
-        else:
-            unsupported.append(f"sandbox.mode={policy.sandbox.mode!r} is not supported by Codex policy emission")
+        ctx = _init_codex_emission(policy)
+        _emit_codex_model(ctx, policy)
+        permission_mode = _emit_codex_permission_mode(ctx, policy)
+        sandbox_mode = _resolve_codex_sandbox_mode(ctx, policy, permission_mode=permission_mode)
         if sandbox_mode is not None:
-            payload["sandbox_mode"] = sandbox_mode
-
-        filesystem = policy.sandbox.workspace.filesystem
-        if sandbox_mode == "workspace-write":
-            workspace_payload = dict(payload.get("sandbox_workspace_write", {}))
-            workspace_payload["writable_roots"] = list(filesystem.allow_write)
-            workspace_payload["network_access"] = bool(policy.sandbox.workspace.network.enabled)
-            payload["sandbox_workspace_write"] = workspace_payload
-        if filesystem.deny_read:
-            unsupported.append("sandbox.workspace.filesystem.deny_read is not enforced by Codex")
-        if filesystem.deny_write:
-            unsupported.append("sandbox.workspace.filesystem.deny_write is not enforced by Codex")
-        if filesystem.allow_read not in {(".",), ()}:
-            unsafe.append("sandbox.workspace.filesystem.allow_read cannot be narrowed by Codex")
-
-        network = policy.sandbox.workspace.network
-        if network.allow_domains or network.deny_domains:
-            unsupported.append("sandbox.workspace.network domain allow/deny filters are not enforced by Codex")
-        if network.mode == "limited":
-            unsafe.append("sandbox.workspace.network.mode='limited' expands to unrestricted network access in Codex")
-        elif network.mode == "none" and sandbox_mode == "workspace-write":
-            workspace_payload = dict(payload.get("sandbox_workspace_write", {}))
-            workspace_payload["network_access"] = False
-            payload["sandbox_workspace_write"] = workspace_payload
-        elif network.mode == "full" and sandbox_mode == "workspace-write":
-            workspace_payload = dict(payload.get("sandbox_workspace_write", {}))
-            workspace_payload["network_access"] = True
-            payload["sandbox_workspace_write"] = workspace_payload
-        if network.allow_local_binding:
-            unsupported.append("sandbox.workspace.network.allow_local_binding is not enforced by Codex")
-
-        payload["shell_environment_policy"] = self._shell_environment_policy(policy, unsupported=unsupported)
-
-        if policy.permissions.allow or policy.permissions.ask or policy.permissions.deny:
-            unsupported.append("permission allow/ask/deny rules are not supported by Codex policy emission")
-        if policy.tools.allow or policy.tools.ask or policy.tools.deny:
-            unsupported.append("tool allow/ask/deny rules are not supported by Codex policy emission")
-        if policy.instructions.files or policy.instructions.inline or policy.instructions.output_style:
-            unsupported.append("instruction policy fields are not supported by Codex policy emission")
-        if policy.telemetry.enabled or policy.telemetry.exporter or policy.telemetry.headers:
-            unsupported.append("telemetry policy fields are not supported by Codex policy emission")
-
-        return payload, unsupported, lossy, unsafe
+            ctx.payload["sandbox_mode"] = sandbox_mode
+        _emit_codex_filesystem(ctx, policy, sandbox_mode=sandbox_mode)
+        _emit_codex_network(ctx, policy, sandbox_mode=sandbox_mode)
+        ctx.payload["shell_environment_policy"] = self._shell_environment_policy(policy, unsupported=ctx.unsupported)
+        _emit_codex_unsupported_sections(ctx, policy)
+        return ctx.payload, ctx.unsupported, ctx.lossy, ctx.unsafe
 
     def _shell_environment_policy(
         self,

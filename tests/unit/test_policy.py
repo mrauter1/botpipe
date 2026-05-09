@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import hashlib
 import json
+import re
 
 import pytest
 
@@ -145,6 +146,66 @@ def test_policy_same_layer_validation_and_dangerous_access() -> None:
     assert dangerous_manual.permissions.mode == "ask"
     assert dangerous_manual.permissions.allow_dangerous_bypass is True
     assert dangerous_manual.sandbox.mode == "danger_full_access"
+
+
+@pytest.mark.parametrize(
+    ("kwargs", "message"),
+    [
+        (
+            {
+                "read_only": True,
+                "sandbox_mode": public_policy.SandboxMode.WORKSPACE_WRITE,
+            },
+            "read_only=True is incompatible with sandbox_mode other than SandboxMode.READ_ONLY",
+        ),
+        (
+            {
+                "read_only": True,
+                "allow_write": "src/",
+            },
+            "allow_write cannot be set when sandbox mode is read-only",
+        ),
+        (
+            {
+                "permission_mode": public_policy.PermissionMode.FULL_AUTO_UNSANDBOXED,
+                "sandbox_mode": public_policy.SandboxMode.WORKSPACE_WRITE,
+            },
+            "permission_mode=PermissionMode.FULL_AUTO_UNSANDBOXED requires sandbox_mode=SandboxMode.DANGER_FULL_ACCESS",
+        ),
+        (
+            {
+                "sandbox_mode": public_policy.SandboxMode.DANGER_FULL_ACCESS,
+                "permission_mode": public_policy.PermissionMode.FULL_AUTO_SANDBOXED,
+            },
+            "sandbox_mode=SandboxMode.DANGER_FULL_ACCESS is incompatible with permission_mode=PermissionMode.FULL_AUTO_SANDBOXED",
+        ),
+        (
+            {
+                "network_domains": (),
+            },
+            "network_domains must not be empty when provided",
+        ),
+        (
+            {
+                "network": public_policy.NetworkMode.LIMITED,
+            },
+            "network=NetworkMode.LIMITED requires non-empty network_domains",
+        ),
+        (
+            {
+                "network": public_policy.NetworkMode.FULL,
+                "network_domains": ("docs.python.org",),
+            },
+            "network='full' cannot be combined with network_domains",
+        ),
+    ],
+)
+def test_policy_same_layer_validation_preserves_exact_messages(
+    kwargs: dict[str, object],
+    message: str,
+) -> None:
+    with pytest.raises(ValueError, match=f"^{re.escape(message)}$"):
+        public_policy.Policy(**kwargs)
 
 
 def test_resolve_policy_layer_accepts_policy_inputs_and_detects_cycles() -> None:
