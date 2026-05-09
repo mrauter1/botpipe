@@ -5,7 +5,7 @@ Not part of the public botlane authoring API.
 
 from __future__ import annotations
 
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any, Callable, Literal, TypeAlias
 
@@ -85,6 +85,7 @@ class ProviderTurnPlan:
 class PromptStepPlan:
     header: StepHeader
     turn: ProviderTurnPlan
+    _compiled_step: Any | None = field(default=None, repr=False, compare=False)
 
 
 @dataclass(frozen=True, slots=True)
@@ -93,12 +94,14 @@ class ProduceVerifyStepPlan:
     producer: ProviderTurnPlan
     verifier: ProviderTurnPlan
     verifier_session_name: str | None
+    _compiled_step: Any | None = field(default=None, repr=False, compare=False)
 
 
 @dataclass(frozen=True, slots=True)
 class PythonStepPlan:
     header: StepHeader
     handler: Callable[..., Any]
+    _compiled_step: Any | None = field(default=None, repr=False, compare=False)
 
 
 @dataclass(frozen=True, slots=True)
@@ -109,6 +112,7 @@ class ChildWorkflowStepPlan:
     message_from: Any
     params: dict[str, Any]
     input: Any
+    _compiled_step: Any | None = field(default=None, repr=False, compare=False)
 
 
 @dataclass(frozen=True, slots=True)
@@ -138,6 +142,7 @@ class BranchGroupPlan:
 class BranchGroupStepPlan:
     header: StepHeader
     branch_group: BranchGroupPlan
+    _compiled_step: Any | None = field(default=None, repr=False, compare=False)
 
 
 StepPlan: TypeAlias = (

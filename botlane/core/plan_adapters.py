@@ -9,6 +9,7 @@ from collections.abc import Mapping
 from pathlib import Path
 from typing import Any, TypeAlias, cast
 
+from .branch_groups.models import CompiledBranchGroupSpec, CompiledBranchStepSpec
 from .compiler import CompiledArtifact, CompiledRoute, CompiledStep, CompiledWorkflow
 from .identifiers import ArtifactId
 from .inventory import ArtifactInventoryRecord, resolve_artifact_reference
@@ -206,6 +207,7 @@ def step_plan_from_compiled_step(*args: Any, **kwargs: Any) -> Any:
                 expected_output_schema=step.expected_output_schema,
                 expected_output_validator=step.expected_output_validator,
             ),
+            _compiled_step=step,
         )
     if step.kind == "produce_verify":
         return ProduceVerifyStepPlan(
@@ -245,11 +247,13 @@ def step_plan_from_compiled_step(*args: Any, **kwargs: Any) -> Any:
                 expected_output_validator=step.expected_output_validator,
             ),
             verifier_session_name=step.verifier_session_name,
+            _compiled_step=step,
         )
     if step.kind in {"python", "operation"}:
         return PythonStepPlan(
             header=header,
             handler=step.python_handler,
+            _compiled_step=step,
         )
     if step.kind == "workflow":
         original_step = step.step
@@ -260,6 +264,7 @@ def step_plan_from_compiled_step(*args: Any, **kwargs: Any) -> Any:
             message_from=getattr(original_step, "message_from", None),
             params=dict(getattr(original_step, "params", {})),
             input=getattr(original_step, "input", None),
+            _compiled_step=step,
         )
     if step.kind == "branch_group":
         branch_group = step.branch_group
@@ -306,6 +311,7 @@ def step_plan_from_compiled_step(*args: Any, **kwargs: Any) -> Any:
                 default_chain_route=branch_group.default_chain_route,
                 rework_chain_route=branch_group.rework_chain_route,
             ),
+            _compiled_step=step,
         )
     raise ValueError(f"unsupported compiled step kind {step.kind!r}")
 
@@ -321,7 +327,7 @@ def compiled_step_from_step_plan(*args: Any, **kwargs: Any) -> Any:
 
     route_table = {tag: compiled_route_from_route_contract(route) for tag, route in routes.items()}
     header = plan.header
-    original_compiled = header.original_step if isinstance(header.original_step, CompiledStep) else None
+    original_compiled = _compiled_step_parity(plan)
     authored_routes = tuple(
         tag for tag, route in routes.items() if route.inheritance_source != "framework_default"
     )
@@ -482,6 +488,11 @@ def compiled_step_from_step_plan(*args: Any, **kwargs: Any) -> Any:
             branch_group=None,
         )
     if isinstance(plan, BranchGroupStepPlan):
+        branch_group = (
+            original_compiled.branch_group
+            if original_compiled is not None and original_compiled.branch_group is not None
+            else _compiled_branch_group_from_plan(plan.branch_group)
+        )
         return CompiledStep(
             **common_kwargs,
             expected_output_schema=None,
@@ -498,7 +509,7 @@ def compiled_step_from_step_plan(*args: Any, **kwargs: Any) -> Any:
             verifier_session_name=None,
             expected_output_validator=None,
             python_handler=None,
-            branch_group=original_compiled.branch_group if original_compiled is not None else None,
+            branch_group=branch_group,
         )
     raise TypeError(f"unsupported step plan {type(plan)!r}")
 
@@ -647,7 +658,7 @@ def _step_header_from_compiled_step(
     return StepHeader(
         name=step.name,
         kind=step.kind,
-        original_step=step,
+        original_step=step.step,
         session_name=step.session_name,
         scope_name=step.scope_name,
         io=_step_io_from_compiled_fields(
@@ -673,6 +684,48 @@ def _step_header_from_compiled_step(
         ),
         provider_policy=step.provider_policy,
     )
+
+
+def _compiled_step_parity(plan: StepPlan) -> CompiledStep | None:
+    compiled = getattr(plan, "_compiled_step", None)
+    return compiled if isinstance(compiled, CompiledStep) else None
+
+
+def _compiled_branch_group_from_plan(plan: BranchGroupPlan) -> CompiledBranchGroupSpec:
+    return CompiledBranchGroupSpec(
+        name=plan.name,
+        kind=plan.kind,
+        branches=tuple(
+            CompiledBranchStepSpec(
+                name=branch.name,
+                index=branch.index,
+                input=branch.input,
+                step=_compiled_step_from_branch_plan(branch.step),
+            )
+            for branch in plan.branches
+        ),
+        concurrency=plan.concurrency,
+        settle=plan.settle,
+        success_routes=tuple(plan.success_routes),
+        outcome=plan.outcome,
+        fan_in_step=(
+            None
+            if plan.fan_in_step is None
+            else _compiled_step_from_branch_plan(plan.fan_in_step)
+        ),
+        composite_route_tags=tuple(plan.composite_route_tags),
+        default_chain_route=plan.default_chain_route,
+        rework_chain_route=plan.rework_chain_route,
+    )
+
+
+def _compiled_step_from_branch_plan(plan: StepPlan) -> CompiledStep:
+    compiled = _compiled_step_parity(plan)
+    if compiled is None:
+        raise ValueError(
+            "branch-group nested compiled-step reconstruction requires adapter parity metadata"
+        )
+    return compiled
 
 
 def _step_io_from_compiled_fields(

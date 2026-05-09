@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+from dataclasses import replace
+
 import botlane.simple as simple
 from pydantic import BaseModel
 
@@ -145,20 +147,24 @@ def test_step_plans_cover_prompt_pair_python_and_child_variants() -> None:
     )
 
     assert isinstance(prompt_plan, PromptStepPlan)
+    assert prompt_plan.header.original_step is compiled.steps["prompt"].step
     assert isinstance(prompt_plan.header.io.reads[0], type(prompt_plan.header.io.writes[0]))
     assert isinstance(prompt_plan.header.io.reads[1], ExternalRead)
     assert prompt_plan.turn.kind == "llm"
     assert not hasattr(prompt_plan.header, "available_routes")
 
     assert isinstance(pair_plan, ProduceVerifyStepPlan)
+    assert pair_plan.header.original_step is compiled.steps["pair"].step
     assert pair_plan.producer.kind == "producer"
     assert pair_plan.verifier.kind == "verifier"
     assert pair_plan.verifier_session_name == compiled.steps["pair"].verifier_session_name
 
     assert isinstance(python_plan, PythonStepPlan)
+    assert python_plan.header.original_step is compiled.steps["run_python"].step
     assert python_plan.handler is compiled.steps["run_python"].python_handler
 
     assert isinstance(child_plan, ChildWorkflowStepPlan)
+    assert child_plan.header.original_step is compiled.steps["launch"].step
     assert child_plan.workflow == "child_workflow"
     assert child_plan.message == "Run child workflow."
     assert child_plan.params == {"mode": "fast"}
@@ -196,6 +202,7 @@ def test_branch_group_step_plan_keeps_nested_plan_shapes_and_fan_in_helpers() ->
     )
 
     assert isinstance(plan, BranchGroupStepPlan)
+    assert plan.header.original_step is branch_step.step
     assert [branch.name for branch in plan.branch_group.branches] == ["security", "cost"]
     assert isinstance(plan.branch_group.branches[0].step, PromptStepPlan)
     assert isinstance(plan.branch_group.fan_in_step, PromptStepPlan)
@@ -212,3 +219,12 @@ def test_branch_group_step_plan_keeps_nested_plan_shapes_and_fan_in_helpers() ->
         },
     )
     assert round_trip == branch_step
+
+    rebuilt_without_top_level_parity = compiled_step_from_step_plan(
+        replace(plan, _compiled_step=None),
+        routes={
+            tag: route_contract_from_compiled_route(route, inventory=compiled.artifacts_by_qualified_name)
+            for tag, route in compiled.routes["reviews"].items()
+        },
+    )
+    assert rebuilt_without_top_level_parity == branch_step
