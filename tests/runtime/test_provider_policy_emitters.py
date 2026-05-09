@@ -422,6 +422,41 @@ def test_claude_emitter_rejects_unsandboxed_mode_when_disable_bypass_is_enabled(
         _emit_claude(tmp_path, policy)
 
 
+def test_claude_emitter_reports_native_effective_enforcement_details(tmp_path: Path) -> None:
+    workspace_root = tmp_path / "workspace"
+    workspace_root.mkdir()
+    policy = ProviderPolicy(
+        permissions=PermissionPolicy(mode="full_auto_sandboxed"),
+        sandbox=SandboxPolicy(
+            mode="workspace_write",
+            workspace=WorkspacePolicy(
+                filesystem=WorkspaceFilesystemPolicy(
+                    allow_read=(".",),
+                    allow_write=("./dist",),
+                    deny_read=("./.env",),
+                    deny_write=("/etc",),
+                ),
+                network=WorkspaceNetworkPolicy(
+                    mode="limited",
+                    allow_domains=("github.com",),
+                    deny_domains=("example.com",),
+                ),
+            ),
+        ),
+    )
+
+    emission = _emit_claude(tmp_path, policy, workspace_root=workspace_root)
+    effective = emission.capability_report.effective_enforcement
+
+    assert effective.sandbox_mode == "workspace_write"
+    assert effective.read_roots == (str(workspace_root.resolve()),)
+    assert effective.write_roots == (str((workspace_root / "dist").resolve()),)
+    assert effective.deny_read_enforced is True
+    assert effective.deny_write_enforced is True
+    assert effective.network_domain_filter_enforced is True
+    assert effective.dangerous_bypass_disabled is True
+
+
 def test_claude_emitter_marks_filesystem_capability_lossy_when_native_support_is_missing(tmp_path: Path) -> None:
     workspace_root = tmp_path / "workspace"
     workspace_root.mkdir()

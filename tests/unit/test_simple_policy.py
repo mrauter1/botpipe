@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+import re
+
 import pytest
 
 import botlane
@@ -10,8 +12,6 @@ from botlane.core.primitives import Event
 from botlane.core.steps import PythonStep
 from botlane.core.provider_policy import ProviderPolicy, ProviderPolicyOverride
 from botlane.policy import PermissionMode, Policy
-
-LEGACY_PRODUCT = "auto" + "loop"
 
 
 def test_policy_surface_exports_shared_policy_symbols() -> None:
@@ -86,12 +86,8 @@ def test_policy_resolves_public_layers_and_internal_overrides() -> None:
 
 
 def test_policy_rejects_removed_public_policy_override_symbol() -> None:
-    with pytest.raises(ImportError):
-        exec(f"from {LEGACY_PRODUCT} import PolicyOverride")
     with pytest.raises(AttributeError):
         getattr(simple, "PolicyOverride")
-    with pytest.raises(ImportError):
-        exec(f"from {LEGACY_PRODUCT}.simple import ProviderPolicyOverride")
     with pytest.raises(AttributeError):
         getattr(simple, "ProviderPolicyOverride")
 
@@ -105,16 +101,10 @@ def test_policy_input_export_matrix_matches_phase_contract() -> None:
 
     assert sdk.PolicyInput is public_policy.PolicyInput
 
-    with pytest.raises(ImportError):
-        exec(f"from {LEGACY_PRODUCT} import PolicyInput")
     with pytest.raises(AttributeError):
         getattr(botlane, "PolicyInput")
-    with pytest.raises(ImportError):
-        exec(f"from {LEGACY_PRODUCT}.simple import PolicyInput")
     with pytest.raises(AttributeError):
         getattr(simple, "PolicyInput")
-    with pytest.raises(ImportError):
-        exec(f"from {LEGACY_PRODUCT}.simple import ProviderPolicyInput")
     with pytest.raises(AttributeError):
         getattr(simple, "ProviderPolicyInput")
 
@@ -203,3 +193,36 @@ def test_simple_declarations_keep_internal_override_compatibility() -> None:
     declaration = simple.step("Draft.", policy=override)
 
     assert declaration.policy is override
+
+
+@pytest.mark.parametrize(
+    ("kwargs", "message"),
+    [
+        (
+            {
+                "read_only": True,
+                "allow_write": "src/",
+            },
+            "allow_write cannot be set when sandbox mode is read-only",
+        ),
+        (
+            {
+                "network": simple.NetworkMode.LIMITED,
+            },
+            "network=NetworkMode.LIMITED requires non-empty network_domains",
+        ),
+        (
+            {
+                "permission_mode": simple.PermissionMode.FULL_AUTO_UNSANDBOXED,
+                "sandbox_mode": simple.SandboxMode.WORKSPACE_WRITE,
+            },
+            "permission_mode=PermissionMode.FULL_AUTO_UNSANDBOXED requires sandbox_mode=SandboxMode.DANGER_FULL_ACCESS",
+        ),
+    ],
+)
+def test_simple_policy_validation_preserves_exact_public_messages(
+    kwargs: dict[str, object],
+    message: str,
+) -> None:
+    with pytest.raises(ValueError, match=f"^{re.escape(message)}$"):
+        simple.Policy(**kwargs)

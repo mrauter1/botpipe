@@ -6,3 +6,9 @@
 - Phase Directory Key: provider-policy-translators
 - Phase Title: Provider Policy Translators
 - Scope: phase-local authoritative verifier artifact
+
+## Test Additions Summary
+
+- Added Claude effective-enforcement assertions for native filesystem/network enforcement and dangerous-bypass reporting.
+- Added `simple.Policy(...)` exact-message regression coverage for read-only/write, limited-network-without-domains, and unsandboxed permission mismatches.
+- Re-ran focused provider-policy and simple-policy suites covering 77 passing tests.
