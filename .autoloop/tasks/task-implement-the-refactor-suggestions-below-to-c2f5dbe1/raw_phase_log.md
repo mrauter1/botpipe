@@ -1765,3 +1765,12 @@ No open verification blockers. The planning artifacts are ready for implementati
 <loop-control>
 {"schema":"docloop.loop_control/v1","kind":"promise","promise":"COMPLETE"}
 </loop-control>
+
+
+---
+run_id=run-20260509T144337Z-158e6e31 | entry=phase_scope_resolved
+---
+phase_mode=single
+phase_ids=unify-runtime-context-mutators
+explicit=True
+current_phase_index=0
