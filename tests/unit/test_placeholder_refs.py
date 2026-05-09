@@ -222,5 +222,9 @@ def test_placeholders_module_does_not_import_context_at_runtime() -> None:
     tree = ast.parse(module_path.read_text(encoding="utf-8"), filename=str(module_path))
 
     for node in ast.walk(tree):
+        if isinstance(node, ast.Import):
+            for alias in node.names:
+                if alias.name == "botlane.core.context":
+                    pytest.fail("placeholders.py must not import Context at runtime")
         if isinstance(node, ast.ImportFrom) and node.module in {"context", "botlane.core.context"}:
             pytest.fail("placeholders.py must not import Context at runtime")

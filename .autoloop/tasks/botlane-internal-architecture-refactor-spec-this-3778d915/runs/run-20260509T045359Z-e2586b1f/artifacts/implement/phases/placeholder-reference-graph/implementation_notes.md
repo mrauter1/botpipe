@@ -21,6 +21,8 @@
 - Added: `PlaceholderRef`, `parse_placeholders(...)`, `validate_placeholder_ref(...)`, `render_placeholder_ref(...)`, `render_template_with_refs(...)`
 - Added: `ReferenceGraph`
 - Updated delegation points: `render_runtime_template(...)`, `_reject_ctx_placeholders_in_artifact_template(...)`, `_analyze_simple_prompt_references(...)`, `_validate_simple_prompt_reference(...)`, `analyze_simple_prompt_references(...)`
+- Removed duplicate runtime placeholder internals from `botlane/core/artifacts.py` so the new placeholder module is the only runtime implementation.
+- Strengthened `test_placeholders_module_does_not_import_context_at_runtime()` to cover plain `import botlane.core.context` in addition to `from ... import ...`.
 
 ## Checklist mapping
 
@@ -53,14 +55,17 @@
 
 - Placeholder parsing is now centralized, reducing regex duplication across compile-time and runtime helper surfaces.
 - Branch/fan-in compile-time validation is imported lazily inside the placeholder validator to avoid package-init cycles from `artifacts.py`.
+- `botlane/core/artifacts.py` no longer carries a stale second copy of runtime placeholder resolution logic.
 
 ## Validation performed
 
 - `./.venv/bin/python -m pytest tests/unit/test_placeholder_refs.py tests/unit/test_primitives_and_stores.py tests/unit/test_simple_surface.py tests/contract/engine/test_prompt_context.py`
 - `./.venv/bin/python -m pytest tests/runtime/test_runtime_static_graph.py tests/runtime/test_workspace_and_context.py`
+- `./.venv/bin/python -m pytest tests/unit/test_placeholder_refs.py tests/unit/test_primitives_and_stores.py tests/unit/test_simple_surface.py tests/contract/engine/test_prompt_context.py tests/runtime/test_runtime_static_graph.py tests/runtime/test_workspace_and_context.py`
 - `python3 -m py_compile botlane/core/placeholders.py botlane/core/reference_graph.py botlane/core/discovery.py botlane/core/artifacts.py botlane/core/prompt_validation.py tests/unit/test_placeholder_refs.py`
 
 ## Deduplication / centralization decisions
 
 - Centralized placeholder tokenization and runtime rendering in `botlane/core/placeholders.py`.
 - Centralized simple-prompt validation through `validate_placeholder_ref(...)` while leaving public-facing compile/runtime entrypoints unchanged.
+- Removed the obsolete runtime placeholder helper copy from `botlane/core/artifacts.py` instead of leaving aliases there.

@@ -2467,3 +2467,63 @@ Open issues / next step
 <loop-control>
 {"schema":"docloop.loop_control/v1","kind":"promise","promise":"INCOMPLETE"}
 </loop-control>
+
+
+---
+run_id=run-20260509T045359Z-e2586b1f | entry=session_turn | pair=implement | phase=producer | cycle=2 | attempt=1 | thread_id=019e0ba1-4411-7631-9340-034a7f1ab6c9
+---
+provider=codex
+mode=resume
+template=/home/rauter/.local/share/pipx/venvs/autoloop/lib/python3.12/site-packages/autoloop/templates/implement_producer.md
+session_id=019e0ba1-4411-7631-9340-034a7f1ab6c9
+
+
+---
+run_id=run-20260509T045359Z-e2586b1f | entry=phase_output | pair=implement | phase=producer | process=codex-agent | cycle=2 | attempt=1 | thread_id=019e0ba1-4411-7631-9340-034a7f1ab6c9
+---
+Reviewer feedback is narrow and actionable: remove the stale placeholder implementation still sitting in `artifacts.py`, and strengthen the AST guard in the new phase-local test. I’m checking for any remaining callers of the legacy helpers before I edit.
+
+There are no remaining callers of the legacy runtime helpers outside `artifacts.py`. I’m removing that stale stack outright and tightening the AST test to catch both `import` and `from ... import` forms.
+
+The stale runtime stack is out. I’m doing a quick compile and the same focused placeholder/runtime suites again to make sure the cleanup didn’t break the public artifact helpers.
+
+The cleanup is through the unit-heavy portion cleanly. I’m waiting on the prompt-context and runtime static-graph buckets, since those were the main regression surfaces touched by the `artifacts.py` deletion.
+
+The runtime created a fresh decision header for this turn, so I’m recording the one non-obvious architectural choice there and then updating the phase notes to reflect the stale-helper removal and the stronger AST guard.
+
+There’s one small cleanup left: `RequestContext` is now unused after the stale helper removal. I’m dropping that type-only import and re-running a fast compile check.
+
+Scope considered
+
+- Phase-local follow-up for `placeholder-reference-graph` only.
+- Addressed reviewer findings in [artifacts.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/botlane/core/artifacts.py) and [test_placeholder_refs.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/tests/unit/test_placeholder_refs.py).
+- Updated the phase notes and the current turn block in `decisions.txt`.
+
+What I analyzed
+
+- Remaining placeholder ownership in `botlane/core/artifacts.py`.
+- The phase-local AST guard in `tests/unit/test_placeholder_refs.py`.
+- Reviewer feedback and the current implementation notes.
+
+What I changed
+
+- Removed the stale runtime placeholder helper stack from [artifacts.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/botlane/core/artifacts.py), leaving `botlane/core/placeholders.py` as the only runtime placeholder implementation.
+- Strengthened `test_placeholders_module_does_not_import_context_at_runtime()` in [test_placeholder_refs.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/tests/unit/test_placeholder_refs.py) to also fail on plain `import botlane.core.context`.
+- Updated [implementation_notes.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/botlane-internal-architecture-refactor-spec-this-3778d915/runs/run-20260509T045359Z-e2586b1f/artifacts/implement/phases/placeholder-reference-graph/implementation_notes.md) to reflect the dedup cleanup and rerun validation.
+
+Key findings / decisions
+
+- The reviewer’s blocking point was valid: leaving the old helper copy in `artifacts.py` would have kept two runtime placeholder implementations alive in the same surface.
+- `botlane/core/placeholders.py` is now the sole runtime placeholder implementation for this phase.
+- Validation after the cleanup passed: `237 passed` across the focused placeholder/runtime suites.
+
+Open issues / next step
+
+- No known phase-local issues remain.
+- Full suite was not rerun; the focused validation set for this phase passed:
+  `tests/unit/test_placeholder_refs.py`
+  `tests/unit/test_primitives_and_stores.py`
+  `tests/unit/test_simple_surface.py`
+  `tests/contract/engine/test_prompt_context.py`
+  `tests/runtime/test_runtime_static_graph.py`
+  `tests/runtime/test_workspace_and_context.py`
