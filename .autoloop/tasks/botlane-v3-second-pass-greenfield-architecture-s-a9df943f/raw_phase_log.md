@@ -2012,3 +2012,56 @@ Open issues / next step
 - Phase artifacts updated:
   [implementation_notes.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/botlane-v3-second-pass-greenfield-architecture-s-a9df943f/runs/run-20260509T125912Z-8deb38fd/artifacts/implement/phases/placeholder-reference-graph/implementation_notes.md)
   [decisions.txt](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/botlane-v3-second-pass-greenfield-architecture-s-a9df943f/runs/run-20260509T125912Z-8deb38fd/decisions.txt)
+
+
+---
+run_id=run-20260509T125912Z-8deb38fd | entry=session_turn | pair=implement | phase=verifier | cycle=1 | attempt=1 | thread_id=019e0d43-3dc9-76f0-90b1-4d54c4f1a863
+---
+provider=codex
+mode=resume
+template=/home/rauter/.local/share/pipx/venvs/autoloop/lib/python3.12/site-packages/autoloop/templates/implement_verifier.md
+session_id=019e0d43-3dc9-76f0-90b1-4d54c4f1a863
+
+
+---
+run_id=run-20260509T125912Z-8deb38fd | entry=phase_output | pair=implement | phase=verifier | process=codex-agent | cycle=1 | attempt=1 | thread_id=019e0d43-3dc9-76f0-90b1-4d54c4f1a863
+---
+I’m reviewing the active phase artifacts and validating the new behavior directly against the changed compiler/placeholder paths. I’m checking whether the implementation actually enforces the promised surface validation or only records refs opportunistically.
+
+I’ve got two likely regressions from static inspection. I’m running direct repros now so the feedback can cite concrete failing scenarios rather than just architectural suspicion.
+
+I have one blocking issue, and it’s specific to the phase promise: the compiler still doesn’t enforce placeholder validation for all supported surfaces. I’m recording that with concrete repros in the review artifacts now.
+
+Scope considered
+
+- Phase-local review of the placeholder/reference-graph implementation only.
+- Changed code paths in `botlane/core/placeholders.py`, `artifacts.py`, `reference_graph.py`, `compiler.py`, and the added placeholder tests.
+- Active review artifacts in the phase directory, plus the authoritative run decisions and implementation notes.
+
+What I analyzed
+
+- Compiler-side `ReferenceGraph` construction and whether it validates or only records placeholder-bearing surfaces.
+- The new `validate_placeholder_ref(...)` branching for `workflow_step_message`, `artifact_template`, and `runtime_template`.
+- Delegate reduction in `artifacts.py` and whether placeholder parsing/rendering ownership is actually centralized.
+- Direct repros with `.venv/bin/python` for invalid `workflow_step_message` and `artifact_template` placeholders.
+
+What I reviewed
+
+- Updated `criteria.md` and `feedback.md` in the active phase artifact directory.
+- Concrete repro result: `simple.workflow_step(Child, message="{ctx.state.missing}")` still compiles.
+- Concrete repro result: `simple.Md("note", path="reports/{item.payload.foo}.md")` on a non-scoped step still compiles.
+- Those compile paths map to `botlane/core/compiler.py:439-479`, where workflow-step message refs are only recorded and artifact-template validation errors are swallowed.
+
+Key findings / decisions
+
+- `IMP-001` blocking: the implementation does not satisfy the phase requirement to validate all supported placeholder surfaces from one parser. Prompt refs are validated, but `workflow_step_message` refs are not validated at compile time, and artifact-template validation explicitly suppresses `WorkflowValidationError`.
+- Criteria remain unchecked because this is a material correctness/intent-fidelity gap against the active phase contract.
+
+Open issues / next step
+
+- Fix `compiler.py` so all placeholder-bearing compile surfaces go through the centralized validator and invalid refs fail compilation consistently.
+- Specifically: validate `ChildWorkflowStepPlan.message` refs, stop swallowing artifact-template validation failures, and reuse one compiler-side helper for `prompt`, `workflow_step_message`, and `artifact_template`.
+
+<loop-control>
+{"schema":"docloop.loop_control/v1","kind":"promise","promise":"INCOMPLETE"}
+</loop-control>
