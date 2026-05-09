@@ -20,3 +20,7 @@
 {"ts": "2026-05-09T13:02:05.426691+00:00", "run_id": "run-20260509T124548Z-f67cf8d4", "seq": 20, "event_type": "phase_finished", "pair": "test", "phase": "producer", "cycle": 1, "attempt": 1, "empty_output": false, "phase_id": "provider-policy-translators"}
 {"ts": "2026-05-09T13:02:46.233714+00:00", "run_id": "run-20260509T124548Z-f67cf8d4", "seq": 21, "event_type": "phase_finished", "pair": "test", "phase": "verifier", "cycle": 1, "attempt": 1, "empty_output": false, "phase_id": "provider-policy-translators"}
 {"ts": "2026-05-09T13:02:46.359103+00:00", "run_id": "run-20260509T124548Z-f67cf8d4", "seq": 22, "event_type": "pair_completed", "pair": "test", "cycle": 1, "attempt": 1, "phase_id": "provider-policy-translators"}
+{"ts": "2026-05-09T13:02:46.517531+00:00", "run_id": "run-20260509T124548Z-f67cf8d4", "seq": 23, "event_type": "phase_completed", "pair": "test", "phase_id": "provider-policy-translators", "phase_mode": "single"}
+{"ts": "2026-05-09T13:02:46.520629+00:00", "run_id": "run-20260509T124548Z-f67cf8d4", "seq": 24, "event_type": "phase_started", "phase_id": "authoring-and-builder-reducers", "phase_mode": "single"}
+{"ts": "2026-05-09T13:02:46.522602+00:00", "run_id": "run-20260509T124548Z-f67cf8d4", "seq": 25, "event_type": "pair_started", "pair": "implement", "phase_id": "authoring-and-builder-reducers"}
+{"ts": "2026-05-09T13:02:46.522699+00:00", "run_id": "run-20260509T124548Z-f67cf8d4", "seq": 26, "event_type": "cycle_started", "pair": "implement", "cycle": 1, "attempt": 1, "phase_id": "authoring-and-builder-reducers"}

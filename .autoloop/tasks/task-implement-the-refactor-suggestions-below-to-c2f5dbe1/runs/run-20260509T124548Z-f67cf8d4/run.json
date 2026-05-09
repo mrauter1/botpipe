@@ -16,12 +16,12 @@
       "conditional-capability-entry-cleanup"
     ],
     "explicit": true,
-    "current_phase_index": 0,
-    "current_phase_id": "provider-policy-translators"
+    "current_phase_index": 1,
+    "current_phase_id": "authoring-and-builder-reducers"
   },
   "phase_status": {
-    "provider-policy-translators": "in_progress",
-    "authoring-and-builder-reducers": "planned",
+    "provider-policy-translators": "completed",
+    "authoring-and-builder-reducers": "in_progress",
     "runtime-and-discovery-extraction": "planned",
     "conditional-capability-entry-cleanup": "planned"
   },
@@ -31,6 +31,19 @@
       "run_id": "run-20260509T124548Z-f67cf8d4",
       "status": "in_progress",
       "ts": "2026-05-09T12:51:19.693040+00:00"
+    },
+    {
+      "phase_id": "provider-policy-translators",
+      "run_id": "run-20260509T124548Z-f67cf8d4",
+      "status": "completed",
+      "ts": "2026-05-09T13:02:46.517246+00:00",
+      "pair": "test"
+    },
+    {
+      "phase_id": "authoring-and-builder-reducers",
+      "run_id": "run-20260509T124548Z-f67cf8d4",
+      "status": "in_progress",
+      "ts": "2026-05-09T13:02:46.519746+00:00"
     }
   ]
 }
