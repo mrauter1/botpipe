@@ -2566,3 +2566,59 @@ Open issues / next step
 <loop-control>
 {"schema":"docloop.loop_control/v1","kind":"promise","promise":"COMPLETE"}
 </loop-control>
+
+
+---
+run_id=run-20260509T125912Z-8deb38fd | entry=session_turn | pair=test | phase=producer | cycle=1 | attempt=1 | thread_id=019e0d60-9795-78f2-a556-d305c102d2c5
+---
+provider=codex
+mode=resume
+template=/home/rauter/.local/share/pipx/venvs/autoloop/lib/python3.12/site-packages/autoloop/templates/test_producer.md
+session_id=019e0d60-9795-78f2-a556-d305c102d2c5
+
+
+---
+run_id=run-20260509T125912Z-8deb38fd | entry=phase_output | pair=test | phase=producer | process=codex-agent | cycle=1 | attempt=1 | thread_id=019e0d60-9795-78f2-a556-d305c102d2c5
+---
+Provider-turn cutover test work is the active scope. I’m reading the phase test artifacts and the current provider-turn tests first, then I’ll add only the coverage that is still missing against the acceptance criteria and record the coverage map.
+
+The transport-boundary tests already cover AC-1, but AC-2 is still only indirect. I’m adding two focused rendered-provider regression tests: one for prompt-step retry plus session persistence, and one for pair-step raw-output and usage propagation through the same transport path.
+
+I’ve narrowed the missing coverage to AC-2 on the rendered transport path. I’m adding one prompt-step regression test for retry plus session reuse, and one pair-step regression test for raw-output / usage / session propagation through `RenderedProviderTurn -> ProviderTurnResult`.
+
+The new coverage is in place. I’m running the provider-turn contract file and the adjacent raw-output/session suites now, because those are the acceptance-criterion surfaces these added tests are meant to lock down.
+
+The targeted provider-turn, raw-output, and session suites are green. I’m recording the explicit coverage map and the one non-obvious test decision, then I’ll close with the exact validation that passed.
+
+Scope considered
+
+- Phase-local provider-turn cutover tests only.
+- Focused on [test_provider_turn_plan.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/tests/contract/test_provider_turn_plan.py) plus adjacent raw-output and session regression surfaces.
+- Updated only the active test artifacts and the allowed run-local decisions ledger entry.
+
+What I analyzed
+
+- The phase contract, acceptance criteria, and run decisions.
+- Existing provider-turn contract coverage versus AC-1 and AC-2.
+- Existing raw-output and session tests in [test_core_contracts.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/tests/contract/engine/test_core_contracts.py) and [test_sessions.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/tests/contract/engine/test_sessions.py) to avoid duplicate churn.
+
+What I changed
+
+- Added rendered-provider AC-2 regression coverage in [test_provider_turn_plan.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/tests/contract/test_provider_turn_plan.py):
+  - prompt-step retry keeps the pre-step session baseline across attempts and persists the final session
+  - pair-step execution preserves producer raw output, verifier raw output, aggregated `StepProviderUsage`, and final verifier session persistence
+- Updated the phase coverage map in [test_strategy.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/botlane-v3-second-pass-greenfield-architecture-s-a9df943f/runs/run-20260509T125912Z-8deb38fd/artifacts/test/phases/provider-turn-cutover/test_strategy.md).
+- Appended a concise test-summary note to [feedback.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/botlane-v3-second-pass-greenfield-architecture-s-a9df943f/runs/run-20260509T125912Z-8deb38fd/artifacts/test/phases/provider-turn-cutover/feedback.md).
+
+Key findings / decisions
+
+- AC-1 was already covered directly by the transport-boundary tests.
+- The missing direct coverage was AC-2 on the rendered-provider path, so I added only those tests rather than broadening into operation-turn behavior.
+- I recorded the non-obvious test decision in `decisions.txt`: rendered prompt retry must reuse the pre-step session, and rendered pair execution must keep output/usage/session propagation intact.
+
+Open issues / next step
+
+- Targeted validation is green:
+  - `.venv/bin/python -m compileall tests/contract/test_provider_turn_plan.py`
+  - `.venv/bin/pytest tests/contract/test_provider_turn_plan.py tests/contract/engine/test_core_contracts.py tests/contract/engine/test_sessions.py -q`
+- No open test-author issues in this phase.

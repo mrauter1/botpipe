@@ -3,7 +3,7 @@ from __future__ import annotations
 import asyncio
 from dataclasses import dataclass
 from pathlib import Path
-from typing import get_args
+from typing import Callable, get_args
 
 from pydantic import BaseModel
 
@@ -12,9 +12,11 @@ from botlane.core.compiler import compile_workflow
 from botlane.core.context import Context
 from botlane.core.engine import Engine
 from botlane.core.primitives import Outcome
+from botlane.core.providers.models import StepProviderUsage, TokenUsage
 from botlane.core.providers.fake import ScriptedLLMProvider
 from botlane.core.providers.rendered import RenderedLLMProvider
 from botlane.core.providers.turns import ProviderTurnResult, RenderedProviderTurn
+from botlane.core.stores.protocols import SessionBinding
 from botlane.core.step_plans import ProduceVerifyStepPlan, PromptStepPlan, ProviderTurnKind
 from botlane.core.stores import InMemoryCheckpointStore, InMemorySessionStore
 
@@ -29,6 +31,19 @@ class _SequencedTransport:
         if not self.raw_texts:
             raise AssertionError("unexpected extra provider turn")
         return ProviderTurnResult(raw_text=self.raw_texts.pop(0), session=None)
+
+
+@dataclass
+class _ResultTransport:
+    responses: list[ProviderTurnResult | Callable[[RenderedProviderTurn], ProviderTurnResult]]
+    seen_turns: list[RenderedProviderTurn]
+
+    async def run_turn(self, turn: RenderedProviderTurn) -> ProviderTurnResult:
+        self.seen_turns.append(turn)
+        if not self.responses:
+            raise AssertionError("unexpected extra provider turn")
+        response = self.responses.pop(0)
+        return response(turn) if callable(response) else response
 
 
 def _build_step_context(engine: Engine, tmp_path: Path, *, step_name: str) -> tuple[object, Context]:
@@ -172,6 +187,152 @@ def test_produce_verify_provider_turn_plan_keeps_rendered_transport_boundary(tmp
     assert all(isinstance(turn, RenderedProviderTurn) for turn in seen_turns)
     assert seen_turns[0].expected_response == "raw_text"
     assert seen_turns[1].expected_response == "outcome_json"
+
+
+def test_rendered_prompt_provider_turn_plan_retries_and_persists_session(tmp_path: Path) -> None:
+    class PromptWorkflow(simple.Workflow):
+        class State(BaseModel):
+            pass
+
+        main = simple.Session()
+        review = simple.step("Review the document.", name="review", session=main, routes={"done": simple.FINISH})
+
+    seen_turns: list[RenderedProviderTurn] = []
+
+    def _illegal_route(turn: RenderedProviderTurn) -> ProviderTurnResult:
+        assert turn.session is not None
+        return ProviderTurnResult(
+            raw_text='{"tag":"unexpected"}',
+            session=SessionBinding(key=turn.session.key, session_id="retry-attempt-1"),
+        )
+
+    def _accepted(turn: RenderedProviderTurn) -> ProviderTurnResult:
+        assert turn.session is not None
+        return ProviderTurnResult(
+            raw_text='{"tag":"done"}',
+            session=SessionBinding(key=turn.session.key, session_id="retry-attempt-2"),
+        )
+
+    provider = RenderedLLMProvider(_ResultTransport(responses=[_illegal_route, _accepted], seen_turns=seen_turns))
+    session_store = InMemorySessionStore()
+    engine = Engine(
+        PromptWorkflow,
+        provider=provider,
+        session_store=session_store,
+        checkpoint_store=InMemoryCheckpointStore(),
+    )
+
+    result = engine.run(
+        task_id="task-provider-turn-retry",
+        run_id="run-provider-turn-retry",
+        task_folder=tmp_path / "task",
+        run_folder=tmp_path / "run",
+        package_folder=tmp_path / "package",
+        root=tmp_path,
+    )
+
+    assert result.terminal == simple.FINISH
+    assert len(seen_turns) == 2
+    assert all(turn.turn_kind == "step" for turn in seen_turns)
+    assert seen_turns[0].session is not None
+    assert seen_turns[1].session is not None
+    assert seen_turns[1].session.session_id == seen_turns[0].session.session_id
+    final_binding = session_store.get("main")
+    assert final_binding is not None
+    assert final_binding.session_id == "retry-attempt-2"
+
+
+def test_rendered_pair_provider_turn_plan_preserves_outputs_usage_and_sessions(tmp_path: Path) -> None:
+    seen_events: list[tuple[str, str | None, str | None, StepProviderUsage | None]] = []
+
+    class _RawOutputExtension:
+        def bind(self, binding: object):
+            class _Bound:
+                def before_step(self, event: object) -> None:
+                    return None
+
+                def after_step(self, event: object) -> None:
+                    seen_events.append(
+                        (
+                            event.step_name,
+                            event.producer_raw_output,
+                            event.verifier_raw_output,
+                            event.provider_usage,
+                        )
+                    )
+
+                def on_terminal(self, event: object) -> None:
+                    return None
+
+            return _Bound()
+
+    class PairWorkflow(simple.Workflow):
+        class State(BaseModel):
+            pass
+
+        main = simple.Session()
+        review = simple.produce_verify_step(
+            producer_prompt="Draft the report.",
+            verifier_prompt="Review the report.",
+            name="review",
+            session=main,
+            producer_writes=[simple.Md("draft")],
+            routes={"accepted": simple.FINISH},
+        )
+        extensions = (_RawOutputExtension(),)
+
+    seen_turns: list[RenderedProviderTurn] = []
+    producer_usage = TokenUsage(input_tokens=5, output_tokens=7, total_tokens=12, source="fake")
+    verifier_usage = TokenUsage(input_tokens=11, output_tokens=3, total_tokens=14, source="fake")
+
+    def _producer(turn: RenderedProviderTurn) -> ProviderTurnResult:
+        assert turn.session is not None
+        return ProviderTurnResult(
+            raw_text="Draft content",
+            session=SessionBinding(key=turn.session.key, session_id="producer-attempt-1"),
+            usage=producer_usage,
+        )
+
+    def _verifier(turn: RenderedProviderTurn) -> ProviderTurnResult:
+        assert turn.session is not None
+        assert turn.session.session_id == "producer-attempt-1"
+        return ProviderTurnResult(
+            raw_text='{"tag":"accepted"}',
+            session=SessionBinding(key=turn.session.key, session_id="verifier-attempt-1"),
+            usage=verifier_usage,
+        )
+
+    provider = RenderedLLMProvider(_ResultTransport(responses=[_producer, _verifier], seen_turns=seen_turns))
+    session_store = InMemorySessionStore()
+    engine = Engine(
+        PairWorkflow,
+        provider=provider,
+        session_store=session_store,
+        checkpoint_store=InMemoryCheckpointStore(),
+    )
+
+    result = engine.run(
+        task_id="task-provider-turn-pair",
+        run_id="run-provider-turn-pair",
+        task_folder=tmp_path / "task",
+        run_folder=tmp_path / "run",
+        package_folder=tmp_path / "package",
+        root=tmp_path,
+    )
+
+    assert result.terminal == simple.FINISH
+    assert [turn.turn_kind for turn in seen_turns] == ["producer", "verifier"]
+    assert seen_events == [
+        (
+            "review",
+            "Draft content",
+            '{"tag":"accepted"}',
+            StepProviderUsage(producer=producer_usage, verifier=verifier_usage),
+        )
+    ]
+    final_binding = session_store.get("main")
+    assert final_binding is not None
+    assert final_binding.session_id == "verifier-attempt-1"
 
 
 def test_route_finalization_exposes_route_decision_for_finish_routes(tmp_path: Path) -> None:
