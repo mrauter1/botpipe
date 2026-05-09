@@ -11,3 +11,4 @@ Kept `Policy` override lowering split into model copy, effect resolution, and se
 <autoloop-decisions-header version="1" block_seq="4" owner="test_author" phase_id="provider-policy-translators" pair="test" turn_seq="1" run_id="run-20260509T124548Z-f67cf8d4" ts="2026-05-09T13:00:23.025364+00:00" />
 Extended `tests/unit/test_simple_policy.py` with exact-message assertions on the `simple.Policy(...)` surface so the phase deliverable covers both public policy and simple-policy regressions without duplicating the full `test_policy.py` matrix.
 Added a Claude native effective-enforcement assertion in `tests/runtime/test_provider_policy_emitters.py` because AC-1 requires capability-report parity, not only payload and CLI-arg parity.
+<autoloop-decisions-header version="1" block_seq="5" owner="implementer" phase_id="authoring-and-builder-reducers" pair="implement" turn_seq="1" run_id="run-20260509T124548Z-f67cf8d4" ts="2026-05-09T13:02:46.680896+00:00" />
