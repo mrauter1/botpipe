@@ -13,11 +13,11 @@
       "tighten-no-compat-artifact-scope"
     ],
     "explicit": true,
-    "current_phase_index": 0,
-    "current_phase_id": "tighten-no-compat-artifact-scope"
+    "current_phase_index": 1,
+    "current_phase_id": null
   },
   "phase_status": {
-    "tighten-no-compat-artifact-scope": "in_progress"
+    "tighten-no-compat-artifact-scope": "completed"
   },
   "phase_history": [
     {
@@ -25,6 +25,13 @@
       "run_id": "run-20260509T033701Z-27394e99",
       "status": "in_progress",
       "ts": "2026-05-09T03:43:42.921145+00:00"
+    },
+    {
+      "phase_id": "tighten-no-compat-artifact-scope",
+      "run_id": "run-20260509T033701Z-27394e99",
+      "status": "completed",
+      "ts": "2026-05-09T04:07:01.854940+00:00",
+      "pair": "test"
     }
   ]
 }

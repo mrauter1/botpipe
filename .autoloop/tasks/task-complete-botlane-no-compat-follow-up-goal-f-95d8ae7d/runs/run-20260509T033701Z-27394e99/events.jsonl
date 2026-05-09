@@ -23,3 +23,6 @@
 {"ts": "2026-05-09T04:05:45.363566+00:00", "run_id": "run-20260509T033701Z-27394e99", "seq": 23, "event_type": "phase_finished", "pair": "test", "phase": "producer", "cycle": 1, "attempt": 1, "empty_output": false, "phase_id": "tighten-no-compat-artifact-scope"}
 {"ts": "2026-05-09T04:07:01.568105+00:00", "run_id": "run-20260509T033701Z-27394e99", "seq": 24, "event_type": "phase_finished", "pair": "test", "phase": "verifier", "cycle": 1, "attempt": 1, "empty_output": false, "phase_id": "tighten-no-compat-artifact-scope"}
 {"ts": "2026-05-09T04:07:01.701996+00:00", "run_id": "run-20260509T033701Z-27394e99", "seq": 25, "event_type": "pair_completed", "pair": "test", "cycle": 1, "attempt": 1, "phase_id": "tighten-no-compat-artifact-scope"}
+{"ts": "2026-05-09T04:07:01.855314+00:00", "run_id": "run-20260509T033701Z-27394e99", "seq": 26, "event_type": "phase_completed", "pair": "test", "phase_id": "tighten-no-compat-artifact-scope", "phase_mode": "single"}
+{"ts": "2026-05-09T04:07:01.858055+00:00", "run_id": "run-20260509T033701Z-27394e99", "seq": 27, "event_type": "pair_started", "pair": "audit", "phase_id": null}
+{"ts": "2026-05-09T04:07:01.858225+00:00", "run_id": "run-20260509T033701Z-27394e99", "seq": 28, "event_type": "cycle_started", "pair": "audit", "cycle": 1, "attempt": 1, "phase_id": null}
