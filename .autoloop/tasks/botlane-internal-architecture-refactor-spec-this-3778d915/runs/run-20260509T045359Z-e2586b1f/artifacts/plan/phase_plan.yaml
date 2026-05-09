@@ -2,238 +2,285 @@ version: 1
 task_id: botlane-internal-architecture-refactor-spec-this-3778d915
 request_snapshot_ref: /home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/botlane-internal-architecture-refactor-spec-this-3778d915/runs/run-20260509T045359Z-e2586b1f/request.md
 phases:
-  - phase_id: "freeze-public-compatibility"
-    title: "Freeze Public Compatibility"
-    objective: "Lock the current public Botlane behavior in tests before internal refactors begin."
-    status: "planned"
-    in_scope:
-      - "Audit existing public-surface tests against the spec and add only missing freeze coverage."
-      - "Confirm root export stability, SDK facade behavior, persistence identity, and unsupported-surface constraints."
-    out_of_scope:
-      - "Adding new internal value objects."
-      - "Changing engine execution behavior."
-    dependencies: []
-    acceptance_criteria:
-      - id: "AC-1"
-        text: "The public root surface, SDK facade, simple authoring conventions, persistence identity, and declared unsupported cases are covered by targeted regression tests without changing runtime behavior."
-    deliverables:
-      - "Updated compatibility-focused tests in existing unit/runtime/strictness suites."
-      - "A validated baseline for later adapter phases."
-    risks:
-      - "Missing a freeze assertion could allow later adapter work to silently broaden or break behavior."
-    rollback:
-      - "Revert new coverage only if it encodes behavior that contradicts the authoritative spec."
-
-  - phase_id: "boundary-primitives-and-strictness"
-    title: "Boundary Primitives"
-    objective: "Add the first internal value-object primitives and codify the core/runtime import boundary."
-    status: "planned"
-    in_scope:
-      - "Add botlane/core/identifiers.py, botlane/core/run_paths.py, botlane/core/provider_policy_resolution.py, and a shell botlane/core/plan_adapters.py."
-      - "Type runtime ProviderPolicyResolver against the new core protocol."
-      - "Add the AST-aware core/runtime strictness test after verifying current imports are clean."
-    out_of_scope:
-      - "Route contracts."
-      - "Engine execution rewrites."
-    dependencies:
-      - "freeze-public-compatibility"
-    acceptance_criteria:
-      - id: "AC-1"
-        text: "ArtifactId, RunPaths, RunIdentity, and the provider policy resolver protocol exist with tests, and botlane/core has no runtime imports outside TYPE_CHECKING."
-    deliverables:
-      - "New primitive modules with internal-only docstrings."
-      - "tests/unit/test_artifact_ids.py, tests/unit/test_run_paths.py, tests/runtime/test_provider_policy_core_protocol.py, and tests/strictness/test_core_runtime_boundary.py."
-    risks:
-      - "Introducing runtime imports into value modules would create new import-cycle pressure."
-    rollback:
-      - "Fall back to protocol and primitive shells only; do not force early integration."
-
-  - phase_id: "route-contract-adapters"
-    title: "Route Contract Adapters"
-    objective: "Introduce typed internal route contracts and runtime route decisions without changing public route authoring."
-    status: "planned"
-    in_scope:
-      - "Add botlane/core/route_contracts.py."
-      - "Implement CompiledRoute to RouteContract round-trips and route-view helpers in plan_adapters.py."
-      - "Add parity tests for targets, visibility, schemas, required writes, runtime-control status, and disabled routes."
-    out_of_scope:
-      - "Engine loop consumption of RouteAction."
-      - "Public exposure of RouteAction or RouteContract."
-    dependencies:
-      - "boundary-primitives-and-strictness"
-    acceptance_criteria:
-      - id: "AC-1"
-        text: "RouteContract and RouteDecision exist internally, compiled-route round-trips preserve route metadata, and required-write conversion fails clearly when inventory is missing."
-    deliverables:
-      - "botlane/core/route_contracts.py."
-      - "Route adapter tests and route parity coverage."
-    risks:
-      - "Duplicating route state on steps would create drift across compiler and runtime."
-    rollback:
-      - "Keep CompiledRoute canonical for all runtime consumers until parity tests are stable."
-
-  - phase_id: "step-and-workflow-plans"
-    title: "Step And Workflow Plans"
-    objective: "Add typed executable plan objects and compiled-plan adapters while preserving current compiled outputs."
-    status: "planned"
-    in_scope:
-      - "Add botlane/core/step_plans.py and botlane/core/workflow_plan.py."
-      - "Add compile_workflow_plan(...) with lazy adapter import in compiler.py."
-      - "Implement CompiledStep and CompiledWorkflow round-trips, branch-group-safe plan shapes, and topology-hash parity coverage."
-    out_of_scope:
-      - "Switching Engine to consume WorkflowPlan directly."
-      - "Changing provider request artifact names."
-    dependencies:
-      - "route-contract-adapters"
-    acceptance_criteria:
-      - id: "AC-1"
-        text: "WorkflowPlan, typed StepPlan variants, and plan adapters exist; compile_workflow(...) stays compatible; topology hash and route-table parity tests pass."
-    deliverables:
-      - "Typed step/workflow plan modules and compiler adapter entrypoint."
-      - "tests/unit/test_step_plans.py and tests/unit/test_workflow_plan_adapters.py."
-    risks:
-      - "Adapter round-trips could mutate maps or alter compiled topology payloads."
-    rollback:
-      - "Retain WorkflowPlan as adapter-only while continuing to run production code on CompiledWorkflow."
-
-  - phase_id: "execution-frame-context-migration"
-    title: "ExecutionFrame Behind Context"
-    objective: "Move mutable runtime state behind an internal frame while preserving the public Context facade."
-    status: "planned"
-    in_scope:
-      - "Add botlane/core/execution_frame.py."
-      - "Synthesize ExecutionFrame inside Context and mirror legacy private-field behavior."
-      - "Add context/frame parity coverage, including message sentinel, worklists, branch metadata, and fan-in metadata."
-    out_of_scope:
-      - "Removing WeakKeyDictionary sidecar state."
-      - "Changing Context constructor signatures."
-    dependencies:
-      - "step-and-workflow-plans"
-    acceptance_criteria:
-      - id: "AC-1"
-        text: "Context continues to behave identically through the public API while its internal state can be read and mutated through ExecutionFrame-backed paths."
-    deliverables:
-      - "botlane/core/execution_frame.py."
-      - "tests/unit/test_execution_frame_context_parity.py."
-    risks:
-      - "Context migration can easily break pause/resume and child workflow behavior."
-    rollback:
-      - "Keep frame writes mirrored to legacy fields and continue using context_runtime as the mutating compatibility layer."
-
-  - phase_id: "provider-turn-and-route-finalization"
-    title: "Provider Turn Adapters"
-    objective: "Add ProviderTurnPlan and RouteDecision adapters around the current provider and route-finalization flows."
-    status: "planned"
-    in_scope:
-      - "Add ProviderTurnPlan support for prompt and produce/verify steps."
-      - "Expose RouteDecision from current route finalization without forcing immediate engine-loop conversion."
-      - "Add parity tests proving existing RenderedProviderTurn and ProviderTurnResult paths remain intact."
-    out_of_scope:
-      - "Operation execution migration."
-      - "Replacing RouteFinalizationResult everywhere in one pass."
-    dependencies:
-      - "execution-frame-context-migration"
-    acceptance_criteria:
-      - id: "AC-1"
-        text: "Prompt and produce/verify provider turns can be planned through ProviderTurnPlan while transports still consume RenderedProviderTurn and return ProviderTurnResult, and route finalization exposes RouteDecision compatibly."
-    deliverables:
-      - "Provider-turn adapters and route-decision bridge."
-      - "tests/contract/test_provider_turn_plan_adapter.py."
-    risks:
-      - "A parallel provider-result system would add technical debt and break fake-provider coverage."
-    rollback:
-      - "Keep existing compiled-step-driven provider execution as the live path until adapter parity is fully green."
-
-  - phase_id: "execution-services-and-collaborators"
-    title: "Execution Services"
-    objective: "Incrementally reduce direct Engine private-method coupling without introducing a replacement god object."
-    status: "planned"
-    in_scope:
-      - "Add botlane/core/execution_services.py as a narrow protocol shell."
-      - "Migrate collaborators in the prescribed order, starting with ArtifactGuard and RouteFinalizer."
-      - "Mark temporary private-call bridges and remove them as ownership narrows."
-    out_of_scope:
-      - "A full engine rewrite."
-      - "Broad execute-everything service methods."
-    dependencies:
-      - "provider-turn-and-route-finalization"
-    acceptance_criteria:
-      - id: "AC-1"
-        text: "Collaborator dependencies on Engine private methods are measurably reduced through narrow services without changing runtime behavior."
-    deliverables:
-      - "ExecutionServices shell and phased collaborator migrations."
-      - "Updated contract coverage for migrated collaborators."
-    risks:
-      - "A broad service layer would simply rename the current coupling."
-    rollback:
-      - "Stop at the last narrow service boundary that still keeps existing contract tests green."
-
-  - phase_id: "placeholder-reference-graph"
-    title: "Placeholder Reference Graph"
-    objective: "Unify placeholder parsing and dependency inference behind internal reference objects while preserving current grammar and errors."
-    status: "planned"
-    in_scope:
-      - "Add botlane/core/placeholders.py and botlane/core/reference_graph.py."
-      - "Delegate current placeholder parsing, validation, rendering, and inferred-read logic to the new types."
-      - "Add parity coverage for safe roots, artifact-path restrictions, branch/fan-in placement, and error quality."
-    out_of_scope:
-      - "Expanding supported placeholder semantics beyond current behavior."
-    dependencies:
-      - "execution-services-and-collaborators"
-    acceptance_criteria:
-      - id: "AC-1"
-        text: "PlaceholderRef and ReferenceGraph exist, current placeholder validation/rendering behavior is preserved, and no botlane/core placeholder module imports Context at runtime."
-    deliverables:
-      - "Placeholder and reference-graph modules."
-      - "tests/unit/test_placeholder_refs.py."
-    risks:
-      - "Small grammar changes here would cascade into prompt rendering and artifact path validation regressions."
-    rollback:
-      - "Keep old helper entrypoints delegating to the last-known-good parser/renderer behavior."
-
-  - phase_id: "branch-results-locators-and-policy-rules"
-    title: "Branch Results And Locators"
-    objective: "Type branch result serialization, add workflow locator variants, and optionally table-drive provider policy emitters without changing external behavior."
-    status: "planned"
-    in_scope:
-      - "Add botlane/core/branch_groups/results.py with exact manifest-shape serialization."
-      - "Add botlane/runtime/workflow_locator.py as an adapter over current loader/reference behavior."
-      - "Introduce policy feature rule tables only where payload parity is proven."
-    out_of_scope:
-      - "Changing branch-group scheduling semantics."
-      - "Changing workflow resolution precedence."
-    dependencies:
-      - "placeholder-reference-graph"
-    acceptance_criteria:
-      - id: "AC-1"
-        text: "BranchResult serializes to the exact current manifest shape, workflow locator variants preserve existing loader behavior, and provider policy emitter outputs remain unchanged where rule tables are introduced."
-    deliverables:
-      - "Typed branch-result and workflow-locator modules."
-      - "tests/contract/test_branch_result_serialization.py, tests/runtime/test_workflow_locator_variants.py, and any necessary provider-policy parity updates."
-    risks:
-      - "Persisted branch manifest or workflow resolution changes would be high-impact regressions."
-    rollback:
-      - "Preserve current branch dict builders and loader/reference types until typed adapters prove parity."
-
-  - phase_id: "single-step-parity-and-cleanup"
-    title: "Single Step Parity And Cleanup"
-    objective: "Optionally introduce SingleStepPlan behind parity tests and remove temporary migration scaffolding only after the full suite is green."
-    status: "planned"
-    in_scope:
-      - "Add SingleStepPlan only if parity tests compare it successfully to the current synthetic workflow path."
-      - "Retire temporary duplicate calculations and marked private-call bridges that are no longer needed."
-      - "Run the full test suite before considering the refactor complete."
-    out_of_scope:
-      - "Broadening client.step support beyond the current matrix."
-    dependencies:
-      - "branch-results-locators-and-policy-rules"
-    acceptance_criteria:
-      - id: "AC-1"
-        text: "Either SingleStepPlan remains adapter-only behind parity tests or Botlane.step(...) switches with exact behavioral equivalence, and the full pytest suite passes."
-    deliverables:
-      - "Single-step parity coverage and any final cleanup changes."
-      - "A full-suite green refactor state."
-    risks:
-      - "Switching Botlane.step too early would break a high-visibility public path."
-    rollback:
-      - "Keep the synthetic one-step workflow path as the supported execution path until exact parity is proven."
+- phase_id: freeze-public-compatibility
+  title: Freeze Public Compatibility
+  objective: Lock the current public Botlane behavior in tests before internal refactors
+    begin.
+  status: planned
+  in_scope:
+  - Audit existing public-surface tests against the spec and add only missing freeze
+    coverage.
+  - Confirm root export stability, SDK facade behavior, persistence identity, and
+    unsupported-surface constraints.
+  out_of_scope:
+  - Adding new internal value objects.
+  - Changing engine execution behavior.
+  dependencies: []
+  acceptance_criteria:
+  - id: AC-1
+    text: The public root surface, SDK facade, simple authoring conventions, persistence
+      identity, and declared unsupported cases are covered by targeted regression
+      tests without changing runtime behavior.
+  deliverables:
+  - Updated compatibility-focused tests in existing unit/runtime/strictness suites.
+  - A validated baseline for later adapter phases.
+  risks:
+  - Missing a freeze assertion could allow later adapter work to silently broaden
+    or break behavior.
+  rollback:
+  - Revert new coverage only if it encodes behavior that contradicts the authoritative
+    spec.
+- phase_id: boundary-primitives-and-strictness
+  title: Boundary Primitives
+  objective: Add the first internal value-object primitives and codify the core/runtime
+    import boundary.
+  status: planned
+  in_scope:
+  - Add botlane/core/identifiers.py, botlane/core/run_paths.py, botlane/core/provider_policy_resolution.py,
+    and a shell botlane/core/plan_adapters.py.
+  - Type runtime ProviderPolicyResolver against the new core protocol.
+  - Add the AST-aware core/runtime strictness test after verifying current imports
+    are clean.
+  out_of_scope:
+  - Route contracts.
+  - Engine execution rewrites.
+  dependencies:
+  - freeze-public-compatibility
+  acceptance_criteria:
+  - id: AC-1
+    text: ArtifactId, RunPaths, RunIdentity, and the provider policy resolver protocol
+      exist with tests, and botlane/core has no runtime imports outside TYPE_CHECKING.
+  deliverables:
+  - New primitive modules with internal-only docstrings.
+  - tests/unit/test_artifact_ids.py, tests/unit/test_run_paths.py, tests/runtime/test_provider_policy_core_protocol.py,
+    and tests/strictness/test_core_runtime_boundary.py.
+  risks:
+  - Introducing runtime imports into value modules would create new import-cycle pressure.
+  rollback:
+  - Fall back to protocol and primitive shells only; do not force early integration.
+- phase_id: route-contract-adapters
+  title: Route Contract Adapters
+  objective: Introduce typed internal route contracts and runtime route decisions
+    without changing public route authoring.
+  status: planned
+  in_scope:
+  - Add botlane/core/route_contracts.py.
+  - Implement CompiledRoute to RouteContract round-trips and route-view helpers in
+    plan_adapters.py.
+  - Add parity tests for targets, visibility, schemas, required writes, runtime-control
+    status, and disabled routes.
+  out_of_scope:
+  - Engine loop consumption of RouteAction.
+  - Public exposure of RouteAction or RouteContract.
+  dependencies:
+  - boundary-primitives-and-strictness
+  acceptance_criteria:
+  - id: AC-1
+    text: RouteContract and RouteDecision exist internally, compiled-route round-trips
+      preserve route metadata, and required-write conversion fails clearly when inventory
+      is missing.
+  deliverables:
+  - botlane/core/route_contracts.py.
+  - Route adapter tests and route parity coverage.
+  risks:
+  - Duplicating route state on steps would create drift across compiler and runtime.
+  rollback:
+  - Keep CompiledRoute canonical for all runtime consumers until parity tests are
+    stable.
+- phase_id: step-and-workflow-plans
+  title: Step And Workflow Plans
+  objective: Add typed executable plan objects and compiled-plan adapters while preserving
+    current compiled outputs.
+  status: planned
+  in_scope:
+  - Add botlane/core/step_plans.py and botlane/core/workflow_plan.py.
+  - Add compile_workflow_plan(...) with lazy adapter import in compiler.py.
+  - Implement CompiledStep and CompiledWorkflow round-trips, branch-group-safe plan
+    shapes, and topology-hash parity coverage.
+  out_of_scope:
+  - Switching Engine to consume WorkflowPlan directly.
+  - Changing provider request artifact names.
+  dependencies:
+  - route-contract-adapters
+  acceptance_criteria:
+  - id: AC-1
+    text: WorkflowPlan, typed StepPlan variants, and plan adapters exist; compile_workflow(...)
+      stays compatible; topology hash and route-table parity tests pass.
+  deliverables:
+  - Typed step/workflow plan modules and compiler adapter entrypoint.
+  - tests/unit/test_step_plans.py and tests/unit/test_workflow_plan_adapters.py.
+  risks:
+  - Adapter round-trips could mutate maps or alter compiled topology payloads.
+  rollback:
+  - Retain WorkflowPlan as adapter-only while continuing to run production code on
+    CompiledWorkflow.
+- phase_id: execution-frame-context-migration
+  title: ExecutionFrame Behind Context
+  objective: Move mutable runtime state behind an internal frame while preserving
+    the public Context facade.
+  status: planned
+  in_scope:
+  - Add botlane/core/execution_frame.py.
+  - Synthesize ExecutionFrame inside Context and mirror legacy private-field behavior.
+  - Add context/frame parity coverage, including message sentinel, worklists, branch
+    metadata, and fan-in metadata.
+  out_of_scope:
+  - Removing WeakKeyDictionary sidecar state.
+  - Changing Context constructor signatures.
+  dependencies:
+  - step-and-workflow-plans
+  acceptance_criteria:
+  - id: AC-1
+    text: Context continues to behave identically through the public API while its
+      internal state can be read and mutated through ExecutionFrame-backed paths.
+  deliverables:
+  - botlane/core/execution_frame.py.
+  - tests/unit/test_execution_frame_context_parity.py.
+  risks:
+  - Context migration can easily break pause/resume and child workflow behavior.
+  rollback:
+  - Keep frame writes mirrored to legacy fields and continue using context_runtime
+    as the mutating compatibility layer.
+- phase_id: provider-turn-and-route-finalization
+  title: Provider Turn Adapters
+  objective: Add ProviderTurnPlan and RouteDecision adapters around the current provider
+    and route-finalization flows.
+  status: planned
+  in_scope:
+  - Add ProviderTurnPlan support for prompt and produce/verify steps.
+  - Expose RouteDecision from current route finalization without forcing immediate
+    engine-loop conversion.
+  - Add parity tests proving existing RenderedProviderTurn and ProviderTurnResult
+    paths remain intact.
+  out_of_scope:
+  - Operation execution migration.
+  - Replacing RouteFinalizationResult everywhere in one pass.
+  dependencies:
+  - execution-frame-context-migration
+  acceptance_criteria:
+  - id: AC-1
+    text: Prompt and produce/verify provider turns can be planned through ProviderTurnPlan
+      while transports still consume RenderedProviderTurn and return ProviderTurnResult,
+      and route finalization exposes RouteDecision compatibly.
+  deliverables:
+  - Provider-turn adapters and route-decision bridge.
+  - tests/contract/test_provider_turn_plan_adapter.py.
+  risks:
+  - A parallel provider-result system would add technical debt and break fake-provider
+    coverage.
+  rollback:
+  - Keep existing compiled-step-driven provider execution as the live path until adapter
+    parity is fully green.
+- phase_id: execution-services-and-collaborators
+  title: Execution Services
+  objective: Incrementally reduce direct Engine private-method coupling without introducing
+    a replacement god object.
+  status: planned
+  in_scope:
+  - Add botlane/core/execution_services.py as a narrow protocol shell.
+  - Migrate collaborators in the prescribed order, starting with ArtifactGuard and
+    RouteFinalizer.
+  - Mark temporary private-call bridges and remove them as ownership narrows.
+  out_of_scope:
+  - A full engine rewrite.
+  - Broad execute-everything service methods.
+  dependencies:
+  - provider-turn-and-route-finalization
+  acceptance_criteria:
+  - id: AC-1
+    text: Collaborator dependencies on Engine private methods are measurably reduced
+      through narrow services without changing runtime behavior.
+  deliverables:
+  - ExecutionServices shell and phased collaborator migrations.
+  - Updated contract coverage for migrated collaborators.
+  risks:
+  - A broad service layer would simply rename the current coupling.
+  rollback:
+  - Stop at the last narrow service boundary that still keeps existing contract tests
+    green.
+- phase_id: placeholder-reference-graph
+  title: Placeholder Reference Graph
+  objective: Unify placeholder parsing and dependency inference behind internal reference
+    objects while preserving current grammar and errors.
+  status: planned
+  in_scope:
+  - Add botlane/core/placeholders.py and botlane/core/reference_graph.py.
+  - Delegate current placeholder parsing, validation, rendering, and inferred-read
+    logic to the new types.
+  - Add parity coverage for safe roots, artifact-path restrictions, branch/fan-in
+    placement, and error quality.
+  out_of_scope:
+  - Expanding supported placeholder semantics beyond current behavior.
+  dependencies:
+  - execution-services-and-collaborators
+  acceptance_criteria:
+  - id: AC-1
+    text: PlaceholderRef and ReferenceGraph exist, current placeholder validation/rendering
+      behavior is preserved, and no botlane/core placeholder module imports Context
+      at runtime.
+  deliverables:
+  - Placeholder and reference-graph modules.
+  - tests/unit/test_placeholder_refs.py.
+  risks:
+  - Small grammar changes here would cascade into prompt rendering and artifact path
+    validation regressions.
+  rollback:
+  - Keep old helper entrypoints delegating to the last-known-good parser/renderer
+    behavior.
+- phase_id: branch-results-locators-and-policy-rules
+  title: Branch Results And Locators
+  objective: Type branch result serialization, add workflow locator variants, and
+    optionally table-drive provider policy emitters without changing external behavior.
+  status: planned
+  in_scope:
+  - Add botlane/core/branch_groups/results.py with exact manifest-shape serialization.
+  - Add botlane/runtime/workflow_locator.py as an adapter over current loader/reference
+    behavior.
+  - Introduce policy feature rule tables only where payload parity is proven.
+  out_of_scope:
+  - Changing branch-group scheduling semantics.
+  - Changing workflow resolution precedence.
+  dependencies:
+  - placeholder-reference-graph
+  acceptance_criteria:
+  - id: AC-1
+    text: BranchResult serializes to the exact current manifest shape, workflow locator
+      variants preserve existing loader behavior, and provider policy emitter outputs
+      remain unchanged where rule tables are introduced.
+  deliverables:
+  - Typed branch-result and workflow-locator modules.
+  - tests/contract/test_branch_result_serialization.py, tests/runtime/test_workflow_locator_variants.py,
+    and any necessary provider-policy parity updates.
+  risks:
+  - Persisted branch manifest or workflow resolution changes would be high-impact
+    regressions.
+  rollback:
+  - Preserve current branch dict builders and loader/reference types until typed adapters
+    prove parity.
+- phase_id: single-step-parity-and-cleanup
+  title: Single Step Parity And Cleanup
+  objective: Optionally introduce SingleStepPlan behind parity tests and remove temporary
+    migration scaffolding only after the full suite is green.
+  status: planned
+  in_scope:
+  - Add SingleStepPlan only if parity tests compare it successfully to the current
+    synthetic workflow path.
+  - Retire temporary duplicate calculations and marked private-call bridges that are
+    no longer needed.
+  - Run the full test suite before considering the refactor complete.
+  out_of_scope:
+  - Broadening client.step support beyond the current matrix.
+  dependencies:
+  - branch-results-locators-and-policy-rules
+  acceptance_criteria:
+  - id: AC-1
+    text: Either SingleStepPlan remains adapter-only behind parity tests or Botlane.step(...)
+      switches with exact behavioral equivalence, and the full pytest suite passes.
+  deliverables:
+  - Single-step parity coverage and any final cleanup changes.
+  - A full-suite green refactor state.
+  risks:
+  - Switching Botlane.step too early would break a high-visibility public path.
+  rollback:
+  - Keep the synthetic one-step workflow path as the supported execution path until
+    exact parity is proven.

@@ -1,0 +1,5 @@
+<autoloop-decisions-header version="1" block_seq="1" owner="planner" phase_id="task-global" pair="plan" turn_seq="1" run_id="run-20260509T045359Z-e2586b1f" ts="2026-05-09T04:53:59.570050+00:00" />
+Treat WorkflowPlan as a tested adapter layer first; Engine migration stays optional until parity tests prove WorkflowPlan consumption safe.
+Reuse botlane/runtime/workspace.py and botlane/runtime/loader.py as the integration anchors for RunPaths/RunIdentity and WorkflowLocator instead of introducing parallel path or resolution systems.
+Keep CompiledWorkflow, CompiledStep, and CompiledRoute as compatibility facades throughout intermediate phases; all new compiled-plan conversions must stay centralized in botlane/core/plan_adapters.py.
+Add the AST-aware no-core-runtime-import strictness test only after verifying botlane/core already has no runtime imports outside TYPE_CHECKING, so the first milestone remains low-risk and behavior-preserving.
