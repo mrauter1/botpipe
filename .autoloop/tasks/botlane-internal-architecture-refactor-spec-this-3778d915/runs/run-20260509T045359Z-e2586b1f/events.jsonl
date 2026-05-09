@@ -36,3 +36,7 @@
 {"ts": "2026-05-09T05:47:00.101574+00:00", "run_id": "run-20260509T045359Z-e2586b1f", "seq": 36, "event_type": "phase_finished", "pair": "test", "phase": "producer", "cycle": 1, "attempt": 1, "empty_output": false, "phase_id": "boundary-primitives-and-strictness"}
 {"ts": "2026-05-09T05:49:37.727263+00:00", "run_id": "run-20260509T045359Z-e2586b1f", "seq": 37, "event_type": "phase_finished", "pair": "test", "phase": "verifier", "cycle": 1, "attempt": 1, "empty_output": false, "phase_id": "boundary-primitives-and-strictness"}
 {"ts": "2026-05-09T05:49:37.849913+00:00", "run_id": "run-20260509T045359Z-e2586b1f", "seq": 38, "event_type": "pair_completed", "pair": "test", "cycle": 1, "attempt": 1, "phase_id": "boundary-primitives-and-strictness"}
+{"ts": "2026-05-09T05:49:37.993984+00:00", "run_id": "run-20260509T045359Z-e2586b1f", "seq": 39, "event_type": "phase_completed", "pair": "test", "phase_id": "boundary-primitives-and-strictness", "phase_mode": "single"}
+{"ts": "2026-05-09T05:49:37.996142+00:00", "run_id": "run-20260509T045359Z-e2586b1f", "seq": 40, "event_type": "phase_started", "phase_id": "route-contract-adapters", "phase_mode": "single"}
+{"ts": "2026-05-09T05:49:37.997089+00:00", "run_id": "run-20260509T045359Z-e2586b1f", "seq": 41, "event_type": "pair_started", "pair": "implement", "phase_id": "route-contract-adapters"}
+{"ts": "2026-05-09T05:49:37.997175+00:00", "run_id": "run-20260509T045359Z-e2586b1f", "seq": 42, "event_type": "cycle_started", "pair": "implement", "cycle": 1, "attempt": 1, "phase_id": "route-contract-adapters"}
