@@ -10,11 +10,12 @@ from pydantic import BaseModel, Field
 import botlane
 import botlane.simple as simple
 import botlane.core as core
+import botlane.core.branch_groups as branch_groups
 import botlane.core.steps as core_steps
 import botlane.core.validation as core_validation
 from botlane.core.branch_groups.models import BranchGroupDeclarationSpec, CompiledBranchGroupSpec
 from botlane.core.compiler import compile_workflow
-from botlane.core.context import Context
+from botlane.core.context import ChildWorkflowResult, Context
 from botlane.core.discovery import get_workflow_definition
 from botlane.core.engine import Engine
 from botlane.core.errors import WorkflowExecutionError, WorkflowValidationError
@@ -35,7 +36,6 @@ REMOVED_REVIEW_STEP = "review" + "_" + "step"
 REMOVED_DO_REVIEW_STEP = "do" + "_" + "review" + "_" + "step"
 REMOVED_SYSTEM_STEP_ALIAS = "system" + "_" + "step"
 REMOVED_VERIFIER_WRITES = "review_" + "writes"
-LEGACY_V3_PACKAGE = ("auto" + "loop") + "_v3"
 def _import_from(module_name: str, symbol: str) -> object:
     namespace: dict[str, object] = {}
     exec(f"from {module_name} import {symbol} as imported_symbol", namespace)
@@ -124,6 +124,52 @@ def test_root_exports_only_the_canonical_public_surface() -> None:
     assert botlane.ProduceVerifyStep is core_steps.ProduceVerifyStep
     assert botlane.PythonStep is core_steps.PythonStep
     assert botlane.ChildWorkflowStep is core_steps.ChildWorkflowStep
+
+
+def test_core_module_all_is_frozen() -> None:
+    assert tuple(core.__all__) == (
+        "AWAIT_INPUT",
+        "Artifact",
+        "Continuity",
+        "Context",
+        "ControlRoutes",
+        "FAIL",
+        "Effects",
+        "Fail",
+        "FINISH",
+        "GLOBAL",
+        "Goto",
+        "Prompt",
+        "ProviderRetryPolicy",
+        "RequestInput",
+        "RuntimeInteractionPolicy",
+        "Route",
+        "Selector",
+        "SELF",
+        "Session",
+        "ValidationResult",
+        "Workflow",
+        "WorkItem",
+        "WorklistEffect",
+        "Worklist",
+    )
+
+
+def test_branch_groups_module_all_is_frozen() -> None:
+    assert tuple(branch_groups.__all__) == (
+        "BranchGroupDeclarationSpec",
+        "BranchMetadata",
+        "BranchSessionStoreView",
+        "BranchStepDeclarationSpec",
+        "CompiledBranchGroupSpec",
+        "CompiledBranchStepSpec",
+        "FanIn",
+        "FanInHelperReference",
+        "FanInMetadata",
+        "StateCell",
+        "branch_group_paths",
+        "select_branch_group_outcome",
+    )
 
 
 def test_effect_exports_and_route_helpers_are_public() -> None:
@@ -299,6 +345,65 @@ def test_runtime_control_exports_are_canonical_and_validate_basic_fields() -> No
         botlane.Fail(reason="  ")
 
 
+def test_child_workflow_result_keeps_positional_constructor_and_path_fields(tmp_path: Path) -> None:
+    task_folder = tmp_path / "task"
+    workflow_folder = task_folder / "wf_demo"
+    run_folder = workflow_folder / "runs" / "run-1"
+    package_folder = tmp_path / "workflows" / "demo"
+    request_file = run_folder / "request.md"
+    run_meta_file = run_folder / "run.json"
+    events_file = run_folder / "events.jsonl"
+    checkpoint_file = run_folder / "checkpoint.json"
+    sessions_dir = run_folder / "sessions"
+    trace_file = run_folder / "trace.jsonl"
+    raw_dir = run_folder / "raw"
+    parent_file = run_folder / "parent.json"
+    output_artifacts = {"report": run_folder / "report.md"}
+    metadata = {"source": "child"}
+
+    result = ChildWorkflowResult(
+        "demo",
+        "run-1",
+        simple.FINISH,
+        "success",
+        simple.Event("done"),
+        {"score": 1},
+        output_artifacts,
+        task_folder,
+        workflow_folder,
+        run_folder,
+        package_folder,
+        request_file,
+        run_meta_file,
+        events_file,
+        checkpoint_file,
+        sessions_dir,
+        trace_file,
+        raw_dir,
+        parent_file,
+        {"summary": "ok"},
+        {},
+        metadata,
+        None,
+    )
+
+    assert result.workflow_name == "demo"
+    assert result.task_folder == task_folder
+    assert result.workflow_folder == workflow_folder
+    assert result.run_folder == run_folder
+    assert result.package_folder == package_folder
+    assert result.request_file == request_file
+    assert result.run_meta_file == run_meta_file
+    assert result.events_file == events_file
+    assert result.checkpoint_file == checkpoint_file
+    assert result.sessions_dir == sessions_dir
+    assert result.trace_file == trace_file
+    assert result.raw_dir == raw_dir
+    assert result.parent_file == parent_file
+    assert dict(result.artifacts) == output_artifacts
+    assert result.metadata == metadata
+
+
 def test_core_top_level_surface_excludes_quarantined_legacy_names() -> None:
     for symbol in (
         REMOVED_AFTER_HOOK_RESULT,
@@ -343,8 +448,6 @@ def test_core_module_identity_remains_canonical() -> None:
 def test_legacy_core_import_usage_is_absent_from_active_python_files() -> None:
     repo_root = Path(__file__).resolve().parents[2]
     forbidden_patterns = (
-        re.compile(rf"\bfrom\s+{re.escape(LEGACY_V3_PACKAGE)}\.core(?:\.|\s+import\b)"),
-        re.compile(rf"\bimport\s+{re.escape(LEGACY_V3_PACKAGE)}\.core(?:\.|\b)"),
         re.compile(r"\bfrom\s+core\._compat(?:\.|\s+import\b)"),
         re.compile(r"\bimport\s+core\._compat(?:\.|\b)"),
     )

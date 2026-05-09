@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import asyncio
 import json
-from datetime import timedelta
+from datetime import datetime, timedelta, timezone
 from pathlib import Path
 
 import pytest
@@ -39,10 +39,6 @@ from botlane.core.routes import Route
 from botlane.core.providers.fake import ScriptedLLMProvider
 from botlane.core.steps import ChildWorkflowStep, ProduceVerifyStep, PromptStep, PythonStep
 from botlane.runtime.config import GitTrackingRuntimeConfig, RuntimeConfig
-
-LEGACY_PRODUCT = "auto" + "loop"
-LEGACY_STATE_DIRNAME = "." + LEGACY_PRODUCT
-LEGACY_TASK_SENTINEL = "." + LEGACY_PRODUCT + "-sdk-task.json"
 
 
 class _SDKApprovalInput(BaseModel):
@@ -785,6 +781,78 @@ def test_sdk_public_exports_include_revised_sdk_surface() -> None:
     assert botlane.CleanupResult is sdk_module.CleanupResult
 
 
+def test_sdk_result_dataclasses_keep_positional_construction_compatibility(tmp_path: Path) -> None:
+    debug = SDKDebugInfo(
+        "sdk-demo",
+        "run-1",
+        tmp_path / ".botlane" / "tasks" / "sdk-demo",
+        tmp_path / ".botlane" / "tasks" / "sdk-demo" / "workflow",
+        tmp_path / ".botlane" / "tasks" / "sdk-demo" / "workflow" / "runs" / "run-1",
+        tmp_path / ".botlane" / "tasks" / "sdk-demo" / "workflow" / "runs" / "run-1" / "events.jsonl",
+        tmp_path / ".botlane" / "tasks" / "sdk-demo" / "workflow" / "runs" / "run-1" / "trace.jsonl",
+        tmp_path / ".botlane" / "tasks" / "sdk-demo" / "workflow" / "runs" / "run-1" / "checkpoint.json",
+    )
+    retention = sdk_module.RetentionInfo(
+        RetentionPolicy.keep_all(),
+        True,
+        False,
+        ("report",),
+        tmp_path / ".botlane" / "tasks" / "sdk-demo",
+    )
+    workflow_result = WorkflowResult(
+        True,
+        "completed",
+        FINISH,
+        _SDKResultState(),
+        {"summary": "ok"},
+        None,
+        ArtifactMap({}),
+        ("capture",),
+        Event("done"),
+        None,
+        (),
+        debug,
+        retention,
+    )
+    input_request = InputRequest(
+        "pending-1",
+        "Approve the rollout?",
+        "Need operator confirmation.",
+        '{"approved": true}',
+        "capture",
+        "before",
+        "provider",
+        {"type": "object"},
+        "ApprovalInput",
+        0,
+        workflow_result,
+    )
+    handled = sdk_module.HandledInput(input_request, {"approved": True})
+    cleanup = sdk_module.CleanupResult(
+        (tmp_path / "deleted",),
+        (tmp_path / "skipped",),
+        {tmp_path / "error": "permission denied"},
+        False,
+    )
+    step_result = sdk_module.StepResult(
+        True,
+        "completed",
+        "done",
+        None,
+        _SDKResultState(),
+        ArtifactMap({}),
+        workflow_result,
+    )
+
+    assert workflow_result.debug is debug
+    assert workflow_result.retention is retention
+    assert input_request.partial is workflow_result
+    assert handled.request is input_request
+    assert cleanup.deleted == (tmp_path / "deleted",)
+    assert step_result.value is None
+    assert step_result.workflow_result is workflow_result
+
+
 def test_sdk_run_exposes_result_artifact_metadata_and_helpers(tmp_path: Path) -> None:
     client = _sdk_client(tmp_path, ScriptedLLMProvider())
 
@@ -1184,40 +1252,13 @@ def test_sdk_cleanup_only_targets_valid_completed_sdk_task_directories(tmp_path:
     assert invalid.exists()
 
 
-def test_sdk_cleanup_reads_legacy_state_root_and_legacy_sentinel_names(tmp_path: Path) -> None:
-    client = _sdk_client_at_root(tmp_path, ScriptedLLMProvider())
-    tasks_root = tmp_path / LEGACY_STATE_DIRNAME / "tasks"
-    legacy_task = tasks_root / "sdk-legacy"
-    legacy_task.mkdir(parents=True, exist_ok=True)
-    (legacy_task / LEGACY_TASK_SENTINEL).write_text(
-        json.dumps(
-            {
-                "schema": "botlane.sdk_task/v1",
-                "generated_by": "botlane.sdk",
-                "task_id": "sdk-legacy",
-                "created_at": "2026-05-01T00:00:00Z",
-                "retention_mode": "delete_task_scratch",
-            }
-        )
-        + "\n",
-        encoding="utf-8",
-    )
-    run_dir = legacy_task / "wf_test" / "runs" / "run-1"
-    run_dir.mkdir(parents=True, exist_ok=True)
-    (run_dir / "run.json").write_text(json.dumps({"status": "completed", "terminal": FINISH}) + "\n", encoding="utf-8")
-
-    result = client.cleanup()
-
-    assert legacy_task in result.deleted
-    assert legacy_task.exists() is False
-
-
 def test_sdk_cleanup_honors_older_than_and_include_failed_opt_in(tmp_path: Path) -> None:
     client = _sdk_client_at_root(tmp_path, ScriptedLLMProvider())
     tasks_root = tmp_path / ".botlane" / "tasks"
     old_completed = tasks_root / "sdk-old-completed"
     new_completed = tasks_root / "sdk-new-completed"
     old_failed = tasks_root / "sdk-old-failed"
+    now = datetime.now(timezone.utc)
 
     def seed_task(task_dir: Path, *, status: str, terminal: str, created_at: str) -> None:
         task_dir.mkdir(parents=True, exist_ok=True)
@@ -1238,9 +1279,24 @@ def test_sdk_cleanup_honors_older_than_and_include_failed_opt_in(tmp_path: Path)
         run_dir.mkdir(parents=True, exist_ok=True)
         (run_dir / "run.json").write_text(json.dumps({"status": status, "terminal": terminal}) + "\n", encoding="utf-8")
 
-    seed_task(old_completed, status="completed", terminal=FINISH, created_at="2026-05-01T00:00:00Z")
-    seed_task(new_completed, status="completed", terminal=FINISH, created_at="2026-05-07T00:00:00Z")
-    seed_task(old_failed, status="failed", terminal=FAIL, created_at="2026-05-01T00:00:00Z")
+    seed_task(
+        old_completed,
+        status="completed",
+        terminal=FINISH,
+        created_at=(now - timedelta(days=10)).strftime("%Y-%m-%dT%H:%M:%SZ"),
+    )
+    seed_task(
+        new_completed,
+        status="completed",
+        terminal=FINISH,
+        created_at=(now - timedelta(hours=12)).strftime("%Y-%m-%dT%H:%M:%SZ"),
+    )
+    seed_task(
+        old_failed,
+        status="failed",
+        terminal=FAIL,
+        created_at=(now - timedelta(days=10)).strftime("%Y-%m-%dT%H:%M:%SZ"),
+    )
 
     dry_run = client.cleanup(older_than=timedelta(days=2), dry_run=True)
 
@@ -1259,6 +1315,27 @@ def test_sdk_cleanup_honors_older_than_and_include_failed_opt_in(tmp_path: Path)
     assert old_completed.exists() is False
     assert old_failed.exists() is False
     assert new_completed.exists()
+
+
+def test_sdk_task_sentinel_identity_stays_canonical(tmp_path: Path) -> None:
+    task_dir = tmp_path / ".botlane" / "tasks" / "sdk-demo"
+
+    sdk_module._write_sdk_task_sentinel(
+        task_dir=task_dir,
+        task_id="sdk-demo",
+        policy=RetentionPolicy.sdk_default(),
+    )
+
+    sentinel = sdk_module._sdk_task_sentinel_path(task_dir)
+    payload = json.loads(sentinel.read_text(encoding="utf-8"))
+
+    assert sdk_module.SDK_TASK_SENTINEL_FILENAME == ".botlane-sdk-task.json"
+    assert sentinel == task_dir / ".botlane-sdk-task.json"
+    assert sentinel.parent == tmp_path / ".botlane" / "tasks" / "sdk-demo"
+    assert payload["schema"] == "botlane.sdk_task/v1"
+    assert payload["generated_by"] == "botlane.sdk"
+    assert payload["task_id"] == "sdk-demo"
+    assert payload["retention_mode"] == "delete_task_scratch"
 
 
 def test_safe_delete_sdk_task_dir_refuses_unsafe_candidates(tmp_path: Path) -> None:
