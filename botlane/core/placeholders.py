@@ -17,6 +17,31 @@ from .errors import WorkflowExecutionError, WorkflowValidationError
 
 _PLACEHOLDER_RE = re.compile(r"\{([^{}]+)\}")
 _FORBIDDEN_CTX_SEGMENT_CHARS = frozenset({'"', "'", "(", ")", "[", "]"})
+_PROMPT_VALIDATION_KINDS = frozenset({"simple_prompt", "prompt", "branch_step_prompt", "fan_in_step_prompt"})
+_WORKFLOW_STEP_MESSAGE_ALLOWED_ROOTS = frozenset({"ctx", "input", "item", "worklist", "branch", "fan_in"})
+_RUNTIME_TEMPLATE_ALLOWED_ROOTS = frozenset(
+    {
+        "ctx",
+        "task_id",
+        "run_id",
+        "workflow_name",
+        "task_folder",
+        "workflow_folder",
+        "run_folder",
+        "package_folder",
+        "root",
+        "request_file",
+        "params",
+        "workflow_params",
+        "input",
+        "state",
+        "item",
+        "worklist",
+        "branch",
+        "fan_in",
+    }
+)
+_ARTIFACT_TEMPLATE_ALLOWED_ROOTS = _RUNTIME_TEMPLATE_ALLOWED_ROOTS - {"ctx"}
 
 SIMPLE_CONTEXT_BARE_NAMES = frozenset(
     {
@@ -62,9 +87,33 @@ def validate_placeholder_ref(
     surface: str,
     symbols: Any,
 ) -> str | None:
-    if not isinstance(symbols, Mapping) or symbols.get("kind") != "simple_prompt":
-        raise ValueError("validate_placeholder_ref currently supports simple_prompt symbols only")
-    return _validate_simple_prompt_reference(ref, surface=surface, symbols=symbols)
+    if not isinstance(symbols, Mapping):
+        raise ValueError("validate_placeholder_ref requires a mapping of placeholder symbols")
+    validation_kind = str(symbols.get("kind", "simple_prompt"))
+    if validation_kind in _PROMPT_VALIDATION_KINDS:
+        return _validate_simple_prompt_reference(ref, surface=surface, symbols=symbols)
+    if validation_kind == "workflow_step_message":
+        return _validate_runtime_template_reference(
+            ref,
+            surface=surface,
+            symbols=symbols,
+            allowed_roots=_WORKFLOW_STEP_MESSAGE_ALLOWED_ROOTS,
+        )
+    if validation_kind == "artifact_template":
+        return _validate_runtime_template_reference(
+            ref,
+            surface=surface,
+            symbols=symbols,
+            allowed_roots=_ARTIFACT_TEMPLATE_ALLOWED_ROOTS,
+        )
+    if validation_kind in {"runtime_template", "worklist_context"}:
+        return _validate_runtime_template_reference(
+            ref,
+            surface=surface,
+            symbols=symbols,
+            allowed_roots=_RUNTIME_TEMPLATE_ALLOWED_ROOTS,
+        )
+    raise ValueError(f"unsupported placeholder validation kind {validation_kind!r}")
 
 
 def render_placeholder_ref(ref: PlaceholderRef, context: Any) -> Any:
@@ -101,6 +150,48 @@ def render_template_with_refs(
             rendered.append("" if value is None else str(value))
     rendered.append(template[cursor:])
     return "".join(rendered)
+
+
+def resolve_artifact_template(template: Any, context: Any) -> Path:
+    """Resolve an artifact template against runtime context."""
+
+    artifact = template if hasattr(template, "template") else None
+    raw_template = getattr(artifact, "template", template)
+    if not isinstance(raw_template, str):
+        raise TypeError("artifact template must be a string or Artifact declaration")
+    _reject_ctx_placeholders_in_artifact_template(raw_template)
+    candidate = Path(raw_template)
+    if candidate.is_absolute():
+        return candidate
+    artifact_owner_step = getattr(artifact, "owner_step", None)
+    if "{" not in raw_template and "}" not in raw_template and artifact_owner_step is not None:
+        return context.workflow_folder / artifact_owner_step / raw_template
+    rendered = render_runtime_template(raw_template, context, placeholder_label="artifact template placeholder")
+    rendered_path = Path(rendered)
+    if rendered_path.is_absolute():
+        return rendered_path
+    if artifact_owner_step is not None:
+        return context.workflow_folder / artifact_owner_step / rendered_path
+    return rendered_path
+
+
+def render_runtime_template(
+    template: str,
+    context: Any,
+    *,
+    placeholder_label: str,
+    replace_roots: frozenset[str] | None = None,
+) -> str:
+    """Render supported runtime placeholders inside free-form text."""
+
+    refs = parse_placeholders(template, source=placeholder_label)
+    return render_template_with_refs(
+        template,
+        refs,
+        context,
+        replace_roots=replace_roots,
+        placeholder_label=placeholder_label,
+    )
 
 
 def _validate_simple_prompt_reference(
@@ -500,6 +591,71 @@ def _validate_ctx_prompt_reference(
         raise WorkflowValidationError(
             f"{surface} {{{ref.raw}}} references unknown {model_labels[root_name]} field {field_name!r}"
         )
+    return None
+
+
+def _validate_runtime_template_reference(
+    ref: PlaceholderRef,
+    *,
+    surface: str,
+    symbols: Mapping[str, Any],
+    allowed_roots: frozenset[str],
+) -> str | None:
+    if not ref.raw:
+        return None
+    if ref.root not in allowed_roots:
+        raise WorkflowValidationError(f"{surface} {{{ref.raw}}} is unknown")
+    if ref.root == "ctx":
+        return _validate_ctx_prompt_reference(ref, surface=surface, symbols=symbols)
+    if ref.root == "input":
+        if not ref.path:
+            return None
+        return _validate_input_prompt_reference(
+            ref,
+            parts=_ref_parts(ref),
+            surface=surface,
+            symbols=symbols,
+        )
+    if ref.root == "params":
+        if not ref.path:
+            return None
+        return _validate_params_prompt_reference(
+            ref,
+            parts=_ref_parts(ref),
+            surface=surface,
+            symbols=symbols,
+        )
+    if ref.root == "state":
+        if not ref.path:
+            return None
+        return _validate_state_prompt_reference(
+            ref,
+            parts=_ref_parts(ref),
+            surface=surface,
+            symbols=symbols,
+        )
+    if ref.root == "item":
+        return _validate_item_prompt_reference(
+            ref,
+            surface=surface,
+            symbols=symbols,
+            second=ref.path[0] if ref.path else "",
+            rest=list(ref.path[1:]),
+        )
+    if ref.root == "worklist":
+        return _validate_worklist_prompt_reference(
+            ref,
+            surface=surface,
+            symbols=symbols,
+            worklist_name=ref.path[0] if ref.path else "",
+            rest=list(ref.path[1:]),
+        )
+    if ref.root == "branch":
+        _validate_branch_or_fan_in_prompt_reference(ref, symbols=symbols)
+        return None
+    if ref.root == "fan_in":
+        _validate_branch_or_fan_in_prompt_reference(ref, symbols=symbols)
+        return None
     return None
 
 
@@ -961,6 +1117,14 @@ def _validate_fan_in_placeholder_reference(reference: str, *, step_name: str, al
     return validate_fan_in_placeholder_reference(reference, step_name=step_name, allowed=allowed)
 
 
+def _reject_ctx_placeholders_in_artifact_template(template: str) -> None:
+    for ref in parse_placeholders(template, source="artifact_template"):
+        if ref.root == "ctx":
+            raise WorkflowExecutionError(
+                "ctx.* placeholders are only supported in prompts and workflow-step messages, not artifact paths"
+            )
+
+
 _SIMPLE_PROMPT_SPECIAL_ERRORS = {
     "message": lambda surface: f"{surface} {{message}} is unknown; use {{ctx.message}}",
     "ctx": lambda surface: f"{surface} {{ctx}} must qualify a runtime context field",
@@ -982,7 +1146,9 @@ __all__ = [
     "PlaceholderRef",
     "SIMPLE_CONTEXT_BARE_NAMES",
     "parse_placeholders",
+    "render_runtime_template",
     "render_placeholder_ref",
     "render_template_with_refs",
+    "resolve_artifact_template",
     "validate_placeholder_ref",
 ]

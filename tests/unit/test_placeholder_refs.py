@@ -6,6 +6,8 @@ from pathlib import Path
 import pytest
 from pydantic import BaseModel
 
+import botlane.simple as simple
+from botlane.core.compiler import compile_workflow
 from botlane.core.artifacts import resolve_artifact_template
 from botlane.core.context import Context
 from botlane.core.errors import WorkflowExecutionError, WorkflowValidationError
@@ -190,6 +192,55 @@ def test_validate_placeholder_ref_preserves_branch_and_fan_in_placement_rules() 
     )
 
 
+def test_validate_placeholder_ref_supports_runtime_template_and_message_surfaces() -> None:
+    workflow_step_symbols = _simple_prompt_symbols(
+        kind="workflow_step_message",
+        allow_branch_placeholders=True,
+        allow_fan_in_placeholders=True,
+    )
+    artifact_symbols = _simple_prompt_symbols(
+        kind="artifact_template",
+        allow_branch_placeholders=True,
+        allow_fan_in_placeholders=True,
+    )
+    runtime_symbols = _simple_prompt_symbols(
+        kind="runtime_template",
+        allow_branch_placeholders=True,
+        allow_fan_in_placeholders=True,
+    )
+
+    assert (
+        validate_placeholder_ref(
+            parse_placeholders("{ctx.message}", source="workflow_step_message")[0],
+            surface="workflow step 'launch' message placeholder",
+            symbols=workflow_step_symbols,
+        )
+        is None
+    )
+    assert (
+        validate_placeholder_ref(
+            parse_placeholders("{input.topic}", source="artifact_template")[0],
+            surface="artifact template placeholder",
+            symbols=artifact_symbols,
+        )
+        is None
+    )
+    assert (
+        validate_placeholder_ref(
+            parse_placeholders("{state.status}", source="runtime_template")[0],
+            surface="runtime template placeholder",
+            symbols=runtime_symbols,
+        )
+        is None
+    )
+    with pytest.raises(WorkflowValidationError, match=r"\{ctx\.message\} is unknown"):
+        validate_placeholder_ref(
+            parse_placeholders("{ctx.message}", source="artifact_template")[0],
+            surface="artifact template placeholder",
+            symbols=artifact_symbols,
+        )
+
+
 def test_render_template_with_refs_preserves_runtime_behavior(tmp_path: Path) -> None:
     context = _build_context(tmp_path)
     template = "Message={ctx.message}; Topic={input.topic}; Branch={branch.name}"
@@ -253,6 +304,62 @@ def test_reference_graph_stores_placeholder_refs_and_inferred_reads() -> None:
     assert graph.prompt_refs["review"][0].raw == "ctx.message"
     assert graph.artifact_template_refs["report"][0].raw == "input.topic"
     assert graph.inferred_artifact_reads["review"][0].qualified_name == "report"
+
+
+def test_compile_workflow_populates_reference_graph_for_prompt_and_template_surfaces() -> None:
+    class GraphWorkflow(simple.Workflow):
+        class State(BaseModel):
+            status: str = "draft"
+
+        class Input(BaseModel):
+            topic: str
+
+        gate = simple.Worklist.from_items(
+            name="gate",
+            items=({"id": "one", "title": "One", "payload": {"status": "ready"}},),
+        )
+
+        report = simple.step(
+            "Draft {ctx.message} for {input.topic} and {worklist.gate.current.payload.status}.",
+            name="report",
+            scope=gate,
+            writes=[simple.Md("report", path="reports/{input.topic}.md")],
+        )
+        review = simple.step(
+            "Review {report}.",
+            name="review",
+        )
+        assess = simple.parallel(
+            branches={
+                "security": simple.step(
+                    "Assess {branch.input.area}.",
+                    name="assess_one",
+                    session=simple.Session.fresh(),
+                ),
+            },
+            fan_in=simple.step(
+                "Summarize {fan_in.context_text}.",
+                name="summarize",
+            ),
+        )
+
+    compiled = compile_workflow(GraphWorkflow)
+    graph = compiled.reference_graph
+
+    assert [ref.raw for ref in graph.prompt_refs["report"]] == [
+        "ctx.message",
+        "input.topic",
+        "worklist.gate.current.payload.status",
+    ]
+    assert [ref.raw for ref in graph.prompt_refs["review"]] == ["report"]
+    assert [ref.raw for ref in graph.prompt_refs["assess_one"]] == ["branch.input.area"]
+    assert [ref.raw for ref in graph.prompt_refs["summarize"]] == ["fan_in.context_text"]
+    assert [ref.raw for ref in graph.artifact_template_refs["report.report"]] == ["input.topic"]
+    assert [artifact_id.qualified_name for artifact_id in graph.inferred_artifact_reads["review"]] == ["report.report"]
+    assert [ref.raw for ref in graph.step_output_refs["review"]] == ["report"]
+    assert [ref.raw for ref in graph.branch_refs["assess_one"]] == ["branch.input.area"]
+    assert [ref.raw for ref in graph.fan_in_refs["summarize"]] == ["fan_in.context_text"]
+    assert [ref.raw for ref in graph.worklist_refs["report"]] == ["worklist.gate.current.payload.status"]
 
 
 def test_placeholders_module_does_not_import_context_at_runtime() -> None:

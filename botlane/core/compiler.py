@@ -35,7 +35,9 @@ from .lowering import (
 from .primitives import AWAIT_INPUT, FAIL, FINISH, GLOBAL, SELF
 from .provider_policy import ProviderPolicy, ProviderPolicyOverride
 from .providers.retries import ProviderRetryPolicy
-from .reference_graph import ReferenceGraph
+from .placeholders import PlaceholderRef, parse_placeholders, validate_placeholder_ref
+from .prompts import Prompt, resolve_prompt_reference
+from .reference_graph import ReferenceGraph, ReferenceGraphBuilder
 from .route_reporting import payload_contract_for_route, route_fields_contract_for_route
 from .route_required_writes import route_required_write_payload
 from .route_contracts import (
@@ -98,6 +100,7 @@ def compile_workflow(workflow_cls: type[Any]) -> WorkflowPlan:
     inventory = collect_artifact_inventory(definition)
     routes = _compile_routes(definition, inventory)
     global_routes = _compile_global_routes(definition, inventory)
+    compiled_steps = _compile_steps(definition, inventory, routes)
     plan = WorkflowPlan(
         workflow_cls=workflow_cls,
         workflow_name=definition.workflow_name,
@@ -113,7 +116,7 @@ def compile_workflow(workflow_cls: type[Any]) -> WorkflowPlan:
         if definition.default_session_name in definition.sessions_by_name
         else False,
         worklists=dict(definition.worklists_by_name),
-        steps=_compile_steps(definition, inventory, routes),
+        steps=compiled_steps,
         routes=routes,
         global_routes=global_routes,
         artifacts=_compile_artifacts(inventory),
@@ -125,6 +128,7 @@ def compile_workflow(workflow_cls: type[Any]) -> WorkflowPlan:
         topology_hash="",
         reference_graph=ReferenceGraph.empty(),
     )
+    plan = replace(plan, reference_graph=_compile_reference_graph(plan, inventory))
     plan = _with_topology_hash(plan)
     if cache_key is not None:
         _WORKFLOW_PLAN_CACHE[cache_key] = plan
@@ -367,6 +371,217 @@ def _compile_steps(
         else:
             raise WorkflowCompilationError(f"unsupported step type {type(step)!r}")
     return compiled_steps
+
+
+def _compile_reference_graph(
+    plan: WorkflowPlan,
+    inventory: dict[str, ArtifactInventoryRecord],
+) -> ReferenceGraph:
+    step_entries = tuple(_iter_reference_graph_steps(plan.steps.values()))
+    step_plans = {step.name: step for step, _, _ in step_entries}
+    step_placeholder_flags = {
+        step.name: (allow_branch_placeholders, allow_fan_in_placeholders)
+        for step, allow_branch_placeholders, allow_fan_in_placeholders in step_entries
+    }
+    builder = ReferenceGraphBuilder(step_names=frozenset(step_plans))
+    state_fields = frozenset(getattr(plan.state_cls, "model_fields", {}).keys())
+    parameter_fields = (
+        frozenset(getattr(plan.parameters_cls, "model_fields", {}).keys())
+        if plan.parameters_cls is not None
+        else frozenset()
+    )
+    input_fields = (
+        frozenset(getattr(plan.input_model, "model_fields", {}).keys())
+        if plan.input_model is not None
+        else frozenset()
+    )
+    worklist_item_state_fields = {
+        name: frozenset(worklist.runtime_item_state_model.model_fields.keys())
+        for name, worklist in plan.worklists.items()
+    }
+    step_state_fields = {name: frozenset(step.step_state_fields) for name, step in step_plans.items()}
+    step_item_state_fields = {name: frozenset(step.step_item_state_fields) for name, step in step_plans.items()}
+    step_output_names = {name: frozenset(artifact_id.name for artifact_id in step.writes) for name, step in step_plans.items()}
+    artifact_name_counts = _artifact_name_counts(plan.artifacts.values())
+
+    for step, allow_branch_placeholders, allow_fan_in_placeholders in step_entries:
+        prompt_refs: list[PlaceholderRef] = []
+        inferred_reads: list[ArtifactId] = []
+        prompt_symbols = {
+            "kind": "simple_prompt",
+            "step_name": step.name,
+            "own_outputs": frozenset(artifact_id.name for artifact_id in step.writes),
+            "state_fields": state_fields,
+            "parameter_fields": parameter_fields,
+            "input_fields": input_fields,
+            "scope_name": step.scope_name,
+            "worklist_item_state_fields": worklist_item_state_fields,
+            "step_state_fields": step_state_fields,
+            "step_item_state_fields": step_item_state_fields,
+            "step_output_names": step_output_names,
+            "artifact_name_counts": artifact_name_counts,
+            "allow_branch_placeholders": allow_branch_placeholders,
+            "allow_fan_in_placeholders": allow_fan_in_placeholders,
+        }
+        for prompt_text in _step_prompt_texts(step, workflow_cls=plan.workflow_cls):
+            refs = tuple(ref for ref in parse_placeholders(prompt_text, source="prompt") if ref.raw)
+            prompt_refs.extend(ref for ref in refs if ref not in prompt_refs)
+            inferred_reads.extend(
+                artifact_id
+                for artifact_id in _infer_prompt_artifact_reads(
+                    refs,
+                    symbols=prompt_symbols,
+                    inventory=inventory,
+                    step_name=step.name,
+                )
+                if artifact_id not in inferred_reads
+            )
+        if isinstance(step, ChildWorkflowStepPlan) and isinstance(step.message, str):
+            refs = tuple(ref for ref in parse_placeholders(step.message, source="workflow_step_message") if ref.raw)
+            if refs:
+                builder.add_prompt_refs(step.name, refs)
+        if prompt_refs:
+            builder.add_prompt_refs(step.name, tuple(prompt_refs))
+        if inferred_reads:
+            builder.add_inferred_artifact_reads(step.name, tuple(inferred_reads))
+
+    for artifact_id, artifact_spec in plan.artifacts.items():
+        refs = tuple(ref for ref in parse_placeholders(artifact_spec.template, source="artifact_template") if ref.raw)
+        if not refs:
+            continue
+        builder.add_artifact_template_refs(artifact_id.qualified_name, refs)
+        owner_step = artifact_spec.owner_step
+        owner_plan = step_plans.get(owner_step) if owner_step is not None else None
+        allow_branch_placeholders, allow_fan_in_placeholders = step_placeholder_flags.get(owner_step or "", (False, False))
+        artifact_template_symbols = {
+            "kind": "artifact_template",
+            "step_name": owner_step or "",
+            "state_fields": state_fields,
+            "parameter_fields": parameter_fields,
+            "input_fields": input_fields,
+            "scope_name": None if owner_plan is None else owner_plan.scope_name,
+            "worklist_item_state_fields": worklist_item_state_fields,
+            "step_state_fields": step_state_fields,
+            "step_item_state_fields": step_item_state_fields,
+            "step_output_names": step_output_names,
+            "artifact_name_counts": artifact_name_counts,
+            "allow_branch_placeholders": allow_branch_placeholders,
+            "allow_fan_in_placeholders": allow_fan_in_placeholders,
+        }
+        for ref in refs:
+            try:
+                validate_placeholder_ref(
+                    ref,
+                    surface=f"artifact template {artifact_id.qualified_name!r} placeholder",
+                    symbols=artifact_template_symbols,
+                )
+            except WorkflowValidationError:
+                continue
+    return builder.build()
+
+
+def _iter_reference_graph_steps(
+    steps: Any,
+    *,
+    allow_branch_placeholders: bool = False,
+    allow_fan_in_placeholders: bool = False,
+):
+    for step in steps:
+        yield step, allow_branch_placeholders, allow_fan_in_placeholders
+        if not isinstance(step, BranchGroupStepPlan):
+            continue
+        for branch in step.branch_group.branches:
+            yield from _iter_reference_graph_steps(
+                (branch.step,),
+                allow_branch_placeholders=True,
+                allow_fan_in_placeholders=False,
+            )
+        if step.branch_group.fan_in_step is not None:
+            yield from _iter_reference_graph_steps(
+                (step.branch_group.fan_in_step,),
+                allow_branch_placeholders=False,
+                allow_fan_in_placeholders=True,
+            )
+
+
+def _artifact_name_counts(artifacts: Any) -> dict[str, int]:
+    counts: dict[str, int] = {}
+    for artifact in artifacts:
+        counts[artifact.name] = counts.get(artifact.name, 0) + 1
+    return counts
+
+
+def _step_prompt_texts(step: StepPlan, *, workflow_cls: type[Any]) -> tuple[str, ...]:
+    texts: list[str] = []
+    if isinstance(step, PromptStepPlan):
+        text = _prompt_text(step.turn.prompt, workflow_cls=workflow_cls)
+        if text:
+            texts.append(text)
+    elif isinstance(step, ProduceVerifyStepPlan):
+        producer_text = _prompt_text(step.producer.prompt, workflow_cls=workflow_cls)
+        verifier_text = _prompt_text(step.verifier.prompt, workflow_cls=workflow_cls)
+        if producer_text:
+            texts.append(producer_text)
+        if verifier_text:
+            texts.append(verifier_text)
+    return tuple(texts)
+
+
+def _prompt_text(prompt: Any, *, workflow_cls: type[Any]) -> str | None:
+    if prompt is None:
+        return None
+    if isinstance(prompt, str):
+        return prompt
+    if isinstance(prompt, Prompt):
+        if isinstance(prompt.text, str) and prompt.text:
+            return prompt.text
+        if not isinstance(prompt.path, str) or not prompt.path or prompt.source == "registry":
+            return None
+        return resolve_prompt_reference(
+            prompt.path,
+            source=prompt.source,
+            search_roots=_workflow_prompt_search_roots(workflow_cls),
+        ).text
+    prompt_text = getattr(prompt, "text", None)
+    if isinstance(prompt_text, str) and prompt_text:
+        return prompt_text
+    return None
+
+
+def _workflow_prompt_search_roots(workflow_cls: type[Any]) -> tuple[Path, ...]:
+    module = inspect.getmodule(workflow_cls)
+    module_file = getattr(module, "__file__", None)
+    if not isinstance(module_file, str) or not module_file:
+        return ()
+    return (Path(module_file).resolve().parent,)
+
+
+def _infer_prompt_artifact_reads(
+    refs: tuple[PlaceholderRef, ...],
+    *,
+    symbols: Mapping[str, Any],
+    inventory: dict[str, ArtifactInventoryRecord],
+    step_name: str,
+) -> tuple[ArtifactId, ...]:
+    inferred: list[ArtifactId] = []
+    for ref in refs:
+        inferred_artifact = validate_placeholder_ref(
+            ref,
+            surface=f"step {step_name!r} prompt placeholder",
+            symbols=symbols,
+        )
+        if inferred_artifact is None:
+            continue
+        record = resolve_artifact_reference(
+            inferred_artifact,
+            inventory,
+            step_name=step_name,
+            prefer_step_local=True,
+        )
+        artifact_id = _artifact_id_from_record(record)
+        if artifact_id not in inferred:
+            inferred.append(artifact_id)
+    return tuple(inferred)
 
 
 def _compile_branch_group_internal_steps(
@@ -1275,7 +1490,7 @@ def _topology_hash_step_payload(
         "provider_policy_fingerprint": _policy_input_fingerprint(step.provider_policy),
         "prompt_refs": [
             _topology_json_value(reference)
-            for reference in getattr(authored_step, "simple_prompt_references", ())
+            for reference in compiled.reference_graph.prompt_refs.get(step.name, ())
         ],
     }
     if step_routes:
