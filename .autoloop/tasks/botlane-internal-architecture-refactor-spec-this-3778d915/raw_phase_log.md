@@ -3102,3 +3102,59 @@ Open issues / next step
 <loop-control>
 {"schema":"docloop.loop_control/v1","kind":"promise","promise":"COMPLETE"}
 </loop-control>
+
+
+---
+run_id=run-20260509T045359Z-e2586b1f | entry=session_turn | pair=test | phase=verifier | cycle=1 | attempt=1 | thread_id=019e0bb7-bc69-7212-a41b-d059a7f5c618
+---
+provider=codex
+mode=resume
+template=/home/rauter/.local/share/pipx/venvs/autoloop/lib/python3.12/site-packages/autoloop/templates/test_verifier.md
+session_id=019e0bb7-bc69-7212-a41b-d059a7f5c618
+
+
+---
+run_id=run-20260509T045359Z-e2586b1f | entry=phase_output | pair=test | phase=verifier | process=codex-agent | cycle=1 | attempt=1 | thread_id=019e0bb7-bc69-7212-a41b-d059a7f5c618
+---
+I’m auditing the final-phase test additions against the phase scope and the recorded decisions. First step is to read the active audit artifacts and the exact test diffs so I can judge whether coverage matches the cleanup risks and parity requirement.
+
+The added assertions are small, but I want to confirm they’re stable on the exact paths the strategy claims. I’m running the parity contract and the two runtime targets the author updated.
+
+The audited paths passed, and I don’t see a coverage hole that would materially weaken regression detection for this phase. I’m marking the criteria accordingly and recording that the audit found no issues.
+
+Scope considered
+
+- Phase-local test audit for `single-step-parity-and-cleanup`.
+- Audited the added parity and cleanup coverage in `tests/contract/test_single_step_plan_equivalence.py`, `tests/runtime/test_package_cli.py`, `tests/runtime/test_workflow_reference_resolution.py`, plus the active `test_strategy.md` and `feedback.md` artifacts.
+
+What I analyzed
+
+- The phase decisions requiring `SingleStepPlan` to remain parity-only/internal and to cover the `parameters_model=None` and workspace `__pycache__` cleanup regressions.
+- The actual test diffs and the behavior-to-test mapping in the strategy artifact.
+- The stability of the new assertions on the exact runtime and contract paths they claim to protect.
+
+What I reviewed
+
+- `tests/contract/test_single_step_plan_equivalence.py` for supported single-step matrix, explicit routes, policy layering, typed input/params, and provider-question parity.
+- `tests/runtime/test_package_cli.py` for the new no-`__pycache__` assertions on `workflows show` and `run`.
+- `tests/runtime/test_workflow_reference_resolution.py` for preserved exported-`Params` capability metadata.
+- Targeted validation runs:
+  - `.venv/bin/python -m pytest tests/contract/test_single_step_plan_equivalence.py`
+  - `.venv/bin/python -m pytest tests/runtime/test_package_cli.py -k typed_workflow_parameters`
+  - `.venv/bin/python -m pytest tests/runtime/test_workflow_reference_resolution.py -k exported_params`
+
+Key findings / decisions
+
+- No blocking findings.
+- No non-blocking findings.
+- The criteria artifact was updated to fully checked.
+- The feedback artifact was updated with the audit result and no-findings outcome.
+
+Open issues / next step
+
+- No open audit issues in this phase scope.
+- Audit result: complete.
+
+<loop-control>
+{"schema":"docloop.loop_control/v1","kind":"promise","promise":"COMPLETE"}
+</loop-control>

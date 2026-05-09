@@ -3026,3 +3026,135 @@ Open issues / next step
 <loop-control>
 {"schema":"docloop.loop_control/v1","kind":"promise","promise":"COMPLETE"}
 </loop-control>
+
+
+---
+run_id=run-20260509T045359Z-e2586b1f | entry=session_turn | pair=test | phase=producer | cycle=1 | attempt=1 | thread_id=019e0bb7-bc69-7212-a41b-d059a7f5c618
+---
+provider=codex
+mode=resume
+template=/home/rauter/.local/share/pipx/venvs/autoloop/lib/python3.12/site-packages/autoloop/templates/test_producer.md
+session_id=019e0bb7-bc69-7212-a41b-d059a7f5c618
+
+
+---
+run_id=run-20260509T045359Z-e2586b1f | entry=phase_output | pair=test | phase=producer | process=codex-agent | cycle=1 | attempt=1 | thread_id=019e0bb7-bc69-7212-a41b-d059a7f5c618
+---
+I’m treating this as a test-hardening pass for the final phase. I’m reading the phase test artifacts and the new parity/cleanup tests first, then I’ll add any missing regression guard only if there’s a concrete uncovered behavior in the final implementation.
+
+Phase focus is the final parity/cleanup test surface. I’m checking the existing parity coverage and the two cleanup fixes so I can add only the minimum direct regression test and update the phase artifacts.
+
+The current parity file is in place. I’m looking for the narrowest direct regression test for the cleanup fixes so the phase doesn’t rely only on the full-suite run to guard them.
+
+I have a concrete gap: the cleanup fix for workspace import hygiene is only guarded indirectly today. I’m adding one focused runtime test that checks both preserved parameter-model discovery and the no-`__pycache__` invariant on workspace workflow inspection/loading, then I’ll update the phase test artifacts to map that coverage explicitly.
+
+I found an existing nearby metadata test, so I’m adding the new assertion alongside that same resolution path rather than introducing a second helper or a cross-test dependency.
+
+The new coverage is in place. I’m running the focused runtime regression and the parity contract file together to confirm the added assertion doesn’t disturb the final-phase matrix.
+
+The failure isn’t in the cleanup behavior; it’s because `inspect_workflow_reference(...)` doesn’t support that alias string for package-relative imports the same way `resolve_workflow_reference(...)` does. I’m narrowing the test to the supported inspection path so it guards the cleanup fix without normalizing an unrelated loader limitation.
+
+I adjusted the regression to use the same supported inspection path the loader suite already treats as canonical. Re-running the focused runtime test now.
+
+The capability inspector is stricter here than the resolver. I’m probing the supported reference forms against the same workspace package so the test targets a real contract instead of baking in a false assumption.
+
+The better owner for this regression is the existing CLI typed-parameters test, because that path already exercises workspace capability inspection successfully. I’m moving the no-`__pycache__` assertion there and dropping the unsupported standalone inspector case.
+
+The regression is now anchored in the already-supported CLI workspace path, which is the right contract surface for the capability cleanup. I’m re-running the focused tests on that path plus the parity file.
+
+The focused tests are green. I’m syncing the phase artifact notes so they match the actual coverage split: parity in the contract file, metadata in the loader suite, and no-`__pycache__` hygiene in the CLI workspace path.
+
+Scope considered
+
+- Phase-local test work for `single-step-parity-and-cleanup`.
+- Changed coverage only for the final `SingleStepPlan` parity/cleanup surface and the two active phase test artifacts.
+
+What I analyzed
+
+- Existing parity coverage in `tests/contract/test_single_step_plan_equivalence.py`.
+- Existing workspace parameter-metadata coverage in `tests/runtime/test_workflow_reference_resolution.py`.
+- Existing CLI typed-parameter coverage in `tests/runtime/test_package_cli.py`.
+- The phase decisions in `decisions.txt`, especially that `Botlane.step(...)` stays on the synthetic path and that the cleanup bugs were `parameters_model=None` and workspace `__pycache__` dirtiness.
+
+What I changed
+
+- Updated [tests/runtime/test_package_cli.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/tests/runtime/test_package_cli.py) to assert that `workflows show` and `run` on a typed workspace package do not leave `__pycache__` under `.botlane/workflows`.
+- Left the existing exported-`Params` capability metadata checks in [tests/runtime/test_workflow_reference_resolution.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/tests/runtime/test_workflow_reference_resolution.py) as the direct loader/runtime metadata coverage.
+- Updated [test_strategy.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/botlane-internal-architecture-refactor-spec-this-3778d915/runs/run-20260509T045359Z-e2586b1f/artifacts/test/phases/single-step-parity-and-cleanup/test_strategy.md) with a behavior-to-test coverage map.
+- Appended a concise summary to [feedback.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/botlane-internal-architecture-refactor-spec-this-3778d915/runs/run-20260509T045359Z-e2586b1f/artifacts/test/phases/single-step-parity-and-cleanup/feedback.md).
+- Appended one test-scope decision under the current test-author header in `decisions.txt`.
+
+Key findings / decisions
+
+- The right place to lock the no-`__pycache__` invariant was the existing CLI typed-workflow test, because that path already exercises supported workspace capability inspection and runtime loading.
+- I avoided encoding an unsupported standalone `inspect_workflow_reference(...)` workspace-package path that fails due to package-relative import semantics; the loader/runtime metadata contract already has coverage elsewhere.
+- Validation run:
+  - `.venv/bin/python -m pytest tests/runtime/test_package_cli.py -k typed_workflow_parameters`
+  - `.venv/bin/python -m pytest tests/runtime/test_workflow_reference_resolution.py -k exported_params`
+  - `.venv/bin/python -m pytest tests/contract/test_single_step_plan_equivalence.py`
+- Result: all selected tests passed.
+
+Open issues / next step
+
+- No blocking test gaps found within this phase scope.
+- I did not rerun the full suite from this turn because the code under test was unchanged and the phase-local additions validated cleanly; if orchestration requires a fresh full-suite run after test-only edits, that would be the next step.
+
+<loop-control>
+{"schema":"docloop.loop_control/v1","kind":"promise","promise":"COMPLETE"}
+</loop-control>
+
+
+---
+run_id=run-20260509T045359Z-e2586b1f | entry=session_turn | pair=test | phase=verifier | cycle=1 | attempt=1 | thread_id=019e0bb7-bc69-7212-a41b-d059a7f5c618
+---
+provider=codex
+mode=resume
+template=/home/rauter/.local/share/pipx/venvs/autoloop/lib/python3.12/site-packages/autoloop/templates/test_verifier.md
+session_id=019e0bb7-bc69-7212-a41b-d059a7f5c618
+
+
+---
+run_id=run-20260509T045359Z-e2586b1f | entry=phase_output | pair=test | phase=verifier | process=codex-agent | cycle=1 | attempt=1 | thread_id=019e0bb7-bc69-7212-a41b-d059a7f5c618
+---
+I’m auditing the final-phase test additions against the phase scope and the recorded decisions. First step is to read the active audit artifacts and the exact test diffs so I can judge whether coverage matches the cleanup risks and parity requirement.
+
+The added assertions are small, but I want to confirm they’re stable on the exact paths the strategy claims. I’m running the parity contract and the two runtime targets the author updated.
+
+The audited paths passed, and I don’t see a coverage hole that would materially weaken regression detection for this phase. I’m marking the criteria accordingly and recording that the audit found no issues.
+
+Scope considered
+
+- Phase-local test audit for `single-step-parity-and-cleanup`.
+- Audited the added parity and cleanup coverage in `tests/contract/test_single_step_plan_equivalence.py`, `tests/runtime/test_package_cli.py`, `tests/runtime/test_workflow_reference_resolution.py`, plus the active `test_strategy.md` and `feedback.md` artifacts.
+
+What I analyzed
+
+- The phase decisions requiring `SingleStepPlan` to remain parity-only/internal and to cover the `parameters_model=None` and workspace `__pycache__` cleanup regressions.
+- The actual test diffs and the behavior-to-test mapping in the strategy artifact.
+- The stability of the new assertions on the exact runtime and contract paths they claim to protect.
+
+What I reviewed
+
+- `tests/contract/test_single_step_plan_equivalence.py` for supported single-step matrix, explicit routes, policy layering, typed input/params, and provider-question parity.
+- `tests/runtime/test_package_cli.py` for the new no-`__pycache__` assertions on `workflows show` and `run`.
+- `tests/runtime/test_workflow_reference_resolution.py` for preserved exported-`Params` capability metadata.
+- Targeted validation runs:
+  - `.venv/bin/python -m pytest tests/contract/test_single_step_plan_equivalence.py`
+  - `.venv/bin/python -m pytest tests/runtime/test_package_cli.py -k typed_workflow_parameters`
+  - `.venv/bin/python -m pytest tests/runtime/test_workflow_reference_resolution.py -k exported_params`
+
+Key findings / decisions
+
+- No blocking findings.
+- No non-blocking findings.
+- The criteria artifact was updated to fully checked.
+- The feedback artifact was updated with the audit result and no-findings outcome.
+
+Open issues / next step
+
+- No open audit issues in this phase scope.
+- Audit result: complete.
+
+<loop-control>
+{"schema":"docloop.loop_control/v1","kind":"promise","promise":"COMPLETE"}
+</loop-control>
