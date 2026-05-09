@@ -48,3 +48,43 @@ Updated the planning artifacts for this run:
 The plan keeps the requested three-stage sequence, but tightens it to the repository’s actual module boundaries and current test surface. The main non-obvious planning decisions are: treat `botlane/*` as the source of truth, keep placeholder dispatch centralized in `botlane/core/placeholders.py` with `discovery.py` as a thin wrapper, and defer `Engine.run_async` / `describe_workflow_class` extraction until the lower-risk policy and authoring refactors are green.
 
 I did not run the test suite; this turn was limited to repository analysis and plan artifact authoring.
+
+
+---
+run_id=run-20260509T124548Z-f67cf8d4 | entry=session_turn | pair=plan | phase=verifier | cycle=1 | attempt=1 | thread_id=019e0cc5-ccab-7410-9ef3-7d5d73ace130
+---
+provider=codex
+mode=resume
+template=/home/rauter/.local/share/pipx/venvs/autoloop/lib/python3.12/site-packages/autoloop/templates/plan_verifier.md
+session_id=019e0cc5-ccab-7410-9ef3-7d5d73ace130
+
+
+---
+run_id=run-20260509T124548Z-f67cf8d4 | entry=phase_output | pair=plan | phase=verifier | process=codex-agent | cycle=1 | attempt=1 | thread_id=019e0cc5-ccab-7410-9ef3-7d5d73ace130
+---
+I’m auditing the written plan against the original hotspot list and the repository evidence now. The main check is whether every requested refactor target is either explicitly planned or explicitly deferred with a safe rule, rather than being silently dropped.
+
+I found one material gap: the plan never accounts for `_capability_entry_from_resolved`, even as an explicit deferment. I’m recording that as a blocking finding and marking the criteria accordingly.
+
+The verifier artifacts are updated. I’m doing one quick readback to ensure the checklist state and the blocking finding are recorded cleanly before I close this pass.
+
+Scope considered
+The narrative plan, machine-readable phase plan, verifier criteria, verifier feedback history, the immutable request snapshot, the raw run log, and the current decisions ledger for this run.
+
+What I analyzed
+I compared the produced plan against the user’s full hotspot list and the stated refactor sequence, then checked whether each requested target was either explicitly planned or explicitly deferred with a safe condition. I also reviewed the phase ordering, regression gates, rollback notes, and the consistency between `plan.md` and `phase_plan.yaml`.
+
+What I reviewed
+I updated `criteria.md` to reflect the current plan state and appended a prioritized finding to `feedback.md`. I did not modify repository source code or the shared `decisions.txt` ledger.
+
+Key findings / decisions
+`PLAN-001` is blocking: the plan omits hotspot 9, `_capability_entry_from_resolved`, from both `plan.md` and `phase_plan.yaml`, and it does not record the request’s “refactor only if this file changes anyway” defer rule. That is a scope-fidelity gap because a later implementer could silently skip part of the requested refactor set.
+The remaining plan structure is otherwise coherent: phase boundaries are reasonable, regression surfaces are called out, and the plan does not introduce obvious technical-debt or compatibility issues on its own.
+Criteria status was updated accordingly: `Intent Fidelity` and `Completeness` remain unchecked; the other three criteria are currently satisfied.
+
+Open issues / next step
+Revise the plan so `_capability_entry_from_resolved` is either assigned to a phase or explicitly deferred with the condition that it is only touched when adjacent work changes the same file, plus a clear validation expectation for that deferment. After that change, rerun plan verification.
+
+<loop-control>
+{"schema":"docloop.loop_control/v1","kind":"promise","promise":"INCOMPLETE"}
+</loop-control>
