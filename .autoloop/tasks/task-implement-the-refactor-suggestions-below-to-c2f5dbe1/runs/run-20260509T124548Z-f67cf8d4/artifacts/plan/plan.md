@@ -5,6 +5,7 @@ Implement the requested Botlane complexity refactors without adding compatibilit
 
 ## Scope
 - In scope: the ten hotspots from the request, sequenced so low-risk pure translators land before authoring/inventory reducers and before runtime lifecycle extraction.
+- In scope: hotspot 9, `_capability_entry_from_resolved`, remains part of the requested refactor set but is explicitly conditional: only refactor it if adjacent work already opens `botlane/core/workflow_capabilities.py`; do not touch that file just for standalone readability churn.
 - In scope: targeted test expansion where current coverage is indirect or does not lock exact output/error parity.
 - Out of scope: feature work, policy semantics changes, checkpoint schema changes, workflow topology changes, CLI contract changes, and unrelated cleanup.
 - Out of scope: direct edits to `build/lib/*` as refactor sources of truth. Treat `botlane/*` as authoritative unless a later packaging step explicitly requires mirroring generated artifacts.
@@ -14,6 +15,7 @@ Implement the requested Botlane complexity refactors without adding compatibilit
 - `_policy_layer_to_override` must preserve current public authoring rules, including dangerous-access inference and exact incompatibility failures.
 - Placeholder validation must keep exact user-facing error wording and ambiguity behavior shared between authoring-time (`discovery.py`) and runtime-safe validation (`placeholders.py`).
 - Artifact inventory must preserve current identity reuse, workflow-level ownership, producer rebind, and conflict diagnostics.
+- Any conditional cleanup of `_capability_entry_from_resolved` must preserve `WorkflowCapabilityEntry` field shape, path/title/alias fallback resolution, session collection, and compiled route/artifact/step projection.
 - `compiled_step_from_step_plan`, `render_branch_group_context`, `Engine.run_async`, and `describe_workflow_class` must remain behavior-preserving internal restructures only.
 
 ## Phase Plan
@@ -56,6 +58,15 @@ Validation gates:
 - Preserve plan round-trip parity in `tests/unit/test_step_plans.py`.
 - Preserve branch-group markdown/output behavior in `tests/contract/test_branch_result_serialization.py`.
 
+### Conditional Hotspot 9: Workflow Capability Entry
+The request includes `_capability_entry_from_resolved` as a lower-priority readability cleanup, but only if the file changes anyway. Keep that condition explicit instead of silently dropping it.
+
+- If Phases 1-3 do not otherwise open `botlane/core/workflow_capabilities.py`, leave `_capability_entry_from_resolved` deferred and make no standalone changes there.
+- If adjacent capability/discovery work already opens that file, refactor `_capability_entry_from_resolved` locally by extracting path/metadata/session fallback helpers and keeping the `WorkflowCapabilityEntry(...)` assembly behavior unchanged.
+
+Validation gates:
+- If this conditional slice activates, add focused capability-inspection tests that lock catalog-entry fallbacks, inferred support-path lists, session projection, and emitted `WorkflowCapabilityEntry` field parity.
+
 ### Phase 3: Runtime Loop And Workflow Discovery
 Only start after Phases 1 and 2 are passing, because these are the highest regression surfaces.
 
@@ -77,6 +88,7 @@ Validation gates:
 - Provider payload drift: helper extraction may accidentally change unsupported/lossy/unsafe ordering or omit fields. Mitigation: exact payload/report assertions, not only semantic assertions.
 - Placeholder wording drift: dispatcher extraction can subtly change surfaced errors. Mitigation: preserve shared validator entrypoint and use exact `match=` assertions.
 - Artifact ownership drift: builder extraction can break rebind and shared-identity handling. Mitigation: add direct tests for workflow-level reuse, duplicate names, and qualified-name conflicts.
+- Workflow capability entry drift: low-priority cleanup can change fallback resolution in `botlane/core/workflow_capabilities.py`, where direct test coverage is lighter. Mitigation: keep it conditional on adjacent file changes and add focused capability-inspection parity tests if activated.
 - Runtime control drift: `run_async` extraction can reorder notifications or checkpoint writes. Mitigation: isolate helper boundaries around existing control flow and add parity tests before any cleanup.
 - Discovery ordering drift: split scanning/lowering can alter step ordering or default entry resolution. Mitigation: preserve current sort/order inputs and validate with existing workflow compilation tests.
 

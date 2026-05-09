@@ -92,3 +92,31 @@ phases:
     rollback:
       - "Revert engine and discovery helper extraction separately from earlier phases."
       - "Stop after Phase 2 if runtime parity cannot be proven cleanly."
+  - phase_id: "conditional-capability-entry-cleanup"
+    title: "Conditional Workflow Capability Entry Cleanup"
+    objective: "Keep hotspot 9 explicit in the plan while only refactoring `_capability_entry_from_resolved` if adjacent work already opens `botlane/core/workflow_capabilities.py`."
+    status: "deferred"
+    in_scope:
+      - "Refactor `botlane/core/workflow_capabilities.py::_capability_entry_from_resolved` only when adjacent capability or discovery work already touches that file."
+      - "Extract local path, metadata, and session fallback helpers without changing `WorkflowCapabilityEntry` payload semantics."
+      - "Add focused capability-inspection parity tests if this conditional slice activates."
+    out_of_scope:
+      - "Standalone readability churn that touches `botlane/core/workflow_capabilities.py` with no adjacent task-driven reason."
+      - "Behavior changes to workflow capability discovery, catalog resolution, or emitted capability entry fields."
+      - "Any new abstraction shared outside `botlane/core/workflow_capabilities.py`."
+    dependencies:
+      - "runtime-and-discovery-extraction"
+    acceptance_criteria:
+      - id: "AC-1"
+        text: "The plan makes hotspot 9 explicit as a deferred conditional slice, so later turns cannot silently skip or silently broaden it."
+      - id: "AC-2"
+        text: "If the slice activates, `WorkflowCapabilityEntry` field shape, path/title/alias fallbacks, sessions, and compiled route/artifact/step projections remain parity-accurate under focused tests."
+    deliverables:
+      - "An explicit deferment contract for hotspot 9 in the ordered phase plan."
+      - "A local-only refactor strategy and validation rule for `_capability_entry_from_resolved` if the file is already open for adjacent work."
+    risks:
+      - "Low direct test coverage in workflow capability inspection makes silent fallback drift easy if the file is edited casually."
+      - "A standalone cleanup here would add avoidable churn to a low-priority area with no user-facing value."
+    rollback:
+      - "Do not activate this phase unless adjacent work already requires touching `botlane/core/workflow_capabilities.py`."
+      - "If activated and parity drifts, revert only the local helper extraction in `botlane/core/workflow_capabilities.py`."
