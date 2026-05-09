@@ -1470,15 +1470,11 @@ class RouteFinalizer:
         route: RouteContract,
         result: _RouteResolution,
     ) -> RouteDecision:
-        contract = route_contract_from_compiled_route(
-            route,
-            inventory=self._artifact_inventory,
-        )
         return RouteDecision(
             final_route=result.final_route,
-            contract=contract,
+            contract=route,
             action=route_action_for_contract(
-                contract,
+                route,
                 pending_input=result.pending_input,
             ),
             runtime_control=result.runtime_control,
@@ -1600,7 +1596,7 @@ class RouteFinalizer:
         runtime.set_route(
             {
                 "tag": final_event.tag,
-                "target": final_route.target,
+                "target": route_target_value(final_route.target),
                 "summary": final_route.summary,
                 "handoff": final_route.handoff,
             }
@@ -1619,7 +1615,7 @@ class RouteFinalizer:
             error_cls=final_error_cls,
             provider_attributable=final_provider_attributable,
         )
-        destination = final_route.target
+        destination = route_target_value(final_route.target)
         pending_input = (
             self._routes.pending_input_from_event(source_step=step.name, event=final_event)
             if destination == AWAIT_INPUT
@@ -1743,7 +1739,7 @@ class RouteFinalizer:
                 runtime.set_route(
                     {
                         "tag": final_event.tag,
-                        "target": final_route.target,
+                        "target": route_target_value(final_route.target),
                         "summary": final_route.summary,
                         "handoff": final_route.handoff,
                     }
@@ -1828,7 +1824,7 @@ class RouteFinalizer:
             error_cls=final_error_cls,
             provider_attributable=final_provider_attributable,
         )
-        destination = final_route.target
+        destination = route_target_value(final_route.target)
         pending_input = (
             self._routes.pending_input_from_event(source_step=step.name, event=final_event)
             if destination == AWAIT_INPUT
@@ -1979,7 +1975,7 @@ class HookRunner:
                 runtime.set_route(
                     {
                         "tag": candidate_event.tag,
-                        "target": compiled_route.target,
+                        "target": route_target_value(compiled_route.target),
                         "summary": compiled_route.summary,
                         "handoff": compiled_route.handoff,
                     }
@@ -2238,7 +2234,7 @@ class HookRunner:
             runtime.set_route(
                 {
                     "tag": event.tag,
-                    "target": compiled_route.target,
+                    "target": route_target_value(compiled_route.target),
                     "summary": compiled_route.summary,
                     "handoff": compiled_route.handoff,
                 }

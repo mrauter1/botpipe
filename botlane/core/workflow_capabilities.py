@@ -526,7 +526,7 @@ def selected_workflow_decomposition_surface_payload(
             "state_model": entry.state_model,
             "step_count": len(entry.steps),
             "steps": [
-                _compiled_step_payload(
+                _step_payload(
                     repo_root_path,
                     entry.package_dir,
                     step=step,
@@ -669,7 +669,7 @@ def _capability_entry_from_resolved(resolved, compiled: WorkflowPlan, catalog_en
             expected_output_schema=None,
         ),
         steps=tuple(
-            _compiled_step_capability(
+            _step_capability(
                 step,
                 default_session_name=compiled.default_session_name,
                 step_routes=compiled.routes.get(step.name, {}),
@@ -1191,7 +1191,7 @@ def _provider_route_map(step: Any, *, policy: str) -> dict[str, Any]:
     }
 
 
-def _compiled_step_capability(
+def _step_capability(
     step,
     *,
     default_session_name: str,
@@ -1288,7 +1288,7 @@ def _route_capability_payload(route: WorkflowRouteCapability) -> dict[str, objec
     }
 
 
-def _compiled_step_payload(
+def _step_payload(
     repo_root: Path,
     package_dir: Path,
     *,

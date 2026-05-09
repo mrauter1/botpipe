@@ -31,6 +31,13 @@ class RouteTarget:
         if self.step_name is not None:
             raise ValueError("non-step route targets must not include step_name")
 
+    def __eq__(self, other: object) -> bool:
+        if isinstance(other, str):
+            return route_target_value(self) == other
+        if not isinstance(other, RouteTarget):
+            return NotImplemented
+        return (self.kind, self.step_name) == (other.kind, other.step_name)
+
 
 @dataclass(frozen=True, slots=True)
 class PayloadContract:

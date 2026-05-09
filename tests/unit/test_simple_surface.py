@@ -12,7 +12,7 @@ import botlane.simple as simple
 import botlane.core as core
 import botlane.core.steps as core_steps
 import botlane.core.validation as core_validation
-from botlane.core.branch_groups.models import BranchGroupDeclarationSpec, CompiledBranchGroupSpec
+from botlane.core.branch_groups.models import BranchGroupDeclarationSpec
 from botlane.core.compiler import compile_workflow
 from botlane.core.context import ChildWorkflowResult, Context
 from botlane.core.discovery import get_workflow_definition
@@ -20,6 +20,7 @@ from botlane.core.engine import Engine
 from botlane.core.errors import WorkflowExecutionError, WorkflowValidationError
 from botlane.core.providers.fake import ScriptedLLMProvider
 from botlane.core.provider_policy import PermissionPolicy, ProviderPolicy, ProviderPolicyOverride
+from botlane.core.route_contracts import route_target_value
 from botlane.core.stores import InMemoryCheckpointStore, InMemorySessionStore
 
 
@@ -703,12 +704,12 @@ def test_parallel_branch_group_compiles_as_one_external_step_with_ordered_intern
     assert tuple(compiled.steps) == ("reviews", "publish")
     assert compiled.steps["reviews"].kind == "branch_group"
     assert isinstance(definition.steps_by_name["reviews"].branch_group, BranchGroupDeclarationSpec)
-    assert isinstance(compiled.steps["reviews"].branch_group, CompiledBranchGroupSpec)
+    assert compiled.steps["reviews"].branch_group is not None
     assert "security_review" not in compiled.steps
     assert "cost_review" not in compiled.steps
     assert "security_review" not in compiled.routes
     assert "cost_review" not in compiled.routes
-    assert compiled.routes["reviews"]["done"].target == "publish"
+    assert route_target_value(compiled.routes["reviews"]["done"].target) == "publish"
     branch_group = compiled.steps["reviews"].branch_group
     assert branch_group is not None
     assert branch_group.kind == "parallel"

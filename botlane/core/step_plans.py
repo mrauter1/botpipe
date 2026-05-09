@@ -11,6 +11,7 @@ from typing import TYPE_CHECKING, Any, Callable, Literal, TypeAlias
 
 from .identifiers import ArtifactId
 from .providers.retries import ProviderRetryPolicy
+from .route_contracts import route_target_value
 
 if TYPE_CHECKING:
     from .route_contracts import RouteContract
@@ -95,6 +96,56 @@ class ProviderTurnPlan:
 
 class _BaseStepPlan:
     header: StepHeader
+
+    @property
+    def _effective_route_table(self) -> dict[str, "RouteContract"]:
+        route_table = getattr(self, "_route_table", None)
+        if route_table is None:
+            return {}
+        return route_table
+
+    @property
+    def available_routes(self) -> tuple[str, ...]:
+        return tuple(tag for tag, route in self._effective_route_table.items() if not route.disabled)
+
+    @property
+    def authored_routes(self) -> tuple[str, ...]:
+        return tuple(
+            tag
+            for tag, route in self._effective_route_table.items()
+            if route.inheritance_source != "framework_default"
+        )
+
+    @property
+    def runtime_control_routes(self) -> tuple[str, ...]:
+        return tuple(
+            tag
+            for tag, route in self._effective_route_table.items()
+            if not route.disabled and route.is_runtime_control
+        )
+
+    @property
+    def provider_visible_routes_interactive(self) -> tuple[str, ...]:
+        return tuple(
+            tag
+            for tag, route in self._effective_route_table.items()
+            if not route.disabled and route.provider_visible_interactive
+        )
+
+    @property
+    def provider_visible_routes_full_auto(self) -> tuple[str, ...]:
+        return tuple(
+            tag
+            for tag, route in self._effective_route_table.items()
+            if not route.disabled and route.provider_visible_full_auto
+        )
+
+    @property
+    def route_table(self) -> dict[str, str | None]:
+        return {
+            tag: route_target_value(route.target)
+            for tag, route in self._effective_route_table.items()
+        }
 
     @property
     def name(self) -> str:

@@ -147,7 +147,7 @@ class _HookSnapshot:
 
 
 @dataclass(frozen=True, slots=True)
-class _DirectRuntimeControl:
+class _RouteControl:
     control: str
     destination: str
     pending_input: PendingInput | None = None
@@ -333,7 +333,7 @@ class _EngineRouteService:
         control: RequestInput | Goto | Fail,
         hook_name: str,
         hook_phase: str,
-    ) -> _DirectRuntimeControl:
+    ) -> _RouteControl:
         return self._engine._normalize_direct_runtime_control(
             step=step,
             context=context,
@@ -355,7 +355,7 @@ class _EngineRouteService:
         self,
         pending_handoffs: tuple[PendingHandoff, ...],
         *,
-        control: _DirectRuntimeControl,
+        control: _RouteControl,
         context: Context,
         source_step: str,
     ) -> tuple[PendingHandoff, ...]:
@@ -1249,7 +1249,7 @@ class Engine:
         control: RequestInput | Goto | Fail,
         hook_name: str,
         hook_phase: str,
-    ) -> _DirectRuntimeControl:
+    ) -> _RouteControl:
         runtime_control = "request_input"
         target_step: str | None = None
         pending_input_id: str | None = None
@@ -1267,7 +1267,7 @@ class Engine:
                     reason=control.reason,
                     pending_input_id=pending_input.pending_input_id,
                 )
-                return _DirectRuntimeControl(
+                return _RouteControl(
                     control="request_input",
                     destination=AWAIT_INPUT,
                     pending_input=pending_input,
@@ -1287,7 +1287,7 @@ class Engine:
                     target_step=target_step,
                     reason=control.reason,
                 )
-                return _DirectRuntimeControl(
+                return _RouteControl(
                     control="goto",
                     destination=target_step,
                     target_step=target_step,
@@ -1304,7 +1304,7 @@ class Engine:
                 source_phase=hook_phase,
                 reason=control.reason,
             )
-            return _DirectRuntimeControl(
+            return _RouteControl(
                 control="fail",
                 destination=FAIL,
                 terminal=FAIL,
@@ -2679,7 +2679,7 @@ class Engine:
         self,
         pending_handoffs: tuple[PendingHandoff, ...],
         *,
-        control: _DirectRuntimeControl,
+        control: _RouteControl,
         context: Context,
         source_step: str,
     ) -> tuple[PendingHandoff, ...]:
@@ -3376,7 +3376,7 @@ class Engine:
         *,
         step: StepPlan,
         state: BaseModel,
-        control: _DirectRuntimeControl,
+        control: _RouteControl,
         pending_handoffs: tuple[PendingHandoff, ...],
         producer_raw_output: str | None = None,
         verifier_raw_output: str | None = None,
@@ -3451,7 +3451,8 @@ class Engine:
             provider_usage=provider_usage,
             finalization=finalization,
             pending_input=route_finalization.pending_input,
-            route_finalization=route_finalization,
+            route_decision=route_finalization.decision,
+            action=None if route_finalization.decision is None else route_finalization.decision.action,
         )
 
     @staticmethod

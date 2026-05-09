@@ -183,7 +183,7 @@ def _compile_steps(
         after_producer_hook = getattr(step, "after_producer", None)
         before_verifier_hook = getattr(step, "before_verifier", None)
         after_verifier_hook = getattr(step, "after_verifier", None)
-        step_kind = _compiled_step_kind(step)
+        step_kind = _step_kind(step)
         step_state_model = getattr(step, "state_model", None)
         if step_state_model is None:
             step_state_model = build_step_state_model(
@@ -206,13 +206,13 @@ def _compile_steps(
                 )
             step_item_state_fields = tuple(dict.fromkeys(step_item_state_model.model_fields.keys()))
         compiled_session_name = (
-            _compiled_step_session_name(step, step.session, default_session_name=definition.default_session_name)
+            _step_session_name(step, step.session, default_session_name=definition.default_session_name)
             if step.session is not None
             else definition.default_session_name
         )
         if isinstance(step, (PythonStep, ChildWorkflowStep)):
             compiled_session_name = (
-                _compiled_step_session_name(step, step.session, default_session_name=definition.default_session_name)
+                _step_session_name(step, step.session, default_session_name=definition.default_session_name)
                 if step.session is not None
                 else None
             )
@@ -287,7 +287,7 @@ def _compile_steps(
                     kind="verifier",
                     prompt=step.verifier,
                     session_name=(
-                        _compiled_step_session_name(
+                        _step_session_name(
                             step,
                             step.verifier_session,
                             default_session_name=definition.default_session_name,
@@ -307,7 +307,7 @@ def _compile_steps(
                     expected_output_validator=expected_output_validator,
                 ),
                 verifier_session_name=(
-                    _compiled_step_session_name(
+                    _step_session_name(
                         step,
                         step.verifier_session,
                         default_session_name=definition.default_session_name,
@@ -616,24 +616,24 @@ def _register_inline_step_sessions(compiled: dict[str, Session], step: Step) -> 
         return
     if step.session is not None:
         compiled.setdefault(
-            _compiled_step_session_name(step, step.session, default_session_name=DEFAULT_SESSION_NAME),
+            _step_session_name(step, step.session, default_session_name=DEFAULT_SESSION_NAME),
             _compiled_session_copy(
-                _compiled_step_session_name(step, step.session, default_session_name=DEFAULT_SESSION_NAME),
+                _step_session_name(step, step.session, default_session_name=DEFAULT_SESSION_NAME),
                 step.session,
             ),
         )
     verifier_session = getattr(step, "verifier_session", None)
     if verifier_session is not None:
         compiled.setdefault(
-            _compiled_step_session_name(step, verifier_session, default_session_name=DEFAULT_SESSION_NAME, role="verifier_session"),
+            _step_session_name(step, verifier_session, default_session_name=DEFAULT_SESSION_NAME, role="verifier_session"),
             _compiled_session_copy(
-                _compiled_step_session_name(step, verifier_session, default_session_name=DEFAULT_SESSION_NAME, role="verifier_session"),
+                _step_session_name(step, verifier_session, default_session_name=DEFAULT_SESSION_NAME, role="verifier_session"),
                 verifier_session,
             ),
         )
 
 
-def _compiled_step_session_name(
+def _step_session_name(
     step: Step,
     session: Session,
     *,
@@ -885,7 +885,7 @@ def _compile_route_contract(
         raise WorkflowCompilationError(f"{owner} is invalid: {exc}") from exc
 
 
-def _compiled_step_kind(step: Step) -> str:
+def _step_kind(step: Step) -> str:
     if isinstance(step, ProduceVerifyStep):
         return "produce_verify"
     if isinstance(step, PromptStep):

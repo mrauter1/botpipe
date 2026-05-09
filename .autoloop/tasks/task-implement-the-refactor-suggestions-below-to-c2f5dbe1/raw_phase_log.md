@@ -685,3 +685,49 @@ Open issues / next step
 
 - Direct pytest execution for the new tests is blocked by pre-existing unrelated import errors in the repo: `botlane.sdk` expects `CompiledArtifact` from `botlane.core.artifacts`, and `botlane.core.engine` import transitively expects `CompiledRoute` from `botlane.core.compiler`.
 - Once those repo-level import breaks are fixed, the next step is to run the new targeted test file and the broader engine/discovery suites.
+
+
+---
+run_id=run-20260509T124548Z-f67cf8d4 | entry=session_turn | pair=implement | phase=verifier | cycle=1 | attempt=1 | thread_id=019e0ce8-ee70-7b01-8577-e4e1d171aaa2
+---
+provider=codex
+mode=resume
+template=/home/rauter/.local/share/pipx/venvs/autoloop/lib/python3.12/site-packages/autoloop/templates/implement_verifier.md
+session_id=019e0ce8-ee70-7b01-8577-e4e1d171aaa2
+
+
+---
+run_id=run-20260509T124548Z-f67cf8d4 | entry=phase_output | pair=implement | phase=verifier | process=codex-agent | cycle=1 | attempt=1 | thread_id=019e0ce8-ee70-7b01-8577-e4e1d171aaa2
+---
+I’ve identified one concrete runtime regression in the refactor path and I’m verifying whether there’s a second blocking issue or just a validation-gap note. I’m pulling exact line references now so the feedback is precise and fixable.
+
+I’ve written the review artifacts and the result is not passable as-is. I’m doing one last read of the findings wording to make sure the fix directions are concrete, then I’ll close with the required status block.
+
+Scope considered
+
+- Phase-local review of the runtime/discovery extraction changes in `botlane/core/engine.py`, `botlane/core/discovery.py`, the new targeted test file, and the active phase artifacts.
+
+What I analyzed
+
+- `Engine.run_async` control-flow parity around init/resume failures, fatal terminal notifications, checkpoint timing, and step-loop extraction.
+- `describe_workflow_class` extraction shape for scan/lower/resolve/build parity.
+- The new regression test file and whether it actually runs under the current repository state.
+
+What I reviewed
+
+- Updated [criteria.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/task-implement-the-refactor-suggestions-below-to-c2f5dbe1/runs/run-20260509T124548Z-f67cf8d4/artifacts/implement/phases/runtime-and-discovery-extraction/criteria.md).
+- Appended blocking findings to [feedback.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/task-implement-the-refactor-suggestions-below-to-c2f5dbe1/runs/run-20260509T124548Z-f67cf8d4/artifacts/implement/phases/runtime-and-discovery-extraction/feedback.md).
+
+Key findings / decisions
+
+- `IMP-001` blocking: the refactor drops fatal terminal context for failures that happen during restore/init before `_restore_or_initialize_run_loop()` returns. Extensions now receive `fatal` with `step_name=None` and `state=None` in cases where the monolith preserved partial loop state.
+- `IMP-002` blocking: the new parity tests do not collect under the current tree, so the phase does not yet satisfy the requested expanded runtime/discovery regression coverage in executable tests.
+
+Open issues / next step
+
+- Rework the run-loop extraction so partial loop state is available to `_handle_run_failure()` during restore/init exceptions.
+- Put the new runtime/discovery coverage in a test path that actually executes under this repo, or repair the import chain enough for those tests to collect.
+
+<loop-control>
+{"schema":"docloop.loop_control/v1","kind":"promise","promise":"INCOMPLETE"}
+</loop-control>

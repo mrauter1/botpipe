@@ -687,9 +687,9 @@ class BranchGroupRuntime:
         finalization = nested_result.finalization
         runtime_control = None if finalization is None else finalization.runtime_control
         if runtime_control is not None:
-            from ..engine import _DirectRuntimeControl
+            from ..engine import _RouteControl
 
-            control = _DirectRuntimeControl(
+            control = _RouteControl(
                 control=runtime_control,
                 destination=nested_result.destination,
                 pending_input=nested_result.pending_input,

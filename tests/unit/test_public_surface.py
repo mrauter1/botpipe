@@ -113,8 +113,6 @@ EXPECTED_BRANCH_GROUP_EXPORTS = (
     "BranchMetadata",
     "BranchSessionStoreView",
     "BranchStepDeclarationSpec",
-    "CompiledBranchGroupSpec",
-    "CompiledBranchStepSpec",
     "FanIn",
     "FanInHelperReference",
     "FanInMetadata",
@@ -192,7 +190,6 @@ def test_branch_group_exports_capture_phase_zero_surface() -> None:
         assert _import_from("botlane.core.branch_groups", symbol) is getattr(branch_groups, symbol)
 
 
-@pytest.mark.skip(reason="Enable in Phase 2 after compiled branch exports are removed.")
 def test_branch_group_exports_after_phase_two_remove_compiled_entries() -> None:
     assert "CompiledBranchGroupSpec" not in branch_groups.__all__
     assert "CompiledBranchStepSpec" not in branch_groups.__all__
