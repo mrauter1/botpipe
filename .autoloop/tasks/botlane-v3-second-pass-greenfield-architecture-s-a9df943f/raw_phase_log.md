@@ -3780,3 +3780,51 @@ Validation:
 Open issues / next step
 
 No open issue remains in this phase-local test slice. The existing warning in `tests/unit/test_provider_boundary_core.py` is unchanged and outside this phase’s scope.
+
+
+---
+run_id=run-20260509T164029Z-23a21781 | entry=session_turn | pair=test | phase=verifier | cycle=1 | attempt=1 | thread_id=019e0da0-8784-72b0-83b6-f50148343400
+---
+provider=codex
+mode=resume
+template=/home/rauter/.local/share/pipx/venvs/autoloop/lib/python3.12/site-packages/autoloop/templates/test_verifier.md
+session_id=019e0da0-8784-72b0-83b6-f50148343400
+
+
+---
+run_id=run-20260509T164029Z-23a21781 | entry=phase_output | pair=test | phase=verifier | process=codex-agent | cycle=1 | attempt=1 | thread_id=019e0da0-8784-72b0-83b6-f50148343400
+---
+I’m auditing the phase-local test additions against the route-authority contract now. First I’m reading the current test strategy, the new static-graph regression coverage, and the auditor artifacts so I can decide whether any material coverage gaps remain.
+
+I’m auditing the phase-local test coverage and the reviewer artifacts now. First step is to verify the added route-authority regression tests against the phase criteria, then I’ll update the audit artifacts only if the coverage actually closes the scoped risks.
+
+The added test coverage is targeting the right regression seam: canonical plan ownership now includes internal branch routes, so the material preserved invariant is that only nested payloads see them while top-level exports stay filtered. I’m updating the audit artifacts to reflect that the scoped coverage is complete and I did not find blocking gaps.
+
+I’ve updated the auditor-owned artifacts. I’m doing one quick readback now to confirm the criteria are fully checked and the feedback entry reflects a clean audit with no open test coverage findings.
+
+Scope considered
+
+Phase-local test audit for `route-authority-cutover` only. I reviewed the added regression coverage for canonical `WorkflowPlan.routes` ownership, the preserved top-level export boundary, and the strictness guard that prevents step-owned route tables from being reintroduced.
+
+What I analyzed
+
+I checked the active test strategy, the new assertions in [tests/runtime/test_runtime_static_graph.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/tests/runtime/test_runtime_static_graph.py), the AST-backed strictness test in [tests/strictness/test_no_internal_compat_layers.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/tests/strictness/test_no_internal_compat_layers.py), and the run-local decisions that define the preserved behavior for nested versus top-level route visibility.
+
+What I reviewed
+
+I updated [criteria.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/botlane-v3-second-pass-greenfield-architecture-s-a9df943f/runs/run-20260509T164029Z-23a21781/artifacts/test/phases/route-authority-cutover/criteria.md) so all audit criteria are checked, and I appended the audit result to [feedback.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/botlane-v3-second-pass-greenfield-architecture-s-a9df943f/runs/run-20260509T164029Z-23a21781/artifacts/test/phases/route-authority-cutover/feedback.md).
+
+Key findings / decisions
+
+No blocking or non-blocking audit findings. The current coverage is aligned with the phase contract:
+- Nested branch and fan-in routes remain covered through canonical plan-owned route data.
+- Top-level static-graph transition exports and `route_table.md` remain explicitly protected against leaking internal branch-step rows.
+- Strictness coverage now fails on `_route_table` and `_effective_route_table` reintroduction in the maintained source tree without relying on brittle substring matching.
+
+Open issues / next step
+
+No open issue remains in this phase-local test audit. The scoped test coverage is sufficient for the route-authority cutover acceptance criteria.
+
+<loop-control>
+{"schema":"docloop.loop_control/v1","kind":"promise","promise":"COMPLETE"}
+</loop-control>
