@@ -1299,3 +1299,113 @@ Open issues / next step
 <loop-control>
 {"schema":"docloop.loop_control/v1","kind":"promise","promise":"COMPLETE"}
 </loop-control>
+
+
+---
+run_id=run-20260509T124548Z-f67cf8d4 | entry=session_turn | pair=test | phase=producer | cycle=1 | attempt=1 | thread_id=019e0d24-0aa0-7ee0-8b2f-3a1ea872689e
+---
+provider=codex
+mode=resume
+template=/home/rauter/.local/share/pipx/venvs/autoloop/lib/python3.12/site-packages/autoloop/templates/test_producer.md
+session_id=019e0d24-0aa0-7ee0-8b2f-3a1ea872689e
+
+
+---
+run_id=run-20260509T124548Z-f67cf8d4 | entry=phase_output | pair=test | phase=producer | process=codex-agent | cycle=1 | attempt=1 | thread_id=019e0d24-0aa0-7ee0-8b2f-3a1ea872689e
+---
+I’m checking the phase-local test contract and the implementation/verifier artifacts first. The key question for this phase is whether hotspot 9 actually activated; if it did not, I should avoid adding out-of-scope test churn and instead record the deferment and the validation path explicitly.
+
+The phase did not activate new test authoring in `botlane/core/workflow_capabilities.py`, so I’m keeping this turn artifact-focused. I still want the test strategy to point at the exact preserved capability-inspection coverage, and I’m adding a decision-ledger note so later turns don’t mistake “no new tests” for a silent omission.
+
+The phase stayed deferred, so I’m not adding a repo test module just to manufacture scope. I’m recording the exact coverage map and the current validation constraint instead, because the attempted focused pytest path now fails during collection on unrelated import drift.
+
+I’ve captured the deferment-aware test plan and the current validation constraint. I’m doing a quick readback on the updated artifacts so the close-out is accurate about what was and was not tested in this phase.
+
+Scope considered
+
+- Active test phase `conditional-capability-entry-cleanup` only.
+- Reviewed the phase contract, implementation/verifier artifacts, decision ledger, and the existing capability-inspection test surface.
+
+What I analyzed
+
+- [implementation_notes.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/task-implement-the-refactor-suggestions-below-to-c2f5dbe1/runs/run-20260509T124548Z-f67cf8d4/artifacts/implement/phases/conditional-capability-entry-cleanup/implementation_notes.md)
+- [implement feedback.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/task-implement-the-refactor-suggestions-below-to-c2f5dbe1/runs/run-20260509T124548Z-f67cf8d4/artifacts/implement/phases/conditional-capability-entry-cleanup/feedback.md)
+- [decisions.txt](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/task-implement-the-refactor-suggestions-below-to-c2f5dbe1/runs/run-20260509T124548Z-f67cf8d4/decisions.txt)
+- Existing capability-inspection coverage in [test_workflow_reference_resolution.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/tests/runtime/test_workflow_reference_resolution.py:424)
+
+What I changed
+
+- Updated [test_strategy.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/task-implement-the-refactor-suggestions-below-to-c2f5dbe1/runs/run-20260509T124548Z-f67cf8d4/artifacts/test/phases/conditional-capability-entry-cleanup/test_strategy.md) with the behavior-to-coverage map, deferred-slice guard, future activation criteria, validation attempted, and known gaps.
+- Appended a concise summary to [feedback.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/task-implement-the-refactor-suggestions-below-to-c2f5dbe1/runs/run-20260509T124548Z-f67cf8d4/artifacts/test/phases/conditional-capability-entry-cleanup/feedback.md).
+- Added one phase-local test decision under the latest header in [decisions.txt](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/task-implement-the-refactor-suggestions-below-to-c2f5dbe1/runs/run-20260509T124548Z-f67cf8d4/decisions.txt:32).
+- Did not change any repository test files, because hotspot 9 never activated and adding standalone tests here would be out-of-scope churn.
+
+Key findings / decisions
+
+- `botlane/core/workflow_capabilities.py` still has no adjacent source diff in this run, so no new `_capability_entry_from_resolved` parity tests were authored.
+- `py_compile` succeeded for `botlane/core/workflow_capabilities.py` and `tests/runtime/test_workflow_reference_resolution.py`.
+- The focused pytest path is currently blocked during collection by an unrelated import issue:
+  - `ImportError: cannot import name 'context_runtime' from 'botlane.core.context'`
+  - The failure comes through `botlane.sdk` while importing `tests/runtime/test_workflow_reference_resolution.py`
+- I recorded that as a validation constraint, not as a new expected behavior.
+
+Open issues / next step
+
+- The existing capability-inspection runtime test path cannot currently be executed cleanly until the unrelated `botlane.sdk` / `context_runtime` import drift is resolved elsewhere.
+- If a later turn actually opens `botlane/core/workflow_capabilities.py`, that turn should add focused parity tests for catalog fallbacks, inferred support paths, non-default sessions, and compiled route/artifact/step payload shape.
+
+
+---
+run_id=run-20260509T124548Z-f67cf8d4 | entry=session_turn | pair=test | phase=verifier | cycle=1 | attempt=1 | thread_id=019e0d24-0aa0-7ee0-8b2f-3a1ea872689e
+---
+provider=codex
+mode=resume
+template=/home/rauter/.local/share/pipx/venvs/autoloop/lib/python3.12/site-packages/autoloop/templates/test_verifier.md
+session_id=019e0d24-0aa0-7ee0-8b2f-3a1ea872689e
+
+
+---
+run_id=run-20260509T124548Z-f67cf8d4 | entry=phase_output | pair=test | phase=verifier | process=codex-agent | cycle=1 | attempt=1 | thread_id=019e0d24-0aa0-7ee0-8b2f-3a1ea872689e
+---
+I’m auditing the phase-local test outcome against the conditional hotspot-9 contract. The main check is whether the test turn stayed appropriately deferred without manufacturing out-of-scope test churn, while still documenting the validation path and its current constraint.
+
+The audit comes down to one thing: the phase stayed within contract, but its preferred validation path is currently unusable because of an unrelated import break. I’m recording that as a non-blocking audit note rather than converting this no-op phase into a broader test-repair task.
+
+Scope considered
+
+- Active test audit phase `conditional-capability-entry-cleanup` only.
+- Audit scope stayed on the phase artifacts, the hotspot-9 deferment contract, the run decision ledger, and the cited capability-inspection validation path.
+
+What I analyzed
+
+- [criteria.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/task-implement-the-refactor-suggestions-below-to-c2f5dbe1/runs/run-20260509T124548Z-f67cf8d4/artifacts/test/phases/conditional-capability-entry-cleanup/criteria.md)
+- [feedback.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/task-implement-the-refactor-suggestions-below-to-c2f5dbe1/runs/run-20260509T124548Z-f67cf8d4/artifacts/test/phases/conditional-capability-entry-cleanup/feedback.md)
+- [test_strategy.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/task-implement-the-refactor-suggestions-below-to-c2f5dbe1/runs/run-20260509T124548Z-f67cf8d4/artifacts/test/phases/conditional-capability-entry-cleanup/test_strategy.md)
+- [decisions.txt](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/task-implement-the-refactor-suggestions-below-to-c2f5dbe1/runs/run-20260509T124548Z-f67cf8d4/decisions.txt)
+- The current source touch set for `botlane/core/workflow_capabilities.py` and the focused pytest path in `tests/runtime/test_workflow_reference_resolution.py`
+
+What I reviewed
+
+- Whether the test turn correctly respected the deferment guard and avoided out-of-scope repository test churn.
+- Whether the strategy explicitly maps preserved behavior and future activation coverage for hotspot 9.
+- Whether the recorded validation state is accurate and reproducible.
+- Whether any missing coverage or validation gap is material enough to block this deferred phase.
+
+Key findings / decisions
+
+- No blocking findings.
+- Updated `criteria.md` to mark the audit complete.
+- Appended one non-blocking audit finding to [feedback.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/task-implement-the-refactor-suggestions-below-to-c2f5dbe1/runs/run-20260509T124548Z-f67cf8d4/artifacts/test/phases/conditional-capability-entry-cleanup/feedback.md):
+  - `TST-001` notes that the preferred capability-inspection validation path currently fails during collection because of unrelated `botlane.sdk` import drift.
+- Reproduced the stated validation constraint:
+  - `.venv/bin/python -m pytest tests/runtime/test_workflow_reference_resolution.py -k 'inspect_workflow_reference or capability_inspection or simple_declaration_workflow_is_discoverable_by_path_module_name_and_capability_inspection' -q`
+  - Result: collection error on missing `context_runtime` import via `botlane.sdk`
+
+Open issues / next step
+
+- No phase-blocking issue remains because hotspot 9 never activated and no repository behavior changed.
+- When the unrelated `botlane.sdk` / `context_runtime` import drift is repaired, rerun the focused capability-inspection test path or isolate future hotspot-9 tests from that import surface if the slice activates.
+
+<loop-control>
+{"schema":"docloop.loop_control/v1","kind":"promise","promise":"COMPLETE"}
+</loop-control>
