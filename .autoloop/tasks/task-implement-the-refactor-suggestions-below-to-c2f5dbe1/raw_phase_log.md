@@ -1129,3 +1129,56 @@ Open issues / next step
 
 - No remaining phase-local test additions are known from this turn.
 - Next step is the test-phase verifier re-audit against the updated simple-step lowering coverage.
+
+
+---
+run_id=run-20260509T124548Z-f67cf8d4 | entry=session_turn | pair=test | phase=verifier | cycle=2 | attempt=1 | thread_id=019e0ce8-ee70-7b01-8577-e4e1d171aaa2
+---
+provider=codex
+mode=resume
+template=/home/rauter/.local/share/pipx/venvs/autoloop/lib/python3.12/site-packages/autoloop/templates/test_verifier.md
+session_id=019e0ce8-ee70-7b01-8577-e4e1d171aaa2
+
+
+---
+run_id=run-20260509T124548Z-f67cf8d4 | entry=phase_output | pair=test | phase=verifier | process=codex-agent | cycle=2 | attempt=1 | thread_id=019e0ce8-ee70-7b01-8577-e4e1d171aaa2
+---
+Re-auditing the updated discovery coverage and the focused phase-local test target now that the simple-step lowering path has been added.
+
+The missing discovery-lowering path is now covered directly. I’m confirming the focused file still passes, then I’ll clear the audit artifacts and record the blocker as resolved.
+
+The focused phase-local target is green with seven passing tests. I’m marking the audit complete and appending a resolution note so the feedback trail stays append-only.
+
+Scope considered
+
+- Phase-local re-audit of the runtime/discovery extraction test additions in [tests/unit/test_runtime_and_discovery_extraction.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/tests/unit/test_runtime_and_discovery_extraction.py), plus the active [test_strategy.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/task-implement-the-refactor-suggestions-below-to-c2f5dbe1/runs/run-20260509T124548Z-f67cf8d4/artifacts/test/phases/runtime-and-discovery-extraction/test_strategy.md) and [feedback.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/task-implement-the-refactor-suggestions-below-to-c2f5dbe1/runs/run-20260509T124548Z-f67cf8d4/artifacts/test/phases/runtime-and-discovery-extraction/feedback.md).
+
+What I analyzed
+
+- The previously missing lowered-simple-step discovery path through `describe_workflow_class()`.
+- Whether the focused phase-local file now covers the material AC-1 and AC-2 branches it claims to cover.
+- The determinism and stability of the updated focused test target.
+
+What I reviewed
+
+- Updated [criteria.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/task-implement-the-refactor-suggestions-below-to-c2f5dbe1/runs/run-20260509T124548Z-f67cf8d4/artifacts/test/phases/runtime-and-discovery-extraction/criteria.md) to mark all audit criteria complete.
+- Appended `TST-002` to [feedback.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/task-implement-the-refactor-suggestions-below-to-c2f5dbe1/runs/run-20260509T124548Z-f67cf8d4/artifacts/test/phases/runtime-and-discovery-extraction/feedback.md) to record that the earlier blocker is resolved.
+- Re-ran the focused validation target:
+  - `.venv/bin/python -m py_compile tests/unit/test_runtime_and_discovery_extraction.py`
+  - `.venv/bin/python -m pytest tests/unit/test_runtime_and_discovery_extraction.py -q`
+  - Result: `7 passed in 0.33s`
+
+Key findings / decisions
+
+- No blocking audit findings remain in the current phase-local test set.
+- The discovery extraction gap is now covered directly by the `simple.Workflow` lowering test, which exercises declaration lowering, preserved order, default entry, and resolved route wiring through `describe_workflow_class()`.
+- The focused file remains deterministic and aligned with the preserved runtime/discovery behavior expected by this phase.
+
+Open issues / next step
+
+- No phase-local test audit issues remain from this pass.
+- Next step is to treat the runtime-and-discovery-extraction test phase as complete.
+
+<loop-control>
+{"schema":"docloop.loop_control/v1","kind":"promise","promise":"COMPLETE"}
+</loop-control>
