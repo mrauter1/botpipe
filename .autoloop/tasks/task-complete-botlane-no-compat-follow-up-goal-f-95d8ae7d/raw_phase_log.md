@@ -569,3 +569,46 @@ The YAML needs one correction: the runtime seed left `phases: []`, so I’m repl
 Updated the planning artifacts for this run: [plan.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/task-complete-botlane-no-compat-follow-up-goal-f-95d8ae7d/runs/run-20260509T033701Z-27394e99/artifacts/plan/plan.md), [phase_plan.yaml](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/task-complete-botlane-no-compat-follow-up-goal-f-95d8ae7d/runs/run-20260509T033701Z-27394e99/artifacts/plan/phase_plan.yaml), [feedback.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/task-complete-botlane-no-compat-follow-up-goal-f-95d8ae7d/runs/run-20260509T033701Z-27394e99/artifacts/plan/feedback.md), and [decisions.txt](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/task-complete-botlane-no-compat-follow-up-goal-f-95d8ae7d/runs/run-20260509T033701Z-27394e99/decisions.txt).
 
 The plan keeps this as one coherent phase. It explicitly calls for closing the scan-root loophole in `tests/strictness/test_no_compat.py`, migrating top-level `.autoloop_recursive/` maintained files to the Botlane vocabulary already established in `recursive_botlane/`, and allowing only exact documented operational-path exceptions instead of broad `.autoloop*` exclusions. I did not run `pytest`; this was a planning turn only.
+
+
+---
+run_id=run-20260509T033701Z-27394e99 | entry=session_turn | pair=plan | phase=verifier | cycle=1 | attempt=1 | thread_id=019e0acf-5c3b-7221-baf9-5a7afddc84fd
+---
+provider=codex
+mode=resume
+template=/home/rauter/.local/share/pipx/venvs/autoloop/lib/python3.12/site-packages/autoloop/templates/plan_verifier.md
+session_id=019e0acf-5c3b-7221-baf9-5a7afddc84fd
+
+
+---
+run_id=run-20260509T033701Z-27394e99 | entry=phase_output | pair=plan | phase=verifier | process=codex-agent | cycle=1 | attempt=1 | thread_id=019e0acf-5c3b-7221-baf9-5a7afddc84fd
+---
+I’m checking the produced plan against the request’s exact `.autoloop` and artifact-tree requirements now. The main question is whether the plan actually closes the `.autoloop` loophole for active operational content, not just for top-level maintained files.
+
+The plan’s likely gap is around `.autoloop/tasks/...` itself: the request treats repo-local `.autoloop` operational content as in scope, while the plan narrows `.autoloop` to “no maintained non-task files.” I’m checking the active run tree just enough to tie that finding to a concrete failure mode.
+
+I found one blocking gap and it is narrow but material: the plan never turns repo-local `.autoloop/tasks/...` active operational files into either scanned in-contract paths or an exact allowlist, so the `.autoloop` loophole can persist even if the top-level `.autoloop_recursive` work is done. I’m recording that in the verifier artifacts now.
+
+Scope considered
+
+The immutable request, raw log clarifications state, producer-authored [plan.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/task-complete-botlane-no-compat-follow-up-goal-f-95d8ae7d/runs/run-20260509T033701Z-27394e99/artifacts/plan/plan.md), [phase_plan.yaml](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/task-complete-botlane-no-compat-follow-up-goal-f-95d8ae7d/runs/run-20260509T033701Z-27394e99/artifacts/plan/phase_plan.yaml), [feedback.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/task-complete-botlane-no-compat-follow-up-goal-f-95d8ae7d/runs/run-20260509T033701Z-27394e99/artifacts/plan/feedback.md), [criteria.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/task-complete-botlane-no-compat-follow-up-goal-f-95d8ae7d/runs/run-20260509T033701Z-27394e99/artifacts/plan/criteria.md), and [decisions.txt](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/task-complete-botlane-no-compat-follow-up-goal-f-95d8ae7d/runs/run-20260509T033701Z-27394e99/decisions.txt).
+
+What I analyzed
+
+I checked the request’s required `.autoloop` and `.autoloop_recursive` artifact-tree policy against the producer plan, verified the YAML metadata and structure, and sampled the active run tree under `.autoloop/tasks/.../runs/...` to confirm that repo-local `.autoloop` operational files exist and do contain legacy literals in scope-relevant content.
+
+What I reviewed
+
+I updated [criteria.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/task-complete-botlane-no-compat-follow-up-goal-f-95d8ae7d/runs/run-20260509T033701Z-27394e99/artifacts/plan/criteria.md) and appended a prioritized finding to [feedback.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/task-complete-botlane-no-compat-follow-up-goal-f-95d8ae7d/runs/run-20260509T033701Z-27394e99/artifacts/plan/feedback.md). I left [decisions.txt](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/task-complete-botlane-no-compat-follow-up-goal-f-95d8ae7d/runs/run-20260509T033701Z-27394e99/decisions.txt) untouched.
+
+Key findings / decisions
+
+`PLAN-001` is blocking. The plan narrows `.autoloop/` to “no maintained non-task files” and never defines how active `.autoloop/tasks/.../runs/...` operational files are scanned or exact-allowlisted, even though the request explicitly includes repo-local `.autoloop/` operational content and requires the scanner to fail on active repo-root artifact trees outside the final exact allowlist.
+
+Open issues / next step
+
+The producer plan needs a concrete `.autoloop/` policy for active task/run operational paths, with exact in-contract files versus exact operational exceptions reflected in both the narrative plan and the phase acceptance contract.
+
+<loop-control>
+{"schema":"docloop.loop_control/v1","kind":"promise","promise":"INCOMPLETE"}
+</loop-control>
