@@ -186,6 +186,59 @@ def test_prompt_provider_turn_plan_falls_back_for_known_parity_gap(
     assert isinstance(seen_turns[0], RenderedProviderTurn)
 
 
+def test_produce_verify_provider_turn_plan_falls_back_for_known_parity_gap(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    class PairWorkflow(simple.Workflow):
+        class State(BaseModel):
+            pass
+
+        review = simple.produce_verify_step(
+            producer_prompt="Draft the report.",
+            verifier_prompt="Review the report.",
+            name="review",
+            producer_writes=[simple.Md("draft")],
+            verifier_writes=[simple.Md("decision")],
+            routes={"accepted": simple.FINISH, "needs_rework": simple.SELF},
+        )
+
+    seen_turns: list[RenderedProviderTurn] = []
+    provider = RenderedLLMProvider(
+        _SequencedTransport(
+            raw_texts=[
+                "Draft content",
+                '{"tag":"accepted"}',
+            ],
+            seen_turns=seen_turns,
+        )
+    )
+    engine = Engine(
+        PairWorkflow,
+        provider=provider,
+        session_store=InMemorySessionStore(),
+        checkpoint_store=InMemoryCheckpointStore(),
+    )
+
+    def _raise_known_parity_gap(*args: object, **kwargs: object) -> object:
+        raise ValueError("unknown compiled required reference 'review.draft'")
+
+    monkeypatch.setattr(engine_collaborators, "step_plan_from_compiled_step", _raise_known_parity_gap)
+
+    result = engine.run(
+        task_id="task-provider-turn-plan",
+        run_id="run-provider-turn-plan",
+        task_folder=tmp_path / "task",
+        run_folder=tmp_path / "run",
+        package_folder=tmp_path / "package",
+        root=tmp_path,
+    )
+
+    assert result.terminal == simple.FINISH
+    assert [turn.turn_kind for turn in seen_turns] == ["producer", "verifier"]
+    assert all(isinstance(turn, RenderedProviderTurn) for turn in seen_turns)
+
+
 def test_prompt_provider_turn_plan_surfaces_unexpected_adapter_errors(
     tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,

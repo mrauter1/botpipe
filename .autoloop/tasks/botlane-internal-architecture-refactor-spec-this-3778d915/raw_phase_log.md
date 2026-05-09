@@ -1913,3 +1913,58 @@ Open issues / next step
 <loop-control>
 {"schema":"docloop.loop_control/v1","kind":"promise","promise":"COMPLETE"}
 </loop-control>
+
+
+---
+run_id=run-20260509T045359Z-e2586b1f | entry=session_turn | pair=test | phase=producer | cycle=1 | attempt=1 | thread_id=019e0b83-527d-7200-87b5-3be58b23f713
+---
+provider=codex
+mode=resume
+template=/home/rauter/.local/share/pipx/venvs/autoloop/lib/python3.12/site-packages/autoloop/templates/test_producer.md
+session_id=019e0b83-527d-7200-87b5-3be58b23f713
+
+
+---
+run_id=run-20260509T045359Z-e2586b1f | entry=phase_output | pair=test | phase=producer | process=codex-agent | cycle=1 | attempt=1 | thread_id=019e0b83-527d-7200-87b5-3be58b23f713
+---
+I’m validating the phase from the test-author side now. First I’m checking the current provider-turn contract coverage and the empty test-phase artifacts so I can decide whether the repository still needs an additional pair-specific regression test or just phase-local strategy/feedback updates.
+
+The phase still lacked a pair-specific edge case. I’m adding one targeted regression test for the produce/verify fallback path so the dual-turn contract is covered, not just the shared prompt helper.
+
+I’m updating the test-phase artifacts alongside the repo test. The strategy will map each behavior to concrete coverage, and the feedback entry will record the pair-specific fallback regression test that was added this turn.
+
+I’m recording one non-obvious test decision in the run ledger: the shared helper makes prompt-only unexpected-error coverage sufficient, so this turn’s extra repository test is the pair-specific fallback case instead of a duplicate exception-path assertion.
+
+The repository test change is in. I’m running the focused contract file now to confirm the added produce/verify fallback test is deterministic and that the full provider-turn adapter suite still passes.
+
+Scope considered
+
+- Phase-local test work for `provider-turn-and-route-finalization`.
+- Repository test file [tests/contract/test_provider_turn_plan_adapter.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/tests/contract/test_provider_turn_plan_adapter.py:1).
+- Phase artifacts:
+  - [test_strategy.md](</home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/botlane-internal-architecture-refactor-spec-this-3778d915/runs/run-20260509T045359Z-e2586b1f/artifacts/test/phases/provider-turn-and-route-finalization/test_strategy.md>)
+  - [feedback.md](</home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/botlane-internal-architecture-refactor-spec-this-3778d915/runs/run-20260509T045359Z-e2586b1f/artifacts/test/phases/provider-turn-and-route-finalization/feedback.md>)
+
+What I analyzed
+
+- The current provider-turn adapter contract tests after the implement/verifier cycle.
+- Remaining coverage gaps against AC-1, especially whether the dual-turn produce/verify fallback path had an explicit regression test.
+- The phase decisions ledger to keep test intent aligned with the shared fallback policy.
+
+What I changed
+
+- Added `test_produce_verify_provider_turn_plan_falls_back_for_known_parity_gap` in [tests/contract/test_provider_turn_plan_adapter.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/tests/contract/test_provider_turn_plan_adapter.py:139) to cover the pair-specific allowlisted fallback path while preserving the `RenderedProviderTurn` transport boundary.
+- Updated [test_strategy.md](</home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/botlane-internal-architecture-refactor-spec-this-3778d915/runs/run-20260509T045359Z-e2586b1f/artifacts/test/phases/provider-turn-and-route-finalization/test_strategy.md>) with a behavior-to-test coverage map, invariants, edge/failure paths, flake controls, and known gaps.
+- Appended a concise summary to [feedback.md](</home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/botlane-internal-architecture-refactor-spec-this-3778d915/runs/run-20260509T045359Z-e2586b1f/artifacts/test/phases/provider-turn-and-route-finalization/feedback.md>).
+- Appended one non-obvious test-scoping decision under the current turn header in `decisions.txt`.
+
+Key findings / decisions
+
+- The shared helper already covers unexpected-error surfacing for both prompt and pair flows, so this turn’s extra repository test targets the pair-specific fallback surface instead of duplicating the same exception-path assertion.
+- Focused validation passed:
+  - `/home/rauter/autoloop_v3/.venv/bin/pytest tests/contract/test_provider_turn_plan_adapter.py`
+
+Open issues / next step
+
+- Operation execution remains intentionally uncovered for this phase.
+- The test-phase artifacts are now ready for audit.
