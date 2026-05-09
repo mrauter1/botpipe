@@ -48,3 +48,44 @@ Updated the planning artifacts for this run:
 The plan is a single coherent implementation phase. It records that `botlane/core/context.py` and `botlane/core/discovery.py` are already in the requested Botlane-only state, while `botlane_optimizer/candidate_surfaces.py` still needs the concrete `.botlane` overlay exclusion fix. It also locks the strictness/test scope around hidden legacy-name construction, narrow allowlisting, positive `botlane` and `botlane_optimizer` smoke, negative legacy import/CLI checks, and the required overlay regression.
 
 I did not run tests in this planning turn.
+
+
+---
+run_id=run-20260509T031006Z-b1998ef3 | entry=session_turn | pair=plan | phase=verifier | cycle=1 | attempt=1 | thread_id=019e0ab6-b75d-7003-b0a3-71d35a68f9f8
+---
+provider=codex
+mode=resume
+template=/home/rauter/.local/share/pipx/venvs/autoloop/lib/python3.12/site-packages/autoloop/templates/plan_verifier.md
+session_id=019e0ab6-b75d-7003-b0a3-71d35a68f9f8
+
+
+---
+run_id=run-20260509T031006Z-b1998ef3 | entry=phase_output | pair=plan | phase=verifier | process=codex-agent | cycle=1 | attempt=1 | thread_id=019e0ab6-b75d-7003-b0a3-71d35a68f9f8
+---
+I’m marking the verification artifacts now. There is one blocking gap: the plan does not explicitly carry the user’s schema-prefix/persisted-data contract through scope, invariants, and validation, so I’m recording that and leaving the gate incomplete.
+
+Scope considered
+
+The authoritative request snapshot, current `plan.md`, `phase_plan.yaml`, `feedback.md`, `criteria.md`, and the current run’s `decisions.txt`. I also checked the named runtime and strictness code paths only to verify whether the plan matched the current tree and covered the requested regression surfaces.
+
+What I analyzed
+
+I compared the plan against the full requested contract: workspace-marker removal, simple-flow sentinel removal, hidden legacy-name construction, strictness scanner scope, overlay copy behavior, import/CLI behavior, repository-wide scans, package/runtime smoke, and the explicit acceptance criterion that `botlane.*` is the only active framework schema prefix.
+
+What I reviewed
+
+I reviewed the narrative plan for scope, invariants, validation, rollback, and compatibility coverage; the machine-readable phase for dependency/order and acceptance coverage; the shared decisions for conflicts; and the criteria checklist for consistency with the actual audit result.
+
+Key findings / decisions
+
+One blocking finding was recorded in [feedback.md](</home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/task-complete-botlane-no-compat-follow-up-goal-f-95d8ae7d/runs/run-20260509T031006Z-b1998ef3/artifacts/plan/feedback.md>): `PLAN-001`.
+The plan is generally coherent and low-debt, but it does not explicitly carry the user-requested schema-prefix/persisted-data contract into scope, invariants, and validation. That leaves a material intent gap around rejecting `autoloop.*` schema prefixes and preserving the Botlane-only schema surface.
+I updated [criteria.md](</home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/task-complete-botlane-no-compat-follow-up-goal-f-95d8ae7d/runs/run-20260509T031006Z-b1998ef3/artifacts/plan/criteria.md>) accordingly: only Technical Debt passes at this stage.
+
+Open issues / next step
+
+The planner should revise both [plan.md](</home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/task-complete-botlane-no-compat-follow-up-goal-f-95d8ae7d/runs/run-20260509T031006Z-b1998ef3/artifacts/plan/plan.md>) and [phase_plan.yaml](</home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/task-complete-botlane-no-compat-follow-up-goal-f-95d8ae7d/runs/run-20260509T031006Z-b1998ef3/artifacts/plan/phase_plan.yaml>) to add explicit schema-prefix audit/validation coverage, then the plan can be re-verified.
+
+<loop-control>
+{"schema":"docloop.loop_control/v1","kind":"promise","promise":"INCOMPLETE"}
+</loop-control>
