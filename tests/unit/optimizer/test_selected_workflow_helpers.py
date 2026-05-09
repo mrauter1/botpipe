@@ -451,6 +451,10 @@ def test_core_selected_workflow_payload_builders_preserve_authoring_and_decompos
         str(package_dir / "prompts" / "repair" / "strategy.md"),
     ]
     assert capability_payload["spec_paths"] == [str(package_dir / "contracts.py")]
+    assert capability_payload["steps"][0]["reads"] == []
+    assert capability_payload["steps"][0]["requires"] == []
+    assert capability_payload["steps"][0]["writes"] == ["assess.assessment_note"]
+    assert capability_payload["steps"][0]["log_artifacts"] == []
 
     assert authoring_surface["workflow_name"] == "release_candidate_to_go_no_go"
     assert authoring_surface["package_name"] == "release_candidate_to_go_no_go"

@@ -246,7 +246,7 @@ def test_route_helper_defaults_and_global_suppression_compile_from_route_metadat
     assert compiled.steps["ask"].provider_visible_routes_full_auto == ("done",)
     assert "failed" not in compiled.steps["ask"].available_routes
     assert compiled.routes["ask"]["failed"].disabled is True
-    with pytest.raises(RoutingError):
+    with pytest.raises(RoutingError, match=r"route 'failed' is disabled for step 'ask'"):
         compiled.route("ask", "failed")
 
 
