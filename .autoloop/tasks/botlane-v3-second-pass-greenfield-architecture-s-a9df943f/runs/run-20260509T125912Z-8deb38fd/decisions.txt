@@ -18,3 +18,4 @@ Phase 1 branch-manifest tests now cover both direct `BranchManifest` input to `s
 Phase 2 keeps a private `_route_table` cache on `StepPlan` variants so engine/provider/CLI capability views can derive route metadata without reintroducing public compiled-step wrappers or adapter modules.
 `ArtifactId` and `RouteTarget` now support string equality as a compatibility shim for existing internal/public helper surfaces while canonical plan storage remains typed.
 Engine artifact resolution now indexes resolved handles by qualified-name string, public artifact alias, and `ArtifactId` so typed `StepIO` references work without changing `ArtifactHandle` public behavior.
+<autoloop-decisions-header version="1" block_seq="7" owner="implementer" phase_id="atomic-plan-runtime-cutover" pair="implement" turn_seq="2" run_id="run-20260509T125912Z-8deb38fd" ts="2026-05-09T14:09:01.993359+00:00" />
