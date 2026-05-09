@@ -3,3 +3,6 @@ Treat `WorkflowPlan.routes` as the only step-local effective route authority and
 Finish the service-boundary cutover by replacing Engine-backed collaborator dependencies with narrow Engine-free services, not by moving Engine private methods behind a renamed god object.
 Collapse `Botlane.step(...)` onto one compiled one-step `WorkflowPlan`; any surviving single-step inspection metadata must be derived from that plan instead of produced by a second parallel compilation.
 Preserve `RunResult.last_transition` and runner/workspace `finalization` payload shapes after removing `StepExecutionResult.transition` by deriving the summary at the engine boundary from canonical route-decision data.
+<autoloop-decisions-header version="1" block_seq="2" owner="implementer" phase_id="route-authority-cutover" pair="implement" turn_seq="1" run_id="run-20260509T164029Z-23a21781" ts="2026-05-09T16:44:44.036511+00:00" />
+Branch-group branch steps and fan-in steps now register their effective route tables in `WorkflowPlan.routes` so nested runtime and inspection surfaces can derive routes from the canonical plan without step-local ownership.
+Top-level capability, topology-hash, static-graph transition, mermaid, and route-table exports intentionally filter `WorkflowPlan.routes` to `WorkflowPlan.steps` so nested branch internals do not leak into public top-level summaries.
