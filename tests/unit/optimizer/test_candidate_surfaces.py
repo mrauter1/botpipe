@@ -651,6 +651,81 @@ def test_candidate_surface_helpers_validate_overlay_normalizes_pytest_and_falls_
         "demo_workflow",
         "helper_workflow",
     ]
+
+
+def test_candidate_surface_overlay_does_not_copy_botlane_runtime_state(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    workflow_folder = tmp_path / ".botlane" / "tasks" / "task-1" / "wf_demo"
+    workflow_folder.mkdir(parents=True, exist_ok=True)
+    candidate_root = workflow_folder / "candidate_surface"
+    candidate_relative_path = "botlane/workflows/demo_workflow/workflow.py"
+    candidate_file = candidate_root / candidate_relative_path
+    candidate_file.parent.mkdir(parents=True, exist_ok=True)
+    candidate_file.write_text("class DemoWorkflow:\n    pass\n", encoding="utf-8")
+
+    repo_root = tmp_path / "repo_root"
+    package_root = repo_root / "botlane"
+    (package_root / "core").mkdir(parents=True, exist_ok=True)
+    (package_root / "runtime").mkdir(parents=True, exist_ok=True)
+    (repo_root / "tests").mkdir(parents=True, exist_ok=True)
+    (package_root / "__init__.py").write_text("__all__ = []\n", encoding="utf-8")
+    (repo_root / "tests" / "conftest.py").write_text("import pytest\n", encoding="utf-8")
+    sentinel = repo_root / ".botlane" / "sentinel.txt"
+    sentinel.parent.mkdir(parents=True, exist_ok=True)
+    sentinel.write_text("live runtime state\n", encoding="utf-8")
+
+    observed: dict[str, Any] = {}
+
+    def _record_resolve(root: Path, workflow_name: str) -> SimpleNamespace:
+        observed.setdefault("resolve_calls", []).append((root, workflow_name))
+        return SimpleNamespace(workflow_cls=workflow_name)
+
+    def _record_compile(workflow_cls: object) -> SimpleNamespace:
+        return SimpleNamespace(workflow_name=f"compiled::{workflow_cls}")
+
+    def _record_run(command: list[str], **kwargs) -> SimpleNamespace:
+        overlay_cwd = kwargs["cwd"]
+        observed["command"] = command
+        observed["cwd"] = overlay_cwd
+        observed["overlay_has_runtime_state"] = (overlay_cwd / ".botlane").exists()
+        observed["candidate_exists"] = (overlay_cwd / candidate_relative_path).is_file()
+        observed["candidate_contents"] = (overlay_cwd / candidate_relative_path).read_text(encoding="utf-8")
+        return SimpleNamespace(returncode=0, stdout="", stderr="")
+
+    monkeypatch.setattr(candidate_surface_helpers, "resolve_workflow_reference", _record_resolve)
+    monkeypatch.setattr(candidate_surface_helpers, "compile_workflow", _record_compile)
+    monkeypatch.setattr(candidate_surface_helpers.subprocess, "run", _record_run)
+
+    result = validate_candidate_surface_overlay(
+        repo_root=repo_root,
+        workflow_names=["demo_workflow"],
+        candidate_manifest={
+            "surface_root": str(candidate_root),
+            "relative_paths": [candidate_relative_path],
+        },
+        target_test_command="pytest -q tests/unit/test_demo.py",
+        candidate_manifest_label="candidate_surface_manifest.json",
+        overlay_failure_prefix="overlay validation failed",
+        overlay_temp_prefix="candidate-surface-overlay-",
+    )
+
+    assert sentinel.is_file()
+    assert result == {
+        "compiled_workflow_names": ["compiled::demo_workflow"],
+        "test_command": "pytest -q tests/unit/test_demo.py",
+        "test_returncode": 0,
+    }
+    assert observed["command"] == [sys.executable, "-m", "pytest", "-q", "tests/unit/test_demo.py"]
+    assert observed["cwd"] != repo_root
+    assert observed["overlay_has_runtime_state"] is False
+    assert observed["candidate_exists"] is True
+    assert observed["candidate_contents"] == "class DemoWorkflow:\n    pass\n"
+    assert not (observed["cwd"] / ".botlane").exists()
+    assert all(root == observed["cwd"] for root, _workflow_name in observed["resolve_calls"])
+
+
 def test_candidate_surface_helpers_normalize_overlay_results_for_single_and_multi_workflow_receipts() -> None:
     single = normalize_candidate_surface_overlay_result(
         {

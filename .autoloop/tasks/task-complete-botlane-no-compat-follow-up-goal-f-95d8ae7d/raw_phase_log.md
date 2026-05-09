@@ -169,3 +169,87 @@ phase_mode=single
 phase_ids=botlane-no-compat-contract-lock
 explicit=True
 current_phase_index=0
+
+
+---
+run_id=run-20260509T031006Z-b1998ef3 | entry=session_turn | pair=implement | phase=producer | cycle=1 | attempt=1 | thread_id=019e0abd-4bea-79d2-a9fd-bcdd4e74e85c
+---
+provider=codex
+mode=start
+template=/home/rauter/.local/share/pipx/venvs/autoloop/lib/python3.12/site-packages/autoloop/templates/implement_producer.md
+session_id=019e0abd-4bea-79d2-a9fd-bcdd4e74e85c
+
+
+---
+run_id=run-20260509T031006Z-b1998ef3 | entry=phase_output | pair=implement | phase=producer | process=codex-agent | cycle=1 | attempt=1 | thread_id=019e0abd-4bea-79d2-a9fd-bcdd4e74e85c
+---
+I’m treating the request snapshot and phase contract as the source of truth. First I’m reading the active feedback/plan artifacts and the relevant Botlane/strictness files, then I’ll patch only the required no-compat and overlay paths and run the requested validation.
+
+The plan artifact already narrows this down: `context.py` and `discovery.py` are likely confirm-only, while strictness coverage and the optimizer overlay path still need concrete edits. I’m checking the current implementations and the maintained-tree scans before touching files.
+
+The maintained literal scan is already clean outside the strictness file. Next I’m reading the specific strictness and optimizer test blocks so I can patch the scanner and add the `.botlane` overlay regression without widening scope.
+
+I’ve confirmed the only obvious production gap is the overlay copy ignore list. I’m also checking the schema-reader surfaces now so the strictness and negative tests line up with the persisted-schema acceptance criteria before I edit anything.
+
+There’s a very dirty worktree, including unrelated generated/build artifacts and prior repo changes. I’m keeping scope to the three task files plus the phase-local notes/decisions files, and I’m checking diffs around those exact files so I don’t trample user work.
+
+I have enough context to edit now.
+
+Plan:
+1. Patch `botlane_optimizer/candidate_surfaces.py` to exclude `.botlane` in overlay copies and remove the remaining legacy ignore path entirely.
+2. Extend `tests/strictness/test_no_compat.py` with the missing Botlane-only smoke coverage and explicit hidden-construction cases the AST scanner must catch.
+3. Add the optimizer regression in `tests/unit/optimizer/test_candidate_surfaces.py` so `.botlane` under the actual copied source root is absent from the overlay while candidate files still patch in and validation runs from the overlay cwd.
+4. Update the phase-local `implementation_notes.md` and this turn’s `decisions.txt`, then run the targeted scans and pytest buckets followed by full `pytest`.
+
+I’ve confirmed there aren’t hidden production constructions in the maintained tree beyond the strictness file itself. I’m patching the three scoped code/test files now: overlay ignore list, missing scanner cases, and the `.botlane` overlay regression plus Botlane-only smoke coverage.
+
+The edits are in place. I’m checking the resulting diffs for only the scoped changes, then I’ll run the literal scan and the requested pytest buckets before the full suite.
+
+The optimizer regression exposed one test bug, not a production issue: I was reading the candidate file after the temporary overlay had already been removed. I’m moving that assertion into the mocked `subprocess.run` while the overlay still exists, then I’ll rerun the targeted buckets and the full suite.
+
+The overlay regression is now passing. The strictness suite is still running; once that clears I’ll run the import/CLI smoke commands directly and then the full `pytest` run.
+
+The strictness failure is environmental: this checkout’s active interpreter doesn’t have a sibling `botlane` console script. I’m keeping the Botlane help assertion but making it prefer the real console script when installed and otherwise fall back to the module entrypoint, so the test still validates the same help surface in repo-local runs.
+
+The strictness suite is clean now, and the direct smoke commands match the contract: `botlane`/`botlane_optimizer` import, legacy imports fail, `python -m autoloop` fails, and Botlane help contains no legacy branding. I’m running the full suite next and then I’ll update the phase notes and decision ledger with the exact scoped changes and validations.
+
+The full suite surfaced failures in `tests/runtime/test_workflow_reference_resolution.py`, which is outside the three files I edited. I’m letting the run finish so I can confirm whether those are isolated pre-existing failures or whether there’s any indirect regression to trace back.
+
+The three scoped changes are holding, but the full suite still isn’t green: two failures remain in `tests/runtime/test_workflow_reference_resolution.py`, and they point to catalog-name resolution preferring bare `workflows/` over `.botlane/workflows/`. That’s adjacent to the Botlane-only workspace contract, so I’m tracing that path now instead of stopping with a partial result.
+
+The remaining full-suite failures are a real contract mismatch, not flakiness: named workflow resolution is currently giving bare `workflows/` precedence over `.botlane/workflows/`, while the runtime tests and Botlane workspace contract expect `.botlane` to win for catalog-name resolution. I’m correcting that precedence and updating the one test that still encoded the old ordering.
+
+The precedence fix is in. I’m rerunning the two runtime suites that cover catalog search order and workflow-name resolution before I spend another minute on the full suite.
+
+The runtime catalog and reference-resolution bucket is clean now, including the two failures from the first full run. I’m letting the full suite finish, then I’ll write the phase-local notes and only the non-obvious decision entry for this turn.
+
+The code and test work is done. I’m recording the two non-obvious decisions from this turn in the run ledger and updating the phase notes with the exact file set, invariants, and validation evidence before I close out.
+
+Scope considered
+
+- Botlane no-compat follow-up surfaces in [candidate_surfaces.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/botlane_optimizer/candidate_surfaces.py), [test_no_compat.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/tests/strictness/test_no_compat.py), and [test_candidate_surfaces.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/tests/unit/optimizer/test_candidate_surfaces.py).
+- Adjacent runtime regression surfaced by the full suite in [workflow_catalog.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/botlane/core/workflow_catalog.py) and [test_workflow_catalog_roots.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/tests/runtime/test_workflow_catalog_roots.py).
+
+What I analyzed
+
+- Confirmed `botlane/core/context.py::_resolve_context_root` and `botlane/core/discovery.py::_is_simple_flow_spec` already enforce Botlane-only behavior.
+- Audited persisted schema surfaces and maintained-tree legacy-name scans.
+- Traced the full-suite failures to workflow catalog precedence, where bare-name resolution was incorrectly preferring repo-local `workflows/` over `.botlane/workflows/`.
+
+What I changed
+
+- In [candidate_surfaces.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/botlane_optimizer/candidate_surfaces.py), overlay copies now ignore `.botlane` and no longer carry any legacy `.autoloop` ignore path.
+- In [test_no_compat.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/tests/strictness/test_no_compat.py), I expanded hidden-construction coverage for split strings, adjacency, joins, f-strings, capitalized/env variants, and added Botlane-only import/help smoke.
+- In [test_candidate_surfaces.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/tests/unit/optimizer/test_candidate_surfaces.py), I added a regression that places `.botlane/sentinel.txt` under the actual copied source root and proves it is absent from the overlay while candidate workflow content is present.
+- In [workflow_catalog.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/botlane/core/workflow_catalog.py), named workflow resolution now gives `.botlane/workflows` higher precedence than repo-local `workflows/`; explicit repo-local path/module references still work.
+
+Key findings / decisions
+
+- The requested no-compat runtime changes in `context.py` and `discovery.py` were already present, so I left them unchanged.
+- The Botlane help smoke prefers an installed `botlane` script but falls back to `python -m botlane.runtime.cli --help` when the script is not installed beside the active interpreter.
+- Validation passed: targeted optimizer tests, strictness tests, operation-replay tests, runtime catalog/reference tests, direct import/CLI smoke, and full `pytest`.
+- Full suite result: `1195 passed, 1 warning`.
+
+Open issues / next step
+
+- No functional blockers remain. The only remaining signal is an existing warning in `tests/unit/test_provider_boundary_core.py` about an un-awaited coroutine.
