@@ -2412,3 +2412,58 @@ Open issues / next step
 
 - No phase-local blockers remain.
 - Validation run completed on the exact touched surfaces, not the full suite: `237 passed` across the placeholder-heavy unit, contract, and runtime buckets listed in `implementation_notes.md`.
+
+
+---
+run_id=run-20260509T045359Z-e2586b1f | entry=session_turn | pair=implement | phase=verifier | cycle=1 | attempt=1 | thread_id=019e0ba1-4411-7631-9340-034a7f1ab6c9
+---
+provider=codex
+mode=resume
+template=/home/rauter/.local/share/pipx/venvs/autoloop/lib/python3.12/site-packages/autoloop/templates/implement_verifier.md
+session_id=019e0ba1-4411-7631-9340-034a7f1ab6c9
+
+
+---
+run_id=run-20260509T045359Z-e2586b1f | entry=phase_output | pair=implement | phase=verifier | process=codex-agent | cycle=1 | attempt=1 | thread_id=019e0ba1-4411-7631-9340-034a7f1ab6c9
+---
+I’m reading the active review artifacts and the exact phase diff now. Then I’ll validate the implementation against the acceptance criteria and capture any blocking drift in the phase feedback only.
+
+I found one material phase-level issue and one weaker coverage gap. I’m recording those in the review artifacts now and marking the criteria to reflect that the behavior looks safe but the unification goal is not fully met yet.
+
+Scope considered
+
+- Phase-local placeholder refactor only.
+- Reviewed the active phase artifacts, the touched source files, and the added phase-local test file.
+- Did not broaden into unrelated dirty workspace files.
+
+What I analyzed
+
+- [placeholders.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/botlane/core/placeholders.py)
+- [reference_graph.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/botlane/core/reference_graph.py)
+- [artifacts.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/botlane/core/artifacts.py)
+- [discovery.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/botlane/core/discovery.py)
+- [prompt_validation.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/botlane/core/prompt_validation.py)
+- [test_placeholder_refs.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/tests/unit/test_placeholder_refs.py)
+- The phase `implementation_notes.md`, `criteria.md`, and `feedback.md`.
+
+What I reviewed
+
+- Whether placeholder parsing, validation, rendering, and inferred-read ownership were actually unified behind the new internal layer.
+- Whether the phase left behind duplicate logic or new indirection that would cause drift in later phases.
+- Whether the phase-local test coverage matched the stated runtime-import boundary intent.
+
+Key findings / decisions
+
+- One blocking finding recorded: the old runtime placeholder implementation still remains in [artifacts.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/botlane/core/artifacts.py) beside the new canonical implementation in [placeholders.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/botlane/core/placeholders.py), which defeats the unification goal and leaves substantial duplicated ownership.
+- One non-blocking finding recorded: the new AST boundary test only checks `ImportFrom` and would miss plain `import botlane.core.context` forms.
+- Updated the phase criteria to reflect that behavior/compatibility look safe, but correctness/intent fidelity and technical-debt simplicity are not fully satisfied yet because of the duplicated runtime placeholder stack.
+
+Open issues / next step
+
+- Remove or fully alias the dead legacy runtime placeholder helpers in `artifacts.py` so there is one canonical runtime implementation.
+- Strengthen the phase-local AST test to cover both `ast.ImportFrom` and `ast.Import` forms.
+- After those fixes, re-review this phase and, if clean, mark all criteria complete.
+
+<loop-control>
+{"schema":"docloop.loop_control/v1","kind":"promise","promise":"INCOMPLETE"}
+</loop-control>
