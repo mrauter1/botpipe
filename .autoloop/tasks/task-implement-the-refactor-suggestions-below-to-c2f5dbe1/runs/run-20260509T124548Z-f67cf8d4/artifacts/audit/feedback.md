@@ -21,3 +21,5 @@
 
 - Updated `gap_report.md`, `revised_request.md`, and `audit_result.json` to treat the runtime/context contract drift as a material unresolved gap.
 - The revised next-run request now targets the failing runtime/simple/contract suites directly instead of declaring the run complete.
+
+- AUD-003 `non-blocking`: Re-review of the revised audit found no remaining audit-quality issues. The updated `gap_report.md` now classifies the runtime/context regression as a material unresolved gap, `revised_request.md` is a direct next-run implementation request for that gap, and `audit_result.json` now correctly sets `material_gaps_found` to `true`.
