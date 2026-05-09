@@ -35,14 +35,20 @@
 - `Engine._ensure_child_workflow_route_declared`
 - `ProviderContractBuilder.available_routes`
 - `available_route_tags`
+- `available_route_tags_for_table`
 - `compiled_route_tags`
+- `compiled_route_tags_for_table`
 - `suppressed_route_tags`
+- `suppressed_route_tags_for_table`
+- `runtime_control_route_tags_for_table`
+- `provider_visible_route_tags_for_table`
 - `effective_route_required_writes_map`
 - `PromptStepPlan`
 - `ProduceVerifyStepPlan`
 - `PythonStepPlan`
 - `ChildWorkflowStepPlan`
 - `BranchGroupStepPlan`
+- `test_maintained_python_sources_do_not_reintroduce_step_owned_route_table_symbols`
 - `_step_capability`
 - `_internal_step_surface_payload`
 - `_step_available_route_tags`
@@ -53,7 +59,7 @@
 - Milestone 1 / route authority: completed.
 - AC-1: completed by removing step-owned `_route_table` storage and moving nested branch-group routes into `WorkflowPlan.routes`.
 - AC-2: completed by rewiring engine lookup, provider-contract export, static-graph payloads, workflow capability export, and tests to derive route views from `WorkflowPlan.routes` / `WorkflowPlan.global_routes`.
-- AC-3: completed by strictness coverage banning direct `_route_table` reintroduction and by tests asserting route views through plan helpers.
+- AC-3: completed by AST-backed strictness coverage for `_route_table` / `_effective_route_table` symbols and by tests asserting route views through plan helpers.
 - Milestones 2-4: intentionally deferred; out of active phase scope.
 
 ## Assumptions
@@ -86,6 +92,7 @@
 ## Deduplication / Centralization
 
 - Route-tag helpers were centralized in `botlane/core/route_contracts.py` so maintained consumers read plan-backed route data instead of duplicating step-local fallbacks.
+- Workflow capability export now reuses the shared route-contract table helpers instead of maintaining a second copy of available/provider-visible/runtime-control derivation.
 - Branch-group nested route compilation now registers internal route tables once during compilation and reuses them across runtime and inspection surfaces.
 
 ## Validation Performed
@@ -97,4 +104,4 @@
 - Full suite:
   `.venv-test/bin/python -m pytest -q`
 - Result:
-  `1278 passed, 1 warning`
+  `1279 passed, 1 warning`

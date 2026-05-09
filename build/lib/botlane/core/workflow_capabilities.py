@@ -15,7 +15,7 @@ from pathlib import Path
 from copy import deepcopy
 from hashlib import sha1
 from types import ModuleType, UnionType
-from typing import Annotated, Any, Literal, Union, get_args, get_origin
+from typing import Annotated, Any, Union, get_args, get_origin
 
 from pydantic import BaseModel
 
@@ -28,7 +28,15 @@ from .route_reporting import (
     provider_response_contract_for_routes,
     route_fields_contract_for_route,
 )
-from .route_contracts import required_write_names, route_target_value
+from .route_contracts import (
+    available_route_tags_for_table,
+    compiled_route_tags_for_table,
+    provider_visible_route_tags_for_table,
+    required_write_names,
+    route_target_value,
+    runtime_control_route_tags_for_table,
+    suppressed_route_tags_for_table,
+)
 from .validation import is_workflow_class
 from .workflow_catalog import AuthoringShape, WorkflowCatalogEntry, discover_workflow_catalog, workflow_search_roots
 from .workflow_plan import WorkflowPlan
@@ -1189,31 +1197,6 @@ def _composite_route_tags(step: Any) -> tuple[str, ...]:
     return branch_group.composite_route_tags
 
 
-def _available_route_tags(step_routes: Mapping[str, Any], *, composite_route_tags: tuple[str, ...]) -> tuple[str, ...]:
-    route_tags = tuple(tag for tag, route in step_routes.items() if not route.disabled)
-    if not composite_route_tags:
-        return route_tags
-    composite_order = tuple(tag for tag in composite_route_tags if tag in route_tags)
-    extras = tuple(tag for tag in route_tags if tag not in composite_order)
-    return (*composite_order, *extras)
-
-
-def _provider_visible_route_tags(
-    step_routes: Mapping[str, Any],
-    *,
-    mode: Literal["interactive", "full_auto"],
-) -> tuple[str, ...]:
-    if mode == "interactive":
-        return tuple(
-            tag for tag, route in step_routes.items() if not route.disabled and route.provider_visible_interactive
-        )
-    return tuple(tag for tag, route in step_routes.items() if not route.disabled and route.provider_visible_full_auto)
-
-
-def _runtime_control_route_tags(step_routes: Mapping[str, Any]) -> tuple[str, ...]:
-    return tuple(tag for tag, route in step_routes.items() if not route.disabled and route.is_runtime_control)
-
-
 def _step_authored_routes(compiled: WorkflowPlan, step: Any) -> tuple[str, ...]:
     definition = get_workflow_definition(compiled.workflow_cls)
     authored_step = next((candidate for candidate in definition.steps if candidate.name == step.name), None)
@@ -1243,13 +1226,13 @@ def _step_capability(
     global_routes: Mapping[str, Any],
 ) -> WorkflowStepCapability:
     composite_route_tags = _composite_route_tags(step)
-    available_routes = _available_route_tags(step_routes, composite_route_tags=composite_route_tags)
+    available_routes = available_route_tags_for_table(step_routes, composite_route_tags=composite_route_tags)
     authored_routes = _step_authored_routes(compiled, step)
-    compiled_tags = tuple(step_routes.keys())
-    suppressed_tags = tuple(tag for tag, route in step_routes.items() if route.disabled)
-    interactive_visible_routes = _provider_visible_route_tags(step_routes, mode="interactive")
-    full_auto_visible_routes = _provider_visible_route_tags(step_routes, mode="full_auto")
-    runtime_control_routes = _runtime_control_route_tags(step_routes)
+    compiled_tags = compiled_route_tags_for_table(step_routes)
+    suppressed_tags = suppressed_route_tags_for_table(step_routes)
+    interactive_visible_routes = provider_visible_route_tags_for_table(step_routes, mode="interactive")
+    full_auto_visible_routes = provider_visible_route_tags_for_table(step_routes, mode="full_auto")
+    runtime_control_routes = runtime_control_route_tags_for_table(step_routes)
     routes = _compiled_routes(
         available_routes,
         step_routes=step_routes,

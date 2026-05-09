@@ -5,7 +5,7 @@ Not part of the public botlane authoring API.
 
 from __future__ import annotations
 
-from collections.abc import Sequence
+from collections.abc import Mapping, Sequence
 from dataclasses import dataclass
 from typing import TYPE_CHECKING, Any, Callable, Literal, TypeAlias
 
@@ -206,7 +206,7 @@ def required_write_names(contract: RouteContract) -> tuple[str, ...]:
     return tuple(artifact_id.qualified_name for artifact_id in contract.required_writes.declared)
 
 
-def _step_route_table(plan: Any, step_name: str) -> dict[str, RouteContract]:
+def _step_route_table(plan: Any, step_name: str) -> Mapping[str, RouteContract]:
     return getattr(plan, "routes", {}).get(step_name, {})
 
 
@@ -222,27 +222,24 @@ def _ordered_route_tags(
     return (*composite_order, *extras)
 
 
-def compiled_route_tags(plan: Any, step_name: str) -> tuple[str, ...]:
-    return tuple(_step_route_table(plan, step_name).keys())
+def compiled_route_tags_for_table(route_table: Mapping[str, RouteContract]) -> tuple[str, ...]:
+    return tuple(route_table.keys())
 
 
-def available_route_tags(
-    plan: Any,
-    step_name: str,
+def available_route_tags_for_table(
+    route_table: Mapping[str, RouteContract],
     *,
     composite_route_tags: Sequence[str] = (),
 ) -> tuple[str, ...]:
-    route_tags = tuple(tag for tag, route in _step_route_table(plan, step_name).items() if not route.disabled)
+    route_tags = tuple(tag for tag, route in route_table.items() if not route.disabled)
     return _ordered_route_tags(route_tags, composite_route_tags=composite_route_tags)
 
 
-def suppressed_route_tags(plan: Any, step_name: str) -> tuple[str, ...]:
-    route_table = _step_route_table(plan, step_name)
+def suppressed_route_tags_for_table(route_table: Mapping[str, RouteContract]) -> tuple[str, ...]:
     return tuple(tag for tag, route in route_table.items() if route.disabled)
 
 
-def runtime_control_route_tags(plan: Any, step_name: str) -> tuple[str, ...]:
-    route_table = _step_route_table(plan, step_name)
+def runtime_control_route_tags_for_table(route_table: Mapping[str, RouteContract]) -> tuple[str, ...]:
     return tuple(
         tag
         for tag, route in route_table.items()
@@ -250,13 +247,11 @@ def runtime_control_route_tags(plan: Any, step_name: str) -> tuple[str, ...]:
     )
 
 
-def provider_visible_route_tags(
-    plan: Any,
-    step_name: str,
+def provider_visible_route_tags_for_table(
+    route_table: Mapping[str, RouteContract],
     *,
     mode: Literal["interactive", "full_auto"],
 ) -> tuple[str, ...]:
-    route_table = _step_route_table(plan, step_name)
     if mode == "interactive":
         return tuple(
             tag
@@ -270,3 +265,36 @@ def provider_visible_route_tags(
             if not route.disabled and route.provider.visible_full_auto
         )
     raise ValueError(f"unsupported provider-visible route mode {mode!r}")
+
+
+def compiled_route_tags(plan: Any, step_name: str) -> tuple[str, ...]:
+    return compiled_route_tags_for_table(_step_route_table(plan, step_name))
+
+
+def available_route_tags(
+    plan: Any,
+    step_name: str,
+    *,
+    composite_route_tags: Sequence[str] = (),
+) -> tuple[str, ...]:
+    return available_route_tags_for_table(
+        _step_route_table(plan, step_name),
+        composite_route_tags=composite_route_tags,
+    )
+
+
+def suppressed_route_tags(plan: Any, step_name: str) -> tuple[str, ...]:
+    return suppressed_route_tags_for_table(_step_route_table(plan, step_name))
+
+
+def runtime_control_route_tags(plan: Any, step_name: str) -> tuple[str, ...]:
+    return runtime_control_route_tags_for_table(_step_route_table(plan, step_name))
+
+
+def provider_visible_route_tags(
+    plan: Any,
+    step_name: str,
+    *,
+    mode: Literal["interactive", "full_auto"],
+) -> tuple[str, ...]:
+    return provider_visible_route_tags_for_table(_step_route_table(plan, step_name), mode=mode)

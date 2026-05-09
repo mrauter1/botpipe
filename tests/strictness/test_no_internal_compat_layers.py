@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import ast
 from pathlib import Path
 
 
@@ -29,10 +30,8 @@ REMOVED_INTERNAL_TOKENS = (
     "_DirectRuntime" + "Control",
     "RouteFinalization" + "Result",
     "original_" + "step",
-    "\"_route_table\"",
-    "_route_table=",
-    "_effective_" + "route_table",
 )
+FORBIDDEN_STEP_ROUTE_OWNERSHIP_NAMES = frozenset({"_route_table", "_effective_route_table"})
 REMOVED_INTERNAL_PATHS = (
     REPO_ROOT / "botlane" / "core" / ("plan_" + "adapters.py"),
 )
@@ -55,6 +54,27 @@ def test_maintained_python_sources_do_not_reference_removed_internal_compatibili
     assert violations == []
 
 
+def test_maintained_python_sources_do_not_reintroduce_step_owned_route_table_symbols() -> None:
+    violations: list[str] = []
+
+    for path in _python_files():
+        tree = ast.parse(path.read_text(encoding="utf-8"), filename=str(path))
+        for node in ast.walk(tree):
+            match node:
+                case ast.Name(id=name) if name in FORBIDDEN_STEP_ROUTE_OWNERSHIP_NAMES:
+                    violations.append(_symbol_violation(path, node, name))
+                case ast.Attribute(attr=name) if name in FORBIDDEN_STEP_ROUTE_OWNERSHIP_NAMES:
+                    violations.append(_symbol_violation(path, node, name))
+                case ast.Constant(value=name) if isinstance(name, str) and name in FORBIDDEN_STEP_ROUTE_OWNERSHIP_NAMES:
+                    violations.append(_symbol_violation(path, node, name))
+                case ast.FunctionDef(name=name) if name in FORBIDDEN_STEP_ROUTE_OWNERSHIP_NAMES:
+                    violations.append(_symbol_violation(path, node, name))
+                case ast.AsyncFunctionDef(name=name) if name in FORBIDDEN_STEP_ROUTE_OWNERSHIP_NAMES:
+                    violations.append(_symbol_violation(path, node, name))
+
+    assert violations == []
+
+
 def _python_files() -> list[Path]:
     files: list[Path] = []
     for root in SCAN_ROOTS:
@@ -62,3 +82,8 @@ def _python_files() -> list[Path]:
             continue
         files.extend(sorted(root.rglob("*.py")))
     return files
+
+
+def _symbol_violation(path: Path, node: ast.AST, name: str) -> str:
+    lineno = getattr(node, "lineno", "?")
+    return f"{path.relative_to(REPO_ROOT)}:{lineno} reintroduces forbidden route-ownership symbol {name!r}"
