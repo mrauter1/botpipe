@@ -2506,3 +2506,63 @@ Open issues / next step
 
 - Focused validation is green: `99 passed` across the provider-turn contract, retry, session, provider-policy, and runtime-provider suites.
 - I did not run the full repository test suite in this turn.
+
+
+---
+run_id=run-20260509T125912Z-8deb38fd | entry=session_turn | pair=implement | phase=verifier | cycle=1 | attempt=1 | thread_id=019e0d60-9795-78f2-a556-d305c102d2c5
+---
+provider=codex
+mode=resume
+template=/home/rauter/.local/share/pipx/venvs/autoloop/lib/python3.12/site-packages/autoloop/templates/implement_verifier.md
+session_id=019e0d60-9795-78f2-a556-d305c102d2c5
+
+
+---
+run_id=run-20260509T125912Z-8deb38fd | entry=phase_output | pair=implement | phase=verifier | process=codex-agent | cycle=1 | attempt=1 | thread_id=019e0d60-9795-78f2-a556-d305c102d2c5
+---
+Provider-turn cutover review is in scope. I’m checking the phase criteria, feedback artifact, and the exact implementation diff first, then I’ll verify the changed runtime path against the phase contract and the decisions ledger before I update the review artifacts.
+
+The phase artifacts are still blank and the local diff for those files is no longer surfaced directly, so I’m verifying the current file state and git status to review the implementation as it stands rather than relying on an empty working-tree diff.
+
+I’m checking for one remaining review surface: whether the fallback removal left dead helper paths or untested acceptance-criterion gaps that should be called out even if the runtime behavior is correct.
+
+The changed runtime path is coherent with the phase contract, and I don’t see a material correctness or regression issue in the implemented state. I’m marking the phase criteria complete and recording a no-findings review note in the verifier artifacts.
+
+I’ve updated the verifier artifacts. I’m doing one quick readback on `criteria.md` and `feedback.md` so the final status reflects exactly what was written.
+
+Scope considered
+
+- Phase-local review of provider-turn cutover changes only.
+- Reviewed current implementations in `botlane/core/engine_collaborators.py`, `botlane/core/engine.py`, and `tests/contract/test_provider_turn_plan.py`, plus the phase artifacts and run decisions ledger.
+- Ignored unrelated dirty files outside this phase scope.
+
+What I analyzed
+
+- The active phase contract, acceptance criteria, implementation notes, and prior run decisions.
+- The provider-backed prompt and produce/verify execution path to confirm it now depends on typed `ProviderTurnPlan` data rather than fallback step fields.
+- The adjacent extension-failure checkpoint/terminal-state change in `Engine._execute_step_frame` for regression risk.
+
+What I reviewed
+
+- `ProviderContractBuilder` now builds prompt/pair contracts directly from `PromptStepPlan.turn` / `ProduceVerifyStepPlan.{producer,verifier}`.
+- `StepDispatcher` now executes prompt and pair steps against concrete step-plan variants without optional-plan fallback branches.
+- The new provider-turn contract test file covers typed turn compilation, rendered transport boundary preservation, and route-decision exposure.
+- The verifier artifacts were updated:
+  - `criteria.md`: all boxes checked.
+  - `feedback.md`: recorded that this pass found no blocking or non-blocking issues.
+
+Key findings / decisions
+
+- No blocking findings.
+- No non-blocking findings.
+- The implementation matches the phase objective: provider-backed prompt and pair execution flows only through `ProviderTurnPlan`, while operations remain on their separate canonical runtime path.
+- The adjacent `after_step` extension failure fix is coherent and improves terminal/checkpoint correctness without widening scope materially.
+
+Open issues / next step
+
+- No phase-local review issues remain.
+- Status: `COMPLETE`.
+
+<loop-control>
+{"schema":"docloop.loop_control/v1","kind":"promise","promise":"COMPLETE"}
+</loop-control>

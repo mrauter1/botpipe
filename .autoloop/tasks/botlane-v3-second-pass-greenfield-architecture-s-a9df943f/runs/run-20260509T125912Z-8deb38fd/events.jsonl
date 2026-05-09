@@ -110,3 +110,6 @@
 {"ts": "2026-05-09T15:34:53.779388+00:00", "run_id": "run-20260509T125912Z-8deb38fd", "seq": 110, "event_type": "phase_started", "phase_id": "provider-turn-cutover", "phase_mode": "single"}
 {"ts": "2026-05-09T15:34:53.782113+00:00", "run_id": "run-20260509T125912Z-8deb38fd", "seq": 111, "event_type": "pair_started", "pair": "implement", "phase_id": "provider-turn-cutover"}
 {"ts": "2026-05-09T15:34:53.782224+00:00", "run_id": "run-20260509T125912Z-8deb38fd", "seq": 112, "event_type": "cycle_started", "pair": "implement", "cycle": 1, "attempt": 1, "phase_id": "provider-turn-cutover"}
+{"ts": "2026-05-09T15:40:32.091494+00:00", "run_id": "run-20260509T125912Z-8deb38fd", "seq": 113, "event_type": "phase_finished", "pair": "implement", "phase": "producer", "cycle": 1, "attempt": 1, "empty_output": false, "phase_id": "provider-turn-cutover"}
+{"ts": "2026-05-09T15:42:22.314593+00:00", "run_id": "run-20260509T125912Z-8deb38fd", "seq": 114, "event_type": "phase_finished", "pair": "implement", "phase": "verifier", "cycle": 1, "attempt": 1, "empty_output": false, "phase_id": "provider-turn-cutover"}
+{"ts": "2026-05-09T15:42:22.418205+00:00", "run_id": "run-20260509T125912Z-8deb38fd", "seq": 115, "event_type": "pair_completed", "pair": "implement", "cycle": 1, "attempt": 1, "phase_id": "provider-turn-cutover"}
