@@ -568,3 +568,52 @@ Key findings / decisions
 Open issues / next step
 - No open issues in this phase-local test slice.
 - If the next phase touches runtime lifecycle or discovery ordering, those areas will need their own direct parity expansion rather than folding more into this phase.
+
+
+---
+run_id=run-20260509T124548Z-f67cf8d4 | entry=session_turn | pair=test | phase=verifier | cycle=1 | attempt=1 | thread_id=019e0cd5-521f-7d82-95d2-393e92f69ab8
+---
+provider=codex
+mode=resume
+template=/home/rauter/.local/share/pipx/venvs/autoloop/lib/python3.12/site-packages/autoloop/templates/test_verifier.md
+session_id=019e0cd5-521f-7d82-95d2-393e92f69ab8
+
+
+---
+run_id=run-20260509T124548Z-f67cf8d4 | entry=phase_output | pair=test | phase=verifier | process=codex-agent | cycle=1 | attempt=1 | thread_id=019e0cd5-521f-7d82-95d2-393e92f69ab8
+---
+I’m auditing the phase-local test additions and the active test strategy first, then I’ll verify the changed-area suites and either record coverage gaps or mark the audit criteria complete.
+
+The strategy matches the phase contract and the run-local decisions. I’m reading the concrete changed tests and rerunning the targeted suite once from the audit side before I decide whether any coverage gaps remain.
+
+The changed-area coverage is exercising the right parity surfaces so far. I’m waiting for the full targeted run to finish, then I’ll either record any material gaps or close the audit cleanly.
+
+The audit rerun exposed an implementation regression, but it did so through the preserved and newly added tests rather than because of a coverage gap. I’m recording that as a non-blocking audit note and marking the test-quality criteria complete.
+
+Scope considered
+- Phase-local audit of the changed and newly added tests for placeholder validation, artifact inventory, compiled-step rebuilding, and branch-group rendering.
+- The active test strategy and feedback artifacts, plus the run-local decisions that constrain preserved behavior.
+
+What I analyzed
+- The new tests in `tests/unit/test_inventory.py`, `tests/unit/test_placeholder_refs.py`, and `tests/contract/test_branch_result_serialization.py`.
+- Existing parity suites in `tests/unit/test_simple_surface.py`, `tests/unit/test_step_plans.py`, and `tests/unit/test_route_contracts.py`.
+- The test strategy’s coverage claims against the actual changed behavior and preserved invariants in scope.
+
+What I reviewed
+- Whether the test additions cover happy-path, failure-path, and edge-case behavior for the refactored placeholder dispatcher, inventory builder, plan adapters, and branch-group renderer.
+- Whether the tests stay deterministic and avoid encoding any unconfirmed behavior break.
+- A fresh audit-side rerun of `.venv/bin/python -m pytest tests/unit/test_placeholder_refs.py tests/unit/test_simple_surface.py tests/unit/test_inventory.py tests/unit/test_step_plans.py tests/unit/test_route_contracts.py tests/contract/test_branch_result_serialization.py`.
+
+Key findings / decisions
+- No blocking test-audit findings.
+- The coverage is adequate for the phase contract: direct inventory conflict/rebind checks were added, placeholder alias dispatch is locked, and branch-group empty-section fallbacks are now asserted directly.
+- The audit rerun exposed 6 implementation failures in `botlane/core/plan_adapters.py`, which I recorded as a non-blocking audit note because the tests are doing their job by catching the regression rather than missing it.
+- I updated the test audit criteria to checked and appended `TST-001` to the active feedback artifact.
+
+Open issues / next step
+- No open test-quality gaps in reviewed scope.
+- The active tree is currently red on the targeted suite because of the implementation regression detected by the existing and newly added tests, not because of insufficient coverage.
+
+<loop-control>
+{"schema":"docloop.loop_control/v1","kind":"promise","promise":"COMPLETE"}
+</loop-control>

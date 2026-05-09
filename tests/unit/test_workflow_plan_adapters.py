@@ -12,6 +12,7 @@ from botlane.core.plan_adapters import compiled_workflow_from_plan, workflow_pla
 from botlane.core.route_contracts import RouteContract
 from botlane.core.steps import PromptStep, Session
 from botlane.core.workflow_plan import WorkflowPlan
+from botlane.core.reference_graph import ReferenceGraph
 
 
 class RoutePayload(BaseModel):
@@ -74,6 +75,8 @@ def test_compile_workflow_plan_returns_internal_workflow_plan_with_topology_hash
     assert plan.default_session_name == compiled.default_session_name
     assert sorted(plan.sessions) == sorted(compiled.sessions)
     assert plan.worklists == compiled.worklists
+    assert isinstance(plan.reference_graph, ReferenceGraph)
+    assert plan.reference_graph == ReferenceGraph.empty()
 
 
 def test_workflow_plan_adapter_round_trip_preserves_compiled_workflow_shape() -> None:
@@ -83,11 +86,21 @@ def test_workflow_plan_adapter_round_trip_preserves_compiled_workflow_shape() ->
 
     assert rebuilt == compiled
     assert rebuilt.topology_hash == compiled.topology_hash
-    assert plan.artifacts == compiled.artifacts
-    assert plan.artifacts_by_qualified_name == compiled.artifacts_by_qualified_name
-    assert {artifact_id.qualified_name for artifact_id in plan.artifacts_by_id} == set(
+    assert {name: artifact_id.qualified_name for name, artifact_id in plan.public_artifacts.items()} == {
+        name: artifact.qualified_name or name
+        for name, artifact in compiled.artifacts.items()
+    }
+    assert {artifact_id.qualified_name for artifact_id in plan.artifacts} == set(compiled.artifacts_by_qualified_name)
+    assert {artifact_spec.qualified_name for artifact_spec in plan.artifacts.values()} == set(
         compiled.artifacts_by_qualified_name
     )
+    assert {
+        qualified_name: artifact_id.qualified_name
+        for qualified_name, artifact_id in plan.artifacts_by_qualified_name.items()
+    } == {
+        qualified_name: qualified_name
+        for qualified_name in compiled.artifacts_by_qualified_name
+    }
 
 
 def test_workflow_plan_routes_match_compiled_route_tables_and_globals() -> None:
@@ -135,11 +148,11 @@ def test_workflow_plan_adapters_copy_maps_instead_of_reusing_mutable_compiled_di
     compiled.artifacts.clear()
 
     assert tuple(plan.routes["ask"]) == tuple(original_routes)
-    assert "report" in plan.artifacts
+    assert "report" in plan.public_artifacts
 
     rebuilt = compiled_workflow_from_plan(plan)
     rebuilt.routes["ask"].clear()
     rebuilt.artifacts.clear()
 
     assert tuple(plan.routes["ask"]) == tuple(original_routes)
-    assert "report" in plan.artifacts
+    assert "report" in plan.public_artifacts

@@ -9,6 +9,7 @@ from collections.abc import Mapping
 from pathlib import Path
 from typing import Any, TypeAlias, cast
 
+from .artifact_plan import ArtifactSpec
 from .branch_groups.models import CompiledBranchGroupSpec, CompiledBranchStepSpec
 from .compiler import CompiledArtifact, CompiledRoute, CompiledStep, CompiledWorkflow
 from .identifiers import ArtifactId
@@ -40,10 +41,12 @@ from .step_plans import (
     StepHookSpec,
     StepIO,
     StepPlan,
+    StepSource,
     StepStateSpec,
     WriteRef,
 )
 from .workflow_plan import WorkflowPlan
+from .reference_graph import ReferenceGraph
 
 
 CompiledInventoryEntry: TypeAlias = CompiledArtifact | ArtifactInventoryRecord
@@ -352,11 +355,15 @@ def _compiled_step_common_kwargs(
     original_compiled: CompiledStep | None,
 ) -> dict[str, Any]:
     header = plan.header
+    if original_compiled is None:
+        raise ValueError(
+            f"compiled-step reconstruction for step {header.name!r} requires adapter parity metadata"
+        )
     route_table = {tag: compiled_route_from_route_contract(route) for tag, route in routes.items()}
     return dict(
         name=header.name,
         kind=header.kind,
-        step=original_compiled.step if original_compiled is not None else header.original_step,
+        step=original_compiled.step,
         session_name=header.session_name,
         scope_name=header.scope_name,
         reads=_compiled_reads_from_step_io(header.io),
@@ -592,6 +599,13 @@ def workflow_plan_from_compiled(*args: Any, **kwargs: Any) -> Any:
         raise TypeError("compiled workflow is required")
 
     inventory = dict(compiled.artifacts_by_qualified_name)
+    artifact_specs = {
+        artifact_id_from_compiled_artifact(key=key, artifact=artifact): _artifact_spec_from_compiled_artifact(
+            key=key,
+            artifact=artifact,
+        )
+        for key, artifact in compiled.artifacts_by_qualified_name.items()
+    }
     routes = {
         step_name: _route_contracts_from_compiled_route_table(route_table, inventory)
         for step_name, route_table in compiled.routes.items()
@@ -616,16 +630,20 @@ def workflow_plan_from_compiled(*args: Any, **kwargs: Any) -> Any:
         },
         routes={step_name: dict(route_table) for step_name, route_table in routes.items()},
         global_routes=dict(global_routes),
-        artifacts=dict(compiled.artifacts),
-        artifacts_by_id={
-            artifact_id_from_compiled_artifact(key=key, artifact=artifact): artifact
-            for key, artifact in compiled.artifacts_by_qualified_name.items()
+        artifacts=artifact_specs,
+        public_artifacts={
+            public_name: artifact_id_from_compiled_artifact(key=public_name, artifact=artifact)
+            for public_name, artifact in compiled.artifacts.items()
         },
-        artifacts_by_qualified_name=dict(compiled.artifacts_by_qualified_name),
+        artifacts_by_qualified_name={
+            qualified_name: artifact_id_from_compiled_artifact(key=qualified_name, artifact=artifact)
+            for qualified_name, artifact in compiled.artifacts_by_qualified_name.items()
+        },
         extensions=tuple(compiled.extensions),
         provider_policy=compiled.provider_policy,
         source_hash=compiled.source_hash,
         topology_hash=compiled.topology_hash,
+        reference_graph=ReferenceGraph.empty(),
     )
 
 
@@ -640,6 +658,13 @@ def compiled_workflow_from_plan(*args: Any, **kwargs: Any) -> Any:
     routes = {
         step_name: {tag: compiled_route_from_route_contract(route) for tag, route in route_table.items()}
         for step_name, route_table in plan.routes.items()
+    }
+    authoritative_artifacts = {
+        qualified_name: _compiled_artifact_from_spec(
+            key=qualified_name,
+            spec=plan.artifacts[artifact_id],
+        )
+        for qualified_name, artifact_id in plan.artifacts_by_qualified_name.items()
     }
     return CompiledWorkflow(
         workflow_cls=plan.workflow_cls,
@@ -660,8 +685,14 @@ def compiled_workflow_from_plan(*args: Any, **kwargs: Any) -> Any:
         },
         routes=routes,
         global_routes={tag: compiled_route_from_route_contract(route) for tag, route in plan.global_routes.items()},
-        artifacts=dict(plan.artifacts),
-        artifacts_by_qualified_name=dict(plan.artifacts_by_qualified_name),
+        artifacts={
+            public_name: _compiled_artifact_from_spec(
+                key=public_name,
+                spec=plan.artifacts[artifact_id],
+            )
+            for public_name, artifact_id in plan.public_artifacts.items()
+        },
+        artifacts_by_qualified_name=authoritative_artifacts,
         extensions=tuple(plan.extensions),
         provider_policy=plan.provider_policy,
         source_hash=plan.source_hash,
@@ -729,7 +760,7 @@ def _step_header_from_compiled_step(
     return StepHeader(
         name=step.name,
         kind=step.kind,
-        original_step=step.step,
+        source=_step_source_from_authored_step(step.step),
         session_name=step.session_name,
         scope_name=step.scope_name,
         io=_step_io_from_compiled_fields(
@@ -756,6 +787,53 @@ def _step_header_from_compiled_step(
             after_verifier=step.after_verifier_hook,
         ),
         provider_policy=step.provider_policy,
+    )
+
+
+def _step_source_from_authored_step(step: object) -> StepSource:
+    step_type = type(step)
+    return StepSource(
+        authoring_kind=step_type.__name__,
+        declaration_name=getattr(step, "name", None),
+        source_module=step_type.__module__,
+        source_qualname=step_type.__qualname__,
+    )
+
+
+def _artifact_spec_from_compiled_artifact(
+    *,
+    key: str,
+    artifact: CompiledArtifact,
+) -> ArtifactSpec:
+    artifact_id = artifact_id_from_compiled_artifact(key=key, artifact=artifact)
+    return ArtifactSpec(
+        id=artifact_id,
+        name=artifact_id.name,
+        template=artifact.template,
+        kind=artifact.kind,
+        schema=artifact.schema,
+        required=artifact.required,
+        owner_step=artifact.owner_step,
+        workflow_level=artifact.workflow_level,
+        producer_steps=tuple(artifact.producer_steps),
+    )
+
+
+def _compiled_artifact_from_spec(
+    *,
+    key: str,
+    spec: ArtifactSpec,
+) -> CompiledArtifact:
+    return CompiledArtifact(
+        name=key,
+        template=spec.template,
+        kind=spec.kind,
+        schema=spec.schema,
+        required=spec.required,
+        owner_step=spec.owner_step,
+        qualified_name=spec.qualified_name,
+        workflow_level=spec.workflow_level,
+        producer_steps=tuple(spec.producer_steps),
     )
 
 

@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import pytest
 
+from botlane.core.artifact_plan import ArtifactSpec
 from botlane.core.artifacts import Artifact, CompiledArtifact
 from botlane.core.identifiers import ArtifactId
 from botlane.core.inventory import ArtifactInventoryRecord
@@ -107,3 +108,22 @@ def test_artifact_id_for_reference_uses_inventory_resolution_instead_of_dot_spli
         step_name="draft",
         prefer_step_local=True,
     ) == ArtifactId("step", name="result.v2.json", step="draft")
+
+
+def test_artifact_spec_uses_explicit_artifact_ids_without_dot_splitting() -> None:
+    artifact_id = ArtifactId("step", name="result.v2.json", step="draft")
+    spec = ArtifactSpec(
+        id=artifact_id,
+        name="result.v2.json",
+        template="draft/result.v2.json",
+        kind="json",
+        schema=None,
+        required=True,
+        owner_step="draft",
+        workflow_level=False,
+        producer_steps=("draft",),
+    )
+
+    assert spec.id is artifact_id
+    assert spec.name == "result.v2.json"
+    assert spec.qualified_name == "draft.result.v2.json"

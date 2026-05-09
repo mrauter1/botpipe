@@ -3,8 +3,39 @@
 from __future__ import annotations
 
 import json
+from dataclasses import dataclass
 from pathlib import Path
-from typing import Any, Mapping
+from typing import Any, Literal, Mapping
+
+from .results import BranchArtifactObservation, BranchResult
+
+
+@dataclass(frozen=True, slots=True)
+class BranchManifest:
+    schema: Literal["botlane.branch_results/v1"]
+    kind: str
+    name: str
+    started_at: str
+    finished_at: str
+    duration_ms: int
+    concurrency: int | None
+    settle: str
+    success_routes: tuple[str, ...]
+    branches: tuple[BranchResult, ...]
+
+    def to_dict(self) -> dict[str, Any]:
+        return {
+            "schema": self.schema,
+            "kind": self.kind,
+            "name": self.name,
+            "started_at": self.started_at,
+            "finished_at": self.finished_at,
+            "duration_ms": self.duration_ms,
+            "concurrency": self.concurrency,
+            "settle": self.settle,
+            "success_routes": list(self.success_routes),
+            "branches": [branch.to_manifest_dict() for branch in self.branches],
+        }
 
 
 def branch_group_paths(*, workflow_folder: Path, group_name: str) -> tuple[Path, Path, Path]:
@@ -16,11 +47,12 @@ def write_branch_group_evidence(
     *,
     results_path: Path,
     context_path: Path,
-    manifest: Mapping[str, Any],
+    manifest: BranchManifest | Mapping[str, Any],
     context_text: str,
 ) -> None:
+    payload = manifest.to_dict() if isinstance(manifest, BranchManifest) else dict(manifest)
     results_path.parent.mkdir(parents=True, exist_ok=True)
-    results_path.write_text(json.dumps(dict(manifest), indent=2, ensure_ascii=False) + "\n", encoding="utf-8")
+    results_path.write_text(json.dumps(payload, indent=2, ensure_ascii=False) + "\n", encoding="utf-8")
     context_path.parent.mkdir(parents=True, exist_ok=True)
     context_path.write_text(context_text, encoding="utf-8")
 
@@ -32,25 +64,26 @@ def build_branch_manifest(
     finished_at: str,
     duration_ms: int,
     branches: list[object],
-) -> dict[str, Any]:
-    return {
-        "schema": "botlane.branch_results/v1",
-        "kind": spec.kind,
-        "name": spec.name,
-        "started_at": started_at,
-        "finished_at": finished_at,
-        "duration_ms": duration_ms,
-        "concurrency": spec.concurrency,
-        "settle": spec.settle,
-        "success_routes": list(spec.success_routes),
-        "branches": [_branch_payload(branch) for branch in branches],
-    }
+) -> BranchManifest:
+    return BranchManifest(
+        schema="botlane.branch_results/v1",
+        kind=spec.kind,
+        name=spec.name,
+        started_at=started_at,
+        finished_at=finished_at,
+        duration_ms=duration_ms,
+        concurrency=spec.concurrency,
+        settle=spec.settle,
+        success_routes=tuple(spec.success_routes),
+        branches=tuple(_branch_result(branch) for branch in branches),
+    )
 
 
-def render_branch_group_context(manifest: Mapping[str, Any]) -> str:
-    branches = [_branch_payload(branch) for branch in manifest.get("branches", [])]
+def render_branch_group_context(manifest: BranchManifest | Mapping[str, Any]) -> str:
+    manifest_payload = manifest.to_dict() if isinstance(manifest, BranchManifest) else dict(manifest)
+    branches = [_branch_payload(branch) for branch in manifest_payload.get("branches", [])]
     sections = [
-        _render_branch_group_header(manifest, branches),
+        _render_branch_group_header(manifest_payload, branches),
         _render_completion_summary(branches),
         _render_route_summary(branches),
         _render_failure_summary(branches),
@@ -260,3 +293,47 @@ def _branch_payload(branch: object) -> dict[str, Any]:
         if isinstance(payload, Mapping):
             return dict(payload)
     raise TypeError(f"unsupported branch manifest entry {type(branch)!r}")
+
+
+def _branch_result(branch: object) -> BranchResult:
+    if isinstance(branch, BranchResult):
+        return branch
+    if isinstance(branch, Mapping):
+        artifact_payloads = branch.get("artifacts") or ()
+        return BranchResult(
+            name=str(branch["name"]),
+            index=int(branch["index"]),
+            input=branch.get("input"),
+            step_name=str(branch["step_name"]),
+            status=branch["status"],
+            route=branch.get("route"),
+            destination=branch.get("destination"),
+            runtime_control=branch.get("runtime_control"),
+            reason=branch.get("reason"),
+            question=branch.get("question"),
+            artifacts=tuple(
+                BranchArtifactObservation(
+                    name=str(artifact.get("name", "")),
+                    path=str(artifact.get("path", "")),
+                    kind=artifact.get("kind"),
+                    exists=bool(artifact.get("exists", False)),
+                    validation=str(artifact.get("validation", "")),
+                    validation_errors=tuple(str(error) for error in artifact.get("validation_errors", ())),
+                )
+                for artifact in artifact_payloads
+                if isinstance(artifact, Mapping)
+            ),
+            raw_output_path=branch.get("raw_output_path"),
+            raw_output_paths=dict(branch.get("raw_output_paths") or {}),
+            provider_session=branch.get("provider_session"),
+            provider_sessions=dict(branch.get("provider_sessions") or {}),
+            error=None if branch.get("error") is None else dict(branch["error"]),
+            started_at=str(branch["started_at"]),
+            finished_at=str(branch["finished_at"]),
+            duration_ms=int(branch["duration_ms"]),
+            usage=dict(branch.get("usage") or {}),
+            cancellation_requested=bool(branch.get("cancellation_requested", False)),
+            cancellation_completed=bool(branch.get("cancellation_completed", False)),
+            cancellation_supported=bool(branch.get("cancellation_supported", True)),
+        )
+    raise TypeError(f"branch manifest branch must be BranchResult or mapping, got {type(branch)!r}")

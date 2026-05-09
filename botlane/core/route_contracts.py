@@ -6,9 +6,12 @@ Not part of the public botlane authoring API.
 from __future__ import annotations
 
 from dataclasses import dataclass
-from typing import Any, Callable, Literal, TypeAlias
+from typing import TYPE_CHECKING, Any, Callable, Literal, TypeAlias
 
 from .identifiers import ArtifactId
+
+if TYPE_CHECKING:
+    from .stores.protocols import PendingHandoff
 
 
 RouteTargetKind: TypeAlias = Literal["step", "finish", "await_input", "fail", "disabled"]
@@ -105,7 +108,7 @@ class RouteDecision:
     contract: RouteContract | None
     action: RouteAction
     runtime_control: str | None = None
-    pending_handoffs: tuple[Any, ...] = ()
+    pending_handoffs: tuple["PendingHandoff", ...] = ()
     provider_attributable: bool = False
     source_hook: str | None = None
     source_phase: str | None = None

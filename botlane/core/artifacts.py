@@ -9,10 +9,10 @@ from typing import TYPE_CHECKING, Any, Iterable, Iterator, Literal, Mapping
 
 from pydantic import BaseModel, ValidationError
 
+from .artifact_plan import ArtifactKind
 from .errors import WorkflowExecutionError
 from .placeholders import parse_placeholders, render_template_with_refs
 
-ArtifactKind = Literal["text", "markdown", "json", "raw"]
 if TYPE_CHECKING:
     from .context import Context
     from .steps import Step
