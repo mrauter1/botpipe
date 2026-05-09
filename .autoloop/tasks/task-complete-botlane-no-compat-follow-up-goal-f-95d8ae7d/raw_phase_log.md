@@ -8,3 +8,43 @@ workspace=/home/rauter/autoloop_v3_bkp/autoloop_v3
 pairs=plan,implement,test,audit
 request_file=/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/task-complete-botlane-no-compat-follow-up-goal-f-95d8ae7d/runs/run-20260509T031006Z-b1998ef3/request.md
 session_mode=persistent
+
+
+---
+run_id=run-20260509T031006Z-b1998ef3 | entry=session_turn | pair=plan | phase=producer | cycle=1 | attempt=1 | thread_id=019e0ab6-b75d-7003-b0a3-71d35a68f9f8
+---
+provider=codex
+mode=start
+template=/home/rauter/.local/share/pipx/venvs/autoloop/lib/python3.12/site-packages/autoloop/templates/plan_producer.md
+session_id=019e0ab6-b75d-7003-b0a3-71d35a68f9f8
+
+
+---
+run_id=run-20260509T031006Z-b1998ef3 | entry=phase_output | pair=plan | phase=producer | process=codex-agent | cycle=1 | attempt=1 | thread_id=019e0ab6-b75d-7003-b0a3-71d35a68f9f8
+---
+I’m treating this as a planning turn only. I’ll inspect the authoritative artifacts and the code paths named in the request, then I’ll write an implementation-ready plan, phase YAML, feedback note, and any non-obvious decisions for later turns.
+
+I’ve confirmed there are no later clarification entries yet and the planning artifacts are essentially empty. Next I’m reading the runtime code and existing strictness/optimizer tests that this plan has to cover, so the milestones line up with actual repository structure.
+
+The relevant files already show the current problem shape: hidden legacy construction exists in the strictness test itself, and runtime/test coverage already has the right anchor points to tighten behavior without new abstractions. I’m locating the exact functions and scan helpers now so the plan can name precise edits and regressions.
+
+The core runtime functions are already partly in the target state: `_resolve_context_root` and `_is_simple_flow_spec` no longer carry the legacy branches. The remaining concrete runtime gap is the overlay copy ignore list, and the main test-side work is tightening `tests/strictness/test_no_compat.py` so it scans for hidden construction instead of using it.
+
+I’ve verified that maintained runtime/docs/tests outside the strictness file are already mostly clean on literal legacy names. I’m checking existing planning conventions in neighboring runs next so this turn’s `plan.md` and `phase_plan.yaml` match the repository’s expected artifact style rather than inventing a new format.
+
+I found a useful failure mode in earlier planning artifacts: one prior plan claimed the `.botlane` overlay exclusion was already present, but the current production code still omits it. I’m checking the existing overlay tests around `validate_candidate_surface_overlay` so the new plan doesn’t repeat that drift and can specify exactly what must be added.
+
+I have enough context. I’m writing the plan artifacts now with one coherent implementation phase, and I’m recording only the non-obvious guardrails that later implement/test turns need to keep explicit.
+
+The artifacts are written. I’m doing one pass to verify they stayed concise, the YAML only changed `phases:`, and the decisions landed under the current runtime header without touching earlier blocks.
+
+Updated the planning artifacts for this run:
+
+- [plan.md](</home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/task-complete-botlane-no-compat-follow-up-goal-f-95d8ae7d/runs/run-20260509T031006Z-b1998ef3/artifacts/plan/plan.md>)
+- [phase_plan.yaml](</home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/task-complete-botlane-no-compat-follow-up-goal-f-95d8ae7d/runs/run-20260509T031006Z-b1998ef3/artifacts/plan/phase_plan.yaml>)
+- [feedback.md](</home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/task-complete-botlane-no-compat-follow-up-goal-f-95d8ae7d/runs/run-20260509T031006Z-b1998ef3/artifacts/plan/feedback.md>)
+- [decisions.txt](</home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/task-complete-botlane-no-compat-follow-up-goal-f-95d8ae7d/runs/run-20260509T031006Z-b1998ef3/decisions.txt>)
+
+The plan is a single coherent implementation phase. It records that `botlane/core/context.py` and `botlane/core/discovery.py` are already in the requested Botlane-only state, while `botlane_optimizer/candidate_surfaces.py` still needs the concrete `.botlane` overlay exclusion fix. It also locks the strictness/test scope around hidden legacy-name construction, narrow allowlisting, positive `botlane` and `botlane_optimizer` smoke, negative legacy import/CLI checks, and the required overlay regression.
+
+I did not run tests in this planning turn.
