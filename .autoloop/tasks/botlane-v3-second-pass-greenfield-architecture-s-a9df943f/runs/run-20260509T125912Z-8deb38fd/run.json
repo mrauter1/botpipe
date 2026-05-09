@@ -21,13 +21,13 @@
       "strictness-cleanup"
     ],
     "explicit": true,
-    "current_phase_index": 1,
-    "current_phase_id": "canonical-type-hardening"
+    "current_phase_index": 2,
+    "current_phase_id": "atomic-plan-runtime-cutover"
   },
   "phase_status": {
     "public-freeze": "completed",
-    "canonical-type-hardening": "in_progress",
-    "atomic-plan-runtime-cutover": "planned",
+    "canonical-type-hardening": "completed",
+    "atomic-plan-runtime-cutover": "in_progress",
     "execution-frame-authority": "planned",
     "branch-typed-evidence": "planned",
     "placeholder-reference-graph": "planned",
@@ -54,6 +54,19 @@
       "run_id": "run-20260509T125912Z-8deb38fd",
       "status": "in_progress",
       "ts": "2026-05-09T13:17:07.358665+00:00"
+    },
+    {
+      "phase_id": "canonical-type-hardening",
+      "run_id": "run-20260509T125912Z-8deb38fd",
+      "status": "completed",
+      "ts": "2026-05-09T13:36:20.000749+00:00",
+      "pair": "test"
+    },
+    {
+      "phase_id": "atomic-plan-runtime-cutover",
+      "run_id": "run-20260509T125912Z-8deb38fd",
+      "status": "in_progress",
+      "ts": "2026-05-09T13:36:20.005041+00:00"
     }
   ]
 }

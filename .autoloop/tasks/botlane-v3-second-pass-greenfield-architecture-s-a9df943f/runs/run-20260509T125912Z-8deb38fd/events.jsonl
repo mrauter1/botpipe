@@ -36,3 +36,7 @@
 {"ts": "2026-05-09T13:35:27.303780+00:00", "run_id": "run-20260509T125912Z-8deb38fd", "seq": 36, "event_type": "phase_finished", "pair": "test", "phase": "producer", "cycle": 1, "attempt": 1, "empty_output": false, "phase_id": "canonical-type-hardening"}
 {"ts": "2026-05-09T13:36:19.727119+00:00", "run_id": "run-20260509T125912Z-8deb38fd", "seq": 37, "event_type": "phase_finished", "pair": "test", "phase": "verifier", "cycle": 1, "attempt": 1, "empty_output": false, "phase_id": "canonical-type-hardening"}
 {"ts": "2026-05-09T13:36:19.848593+00:00", "run_id": "run-20260509T125912Z-8deb38fd", "seq": 38, "event_type": "pair_completed", "pair": "test", "cycle": 1, "attempt": 1, "phase_id": "canonical-type-hardening"}
+{"ts": "2026-05-09T13:36:20.001310+00:00", "run_id": "run-20260509T125912Z-8deb38fd", "seq": 39, "event_type": "phase_completed", "pair": "test", "phase_id": "canonical-type-hardening", "phase_mode": "single"}
+{"ts": "2026-05-09T13:36:20.005965+00:00", "run_id": "run-20260509T125912Z-8deb38fd", "seq": 40, "event_type": "phase_started", "phase_id": "atomic-plan-runtime-cutover", "phase_mode": "single"}
+{"ts": "2026-05-09T13:36:20.007719+00:00", "run_id": "run-20260509T125912Z-8deb38fd", "seq": 41, "event_type": "pair_started", "pair": "implement", "phase_id": "atomic-plan-runtime-cutover"}
+{"ts": "2026-05-09T13:36:20.007880+00:00", "run_id": "run-20260509T125912Z-8deb38fd", "seq": 42, "event_type": "cycle_started", "pair": "implement", "cycle": 1, "attempt": 1, "phase_id": "atomic-plan-runtime-cutover"}
