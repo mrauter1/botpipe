@@ -16,6 +16,7 @@ from .compiler import CompiledRoute
 from .context import context_runtime
 from .effects import Effects, WorklistEffect
 from .errors import FailureContext, ProviderExecutionError, WorkflowExecutionError
+from .execution_services import ExecutionServices
 from .extensions import HookRouteRedirect
 from .identifiers import ArtifactId
 from .operations import OperationRuntime, bind_operation_runtime, provider_configuration
@@ -464,7 +465,7 @@ class ProviderContractBuilder:
         *,
         context: "Context",
     ) -> tuple[ProviderReadableRef, ...]:
-        return tuple(self.readable_ref(_compiled_read_name(ref), artifacts, context=context) for ref in refs)
+        return tuple(self._readable_ref_from_turn(ref, artifacts, context=context) for ref in refs)
 
     def required_artifact_refs_from_turn(
         self,
@@ -510,6 +511,23 @@ class ProviderContractBuilder:
             declared_artifact=False,
         )
 
+    def _readable_ref_from_turn(
+        self,
+        ref: ReadRef,
+        artifacts: ResolvedArtifacts,
+        *,
+        context: "Context",
+    ) -> ProviderReadableRef:
+        if isinstance(ref, FanInRead):
+            path = self._fan_in_workspace_path(ref, context=context)
+            return ProviderReadableRef(
+                name=ref.path,
+                path=str(path),
+                exists=path.exists(),
+                declared_artifact=False,
+            )
+        return self.readable_ref(_compiled_read_name(ref), artifacts, context=context)
+
     def _required_artifact_ref_from_turn(
         self,
         ref: RequireRef,
@@ -520,7 +538,11 @@ class ProviderContractBuilder:
         if isinstance(ref, ArtifactId):
             name = _compiled_require_name(ref)
             return self.artifact_ref(name, artifacts[name])
-        path = self._engine._resolve_workspace_read_path(_compiled_require_name(ref), context=context)
+        path = (
+            self._fan_in_workspace_path(ref, context=context)
+            if isinstance(ref, FanInRead)
+            else self._engine._resolve_workspace_read_path(_compiled_require_name(ref), context=context)
+        )
         return ProviderArtifactRef(
             name=ref.path,
             qualified_name=ref.path,
@@ -530,6 +552,13 @@ class ProviderContractBuilder:
             exists=path.exists(),
             schema_name=None,
         )
+
+    @staticmethod
+    def _fan_in_workspace_path(ref: FanInRead, *, context: "Context") -> Path:
+        fan_in = context.fan_in
+        if fan_in is None:
+            raise WorkflowExecutionError(f"fan-in helper {ref.helper!r} requires fan-in context")
+        return fan_in.results_path if ref.helper == "results" else fan_in.context_path
 
     def route_required_writes(self, step: "CompiledStep") -> dict[str, tuple[str, ...]]:
         visible_routes = set(self.available_routes(step))
@@ -1445,8 +1474,25 @@ def run_awaitable_sync(
 class RouteFinalizer:
     """Owns step finalization entrypoints."""
 
-    def __init__(self, engine: "Engine") -> None:
-        self._engine = engine
+    def __init__(
+        self,
+        services: ExecutionServices,
+        *,
+        artifact_inventory: "Mapping[str, Any]",
+    ) -> None:
+        if services.artifacts is None:
+            raise ValueError("RouteFinalizer requires ExecutionServices.artifacts")
+        if services.routes is None:
+            raise ValueError("RouteFinalizer requires ExecutionServices.routes")
+        if services.hooks is None:
+            raise ValueError("RouteFinalizer requires ExecutionServices.hooks")
+        if services.state is None:
+            raise ValueError("RouteFinalizer requires ExecutionServices.state")
+        self._artifacts = services.artifacts
+        self._routes = services.routes
+        self._hooks = services.hooks
+        self._state = services.state
+        self._artifact_inventory = dict(artifact_inventory)
 
     def _route_decision_for_route(
         self,
@@ -1456,7 +1502,7 @@ class RouteFinalizer:
     ) -> RouteDecision:
         contract = route_contract_from_compiled_route(
             route,
-            inventory=self._engine.compiled.artifacts_by_qualified_name,
+            inventory=self._artifact_inventory,
         )
         return RouteDecision(
             final_route=result.final_route,
@@ -1490,14 +1536,14 @@ class RouteFinalizer:
         context = request.context
         candidate_event = request.candidate_event
         try:
-            self._engine._validate_event(
+            self._routes.validate_event(
                 step,
                 candidate_event,
                 provider_attributable=request.provider_attributable,
                 error_cls=request.error_cls,
             )
         except WorkflowExecutionError as exc:
-            annotated = self._engine._annotate_execution_error(
+            annotated = self._routes.annotate_execution_error(
                 exc,
                 checkpoint_state=request.state,
                 failure_context=FailureContext(
@@ -1512,7 +1558,7 @@ class RouteFinalizer:
             raise annotated from exc
 
         candidate_route = request.candidate_route if request.candidate_route_present else None
-        after_result = self._engine.hook_runner.run_after(
+        after_result = self._hooks.run_after(
             step,
             context,
             state=request.state,
@@ -1528,19 +1574,19 @@ class RouteFinalizer:
         after_redirect = after_result.redirect
         runtime = context_runtime(context)
         runtime.set_state(final_state)
-        finalized_artifacts = self._engine._resolve_artifacts(context)
+        finalized_artifacts = self._artifacts.resolve_artifacts(context)
         runtime.set_artifacts(finalized_artifacts)
         route_redirects: list[HookRouteRedirect] = []
         final_source_hook = request.source_hook
         final_source_phase = request.source_phase
         if after_redirect is not None:
             route_redirects.append(replace(after_redirect, redirect_index=len(route_redirects) + 1))
-            self._engine._ensure_hook_redirect_limit(step, candidate_route=candidate_route, redirects=route_redirects)
+            self._routes.ensure_hook_redirect_limit(step, candidate_route=candidate_route, redirects=route_redirects)
             final_source_hook = after_redirect.hook
             final_source_phase = after_redirect.phase
 
         if after_result.control is not None:
-            direct_control = self._engine._normalize_direct_runtime_control(
+            direct_control = self._routes.normalize_direct_runtime_control(
                 step=step,
                 context=context,
                 control=after_result.control,
@@ -1568,12 +1614,15 @@ class RouteFinalizer:
             return replace(result, decision=self._route_decision_for_direct_control(result))
 
         try:
-            final_route = self._engine._compiled_route_for_step(step, final_event.tag)
+            final_route = self._routes.compiled_route_for_step(step, final_event.tag)
         except Exception as exc:
             runtime.set_route(None)
             runtime.set_event(None)
             runtime.set_outcome(None)
-            annotated = self._engine._annotate_execution_error(exc, checkpoint_state=self._engine._clone_state(context.state))
+            annotated = self._routes.annotate_execution_error(
+                exc,
+                checkpoint_state=self._state.clone_state(context.state),
+            )
             if annotated is exc:
                 raise
             raise annotated from exc
@@ -1586,12 +1635,12 @@ class RouteFinalizer:
                 "handoff": final_route.handoff,
             }
         )
-        runtime.set_event(self._engine._event_context_payload(final_event))
+        runtime.set_event(self._routes.event_context_payload(final_event))
         runtime.set_outcome(request.after_subject)
 
         final_provider_attributable = request.provider_attributable and not explicit_event_override
         final_error_cls = request.error_cls if final_provider_attributable else WorkflowExecutionError
-        self._engine.artifact_guard.enforce(
+        self._artifacts.enforce_artifact_contracts(
             step,
             context,
             finalized_artifacts,
@@ -1602,13 +1651,13 @@ class RouteFinalizer:
         )
         destination = final_route.target
         pending_input = (
-            self._engine._pending_input_from_event(source_step=step.name, event=final_event)
+            self._routes.pending_input_from_event(source_step=step.name, event=final_event)
             if destination == AWAIT_INPUT
             else None
         )
-        self._engine._update_final_step_runtime_state(step, getattr(context, "_step_state", None), final_event)
-        self._engine._update_final_step_runtime_state(step, getattr(context, "_step_item_state", None), final_event)
-        self._engine._update_final_item_runtime_state(getattr(context, "_item_state", None), final_event)
+        self._state.update_final_step_runtime_state(step, getattr(context, "_step_state", None), final_event)
+        self._state.update_final_step_runtime_state(step, getattr(context, "_step_item_state", None), final_event)
+        self._state.update_final_item_runtime_state(getattr(context, "_item_state", None), final_event)
         result = RouteFinalizationResult(
             state=final_state,
             destination=destination,
@@ -1634,14 +1683,14 @@ class RouteFinalizer:
         context = request.context
         candidate_event = request.candidate_event
         try:
-            self._engine._validate_event(
+            self._routes.validate_event(
                 step,
                 candidate_event,
                 provider_attributable=request.provider_attributable,
                 error_cls=request.error_cls,
             )
         except WorkflowExecutionError as exc:
-            annotated = self._engine._annotate_execution_error(
+            annotated = self._routes.annotate_execution_error(
                 exc,
                 checkpoint_state=request.state,
                 failure_context=FailureContext(
@@ -1656,7 +1705,7 @@ class RouteFinalizer:
             raise annotated from exc
 
         candidate_route = request.candidate_route if request.candidate_route_present else None
-        after_result = self._engine.hook_runner.run_after(
+        after_result = self._hooks.run_after(
             step,
             context,
             state=request.state,
@@ -1672,26 +1721,26 @@ class RouteFinalizer:
         after_redirect = after_result.redirect
         runtime = context_runtime(context)
         runtime.set_state(final_state)
-        finalized_artifacts = self._engine._resolve_artifacts(context)
+        finalized_artifacts = self._artifacts.resolve_artifacts(context)
         runtime.set_artifacts(finalized_artifacts)
         route_redirects: list[HookRouteRedirect] = []
         final_source_hook = request.source_hook
         final_source_phase = request.source_phase
         if after_redirect is not None:
             route_redirects.append(replace(after_redirect, redirect_index=len(route_redirects) + 1))
-            self._engine._ensure_hook_redirect_limit(step, candidate_route=candidate_route, redirects=route_redirects)
+            self._routes.ensure_hook_redirect_limit(step, candidate_route=candidate_route, redirects=route_redirects)
             final_source_hook = after_redirect.hook
             final_source_phase = after_redirect.phase
 
         if after_result.control is not None:
-            direct_control = self._engine._normalize_direct_runtime_control(
+            direct_control = self._routes.normalize_direct_runtime_control(
                 step=step,
                 context=context,
                 control=after_result.control,
                 hook_name=getattr(request.after_hook or step.after_hook, "__name__", type(request.after_hook or step.after_hook).__name__),
                 hook_phase=request.after_hook_phase,
             )
-            scheduled_handoffs = self._engine._schedule_direct_control_handoffs(
+            scheduled_handoffs = self._routes.schedule_direct_control_handoffs(
                 request.pending_handoffs,
                 control=direct_control,
                 context=context,
@@ -1720,7 +1769,7 @@ class RouteFinalizer:
         final_route: CompiledRoute
         try:
             while True:
-                final_route = self._engine._compiled_route_for_step(step, final_event.tag)
+                final_route = self._routes.compiled_route_for_step(step, final_event.tag)
                 runtime.set_route(
                     {
                         "tag": final_event.tag,
@@ -1729,9 +1778,9 @@ class RouteFinalizer:
                         "handoff": final_route.handoff,
                     }
                 )
-                runtime.set_event(self._engine._event_context_payload(final_event))
+                runtime.set_event(self._routes.event_context_payload(final_event))
                 runtime.set_outcome(request.after_subject)
-                route_result = self._engine.hook_runner.run_route(
+                route_result = self._hooks.run_route(
                     step,
                     context,
                     final_state,
@@ -1748,19 +1797,19 @@ class RouteFinalizer:
                 route_redirect = route_result.redirect
                 if route_redirect is not None:
                     route_redirects.append(replace(route_redirect, redirect_index=len(route_redirects) + 1))
-                    self._engine._ensure_hook_redirect_limit(step, candidate_route=candidate_route, redirects=route_redirects)
+                    self._routes.ensure_hook_redirect_limit(step, candidate_route=candidate_route, redirects=route_redirects)
                     final_source_hook = route_redirect.hook
                     final_source_phase = route_redirect.phase
                     continue
                 if route_result.control is not None:
-                    direct_control = self._engine._normalize_direct_runtime_control(
+                    direct_control = self._routes.normalize_direct_runtime_control(
                         step=step,
                         context=context,
                         control=route_result.control,
                         hook_name=getattr(final_route.on_taken, "__name__", type(final_route.on_taken).__name__),
                         hook_phase="on_taken",
                     )
-                    scheduled_handoffs = self._engine._schedule_direct_control_handoffs(
+                    scheduled_handoffs = self._routes.schedule_direct_control_handoffs(
                         request.pending_handoffs,
                         control=direct_control,
                         context=context,
@@ -1790,14 +1839,17 @@ class RouteFinalizer:
             runtime.set_route(None)
             runtime.set_event(None)
             runtime.set_outcome(None)
-            annotated = self._engine._annotate_execution_error(exc, checkpoint_state=self._engine._clone_state(context.state))
+            annotated = self._routes.annotate_execution_error(
+                exc,
+                checkpoint_state=self._state.clone_state(context.state),
+            )
             if annotated is exc:
                 raise
             raise annotated from exc
 
         final_provider_attributable = request.provider_attributable and not explicit_event_override
         final_error_cls = request.error_cls if final_provider_attributable else WorkflowExecutionError
-        self._engine.artifact_guard.enforce(
+        self._artifacts.enforce_artifact_contracts(
             step,
             context,
             finalized_artifacts,
@@ -1808,13 +1860,13 @@ class RouteFinalizer:
         )
         destination = final_route.target
         pending_input = (
-            self._engine._pending_input_from_event(source_step=step.name, event=final_event)
+            self._routes.pending_input_from_event(source_step=step.name, event=final_event)
             if destination == AWAIT_INPUT
             else None
         )
-        self._engine._update_final_step_runtime_state(step, getattr(context, "_step_state", None), final_event)
-        self._engine._update_final_step_runtime_state(step, getattr(context, "_step_item_state", None), final_event)
-        self._engine._update_final_item_runtime_state(getattr(context, "_item_state", None), final_event)
+        self._state.update_final_step_runtime_state(step, getattr(context, "_step_state", None), final_event)
+        self._state.update_final_step_runtime_state(step, getattr(context, "_step_item_state", None), final_event)
+        self._state.update_final_item_runtime_state(getattr(context, "_item_state", None), final_event)
         result = RouteFinalizationResult(
             state=final_state,
             destination=destination,
@@ -1831,7 +1883,7 @@ class RouteFinalizer:
             hook_route_override_from=route_redirects[0].from_route if route_redirects else None,
             hook_route_override_to=route_redirects[-1].to_route if route_redirects else None,
             hook_route_redirects=tuple(route_redirects),
-            scheduled_handoffs=self._engine._schedule_route_handoffs(
+            scheduled_handoffs=self._routes.schedule_route_handoffs(
                 request.pending_handoffs,
                 route=final_route,
                 event=final_event,
@@ -2281,11 +2333,13 @@ class HookRunner:
 class ArtifactGuard:
     """Owns artifact contract enforcement entrypoints."""
 
-    def __init__(self, engine: "Engine") -> None:
-        self._engine = engine
+    def __init__(self, services: ExecutionServices) -> None:
+        if services.artifacts is None:
+            raise ValueError("ArtifactGuard requires ExecutionServices.artifacts")
+        self._artifacts = services.artifacts
 
     def enforce(self, *args: Any, **kwargs: Any) -> None:
-        self._engine._enforce_artifact_contracts(*args, **kwargs)
+        self._artifacts.enforce_artifact_contracts(*args, **kwargs)
 
 
 class StateRuntime:

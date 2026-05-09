@@ -186,6 +186,14 @@ def step_plan_from_compiled_step(*args: Any, **kwargs: Any) -> Any:
     if step is None:
         raise TypeError("step is required")
 
+    original_step = step.step
+    source_reads = _step_source_refs(original_step, "reads")
+    source_requires = _step_source_refs(original_step, "requires")
+    source_producer_reads = _step_source_refs(original_step, "producer_reads", default=source_reads)
+    source_producer_requires = _step_source_refs(original_step, "producer_requires", default=source_requires)
+    source_verifier_reads = _step_source_refs(original_step, "verifier_reads", default=source_reads)
+    source_verifier_requires = _step_source_refs(original_step, "verifier_requires", default=source_requires)
+
     header = _step_header_from_compiled_step(step, inventory)
     if step.kind == "step":
         return PromptStepPlan(
@@ -200,8 +208,8 @@ def step_plan_from_compiled_step(*args: Any, **kwargs: Any) -> Any:
                     writes=step.producer_writes,
                     log_artifacts=step.log_artifacts,
                     inventory=inventory,
-                    fallback_reads=step.reads,
-                    fallback_requires=step.requires,
+                    fallback_reads=source_producer_reads,
+                    fallback_requires=source_producer_requires,
                 ),
                 retry_policy=step.retry_policy,
                 expected_output_schema=step.expected_output_schema,
@@ -222,12 +230,12 @@ def step_plan_from_compiled_step(*args: Any, **kwargs: Any) -> Any:
                     writes=step.producer_writes,
                     log_artifacts=step.log_artifacts,
                     inventory=inventory,
-                    fallback_reads=step.reads,
-                    fallback_requires=step.requires,
+                    fallback_reads=source_producer_reads,
+                    fallback_requires=source_producer_requires,
                 ),
                 retry_policy=step.retry_policy,
-                expected_output_schema=step.expected_output_schema,
-                expected_output_validator=step.expected_output_validator,
+                expected_output_schema=None,
+                expected_output_validator=None,
             ),
             verifier=ProviderTurnPlan(
                 kind="verifier",
@@ -239,8 +247,8 @@ def step_plan_from_compiled_step(*args: Any, **kwargs: Any) -> Any:
                     writes=step.verifier_writes,
                     log_artifacts=step.log_artifacts,
                     inventory=inventory,
-                    fallback_reads=step.reads,
-                    fallback_requires=step.verifier_requires,
+                    fallback_reads=source_verifier_reads,
+                    fallback_requires=source_verifier_requires,
                 ),
                 retry_policy=step.retry_policy,
                 expected_output_schema=step.expected_output_schema,
@@ -655,6 +663,8 @@ def _step_header_from_compiled_step(
     step: CompiledStep,
     inventory: Mapping[str, CompiledArtifact],
 ) -> StepHeader:
+    source_reads = _step_source_refs(step.step, "reads")
+    source_requires = _step_source_refs(step.step, "requires")
     return StepHeader(
         name=step.name,
         kind=step.kind,
@@ -667,6 +677,8 @@ def _step_header_from_compiled_step(
             writes=step.writes,
             log_artifacts=step.log_artifacts,
             inventory=inventory,
+            fallback_reads=source_reads,
+            fallback_requires=source_requires,
         ),
         state=StepStateSpec(
             step_state_model=step.step_state_model,
@@ -760,6 +772,13 @@ def _step_io_from_compiled_fields(
     )
 
 
+def _step_source_refs(step: object, attr: str, *, default: tuple[object, ...] = ()) -> tuple[object, ...]:
+    value = getattr(step, attr, None)
+    if value is None:
+        return default
+    return tuple(cast(Any, value))
+
+
 def _read_ref_from_compiled(
     value: object,
     inventory: Mapping[str, CompiledArtifact],
@@ -781,6 +800,8 @@ def _read_ref_from_compiled(
     artifact = inventory.get(value)
     if artifact is not None:
         return artifact_id_from_compiled_artifact(key=value, artifact=artifact)
+    if fallback is not None:
+        return _read_ref_from_compiled(fallback, inventory)
     return ExternalRead(value=value)
 
 
@@ -801,6 +822,8 @@ def _require_ref_from_compiled(
             return artifact_id
         raise ValueError(f"unknown compiled required reference {value!r}")
     artifact = inventory.get(value)
+    if artifact is None and fallback is not None:
+        return _require_ref_from_compiled(fallback, inventory)
     if artifact is None:
         raise ValueError(f"unknown compiled required reference {value!r}")
     return artifact_id_from_compiled_artifact(key=value, artifact=artifact)
@@ -822,14 +845,6 @@ def _fan_in_read_from_path(value: object) -> FanInRead | None:
     helper = getattr(value, "helper", None)
     if helper in {"results", "context"}:
         return FanInRead(helper=helper, path=str(value))
-    if not isinstance(value, str):
-        return None
-    if not value.startswith("_branch_groups/"):
-        return None
-    if value.endswith("/results.json"):
-        return FanInRead(helper="results", path=value)
-    if value.endswith("/context.md"):
-        return FanInRead(helper="context", path=value)
     return None
 
 

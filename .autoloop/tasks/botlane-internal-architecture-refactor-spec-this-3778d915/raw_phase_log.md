@@ -2028,3 +2028,149 @@ Open issues / next step
 <loop-control>
 {"schema":"docloop.loop_control/v1","kind":"promise","promise":"COMPLETE"}
 </loop-control>
+
+
+---
+run_id=run-20260509T045359Z-e2586b1f | entry=session_turn | pair=implement | phase=producer | cycle=1 | attempt=1 | thread_id=019e0b93-dab0-7e93-a14b-9a9419ebe6ec
+---
+provider=codex
+mode=start
+template=/home/rauter/.local/share/pipx/venvs/autoloop/lib/python3.12/site-packages/autoloop/templates/implement_producer.md
+session_id=019e0b93-dab0-7e93-a14b-9a9419ebe6ec
+
+
+---
+run_id=run-20260509T045359Z-e2586b1f | entry=phase_output | pair=implement | phase=producer | process=codex-agent | cycle=1 | attempt=1 | thread_id=019e0b93-dab0-7e93-a14b-9a9419ebe6ec
+---
+I’m working on the `execution-services-and-collaborators` phase. First I’m reading the phase artifacts and the current engine/collaborator wiring to identify the smallest service-shell migration that reduces `Engine` private-method coupling without changing runtime behavior.
+
+I’ve got the phase contract and prior decisions. Next I’m tracing the current `Engine` collaborator call graph to find the first narrow seams for `ExecutionServices`, starting with `ArtifactGuard` and `RouteFinalizer` as required by this phase.
+
+The codebase still has heavy `engine._...` reach-throughs, especially in `engine_collaborators.py` and `branch_groups/runtime.py`. I’m checking the existing abstractions around those call sites so I can introduce a narrow `ExecutionServices` shell instead of a broad engine proxy.
+
+There aren’t dedicated collaborator tests yet in the obvious locations, so I’m locating the nearest contract coverage and likely regression surfaces before editing. The phase notes are effectively blank, which means the code and plan are the main guidance here.
+
+I’ve narrowed the change: add a real `ExecutionServices` protocol shell, then route `ArtifactGuard` and `RouteFinalizer` through small service adapters built by `Engine`. That cuts the first private-method reach-throughs without touching step execution semantics yet.
+
+I’ve settled on a small first migration inside this phase: `ArtifactGuard` and `RouteFinalizer` will stop taking `Engine` directly, and `Engine` will provide only the specific service adapters they need. I’m checking for any direct instantiations before I patch that wiring.
+
+I’ve finished the read-through and I’m starting the code changes now. The patch is limited to a new `execution_services` module, `Engine` wiring for service adapters, collaborator constructor changes for `ArtifactGuard` and `RouteFinalizer`, and focused contract coverage for that seam.
+
+I’ve reached the test addition step. I’m adding focused contract coverage around the new service seam, not broad runtime behavior tests, because the goal here is to prove the collaborator migration boundary while relying on existing engine suites for end-to-end parity.
+
+I’ve got the new seam covered with focused tests. I’m doing a quick pass on the new file for import correctness and keeping the assertions limited to the collaborator boundary rather than engine internals more broadly.
+
+The first validation command failed because this workspace doesn’t have `python` on `PATH`. I’m rerunning the same targeted suite with `python3` so I can verify the migration before touching notes or decisions.
+
+The focused seam tests passed, along with the adjacent artifact, route, and provider-turn suites. I’m running the broader engine contract bucket plus branch-group runtime now because `Engine` construction changed and that’s the most likely regression surface beyond the new collaborator seam.
+
+The broader engine contract run exposed two real regressions outside the narrow service seam: one in produce/verify provider-contract shaping, and one in fan-in readable path resolution under the step-plan path. I’m tracing those now before I finalize, because they’re both compatibility-sensitive and likely caused by the newer plan-based execution branches rather than the service shell itself.
+
+The failures both trace back to the typed plan path, not the new service adapters. I’m patching those plan-path parity gaps now: producer turns should not inherit verifier output schema, and `FanInRead` needs to resolve through `ctx.fan_in` metadata instead of being treated like a literal workspace path.
+
+One more parity gap surfaced in branch-group coverage. The problem is narrower than it looked: plain workflow reads of `_branch_groups/...` should stay plain workspace reads, while only actual fan-in helper references should become `FanInRead`. I’m tracing how the compiler marks fan-in steps so I can stop over-normalizing those literal paths.
+
+The fan-in and pair-contract regressions were both in the plan-adapter/provider-contract path, and the fixes are in. I’m rerunning the full engine contract bucket with branch-group runtime to make sure the service-shell work and those parity fixes hold together as a set.
+
+The strictness suite found one new forbidden token in the new test file only. I’m removing that internal module name from the test rather than widening the allowlist, so the scan remains as tight as it was before this phase.
+
+I’ve finished the code and validation work. I’m updating the phase notes and the decisions ledger now, including the two parity fixes that were necessary to keep runtime behavior unchanged after the collaborator seam moved.
+
+Scope considered
+- `botlane/core/engine.py`, `botlane/core/engine_collaborators.py`, new `botlane/core/execution_services.py`
+- `botlane/core/plan_adapters.py` for parity fixes required by the new seam
+- `tests/contract/engine/test_execution_services.py`
+- Phase notes and decisions files for this phase only
+
+What I analyzed
+- Current `Engine` collaborator wiring and direct `engine._...` reach-throughs
+- `ArtifactGuard` and `RouteFinalizer` call paths as the first required migration targets
+- Adjacent provider-turn and branch-group contract surfaces to catch regressions from the new seam
+- Strictness coverage to avoid widening allowlists unnecessarily
+
+What I changed
+- Added `botlane/core/execution_services.py` with narrow protocols and the `ExecutionServices` bundle.
+- Wired `Engine` to build private bridge adapters for artifact, route, and state operations, plus reuse `HookRunner` as the hook service.
+- Changed `ArtifactGuard` to depend on `ExecutionServices.artifacts` instead of `Engine`.
+- Changed `RouteFinalizer` to depend on `ExecutionServices` plus artifact inventory instead of `Engine`, removing its direct engine-private-method coupling.
+- Added focused contract tests in `tests/contract/engine/test_execution_services.py`.
+- Fixed two parity regressions exposed by the broader validation:
+  - producer turns no longer inherit `expected_output_schema`
+  - `FanInRead` now resolves from authored helper refs, while literal `_branch_groups/...` reads remain normal workspace reads
+
+Key findings / decisions
+- The narrow service seam is enough for this phase: `ArtifactGuard` and `RouteFinalizer` are migrated without introducing an engine-shaped replacement service.
+- The first seam exposed existing plan-path parity gaps, so `plan_adapters.py` needed small compatibility repairs to keep runtime behavior unchanged.
+- I kept the strictness scan tight by removing a forbidden internal token from the new test instead of expanding allowlists.
+- I updated the phase `implementation_notes.md` and appended the non-obvious decisions under the current header in `decisions.txt`.
+
+Open issues / next step
+- Later phases still need to migrate `HookRunner`, `StepDispatcher`, `BranchGroupRuntime`, and the remaining collaborators off direct `Engine` coupling.
+- Full `python -m pytest` was not run in this turn.
+- Validation completed for:
+  - `tests/contract/engine` and `tests/contract/test_branch_group_runtime.py` with 213 passing tests
+  - `tests/unit/test_simple_surface.py`, `tests/unit/test_sdk_facade.py`, and `tests/strictness/test_no_compat.py` with 223 passing tests in that batch
+
+<loop-control>
+{"schema":"docloop.loop_control/v1","kind":"complete","status":"completed"}
+</loop-control>
+
+
+---
+run_id=run-20260509T045359Z-e2586b1f | entry=loop_control_retry | pair=implement | phase=producer | cycle=1 | attempt=1
+---
+Loop-control parse feedback:
+The previous implement producer response could not be parsed: Canonical loop-control kind must be 'question' or 'promise'.
+Retry this phase once now. Preserve the intended response, but fix the loop-control output so it follows the required contract exactly.
+
+
+---
+run_id=run-20260509T045359Z-e2586b1f | entry=session_turn | pair=implement | phase=producer | cycle=1 | attempt=1 | thread_id=019e0b93-dab0-7e93-a14b-9a9419ebe6ec
+---
+provider=codex
+mode=resume
+template=/home/rauter/.local/share/pipx/venvs/autoloop/lib/python3.12/site-packages/autoloop/templates/implement_producer.md
+session_id=019e0b93-dab0-7e93-a14b-9a9419ebe6ec
+
+
+---
+run_id=run-20260509T045359Z-e2586b1f | entry=phase_output | pair=implement | phase=producer | process=codex-agent | cycle=1 | attempt=1 | thread_id=019e0b93-dab0-7e93-a14b-9a9419ebe6ec
+---
+Scope considered
+- `botlane/core/engine.py`, `botlane/core/engine_collaborators.py`, new `botlane/core/execution_services.py`
+- `botlane/core/plan_adapters.py` for parity fixes required by the new seam
+- `tests/contract/engine/test_execution_services.py`
+- Phase notes and decisions files for this phase only
+
+What I analyzed
+- Current `Engine` collaborator wiring and direct `engine._...` reach-throughs
+- `ArtifactGuard` and `RouteFinalizer` call paths as the first required migration targets
+- Adjacent provider-turn and branch-group contract surfaces to catch regressions from the new seam
+- Strictness coverage to avoid widening allowlists unnecessarily
+
+What I changed
+- Added `botlane/core/execution_services.py` with narrow protocols and the `ExecutionServices` bundle.
+- Wired `Engine` to build private bridge adapters for artifact, route, and state operations, plus reuse `HookRunner` as the hook service.
+- Changed `ArtifactGuard` to depend on `ExecutionServices.artifacts` instead of `Engine`.
+- Changed `RouteFinalizer` to depend on `ExecutionServices` plus artifact inventory instead of `Engine`, removing its direct engine-private-method coupling.
+- Added focused contract tests in `tests/contract/engine/test_execution_services.py`.
+- Fixed two parity regressions exposed by the broader validation:
+  - producer turns no longer inherit `expected_output_schema`
+  - `FanInRead` now resolves from authored helper refs, while literal `_branch_groups/...` reads remain normal workspace reads
+
+Key findings / decisions
+- The narrow service seam is enough for this phase: `ArtifactGuard` and `RouteFinalizer` are migrated without introducing an engine-shaped replacement service.
+- The first seam exposed existing plan-path parity gaps, so `plan_adapters.py` needed small compatibility repairs to keep runtime behavior unchanged.
+- I kept the strictness scan tight by removing a forbidden internal token from the new test instead of expanding allowlists.
+- I updated the phase `implementation_notes.md` and appended the non-obvious decisions under the current header in `decisions.txt`.
+
+Open issues / next step
+- Later phases still need to migrate `HookRunner`, `StepDispatcher`, `BranchGroupRuntime`, and the remaining collaborators off direct `Engine` coupling.
+- Full `python -m pytest` was not run in this turn.
+- Validation completed for:
+  - `tests/contract/engine` and `tests/contract/test_branch_group_runtime.py` with 213 passing tests
+  - `tests/unit/test_simple_surface.py`, `tests/unit/test_sdk_facade.py`, and `tests/strictness/test_no_compat.py` with 223 passing tests in that batch
+
+<loop-control>
+{"schema":"docloop.loop_control/v1","kind":"promise","promise":"COMPLETE"}
+</loop-control>
