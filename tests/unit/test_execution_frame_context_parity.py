@@ -80,6 +80,8 @@ def test_context_synthesizes_execution_frame_and_preserves_default_message_senti
 
 def test_context_module_has_no_weakref_runtime_sidecar() -> None:
     assert not hasattr(context_module, "_CONTEXT_RUNTIMES")
+    assert not hasattr(context_module, "_ContextRuntime")
+    assert not hasattr(context_module, "context_runtime")
 
 
 def test_context_frame_mutators_update_execution_frame_and_legacy_fields(tmp_path: Path) -> None:
@@ -177,6 +179,10 @@ def test_branch_child_context_uses_child_frame_and_preserves_shared_state(tmp_pa
     assert branch._execution_frame.fan_in is None
     assert branch._execution_frame.selection_snapshots == snapshots
     assert branch._execution_frame.selection_snapshots is not parent._execution_frame.selection_snapshots
+    assert branch._execution_frame.worklist_selection_resolver is not None
+    assert branch._execution_frame.worklist_selection_resolver is not parent._execution_frame.worklist_selection_resolver
+    assert branch._execution_frame.worklist_items_cache == {}
+    assert branch._execution_frame.worklist_items_cache is not parent._execution_frame.worklist_items_cache
 
     branch.values.shared = "branch"
     branch.state = branch.state.model_copy(update={"counter": 5})

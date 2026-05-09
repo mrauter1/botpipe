@@ -1,1 +1,5 @@
 <autoloop-decisions-header version="1" block_seq="1" owner="planner" phase_id="task-global" pair="plan" turn_seq="1" run_id="run-20260509T144337Z-158e6e31" ts="2026-05-09T14:43:38.486001+00:00" />
+Context should become the canonical executable runtime mutator facade; keep ExecutionFrame as the backing store and child-frame construction primitive rather than adding a new runtime wrapper.
+Unify worklist selection mutation, selection-snapshot invalidation, and scoped item-state refresh behind one Context path reused by engine lazy selection, worklist runtime helpers, and branch-group child selection resolvers.
+The cited failing tests and the full acceptance batch are already green in this workspace; treat the task as behavior-preserving contract consolidation, not a user-visible runtime behavior change.
+Hotspot 9 remains deferred because the current plan does not require opening botlane/core/workflow_capabilities.py.
