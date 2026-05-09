@@ -2271,3 +2271,56 @@ Open issues / next step
   - `tests/unit/test_sdk_facade.py -k "strict_child_workflow_steps or wraps_invalid_child_workflow_message_placeholder"`
   - `test_sdk_step_supports_directly_resolvable_strict_child_workflow_steps` still fails because `ChildWorkflowStepPlan` lacks `.step`
 - Next step is verifier re-review of the phase artifacts and updated SDK boundary.
+
+
+---
+run_id=run-20260509T125912Z-8deb38fd | entry=session_turn | pair=implement | phase=verifier | cycle=3 | attempt=1 | thread_id=019e0d43-3dc9-76f0-90b1-4d54c4f1a863
+---
+provider=codex
+mode=resume
+template=/home/rauter/.local/share/pipx/venvs/autoloop/lib/python3.12/site-packages/autoloop/templates/implement_verifier.md
+session_id=019e0d43-3dc9-76f0-90b1-4d54c4f1a863
+
+
+---
+run_id=run-20260509T125912Z-8deb38fd | entry=phase_output | pair=implement | phase=verifier | process=codex-agent | cycle=3 | attempt=1 | thread_id=019e0d43-3dc9-76f0-90b1-4d54c4f1a863
+---
+I’m re-checking the SDK compile-boundary fix and the earlier placeholder/reference-graph surfaces together. The main question for this pass is whether the producer restored the public SDK exception contract without reopening the centralized placeholder validation work.
+
+The focused verification is green. I don’t see a remaining phase-local blocking issue, so I’m updating the review artifacts to reflect that `IMP-002` is resolved and marking the criteria complete.
+
+Scope considered
+
+- Phase-local re-review of the `placeholder-reference-graph` implementation.
+- The SDK compile-boundary fix in `botlane/sdk.py`, the shared placeholder-validation/message-normalization path in `botlane/core/compiler.py` and `botlane/core/placeholders.py`, and the earlier engine-side preservation in `botlane/core/engine.py`.
+- Active review artifacts only: [criteria.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/botlane-v3-second-pass-greenfield-architecture-s-a9df943f/runs/run-20260509T125912Z-8deb38fd/artifacts/implement/phases/placeholder-reference-graph/criteria.md), [feedback.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/botlane-v3-second-pass-greenfield-architecture-s-a9df943f/runs/run-20260509T125912Z-8deb38fd/artifacts/implement/phases/placeholder-reference-graph/feedback.md), and [implementation_notes.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/botlane-v3-second-pass-greenfield-architecture-s-a9df943f/runs/run-20260509T125912Z-8deb38fd/artifacts/implement/phases/placeholder-reference-graph/implementation_notes.md).
+
+What I analyzed
+
+- The public SDK entrypoint behavior for compile-time placeholder failures.
+- The shared normalization helper now hosted in `botlane/core/compiler.py`.
+- The compile-time missing-input wording for `input.*` / `ctx.input.*` placeholder refs.
+- Focused pytest coverage for the fixed SDK regression and the earlier placeholder/reference-graph acceptance surfaces.
+
+What I reviewed
+
+- `IMP-002` is resolved: public SDK entrypoints no longer leak raw `WorkflowValidationError` for the newly compile-time-validated placeholder surfaces.
+- The producer also restored the existing SDK-facing wording contract for no-input placeholder failures.
+- I updated [criteria.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/botlane-v3-second-pass-greenfield-architecture-s-a9df943f/runs/run-20260509T125912Z-8deb38fd/artifacts/implement/phases/placeholder-reference-graph/criteria.md) to all checked and marked `IMP-002` resolved in [feedback.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/botlane-v3-second-pass-greenfield-architecture-s-a9df943f/runs/run-20260509T125912Z-8deb38fd/artifacts/implement/phases/placeholder-reference-graph/feedback.md).
+
+Key findings / decisions
+
+- No remaining phase-local blocking findings.
+- The SDK fix is cohesive: one compiler-owned normalization helper is shared by engine and SDK, and the SDK now catches placeholder-related compile failures from both the loader’s early compile pass and the explicit SDK compile pass.
+- Focused verification passed:
+  - `.venv/bin/python -m pytest tests/unit/test_sdk_facade.py -k "wraps_invalid_child_workflow_message_placeholder or prompt_step_missing_input_field_fails_clearly" -q`
+  - `.venv/bin/python -m pytest tests/unit/test_placeholder_refs.py tests/contract/engine/test_child_workflows.py -k "invalid_ctx_field or test_compile_workflow_rejects_invalid_workflow_step_message_placeholder or test_compile_workflow_rejects_invalid_artifact_template_placeholder" -q`
+
+Open issues / next step
+
+- The producer’s broader spot-check still notes an unrelated pre-existing failure in `test_sdk_step_supports_directly_resolvable_strict_child_workflow_steps` caused by `ChildWorkflowStepPlan` lacking `.step`; that is outside this phase scope and not caused by the placeholder/reference-graph changes.
+- Phase-local review is complete.
+
+<loop-control>
+{"schema":"docloop.loop_control/v1","kind":"promise","promise":"COMPLETE"}
+</loop-control>
