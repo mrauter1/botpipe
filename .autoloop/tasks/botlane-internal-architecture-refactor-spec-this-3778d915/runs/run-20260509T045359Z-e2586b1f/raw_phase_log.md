@@ -2793,3 +2793,94 @@ No phase-local issues remain from review. The implementation is suitable to adva
 <loop-control>
 {"schema":"docloop.loop_control/v1","kind":"promise","promise":"COMPLETE"}
 </loop-control>
+
+
+---
+run_id=run-20260509T045359Z-e2586b1f | entry=session_turn | pair=test | phase=producer | cycle=1 | attempt=1 | thread_id=019e0bae-cd99-7e10-beea-ffbc2cc82edc
+---
+provider=codex
+mode=resume
+template=/home/rauter/.local/share/pipx/venvs/autoloop/lib/python3.12/site-packages/autoloop/templates/test_producer.md
+session_id=019e0bae-cd99-7e10-beea-ffbc2cc82edc
+
+
+---
+run_id=run-20260509T045359Z-e2586b1f | entry=phase_output | pair=test | phase=producer | process=codex-agent | cycle=1 | attempt=1 | thread_id=019e0bae-cd99-7e10-beea-ffbc2cc82edc
+---
+I’m checking the new phase tests against the implementation and the verifier outcome to see whether any edge or failure-path coverage is still missing. If there’s a gap, I’ll add only the smallest deterministic test needed and then update the phase test artifacts with the exact behavior map.
+
+I found one useful gap worth closing: the locator tests don’t yet pin the deliberate non-support for `workflow_class` resolutions, even though the approved `WorkflowLocator` union excludes imported-class variants. I’m adding that failure-path coverage and one explicit cancelled-branch serializer shape check, then I’ll update the phase test artifacts to reflect the full behavior map.
+
+The added failure-path test exposed a test harness issue, not a product issue: the temporary module needs to be registered in `sys.modules` before `inspect.getfile()` can see its source path. I’m fixing that setup now and rerunning the affected buckets.
+
+The added edge/failure-path coverage is green now. I’m writing the phase-local strategy and feedback artifacts with the exact behavior map, preserved invariants, failure paths, and the deterministic harness note from the imported-class locator test.
+
+Scope considered
+
+Active phase `branch-results-locators-and-policy-rules` only. I limited work to the new branch-result and workflow-locator tests plus the phase-local `test_strategy.md` and `feedback.md` artifacts.
+
+What I analyzed
+
+I reviewed the existing new tests in `tests/contract/test_branch_result_serialization.py` and `tests/runtime/test_workflow_locator_variants.py`, compared them to the implementation and verifier outcome, and looked for uncovered edge/failure paths within the approved scope.
+
+What I changed
+
+I extended `tests/contract/test_branch_result_serialization.py` with explicit cancelled-entry shape coverage, and `tests/runtime/test_workflow_locator_variants.py` with the negative path that `workflow_locator_from_resolved(...)` rejects `workflow_class` resolutions because imported-class locators are intentionally out of scope. I also updated the phase test artifacts to map coverage, invariants, failure paths, stabilization notes, and validation run details.
+
+Key findings / decisions
+
+The only meaningful gap was the missing failure-path assertion for unsupported `workflow_class` locator conversion. The temporary imported-class test needed deterministic module registration in `sys.modules` so `inspect.getfile(...)` could resolve the file path consistently during `resolve_workflow_reference(...)`.
+
+Open issues / next step
+
+Focused validation passed with:
+- `./.venv/bin/python -m pytest tests/contract/test_branch_result_serialization.py`
+- `./.venv/bin/python -m pytest tests/runtime/test_workflow_locator_variants.py`
+- `./.venv/bin/python -m pytest tests/contract/test_branch_group_runtime.py tests/runtime/test_provider_policy_emitters.py`
+
+No additional phase-local gaps remain.
+
+
+---
+run_id=run-20260509T045359Z-e2586b1f | entry=session_turn | pair=test | phase=verifier | cycle=1 | attempt=1 | thread_id=019e0bae-cd99-7e10-beea-ffbc2cc82edc
+---
+provider=codex
+mode=resume
+template=/home/rauter/.local/share/pipx/venvs/autoloop/lib/python3.12/site-packages/autoloop/templates/test_verifier.md
+session_id=019e0bae-cd99-7e10-beea-ffbc2cc82edc
+
+
+---
+run_id=run-20260509T045359Z-e2586b1f | entry=phase_output | pair=test | phase=verifier | process=codex-agent | cycle=1 | attempt=1 | thread_id=019e0bae-cd99-7e10-beea-ffbc2cc82edc
+---
+I’m auditing the phase-local tests against the acceptance criteria and the run decisions. I’ll verify the new branch-result and workflow-locator coverage first, then update the audit artifacts with any concrete gaps or a clean completion if the coverage is sufficient.
+
+The strategy and feedback align with the changed scope. I’m doing one quick confirmation pass on the concrete test files and the focused pytest buckets so the audit result is grounded in the actual covered behavior, not just the artifact summary.
+
+The concrete test files match the strategy, and the focused combined pytest run is still in flight. I’m polling once for the final result and then I’ll write the audit artifacts based on that verified outcome.
+
+The focused test buckets are green end to end, including the new failure-path coverage. I’m recording a clean audit in the criteria and feedback artifacts now, then I’ll close the phase as complete.
+
+Scope considered
+
+Active phase `branch-results-locators-and-policy-rules` only. I audited the phase-local test additions, the test strategy artifact, and the focused regression buckets tied to branch-result serialization and workflow-locator behavior.
+
+What I analyzed
+
+I checked the updated tests in `tests/contract/test_branch_result_serialization.py` and `tests/runtime/test_workflow_locator_variants.py` against the phase acceptance criteria and the run decisions, especially the manifest-shape parity rule and the intentional scope limit that excludes imported-class locator variants.
+
+What I reviewed
+
+The tests now cover completed, skipped, and cancelled branch-result shapes; manifest/context/outcome compatibility during typed-result migration; supported catalog/file/module/directory locator parity; the missing-file locator failure path; and the deliberate `workflow_class` locator rejection path. I also verified the stated stabilization approach for the imported-class test and reran the focused combined pytest command, which passed with 46 tests.
+
+Key findings / decisions
+
+No blocking or non-blocking audit findings. The coverage is appropriate for the changed behavior, the failure paths are explicit where material, and the tests do not encode any unconfirmed behavior break.
+
+Open issues / next step
+
+No phase-local issues remain from the test audit. I updated the audit criteria to checked and recorded a clean audit note in the phase feedback artifact.
+
+<loop-control>
+{"schema":"docloop.loop_control/v1","kind":"promise","promise":"COMPLETE"}
+</loop-control>

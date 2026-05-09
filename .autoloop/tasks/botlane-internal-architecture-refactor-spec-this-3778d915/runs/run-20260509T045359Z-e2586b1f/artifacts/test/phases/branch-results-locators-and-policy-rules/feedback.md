@@ -8,3 +8,5 @@
 - Scope: phase-local authoritative verifier artifact
 
 Added phase-local coverage in `tests/contract/test_branch_result_serialization.py` for cancelled-entry shape parity and in `tests/runtime/test_workflow_locator_variants.py` for the intentional `workflow_class` locator rejection path. Revalidated the focused phase buckets: branch-result serialization, workflow-locator variants, branch-group runtime, and provider-policy emitter parity.
+
+No audit findings. The added tests cover the intended typed-serialization parity, preserved manifest/context/outcome behavior, supported locator variants, and the deliberate unsupported `workflow_class` locator conversion path with deterministic module registration.
