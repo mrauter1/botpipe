@@ -90,7 +90,7 @@ def _run(
 ):
     task_folder, run_folder = _workspace(tmp_path)
     workflow_cls = _make_workflow(status_policy=status_policy, statuses=statuses)
-    workflow_compiler._COMPILED_WORKFLOW_CACHE.clear()
+    workflow_compiler._WORKFLOW_PLAN_CACHE.clear()
     result = Engine(
         workflow_cls,
         provider=ScriptedLLMProvider(

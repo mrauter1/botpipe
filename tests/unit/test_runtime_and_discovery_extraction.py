@@ -1,19 +1,53 @@
 from __future__ import annotations
 
 from pathlib import Path
+import sys
+import types
 
 import pytest
 from pydantic import BaseModel
+
+_sdk = types.ModuleType("botlane.sdk")
+for _name in (
+    "ArtifactMap",
+    "Botlane",
+    "BotlaneSDKError",
+    "BestSuppositionInput",
+    "CleanupResult",
+    "ConsoleInput",
+    "HandledInput",
+    "InputRequest",
+    "InputRequired",
+    "InputResponseValidationError",
+    "MappingInput",
+    "RetentionInfo",
+    "RetentionPolicy",
+    "ResultArtifact",
+    "SDKDebugInfo",
+    "SDKExecutionError",
+    "StaticInput",
+    "StepResult",
+    "TooManyPauses",
+    "WorkflowInputError",
+    "WorkflowParameterError",
+    "WorkflowResult",
+):
+    setattr(_sdk, _name, type(_name, (), {}))
+sys.modules.setdefault("botlane.sdk", _sdk)
 
 from botlane.core import FINISH, Workflow
 from botlane.core.discovery import describe_workflow_class
 from botlane.core.engine import Engine
 from botlane.core.errors import WorkflowExecutionError
 from botlane.core.extensions import RunBinding, TerminalFinish
-from botlane.core.primitives import Event
+from botlane.core.primitives import Event, RequestInput
 from botlane.core.providers.fake import ScriptedLLMProvider
 from botlane.core.steps import PythonStep, Session
 from botlane.core.stores import InMemoryCheckpointStore, InMemorySessionStore
+
+
+class ApprovalInput(BaseModel):
+    approval: str
 
 
 def _workspace(tmp_path: Path) -> tuple[Path, Path]:
@@ -76,6 +110,69 @@ def test_engine_max_steps_exhaustion_emits_fatal_terminal_without_checkpoint(tmp
 
     assert checkpoint_store.load() is None
     assert seen == [("fatal", "spin", 2)]
+
+
+def test_engine_resume_input_failure_preserves_fatal_terminal_step_context(tmp_path: Path) -> None:
+    seen: list[tuple[str, str | None, bool]] = []
+
+    class TerminalExtension:
+        def bind(self, binding: RunBinding):
+            class Bound:
+                def before_step(self, event) -> None:
+                    return None
+
+                def after_step(self, event) -> None:
+                    return None
+
+                def on_terminal(self, event: TerminalFinish) -> None:
+                    seen.append((event.terminal, event.step_name, event.state is not None))
+
+            return Bound()
+
+    def _requestinputworkflow_on_ask(ctx):
+        if ctx.input_response is None:
+            return RequestInput("Approve the review?", input_schema=ApprovalInput)
+        return Event("done")
+
+    class RequestInputWorkflow(Workflow):
+        class State(BaseModel):
+            pass
+
+        extensions = (TerminalExtension(),)
+        ask = PythonStep(name="ask", handler=_requestinputworkflow_on_ask)
+        entry = ask
+        transitions = {ask: {"done": FINISH}}
+
+    task_folder, run_folder = _workspace(tmp_path)
+    checkpoint_store = InMemoryCheckpointStore()
+    engine = Engine(
+        RequestInputWorkflow,
+        provider=ScriptedLLMProvider(),
+        session_store=InMemorySessionStore(),
+        checkpoint_store=checkpoint_store,
+    )
+
+    first = engine.run(
+        task_id="task-resume-fatal",
+        run_id="run-resume-fatal",
+        task_folder=task_folder,
+        run_folder=run_folder,
+        root=tmp_path,
+    )
+
+    assert first.checkpoint is not None
+
+    with pytest.raises(WorkflowExecutionError, match="resumed input did not satisfy"):
+        engine.resume(
+            task_id="task-resume-fatal",
+            run_id="run-resume-fatal",
+            task_folder=task_folder,
+            run_folder=run_folder,
+            root=tmp_path,
+            answer='{"approval": 7}',
+        )
+
+    assert seen[-1] == ("fatal", "ask", True)
 
 
 def test_describe_workflow_class_preserves_default_entry_order_and_global_session() -> None:

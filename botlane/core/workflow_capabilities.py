@@ -26,6 +26,7 @@ from .route_reporting import (
     provider_response_contract_for_routes,
     route_fields_contract_for_route,
 )
+from .route_contracts import required_write_names, route_target_value
 from .validation import is_workflow_class
 from .workflow_catalog import AuthoringShape, WorkflowCatalogEntry, discover_workflow_catalog, workflow_search_roots
 from .workflow_plan import WorkflowPlan
@@ -658,10 +659,10 @@ def _capability_entry_from_resolved(resolved, compiled: WorkflowPlan, catalog_en
             for name, artifact in compiled.artifact_items(authoritative=True)
         ),
         routes={
-            step_name: {tag: route.target for tag, route in routes.items()}
+            step_name: {tag: route_target_value(route.target) for tag, route in routes.items()}
             for step_name, routes in compiled.routes.items()
         },
-        global_routes={tag: route.target for tag, route in compiled.global_routes.items()},
+        global_routes={tag: route_target_value(route.target) for tag, route in compiled.global_routes.items()},
         compiled_global_routes=_compiled_routes(
             tuple(compiled.global_routes.keys()),
             step_routes=compiled.global_routes,
@@ -1154,9 +1155,9 @@ def _compiled_routes(
         )
         route_fields_contract = route_fields_contract_for_route(route)
         routes[route_name] = WorkflowRouteCapability(
-            target=route.target,
+            target=route_target_value(route.target),
             summary=route.summary,
-            required_writes=tuple(route.required_writes or ()),
+            required_writes=required_write_names(route),
             handoff=route.handoff,
             on_taken=getattr(route.on_taken, "__name__", None),
             provider_visibility=route.provider_visibility,
@@ -1183,7 +1184,7 @@ def _provider_route_map(step: Any, *, policy: str) -> dict[str, Any]:
         if policy == "interactive"
         else step.provider_visible_routes_full_auto
     )
-    route_table = getattr(step, "route_table", None) or {}
+    route_table = getattr(step, "_route_table", None) or {}
     return {
         route_tag: route_table[route_tag]
         for route_tag in visible_tags
@@ -1204,7 +1205,7 @@ def _step_capability(
         global_routes=global_routes,
         expected_output_schema=step.expected_output_schema,
     )
-    compiled_route_tags = tuple((getattr(step, "route_table", None) or {}).keys())
+    compiled_route_tags = tuple((getattr(step, "_route_table", None) or {}).keys())
     compiled_routes = _compiled_routes(
         compiled_route_tags,
         step_routes=step_routes,

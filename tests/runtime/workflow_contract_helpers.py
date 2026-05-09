@@ -18,7 +18,7 @@ def _normalize_control_result(result: Any) -> Any:
 def _compile_fresh_workflow(workflow_cls: type[Any]):
     # Tests in this module monkeypatch workflow module handlers between invocations.
     # Clear the compiler cache so helper-based step calls observe the patched callable.
-    workflow_compiler._COMPILED_WORKFLOW_CACHE.clear()
+    workflow_compiler._WORKFLOW_PLAN_CACHE.clear()
     return compile_workflow(workflow_cls)
 
 

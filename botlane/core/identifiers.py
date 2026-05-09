@@ -28,6 +28,21 @@ class ArtifactId:
             return
         raise ValueError(f"unsupported ArtifactId namespace {self.namespace!r}")
 
+    def __eq__(self, other: object) -> bool:
+        if isinstance(other, str):
+            return self.qualified_name == other
+        if not isinstance(other, ArtifactId):
+            return NotImplemented
+        return (
+            self.namespace,
+            self.name,
+            self.step,
+        ) == (
+            other.namespace,
+            other.name,
+            other.step,
+        )
+
     @property
     def qualified_name(self) -> str:
         return self.name if self.step is None else f"{self.step}.{self.name}"

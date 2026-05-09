@@ -106,15 +106,27 @@ class _BaseStepPlan:
 
     @property
     def available_routes(self) -> tuple[str, ...]:
-        return tuple(tag for tag, route in self._effective_route_table.items() if not route.disabled)
+        ordered_tags = tuple(tag for tag, route in self._effective_route_table.items() if not route.disabled)
+        branch_group = self.branch_group
+        if branch_group is None or not branch_group.composite_route_tags:
+            return ordered_tags
+        composite_order = tuple(tag for tag in branch_group.composite_route_tags if tag in ordered_tags)
+        extras = tuple(tag for tag in ordered_tags if tag not in composite_order)
+        return (*composite_order, *extras)
 
     @property
     def authored_routes(self) -> tuple[str, ...]:
-        return tuple(
+        authored_tags = tuple(
             tag
             for tag, route in self._effective_route_table.items()
             if route.inheritance_source != "framework_default"
         )
+        branch_group = self.branch_group
+        if branch_group is None or not branch_group.composite_route_tags:
+            return authored_tags
+        composite_order = tuple(tag for tag in branch_group.composite_route_tags if tag in authored_tags)
+        extras = tuple(tag for tag in authored_tags if tag not in composite_order)
+        return (*composite_order, *extras)
 
     @property
     def runtime_control_routes(self) -> tuple[str, ...]:

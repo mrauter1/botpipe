@@ -1,16 +1,13 @@
 from __future__ import annotations
 
-from dataclasses import replace
-
 import botlane.simple as simple
-import pytest
 from pydantic import BaseModel
 
 from botlane import FINISH
 from botlane.core import Workflow
 from botlane.core.artifacts import Artifact
 from botlane.core.compiler import compile_workflow
-from botlane.core.plan_adapters import compiled_step_from_step_plan, route_contract_from_compiled_route, step_plan_from_compiled_step
+from botlane.core.identifiers import ArtifactId
 from botlane.core.step_plans import (
     BranchGroupStepPlan,
     ChildWorkflowStepPlan,
@@ -111,50 +108,22 @@ class _BranchPlanWorkflow(Workflow):
     )
 
 
-def test_step_plans_cover_prompt_pair_python_and_child_variants() -> None:
+def test_compile_workflow_emits_typed_step_plan_variants() -> None:
     compiled = compile_workflow(_PlanWorkflow)
 
-    prompt_plan = step_plan_from_compiled_step(
-        compiled.steps["prompt"],
-        routes={
-            tag: route_contract_from_compiled_route(route, inventory=compiled.artifacts_by_qualified_name)
-            for tag, route in compiled.routes["prompt"].items()
-        },
-        inventory=compiled.artifacts_by_qualified_name,
-    )
-    pair_plan = step_plan_from_compiled_step(
-        compiled.steps["pair"],
-        routes={
-            tag: route_contract_from_compiled_route(route, inventory=compiled.artifacts_by_qualified_name)
-            for tag, route in compiled.routes["pair"].items()
-        },
-        inventory=compiled.artifacts_by_qualified_name,
-    )
-    python_plan = step_plan_from_compiled_step(
-        compiled.steps["run_python"],
-        routes={
-            tag: route_contract_from_compiled_route(route, inventory=compiled.artifacts_by_qualified_name)
-            for tag, route in compiled.routes["run_python"].items()
-        },
-        inventory=compiled.artifacts_by_qualified_name,
-    )
-    child_plan = step_plan_from_compiled_step(
-        compiled.steps["launch"],
-        routes={
-            tag: route_contract_from_compiled_route(route, inventory=compiled.artifacts_by_qualified_name)
-            for tag, route in compiled.routes["launch"].items()
-        },
-        inventory=compiled.artifacts_by_qualified_name,
-    )
+    prompt_plan = compiled.steps["prompt"]
+    pair_plan = compiled.steps["pair"]
+    python_plan = compiled.steps["run_python"]
+    child_plan = compiled.steps["launch"]
 
     assert isinstance(prompt_plan, PromptStepPlan)
     assert prompt_plan.header.source is not None
     assert prompt_plan.header.source.declaration_name == "prompt"
-    assert prompt_plan.header.source.authoring_kind == type(compiled.steps["prompt"].step).__name__
-    assert isinstance(prompt_plan.header.io.reads[0], type(prompt_plan.header.io.writes[0]))
-    assert isinstance(prompt_plan.header.io.reads[1], ExternalRead)
+    assert prompt_plan.header.source.authoring_kind == "PromptStep"
     assert prompt_plan.turn.kind == "llm"
-    assert not hasattr(prompt_plan.header, "available_routes")
+    assert isinstance(prompt_plan.reads[0], ArtifactId)
+    assert isinstance(prompt_plan.reads[1], ExternalRead)
+    assert prompt_plan.available_routes == ("done", "question")
     assert not hasattr(prompt_plan.header, "original_step")
 
     assert isinstance(pair_plan, ProduceVerifyStepPlan)
@@ -167,7 +136,7 @@ def test_step_plans_cover_prompt_pair_python_and_child_variants() -> None:
     assert isinstance(python_plan, PythonStepPlan)
     assert python_plan.header.source is not None
     assert python_plan.header.source.declaration_name == "run_python"
-    assert python_plan.handler is compiled.steps["run_python"].python_handler
+    assert python_plan.handler is compiled.steps["run_python"].handler
 
     assert isinstance(child_plan, ChildWorkflowStepPlan)
     assert child_plan.header.source is not None
@@ -177,36 +146,10 @@ def test_step_plans_cover_prompt_pair_python_and_child_variants() -> None:
     assert child_plan.params == {"mode": "fast"}
     assert child_plan.input == {"attempt": 1}
 
-    assert compiled_step_from_step_plan(prompt_plan, routes={
-        tag: route_contract_from_compiled_route(route, inventory=compiled.artifacts_by_qualified_name)
-        for tag, route in compiled.routes["prompt"].items()
-    }) == compiled.steps["prompt"]
-    assert compiled_step_from_step_plan(pair_plan, routes={
-        tag: route_contract_from_compiled_route(route, inventory=compiled.artifacts_by_qualified_name)
-        for tag, route in compiled.routes["pair"].items()
-    }) == compiled.steps["pair"]
-    assert compiled_step_from_step_plan(python_plan, routes={
-        tag: route_contract_from_compiled_route(route, inventory=compiled.artifacts_by_qualified_name)
-        for tag, route in compiled.routes["run_python"].items()
-    }) == compiled.steps["run_python"]
-    assert compiled_step_from_step_plan(child_plan, routes={
-        tag: route_contract_from_compiled_route(route, inventory=compiled.artifacts_by_qualified_name)
-        for tag, route in compiled.routes["launch"].items()
-    }) == compiled.steps["launch"]
-
 
 def test_branch_group_step_plan_keeps_nested_plan_shapes_and_fan_in_helpers() -> None:
     compiled = compile_workflow(_BranchPlanWorkflow)
-    branch_step = compiled.steps["reviews"]
-
-    plan = step_plan_from_compiled_step(
-        branch_step,
-        routes={
-            tag: route_contract_from_compiled_route(route, inventory=compiled.artifacts_by_qualified_name)
-            for tag, route in compiled.routes["reviews"].items()
-        },
-        inventory=compiled.artifacts_by_qualified_name,
-    )
+    plan = compiled.steps["reviews"]
 
     assert isinstance(plan, BranchGroupStepPlan)
     assert plan.header.source is not None
@@ -214,41 +157,7 @@ def test_branch_group_step_plan_keeps_nested_plan_shapes_and_fan_in_helpers() ->
     assert [branch.name for branch in plan.branch_group.branches] == ["security", "cost"]
     assert isinstance(plan.branch_group.branches[0].step, PromptStepPlan)
     assert isinstance(plan.branch_group.fan_in_step, PromptStepPlan)
-    assert isinstance(plan.branch_group.fan_in_step.header.io.reads[0], FanInRead)
-    assert plan.branch_group.fan_in_step.header.io.reads[0].helper == "results"
-    assert isinstance(plan.branch_group.fan_in_step.header.io.requires[0], FanInRead)
-    assert plan.branch_group.fan_in_step.header.io.requires[0].helper == "context"
-
-    round_trip = compiled_step_from_step_plan(
-        plan,
-        routes={
-            tag: route_contract_from_compiled_route(route, inventory=compiled.artifacts_by_qualified_name)
-            for tag, route in compiled.routes["reviews"].items()
-        },
-    )
-    assert round_trip == branch_step
-
-
-def test_compiled_step_reconstruction_requires_adapter_parity_metadata() -> None:
-    compiled = compile_workflow(_BranchPlanWorkflow)
-    plan = step_plan_from_compiled_step(
-        compiled.steps["reviews"],
-        routes={
-            tag: route_contract_from_compiled_route(route, inventory=compiled.artifacts_by_qualified_name)
-            for tag, route in compiled.routes["reviews"].items()
-        },
-        inventory=compiled.artifacts_by_qualified_name,
-    )
-    assert isinstance(plan, BranchGroupStepPlan)
-
-    with pytest.raises(
-        ValueError,
-        match="compiled-step reconstruction for step 'reviews' requires adapter parity metadata",
-    ):
-        compiled_step_from_step_plan(
-            replace(plan, _compiled_step=None),
-            routes={
-                tag: route_contract_from_compiled_route(route, inventory=compiled.artifacts_by_qualified_name)
-                for tag, route in compiled.routes["reviews"].items()
-            },
-        )
+    assert isinstance(plan.branch_group.fan_in_step.reads[0], FanInRead)
+    assert plan.branch_group.fan_in_step.reads[0].helper == "results"
+    assert isinstance(plan.branch_group.fan_in_step.requires[0], FanInRead)
+    assert plan.branch_group.fan_in_step.requires[0].helper == "context"

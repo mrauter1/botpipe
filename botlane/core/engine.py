@@ -542,10 +542,11 @@ class Engine:
             workflow_input=workflow_input,
             workflow_invoker=workflow_invoker,
         )
-        loop: _RunLoopState | None = None
+        loop = self._new_run_loop_state()
         try:
             loop = self._restore_or_initialize_run_loop(
                 env,
+                loop=loop,
                 initial_state=initial_state,
                 resume=resume,
                 answer=answer,
@@ -556,6 +557,22 @@ class Engine:
             raise
         finally:
             self.provider_policy_resolver = env.previous_provider_policy_resolver
+
+    @staticmethod
+    def _new_run_loop_state() -> _RunLoopState:
+        return _RunLoopState(
+            history=[],
+            current_step_name=None,
+            state=None,
+            current_answer=None,
+            current_input_response=None,
+            selections={},
+            selection_snapshots={},
+            values={},
+            step_states={},
+            item_states={},
+            step_item_states={},
+        )
 
     def _prepare_run_environment(
         self,
@@ -621,18 +638,20 @@ class Engine:
         self,
         env: _RunEnvironment,
         *,
+        loop: _RunLoopState,
         initial_state: BaseModel | None,
         resume: bool,
         answer: str | None,
     ) -> _RunLoopState:
         if resume:
-            return self._restore_run_loop(env, answer=answer)
-        return self._initialize_run_loop(env, initial_state=initial_state)
+            return self._restore_run_loop(env, loop=loop, answer=answer)
+        return self._initialize_run_loop(env, loop=loop, initial_state=initial_state)
 
     def _restore_run_loop(
         self,
         env: _RunEnvironment,
         *,
+        loop: _RunLoopState,
         answer: str | None,
     ) -> _RunLoopState:
         checkpoint = self.checkpoint_store.load()
@@ -656,21 +675,17 @@ class Engine:
             selection_context,
             checkpoint.worklist_selections or {},
         )
-        loop = _RunLoopState(
-            history=[],
-            current_step_name=checkpoint.stage,
-            state=state,
-            current_answer=answer if answer is not None else checkpoint.pending_answer,
-            current_input_response=None,
-            selections={},
-            selection_snapshots=selection_snapshots,
-            values=values,
-            step_states=step_states,
-            item_states=item_states,
-            step_item_states=step_item_states,
-            pending_handoffs=checkpoint.pending_handoffs,
-            checkpoint=checkpoint,
-        )
+        loop.current_step_name = checkpoint.stage
+        loop.state = state
+        loop.current_answer = answer if answer is not None else checkpoint.pending_answer
+        loop.current_input_response = None
+        loop.selection_snapshots = selection_snapshots
+        loop.values = values
+        loop.step_states = step_states
+        loop.item_states = item_states
+        loop.step_item_states = step_item_states
+        loop.pending_handoffs = checkpoint.pending_handoffs
+        loop.checkpoint = checkpoint
         try:
             loop.current_input_response = self._resume_input_response(checkpoint=checkpoint, answer=loop.current_answer)
         except Exception as exc:
@@ -689,23 +704,13 @@ class Engine:
         self,
         env: _RunEnvironment,
         *,
+        loop: _RunLoopState,
         initial_state: BaseModel | None,
     ) -> _RunLoopState:
         self.session_runtime.restore(SessionSnapshot(bindings=(), active_keys_by_slot={}))
         state = initial_state if initial_state is not None else self.compiled.new_state()
-        loop = _RunLoopState(
-            history=[],
-            current_step_name=self.compiled.entry_step_name,
-            state=state,
-            current_answer=None,
-            current_input_response=None,
-            selections={},
-            selection_snapshots={},
-            values={},
-            step_states={},
-            item_states={},
-            step_item_states={},
-        )
+        loop.current_step_name = self.compiled.entry_step_name
+        loop.state = state
         context = self._build_run_context(
             env,
             state=state,
@@ -1497,17 +1502,29 @@ class Engine:
     def _resolve_artifacts(self, context: Context) -> ResolvedArtifacts:
         canonical_handles = {
             name: ArtifactHandle(
-                name=self._artifact_display_name(artifact),
-                path=resolve_artifact_template(self._runtime_artifact_spec(artifact), context),
-                artifact=self._runtime_artifact_spec(artifact),
+                name=self._artifact_display_name(self.compiled.artifact_spec(artifact_id)),
+                path=resolve_artifact_template(
+                    self._runtime_artifact_spec(self.compiled.artifact_spec(artifact_id)),
+                    context,
+                ),
+                artifact=self._runtime_artifact_spec(self.compiled.artifact_spec(artifact_id)),
             )
-            for name, artifact in self.compiled.artifacts_by_qualified_name.items()
+            for name, artifact_id in self.compiled.artifacts_by_qualified_name.items()
         }
         handles = dict(canonical_handles)
-        for name, artifact in self.compiled.artifacts.items():
-            canonical_name = artifact.qualified_name or name
-            handles[name] = canonical_handles.get(
-                canonical_name,
+        for public_name, artifact_id in self.compiled.public_artifacts.items():
+            spec = self.compiled.artifact_spec(artifact_id)
+            handles[public_name] = canonical_handles.get(
+                spec.qualified_name,
+                ArtifactHandle(
+                    name=self._artifact_display_name(spec),
+                    path=resolve_artifact_template(self._runtime_artifact_spec(spec), context),
+                    artifact=self._runtime_artifact_spec(spec),
+                ),
+            )
+        for artifact_id, artifact in self.compiled.artifacts.items():
+            handles[artifact_id] = canonical_handles.get(
+                artifact.qualified_name,
                 ArtifactHandle(
                     name=self._artifact_display_name(artifact),
                     path=resolve_artifact_template(self._runtime_artifact_spec(artifact), context),

@@ -1,40 +1,12 @@
 from __future__ import annotations
 
+import botlane.simple as simple
 import pytest
 
 from botlane.core.artifact_plan import ArtifactSpec
-from botlane.core.artifacts import Artifact, CompiledArtifact
+from botlane.core.compiler import compile_workflow
 from botlane.core.identifiers import ArtifactId
-from botlane.core.inventory import ArtifactInventoryRecord
-from botlane.core.plan_adapters import (
-    artifact_id_for_reference,
-    artifact_id_from_compiled_artifact,
-    artifact_id_from_inventory_record,
-)
-
-
-def _inventory_record(
-    *,
-    name: str,
-    qualified_name: str,
-    owner_step: str | None,
-    workflow_level: bool,
-) -> ArtifactInventoryRecord:
-    artifact = Artifact(
-        f"{qualified_name}.txt",
-        name=name,
-        kind="text",
-        owner_step=owner_step,
-        qualified_name=qualified_name,
-    )
-    return ArtifactInventoryRecord(
-        artifact=artifact,
-        name=name,
-        qualified_name=qualified_name,
-        owner_step=owner_step,
-        workflow_level=workflow_level,
-        producer_steps=() if owner_step is None else (owner_step,),
-    )
+from botlane.core.step_plans import ExternalRead, FanInRead
 
 
 def test_artifact_id_accepts_workflow_and_step_variants() -> None:
@@ -58,59 +30,26 @@ def test_artifact_id_validates_namespace_invariants() -> None:
         ArtifactId("workflow", name=" ")
 
 
-def test_artifact_id_adapters_preserve_dotted_step_artifact_names() -> None:
-    record = _inventory_record(
-        name="result.v2.json",
-        qualified_name="draft.result.v2.json",
-        owner_step="draft",
-        workflow_level=False,
-    )
-    compiled = CompiledArtifact(
-        name=record.qualified_name,
-        template=record.artifact.template,
-        kind=record.artifact.kind,
-        schema=record.artifact.schema,
-        required=record.artifact.required,
-        owner_step=record.owner_step,
-        qualified_name=record.qualified_name,
-        workflow_level=record.workflow_level,
-        producer_steps=record.producer_steps,
-    )
+def test_compiler_keeps_dotted_artifact_names_without_dot_splitting() -> None:
+    class ArtifactWorkflow(simple.Workflow):
+        prepare = simple.step(
+            "Prepare the artifact.",
+            name="prepare",
+            reads=["notes.txt"],
+            writes=[simple.Json("result.v2.json")],
+        )
 
-    expected = ArtifactId("step", name="result.v2.json", step="draft")
+    compiled = compile_workflow(ArtifactWorkflow)
+    step_id = ArtifactId("step", name="result.v2.json", step="prepare")
 
-    assert artifact_id_from_inventory_record(key=record.qualified_name, record=record) == expected
-    assert artifact_id_from_compiled_artifact(key=record.qualified_name, artifact=compiled) == expected
+    assert step_id in compiled.artifacts
+    assert compiled.artifacts_by_qualified_name["prepare.result.v2.json"] == step_id
+    assert compiled.steps["prepare"].writes == (step_id,)
+    assert isinstance(compiled.steps["prepare"].reads[0], ExternalRead)
+    assert compiled.steps["prepare"].requires == ()
 
 
-def test_artifact_id_for_reference_uses_inventory_resolution_instead_of_dot_splitting() -> None:
-    workflow_record = _inventory_record(
-        name="report.v1",
-        qualified_name="report.v1",
-        owner_step=None,
-        workflow_level=True,
-    )
-    step_record = _inventory_record(
-        name="result.v2.json",
-        qualified_name="draft.result.v2.json",
-        owner_step="draft",
-        workflow_level=False,
-    )
-    inventory = {
-        workflow_record.qualified_name: workflow_record,
-        step_record.qualified_name: step_record,
-    }
-
-    assert artifact_id_for_reference("report.v1", inventory) == ArtifactId("workflow", name="report.v1")
-    assert artifact_id_for_reference(
-        "result.v2.json",
-        inventory,
-        step_name="draft",
-        prefer_step_local=True,
-    ) == ArtifactId("step", name="result.v2.json", step="draft")
-
-
-def test_artifact_spec_uses_explicit_artifact_ids_without_dot_splitting() -> None:
+def test_artifact_spec_uses_explicit_artifact_ids() -> None:
     artifact_id = ArtifactId("step", name="result.v2.json", step="draft")
     spec = ArtifactSpec(
         id=artifact_id,
@@ -127,3 +66,22 @@ def test_artifact_spec_uses_explicit_artifact_ids_without_dot_splitting() -> Non
     assert spec.id is artifact_id
     assert spec.name == "result.v2.json"
     assert spec.qualified_name == "draft.result.v2.json"
+
+
+def test_step_io_reference_types_use_artifact_ids_and_fan_in_helpers() -> None:
+    class FanInWorkflow(simple.Workflow):
+        review = simple.parallel(
+            branches={"security": simple.step("Review.", name="security_review", session=simple.Session.fresh())},
+            fan_in=simple.step(
+                "Summarize {fan_in.context_text}.",
+                name="combine_reviews",
+                reads=[simple.FanIn.results()],
+                requires=[simple.FanIn.context()],
+            ),
+        )
+
+    compiled = compile_workflow(FanInWorkflow)
+    fan_in_step = compiled.steps["review"].branch_group.fan_in_step
+
+    assert isinstance(fan_in_step.reads[0], FanInRead)
+    assert isinstance(fan_in_step.requires[0], FanInRead)

@@ -9,7 +9,7 @@ from pydantic import BaseModel
 import botlane.simple as simple
 import botlane.sdk as sdk_module
 from botlane import AWAIT_INPUT, FAIL, FINISH, SELF, Botlane, Policy, StaticInput
-from botlane.core.compiler import compile_workflow_plan
+from botlane.core.compiler import compile_workflow
 from botlane.core.primitives import Event, Outcome
 from botlane.core.prompts import Prompt
 from botlane.core.providers.fake import ScriptedLLMProvider
@@ -174,7 +174,7 @@ def test_single_step_plan_matches_compiled_synthetic_workflow_for_supported_step
         params,
         routes=None,
     )
-    workflow_plan = compile_workflow_plan(workflow_cls)
+    workflow_plan = compile_workflow(workflow_cls)
     entry_step_name = workflow_plan.entry_step_name
 
     assert isinstance(single_step_plan, SingleStepPlan)
