@@ -127,6 +127,72 @@ def test_branch_result_to_manifest_dict_matches_current_skipped_shape() -> None:
     }
 
 
+def test_branch_result_to_manifest_dict_matches_current_cancelled_shape() -> None:
+    result = BranchResult(
+        name="perf",
+        index=2,
+        input={"area": "performance"},
+        step_name="perf_review",
+        status="cancelled",
+        route=None,
+        destination=None,
+        runtime_control=None,
+        reason="Cancellation requested after fail_fast.",
+        question=None,
+        artifacts=(),
+        raw_output_path=None,
+        raw_output_paths={},
+        provider_session=None,
+        provider_sessions={},
+        error={
+            "type": "Cancelled",
+            "message": "Branch execution was cancelled before completion.",
+            "failure_context": None,
+            "retry_kind": None,
+            "retry_exhausted": False,
+        },
+        started_at="2026-05-09T08:00:03+00:00",
+        finished_at="2026-05-09T08:00:03+00:00",
+        duration_ms=0,
+        usage={},
+        cancellation_requested=True,
+        cancellation_completed=True,
+        cancellation_supported=True,
+    )
+
+    assert result.to_manifest_dict() == {
+        "name": "perf",
+        "index": 2,
+        "input": {"area": "performance"},
+        "step_name": "perf_review",
+        "status": "cancelled",
+        "route": None,
+        "destination": None,
+        "runtime_control": None,
+        "reason": "Cancellation requested after fail_fast.",
+        "question": None,
+        "artifacts": [],
+        "raw_output_path": None,
+        "raw_output_paths": {},
+        "provider_session": None,
+        "provider_sessions": {},
+        "error": {
+            "type": "Cancelled",
+            "message": "Branch execution was cancelled before completion.",
+            "failure_context": None,
+            "retry_kind": None,
+            "retry_exhausted": False,
+        },
+        "started_at": "2026-05-09T08:00:03+00:00",
+        "finished_at": "2026-05-09T08:00:03+00:00",
+        "duration_ms": 0,
+        "usage": {},
+        "cancellation_requested": True,
+        "cancellation_completed": True,
+        "cancellation_supported": True,
+    }
+
+
 def test_branch_manifest_schema_context_and_outcome_remain_stable() -> None:
     completed = BranchResult(
         name="security",

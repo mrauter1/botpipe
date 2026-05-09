@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import importlib
+import importlib.util
 import sys
 from pathlib import Path
 
@@ -164,3 +165,28 @@ def test_invalid_workflow_locator_fails_clearly(tmp_path: Path) -> None:
 
     with pytest.raises(FileNotFoundError, match="does not exist"):
         resolve_workflow_locator(tmp_path, locator)
+
+
+def test_workflow_locator_from_resolved_rejects_workflow_class_kind(tmp_path: Path) -> None:
+    workflow_path = _write_single_file(
+        tmp_path,
+        "ad_hoc/class_review.py",
+        workflow_name="class_review",
+        class_name="ClassReviewWorkflow",
+    )
+    spec = importlib.util.spec_from_file_location("adhoc_class_review", workflow_path)
+    assert spec is not None
+    assert spec.loader is not None
+    module = importlib.util.module_from_spec(spec)
+    sys.modules[module.__name__] = module
+    try:
+        spec.loader.exec_module(module)
+        workflow_cls = module.ClassReviewWorkflow
+
+        resolved = resolve_workflow_reference(tmp_path, workflow_cls)
+
+        assert resolved.reference.kind == "workflow_class"
+        with pytest.raises(ValueError, match="does not have a locator variant"):
+            workflow_locator_from_resolved(resolved)
+    finally:
+        sys.modules.pop(module.__name__, None)
