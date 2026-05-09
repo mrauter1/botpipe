@@ -2,3 +2,7 @@
 Phase 2 must land as one atomic compiler and runtime cutover because engine_collaborators, SDK, runtime loader/runner/static_graph, and branch runtime still depend on compiled objects and plan adapters today.
 Use the existing canonical-looking modules for the second-pass types and fix their field shapes in place rather than adding parallel plan/runtime modules.
 Keep SingleStepPlan as the only one-step execution architecture; remove compile_workflow_plan and any synthetic one-step fallback instead of maintaining two internal paths.
+<autoloop-decisions-header version="1" block_seq="2" owner="planner" phase_id="task-global" pair="plan" turn_seq="2" run_id="run-20260509T125912Z-8deb38fd" ts="2026-05-09T13:05:10.319311+00:00" />
+Phase 0 must freeze simple public authoring examples, route-sentinel authoring, and the full Botlane SDK helper surface before any internal rewrite phase starts.
+Create tests/strictness/test_botlane_identity.py in Phase 0 and only expand it in Phase 8 so per-phase test execution stays feasible.
+Add botlane/core/artifact_plan.py as the canonical home for ArtifactSpec and artifact inventory metadata; keep artifacts.py limited to public artifact handles and template delegates after the cutover.
