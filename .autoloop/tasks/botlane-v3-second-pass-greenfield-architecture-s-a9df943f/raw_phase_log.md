@@ -839,3 +839,46 @@ Result: `204 passed`
 Open issues / next step
 
 This turn did not do the later-phase work: `ExecutionFrame` authority, typed branch-runtime evidence, and placeholder centralization are still pending. I did not run the full repository `pytest` suite yet.
+
+
+---
+run_id=run-20260509T125912Z-8deb38fd | entry=session_turn | pair=implement | phase=verifier | cycle=1 | attempt=1 | thread_id=019e0cf4-0b68-7da2-95fb-5cff4df28a4a
+---
+provider=codex
+mode=resume
+template=/home/rauter/.local/share/pipx/venvs/autoloop/lib/python3.12/site-packages/autoloop/templates/implement_verifier.md
+session_id=019e0cf4-0b68-7da2-95fb-5cff4df28a4a
+
+
+---
+run_id=run-20260509T125912Z-8deb38fd | entry=phase_output | pair=implement | phase=verifier | process=codex-agent | cycle=1 | attempt=1 | thread_id=019e0cf4-0b68-7da2-95fb-5cff4df28a4a
+---
+Reviewing the phase cutover against the acceptance criteria first, then I’ll verify the highest-risk runtime boundaries and write the criteria/feedback artifacts based on concrete evidence.
+
+The highest-risk check is the engine boundary: whether route finalization actually became the canonical control-flow output, or whether the old transition wrapper still drives the loop. I’m verifying that next because it directly determines whether AC-2 is truly met.
+
+I found one material architecture-conformance issue that also carries behavioral risk: the engine loop is still driven by the old finalization wrapper and destination strings, so the new route-decision/action path is not yet authoritative. I’m recording that as a blocking finding and leaving the phase incomplete.
+
+Scope considered
+
+Phase `atomic-plan-runtime-cutover` only. I reviewed the request-relevant implementation in `botlane/core`, `botlane/runtime`, `botlane/sdk.py`, `botlane/workflows/botlane_v1/parity.py`, and the updated phase-scoped tests/artifacts.
+
+What I analyzed
+
+I checked the acceptance-criteria boundaries directly: compiler entrypoint/cache cutover, removal of compiled symbols and adapter layer from `botlane/core`, branch-group export surface, and the engine/step-dispatch/route-finalizer control-flow path. I also reviewed the targeted validation evidence and inspected the actual runtime control-flow implementation rather than relying on test names.
+
+What I reviewed
+
+I updated the review artifact by appending one blocking finding to [feedback.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/botlane-v3-second-pass-greenfield-architecture-s-a9df943f/runs/run-20260509T125912Z-8deb38fd/artifacts/implement/phases/atomic-plan-runtime-cutover/feedback.md). I left the criteria boxes unchecked in [criteria.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/botlane-v3-second-pass-greenfield-architecture-s-a9df943f/runs/run-20260509T125912Z-8deb38fd/artifacts/implement/phases/atomic-plan-runtime-cutover/criteria.md) because the phase is not yet complete.
+
+Key findings / decisions
+
+`IMP-001` is blocking: AC-2 is not met. `RouteFinalizer.finalize(...)` still returns the legacy `_RouteResolution` wrapper, `StepExecutionResult` still carries `finalization`, and `Engine._handle_step_result(...)` still branches on destination strings / legacy transition state instead of treating `RouteDecision` / `RouteAction` as the authoritative control-flow result.
+
+Open issues / next step
+
+The phase should return to implement to finish the route-finalization / engine-loop cutover: make `RouteFinalizer.finalize(...)` return the canonical decision/action result, remove legacy finalization as the engine’s control-flow source, and have the engine branch on `RouteAction` directly.
+
+<loop-control>
+{"schema":"docloop.loop_control/v1","kind":"promise","promise":"INCOMPLETE"}
+</loop-control>

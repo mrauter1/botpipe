@@ -16,6 +16,7 @@
 ## Symbols Touched
 - `Engine.run_async`
 - `Engine._prepare_run_environment`
+- `Engine._new_run_loop_state`
 - `Engine._restore_or_initialize_run_loop`
 - `Engine._restore_run_loop`
 - `Engine._initialize_run_loop`
@@ -54,6 +55,7 @@
 ## Preserved Invariants
 - Resume still restores checkpoint state, values, step/item state stores, selection snapshots, pending handoffs, and resumed input validation before entering the loop.
 - Step history append timing, before/after hook notification payloads, terminal notification payloads, and fatal-notification sequencing remain unchanged.
+- Fatal terminal notifications during restore/init failures still carry the partially restored `step_name` and `state`, matching the pre-refactor monolith.
 - Terminal checkpoint timing remains unchanged: `FINISH` checkpoints only on terminal-notification failure; `AWAIT_INPUT` and `FAIL` checkpoint before terminal notification; `goto` still checkpoints the target stage before dispatching the next step.
 - Discovery still scans visible namespace members first, lowers simple declarations second, resolves named transitions/entry after lowering, and only then applies default-entry/session resolution.
 
@@ -71,10 +73,9 @@
 
 ## Validation Performed
 - `py_compile`: `.venv/bin/python -m py_compile botlane/core/engine.py botlane/core/discovery.py tests/unit/test_runtime_and_discovery_extraction.py`
-- Attempted targeted pytest on the new unit file, but collection is currently blocked by unrelated pre-existing import failures:
-  - `botlane.sdk` import path expects `CompiledArtifact` from `botlane.core.artifacts`
-  - `botlane.core.engine` import path expects `CompiledRoute` from `botlane.core.compiler`
+- Targeted pytest: `.venv/bin/python -m pytest tests/unit/test_runtime_and_discovery_extraction.py -q` → `3 passed`
 
 ## Dedup / Centralization Decisions
 - Centralized context construction and checkpoint persistence in `Engine` helpers instead of repeating the same `Context(...)` and `_save_checkpoint(...)` argument lists across resume/init/terminal paths.
 - Centralized workflow discovery into explicit base, scan, lower, graph, session, and build helpers instead of keeping namespace scan and graph resolution intertwined in one function.
+- Kept the `botlane.sdk` stub local to the new test module so source code stays phase-scoped while the added runtime/discovery coverage remains executable.
