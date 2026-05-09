@@ -172,3 +172,12 @@ No blocking planning issues remain. The planning artifacts are complete and read
 <loop-control>
 {"schema":"docloop.loop_control/v1","kind":"promise","promise":"COMPLETE"}
 </loop-control>
+
+
+---
+run_id=run-20260509T124548Z-f67cf8d4 | entry=phase_scope_resolved
+---
+phase_mode=single
+phase_ids=provider-policy-translators,authoring-and-builder-reducers,runtime-and-discovery-extraction,conditional-capability-entry-cleanup
+explicit=True
+current_phase_index=0
