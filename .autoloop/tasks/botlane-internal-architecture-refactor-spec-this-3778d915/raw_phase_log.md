@@ -1968,3 +1968,63 @@ Open issues / next step
 
 - Operation execution remains intentionally uncovered for this phase.
 - The test-phase artifacts are now ready for audit.
+
+
+---
+run_id=run-20260509T045359Z-e2586b1f | entry=session_turn | pair=test | phase=verifier | cycle=1 | attempt=1 | thread_id=019e0b83-527d-7200-87b5-3be58b23f713
+---
+provider=codex
+mode=resume
+template=/home/rauter/.local/share/pipx/venvs/autoloop/lib/python3.12/site-packages/autoloop/templates/test_verifier.md
+session_id=019e0b83-527d-7200-87b5-3be58b23f713
+
+
+---
+run_id=run-20260509T045359Z-e2586b1f | entry=phase_output | pair=test | phase=verifier | process=codex-agent | cycle=1 | attempt=1 | thread_id=019e0b83-527d-7200-87b5-3be58b23f713
+---
+Auditing the phase-local tests now. I’m checking the provider-turn adapter contract file, the strategy map, and whether the new tests actually cover the changed prompt and produce/verify behavior without normalizing any unconfirmed fallback or control-flow regression.
+
+The phase-local test coverage looks sufficient for the changed surface. I’m marking the audit artifacts complete and noting that no additional coverage or flake findings remain after the pair-specific fallback case was added.
+
+Scope considered
+
+- Phase-local test audit for `provider-turn-and-route-finalization`.
+- Repository coverage in [tests/contract/test_provider_turn_plan_adapter.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/tests/contract/test_provider_turn_plan_adapter.py:1).
+- Phase artifacts:
+  - [test_strategy.md](</home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/botlane-internal-architecture-refactor-spec-this-3778d915/runs/run-20260509T045359Z-e2586b1f/artifacts/test/phases/provider-turn-and-route-finalization/test_strategy.md>)
+  - [criteria.md](</home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/botlane-internal-architecture-refactor-spec-this-3778d915/runs/run-20260509T045359Z-e2586b1f/artifacts/test/phases/provider-turn-and-route-finalization/criteria.md>)
+  - [feedback.md](</home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/botlane-internal-architecture-refactor-spec-this-3778d915/runs/run-20260509T045359Z-e2586b1f/artifacts/test/phases/provider-turn-and-route-finalization/feedback.md>)
+
+What I analyzed
+
+- Coverage for prompt and produce/verify provider-turn happy paths.
+- Coverage for the explicit parity-gap fallback path and the surfaced unexpected-adapter-error path.
+- Coverage for the additive `RouteDecision` bridge on finish and await-input routes.
+- The strategy artifact’s mapping of behaviors, invariants, edge cases, and flake controls.
+
+What I reviewed
+
+- The test file now covers:
+  - prompt happy path
+  - produce/verify happy path
+  - prompt fallback
+  - produce/verify fallback
+  - unexpected adapter error surfacing
+  - finish-route decision exposure
+  - await-input decision exposure with materialized `pending_input`
+- The strategy artifact accurately reflects the implemented coverage and notes the remaining intentional gap around operations.
+
+Key findings / decisions
+
+- No additional blocking or non-blocking audit findings.
+- `criteria.md` was updated to all checked boxes.
+- `feedback.md` was updated to record a clean audit result after the pair-specific fallback coverage was added.
+
+Open issues / next step
+
+- No phase-local test audit blockers remain.
+- Operation execution remains intentionally out of scope for this phase and is already documented as a known gap.
+
+<loop-control>
+{"schema":"docloop.loop_control/v1","kind":"promise","promise":"COMPLETE"}
+</loop-control>
