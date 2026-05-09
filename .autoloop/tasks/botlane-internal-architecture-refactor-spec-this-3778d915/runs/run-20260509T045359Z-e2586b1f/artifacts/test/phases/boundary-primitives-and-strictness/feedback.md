@@ -9,3 +9,5 @@
 
 - Added focused regression coverage in `tests/runtime/test_provider_policy_core_protocol.py` for direct `Engine(...)` fallback provider-policy resolution and in `tests/runtime/test_workflow_reference_resolution.py` for imported repo workflow class inspection preserving aliases and exported `Params`.
 - Validation run: `.venv/bin/python -m pytest tests/unit/test_artifact_ids.py tests/unit/test_run_paths.py tests/runtime/test_provider_policy_core_protocol.py tests/strictness/test_core_runtime_boundary.py tests/unit/test_simple_surface.py tests/unit/test_sdk_facade.py tests/strictness/test_no_compat.py tests/runtime/test_workflow_reference_resolution.py` -> `245 passed`.
+- TST-001 | non-blocking | Audit complete: no material coverage gaps found in the active phase scope.
+  The added tests directly cover the two review-cycle regressions introduced by the boundary repair, the existing primitive/strictness tests still cover the milestone deliverables, and the stated 245-test validation bundle passed locally without flake indicators.

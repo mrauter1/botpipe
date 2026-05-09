@@ -723,3 +723,62 @@ Open issues / next step
 - Validation passed:
   `.venv/bin/python -m pytest tests/unit/test_artifact_ids.py tests/unit/test_run_paths.py tests/runtime/test_provider_policy_core_protocol.py tests/strictness/test_core_runtime_boundary.py tests/unit/test_simple_surface.py tests/unit/test_sdk_facade.py tests/strictness/test_no_compat.py tests/runtime/test_workflow_reference_resolution.py`
 - Result: `245 passed in 34.58s`.
+
+
+---
+run_id=run-20260509T045359Z-e2586b1f | entry=session_turn | pair=test | phase=verifier | cycle=1 | attempt=1 | thread_id=019e0b26-c7f5-7f41-8aef-b4659169d826
+---
+provider=codex
+mode=resume
+template=/home/rauter/.local/share/pipx/venvs/autoloop/lib/python3.12/site-packages/autoloop/templates/test_verifier.md
+session_id=019e0b26-c7f5-7f41-8aef-b4659169d826
+
+
+---
+run_id=run-20260509T045359Z-e2586b1f | entry=phase_output | pair=test | phase=verifier | process=codex-agent | cycle=1 | attempt=1 | thread_id=019e0b26-c7f5-7f41-8aef-b4659169d826
+---
+I’m auditing only the active test-phase artifacts and the test changes relevant to this boundary-primitives phase. First I’m reading the criteria, strategy, and new regression tests together, then I’ll rerun the stated validation bundle before updating the audit artifacts.
+
+The new tests are narrowly scoped and aligned with the repaired boundary behavior. I’m rerunning the stated 245-test validation bundle now so the audit result is based on observed stability, not only the added assertions.
+
+The audit pass is clean. I’m marking the criteria complete and appending a short audit note in `feedback.md` that the added regression tests are sufficient for this phase and the 245-test validation bundle passed.
+
+Scope considered
+
+- Phase-local audit of `boundary-primitives-and-strictness` test work only.
+- I reviewed the new test additions, the phase `test_strategy.md`, and the phase `feedback.md`.
+- I ignored unrelated repository changes outside the active test-phase scope.
+
+What I analyzed
+
+- The added regression tests in `tests/runtime/test_provider_policy_core_protocol.py` and `tests/runtime/test_workflow_reference_resolution.py`.
+- The existing phase-deliverable tests for `ArtifactId`, `RunPaths`, and the AST core/runtime strictness boundary.
+- The strategy artifact’s behavior-to-coverage map and stated validation bundle.
+- The run-local decisions ledger to confirm the tests were not normalizing any unconfirmed behavior break.
+
+What I reviewed
+
+- Whether the new tests target the actual regression risk introduced during the boundary fix.
+- Whether preserved invariants with material risk are still covered by the existing suite.
+- Whether the added tests are deterministic and avoid timing, ordering, or environment flake.
+- Whether the phase validation bundle runs cleanly with the final test set.
+
+Key findings / decisions
+
+- No blocking audit findings.
+- The added tests appropriately harden the two review-cycle regressions:
+  - direct `Engine(...)` fallback provider-policy resolution
+  - imported repo workflow class inspection preserving aliases and exported `Params`
+- The milestone deliverables remain covered by the existing primitive and strictness tests.
+- I updated the test criteria to fully checked and appended a concise audit note in the phase feedback artifact.
+
+Open issues / next step
+
+- No open audit blockers for this phase.
+- Validation rerun passed:
+  `.venv/bin/python -m pytest tests/unit/test_artifact_ids.py tests/unit/test_run_paths.py tests/runtime/test_provider_policy_core_protocol.py tests/strictness/test_core_runtime_boundary.py tests/unit/test_simple_surface.py tests/unit/test_sdk_facade.py tests/strictness/test_no_compat.py tests/runtime/test_workflow_reference_resolution.py`
+- Result: `245 passed in 34.43s`.
+
+<loop-control>
+{"schema":"docloop.loop_control/v1","kind":"promise","promise":"COMPLETE"}
+</loop-control>
