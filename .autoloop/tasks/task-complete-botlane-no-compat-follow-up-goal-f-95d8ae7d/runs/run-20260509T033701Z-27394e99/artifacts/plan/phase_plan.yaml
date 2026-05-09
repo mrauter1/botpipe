@@ -9,7 +9,7 @@ phases:
     in_scope:
       - "Update `tests/strictness/test_no_compat.py` scan helpers and scope assertions so `.autoloop_recursive/` and `.autoloop/` policy is explicit."
       - "Migrate maintained top-level `.autoloop_recursive/` files that still contain legacy Autoloop literals."
-      - "Define and test any unavoidable repo-root operational exception paths as exact repo-relative entries."
+      - "Define and test any unavoidable repo-root operational exception paths as exact repo-relative entries, including the active current-run `.autoloop/tasks/.../runs/...` record set."
       - "Validate with targeted strictness coverage, repo literal scans over the covered artifact files, and the full pytest suite."
     out_of_scope:
       - "Runtime, provider, overlay-copying, hidden-construction, or CLI behavior changes outside strictness/helper rewiring needed for this cleanup."
@@ -20,15 +20,15 @@ phases:
       - id: "AC-1"
         text: "The strictness suite no longer depends on `ACTIVE_SCAN_ROOTS` or `BRANDING_SCAN_ROOTS` omission to avoid `.autoloop_recursive/` or `.autoloop/`."
       - id: "AC-2"
-        text: "Maintained active repo-root artifact files no longer contain legacy Autoloop literals unless an exact operational-path exception is explicitly documented."
+        text: "Maintained active repo-root artifact files no longer contain legacy Autoloop literals unless an exact operational-path exception is explicitly documented, and the active current-run `.autoloop/tasks/.../runs/...` files are either exact exceptions or Botlane-clean."
       - id: "AC-3"
         text: "Historical legacy mentions remain limited to `legacy_docs/*.md`, `tests/strictness/test_no_compat.py`, and any exact justified repo-root operational records."
       - id: "AC-4"
         text: "The targeted strictness suite and full `python -m pytest` pass after the scanner-scope and artifact cleanup changes."
     deliverables:
-      - "An updated `tests/strictness/test_no_compat.py` with explicit repo-root artifact policy, exact exception handling, and regression assertions."
+      - "An updated `tests/strictness/test_no_compat.py` with explicit repo-root artifact policy, exact exception handling for `.autoloop_recursive/` and the active current-run `.autoloop/` files, and regression assertions."
       - "Renamed or cleaned top-level `.autoloop_recursive/` maintained files aligned to the Botlane vocabulary used by `recursive_botlane/`."
-      - "Validation evidence from the targeted strictness suite, repo literal scans, and the full pytest run."
+      - "Validation evidence from the targeted strictness suite, repo literal scans over the maintained tree plus the exact active current-run `.autoloop/` record set, and the full pytest run."
     risks:
       - "Scanning the wrong `.autoloop/` inventory could fail on generated archives instead of maintained operational content."
       - "Manual edits to recursive memory/docs can drift from the current `recursive_botlane/` templates if implementers do not reuse that wording."
