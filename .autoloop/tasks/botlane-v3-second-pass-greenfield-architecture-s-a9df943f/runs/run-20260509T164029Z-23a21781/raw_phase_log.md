@@ -82,3 +82,12 @@ No open verification blockers. The plan artifacts are ready for the next loop ph
 <loop-control>
 {"schema":"docloop.loop_control/v1","kind":"promise","promise":"COMPLETE"}
 </loop-control>
+
+
+---
+run_id=run-20260509T164029Z-23a21781 | entry=phase_scope_resolved
+---
+phase_mode=single
+phase_ids=route-authority-cutover,execution-services-cutover,canonical-single-step-and-finalization
+explicit=True
+current_phase_index=0
