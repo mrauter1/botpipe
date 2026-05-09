@@ -723,93 +723,6 @@ class Context:
             input=payload_input,
         )
 
-    def _set_state(self, state: BaseModel) -> None:
-        self._execution_frame.set_state(state)
-
-    def _set_answer(self, answer: str | None) -> None:
-        self._execution_frame.answer = answer
-
-    def _set_input_response(self, input_response: Any | None) -> None:
-        self._execution_frame.input_response = input_response
-
-    def _set_artifacts(self, artifacts: "ResolvedArtifacts | None") -> None:
-        self._execution_frame.set_artifacts(artifacts)
-
-    def _set_values(self, values: Mapping[str, Any] | None) -> None:
-        self._execution_frame.set_values(
-            values if isinstance(values, dict) else normalize_mapping(values)
-        )
-
-    def _set_route(self, route: Mapping[str, Any] | Any | None) -> None:
-        self._execution_frame.set_route(route)
-
-    def _set_outcome(self, outcome: Mapping[str, Any] | Any | None) -> None:
-        self._execution_frame.set_outcome(outcome)
-
-    def _set_event(self, event: Mapping[str, Any] | Any | None) -> None:
-        self._execution_frame.set_event(event)
-
-    def _set_meta(self, meta: Mapping[str, Any] | Any | None) -> None:
-        self._execution_frame.set_meta(meta)
-
-    def _set_step_state_store(self, state: BaseModel | dict[str, Any]) -> None:
-        self._execution_frame.set_step_state(state)
-
-    def _set_item_state_store(self, state: BaseModel | dict[str, Any] | None) -> None:
-        self._execution_frame.set_item_state(state)
-
-    def _set_step_item_state_store(self, state: BaseModel | dict[str, Any] | None) -> None:
-        self._execution_frame.set_step_item_state(state)
-
-    def _set_session_store(self, session_store: "SessionStore") -> None:
-        self._execution_frame.set_session_store(session_store)
-
-    def _set_branch(self, branch: BranchMetadata | None) -> None:
-        self._execution_frame.set_branch(branch)
-
-    def _set_fan_in(self, fan_in: FanInMetadata | None) -> None:
-        self._execution_frame.set_fan_in(fan_in)
-
-    def _set_step_execution_id(self, step_execution_id: str | None) -> None:
-        self._execution_frame.set_step_execution_id(step_execution_id)
-
-    def _set_selection(self, worklist: "Worklist[Any] | str", selection: "Selection[Any]") -> None:
-        worklist_name = self._worklist_name(worklist)
-        self._execution_frame.set_selection(worklist_name, selection)
-
-    def _set_active_worklist(self, worklist: "Worklist[Any] | str | None") -> None:
-        self._execution_frame.set_active_worklist(
-            None if worklist is None else self._worklist_name(worklist)
-        )
-
-    def _set_selections(self, selections: dict[str, "Selection[Any]"]) -> None:
-        self._execution_frame.set_selections(selections)
-
-    def _set_selection_snapshots(self, snapshots: dict[str, "SelectionSnapshot"]) -> None:
-        self._execution_frame.set_selection_snapshots(snapshots)
-
-    def _set_worklist_selection_sync(self, callback: Callable[[str], None] | None) -> None:
-        self._execution_frame.set_worklist_selection_sync(callback)
-
-    def _set_worklist_selection_resolver(
-        self,
-        callback: Callable[[str], "Selection[Any]"] | None,
-    ) -> None:
-        self._execution_frame.set_worklist_selection_resolver(callback)
-
-    def _set_execution_source(
-        self,
-        *,
-        hook_name: str | None,
-        phase: str | None,
-        invocation_id: str | None,
-    ) -> None:
-        self._execution_frame.set_execution_source(
-            hook_name=hook_name,
-            phase=phase,
-            invocation_id=invocation_id,
-        )
-
     def _sync_scoped_state_after_worklist_selection_change(self, worklist: "Worklist[Any] | str") -> None:
         callback = self._execution_frame.worklist_selection_sync
         if callback is None:
@@ -936,12 +849,6 @@ class Context:
         if self._execution_hook_invocation_id is not None and "hook_invocation_id" not in event_payload:
             event_payload["hook_invocation_id"] = self._execution_hook_invocation_id
         self._runtime_event_sink(event_type, event_payload)
-
-    def _get_cached_worklist_items(self, worklist_name: str) -> tuple[Any, ...] | None:
-        return self._execution_frame.get_cached_worklist_items(worklist_name)
-
-    def _cache_worklist_items(self, worklist_name: str, items: tuple[Any, ...]) -> tuple[Any, ...]:
-        return self._execution_frame.cache_worklist_items(worklist_name, items)
 
     def _worklist_name(self, worklist: "Worklist[Any] | str") -> str:
         if isinstance(worklist, str):

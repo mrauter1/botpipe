@@ -76,7 +76,7 @@ class BranchGroupRuntime:
             settle=spec.settle,
         )
 
-        context._set_values(context._values)
+        context._execution_frame.set_values(context._values)
         started_at = _utc_now()
         branch_results = await self._run_branches(spec, context=context, state=state)
         finished_at = _utc_now()
@@ -255,15 +255,15 @@ class BranchGroupRuntime:
             session_store=session_store,
             step_state_store=step_state_store,
         )
-        branch_context._set_values(parent_context._values)
+        branch_context._execution_frame.set_values(parent_context._values)
         self._engine._increment_step_runtime_state(step_state_store)
-        branch_context._set_step_state_store(step_state_store)
+        branch_context._execution_frame.set_step_state(step_state_store)
         if compiled_step.scope_name is not None:
             raise AssertionError(
                 f"branch-group runtime does not support scoped branch step {compiled_step.name!r}; "
                 "compile-time validation should have rejected it."
             )
-        branch_context._set_meta(
+        branch_context._execution_frame.set_meta(
             {
                 "step": {
                     "name": compiled_step.name,
@@ -587,9 +587,9 @@ class BranchGroupRuntime:
             session_store=context._session_store,
             step_state_store=fan_in_step.step_state_model(),
         )
-        fan_in_context._set_values(context._values)
+        fan_in_context._execution_frame.set_values(context._values)
         self._engine._increment_step_runtime_state(fan_in_context._step_state)
-        fan_in_context._set_step_state_store(fan_in_context._step_state)
+        fan_in_context._execution_frame.set_step_state(fan_in_context._step_state)
         fan_in_context._emit_runtime_event(
             "fan_in_started",
             group_name=spec.name,

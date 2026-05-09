@@ -1503,3 +1503,65 @@ Open issues / next step
 <loop-control>
 {"schema":"docloop.loop_control/v1","kind":"promise","promise":"INCOMPLETE"}
 </loop-control>
+
+
+---
+run_id=run-20260509T124548Z-f67cf8d4 | entry=session_turn | pair=audit | phase=verifier | cycle=1 | attempt=1 | thread_id=019e0d28-6091-7ea2-a836-0824ea642f97
+---
+provider=codex
+mode=resume
+template=/home/rauter/.local/share/pipx/venvs/autoloop/lib/python3.12/site-packages/autoloop/templates/audit_verifier.md
+session_id=019e0d28-6091-7ea2-a836-0824ea642f97
+
+
+---
+run_id=run-20260509T124548Z-f67cf8d4 | entry=phase_output | pair=audit | phase=verifier | process=codex-agent | cycle=1 | attempt=1 | thread_id=019e0d28-6091-7ea2-a836-0824ea642f97
+---
+I’m verifying the audit artifacts against the request, decisions ledger, live source, and the cited validation evidence now. First I’m reading the audit outputs and the supporting run decisions to check whether the “no gaps” conclusion is actually justified.
+
+The audit’s key claim is “no material gaps, current validation green.” I’m re-running the combined regression batch and checking the live helper structures it cites so I can either clear the audit or record a precise finding.
+
+The audit’s “all green” conclusion does not hold. The combined regression batch fails with 24 engine/context regressions, and the failure points directly at the runtime/discovery extraction surface the audit cleared. I’m confirming the missing mutator in the live source now, then I’ll record a blocking audit finding.
+
+The failing stack traces reference older `engine.py` and `context.py` call sites than the live source, so I’m checking whether the audit missed a real product regression or whether its reproduced evidence is simply unstable because the combined batch is not deterministic under the current tree.
+
+I’ve confirmed a reproducible blocking miss: the audit’s own cited combined regression batch currently fails with 24 runtime/context errors, so the “no follow-up required” conclusion is not defensible. I’m updating the audit verifier artifacts now.
+
+The verifier artifacts are updated. I’m doing one quick readback now so the final verdict matches the file state and the reproduced failure evidence.
+
+Scope considered
+
+- Immutable request snapshot, authoritative raw log, and `decisions.txt`
+- Audit artifacts in the run-local `artifacts/audit` directory
+- Live runtime/discovery source in `botlane/core/*`
+- Current regression evidence, including the exact combined batch cited by the audit
+
+What I analyzed
+
+- Re-verified the audit’s “no material gaps” conclusion against the live code and the runtime/discovery decisions
+- Re-ran the deferred hotspot-9 capability-inspection target: `1 passed, 13 deselected`
+- Re-ran the exact combined cross-phase batch cited by the audit and reproduced a failure: `24 failed, 193 passed`
+- Confirmed the failure path is real and relevant to requested behavior preservation:
+  - `botlane/core/engine_collaborators.py:607` still calls legacy context mutators such as `runtime._set_state(...)`
+  - `botlane/core/context.py:276` does not expose `_set_state`, `_cache_worklist_items`, and related mutators on the current context surface
+
+What I reviewed
+
+- Updated [criteria.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/task-implement-the-refactor-suggestions-below-to-c2f5dbe1/runs/run-20260509T124548Z-f67cf8d4/artifacts/audit/criteria.md) to leave only `Intent Ledger Coverage` checked
+- Appended blocking findings `AUD-001` and `AUD-002` to [feedback.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/task-implement-the-refactor-suggestions-below-to-c2f5dbe1/runs/run-20260509T124548Z-f67cf8d4/artifacts/audit/feedback.md)
+- Did not modify source code, tests, or `decisions.txt`
+
+Key findings / decisions
+
+- `AUD-001` `blocking`: the audit misses a material unresolved runtime regression and incorrectly reports the final state as gap-free
+- `AUD-002` `blocking`: because the gap is real, `audit_result.json` and `revised_request.md` are inaccurate and must be rewritten as a follow-up implementation request
+- Hotspot 9 deferment remains justified; the blocking issue is in the runtime/context contract, not the deferred capability-entry cleanup
+
+Open issues / next step
+
+- The audit producer needs to revise `gap_report.md`, `revised_request.md`, and `audit_result.json` to reflect the runtime/context regression and request a direct follow-up implementation run
+- Current verifier status is `INCOMPLETE` because the audit artifacts are materially wrong
+
+<loop-control>
+{"schema":"docloop.loop_control/v1","kind":"promise","promise":"INCOMPLETE"}
+</loop-control>
