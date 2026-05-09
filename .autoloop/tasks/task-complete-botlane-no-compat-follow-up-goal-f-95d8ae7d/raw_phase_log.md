@@ -1632,3 +1632,69 @@ Open issues / next step
 <loop-control>
 {"schema":"docloop.loop_control/v1","kind":"promise","promise":"COMPLETE"}
 </loop-control>
+
+
+---
+run_id=run-20260509T041550Z-4b0707de | entry=session_turn | pair=test | phase=producer | cycle=1 | attempt=1 | thread_id=019e0af7-2806-7420-b8d1-ea347b3defd6
+---
+provider=codex
+mode=resume
+template=/home/rauter/.local/share/pipx/venvs/autoloop/lib/python3.12/site-packages/autoloop/templates/test_producer.md
+session_id=019e0af7-2806-7420-b8d1-ea347b3defd6
+
+
+---
+run_id=run-20260509T041550Z-4b0707de | entry=phase_output | pair=test | phase=producer | process=codex-agent | cycle=1 | attempt=1 | thread_id=019e0af7-2806-7420-b8d1-ea347b3defd6
+---
+I’m reviewing the current strictness coverage and the new post-runtime session-file behavior now. I’ll decide whether the existing assertions already pin the regression adequately or whether one more targeted assertion is warranted, then I’ll update the test-phase artifacts with the final coverage map.
+
+I found one gap worth pinning directly in the repository tests: the inventory equality test catches omission of the phase session file, but it would not catch someone later downgrading that clean file into an exact exception. I’m adding a walker-scan assertion for that file and updating the test-phase artifacts to capture that coverage explicitly.
+
+The repository test change is in place. I’m rerunning the strictness slice first to verify the new phase-session assertion, then I’ll run the full suite so the test-phase artifacts can cite final coverage results instead of assumptions.
+
+The new assertion tripped immediately, which means the scanner contract and the required-clean contract are still inconsistent for the phase-session file. I’m letting the strictness run finish so I can capture the exact failure and then tighten the test to match the verified runtime behavior rather than a mistaken assumption.
+
+The new failure came from the test-phase artifacts themselves becoming part of the live current-run tree. I’m checking those three files for cleanliness now; if they’re clean, I’ll extend the exact-path contract to keep them required-clean and add one walker assertion so they can’t silently slip into the exception set later.
+
+The test-phase artifacts are clean, so they belong in the required-clean inventory. I’m extending the exact-path contract for those three files and making the walker assertion target one of them as a clean-classification guard, then I’ll rerun the strictness slice and the full suite against the resulting final-state tree.
+
+The earlier full-suite run failed for the same now-fixed omission, which is expected. I’m rerunning both the strictness slice and the full suite from the updated tree so the test-phase artifacts record the final, not intermediate, state.
+
+The updated strictness slice is green: `72 passed`. I’m letting the full suite finish once more so the test feedback can reflect the final-state regression coverage after the test-phase artifacts themselves were added to the inventory.
+
+The full suite has already crossed the strictness file cleanly and is deep into unit coverage. I’m waiting for the final result before I close the test-phase artifacts so the coverage map and feedback summarize the final-state run, not the intermediate failing snapshot.
+
+The final reruns are green. I’m adding one short validation note to the test-phase feedback so the artifact records both the added coverage and the final execution state, then I’ll close out the phase summary.
+
+Scope considered
+
+- [tests/strictness/test_no_compat.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/tests/strictness/test_no_compat.py:262)
+- The live current-run test artifacts under `artifacts/test/phases/finalize-current-run-artifact-contract/`
+- [test_strategy.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/task-complete-botlane-no-compat-follow-up-goal-f-95d8ae7d/runs/run-20260509T041550Z-4b0707de/artifacts/test/phases/finalize-current-run-artifact-contract/test_strategy.md:1)
+- [feedback.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/task-complete-botlane-no-compat-follow-up-goal-f-95d8ae7d/runs/run-20260509T041550Z-4b0707de/artifacts/test/phases/finalize-current-run-artifact-contract/feedback.md:1)
+
+What I analyzed
+
+- The post-runtime phase-session regression that implement already fixed.
+- The new inventory drift introduced when the test pair itself wrote `criteria.md`, `feedback.md`, and `test_strategy.md`.
+- Whether those new test-phase artifacts were clean enough to stay in the required-clean set.
+
+What I changed
+
+- Extended the active current-run required-clean inventory in [tests/strictness/test_no_compat.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/tests/strictness/test_no_compat.py:262) to include the three test-phase artifacts.
+- Added a walker assertion for the clean test artifact [test_strategy.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/tests/strictness/test_no_compat.py:627) so a future regression cannot silently move it into the exact-exception set.
+- Updated [test_strategy.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/task-complete-botlane-no-compat-follow-up-goal-f-95d8ae7d/runs/run-20260509T041550Z-4b0707de/artifacts/test/phases/finalize-current-run-artifact-contract/test_strategy.md:10) with the final behavior-to-test coverage map and failure paths.
+- Appended the test-phase decisions and feedback entries in [decisions.txt](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/task-complete-botlane-no-compat-follow-up-goal-f-95d8ae7d/runs/run-20260509T041550Z-4b0707de/decisions.txt:10) and [feedback.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/task-complete-botlane-no-compat-follow-up-goal-f-95d8ae7d/runs/run-20260509T041550Z-4b0707de/artifacts/test/phases/finalize-current-run-artifact-contract/feedback.md:10).
+
+Key findings / decisions
+
+- The strictness contract has to account for files created by the test pair itself, not just implement/audit/session outputs.
+- The three test-phase artifacts are legacy-name-clean, so they belong in the required-clean set.
+- Validation after the final update:
+  - `./.venv/bin/python -m pytest tests/strictness/test_no_compat.py -q` -> `72 passed`
+  - `./.venv/bin/python -m pytest` -> `1204 passed, 1 warning`
+
+Open issues / next step
+
+- No test-side blocker remains in this phase scope.
+- The only remaining note is the existing non-failing warning from `tests/unit/test_provider_boundary_core.py:661`.
