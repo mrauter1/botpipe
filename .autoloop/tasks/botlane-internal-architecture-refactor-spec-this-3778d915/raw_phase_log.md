@@ -1540,3 +1540,61 @@ Open issues / next step
 <loop-control>
 {"schema":"docloop.loop_control/v1","kind":"promise","promise":"COMPLETE"}
 </loop-control>
+
+
+---
+run_id=run-20260509T045359Z-e2586b1f | entry=session_turn | pair=test | phase=producer | cycle=1 | attempt=1 | thread_id=019e0b6d-ff1f-7b62-a90d-3277958ff03c
+---
+provider=codex
+mode=resume
+template=/home/rauter/.local/share/pipx/venvs/autoloop/lib/python3.12/site-packages/autoloop/templates/test_producer.md
+session_id=019e0b6d-ff1f-7b62-a90d-3277958ff03c
+
+
+---
+run_id=run-20260509T045359Z-e2586b1f | entry=phase_output | pair=test | phase=producer | process=codex-agent | cycle=1 | attempt=1 | thread_id=019e0b6d-ff1f-7b62-a90d-3277958ff03c
+---
+I’m reviewing the phase-local test surface against the execution-frame contract. First I’m checking the current strategy artifact and the new parity test so I can decide whether a targeted refinement is still needed or whether the existing added coverage is already sufficient.
+
+The new parity file already covers sentinel, branch, and fan-in behavior, but I want one tighter frame-specific worklist mutation check. I’m adding a focused test for `set_selection(...)` and `set_active_worklist(...)` so the phase-local coverage directly exercises the worklist path that now mirrors through `ExecutionFrame`.
+
+I’ve added the focused worklist mutator parity test. Next I’m rerunning the phase-local file plus the adjacent suites most likely to catch a frame/worklist regression before I update the test artifacts.
+
+The added worklist parity test passed, and the larger primitives suite stayed green. I’m waiting on the runtime workspace/context suite to finish because that’s the last meaningful regression surface for this phase’s `Context` backing-store change.
+
+Scope considered
+
+- Phase-local execution-frame work in `tests/unit/test_execution_frame_context_parity.py`.
+- Adjacent regression surfaces in `tests/unit/test_primitives_and_stores.py` and `tests/runtime/test_workspace_and_context.py`.
+- Phase-local artifacts `test_strategy.md`, `feedback.md`, and the current run decisions ledger.
+
+What I analyzed
+
+- The new `ExecutionFrame`-backed `Context` behavior the implementer introduced.
+- Existing phase-local parity coverage for message sentinel behavior, mirrored runtime mutations, branch child frames, and fan-in metadata.
+- Remaining gap around frame-backed worklist mutation paths, since this phase explicitly calls out worklists and public `Context` parity.
+
+What I changed
+
+- Extended `tests/unit/test_execution_frame_context_parity.py` with `test_worklist_runtime_mutators_keep_frame_and_public_selection_in_sync`.
+- Updated the phase-local [test_strategy.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/botlane-internal-architecture-refactor-spec-this-3778d915/runs/run-20260509T045359Z-e2586b1f/artifacts/test/phases/execution-frame-context-migration/test_strategy.md) with a behavior-to-test coverage map, invariants, edge cases, regression risks, and known gaps.
+- Appended a concise summary to the phase-local [feedback.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/botlane-internal-architecture-refactor-spec-this-3778d915/runs/run-20260509T045359Z-e2586b1f/artifacts/test/phases/execution-frame-context-migration/feedback.md).
+- Appended one run-local testing decision under the current header in `decisions.txt`.
+
+Key findings / decisions
+
+- The phase-local file now directly covers the missing frame-backed worklist mutation path instead of relying only on broader legacy worklist suites.
+- I kept the new parity file focused on frame-specific assertions and used existing broader suites for unchanged public behavior, to avoid duplicating contract tests and adding noisy churn.
+- Validation passed:
+  - `./.venv/bin/python -m pytest tests/unit/test_execution_frame_context_parity.py`
+  - `./.venv/bin/python -m pytest tests/unit/test_primitives_and_stores.py`
+  - `./.venv/bin/python -m pytest tests/runtime/test_workspace_and_context.py`
+
+Open issues / next step
+
+- No blocking test gaps remain for this phase-local contract.
+- I did not touch auditor-owned `criteria.md`, per instructions.
+
+<loop-control>
+{"schema":"docloop.loop_control/v1","kind":"promise","promise":"COMPLETE"}
+</loop-control>

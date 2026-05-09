@@ -109,6 +109,34 @@ def test_context_runtime_mutators_update_execution_frame_and_legacy_fields(tmp_p
     assert ctx._execution_frame.state_cell is ctx.state_cell
 
 
+def test_worklist_runtime_mutators_keep_frame_and_public_selection_in_sync(tmp_path: Path) -> None:
+    gates = Worklist.from_items(name="gate", items=({"id": "alpha", "title": "Alpha"},))
+    ctx = _make_context(
+        tmp_path,
+        worklists={"gate": gates},
+        selection_snapshots={
+            "gate": SelectionSnapshot(
+                worklist_name="gate",
+                mode="single",
+                items=(WorkItemSnapshot(id="alpha", title="Alpha"),),
+                explicit=True,
+            )
+        },
+    )
+    runtime = context_runtime(ctx)
+    selection = gates.initial_selection(ctx)
+
+    runtime.set_selection("gate", selection)
+    runtime.set_active_worklist("gate")
+
+    assert ctx._execution_frame.selections == {"gate": selection}
+    assert ctx._execution_frame.selection_snapshots == {}
+    assert ctx._execution_frame.active_worklist == "gate"
+    assert ctx._selection_snapshots == {}
+    assert ctx.selection("gate") is selection
+    assert ctx.current_worklist.current_id == "alpha"
+
+
 def test_branch_child_context_uses_child_frame_and_preserves_shared_state(tmp_path: Path) -> None:
     gates = Worklist.from_items(name="gate", items=({"id": "alpha", "title": "Alpha"},))
     snapshots = {
