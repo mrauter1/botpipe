@@ -14,3 +14,5 @@ Check these boxes (`- [x]`) only when true.
 - [ ] **Compatibility / Safety**: No material compatibility, security, data-integrity, or operational regressions were introduced.
 - [ ] **Technical Debt / Simplicity**: Changes avoid unnecessary indirection, duplicated logic, scattered ownership, over-engineering, and unrelated refactors.
 - [ ] **Maintainability / Validation**: Diffs are cohesive, follow repository conventions, and are supported by appropriate validation, documentation, or notes where needed.
+
+Reviewer note: left unchecked because typed `BranchManifest` was introduced without updating current branch-runtime consumers, causing verified runtime regressions.

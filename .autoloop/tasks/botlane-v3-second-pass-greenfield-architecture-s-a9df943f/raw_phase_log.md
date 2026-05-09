@@ -480,3 +480,59 @@ Those regression tests are still running. I’m waiting on the result before I w
 - `.venv/bin/python -m pytest tests/unit/test_artifact_ids.py tests/unit/test_route_contracts.py tests/unit/test_placeholder_refs.py tests/unit/test_step_plans.py tests/unit/test_workflow_plan_adapters.py tests/contract/test_branch_result_serialization.py -q`
 - `.venv/bin/python -m pytest tests/unit/test_public_surface.py tests/unit/test_sdk_facade.py tests/contract/engine/test_execution_services.py -q`
 - Result: `103 passed, 1 skipped`.
+
+
+---
+run_id=run-20260509T125912Z-8deb38fd | entry=session_turn | pair=implement | phase=verifier | cycle=1 | attempt=1 | thread_id=019e0ce2-74d0-7282-8aa6-faff99e1eb7d
+---
+provider=codex
+mode=resume
+template=/home/rauter/.local/share/pipx/venvs/autoloop/lib/python3.12/site-packages/autoloop/templates/implement_verifier.md
+session_id=019e0ce2-74d0-7282-8aa6-faff99e1eb7d
+
+
+---
+run_id=run-20260509T125912Z-8deb38fd | entry=phase_output | pair=implement | phase=verifier | process=codex-agent | cycle=1 | attempt=1 | thread_id=019e0ce2-74d0-7282-8aa6-faff99e1eb7d
+---
+I’m reviewing the phase artifacts, the touched internal modules, and the focused validation evidence to decide whether the canonical-type hardening actually meets the phase contract.
+
+I have the implementation notes and decisions. Now I’m reading the changed source directly and checking adjacent callers for regressions that the focused tests may have missed.
+
+I’m probing a small adjacent ring around the adapter bridge now. The source changes mostly live there, so I want evidence that removal of `StepHeader.original_step` didn’t quietly break other contract tests.
+
+The adapter ring exposed a real regression: branch runtime now hands a typed `BranchManifest` into a helper that still assumes a mapping. I’m checking whether that break is isolated or affects the wider branch-runtime contract.
+
+I have a single blocking regression with broad impact across branch-group execution. I’m recording it in the phase feedback and marking the criteria accordingly.
+
+Scope considered
+
+- Phase-local `canonical-type-hardening` artifacts, the changed internal type modules, and adjacent branch-runtime consumers justified by regression risk.
+- I did not review unrelated dirty files outside the active phase scope.
+
+What I analyzed
+
+- Phase contract, implementation notes, and run decisions.
+- The touched modules: `artifact_plan.py`, `workflow_plan.py`, `step_plans.py`, `execution_services.py`, `reference_graph.py`, `branch_groups/manifest.py`, and `plan_adapters.py`.
+- Adjacent branch-runtime callers in `botlane/core/branch_groups/runtime.py` and `botlane/core/branch_groups/outcomes.py`.
+
+What I reviewed
+
+- The implementer’s focused green tests.
+- Additional regression checks:
+- `.venv/bin/python -m pytest tests/contract/test_provider_turn_plan_adapter.py tests/contract/test_async_step_dispatcher.py -q`
+- `.venv/bin/python -m pytest tests/contract/test_branch_group_runtime.py tests/contract/test_branch_result_serialization.py -q`
+
+Key findings / decisions
+
+- I recorded one blocking finding in `feedback.md` as `IMP-001`.
+- The regression is real: `build_branch_manifest(...)` now returns `BranchManifest`, but current branch runtime still treats `manifest` as a `Mapping`, which crashes mechanical outcomes and fan-in execution paths.
+- I updated `criteria.md` and left all boxes unchecked because the phase currently violates correctness, behavioral safety, and compatibility.
+
+Open issues / next step
+
+- Fix the branch-runtime boundary so `select_branch_group_outcome(...)` and fan-in metadata assembly accept `BranchManifest` directly, or convert with `to_dict()` exactly at those runtime call sites.
+- Re-run the failing branch-runtime contract tests after that fix.
+
+<loop-control>
+{"schema":"docloop.loop_control/v1","kind":"promise","promise":"INCOMPLETE"}
+</loop-control>
