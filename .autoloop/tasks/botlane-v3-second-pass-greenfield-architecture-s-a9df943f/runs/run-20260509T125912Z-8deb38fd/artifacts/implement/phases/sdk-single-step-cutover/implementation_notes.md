@@ -9,6 +9,7 @@
 
 ## Files changed
 
+- `botlane/core/compiler.py`
 - `botlane/sdk.py`
 - `botlane/runtime/runner.py`
 - `botlane/core/engine.py`
@@ -18,6 +19,11 @@
 
 ## Symbols touched
 
+- `_compile_single_step_execution_plan`
+- `_compile_single_step_workflow_plan`
+- `_default_single_step_routes`
+- `_internal_single_step_authored_routes`
+- `_lower_internal_route_target`
 - `Botlane.run`
 - `Botlane.step`
 - `Botlane._run_compiled_plan`
@@ -32,7 +38,7 @@
 ## Checklist mapping
 
 - Phase 7 / AC-1: removed `Botlane.step(...)` synthetic-workflow fallback and `client.run(...)` delegation; the SDK now builds a direct `SingleStepPlan` plus one-step `WorkflowPlan` and executes that plan through the normal runner.
-- Phase 7 / AC-2: preserved helper-facade behavior for `Botlane.step(...)`, `prompt_step(...)`, `produce_verify_step(...)`, `python_step(...)`, and `workflow_step(...)`; updated tests to cover direct single-step execution and the public helper contracts.
+- Phase 7 / AC-2: preserved helper-facade behavior for `Botlane.step(...)`, `prompt_step(...)`, `produce_verify_step(...)`, `python_step(...)`, and `workflow_step(...)`; this turn moved one-step workflow-plan construction under compiler ownership while keeping the existing direct single-step tests green.
 
 ## Assumptions
 
@@ -44,6 +50,7 @@
 - Invocation-local policy layering still does not mutate the supplied step/declaration object.
 - Pause/resume, provider-questions defaulting, retention, artifact handling, and SDK error wrapping still use the shared SDK run loop.
 - Child-workflow step behavior remains routed through typed `ChildWorkflowStepPlan` data without reintroducing authored-step backreferences.
+- Default single-step route behavior for core and simple declarations remains unchanged, including produce/verify self-loop rework routing.
 
 ## Intended behavior changes
 
@@ -59,13 +66,15 @@
 
 - One-step runs now persist workflow metadata/topology from a directly-built one-step `WorkflowPlan`.
 - Engine child-workflow output writing now supports both authored-step mappings and plan-time `ArtifactId` write tuples.
+- The SDK single-step helpers now depend on compiler-owned private helpers instead of reassembling `WorkflowDefinition` and compile stages inside `sdk.py`.
 
 ## Validation performed
 
-- `python3 -m py_compile botlane/sdk.py botlane/runtime/runner.py tests/unit/test_sdk_facade.py tests/contract/test_single_step_plan_equivalence.py tests/contract/test_sdk_single_step_execution.py`
+- `python3 -m py_compile botlane/core/compiler.py botlane/sdk.py botlane/runtime/runner.py botlane/core/engine.py tests/unit/test_sdk_facade.py tests/contract/test_single_step_plan_equivalence.py tests/contract/test_sdk_single_step_execution.py`
 - `.venv/bin/python -m pytest -q tests/unit/test_sdk_facade.py tests/contract/test_single_step_plan_equivalence.py tests/contract/test_sdk_single_step_execution.py`
 - `.venv/bin/python -m pytest -q tests/contract/engine/test_child_workflows.py`
 
 ## Deduplication / centralization decisions
 
 - Centralized the shared SDK execution loop in `Botlane._run_compiled_plan(...)` so `Botlane.run(...)` and `Botlane.step(...)` keep identical pause/resume, retention, and error-wrapping behavior while using different plan-construction paths.
+- Centralized one-step `WorkflowPlan` and `SingleStepPlan` construction in compiler-owned private helpers so `sdk.py` no longer imports and orchestrates compiler/discovery internals directly.

@@ -2813,3 +2813,76 @@ Open issues / next step
 <loop-control>
 {"schema":"docloop.loop_control/v1","kind":"promise","promise":"INCOMPLETE"}
 </loop-control>
+
+
+---
+run_id=run-20260509T125912Z-8deb38fd | entry=session_turn | pair=implement | phase=producer | cycle=2 | attempt=1 | thread_id=019e0d6a-0a1a-7b51-bac5-3dded18dc199
+---
+provider=codex
+mode=resume
+template=/home/rauter/.local/share/pipx/venvs/autoloop/lib/python3.12/site-packages/autoloop/templates/implement_producer.md
+session_id=019e0d6a-0a1a-7b51-bac5-3dded18dc199
+
+
+---
+run_id=run-20260509T125912Z-8deb38fd | entry=phase_output | pair=implement | phase=producer | process=codex-agent | cycle=2 | attempt=1 | thread_id=019e0d6a-0a1a-7b51-bac5-3dded18dc199
+---
+I’m addressing the blocking review note by moving single-step plan construction out of the SDK layer and back under compiler ownership. First I’m mapping the current helper chain in `sdk.py` against the compiler/discovery pipeline so the fix stays local and doesn’t reintroduce fallback behavior.
+
+I’ve narrowed the fix surface: the new tests explicitly exercise `_build_single_step_workflow_plan(...)`, so the cleanest repair is to keep the SDK helper name but make it a thin delegate to compiler-owned construction. I’m pulling the compiler module context and the test expectations before editing.
+
+Plan for this fix:
+
+- Move single-step workflow-plan construction into `botlane/core/compiler.py` as compiler-owned private helpers.
+- Keep `botlane/sdk.py` as the thin orchestration layer: declaration validation, input/params model inference, execution, and public error handling.
+- Update the focused SDK single-step tests only where they currently assert implementation details that should now live behind the compiler boundary.
+- Re-run the phase test set plus adjacent child-workflow coverage, then update `implementation_notes.md` and append the non-obvious decision under the current `decisions.txt` turn header.
+
+I’ve got a contained refactor path. The compiler already owns the internal single-step branch-step compilation helpers, so I’m extending that module to own the SDK single-step workflow-plan build as well, then reducing `sdk.py` back to thin wrappers.
+
+The code movement is in place. I’m running a fast compile and the focused phase suites now, because the main risk is import or behavior drift at the new compiler-owned boundary.
+
+The compile check is clean. The focused SDK suite is still running; once that finishes I’ll run the adjacent child-workflow contract again because the compiler-owned handoff still feeds that path.
+
+The focused suite exposed one regression: produce/verify single-step defaults now loop to the literal `"SELF"` instead of the current step. I’m tracing the exact authored-route lowering path in the new compiler helper before patching it.
+
+The failure was a pre-existing sentinel-lowering hazard that the compiler-owned path surfaced more reliably: `SELF` is a string sentinel, so identity comparison was wrong. I patched that at the compiler lowering boundary and I’m rerunning the focused suite now.
+
+The focused phase suite is green again. I’m running the adjacent child-workflow contract and a final compile check, since both were touched indirectly by the new compiler-owned single-step build.
+
+I’m at the wrap-up stage now: the implementation is green on the phase tests, and I’m checking the final touched-file diff so the notes and decision entry describe the actual centralization and the sentinel fix without drift.
+
+I’ve confirmed the final blast radius: this turn only changed `botlane/core/compiler.py` and `botlane/sdk.py`, but it deliberately preserves the earlier runner/engine changes from the previous attempt. I’m recording that split clearly in the notes and decisions so the next verifier pass doesn’t lose the ownership change or the sentinel fix.
+
+Scope considered
+
+- Phase-local SDK single-step cutover only.
+- Reviewer finding `IMP-001` plus the request-relevant one-step path in `botlane/sdk.py`, the compiler boundary in `botlane/core/compiler.py`, and adjacent child-workflow regression risk.
+- Phase artifacts `feedback.md`, `implementation_notes.md`, and `decisions.txt`.
+
+What I analyzed
+
+- The SDK one-step helper chain in `botlane/sdk.py`, especially `_build_single_step_execution_plan(...)` and `_build_single_step_workflow_plan(...)`.
+- The existing compiler ownership in `botlane/core/compiler.py` to find the right centralization target instead of adding another wrapper layer.
+- Focused SDK tests and the adjacent child-workflow contract to make sure the ownership move did not change SDK behavior.
+
+What I changed
+
+- Moved one-step `WorkflowPlan` and `SingleStepPlan` construction into compiler-owned private helpers in `botlane/core/compiler.py`.
+- Reduced `botlane/sdk.py` back to a thin layer that validates declarations, infers input/params models, and delegates single-step plan construction to the compiler.
+- Fixed single-step route lowering so string sentinel `SELF` is normalized by equality at the compiler boundary and resolves to the current step name.
+- Updated `implementation_notes.md` and appended the non-obvious decisions under the current turn header in `decisions.txt`.
+
+Key findings / decisions
+
+- `IMP-001` is addressed by removing compiler/discovery orchestration from `sdk.py` and centralizing that ownership in `botlane.core.compiler`.
+- The compiler-owned path surfaced a latent sentinel issue: `SELF` is a string constant, so identity comparison was unsafe in internal route lowering. Fixing that at the compiler boundary preserves the expected produce/verify self-loop behavior.
+- No public SDK signatures or helper-facade behavior changed.
+
+Open issues / next step
+
+- Focused validation passed:
+- `python3 -m py_compile botlane/core/compiler.py botlane/sdk.py botlane/runtime/runner.py botlane/core/engine.py tests/unit/test_sdk_facade.py tests/contract/test_single_step_plan_equivalence.py tests/contract/test_sdk_single_step_execution.py`
+- `.venv/bin/python -m pytest -q tests/unit/test_sdk_facade.py tests/contract/test_single_step_plan_equivalence.py tests/contract/test_sdk_single_step_execution.py`
+- `.venv/bin/python -m pytest -q tests/contract/engine/test_child_workflows.py`
+- I did not run the full repo `pytest` suite in this turn.

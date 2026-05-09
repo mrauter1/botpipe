@@ -30,7 +30,14 @@ from botlane.policy import (
 from botlane.core import Workflow as CoreWorkflow
 from botlane.core.artifact_plan import ArtifactSpec
 from botlane.core.artifacts import Artifact, resolve_artifact_template
-from botlane.core.compiler import compile_workflow, runtime_workflow_validation_message
+from botlane.core.compiler import (
+    _compile_single_step_execution_plan,
+    _compile_single_step_workflow_plan,
+    _default_single_step_routes,
+    _single_step_workflow_name,
+    compile_workflow,
+    runtime_workflow_validation_message,
+)
 from botlane.core.context import Context
 from botlane.core.errors import WorkflowCompilationError, WorkflowExecutionError, WorkflowValidationError, exception_failure_context
 from botlane.core.operations import classify_call, llm_call
@@ -39,7 +46,6 @@ from botlane.core.primitives import AWAIT_INPUT, FAIL, FINISH, SELF, Event, Outc
 from botlane.core.prompts import Prompt
 from botlane.core.providers.protocols import LLMProvider, validate_llm_provider
 from botlane.core.providers.retries import ProviderRetryPolicy
-from botlane.core.sessions import DEFAULT_SESSION_NAME
 from botlane.core.steps import BranchGroupStep, ChildWorkflowStep, ProduceVerifyStep, PromptStep, PythonStep, Session, Step
 from botlane.core.step_plans import SingleStepPlan
 from botlane.core.stores.protocols import SessionSnapshot
@@ -1785,23 +1791,14 @@ def _build_single_step_execution_plan(
     routes: Mapping[str, Any] | None,
     workflow_policy: PolicyInput = None,
 ) -> tuple[SingleStepPlan, WorkflowPlan]:
-    workflow_plan = _build_single_step_workflow_plan(
-        root,
+    _validate_step_declaration_supported(root, step_def)
+    return _compile_single_step_execution_plan(
         step_def,
-        input,
-        params,
+        input_model=_single_step_input_model(input),
+        params_model=_single_step_params_model(params),
         routes=routes,
         workflow_policy=workflow_policy,
     )
-    entry_step_name = workflow_plan.entry_step_name
-    single_step_plan = SingleStepPlan(
-        step=workflow_plan.steps[entry_step_name],
-        input_model=workflow_plan.input_model,
-        params_model=workflow_plan.parameters_cls,
-        routes=dict(workflow_plan.routes.get(entry_step_name, {})),
-        workflow_policy=workflow_plan.provider_policy,
-    )
-    return single_step_plan, workflow_plan
 
 
 def _build_single_step_plan(
@@ -1833,209 +1830,14 @@ def _build_single_step_workflow_plan(
     routes: Mapping[str, Any] | None,
     workflow_policy: PolicyInput = None,
 ) -> WorkflowPlan:
-    from botlane.core.compiler import (
-        _compile_artifacts,
-        _compile_artifacts_by_qualified_name,
-        _compile_global_routes,
-        _compile_public_artifacts,
-        _compile_reference_graph,
-        _compile_routes,
-        _compile_sessions,
-        _compile_steps,
-        _internal_step_authored_routes,
-        _internal_step_framework_default_routes,
-        _internal_step_runtime_control_routes,
-        _lower_internal_route_destination,
-        _with_topology_hash,
-    )
-    from botlane.core.discovery import (
-        WorkflowDefinition,
-        _SimpleStepSeed,
-        _lower_simple_steps,
-        _lower_simple_verifier_writes,
-        _lower_simple_writes,
-    )
-    from botlane.core.inventory import collect_artifact_inventory
-
     _validate_step_declaration_supported(root, step_def)
-    input_model = _single_step_input_model(input)
-    params_model = _single_step_params_model(params)
-    workflow_name = _single_step_workflow_name(step_def)
-    workflow_cls = _single_step_workflow_cls(
-        workflow_name=workflow_name,
-        input_model=input_model,
-        params_model=params_model,
+    return _compile_single_step_workflow_plan(
+        step_def,
+        input_model=_single_step_input_model(input),
+        params_model=_single_step_params_model(params),
+        routes=routes,
         workflow_policy=workflow_policy,
     )
-    step = _materialize_single_step_definition(workflow_cls, step_def)
-    base_definition = WorkflowDefinition(
-        workflow_cls=workflow_cls,
-        workflow_name=workflow_name,
-        workflow_policy=workflow_policy,
-        state_cls=_SDKStepState,
-        parameters_cls=params_model,
-        entry=step,
-        steps=(step,),
-        steps_by_name={step.name: step},
-        sessions_by_name={},
-        default_session_name=DEFAULT_SESSION_NAME,
-        worklists_by_name={},
-        workflow_artifacts={},
-        workflow_log_artifacts=(),
-        extensions=(),
-        authored_transitions={},
-        transitions={},
-        framework_default_transitions_by_step={},
-        runtime_control_routes_by_step={},
-    )
-    authored_routes = (
-        {
-            route_name: _lower_internal_route_destination(
-                destination,
-                destination_names={
-                    id(step): step.name,
-                    **(
-                        {id(getattr(step, "simple_declaration")): step.name}
-                        if getattr(step, "simple_declaration", None) is not None
-                        else {}
-                    ),
-                },
-                current_step_name=step.name,
-            )
-            for route_name, destination in dict(routes).items()
-        }
-        if routes is not None
-        else (
-            {
-                route_name: _lower_internal_route_destination(
-                    destination,
-                    destination_names={id(step): step.name},
-                    current_step_name=step.name,
-                )
-                for route_name, destination in _default_routes_for_step(step).items()
-            }
-            if isinstance(step_def, Step)
-            else _internal_step_authored_routes(base_definition, step)
-        )
-    )
-    definition = WorkflowDefinition(
-        workflow_cls=workflow_cls,
-        workflow_name=workflow_name,
-        workflow_policy=workflow_policy,
-        state_cls=_SDKStepState,
-        parameters_cls=params_model,
-        entry=step,
-        steps=(step,),
-        steps_by_name={step.name: step},
-        sessions_by_name={},
-        default_session_name=DEFAULT_SESSION_NAME,
-        worklists_by_name={},
-        workflow_artifacts={},
-        workflow_log_artifacts=(),
-        extensions=(),
-        authored_transitions={step: dict(authored_routes)},
-        transitions={step: dict(authored_routes)},
-        framework_default_transitions_by_step={step.name: _internal_step_framework_default_routes(step)},
-        runtime_control_routes_by_step={step.name: _internal_step_runtime_control_routes(step)},
-    )
-    workflow_cls.__workflow_definition__ = definition
-    inventory = collect_artifact_inventory(definition)
-    compiled_routes = _compile_routes(definition, inventory)
-    global_routes = _compile_global_routes(definition, inventory)
-    compiled_steps = _compile_steps(definition, inventory, compiled_routes)
-    workflow_plan = WorkflowPlan(
-        workflow_cls=workflow_cls,
-        workflow_name=workflow_name,
-        state_cls=_SDKStepState,
-        input_model=input_model,
-        output_model=None,
-        output_builder=None,
-        parameters_cls=params_model,
-        entry_step_name=step.name,
-        sessions=_compile_sessions(definition),
-        default_session_name=DEFAULT_SESSION_NAME,
-        default_session_open=False,
-        worklists={},
-        steps=compiled_steps,
-        routes=compiled_routes,
-        global_routes=global_routes,
-        artifacts=_compile_artifacts(inventory),
-        public_artifacts=_compile_public_artifacts(inventory),
-        artifacts_by_qualified_name=_compile_artifacts_by_qualified_name(inventory),
-        extensions=(),
-        provider_policy=workflow_policy,
-        source_hash=None,
-        topology_hash="",
-    )
-    workflow_plan = replace(workflow_plan, reference_graph=_compile_reference_graph(workflow_plan, inventory))
-    return _with_topology_hash(workflow_plan)
-
-
-def _materialize_single_step_definition(workflow_cls: type[object], step_def: Step | object) -> Step:
-    if isinstance(step_def, Step):
-        return step_def
-    simple_name = getattr(step_def, "name", None) or "step"
-    writes = _lower_single_step_writes(step_def, simple_name)
-    verifier_writes = _lower_single_step_verifier_writes(step_def, simple_name)
-    seed = _single_step_seed(
-        declaration=step_def,
-        name=simple_name,
-        writes=writes,
-        verifier_writes=verifier_writes,
-    )
-    from botlane.core.discovery import _lower_simple_steps
-
-    lowered = _lower_simple_steps(
-        workflow_cls,
-        simple_seeds=(seed,),
-        workflow_artifacts={},
-        existing_steps=(),
-    )
-    return lowered[0][1]
-
-
-def _single_step_seed(
-    *,
-    declaration: object,
-    name: str,
-    writes: dict[str, Artifact],
-    verifier_writes: dict[str, Artifact],
-):
-    from botlane.core.discovery import _SimpleStepSeed
-
-    return _SimpleStepSeed(
-        order=0,
-        attr_name=name,
-        declaration=declaration,
-        name=name,
-        kind=str(getattr(declaration, "kind", "")),
-        writes=writes,
-        verifier_writes=verifier_writes,
-        output_order=tuple((*writes.keys(), *verifier_writes.keys())),
-    )
-
-
-def _lower_single_step_writes(step_def: object, step_name: str) -> dict[str, Artifact]:
-    if isinstance(step_def, Step):
-        return dict(step_def.writes)
-    from botlane.core.discovery import _lower_simple_writes
-
-    return _lower_simple_writes(step_def, step_name)
-
-
-def _lower_single_step_verifier_writes(step_def: object, step_name: str) -> dict[str, Artifact]:
-    if isinstance(step_def, Step):
-        verifier_write_names = tuple(getattr(step_def, "verifier_writes", ()))
-        if not verifier_write_names:
-            return {}
-        return {
-            name: artifact
-            for name, artifact in step_def.writes.items()
-            if name in verifier_write_names
-        }
-    from botlane.core.discovery import _lower_simple_verifier_writes
-
-    return _lower_simple_verifier_writes(step_def, step_name)
 
 
 def _single_step_input_model(input: BaseModel | Mapping[str, Any] | None) -> type[BaseModel] | None:
@@ -2058,32 +1860,6 @@ def _single_step_params_model(params: BaseModel | Mapping[str, Any] | None) -> t
             **{str(key): (Any, ...) for key in params},
         )
     return None
-
-
-def _single_step_workflow_name(step_def: Step | object) -> str:
-    step_name = getattr(step_def, "name", None) or "step"
-    return f"sdk_step_{_TASK_ID_SAFE_RE.sub('_', step_name.strip().lower()).strip('_') or 'step'}"
-
-
-def _single_step_workflow_cls(
-    *,
-    workflow_name: str,
-    input_model: type[BaseModel] | None,
-    params_model: type[BaseModel] | None,
-    workflow_policy: PolicyInput,
-) -> type[object]:
-    attrs: dict[str, Any] = {
-        "__module__": __name__,
-        "State": _SDKStepState,
-        "name": workflow_name,
-    }
-    if input_model is not None:
-        attrs["Input"] = input_model
-    if params_model is not None:
-        attrs["Params"] = params_model
-    if workflow_policy is not None:
-        attrs["policy"] = workflow_policy
-    return type(f"SDKSingleStepWorkflow_{uuid4().hex[:8]}", (), attrs)
 
 
 def _single_step_workflow_reference(root: Path, workflow_plan: WorkflowPlan) -> WorkflowReference:
@@ -2109,28 +1885,8 @@ def _single_step_workflow_reference(root: Path, workflow_plan: WorkflowPlan) -> 
     )
 
 
-class _SDKStepState(BaseModel):
-    pass
-
-
 def _default_routes_for_step(step_def: Step) -> dict[str, object]:
-    if step_def.route_metadata:
-        transitions: dict[str, object] = {}
-        for route_name in step_def.route_metadata:
-            if route_name in {"question", "blocked"}:
-                transitions[route_name] = AWAIT_INPUT
-            elif route_name == "failed":
-                transitions[route_name] = FAIL
-            elif isinstance(step_def, ProduceVerifyStep) and route_name == "needs_rework":
-                transitions[route_name] = SELF
-            else:
-                transitions[route_name] = FINISH
-        return transitions
-    if isinstance(step_def, ProduceVerifyStep):
-        return {"accepted": FINISH, "needs_rework": SELF}
-    if isinstance(step_def, (PromptStep, PythonStep, ChildWorkflowStep)):
-        return {"done": FINISH}
-    return {"done": FINISH}
+    return _default_single_step_routes(step_def)
 
 def _normalize_prompt(prompt: str | Prompt) -> Prompt:
     if isinstance(prompt, Prompt):
