@@ -592,3 +592,55 @@ Open issues / next step
 - `.venv/bin/python -m pytest tests/contract/test_async_step_dispatcher.py tests/contract/test_branch_group_runtime.py tests/contract/test_branch_result_serialization.py -q`
 - `.venv/bin/python -m pytest tests/unit/test_artifact_ids.py tests/unit/test_route_contracts.py tests/unit/test_placeholder_refs.py tests/unit/test_step_plans.py tests/unit/test_workflow_plan_adapters.py tests/contract/test_branch_result_serialization.py tests/unit/test_public_surface.py tests/unit/test_sdk_facade.py tests/contract/engine/test_execution_services.py tests/contract/test_provider_turn_plan_adapter.py tests/contract/test_async_step_dispatcher.py tests/contract/test_branch_group_runtime.py -q`
 - Result: `136 passed, 1 skipped`.
+
+
+---
+run_id=run-20260509T125912Z-8deb38fd | entry=session_turn | pair=implement | phase=verifier | cycle=2 | attempt=1 | thread_id=019e0ce2-74d0-7282-8aa6-faff99e1eb7d
+---
+provider=codex
+mode=resume
+template=/home/rauter/.local/share/pipx/venvs/autoloop/lib/python3.12/site-packages/autoloop/templates/implement_verifier.md
+session_id=019e0ce2-74d0-7282-8aa6-faff99e1eb7d
+
+
+---
+run_id=run-20260509T125912Z-8deb38fd | entry=phase_output | pair=implement | phase=verifier | process=codex-agent | cycle=2 | attempt=1 | thread_id=019e0ce2-74d0-7282-8aa6-faff99e1eb7d
+---
+I’m re-checking the reviewer-owned artifacts, the manifest/runtime boundary fix, and the validated regression ring to decide whether the phase can now be marked complete.
+
+The fix looks coherent in source. I’m running the final regression ring myself before I rewrite the reviewer artifacts.
+
+I’ve re-run the final ring and there are no remaining blocking issues in scope. I’m marking the criteria complete and appending a re-review resolution note for the earlier finding.
+
+Scope considered
+
+- Phase-local `canonical-type-hardening` artifacts and the source files changed to resolve `IMP-001`.
+- Adjacent branch-runtime consumers were included because the original regression was in the manifest/runtime boundary.
+
+What I analyzed
+
+- The reviewer-owned `criteria.md` and `feedback.md`.
+- The updated implementation notes.
+- The manifest/runtime boundary in `botlane/core/branch_groups/manifest.py`, `outcomes.py`, and `runtime.py`.
+- The prior blocking finding against the active run decisions and phase scope.
+
+What I reviewed
+
+- Source changes that introduced `branch_manifest_payload(...)` and routed runtime consumers through it.
+- Validation rerun:
+- `.venv/bin/python -m pytest tests/unit/test_artifact_ids.py tests/unit/test_route_contracts.py tests/unit/test_placeholder_refs.py tests/unit/test_step_plans.py tests/unit/test_workflow_plan_adapters.py tests/contract/test_branch_result_serialization.py tests/unit/test_public_surface.py tests/unit/test_sdk_facade.py tests/contract/engine/test_execution_services.py tests/contract/test_provider_turn_plan_adapter.py tests/contract/test_async_step_dispatcher.py tests/contract/test_branch_group_runtime.py -q`
+
+Key findings / decisions
+
+- `IMP-001` is resolved. The typed `BranchManifest` no longer breaks current branch runtime behavior because the existing mapping-shaped boundary is now normalized centrally.
+- I found no new blocking or non-blocking issues in scope after the fix and rerun.
+- I updated `criteria.md` to all checked and appended a re-review resolution note in `feedback.md`.
+
+Open issues / next step
+
+- No in-scope issues remain for this phase based on the current regression ring.
+- Later phases can still remove the mapping compatibility boundary intentionally when the branch runtime itself is fully cut over.
+
+<loop-control>
+{"schema":"docloop.loop_control/v1","kind":"promise","promise":"COMPLETE"}
+</loop-control>
