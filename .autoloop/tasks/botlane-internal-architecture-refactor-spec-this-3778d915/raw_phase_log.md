@@ -2752,3 +2752,44 @@ Focused validation passed with `./.venv/bin/python -m pytest` for:
 - `tests/runtime/test_provider_policy_emitters.py`
 
 I did not run the full suite in this turn.
+
+
+---
+run_id=run-20260509T045359Z-e2586b1f | entry=session_turn | pair=implement | phase=verifier | cycle=1 | attempt=1 | thread_id=019e0bae-cd99-7e10-beea-ffbc2cc82edc
+---
+provider=codex
+mode=resume
+template=/home/rauter/.local/share/pipx/venvs/autoloop/lib/python3.12/site-packages/autoloop/templates/implement_verifier.md
+session_id=019e0bae-cd99-7e10-beea-ffbc2cc82edc
+
+
+---
+run_id=run-20260509T045359Z-e2586b1f | entry=phase_output | pair=implement | phase=verifier | process=codex-agent | cycle=1 | attempt=1 | thread_id=019e0bae-cd99-7e10-beea-ffbc2cc82edc
+---
+I’m reviewing the phase-local implementation against the active acceptance criteria and the run decisions. I’ll inspect the changed branch serialization and locator adapters first, then update the review artifacts with any concrete findings and the final criteria state.
+
+The implementation matches the phase contract from what I’ve verified: typed branch serialization stays adapter-only, locator resolution still rides the existing loader, and the focused regression tests are green. I’m recording a clean review in the artifacts now and then I’ll close the phase as complete.
+
+Scope considered
+
+Active phase `branch-results-locators-and-policy-rules` only. I reviewed the implementation diff in the typed branch-result layer, branch-group runtime/manifest integration, workflow-locator adapter module, new phase tests, and the phase-local implementation notes against the run decisions and acceptance criteria.
+
+What I analyzed
+
+I checked the new [results.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/botlane/core/branch_groups/results.py:1) serialization contract, the runtime call sites in [runtime.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/botlane/core/branch_groups/runtime.py:431), the manifest/context adapter logic in [manifest.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/botlane/core/branch_groups/manifest.py:28), and the loader-facing locator wrappers in [workflow_locator.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/botlane/runtime/workflow_locator.py:1). I also verified the phase decisions and the focused pytest coverage recorded in the implementation notes.
+
+What I reviewed
+
+The branch-result refactor preserves the existing persisted shape by immediately serializing typed values back to manifest dicts and by keeping cancellation fields omitted except for `cancelled` / `skipped` entries. The workflow-locator work stays within scope by reconstructing current reference strings and delegating resolution to `runtime.loader` instead of adding a second resolution stack. The new tests cover branch-result shape/context/outcome behavior and the catalog/file/module/directory locator variants, and the existing branch runtime and provider-policy emitter suites remained green.
+
+Key findings / decisions
+
+No blocking or non-blocking findings. I updated the phase criteria to checked and recorded a clean review in the phase feedback artifact.
+
+Open issues / next step
+
+No phase-local issues remain from review. The implementation is suitable to advance to the next phase; full-suite validation is still a later integration step, not part of this review turn.
+
+<loop-control>
+{"schema":"docloop.loop_control/v1","kind":"promise","promise":"COMPLETE"}
+</loop-control>
