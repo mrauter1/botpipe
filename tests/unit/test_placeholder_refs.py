@@ -393,6 +393,58 @@ def test_compile_workflow_rejects_invalid_artifact_template_placeholder() -> Non
         compile_workflow(BadArtifactWorkflow)
 
 
+@pytest.mark.parametrize(
+    ("workflow_factory", "expected_message"),
+    (
+        (
+            lambda: type(
+                "PromptMissingInputWorkflow",
+                (simple.Workflow,),
+                {"review": simple.step("Echo {input.customer}", name="review")},
+            ),
+            r"step 'review' prompt placeholder \{input\.customer\} requires workflow input, but no input was provided",
+        ),
+        (
+            lambda: type(
+                "WorkflowStepMissingInputWorkflow",
+                (simple.Workflow,),
+                {
+                    "child": type("ChildWorkflow", (simple.Workflow,), {"note": simple.step("Child note.")}),
+                    "launch": simple.workflow_step(
+                        "ChildWorkflow",
+                        name="launch",
+                        message="{ctx.input.topic}",
+                    ),
+                },
+            ),
+            r"workflow step 'launch' message placeholder \{ctx\.input\.topic\} requires workflow input, but no input was provided",
+        ),
+        (
+            lambda: type(
+                "ArtifactTemplateMissingInputWorkflow",
+                (simple.Workflow,),
+                {
+                    "review": simple.step(
+                        "Draft.",
+                        name="review",
+                        writes=[simple.Md("report", path="reports/{input.topic}.md")],
+                    ),
+                },
+            ),
+            r"artifact template 'review\.report' placeholder \{input\.topic\} requires workflow input, but no input was provided",
+        ),
+    ),
+)
+def test_compile_workflow_reports_missing_input_model_for_all_placeholder_surfaces(
+    workflow_factory,
+    expected_message: str,
+) -> None:
+    workflow_cls = workflow_factory()
+
+    with pytest.raises(WorkflowValidationError, match=expected_message):
+        compile_workflow(workflow_cls)
+
+
 def test_placeholders_module_does_not_import_context_at_runtime() -> None:
     module_path = Path("botlane/core/placeholders.py")
     tree = ast.parse(module_path.read_text(encoding="utf-8"), filename=str(module_path))
