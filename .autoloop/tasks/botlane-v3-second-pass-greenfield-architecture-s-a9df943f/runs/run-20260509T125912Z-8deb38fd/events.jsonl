@@ -71,3 +71,7 @@
 {"ts": "2026-05-09T14:48:04.199664+00:00", "run_id": "run-20260509T125912Z-8deb38fd", "seq": 71, "event_type": "phase_finished", "pair": "test", "phase": "producer", "cycle": 1, "attempt": 1, "empty_output": false, "phase_id": "execution-frame-authority"}
 {"ts": "2026-05-09T14:48:53.673303+00:00", "run_id": "run-20260509T125912Z-8deb38fd", "seq": 72, "event_type": "phase_finished", "pair": "test", "phase": "verifier", "cycle": 1, "attempt": 1, "empty_output": false, "phase_id": "execution-frame-authority"}
 {"ts": "2026-05-09T14:48:53.833171+00:00", "run_id": "run-20260509T125912Z-8deb38fd", "seq": 73, "event_type": "pair_completed", "pair": "test", "cycle": 1, "attempt": 1, "phase_id": "execution-frame-authority"}
+{"ts": "2026-05-09T14:48:53.980636+00:00", "run_id": "run-20260509T125912Z-8deb38fd", "seq": 74, "event_type": "phase_completed", "pair": "test", "phase_id": "execution-frame-authority", "phase_mode": "single"}
+{"ts": "2026-05-09T14:48:53.983029+00:00", "run_id": "run-20260509T125912Z-8deb38fd", "seq": 75, "event_type": "phase_started", "phase_id": "branch-typed-evidence", "phase_mode": "single"}
+{"ts": "2026-05-09T14:48:53.983868+00:00", "run_id": "run-20260509T125912Z-8deb38fd", "seq": 76, "event_type": "pair_started", "pair": "implement", "phase_id": "branch-typed-evidence"}
+{"ts": "2026-05-09T14:48:53.983941+00:00", "run_id": "run-20260509T125912Z-8deb38fd", "seq": 77, "event_type": "cycle_started", "pair": "implement", "cycle": 1, "attempt": 1, "phase_id": "branch-typed-evidence"}
