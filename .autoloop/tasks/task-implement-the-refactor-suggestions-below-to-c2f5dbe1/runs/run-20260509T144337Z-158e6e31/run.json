@@ -13,11 +13,11 @@
       "unify-runtime-context-mutators"
     ],
     "explicit": true,
-    "current_phase_index": 0,
-    "current_phase_id": "unify-runtime-context-mutators"
+    "current_phase_index": 1,
+    "current_phase_id": null
   },
   "phase_status": {
-    "unify-runtime-context-mutators": "in_progress"
+    "unify-runtime-context-mutators": "completed"
   },
   "phase_history": [
     {
@@ -25,6 +25,13 @@
       "run_id": "run-20260509T144337Z-158e6e31",
       "status": "in_progress",
       "ts": "2026-05-09T14:48:20.955255+00:00"
+    },
+    {
+      "phase_id": "unify-runtime-context-mutators",
+      "run_id": "run-20260509T144337Z-158e6e31",
+      "status": "completed",
+      "ts": "2026-05-09T14:57:39.202051+00:00",
+      "pair": "test"
     }
   ]
 }
