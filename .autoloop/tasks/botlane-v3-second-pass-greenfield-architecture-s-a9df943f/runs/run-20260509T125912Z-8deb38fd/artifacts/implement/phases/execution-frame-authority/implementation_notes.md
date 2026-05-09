@@ -10,56 +10,79 @@
 ## Files changed
 
 - `botlane/core/context.py`
+- `botlane/core/engine.py`
+- `botlane/core/worklists.py`
 - `botlane/core/branch_groups/context.py`
+- `botlane/core/branch_groups/runtime.py`
+- `botlane/core/engine_collaborators.py`
+- `tests/contract/test_async_step_dispatcher.py`
+- `tests/contract/engine/test_execution_services.py`
+- `tests/contract/test_provider_turn_plan_adapter.py`
+- `tests/runtime/workflow_contract_helpers.py`
+- `tests/unit/test_branch_group_context_sessions.py`
 - `tests/unit/test_execution_frame_context_parity.py`
+- `tests/unit/test_primitives_and_stores.py`
 
 ## Symbols touched
 
 - `Context.__getattr__`
 - `_legacy_frame_attr(...)`
-- `_ContextRuntime`
-- `context_runtime(...)`
-- `_inherit_child_runtime_bookkeeping(...)`
+- `Engine._configure_context_frame(...)`
+- `ExecutionFrame.set_*` and worklist cache methods via internal callers
+- `_inherit_child_frame_bookkeeping(...)`
+- `ProviderContractBuilder.available_routes(...)`
 
 ## Checklist mapping
 
-- `execution-frame-authority / AC-1`: `Context` public properties still read from `ExecutionFrame`; legacy underscore access now resolves dynamically into frame state instead of mirrored fields.
-- `execution-frame-authority / AC-2`: branch and fan-in child context creation continues through `ExecutionFrame.child_for_branch(...)` / `child_for_fan_in(...)`, with child-local bookkeeping layered on top of the child frame.
+- `execution-frame-authority / AC-1`: public `Context` reads continue to resolve from `ExecutionFrame`, while internal state/session/worklist mutation moved off `Context` and onto `ExecutionFrame`.
+- `execution-frame-authority / AC-2`: branch and fan-in child contexts still originate from `ExecutionFrame.child_for_branch(...)` / `child_for_fan_in(...)`, with only child-local resolver/cache setup applied afterward.
 
 ## Assumptions
 
-- Existing internal callers may keep using `context_runtime(...)` and underscore aliases during later phases; removing those call sites is out of scope for this phase.
+- The two remaining failures in the full `tests/unit/test_branch_group_context_sessions.py` file are still Phase 2 stale assertions, not regressions from this phase.
 
 ## Preserved invariants
 
-- Public `Context` API surface is unchanged.
-- Default request-message sentinel vs explicit `message=None` behavior is unchanged.
-- Branch/fan-in request snapshot, state-cell sharing, and worklist snapshot isolation stay unchanged.
+- Public `Context` properties and methods are unchanged.
+- Explicit `message=None` remains distinct from the request-file sentinel.
+- Branch/fan-in child contexts preserve shared state-cell semantics, request snapshots, and branch-local session/worklist isolation.
 
 ## Intended behavior changes
 
-- Removed the `WeakKeyDictionary` context sidecar and `_sync_legacy_fields_from_execution_frame(...)`.
-- `context_runtime(...)` now mutates only `ExecutionFrame` state.
-- Legacy underscore reads such as `_values`, `_selections`, `_selection_snapshots`, and `_worklist_items_cache` now resolve directly from `ExecutionFrame` instead of mirrored `Context` fields.
+- Removed `context_runtime(...)` entirely.
+- Removed `Context`-level `_set_*` and worklist cache mutator methods so runtime writes happen on `ExecutionFrame` only.
+- Branch/worklist/engine internal callers now write state, selections, worklist caches, execution-source metadata, and scoped stores through `ExecutionFrame`.
 
 ## Known non-changes
 
-- `context_runtime(...)` remains available as an internal facade.
-- No public `Context` method/property names changed.
-- No branch-runtime or provider-runtime behavior outside frame authority was intentionally changed.
+- Legacy underscore reads such as `_values`, `_selections`, `_selection_snapshots`, `_worklist_items_cache`, and `_step_state` still resolve dynamically from `ExecutionFrame`.
+- Public `Context` naming and branch evidence schemas are unchanged.
 
 ## Expected side effects
 
-- Eliminates frame/context drift caused by mirrored private fields.
-- Child branch/fan-in contexts now inherit selection snapshots from the child frame and keep their worklist cache local to that frame.
+- No parallel context-side mutation facade remains.
+- Async branch-group execution keeps provider-visible branch routes even when nested branch steps are stored only on their step-plan route cache.
+
+## Deduplication / centralization
+
+- Centralized mutable runtime writes on `ExecutionFrame` instead of splitting them between `Context`, worklist helpers, branch helpers, and former `context_runtime(...)` wrappers.
+- Kept event emission and scoped worklist-sync logic on `Context` because they derive payloads from the public facade rather than owning mutable storage.
+
+## Intended out-of-phase change
+
+- `ProviderContractBuilder.available_routes(...)` now falls back to step-plan provider-visible route properties for nested branch steps when `WorkflowPlan.routes` has no direct entry.
+- Justification: the execution-frame-authority validation surfaced an async branch-group regression (`legal routes: <none>`) in nested provider steps; fixing the fallback keeps branch runtime behavior stable without changing the public surface or reintroducing adapters.
 
 ## Validation performed
 
-- `python3 -m py_compile botlane/core/context.py botlane/core/execution_frame.py botlane/core/branch_groups/context.py`
-- `./.venv/bin/python -m pytest -q tests/unit/test_execution_frame_context_parity.py tests/unit/test_primitives_and_stores.py tests/unit/test_branch_group_context_sessions.py -k 'branch_context_shares_state_cell_values_and_branch_metadata or fan_in_context_exposes_metadata_and_branch_execution_ids or branch_and_fan_in_contexts_preserve_parent_request_snapshot or branch_session_store_view_keeps_activation_local_to_branch or branch_session_store_view_uses_distinct_fresh_keys_per_branch_namespace or branch_session_store_view_snapshot_is_branch_local_only or branch_context_resolves_worklists_locally_without_mutating_parent'`
+- `python3 -m py_compile botlane/core/context.py botlane/core/engine.py botlane/core/worklists.py botlane/core/branch_groups/context.py botlane/core/branch_groups/runtime.py botlane/core/engine_collaborators.py botlane/simple.py tests/contract/test_async_step_dispatcher.py tests/contract/engine/test_execution_services.py tests/contract/test_provider_turn_plan_adapter.py tests/runtime/workflow_contract_helpers.py tests/unit/test_branch_group_context_sessions.py tests/unit/test_execution_frame_context_parity.py tests/unit/test_primitives_and_stores.py`
+- `./.venv/bin/python -m pytest -q tests/unit/test_execution_frame_context_parity.py tests/unit/test_primitives_and_stores.py tests/contract/test_provider_turn_plan_adapter.py tests/contract/test_async_step_dispatcher.py tests/contract/engine/test_execution_services.py tests/runtime/test_workspace_and_context.py`
+- `./.venv/bin/python -m pytest -q tests/contract/test_async_step_dispatcher.py -k 'finalize_runs_branch_group_inside_event_loop or capture_runs_hooks_and_skips_route_on_taken'`
 - `./.venv/bin/python -m pytest -q tests/contract/engine/test_worklists.py -k 'legacy_null_worklist_selection_payloads'`
-- `./.venv/bin/python -m pytest -q tests/runtime/test_workspace_and_context.py`
+- `./.venv/bin/python -m pytest -q tests/unit/test_branch_group_context_sessions.py -k 'branch_context_shares_state_cell_values_and_branch_metadata or fan_in_context_exposes_metadata_and_branch_execution_ids or branch_and_fan_in_contexts_preserve_parent_request_snapshot or branch_session_store_view_keeps_activation_local_to_branch or branch_session_store_view_uses_distinct_fresh_keys_per_branch_namespace or branch_session_store_view_snapshot_is_branch_local_only or branch_context_resolves_worklists_locally_without_mutating_parent'`
 
 ## Validation notes
 
-- A broader run of `tests/unit/test_branch_group_context_sessions.py` still reports two unrelated pre-existing failures that assert removed Phase 2 internals (`StepExecutionResult(finalization=...)` and dataclass `scope_name` replacement on step plans). Those assertions were left untouched in this phase-local slice.
+- A broad run including all of `tests/unit/test_branch_group_context_sessions.py` still reports two unrelated stale failures from earlier architecture cutover work:
+- `StepExecutionResult(finalization=...)`
+- dataclass `replace(..., scope_name=...)` on step plans

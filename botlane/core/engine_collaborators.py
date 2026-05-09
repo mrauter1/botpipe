@@ -564,8 +564,10 @@ class ProviderContractBuilder:
 
     def available_routes(self, step: StepPlan) -> tuple[str, ...]:
         if self._engine.interaction_policy.allow_provider_questions:
-            return provider_visible_route_tags(self._engine.compiled, step.name, mode="interactive")
-        return provider_visible_route_tags(self._engine.compiled, step.name, mode="full_auto")
+            routes = provider_visible_route_tags(self._engine.compiled, step.name, mode="interactive")
+            return routes or step.provider_visible_routes_interactive
+        routes = provider_visible_route_tags(self._engine.compiled, step.name, mode="full_auto")
+        return routes or step.provider_visible_routes_full_auto
 
 
 class StepDispatcher:
