@@ -1021,3 +1021,51 @@ Open issues / next step
   - `.venv/bin/python -m py_compile tests/unit/test_runtime_and_discovery_extraction.py`
   - `.venv/bin/python -m pytest tests/unit/test_runtime_and_discovery_extraction.py -q` → `6 passed`
 - Next step is the test-phase verifier pass against the updated strategy and focused test coverage.
+
+
+---
+run_id=run-20260509T124548Z-f67cf8d4 | entry=session_turn | pair=test | phase=verifier | cycle=1 | attempt=1 | thread_id=019e0ce8-ee70-7b01-8577-e4e1d171aaa2
+---
+provider=codex
+mode=resume
+template=/home/rauter/.local/share/pipx/venvs/autoloop/lib/python3.12/site-packages/autoloop/templates/test_verifier.md
+session_id=019e0ce8-ee70-7b01-8577-e4e1d171aaa2
+
+
+---
+run_id=run-20260509T124548Z-f67cf8d4 | entry=phase_output | pair=test | phase=verifier | process=codex-agent | cycle=1 | attempt=1 | thread_id=019e0ce8-ee70-7b01-8577-e4e1d171aaa2
+---
+Auditing the new phase-local tests against the acceptance criteria and the stated coverage map first, then I’ll decide whether the strategy leaves any material regression surface uncovered.
+
+The main remaining gap is on the discovery side: the extracted helper for lowering simple-step declarations still has no direct regression coverage in this phase, even though AC-2 explicitly calls that behavior out. I’m recording that as the blocking audit finding.
+
+Scope considered
+
+- Phase-local audit of the new runtime/discovery regression tests, with focus on [tests/unit/test_runtime_and_discovery_extraction.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/tests/unit/test_runtime_and_discovery_extraction.py), [test_strategy.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/task-implement-the-refactor-suggestions-below-to-c2f5dbe1/runs/run-20260509T124548Z-f67cf8d4/artifacts/test/phases/runtime-and-discovery-extraction/test_strategy.md), and the acceptance criteria for this phase.
+
+What I analyzed
+
+- The focused phase-local file’s direct coverage of the extracted `Engine.run_async` terminal/checkpoint branches.
+- The discovery-side coverage against AC-2, especially whether the extraction of `_lower_discovered_simple_steps()` is exercised.
+- The test strategy’s claim that broader contract coverage is reused for `goto` and hook-notification behavior.
+
+What I reviewed
+
+- Updated [criteria.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/task-implement-the-refactor-suggestions-below-to-c2f5dbe1/runs/run-20260509T124548Z-f67cf8d4/artifacts/test/phases/runtime-and-discovery-extraction/criteria.md) to reflect that reliability and behavioral intent are acceptable, but material coverage remains missing.
+- Appended `TST-001` to [feedback.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/task-implement-the-refactor-suggestions-below-to-c2f5dbe1/runs/run-20260509T124548Z-f67cf8d4/artifacts/test/phases/runtime-and-discovery-extraction/feedback.md).
+- Confirmed the focused file itself is stable and runnable via the recorded `6 passed` result.
+
+Key findings / decisions
+
+- `TST-001` blocking: the updated phase-local tests do not cover lowered-simple-step behavior at all, even though AC-2 explicitly calls that preserved behavior out. Current discovery coverage only exercises explicit `PythonStep` ordering, `global_session`, and duplicate-step rejection.
+- The runtime-side additions are useful and deterministic, but they are not enough to clear the discovery extraction acceptance criteria on their own.
+- I did not find flake-risk concerns in the added tests; the remaining issue is coverage completeness, not reliability.
+
+Open issues / next step
+
+- Add or explicitly wire in a regression test that exercises `describe_workflow_class()` through the repository’s simple-step declaration/lowering path and asserts the lowered step ordering or route wiring.
+- After that discovery-lowering gap is covered, this test phase can be re-audited.
+
+<loop-control>
+{"schema":"docloop.loop_control/v1","kind":"promise","promise":"INCOMPLETE"}
+</loop-control>

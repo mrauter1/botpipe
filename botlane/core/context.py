@@ -8,7 +8,6 @@ from pathlib import Path
 import inspect
 from typing import TYPE_CHECKING, Any, Callable, Generic, TypeVar
 from uuid import uuid4
-from weakref import WeakKeyDictionary
 
 from pydantic import BaseModel, ConfigDict
 
@@ -32,7 +31,6 @@ if TYPE_CHECKING:
 
 
 OutputT = TypeVar("OutputT")
-_CONTEXT_RUNTIMES: "WeakKeyDictionary[Context, _ContextRuntime]" = WeakKeyDictionary()
 _DEFAULT_MESSAGE = _DEFAULT_FRAME_MESSAGE
 
 
@@ -201,6 +199,81 @@ class StateView:
 
     def __repr__(self) -> str:
         return f"StateView({object.__getattribute__(self, '_source')!r})"
+
+
+def _legacy_frame_attr(context: "Context", name: str) -> Any:
+    frame = context._execution_frame
+    if name == "_state_cell":
+        return frame.state_cell
+    if name == "_state":
+        return None if frame.state_cell is None else frame.state_cell.value
+    if name == "_session_store":
+        return frame.session_store
+    if name == "_session_definitions":
+        return {} if frame.session_definitions is None else frame.session_definitions
+    if name == "_worklists":
+        return {} if frame.worklists is None else frame.worklists
+    if name == "_selections":
+        return {} if frame.selections is None else frame.selections
+    if name == "_selection_snapshots":
+        return {} if frame.selection_snapshots is None else frame.selection_snapshots
+    if name == "_active_worklist":
+        return frame.active_worklist
+    if name == "_params":
+        return frame.params if frame.params is not None else EmptyParameters()
+    if name == "_workflow_params":
+        return {} if frame.workflow_params is None else frame.workflow_params
+    if name == "_message":
+        return frame.message
+    if name == "_input_fields":
+        return frame.input_fields
+    if name == "_workflow_invoker":
+        return frame.workflow_invoker
+    if name == "_answer":
+        return frame.answer
+    if name == "_input_response":
+        return frame.input_response
+    if name == "_step_name":
+        return frame.step_name
+    if name == "_artifacts":
+        return frame.artifacts
+    if name == "_values":
+        return {} if frame.values is None else frame.values
+    if name == "_route":
+        return frame.route
+    if name == "_event":
+        return frame.event
+    if name == "_outcome":
+        return frame.outcome
+    if name == "_meta":
+        return frame.meta
+    if name == "_step_state":
+        return {} if frame.step_state is None else frame.step_state
+    if name == "_item_state":
+        return frame.item_state
+    if name == "_step_item_state":
+        return frame.step_item_state
+    if name == "_branch":
+        return frame.branch
+    if name == "_fan_in":
+        return frame.fan_in
+    if name == "_step_execution_id":
+        return frame.step_execution_id
+    if name == "_runtime_event_sink":
+        return frame.runtime_event_sink
+    if name == "_worklist_items_cache":
+        return {} if frame.worklist_items_cache is None else frame.worklist_items_cache
+    if name == "_worklist_selection_sync":
+        return frame.worklist_selection_sync
+    if name == "_worklist_selection_resolver":
+        return frame.worklist_selection_resolver
+    if name == "_execution_source_hook":
+        return frame.execution_source_hook
+    if name == "_execution_source_phase":
+        return frame.execution_source_phase
+    if name == "_execution_hook_invocation_id":
+        return frame.execution_hook_invocation_id
+    raise AttributeError(name)
 
 
 class Context:
