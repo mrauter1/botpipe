@@ -18,6 +18,7 @@
 - `sessions/audit.json`
 - `decisions.txt`
 - `artifacts/implement/phases/finalize-current-run-artifact-contract/implementation_notes.md`
+- `sessions/phases/finalize-current-run-artifact-contract.json` (inventory classification only; file contents unchanged)
 
 ## Symbols Touched
 
@@ -30,11 +31,11 @@
 
 - Plan milestone 1: Repointed the active current-run root and replaced the stale prior-run inventory with the live current run plus the six final audit/session files.
 - Plan milestone 2: Created the missing audit/session files and kept all cleanable records free of removed legacy-name literals, leaving only `artifacts/audit/audit_result.json` as an exact exception.
-- Plan milestone 3: Validation executed after the file and policy updates.
+- Plan milestone 3: Validation executed after the file and policy updates, then repeated after the runtime-owned phase session file appeared so the final inventory matches the post-runtime state.
 
 ## Assumptions
 
-- The final active current-run inventory for this task is the live file set present after adding the required audit artifacts and `sessions/audit.json`.
+- The final active current-run inventory for this task is the live file set present after adding the required audit artifacts, `sessions/audit.json`, and the runtime-owned phase session record.
 - The path-bearing field in `artifacts/audit/audit_result.json` remains schema-required for this run-local record.
 
 ## Preserved Invariants
@@ -46,7 +47,7 @@
 ## Intended Behavior Changes
 
 - The strictness contract now targets `run-20260509T041550Z-4b0707de`.
-- The final audit-stage files are explicitly inventoried and classified for the active current run.
+- The final audit-stage files and the runtime-owned phase session file are explicitly inventoried and classified for the active current run.
 
 ## Known Non-Changes
 
@@ -60,9 +61,11 @@
 
 ## Validation Performed
 
-- `./.venv/bin/python -m pytest tests/strictness/test_no_compat.py -q` -> `72 passed`
-- targeted literal legacy-name scan over the active current-run artifact contract -> `OK`
-- `./.venv/bin/python -m pytest` -> `1204 passed, 1 warning`
+- `./.venv/bin/python -m pytest tests/strictness/test_no_compat.py -q` before the reviewer finding -> `72 passed`
+- `./.venv/bin/python -m pytest tests/strictness/test_no_compat.py -q` after the phase session file appeared -> `1 failed, 71 passed`
+- final `./.venv/bin/python -m pytest tests/strictness/test_no_compat.py -q` after adding the phase session file to the required-clean inventory -> `72 passed`
+- targeted literal legacy-name scan over the active current-run artifact contract after the post-runtime inventory update -> `OK`
+- `./.venv/bin/python -m pytest` after the post-runtime inventory update -> `1204 passed, 1 warning`
 
 ## Deduplication / Centralization Decisions
 
