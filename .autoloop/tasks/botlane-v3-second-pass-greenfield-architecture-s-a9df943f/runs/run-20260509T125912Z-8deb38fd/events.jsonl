@@ -135,3 +135,7 @@
 {"ts": "2026-05-09T16:10:12.587487+00:00", "run_id": "run-20260509T125912Z-8deb38fd", "seq": 135, "event_type": "phase_finished", "pair": "test", "phase": "producer", "cycle": 1, "attempt": 1, "empty_output": false, "phase_id": "sdk-single-step-cutover"}
 {"ts": "2026-05-09T16:11:06.786431+00:00", "run_id": "run-20260509T125912Z-8deb38fd", "seq": 136, "event_type": "phase_finished", "pair": "test", "phase": "verifier", "cycle": 1, "attempt": 1, "empty_output": false, "phase_id": "sdk-single-step-cutover"}
 {"ts": "2026-05-09T16:11:06.901164+00:00", "run_id": "run-20260509T125912Z-8deb38fd", "seq": 137, "event_type": "pair_completed", "pair": "test", "cycle": 1, "attempt": 1, "phase_id": "sdk-single-step-cutover"}
+{"ts": "2026-05-09T16:11:07.071194+00:00", "run_id": "run-20260509T125912Z-8deb38fd", "seq": 138, "event_type": "phase_completed", "pair": "test", "phase_id": "sdk-single-step-cutover", "phase_mode": "single"}
+{"ts": "2026-05-09T16:11:07.074001+00:00", "run_id": "run-20260509T125912Z-8deb38fd", "seq": 139, "event_type": "phase_started", "phase_id": "strictness-cleanup", "phase_mode": "single"}
+{"ts": "2026-05-09T16:11:07.075006+00:00", "run_id": "run-20260509T125912Z-8deb38fd", "seq": 140, "event_type": "pair_started", "pair": "implement", "phase_id": "strictness-cleanup"}
+{"ts": "2026-05-09T16:11:07.075099+00:00", "run_id": "run-20260509T125912Z-8deb38fd", "seq": 141, "event_type": "cycle_started", "pair": "implement", "cycle": 1, "attempt": 1, "phase_id": "strictness-cleanup"}

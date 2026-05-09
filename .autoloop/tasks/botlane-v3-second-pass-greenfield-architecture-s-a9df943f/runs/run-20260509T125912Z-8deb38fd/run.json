@@ -21,8 +21,8 @@
       "strictness-cleanup"
     ],
     "explicit": true,
-    "current_phase_index": 7,
-    "current_phase_id": "sdk-single-step-cutover"
+    "current_phase_index": 8,
+    "current_phase_id": "strictness-cleanup"
   },
   "phase_status": {
     "public-freeze": "completed",
@@ -32,8 +32,8 @@
     "branch-typed-evidence": "completed",
     "placeholder-reference-graph": "completed",
     "provider-turn-cutover": "completed",
-    "sdk-single-step-cutover": "in_progress",
-    "strictness-cleanup": "planned"
+    "sdk-single-step-cutover": "completed",
+    "strictness-cleanup": "in_progress"
   },
   "phase_history": [
     {
@@ -132,6 +132,19 @@
       "run_id": "run-20260509T125912Z-8deb38fd",
       "status": "in_progress",
       "ts": "2026-05-09T15:45:12.946184+00:00"
+    },
+    {
+      "phase_id": "sdk-single-step-cutover",
+      "run_id": "run-20260509T125912Z-8deb38fd",
+      "status": "completed",
+      "ts": "2026-05-09T16:11:07.070878+00:00",
+      "pair": "test"
+    },
+    {
+      "phase_id": "strictness-cleanup",
+      "run_id": "run-20260509T125912Z-8deb38fd",
+      "status": "in_progress",
+      "ts": "2026-05-09T16:11:07.073152+00:00"
     }
   ]
 }
