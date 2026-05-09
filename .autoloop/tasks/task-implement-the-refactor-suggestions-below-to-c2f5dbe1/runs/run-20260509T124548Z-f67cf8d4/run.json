@@ -16,13 +16,13 @@
       "conditional-capability-entry-cleanup"
     ],
     "explicit": true,
-    "current_phase_index": 1,
-    "current_phase_id": "authoring-and-builder-reducers"
+    "current_phase_index": 2,
+    "current_phase_id": "runtime-and-discovery-extraction"
   },
   "phase_status": {
     "provider-policy-translators": "completed",
-    "authoring-and-builder-reducers": "in_progress",
-    "runtime-and-discovery-extraction": "planned",
+    "authoring-and-builder-reducers": "completed",
+    "runtime-and-discovery-extraction": "in_progress",
     "conditional-capability-entry-cleanup": "planned"
   },
   "phase_history": [
@@ -44,6 +44,19 @@
       "run_id": "run-20260509T124548Z-f67cf8d4",
       "status": "in_progress",
       "ts": "2026-05-09T13:02:46.519746+00:00"
+    },
+    {
+      "phase_id": "authoring-and-builder-reducers",
+      "run_id": "run-20260509T124548Z-f67cf8d4",
+      "status": "completed",
+      "ts": "2026-05-09T13:24:11.609431+00:00",
+      "pair": "test"
+    },
+    {
+      "phase_id": "runtime-and-discovery-extraction",
+      "run_id": "run-20260509T124548Z-f67cf8d4",
+      "status": "in_progress",
+      "ts": "2026-05-09T13:24:11.611483+00:00"
     }
   ]
 }
