@@ -134,6 +134,27 @@ def test_validate_placeholder_ref_preserves_known_simple_prompt_surfaces() -> No
     )
 
 
+def test_validate_placeholder_ref_preserves_artifact_and_step_alias_dispatch() -> None:
+    symbols = _simple_prompt_symbols()
+
+    assert (
+        validate_placeholder_ref(
+            parse_placeholders("{artifacts.report}", source="prompt")[0],
+            surface="simple step 'review' prompt placeholder",
+            symbols=symbols,
+        )
+        == "report"
+    )
+    assert (
+        validate_placeholder_ref(
+            parse_placeholders("{step.draft}", source="prompt")[0],
+            surface="simple step 'review' prompt placeholder",
+            symbols=symbols,
+        )
+        is None
+    )
+
+
 def test_validate_placeholder_ref_preserves_branch_and_fan_in_placement_rules() -> None:
     branch_ref = parse_placeholders("{branch.name}", source="prompt")[0]
     fan_in_ref = parse_placeholders("{fan_in.context_text}", source="prompt")[0]

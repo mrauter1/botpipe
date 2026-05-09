@@ -6,3 +6,6 @@ Keep SingleStepPlan as the only one-step execution architecture; remove compile_
 Phase 0 must freeze simple public authoring examples, route-sentinel authoring, and the full Botlane SDK helper surface before any internal rewrite phase starts.
 Create tests/strictness/test_botlane_identity.py in Phase 0 and only expand it in Phase 8 so per-phase test execution stays feasible.
 Add botlane/core/artifact_plan.py as the canonical home for ArtifactSpec and artifact inventory metadata; keep artifacts.py limited to public artifact handles and template delegates after the cutover.
+<autoloop-decisions-header version="1" block_seq="3" owner="implementer" phase_id="public-freeze" pair="implement" turn_seq="1" run_id="run-20260509T125912Z-8deb38fd" ts="2026-05-09T13:07:46.931819+00:00" />
+Phase 0 export freezing now lives in tests/unit/test_public_surface.py, while tests/unit/test_simple_surface.py keeps behavior-facing authoring coverage instead of repeating __all__ assertions.
+The branch-group post-cutover export assertion is staged as an explicit skipped Phase 2 test so current behavior is documented without forcing premature compiled-export removal.
