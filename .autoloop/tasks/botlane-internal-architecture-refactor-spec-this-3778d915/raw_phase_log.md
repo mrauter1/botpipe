@@ -1733,3 +1733,65 @@ Open issues / next step
   - `tests/unit/test_route_contracts.py`
   - `tests/unit/test_step_plans.py`
 - `tests/strictness/test_no_compat.py` still has one pre-existing environment failure: the venv contains an importable legacy `autoloop` package under `/home/rauter/autoloop_v3/.venv/lib/python3.12/site-packages/autoloop`. The code changes here did not introduce that.
+
+
+---
+run_id=run-20260509T045359Z-e2586b1f | entry=session_turn | pair=implement | phase=verifier | cycle=1 | attempt=1 | thread_id=019e0b83-527d-7200-87b5-3be58b23f713
+---
+provider=codex
+mode=resume
+template=/home/rauter/.local/share/pipx/venvs/autoloop/lib/python3.12/site-packages/autoloop/templates/implement_verifier.md
+session_id=019e0b83-527d-7200-87b5-3be58b23f713
+
+
+---
+run_id=run-20260509T045359Z-e2586b1f | entry=phase_output | pair=implement | phase=verifier | process=codex-agent | cycle=1 | attempt=1 | thread_id=019e0b83-527d-7200-87b5-3be58b23f713
+---
+I’m reviewing the phase-local implementation against the provider-turn and route-finalization contract. First I’m reading the phase criteria, current feedback artifact, implementation notes, and the concrete code/test diffs that landed for this phase.
+
+I’ve got the phase notes and decisions. Now I’m reading the actual adapter code paths and the new contract test file closely for parity holes, silent fallbacks, and any contradictions with the phase contract.
+
+Reviewing the phase-local implementation against the provider-turn and route-finalization scope first. I’m checking the changed execution paths, the new contract test, and whether the adapter fallback preserves the phase acceptance criteria without silently dropping the new behavior.
+
+The review center is the adapter fallback behavior now. I’m tracing how `ProviderTurnPlan` is actually selected at runtime, because the acceptance criterion is about real planning support, not just a new code path plus fallback.
+
+I have the main risk narrowed down: the new adapter path is guarded by an unconditional fallback. I’m checking the adapter contract itself now to confirm whether the runtime can distinguish expected parity gaps from real regressions, because that determines whether this is a blocking silent-degradation issue.
+
+I’ve got one blocking review point. It’s not about the new types themselves; it’s that unexpected failures in the new adapter path are fully swallowed, which lets the runtime silently fall back to the legacy path and makes the phase’s new behavior impossible to trust.
+
+Scope considered
+
+- Phase-local review for `provider-turn-and-route-finalization`.
+- Changed implementation paths in [botlane/core/engine_collaborators.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/botlane/core/engine_collaborators.py:1).
+- New contract coverage in [tests/contract/test_provider_turn_plan_adapter.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/tests/contract/test_provider_turn_plan_adapter.py:1).
+- Phase artifacts: `criteria.md`, `feedback.md`, `implementation_notes.md`, and `decisions.txt`.
+
+What I analyzed
+
+- How prompt and produce/verify execution select the new `ProviderTurnPlan` bridge.
+- How provider contracts still flow through existing `RenderedProviderTurn` and `ProviderTurnResult` boundaries.
+- How `RouteDecision` is attached to `RouteFinalizationResult`.
+- The phase-local implementation notes and decisions ledger to verify intended scope and non-changes.
+
+What I reviewed
+
+- Provider-turn adapter entry points: `_prompt_step_plan_for_execution()`, `_pair_step_plan_for_execution()`, `ProviderContractBuilder._provider_turn_contract()`.
+- Route-finalization bridge points: `RouteFinalizationResult.decision`, `RouteFinalizer.capture()`, `RouteFinalizer.finalize()`.
+- New contract tests for prompt/pair rendered-turn parity and route-decision exposure.
+- Review artifacts updated:
+  - [criteria.md](</home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/botlane-internal-architecture-refactor-spec-this-3778d915/runs/run-20260509T045359Z-e2586b1f/artifacts/implement/phases/provider-turn-and-route-finalization/criteria.md>)
+  - [feedback.md](</home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/botlane-internal-architecture-refactor-spec-this-3778d915/runs/run-20260509T045359Z-e2586b1f/artifacts/implement/phases/provider-turn-and-route-finalization/feedback.md>)
+
+Key findings / decisions
+
+- `IMP-001` blocking: the new provider-turn bridge is guarded by blanket `except Exception` fallbacks in [botlane/core/engine_collaborators.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/botlane/core/engine_collaborators.py:170) and [botlane/core/engine_collaborators.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/botlane/core/engine_collaborators.py:184). Unexpected adapter bugs are silently converted into legacy-path execution, so the phase can appear healthy while the new `ProviderTurnPlan` behavior is effectively disabled.
+- Criteria were marked `INCOMPLETE`; compatibility remained checked, but correctness, behavioral safety, technical debt, and validation did not.
+
+Open issues / next step
+
+- Tighten the fallback policy so only explicit, known parity gaps use the legacy path.
+- Surface or fail on unexpected `step_plan_from_compiled_step(...)` errors, then rerun the phase-local contract and route/runtime-control suites.
+
+<loop-control>
+{"schema":"docloop.loop_control/v1","kind":"promise","promise":"INCOMPLETE"}
+</loop-control>
