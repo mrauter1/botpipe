@@ -4,3 +4,7 @@
 {"ts": "2026-05-09T04:19:10.938510+00:00", "run_id": "run-20260509T041550Z-4b0707de", "seq": 4, "event_type": "phase_finished", "pair": "plan", "phase": "producer", "cycle": 1, "attempt": 1, "empty_output": false, "phase_id": null}
 {"ts": "2026-05-09T04:20:29.122524+00:00", "run_id": "run-20260509T041550Z-4b0707de", "seq": 5, "event_type": "phase_finished", "pair": "plan", "phase": "verifier", "cycle": 1, "attempt": 1, "empty_output": false, "phase_id": null}
 {"ts": "2026-05-09T04:20:29.253819+00:00", "run_id": "run-20260509T041550Z-4b0707de", "seq": 6, "event_type": "pair_completed", "pair": "plan", "cycle": 1, "attempt": 1, "phase_id": null}
+{"ts": "2026-05-09T04:20:29.412162+00:00", "run_id": "run-20260509T041550Z-4b0707de", "seq": 7, "event_type": "phase_scope_resolved", "phase_mode": "single", "phase_ids": ["finalize-current-run-artifact-contract"], "explicit": true, "current_phase_index": 0}
+{"ts": "2026-05-09T04:20:29.413968+00:00", "run_id": "run-20260509T041550Z-4b0707de", "seq": 8, "event_type": "phase_started", "phase_id": "finalize-current-run-artifact-contract", "phase_mode": "single"}
+{"ts": "2026-05-09T04:20:29.415179+00:00", "run_id": "run-20260509T041550Z-4b0707de", "seq": 9, "event_type": "pair_started", "pair": "implement", "phase_id": "finalize-current-run-artifact-contract"}
+{"ts": "2026-05-09T04:20:29.415281+00:00", "run_id": "run-20260509T041550Z-4b0707de", "seq": 10, "event_type": "cycle_started", "pair": "implement", "cycle": 1, "attempt": 1, "phase_id": "finalize-current-run-artifact-contract"}

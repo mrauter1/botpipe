@@ -96,3 +96,12 @@ No verifier blocking issues remain in the planning artifacts. The next step is i
 <loop-control>
 {"schema":"docloop.loop_control/v1","kind":"promise","promise":"COMPLETE"}
 </loop-control>
+
+
+---
+run_id=run-20260509T041550Z-4b0707de | entry=phase_scope_resolved
+---
+phase_mode=single
+phase_ids=finalize-current-run-artifact-contract
+explicit=True
+current_phase_index=0
