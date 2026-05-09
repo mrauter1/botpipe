@@ -5,15 +5,15 @@ from pathlib import Path
 import pytest
 from pydantic import BaseModel
 
-from botlane.core import FINISH, Workflow
+from botlane.core import AWAIT_INPUT, FAIL, FINISH, Workflow
 from botlane.core.engine import Engine, StepFinalizationRecord
 from botlane.core.engine_collaborators import StepExecutionResult
 from botlane.core.errors import WorkflowExecutionError
 from botlane.core.prompts import Prompt
 from botlane.core.providers.fake import ScriptedLLMProvider
-from botlane.core.route_contracts import Continue
+from botlane.core.route_contracts import AwaitInput, Continue, FailAction, Finish
 from botlane.core.steps import PromptStep, PythonStep
-from botlane.core.stores import InMemoryCheckpointStore, InMemorySessionStore
+from botlane.core.stores import InMemoryCheckpointStore, InMemorySessionStore, PendingInput
 
 
 class _RouteActionWorkflow(Workflow):
@@ -104,3 +104,72 @@ def test_handle_step_result_rejects_missing_canonical_route_action(tmp_path: Pat
 
     with pytest.raises(WorkflowExecutionError, match="canonical route action"):
         engine._handle_step_result(env, loop, frame, step_result)
+
+
+def test_handle_step_result_uses_finish_action_over_legacy_destination(tmp_path: Path) -> None:
+    engine = _build_engine()
+    env, loop, frame = _prepare_loop(engine, tmp_path)
+
+    step_result = StepExecutionResult(
+        state=loop.state,
+        destination="second",
+        event=None,
+        outcome=None,
+        pending_handoffs=(),
+        action=Finish(),
+        transition=StepFinalizationRecord(final_route="done", terminal=FINISH),
+    )
+
+    terminal = engine._handle_step_result(env, loop, frame, step_result)
+
+    assert terminal is not None
+    assert terminal.terminal == FINISH
+
+
+def test_handle_step_result_uses_await_input_action_over_legacy_destination(tmp_path: Path) -> None:
+    engine = _build_engine()
+    env, loop, frame = _prepare_loop(engine, tmp_path)
+    pending_input = PendingInput(
+        pending_input_id="pending-1",
+        source_step="first",
+        question="Need approval?",
+    )
+
+    step_result = StepExecutionResult(
+        state=loop.state,
+        destination="second",
+        event=None,
+        outcome=None,
+        pending_handoffs=(),
+        action=AwaitInput(pending_input=pending_input),
+        pending_input=pending_input,
+        transition=StepFinalizationRecord(runtime_control="request_input", terminal=AWAIT_INPUT),
+    )
+
+    terminal = engine._handle_step_result(env, loop, frame, step_result)
+
+    assert terminal is not None
+    assert terminal.terminal == AWAIT_INPUT
+    assert terminal.checkpoint is not None
+    assert terminal.checkpoint.pending_input == pending_input
+
+
+def test_handle_step_result_uses_fail_action_over_legacy_destination(tmp_path: Path) -> None:
+    engine = _build_engine()
+    env, loop, frame = _prepare_loop(engine, tmp_path)
+
+    step_result = StepExecutionResult(
+        state=loop.state,
+        destination="second",
+        event=None,
+        outcome=None,
+        pending_handoffs=(),
+        action=FailAction(reason="route failed"),
+        transition=StepFinalizationRecord(runtime_control="fail", terminal=FAIL),
+    )
+
+    terminal = engine._handle_step_result(env, loop, frame, step_result)
+
+    assert terminal is not None
+    assert terminal.terminal == FAIL
+    assert terminal.checkpoint is not None

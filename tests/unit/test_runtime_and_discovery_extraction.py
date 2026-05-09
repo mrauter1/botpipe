@@ -35,10 +35,10 @@ for _name in (
     setattr(_sdk, _name, type(_name, (), {}))
 sys.modules.setdefault("botlane.sdk", _sdk)
 
-from botlane.core import FINISH, Workflow
+from botlane.core import FAIL, FINISH, Workflow
 from botlane.core.discovery import describe_workflow_class
 from botlane.core.engine import Engine
-from botlane.core.errors import WorkflowExecutionError
+from botlane.core.errors import WorkflowExecutionError, WorkflowValidationError
 from botlane.core.extensions import RunBinding, TerminalFinish
 from botlane.core.primitives import Event, RequestInput
 from botlane.core.providers.fake import ScriptedLLMProvider
@@ -160,7 +160,9 @@ def test_engine_resume_input_failure_preserves_fatal_terminal_step_context(tmp_p
         root=tmp_path,
     )
 
+    assert first.terminal == "AWAIT_INPUT"
     assert first.checkpoint is not None
+    assert seen[0] == ("AWAIT_INPUT", "ask", True)
 
     with pytest.raises(WorkflowExecutionError, match="resumed input did not satisfy"):
         engine.resume(
@@ -173,6 +175,112 @@ def test_engine_resume_input_failure_preserves_fatal_terminal_step_context(tmp_p
         )
 
     assert seen[-1] == ("fatal", "ask", True)
+
+
+def test_engine_fail_terminal_saves_checkpoint_and_emits_terminal_state(tmp_path: Path) -> None:
+    seen: list[tuple[str, str | None, str | None]] = []
+
+    class TerminalExtension:
+        def bind(self, binding: RunBinding):
+            class Bound:
+                def before_step(self, event) -> None:
+                    return None
+
+                def after_step(self, event) -> None:
+                    return None
+
+                def on_terminal(self, event: TerminalFinish) -> None:
+                    status = None if event.state is None else event.state.status
+                    seen.append((event.terminal, event.step_name, status))
+
+            return Bound()
+
+    def _failworkflow_on_review(ctx):
+        ctx.state = ctx.state.model_copy(update={"status": "failed-in-review"})
+        return Event("failed")
+
+    class FailWorkflow(Workflow):
+        class State(BaseModel):
+            status: str = "new"
+
+        extensions = (TerminalExtension(),)
+        review = PythonStep(name="review", handler=_failworkflow_on_review)
+        entry = review
+        transitions = {review: {"failed": FAIL}}
+
+    task_folder, run_folder = _workspace(tmp_path)
+    checkpoint_store = InMemoryCheckpointStore()
+    result = Engine(
+        FailWorkflow,
+        provider=ScriptedLLMProvider(),
+        session_store=InMemorySessionStore(),
+        checkpoint_store=checkpoint_store,
+    ).run(
+        task_id="task-fail-terminal",
+        run_id="run-fail-terminal",
+        task_folder=task_folder,
+        run_folder=run_folder,
+        root=tmp_path,
+    )
+
+    checkpoint = checkpoint_store.load()
+    assert result.terminal == FAIL
+    assert checkpoint is not None
+    assert checkpoint.stage == "review"
+    assert checkpoint.state.status == "failed-in-review"
+    assert seen == [(FAIL, "review", "failed-in-review")]
+
+
+def test_engine_finish_terminal_skips_checkpoint_and_emits_terminal_state(tmp_path: Path) -> None:
+    seen: list[tuple[str, str | None, int | None]] = []
+
+    class TerminalExtension:
+        def bind(self, binding: RunBinding):
+            class Bound:
+                def before_step(self, event) -> None:
+                    return None
+
+                def after_step(self, event) -> None:
+                    return None
+
+                def on_terminal(self, event: TerminalFinish) -> None:
+                    completed = None if event.state is None else event.state.completed
+                    seen.append((event.terminal, event.step_name, completed))
+
+            return Bound()
+
+    def _finishworkflow_on_publish(ctx):
+        ctx.state = ctx.state.model_copy(update={"completed": ctx.state.completed + 1})
+        return Event("done")
+
+    class FinishWorkflow(Workflow):
+        class State(BaseModel):
+            completed: int = 0
+
+        extensions = (TerminalExtension(),)
+        publish = PythonStep(name="publish", handler=_finishworkflow_on_publish)
+        entry = publish
+        transitions = {publish: {"done": FINISH}}
+
+    task_folder, run_folder = _workspace(tmp_path)
+    checkpoint_store = InMemoryCheckpointStore()
+    result = Engine(
+        FinishWorkflow,
+        provider=ScriptedLLMProvider(),
+        session_store=InMemorySessionStore(),
+        checkpoint_store=checkpoint_store,
+    ).run(
+        task_id="task-finish-terminal",
+        run_id="run-finish-terminal",
+        task_folder=task_folder,
+        run_folder=run_folder,
+        root=tmp_path,
+    )
+
+    assert result.terminal == FINISH
+    assert result.checkpoint is None
+    assert checkpoint_store.load() is None
+    assert seen == [(FINISH, "publish", 1)]
 
 
 def test_describe_workflow_class_preserves_default_entry_order_and_global_session() -> None:
@@ -198,3 +306,23 @@ def test_describe_workflow_class_preserves_default_entry_order_and_global_sessio
     assert tuple(step.name for step in definition.steps) == ("draft", "publish")
     assert definition.default_session_name == "global"
     assert definition.sessions_by_name["global"] is DiscoveryWorkflow.global_session
+
+
+def test_describe_workflow_class_rejects_duplicate_step_names() -> None:
+    def _duplicateworkflow_on_first(ctx):
+        return Event("done")
+
+    def _duplicateworkflow_on_second(ctx):
+        return Event("done")
+
+    class DuplicateWorkflow(Workflow):
+        class State(BaseModel):
+            pass
+
+        first = PythonStep(name="review", handler=_duplicateworkflow_on_first)
+        second = PythonStep(name="review", handler=_duplicateworkflow_on_second)
+        entry = first
+        transitions = {first: {"done": FINISH}, second: {"done": FINISH}}
+
+    with pytest.raises(WorkflowValidationError, match="duplicate step name 'review'"):
+        describe_workflow_class(DuplicateWorkflow)

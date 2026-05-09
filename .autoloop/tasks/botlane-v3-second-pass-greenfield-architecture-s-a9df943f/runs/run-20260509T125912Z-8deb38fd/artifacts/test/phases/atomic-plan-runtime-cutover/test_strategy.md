@@ -20,7 +20,7 @@
 
 - Engine consumes `RouteAction` as authoritative control flow
   Covered by `tests/unit/test_engine_route_actions.py`.
-  Edge case: conflicting legacy `destination` vs `Continue.target_step` must follow `action`.
+  Edge cases: conflicting legacy `destination` vs `Continue.target_step`, `Finish`, `AwaitInput`, and `FailAction` must all follow `action`.
   Failure path: missing canonical `action` raises `WorkflowExecutionError`.
 
 - Branch-group public export cutover
