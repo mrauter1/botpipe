@@ -12,6 +12,7 @@ from pydantic import BaseModel, ValidationError
 
 from .context_placeholders import CTX_MODEL_ROOTS, validate_safe_ctx_reference
 from .errors import WorkflowExecutionError
+from .placeholders import parse_placeholders, render_template_with_refs
 
 ArtifactKind = Literal["text", "markdown", "json", "raw"]
 if TYPE_CHECKING:
@@ -316,24 +317,14 @@ def render_runtime_template(
     replace_roots: frozenset[str] | None = None,
 ) -> str:
     """Render supported runtime placeholders inside free-form text."""
-
-    def replace(match: re.Match[str]) -> str:
-        expression = match.group(1).strip()
-        if not expression:
-            return match.group(0) if replace_roots is not None else ""
-        root_name = expression.split(".", 1)[0]
-        if replace_roots is not None and root_name not in replace_roots:
-            return match.group(0)
-        value = _resolve_placeholder(expression, context, placeholder_label=placeholder_label)
-        if root_name == "ctx":
-            return _render_prompt_value(
-                value,
-                expression=expression,
-                placeholder_label=placeholder_label,
-            )
-        return "" if value is None else str(value)
-
-    return _PLACEHOLDER_RE.sub(replace, template)
+    refs = parse_placeholders(template, source=placeholder_label)
+    return render_template_with_refs(
+        template,
+        refs,
+        context,
+        replace_roots=replace_roots,
+        placeholder_label=placeholder_label,
+    )
 
 
 def validate_artifact_declaration(artifact: Artifact) -> tuple[str, ...]:
@@ -448,8 +439,8 @@ def _load_jsonschema_validator_cls() -> type[Any]:
 
 
 def _reject_ctx_placeholders_in_artifact_template(template: str) -> None:
-    for placeholder in _PLACEHOLDER_RE.findall(template):
-        if placeholder.strip().split(".", 1)[0] == "ctx":
+    for ref in parse_placeholders(template, source="artifact_template"):
+        if ref.root == "ctx":
             raise WorkflowExecutionError(
                 "ctx.* placeholders are only supported in prompts and workflow-step messages, not artifact paths"
             )

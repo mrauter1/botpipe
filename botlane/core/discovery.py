@@ -26,7 +26,6 @@ from .branch_groups.validation import (
     validate_fan_in_step_kind,
     validate_path_safe_name,
 )
-from .context_placeholders import CTX_MODEL_ROOTS, CTX_NESTED_FIELDS, CTX_SCALAR_FIELDS, validate_safe_ctx_reference
 from .descriptors import (
     ParameterField,
     StateField,
@@ -39,31 +38,14 @@ from .primitives import AWAIT_INPUT, FAIL, FINISH, GLOBAL, SELF
 from .prompts import resolve_prompt_reference
 from .provider_policy import ProviderPolicy, ProviderPolicyOverride
 from .providers.retries import ProviderRetryPolicy
+from .placeholders import SIMPLE_CONTEXT_BARE_NAMES, parse_placeholders, validate_placeholder_ref
 from .routes import Route, _replace_route, normalize_route_spec
 from .sessions import DEFAULT_SESSION_NAME
 from .step_state import build_step_item_state_model, build_step_state_model
 from .steps import BranchGroupStep, ChildWorkflowStep, ProduceVerifyStep, PromptStep, PythonStep, Session, Step
 from .worklists import Worklist
 
-
-SIMPLE_CONTEXT_BARE_NAMES = frozenset(
-    {
-        "answer",
-        "artifacts",
-        "input",
-        "item",
-        "package_folder",
-        "params",
-        "request_file",
-        "run_folder",
-        "state",
-        "task_folder",
-        "workflow_folder",
-        "workflow_params",
-    }
-)
 RESERVED_STEP_PSEUDO_FIELDS = frozenset({"value", "state", "item_state", "meta"})
-_PROMPT_PLACEHOLDER_RE = re.compile(r"\{([^{}]+)\}")
 
 
 class _EmptyWorkflowState(BaseModel):
@@ -432,10 +414,7 @@ def _is_simple_artifact_spec(value: object) -> bool:
 
 
 def _is_simple_flow_spec(value: object) -> bool:
-    return bool(
-        getattr(value, "__botlane_simple_flow_spec__", False)
-        or getattr(value, "__auto" + "loop_simple_flow_spec__", False)
-    )
+    return bool(getattr(value, "__botlane_simple_flow_spec__", False))
 
 
 def _lower_simple_writes(declaration: object, step_name: str) -> dict[str, Artifact]:
@@ -924,18 +903,17 @@ def _validate_branch_group_artifact_templates(
         template = getattr(artifact, "template", None)
         if not isinstance(template, str) or "{" not in template:
             continue
-        for placeholder in _PROMPT_PLACEHOLDER_RE.findall(template):
-            reference = placeholder.strip()
-            if not reference:
+        for ref in parse_placeholders(template, source="artifact_template"):
+            if not ref.raw:
                 continue
             if validate_branch_placeholder_reference(
-                reference,
+                ref.raw,
                 step_name=step_name,
                 allowed=allow_branch_placeholders,
             ):
                 continue
             validate_fan_in_placeholder_reference(
-                reference,
+                ref.raw,
                 step_name=step_name,
                 allowed=allow_fan_in_placeholders,
             )
@@ -1037,13 +1015,12 @@ def _analyze_simple_prompt_references(
         text = _simple_prompt_text(prompt, search_roots=search_roots)
         if not text:
             continue
-        for placeholder in _PROMPT_PLACEHOLDER_RE.findall(text):
-            reference = placeholder.strip()
-            if not reference:
+        for ref in parse_placeholders(text, source="simple_prompt"):
+            if not ref.raw:
                 continue
-            references.append(reference)
+            references.append(ref.raw)
             inferred_artifact = _validate_simple_prompt_reference(
-                reference,
+                ref.raw,
                 step_name=seed.name,
                 own_outputs=own_outputs,
                 state_fields=state_fields,
@@ -1146,202 +1123,27 @@ def _validate_simple_prompt_reference(
     allow_branch_placeholders: bool = False,
     allow_fan_in_placeholders: bool = False,
 ) -> str | None:
-    if validate_branch_placeholder_reference(
-        reference,
-        step_name=step_name,
-        allowed=allow_branch_placeholders,
-    ):
-        return None
-    if validate_fan_in_placeholder_reference(
-        reference,
-        step_name=step_name,
-        allowed=allow_fan_in_placeholders,
-    ):
-        return None
-    if reference == "message":
-        raise WorkflowValidationError(
-            f"simple step {step_name!r} prompt placeholder {{message}} is unknown; use {{ctx.message}}"
-        )
-    if reference == "ctx":
-        raise WorkflowValidationError(
-            f"simple step {step_name!r} prompt placeholder {{ctx}} must qualify a runtime context field"
-        )
-    if reference.startswith("ctx."):
-        return _validate_ctx_prompt_reference(
-            reference,
-            step_name=step_name,
-            state_fields=state_fields,
-            parameter_fields=parameter_fields,
-            input_fields=input_fields,
-        )
-    parts = reference.split(".")
-    if len(parts) == 1:
-        name = parts[0]
-        context_collision = name in state_fields or name in parameter_fields or name in input_fields or name in SIMPLE_CONTEXT_BARE_NAMES
-        artifact_count = artifact_name_counts.get(name, 0)
-        if artifact_count > 1 or (artifact_count == 1 and context_collision):
-            raise WorkflowValidationError(
-                f"simple step {step_name!r} prompt placeholder {{{reference}}} is ambiguous; qualify the artifact reference"
-            )
-        if artifact_count == 1:
-            return name if name not in own_outputs else None
-        if context_collision:
-            return None
-        raise WorkflowValidationError(f"simple step {step_name!r} prompt placeholder {{{reference}}} is unknown")
-
-    root, second, *rest = parts
-    if root == "params":
-        if second not in parameter_fields:
-            raise WorkflowValidationError(
-                f"simple step {step_name!r} prompt placeholder {{{reference}}} references unknown params field {second!r}"
-            )
-        return None
-    if root == "self":
-        if second not in own_outputs:
-            raise WorkflowValidationError(
-                f"simple step {step_name!r} prompt placeholder {{{reference}}} references unknown self artifact {second!r}"
-            )
-        return None
-    if root == "state":
-        if second not in state_fields:
-            raise WorkflowValidationError(
-                f"simple step {step_name!r} prompt placeholder {{{reference}}} references unknown state field {second!r}"
-            )
-        return None
-    if root == "input":
-        if second == "message" and not rest:
-            return None
-        if second not in input_fields:
-            raise WorkflowValidationError(
-                f"simple step {step_name!r} prompt placeholder {{{reference}}} references unknown input field {second!r}"
-            )
-        return None
-    if root == "run":
-        if second not in {"id"}:
-            raise WorkflowValidationError(
-                f"simple step {step_name!r} prompt placeholder {{{reference}}} references unknown run field {second!r}"
-            )
-        return None
-    if root == "workflow":
-        if second not in {"folder"}:
-            raise WorkflowValidationError(
-                f"simple step {step_name!r} prompt placeholder {{{reference}}} references unknown workflow field {second!r}"
-            )
-        return None
-    if root == "item":
-        if scope_name is None:
-            raise WorkflowValidationError(
-                f"simple step {step_name!r} prompt placeholder {{{reference}}} requires scope=... on the same step"
-            )
-        if second in {"id", "title", "status", "dir_key"} and not rest:
-            return None
-        if second == "payload":
-            return None
-        if second != "state" or not rest:
-            raise WorkflowValidationError(
-                f"simple step {step_name!r} prompt placeholder {{{reference}}} must use item.id, item.title, "
-                "item.status, item.dir_key, item.payload, item.payload.<path>, or item.state.<field>"
-            )
-        field_name = rest[0]
-        available_fields = worklist_item_state_fields.get(scope_name, frozenset())
-        if not available_fields:
-            raise WorkflowValidationError(
-                f"simple step {step_name!r} prompt placeholder {{{reference}}} requires worklist {scope_name!r} to declare item_state"
-            )
-        if field_name not in available_fields:
-            raise WorkflowValidationError(
-                f"simple step {step_name!r} prompt placeholder {{{reference}}} references unknown item state field {field_name!r} on worklist {scope_name!r}"
-            )
-        return None
-    if root == "worklist":
-        worklist_name = second
-        if worklist_name not in worklist_item_state_fields:
-            raise WorkflowValidationError(
-                f"simple step {step_name!r} prompt placeholder {{{reference}}} references unknown worklist {worklist_name!r}"
-            )
-        if not rest:
-            raise WorkflowValidationError(
-                f"simple step {step_name!r} prompt placeholder {{{reference}}} must qualify a worklist runtime field"
-            )
-        worklist_field, *worklist_rest = rest
-        if worklist_field == "current":
-            if not worklist_rest:
-                raise WorkflowValidationError(
-                    f"simple step {step_name!r} prompt placeholder {{{reference}}} must qualify a current work item field"
-                )
-            current_field, *current_rest = worklist_rest
-            if current_field in {"id", "title", "status", "dir_key"} and not current_rest:
-                return None
-            if current_field == "payload":
-                return None
-            raise WorkflowValidationError(
-                f"simple step {step_name!r} prompt placeholder {{{reference}}} must use "
-                "worklist.<name>.current.id, .title, .status, .dir_key, .payload, or .payload.<path>"
-            )
-        if worklist_field in {"item_ids", "current_index", "is_exhausted"} and not worklist_rest:
-            return None
-        raise WorkflowValidationError(
-            f"simple step {step_name!r} prompt placeholder {{{reference}}} must use "
-            "worklist.<name>.current..., worklist.<name>.item_ids, worklist.<name>.current_index, "
-            "or worklist.<name>.is_exhausted"
-        )
-    if root in {"artifacts", "step"} and not rest:
-        return _validate_simple_prompt_reference(
-            second,
-            step_name=step_name,
-            own_outputs=own_outputs,
-            state_fields=state_fields,
-            parameter_fields=parameter_fields,
-            input_fields=input_fields,
-            scope_name=scope_name,
-            worklist_item_state_fields=worklist_item_state_fields,
-            step_state_fields=step_state_fields,
-            step_item_state_fields=step_item_state_fields,
-            step_output_names=step_output_names,
-            artifact_name_counts=artifact_name_counts,
-            allow_branch_placeholders=allow_branch_placeholders,
-            allow_fan_in_placeholders=allow_fan_in_placeholders,
-        )
-    if root not in step_output_names:
-        raise WorkflowValidationError(
-            f"simple step {step_name!r} prompt placeholder {{{reference}}} references unknown step {root!r}"
-        )
-    if second == "value":
-        return None
-    if second == "state":
-        if not rest:
-            raise WorkflowValidationError(
-                f"simple step {step_name!r} prompt placeholder {{{reference}}} must qualify a step state field"
-            )
-        field_name = rest[0]
-        if field_name not in step_state_fields.get(root, frozenset()):
-            raise WorkflowValidationError(
-                f"simple step {step_name!r} prompt placeholder {{{reference}}} references unknown state field {field_name!r} on step {root!r}"
-            )
-        return None
-    if second == "item_state":
-        if not rest:
-            raise WorkflowValidationError(
-                f"simple step {step_name!r} prompt placeholder {{{reference}}} must qualify a step item_state field"
-            )
-        field_name = rest[0]
-        available_fields = step_item_state_fields.get(root, frozenset())
-        if not available_fields:
-            raise WorkflowValidationError(
-                f"simple step {step_name!r} prompt placeholder {{{reference}}} requires scoped step {root!r} to declare item_state or use built-in scoped runtime state"
-            )
-        if field_name not in available_fields:
-            raise WorkflowValidationError(
-                f"simple step {step_name!r} prompt placeholder {{{reference}}} references unknown item_state field {field_name!r} on step {root!r}"
-            )
-        return None
-    if second == "meta":
-        return None
-    if second not in step_output_names[root]:
-        raise WorkflowValidationError(
-            f"simple step {step_name!r} prompt placeholder {{{reference}}} references unknown artifact {second!r} on step {root!r}"
-        )
-    return None if root == step_name else f"{root}.{second}"
+    ref = parse_placeholders(f"{{{reference}}}", source="simple_prompt")[0]
+    return validate_placeholder_ref(
+        ref,
+        surface=f"simple step {step_name!r} prompt placeholder",
+        symbols={
+            "kind": "simple_prompt",
+            "step_name": step_name,
+            "own_outputs": own_outputs,
+            "state_fields": state_fields,
+            "parameter_fields": parameter_fields,
+            "input_fields": input_fields,
+            "scope_name": scope_name,
+            "worklist_item_state_fields": worklist_item_state_fields,
+            "step_state_fields": step_state_fields,
+            "step_item_state_fields": step_item_state_fields,
+            "step_output_names": step_output_names,
+            "artifact_name_counts": artifact_name_counts,
+            "allow_branch_placeholders": allow_branch_placeholders,
+            "allow_fan_in_placeholders": allow_fan_in_placeholders,
+        },
+    )
 
 
 def _simple_prompt_search_roots(workflow_cls: type[Any]) -> tuple[Path, ...]:
@@ -1369,82 +1171,6 @@ def _simple_prompt_text(prompt: object, *, search_roots: Sequence[Path]) -> str 
             search_roots=search_roots,
         ).text
     return None
-
-
-def _validate_ctx_prompt_reference(
-    reference: str,
-    *,
-    step_name: str,
-    state_fields: frozenset[str],
-    parameter_fields: frozenset[str],
-    input_fields: frozenset[str],
-) -> None:
-    model_labels = {
-        "input": "Input",
-        "state": "State",
-        "params": "Params",
-    }
-    qualifier_labels = {
-        "request": "request",
-        "input": "input",
-        "state": "state",
-        "params": "params",
-    }
-    parts = tuple(reference.split("."))
-    if len(parts) == 2 and parts[1] in qualifier_labels:
-        label = qualifier_labels[parts[1]]
-        raise WorkflowValidationError(
-            f"simple step {step_name!r} prompt placeholder {{{reference}}} must qualify a {label} field"
-        )
-
-    def _is_safe_field_candidate(segment: str) -> bool:
-        forbidden_characters = {'"', "'", "(", ")", "[", "]"}
-        return (
-            bool(segment)
-            and not segment.startswith("_")
-            and "__" not in segment
-            and not any(character.isspace() for character in segment)
-            and not any(character in forbidden_characters for character in segment)
-        )
-
-    try:
-        validated = validate_safe_ctx_reference(reference)
-    except ValueError as exc:
-        if len(parts) == 3 and parts[1] in CTX_MODEL_ROOTS and _is_safe_field_candidate(parts[2]):
-            field_name = parts[2]
-            available_fields = {
-                "input": input_fields,
-                "state": state_fields,
-                "params": parameter_fields,
-            }[parts[1]]
-            if field_name not in available_fields:
-                label = model_labels[parts[1]]
-                raise WorkflowValidationError(
-                    f"simple step {step_name!r} prompt placeholder {{{reference}}} references unknown {label} field {field_name!r}"
-                ) from exc
-        raise WorkflowValidationError(
-            f"simple step {step_name!r} prompt placeholder {{{reference}}} is not a supported safe dotted path"
-        ) from exc
-
-    root_name = validated[1]
-    if root_name in CTX_SCALAR_FIELDS or root_name in CTX_NESTED_FIELDS:
-        return None
-    field_name = validated[2]
-    if root_name == "input" and field_name == "message":
-        return None
-    available_fields = {
-        "input": input_fields,
-        "state": state_fields,
-        "params": parameter_fields,
-    }[root_name]
-    if field_name not in available_fields:
-        label = model_labels[root_name]
-        raise WorkflowValidationError(
-            f"simple step {step_name!r} prompt placeholder {{{reference}}} references unknown {label} field {field_name!r}"
-        )
-    return None
-
-
 def _model_field_names(model_cls: object) -> frozenset[str]:
     if not inspect.isclass(model_cls) or not issubclass(model_cls, BaseModel):
         return frozenset()

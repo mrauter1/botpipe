@@ -2329,3 +2329,86 @@ Open issues / next step
 <loop-control>
 {"schema":"docloop.loop_control/v1","kind":"promise","promise":"COMPLETE"}
 </loop-control>
+
+
+---
+run_id=run-20260509T045359Z-e2586b1f | entry=session_turn | pair=implement | phase=producer | cycle=1 | attempt=1 | thread_id=019e0ba1-4411-7631-9340-034a7f1ab6c9
+---
+provider=codex
+mode=start
+template=/home/rauter/.local/share/pipx/venvs/autoloop/lib/python3.12/site-packages/autoloop/templates/implement_producer.md
+session_id=019e0ba1-4411-7631-9340-034a7f1ab6c9
+
+
+---
+run_id=run-20260509T045359Z-e2586b1f | entry=phase_output | pair=implement | phase=producer | process=codex-agent | cycle=1 | attempt=1 | thread_id=019e0ba1-4411-7631-9340-034a7f1ab6c9
+---
+Phase scope is `placeholder-reference-graph`. I’m reading the active phase artifacts and the current placeholder implementation first, then I’ll wire the new internal types through the existing validation and rendering paths without broadening placeholder behavior.
+
+I’ve identified the existing placeholder surface in `botlane/core/artifacts.py` and `botlane/core/discovery.py`. Next I’m reading those paths in detail so the new internal modules can delegate to current behavior instead of reinterpreting it.
+
+The existing logic is split cleanly enough to centralize it without changing behavior: compile-time validation in `discovery.py`, runtime resolution in `artifacts.py`, and branch/fan-in gatekeeping in `branch_groups/validation.py`. I’m checking the current module graph now so the new placeholder modules stay dependency-light and avoid importing `Context` at runtime.
+
+The change is likely local to `artifacts.py`, `discovery.py`, and two new core modules. I’m checking the worktree before editing so I don’t trample unrelated changes, then I’ll patch in the new placeholder adapter layer and targeted tests.
+
+I’ve got the adapter shape. I’m editing in three layers: new internal placeholder modules first, then `discovery.py` compile-time delegation, then `artifacts.py` runtime delegation so the behavior stays anchored to the current error messages.
+
+I’ve added the new internal modules. I’m patching `discovery.py` next so compile-time placeholder parsing and inferred-read decisions go through `PlaceholderRef` while keeping the existing `WorkflowValidationError` text stable.
+
+The runtime side can stay small: `artifacts.py` only needs to hand parsed refs into the new renderer. I’m keeping the public surface unchanged and moving just the dispatch point now.
+
+There’s one more placeholder-related path in `botlane/core/prompt_validation.py`. I’m checking whether that’s part of the active behavior surface or just a narrow helper, so I don’t leave an un-delegated parsing path behind.
+
+`prompt_validation.py` is part of the same compile-time surface, so I’m switching that helper too. That keeps placeholder parsing consolidated instead of leaving a side regex path around.
+
+I’m adding a focused unit file for the new internal API now. It covers parser shape, validation parity, runtime rendering parity, the internal `ReferenceGraph` container, and the no-`Context`-import boundary on `placeholders.py`.
+
+I’m tightening the new unit file before running it: one small cleanup in the AST boundary assertion, then I’ll run syntax checks and the focused test set.
+
+The code parses cleanly. I’m running the new unit file plus the existing placeholder-heavy suites in `simple_surface`, `primitives_and_stores`, and the engine prompt-context contracts to catch behavior drift where this refactor is most likely to show up.
+
+`pytest` isn’t available in the default interpreter. I’m checking the project environment entrypoints next so I can run the intended suite with the repo’s installed tooling instead of guessing.
+
+The first test run exposed an import-cycle problem: `artifacts.py` imports the new placeholder module early, and the placeholder module was eagerly importing branch-group validation through the package. I’m fixing that by making the branch/fan-in validation import lazy inside the compile-time validator.
+
+The focused placeholder suites are through collection and most of execution cleanly. I’m waiting on the tail of the run, then I’ll do a short broader pass against the prompt-validation helper surface that also changed.
+
+The compile-time and runtime placeholder-heavy suites are green. I’m letting the static-graph/workspace pass finish because prompt-reference persistence and request-path rendering are adjacent regression surfaces for this phase.
+
+The implementation is functionally green. I’m documenting the non-obvious decisions and phase mapping now, then I’ll do one last targeted status check on just the files touched in this phase.
+
+One small hardening pass remains: `artifacts.py` still has private legacy helpers left in place during the migration. I’m restoring their supporting imports so they stay inert but valid if any adjacent code path still touches them.
+
+The hardening change was import-only, but I’m re-running the previously green focused suite once more so the final validation reflects the exact file state I’m leaving behind.
+
+Scope considered
+
+- Active phase `placeholder-reference-graph` only: placeholder parsing, compile-time validation/inferred reads, runtime rendering, artifact-path restriction, and phase-local notes/decisions.
+- Touched files: [placeholders.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/botlane/core/placeholders.py), [reference_graph.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/botlane/core/reference_graph.py), [artifacts.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/botlane/core/artifacts.py), [discovery.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/botlane/core/discovery.py), [prompt_validation.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/botlane/core/prompt_validation.py), [test_placeholder_refs.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/tests/unit/test_placeholder_refs.py).
+- Updated phase notes and the current turn block in `decisions.txt`.
+
+What I analyzed
+
+- Existing runtime placeholder rendering in `botlane/core/artifacts.py`.
+- Existing simple-surface placeholder validation and inferred-read logic in `botlane/core/discovery.py`.
+- Adjacent prompt-reference helper usage in `botlane/core/prompt_validation.py`.
+- Regression surfaces in `tests/unit/test_primitives_and_stores.py`, `tests/unit/test_simple_surface.py`, `tests/contract/engine/test_prompt_context.py`, `tests/runtime/test_runtime_static_graph.py`, and `tests/runtime/test_workspace_and_context.py`.
+
+What I changed
+
+- Added internal `PlaceholderRef` parsing/rendering/validation in [placeholders.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/botlane/core/placeholders.py) and internal `ReferenceGraph` in [reference_graph.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/botlane/core/reference_graph.py).
+- Switched compile-time placeholder parsing and inferred-read validation in [discovery.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/botlane/core/discovery.py) to delegate through `parse_placeholders(...)` and `validate_placeholder_ref(...)`.
+- Switched runtime template rendering and artifact-path `ctx.*` rejection in [artifacts.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/botlane/core/artifacts.py) to delegate through the new placeholder module.
+- Switched `analyze_simple_prompt_references(...)` in [prompt_validation.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/botlane/core/prompt_validation.py) to use the shared parser.
+- Added focused parity coverage in [test_placeholder_refs.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/tests/unit/test_placeholder_refs.py).
+
+Key findings / decisions
+
+- Eagerly importing `botlane.core.branch_groups.validation` from the new placeholder module caused an import cycle through `artifacts.py`; I fixed that with lazy branch/fan-in validation imports inside `validate_placeholder_ref(...)`.
+- Persisted/static prompt-reference payloads still stay string-compatible; internal parsing uses `PlaceholderRef`, but compile/static-graph boundaries still project back to raw placeholder strings.
+- Public behavior was preserved in the focused suites: branch/fan-in placement rules, `ctx.*` artifact-path rejection, error text, prompt reference persistence, and runtime context rendering.
+
+Open issues / next step
+
+- No phase-local blockers remain.
+- Validation run completed on the exact touched surfaces, not the full suite: `237 passed` across the placeholder-heavy unit, contract, and runtime buckets listed in `implementation_notes.md`.
