@@ -18,7 +18,7 @@ from typing import Any, Literal
 
 from pydantic import BaseModel, ValidationError, create_model
 
-from botlane.core.compiler import CompiledWorkflow, compile_workflow
+from botlane.core.compiler import compile_workflow
 from botlane.core.context import EmptyParameters
 from botlane.core.descriptors import effective_parameters_model
 from botlane.core.mappings import normalize_mapping
@@ -43,6 +43,7 @@ from botlane.core.workflow_catalog import (
     read_workflow_manifest,
     workflow_search_roots,
 )
+from botlane.core.workflow_plan import WorkflowPlan
 
 _NAMED_CATALOG_REFERENCE_ATTR = "__botlane_named_catalog_reference__"
 _NAMED_CATALOG_SOURCE_ROOT_ATTR = "__botlane_named_catalog_source_root__"
@@ -236,7 +237,7 @@ def load_workflow_package_class(root: str | Path, reference: str | type[Any]) ->
     return resolve_workflow_reference(root, reference).workflow_cls
 
 
-def load_compiled_workflow_package(root: str | Path, reference: str | type[Any]) -> CompiledWorkflow:
+def load_compiled_workflow_package(root: str | Path, reference: str | type[Any]) -> WorkflowPlan:
     """Resolve and compile the main workflow class from a workflow reference."""
 
     return compile_workflow(load_workflow_package_class(root, reference))

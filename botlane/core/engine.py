@@ -18,9 +18,10 @@ from botlane.policy import resolve_policy_layer
 
 from .artifacts import Artifact, ArtifactHandle, ResolvedArtifacts, render_runtime_template, resolve_artifact_template
 from .branch_groups.runtime import BranchGroupRuntime
-from .compiler import CompiledRoute, CompiledStep, CompiledWorkflow, compile_workflow
+from .compiler import compile_workflow
 from .context import Context, _DEFAULT_MESSAGE, _resolve_context_root, context_runtime
 from .engine_collaborators import (
+    _RouteResolution,
     ArtifactGuard,
     CheckpointManager,
     HookRunner,
@@ -28,7 +29,6 @@ from .engine_collaborators import (
     ProviderContractBuilder,
     ProviderExecResult,
     RouteFinalizer,
-    RouteFinalizationResult,
     SessionRuntime,
     StateRuntime,
     StepExecutionResult,
@@ -76,9 +76,19 @@ from .providers.models import (
 )
 from .providers.protocols import LLMProvider, validate_llm_provider
 from .providers.retries import ProviderRetryPolicy, build_retry_feedback
+from .route_contracts import (
+    AwaitInput as AwaitInputAction,
+    Continue,
+    FailAction,
+    Finish as FinishAction,
+    RouteAction,
+    RouteContract,
+    route_target_value,
+)
 from .route_required_writes import (
     effective_route_required_writes,
 )
+from .step_plans import StepPlan
 from .stores.protocols import (
     CheckpointStore,
     PendingInput,
@@ -89,6 +99,7 @@ from .stores.protocols import (
 )
 from .statuses import route_is_replan, route_is_rework
 from .steps import ChildWorkflowStep
+from .workflow_plan import WorkflowPlan
 from .worklists import Selection, SelectionSnapshot
 
 
@@ -191,7 +202,7 @@ class _RunLoopState:
 
 @dataclass(frozen=True, slots=True)
 class _StepFrame:
-    step: CompiledStep
+    step: StepPlan
     context: Context
     step_state_store: BaseModel | dict[str, Any]
     step_item_state_store: BaseModel | dict[str, Any] | None
@@ -257,7 +268,7 @@ class _EngineArtifactService:
 
     def enforce_artifact_contracts(
         self,
-        step: CompiledStep,
+        step: StepPlan,
         context: Context,
         artifacts: ResolvedArtifacts,
         *,
@@ -289,7 +300,7 @@ class _EngineRouteService:
 
     def validate_event(
         self,
-        step: CompiledStep,
+        step: StepPlan,
         event: Event,
         *,
         provider_attributable: bool,
@@ -307,7 +318,7 @@ class _EngineRouteService:
 
     def ensure_hook_redirect_limit(
         self,
-        step: CompiledStep,
+        step: StepPlan,
         *,
         candidate_route: str | None,
         redirects: Sequence[HookRouteRedirect],
@@ -317,7 +328,7 @@ class _EngineRouteService:
     def normalize_direct_runtime_control(
         self,
         *,
-        step: CompiledStep,
+        step: StepPlan,
         context: Context,
         control: RequestInput | Goto | Fail,
         hook_name: str,
@@ -331,7 +342,7 @@ class _EngineRouteService:
             hook_phase=hook_phase,
         )
 
-    def compiled_route_for_step(self, step: CompiledStep, route_tag: str) -> CompiledRoute:
+    def compiled_route_for_step(self, step: StepPlan, route_tag: str) -> RouteContract:
         return self._engine._compiled_route_for_step(step, route_tag)
 
     def event_context_payload(self, event: Event) -> dict[str, Any]:
@@ -359,7 +370,7 @@ class _EngineRouteService:
         self,
         pending_handoffs: tuple[PendingHandoff, ...],
         *,
-        route: CompiledRoute,
+        route: RouteContract,
         event: Event,
         destination: str,
         context: Context,
@@ -388,7 +399,7 @@ class _EngineStateService:
     def clone_state(self, state: BaseModel) -> BaseModel:
         return self._engine._clone_state(state)
 
-    def update_final_step_runtime_state(self, step: CompiledStep, store: Any, event: Event) -> None:
+    def update_final_step_runtime_state(self, step: StepPlan, store: Any, event: Event) -> None:
         self._engine._update_final_step_runtime_state(step, store, event)
 
     def update_final_item_runtime_state(self, store: Any, event: Event) -> None:
@@ -402,7 +413,7 @@ class Engine:
 
     def __init__(
         self,
-        workflow: type[Any] | CompiledWorkflow,
+        workflow: type[Any] | WorkflowPlan,
         *,
         provider: LLMProvider,
         session_store: SessionStore,
@@ -415,7 +426,7 @@ class Engine:
         runtime_event_sink: Callable[[str, Mapping[str, Any]], None] | None = None,
         provider_policy_resolver: ProviderPolicyResolverProtocol | None = None,
     ) -> None:
-        self.compiled = workflow if isinstance(workflow, CompiledWorkflow) else compile_workflow(workflow)
+        self.compiled = workflow if isinstance(workflow, WorkflowPlan) else compile_workflow(workflow)
         self.provider = validate_llm_provider(provider)
         self.session_store = session_store
         self.checkpoint_store = checkpoint_store
@@ -515,6 +526,55 @@ class Engine:
         answer: str | None = None,
         max_steps: int = 100,
     ) -> RunResult:
+        env = self._prepare_run_environment(
+            task_id=task_id,
+            run_id=run_id,
+            task_folder=task_folder,
+            workflow_folder=workflow_folder,
+            run_folder=run_folder,
+            package_folder=package_folder,
+            root=root,
+            request_file=request_file,
+            task_request_file=task_request_file,
+            params=params,
+            workflow_params=workflow_params,
+            message=message,
+            workflow_input=workflow_input,
+            workflow_invoker=workflow_invoker,
+        )
+        loop: _RunLoopState | None = None
+        try:
+            loop = self._restore_or_initialize_run_loop(
+                env,
+                initial_state=initial_state,
+                resume=resume,
+                answer=answer,
+            )
+            return await self._run_loop(env, loop, max_steps=max_steps)
+        except Exception as exc:
+            self._handle_run_failure(env, loop, exc)
+            raise
+        finally:
+            self.provider_policy_resolver = env.previous_provider_policy_resolver
+
+    def _prepare_run_environment(
+        self,
+        *,
+        task_id: str,
+        run_id: str,
+        task_folder: Path,
+        workflow_folder: Path | None,
+        run_folder: Path,
+        package_folder: Path | None,
+        root: Path | None,
+        request_file: Path | None,
+        task_request_file: Path | None,
+        params: BaseModel | None,
+        workflow_params: Mapping[str, Any] | None,
+        message: str | None | object,
+        workflow_input: BaseModel | None,
+        workflow_invoker: Callable[..., Any] | None,
+    ) -> _RunEnvironment:
         resolved_workflow_folder = workflow_folder or task_folder / f"wf_{self.compiled.workflow_name}"
         resolved_package_folder = package_folder or (root.resolve() if root is not None else task_folder)
         previous_provider_policy_resolver = self.provider_policy_resolver
@@ -527,7 +587,7 @@ class Engine:
                     package_folder=resolved_package_folder,
                 ),
             )
-        workflow_instance = self.compiled.workflow_cls()
+        self.compiled.workflow_cls()
         binding = self._build_run_binding(
             task_id=task_id,
             run_id=run_id,
@@ -537,488 +597,567 @@ class Engine:
             package_folder=resolved_package_folder,
             root=root,
         )
-        extensions = self._bind_extensions(binding)
-        history: list[str] = []
-        current_step_name: str | None = None
-        state: BaseModel | None = None
-        current_answer: str | None = None
-        current_input_response: Any | None = None
-        selections: dict[str, Selection[Any]] = {}
-        selection_snapshots: dict[str, SelectionSnapshot] = {}
-        values: dict[str, Any] = {}
-        step_states: dict[str, BaseModel | dict[str, Any]] = {}
-        item_states: dict[str, BaseModel | dict[str, Any]] = {}
-        step_item_states: dict[str, dict[str, BaseModel | dict[str, Any]]] = {}
-        pending_handoffs: tuple[PendingHandoff, ...] = ()
-        checkpoint: Checkpoint | None = None
-        terminal_failure_handled = False
+        return _RunEnvironment(
+            task_id=task_id,
+            run_id=run_id,
+            task_folder=task_folder,
+            workflow_folder=resolved_workflow_folder,
+            run_folder=run_folder,
+            package_folder=resolved_package_folder,
+            root=root,
+            request_file=request_file,
+            task_request_file=task_request_file,
+            params=params,
+            workflow_params=workflow_params,
+            message=message,
+            workflow_input=workflow_input,
+            workflow_invoker=workflow_invoker,
+            binding=binding,
+            extensions=self._bind_extensions(binding),
+            previous_provider_policy_resolver=previous_provider_policy_resolver,
+        )
 
-        last_event: Event | None = None
-        last_outcome: Outcome | None = None
-        last_transition: StepFinalizationRecord | None = None
-        context_message = message
+    def _restore_or_initialize_run_loop(
+        self,
+        env: _RunEnvironment,
+        *,
+        initial_state: BaseModel | None,
+        resume: bool,
+        answer: str | None,
+    ) -> _RunLoopState:
+        if resume:
+            return self._restore_run_loop(env, answer=answer)
+        return self._initialize_run_loop(env, initial_state=initial_state)
+
+    def _restore_run_loop(
+        self,
+        env: _RunEnvironment,
+        *,
+        answer: str | None,
+    ) -> _RunLoopState:
+        checkpoint = self.checkpoint_store.load()
+        if checkpoint is None:
+            raise WorkflowExecutionError("resume requested but no checkpoint is available")
+        self._validate_resume_checkpoint_target(checkpoint)
+        self.session_runtime.restore(normalize_session_snapshot(checkpoint.session_bindings, run_id=env.run_id))
+        state = checkpoint.state
+        values = deepcopy(checkpoint.values or {})
+        step_states = deepcopy(checkpoint.step_states or {})
+        item_states = deepcopy(checkpoint.item_states or {})
+        step_item_states = deepcopy(checkpoint.step_item_states or {})
+        selection_context = self._build_run_context(
+            env,
+            state=state,
+            selections={},
+            selection_snapshots={},
+            values=values,
+        )
+        selection_snapshots = self.state_runtime.restore_worklist_selections(
+            selection_context,
+            checkpoint.worklist_selections or {},
+        )
+        loop = _RunLoopState(
+            history=[],
+            current_step_name=checkpoint.stage,
+            state=state,
+            current_answer=answer if answer is not None else checkpoint.pending_answer,
+            current_input_response=None,
+            selections={},
+            selection_snapshots=selection_snapshots,
+            values=values,
+            step_states=step_states,
+            item_states=item_states,
+            step_item_states=step_item_states,
+            pending_handoffs=checkpoint.pending_handoffs,
+            checkpoint=checkpoint,
+        )
         try:
-            if resume:
-                checkpoint = self.checkpoint_store.load()
-                if checkpoint is None:
-                    raise WorkflowExecutionError("resume requested but no checkpoint is available")
-                self._validate_resume_checkpoint_target(checkpoint)
-                self.session_runtime.restore(normalize_session_snapshot(checkpoint.session_bindings, run_id=run_id))
-                state = checkpoint.state
-                values = deepcopy(checkpoint.values or {})
-                step_states = deepcopy(checkpoint.step_states or {})
-                item_states = deepcopy(checkpoint.item_states or {})
-                step_item_states = deepcopy(checkpoint.step_item_states or {})
-                selection_context = Context(
-                    root=root,
-                    task_id=task_id,
-                    run_id=run_id,
-                    workflow_name=self.compiled.workflow_name,
-                    task_folder=task_folder,
-                    workflow_folder=resolved_workflow_folder,
-                    run_folder=run_folder,
-                    package_folder=resolved_package_folder,
-                    request_file=request_file,
-                    task_request_file=task_request_file,
-                    state=state,
-                    session_store=self.session_store,
-                    session_definitions=self.compiled.sessions,
-                    worklists=self.compiled.worklists,
-                    selections={},
-                    selection_snapshots={},
-                    params=params,
-                    workflow_params=workflow_params,
-                    message=context_message,
-                    workflow_input=workflow_input,
-                    workflow_invoker=workflow_invoker,
-                    answer=None,
-                    input_response=None,
-                    default_session_name=self.compiled.default_session_name,
-                    values=values,
-                )
-                selection_snapshots = self.state_runtime.restore_worklist_selections(
-                    selection_context,
-                    checkpoint.worklist_selections or {},
-                )
-                pending_handoffs = checkpoint.pending_handoffs
-                current_step_name = checkpoint.stage
-                current_answer = answer if answer is not None else checkpoint.pending_answer
-                try:
-                    current_input_response = self._resume_input_response(checkpoint=checkpoint, answer=current_answer)
-                except Exception as exc:
-                    self.checkpoint_manager.save(
-                        stage=current_step_name,
-                        state=self._state_for_failure(state, exc) or state,
-                        values=values,
-                        step_states=step_states,
-                        item_states=item_states,
-                        step_item_states=step_item_states,
-                        worklist_selections=selections,
-                        worklist_selection_snapshots=selection_snapshots,
-                        pending_handoffs=pending_handoffs,
-                        pending_input=checkpoint.pending_input,
-                        pending_answer=current_answer,
-                        failure_context=self._failure_context_for_exception(exc),
-                    )
-                    raise
-            else:
-                self.session_runtime.restore(SessionSnapshot(bindings=(), active_keys_by_slot={}))
-                state = initial_state if initial_state is not None else self.compiled.new_state()
-                context = Context(
-                    root=root,
-                    task_id=task_id,
-                    run_id=run_id,
-                    workflow_name=self.compiled.workflow_name,
-                    task_folder=task_folder,
-                    workflow_folder=resolved_workflow_folder,
-                    run_folder=run_folder,
-                    package_folder=resolved_package_folder,
-                    request_file=request_file,
-                    task_request_file=task_request_file,
-                    state=state,
-                    session_store=self.session_store,
-                    session_definitions=self.compiled.sessions,
-                    worklists=self.compiled.worklists,
-                    selections=selections,
-                    selection_snapshots=selection_snapshots,
-                    params=params,
-                    workflow_params=workflow_params,
-                    message=context_message,
-                    workflow_input=workflow_input,
-                    workflow_invoker=workflow_invoker,
-                    answer=None,
-                    input_response=None,
-                    default_session_name=self.compiled.default_session_name,
-                    values=values,
-                )
-                runtime = context_runtime(context)
-                runtime.set_worklist_selection_resolver(
-                    lambda worklist_name, *, _context=context: self.state_runtime.ensure_worklist_selection(
-                        _context,
-                        worklist_name,
-                    )
-                )
-                if self.compiled.default_session_open:
-                    context.open_session(self.compiled.default_session_name)
-                state = context.state
-                current_step_name = self.compiled.entry_step_name
-                current_answer = None
-                current_input_response = None
-
-            for _ in range(max_steps):
-                assert state is not None
-                assert current_step_name is not None
-                step = self.compiled.steps[current_step_name]
-                context = Context(
-                    root=root,
-                    task_id=task_id,
-                    run_id=run_id,
-                    workflow_name=self.compiled.workflow_name,
-                    task_folder=task_folder,
-                    workflow_folder=resolved_workflow_folder,
-                    run_folder=run_folder,
-                    package_folder=resolved_package_folder,
-                    request_file=request_file,
-                    task_request_file=task_request_file,
-                    state=state,
-                    session_store=self.session_store,
-                    session_definitions=self.compiled.sessions,
-                    worklists=self.compiled.worklists,
-                    selections=selections,
-                    selection_snapshots=selection_snapshots,
-                    active_worklist=step.scope_name,
-                    params=params,
-                    workflow_params=workflow_params,
-                    message=context_message,
-                    workflow_input=workflow_input,
-                    workflow_invoker=workflow_invoker,
-                    answer=current_answer,
-                    input_response=current_input_response,
-                    step_name=step.name,
-                    default_session_name=self.compiled.default_session_name,
-                    values=values,
-                    runtime_event_sink=self.runtime_event_sink,
-                )
-                runtime = context_runtime(context)
-                runtime.set_worklist_selection_resolver(
-                    lambda worklist_name, *, _context=context: self.state_runtime.ensure_worklist_selection(
-                        _context,
-                        worklist_name,
-                    )
-                )
-                step_state_store = self._ensure_step_state_store(step_states, step)
-                self._increment_step_runtime_state(step_state_store)
-                runtime.set_step_state_store(step_state_store)
-                if step.scope_name is not None:
-                    context.ensure_selection(step.scope_name)
-                current_item_key = self._current_item_state_key(context, step)
-                item_state_store = self._ensure_item_state_store(item_states, step, item_key=current_item_key)
-                step_item_state_store = self._ensure_step_item_state_store(
-                    step_item_states,
-                    step,
-                    item_key=current_item_key,
-                )
-                if item_state_store is not None:
-                    runtime.set_item_state_store(item_state_store)
-                if step_item_state_store is not None:
-                    self._increment_step_runtime_state(step_item_state_store)
-                    runtime.set_step_item_state_store(step_item_state_store)
-                self._update_item_runtime_state_on_entry(step, context, getattr(context, "_item_state", None))
-                runtime.set_worklist_selection_sync(
-                    lambda worklist_name, *, _context=context, _step=step, _item_states=item_states, _step_item_states=step_item_states: self._sync_context_scoped_state_after_worklist_selection_change(
-                        _context,
-                        _step,
-                        _item_states,
-                        _step_item_states,
-                        worklist_name=worklist_name,
-                    )
-                )
-                runtime.set_values(values)
-                runtime.set_meta(
-                    {
-                        "step": {
-                            "name": step.name,
-                            "kind": step.kind,
-                            "visits": self._step_runtime_visits(step_state_store),
-                            "last_route": getattr(step_state_store, "last_route", None),
-                        }
-                    }
-                )
-                history.append(step.name)
-                step_visit = self._step_execution_visit(step, step_state_store, step_item_state_store)
-                scope_name, item_id = self._current_step_scope_item(context, step)
-                step_execution_id = self._step_execution_id(
-                    step_name=step.name,
-                    visit=step_visit,
-                    scope_name=scope_name,
-                    item_id=item_id,
-                )
-                self._notify_before_step(
-                    extensions,
-                    StepStart(
-                        binding=binding,
-                        step_name=step.name,
-                        step_kind=step.kind,
-                        state=self._clone_state(state),
-                        answer=current_answer,
-                        visit=step_visit,
-                        step_execution_id=step_execution_id,
-                        scope=scope_name,
-                        item_id=item_id,
-                    ),
-                )
-                state_before = self._clone_state(state)
-                try:
-                    with self.operation_recorder.bind_step(
-                        step=step,
-                        context=context,
-                        run_folder=run_folder,
-                        step_name=step.name,
-                        step_visit=self._step_execution_visit(step, step_state_store, step_item_state_store),
-                    ):
-                        step_result = await self.step_dispatcher.execute_async(step, context, state, pending_handoffs)
-                        state = step_result.state
-                        destination = step_result.destination
-                        last_event = step_result.event
-                        last_outcome = step_result.outcome
-                        producer_raw_output = step_result.producer_raw_output
-                        verifier_raw_output = step_result.verifier_raw_output
-                        provider_usage = step_result.provider_usage
-                        pending_handoffs = step_result.pending_handoffs
-                        last_transition = step_result.finalization
-                        assert last_transition is not None
-                        candidate_route = last_transition.candidate_route
-                        final_route = last_transition.final_route
-                        runtime_control = last_transition.runtime_control
-                        pending_input_id = last_transition.pending_input_id
-                        target_step = last_transition.target_step
-                        control_terminal = last_transition.terminal
-                        final_provider_attributable = last_transition.provider_attributable
-                        provider_attempted = last_transition.provider_attempted
-                        producer_attempted = last_transition.producer_attempted
-                        verifier_attempted = last_transition.verifier_attempted
-                        control_source_hook = last_transition.source_hook
-                        control_source_phase = last_transition.source_phase
-                        hook_route_override_from = None if not last_transition.hook_route_redirects else last_transition.hook_route_redirects[0].from_route
-                        hook_route_override_to = None if not last_transition.hook_route_redirects else last_transition.hook_route_redirects[-1].to_route
-                        hook_route_redirects = last_transition.hook_route_redirects
-                        self._notify_after_step(
-                            extensions,
-                            StepFinish(
-                                binding=binding,
-                                step_name=step.name,
-                                step_kind=step.kind,
-                                state_before=state_before,
-                                state_after=self._clone_state(state),
-                                event=self._clone_event(last_event),
-                                outcome=self._clone_outcome(last_outcome),
-                                producer_raw_output=producer_raw_output,
-                                verifier_raw_output=verifier_raw_output,
-                                provider_usage=provider_usage,
-                                candidate_route=candidate_route,
-                                final_route=final_route,
-                                runtime_control=runtime_control,
-                                pending_input_id=pending_input_id,
-                                target_step=target_step,
-                                terminal=control_terminal,
-                                provider_attributable=final_provider_attributable,
-                                provider_attempted=provider_attempted,
-                                producer_attempted=producer_attempted,
-                                verifier_attempted=verifier_attempted,
-                                source_hook=control_source_hook,
-                                source_phase=control_source_phase,
-                                hook_route_override_from=hook_route_override_from,
-                                hook_route_override_to=hook_route_override_to,
-                                hook_route_redirects=hook_route_redirects,
-                                visit=step_visit,
-                                step_execution_id=step_execution_id,
-                                scope=scope_name,
-                                item_id=item_id,
-                            ),
-                        )
-                except Exception as exc:
-                    checkpoint = self.checkpoint_manager.save(
-                        stage=current_step_name,
-                        state=self._state_for_failure(state, exc),
-                        values=values,
-                        step_states=step_states,
-                        item_states=item_states,
-                        step_item_states=step_item_states,
-                        worklist_selections=selections,
-                        worklist_selection_snapshots=selection_snapshots,
-                        pending_handoffs=self._pending_handoffs_for_exception(exc, pending_handoffs),
-                        pending_input=None,
-                        pending_answer=current_answer,
-                        failure_context=self._failure_context_for_exception(exc),
-                    )
-                    raise
-
-                current_answer = None
-                current_input_response = None
-                if destination == FINISH:
-                    output, output_validation_error = self._build_workflow_output(context, state)
-                    result = RunResult(
-                        terminal=FINISH,
-                        state=state,
-                        history=tuple(history),
-                        checkpoint=None,
-                        last_event=last_event,
-                        last_outcome=last_outcome,
-                        last_transition=last_transition,
-                        output=output,
-                        output_validation_error=output_validation_error,
-                    )
-                    try:
-                        self._notify_terminal(
-                            extensions,
-                            TerminalFinish(
-                                binding=binding,
-                                terminal=FINISH,
-                                step_name=step.name,
-                                state=self._clone_state(state),
-                                event=self._clone_event(last_event),
-                                outcome=self._clone_outcome(last_outcome),
-                            ),
-                        )
-                    except Exception:
-                        checkpoint = self._save_checkpoint(
-                            stage=step.name,
-                            state=state,
-                            values=values,
-                            step_states=step_states,
-                            item_states=item_states,
-                            step_item_states=step_item_states,
-                            worklist_selections=selections,
-                            worklist_selection_snapshots=selection_snapshots,
-                            pending_handoffs=pending_handoffs,
-                            pending_input=None,
-                            pending_answer=None,
-                        )
-                        terminal_failure_handled = True
-                        raise
-                    self.checkpoint_store.clear()
-                    return result
-                if destination == AWAIT_INPUT:
-                    pending_input = step_result.pending_input or self._pending_input_from_event(
-                        source_step=step.name,
-                        event=last_event,
-                    )
-                    checkpoint = self._save_checkpoint(
-                        stage=current_step_name,
-                        state=state,
-                        values=values,
-                        step_states=step_states,
-                        item_states=item_states,
-                        step_item_states=step_item_states,
-                        worklist_selections=selections,
-                        worklist_selection_snapshots=selection_snapshots,
-                        pending_handoffs=pending_handoffs,
-                        pending_input=pending_input,
-                        pending_answer=None,
-                    )
-                    output, output_validation_error = self._build_workflow_output(context, state)
-                    result = RunResult(
-                        terminal=AWAIT_INPUT,
-                        state=state,
-                        history=tuple(history),
-                        checkpoint=checkpoint,
-                        last_event=last_event,
-                        last_outcome=last_outcome,
-                        last_transition=last_transition,
-                        output=output,
-                        output_validation_error=output_validation_error,
-                    )
-                    try:
-                        self._notify_terminal(
-                            extensions,
-                            TerminalFinish(
-                                binding=binding,
-                                terminal=AWAIT_INPUT,
-                                step_name=step.name,
-                                state=self._clone_state(state),
-                                event=self._clone_event(last_event),
-                                outcome=self._clone_outcome(last_outcome),
-                            ),
-                        )
-                    except Exception:
-                        terminal_failure_handled = True
-                        raise
-                    return result
-                if destination == FAIL:
-                    checkpoint = self._save_checkpoint(
-                        stage=current_step_name,
-                        state=state,
-                        values=values,
-                        step_states=step_states,
-                        item_states=item_states,
-                        step_item_states=step_item_states,
-                        worklist_selections=selections,
-                        worklist_selection_snapshots=selection_snapshots,
-                        pending_handoffs=pending_handoffs,
-                        pending_input=None,
-                        pending_answer=None,
-                    )
-                    output, output_validation_error = self._build_workflow_output(context, state)
-                    result = RunResult(
-                        terminal=FAIL,
-                        state=state,
-                        history=tuple(history),
-                        checkpoint=checkpoint,
-                        last_event=last_event,
-                        last_outcome=last_outcome,
-                        last_transition=last_transition,
-                        output=output,
-                        output_validation_error=output_validation_error,
-                    )
-                    try:
-                        self._notify_terminal(
-                            extensions,
-                            TerminalFinish(
-                                binding=binding,
-                                terminal=FAIL,
-                                step_name=step.name,
-                                state=self._clone_state(state),
-                                event=self._clone_event(last_event),
-                                outcome=self._clone_outcome(last_outcome),
-                            ),
-                        )
-                    except Exception:
-                        terminal_failure_handled = True
-                        raise
-                    return result
-                if runtime_control == "goto":
-                    checkpoint = self._save_checkpoint(
-                        stage=destination,
-                        state=state,
-                        values=values,
-                        step_states=step_states,
-                        item_states=item_states,
-                        step_item_states=step_item_states,
-                        worklist_selections=selections,
-                        worklist_selection_snapshots=selection_snapshots,
-                        pending_handoffs=pending_handoffs,
-                        pending_input=None,
-                        pending_answer=None,
-                    )
-                current_step_name = destination
-            raise WorkflowExecutionError(f"workflow exceeded max_steps={max_steps}")
+            loop.current_input_response = self._resume_input_response(checkpoint=checkpoint, answer=loop.current_answer)
         except Exception as exc:
-            if not terminal_failure_handled:
-                fatal_event = TerminalFinish(
-                    binding=binding,
-                    terminal="fatal",
-                    step_name=history[-1] if history else current_step_name,
-                    state=self._clone_state(state),
-                    event=self._clone_event(last_event),
-                    outcome=self._clone_outcome(last_outcome),
-                )
-                fatal_error = self._notify_fatal(extensions, fatal_event, exc)
-                self._notify_terminal(extensions, fatal_event)
-                if fatal_error is not None:
-                    raise fatal_error from exc
+            loop.checkpoint = self._save_loop_checkpoint(
+                loop,
+                stage=checkpoint.stage,
+                state=self._state_for_failure(loop.state, exc) or loop.state,
+                pending_input=checkpoint.pending_input,
+                pending_answer=loop.current_answer,
+                failure_context=self._failure_context_for_exception(exc),
+            )
             raise
-        finally:
-            self.provider_policy_resolver = previous_provider_policy_resolver
+        return loop
+
+    def _initialize_run_loop(
+        self,
+        env: _RunEnvironment,
+        *,
+        initial_state: BaseModel | None,
+    ) -> _RunLoopState:
+        self.session_runtime.restore(SessionSnapshot(bindings=(), active_keys_by_slot={}))
+        state = initial_state if initial_state is not None else self.compiled.new_state()
+        loop = _RunLoopState(
+            history=[],
+            current_step_name=self.compiled.entry_step_name,
+            state=state,
+            current_answer=None,
+            current_input_response=None,
+            selections={},
+            selection_snapshots={},
+            values={},
+            step_states={},
+            item_states={},
+            step_item_states={},
+        )
+        context = self._build_run_context(
+            env,
+            state=state,
+            selections=loop.selections,
+            selection_snapshots=loop.selection_snapshots,
+            values=loop.values,
+        )
+        self._configure_context_runtime(context)
+        if self.compiled.default_session_open:
+            context.open_session(self.compiled.default_session_name)
+        loop.state = context.state
+        return loop
+
+    def _build_run_context(
+        self,
+        env: _RunEnvironment,
+        *,
+        state: BaseModel,
+        selections: Mapping[str, Selection[Any]],
+        selection_snapshots: Mapping[str, SelectionSnapshot],
+        values: Mapping[str, Any],
+        step: StepPlan | None = None,
+        answer: str | None = None,
+        input_response: Any | None = None,
+        runtime_event_sink: Callable[[str, Mapping[str, Any]], None] | None = None,
+    ) -> Context:
+        return Context(
+            root=env.root,
+            task_id=env.task_id,
+            run_id=env.run_id,
+            workflow_name=self.compiled.workflow_name,
+            task_folder=env.task_folder,
+            workflow_folder=env.workflow_folder,
+            run_folder=env.run_folder,
+            package_folder=env.package_folder,
+            request_file=env.request_file,
+            task_request_file=env.task_request_file,
+            state=state,
+            session_store=self.session_store,
+            session_definitions=self.compiled.sessions,
+            worklists=self.compiled.worklists,
+            selections=selections,
+            selection_snapshots=selection_snapshots,
+            active_worklist=None if step is None else step.scope_name,
+            params=env.params,
+            workflow_params=env.workflow_params,
+            message=env.message,
+            workflow_input=env.workflow_input,
+            workflow_invoker=env.workflow_invoker,
+            answer=answer,
+            input_response=input_response,
+            step_name=None if step is None else step.name,
+            default_session_name=self.compiled.default_session_name,
+            values=values,
+            runtime_event_sink=runtime_event_sink,
+        )
+
+    def _configure_context_runtime(self, context: Context) -> Any:
+        runtime = context_runtime(context)
+        runtime.set_worklist_selection_resolver(
+            lambda worklist_name, *, _context=context: self.state_runtime.ensure_worklist_selection(
+                _context,
+                worklist_name,
+            )
+        )
+        return runtime
+
+    async def _run_loop(
+        self,
+        env: _RunEnvironment,
+        loop: _RunLoopState,
+        *,
+        max_steps: int,
+    ) -> RunResult:
+        for _ in range(max_steps):
+            frame = self._prepare_step_frame(env, loop)
+            step_result = await self._execute_step_frame(env, loop, frame)
+            terminal = self._handle_step_result(env, loop, frame, step_result)
+            if terminal is not None:
+                return terminal
+        raise WorkflowExecutionError(f"workflow exceeded max_steps={max_steps}")
+
+    def _prepare_step_frame(
+        self,
+        env: _RunEnvironment,
+        loop: _RunLoopState,
+    ) -> _StepFrame:
+        assert loop.state is not None
+        assert loop.current_step_name is not None
+        step = self.compiled.steps[loop.current_step_name]
+        context = self._build_run_context(
+            env,
+            state=loop.state,
+            selections=loop.selections,
+            selection_snapshots=loop.selection_snapshots,
+            values=loop.values,
+            step=step,
+            answer=loop.current_answer,
+            input_response=loop.current_input_response,
+            runtime_event_sink=self.runtime_event_sink,
+        )
+        runtime = self._configure_context_runtime(context)
+        step_state_store = self._ensure_step_state_store(loop.step_states, step)
+        self._increment_step_runtime_state(step_state_store)
+        runtime.set_step_state_store(step_state_store)
+        if step.scope_name is not None:
+            context.ensure_selection(step.scope_name)
+        current_item_key = self._current_item_state_key(context, step)
+        item_state_store = self._ensure_item_state_store(loop.item_states, step, item_key=current_item_key)
+        step_item_state_store = self._ensure_step_item_state_store(
+            loop.step_item_states,
+            step,
+            item_key=current_item_key,
+        )
+        if item_state_store is not None:
+            runtime.set_item_state_store(item_state_store)
+        if step_item_state_store is not None:
+            self._increment_step_runtime_state(step_item_state_store)
+            runtime.set_step_item_state_store(step_item_state_store)
+        self._update_item_runtime_state_on_entry(step, context, getattr(context, "_item_state", None))
+        runtime.set_worklist_selection_sync(
+            lambda worklist_name, *, _context=context, _step=step, _item_states=loop.item_states, _step_item_states=loop.step_item_states: self._sync_context_scoped_state_after_worklist_selection_change(
+                _context,
+                _step,
+                _item_states,
+                _step_item_states,
+                worklist_name=worklist_name,
+            )
+        )
+        runtime.set_values(loop.values)
+        runtime.set_meta(
+            {
+                "step": {
+                    "name": step.name,
+                    "kind": step.kind,
+                    "visits": self._step_runtime_visits(step_state_store),
+                    "last_route": getattr(step_state_store, "last_route", None),
+                }
+            }
+        )
+        loop.history.append(step.name)
+        step_visit = self._step_execution_visit(step, step_state_store, step_item_state_store)
+        scope_name, item_id = self._current_step_scope_item(context, step)
+        return _StepFrame(
+            step=step,
+            context=context,
+            step_state_store=step_state_store,
+            step_item_state_store=step_item_state_store,
+            step_visit=step_visit,
+            scope_name=scope_name,
+            item_id=item_id,
+            step_execution_id=self._step_execution_id(
+                step_name=step.name,
+                visit=step_visit,
+                scope_name=scope_name,
+                item_id=item_id,
+            ),
+        )
+
+    async def _execute_step_frame(
+        self,
+        env: _RunEnvironment,
+        loop: _RunLoopState,
+        frame: _StepFrame,
+    ) -> StepExecutionResult:
+        assert loop.state is not None
+        self._notify_before_step(
+            env.extensions,
+            StepStart(
+                binding=env.binding,
+                step_name=frame.step.name,
+                step_kind=frame.step.kind,
+                state=self._clone_state(loop.state),
+                answer=loop.current_answer,
+                visit=frame.step_visit,
+                step_execution_id=frame.step_execution_id,
+                scope=frame.scope_name,
+                item_id=frame.item_id,
+            ),
+        )
+        state_before = self._clone_state(loop.state)
+        failure_state = loop.state
+        failure_handoffs = loop.pending_handoffs
+        try:
+            with self.operation_recorder.bind_step(
+                step=frame.step,
+                context=frame.context,
+                run_folder=env.run_folder,
+                step_name=frame.step.name,
+                step_visit=frame.step_visit,
+            ):
+                step_result = await self.step_dispatcher.execute_async(
+                    frame.step,
+                    frame.context,
+                    loop.state,
+                    loop.pending_handoffs,
+                )
+            failure_state = step_result.state
+            failure_handoffs = step_result.pending_handoffs
+            self._emit_after_step_notification(env, frame, state_before, step_result)
+        except Exception as exc:
+            loop.checkpoint = self._save_loop_checkpoint(
+                loop,
+                stage=loop.current_step_name or frame.step.name,
+                state=self._state_for_failure(failure_state, exc),
+                pending_input=None,
+                pending_answer=loop.current_answer,
+                pending_handoffs=self._pending_handoffs_for_exception(exc, failure_handoffs),
+                failure_context=self._failure_context_for_exception(exc),
+            )
+            raise
+        return step_result
+
+    def _emit_after_step_notification(
+        self,
+        env: _RunEnvironment,
+        frame: _StepFrame,
+        state_before: BaseModel | None,
+        step_result: StepExecutionResult,
+    ) -> None:
+        state_after = step_result.state
+        last_transition = step_result.finalization
+        assert last_transition is not None
+        hook_route_override_from = None
+        hook_route_override_to = None
+        if last_transition.hook_route_redirects:
+            hook_route_override_from = last_transition.hook_route_redirects[0].from_route
+            hook_route_override_to = last_transition.hook_route_redirects[-1].to_route
+        self._notify_after_step(
+            env.extensions,
+            StepFinish(
+                binding=env.binding,
+                step_name=frame.step.name,
+                step_kind=frame.step.kind,
+                state_before=state_before,
+                state_after=self._clone_state(state_after),
+                event=self._clone_event(step_result.event),
+                outcome=self._clone_outcome(step_result.outcome),
+                producer_raw_output=step_result.producer_raw_output,
+                verifier_raw_output=step_result.verifier_raw_output,
+                provider_usage=step_result.provider_usage,
+                candidate_route=last_transition.candidate_route,
+                final_route=last_transition.final_route,
+                runtime_control=last_transition.runtime_control,
+                pending_input_id=last_transition.pending_input_id,
+                target_step=last_transition.target_step,
+                terminal=last_transition.terminal,
+                provider_attributable=last_transition.provider_attributable,
+                provider_attempted=last_transition.provider_attempted,
+                producer_attempted=last_transition.producer_attempted,
+                verifier_attempted=last_transition.verifier_attempted,
+                source_hook=last_transition.source_hook,
+                source_phase=last_transition.source_phase,
+                hook_route_override_from=hook_route_override_from,
+                hook_route_override_to=hook_route_override_to,
+                hook_route_redirects=last_transition.hook_route_redirects,
+                visit=frame.step_visit,
+                step_execution_id=frame.step_execution_id,
+                scope=frame.scope_name,
+                item_id=frame.item_id,
+            ),
+        )
+
+    def _handle_step_result(
+        self,
+        env: _RunEnvironment,
+        loop: _RunLoopState,
+        frame: _StepFrame,
+        step_result: StepExecutionResult,
+    ) -> RunResult | None:
+        loop.state = step_result.state
+        loop.pending_handoffs = step_result.pending_handoffs
+        loop.last_event = step_result.event
+        loop.last_outcome = step_result.outcome
+        loop.last_transition = step_result.finalization
+        destination = step_result.destination
+        loop.current_answer = None
+        loop.current_input_response = None
+        if destination == FINISH:
+            return self._finish_terminal(env, loop, frame)
+        if destination == AWAIT_INPUT:
+            return self._await_input_terminal(env, loop, frame, step_result=step_result)
+        if destination == FAIL:
+            return self._fail_terminal(env, loop, frame)
+        if loop.last_transition is not None and loop.last_transition.runtime_control == "goto":
+            loop.checkpoint = self._save_loop_checkpoint(
+                loop,
+                stage=destination,
+                pending_input=None,
+                pending_answer=None,
+            )
+        loop.current_step_name = destination
+        return None
+
+    def _finish_terminal(
+        self,
+        env: _RunEnvironment,
+        loop: _RunLoopState,
+        frame: _StepFrame,
+    ) -> RunResult:
+        assert loop.state is not None
+        result = self._terminal_run_result(loop, frame.context, terminal=FINISH, checkpoint=None)
+        try:
+            self._notify_terminal(env.extensions, self._terminal_event(env, loop, terminal=FINISH, step_name=frame.step.name))
+        except Exception:
+            loop.checkpoint = self._save_loop_checkpoint(
+                loop,
+                stage=frame.step.name,
+                pending_input=None,
+                pending_answer=None,
+            )
+            loop.terminal_failure_handled = True
+            raise
+        self.checkpoint_store.clear()
+        return result
+
+    def _await_input_terminal(
+        self,
+        env: _RunEnvironment,
+        loop: _RunLoopState,
+        frame: _StepFrame,
+        *,
+        step_result: StepExecutionResult,
+    ) -> RunResult:
+        pending_input = step_result.pending_input or self._pending_input_from_event(
+            source_step=frame.step.name,
+            event=loop.last_event,
+        )
+        loop.checkpoint = self._save_loop_checkpoint(
+            loop,
+            stage=frame.step.name,
+            pending_input=pending_input,
+            pending_answer=None,
+        )
+        result = self._terminal_run_result(loop, frame.context, terminal=AWAIT_INPUT, checkpoint=loop.checkpoint)
+        try:
+            self._notify_terminal(
+                env.extensions,
+                self._terminal_event(env, loop, terminal=AWAIT_INPUT, step_name=frame.step.name),
+            )
+        except Exception:
+            loop.terminal_failure_handled = True
+            raise
+        return result
+
+    def _fail_terminal(
+        self,
+        env: _RunEnvironment,
+        loop: _RunLoopState,
+        frame: _StepFrame,
+    ) -> RunResult:
+        loop.checkpoint = self._save_loop_checkpoint(
+            loop,
+            stage=frame.step.name,
+            pending_input=None,
+            pending_answer=None,
+        )
+        result = self._terminal_run_result(loop, frame.context, terminal=FAIL, checkpoint=loop.checkpoint)
+        try:
+            self._notify_terminal(env.extensions, self._terminal_event(env, loop, terminal=FAIL, step_name=frame.step.name))
+        except Exception:
+            loop.terminal_failure_handled = True
+            raise
+        return result
+
+    def _terminal_run_result(
+        self,
+        loop: _RunLoopState,
+        context: Context,
+        *,
+        terminal: str,
+        checkpoint: Checkpoint | None,
+    ) -> RunResult:
+        assert loop.state is not None
+        output, output_validation_error = self._build_workflow_output(context, loop.state)
+        return RunResult(
+            terminal=terminal,
+            state=loop.state,
+            history=tuple(loop.history),
+            checkpoint=checkpoint,
+            last_event=loop.last_event,
+            last_outcome=loop.last_outcome,
+            last_transition=loop.last_transition,
+            output=output,
+            output_validation_error=output_validation_error,
+        )
+
+    def _terminal_event(
+        self,
+        env: _RunEnvironment,
+        loop: _RunLoopState,
+        *,
+        terminal: str,
+        step_name: str | None,
+    ) -> TerminalFinish:
+        return TerminalFinish(
+            binding=env.binding,
+            terminal=terminal,
+            step_name=step_name,
+            state=self._clone_state(loop.state),
+            event=self._clone_event(loop.last_event),
+            outcome=self._clone_outcome(loop.last_outcome),
+        )
+
+    def _save_loop_checkpoint(
+        self,
+        loop: _RunLoopState,
+        *,
+        stage: str,
+        pending_input: PendingInput | None,
+        pending_answer: str | None,
+        state: BaseModel | None = None,
+        pending_handoffs: tuple[PendingHandoff, ...] | None = None,
+        failure_context: FailureContext | Mapping[str, Any] | None = None,
+    ) -> Checkpoint:
+        current_state = state if state is not None else loop.state
+        assert current_state is not None
+        return self._save_checkpoint(
+            stage=stage,
+            state=current_state,
+            values=loop.values,
+            step_states=loop.step_states,
+            item_states=loop.item_states,
+            step_item_states=loop.step_item_states,
+            worklist_selections=loop.selections,
+            worklist_selection_snapshots=loop.selection_snapshots,
+            pending_handoffs=loop.pending_handoffs if pending_handoffs is None else pending_handoffs,
+            pending_input=pending_input,
+            pending_answer=pending_answer,
+            failure_context=failure_context,
+        )
+
+    def _handle_run_failure(
+        self,
+        env: _RunEnvironment,
+        loop: _RunLoopState | None,
+        exc: Exception,
+    ) -> None:
+        if loop is not None and loop.terminal_failure_handled:
+            return
+        fatal_event = TerminalFinish(
+            binding=env.binding,
+            terminal="fatal",
+            step_name=None if loop is None else (loop.history[-1] if loop.history else loop.current_step_name),
+            state=None if loop is None else self._clone_state(loop.state),
+            event=None if loop is None else self._clone_event(loop.last_event),
+            outcome=None if loop is None else self._clone_outcome(loop.last_outcome),
+        )
+        fatal_error = self._notify_fatal(env.extensions, fatal_event, exc)
+        self._notify_terminal(env.extensions, fatal_event)
+        if fatal_error is not None:
+            raise fatal_error from exc
 
     def resume(
         self,
@@ -1105,7 +1244,7 @@ class Engine:
     def _normalize_direct_runtime_control(
         self,
         *,
-        step: CompiledStep,
+        step: StepPlan,
         context: Context,
         control: RequestInput | Goto | Fail,
         hook_name: str,
@@ -1253,7 +1392,7 @@ class Engine:
             raise WorkflowExecutionError(f"Goto target {target_step!r} is not a declared workflow step")
         return target_step
 
-    def _validate_hook_event_override(self, step: CompiledStep, event: Event) -> Event:
+    def _validate_hook_event_override(self, step: StepPlan, event: Event) -> Event:
         self._validate_event(
             step,
             event,
@@ -1265,7 +1404,7 @@ class Engine:
     def _build_hook_redirect_record(
         self,
         *,
-        step: CompiledStep,
+        step: StepPlan,
         context: Context,
         hook_name: str,
         hook_phase: str,
@@ -1293,7 +1432,7 @@ class Engine:
 
     def _ensure_hook_redirect_limit(
         self,
-        step: CompiledStep,
+        step: StepPlan,
         *,
         candidate_route: str,
         redirects: Sequence[HookRouteRedirect],
@@ -1331,10 +1470,10 @@ class Engine:
         self._restore_model_or_dict(getattr(context, "_item_state", None), snapshot.item_state)
         self._restore_model_or_dict(getattr(context, "_step_item_state", None), snapshot.step_item_state)
 
-    def _resolve_session(self, step: CompiledStep, context: Context) -> SessionBinding | None:
+    def _resolve_session(self, step: StepPlan, context: Context) -> SessionBinding | None:
         return self._select_session(step, context)
 
-    def _select_session(self, step: CompiledStep, context: Context) -> SessionBinding | None:
+    def _select_session(self, step: StepPlan, context: Context) -> SessionBinding | None:
         if step.session_name is None:
             return None
         active_key = context._session_store.snapshot().active_keys_by_slot.get(step.session_name)
@@ -1351,7 +1490,7 @@ class Engine:
             target_store = self.session_store if context is None else context._session_store
             target_store.upsert(binding)
 
-    def _append_logs(self, step: CompiledStep, artifacts: ResolvedArtifacts, content: str) -> None:
+    def _append_logs(self, step: StepPlan, artifacts: ResolvedArtifacts, content: str) -> None:
         for name in step.log_artifacts:
             artifacts[name].append(content)
 
@@ -1377,7 +1516,7 @@ class Engine:
             )
         return ResolvedArtifacts(handles)
 
-    def _ensure_required_artifacts(self, step: CompiledStep, artifacts: ResolvedArtifacts) -> None:
+    def _ensure_required_artifacts(self, step: StepPlan, artifacts: ResolvedArtifacts) -> None:
         self._ensure_named_artifacts_exist(step.requires, artifacts, step_name=step.name)
 
     def _ensure_named_artifacts_exist(
@@ -1393,7 +1532,7 @@ class Engine:
 
     def _enforce_artifact_contracts(
         self,
-        step: CompiledStep,
+        step: StepPlan,
         context: Context,
         artifacts: ResolvedArtifacts,
         *,
@@ -1431,23 +1570,25 @@ class Engine:
                 provider_attributable=provider_attributable,
             )
 
-    def _required_output_artifacts(self, step: CompiledStep, route_tag: str) -> tuple[str, ...]:
+    def _required_output_artifacts(self, step: StepPlan, route_tag: str) -> tuple[str, ...]:
         return effective_route_required_writes(
             self.compiled,
             step_name=step.name,
             route_tag=route_tag,
         )
 
-    def _route_table_for_step(self, step: CompiledStep) -> dict[str, CompiledRoute]:
-        if step.route_table is not None:
-            return dict(step.route_table)
+    def _route_table_for_step(self, step: StepPlan) -> dict[str, RouteContract]:
+        route_table = getattr(step, "_route_table", None)
+        if route_table is not None:
+            return dict(route_table)
         route_table = dict(self.compiled.global_routes)
         route_table.update(self.compiled.routes.get(step.name, {}))
         return route_table
 
-    def _compiled_route_for_step(self, step: CompiledStep, route_tag: str) -> CompiledRoute:
-        if step.route_table is not None:
-            compiled_route = step.route_table.get(route_tag)
+    def _compiled_route_for_step(self, step: StepPlan, route_tag: str) -> RouteContract:
+        route_table = getattr(step, "_route_table", None)
+        if route_table is not None:
+            compiled_route = route_table.get(route_tag)
             if compiled_route is None:
                 raise RoutingError(f"no route for step {step.name!r} and tag {route_tag!r}")
             return compiled_route
@@ -1461,7 +1602,7 @@ class Engine:
 
     def _validate_output_artifact(
         self,
-        step: CompiledStep,
+        step: StepPlan,
         *,
         context: Context,
         route_tag: str,
@@ -1504,7 +1645,7 @@ class Engine:
         self,
         error_cls: type[WorkflowExecutionError],
         *,
-        step: CompiledStep,
+        step: StepPlan,
         context: Context,
         step_name: str,
         route_tag: str,
@@ -1635,7 +1776,7 @@ class Engine:
             ),
         )
 
-    def _validate_outcome(self, step: CompiledStep, outcome: Outcome) -> None:
+    def _validate_outcome(self, step: StepPlan, outcome: Outcome) -> None:
         if not isinstance(outcome, Outcome):
             raise ProviderExecutionError(
                 "provider must return Outcome instances",
@@ -1753,8 +1894,8 @@ class Engine:
 
     def _validate_outcome_route_fields(
         self,
-        step: CompiledStep,
-        route: CompiledRoute,
+        step: StepPlan,
+        route: RouteContract,
         outcome: Outcome,
     ) -> None:
         if route.route_fields_validator is not None:
@@ -1781,7 +1922,7 @@ class Engine:
 
     def _validate_event(
         self,
-        step: CompiledStep,
+        step: StepPlan,
         event: Event,
         *,
         provider_attributable: bool,
@@ -1789,8 +1930,9 @@ class Engine:
     ) -> None:
         if not isinstance(event, Event):
             raise WorkflowExecutionError(f"step {step.name!r} must produce Event instances")
-        if event.tag not in step.available_routes:
-            legal_routes = ", ".join(step.available_routes) or "<none>"
+        available_routes = tuple(self._route_table_for_step(step).keys())
+        if event.tag not in available_routes:
+            legal_routes = ", ".join(available_routes) or "<none>"
             message = f"step {step.name!r} produced illegal route {event.tag!r}; legal routes: {legal_routes}"
             if provider_attributable:
                 raise ProviderExecutionError(
@@ -1803,7 +1945,7 @@ class Engine:
                         details={
                             "step": step.name,
                             "route": event.tag,
-                            "legal_routes": list(step.available_routes),
+                            "legal_routes": list(available_routes),
                             "provider_attributable": True,
                         },
                     ),
@@ -1853,12 +1995,12 @@ class Engine:
             return local_name
         return str(name)
 
-    def _provider_available_routes_for_step(self, step: CompiledStep) -> tuple[str, ...]:
+    def _provider_available_routes_for_step(self, step: StepPlan) -> tuple[str, ...]:
         return self.provider_contract_builder.available_routes(step)
 
     def _resolve_pair_review_session(
         self,
-        step: CompiledStep,
+        step: StepPlan,
         context: Context,
         *,
         producer_session: SessionBinding | None,
@@ -2317,7 +2459,7 @@ class Engine:
 
     def _next_retry_feedback(
         self,
-        step: CompiledStep,
+        step: StepPlan,
         exc: Exception,
         *,
         attempt: int,
@@ -2341,7 +2483,7 @@ class Engine:
         self,
         exc: Exception,
         *,
-        step: CompiledStep,
+        step: StepPlan,
         attempt: int,
         kind: str,
     ) -> Exception:
@@ -2374,7 +2516,7 @@ class Engine:
         self,
         exc: Exception,
         *,
-        step: CompiledStep,
+        step: StepPlan,
         kind: str,
     ) -> Exception:
         existing = self._failure_context_for_exception(exc)
@@ -2471,7 +2613,7 @@ class Engine:
 
     def _matching_pending_handoffs(
         self,
-        step: CompiledStep,
+        step: StepPlan,
         context: Context,
         pending_handoffs: tuple[PendingHandoff, ...],
     ) -> tuple[str | None, tuple[PendingHandoff, ...]]:
@@ -2501,7 +2643,7 @@ class Engine:
         self,
         pending_handoffs: tuple[PendingHandoff, ...],
         *,
-        route: CompiledRoute,
+        route: RouteContract,
         event: Event | None,
         destination: str,
         context: Context,
@@ -2564,7 +2706,7 @@ class Engine:
 
     def _handoff_scope_for_target(
         self,
-        step: CompiledStep,
+        step: StepPlan,
         context: Context,
     ) -> tuple[str | None, str | None]:
         if step.scope_name is None:
@@ -2574,7 +2716,7 @@ class Engine:
             return step.scope_name, None
         return step.scope_name, item.id
 
-    def _run_workflow_step(self, step: CompiledStep, context: Context) -> Any:
+    def _run_workflow_step(self, step: StepPlan, context: Context) -> Any:
         workflow_step = step.step
         if not isinstance(workflow_step, ChildWorkflowStep):
             raise WorkflowExecutionError(f"workflow step {step.name!r} is missing workflow-step metadata")
@@ -2686,7 +2828,7 @@ class Engine:
                 lines.append(f"- {name}: {path}")
         return "\n".join(lines) + "\n"
 
-    def _map_workflow_step_result(self, step: CompiledStep, child_result: Any) -> Event:
+    def _map_workflow_step_result(self, step: StepPlan, child_result: Any) -> Event:
         terminal = getattr(child_result, "terminal", None)
         last_event = getattr(child_result, "last_event", None)
         checkpoint = getattr(child_result, "checkpoint", None)
@@ -2723,14 +2865,15 @@ class Engine:
 
     @staticmethod
     def _ensure_child_workflow_route_declared(
-        step: CompiledStep,
+        step: StepPlan,
         *,
         child_terminal: str,
         mapped_route: str,
     ) -> None:
-        if mapped_route in step.available_routes:
+        available_routes = tuple(getattr(step, "_route_table", {}) or ())
+        if mapped_route in available_routes:
             return
-        declared_routes = ", ".join(step.authored_routes) or "<none>"
+        declared_routes = ", ".join(available_routes) or "<none>"
         raise WorkflowExecutionError(
             f"child workflow step {step.name!r} returned terminal {child_terminal!r}, which maps to route "
             f"{mapped_route!r}, but declared routes are: {declared_routes}. "
@@ -2750,7 +2893,7 @@ class Engine:
             route_fields=deepcopy(outcome.route_fields),
         )
 
-    def _event_from_outcome(self, step: CompiledStep, outcome: Outcome) -> Event:
+    def _event_from_outcome(self, step: StepPlan, outcome: Outcome) -> Event:
         compiled_route = self._route_table_for_step(step).get(outcome.tag)
         question = outcome.question
         if compiled_route is not None and is_question_style_route(compiled_route, tag=outcome.tag):
@@ -2840,7 +2983,7 @@ class Engine:
                 f"resume checkpoint refers to step {stage!r}, but the current workflow does not declare that step"
             )
 
-    def _current_item_state_key(self, context: Context, step: CompiledStep) -> str | None:
+    def _current_item_state_key(self, context: Context, step: StepPlan) -> str | None:
         if step.scope_name is None:
             return None
         item = context.current(step.scope_name)
@@ -2872,7 +3015,7 @@ class Engine:
 
     @staticmethod
     def _update_final_step_runtime_state(
-        step: CompiledStep,
+        step: StepPlan,
         step_state: BaseModel | dict[str, Any] | None,
         final_event: Event,
     ) -> None:
@@ -2899,7 +3042,7 @@ class Engine:
 
     @staticmethod
     def _update_item_runtime_state_on_entry(
-        step: CompiledStep,
+        step: StepPlan,
         context: Context,
         item_state: BaseModel | dict[str, Any] | None,
     ) -> None:
@@ -2929,7 +3072,7 @@ class Engine:
     def _ensure_step_state_store(
         self,
         step_states: dict[str, BaseModel | dict[str, Any]],
-        step: CompiledStep,
+        step: StepPlan,
     ) -> BaseModel:
         state_model = step.step_state_model
         store = step_states.get(step.name)
@@ -3000,7 +3143,7 @@ class Engine:
     def _ensure_item_state_store(
         self,
         item_states: dict[str, BaseModel | dict[str, Any]],
-        step: CompiledStep,
+        step: StepPlan,
         item_key: str | None,
     ) -> BaseModel | dict[str, Any] | None:
         if item_key is None:
@@ -3024,7 +3167,7 @@ class Engine:
     def _ensure_step_item_state_store(
         self,
         step_item_states: dict[str, dict[str, BaseModel | dict[str, Any]]],
-        step: CompiledStep,
+        step: StepPlan,
         item_key: str | None,
     ) -> BaseModel | dict[str, Any] | None:
         if item_key is None or step.step_item_state_model is None:
@@ -3046,7 +3189,7 @@ class Engine:
     def _sync_context_scoped_state_after_worklist_selection_change(
         self,
         context: Context,
-        step: CompiledStep,
+        step: StepPlan,
         item_states: dict[str, BaseModel | dict[str, Any]],
         step_item_states: dict[str, dict[str, BaseModel | dict[str, Any]]],
         *,
@@ -3071,7 +3214,7 @@ class Engine:
         self,
         event_type: str,
         *,
-        step: CompiledStep,
+        step: StepPlan,
         context: Context,
         turn_kind: str,
         attempt: int,
@@ -3092,7 +3235,7 @@ class Engine:
     def _emit_provider_attempt_finished(
         self,
         *,
-        step: CompiledStep,
+        step: StepPlan,
         context: Context,
         turn_kind: str,
         attempt: int,
@@ -3110,7 +3253,7 @@ class Engine:
     def _emit_provider_attempt_failed(
         self,
         *,
-        step: CompiledStep,
+        step: StepPlan,
         context: Context,
         turn_kind: str,
         attempt: int,
@@ -3128,7 +3271,7 @@ class Engine:
     def _step_runtime_event_payload(
         self,
         *,
-        step: CompiledStep,
+        step: StepPlan,
         context: Context,
     ) -> dict[str, Any]:
         step_state_store = getattr(context, "_step_state", None)
@@ -3188,7 +3331,7 @@ class Engine:
     def _build_step_finalization_record(
         self,
         *,
-        step: CompiledStep,
+        step: StepPlan,
         outcome: Outcome | None,
         producer_raw_output: str | None,
         verifier_raw_output: str | None,
@@ -3231,7 +3374,7 @@ class Engine:
     def _step_result_from_direct_control(
         self,
         *,
-        step: CompiledStep,
+        step: StepPlan,
         state: BaseModel,
         control: _DirectRuntimeControl,
         pending_handoffs: tuple[PendingHandoff, ...],
@@ -3273,8 +3416,8 @@ class Engine:
     def _step_result_from_route_finalization(
         self,
         *,
-        step: CompiledStep,
-        route_finalization: RouteFinalizationResult,
+        step: StepPlan,
+        route_finalization: _RouteResolution,
         outcome: Outcome | None = None,
         producer_raw_output: str | None = None,
         verifier_raw_output: str | None = None,
@@ -3329,7 +3472,7 @@ class Engine:
         return exception_failure_context_payload(exc)
 
     @staticmethod
-    def _current_step_scope_item(context: Context, step: CompiledStep) -> tuple[str | None, str | None]:
+    def _current_step_scope_item(context: Context, step: StepPlan) -> tuple[str | None, str | None]:
         if step.scope_name is None:
             return None, None
         item = context.current(step.scope_name)
@@ -3340,7 +3483,7 @@ class Engine:
 
     def _step_execution_visit(
         self,
-        step: CompiledStep,
+        step: StepPlan,
         step_state: BaseModel | dict[str, Any] | None,
         step_item_state: BaseModel | dict[str, Any] | None,
     ) -> int | None:
@@ -3366,7 +3509,7 @@ class Engine:
         self,
         event_type: str,
         *,
-        step: CompiledStep | None = None,
+        step: StepPlan | None = None,
         context: Context | None = None,
         **payload: Any,
     ) -> None:

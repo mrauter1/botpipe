@@ -6,7 +6,14 @@ import json
 from pathlib import Path
 from typing import Any, Mapping
 
-from botlane.core.compiler import CompiledRoute, CompiledWorkflow
+from botlane.core.discovery import get_workflow_definition
+from botlane.core.route_contracts import (
+    RouteContract,
+    available_route_tags,
+    provider_visible_route_tags,
+    route_target_value,
+    runtime_control_route_tags,
+)
 from botlane.core.route_reporting import (
     payload_contract_for_route,
     provider_response_contract_for_routes,
@@ -24,6 +31,9 @@ from botlane.core.schema_registry import (
     WORKFLOW_TOPOLOGY_SCHEMA,
 )
 from botlane.core.step_state import built_in_step_state_model
+from botlane.core.step_plans import StepPlan
+from botlane.core.workflow_plan import WorkflowPlan
+from botlane.core.lowering import step_authored_route_tags
 
 
 STATIC_GRAPH_SCHEMA = WORKFLOW_STATIC_STEP_GRAPH_SCHEMA
@@ -45,7 +55,7 @@ STATE_CONTRACTS_SCHEMA = WORKFLOW_STATE_CONTRACTS_SCHEMA
 SESSION_CONTRACTS_SCHEMA = WORKFLOW_SESSION_CONTRACTS_SCHEMA
 
 
-def workflow_static_step_graph_payload(compiled: CompiledWorkflow) -> dict[str, Any]:
+def workflow_static_step_graph_payload(compiled: WorkflowPlan) -> dict[str, Any]:
     return {
         "schema": STATIC_GRAPH_SCHEMA,
         "workflow_name": compiled.workflow_name,
@@ -60,24 +70,24 @@ def workflow_static_step_graph_payload(compiled: CompiledWorkflow) -> dict[str, 
                 "prompt": _prompt_path(step.prompt),
                 "producer_prompt": _prompt_path(step.producer_prompt),
                 "verifier_prompt": _prompt_path(step.verifier_prompt),
-                "reads": list(step.reads),
-                "requires": list(step.requires),
-                "producer_reads": list(step.producer_reads),
-                "producer_requires": list(step.producer_requires),
-                "producer_writes": list(step.producer_writes),
-                "verifier_reads": list(step.verifier_reads),
-                "verifier_requires": list(step.verifier_requires),
-                "verifier_writes": list(step.verifier_writes),
-                "writes": list(step.writes),
-                "log_artifacts": list(step.log_artifacts),
-                "available_routes": list(step.available_routes),
-                "authored_routes": list(step.authored_routes),
-                "compiled_route_tags": list(_compiled_route_tags(step)),
-                "suppressed_route_tags": list(_suppressed_route_tags(step)),
-                "runtime_control_routes": list(step.runtime_control_routes),
-                "provider_visible_routes_interactive": list(step.provider_visible_routes_interactive),
-                "provider_visible_routes_full_auto": list(step.provider_visible_routes_full_auto),
-                "provider_response_contracts": _provider_response_contracts(step),
+                "reads": [_json_value(value) for value in step.reads],
+                "requires": [_json_value(value) for value in step.requires],
+                "producer_reads": [_json_value(value) for value in step.producer_reads],
+                "producer_requires": [_json_value(value) for value in step.producer_requires],
+                "producer_writes": [_json_value(value) for value in step.producer_writes],
+                "verifier_reads": [_json_value(value) for value in step.verifier_reads],
+                "verifier_requires": [_json_value(value) for value in step.verifier_requires],
+                "verifier_writes": [_json_value(value) for value in step.verifier_writes],
+                "writes": [_json_value(value) for value in step.writes],
+                "log_artifacts": [_json_value(value) for value in step.log_artifacts],
+                "available_routes": list(available_route_tags(compiled, step.name)),
+                "authored_routes": list(_authored_route_tags(compiled, step)),
+                "compiled_route_tags": list(_compiled_route_tags(compiled, step)),
+                "suppressed_route_tags": list(_suppressed_route_tags(compiled, step)),
+                "runtime_control_routes": list(runtime_control_route_tags(compiled, step.name)),
+                "provider_visible_routes_interactive": list(provider_visible_route_tags(compiled, step.name, mode="interactive")),
+                "provider_visible_routes_full_auto": list(provider_visible_route_tags(compiled, step.name, mode="full_auto")),
+                "provider_response_contracts": _provider_response_contracts(compiled, step),
                 "verifier_session_name": step.verifier_session_name,
                 "state_surface": _step_state_surface_payload(step),
                 "step_item_state_model": step.step_item_state_model.__name__ if step.step_item_state_model is not None else None,
@@ -93,20 +103,20 @@ def workflow_static_step_graph_payload(compiled: CompiledWorkflow) -> dict[str, 
                         route=compiled.routes.get(step.name, {}).get(route_name) or compiled.global_routes.get(route_name),
                         expected_output_schema=step.expected_output_schema,
                     )
-                    for route_name in step.available_routes
+                    for route_name in available_route_tags(compiled, step.name)
                 },
                 "compiled_routes": {
                     route_name: _topology_route_payload(
                         compiled=compiled,
                         step_name=step.name,
                         route_tag=route_name,
-                        route=(step.route_table or {}).get(route_name),
+                        route=compiled.routes.get(step.name, {}).get(route_name),
                         expected_output_schema=step.expected_output_schema,
-                        available=route_name in step.available_routes,
+                        available=route_name in available_route_tags(compiled, step.name),
                     )
-                    for route_name in _compiled_route_tags(step)
+                    for route_name in _compiled_route_tags(compiled, step)
                 },
-                "prompt_references": list(_prompt_references(step)),
+                "prompt_references": list(_prompt_references(compiled, step)),
                 "has_expected_output_schema": step.expected_output_schema is not None,
                 **(
                     {"branch_group": _branch_group_surface_payload(compiled, step.branch_group, route_shape="mapping")}
@@ -119,20 +129,20 @@ def workflow_static_step_graph_payload(compiled: CompiledWorkflow) -> dict[str, 
         "transitions": {
             "steps": {
                 step_name: {
-                    route_tag: compiled_route.target
+                    route_tag: route_target_value(compiled_route.target)
                     for route_tag, compiled_route in routes.items()
                 }
                 for step_name, routes in compiled.routes.items()
             },
             "global": {
-                route_tag: compiled_route.target
+                route_tag: route_target_value(compiled_route.target)
                 for route_tag, compiled_route in compiled.global_routes.items()
             },
         },
     }
 
 
-def workflow_topology_payload(compiled: CompiledWorkflow) -> dict[str, Any]:
+def workflow_topology_payload(compiled: WorkflowPlan) -> dict[str, Any]:
     return {
         "schema": TOPOLOGY_SCHEMA,
         "workflow_name": compiled.workflow_name,
@@ -150,21 +160,21 @@ def workflow_topology_payload(compiled: CompiledWorkflow) -> dict[str, Any]:
                 "prompt": _prompt_path(step.prompt),
                 "producer_prompt": _prompt_path(step.producer_prompt),
                 "verifier_prompt": _prompt_path(step.verifier_prompt),
-                "reads": list(step.reads),
-                "requires": list(step.requires),
-                "producer_reads": list(step.producer_reads),
-                "producer_requires": list(step.producer_requires),
-                "producer_writes": list(step.producer_writes),
-                "verifier_reads": list(step.verifier_reads),
-                "verifier_requires": list(step.verifier_requires),
-                "verifier_writes": list(step.verifier_writes),
-                "writes": list(step.writes),
-                "log_artifacts": list(step.log_artifacts),
-                "prompt_references": list(_prompt_references(step)),
-                "available_routes": list(step.available_routes),
-                "authored_routes": list(step.authored_routes),
-                "compiled_route_tags": list(_compiled_route_tags(step)),
-                "suppressed_route_tags": list(_suppressed_route_tags(step)),
+                "reads": [_json_value(value) for value in step.reads],
+                "requires": [_json_value(value) for value in step.requires],
+                "producer_reads": [_json_value(value) for value in step.producer_reads],
+                "producer_requires": [_json_value(value) for value in step.producer_requires],
+                "producer_writes": [_json_value(value) for value in step.producer_writes],
+                "verifier_reads": [_json_value(value) for value in step.verifier_reads],
+                "verifier_requires": [_json_value(value) for value in step.verifier_requires],
+                "verifier_writes": [_json_value(value) for value in step.verifier_writes],
+                "writes": [_json_value(value) for value in step.writes],
+                "log_artifacts": [_json_value(value) for value in step.log_artifacts],
+                "prompt_references": list(_prompt_references(compiled, step)),
+                "available_routes": list(available_route_tags(compiled, step.name)),
+                "authored_routes": list(_authored_route_tags(compiled, step)),
+                "compiled_route_tags": list(_compiled_route_tags(compiled, step)),
+                "suppressed_route_tags": list(_suppressed_route_tags(compiled, step)),
                 "hooks": {
                     "before": _callable_name(step.before_hook),
                     "after": _callable_name(step.after_hook),
@@ -173,11 +183,11 @@ def workflow_topology_payload(compiled: CompiledWorkflow) -> dict[str, Any]:
                     "before_verifier": _callable_name(step.before_verifier_hook),
                     "after_verifier": _callable_name(step.after_verifier_hook),
                 },
-                "provider_visible_routes_interactive": list(step.provider_visible_routes_interactive),
-                "provider_visible_routes_full_auto": list(step.provider_visible_routes_full_auto),
-                "provider_response_contracts": _provider_response_contracts(step),
+                "provider_visible_routes_interactive": list(provider_visible_route_tags(compiled, step.name, mode="interactive")),
+                "provider_visible_routes_full_auto": list(provider_visible_route_tags(compiled, step.name, mode="full_auto")),
+                "provider_response_contracts": _provider_response_contracts(compiled, step),
                 "verifier_session_name": step.verifier_session_name,
-                "runtime_control_routes": list(step.runtime_control_routes),
+                "runtime_control_routes": list(runtime_control_route_tags(compiled, step.name)),
                 "state_model": step.step_state_model.__name__,
                 "state_fields": list(step.step_state_fields),
                 "state_surface": _step_state_surface_payload(step),
@@ -194,18 +204,18 @@ def workflow_topology_payload(compiled: CompiledWorkflow) -> dict[str, Any]:
                         route=compiled.routes.get(step.name, {}).get(route_tag) or compiled.global_routes.get(route_tag),
                         expected_output_schema=step.expected_output_schema,
                     )
-                    for route_tag in step.available_routes
+                    for route_tag in available_route_tags(compiled, step.name)
                 ],
                 "compiled_routes": [
                     _topology_route_payload(
                         compiled=compiled,
                         step_name=step.name,
                         route_tag=route_tag,
-                        route=(step.route_table or {}).get(route_tag),
+                        route=compiled.routes.get(step.name, {}).get(route_tag),
                         expected_output_schema=step.expected_output_schema,
-                        available=route_tag in step.available_routes,
+                        available=route_tag in available_route_tags(compiled, step.name),
                     )
-                    for route_tag in _compiled_route_tags(step)
+                    for route_tag in _compiled_route_tags(compiled, step)
                 ],
                 **(
                     {"branch_group": _branch_group_surface_payload(compiled, step.branch_group, route_shape="list")}
@@ -227,11 +237,11 @@ def workflow_topology_payload(compiled: CompiledWorkflow) -> dict[str, Any]:
     }
 
 
-def write_static_step_graph(run_dir: Path, compiled: CompiledWorkflow) -> Path:
+def write_static_step_graph(run_dir: Path, compiled: WorkflowPlan) -> Path:
     return write_static_step_graph_payload(run_dir, workflow_static_step_graph_payload(compiled))
 
 
-def write_topology_artifacts(run_dir: Path, compiled: CompiledWorkflow) -> dict[str, Path]:
+def write_topology_artifacts(run_dir: Path, compiled: WorkflowPlan) -> dict[str, Path]:
     topology_payload = workflow_topology_payload(compiled)
     outputs = {
         TOPOLOGY_FILENAME: _write_json_file(run_dir / TOPOLOGY_FILENAME, topology_payload),
@@ -245,12 +255,12 @@ def write_topology_artifacts(run_dir: Path, compiled: CompiledWorkflow) -> dict[
                 "artifacts": [
                     {
                         "qualified_name": name,
-                        "kind": artifact.kind,
-                        "required": artifact.required,
-                        "owner_step": artifact.owner_step,
-                        "producer_steps": list(artifact.producer_steps),
+                        "kind": compiled.artifact_spec(artifact_id).kind,
+                        "required": compiled.artifact_spec(artifact_id).required,
+                        "owner_step": compiled.artifact_spec(artifact_id).owner_step,
+                        "producer_steps": list(compiled.artifact_spec(artifact_id).producer_steps),
                     }
-                    for name, artifact in compiled.artifacts_by_qualified_name.items()
+                    for name, artifact_id in compiled.artifacts_by_qualified_name.items()
                 ],
             },
         ),
@@ -261,7 +271,7 @@ def write_topology_artifacts(run_dir: Path, compiled: CompiledWorkflow) -> dict[
                 "workflow_name": compiled.workflow_name,
                 "source_hash": compiled.source_hash,
                 "topology_hash": compiled.topology_hash,
-                "steps": {step.name: list(_prompt_references(step)) for step in compiled.steps.values()},
+                "steps": {step.name: list(_prompt_references(compiled, step)) for step in compiled.steps.values()},
             },
         ),
         STATE_CONTRACTS_FILENAME: _write_json_file(
@@ -363,18 +373,18 @@ def _prompt_path(prompt: str | Prompt | None) -> str | None:
     return prompt
 
 
-def _prompt_references(step: Any) -> tuple[str, ...]:
-    return tuple(_json_value(reference) for reference in getattr(step.step, "simple_prompt_references", ()))
+def _prompt_references(compiled: WorkflowPlan, step: StepPlan) -> tuple[str, ...]:
+    return tuple(ref.raw for ref in compiled.reference_graph.prompt_refs.get(step.name, ()))
 
 
-def _workflow_state_surface_payload(compiled: CompiledWorkflow) -> dict[str, Any]:
+def _workflow_state_surface_payload(compiled: WorkflowPlan) -> dict[str, Any]:
     return {
         "model": compiled.state_cls.__name__,
         "fields": sorted(getattr(compiled.state_cls, "model_fields", {}).keys()),
     }
 
 
-def _workflow_params_surface_payload(compiled: CompiledWorkflow) -> dict[str, Any] | None:
+def _workflow_params_surface_payload(compiled: WorkflowPlan) -> dict[str, Any] | None:
     if compiled.parameters_cls is None:
         return None
     return {
@@ -384,7 +394,7 @@ def _workflow_params_surface_payload(compiled: CompiledWorkflow) -> dict[str, An
 
 
 def _branch_group_surface_payload(
-    compiled: CompiledWorkflow,
+    compiled: WorkflowPlan,
     spec: Any,
     *,
     route_shape: str,
@@ -433,12 +443,13 @@ def _branch_group_outcome_payload(outcome: object) -> str | None:
 
 
 def _internal_step_surface_payload(
-    compiled: CompiledWorkflow,
-    step: Any,
+    compiled: WorkflowPlan,
+    step: StepPlan,
     *,
     route_shape: str,
 ) -> dict[str, Any]:
-    route_table = dict(getattr(step, "route_table", {}) or {})
+    route_table = dict(compiled.routes.get(step.name, {}))
+    available_routes = available_route_tags(compiled, step.name)
     routes: dict[str, Any] | list[dict[str, Any]]
     if route_shape == "mapping":
         routes = {
@@ -447,9 +458,9 @@ def _internal_step_surface_payload(
                 step=step,
                 route_tag=route_name,
                 route=route_table.get(route_name),
-                available=route_name in step.available_routes,
+                available=route_name in available_routes,
             )
-            for route_name in step.available_routes
+            for route_name in available_routes
         }
     elif route_shape == "list":
         routes = [
@@ -458,9 +469,9 @@ def _internal_step_surface_payload(
                 step=step,
                 route_tag=route_name,
                 route=route_table.get(route_name),
-                available=route_name in step.available_routes,
+                available=route_name in available_routes,
             )
-            for route_name in step.available_routes
+            for route_name in available_routes
         ]
     else:
         raise ValueError(f"unsupported route shape {route_shape!r}")
@@ -472,24 +483,24 @@ def _internal_step_surface_payload(
         "prompt": _prompt_path(step.prompt),
         "producer_prompt": _prompt_path(step.producer_prompt),
         "verifier_prompt": _prompt_path(step.verifier_prompt),
-        "reads": list(step.reads),
-        "requires": list(step.requires),
-        "producer_reads": list(step.producer_reads),
-        "producer_requires": list(step.producer_requires),
-        "producer_writes": list(step.producer_writes),
-        "verifier_reads": list(step.verifier_reads),
-        "verifier_requires": list(step.verifier_requires),
-        "verifier_writes": list(step.verifier_writes),
-        "writes": list(step.writes),
-        "log_artifacts": list(step.log_artifacts),
-        "available_routes": list(step.available_routes),
-        "authored_routes": list(step.authored_routes),
-        "compiled_route_tags": list(_compiled_route_tags(step)),
-        "suppressed_route_tags": list(_suppressed_route_tags(step)),
-        "runtime_control_routes": list(step.runtime_control_routes),
-        "provider_visible_routes_interactive": list(step.provider_visible_routes_interactive),
-        "provider_visible_routes_full_auto": list(step.provider_visible_routes_full_auto),
-        "provider_response_contracts": _provider_response_contracts(step),
+        "reads": [_json_value(value) for value in step.reads],
+        "requires": [_json_value(value) for value in step.requires],
+        "producer_reads": [_json_value(value) for value in step.producer_reads],
+        "producer_requires": [_json_value(value) for value in step.producer_requires],
+        "producer_writes": [_json_value(value) for value in step.producer_writes],
+        "verifier_reads": [_json_value(value) for value in step.verifier_reads],
+        "verifier_requires": [_json_value(value) for value in step.verifier_requires],
+        "verifier_writes": [_json_value(value) for value in step.verifier_writes],
+        "writes": [_json_value(value) for value in step.writes],
+        "log_artifacts": [_json_value(value) for value in step.log_artifacts],
+        "available_routes": list(available_routes),
+        "authored_routes": list(_authored_route_tags(compiled, step)),
+        "compiled_route_tags": list(_compiled_route_tags(compiled, step)),
+        "suppressed_route_tags": list(_suppressed_route_tags(compiled, step)),
+        "runtime_control_routes": list(runtime_control_route_tags(compiled, step.name)),
+        "provider_visible_routes_interactive": list(provider_visible_route_tags(compiled, step.name, mode="interactive")),
+        "provider_visible_routes_full_auto": list(provider_visible_route_tags(compiled, step.name, mode="full_auto")),
+        "provider_response_contracts": _provider_response_contracts(compiled, step),
         "verifier_session_name": step.verifier_session_name,
         "hooks": {
             "before": _callable_name(step.before_hook),
@@ -515,9 +526,9 @@ def _internal_step_surface_payload(
                     step=step,
                     route_tag=route_name,
                     route=route_table.get(route_name),
-                    available=route_name in step.available_routes,
+                    available=route_name in available_routes,
                 )
-                for route_name in _compiled_route_tags(step)
+                for route_name in _compiled_route_tags(compiled, step)
             }
             if route_shape == "mapping"
             else [
@@ -526,22 +537,22 @@ def _internal_step_surface_payload(
                     step=step,
                     route_tag=route_name,
                     route=route_table.get(route_name),
-                    available=route_name in step.available_routes,
+                    available=route_name in available_routes,
                 )
-                for route_name in _compiled_route_tags(step)
+                for route_name in _compiled_route_tags(compiled, step)
             ]
         ),
-        "prompt_references": list(_prompt_references(step)),
+        "prompt_references": list(_prompt_references(compiled, step)),
         "has_expected_output_schema": step.expected_output_schema is not None,
     }
 
 
 def _internal_route_payload(
     *,
-    compiled: CompiledWorkflow,
-    step: Any,
+    compiled: WorkflowPlan,
+    step: StepPlan,
     route_tag: str,
-    route: CompiledRoute | None,
+    route: RouteContract | None,
     available: bool = True,
 ) -> dict[str, Any]:
     if route is None:
@@ -564,9 +575,9 @@ def _internal_route_payload(
     explicit_required_writes = explicit_route_required_writes(route)
     if explicit_required_writes is None:
         effective_required_writes = [
-            artifact_name
-            for artifact_name in step.writes
-            if compiled.artifacts_by_qualified_name[artifact_name].required
+            artifact_id.qualified_name
+            for artifact_id in step.writes
+            if compiled.artifact_spec(artifact_id).required
         ]
     else:
         effective_required_writes = list(explicit_required_writes)
@@ -574,9 +585,11 @@ def _internal_route_payload(
     route_fields_contract = route_fields_contract_for_route(route)
     return {
         "tag": route_tag,
-        "target": route.target,
+        "target": route_target_value(route.target),
         "summary": route.summary,
-        "required_writes": list(route.required_writes or ()),
+        "required_writes": list(
+            artifact_id.qualified_name for artifact_id in route.required_writes.declared
+        ),
         "explicit_required_writes": None if explicit_required_writes is None else list(explicit_required_writes),
         "effective_required_writes": effective_required_writes,
         "handoff": route.handoff,
@@ -607,7 +620,7 @@ def _internal_route_payload(
     }
 
 
-def _worklist_surfaces_payload(compiled: CompiledWorkflow) -> dict[str, dict[str, Any]]:
+def _worklist_surfaces_payload(compiled: WorkflowPlan) -> dict[str, dict[str, Any]]:
     return {
         name: {
             "item_state_model": worklist.runtime_item_state_model.__name__,
@@ -627,27 +640,27 @@ def _worklist_surfaces_payload(compiled: CompiledWorkflow) -> dict[str, dict[str
     }
 
 
-def _compiled_route_tags(step: Any) -> tuple[str, ...]:
-    route_table = getattr(step, "route_table", None)
-    if not route_table:
-        return ()
+def _authored_route_tags(compiled: WorkflowPlan, step: StepPlan) -> tuple[str, ...]:
+    definition = get_workflow_definition(compiled.workflow_cls)
+    authored_step = next((candidate for candidate in definition.steps if candidate.name == step.name), None)
+    if authored_step is None:
+        return available_route_tags(compiled, step.name)
+    return step_authored_route_tags(definition, authored_step)
+
+
+def _compiled_route_tags(compiled: WorkflowPlan, step: StepPlan) -> tuple[str, ...]:
+    route_table = compiled.routes.get(step.name, {})
     return tuple(route_table.keys())
 
 
-def _suppressed_route_tags(step: Any) -> tuple[str, ...]:
-    route_table = getattr(step, "route_table", None)
-    if not route_table:
-        return ()
-    return tuple(tag for tag, route in route_table.items() if getattr(route, "disabled", False))
+def _suppressed_route_tags(compiled: WorkflowPlan, step: StepPlan) -> tuple[str, ...]:
+    route_table = compiled.routes.get(step.name, {})
+    return tuple(tag for tag, route in route_table.items() if route.disabled)
 
 
-def _provider_route_map(step: Any, *, policy: str) -> dict[str, CompiledRoute]:
-    visible_tags = (
-        step.provider_visible_routes_interactive
-        if policy == "interactive"
-        else step.provider_visible_routes_full_auto
-    )
-    route_table = getattr(step, "route_table", None) or {}
+def _provider_route_map(compiled: WorkflowPlan, step: StepPlan, *, policy: str) -> dict[str, RouteContract]:
+    visible_tags = provider_visible_route_tags(compiled, step.name, mode="interactive" if policy == "interactive" else "full_auto")
+    route_table = compiled.routes.get(step.name, {})
     return {
         route_tag: route_table[route_tag]
         for route_tag in visible_tags
@@ -655,8 +668,8 @@ def _provider_route_map(step: Any, *, policy: str) -> dict[str, CompiledRoute]:
     }
 
 
-def _provider_response_contracts(step: Any) -> dict[str, Any]:
-    route_table = getattr(step, "route_table", None) or {}
+def _provider_response_contracts(compiled: WorkflowPlan, step: StepPlan) -> dict[str, Any]:
+    route_table = compiled.routes.get(step.name, {})
     if not route_table:
         return {
             "interactive": {"route_tags": [], "schema_simplified": False, "schema_fingerprint": None, "schema_chars": 0},
@@ -664,11 +677,11 @@ def _provider_response_contracts(step: Any) -> dict[str, Any]:
         }
     return {
         "interactive": provider_response_contract_for_routes(
-            routes=_provider_route_map(step, policy="interactive"),
+            routes=_provider_route_map(compiled, step, policy="interactive"),
             expected_output_schema=step.expected_output_schema,
         ),
         "full_auto": provider_response_contract_for_routes(
-            routes=_provider_route_map(step, policy="full_auto"),
+            routes=_provider_route_map(compiled, step, policy="full_auto"),
             expected_output_schema=step.expected_output_schema,
         ),
     }
@@ -713,9 +726,9 @@ def _step_item_state_surface_payload(step: Any) -> dict[str, Any] | None:
     )
 
 
-def _route_hook_locations(compiled: CompiledWorkflow, step: Any) -> list[dict[str, Any]]:
+def _route_hook_locations(compiled: WorkflowPlan, step: StepPlan) -> list[dict[str, Any]]:
     locations: list[dict[str, Any]] = []
-    route_table = dict(getattr(step, "route_table", {}) or compiled.routes.get(step.name, {}))
+    route_table = dict(compiled.routes.get(step.name, {}))
     for hook_phase, hook in (
         ("before", step.before_hook),
         ("before_producer", step.before_producer_hook),
@@ -727,7 +740,7 @@ def _route_hook_locations(compiled: CompiledWorkflow, step: Any) -> list[dict[st
         if hook is None:
             continue
         locations.append({"hook": hook_phase, "callable": _callable_name(hook)})
-    for route_tag in step.available_routes:
+    for route_tag in available_route_tags(compiled, step.name):
         route = route_table.get(route_tag) or compiled.global_routes.get(route_tag)
         if route is None or route.on_taken is None:
             continue
@@ -744,10 +757,10 @@ def _route_hook_locations(compiled: CompiledWorkflow, step: Any) -> list[dict[st
 
 def _topology_route_payload(
     *,
-    compiled: CompiledWorkflow,
+    compiled: WorkflowPlan,
     step_name: str | None,
     route_tag: str,
-    route: CompiledRoute | None,
+    route: RouteContract | None,
     expected_output_schema: Mapping[str, Any] | None = None,
     available: bool = True,
 ) -> dict[str, Any]:
@@ -772,7 +785,7 @@ def _topology_route_payload(
     route_fields_contract = route_fields_contract_for_route(route)
     return {
         "tag": route_tag,
-        "target": route.target,
+        "target": route_target_value(route.target),
         "summary": route.summary,
         **route_required_write_payload(
             compiled,
@@ -828,7 +841,7 @@ def _json_value(value: object) -> object:
     return repr(value)
 
 
-def _route_table_text(compiled: CompiledWorkflow) -> str:
+def _route_table_text(compiled: WorkflowPlan) -> str:
     lines = [
         "# Route Table",
         "",
@@ -846,7 +859,7 @@ def _route_table_text(compiled: CompiledWorkflow) -> str:
                 expected_output_schema=expected_output_schema,
             )
             lines.append(
-                f"| {step_name} | {route_tag} | {route_view['preset']} | {route_view['source']} | {route.target} | "
+                f"| {step_name} | {route_tag} | {route_view['preset']} | {route_view['source']} | {route_target_value(route.target)} | "
                 f"{route_view['visibility']} | {route_view['state']} | "
                 f"{route_view['payload_schema_text']} | {route_view['route_fields_schema_text']} | "
                 f"{route_view['explicit_required_writes_text']} | {route_view['effective_required_writes_text']} | "
@@ -861,7 +874,7 @@ def _route_table_text(compiled: CompiledWorkflow) -> str:
             expected_output_schema=None,
         )
         lines.append(
-            f"| GLOBAL | {route_tag} | {route_view['preset']} | {route_view['source']} | {route.target} | "
+            f"| GLOBAL | {route_tag} | {route_view['preset']} | {route_view['source']} | {route_target_value(route.target)} | "
             f"{route_view['visibility']} | {route_view['state']} | "
             f"{route_view['payload_schema_text']} | {route_view['route_fields_schema_text']} | "
             f"{route_view['explicit_required_writes_text']} | {route_view['effective_required_writes_text']} | "
@@ -870,22 +883,22 @@ def _route_table_text(compiled: CompiledWorkflow) -> str:
     return "\n".join(lines)
 
 
-def _topology_mermaid(compiled: CompiledWorkflow) -> str:
+def _topology_mermaid(compiled: WorkflowPlan) -> str:
     lines = ["flowchart TD"]
     for step_name, routes in compiled.routes.items():
         for route_tag, route in routes.items():
             hook = f" / {_callable_name(route.on_taken)}" if route.on_taken is not None else ""
             visibility = f" [{_mermaid_route_labels(route)}]"
             lines.append(
-                f"    {step_name} -- {route_tag}{hook}{visibility} --> {route.target}"
+                f"    {step_name} -- {route_tag}{hook}{visibility} --> {route_target_value(route.target)}"
             )
     for route_tag, route in compiled.global_routes.items():
         visibility = f" [{_mermaid_route_labels(route)}]"
-        lines.append(f"    GLOBAL -- {route_tag}{visibility} --> {route.target}")
+        lines.append(f"    GLOBAL -- {route_tag}{visibility} --> {route_target_value(route.target)}")
     return "\n".join(lines)
 
 
-def _compile_report_text(compiled: CompiledWorkflow) -> str:
+def _compile_report_text(compiled: WorkflowPlan) -> str:
     hidden_route_count = sum(
         1
         for routes in compiled.routes.values()
@@ -934,7 +947,7 @@ def _compile_report_text(compiled: CompiledWorkflow) -> str:
             f"- worklists: `{len(compiled.worklists)}`",
             "",
             "## Step Route Views",
-            *(_step_route_view_line(step) for step in compiled.steps.values()),
+            *(_step_route_view_line(compiled, step) for step in compiled.steps.values()),
             "",
             "## Route Contracts",
             *(
@@ -954,11 +967,11 @@ def _compile_report_text(compiled: CompiledWorkflow) -> str:
 
 
 def _route_view_payload(
-    compiled: CompiledWorkflow,
+    compiled: WorkflowPlan,
     *,
     step_name: str | None,
     route_tag: str,
-    route: CompiledRoute,
+    route: RouteContract,
     expected_output_schema: Mapping[str, Any] | None,
 ) -> dict[str, Any]:
     payload = route_required_write_payload(
@@ -987,23 +1000,23 @@ def _route_view_payload(
     }
 
 
-def _mermaid_route_labels(route: CompiledRoute) -> str:
+def _mermaid_route_labels(route: RouteContract) -> str:
     labels = [route.preset_kind, route.inheritance_source, route.provider_visibility]
     if route.disabled:
         labels.append("suppressed")
     return ", ".join(labels)
 
 
-def _step_route_view_line(step) -> str:
-    authored = ", ".join(f"`{route}`" for route in step.authored_routes) or "none"
-    runtime_control = ", ".join(f"`{route}`" for route in step.runtime_control_routes) or "none"
-    interactive = ", ".join(f"`{route}`" for route in step.provider_visible_routes_interactive) or "none"
-    full_auto = ", ".join(f"`{route}`" for route in step.provider_visible_routes_full_auto) or "none"
-    compiled_routes = ", ".join(f"`{route}`" for route in _compiled_route_tags(step)) or "none"
-    suppressed = ", ".join(f"`{route}`" for route in _suppressed_route_tags(step)) or "none"
-    provider_contracts = _provider_response_contracts(step)
+def _step_route_view_line(compiled: WorkflowPlan, step: StepPlan) -> str:
+    authored = ", ".join(f"`{route}`" for route in _authored_route_tags(compiled, step)) or "none"
+    runtime_control = ", ".join(f"`{route}`" for route in runtime_control_route_tags(compiled, step.name)) or "none"
+    interactive = ", ".join(f"`{route}`" for route in provider_visible_route_tags(compiled, step.name, mode="interactive")) or "none"
+    full_auto = ", ".join(f"`{route}`" for route in provider_visible_route_tags(compiled, step.name, mode="full_auto")) or "none"
+    compiled_routes = ", ".join(f"`{route}`" for route in _compiled_route_tags(compiled, step)) or "none"
+    suppressed = ", ".join(f"`{route}`" for route in _suppressed_route_tags(compiled, step)) or "none"
+    provider_contracts = _provider_response_contracts(compiled, step)
     return (
-        f"- `{step.name}`: compiled={compiled_routes}; available={', '.join(f'`{route}`' for route in step.available_routes) or 'none'}; "
+        f"- `{step.name}`: compiled={compiled_routes}; available={', '.join(f'`{route}`' for route in available_route_tags(compiled, step.name)) or 'none'}; "
         f"suppressed={suppressed}; provider_visible_interactive={interactive}; provider_visible_full_auto={full_auto}; "
         f"provider_schema_fallback(interactive/full_auto)=`{provider_contracts['interactive']['schema_simplified']}`/`{provider_contracts['full_auto']['schema_simplified']}`; "
         f"legacy_authored={authored}; legacy_runtime_control={runtime_control}"
@@ -1011,10 +1024,10 @@ def _step_route_view_line(step) -> str:
 
 
 def _route_contract_line(
-    compiled: CompiledWorkflow,
+    compiled: WorkflowPlan,
     step_name: str | None,
     route_tag: str,
-    route: CompiledRoute,
+    route: RouteContract,
 ) -> str:
     expected_output_schema = None if step_name is None else compiled.steps[step_name].expected_output_schema
     route_view = _route_view_payload(
@@ -1029,7 +1042,7 @@ def _route_contract_line(
         f"- `{scope}.{route_tag}`: preset=`{route_view['preset']}`, source=`{route_view['source']}`, "
         f"visibility=`{route_view['visibility']}`, state=`{route_view['state']}`, "
         f"payload={route_view['payload_schema_text']}, route_fields={route_view['route_fields_schema_text']}, "
-        f"target=`{route.target}`"
+        f"target=`{route_target_value(route.target)}`"
     )
 
 

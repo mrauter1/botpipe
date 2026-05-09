@@ -19,7 +19,7 @@ from typing import Annotated, Any, Union, get_args, get_origin
 
 from pydantic import BaseModel
 
-from .compiler import CompiledWorkflow, compile_workflow
+from .compiler import compile_workflow
 from .descriptors import effective_parameters_model
 from .route_reporting import (
     payload_contract_for_route,
@@ -28,6 +28,7 @@ from .route_reporting import (
 )
 from .validation import is_workflow_class
 from .workflow_catalog import AuthoringShape, WorkflowCatalogEntry, discover_workflow_catalog, workflow_search_roots
+from .workflow_plan import WorkflowPlan
 
 
 class WorkflowCapabilityInspectionError(LookupError):
@@ -40,7 +41,7 @@ class WorkflowLoadedPackage:
 
     workflow_cls: type[Any]
     parameters_cls: type[Any] | None
-    compiled: CompiledWorkflow
+    compiled: WorkflowPlan
 
 
 @dataclass(frozen=True, slots=True)
@@ -579,7 +580,7 @@ def _inspect_catalog_entry(root_path: Path, entry: WorkflowCatalogEntry) -> Work
     return _capability_entry_from_resolved(resolved, compiled, entry)
 
 
-def _capability_entry_from_resolved(resolved, compiled: CompiledWorkflow, catalog_entry: WorkflowCatalogEntry | None):
+def _capability_entry_from_resolved(resolved, compiled: WorkflowPlan, catalog_entry: WorkflowCatalogEntry | None):
     reference = resolved.reference
     source_path = reference.source_path.resolve() if reference.source_path is not None else None
     if source_path is None:
@@ -1324,7 +1325,7 @@ def _compiled_step_payload(
     }
 
 
-def _resolved_prompt_paths(package_dir: Path, compiled: CompiledWorkflow) -> tuple[Path, ...]:
+def _resolved_prompt_paths(package_dir: Path, compiled: WorkflowPlan) -> tuple[Path, ...]:
     paths: list[Path] = []
     for step in compiled.steps.values():
         for prompt in (step.producer_prompt, step.verifier_prompt):

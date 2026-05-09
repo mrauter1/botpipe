@@ -9,6 +9,7 @@ from dataclasses import dataclass
 from typing import TYPE_CHECKING, Any, Callable, Literal, TypeAlias
 
 from .identifiers import ArtifactId
+from .primitives import AWAIT_INPUT, FAIL, FINISH
 
 if TYPE_CHECKING:
     from .stores.protocols import PendingHandoff
@@ -76,6 +77,46 @@ class RouteContract:
     disabled: bool
     is_runtime_control: bool
 
+    @property
+    def provider_visibility(self) -> str:
+        return self.provider.visibility
+
+    @property
+    def provider_visible(self) -> bool:
+        return self.provider.visible
+
+    @property
+    def provider_visible_interactive(self) -> bool:
+        return self.provider.visible_interactive
+
+    @property
+    def provider_visible_full_auto(self) -> bool:
+        return self.provider.visible_full_auto
+
+    @property
+    def payload_schema_mode(self) -> str:
+        return self.payload.schema_mode
+
+    @property
+    def payload_schema(self) -> dict[str, Any] | None:
+        return self.payload.schema
+
+    @property
+    def payload_validator(self) -> Any | None:
+        return self.payload.validator
+
+    @property
+    def route_fields_schema(self) -> dict[str, Any] | None:
+        return self.route_fields.schema
+
+    @property
+    def route_fields_validator(self) -> Any | None:
+        return self.route_fields.validator
+
+    @property
+    def _required_writes_explicit(self) -> bool:
+        return self.required_writes.explicit is not None
+
 
 @dataclass(frozen=True, slots=True)
 class Continue:
@@ -139,6 +180,22 @@ def route_action_for_contract(
     if target.kind == "fail":
         return FailAction(reason=reason, failure_context=failure_context)
     raise ValueError("disabled routes do not have a runtime action")
+
+
+def route_target_value(target: RouteTarget) -> str | None:
+    if target.kind == "step":
+        return target.step_name
+    if target.kind == "finish":
+        return FINISH
+    if target.kind == "await_input":
+        return AWAIT_INPUT
+    if target.kind == "fail":
+        return FAIL
+    return None
+
+
+def required_write_names(contract: RouteContract) -> tuple[str, ...]:
+    return tuple(artifact_id.qualified_name for artifact_id in contract.required_writes.declared)
 
 
 def available_route_tags(plan: Any, step_name: str) -> tuple[str, ...]:

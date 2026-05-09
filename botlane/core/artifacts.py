@@ -197,21 +197,6 @@ class ResolvedArtifacts(Mapping[str, ArtifactHandle]):
     def subset(self, names: Iterable[str]) -> "ResolvedArtifacts":
         return ResolvedArtifacts({name: self._handles[name] for name in names})
 
-
-@dataclass(frozen=True, slots=True)
-class CompiledArtifact:
-    """Immutable compiled artifact metadata."""
-
-    name: str
-    template: str
-    kind: ArtifactKind
-    schema: type[BaseModel] | dict[str, object] | None
-    required: bool
-    owner_step: str | None
-    qualified_name: str | None
-    workflow_level: bool
-    producer_steps: tuple[str, ...]
-
 def resolve_artifact_template(template: str | Artifact, context: Context) -> Path:
     """Resolve a template against runtime context."""
 

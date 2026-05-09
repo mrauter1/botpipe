@@ -106,6 +106,38 @@ class _SimpleStepSeed:
     output_order: tuple[str, ...]
 
 
+@dataclass(frozen=True, slots=True)
+class _WorkflowDescriptionBase:
+    workflow_policy: PolicyInput
+    state_cls: type[BaseModel]
+    parameters_cls: type[BaseModel] | None
+    entry: object
+    transitions: object
+    extensions: tuple[Any, ...]
+    workflow_name: str
+
+
+@dataclass(slots=True)
+class WorkflowNamespaceScan:
+    workflow_artifacts: dict[str, Artifact]
+    sessions_by_name: dict[str, Session]
+    worklists_by_name: dict[str, Worklist[Any]]
+    steps: list[Step]
+    steps_by_name: dict[str, Step]
+    step_order: dict[int, int]
+    simple_seeds: list[_SimpleStepSeed]
+
+
+@dataclass(frozen=True, slots=True)
+class _ResolvedWorkflowGraph:
+    entry: Step | None
+    steps: tuple[Step, ...]
+    authored_transitions: dict[Step | str, dict[str, Any]]
+    transitions: object
+    framework_default_transitions_by_step: dict[str, dict[str, Any]]
+    runtime_control_routes_by_step: dict[str, tuple[str, ...]]
+
+
 class WorkflowMeta(type):
     """Metaclass that validates workflow subclasses at definition time."""
 
@@ -145,6 +177,33 @@ def get_workflow_definition(workflow_cls: type[Any]) -> WorkflowDefinition:
 
 def describe_workflow_class(workflow_cls: type[Any]) -> WorkflowDefinition:
     _validate_simple_authoring_models(workflow_cls)
+    base = _discover_workflow_description_base(workflow_cls)
+    scan = _scan_workflow_namespace(workflow_cls)
+    lowered_entry, lowered_transitions = _lower_discovered_simple_steps(
+        workflow_cls,
+        scan=scan,
+        entry=base.entry,
+        transitions=base.transitions,
+    )
+    graph = _resolve_workflow_graph(
+        lowered_entry,
+        lowered_transitions,
+        steps_by_name=scan.steps_by_name,
+        steps=scan.steps,
+        step_order=scan.step_order,
+    )
+    sessions_by_name, default_session_name = _resolve_default_session(workflow_cls, scan.sessions_by_name)
+    return _build_workflow_definition(
+        workflow_cls=workflow_cls,
+        base=base,
+        scan=scan,
+        graph=graph,
+        sessions_by_name=sessions_by_name,
+        default_session_name=default_session_name,
+    )
+
+
+def _discover_workflow_description_base(workflow_cls: type[Any]) -> _WorkflowDescriptionBase:
     workflow_policy = _validate_workflow_policy(workflow_cls)
     state_cls = effective_state_model(workflow_cls, fallback_model=_EmptyWorkflowState)
     parameters_cls = effective_parameters_model(workflow_cls)
@@ -157,7 +216,23 @@ def describe_workflow_class(workflow_cls: type[Any]) -> WorkflowDefinition:
         )
     extensions = getattr(workflow_cls, "extensions", ())
     declared_workflow_name = getattr(workflow_cls, "name", None)
-    workflow_name = declared_workflow_name.strip() if isinstance(declared_workflow_name, str) and declared_workflow_name.strip() else _snake_case_workflow_name(workflow_cls.__name__)
+    workflow_name = (
+        declared_workflow_name.strip()
+        if isinstance(declared_workflow_name, str) and declared_workflow_name.strip()
+        else _snake_case_workflow_name(workflow_cls.__name__)
+    )
+    return _WorkflowDescriptionBase(
+        workflow_policy=workflow_policy,
+        state_cls=state_cls,
+        parameters_cls=parameters_cls,
+        entry=entry,
+        transitions=transitions,
+        extensions=extensions,
+        workflow_name=workflow_name,
+    )
+
+
+def _scan_workflow_namespace(workflow_cls: type[Any]) -> WorkflowNamespaceScan:
     workflow_artifacts: dict[str, Artifact] = {}
     sessions_by_name: dict[str, Session] = {}
     worklists_by_name: dict[str, Worklist[Any]] = {}
@@ -229,31 +304,56 @@ def describe_workflow_class(workflow_cls: type[Any]) -> WorkflowDefinition:
             )
             seen_simple_declarations.add(id(value))
 
-    if simple_seeds:
+    return WorkflowNamespaceScan(
+        workflow_artifacts=workflow_artifacts,
+        sessions_by_name=sessions_by_name,
+        worklists_by_name=worklists_by_name,
+        steps=steps,
+        steps_by_name=steps_by_name,
+        step_order=step_order,
+        simple_seeds=simple_seeds,
+    )
+
+
+def _lower_discovered_simple_steps(
+    workflow_cls: type[Any],
+    *,
+    scan: WorkflowNamespaceScan,
+    entry: object,
+    transitions: object,
+) -> tuple[object, object]:
+    if scan.simple_seeds:
         lowered_steps = _lower_simple_steps(
             workflow_cls,
-            simple_seeds=simple_seeds,
-            workflow_artifacts=workflow_artifacts,
-            existing_steps=tuple(steps),
+            simple_seeds=scan.simple_seeds,
+            workflow_artifacts=scan.workflow_artifacts,
+            existing_steps=tuple(scan.steps),
         )
         for seed, step in lowered_steps:
-            if step.name in steps_by_name:
+            if step.name in scan.steps_by_name:
                 raise WorkflowValidationError(f"duplicate step name {step.name!r}")
-            steps.append(step)
-            steps_by_name[step.name] = step
-            step_order[id(step)] = seed.order
+            scan.steps.append(step)
+            scan.steps_by_name[step.name] = step
+            scan.step_order[id(step)] = seed.order
 
         simple_step_map = {seed.declaration: step for seed, step in lowered_steps}
-        entry, transitions = _lower_simple_workflow_graph(
+        return _lower_simple_workflow_graph(
             workflow_cls,
             entry=entry,
-            ordered_steps=tuple(sorted(steps, key=lambda step: step_order.get(id(step), step._order))),
+            ordered_steps=tuple(sorted(scan.steps, key=lambda step: scan.step_order.get(id(step), step._order))),
             simple_step_map=simple_step_map,
         )
-    else:
-        entry = _lower_simple_entry(entry, {})
-        transitions = _lower_simple_transition_table(transitions, {})
+    return _lower_simple_entry(entry, {}), _lower_simple_transition_table(transitions, {})
 
+
+def _resolve_workflow_graph(
+    entry: object,
+    transitions: object,
+    *,
+    steps_by_name: Mapping[str, Step],
+    steps: Sequence[Step],
+    step_order: Mapping[int, int],
+) -> _ResolvedWorkflowGraph:
     authored_transitions: dict[Step | str, dict[str, Any]] = {}
     framework_default_transitions_by_step: dict[str, dict[str, Any]] = {}
     runtime_control_routes_by_step: dict[str, tuple[str, ...]] = {}
@@ -265,39 +365,65 @@ def describe_workflow_class(workflow_cls: type[Any]) -> WorkflowDefinition:
         )
         transitions = authored_transitions
 
-    entry = _resolve_named_entry(entry, steps_by_name)
+    resolved_entry = _resolve_named_entry(entry, steps_by_name)
     ordered_steps = tuple(sorted(steps, key=lambda step: step_order.get(id(step), step._order)))
-    if entry is None and ordered_steps:
-        entry = ordered_steps[0]
-    ordered_steps = _order_steps_from_entry(ordered_steps, entry=entry, transitions=transitions)
+    if resolved_entry is None and ordered_steps:
+        resolved_entry = ordered_steps[0]
+    ordered_steps = _order_steps_from_entry(ordered_steps, entry=resolved_entry, transitions=transitions)
+    return _ResolvedWorkflowGraph(
+        entry=resolved_entry,
+        steps=ordered_steps,
+        authored_transitions=authored_transitions,
+        transitions=transitions,
+        framework_default_transitions_by_step=framework_default_transitions_by_step,
+        runtime_control_routes_by_step=runtime_control_routes_by_step,
+    )
 
-    workflow_log_artifacts = tuple(getattr(workflow_cls, "log_artifacts", ()) or ())
+
+def _resolve_default_session(
+    workflow_cls: type[Any],
+    sessions_by_name: Mapping[str, Session],
+) -> tuple[dict[str, Session], str]:
+    resolved_sessions = dict(sessions_by_name)
     default_session_name = DEFAULT_SESSION_NAME
     global_session = getattr(workflow_cls, "global_session", None)
     if isinstance(global_session, Session):
         if global_session.name is None:
             global_session.bind_name(DEFAULT_SESSION_NAME)
-        sessions_by_name.setdefault(global_session.name, global_session)
+        resolved_sessions.setdefault(global_session.name, global_session)
         default_session_name = global_session.name
+    return resolved_sessions, default_session_name
+
+
+def _build_workflow_definition(
+    *,
+    workflow_cls: type[Any],
+    base: _WorkflowDescriptionBase,
+    scan: WorkflowNamespaceScan,
+    graph: _ResolvedWorkflowGraph,
+    sessions_by_name: Mapping[str, Session],
+    default_session_name: str,
+) -> WorkflowDefinition:
+    workflow_log_artifacts = tuple(getattr(workflow_cls, "log_artifacts", ()) or ())
     return WorkflowDefinition(
         workflow_cls=workflow_cls,
-        workflow_name=workflow_name,
-        workflow_policy=workflow_policy,
-        state_cls=state_cls,
-        parameters_cls=parameters_cls,
-        entry=entry,
-        steps=ordered_steps,
-        steps_by_name=steps_by_name,
-        sessions_by_name=sessions_by_name,
+        workflow_name=base.workflow_name,
+        workflow_policy=base.workflow_policy,
+        state_cls=base.state_cls,
+        parameters_cls=base.parameters_cls,
+        entry=graph.entry,
+        steps=graph.steps,
+        steps_by_name=scan.steps_by_name,
+        sessions_by_name=dict(sessions_by_name),
         default_session_name=default_session_name,
-        worklists_by_name=worklists_by_name,
-        workflow_artifacts=workflow_artifacts,
+        worklists_by_name=scan.worklists_by_name,
+        workflow_artifacts=scan.workflow_artifacts,
         workflow_log_artifacts=workflow_log_artifacts,
-        extensions=extensions,
-        authored_transitions=authored_transitions,
-        transitions=transitions,
-        framework_default_transitions_by_step=framework_default_transitions_by_step,
-        runtime_control_routes_by_step=runtime_control_routes_by_step,
+        extensions=base.extensions,
+        authored_transitions=graph.authored_transitions,
+        transitions=graph.transitions,
+        framework_default_transitions_by_step=graph.framework_default_transitions_by_step,
+        runtime_control_routes_by_step=graph.runtime_control_routes_by_step,
     )
 
 

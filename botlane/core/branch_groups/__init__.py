@@ -6,8 +6,6 @@ from .manifest import branch_group_paths
 from .models import (
     BranchGroupDeclarationSpec,
     BranchStepDeclarationSpec,
-    CompiledBranchGroupSpec,
-    CompiledBranchStepSpec,
     FanInHelperReference,
 )
 from .outcomes import select_branch_group_outcome
@@ -18,8 +16,6 @@ __all__ = [
     "BranchMetadata",
     "BranchSessionStoreView",
     "BranchStepDeclarationSpec",
-    "CompiledBranchGroupSpec",
-    "CompiledBranchStepSpec",
     "FanIn",
     "FanInHelperReference",
     "FanInMetadata",

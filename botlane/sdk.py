@@ -28,8 +28,9 @@ from botlane.policy import (
     SandboxMode,
 )
 from botlane.core import Workflow as CoreWorkflow
-from botlane.core.artifacts import Artifact, CompiledArtifact, resolve_artifact_template
-from botlane.core.compiler import CompiledWorkflow, compile_workflow, compile_workflow_plan
+from botlane.core.artifact_plan import ArtifactSpec
+from botlane.core.artifacts import Artifact, resolve_artifact_template
+from botlane.core.compiler import compile_workflow
 from botlane.core.context import Context
 from botlane.core.errors import WorkflowCompilationError, WorkflowExecutionError, exception_failure_context
 from botlane.core.operations import classify_call, llm_call
@@ -42,6 +43,7 @@ from botlane.core.steps import BranchGroupStep, ChildWorkflowStep, ProduceVerify
 from botlane.core.step_plans import SingleStepPlan
 from botlane.core.stores.protocols import SessionSnapshot
 from botlane.core.stores.session_store import InMemorySessionStore
+from botlane.core.workflow_plan import WorkflowPlan
 from botlane.runtime.config import (
     ClaudeProviderConfig,
     CodexProviderConfig,
@@ -1091,7 +1093,7 @@ def _provider_config_with_overrides(
     return updated
 
 
-def _resolve_and_compile_workflow(root: Path, workflow: type[object] | str) -> tuple[Any, CompiledWorkflow]:
+def _resolve_and_compile_workflow(root: Path, workflow: type[object] | str) -> tuple[Any, WorkflowPlan]:
     try:
         resolved = resolve_workflow_reference(root, workflow)
         return resolved, compile_workflow(resolved.workflow_cls)
@@ -1104,7 +1106,7 @@ def _resolve_and_compile_workflow(root: Path, workflow: type[object] | str) -> t
 
 
 def _coerce_sdk_input(
-    compiled: CompiledWorkflow,
+    compiled: WorkflowPlan,
     input: BaseModel | Mapping[str, Any] | None,
 ) -> dict[str, Any] | None:
     workflow_name = compiled.workflow_cls.__name__
@@ -1331,7 +1333,7 @@ def _runtime_equivalent_artifact_context(execution: RunExecution, *, message: st
     )
 
 
-def _resolve_sdk_artifact_path(artifact: CompiledArtifact, context: Any) -> Path:
+def _resolve_sdk_artifact_path(artifact: ArtifactSpec, context: Any) -> Path:
     candidate = Path(artifact.template)
     if not candidate.is_absolute() and artifact.owner_step is not None and "{" not in artifact.template and "}" not in artifact.template:
         return context.workflow_folder / artifact.owner_step / artifact.template
@@ -1766,7 +1768,7 @@ def _build_single_step_plan(
         routes=routes,
         workflow_policy=workflow_policy,
     )
-    workflow_plan = compile_workflow_plan(workflow_cls)
+    workflow_plan = compile_workflow(workflow_cls)
     entry_step_name = workflow_plan.entry_step_name
     return SingleStepPlan(
         step=workflow_plan.steps[entry_step_name],

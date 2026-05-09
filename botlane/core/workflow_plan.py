@@ -61,3 +61,22 @@ class WorkflowPlan:
     @property
     def artifacts_by_id(self) -> dict[ArtifactId, ArtifactSpec]:
         return self.artifacts
+
+    def artifact_spec(self, artifact_id: ArtifactId) -> ArtifactSpec:
+        return self.artifacts[artifact_id]
+
+    def artifact_spec_for_qualified_name(self, qualified_name: str) -> ArtifactSpec:
+        return self.artifacts[self.artifacts_by_qualified_name[qualified_name]]
+
+    def artifact_items(self, *, authoritative: bool = False) -> tuple[tuple[str, ArtifactSpec], ...]:
+        source = self.artifacts_by_qualified_name if authoritative else self.public_artifacts
+        return tuple((name, self.artifacts[artifact_id]) for name, artifact_id in source.items())
+
+    def route(self, step_name: str, tag: str) -> RouteContract:
+        route = self.routes.get(step_name, {}).get(tag)
+        if route is not None and not route.disabled:
+            return route
+        route = self.global_routes.get(tag)
+        if route is not None and not route.disabled:
+            return route
+        raise KeyError((step_name, tag))

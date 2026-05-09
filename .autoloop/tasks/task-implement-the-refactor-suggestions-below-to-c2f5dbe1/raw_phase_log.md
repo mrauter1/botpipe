@@ -617,3 +617,71 @@ Open issues / next step
 <loop-control>
 {"schema":"docloop.loop_control/v1","kind":"promise","promise":"COMPLETE"}
 </loop-control>
+
+
+---
+run_id=run-20260509T124548Z-f67cf8d4 | entry=session_turn | pair=implement | phase=producer | cycle=1 | attempt=1 | thread_id=019e0ce8-ee70-7b01-8577-e4e1d171aaa2
+---
+provider=codex
+mode=start
+template=/home/rauter/.local/share/pipx/venvs/autoloop/lib/python3.12/site-packages/autoloop/templates/implement_producer.md
+session_id=019e0ce8-ee70-7b01-8577-e4e1d171aaa2
+
+
+---
+run_id=run-20260509T124548Z-f67cf8d4 | entry=phase_output | pair=implement | phase=producer | process=codex-agent | cycle=1 | attempt=1 | thread_id=019e0ce8-ee70-7b01-8577-e4e1d171aaa2
+---
+I’m scoping the runtime and discovery extraction phase now. First step is to read the phase artifacts, the current `Engine.run_async` and `describe_workflow_class` implementations, and the related tests so the refactor stays behavior-identical.
+
+The phase artifacts are light on extra instructions, so the main constraints are the acceptance criteria and the earlier invariant notes. I’m reading the engine and discovery code next, then I’ll choose the smallest helper boundaries that preserve notification and ordering semantics.
+
+I’ve confirmed `run_async` is still monolithic and already has reusable services around it, so the refactor can stay local instead of inventing a new subsystem. Next I’m pulling the surrounding helper surface and the discovery tests that actually lock ordering, default entry, and duplicate detection.
+
+I have enough context to start shaping the refactor. Plan is:
+1. Extract `run_async` into private setup, restore/init, loop, step-context, step-execution, and terminal/fatal helpers while keeping the existing services and data flow.
+2. Extract `describe_workflow_class` into scan, simple-step lowering, graph resolution, session resolution, and definition assembly helpers with a private namespace-scan carrier.
+3. Add parity tests only where current coverage is indirect: one or two engine control-flow cases and a focused discovery ordering/default-session case.
+
+I’ve narrowed the change set to `botlane/core/engine.py`, `botlane/core/discovery.py`, and focused tests plus the phase notes. I’m editing those now, keeping all other dirty files out of scope.
+
+I’m making the `run_async` split first because it’s the highest-risk part of the phase and it dictates what parity tests are worth adding. After that I’ll do the smaller discovery extraction around the now-stable helper pattern.
+
+The engine split is in place structurally. I’m fixing a couple of method-boundary issues from the first pass now before I move on to tests or discovery, so the helper names line up cleanly with the existing extension notification methods.
+
+The code is edited enough to start checking structure, and the first test invocation just showed this environment uses `python3`, not `python`. I’m rerunning with the correct interpreter and then I’ll add the targeted parity tests once the refactor imports cleanly.
+
+I can’t validate against the contract-style engine tests right now because the repo has a pre-existing top-level import break unrelated to this phase (`botlane.sdk` expecting `CompiledArtifact`). I’m adding core-only tests that avoid that unrelated failure so the extracted engine/discovery paths still get direct regression coverage in this run.
+
+The unrelated package-surface import break can be bypassed for core-only tests by preloading a minimal `botlane.sdk` stub before pytest starts. I’m using that to validate the new phase-specific tests without changing the out-of-scope SDK/export code.
+
+The helper extraction now compiles, and I’ve kept the runtime changes local to `Engine` rather than spreading new abstractions elsewhere. I’m reviewing the diff and then I’ll update the phase notes and decisions with the exact invariants preserved and the validation limits caused by the repo’s existing import breaks.
+
+I’ve finished the code changes for the phase. Last step is documenting the preserved invariants and the validation gap caused by the repo’s current import-state so the next turn doesn’t misread the limited test signal.
+
+Scope considered
+
+- Phase-local runtime/discovery extraction only: [engine.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/botlane/core/engine.py), [discovery.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/botlane/core/discovery.py), targeted test coverage in [test_runtime_and_discovery_extraction.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/tests/unit/test_runtime_and_discovery_extraction.py), plus the phase notes and decisions files.
+
+What I analyzed
+
+- The current `Engine.run_async` control flow around resume/init, per-step context setup, before/after hooks, checkpoint timing, `FINISH` / `AWAIT_INPUT` / `FAIL` / `goto`, and fatal handling.
+- The current `describe_workflow_class` flow around namespace scan, simple-step lowering, transition resolution, entry ordering, and default-session binding.
+- Existing repo state enough to confirm validation constraints; direct pytest collection is currently blocked by unrelated import breaks outside this phase.
+
+What I changed
+
+- Split `Engine.run_async` into private phases with `_RunEnvironment`, `_RunLoopState`, and `_StepFrame` carriers plus helpers for environment setup, restore/init, loop execution, step execution, terminal handling, checkpoint persistence, and fatal notification handling.
+- Split `describe_workflow_class` into `_discover_workflow_description_base`, `WorkflowNamespaceScan`, `_scan_workflow_namespace`, `_lower_discovered_simple_steps`, `_resolve_workflow_graph`, `_resolve_default_session`, and `_build_workflow_definition`.
+- Added targeted phase tests in [test_runtime_and_discovery_extraction.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/tests/unit/test_runtime_and_discovery_extraction.py) for max-step fatal behavior and discovery default entry/session behavior.
+- Updated [implementation_notes.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/task-implement-the-refactor-suggestions-below-to-c2f5dbe1/runs/run-20260509T124548Z-f67cf8d4/artifacts/implement/phases/runtime-and-discovery-extraction/implementation_notes.md) and appended non-obvious invariants to [decisions.txt](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/task-implement-the-refactor-suggestions-below-to-c2f5dbe1/runs/run-20260509T124548Z-f67cf8d4/decisions.txt).
+
+Key findings / decisions
+
+- I preserved the original checkpoint timing semantics instead of “cleaning them up”: `FINISH` checkpoints only if terminal notification fails, while `AWAIT_INPUT` and `FAIL` checkpoint before terminal notification, and max-step exhaustion still surfaces as fatal without creating a new checkpoint.
+- I kept discovery as two passes: raw namespace scan first, simple-step lowering second, graph/session resolution last. That preserves duplicate detection, inherited ordering, and default-entry behavior.
+- Structural validation passed with `.venv/bin/python -m py_compile botlane/core/engine.py botlane/core/discovery.py tests/unit/test_runtime_and_discovery_extraction.py`.
+
+Open issues / next step
+
+- Direct pytest execution for the new tests is blocked by pre-existing unrelated import errors in the repo: `botlane.sdk` expects `CompiledArtifact` from `botlane.core.artifacts`, and `botlane.core.engine` import transitively expects `CompiledRoute` from `botlane.core.compiler`.
+- Once those repo-level import breaks are fixed, the next step is to run the new targeted test file and the broader engine/discovery suites.

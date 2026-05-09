@@ -30,10 +30,10 @@ from .results import BranchArtifactObservation, BranchResult
 from .sessions import BranchSessionStoreView
 
 if TYPE_CHECKING:
-    from ..compiler import CompiledStep
     from ..context import Context
     from ..engine import Engine
     from ..primitives import PendingHandoff
+    from ..step_plans import StepPlan
 
 
 class BranchGroupRuntime:
@@ -44,7 +44,7 @@ class BranchGroupRuntime:
 
     def run(
         self,
-        step: "CompiledStep",
+        step: "StepPlan",
         context: "Context",
         state: BaseModel,
         pending_handoffs: tuple["PendingHandoff", ...],
@@ -58,7 +58,7 @@ class BranchGroupRuntime:
 
     async def run_async(
         self,
-        step: "CompiledStep",
+        step: "StepPlan",
         context: "Context",
         state: BaseModel,
         pending_handoffs: tuple["PendingHandoff", ...],
@@ -393,7 +393,7 @@ class BranchGroupRuntime:
         *,
         spec: Any,
         branch: Any,
-        compiled_step: "CompiledStep",
+        compiled_step: "StepPlan",
         branch_context: "Context",
         step_result: StepExecutionResult,
         branch_dir: Path,
@@ -463,7 +463,7 @@ class BranchGroupRuntime:
         *,
         spec: Any,
         branch: Any,
-        compiled_step: "CompiledStep",
+        compiled_step: "StepPlan",
         branch_context: "Context",
         branch_dir: Path,
         started_at: datetime,
@@ -526,7 +526,7 @@ class BranchGroupRuntime:
                 primary_path = relative
         return primary_path, raw_paths
 
-    def _collect_branch_artifacts(self, step: "CompiledStep", context: "Context") -> tuple[BranchArtifactObservation, ...]:
+    def _collect_branch_artifacts(self, step: "StepPlan", context: "Context") -> tuple[BranchArtifactObservation, ...]:
         artifacts = self._engine._resolve_artifacts(context)
         branch_artifacts: list[BranchArtifactObservation] = []
         for name in step.writes:
@@ -544,7 +544,7 @@ class BranchGroupRuntime:
             )
         return tuple(branch_artifacts)
 
-    def _provider_session_snapshot(self, step: "CompiledStep", context: "Context") -> tuple[str | None, dict[str, str]]:
+    def _provider_session_snapshot(self, step: "StepPlan", context: "Context") -> tuple[str | None, dict[str, str]]:
         sessions: dict[str, str] = {}
         if step.session_name is not None:
             binding = context._session_store.get(step.session_name)
@@ -560,7 +560,7 @@ class BranchGroupRuntime:
     async def _run_fan_in(
         self,
         *,
-        composite_step: "CompiledStep",
+        composite_step: "StepPlan",
         spec: Any,
         context: "Context",
         manifest: BranchManifest | Mapping[str, Any],
@@ -648,7 +648,7 @@ class BranchGroupRuntime:
     def _run_mechanical_outcome(
         self,
         *,
-        composite_step: "CompiledStep",
+        composite_step: "StepPlan",
         spec: Any,
         context: "Context",
         manifest: BranchManifest | Mapping[str, Any],
@@ -678,8 +678,8 @@ class BranchGroupRuntime:
     def _map_nested_result_to_composite(
         self,
         *,
-        composite_step: "CompiledStep",
-        nested_step: "CompiledStep",
+        composite_step: "StepPlan",
+        nested_step: "StepPlan",
         context: "Context",
         pending_handoffs: tuple["PendingHandoff", ...],
         nested_result: StepExecutionResult,

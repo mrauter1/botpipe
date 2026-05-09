@@ -25,8 +25,8 @@ from .steps import Session
 
 if TYPE_CHECKING:
     from .artifacts import ArtifactHandle, ResolvedArtifacts
-    from .compiler import CompiledStep
     from .history import HistoryReader
+    from .step_plans import StepPlan
     from .stores.protocols import SessionStore
     from .worklists import Selection, SelectionSnapshot, WorkItem, Worklist
 
