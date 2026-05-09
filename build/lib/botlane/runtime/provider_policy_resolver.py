@@ -5,7 +5,6 @@ from __future__ import annotations
 from pathlib import Path
 
 from botlane.policy import PolicyInput, resolve_policy_layer
-from botlane.core.compiler import CompiledStep
 from botlane.core.context import Context
 from botlane.core.provider_policy import (
     ProviderPolicy,
@@ -13,6 +12,7 @@ from botlane.core.provider_policy import (
     validate_against_strict_policy,
 )
 from botlane.core.provider_policy_resolution import ProviderPolicyResolverProtocol
+from botlane.core.step_plans import StepPlan
 
 from .config import (
     ProviderConfig,
@@ -60,7 +60,7 @@ class ProviderPolicyResolver(ProviderPolicyResolverProtocol):
     def workspace_root(self) -> Path:
         return self._workspace_root
 
-    def resolve_for_step(self, step: CompiledStep) -> ResolvedProviderPolicy:
+    def resolve_for_step(self, step: StepPlan) -> ResolvedProviderPolicy:
         candidate = self._base_candidate()
         candidate = resolve_policy_layer(candidate, step.provider_policy)
         return self._validate(candidate, step_name=step.name)

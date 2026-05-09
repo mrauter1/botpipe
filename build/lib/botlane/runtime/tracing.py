@@ -10,7 +10,7 @@ from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any, Mapping
 
-from botlane.core.compiler import CompiledWorkflow
+from botlane.core.workflow_plan import WorkflowPlan
 from botlane.core.extensions import StepFinish, StepStart, TerminalFinish
 from botlane.core.providers.models import StepProviderUsage
 from botlane.core.primitives import Event, Outcome
@@ -39,7 +39,7 @@ class RuntimeTraceWriter:
         run_id: str,
         config: TracingRuntimeConfig,
         static_step_graph: Mapping[str, Any],
-        compiled_workflow: CompiledWorkflow | None = None,
+        compiled_workflow: WorkflowPlan | None = None,
     ) -> None:
         self._run_dir = run_dir.resolve()
         self._workflow_name = workflow_name

@@ -14,8 +14,9 @@ from typing import Any, Callable, Literal
 from pydantic import BaseModel, ValidationError
 
 from botlane.policy import PolicyInput
+from botlane.core.artifact_plan import ArtifactSpec
 from botlane.core.artifacts import resolve_artifact_template
-from botlane.core.compiler import CompiledArtifact, CompiledWorkflow, compile_workflow
+from botlane.core.compiler import compile_workflow
 from botlane.core.context import ChildWorkflowResult, _DEFAULT_MESSAGE
 from botlane.core.engine import Engine, RunResult, StepFinalizationRecord
 from botlane.core.errors import WorkflowExecutionError
@@ -83,6 +84,7 @@ from .workspace import (
     resolve_resume_state_root,
     task_request_text,
 )
+from botlane.core.workflow_plan import WorkflowPlan
 
 
 @dataclass(frozen=True, slots=True)
@@ -109,7 +111,7 @@ class RunnerOptions:
 class PreparedRunContext:
     """Resolved generic runtime context for one run."""
 
-    compiled: CompiledWorkflow
+    compiled: WorkflowPlan
     task_workspace: TaskWorkspace
     workflow_workspace: WorkflowWorkspace
     run_workspace: RunWorkspace
@@ -133,7 +135,7 @@ class RunExecution:
     """Execution result plus resolved runtime metadata for CLI summaries."""
 
     result: RunResult
-    compiled: CompiledWorkflow
+    compiled: WorkflowPlan
     task_workspace: TaskWorkspace
     workflow_workspace: WorkflowWorkspace
     run_workspace: RunWorkspace
@@ -170,8 +172,26 @@ def execute_workflow_package(
     )
 
 
+def execute_workflow_plan(
+    compiled: WorkflowPlan,
+    *,
+    reference: WorkflowReference,
+    provider: LLMProvider,
+    options: RunnerOptions,
+) -> RunExecution:
+    execution_options = _normalize_execution_options(options, parameters_cls=compiled.parameters_cls)
+    return _execute_compiled_workflow(
+        compiled,
+        reference=reference,
+        parameters_cls=compiled.parameters_cls,
+        capability_prompt_paths=(),
+        provider=provider,
+        options=execution_options,
+    )
+
+
 def _execute_compiled_workflow(
-    compiled: CompiledWorkflow,
+    compiled: WorkflowPlan,
     *,
     reference: WorkflowReference,
     parameters_cls: type[Any] | None,
@@ -432,7 +452,7 @@ def _execute_compiled_workflow(
 
 
 def prepare_runtime_services(
-    compiled: CompiledWorkflow,
+    compiled: WorkflowPlan,
     *,
     task_workspace: TaskWorkspace,
     workflow_workspace: WorkflowWorkspace,
@@ -472,7 +492,7 @@ def prepare_runtime_services(
 def _prompt_registry_roots(
     workflow_parent: Path,
     *,
-    compiled: CompiledWorkflow,
+    compiled: WorkflowPlan,
     capability_prompt_paths: tuple[Path, ...] = (),
 ) -> tuple[Path, ...]:
     roots: list[Path] = [workflow_parent.resolve()]
@@ -552,7 +572,7 @@ def _assert_workflow_identity_consistency(
 
 
 def _ensure_workflow_workspace(
-    compiled: CompiledWorkflow,
+    compiled: WorkflowPlan,
     task_workspace: TaskWorkspace,
     *,
     reference: WorkflowReference,
@@ -577,7 +597,7 @@ def _ensure_workflow_workspace(
 
 
 def _prepare_workspaces(
-    compiled: CompiledWorkflow,
+    compiled: WorkflowPlan,
     options: RunnerOptions,
     *,
     reference: WorkflowReference,
@@ -610,7 +630,7 @@ def _prepare_workspaces(
 
 
 def _plan_workspaces(
-    compiled: CompiledWorkflow,
+    compiled: WorkflowPlan,
     options: RunnerOptions,
     *,
     reference: WorkflowReference,
@@ -679,7 +699,7 @@ def _runtime_observability_error(exc: BaseException) -> BaseException:
     return exc
 
 
-def resolve_session_path_strategy(compiled: CompiledWorkflow):
+def resolve_session_path_strategy(compiled: WorkflowPlan):
     try:
         return extract_session_path_strategy(compiled.extensions)
     except ValueError as exc:
@@ -706,7 +726,7 @@ def validate_resume_state(run_dir: Path) -> None:
 
 def _resume_topology_mismatch_warning(
     run_workspace: RunWorkspace,
-    compiled: CompiledWorkflow,
+    compiled: WorkflowPlan,
     *,
     behavior: Literal["warn", "fail"],
 ) -> dict[str, str] | None:
@@ -768,7 +788,7 @@ def _validate_saved_run_topology_payload(
     return payload
 
 
-def _run_topology_metadata(run_workspace: RunWorkspace, compiled: CompiledWorkflow) -> dict[str, Any]:
+def _run_topology_metadata(run_workspace: RunWorkspace, compiled: WorkflowPlan) -> dict[str, Any]:
     return {
         "schema": WORKFLOW_TOPOLOGY_SCHEMA,
         "workflow_name": compiled.workflow_name,
@@ -790,7 +810,7 @@ def _run_topology_metadata(run_workspace: RunWorkspace, compiled: CompiledWorkfl
     }
 
 
-def _runtime_compiled_workflow(compiled: CompiledWorkflow) -> tuple[CompiledWorkflow, tuple[dict[str, str], ...]]:
+def _runtime_compiled_workflow(compiled: WorkflowPlan) -> tuple[WorkflowPlan, tuple[dict[str, str], ...]]:
     return compiled, ()
 
 
@@ -903,7 +923,7 @@ def _normalize_execution_options(
 
 
 def _coerce_workflow_input_payload(
-    compiled: CompiledWorkflow,
+    compiled: WorkflowPlan,
     raw_input: BaseModel | dict[str, Any] | None,
 ) -> dict[str, Any] | None:
     if raw_input is None:
@@ -926,7 +946,7 @@ def _coerce_workflow_input_payload(
 
 
 def _materialize_workflow_input(
-    compiled: CompiledWorkflow,
+    compiled: WorkflowPlan,
     raw_input: dict[str, Any] | None,
 ) -> BaseModel | None:
     if raw_input is None:
@@ -946,7 +966,7 @@ def _materialize_workflow_input(
 def _typed_output_metadata(
     *,
     execution_result: RunResult,
-    compiled: CompiledWorkflow,
+    compiled: WorkflowPlan,
 ) -> dict[str, Any]:
     metadata: dict[str, Any] = {}
     if compiled.output_model is not None or compiled.output_builder is not None:
@@ -1067,7 +1087,7 @@ def _build_child_workflow_result(execution: RunExecution) -> ChildWorkflowResult
     )
 
 
-def _resolve_compiled_artifact_path(artifact: CompiledArtifact, context: Any) -> Path:
+def _resolve_compiled_artifact_path(artifact: ArtifactSpec, context: Any) -> Path:
     candidate = Path(artifact.template)
     if not candidate.is_absolute() and artifact.owner_step is not None and "{" not in artifact.template and "}" not in artifact.template:
         return context.workflow_folder / artifact.owner_step / artifact.template

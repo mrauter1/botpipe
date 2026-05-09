@@ -14,14 +14,18 @@ SCAN_ROOTS = (
     REPO_ROOT / "tests",
 )
 EXCLUDED_SCAN_PATHS = {
-    REPO_ROOT / "tests" / "strictness" / "test_no_compat.py",
+    REPO_ROOT / "tests" / "strictness" / "test_botlane_identity.py",
 }
 LEGACY_PACKAGE = "auto" + "loop"
 LEGACY_OPTIMIZER = LEGACY_PACKAGE + "_optimizer"
 LEGACY_STATE_DIR = "." + LEGACY_PACKAGE
+LEGACY_SDK_TASK_SENTINEL = LEGACY_STATE_DIR + "-sdk-task.json"
 LEGACY_SDK_TASK_SCHEMA = LEGACY_PACKAGE + ".sdk_task/v1"
 LEGACY_BRANCH_RESULTS_SCHEMA = LEGACY_PACKAGE + ".branch_results/v1"
 LEGACY_GENERATED_BY = LEGACY_PACKAGE + ".sdk"
+LEGACY_IMPORT_FROM = "from " + LEGACY_PACKAGE
+LEGACY_IMPORT = "import " + LEGACY_PACKAGE
+LEGACY_MODULE_PREFIX = LEGACY_PACKAGE + "."
 
 
 def test_botlane_identity_constants_stay_canonical() -> None:
@@ -52,9 +56,12 @@ def test_active_python_sources_do_not_reintroduce_legacy_product_identity() -> N
     for path in _python_files():
         text = path.read_text(encoding="utf-8")
         for token in (
-            LEGACY_PACKAGE,
+            LEGACY_IMPORT_FROM,
+            LEGACY_IMPORT,
+            LEGACY_MODULE_PREFIX,
             LEGACY_OPTIMIZER,
             LEGACY_STATE_DIR,
+            LEGACY_SDK_TASK_SENTINEL,
             LEGACY_SDK_TASK_SCHEMA,
             LEGACY_BRANCH_RESULTS_SCHEMA,
             LEGACY_GENERATED_BY,

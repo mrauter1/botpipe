@@ -13,6 +13,21 @@ class ArtifactService(Protocol):
     def resolve_artifacts(self, context: Any) -> Any:
         ...
 
+    def collect_artifact_observations(self, context: Any, artifacts: Any) -> Any:
+        ...
+
+    def validate_required_writes(
+        self,
+        *,
+        step: Any,
+        route_tag: str,
+        state: Any,
+        artifacts: Any,
+        error_cls: type[Exception],
+        provider_attributable: bool,
+    ) -> None:
+        ...
+
     def enforce_artifact_contracts(
         self,
         step: Any,
@@ -28,6 +43,17 @@ class ArtifactService(Protocol):
 
 
 class RouteService(Protocol):
+    def route_for_step(self, step_name: str, route_tag: str) -> Any:
+        ...
+
+    def provider_visible_route_tags(
+        self,
+        step_name: str,
+        *,
+        mode: str,
+    ) -> tuple[str, ...]:
+        ...
+
     def validate_event(
         self,
         step: Any,
@@ -114,6 +140,15 @@ class ChildWorkflowService(Protocol): ...
 
 
 class StateService(Protocol):
+    def initialize_step_state(self, step: Any, store: Any) -> Any:
+        ...
+
+    def initialize_item_state(self, store: Any) -> Any:
+        ...
+
+    def track_visit(self, step: Any, store: Any) -> None:
+        ...
+
     def clone_state(self, state: Any) -> Any:
         ...
 

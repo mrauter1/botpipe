@@ -9,10 +9,12 @@ from typing import TYPE_CHECKING, Any, Iterable, Iterator, Literal, Mapping
 
 from pydantic import BaseModel, ValidationError
 
-from .errors import WorkflowExecutionError
-from .placeholders import parse_placeholders, render_template_with_refs
+from .artifact_plan import ArtifactKind
+from .placeholders import (
+    render_runtime_template as _render_runtime_template,
+    resolve_artifact_template as _resolve_artifact_template,
+)
 
-ArtifactKind = Literal["text", "markdown", "json", "raw"]
 if TYPE_CHECKING:
     from .context import Context
     from .steps import Step
@@ -197,39 +199,10 @@ class ResolvedArtifacts(Mapping[str, ArtifactHandle]):
     def subset(self, names: Iterable[str]) -> "ResolvedArtifacts":
         return ResolvedArtifacts({name: self._handles[name] for name in names})
 
-
-@dataclass(frozen=True, slots=True)
-class CompiledArtifact:
-    """Immutable compiled artifact metadata."""
-
-    name: str
-    template: str
-    kind: ArtifactKind
-    schema: type[BaseModel] | dict[str, object] | None
-    required: bool
-    owner_step: str | None
-    qualified_name: str | None
-    workflow_level: bool
-    producer_steps: tuple[str, ...]
-
 def resolve_artifact_template(template: str | Artifact, context: Context) -> Path:
-    """Resolve a template against runtime context."""
+    """Thin delegate to the canonical placeholder renderer."""
 
-    artifact = template if isinstance(template, Artifact) else None
-    raw_template = artifact.template if artifact is not None else template
-    _reject_ctx_placeholders_in_artifact_template(raw_template)
-    candidate = Path(raw_template)
-    if candidate.is_absolute():
-        return candidate
-    if "{" not in raw_template and "}" not in raw_template and artifact is not None and artifact.owner_step is not None:
-        return context.workflow_folder / artifact.owner_step / raw_template
-    rendered = render_runtime_template(raw_template, context, placeholder_label="artifact template placeholder")
-    rendered_path = Path(rendered)
-    if rendered_path.is_absolute():
-        return rendered_path
-    if artifact is not None and artifact.owner_step is not None:
-        return context.workflow_folder / artifact.owner_step / rendered_path
-    return rendered_path
+    return _resolve_artifact_template(template, context)
 
 
 def render_runtime_template(
@@ -239,14 +212,13 @@ def render_runtime_template(
     placeholder_label: str,
     replace_roots: frozenset[str] | None = None,
 ) -> str:
-    """Render supported runtime placeholders inside free-form text."""
-    refs = parse_placeholders(template, source=placeholder_label)
-    return render_template_with_refs(
+    """Thin delegate to the canonical placeholder renderer."""
+
+    return _render_runtime_template(
         template,
-        refs,
         context,
-        replace_roots=replace_roots,
         placeholder_label=placeholder_label,
+        replace_roots=replace_roots,
     )
 
 
@@ -360,10 +332,3 @@ def _load_jsonschema_validator_cls() -> type[Any]:
         ) from exc
     return Draft202012Validator
 
-
-def _reject_ctx_placeholders_in_artifact_template(template: str) -> None:
-    for ref in parse_placeholders(template, source="artifact_template"):
-        if ref.root == "ctx":
-            raise WorkflowExecutionError(
-                "ctx.* placeholders are only supported in prompts and workflow-step messages, not artifact paths"
-            )

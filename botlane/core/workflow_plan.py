@@ -11,7 +11,7 @@ from typing import Any, Callable
 from pydantic import BaseModel
 
 from .artifact_plan import ArtifactSpec
-from .errors import WorkflowCompilationError
+from .errors import RoutingError, WorkflowCompilationError
 from .identifiers import ArtifactId
 from .reference_graph import ReferenceGraph
 from .route_contracts import RouteContract
@@ -73,10 +73,13 @@ class WorkflowPlan:
         return tuple((name, self.artifacts[artifact_id]) for name, artifact_id in source.items())
 
     def route(self, step_name: str, tag: str) -> RouteContract:
-        route = self.routes.get(step_name, {}).get(tag)
-        if route is not None and not route.disabled:
+        step_routes = self.routes.get(step_name, {})
+        route = step_routes.get(tag)
+        if route is not None:
+            if route.disabled:
+                raise RoutingError(f"route {tag!r} is disabled for step {step_name!r}")
             return route
         route = self.global_routes.get(tag)
         if route is not None and not route.disabled:
             return route
-        raise KeyError((step_name, tag))
+        raise RoutingError(f"no route for step {step_name!r} and tag {tag!r}")

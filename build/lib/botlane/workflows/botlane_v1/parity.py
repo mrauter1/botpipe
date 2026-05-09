@@ -11,15 +11,16 @@ from typing import Any
 
 from pydantic import BaseModel
 
-from botlane.core.compiler import CompiledWorkflow, compile_workflow
+from botlane.core.compiler import compile_workflow
 from botlane.core.extensions import RunBinding, StepFinish, StepStart, TerminalFinish
+from botlane.core.workflow_plan import WorkflowPlan
 from botlane.runtime.stores.filesystem import ensure_session_payload_placeholder, load_session_payload, set_pending_session_note
 
 from .conventions import botlane_v1_session_path
 
 
 DECISIONS_VERSION = 1
-_DECISIONS_HEADER_RE = re.compile(r"<(?:botlane|auto" + "loop)-decisions-header\b([^>]*)/>")
+_DECISIONS_HEADER_RE = re.compile(r"<botlane-decisions-header\b([^>]*)/>")
 _DECISIONS_ATTR_RE = re.compile(r'([a-zA-Z0-9_]+)="([^"]*)"')
 
 
@@ -42,7 +43,7 @@ class BotlaneV1Parity:
 
 @dataclass(slots=True)
 class _BotlaneV1ParityRuntime:
-    compiled: CompiledWorkflow
+    compiled: WorkflowPlan
     binding: RunBinding
     task_raw_log: Path
     run_raw_log: Path
@@ -51,7 +52,7 @@ class _BotlaneV1ParityRuntime:
     last_turn_kind: dict[tuple[str, str | None], str] = field(default_factory=dict)
 
     @classmethod
-    def create(cls, *, compiled: CompiledWorkflow, binding: RunBinding) -> "_BotlaneV1ParityRuntime":
+    def create(cls, *, compiled: WorkflowPlan, binding: RunBinding) -> "_BotlaneV1ParityRuntime":
         task_raw_log = binding.task_folder / "raw_phase_log.md"
         run_raw_log = binding.run_folder / "raw_phase_log.md"
         decisions_file = binding.task_folder / "decisions.txt"

@@ -12,21 +12,26 @@ from typing import TYPE_CHECKING, Any
 from pydantic import BaseModel
 
 from ..artifacts import validate_artifact_handle
-from ..context import context_runtime
 from ..engine_collaborators import StepExecutionResult, StepFinalizationRequest, run_awaitable_sync
 from ..errors import ProviderExecutionError, WorkflowExecutionError
 from ..primitives import Event
 from .context import BranchMetadata, FanInMetadata, create_branch_context, create_fan_in_context
-from .manifest import branch_group_paths, build_branch_manifest, render_branch_group_context, write_branch_group_evidence
+from .manifest import (
+    BranchManifest,
+    branch_group_paths,
+    build_branch_manifest,
+    render_branch_group_context,
+    write_branch_group_evidence,
+)
 from .outcomes import select_branch_group_outcome
 from .results import BranchArtifactObservation, BranchResult
 from .sessions import BranchSessionStoreView
 
 if TYPE_CHECKING:
-    from ..compiler import CompiledStep
     from ..context import Context
     from ..engine import Engine
     from ..primitives import PendingHandoff
+    from ..step_plans import StepPlan
 
 
 class BranchGroupRuntime:
@@ -37,7 +42,7 @@ class BranchGroupRuntime:
 
     def run(
         self,
-        step: "CompiledStep",
+        step: "StepPlan",
         context: "Context",
         state: BaseModel,
         pending_handoffs: tuple["PendingHandoff", ...],
@@ -51,7 +56,7 @@ class BranchGroupRuntime:
 
     async def run_async(
         self,
-        step: "CompiledStep",
+        step: "StepPlan",
         context: "Context",
         state: BaseModel,
         pending_handoffs: tuple["PendingHandoff", ...],
@@ -59,8 +64,7 @@ class BranchGroupRuntime:
         spec = step.branch_group
         if spec is None:
             raise WorkflowExecutionError(f"branch-group step {step.name!r} is missing compiled branch metadata")
-        parent_runtime = context_runtime(context)
-        parent_runtime.emit_runtime_event(
+        context._emit_runtime_event(
             "branch_group_started",
             step_name=step.name,
             execution_id=getattr(context, "_step_execution_id", None),
@@ -71,7 +75,7 @@ class BranchGroupRuntime:
             settle=spec.settle,
         )
 
-        parent_runtime.set_values(context._values)
+        context._sync_values(context._values)
         started_at = _utc_now()
         branch_results = await self._run_branches(spec, context=context, state=state)
         finished_at = _utc_now()
@@ -92,7 +96,7 @@ class BranchGroupRuntime:
             manifest=manifest,
             context_text=context_text,
         )
-        parent_runtime.emit_runtime_event(
+        context._emit_runtime_event(
             "branch_manifest_written",
             step_name=step.name,
             execution_id=getattr(context, "_step_execution_id", None),
@@ -126,8 +130,8 @@ class BranchGroupRuntime:
                 pending_handoffs=pending_handoffs,
             )
 
-        final_route = None if step_result.finalization is None else step_result.finalization.final_route
-        parent_runtime.emit_runtime_event(
+        final_route = None if step_result.transition is None else step_result.transition.final_route
+        context._emit_runtime_event(
             "branch_group_completed",
             step_name=step.name,
             execution_id=getattr(context, "_step_execution_id", None),
@@ -149,18 +153,16 @@ class BranchGroupRuntime:
         *,
         context: "Context",
         state: BaseModel,
-    ) -> dict[int, dict[str, Any]]:
+    ) -> dict[int, BranchResult]:
         del state
-        results: dict[int, dict[str, Any]] = {}
+        results: dict[int, BranchResult] = {}
         branches = tuple(spec.branches)
         concurrency = len(branches) if spec.concurrency is None else max(1, min(spec.concurrency, len(branches)))
         semaphore = asyncio.Semaphore(concurrency)
-        completion_queue: asyncio.Queue[tuple[int, dict[str, Any]]] = asyncio.Queue()
+        completion_queue: asyncio.Queue[tuple[int, BranchResult]] = asyncio.Queue()
         active_tasks: dict[int, asyncio.Task[None]] = {}
         next_branch_index = 0
         stop_launches = False
-        parent_runtime = context_runtime(context)
-
         async def run_branch_task(branch: Any) -> None:
             try:
                 async with semaphore:
@@ -186,7 +188,7 @@ class BranchGroupRuntime:
             await completion_queue.put((branch.index, result))
 
         def launch(branch: Any) -> None:
-            parent_runtime.emit_runtime_event(
+            context._emit_runtime_event(
                 "branch_scheduled",
                 execution_id=getattr(context, "_step_execution_id", None),
                 group_name=spec.name,
@@ -212,7 +214,7 @@ class BranchGroupRuntime:
             if task is not None:
                 await asyncio.gather(task, return_exceptions=True)
             results[branch_index] = result
-            if spec.settle == "fail_fast" and result["status"] == "failed" and not stop_launches:
+            if spec.settle == "fail_fast" and result.status == "failed" and not stop_launches:
                 stop_launches = True
                 for active_branch_index, active_task in active_tasks.items():
                     if active_branch_index != branch_index:
@@ -231,7 +233,7 @@ class BranchGroupRuntime:
                 )
         return results
 
-    async def _execute_branch(self, spec: Any, branch: Any, parent_context: "Context") -> dict[str, Any]:
+    async def _execute_branch(self, spec: Any, branch: Any, parent_context: "Context") -> BranchResult:
         compiled_step = branch.step
         branch_meta = BranchMetadata(
             name=branch.name,
@@ -252,16 +254,15 @@ class BranchGroupRuntime:
             session_store=session_store,
             step_state_store=step_state_store,
         )
-        runtime = context_runtime(branch_context)
-        runtime.set_values(parent_context._values)
+        branch_context._sync_values(parent_context._values)
         self._engine._increment_step_runtime_state(step_state_store)
-        runtime.set_step_state_store(step_state_store)
+        branch_context._sync_step_state(step_state_store)
         if compiled_step.scope_name is not None:
             raise AssertionError(
                 f"branch-group runtime does not support scoped branch step {compiled_step.name!r}; "
                 "compile-time validation should have rejected it."
             )
-        runtime.set_meta(
+        branch_context._sync_meta(
             {
                 "step": {
                     "name": compiled_step.name,
@@ -272,7 +273,7 @@ class BranchGroupRuntime:
             }
         )
         execution_id = _branch_execution_id(branch_context)
-        runtime.emit_runtime_event(
+        branch_context._emit_runtime_event(
             "branch_started",
             group_name=spec.name,
             group_kind=spec.kind,
@@ -355,7 +356,7 @@ class BranchGroupRuntime:
         context: "Context",
         spec: Any,
         branch: Any,
-        result: Mapping[str, Any],
+        result: BranchResult,
         execution_id: str | None,
     ) -> None:
         event_type = {
@@ -364,8 +365,8 @@ class BranchGroupRuntime:
             "needs_input": "branch_needs_input",
             "cancelled": "branch_cancelled",
             "skipped": "branch_skipped",
-        }.get(result["status"], "branch_completed")
-        context_runtime(context).emit_runtime_event(
+        }.get(result.status, "branch_completed")
+        context._emit_runtime_event(
             event_type,
             group_name=spec.name,
             group_kind=spec.kind,
@@ -373,12 +374,12 @@ class BranchGroupRuntime:
             branch_index=branch.index,
             step_name=branch.step.name,
             execution_id=execution_id,
-            route=result.get("route"),
-            destination=result.get("destination"),
-            status=result["status"],
-            reason=result.get("reason"),
-            error=result.get("error"),
-            artifact_paths=[artifact["path"] for artifact in result.get("artifacts", ())],
+            route=result.route,
+            destination=result.destination,
+            status=result.status,
+            reason=result.reason,
+            error=result.error,
+            artifact_paths=[artifact.path for artifact in result.artifacts],
         )
 
     def _branch_result_from_step_result(
@@ -386,17 +387,17 @@ class BranchGroupRuntime:
         *,
         spec: Any,
         branch: Any,
-        compiled_step: "CompiledStep",
+        compiled_step: "StepPlan",
         branch_context: "Context",
         step_result: StepExecutionResult,
         branch_dir: Path,
         started_at: datetime,
-    ) -> dict[str, Any]:
+    ) -> BranchResult:
         finished_at = _utc_now()
         status = "completed"
-        route = None if step_result.finalization is None else step_result.finalization.final_route
+        route = None if step_result.transition is None else step_result.transition.final_route
         destination = step_result.destination
-        runtime_control = None if step_result.finalization is None else step_result.finalization.runtime_control
+        runtime_control = None if step_result.transition is None else step_result.transition.runtime_control
         question = None
         reason = None
         error = None
@@ -449,19 +450,19 @@ class BranchGroupRuntime:
             finished_at=finished_at.isoformat(),
             duration_ms=_duration_ms(started_at, finished_at),
             usage=_serialize_usage(step_result.provider_usage),
-        ).to_manifest_dict()
+        )
 
     def _failed_branch_result(
         self,
         *,
         spec: Any,
         branch: Any,
-        compiled_step: "CompiledStep",
+        compiled_step: "StepPlan",
         branch_context: "Context",
         branch_dir: Path,
         started_at: datetime,
         exc: Exception,
-    ) -> dict[str, Any]:
+    ) -> BranchResult:
         finished_at = _utc_now()
         raw_output_path, raw_output_paths = self._write_branch_raw_outputs(
             step_result=None,
@@ -490,7 +491,7 @@ class BranchGroupRuntime:
             finished_at=finished_at.isoformat(),
             duration_ms=_duration_ms(started_at, finished_at),
             usage={},
-        ).to_manifest_dict()
+        )
 
     def _write_branch_raw_outputs(
         self,
@@ -519,7 +520,7 @@ class BranchGroupRuntime:
                 primary_path = relative
         return primary_path, raw_paths
 
-    def _collect_branch_artifacts(self, step: "CompiledStep", context: "Context") -> tuple[BranchArtifactObservation, ...]:
+    def _collect_branch_artifacts(self, step: "StepPlan", context: "Context") -> tuple[BranchArtifactObservation, ...]:
         artifacts = self._engine._resolve_artifacts(context)
         branch_artifacts: list[BranchArtifactObservation] = []
         for name in step.writes:
@@ -537,7 +538,7 @@ class BranchGroupRuntime:
             )
         return tuple(branch_artifacts)
 
-    def _provider_session_snapshot(self, step: "CompiledStep", context: "Context") -> tuple[str | None, dict[str, str]]:
+    def _provider_session_snapshot(self, step: "StepPlan", context: "Context") -> tuple[str | None, dict[str, str]]:
         sessions: dict[str, str] = {}
         if step.session_name is not None:
             binding = context._session_store.get(step.session_name)
@@ -553,10 +554,10 @@ class BranchGroupRuntime:
     async def _run_fan_in(
         self,
         *,
-        composite_step: "CompiledStep",
+        composite_step: "StepPlan",
         spec: Any,
         context: "Context",
-        manifest: Mapping[str, Any],
+        manifest: BranchManifest,
         results_path: Path,
         context_path: Path,
         context_text: str,
@@ -566,15 +567,15 @@ class BranchGroupRuntime:
         if fan_in_step is None:
             raise WorkflowExecutionError(f"branch group {spec.name!r} is missing its compiled fan-in step")
         metadata = FanInMetadata(
-            results=dict(manifest),
+            results=manifest.to_dict(),
             results_path=results_path,
             context_path=context_path,
             context_text=context_text,
-            branch_count=len(manifest.get("branches", ())),
-            completed_count=sum(1 for branch in manifest.get("branches", ()) if branch.get("status") == "completed"),
-            failed_count=sum(1 for branch in manifest.get("branches", ()) if branch.get("status") == "failed"),
-            needs_input_count=sum(1 for branch in manifest.get("branches", ()) if branch.get("status") == "needs_input"),
-            cancelled_count=sum(1 for branch in manifest.get("branches", ()) if branch.get("status") == "cancelled"),
+            branch_count=len(manifest.branches),
+            completed_count=sum(1 for branch in manifest.branches if branch.status == "completed"),
+            failed_count=sum(1 for branch in manifest.branches if branch.status == "failed"),
+            needs_input_count=sum(1 for branch in manifest.branches if branch.status == "needs_input"),
+            cancelled_count=sum(1 for branch in manifest.branches if branch.status == "cancelled"),
         )
         fan_in_context = create_fan_in_context(
             context,
@@ -583,11 +584,10 @@ class BranchGroupRuntime:
             session_store=context._session_store,
             step_state_store=fan_in_step.step_state_model(),
         )
-        runtime = context_runtime(fan_in_context)
-        runtime.set_values(context._values)
+        fan_in_context._sync_values(context._values)
         self._engine._increment_step_runtime_state(fan_in_context._step_state)
-        runtime.set_step_state_store(fan_in_context._step_state)
-        runtime.emit_runtime_event(
+        fan_in_context._sync_step_state(fan_in_context._step_state)
+        fan_in_context._emit_runtime_event(
             "fan_in_started",
             group_name=spec.name,
             group_kind=spec.kind,
@@ -614,13 +614,13 @@ class BranchGroupRuntime:
                 (),
                 route_mode="capture",
             )
-        runtime.emit_runtime_event(
+        fan_in_context._emit_runtime_event(
             "fan_in_completed",
             group_name=spec.name,
             group_kind=spec.kind,
             composite_step_name=composite_step.name,
             step_name=fan_in_step.name,
-            route=None if step_result.finalization is None else step_result.finalization.final_route,
+            route=None if step_result.transition is None else step_result.transition.final_route,
             destination=step_result.destination,
             status=_composite_status(step_result),
             artifact_paths=[
@@ -639,14 +639,14 @@ class BranchGroupRuntime:
     def _run_mechanical_outcome(
         self,
         *,
-        composite_step: "CompiledStep",
+        composite_step: "StepPlan",
         spec: Any,
         context: "Context",
-        manifest: Mapping[str, Any],
+        manifest: BranchManifest,
         pending_handoffs: tuple["PendingHandoff", ...],
     ) -> StepExecutionResult:
         event = select_branch_group_outcome(spec, manifest, context)
-        finalization = self._engine.route_finalizer.finalize(
+        finalization = self._engine.route_finalizer.finalize_result(
             StepFinalizationRequest(
                 step=composite_step,
                 context=context,
@@ -669,18 +669,18 @@ class BranchGroupRuntime:
     def _map_nested_result_to_composite(
         self,
         *,
-        composite_step: "CompiledStep",
-        nested_step: "CompiledStep",
+        composite_step: "StepPlan",
+        nested_step: "StepPlan",
         context: "Context",
         pending_handoffs: tuple["PendingHandoff", ...],
         nested_result: StepExecutionResult,
     ) -> StepExecutionResult:
-        finalization = nested_result.finalization
+        finalization = nested_result.transition
         runtime_control = None if finalization is None else finalization.runtime_control
         if runtime_control is not None:
-            from ..engine import _DirectRuntimeControl
+            from ..engine import _RouteControl
 
-            control = _DirectRuntimeControl(
+            control = _RouteControl(
                 control=runtime_control,
                 destination=nested_result.destination,
                 pending_input=nested_result.pending_input,
@@ -702,7 +702,7 @@ class BranchGroupRuntime:
             raise WorkflowExecutionError(
                 f"fan-in step {nested_step.name!r} completed without a route event or direct runtime control"
             )
-        route_finalization = self._engine.route_finalizer.finalize(
+        route_finalization = self._engine.route_finalizer.finalize_result(
             StepFinalizationRequest(
                 step=composite_step,
                 context=context,
@@ -776,8 +776,7 @@ def _serialize_exception(engine: "Engine", exc: Exception) -> dict[str, Any]:
 
 
 def _branch_execution_id(context: "Context") -> str | None:
-    runtime = context_runtime(context)
-    visit = runtime._context._step_state.get("visits") if isinstance(runtime._context._step_state, dict) else getattr(runtime._context._step_state, "visits", None)
+    visit = context._step_state.get("visits") if isinstance(context._step_state, dict) else getattr(context._step_state, "visits", None)
     return getattr(context, "_step_execution_id", None) if visit is None else f"{context._step_execution_id.rsplit(':', 1)[0]}:{visit}"
 
 
@@ -787,7 +786,8 @@ def _cancelled_branch_result(
     branch: Any,
     context: "Context",
     started_at: datetime | None = None,
-) -> dict[str, Any]:
+) -> BranchResult:
+    del spec, context
     started = _utc_now() if started_at is None else started_at
     finished = _utc_now()
     return BranchResult(
@@ -820,10 +820,11 @@ def _cancelled_branch_result(
         cancellation_requested=True,
         cancellation_completed=True,
         cancellation_supported=True,
-    ).to_manifest_dict()
+    )
 
 
-def _unexpected_branch_failure_result(engine: "Engine", *, spec: Any, branch: Any, exc: Exception) -> dict[str, Any]:
+def _unexpected_branch_failure_result(engine: "Engine", *, spec: Any, branch: Any, exc: Exception) -> BranchResult:
+    del spec
     now = _utc_now().isoformat()
     return BranchResult(
         name=branch.name,
@@ -846,10 +847,11 @@ def _unexpected_branch_failure_result(engine: "Engine", *, spec: Any, branch: An
         finished_at=now,
         duration_ms=0,
         usage={},
-    ).to_manifest_dict()
+    )
 
 
-def _skipped_branch_result(*, spec: Any, branch: Any, context: "Context") -> dict[str, Any]:
+def _skipped_branch_result(*, spec: Any, branch: Any, context: "Context") -> BranchResult:
+    del spec, context
     now = _utc_now().isoformat()
     return BranchResult(
         name=branch.name,
@@ -875,15 +877,15 @@ def _skipped_branch_result(*, spec: Any, branch: Any, context: "Context") -> dic
         cancellation_requested=False,
         cancellation_completed=False,
         cancellation_supported=True,
-    ).to_manifest_dict()
+    )
 
 
 def _composite_status(step_result: StepExecutionResult) -> str:
-    if step_result.finalization is None:
+    if step_result.transition is None:
         return "completed"
-    if step_result.finalization.runtime_control == "request_input":
+    if step_result.transition.runtime_control == "request_input":
         return "needs_input"
-    if step_result.finalization.runtime_control == "fail":
+    if step_result.transition.runtime_control == "fail":
         return "failed"
     if step_result.event is not None and step_result.event.tag == "question":
         return "needs_input"

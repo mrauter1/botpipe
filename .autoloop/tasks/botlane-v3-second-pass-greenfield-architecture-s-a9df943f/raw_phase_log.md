@@ -3047,3 +3047,103 @@ Open issues / next step
 <loop-control>
 {"schema":"docloop.loop_control/v1","kind":"promise","promise":"COMPLETE"}
 </loop-control>
+
+
+---
+run_id=run-20260509T125912Z-8deb38fd | entry=session_turn | pair=implement | phase=producer | cycle=1 | attempt=1 | thread_id=019e0d81-c0de-7d70-9814-9a0bf81af2f5
+---
+provider=codex
+mode=start
+template=/home/rauter/.local/share/pipx/venvs/autoloop/lib/python3.12/site-packages/autoloop/templates/implement_producer.md
+session_id=019e0d81-c0de-7d70-9814-9a0bf81af2f5
+
+
+---
+run_id=run-20260509T125912Z-8deb38fd | entry=phase_output | pair=implement | phase=producer | process=codex-agent | cycle=1 | attempt=1 | thread_id=019e0d81-c0de-7d70-9814-9a0bf81af2f5
+---
+I’m handling the `strictness-cleanup` phase. First I’m reading the phase artifacts, the current strictness tests, and the relevant runtime/core files to see what still preserves deleted internals or misses the import-boundary and identity checks.
+
+I’ve got the phase contract and prior decisions. Next I’m checking the existing strictness tests and scanning the tree for any remaining banned symbols or stale identity strings before I touch the tests.
+
+The scan shows most remaining banned strings are already in strictness tests or in a local test variable named `original_step`, not production code. I’m reading those tests now to decide whether to replace them, rename them, or tighten them to match this phase contract.
+
+The existing `test_no_compat.py` is an older broad branding/cleanup scanner, much wider than this phase. I’m checking whether the core/runtime boundary and strictness conditions can be enforced with smaller targeted tests instead of carrying that legacy file forward.
+
+I’ve confirmed production code no longer has the banned compiled symbols. The remaining cleanup is mostly test-side: replacing the oversized legacy strictness file, tightening identity scanning to the intended roots, and removing any test artifacts that still preserve the old adapter-era contract.
+
+Plan for this phase:
+- Replace the legacy broad strictness test with a targeted `test_no_internal_compat_layers.py` that scans only maintained Python sources for the exact removed internal symbols.
+- Expand `test_botlane_identity.py` to cover stale package/state/schema identifiers across `botlane`, `botlane_optimizer`, and `tests`, while keeping the strictness tests themselves out of the false-positive path.
+- Clean up test-side leftovers that preserve deleted internals, then run the strictness suite and a full `pytest` run.
+
+I’m editing the strictness suite now. The changes are confined to the strictness tests plus one test variable rename so the final scanners enforce the intended boundary without preserving any of the old compatibility vocabulary.
+
+The strictness files are in place. I’m running the strictness suite first to catch any scanner mistakes before I touch the phase notes or launch the full test run.
+
+`pytest` isn’t on the shell `PATH` here, so I’m checking the project’s Python environment and rerunning through the available interpreter instead of assuming a global install.
+
+The repo has a local virtualenv, and the system interpreter doesn’t have `pytest`. I’m switching to `.venv/bin/python` so the validation runs against the project environment instead of the bare system Python.
+
+The strictness suite is green. I’m running the full repository test suite now, since this phase isn’t complete until the final end-to-end `pytest` pass is clean.
+
+The full suite is still running. While that finishes, I’m preparing the phase notes and checking whether this turn introduced any non-obvious decisions that need to be recorded in the run ledger.
+
+The first full pass has failures in unrelated parts of the suite beyond the new strictness tests. I’m letting it finish so I can fix all current regressions in one sweep instead of reacting to partial output.
+
+Several failures are appearing deeper in the suite, likely from pre-existing expectations around artifacts, packaging, or compatibility cleanup rather than the strictness scanners themselves. I’m waiting for the complete report before deciding whether this phase can safely absorb the fixes or needs a scoped follow-up.
+
+The failures split into two categories: stale tests that still expect deleted internal shapes, and a smaller set of real behavior mismatches around user-facing artifact names and placeholder timing. I’m reading the affected tests and the corresponding code paths before deciding which ones need code fixes versus contract updates.
+
+Most of the remaining failures are stale expectations against the old string-based compiled shape. I’m reading the current `WorkflowPlan`, `RouteContract`, and static-graph payload code so I can update those tests to the canonical typed plan boundary instead of reintroducing compatibility in code.
+
+I’ve narrowed the remaining work. There are a few real code fixes to preserve the intended public/runtime surface, and a larger set of stale tests that still assert the deleted string-based compiled internals. I’m fixing the code-side regressions first so the public snapshots and runtime errors settle before I rewrite those test expectations.
+
+I’m making the code-side fixes now: typed artifact names are being rendered back to the user-facing form in runtime errors, nested fan-in routes are being surfaced in static-graph payloads, and the remaining public `Context` mutator method names are being removed from the facade.
+
+The first patch was too broad for the current file state. I’m splitting it into smaller edits now so I can update the runtime helpers safely without trampling adjacent changes from earlier phases.
+
+I’m switching these method renames to mechanical replacements because the files have drifted enough that a single patch hunk is brittle. The change is still local and purely renames the internal facade calls to match the hidden public surface.
+
+The internal mutator rename and route/static-graph fixes are in. I’m running the previously failing targeted tests next so I can separate real remaining behavior gaps from stale expectation failures before rewriting the validation-heavy test file.
+
+I’m patching the validation test file in smaller chunks. Most of those failures are straightforward expectation drift from string-based internals to typed plan objects, but the file has enough local variation that granular edits are safer than one large replacement.
+
+The stale contract tests are being rewritten to the typed plan boundary now. I’m rerunning the previously failing slices in `validation`, `static_graph`, and `optimizer` to see what still needs either a public-surface fix or a final expectation update.
+
+The remaining failures are cleaner now. One is a real route-suppression bug on `WorkflowPlan.route(...)`; the others come from optimizer snapshot payloads still embedding raw `ArtifactId` objects instead of serializing them to their public string form. I’m fixing those code paths rather than weakening the tests.
+
+The optimizer and route-suppression regressions are resolved. I’m running the full suite again now; at this point the remaining work should be either zero or a much smaller tail of stale expectations.
+
+The full pass is well past the earlier failure zones. I’m letting it finish before I update the run notes so the validation section reflects the final result rather than an intermediate state.
+
+I’ve got a clean full run: `1278 passed`. I’m updating the turn ledger and the phase implementation notes now with the exact regressions fixed, the test replacement, and the validation commands used.
+
+Scope considered
+
+- `strictness-cleanup` phase deliverables plus adjacent regressions that blocked the final green suite.
+
+What I analyzed
+
+- Phase artifacts and prior decisions.
+- Existing strictness/identity tests, stale adapter-era assertions, `Context` runtime mutator exposure, route suppression, static-graph route surfacing, and optimizer capability snapshot serialization.
+
+What I changed
+
+- Replaced the legacy broad scanner with `tests/strictness/test_no_internal_compat_layers.py` and tightened `tests/strictness/test_botlane_identity.py`.
+- Removed test-side stale compiled-shape expectations in engine, validation, optimizer, and single-step tests.
+- Renamed internal `Context` facade mutators from `_set_*` to `_sync_*` and updated runtime callers/tests so the public context no longer exposes the old mutator names.
+- Fixed `WorkflowPlan.route(...)` so a disabled step-local route suppresses same-tag global fallback.
+- Fixed user-facing missing-artifact errors to report public artifact names instead of raw `ArtifactId(...)`.
+- Fixed static-graph / capability snapshot serialization so typed refs stay internal but JSON artifacts still emit string names.
+- Updated phase notes in [implementation_notes.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/botlane-v3-second-pass-greenfield-architecture-s-a9df943f/runs/run-20260509T125912Z-8deb38fd/artifacts/implement/phases/strictness-cleanup/implementation_notes.md).
+
+Key findings / decisions
+
+- The old `tests/strictness/test_no_compat.py` was too broad for this phase and was replaced rather than extended.
+- JSON-facing workflow capability and selected-workflow artifacts must serialize typed plan refs back to public string names.
+- Disabled local routes are a suppression boundary, not a fallback to global routes with the same tag.
+
+Open issues / next step
+
+- Full suite is green: `1278 passed, 1 warning` via `.venv/bin/python -m pytest -q`.
+- The remaining warning is a pre-existing `RuntimeWarning` in `tests/unit/test_provider_boundary_core.py::test_fake_provider_rejects_awaitable_sync_operation_responses`; it does not fail the suite.

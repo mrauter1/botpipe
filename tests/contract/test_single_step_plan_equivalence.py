@@ -167,12 +167,12 @@ def test_single_step_workflow_plan_lowers_simple_pair_rework_to_current_step(tmp
 def test_single_step_plan_preserves_policy_layering_and_explicit_routes(tmp_path: Path) -> None:
     authored_policy = Policy(effort=ModelEffort.LOW)
     invocation_policy = Policy(effort=ModelEffort.HIGH)
-    original_step = PromptStep(
+    authored_step = PromptStep(
         name="draft",
         producer=Prompt.inline("Draft {input.topic}."),
         provider_policy=authored_policy,
     )
-    effective_step, workflow_policy = sdk_module._sdk_step_invocation_layer(original_step, invocation_policy)
+    effective_step, workflow_policy = sdk_module._sdk_step_invocation_layer(authored_step, invocation_policy)
 
     single_step_plan = sdk_module._build_single_step_plan(
         tmp_path,
@@ -189,7 +189,7 @@ def test_single_step_plan_preserves_policy_layering_and_explicit_routes(tmp_path
     )
 
     assert workflow_policy is authored_policy
-    assert original_step.provider_policy is authored_policy
+    assert authored_step.provider_policy is authored_policy
     assert single_step_plan.workflow_policy is authored_policy
     assert single_step_plan.step.header.provider_policy is invocation_policy
     assert tuple(single_step_plan.routes) == ("done", "question", "failed", "repair")

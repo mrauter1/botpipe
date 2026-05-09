@@ -5,6 +5,7 @@ botlane/policy.py
 botlane/sdk.py
 botlane/simple.py
 botlane/core/__init__.py
+botlane/core/artifact_plan.py
 botlane/core/artifacts.py
 botlane/core/compiler.py
 botlane/core/context.py
@@ -27,7 +28,6 @@ botlane/core/mappings.py
 botlane/core/operations.py
 botlane/core/outcome_contract.py
 botlane/core/placeholders.py
-botlane/core/plan_adapters.py
 botlane/core/primitives.py
 botlane/core/prompt_validation.py
 botlane/core/prompts.py

@@ -448,8 +448,8 @@ def _internal_step_surface_payload(
     *,
     route_shape: str,
 ) -> dict[str, Any]:
-    route_table = dict(compiled.routes.get(step.name, {}))
-    available_routes = available_route_tags(compiled, step.name)
+    route_table = _step_route_table(compiled, step)
+    available_routes = _step_available_route_tags(compiled, step)
     routes: dict[str, Any] | list[dict[str, Any]]
     if route_shape == "mapping":
         routes = {
@@ -497,9 +497,9 @@ def _internal_step_surface_payload(
         "authored_routes": list(_authored_route_tags(compiled, step)),
         "compiled_route_tags": list(_compiled_route_tags(compiled, step)),
         "suppressed_route_tags": list(_suppressed_route_tags(compiled, step)),
-        "runtime_control_routes": list(runtime_control_route_tags(compiled, step.name)),
-        "provider_visible_routes_interactive": list(provider_visible_route_tags(compiled, step.name, mode="interactive")),
-        "provider_visible_routes_full_auto": list(provider_visible_route_tags(compiled, step.name, mode="full_auto")),
+        "runtime_control_routes": list(_step_runtime_control_route_tags(compiled, step)),
+        "provider_visible_routes_interactive": list(_step_provider_visible_route_tags(compiled, step, mode="interactive")),
+        "provider_visible_routes_full_auto": list(_step_provider_visible_route_tags(compiled, step, mode="full_auto")),
         "provider_response_contracts": _provider_response_contracts(compiled, step),
         "verifier_session_name": step.verifier_session_name,
         "hooks": {
@@ -644,28 +644,63 @@ def _authored_route_tags(compiled: WorkflowPlan, step: StepPlan) -> tuple[str, .
     definition = get_workflow_definition(compiled.workflow_cls)
     authored_step = next((candidate for candidate in definition.steps if candidate.name == step.name), None)
     if authored_step is None:
-        return available_route_tags(compiled, step.name)
+        return _step_available_route_tags(compiled, step)
     return step_authored_route_tags(definition, authored_step)
 
 
 def _compiled_route_tags(compiled: WorkflowPlan, step: StepPlan) -> tuple[str, ...]:
-    route_table = compiled.routes.get(step.name, {})
+    route_table = _step_route_table(compiled, step)
     return tuple(route_table.keys())
 
 
 def _suppressed_route_tags(compiled: WorkflowPlan, step: StepPlan) -> tuple[str, ...]:
-    route_table = compiled.routes.get(step.name, {})
+    route_table = _step_route_table(compiled, step)
     return tuple(tag for tag, route in route_table.items() if route.disabled)
 
 
 def _provider_route_map(compiled: WorkflowPlan, step: StepPlan, *, policy: str) -> dict[str, RouteContract]:
-    visible_tags = provider_visible_route_tags(compiled, step.name, mode="interactive" if policy == "interactive" else "full_auto")
-    route_table = compiled.routes.get(step.name, {})
+    visible_tags = _step_provider_visible_route_tags(
+        compiled,
+        step,
+        mode="interactive" if policy == "interactive" else "full_auto",
+    )
+    route_table = _step_route_table(compiled, step)
     return {
         route_tag: route_table[route_tag]
         for route_tag in visible_tags
         if route_tag in route_table and not route_table[route_tag].disabled
     }
+
+
+def _step_route_table(compiled: WorkflowPlan, step: StepPlan) -> dict[str, RouteContract]:
+    workflow_routes = compiled.routes.get(step.name)
+    if workflow_routes is not None:
+        return dict(workflow_routes)
+    return dict(step._effective_route_table)
+
+
+def _step_available_route_tags(compiled: WorkflowPlan, step: StepPlan) -> tuple[str, ...]:
+    workflow_tags = available_route_tags(compiled, step.name)
+    return workflow_tags or step.available_routes
+
+
+def _step_runtime_control_route_tags(compiled: WorkflowPlan, step: StepPlan) -> tuple[str, ...]:
+    workflow_tags = runtime_control_route_tags(compiled, step.name)
+    return workflow_tags or step.runtime_control_routes
+
+
+def _step_provider_visible_route_tags(
+    compiled: WorkflowPlan,
+    step: StepPlan,
+    *,
+    mode: str,
+) -> tuple[str, ...]:
+    workflow_tags = provider_visible_route_tags(compiled, step.name, mode=mode)
+    if workflow_tags:
+        return workflow_tags
+    if mode == "interactive":
+        return step.provider_visible_routes_interactive
+    return step.provider_visible_routes_full_auto
 
 
 def _provider_response_contracts(compiled: WorkflowPlan, step: StepPlan) -> dict[str, Any]:

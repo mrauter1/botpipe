@@ -19,15 +19,17 @@ from typing import Annotated, Any, Union, get_args, get_origin
 
 from pydantic import BaseModel
 
-from .compiler import CompiledWorkflow, compile_workflow
+from .compiler import compile_workflow
 from .descriptors import effective_parameters_model
 from .route_reporting import (
     payload_contract_for_route,
     provider_response_contract_for_routes,
     route_fields_contract_for_route,
 )
+from .route_contracts import required_write_names, route_target_value
 from .validation import is_workflow_class
 from .workflow_catalog import AuthoringShape, WorkflowCatalogEntry, discover_workflow_catalog, workflow_search_roots
+from .workflow_plan import WorkflowPlan
 
 
 class WorkflowCapabilityInspectionError(LookupError):
@@ -40,7 +42,7 @@ class WorkflowLoadedPackage:
 
     workflow_cls: type[Any]
     parameters_cls: type[Any] | None
-    compiled: CompiledWorkflow
+    compiled: WorkflowPlan
 
 
 @dataclass(frozen=True, slots=True)
@@ -389,15 +391,15 @@ def workflow_capability_payload(entry: WorkflowCapabilityEntry) -> dict[str, obj
                 "suppressed_route_tags": list(step.suppressed_route_tags),
                 "has_expected_output_schema": step.expected_output_schema is not None,
                 "kind": step.kind,
-                "log_artifacts": list(step.log_artifacts),
+                "log_artifacts": [_surface_ref_payload(value) for value in step.log_artifacts],
                 "name": step.name,
                 "provider_visible_routes_full_auto": list(step.provider_visible_routes_full_auto),
                 "provider_visible_routes_interactive": list(step.provider_visible_routes_interactive),
                 "provider_response_contracts": deepcopy(step.provider_response_contracts),
                 "producer_prompt": step.producer_prompt,
-                "writes": list(step.writes),
-                "reads": list(step.reads),
-                "requires": list(step.requires),
+                "writes": [_surface_ref_payload(value) for value in step.writes],
+                "reads": [_surface_ref_payload(value) for value in step.reads],
+                "requires": [_surface_ref_payload(value) for value in step.requires],
                 "runtime_control_routes": list(step.runtime_control_routes),
                 "routes": {route_name: _route_capability_payload(route) for route_name, route in step.routes.items()},
                 "compiled_routes": {
@@ -525,7 +527,7 @@ def selected_workflow_decomposition_surface_payload(
             "state_model": entry.state_model,
             "step_count": len(entry.steps),
             "steps": [
-                _compiled_step_payload(
+                _step_payload(
                     repo_root_path,
                     entry.package_dir,
                     step=step,
@@ -579,7 +581,7 @@ def _inspect_catalog_entry(root_path: Path, entry: WorkflowCatalogEntry) -> Work
     return _capability_entry_from_resolved(resolved, compiled, entry)
 
 
-def _capability_entry_from_resolved(resolved, compiled: CompiledWorkflow, catalog_entry: WorkflowCatalogEntry | None):
+def _capability_entry_from_resolved(resolved, compiled: WorkflowPlan, catalog_entry: WorkflowCatalogEntry | None):
     reference = resolved.reference
     source_path = reference.source_path.resolve() if reference.source_path is not None else None
     if source_path is None:
@@ -657,10 +659,10 @@ def _capability_entry_from_resolved(resolved, compiled: CompiledWorkflow, catalo
             for name, artifact in compiled.artifact_items(authoritative=True)
         ),
         routes={
-            step_name: {tag: route.target for tag, route in routes.items()}
+            step_name: {tag: route_target_value(route.target) for tag, route in routes.items()}
             for step_name, routes in compiled.routes.items()
         },
-        global_routes={tag: route.target for tag, route in compiled.global_routes.items()},
+        global_routes={tag: route_target_value(route.target) for tag, route in compiled.global_routes.items()},
         compiled_global_routes=_compiled_routes(
             tuple(compiled.global_routes.keys()),
             step_routes=compiled.global_routes,
@@ -668,7 +670,7 @@ def _capability_entry_from_resolved(resolved, compiled: CompiledWorkflow, catalo
             expected_output_schema=None,
         ),
         steps=tuple(
-            _compiled_step_capability(
+            _step_capability(
                 step,
                 default_session_name=compiled.default_session_name,
                 step_routes=compiled.routes.get(step.name, {}),
@@ -1153,9 +1155,9 @@ def _compiled_routes(
         )
         route_fields_contract = route_fields_contract_for_route(route)
         routes[route_name] = WorkflowRouteCapability(
-            target=route.target,
+            target=route_target_value(route.target),
             summary=route.summary,
-            required_writes=tuple(route.required_writes or ()),
+            required_writes=required_write_names(route),
             handoff=route.handoff,
             on_taken=getattr(route.on_taken, "__name__", None),
             provider_visibility=route.provider_visibility,
@@ -1182,7 +1184,7 @@ def _provider_route_map(step: Any, *, policy: str) -> dict[str, Any]:
         if policy == "interactive"
         else step.provider_visible_routes_full_auto
     )
-    route_table = getattr(step, "route_table", None) or {}
+    route_table = getattr(step, "_route_table", None) or {}
     return {
         route_tag: route_table[route_tag]
         for route_tag in visible_tags
@@ -1190,7 +1192,7 @@ def _provider_route_map(step: Any, *, policy: str) -> dict[str, Any]:
     }
 
 
-def _compiled_step_capability(
+def _step_capability(
     step,
     *,
     default_session_name: str,
@@ -1203,7 +1205,7 @@ def _compiled_step_capability(
         global_routes=global_routes,
         expected_output_schema=step.expected_output_schema,
     )
-    compiled_route_tags = tuple((getattr(step, "route_table", None) or {}).keys())
+    compiled_route_tags = tuple((getattr(step, "_route_table", None) or {}).keys())
     compiled_routes = _compiled_routes(
         compiled_route_tags,
         step_routes=step_routes,
@@ -1287,7 +1289,7 @@ def _route_capability_payload(route: WorkflowRouteCapability) -> dict[str, objec
     }
 
 
-def _compiled_step_payload(
+def _step_payload(
     repo_root: Path,
     package_dir: Path,
     *,
@@ -1301,16 +1303,16 @@ def _compiled_step_payload(
         "suppressed_route_tags": list(step.suppressed_route_tags),
         "expected_output_schema": step.expected_output_schema,
         "kind": step.kind,
-        "log_artifacts": list(step.log_artifacts),
+        "log_artifacts": [_surface_ref_payload(value) for value in step.log_artifacts],
         "name": step.name,
         "provider_visible_routes_full_auto": list(step.provider_visible_routes_full_auto),
         "provider_visible_routes_interactive": list(step.provider_visible_routes_interactive),
         "provider_response_contracts": deepcopy(step.provider_response_contracts),
         "producer_prompt": step.producer_prompt,
         "producer_prompt_repo_relative": _prompt_repo_relative(repo_root, package_dir, step.producer_prompt),
-        "writes": list(step.writes),
-        "reads": list(step.reads),
-        "requires": list(step.requires),
+        "writes": [_surface_ref_payload(value) for value in step.writes],
+        "reads": [_surface_ref_payload(value) for value in step.reads],
+        "requires": [_surface_ref_payload(value) for value in step.requires],
         "runtime_control_routes": list(step.runtime_control_routes),
         "routes": {route_name: _route_capability_payload(route) for route_name, route in step.routes.items()},
         "compiled_routes": {
@@ -1324,7 +1326,7 @@ def _compiled_step_payload(
     }
 
 
-def _resolved_prompt_paths(package_dir: Path, compiled: CompiledWorkflow) -> tuple[Path, ...]:
+def _resolved_prompt_paths(package_dir: Path, compiled: WorkflowPlan) -> tuple[Path, ...]:
     paths: list[Path] = []
     for step in compiled.steps.values():
         for prompt in (step.producer_prompt, step.verifier_prompt):
@@ -1682,6 +1684,25 @@ def _annotation_supports_multiple(annotation: Any) -> bool:
 
 def _qualified_name(candidate: type[Any]) -> str:
     return f"{candidate.__module__}.{candidate.__qualname__}"
+
+
+def _surface_ref_payload(value: Any) -> Any:
+    if isinstance(value, (str, int, float, bool)) or value is None:
+        return value
+    if isinstance(value, Path):
+        return str(value)
+    qualified_name = getattr(value, "qualified_name", None)
+    if isinstance(qualified_name, str) and qualified_name:
+        return qualified_name
+    raw_value = getattr(value, "value", None)
+    if isinstance(raw_value, Path):
+        return str(raw_value)
+    if isinstance(raw_value, str):
+        return raw_value
+    name = getattr(value, "name", None)
+    if isinstance(name, str) and name:
+        return name
+    return str(value)
 
 
 def _prompt_path(prompt: Any) -> str | None:

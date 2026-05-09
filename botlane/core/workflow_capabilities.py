@@ -391,15 +391,15 @@ def workflow_capability_payload(entry: WorkflowCapabilityEntry) -> dict[str, obj
                 "suppressed_route_tags": list(step.suppressed_route_tags),
                 "has_expected_output_schema": step.expected_output_schema is not None,
                 "kind": step.kind,
-                "log_artifacts": list(step.log_artifacts),
+                "log_artifacts": [_surface_ref_payload(value) for value in step.log_artifacts],
                 "name": step.name,
                 "provider_visible_routes_full_auto": list(step.provider_visible_routes_full_auto),
                 "provider_visible_routes_interactive": list(step.provider_visible_routes_interactive),
                 "provider_response_contracts": deepcopy(step.provider_response_contracts),
                 "producer_prompt": step.producer_prompt,
-                "writes": list(step.writes),
-                "reads": list(step.reads),
-                "requires": list(step.requires),
+                "writes": [_surface_ref_payload(value) for value in step.writes],
+                "reads": [_surface_ref_payload(value) for value in step.reads],
+                "requires": [_surface_ref_payload(value) for value in step.requires],
                 "runtime_control_routes": list(step.runtime_control_routes),
                 "routes": {route_name: _route_capability_payload(route) for route_name, route in step.routes.items()},
                 "compiled_routes": {
@@ -1303,16 +1303,16 @@ def _step_payload(
         "suppressed_route_tags": list(step.suppressed_route_tags),
         "expected_output_schema": step.expected_output_schema,
         "kind": step.kind,
-        "log_artifacts": list(step.log_artifacts),
+        "log_artifacts": [_surface_ref_payload(value) for value in step.log_artifacts],
         "name": step.name,
         "provider_visible_routes_full_auto": list(step.provider_visible_routes_full_auto),
         "provider_visible_routes_interactive": list(step.provider_visible_routes_interactive),
         "provider_response_contracts": deepcopy(step.provider_response_contracts),
         "producer_prompt": step.producer_prompt,
         "producer_prompt_repo_relative": _prompt_repo_relative(repo_root, package_dir, step.producer_prompt),
-        "writes": list(step.writes),
-        "reads": list(step.reads),
-        "requires": list(step.requires),
+        "writes": [_surface_ref_payload(value) for value in step.writes],
+        "reads": [_surface_ref_payload(value) for value in step.reads],
+        "requires": [_surface_ref_payload(value) for value in step.requires],
         "runtime_control_routes": list(step.runtime_control_routes),
         "routes": {route_name: _route_capability_payload(route) for route_name, route in step.routes.items()},
         "compiled_routes": {
@@ -1684,6 +1684,25 @@ def _annotation_supports_multiple(annotation: Any) -> bool:
 
 def _qualified_name(candidate: type[Any]) -> str:
     return f"{candidate.__module__}.{candidate.__qualname__}"
+
+
+def _surface_ref_payload(value: Any) -> Any:
+    if isinstance(value, (str, int, float, bool)) or value is None:
+        return value
+    if isinstance(value, Path):
+        return str(value)
+    qualified_name = getattr(value, "qualified_name", None)
+    if isinstance(qualified_name, str) and qualified_name:
+        return qualified_name
+    raw_value = getattr(value, "value", None)
+    if isinstance(raw_value, Path):
+        return str(raw_value)
+    if isinstance(raw_value, str):
+        return raw_value
+    name = getattr(value, "name", None)
+    if isinstance(name, str) and name:
+        return name
+    return str(value)
 
 
 def _prompt_path(prompt: Any) -> str | None:

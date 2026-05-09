@@ -6,9 +6,13 @@ Not part of the public botlane authoring API.
 from __future__ import annotations
 
 from dataclasses import dataclass
-from typing import Any, Callable, Literal, TypeAlias
+from typing import TYPE_CHECKING, Any, Callable, Literal, TypeAlias
 
 from .identifiers import ArtifactId
+from .primitives import AWAIT_INPUT, FAIL, FINISH
+
+if TYPE_CHECKING:
+    from .stores.protocols import PendingHandoff
 
 
 RouteTargetKind: TypeAlias = Literal["step", "finish", "await_input", "fail", "disabled"]
@@ -26,6 +30,13 @@ class RouteTarget:
             return
         if self.step_name is not None:
             raise ValueError("non-step route targets must not include step_name")
+
+    def __eq__(self, other: object) -> bool:
+        if isinstance(other, str):
+            return route_target_value(self) == other
+        if not isinstance(other, RouteTarget):
+            return NotImplemented
+        return (self.kind, self.step_name) == (other.kind, other.step_name)
 
 
 @dataclass(frozen=True, slots=True)
@@ -73,6 +84,46 @@ class RouteContract:
     disabled: bool
     is_runtime_control: bool
 
+    @property
+    def provider_visibility(self) -> str:
+        return self.provider.visibility
+
+    @property
+    def provider_visible(self) -> bool:
+        return self.provider.visible
+
+    @property
+    def provider_visible_interactive(self) -> bool:
+        return self.provider.visible_interactive
+
+    @property
+    def provider_visible_full_auto(self) -> bool:
+        return self.provider.visible_full_auto
+
+    @property
+    def payload_schema_mode(self) -> str:
+        return self.payload.schema_mode
+
+    @property
+    def payload_schema(self) -> dict[str, Any] | None:
+        return self.payload.schema
+
+    @property
+    def payload_validator(self) -> Any | None:
+        return self.payload.validator
+
+    @property
+    def route_fields_schema(self) -> dict[str, Any] | None:
+        return self.route_fields.schema
+
+    @property
+    def route_fields_validator(self) -> Any | None:
+        return self.route_fields.validator
+
+    @property
+    def _required_writes_explicit(self) -> bool:
+        return self.required_writes.explicit is not None
+
 
 @dataclass(frozen=True, slots=True)
 class Continue:
@@ -105,7 +156,7 @@ class RouteDecision:
     contract: RouteContract | None
     action: RouteAction
     runtime_control: str | None = None
-    pending_handoffs: tuple[Any, ...] = ()
+    pending_handoffs: tuple["PendingHandoff", ...] = ()
     provider_attributable: bool = False
     source_hook: str | None = None
     source_phase: str | None = None
@@ -136,6 +187,22 @@ def route_action_for_contract(
     if target.kind == "fail":
         return FailAction(reason=reason, failure_context=failure_context)
     raise ValueError("disabled routes do not have a runtime action")
+
+
+def route_target_value(target: RouteTarget) -> str | None:
+    if target.kind == "step":
+        return target.step_name
+    if target.kind == "finish":
+        return FINISH
+    if target.kind == "await_input":
+        return AWAIT_INPUT
+    if target.kind == "fail":
+        return FAIL
+    return None
+
+
+def required_write_names(contract: RouteContract) -> tuple[str, ...]:
+    return tuple(artifact_id.qualified_name for artifact_id in contract.required_writes.declared)
 
 
 def available_route_tags(plan: Any, step_name: str) -> tuple[str, ...]:

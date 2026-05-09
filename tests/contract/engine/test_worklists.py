@@ -243,24 +243,15 @@ def test_prompt_runtime_reports_missing_item_state_field_with_placeholder_contex
         entry = assess
         transitions = {assess: {"done": FINISH}}
 
-    task_folder, run_folder = _workspace(tmp_path)
-    engine = Engine(
-        MissingItemStateFieldWorkflow,
-        provider=ScriptedLLMProvider(llm_turns=[Outcome(raw_output="ok", tag="done")]),
-        session_store=InMemorySessionStore(),
-        checkpoint_store=InMemoryCheckpointStore(),
-    )
-
     with pytest.raises(
-        WorkflowExecutionError,
-        match=r"prompt placeholder on step 'assess' \{item\.state\.priority\} references unknown runtime field 'priority' on worklist 'gate'",
+        WorkflowValidationError,
+        match=r"step 'assess' prompt placeholder \{item\.state\.priority\} references unknown item state field 'priority' on worklist 'gate'",
     ):
-        engine.run(
-            task_id="task-1",
-            run_id="run-1",
-            task_folder=task_folder,
-            run_folder=run_folder,
-            root=tmp_path,
+        Engine(
+            MissingItemStateFieldWorkflow,
+            provider=ScriptedLLMProvider(llm_turns=[Outcome(raw_output="ok", tag="done")]),
+            session_store=InMemorySessionStore(),
+            checkpoint_store=InMemoryCheckpointStore(),
         )
 def test_prompt_runtime_reports_missing_worklist_current_payload_path_with_placeholder_context(tmp_path: Path):
     class MissingWorklistPayloadPromptWorkflow(Workflow):

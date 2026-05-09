@@ -71,6 +71,24 @@ def _patch_missing_jsonschema(monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setattr(builtins, "__import__", fake_import)
 
 
+def _surface_ref_name(value):
+    qualified_name = getattr(value, "qualified_name", None)
+    if isinstance(qualified_name, str):
+        return qualified_name
+    raw_value = getattr(value, "value", None)
+    if isinstance(raw_value, str):
+        return raw_value
+    return value
+
+
+def _surface_ref_names(values):
+    return tuple(_surface_ref_name(value) for value in values)
+
+
+def _route_required_write_names(route):
+    return tuple(artifact_id.qualified_name for artifact_id in route.required_writes.declared)
+
+
 def test_validation_allows_missing_state_with_empty_fallback_model():
     def _missingstateworkflow_on_begin(ctx):
         return Event('done')
@@ -568,12 +586,12 @@ def test_validation_accepts_same_identity_workflow_level_artifact_written_by_one
 
     assert DualRoleArtifactWorkflow.request.qualified_name == "request"
     assert DualRoleArtifactWorkflow.request.owner_step is None
-    assert compiled.artifacts["request"].qualified_name == "request"
-    assert compiled.artifacts["request"].workflow_level is True
-    assert compiled.artifacts["request"].producer_steps == ("publish",)
+    assert compiled.artifact_spec_for_qualified_name("request").qualified_name == "request"
+    assert compiled.artifact_spec_for_qualified_name("request").workflow_level is True
+    assert compiled.artifact_spec_for_qualified_name("request").producer_steps == ("publish",)
     assert compiled.artifacts_by_qualified_name["request"].name == "request"
-    assert compiled.steps["publish"].writes == ("request",)
-    assert compiled.routes["publish"]["done"].required_writes == ("request",)
+    assert _surface_ref_names(compiled.steps["publish"].writes) == ("request",)
+    assert _route_required_write_names(compiled.routes["publish"]["done"]) == ("request",)
 
 
 def test_validation_accepts_same_identity_workflow_level_artifact_written_by_multiple_steps():
@@ -597,11 +615,11 @@ def test_validation_accepts_same_identity_workflow_level_artifact_written_by_mul
 
     compiled = compile_workflow(MultiProducerArtifactWorkflow)
 
-    assert compiled.artifacts["request"].qualified_name == "request"
-    assert compiled.artifacts["request"].workflow_level is True
-    assert compiled.artifacts["request"].producer_steps == ("plan", "revise")
-    assert compiled.steps["plan"].writes == ("request",)
-    assert compiled.steps["revise"].writes == ("request",)
+    assert compiled.artifact_spec_for_qualified_name("request").qualified_name == "request"
+    assert compiled.artifact_spec_for_qualified_name("request").workflow_level is True
+    assert compiled.artifact_spec_for_qualified_name("request").producer_steps == ("plan", "revise")
+    assert _surface_ref_names(compiled.steps["plan"].writes) == ("request",)
+    assert _surface_ref_names(compiled.steps["revise"].writes) == ("request",)
 
 
 def test_validation_rejects_distinct_artifacts_with_same_public_name_across_workflow_and_step_output():
@@ -931,7 +949,7 @@ def test_compilation_exposes_step_control_contracts():
     assert compiled.route("ask", "failed").target == "FAIL"
     assert compiled.route("ask", "failed").summary == "Routes from 'GLOBAL' to 'FAIL'."
     assert {
-        route_name: compiled_route.required_writes
+        route_name: _route_required_write_names(compiled_route)
         for route_name, compiled_route in compiled.routes["ask"].items()
     } == {
         "done": (),
@@ -1072,9 +1090,9 @@ def test_compilation_normalizes_route_metadata_required_writes():
     compiled = compile_workflow(ContractWorkflow)
 
     assert compiled.routes["ask"]["done"].summary == "workflow completed cleanly"
-    assert compiled.routes["ask"]["done"].required_writes == ("ask.report",)
+    assert _route_required_write_names(compiled.routes["ask"]["done"]) == ("ask.report",)
     assert {
-        route_name: compiled_route.required_writes
+        route_name: _route_required_write_names(compiled_route)
         for route_name, compiled_route in compiled.routes["ask"].items()
     } == {
         "done": ("ask.report",),
@@ -1111,8 +1129,8 @@ def test_compilation_keeps_public_empty_required_writes_but_marks_explicit_empty
     default_route = compiled.routes["ask"]["default_done"]
     optional_route = compiled.routes["ask"]["optional_done"]
 
-    assert default_route.required_writes == ()
-    assert optional_route.required_writes == ()
+    assert _route_required_write_names(default_route) == ()
+    assert _route_required_write_names(optional_route) == ()
     assert default_route._required_writes_explicit is False
     assert optional_route._required_writes_explicit is True
     assert explicit_route_required_writes(default_route) is None
@@ -1149,7 +1167,7 @@ def test_compilation_preserves_extended_artifact_metadata():
 
 
     compiled = compile_workflow(ArtifactMetadataWorkflow)
-    artifact = compiled.artifacts["report"]
+    artifact = compiled.artifact_spec_for_qualified_name("ask.report")
 
     assert artifact.kind == "json"
     assert artifact.schema is ReviewPayload
@@ -1185,10 +1203,10 @@ def test_step_local_artifacts_bind_names_and_qualified_names():
     assert StepLocalArtifactWorkflow.draft.summary.name == "summary"
     assert StepLocalArtifactWorkflow.draft.summary.owner_step == "draft"
     assert StepLocalArtifactWorkflow.draft.summary.qualified_name == "draft.summary"
-    assert compiled.artifacts["summary"].owner_step == "draft"
-    assert compiled.artifacts["summary"].qualified_name == "draft.summary"
-    assert compiled.artifacts_by_qualified_name["draft.summary"].name == "draft.summary"
-    assert compiled.steps["draft"].writes == ("draft.summary", "draft.report")
+    assert compiled.artifact_spec_for_qualified_name("draft.summary").owner_step == "draft"
+    assert compiled.artifact_spec_for_qualified_name("draft.summary").qualified_name == "draft.summary"
+    assert compiled.artifacts_by_qualified_name["draft.summary"].name == "summary"
+    assert _surface_ref_names(compiled.steps["draft"].writes) == ("draft.summary", "draft.report")
 
 
 def test_compilation_requires_accept_step_local_artifact_reference():
@@ -1217,7 +1235,7 @@ def test_compilation_requires_accept_step_local_artifact_reference():
 
     compiled = compile_workflow(StepLocalDependencyWorkflow)
 
-    assert compiled.steps["publish"].requires == ("draft.summary",)
+    assert _surface_ref_names(compiled.steps["publish"].requires) == ("draft.summary",)
 
 
 def test_compilation_tracks_optional_read_artifact_references():
@@ -1246,8 +1264,8 @@ def test_compilation_tracks_optional_read_artifact_references():
 
     compiled = compile_workflow(ReadDependencyWorkflow)
 
-    assert compiled.steps["publish"].reads == ("draft.summary",)
-    assert compiled.steps["publish"].requires == ()
+    assert _surface_ref_names(compiled.steps["publish"].reads) == ("draft.summary",)
+    assert _surface_ref_names(compiled.steps["publish"].requires) == ()
 
 
 def test_route_metadata_required_write_resolves_to_step_local_output():
@@ -1278,7 +1296,7 @@ def test_route_metadata_required_write_resolves_to_step_local_output():
 
     compiled = compile_workflow(RouteScopedArtifactWorkflow)
 
-    assert compiled.routes["draft"]["done"].required_writes == ("draft.summary",)
+    assert _route_required_write_names(compiled.routes["draft"]["done"]) == ("draft.summary",)
     assert "summary" not in compiled.artifacts
     assert set(compiled.artifacts_by_qualified_name) >= {"draft.summary", "review.summary"}
 
@@ -1312,9 +1330,9 @@ def test_compilation_uses_explicit_transition_route_metadata():
     compiled = compile_workflow(ExplicitRouteMetadataWorkflow)
 
     assert compiled.routes["ask"]["done"].summary == "publish the generated report"
-    assert compiled.routes["ask"]["done"].required_writes == ("ask.report",)
+    assert _route_required_write_names(compiled.routes["ask"]["done"]) == ("ask.report",)
     assert {
-        route_name: compiled_route.required_writes
+        route_name: _route_required_write_names(compiled_route)
         for route_name, compiled_route in compiled.routes["ask"].items()
     } == {
         "done": ("ask.report",),
@@ -1419,7 +1437,7 @@ def test_validation_rejects_future_read_artifacts():
 
     compiled = compile_workflow(FutureReadWorkflow)
 
-    assert compiled.steps["publish"].reads == ("draft.summary", "workspace/optional.md")
+    assert _surface_ref_names(compiled.steps["publish"].reads) == ("draft.summary", "workspace/optional.md")
 
 
 def test_compiled_workflow_artifact_items_distinguish_alias_and_authoritative_inventories():
@@ -1447,8 +1465,8 @@ def test_compiled_workflow_artifact_items_distinguish_alias_and_authoritative_in
 
     assert compiled.artifact_items() == ()
     assert compiled.artifact_items(authoritative=True) == (
-        ("draft.summary", compiled.artifacts_by_qualified_name["draft.summary"]),
-        ("review.summary", compiled.artifacts_by_qualified_name["review.summary"]),
+        ("draft.summary", compiled.artifact_spec_for_qualified_name("draft.summary")),
+        ("review.summary", compiled.artifact_spec_for_qualified_name("review.summary")),
     )
 
 
@@ -1675,7 +1693,7 @@ def test_validation_allows_application_routes_without_explicit_route_metadata():
     assert compiled.routes["ask"]["done"].summary == "success path"
     assert compiled.routes["ask"]["retry"].summary == "Routes from 'ask' to 'FINISH'."
     assert {
-        route_name: compiled_route.required_writes
+        route_name: _route_required_write_names(compiled_route)
         for route_name, compiled_route in compiled.routes["ask"].items()
     } == {
         "done": (),
@@ -1804,7 +1822,7 @@ def test_validation_prefers_route_required_writes_over_step_route_metadata_defau
     compiled = compile_workflow(ExplicitRouteRequiredOutputWorkflow)
 
     assert compiled.routes["ask"]["done"].summary == "success path"
-    assert compiled.routes["ask"]["done"].required_writes == ("ask.report",)
+    assert _route_required_write_names(compiled.routes["ask"]["done"]) == ("ask.report",)
 
 
 def test_validation_allows_pair_route_required_writes_across_do_and_review_artifacts():
@@ -1835,11 +1853,11 @@ def test_validation_allows_pair_route_required_writes_across_do_and_review_artif
 
     compiled = compile_workflow(PairRouteWritesWorkflow)
 
-    assert compiled.routes["assess"]["approved"].required_writes == (
+    assert _route_required_write_names(compiled.routes["assess"]["approved"]) == (
         "assess.draft",
         "assess.decision",
     )
-    assert compiled.routes["assess"]["rejected"].required_writes == ("assess.decision",)
+    assert _route_required_write_names(compiled.routes["assess"]["rejected"]) == ("assess.decision",)
 
 
 def test_validation_rejects_pair_verifier_requires_artifact_written_only_in_review_phase():

@@ -90,10 +90,21 @@ def route_required_write_payload(
     """Return a serialized explicit/effective required-write payload for one route."""
 
     explicit = explicit_route_required_writes(route)
+    payload_required_writes = [] if route is None else list(required_write_names(route) if isinstance(route, RouteContract) else route.required_writes or ())
+    payload_explicit = None if explicit is None else list(explicit)
+    if route is not None and step_name is None and isinstance(route, RouteContract):
+        payload_required_writes = [_public_route_artifact_name(compiled, artifact_id) for artifact_id in route.required_writes.declared]
+        if route.required_writes.explicit is None:
+            payload_explicit = None
+        else:
+            payload_explicit = [
+                _public_route_artifact_name(compiled, artifact_id)
+                for artifact_id in route.required_writes.explicit
+            ]
     if route is None:
         effective: list[str] | None = []
     elif step_name is None:
-        effective = None if explicit is None else list(explicit)
+        effective = None if payload_explicit is None else list(payload_explicit)
     else:
         effective = list(
             effective_route_required_writes(
@@ -103,7 +114,14 @@ def route_required_write_payload(
             )
         )
     return {
-        "required_writes": [] if route is None else list(required_write_names(route) if isinstance(route, RouteContract) else route.required_writes or ()),
-        "explicit_required_writes": None if explicit is None else list(explicit),
+        "required_writes": payload_required_writes,
+        "explicit_required_writes": payload_explicit,
         "effective_required_writes": effective,
     }
+
+
+def _public_route_artifact_name(compiled: Any, artifact_id: Any) -> str:
+    for public_name, public_artifact_id in getattr(compiled, "public_artifacts", {}).items():
+        if public_artifact_id == artifact_id:
+            return public_name
+    return artifact_id.qualified_name

@@ -885,7 +885,7 @@ def test_workflow_step_honors_hooks_and_can_participate_in_verifier_rework_loops
     assert child_runs == ["Run child workflow", "Run child workflow"]
     assert child_result_path.exists()
     assert compiled.steps["launch"].kind == "workflow"
-    assert isinstance(compiled.steps["launch"].step, ChildWorkflowStep)
+    assert compiled.steps["launch"].workflow is ChildWorkflow
     assert compiled.steps["launch"].python_handler is None
     assert "on_launch" not in ParentWorkflow.__dict__
 def test_after_hook_re_resolves_artifact_paths_before_on_taken(tmp_path: Path):

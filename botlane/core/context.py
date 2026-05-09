@@ -412,45 +412,45 @@ class Context:
 
     @state.setter
     def state(self, value: BaseModel) -> None:
-        self._set_state(value)
+        self._sync_state(value)
 
-    def _set_state(self, value: BaseModel) -> None:
+    def _sync_state(self, value: BaseModel) -> None:
         self._execution_frame.set_state(value)
 
-    def _set_artifacts(self, artifacts: "ResolvedArtifacts | None") -> None:
+    def _sync_artifacts(self, artifacts: "ResolvedArtifacts | None") -> None:
         self._execution_frame.set_artifacts(artifacts)
 
-    def _set_values(self, values: Mapping[str, Any] | None) -> None:
+    def _sync_values(self, values: Mapping[str, Any] | None) -> None:
         self._execution_frame.set_values(values)
 
-    def _set_route(self, route: Mapping[str, Any] | Any | None) -> None:
+    def _sync_route(self, route: Mapping[str, Any] | Any | None) -> None:
         self._execution_frame.set_route(route)
 
-    def _set_event(self, event: Mapping[str, Any] | Any | None) -> None:
+    def _sync_event(self, event: Mapping[str, Any] | Any | None) -> None:
         self._execution_frame.set_event(event)
 
-    def _set_outcome(self, outcome: Mapping[str, Any] | Any | None) -> None:
+    def _sync_outcome(self, outcome: Mapping[str, Any] | Any | None) -> None:
         self._execution_frame.set_outcome(outcome)
 
-    def _set_meta(self, meta: Mapping[str, Any] | Any | None) -> None:
+    def _sync_meta(self, meta: Mapping[str, Any] | Any | None) -> None:
         self._execution_frame.set_meta(meta)
 
-    def _set_step_state(self, step_state: BaseModel | dict[str, Any] | None) -> None:
+    def _sync_step_state(self, step_state: BaseModel | dict[str, Any] | None) -> None:
         self._execution_frame.set_step_state(step_state)
 
-    def _set_item_state(self, item_state: BaseModel | dict[str, Any] | None) -> None:
+    def _sync_item_state(self, item_state: BaseModel | dict[str, Any] | None) -> None:
         self._execution_frame.set_item_state(item_state)
 
-    def _set_step_item_state(self, step_item_state: BaseModel | dict[str, Any] | None) -> None:
+    def _sync_step_item_state(self, step_item_state: BaseModel | dict[str, Any] | None) -> None:
         self._execution_frame.set_step_item_state(step_item_state)
 
-    def _set_active_worklist(self, worklist_name: str | None) -> None:
+    def _sync_active_worklist(self, worklist_name: str | None) -> None:
         self._execution_frame.set_active_worklist(worklist_name)
 
-    def _set_selection_snapshots(self, snapshots: dict[str, "SelectionSnapshot"]) -> None:
+    def _sync_selection_snapshots(self, snapshots: dict[str, "SelectionSnapshot"]) -> None:
         self._execution_frame.set_selection_snapshots(snapshots)
 
-    def _set_worklist_selection_sync(self, callback: Callable[[str], None] | None) -> None:
+    def _sync_worklist_selection(self, callback: Callable[[str], None] | None) -> None:
         self._execution_frame.set_worklist_selection_sync(callback)
 
     def _set_worklist_selection_resolver(self, callback: Callable[[str], Any] | None) -> None:

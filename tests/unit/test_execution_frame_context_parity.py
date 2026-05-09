@@ -119,17 +119,17 @@ def test_context_private_mutator_facade_updates_execution_frame_and_legacy_field
     ctx = _make_context(tmp_path, values={"shared": "root"})
     updated_values = {"shared": "updated", "count": 2}
 
-    ctx._set_values(updated_values)
-    ctx._set_route({"tag": "done"})
-    ctx._set_event({"tag": "progress"})
-    ctx._set_outcome({"status": "ok"})
-    ctx._set_meta({"source": "test"})
+    ctx._sync_values(updated_values)
+    ctx._sync_route({"tag": "done"})
+    ctx._sync_event({"tag": "progress"})
+    ctx._sync_outcome({"status": "ok"})
+    ctx._sync_meta({"source": "test"})
     ctx._execution_frame.answer = "42"
     ctx._execution_frame.input_response = {"approved": True}
-    ctx._set_step_state({"visits": 1, "last_route": None, "last_reason": None})
-    ctx._set_item_state({"status": "queued"})
-    ctx._set_step_item_state({"visits": 2, "last_route": "done", "last_reason": None})
-    ctx._set_state(ctx.state.model_copy(update={"counter": 3}))
+    ctx._sync_step_state({"visits": 1, "last_route": None, "last_reason": None})
+    ctx._sync_item_state({"status": "queued"})
+    ctx._sync_step_item_state({"visits": 2, "last_route": "done", "last_reason": None})
+    ctx._sync_state(ctx.state.model_copy(update={"counter": 3}))
 
     assert ctx._execution_frame.values is updated_values
     assert ctx._values is updated_values
@@ -199,7 +199,7 @@ def test_context_selection_mutator_clears_only_touched_snapshot_and_runs_sync(tm
     sync_calls: list[str] = []
     selection = gates.initial_selection(ctx)
 
-    ctx._set_worklist_selection_sync(sync_calls.append)
+    ctx._sync_worklist_selection(sync_calls.append)
     ctx._set_worklist_selection("gate", selection)
 
     assert ctx.selection("gate") is selection
@@ -285,7 +285,7 @@ def test_branch_child_lazy_selection_uses_context_selection_mutator_path(tmp_pat
     )
     sync_calls: list[str] = []
 
-    branch._set_worklist_selection_sync(sync_calls.append)
+    branch._sync_worklist_selection(sync_calls.append)
     selection = branch.ensure_selection("gate")
 
     assert branch.selection("gate") is selection
