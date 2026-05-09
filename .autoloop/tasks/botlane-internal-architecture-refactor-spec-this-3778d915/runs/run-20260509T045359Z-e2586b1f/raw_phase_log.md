@@ -1396,3 +1396,147 @@ Open issues / next step
 <loop-control>
 {"schema":"docloop.loop_control/v1","kind":"promise","promise":"COMPLETE"}
 </loop-control>
+
+
+---
+run_id=run-20260509T045359Z-e2586b1f | entry=session_turn | pair=implement | phase=producer | cycle=1 | attempt=1 | thread_id=019e0b6d-ff1f-7b62-a90d-3277958ff03c
+---
+provider=codex
+mode=start
+template=/home/rauter/.local/share/pipx/venvs/autoloop/lib/python3.12/site-packages/autoloop/templates/implement_producer.md
+session_id=019e0b6d-ff1f-7b62-a90d-3277958ff03c
+
+
+---
+run_id=run-20260509T045359Z-e2586b1f | entry=phase_output | pair=implement | phase=producer | process=codex-agent | cycle=1 | attempt=1 | thread_id=019e0b6d-ff1f-7b62-a90d-3277958ff03c
+---
+I’m working the `execution-frame-context-migration` phase. First I’m reading the phase artifacts and the current `Context` implementation so I can wire `ExecutionFrame` behind it without changing public behavior.
+
+I’ve confirmed the phase artifacts are basically placeholders, so the real work is in `botlane/core/context.py` and adjacent tests. Next I’m tracing how `Context` stores mutable state and where branch, fan-in, and worklist state are mutated so the frame can mirror it cleanly.
+
+The current `Context` already carries `RunPaths` and `RunIdentity`; the migration point is the large private-field bag plus `_ContextRuntime`. I’m checking branch and worklist helpers now so the new frame API lines up with the actual mutation patterns instead of the spec in isolation.
+
+I’ve confirmed `execution_frame.py` does not exist yet, and `Context`/branch helpers still clone and mutate the legacy private fields directly. I’m pulling a few targeted tests now so I can preserve the exact observable behavior around child contexts and worklist snapshots while swapping in the frame.
+
+The main compatibility constraint is that a lot of code still reads and sometimes assigns `Context`’s private attributes directly. I’m checking that write surface now so I can decide which fields must stay source-of-truth on the legacy attributes and which can safely flow through the frame first.
+
+I have enough context to edit safely. The implementation will be narrow: add `ExecutionFrame`, make `Context` synthesize and mirror it, update `_ContextRuntime` to write through the frame, then switch branch/fan-in child context creation to derive from child frames without changing the public constructor.
+
+The frame and context wiring is in place. I’m reading back the edited modules for structural mistakes before I run tests, then I’ll add the focused parity tests for message sentinel handling, child frames, and worklist snapshot behavior.
+
+I’m at the verification step now. First pass is the new parity test plus the most relevant existing context and branch-context suites, so I can catch migration mistakes before I widen the regression surface.
+
+The code changes are in; validation is blocked only by the shell environment not having `python` on `PATH`. I’m switching to `python3` and, if needed, the repo’s existing toolchain entrypoint so I can keep the verification local to this phase.
+
+`pytest` isn’t in the system interpreter, but the repo has local virtualenvs. I’m using the project venv next so the verification matches the repository’s own test environment instead of the bare shell.
+
+The new parity coverage passed, and the existing branch-context and run-path suites are still green. The broader `test_workspace_and_context.py` run is in progress; I’m polling that before I widen to simple/SDK regressions.
+
+The broader regression checks are still clean: simple surface, SDK facade, prompt-context, and worklist contract tests all passed. I’m doing one more pass through branch-group runtime and the larger primitives/context unit suite because those hit the child-context paths most directly.
+
+I’m in the last bookkeeping pass now: recording the non-obvious compatibility choices and summarizing the phase artifacts so later turns don’t accidentally drift from the frame-mirroring approach that kept the old private `Context` surface intact.
+
+Scope considered
+
+- `botlane/core/context.py`, `botlane/core/branch_groups/context.py`, new [execution_frame.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/botlane/core/execution_frame.py), and phase-local notes/decisions.
+- Regression surface around branch/fan-in child contexts, worklist snapshots, message sentinel behavior, simple surface, SDK facade, and strictness checks.
+
+What I analyzed
+
+- Current `Context` private-field storage, `_ContextRuntime` mutators, and `_CONTEXT_RUNTIMES` sidecar.
+- Branch/fan-in child context cloning in [branch_groups/context.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/botlane/core/branch_groups/context.py).
+- Existing tests covering run paths, branch sessions, worklists, prompt context, SDK/simple compatibility, and strictness.
+
+What I changed
+
+- Added [botlane/core/execution_frame.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/botlane/core/execution_frame.py) with `ExecutionFrame`, child-frame helpers, frame mutators, and the internal message sentinel.
+- Updated [botlane/core/context.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/botlane/core/context.py) so `Context` synthesizes `_execution_frame`, aliases `_DEFAULT_MESSAGE` to the frame sentinel, and mirrors frame state back onto legacy private attrs after runtime mutations.
+- Updated [botlane/core/branch_groups/context.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/botlane/core/branch_groups/context.py) so branch/fan-in child contexts derive from frame child copies instead of manually cloning the mutable field bundle.
+- Added [tests/unit/test_execution_frame_context_parity.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/tests/unit/test_execution_frame_context_parity.py) for sentinel parity, runtime mutation parity, branch child-frame sharing, fan-in metadata, and worklist snapshot behavior.
+
+Key findings / decisions
+
+- The safe migration path is frame-first writes plus immediate legacy-field mirroring, because engine/worklist/branch code and tests still read `_message`, `_selections`, `_branch`, `_fan_in`, and related private attrs directly.
+- Keeping `_DEFAULT_MESSAGE` identical to the new frame sentinel preserved existing engine/runner default-message identity semantics without touching public call sites.
+
+Open issues / next step
+
+- No functional blockers in this phase.
+- Targeted validation passed with `./.venv/bin/python -m pytest`; I did not run the full `python -m pytest` suite yet. Passed suites included:
+  - `tests/unit/test_execution_frame_context_parity.py`
+  - `tests/unit/test_branch_group_context_sessions.py`
+  - `tests/unit/test_run_paths.py`
+  - `tests/runtime/test_workspace_and_context.py`
+  - `tests/unit/test_simple_surface.py`
+  - `tests/unit/test_sdk_facade.py`
+  - `tests/contract/engine/test_prompt_context.py`
+  - `tests/contract/engine/test_worklists.py`
+  - `tests/contract/test_branch_group_runtime.py`
+  - `tests/unit/test_primitives_and_stores.py`
+  - `tests/strictness/test_no_compat.py`
+  - `tests/strictness/test_core_runtime_boundary.py`
+
+
+---
+run_id=run-20260509T045359Z-e2586b1f | entry=session_turn | pair=implement | phase=verifier | cycle=1 | attempt=1 | thread_id=019e0b6d-ff1f-7b62-a90d-3277958ff03c
+---
+provider=codex
+mode=resume
+template=/home/rauter/.local/share/pipx/venvs/autoloop/lib/python3.12/site-packages/autoloop/templates/implement_verifier.md
+session_id=019e0b6d-ff1f-7b62-a90d-3277958ff03c
+
+
+---
+run_id=run-20260509T045359Z-e2586b1f | entry=phase_output | pair=implement | phase=verifier | process=codex-agent | cycle=1 | attempt=1 | thread_id=019e0b6d-ff1f-7b62-a90d-3277958ff03c
+---
+I’m reviewing the execution-frame phase against the acceptance criteria and the actual diffs in `Context` and branch child-context handling. First I’m reading the phase artifacts and the touched files to decide whether the migration preserved behavior or introduced a compatibility gap.
+
+I’m checking for a behavior gap that the current tests might miss: whether any existing code still mutates `Context`’s legacy private fields directly, and whether the new frame/property split would now make those writes invisible through the public facade.
+
+I’ve finished the dependency and regression sweep. I’m not seeing a material behavior or compatibility gap in the scoped changes, so I’m updating the review artifacts to mark the phase complete and record that no actionable findings were identified.
+
+Scope considered
+
+- Active phase artifacts in `execution-frame-context-migration`.
+- Scoped diff in `botlane/core/execution_frame.py`, `botlane/core/context.py`, `botlane/core/branch_groups/context.py`, and `tests/unit/test_execution_frame_context_parity.py`.
+- Adjacent regression surface around branch/fan-in child contexts, worklist state, message sentinel behavior, simple surface, SDK facade, and strictness coverage.
+
+What I analyzed
+
+- The `Context` constructor and public properties versus the new `_execution_frame` backing store.
+- `_ContextRuntime` mutation paths and whether legacy private fields remain mirrored for existing callers.
+- Child-context creation in `branch_groups/context.py` and whether shared state, copied selections, and request snapshot behavior still match prior semantics.
+- The implementation notes, validation record, and run-local decisions for this phase.
+
+What I reviewed
+
+- Diff structure and ownership boundaries against the phase contract and out-of-scope constraints.
+- Compatibility risk from the `_DEFAULT_MESSAGE` sentinel aliasing and frame/property split.
+- Targeted validation claims covering:
+  - `tests/unit/test_execution_frame_context_parity.py`
+  - `tests/unit/test_branch_group_context_sessions.py`
+  - `tests/unit/test_run_paths.py`
+  - `tests/runtime/test_workspace_and_context.py`
+  - `tests/unit/test_simple_surface.py`
+  - `tests/unit/test_sdk_facade.py`
+  - `tests/contract/engine/test_prompt_context.py`
+  - `tests/contract/engine/test_worklists.py`
+  - `tests/contract/test_branch_group_runtime.py`
+  - `tests/unit/test_primitives_and_stores.py`
+  - `tests/strictness/test_no_compat.py`
+  - `tests/strictness/test_core_runtime_boundary.py`
+
+Key findings / decisions
+
+- No blocking findings.
+- No non-blocking findings.
+- Updated `criteria.md` to check all boxes and appended `feedback.md` with a no-findings review outcome.
+
+Open issues / next step
+
+- No open issues in this phase-local review.
+- This review can be treated as complete for `execution-frame-context-migration`.
+
+<loop-control>
+{"schema":"docloop.loop_control/v1","kind":"promise","promise":"COMPLETE"}
+</loop-control>
