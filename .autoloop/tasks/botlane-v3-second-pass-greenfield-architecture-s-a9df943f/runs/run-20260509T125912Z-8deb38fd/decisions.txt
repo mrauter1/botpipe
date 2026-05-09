@@ -15,3 +15,6 @@ Removing `StepHeader.original_step` in Phase 1 keeps the canonical header shape 
 <autoloop-decisions-header version="1" block_seq="5" owner="test_author" phase_id="canonical-type-hardening" pair="test" turn_seq="1" run_id="run-20260509T125912Z-8deb38fd" ts="2026-05-09T13:34:00.223973+00:00" />
 Phase 1 branch-manifest tests now cover both direct `BranchManifest` input to `select_branch_group_outcome(...)` and the preserved mapping-shaped payload seen by custom outcome aggregators so later branch-runtime cutovers cannot silently regress either boundary.
 <autoloop-decisions-header version="1" block_seq="6" owner="implementer" phase_id="atomic-plan-runtime-cutover" pair="implement" turn_seq="1" run_id="run-20260509T125912Z-8deb38fd" ts="2026-05-09T13:36:20.143942+00:00" />
+Phase 2 keeps a private `_route_table` cache on `StepPlan` variants so engine/provider/CLI capability views can derive route metadata without reintroducing public compiled-step wrappers or adapter modules.
+`ArtifactId` and `RouteTarget` now support string equality as a compatibility shim for existing internal/public helper surfaces while canonical plan storage remains typed.
+Engine artifact resolution now indexes resolved handles by qualified-name string, public artifact alias, and `ArtifactId` so typed `StepIO` references work without changing `ArtifactHandle` public behavior.
