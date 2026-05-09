@@ -1240,3 +1240,62 @@ Open issues / next step
 
 - No open implementation issue in this phase.
 - If a later approved change actually opens `botlane/core/workflow_capabilities.py`, that turn should activate the local-only `_capability_entry_from_resolved` cleanup and add focused parity tests then.
+
+
+---
+run_id=run-20260509T124548Z-f67cf8d4 | entry=session_turn | pair=implement | phase=verifier | cycle=1 | attempt=1 | thread_id=019e0d24-0aa0-7ee0-8b2f-3a1ea872689e
+---
+provider=codex
+mode=resume
+template=/home/rauter/.local/share/pipx/venvs/autoloop/lib/python3.12/site-packages/autoloop/templates/implement_verifier.md
+session_id=019e0d24-0aa0-7ee0-8b2f-3a1ea872689e
+
+
+---
+run_id=run-20260509T124548Z-f67cf8d4 | entry=phase_output | pair=implement | phase=verifier | process=codex-agent | cycle=1 | attempt=1 | thread_id=019e0d24-0aa0-7ee0-8b2f-3a1ea872689e
+---
+I’m reviewing the phase-local implementation outcome against the conditional hotspot-9 contract first. The main question is whether the implementer correctly kept the slice deferred without broadening scope, and whether the review artifacts reflect that cleanly.
+
+The implementation is still looking scope-safe. I’m doing one last verification pass on the actual source touch set and the cited capability-inspection test path before I finalize criteria and feedback.
+
+I verified the touched set is artifact-only and re-ran the cited focused test. I’m marking the phase complete with no findings, since the implementation followed the deferment contract and did not broaden scope into `workflow_capabilities.py`.
+
+Scope considered
+
+- Active phase `conditional-capability-entry-cleanup` only.
+- Review scope was limited to the phase artifacts, the hotspot-9 deferment contract, the run decision ledger, and the cited capability-inspection validation surface.
+
+What I analyzed
+
+- [criteria.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/task-implement-the-refactor-suggestions-below-to-c2f5dbe1/runs/run-20260509T124548Z-f67cf8d4/artifacts/implement/phases/conditional-capability-entry-cleanup/criteria.md)
+- [feedback.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/task-implement-the-refactor-suggestions-below-to-c2f5dbe1/runs/run-20260509T124548Z-f67cf8d4/artifacts/implement/phases/conditional-capability-entry-cleanup/feedback.md)
+- [implementation_notes.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/task-implement-the-refactor-suggestions-below-to-c2f5dbe1/runs/run-20260509T124548Z-f67cf8d4/artifacts/implement/phases/conditional-capability-entry-cleanup/implementation_notes.md)
+- [plan.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/task-implement-the-refactor-suggestions-below-to-c2f5dbe1/runs/run-20260509T124548Z-f67cf8d4/artifacts/plan/plan.md)
+- [decisions.txt](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/task-implement-the-refactor-suggestions-below-to-c2f5dbe1/runs/run-20260509T124548Z-f67cf8d4/decisions.txt)
+- The current source touch set for `botlane/core/workflow_capabilities.py` and the focused capability-inspection test path in [test_workflow_reference_resolution.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/tests/runtime/test_workflow_reference_resolution.py:424)
+
+What I reviewed
+
+- Whether the implementation broadened scope into `botlane/core/workflow_capabilities.py` despite the conditional contract.
+- Whether hotspot 9 remained explicit and deferred in the plan and decision ledger.
+- Whether the recorded validation was plausible and reproducible.
+- Whether the phase artifacts were updated coherently.
+
+Key findings / decisions
+
+- No blocking findings.
+- No non-blocking corrective findings.
+- Updated `criteria.md` to mark all checks complete.
+- Appended `IMP-000` to `feedback.md` documenting that there were no review findings.
+- Revalidated the cited focused test path:
+  - `.venv/bin/python -m py_compile botlane/core/workflow_capabilities.py tests/runtime/test_workflow_reference_resolution.py`
+  - `.venv/bin/python -m pytest tests/runtime/test_workflow_reference_resolution.py -k 'inspect_workflow_reference or capability_inspection or simple_declaration_workflow_is_discoverable_by_path_module_name_and_capability_inspection' -q` → `1 passed, 13 deselected`
+
+Open issues / next step
+
+- No open issues in this phase.
+- If a later turn actually opens `botlane/core/workflow_capabilities.py` for adjacent work, that turn should activate the local `_capability_entry_from_resolved` cleanup and add focused parity tests then.
+
+<loop-control>
+{"schema":"docloop.loop_control/v1","kind":"promise","promise":"COMPLETE"}
+</loop-control>

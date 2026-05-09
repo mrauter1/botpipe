@@ -723,6 +723,226 @@ class Context:
             input=payload_input,
         )
 
+    def _set_state(self, state: BaseModel) -> None:
+        self._execution_frame.set_state(state)
+
+    def _set_answer(self, answer: str | None) -> None:
+        self._execution_frame.answer = answer
+
+    def _set_input_response(self, input_response: Any | None) -> None:
+        self._execution_frame.input_response = input_response
+
+    def _set_artifacts(self, artifacts: "ResolvedArtifacts | None") -> None:
+        self._execution_frame.set_artifacts(artifacts)
+
+    def _set_values(self, values: Mapping[str, Any] | None) -> None:
+        self._execution_frame.set_values(
+            values if isinstance(values, dict) else normalize_mapping(values)
+        )
+
+    def _set_route(self, route: Mapping[str, Any] | Any | None) -> None:
+        self._execution_frame.set_route(route)
+
+    def _set_outcome(self, outcome: Mapping[str, Any] | Any | None) -> None:
+        self._execution_frame.set_outcome(outcome)
+
+    def _set_event(self, event: Mapping[str, Any] | Any | None) -> None:
+        self._execution_frame.set_event(event)
+
+    def _set_meta(self, meta: Mapping[str, Any] | Any | None) -> None:
+        self._execution_frame.set_meta(meta)
+
+    def _set_step_state_store(self, state: BaseModel | dict[str, Any]) -> None:
+        self._execution_frame.set_step_state(state)
+
+    def _set_item_state_store(self, state: BaseModel | dict[str, Any] | None) -> None:
+        self._execution_frame.set_item_state(state)
+
+    def _set_step_item_state_store(self, state: BaseModel | dict[str, Any] | None) -> None:
+        self._execution_frame.set_step_item_state(state)
+
+    def _set_session_store(self, session_store: "SessionStore") -> None:
+        self._execution_frame.set_session_store(session_store)
+
+    def _set_branch(self, branch: BranchMetadata | None) -> None:
+        self._execution_frame.set_branch(branch)
+
+    def _set_fan_in(self, fan_in: FanInMetadata | None) -> None:
+        self._execution_frame.set_fan_in(fan_in)
+
+    def _set_step_execution_id(self, step_execution_id: str | None) -> None:
+        self._execution_frame.set_step_execution_id(step_execution_id)
+
+    def _set_selection(self, worklist: "Worklist[Any] | str", selection: "Selection[Any]") -> None:
+        worklist_name = self._worklist_name(worklist)
+        self._execution_frame.set_selection(worklist_name, selection)
+
+    def _set_active_worklist(self, worklist: "Worklist[Any] | str | None") -> None:
+        self._execution_frame.set_active_worklist(
+            None if worklist is None else self._worklist_name(worklist)
+        )
+
+    def _set_selections(self, selections: dict[str, "Selection[Any]"]) -> None:
+        self._execution_frame.set_selections(selections)
+
+    def _set_selection_snapshots(self, snapshots: dict[str, "SelectionSnapshot"]) -> None:
+        self._execution_frame.set_selection_snapshots(snapshots)
+
+    def _set_worklist_selection_sync(self, callback: Callable[[str], None] | None) -> None:
+        self._execution_frame.set_worklist_selection_sync(callback)
+
+    def _set_worklist_selection_resolver(
+        self,
+        callback: Callable[[str], "Selection[Any]"] | None,
+    ) -> None:
+        self._execution_frame.set_worklist_selection_resolver(callback)
+
+    def _set_execution_source(
+        self,
+        *,
+        hook_name: str | None,
+        phase: str | None,
+        invocation_id: str | None,
+    ) -> None:
+        self._execution_frame.set_execution_source(
+            hook_name=hook_name,
+            phase=phase,
+            invocation_id=invocation_id,
+        )
+
+    def _sync_scoped_state_after_worklist_selection_change(self, worklist: "Worklist[Any] | str") -> None:
+        callback = self._execution_frame.worklist_selection_sync
+        if callback is None:
+            return
+        callback(self._worklist_name(worklist))
+
+    def _emit_worklist_runtime_event(
+        self,
+        event_type: str,
+        *,
+        worklist_name: str,
+        previous_selection: "Selection[Any]",
+        new_selection: "Selection[Any]",
+    ) -> None:
+        if self._runtime_event_sink is None:
+            return
+        previous_current = previous_selection.current
+        new_current = new_selection.current
+        previous_status = None if previous_current is None else previous_current.status
+        new_status = None if new_current is None else new_current.status
+        payload: dict[str, Any] = {
+            "step_name": self._step_name,
+            "worklist_name": worklist_name,
+            "previous_current_item_id": None if previous_current is None else previous_current.id,
+            "new_current_item_id": None if new_current is None else new_current.id,
+            "previous_status": previous_status,
+            "new_status": new_status,
+        }
+        visit = _runtime_visits(self._step_item_state or self._step_state)
+        if isinstance(visit, int):
+            payload["visit"] = visit
+        if self._active_worklist is not None:
+            payload["scope"] = self._active_worklist
+        if new_current is not None:
+            payload["item_id"] = new_current.id
+        elif previous_current is not None:
+            payload["item_id"] = previous_current.id
+        step_execution_id = _context_step_execution_id(
+            self,
+            visit=visit,
+            item_id=None if new_current is None else new_current.id,
+        )
+        if step_execution_id is not None:
+            payload["step_execution_id"] = step_execution_id
+        if self._execution_source_hook is not None:
+            payload["source_hook"] = self._execution_source_hook
+        if self._execution_source_phase is not None:
+            payload["source_phase"] = self._execution_source_phase
+        if self._execution_hook_invocation_id is not None:
+            payload["hook_invocation_id"] = self._execution_hook_invocation_id
+        self._runtime_event_sink(event_type, payload)
+
+    def _emit_worklist_selection_resolved(
+        self,
+        *,
+        worklist_name: str,
+        selection: "Selection[Any]",
+        lazy: bool = False,
+        source: str | None = None,
+    ) -> None:
+        if self._runtime_event_sink is None:
+            return
+        current = selection.current
+        payload: dict[str, Any] = {
+            "step_name": self._step_name,
+            "worklist_name": worklist_name,
+            "selection_mode": selection.mode,
+            "selection_explicit": selection.explicit,
+            "item_ids": [item.id for item in selection.items],
+            "current_index": selection.current_index,
+            "current_item_id": None if current is None else current.id,
+            "lazy": lazy,
+            "materialization_state": "materialized",
+        }
+        if source is not None:
+            payload["source"] = source
+        worklist = self._worklists.get(worklist_name)
+        if worklist is not None:
+            payload["source_type"] = worklist.source_type
+            if worklist.missing_policy is not None:
+                payload["missing_policy"] = worklist.missing_policy
+        visit = _runtime_visits(self._step_item_state or self._step_state)
+        if isinstance(visit, int):
+            payload["visit"] = visit
+        if self._active_worklist is not None:
+            payload["scope"] = self._active_worklist
+        step_execution_id = _context_step_execution_id(
+            self,
+            visit=visit,
+            item_id=None if current is None else current.id,
+        )
+        if step_execution_id is not None:
+            payload["step_execution_id"] = step_execution_id
+        if self._execution_source_hook is not None:
+            payload["source_hook"] = self._execution_source_hook
+        if self._execution_source_phase is not None:
+            payload["source_phase"] = self._execution_source_phase
+        if self._execution_hook_invocation_id is not None:
+            payload["hook_invocation_id"] = self._execution_hook_invocation_id
+        self._runtime_event_sink("worklist_selection_resolved", payload)
+
+    def _emit_runtime_event(self, event_type: str, **payload: Any) -> None:
+        if self._runtime_event_sink is None:
+            return
+        event_payload = dict(payload)
+        if "step_name" not in event_payload:
+            event_payload["step_name"] = self._step_name
+        visit = _runtime_visits(self._step_item_state or self._step_state)
+        if isinstance(visit, int) and "visit" not in event_payload:
+            event_payload["visit"] = visit
+        if self._active_worklist is not None and "scope" not in event_payload:
+            event_payload["scope"] = self._active_worklist
+        step_execution_id = _context_step_execution_id(
+            self,
+            visit=visit,
+            item_id=event_payload.get("item_id"),
+        )
+        if step_execution_id is not None and "step_execution_id" not in event_payload:
+            event_payload["step_execution_id"] = step_execution_id
+        if self._execution_source_hook is not None and "source_hook" not in event_payload:
+            event_payload["source_hook"] = self._execution_source_hook
+        if self._execution_source_phase is not None and "source_phase" not in event_payload:
+            event_payload["source_phase"] = self._execution_source_phase
+        if self._execution_hook_invocation_id is not None and "hook_invocation_id" not in event_payload:
+            event_payload["hook_invocation_id"] = self._execution_hook_invocation_id
+        self._runtime_event_sink(event_type, event_payload)
+
+    def _get_cached_worklist_items(self, worklist_name: str) -> tuple[Any, ...] | None:
+        return self._execution_frame.get_cached_worklist_items(worklist_name)
+
+    def _cache_worklist_items(self, worklist_name: str, items: tuple[Any, ...]) -> tuple[Any, ...]:
+        return self._execution_frame.cache_worklist_items(worklist_name, items)
+
     def _worklist_name(self, worklist: "Worklist[Any] | str") -> str:
         if isinstance(worklist, str):
             if worklist not in self._worklists:
