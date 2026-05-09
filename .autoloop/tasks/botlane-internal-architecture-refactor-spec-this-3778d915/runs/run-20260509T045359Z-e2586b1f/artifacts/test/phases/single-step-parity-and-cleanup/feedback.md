@@ -6,3 +6,5 @@
 - Phase Directory Key: single-step-parity-and-cleanup
 - Phase Title: Single Step Parity And Cleanup
 - Scope: phase-local authoritative verifier artifact
+
+- Added focused final-phase regression coverage for the cleanup path: loader/runtime tests keep exported workspace `Params` metadata intact, and the CLI typed-workflow test now asserts `workflows show` and `run` do not leave `__pycache__` under `.botlane/workflows`.
