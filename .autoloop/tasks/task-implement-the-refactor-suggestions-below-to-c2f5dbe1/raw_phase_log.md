@@ -1885,3 +1885,51 @@ If this area is reopened later, the only scoped cleanup worth considering is mov
 <loop-control>
 {"schema":"docloop.loop_control/v1","kind":"promise","promise":"COMPLETE"}
 </loop-control>
+
+
+---
+run_id=run-20260509T144337Z-158e6e31 | entry=session_turn | pair=test | phase=producer | cycle=1 | attempt=1 | thread_id=019e0d35-fa40-7210-808e-675ddee642cd
+---
+provider=codex
+mode=resume
+template=/home/rauter/.local/share/pipx/venvs/autoloop/lib/python3.12/site-packages/autoloop/templates/test_producer.md
+session_id=019e0d35-fa40-7210-808e-675ddee642cd
+
+
+---
+run_id=run-20260509T144337Z-158e6e31 | entry=phase_output | pair=test | phase=producer | process=codex-agent | cycle=1 | attempt=1 | thread_id=019e0d35-fa40-7210-808e-675ddee642cd
+---
+I’m looking for the narrowest existing test surfaces that exercise the new `Context` mutator path, especially selection invalidation/scoped sync and branch-child lazy selection restore, before I add anything.
+
+I found a good low-level test seam: `tests/unit/test_execution_frame_context_parity.py` already exercises `Context` and branch child creation without depending on the broader branch-group package surface. I’m adding direct facade coverage there so the new contract is tested even while unrelated workspace breakage exists elsewhere.
+
+The new tests are passing in the parity file. I’m recording the coverage map now, along with the one validation constraint: broader acceptance remains blocked by the unrelated dirty `outcomes.py` syntax error, so I kept the added coverage on low-level context/branch seams that still execute cleanly.
+
+Scope considered
+
+The runtime-context mutator refactor itself, the new private `Context` helper surface, the unified selection mutation path, and the branch-child lazy selection restore path. I kept the test scope narrow and avoided unrelated dirty files except to note that dirty `botlane/core/branch_groups/outcomes.py` currently blocks broader import-heavy validation.
+
+What I analyzed
+
+I reviewed the phase contract, the run decisions, the new `Context` helper methods, and the existing parity tests around `Context`, `ExecutionFrame`, and branch child creation. I selected `tests/unit/test_execution_frame_context_parity.py` as the safest seam because it exercises the changed contract directly without depending on the unrelated broken branch-group outcome import path.
+
+What I changed
+
+I extended `tests/unit/test_execution_frame_context_parity.py` with:
+- direct coverage for the new private `Context` mutator facade updating frame-backed state and legacy/public accessors
+- a selection-mutator test that proves only the touched snapshot entry is cleared and the scoped sync callback fires with the mutated worklist name
+- a branch-child lazy selection test that proves child selection restore uses the same mutator path, clears only child snapshots, and leaves parent selections/snapshots untouched
+
+I also updated `test_strategy.md` with the behavior-to-test coverage map and appended a concise summary to the phase `feedback.md`.
+
+Key findings / decisions
+
+The added parity tests pass: `tests/unit/test_execution_frame_context_parity.py` is now `9 passed`. I recorded one non-obvious test decision in `decisions.txt`: coverage was added at the low-level parity seam because the unrelated dirty `botlane/core/branch_groups/outcomes.py` syntax error blocks broader acceptance-style reruns in this workspace.
+
+Open issues / next step
+
+No further test changes are needed for this phase-local contract slice. Broader acceptance reruns should wait until the unrelated `botlane/core/branch_groups/outcomes.py` workspace breakage is fixed or reverted.
+
+<loop-control>
+{"schema":"docloop.loop_control/v1","kind":"promise","promise":"COMPLETE"}
+</loop-control>

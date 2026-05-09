@@ -1613,3 +1613,68 @@ Open issues / next step
 <loop-control>
 {"schema":"docloop.loop_control/v1","kind":"promise","promise":"COMPLETE"}
 </loop-control>
+
+
+---
+run_id=run-20260509T125912Z-8deb38fd | entry=session_turn | pair=implement | phase=producer | cycle=1 | attempt=1 | thread_id=019e0d36-7afc-75e3-9a6e-3011fe4ea348
+---
+provider=codex
+mode=start
+template=/home/rauter/.local/share/pipx/venvs/autoloop/lib/python3.12/site-packages/autoloop/templates/implement_producer.md
+session_id=019e0d36-7afc-75e3-9a6e-3011fe4ea348
+
+
+---
+run_id=run-20260509T125912Z-8deb38fd | entry=phase_output | pair=implement | phase=producer | process=codex-agent | cycle=1 | attempt=1 | thread_id=019e0d36-7afc-75e3-9a6e-3011fe4ea348
+---
+I’m implementing the `branch-typed-evidence` phase. First I’m reading the phase artifacts and the current branch runtime/manifest code to see where dict-shaped branch results are still authoritative and what downstream callers depend on.
+
+The phase artifacts are minimal, so I’m using the accepted plan plus the current code as the execution guide. Next I’m tracing the branch runtime, manifest builders, and tests that already exist around branch evidence so I can cut over without changing the persisted JSON shape.
+
+The main gap is clear now: `BranchResult` and `BranchManifest` already exist, but the runtime still converts them straight back into dicts and treats those dicts as the authoritative representation. I’m checking the nearby APIs so I can flip runtime internals to typed objects without widening the phase beyond branch evidence.
+
+I have enough context to edit safely now. I’m changing only the branch evidence slice: make runtime helpers return `BranchResult`, make fan-in/outcome/context code consume typed `BranchManifest`, and then I’ll tighten or add tests around those internal return types and preserved JSON output.
+
+I’m editing the branch runtime and manifest modules now. The key constraint is to keep the on-disk manifest JSON unchanged while removing the dict-shaped in-memory authority.
+
+I’ve switched the main code path. I’m adding one focused contract test for the internal `_run_branches` result type so the phase has a direct guard against slipping back to dict-shaped branch results.
+
+The code path is switched. I’m running the branch-focused tests now to catch any drift in the manifest JSON shape or any remaining test assumptions about dict-shaped runtime results.
+
+The shell doesn’t have a `pytest` executable on `PATH`, so I’m rerunning through `python -m pytest` instead.
+
+Most branch tests passed. There’s one failing case left, so I’m pulling the traceback and adjusting only that edge rather than widening the change set.
+
+The branch-focused suite is green now. I’m writing the phase notes and one decision entry for the custom-outcome boundary so later turns don’t accidentally reintroduce ad hoc manifest serialization.
+
+Scope considered
+
+- Phase-local `branch-typed-evidence` only.
+- Runtime and evidence surfaces in [runtime.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/botlane/core/branch_groups/runtime.py), [manifest.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/botlane/core/branch_groups/manifest.py), and [outcomes.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/botlane/core/branch_groups/outcomes.py).
+- Focused tests and phase artifacts only; no unrelated dirty files were absorbed.
+
+What I analyzed
+
+- Current branch runtime helpers still returned dict-shaped results even though `BranchResult` and `BranchManifest` already existed.
+- `render_branch_group_context(...)` and `select_branch_group_outcome(...)` were still round-tripping typed manifests back into mappings for built-in behavior.
+- Existing branch tests already froze the persisted JSON schema and custom outcome callback payload shape.
+
+What I changed
+
+- Made branch runtime helpers return and store `BranchResult` internally, including `_run_branches`, `_execute_branch`, `_branch_result_from_step_result`, `_failed_branch_result`, `_cancelled_branch_result`, `_unexpected_branch_failure_result`, and `_skipped_branch_result`.
+- Switched branch event emission to read typed `BranchResult` fields directly.
+- Kept `build_branch_manifest(...)` returning `BranchManifest`, and added typed coercion helpers so render/outcome paths consume `BranchManifest` / `BranchResult` without dict authority.
+- Kept serialization at the canonical boundaries: `BranchResult.to_manifest_dict()` and `BranchManifest.to_dict()`.
+- Passed the typed manifest through fan-in metadata in-memory.
+- Updated [test_branch_group_context_sessions.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/tests/unit/test_branch_group_context_sessions.py) to assert typed helper returns and added [test_branch_result_runtime.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/tests/contract/test_branch_result_runtime.py).
+
+Key findings / decisions
+
+- Built-in branch outcome selection and branch context rendering now operate on typed manifests/results.
+- Custom outcome callbacks still receive `manifest.to_dict()` to preserve the existing mapping-shaped callback boundary.
+- Persisted branch evidence schema and on-disk JSON shape remained unchanged.
+
+Open issues / next step
+
+- Focused validation passed: `.venv/bin/python -m pytest tests/contract/test_branch_result_runtime.py tests/contract/test_branch_result_serialization.py tests/contract/test_branch_group_runtime.py tests/unit/test_branch_group_context_sessions.py -q` with `43 passed`.
+- Full repo `pytest` was not run in this phase.
