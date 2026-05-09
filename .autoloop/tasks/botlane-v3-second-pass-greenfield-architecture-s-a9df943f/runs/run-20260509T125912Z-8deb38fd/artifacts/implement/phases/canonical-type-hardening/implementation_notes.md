@@ -18,6 +18,8 @@
 - `botlane/core/execution_services.py`
 - `botlane/core/plan_adapters.py`
 - `botlane/core/branch_groups/manifest.py`
+- `botlane/core/branch_groups/outcomes.py`
+- `botlane/core/branch_groups/runtime.py`
 - `tests/unit/test_artifact_ids.py`
 - `tests/unit/test_step_plans.py`
 - `tests/unit/test_workflow_plan_adapters.py`
@@ -31,7 +33,8 @@
 - `ReferenceGraph.empty`
 - `RouteDecision.pending_handoffs`
 - `ExecutionServices` protocol surfaces
-- `BranchManifest`, `build_branch_manifest`, `write_branch_group_evidence`, `render_branch_group_context`
+- `BranchManifest`, `branch_manifest_payload`, `build_branch_manifest`, `write_branch_group_evidence`, `render_branch_group_context`
+- `select_branch_group_outcome`, `BranchGroupRuntime._run_fan_in`, `BranchGroupRuntime._run_mechanical_outcome`
 - `workflow_plan_from_compiled`, `compiled_workflow_from_plan`, `step_plan_from_compiled_step`
 
 ## Checklist mapping
@@ -59,6 +62,7 @@
 - Internal workflow plans now use `ArtifactId -> ArtifactSpec` inventory plus explicit public/qualified-name index maps.
 - `StepHeader` now carries metadata-only `StepSource` instead of an authored-step field.
 - `build_branch_manifest(...)` now returns typed `BranchManifest`.
+- Existing branch runtime still receives mapping-shaped manifest payloads at its current boundary through centralized normalization.
 
 ## Known non-changes
 
@@ -71,13 +75,17 @@
 
 - Adapter round-trips now depend on parity metadata instead of `StepHeader.original_step`.
 - Tests that asserted adapter-era header/artifact shapes were updated to assert canonical internal fields instead.
+- Typed branch manifests no longer break mechanical outcomes or fan-in metadata assembly; both consumers normalize through one helper.
 
 ## Validation performed
 
 - `.venv/bin/python -m pytest tests/unit/test_artifact_ids.py tests/unit/test_route_contracts.py tests/unit/test_placeholder_refs.py tests/unit/test_step_plans.py tests/unit/test_workflow_plan_adapters.py tests/contract/test_branch_result_serialization.py -q`
 - `.venv/bin/python -m pytest tests/unit/test_public_surface.py tests/unit/test_sdk_facade.py tests/contract/engine/test_execution_services.py -q`
+- `.venv/bin/python -m pytest tests/contract/test_provider_turn_plan_adapter.py tests/contract/test_async_step_dispatcher.py tests/contract/test_branch_group_runtime.py -q`
+- `.venv/bin/python -m pytest tests/unit/test_artifact_ids.py tests/unit/test_route_contracts.py tests/unit/test_placeholder_refs.py tests/unit/test_step_plans.py tests/unit/test_workflow_plan_adapters.py tests/contract/test_branch_result_serialization.py tests/unit/test_public_surface.py tests/unit/test_sdk_facade.py tests/contract/engine/test_execution_services.py tests/contract/test_provider_turn_plan_adapter.py tests/contract/test_async_step_dispatcher.py tests/contract/test_branch_group_runtime.py -q`
 
 ## Deduplication / centralization decisions
 
 - Centralized canonical artifact metadata in `botlane/core/artifact_plan.py`.
 - Kept `artifacts.py` as the artifact declaration/handle surface while using adapter helpers to bridge compiled artifacts into `ArtifactSpec`.
+- Centralized the typed `BranchManifest` compatibility boundary in `branch_manifest_payload(...)` so runtime callers keep the pre-existing mapping contract until the later branch-runtime cutover.

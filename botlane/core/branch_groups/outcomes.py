@@ -5,6 +5,7 @@ from __future__ import annotations
 import inspect
 from typing import Any, Mapping
 
+from .manifest import BranchManifest, branch_manifest_payload
 from ..errors import WorkflowExecutionError
 from ..primitives import Event
 
@@ -15,23 +16,24 @@ def branch_is_success(branch: Mapping[str, Any], *, success_routes: tuple[str, .
 
 def select_branch_group_outcome(
     spec: Any,
-    manifest: Mapping[str, Any],
+    manifest: BranchManifest | Mapping[str, Any],
     context: Any,
 ) -> Event:
+    manifest_payload = branch_manifest_payload(manifest)
     outcome = spec.outcome or "all_done"
     if callable(outcome):
-        event = _call_outcome_aggregator(outcome, manifest=manifest, context=context)
+        event = _call_outcome_aggregator(outcome, manifest=manifest_payload, context=context)
         if not isinstance(event, Event):
             raise WorkflowExecutionError(
                 f"branch group {spec.name!r} custom outcome must return botlane.core.primitives.Event"
             )
         return event
     if outcome == "all_done":
-        return _all_done(spec, manifest)
+        return _all_done(spec, manifest_payload)
     if outcome == "all_settled":
-        return _all_settled(spec, manifest)
+        return _all_settled(spec, manifest_payload)
     if outcome == "any_done":
-        return _any_done(spec, manifest)
+        return _any_done(spec, manifest_payload)
     raise WorkflowExecutionError(f"branch group {spec.name!r} uses unsupported outcome policy {outcome!r}")
 
 

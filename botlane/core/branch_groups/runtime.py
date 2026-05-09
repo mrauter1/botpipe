@@ -17,7 +17,14 @@ from ..engine_collaborators import StepExecutionResult, StepFinalizationRequest,
 from ..errors import ProviderExecutionError, WorkflowExecutionError
 from ..primitives import Event
 from .context import BranchMetadata, FanInMetadata, create_branch_context, create_fan_in_context
-from .manifest import branch_group_paths, build_branch_manifest, render_branch_group_context, write_branch_group_evidence
+from .manifest import (
+    BranchManifest,
+    branch_group_paths,
+    branch_manifest_payload,
+    build_branch_manifest,
+    render_branch_group_context,
+    write_branch_group_evidence,
+)
 from .outcomes import select_branch_group_outcome
 from .results import BranchArtifactObservation, BranchResult
 from .sessions import BranchSessionStoreView
@@ -556,7 +563,7 @@ class BranchGroupRuntime:
         composite_step: "CompiledStep",
         spec: Any,
         context: "Context",
-        manifest: Mapping[str, Any],
+        manifest: BranchManifest | Mapping[str, Any],
         results_path: Path,
         context_path: Path,
         context_text: str,
@@ -565,16 +572,18 @@ class BranchGroupRuntime:
         fan_in_step = spec.fan_in_step
         if fan_in_step is None:
             raise WorkflowExecutionError(f"branch group {spec.name!r} is missing its compiled fan-in step")
+        manifest_payload = branch_manifest_payload(manifest)
+        manifest_branches = tuple(manifest_payload.get("branches", ()))
         metadata = FanInMetadata(
-            results=dict(manifest),
+            results=manifest_payload,
             results_path=results_path,
             context_path=context_path,
             context_text=context_text,
-            branch_count=len(manifest.get("branches", ())),
-            completed_count=sum(1 for branch in manifest.get("branches", ()) if branch.get("status") == "completed"),
-            failed_count=sum(1 for branch in manifest.get("branches", ()) if branch.get("status") == "failed"),
-            needs_input_count=sum(1 for branch in manifest.get("branches", ()) if branch.get("status") == "needs_input"),
-            cancelled_count=sum(1 for branch in manifest.get("branches", ()) if branch.get("status") == "cancelled"),
+            branch_count=len(manifest_branches),
+            completed_count=sum(1 for branch in manifest_branches if branch.get("status") == "completed"),
+            failed_count=sum(1 for branch in manifest_branches if branch.get("status") == "failed"),
+            needs_input_count=sum(1 for branch in manifest_branches if branch.get("status") == "needs_input"),
+            cancelled_count=sum(1 for branch in manifest_branches if branch.get("status") == "cancelled"),
         )
         fan_in_context = create_fan_in_context(
             context,
@@ -642,7 +651,7 @@ class BranchGroupRuntime:
         composite_step: "CompiledStep",
         spec: Any,
         context: "Context",
-        manifest: Mapping[str, Any],
+        manifest: BranchManifest | Mapping[str, Any],
         pending_handoffs: tuple["PendingHandoff", ...],
     ) -> StepExecutionResult:
         event = select_branch_group_outcome(spec, manifest, context)

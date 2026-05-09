@@ -536,3 +536,59 @@ Open issues / next step
 <loop-control>
 {"schema":"docloop.loop_control/v1","kind":"promise","promise":"INCOMPLETE"}
 </loop-control>
+
+
+---
+run_id=run-20260509T125912Z-8deb38fd | entry=session_turn | pair=implement | phase=producer | cycle=2 | attempt=1 | thread_id=019e0ce2-74d0-7282-8aa6-faff99e1eb7d
+---
+provider=codex
+mode=resume
+template=/home/rauter/.local/share/pipx/venvs/autoloop/lib/python3.12/site-packages/autoloop/templates/implement_producer.md
+session_id=019e0ce2-74d0-7282-8aa6-faff99e1eb7d
+
+
+---
+run_id=run-20260509T125912Z-8deb38fd | entry=phase_output | pair=implement | phase=producer | process=codex-agent | cycle=2 | attempt=1 | thread_id=019e0ce2-74d0-7282-8aa6-faff99e1eb7d
+---
+I’m fixing the verified branch-runtime regression from `IMP-001` first, then I’ll rerun the failing branch tests before touching the phase notes.
+
+I found the narrowest safe fix: keep the new typed manifest, but normalize it back to the existing mapping shape at the current runtime call sites so branch behavior stays stable in this phase.
+
+I’ve patched the typed-manifest boundary in the two runtime consumers that were still assuming a dict. I’m rerunning the previously failing branch suites now.
+
+The failing branch tests are green again. I’m running the broader phase regression ring one more time so the notes reflect the final state after the fix.
+
+I’ve finished the fix and validation. I’m updating the phase notes now to reflect the resolved reviewer finding and the extra regression coverage.
+
+Scope considered
+
+- Phase-local `canonical-type-hardening` work only.
+- The blocking reviewer finding in `feedback.md`, plus the branch-runtime consumers it identified as regression surfaces.
+
+What I analyzed
+
+- `IMP-001` in the phase feedback.
+- Current typed-manifest code in `botlane/core/branch_groups/manifest.py`.
+- The two runtime consumers that still assumed mapping semantics: `botlane/core/branch_groups/outcomes.py` and `botlane/core/branch_groups/runtime.py`.
+
+What I changed
+
+- Added `branch_manifest_payload(...)` in [manifest.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/botlane/core/branch_groups/manifest.py) to centralize the `BranchManifest -> dict` compatibility boundary.
+- Updated [outcomes.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/botlane/core/branch_groups/outcomes.py) so `select_branch_group_outcome(...)` accepts typed manifests but preserves existing mapping-shaped behavior for built-in and custom outcomes.
+- Updated [runtime.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/botlane/core/branch_groups/runtime.py) so fan-in metadata assembly and mechanical outcome routing normalize manifests through that helper instead of calling `dict(manifest)` / `manifest.get(...)` directly.
+- Refreshed the phase [implementation_notes.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/botlane-v3-second-pass-greenfield-architecture-s-a9df943f/runs/run-20260509T125912Z-8deb38fd/artifacts/implement/phases/canonical-type-hardening/implementation_notes.md) with the additional files, symbols, and validation.
+
+Key findings / decisions
+
+- The reviewer’s blocking regression was valid: returning `BranchManifest` without updating runtime consumers broke branch execution and fan-in.
+- The narrow safe fix for this phase is to keep `BranchManifest` typed internally while normalizing to the pre-existing mapping shape at the current runtime boundary.
+- Validation now passes for the original phase subset and the previously failing branch-runtime ring.
+
+Open issues / next step
+
+- Next review should re-check `criteria.md` / `feedback.md`; I did not edit reviewer-owned artifacts.
+- Later phases still need the fuller typed branch-runtime cutover so mapping normalization can be removed deliberately.
+- Validation run:
+- `.venv/bin/python -m pytest tests/contract/test_async_step_dispatcher.py tests/contract/test_branch_group_runtime.py tests/contract/test_branch_result_serialization.py -q`
+- `.venv/bin/python -m pytest tests/unit/test_artifact_ids.py tests/unit/test_route_contracts.py tests/unit/test_placeholder_refs.py tests/unit/test_step_plans.py tests/unit/test_workflow_plan_adapters.py tests/contract/test_branch_result_serialization.py tests/unit/test_public_surface.py tests/unit/test_sdk_facade.py tests/contract/engine/test_execution_services.py tests/contract/test_provider_turn_plan_adapter.py tests/contract/test_async_step_dispatcher.py tests/contract/test_branch_group_runtime.py -q`
+- Result: `136 passed, 1 skipped`.

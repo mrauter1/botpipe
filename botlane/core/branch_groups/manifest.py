@@ -50,7 +50,7 @@ def write_branch_group_evidence(
     manifest: BranchManifest | Mapping[str, Any],
     context_text: str,
 ) -> None:
-    payload = manifest.to_dict() if isinstance(manifest, BranchManifest) else dict(manifest)
+    payload = branch_manifest_payload(manifest)
     results_path.parent.mkdir(parents=True, exist_ok=True)
     results_path.write_text(json.dumps(payload, indent=2, ensure_ascii=False) + "\n", encoding="utf-8")
     context_path.parent.mkdir(parents=True, exist_ok=True)
@@ -80,7 +80,7 @@ def build_branch_manifest(
 
 
 def render_branch_group_context(manifest: BranchManifest | Mapping[str, Any]) -> str:
-    manifest_payload = manifest.to_dict() if isinstance(manifest, BranchManifest) else dict(manifest)
+    manifest_payload = branch_manifest_payload(manifest)
     branches = [_branch_payload(branch) for branch in manifest_payload.get("branches", [])]
     sections = [
         _render_branch_group_header(manifest_payload, branches),
@@ -337,3 +337,7 @@ def _branch_result(branch: object) -> BranchResult:
             cancellation_supported=bool(branch.get("cancellation_supported", True)),
         )
     raise TypeError(f"branch manifest branch must be BranchResult or mapping, got {type(branch)!r}")
+
+
+def branch_manifest_payload(manifest: BranchManifest | Mapping[str, Any]) -> dict[str, Any]:
+    return manifest.to_dict() if isinstance(manifest, BranchManifest) else dict(manifest)
