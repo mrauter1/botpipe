@@ -115,6 +115,38 @@ def test_context_frame_mutators_update_execution_frame_and_legacy_fields(tmp_pat
     assert ctx._execution_frame.state_cell is ctx.state_cell
 
 
+def test_context_private_mutator_facade_updates_execution_frame_and_legacy_fields(tmp_path: Path) -> None:
+    ctx = _make_context(tmp_path, values={"shared": "root"})
+    updated_values = {"shared": "updated", "count": 2}
+
+    ctx._set_values(updated_values)
+    ctx._set_route({"tag": "done"})
+    ctx._set_event({"tag": "progress"})
+    ctx._set_outcome({"status": "ok"})
+    ctx._set_meta({"source": "test"})
+    ctx._execution_frame.answer = "42"
+    ctx._execution_frame.input_response = {"approved": True}
+    ctx._set_step_state({"visits": 1, "last_route": None, "last_reason": None})
+    ctx._set_item_state({"status": "queued"})
+    ctx._set_step_item_state({"visits": 2, "last_route": "done", "last_reason": None})
+    ctx._set_state(ctx.state.model_copy(update={"counter": 3}))
+
+    assert ctx._execution_frame.values is updated_values
+    assert ctx._values is updated_values
+    assert ctx.values.shared == "updated"
+    assert ctx.route is not None and ctx.route.tag == "done"
+    assert ctx.event is not None and ctx.event.tag == "progress"
+    assert ctx.outcome.status == "ok"
+    assert ctx.meta.source == "test"
+    assert ctx.answer == "42"
+    assert ctx.input_response == {"approved": True}
+    assert ctx.step_state.visits == 1
+    assert ctx.item_state.status == "queued"
+    assert ctx.step_item_state.visits == 2
+    assert ctx.state.counter == 3
+    assert ctx._execution_frame.state_cell is ctx.state_cell
+
+
 def test_worklist_runtime_mutators_keep_frame_and_public_selection_in_sync(tmp_path: Path) -> None:
     gates = Worklist.from_items(name="gate", items=({"id": "alpha", "title": "Alpha"},))
     ctx = _make_context(
@@ -140,6 +172,40 @@ def test_worklist_runtime_mutators_keep_frame_and_public_selection_in_sync(tmp_p
     assert ctx._selection_snapshots == {}
     assert ctx.selection("gate") is selection
     assert ctx.current_worklist.current_id == "alpha"
+
+
+def test_context_selection_mutator_clears_only_touched_snapshot_and_runs_sync(tmp_path: Path) -> None:
+    gates = Worklist.from_items(name="gate", items=({"id": "alpha", "title": "Alpha"},))
+    later = Worklist.from_items(name="later", items=({"id": "beta", "title": "Beta"},))
+    snapshots = {
+        "gate": SelectionSnapshot(
+            worklist_name="gate",
+            mode="single",
+            items=(WorkItemSnapshot(id="alpha", title="Alpha"),),
+            explicit=True,
+        ),
+        "later": SelectionSnapshot(
+            worklist_name="later",
+            mode="single",
+            items=(WorkItemSnapshot(id="beta", title="Beta"),),
+            explicit=True,
+        ),
+    }
+    ctx = _make_context(
+        tmp_path,
+        worklists={"gate": gates, "later": later},
+        selection_snapshots=snapshots,
+    )
+    sync_calls: list[str] = []
+    selection = gates.initial_selection(ctx)
+
+    ctx._set_worklist_selection_sync(sync_calls.append)
+    ctx._set_worklist_selection("gate", selection)
+
+    assert ctx.selection("gate") is selection
+    assert ctx._selection_snapshots == {"later": snapshots["later"]}
+    assert ctx._execution_frame.selection_snapshots == {"later": snapshots["later"]}
+    assert sync_calls == ["gate"]
 
 
 def test_branch_child_context_uses_child_frame_and_preserves_shared_state(tmp_path: Path) -> None:
@@ -192,6 +258,41 @@ def test_branch_child_context_uses_child_frame_and_preserves_shared_state(tmp_pa
     assert parent.state.counter == 5
     assert parent._selection_snapshots == snapshots
     assert branch._selection_snapshots == {}
+
+
+def test_branch_child_lazy_selection_uses_context_selection_mutator_path(tmp_path: Path) -> None:
+    gates = Worklist.from_items(name="gate", items=({"id": "alpha", "title": "Alpha"},))
+    snapshots = {
+        "gate": SelectionSnapshot(
+            worklist_name="gate",
+            mode="single",
+            items=(WorkItemSnapshot(id="alpha", title="Alpha"),),
+            explicit=True,
+        )
+    }
+    parent = _make_context(
+        tmp_path,
+        values={"shared": "root"},
+        worklists={"gate": gates},
+        selection_snapshots=snapshots,
+    )
+    branch = create_branch_context(
+        parent,
+        step_name="assess",
+        branch=BranchMetadata(name="security", index=0, group="reviews", input={"area": "security"}, count=1),
+        session_store=parent._session_store,
+        step_state_store={"visits": 1, "last_route": None, "last_reason": None},
+    )
+    sync_calls: list[str] = []
+
+    branch._set_worklist_selection_sync(sync_calls.append)
+    selection = branch.ensure_selection("gate")
+
+    assert branch.selection("gate") is selection
+    assert branch._selection_snapshots == {}
+    assert parent._selection_snapshots == snapshots
+    assert parent._selections == {}
+    assert sync_calls == ["gate"]
 
 
 def test_fan_in_child_context_exposes_fan_in_frame_metadata(tmp_path: Path) -> None:

@@ -553,7 +553,10 @@ def test_branch_runtime_rejects_scoped_compiled_branches_defensively(tmp_path: P
     assert spec is not None
     scoped_branch = replace(
         spec.branches[0],
-        step=replace(spec.branches[0].step, scope_name="queue"),
+        step=replace(
+            spec.branches[0].step,
+            header=replace(spec.branches[0].step.header, scope_name="queue"),
+        ),
     )
 
     with pytest.raises(AssertionError, match="does not support scoped branch step"):
