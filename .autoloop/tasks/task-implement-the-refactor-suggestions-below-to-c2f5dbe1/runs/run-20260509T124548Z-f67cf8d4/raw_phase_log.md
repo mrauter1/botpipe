@@ -846,3 +846,55 @@ Open issues / next step
 <loop-control>
 {"schema":"docloop.loop_control/v1","kind":"promise","promise":"INCOMPLETE"}
 </loop-control>
+
+
+---
+run_id=run-20260509T124548Z-f67cf8d4 | entry=session_turn | pair=implement | phase=producer | cycle=3 | attempt=1 | thread_id=019e0ce8-ee70-7b01-8577-e4e1d171aaa2
+---
+provider=codex
+mode=resume
+template=/home/rauter/.local/share/pipx/venvs/autoloop/lib/python3.12/site-packages/autoloop/templates/implement_producer.md
+session_id=019e0ce8-ee70-7b01-8577-e4e1d171aaa2
+
+
+---
+run_id=run-20260509T124548Z-f67cf8d4 | entry=phase_output | pair=implement | phase=producer | process=codex-agent | cycle=3 | attempt=1 | thread_id=019e0ce8-ee70-7b01-8577-e4e1d171aaa2
+---
+Addressing the remaining blocker in the engine/collaborator contract first, then I’ll rerun the targeted phase tests and update the implementation notes and decision ledger if the fix holds.
+
+I found the likely drift point: `engine.py` still imports `_RouteResolution`, while the rest of the refactor already uses `_StepRouteResult`. I’m confirming that it’s just the import contract and not a deeper type mismatch before I edit.
+
+The import line is already aligned in the current workspace, so I’m treating this as a narrow verification pass now: rerun the targeted test file and then reconcile the notes with the actual result.
+
+The phase-local tests pass in the current tree. I’m checking what changed since the last verifier pass so I only touch the source/notes that still need reconciliation for this turn.
+
+No additional source edits are required in the current workspace. I’m recording the resolved collaborator-contract detail and the fresh validation run so the phase notes match the state the verifier should see next.
+
+Scope considered
+
+- Phase-local runtime/discovery extraction only: the current `Engine`/discovery refactor state, the targeted test file, the active reviewer feedback, and the required phase notes and decision ledger.
+
+What I analyzed
+
+- The remaining reviewer blocker around the `Engine` to `engine_collaborators` route-finalization type contract.
+- The current workspace state to confirm whether that blocker still required source edits.
+- The executable status of the targeted phase test file under the current tree.
+
+What I changed
+
+- No additional source-file edits were needed in this turn; the current workspace already had `Engine` importing collaborator-owned `_StepRouteResult`, which resolves the reported import drift.
+- Updated [implementation_notes.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/task-implement-the-refactor-suggestions-below-to-c2f5dbe1/runs/run-20260509T124548Z-f67cf8d4/artifacts/implement/phases/runtime-and-discovery-extraction/implementation_notes.md) to record the collaborator-contract resolution and the fresh validation run.
+- Appended a turn-local note to [decisions.txt](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/task-implement-the-refactor-suggestions-below-to-c2f5dbe1/runs/run-20260509T124548Z-f67cf8d4/decisions.txt) that `_StepRouteResult` remains the single owner of the route-finalization result shape.
+
+Key findings / decisions
+
+- The previous verifier blocker is not present in the current workspace: `botlane/core/engine.py` imports `_StepRouteResult`, and the targeted phase tests import and run successfully.
+- Validation now passes cleanly:
+  - `.venv/bin/python -m py_compile botlane/core/engine.py botlane/core/discovery.py tests/unit/test_runtime_and_discovery_extraction.py`
+  - `.venv/bin/python -m pytest tests/unit/test_runtime_and_discovery_extraction.py -q` → `3 passed in 0.33s`
+- The phase remains within scope: no checkpoint schema changes, no workflow graph semantics changes, and no new public runtime abstractions.
+
+Open issues / next step
+
+- No remaining phase-local implementation blockers are known in the current tree.
+- Next step is rerunning the verifier against the updated artifacts and passing test state.

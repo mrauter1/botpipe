@@ -932,3 +932,50 @@ The AC-2 reviewer finding should now be resolved. I validated with:
   - `204 passed`
 
 Next step is verifier re-review against the updated AC-2 boundary.
+
+
+---
+run_id=run-20260509T125912Z-8deb38fd | entry=session_turn | pair=implement | phase=verifier | cycle=2 | attempt=1 | thread_id=019e0cf4-0b68-7da2-95fb-5cff4df28a4a
+---
+provider=codex
+mode=resume
+template=/home/rauter/.local/share/pipx/venvs/autoloop/lib/python3.12/site-packages/autoloop/templates/implement_verifier.md
+session_id=019e0cf4-0b68-7da2-95fb-5cff4df28a4a
+
+
+---
+run_id=run-20260509T125912Z-8deb38fd | entry=phase_output | pair=implement | phase=verifier | process=codex-agent | cycle=2 | attempt=1 | thread_id=019e0cf4-0b68-7da2-95fb-5cff4df28a4a
+---
+Re-reviewing the AC-2 boundary first, since that was the blocking issue last round. I’ll verify the route-finalizer signature, the engine’s control-flow source, and the branch-runtime callers before I update the review artifacts.
+
+Re-review is at the acceptance-criteria boundary now. I’m confirming the targeted test run outcome and spot-checking the remaining AC-1 and AC-3 surfaces before I update the review artifacts.
+
+The targeted suite is green. I’m doing one last control-flow and dispatch spot-check before I mark the criteria, because AC-2 is about architecture shape, not just passing tests.
+
+The route-control path is aligned with AC-2 now. I’m checking for any remaining compiled-era symbols inside `botlane/core`, because that’s the easiest place for a false “complete” call to slip through.
+
+The implementation looks phase-complete at the acceptance-criteria level. I’m updating the verifier artifacts to reflect that the prior blocker is resolved and no new blockers were found in scope.
+
+Scope considered
+
+Phase `atomic-plan-runtime-cutover` only. I reviewed the updated compiler/runtime cutover surfaces and limited writes to the active verifier artifacts: [criteria.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/botlane-v3-second-pass-greenfield-architecture-s-a9df943f/runs/run-20260509T125912Z-8deb38fd/artifacts/implement/phases/atomic-plan-runtime-cutover/criteria.md) and [feedback.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/botlane-v3-second-pass-greenfield-architecture-s-a9df943f/runs/run-20260509T125912Z-8deb38fd/artifacts/implement/phases/atomic-plan-runtime-cutover/feedback.md).
+
+What I analyzed
+
+I re-checked the prior AC-2 blocker in `botlane/core/engine_collaborators.py`, `botlane/core/engine.py`, and `botlane/core/branch_groups/runtime.py`, then spot-checked AC-1 and AC-3 via `botlane/core/compiler.py`, `botlane/core/branch_groups/__init__.py`, and a repo search for removed compiled-era symbols in `botlane/core`.
+
+What I reviewed
+
+The targeted phase validation suite completed successfully: `204 passed in 7.26s`. The re-review confirmed that `RouteFinalizer.finalize(...)` now returns `RouteDecision`, `StepExecutionResult` no longer uses legacy `finalization`, and `Engine._handle_step_result(...)` consumes `RouteAction` directly. I marked all verifier criteria complete and appended a non-blocking re-review note documenting that `IMP-001` is resolved.
+
+Key findings / decisions
+
+No blocking findings remain in phase scope. AC-1 through AC-3 are satisfied for this phase review boundary. There are still some private/internal helper names using `compiled_` terminology, but they did not amount to a phase-blocking compatibility or architecture violation under the accepted criteria.
+
+Open issues / next step
+
+This verifier pass is complete for `atomic-plan-runtime-cutover`. The next step is moving to the next planned phase rather than reopening this one.
+
+<loop-control>
+{"schema":"docloop.loop_control/v1","kind":"promise","promise":"COMPLETE"}
+</loop-control>
