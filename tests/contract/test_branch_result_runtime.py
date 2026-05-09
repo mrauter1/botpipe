@@ -10,6 +10,7 @@ from botlane.core.branch_groups.manifest import BranchManifest, build_branch_man
 from botlane.core.branch_groups.outcomes import select_branch_group_outcome
 from botlane.core.branch_groups.results import BranchResult
 from botlane.core.branch_groups.runtime import BranchGroupRuntime
+from botlane.core.execution_services import ExecutionServices
 
 
 class _State(BaseModel):
@@ -45,7 +46,19 @@ def _branch_result(*, name: str, index: int, status: str, route: str | None = No
 
 
 def test_run_branches_returns_typed_branch_results_and_fail_fast_skips_unscheduled() -> None:
-    runtime = BranchGroupRuntime(engine=SimpleNamespace())
+    runtime = BranchGroupRuntime(
+        services=ExecutionServices(
+            artifacts=SimpleNamespace(),
+            events=SimpleNamespace(serialize_exception=lambda exc: {"message": str(exc)}),
+            state=SimpleNamespace(
+                increment_step_runtime_state=lambda store: None,
+                step_runtime_visits=lambda store: 1,
+            ),
+        ),
+        step_dispatcher=SimpleNamespace(),
+        route_finalizer=SimpleNamespace(),
+        operation_recorder=SimpleNamespace(),
+    )
     branches = (
         SimpleNamespace(name="stop", index=0, input={"name": "stop"}, step=SimpleNamespace(name="stop_step")),
         SimpleNamespace(name="later_a", index=1, input={"name": "later_a"}, step=SimpleNamespace(name="later_a_step")),

@@ -15,6 +15,7 @@ from .artifacts import ResolvedArtifacts
 from .effects import Effects, WorklistEffect
 from .errors import FailureContext, ProviderExecutionError, WorkflowExecutionError
 from .execution_services import ExecutionServices
+from .execution_runtime_services import StateRuntimeService
 from .extensions import HookRouteRedirect
 from .identifiers import ArtifactId
 from .operations import OperationRuntime, bind_operation_runtime, provider_configuration
@@ -49,16 +50,15 @@ from .route_contracts import (
     route_target_value,
 )
 from .step_plans import FanInRead, ProduceVerifyStepPlan, PromptStepPlan, ProviderTurnPlan, ReadRef, RequireRef, StepPlan, WriteRef
-from .stores.protocols import PendingHandoff, PendingInput
+from .stores.protocols import PendingHandoff, PendingInput, SessionBinding
 
 if TYPE_CHECKING:
     from collections.abc import Mapping
     from pathlib import Path
 
     from .context import Context
-    from .engine import Engine, StepFinalizationRecord
+    from .engine import StepFinalizationRecord
     from .worklists import Selection, SelectionSnapshot
-    from .stores.protocols import SessionBinding
 
 
 @dataclass(frozen=True, slots=True)
@@ -135,6 +135,196 @@ class StepExecutionResult:
 RouteMode = Literal["capture", "finalize"]
 
 
+def _provider_attempt_flags(
+    *,
+    step_kind: str,
+    provider_usage: StepProviderUsage | None,
+    outcome: Outcome | None,
+    producer_raw_output: str | None,
+    verifier_raw_output: str | None,
+) -> tuple[bool, bool | None, bool | None]:
+    if step_kind == "produce_verify":
+        producer_attempted = (
+            producer_raw_output is not None
+            or (provider_usage is not None and provider_usage.producer is not None)
+        )
+        verifier_attempted = (
+            verifier_raw_output is not None
+            or (provider_usage is not None and provider_usage.verifier is not None)
+        )
+        return producer_attempted or verifier_attempted, producer_attempted, verifier_attempted
+    provider_attempted = (
+        outcome is not None
+        or producer_raw_output is not None
+        or (provider_usage is not None and provider_usage.llm is not None)
+    )
+    return provider_attempted, None, None
+
+
+def _build_step_finalization_record(
+    *,
+    step: StepPlan,
+    outcome: Outcome | None,
+    producer_raw_output: str | None,
+    verifier_raw_output: str | None,
+    provider_usage: StepProviderUsage | None,
+    candidate_route: str | None,
+    final_route: str | None,
+    runtime_control: str | None,
+    pending_input: PendingInput | None,
+    target_step: str | None,
+    terminal: str | None,
+    provider_attributable: bool,
+    source_hook: str | None,
+    source_phase: str | None,
+    hook_route_redirects: tuple[HookRouteRedirect, ...],
+) -> "StepFinalizationRecord":
+    from .engine import StepFinalizationRecord
+
+    provider_attempted, producer_attempted, verifier_attempted = _provider_attempt_flags(
+        step_kind=step.kind,
+        provider_usage=provider_usage,
+        outcome=outcome,
+        producer_raw_output=producer_raw_output,
+        verifier_raw_output=verifier_raw_output,
+    )
+    pending_input_id = pending_input.pending_input_id if pending_input is not None else None
+    return StepFinalizationRecord(
+        candidate_route=candidate_route,
+        final_route=final_route,
+        runtime_control=runtime_control,
+        pending_input_id=pending_input_id,
+        target_step=target_step,
+        terminal=terminal,
+        provider_attributable=provider_attributable,
+        provider_attempted=provider_attempted,
+        producer_attempted=producer_attempted,
+        verifier_attempted=verifier_attempted,
+        source_hook=source_hook,
+        source_phase=source_phase,
+        hook_route_redirects=hook_route_redirects,
+    )
+
+
+def step_result_from_direct_control(
+    *,
+    step: StepPlan,
+    state: BaseModel,
+    control: Any,
+    pending_handoffs: tuple[PendingHandoff, ...],
+    producer_raw_output: str | None = None,
+    verifier_raw_output: str | None = None,
+    provider_usage: StepProviderUsage | None = None,
+) -> StepExecutionResult:
+    pending_input = control.pending_input
+    finalization = _build_step_finalization_record(
+        step=step,
+        outcome=None,
+        producer_raw_output=producer_raw_output,
+        verifier_raw_output=verifier_raw_output,
+        provider_usage=provider_usage,
+        candidate_route=None,
+        final_route=None,
+        runtime_control=control.control,
+        pending_input=pending_input,
+        target_step=control.target_step,
+        terminal=control.terminal,
+        provider_attributable=False,
+        source_hook=control.source_hook,
+        source_phase=control.source_phase,
+        hook_route_redirects=(),
+    )
+    action = (
+        FinishAction(reason=control.control or "finish")
+        if control.destination == FINISH
+        else AwaitInputAction(pending_input=pending_input)
+        if control.destination == AWAIT_INPUT
+        else FailAction(reason=control.control)
+        if control.destination == FAIL
+        else Continue(
+            target_step=control.target_step or control.destination,
+            reason=control.control or "route",
+        )
+    )
+    return StepExecutionResult(
+        state=state,
+        destination=control.destination,
+        event=None,
+        outcome=None,
+        pending_handoffs=pending_handoffs,
+        route_decision=RouteDecision(
+            final_route=None,
+            contract=None,
+            action=action,
+            runtime_control=control.control,
+            provider_attributable=False,
+            source_hook=control.source_hook,
+            source_phase=control.source_phase,
+        ),
+        action=action,
+        producer_raw_output=producer_raw_output,
+        verifier_raw_output=verifier_raw_output,
+        provider_usage=provider_usage,
+        transition=finalization,
+        pending_input=pending_input,
+    )
+
+
+def step_result_from_route_finalization(
+    *,
+    step: StepPlan,
+    route_finalization: _StepRouteResult,
+    outcome: Outcome | None = None,
+    producer_raw_output: str | None = None,
+    verifier_raw_output: str | None = None,
+    provider_usage: StepProviderUsage | None = None,
+) -> StepExecutionResult:
+    finalization = _build_step_finalization_record(
+        step=step,
+        outcome=outcome,
+        producer_raw_output=producer_raw_output,
+        verifier_raw_output=verifier_raw_output,
+        provider_usage=provider_usage,
+        candidate_route=route_finalization.candidate_route,
+        final_route=route_finalization.final_route,
+        runtime_control=route_finalization.runtime_control,
+        pending_input=route_finalization.pending_input,
+        target_step=route_finalization.target_step,
+        terminal=route_finalization.terminal,
+        provider_attributable=route_finalization.provider_attributable,
+        source_hook=route_finalization.source_hook,
+        source_phase=route_finalization.source_phase,
+        hook_route_redirects=route_finalization.hook_route_redirects,
+    )
+    return StepExecutionResult(
+        state=route_finalization.state,
+        destination=route_finalization.destination,
+        event=route_finalization.finalized_event,
+        outcome=outcome,
+        pending_handoffs=route_finalization.scheduled_handoffs,
+        producer_raw_output=producer_raw_output,
+        verifier_raw_output=verifier_raw_output,
+        provider_usage=provider_usage,
+        transition=finalization,
+        pending_input=route_finalization.pending_input,
+        route_decision=route_finalization.decision,
+        action=None if route_finalization.decision is None else route_finalization.decision.action,
+    )
+
+
+def provider_exec_result(response: Any, *, text: str) -> ProviderExecResult:
+    session = getattr(response, "session", None)
+    session_id = getattr(session, "session_id", None)
+    metadata = getattr(response, "metadata", {}) or {}
+    return ProviderExecResult(
+        text=text,
+        session_id=session_id if isinstance(session_id, str) else None,
+        provider_metadata=deepcopy(dict(metadata)),
+        usage=getattr(response, "usage", None),
+        session=session if isinstance(session, SessionBinding) else None,
+    )
+
+
 @dataclass(frozen=True, slots=True)
 class PairProviderResult:
     producer_raw_output: str | None
@@ -197,8 +387,21 @@ _T = TypeVar("_T")
 class ProviderContractBuilder:
     """Builds provider-visible contracts for step execution."""
 
-    def __init__(self, engine: "Engine") -> None:
-        self._engine = engine
+    def __init__(
+        self,
+        *,
+        compiled: Any,
+        services: ExecutionServices,
+        allow_provider_questions: bool,
+    ) -> None:
+        if services.artifacts is None:
+            raise ValueError("ProviderContractBuilder requires ExecutionServices.artifacts")
+        if services.routes is None:
+            raise ValueError("ProviderContractBuilder requires ExecutionServices.routes")
+        self._compiled = compiled
+        self._artifacts = services.artifacts
+        self._routes = services.routes
+        self._allow_provider_questions = allow_provider_questions
 
     def control_contract(
         self,
@@ -311,7 +514,7 @@ class ProviderContractBuilder:
     ) -> tuple[ProviderArtifactRef, ...]:
         return tuple(
             self.artifact_ref(resolved_name, artifacts[resolved_name])
-            for resolved_name in (self._engine._artifact_lookup_name(name) for name in names)
+            for resolved_name in (self._artifacts.artifact_lookup_name(name) for name in names)
         )
 
     def artifact_ref(self, name: str, handle: Any) -> ProviderArtifactRef:
@@ -323,7 +526,7 @@ class ProviderContractBuilder:
         )
         kind = artifact.kind if artifact is not None else "text"
         required = artifact.required if artifact is not None else False
-        schema_name = self._engine._artifact_schema_name(artifact)
+        schema_name = self._artifacts.artifact_schema_name(artifact)
         return ProviderArtifactRef(
             name=handle.name,
             qualified_name=qualified_name,
@@ -375,7 +578,7 @@ class ProviderContractBuilder:
         *,
         context: "Context",
     ) -> ProviderReadableRef:
-        name = self._engine._artifact_lookup_name(name)
+        name = self._artifacts.artifact_lookup_name(name)
         if name in artifacts:
             handle = artifacts[name]
             artifact = handle.artifact
@@ -386,9 +589,9 @@ class ProviderContractBuilder:
                 declared_artifact=True,
                 kind=None if artifact is None else artifact.kind,
                 qualified_name=None if artifact is None else artifact.qualified_name,
-                schema_name=self._engine._artifact_schema_name(artifact),
+                schema_name=self._artifacts.artifact_schema_name(artifact),
             )
-        workspace_path = self._engine._resolve_workspace_read_path(name, context=context)
+        workspace_path = self._artifacts.resolve_workspace_read_path(name, context=context)
         return ProviderReadableRef(
             name=name,
             path=str(workspace_path),
@@ -426,7 +629,7 @@ class ProviderContractBuilder:
         path = (
             self._fan_in_workspace_path(ref, context=context)
             if isinstance(ref, FanInRead)
-            else self._engine._resolve_workspace_read_path(_compiled_require_name(ref), context=context)
+            else self._artifacts.resolve_workspace_read_path(_compiled_require_name(ref), context=context)
         )
         return ProviderArtifactRef(
             name=ref.path,
@@ -449,18 +652,18 @@ class ProviderContractBuilder:
         visible_routes = set(self.available_routes(step))
         return {
             route_tag: effective_route_required_writes_for_step(
-                self._engine.compiled,
+                self._compiled,
                 step=step,
                 route_tag=route_tag,
             )
-            for route_tag, compiled_route in self._engine._route_table_for_step(step).items()
+            for route_tag in self._compiled.routes.get(step.name, {})
             if route_tag in visible_routes
         }
 
     def routes(self, step: StepPlan) -> dict[str, ProviderRoute]:
         routes: dict[str, ProviderRoute] = {}
         for route_name in self.available_routes(step):
-            compiled_route = self._engine._route_table_for_step(step).get(route_name)
+            compiled_route = self._compiled.routes.get(step.name, {}).get(route_name)
             if compiled_route is None:
                 continue
             routes[route_name] = ProviderRoute(
@@ -481,17 +684,45 @@ class ProviderContractBuilder:
         return routes
 
     def available_routes(self, step: StepPlan) -> tuple[str, ...]:
-        if self._engine.interaction_policy.allow_provider_questions:
-            routes = provider_visible_route_tags(self._engine.compiled, step.name, mode="interactive")
-            return routes
-        return provider_visible_route_tags(self._engine.compiled, step.name, mode="full_auto")
+        if self._allow_provider_questions:
+            return self._routes.provider_visible_route_tags(step.name, mode="interactive")
+        return self._routes.provider_visible_route_tags(step.name, mode="full_auto")
 
 
 class StepDispatcher:
     """Dispatches one workflow step plan through the engine execution path."""
 
-    def __init__(self, engine: "Engine") -> None:
-        self._engine = engine
+    def __init__(
+        self,
+        *,
+        services: ExecutionServices,
+        hook_runner: "HookRunner",
+        route_finalizer: "RouteFinalizer",
+        branch_group_runtime: Any,
+        provider_contract_builder: ProviderContractBuilder,
+    ) -> None:
+        if services.artifacts is None:
+            raise ValueError("StepDispatcher requires ExecutionServices.artifacts")
+        if services.routes is None:
+            raise ValueError("StepDispatcher requires ExecutionServices.routes")
+        if services.sessions is None:
+            raise ValueError("StepDispatcher requires ExecutionServices.sessions")
+        if services.providers is None:
+            raise ValueError("StepDispatcher requires ExecutionServices.providers")
+        if services.events is None:
+            raise ValueError("StepDispatcher requires ExecutionServices.events")
+        if services.child_workflows is None:
+            raise ValueError("StepDispatcher requires ExecutionServices.child_workflows")
+        self._artifacts = services.artifacts
+        self._routes = services.routes
+        self._sessions = services.sessions
+        self._providers = services.providers
+        self._events = services.events
+        self._child_workflows = services.child_workflows
+        self._hook_runner = hook_runner
+        self._route_finalizer = route_finalizer
+        self._branch_group_runtime = branch_group_runtime
+        self._provider_contract_builder = provider_contract_builder
 
     def execute(
         self,
@@ -526,9 +757,9 @@ class StepDispatcher:
         context._sync_active_worklist(step.scope_name)
         if step.scope_name is not None:
             context.ensure_selection(step.scope_name)
-        initial_artifacts = self._engine._resolve_artifacts(context)
+        initial_artifacts = self._artifacts.resolve_artifacts(context)
         context._sync_artifacts(initial_artifacts)
-        self._engine._ensure_required_artifacts(step, initial_artifacts)
+        self._artifacts.ensure_required_artifacts(step, initial_artifacts)
         if isinstance(step, ProduceVerifyStepPlan):
             return await self._execute_pair_step_async(step, context, state, pending_handoffs, route_mode=route_mode)
         from .step_plans import BranchGroupStepPlan, ChildWorkflowStepPlan, PythonStepPlan
@@ -536,15 +767,15 @@ class StepDispatcher:
         if isinstance(step, BranchGroupStepPlan):
             if route_mode != "finalize":
                 raise WorkflowExecutionError("branch-group composite steps do not support capture mode")
-            return await self._engine.branch_group_runtime.run_async(step, context, state, pending_handoffs)
+            return await self._branch_group_runtime.run_async(step, context, state, pending_handoffs)
 
-        before_result = self._engine.hook_runner.run_before(step, context, state, artifacts=initial_artifacts)
+        before_result = self._hook_runner.run_before(step, context, state, artifacts=initial_artifacts)
         state = before_result.state
         context._sync_state(state)
-        context._sync_artifacts(self._engine._resolve_artifacts(context))
+        context._sync_artifacts(self._artifacts.resolve_artifacts(context))
         if before_result.control is not None:
-            _, remaining_pending_handoffs = self._engine._matching_pending_handoffs(step, context, pending_handoffs)
-            direct_control = self._engine._normalize_direct_runtime_control(
+            _, remaining_pending_handoffs = self._routes.matching_pending_handoffs(step, context, pending_handoffs)
+            direct_control = self._routes.normalize_direct_runtime_control(
                 step=step,
                 context=context,
                 control=before_result.control,
@@ -554,28 +785,28 @@ class StepDispatcher:
             scheduled_handoffs = (
                 ()
                 if route_mode == "capture"
-                else self._engine._schedule_direct_control_handoffs(
+                else self._routes.schedule_direct_control_handoffs(
                     remaining_pending_handoffs,
                     control=direct_control,
                     context=context,
                     source_step=step.name,
                 )
             )
-            return self._engine._step_result_from_direct_control(
+            return step_result_from_direct_control(
                 step=step,
                 state=state,
                 control=direct_control,
                 pending_handoffs=scheduled_handoffs,
             )
         if before_result.event is not None:
-            _, remaining_pending_handoffs = self._engine._matching_pending_handoffs(step, context, pending_handoffs)
+            _, remaining_pending_handoffs = self._routes.matching_pending_handoffs(step, context, pending_handoffs)
             finalization = self._complete_route(
                 route_mode=route_mode,
                 request=StepFinalizationRequest(
                     step=step,
                     context=context,
                     state=state,
-                    artifacts=self._engine._resolve_artifacts(context),
+                    artifacts=self._artifacts.resolve_artifacts(context),
                     candidate_event=before_result.event,
                     candidate_route_present=False,
                     after_subject=before_result.event,
@@ -586,7 +817,7 @@ class StepDispatcher:
                     source_phase="before",
                 ),
             )
-            return self._engine._step_result_from_route_finalization(step=step, route_finalization=finalization)
+            return step_result_from_route_finalization(step=step, route_finalization=finalization)
         if isinstance(step, PromptStepPlan):
             return await self._execute_llm_step_async(step, context, state, pending_handoffs, route_mode=route_mode)
         if isinstance(step, ChildWorkflowStepPlan):
@@ -614,15 +845,8 @@ class StepDispatcher:
         request: StepFinalizationRequest,
     ) -> _StepRouteResult:
         if route_mode == "capture":
-            return self._engine.route_finalizer.capture(request)
-        return self._engine.route_finalizer.finalize_result(request)
-
-    async def _call_provider(
-        self,
-        *,
-        call: Callable[[Any], Awaitable[_T]],
-    ) -> _T:
-        return await call(self._engine.provider)
+            return self._route_finalizer.capture(request)
+        return self._route_finalizer.finalize_result(request)
 
     def _execute_workflow_step_for_mode(
         self,
@@ -633,13 +857,13 @@ class StepDispatcher:
         *,
         route_mode: RouteMode,
     ) -> StepExecutionResult:
-        _, remaining_pending_handoffs = self._engine._matching_pending_handoffs(step, context, pending_handoffs)
-        child_result = self._engine.workflow_invoker.run_child_step(step, context)
-        event = self._engine._map_workflow_step_result(step, child_result)
+        _, remaining_pending_handoffs = self._routes.matching_pending_handoffs(step, context, pending_handoffs)
+        child_result = self._child_workflows.run_child_step(step, context)
+        event = self._child_workflows.map_result(step, child_result)
         try:
-            self._engine._validate_event(step, event, provider_attributable=False, error_cls=WorkflowExecutionError)
+            self._routes.validate_event(step, event, provider_attributable=False, error_cls=WorkflowExecutionError)
         except WorkflowExecutionError as exc:
-            annotated = self._engine._annotate_execution_error(
+            annotated = self._events.annotate_execution_error(
                 exc,
                 checkpoint_state=state,
                 failure_context=FailureContext(
@@ -658,7 +882,7 @@ class StepDispatcher:
                 step=step,
                 context=context,
                 state=state,
-                artifacts=self._engine._resolve_artifacts(context),
+                artifacts=self._artifacts.resolve_artifacts(context),
                 candidate_event=event,
                 candidate_route=event.tag,
                 candidate_route_present=True,
@@ -668,7 +892,7 @@ class StepDispatcher:
                 provider_attributable=False,
             ),
         )
-        return self._engine._step_result_from_route_finalization(step=step, route_finalization=finalization)
+        return step_result_from_route_finalization(step=step, route_finalization=finalization)
 
     def _execute_python_step_for_mode(
         self,
@@ -679,7 +903,7 @@ class StepDispatcher:
         *,
         route_mode: RouteMode,
     ) -> StepExecutionResult:
-        _, remaining_pending_handoffs = self._engine._matching_pending_handoffs(step, context, pending_handoffs)
+        _, remaining_pending_handoffs = self._routes.matching_pending_handoffs(step, context, pending_handoffs)
         if step.python_handler is None:
             raise WorkflowExecutionError(f"{step.kind} step {step.name!r} has no compiled handler")
         context._sync_route(None)
@@ -698,7 +922,7 @@ class StepDispatcher:
         finally:
             context._set_execution_source(hook_name=None, phase=None, invocation_id=None)
         try:
-            hook_result = self._engine.hook_runner.normalize_result(
+            hook_result = self._hook_runner.normalize_result(
                 step,
                 state=next_state,
                 context=context,
@@ -713,9 +937,9 @@ class StepDispatcher:
                 candidate_route = result
             elif isinstance(result, Event):
                 candidate_route = result.tag
-            annotated = self._engine._annotate_execution_error(
+            annotated = self._events.annotate_execution_error(
                 exc,
-                checkpoint_state=self._engine._clone_state(context.state),
+                checkpoint_state=StateRuntimeService.clone_state(context.state),
                 failure_context=FailureContext(
                     kind="route_validation",
                     step_name=step.name,
@@ -729,7 +953,7 @@ class StepDispatcher:
                 raise
             raise annotated from exc
         if hook_result.control is not None:
-            direct_control = self._engine._normalize_direct_runtime_control(
+            direct_control = self._routes.normalize_direct_runtime_control(
                 step=step,
                 context=context,
                 control=hook_result.control,
@@ -739,14 +963,14 @@ class StepDispatcher:
             scheduled_handoffs = (
                 ()
                 if route_mode == "capture"
-                else self._engine._schedule_direct_control_handoffs(
+                else self._routes.schedule_direct_control_handoffs(
                     remaining_pending_handoffs,
                     control=direct_control,
                     context=context,
                     source_step=step.name,
                 )
             )
-            return self._engine._step_result_from_direct_control(
+            return step_result_from_direct_control(
                 step=step,
                 state=next_state,
                 control=direct_control,
@@ -759,7 +983,7 @@ class StepDispatcher:
                 step=step,
                 context=context,
                 state=next_state,
-                artifacts=self._engine._resolve_artifacts(context),
+                artifacts=self._artifacts.resolve_artifacts(context),
                 candidate_event=event,
                 candidate_route=event.tag,
                 candidate_route_present=True,
@@ -771,7 +995,7 @@ class StepDispatcher:
                 source_phase="python_step",
             ),
         )
-        return self._engine._step_result_from_route_finalization(step=step, route_finalization=finalization)
+        return step_result_from_route_finalization(step=step, route_finalization=finalization)
 
     async def _execute_pair_step_async(
         self,
@@ -782,12 +1006,12 @@ class StepDispatcher:
         *,
         route_mode: RouteMode,
     ) -> StepExecutionResult:
-        baseline_session = self._engine._resolve_session(step, context)
-        route_handoff, remaining_pending_handoffs = self._engine._matching_pending_handoffs(step, context, pending_handoffs)
+        baseline_session = self._sessions.resolve_session(step, context)
+        route_handoff, remaining_pending_handoffs = self._routes.matching_pending_handoffs(step, context, pending_handoffs)
         retry_feedback: str | None = None
         max_attempts = step.producer.retry_policy.max_attempts
         for attempt in range(1, max_attempts + 1):
-            artifacts = self._engine._resolve_artifacts(context)
+            artifacts = self._artifacts.resolve_artifacts(context)
             try:
                 pair_result = await self._run_pair_step_async(
                     step,
@@ -807,14 +1031,14 @@ class StepDispatcher:
                     scheduled_handoffs = (
                         ()
                         if route_mode == "capture"
-                        else self._engine._schedule_direct_control_handoffs(
+                        else self._routes.schedule_direct_control_handoffs(
                             remaining_pending_handoffs,
                             control=pair_result.direct_control,
                             context=context,
                             source_step=step.name,
                         )
                     )
-                    return self._engine._step_result_from_direct_control(
+                    return step_result_from_direct_control(
                         step=step,
                         state=pair_result.state or context.state,
                         control=pair_result.direct_control,
@@ -830,7 +1054,7 @@ class StepDispatcher:
                             step=step,
                             context=context,
                             state=pair_result.state or context.state,
-                            artifacts=self._engine._resolve_artifacts(context),
+                            artifacts=self._artifacts.resolve_artifacts(context),
                             candidate_event=pair_result.short_circuit_event,
                             candidate_route_present=False,
                             after_subject=pair_result.short_circuit_event,
@@ -841,24 +1065,24 @@ class StepDispatcher:
                             source_phase=pair_result.source_phase,
                         ),
                     )
-                    return self._engine._step_result_from_route_finalization(
+                    return step_result_from_route_finalization(
                         step=step,
                         route_finalization=finalization,
                         producer_raw_output=pair_result.producer_raw_output,
                         verifier_raw_output=pair_result.verifier_raw_output,
                         provider_usage=pair_result.usage,
                     )
-                self._engine._persist_session(pair_result.producer_session, context=context)
-                self._engine._persist_session(pair_result.verifier_session, context=context)
+                self._sessions.persist_session(pair_result.producer_session, context=context)
+                self._sessions.persist_session(pair_result.verifier_session, context=context)
                 assert pair_result.outcome is not None
-                final_event = self._engine._event_from_outcome(step, pair_result.outcome)
+                final_event = self._routes.event_from_outcome(step, pair_result.outcome)
                 finalization = self._complete_route(
                     route_mode=route_mode,
                     request=StepFinalizationRequest(
                         step=step,
                         context=context,
                         state=pair_result.state or context.state,
-                        artifacts=self._engine._resolve_artifacts(context),
+                        artifacts=self._artifacts.resolve_artifacts(context),
                         candidate_event=final_event,
                         candidate_route=final_event.tag,
                         candidate_route_present=True,
@@ -870,7 +1094,7 @@ class StepDispatcher:
                         after_hook_phase="after_verifier",
                     ),
                 )
-                return self._engine._step_result_from_route_finalization(
+                return step_result_from_route_finalization(
                     step=step,
                     route_finalization=finalization,
                     outcome=pair_result.outcome,
@@ -881,7 +1105,7 @@ class StepDispatcher:
             except asyncio.CancelledError:
                 raise
             except Exception as exc:
-                next_feedback, annotated_exc = self._engine._next_retry_feedback(step, exc, attempt=attempt)
+                next_feedback, annotated_exc = self._events.next_retry_feedback(step, exc, attempt=attempt)
                 if next_feedback is None:
                     if annotated_exc is exc:
                         raise
@@ -898,12 +1122,12 @@ class StepDispatcher:
         *,
         route_mode: RouteMode,
     ) -> StepExecutionResult:
-        baseline_session = self._engine._resolve_session(step, context)
-        route_handoff, remaining_pending_handoffs = self._engine._matching_pending_handoffs(step, context, pending_handoffs)
+        baseline_session = self._sessions.resolve_session(step, context)
+        route_handoff, remaining_pending_handoffs = self._routes.matching_pending_handoffs(step, context, pending_handoffs)
         retry_feedback: str | None = None
         max_attempts = step.turn.retry_policy.max_attempts
         for attempt in range(1, max_attempts + 1):
-            artifacts = self._engine._resolve_artifacts(context)
+            artifacts = self._artifacts.resolve_artifacts(context)
             try:
                 llm_result = await self._run_llm_step_async(
                     step,
@@ -919,14 +1143,14 @@ class StepDispatcher:
                     restorable_pending_handoffs=pending_handoffs,
                 )
                 assert llm_result.outcome is not None
-                final_event = self._engine._event_from_outcome(step, llm_result.outcome)
+                final_event = self._routes.event_from_outcome(step, llm_result.outcome)
                 finalization = self._complete_route(
                     route_mode=route_mode,
                     request=StepFinalizationRequest(
                         step=step,
                         context=context,
                         state=state,
-                        artifacts=self._engine._resolve_artifacts(context),
+                        artifacts=self._artifacts.resolve_artifacts(context),
                         candidate_event=final_event,
                         candidate_route=final_event.tag,
                         candidate_route_present=True,
@@ -936,8 +1160,8 @@ class StepDispatcher:
                         provider_attributable=True,
                     ),
                 )
-                self._engine._persist_session(llm_result.session, context=context)
-                return self._engine._step_result_from_route_finalization(
+                self._sessions.persist_session(llm_result.session, context=context)
+                return step_result_from_route_finalization(
                     step=step,
                     route_finalization=finalization,
                     outcome=llm_result.outcome,
@@ -947,7 +1171,7 @@ class StepDispatcher:
             except asyncio.CancelledError:
                 raise
             except Exception as exc:
-                next_feedback, annotated_exc = self._engine._next_retry_feedback(step, exc, attempt=attempt)
+                next_feedback, annotated_exc = self._events.next_retry_feedback(step, exc, attempt=attempt)
                 if next_feedback is None:
                     if annotated_exc is exc:
                         raise
@@ -971,7 +1195,7 @@ class StepDispatcher:
         consumed_pending_handoffs: tuple["PendingHandoff", ...],
         restorable_pending_handoffs: tuple["PendingHandoff", ...],
     ) -> PairProviderResult:
-        before_producer_result = self._engine.hook_runner.run_before(
+        before_producer_result = self._hook_runner.run_before(
             step,
             context,
             state,
@@ -981,9 +1205,9 @@ class StepDispatcher:
         )
         producer_state = before_producer_result.state
         context._sync_state(producer_state)
-        context._sync_artifacts(self._engine._resolve_artifacts(context))
+        context._sync_artifacts(self._artifacts.resolve_artifacts(context))
         if before_producer_result.control is not None:
-            direct_control = self._engine._normalize_direct_runtime_control(
+            direct_control = self._routes.normalize_direct_runtime_control(
                 step=step,
                 context=context,
                 control=before_producer_result.control,
@@ -1014,8 +1238,8 @@ class StepDispatcher:
                 source_phase="before_producer",
             )
 
-        producer_prompt = self._engine._resolve_prompt(step.producer.prompt, context=context)
-        self._engine._emit_provider_attempt_event(
+        producer_prompt = self._providers.resolve_prompt(step.producer.prompt, context=context)
+        self._events.emit_provider_attempt_event(
             "provider_attempt_started",
             step=step,
             context=context,
@@ -1030,7 +1254,7 @@ class StepDispatcher:
                 artifacts=artifacts,
                 session=session,
                 policy=_context_provider_policy(context),
-                **self._engine.provider_contract_builder.pair_producer_contract(
+                **self._provider_contract_builder.pair_producer_contract(
                     step,
                     context=context,
                     artifacts=artifacts,
@@ -1040,16 +1264,14 @@ class StepDispatcher:
                     route_handoff=route_handoff,
                 ),
             )
-            producer_response = await self._call_provider(
-                call=lambda provider: provider.run_producer(producer_request),
-            )
+            producer_response = await self._providers.run_producer(producer_request)
         except asyncio.CancelledError:
             raise
         except Exception as exc:
             annotated_exc = exc
             if route_handoff is not None:
-                annotated_exc = self._engine._annotate_execution_error(exc, pending_handoffs=restorable_pending_handoffs)
-            self._engine._emit_provider_attempt_failed(
+                annotated_exc = self._events.annotate_execution_error(exc, pending_handoffs=restorable_pending_handoffs)
+            self._events.emit_provider_attempt_failed(
                 step=step,
                 context=context,
                 turn_kind="producer",
@@ -1059,22 +1281,22 @@ class StepDispatcher:
             if annotated_exc is exc:
                 raise
             raise annotated_exc from exc
-        producer_exec = self._engine._provider_exec_result(response=producer_response, text=producer_response.raw_output)
-        self._engine._emit_provider_attempt_finished(
+        producer_exec = provider_exec_result(response=producer_response, text=producer_response.raw_output)
+        self._events.emit_provider_attempt_finished(
             step=step,
             context=context,
             turn_kind="producer",
             attempt=attempt,
             token_usage=producer_exec.usage,
         )
-        self._engine._append_logs(step, artifacts, producer_exec.text)
+        self._artifacts.append_logs(step, artifacts, producer_exec.text)
         if producer_exec.session is not None:
-            self._engine._persist_session(producer_exec.session, context=context)
-        after_producer_result = self._engine.hook_runner.run_after(
+            self._sessions.persist_session(producer_exec.session, context=context)
+        after_producer_result = self._hook_runner.run_after(
             step,
             context,
             state=producer_state,
-            artifacts=self._engine._resolve_artifacts(context),
+            artifacts=self._artifacts.resolve_artifacts(context),
             subject=producer_exec.text,
             candidate_event=None,
             hook=step.after_producer_hook,
@@ -1083,7 +1305,7 @@ class StepDispatcher:
         next_state = after_producer_result.state
         context._sync_state(next_state)
         if after_producer_result.control is not None:
-            direct_control = self._engine._normalize_direct_runtime_control(
+            direct_control = self._routes.normalize_direct_runtime_control(
                 step=step,
                 context=context,
                 control=after_producer_result.control,
@@ -1114,10 +1336,10 @@ class StepDispatcher:
                 source_phase="after_producer",
             )
         try:
-            review_artifacts = self._engine._resolve_artifacts(context)
+            review_artifacts = self._artifacts.resolve_artifacts(context)
             context._sync_artifacts(review_artifacts)
-            self._engine._ensure_named_artifacts_exist(step.verifier_requires, review_artifacts, step_name=step.name)
-            before_verifier_result = self._engine.hook_runner.run_before(
+            self._artifacts.ensure_named_artifacts_exist(step.verifier_requires, review_artifacts, step_name=step.name)
+            before_verifier_result = self._hook_runner.run_before(
                 step,
                 context,
                 next_state,
@@ -1128,7 +1350,7 @@ class StepDispatcher:
             review_state = before_verifier_result.state
             context._sync_state(review_state)
             if before_verifier_result.control is not None:
-                direct_control = self._engine._normalize_direct_runtime_control(
+                direct_control = self._routes.normalize_direct_runtime_control(
                     step=step,
                     context=context,
                     control=before_verifier_result.control,
@@ -1158,13 +1380,13 @@ class StepDispatcher:
                     source_hook=getattr(step.before_verifier_hook, "__name__", type(step.before_verifier_hook).__name__),
                     source_phase="before_verifier",
                 )
-            verifier_prompt = self._engine._resolve_prompt(step.verifier.prompt, context=context)
-            verifier_session = self._engine._resolve_pair_review_session(
+            verifier_prompt = self._providers.resolve_prompt(step.verifier.prompt, context=context)
+            verifier_session = self._sessions.resolve_pair_review_session(
                 step,
                 context,
                 producer_session=producer_exec.session or session,
             )
-            self._engine._emit_provider_attempt_event(
+            self._events.emit_provider_attempt_event(
                 "provider_attempt_started",
                 step=step,
                 context=context,
@@ -1180,27 +1402,25 @@ class StepDispatcher:
                     artifacts=review_artifacts,
                     session=verifier_session,
                     policy=_context_provider_policy(context),
-                    **self._engine.provider_contract_builder.pair_verifier_contract(
+                    **self._provider_contract_builder.pair_verifier_contract(
                         step,
-                    context=context,
-                    artifacts=review_artifacts,
-                    attempt=attempt,
-                    max_attempts=max_attempts,
-                    retry_feedback=retry_feedback,
-                    route_handoff=route_handoff,
-                ),
-            )
-                verifier_response = await self._call_provider(
-                    call=lambda provider: provider.run_verifier(verifier_request),
+                        context=context,
+                        artifacts=review_artifacts,
+                        attempt=attempt,
+                        max_attempts=max_attempts,
+                        retry_feedback=retry_feedback,
+                        route_handoff=route_handoff,
+                    ),
                 )
-                self._engine._validate_outcome(step, verifier_response.outcome)
+                verifier_response = await self._providers.run_verifier(verifier_request)
+                self._providers.validate_outcome(step, verifier_response.outcome)
             except asyncio.CancelledError:
                 raise
             except Exception as exc:
                 annotated_exc = exc
                 if route_handoff is not None:
-                    annotated_exc = self._engine._annotate_execution_error(exc, pending_handoffs=restorable_pending_handoffs)
-                self._engine._emit_provider_attempt_failed(
+                    annotated_exc = self._events.annotate_execution_error(exc, pending_handoffs=restorable_pending_handoffs)
+                self._events.emit_provider_attempt_failed(
                     step=step,
                     context=context,
                     turn_kind="verifier",
@@ -1210,11 +1430,11 @@ class StepDispatcher:
                 if annotated_exc is exc:
                     raise
                 raise annotated_exc from exc
-            verifier_exec = self._engine._provider_exec_result(
+            verifier_exec = provider_exec_result(
                 response=verifier_response,
                 text=verifier_response.outcome.raw_output,
             )
-            self._engine._emit_provider_attempt_finished(
+            self._events.emit_provider_attempt_finished(
                 step=step,
                 context=context,
                 turn_kind="verifier",
@@ -1224,7 +1444,7 @@ class StepDispatcher:
         except asyncio.CancelledError:
             raise
         except Exception as exc:
-            annotated_exc = self._engine._annotate_execution_error(exc, pending_handoffs=consumed_pending_handoffs)
+            annotated_exc = self._events.annotate_execution_error(exc, pending_handoffs=consumed_pending_handoffs)
             if annotated_exc is exc:
                 raise
             raise annotated_exc from exc
@@ -1256,8 +1476,8 @@ class StepDispatcher:
         consumed_pending_handoffs: tuple["PendingHandoff", ...],
         restorable_pending_handoffs: tuple["PendingHandoff", ...],
     ) -> ProviderExecResult:
-        prompt = self._engine._resolve_prompt(step.turn.prompt, context=context)
-        self._engine._emit_provider_attempt_event(
+        prompt = self._providers.resolve_prompt(step.turn.prompt, context=context)
+        self._events.emit_provider_attempt_event(
             "provider_attempt_started",
             step=step,
             context=context,
@@ -1272,7 +1492,7 @@ class StepDispatcher:
                 artifacts=artifacts,
                 session=session,
                 policy=_context_provider_policy(context),
-                **self._engine.provider_contract_builder.control_contract(
+                **self._provider_contract_builder.control_contract(
                     step,
                     context=context,
                     artifacts=artifacts,
@@ -1282,39 +1502,37 @@ class StepDispatcher:
                     route_handoff=route_handoff,
                 ),
             )
-            response = await self._call_provider(
-                call=lambda provider: provider.run_llm(llm_request),
-            )
-            self._engine._validate_outcome(step, response.outcome)
+            response = await self._providers.run_llm(llm_request)
+            self._providers.validate_outcome(step, response.outcome)
         except asyncio.CancelledError:
             raise
         except Exception as exc:
             annotated_exc = exc
             if route_handoff is not None:
-                annotated_exc = self._engine._annotate_execution_error(exc, pending_handoffs=restorable_pending_handoffs)
-            self._engine._emit_provider_attempt_failed(
+                annotated_exc = self._events.annotate_execution_error(exc, pending_handoffs=restorable_pending_handoffs)
+            self._events.emit_provider_attempt_failed(
                 step=step,
                 context=context,
                 turn_kind="llm",
                 attempt=attempt,
                 exc=annotated_exc,
             )
-            annotated_exc = self._engine._annotate_execution_error(
+            annotated_exc = self._events.annotate_execution_error(
                 annotated_exc,
                 pending_handoffs=consumed_pending_handoffs,
             )
             if annotated_exc is exc:
                 raise
             raise annotated_exc from exc
-        provider_exec = self._engine._provider_exec_result(response=response, text=response.outcome.raw_output)
-        self._engine._emit_provider_attempt_finished(
+        provider_exec = provider_exec_result(response=response, text=response.outcome.raw_output)
+        self._events.emit_provider_attempt_finished(
             step=step,
             context=context,
             turn_kind="llm",
             attempt=attempt,
             token_usage=provider_exec.usage,
         )
-        self._engine._append_logs(step, artifacts, provider_exec.text)
+        self._artifacts.append_logs(step, artifacts, provider_exec.text)
         resolved_session = provider_exec.session or session
         resolved_session_id = getattr(resolved_session, "session_id", None)
         return replace(
@@ -1761,8 +1979,16 @@ class RouteFinalizer:
 class HookRunner:
     """Owns hook execution entrypoints."""
 
-    def __init__(self, engine: "Engine") -> None:
-        self._engine = engine
+    def __init__(self, services: ExecutionServices) -> None:
+        if services.routes is None:
+            raise ValueError("HookRunner requires ExecutionServices.routes")
+        if services.events is None:
+            raise ValueError("HookRunner requires ExecutionServices.events")
+        if services.state is None:
+            raise ValueError("HookRunner requires ExecutionServices.state")
+        self._routes = services.routes
+        self._events = services.events
+        self._state = services.state
 
     def run_before(
         self,
@@ -1778,7 +2004,7 @@ class HookRunner:
         if hook is None:
             return HookExecutionResult(state=state)
         hook_name = getattr(hook, "__name__", type(hook).__name__)
-        self._engine._emit_hook_event("hook_started", step=step, context=context, hook_name=hook_name, phase=hook_phase)
+        self._events.emit_hook_event("hook_started", step=step, context=context, hook_name=hook_name, phase=hook_phase)
         try:
             context._sync_state(state)
             context._sync_artifacts(artifacts)
@@ -1805,7 +2031,7 @@ class HookRunner:
                 hook_phase=hook_phase,
                 hook_name=hook_name,
             )
-            self._engine._emit_hook_event(
+            self._events.emit_hook_event(
                 "hook_finished",
                 step=step,
                 context=context,
@@ -1815,7 +2041,7 @@ class HookRunner:
             )
             return hook_result
         except Exception as exc:
-            self._engine._emit_hook_event(
+            self._events.emit_hook_event(
                 "hook_failed",
                 step=step,
                 context=context,
@@ -1823,9 +2049,9 @@ class HookRunner:
                 phase=hook_phase,
                 error=str(exc),
             )
-            annotated = self._engine._annotate_execution_error(
+            annotated = self._events.annotate_execution_error(
                 exc,
-                checkpoint_state=self._engine._clone_state(context.state),
+                checkpoint_state=self._state.clone_state(context.state),
                 failure_context=FailureContext(
                     kind="hook_failure",
                     step_name=step.name,
@@ -1854,7 +2080,7 @@ class HookRunner:
         if hook is None:
             return HookExecutionResult(state=state)
         hook_name = getattr(hook, "__name__", type(hook).__name__)
-        self._engine._emit_hook_event(
+        self._events.emit_hook_event(
             "hook_started",
             step=step,
             context=context,
@@ -1866,7 +2092,7 @@ class HookRunner:
             context._sync_state(state)
             context._sync_artifacts(artifacts)
             if candidate_event is not None:
-                compiled_route = self._engine._compiled_route_for_step(step, candidate_event.tag)
+                compiled_route = self._routes.compiled_route_for_step(step, candidate_event.tag)
                 context._sync_route(
                     {
                         "tag": candidate_event.tag,
@@ -1875,7 +2101,7 @@ class HookRunner:
                         "handoff": compiled_route.handoff,
                     }
                 )
-                context._sync_event(self._engine._event_context_payload(candidate_event))
+                context._sync_event(self._routes.event_context_payload(candidate_event))
             else:
                 context._sync_route(None)
                 context._sync_event(None)
@@ -1900,7 +2126,7 @@ class HookRunner:
                 hook_phase=hook_phase,
                 hook_name=hook_name,
             )
-            self._engine._emit_hook_event(
+            self._events.emit_hook_event(
                 "hook_finished",
                 step=step,
                 context=context,
@@ -1910,7 +2136,7 @@ class HookRunner:
             )
             return hook_result
         except Exception as exc:
-            self._engine._emit_hook_event(
+            self._events.emit_hook_event(
                 "hook_failed",
                 step=step,
                 context=context,
@@ -1919,9 +2145,9 @@ class HookRunner:
                 route=None if candidate_event is None else candidate_event.tag,
                 error=str(exc),
             )
-            annotated = self._engine._annotate_execution_error(
+            annotated = self._events.annotate_execution_error(
                 exc,
-                checkpoint_state=self._engine._clone_state(context.state),
+                checkpoint_state=self._state.clone_state(context.state),
                 failure_context=FailureContext(
                     kind="hook_failure",
                     step_name=step.name,
@@ -1982,7 +2208,7 @@ class HookRunner:
                 hook_name=hook_name,
             )
         if isinstance(result, str):
-            override_event = self._engine._validate_hook_event_override(
+            override_event = self._routes.validate_hook_event_override(
                 step,
                 Event(
                     tag=result,
@@ -1993,7 +2219,7 @@ class HookRunner:
             )
             redirect_record = None
             if next_event is not None:
-                redirect_record = self._engine._build_hook_redirect_record(
+                redirect_record = self._routes.build_hook_redirect_record(
                     step=step,
                     context=context,
                     hook_name=hook_name,
@@ -2009,10 +2235,10 @@ class HookRunner:
                 redirect=redirect_record,
             )
         if isinstance(result, Event):
-            override_event = self._engine._validate_hook_event_override(step, result)
+            override_event = self._routes.validate_hook_event_override(step, result)
             redirect_record = None
             if next_event is not None:
-                redirect_record = self._engine._build_hook_redirect_record(
+                redirect_record = self._routes.build_hook_redirect_record(
                     step=step,
                     context=context,
                     hook_name=hook_name,
@@ -2113,7 +2339,7 @@ class HookRunner:
         if hook is None:
             return HookExecutionResult(state=state)
         hook_name = getattr(hook, "__name__", type(hook).__name__)
-        self._engine._emit_hook_event(
+        self._events.emit_hook_event(
             "hook_started",
             step=step,
             context=context,
@@ -2124,7 +2350,7 @@ class HookRunner:
         try:
             context._sync_state(state)
             context._sync_artifacts(artifacts)
-            compiled_route = self._engine._compiled_route_for_step(step, event.tag)
+            compiled_route = self._routes.compiled_route_for_step(step, event.tag)
             context._sync_route(
                 {
                     "tag": event.tag,
@@ -2133,7 +2359,7 @@ class HookRunner:
                     "handoff": compiled_route.handoff,
                 }
             )
-            context._sync_event(self._engine._event_context_payload(event))
+            context._sync_event(self._routes.event_context_payload(event))
             invocation_id = f"{step.name}:{hook_phase}:{hook_name}"
             context._set_execution_source(
                 hook_name=hook_name,
@@ -2154,7 +2380,7 @@ class HookRunner:
                 hook_phase=hook_phase,
                 hook_name=hook_name,
             )
-            self._engine._emit_hook_event(
+            self._events.emit_hook_event(
                 "hook_finished",
                 step=step,
                 context=context,
@@ -2164,7 +2390,7 @@ class HookRunner:
             )
             return hook_result
         except Exception as exc:
-            self._engine._emit_hook_event(
+            self._events.emit_hook_event(
                 "hook_failed",
                 step=step,
                 context=context,
@@ -2173,9 +2399,9 @@ class HookRunner:
                 route=event.tag,
                 error=str(exc),
             )
-            annotated = self._engine._annotate_execution_error(
+            annotated = self._events.annotate_execution_error(
                 exc,
-                checkpoint_state=self._engine._clone_state(context.state),
+                checkpoint_state=self._state.clone_state(context.state),
                 failure_context=FailureContext(
                     kind="hook_failure",
                     step_name=step.name,
@@ -2205,52 +2431,60 @@ class ArtifactGuard:
 class StateRuntime:
     """Owns worklist selection state helpers."""
 
-    def __init__(self, engine: "Engine") -> None:
-        self._engine = engine
+    def __init__(self, services: ExecutionServices) -> None:
+        if services.state is None:
+            raise ValueError("StateRuntime requires ExecutionServices.state")
+        self._state = services.state
 
     def restore_worklist_selections(
         self,
         context: "Context",
         snapshots: "Mapping[str, SelectionSnapshot]",
     ) -> dict[str, "SelectionSnapshot"]:
-        return self._engine._restore_worklist_selections(context, snapshots)
+        return self._state.restore_worklist_selections(context, snapshots)
 
     def ensure_worklist_selection(
         self,
         context: "Context",
         worklist_name: str,
     ) -> "Selection[Any]":
-        return self._engine._ensure_worklist_selection(context, worklist_name)
+        return self._state.ensure_worklist_selection(context, worklist_name)
 
 
 class SessionRuntime:
     """Owns session-store state transitions."""
 
-    def __init__(self, engine: "Engine") -> None:
-        self._engine = engine
+    def __init__(self, services: ExecutionServices) -> None:
+        if services.sessions is None:
+            raise ValueError("SessionRuntime requires ExecutionServices.sessions")
+        self._sessions = services.sessions
 
     def restore(self, snapshot: Any) -> None:
-        self._engine.session_store.restore(snapshot)
+        self._sessions.restore(snapshot)
 
     def snapshot(self) -> Any:
-        return self._engine.session_store.snapshot()
+        return self._sessions.snapshot()
 
 
 class CheckpointManager:
     """Owns checkpoint persistence entrypoints."""
 
-    def __init__(self, engine: "Engine") -> None:
-        self._engine = engine
+    def __init__(self, services: ExecutionServices) -> None:
+        if services.checkpoints is None:
+            raise ValueError("CheckpointManager requires ExecutionServices.checkpoints")
+        self._checkpoints = services.checkpoints
 
     def save(self, *args: Any, **kwargs: Any) -> Any:
-        return self._engine._save_checkpoint(*args, **kwargs)
+        return self._checkpoints.save(*args, **kwargs)
 
 
 class OperationRecorder:
     """Owns operation-runtime binding for step execution."""
 
-    def __init__(self, engine: "Engine") -> None:
-        self._engine = engine
+    def __init__(self, services: ExecutionServices) -> None:
+        if services.operations is None:
+            raise ValueError("OperationRecorder requires ExecutionServices.operations")
+        self._operations = services.operations
 
     @contextmanager
     def bind_step(
@@ -2262,69 +2496,30 @@ class OperationRecorder:
         step_name: str,
         step_visit: int,
     ):
-        previous_policy = getattr(context, "_provider_policy", _MISSING_PROVIDER_POLICY)
-        resolved_policy = None
-        if self._engine.provider_policy_resolver is not None:
-            try:
-                resolved_policy = self._engine.provider_policy_resolver.resolve_for_step(step)
-            except ProviderPolicyError as exc:
-                context._emit_runtime_event(
-                    "provider_policy_violation",
-                    policy_fingerprint=None,
-                    error_message=str(exc),
-                )
-                raise
-            context._provider_policy = resolved_policy
-            context._emit_runtime_event(
-                "provider_policy_resolved",
-                policy_fingerprint=policy_fingerprint(resolved_policy),
-            )
-        try:
-            with bind_operation_runtime(
-                OperationRuntime(
-                    provider=self._engine.provider,
-                    provider_configuration=provider_configuration(
-                        self._engine.provider,
-                        default_session_name=self._engine.compiled.default_session_name,
-                    ),
-                    prompt_registry=self._engine.prompt_registry,
-                    context=context,
-                    run_folder=run_folder,
-                    workflow_name=self._engine.compiled.workflow_name,
-                    topology_hash=self._engine.compiled.topology_hash,
-                    source_hash=self._engine.compiled.source_hash,
-                    step_name=step_name,
-                    step_visit=step_visit,
-                    default_session_name=self._engine.compiled.default_session_name,
-                    replay_mismatch_behavior=self._engine.operation_replay_mismatch_behavior,
-                    policy=resolved_policy,
-                    provider_policy_resolver=self._engine.provider_policy_resolver,
-                    event_sink=self._engine.runtime_event_sink,
-                )
-            ) as runtime:
-                yield runtime
-        finally:
-            if previous_policy is _MISSING_PROVIDER_POLICY:
-                try:
-                    delattr(context, "_provider_policy")
-                except AttributeError:
-                    pass
-            else:
-                context._provider_policy = previous_policy
+        with self._operations.bind_step(
+            step=step,
+            context=context,
+            run_folder=run_folder,
+            step_name=step_name,
+            step_visit=step_visit,
+        ) as runtime:
+            yield runtime
+
+    def set_provider_policy_resolver(self, resolver: Any) -> None:
+        self._operations.set_provider_policy_resolver(resolver)
 
 
 def _context_provider_policy(context: "Context") -> object | None:
     return getattr(context, "_provider_policy", None)
 
 
-_MISSING_PROVIDER_POLICY = object()
-
-
 class WorkflowInvoker:
     """Owns child-workflow invocation entrypoints."""
 
-    def __init__(self, engine: "Engine") -> None:
-        self._engine = engine
+    def __init__(self, services: ExecutionServices) -> None:
+        if services.child_workflows is None:
+            raise ValueError("WorkflowInvoker requires ExecutionServices.child_workflows")
+        self._child_workflows = services.child_workflows
 
     def run_child_step(self, step: StepPlan, context: "Context") -> Any:
-        return self._engine._run_workflow_step(step, context)
+        return self._child_workflows.run_child_step(step, context)

@@ -12,7 +12,14 @@ from typing import TYPE_CHECKING, Any
 from pydantic import BaseModel
 
 from ..artifacts import validate_artifact_handle
-from ..engine_collaborators import StepExecutionResult, StepFinalizationRequest, run_awaitable_sync
+from ..engine_collaborators import (
+    StepExecutionResult,
+    StepFinalizationRequest,
+    run_awaitable_sync,
+    step_result_from_direct_control,
+    step_result_from_route_finalization,
+)
+from ..execution_services import ExecutionServices
 from ..errors import ProviderExecutionError, WorkflowExecutionError
 from ..primitives import Event
 from .context import BranchMetadata, FanInMetadata, create_branch_context, create_fan_in_context
@@ -29,7 +36,6 @@ from .sessions import BranchSessionStoreView
 
 if TYPE_CHECKING:
     from ..context import Context
-    from ..engine import Engine
     from ..primitives import PendingHandoff
     from ..step_plans import StepPlan
 
@@ -37,8 +43,26 @@ if TYPE_CHECKING:
 class BranchGroupRuntime:
     """Runs one compiled branch-group step as a composite barrier."""
 
-    def __init__(self, engine: "Engine") -> None:
-        self._engine = engine
+    def __init__(
+        self,
+        *,
+        services: ExecutionServices,
+        step_dispatcher: Any,
+        route_finalizer: Any,
+        operation_recorder: Any,
+    ) -> None:
+        if services.artifacts is None:
+            raise ValueError("BranchGroupRuntime requires ExecutionServices.artifacts")
+        if services.events is None:
+            raise ValueError("BranchGroupRuntime requires ExecutionServices.events")
+        if services.state is None:
+            raise ValueError("BranchGroupRuntime requires ExecutionServices.state")
+        self._artifacts = services.artifacts
+        self._events = services.events
+        self._state = services.state
+        self._step_dispatcher = step_dispatcher
+        self._route_finalizer = route_finalizer
+        self._operation_recorder = operation_recorder
 
     def run(
         self,
@@ -177,7 +201,7 @@ class BranchGroupRuntime:
                     execution_id=None,
                 )
             except Exception as exc:  # pragma: no cover - defensive fallback
-                result = _unexpected_branch_failure_result(self._engine, spec=spec, branch=branch, exc=exc)
+                result = _unexpected_branch_failure_result(self._events, spec=spec, branch=branch, exc=exc)
                 self._emit_branch_result_event(
                     context=context,
                     spec=spec,
@@ -255,7 +279,7 @@ class BranchGroupRuntime:
             step_state_store=step_state_store,
         )
         branch_context._sync_values(parent_context._values)
-        self._engine._increment_step_runtime_state(step_state_store)
+        self._state.increment_step_runtime_state(step_state_store)
         branch_context._sync_step_state(step_state_store)
         if compiled_step.scope_name is not None:
             raise AssertionError(
@@ -267,7 +291,7 @@ class BranchGroupRuntime:
                 "step": {
                     "name": compiled_step.name,
                     "kind": compiled_step.kind,
-                    "visits": self._engine._step_runtime_visits(step_state_store),
+                    "visits": self._state.step_runtime_visits(step_state_store),
                     "last_route": getattr(step_state_store, "last_route", None),
                 }
             }
@@ -285,14 +309,14 @@ class BranchGroupRuntime:
         branch_dir = parent_context.workflow_folder / "_branch_groups" / spec.name / "branches" / branch.name
         started_at = _utc_now()
         try:
-            with self._engine.operation_recorder.bind_step(
+            with self._operation_recorder.bind_step(
                 step=compiled_step,
                 context=branch_context,
                 run_folder=branch_context.run_folder,
                 step_name=compiled_step.name,
-                step_visit=self._engine._step_runtime_visits(step_state_store),
+                step_visit=self._state.step_runtime_visits(step_state_store),
             ):
-                step_result = await self._engine.step_dispatcher.execute_async(
+                step_result = await self._step_dispatcher.execute_async(
                     compiled_step,
                     branch_context,
                     branch_context.state,
@@ -486,7 +510,7 @@ class BranchGroupRuntime:
             raw_output_paths=raw_output_paths,
             provider_session=provider_session,
             provider_sessions=provider_sessions,
-            error=_serialize_exception(self._engine, exc),
+            error=self._events.serialize_exception(exc),
             started_at=started_at.isoformat(),
             finished_at=finished_at.isoformat(),
             duration_ms=_duration_ms(started_at, finished_at),
@@ -521,7 +545,7 @@ class BranchGroupRuntime:
         return primary_path, raw_paths
 
     def _collect_branch_artifacts(self, step: "StepPlan", context: "Context") -> tuple[BranchArtifactObservation, ...]:
-        artifacts = self._engine._resolve_artifacts(context)
+        artifacts = self._artifacts.resolve_artifacts(context)
         branch_artifacts: list[BranchArtifactObservation] = []
         for name in step.writes:
             handle = artifacts[name]
@@ -585,7 +609,7 @@ class BranchGroupRuntime:
             step_state_store=fan_in_step.step_state_model(),
         )
         fan_in_context._sync_values(context._values)
-        self._engine._increment_step_runtime_state(fan_in_context._step_state)
+        self._state.increment_step_runtime_state(fan_in_context._step_state)
         fan_in_context._sync_step_state(fan_in_context._step_state)
         fan_in_context._emit_runtime_event(
             "fan_in_started",
@@ -600,14 +624,14 @@ class BranchGroupRuntime:
                 _relative_to_root(context_path, context=context),
             ],
         )
-        with self._engine.operation_recorder.bind_step(
+        with self._operation_recorder.bind_step(
             step=fan_in_step,
             context=fan_in_context,
             run_folder=fan_in_context.run_folder,
             step_name=fan_in_step.name,
-            step_visit=self._engine._step_runtime_visits(fan_in_context._step_state),
+            step_visit=self._state.step_runtime_visits(fan_in_context._step_state),
         ):
-            step_result = await self._engine.step_dispatcher.execute_async(
+            step_result = await self._step_dispatcher.execute_async(
                 fan_in_step,
                 fan_in_context,
                 fan_in_context.state,
@@ -646,12 +670,12 @@ class BranchGroupRuntime:
         pending_handoffs: tuple["PendingHandoff", ...],
     ) -> StepExecutionResult:
         event = select_branch_group_outcome(spec, manifest, context)
-        finalization = self._engine.route_finalizer.finalize_result(
+        finalization = self._route_finalizer.finalize_result(
             StepFinalizationRequest(
                 step=composite_step,
                 context=context,
                 state=context.state,
-                artifacts=self._engine._resolve_artifacts(context),
+                artifacts=self._artifacts.resolve_artifacts(context),
                 candidate_event=event,
                 candidate_route=event.tag,
                 candidate_route_present=True,
@@ -661,7 +685,7 @@ class BranchGroupRuntime:
                 provider_attributable=False,
             )
         )
-        return self._engine._step_result_from_route_finalization(
+        return step_result_from_route_finalization(
             step=composite_step,
             route_finalization=finalization,
         )
@@ -689,7 +713,7 @@ class BranchGroupRuntime:
                 source_hook=None if finalization is None else finalization.source_hook,
                 source_phase=None if finalization is None else finalization.source_phase,
             )
-            return self._engine._step_result_from_direct_control(
+            return step_result_from_direct_control(
                 step=composite_step,
                 state=nested_result.state,
                 control=control,
@@ -702,12 +726,12 @@ class BranchGroupRuntime:
             raise WorkflowExecutionError(
                 f"fan-in step {nested_step.name!r} completed without a route event or direct runtime control"
             )
-        route_finalization = self._engine.route_finalizer.finalize_result(
+        route_finalization = self._route_finalizer.finalize_result(
             StepFinalizationRequest(
                 step=composite_step,
                 context=context,
                 state=nested_result.state,
-                artifacts=self._engine._resolve_artifacts(context),
+                artifacts=self._artifacts.resolve_artifacts(context),
                 candidate_event=nested_result.event,
                 candidate_route=nested_result.event.tag,
                 candidate_route_present=True,
@@ -721,7 +745,7 @@ class BranchGroupRuntime:
                 source_phase=None if finalization is None else finalization.source_phase,
             )
         )
-        return self._engine._step_result_from_route_finalization(
+        return step_result_from_route_finalization(
             step=composite_step,
             route_finalization=route_finalization,
             outcome=nested_result.outcome,
@@ -758,21 +782,6 @@ def _serialize_usage(usage: Any) -> dict[str, Any]:
     if isinstance(usage, Mapping):
         return dict(usage)
     return {"value": usage}
-
-
-def _serialize_exception(engine: "Engine", exc: Exception) -> dict[str, Any]:
-    failure_context = engine._failure_context_for_exception(exc)
-    retry_kind = engine._retry_kind_for_exception(exc)
-    retry_exhausted = False
-    if failure_context is not None:
-        retry_exhausted = bool(failure_context.details.get("retry_exhausted"))
-    return {
-        "type": type(exc).__name__,
-        "message": str(exc),
-        "failure_context": None if failure_context is None else failure_context.to_payload(),
-        "retry_kind": retry_kind,
-        "retry_exhausted": retry_exhausted,
-    }
 
 
 def _branch_execution_id(context: "Context") -> str | None:
@@ -823,7 +832,7 @@ def _cancelled_branch_result(
     )
 
 
-def _unexpected_branch_failure_result(engine: "Engine", *, spec: Any, branch: Any, exc: Exception) -> BranchResult:
+def _unexpected_branch_failure_result(events: Any, *, spec: Any, branch: Any, exc: Exception) -> BranchResult:
     del spec
     now = _utc_now().isoformat()
     return BranchResult(
@@ -842,7 +851,7 @@ def _unexpected_branch_failure_result(engine: "Engine", *, spec: Any, branch: An
         raw_output_paths={},
         provider_session=None,
         provider_sessions={},
-        error=_serialize_exception(engine, exc),
+        error=events.serialize_exception(exc),
         started_at=now,
         finished_at=now,
         duration_ms=0,

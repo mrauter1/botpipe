@@ -53,6 +53,17 @@ from .errors import (
     replace_execution_error,
 )
 from .execution_services import ExecutionServices
+from .execution_runtime_services import (
+    ArtifactRuntimeService,
+    CheckpointRuntimeService,
+    ChildWorkflowRuntimeService,
+    EventRuntimeService,
+    OperationBindingService,
+    ProviderRuntimeService,
+    RouteRuntimeService,
+    SessionRuntimeService,
+    StateRuntimeService,
+)
 from .operations import serialize_context_values
 from .outcome_contract import (
     is_question_style_route,
@@ -256,159 +267,6 @@ class _DefaultProviderPolicyResolver(ProviderPolicyResolverProtocol):
         )
 
 
-class _EngineArtifactService:
-    """Temporary artifact bridge for phased execution-service migration.
-
-    TODO(execution-services): move artifact ownership out of Engine private methods
-    as StepDispatcher and BranchGroupRuntime stop reaching through Engine directly.
-    """
-
-    def __init__(self, engine: "Engine") -> None:
-        self._engine = engine
-
-    def resolve_artifacts(self, context: Context) -> ResolvedArtifacts:
-        return self._engine._resolve_artifacts(context)
-
-    def enforce_artifact_contracts(
-        self,
-        step: StepPlan,
-        context: Context,
-        artifacts: ResolvedArtifacts,
-        *,
-        route_tag: str,
-        state: BaseModel,
-        error_cls: type[Exception],
-        provider_attributable: bool,
-    ) -> None:
-        self._engine._enforce_artifact_contracts(
-            step,
-            context,
-            artifacts,
-            route_tag=route_tag,
-            state=state,
-            error_cls=error_cls,
-            provider_attributable=provider_attributable,
-        )
-
-
-class _EngineRouteService:
-    """Temporary route bridge for phased execution-service migration.
-
-    TODO(execution-services): migrate route ownership from Engine private helpers into
-    narrow services as HookRunner and StepDispatcher are moved off Engine.
-    """
-
-    def __init__(self, engine: "Engine") -> None:
-        self._engine = engine
-
-    def validate_event(
-        self,
-        step: StepPlan,
-        event: Event,
-        *,
-        provider_attributable: bool,
-        error_cls: type[Exception],
-    ) -> None:
-        self._engine._validate_event(
-            step,
-            event,
-            provider_attributable=provider_attributable,
-            error_cls=error_cls,
-        )
-
-    def annotate_execution_error(self, exc: Exception, **kwargs: Any) -> Exception:
-        return self._engine._annotate_execution_error(exc, **kwargs)
-
-    def ensure_hook_redirect_limit(
-        self,
-        step: StepPlan,
-        *,
-        candidate_route: str | None,
-        redirects: Sequence[HookRouteRedirect],
-    ) -> None:
-        self._engine._ensure_hook_redirect_limit(step, candidate_route=candidate_route, redirects=redirects)
-
-    def normalize_direct_runtime_control(
-        self,
-        *,
-        step: StepPlan,
-        context: Context,
-        control: RequestInput | Goto | Fail,
-        hook_name: str,
-        hook_phase: str,
-    ) -> _RouteControl:
-        return self._engine._normalize_direct_runtime_control(
-            step=step,
-            context=context,
-            control=control,
-            hook_name=hook_name,
-            hook_phase=hook_phase,
-        )
-
-    def compiled_route_for_step(self, step: StepPlan, route_tag: str) -> RouteContract:
-        return self._engine._compiled_route_for_step(step, route_tag)
-
-    def event_context_payload(self, event: Event) -> dict[str, Any]:
-        return self._engine._event_context_payload(event)
-
-    def pending_input_from_event(self, *, source_step: str, event: Event) -> PendingInput:
-        return self._engine._pending_input_from_event(source_step=source_step, event=event)
-
-    def schedule_direct_control_handoffs(
-        self,
-        pending_handoffs: tuple[PendingHandoff, ...],
-        *,
-        control: _RouteControl,
-        context: Context,
-        source_step: str,
-    ) -> tuple[PendingHandoff, ...]:
-        return self._engine._schedule_direct_control_handoffs(
-            pending_handoffs,
-            control=control,
-            context=context,
-            source_step=source_step,
-        )
-
-    def schedule_route_handoffs(
-        self,
-        pending_handoffs: tuple[PendingHandoff, ...],
-        *,
-        route: RouteContract,
-        event: Event,
-        destination: str,
-        context: Context,
-        source_step: str,
-    ) -> tuple[PendingHandoff, ...]:
-        return self._engine._schedule_route_handoffs(
-            pending_handoffs,
-            route=route,
-            event=event,
-            destination=destination,
-            context=context,
-            source_step=source_step,
-        )
-
-
-class _EngineStateService:
-    """Temporary state bridge for phased execution-service migration.
-
-    TODO(execution-services): fold these runtime-state helpers into a dedicated
-    state service once HookRunner and BranchGroupRuntime stop depending on Engine.
-    """
-
-    def __init__(self, engine: "Engine") -> None:
-        self._engine = engine
-
-    def clone_state(self, state: BaseModel) -> BaseModel:
-        return self._engine._clone_state(state)
-
-    def update_final_step_runtime_state(self, step: StepPlan, store: Any, event: Event) -> None:
-        self._engine._update_final_step_runtime_state(step, store, event)
-
-    def update_final_item_runtime_state(self, store: Any, event: Event) -> None:
-        self._engine._update_final_item_runtime_state(store, event)
-
-
 class Engine:
     """Strict workflow engine."""
 
@@ -440,26 +298,89 @@ class Engine:
         self.hook_event_sink = hook_event_sink
         self.runtime_event_sink = runtime_event_sink
         self.provider_policy_resolver = provider_policy_resolver
-        self.hook_runner = HookRunner(self)
-        self.execution_services = ExecutionServices(
-            artifacts=_EngineArtifactService(self),
-            routes=_EngineRouteService(self),
-            hooks=self.hook_runner,
-            state=_EngineStateService(self),
+        event_service = EventRuntimeService(
+            hook_event_sink=hook_event_sink,
+            runtime_event_sink=runtime_event_sink,
         )
+        state_service = StateRuntimeService(compiled=self.compiled)
+        artifact_service = ArtifactRuntimeService(compiled=self.compiled, events=event_service)
+        route_service = RouteRuntimeService(
+            compiled=self.compiled,
+            interaction_policy=self.interaction_policy,
+            max_hook_redirects=self.max_hook_redirects,
+            events=event_service,
+        )
+        session_service = SessionRuntimeService(compiled=self.compiled, session_store=self.session_store)
+        provider_service = ProviderRuntimeService(
+            compiled=self.compiled,
+            provider=self.provider,
+            prompt_registry=self.prompt_registry,
+            interaction_policy=self.interaction_policy,
+        )
+        operation_service = OperationBindingService(
+            compiled=self.compiled,
+            provider=self.provider,
+            prompt_registry=self.prompt_registry,
+            operation_replay_mismatch_behavior=self.operation_replay_mismatch_behavior,
+            provider_policy_resolver=self.provider_policy_resolver,
+            runtime_event_sink=self.runtime_event_sink,
+        )
+        self.execution_services = ExecutionServices(
+            artifacts=artifact_service,
+            routes=route_service,
+            sessions=session_service,
+            events=event_service,
+            providers=provider_service,
+            operations=operation_service,
+            state=state_service,
+        )
+        self.hook_runner = HookRunner(self.execution_services)
+        self.execution_services = replace(self.execution_services, hooks=self.hook_runner)
         self.artifact_guard = ArtifactGuard(self.execution_services)
         self.route_finalizer = RouteFinalizer(
             self.execution_services,
             artifact_inventory=self.compiled.artifacts_by_qualified_name,
         )
-        self.step_dispatcher = StepDispatcher(self)
-        self.state_runtime = StateRuntime(self)
-        self.session_runtime = SessionRuntime(self)
-        self.checkpoint_manager = CheckpointManager(self)
-        self.operation_recorder = OperationRecorder(self)
-        self.workflow_invoker = WorkflowInvoker(self)
-        self.provider_contract_builder = ProviderContractBuilder(self)
-        self.branch_group_runtime = BranchGroupRuntime(self)
+        child_workflow_service = ChildWorkflowRuntimeService(
+            compiled=self.compiled,
+            artifacts=artifact_service,
+            routes=route_service,
+        )
+        checkpoint_service = CheckpointRuntimeService(
+            compiled=self.compiled,
+            checkpoint_store=self.checkpoint_store,
+            sessions=session_service,
+            state=state_service,
+        )
+        self.execution_services = replace(
+            self.execution_services,
+            checkpoints=checkpoint_service,
+            child_workflows=child_workflow_service,
+        )
+        self.operation_recorder = OperationRecorder(self.execution_services)
+        self.provider_contract_builder = ProviderContractBuilder(
+            compiled=self.compiled,
+            services=self.execution_services,
+            allow_provider_questions=self.interaction_policy.allow_provider_questions,
+        )
+        self.step_dispatcher = StepDispatcher(
+            services=self.execution_services,
+            hook_runner=self.hook_runner,
+            route_finalizer=self.route_finalizer,
+            branch_group_runtime=None,
+            provider_contract_builder=self.provider_contract_builder,
+        )
+        self.branch_group_runtime = BranchGroupRuntime(
+            services=self.execution_services,
+            step_dispatcher=self.step_dispatcher,
+            route_finalizer=self.route_finalizer,
+            operation_recorder=self.operation_recorder,
+        )
+        self.step_dispatcher._branch_group_runtime = self.branch_group_runtime
+        self.state_runtime = StateRuntime(self.execution_services)
+        self.session_runtime = SessionRuntime(self.execution_services)
+        self.checkpoint_manager = CheckpointManager(self.execution_services)
+        self.workflow_invoker = WorkflowInvoker(self.execution_services)
 
     @staticmethod
     def _compile_runtime_workflow(workflow: type[Any]) -> WorkflowPlan:
@@ -570,6 +491,7 @@ class Engine:
             raise
         finally:
             self.provider_policy_resolver = env.previous_provider_policy_resolver
+            self.operation_recorder.set_provider_policy_resolver(self.provider_policy_resolver)
 
     @staticmethod
     def _new_run_loop_state() -> _RunLoopState:
@@ -617,6 +539,7 @@ class Engine:
                     package_folder=resolved_package_folder,
                 ),
             )
+        self.operation_recorder.set_provider_policy_resolver(self.provider_policy_resolver)
         self.compiled.workflow_cls()
         binding = self._build_run_binding(
             task_id=task_id,

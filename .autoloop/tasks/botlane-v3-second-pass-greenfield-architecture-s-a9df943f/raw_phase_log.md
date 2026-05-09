@@ -3828,3 +3828,65 @@ No open issue remains in this phase-local test audit. The scoped test coverage i
 <loop-control>
 {"schema":"docloop.loop_control/v1","kind":"promise","promise":"COMPLETE"}
 </loop-control>
+
+
+---
+run_id=run-20260509T164029Z-23a21781 | entry=session_turn | pair=implement | phase=producer | cycle=1 | attempt=1 | thread_id=019e0db8-1056-72b2-89e4-ed5ec238a0ff
+---
+provider=codex
+mode=start
+template=/home/rauter/.local/share/pipx/venvs/autoloop/lib/python3.12/site-packages/autoloop/templates/implement_producer.md
+session_id=019e0db8-1056-72b2-89e4-ed5ec238a0ff
+
+
+---
+run_id=run-20260509T164029Z-23a21781 | entry=phase_output | pair=implement | phase=producer | process=codex-agent | cycle=1 | attempt=1 | thread_id=019e0db8-1056-72b2-89e4-ed5ec238a0ff
+---
+I’m treating this as the `execution-services-cutover` phase only. First I’m reading the phase artifacts and the current execution/runtime code to identify every remaining `Engine` reach-through before I touch anything.
+
+The first pass confirmed the planning artifacts but also shows the codebase is mid-cutover: route authority has already moved, while the execution layer still has direct `Engine` dependencies in exactly the areas called out by the phase contract. I’m drilling into those collaborators and the contract tests next so the edit set stays scoped and coherent.
+
+I’ve confirmed the cutover is broader than a constructor swap. The current services are just Engine-backed shims, and both `StepDispatcher` and `BranchGroupRuntime` still depend on a cluster of route/session/provider/checkpoint helpers that need real Engine-free implementations.
+
+I have the dependency map now. The cleanest path is to replace the temporary Engine-backed bridges with concrete runtime services and rewire the collaborators against those services in one slice, then add strictness coverage that blocks `Engine` fields and `Engine._*` calls in maintained collaborators.
+
+I’m at the edit point now. The main code change is a new set of concrete runtime services that own route, artifact, provider, session, and event/error behavior without closing over `Engine`, then I’ll rewire the collaborators and branch runtime onto those services.
+
+The service layer is in place and I’m wiring the engine composition over to it now. After that I’ll clean up the remaining `Engine` references in the collaborators and branch runtime, then run focused contract tests and strictness checks.
+
+The direct `Engine` fields are out of the main collaborators now. I’m running syntax checks next because this refactor touched several long methods and constructor signatures, and I want to catch structural issues before I move on to test coverage and strictness.
+
+The repo has local virtualenvs, so I’m switching to the project interpreter for the focused test pass. That should tell me whether the cutover is just constructor plumbing now or if there are behavioral gaps still hiding in route/session/provider flow.
+
+The service cutover is functionally green on the targeted contract suites. I’m adding an explicit AST-level guard now so `engine` constructor injection and `Engine._*` reach-through can’t quietly come back in these maintained runtime collaborators.
+
+The focused contract surface is green now. I’m writing the phase notes and the shared decision ledger next so the next turn inherits the two non-obvious invariants from this cutover: provider-visible route legality is only enforced on provider-backed steps, and the operation binding service must track resolver swaps from the engine run lifecycle.
+
+Scope considered
+
+`execution-services-cutover` only. I kept the work scoped to removing `Engine` reach-through from maintained execution collaborators and adding regression guards, without pulling in the later one-step SDK collapse or `StepExecutionResult.transition` removal.
+
+What I analyzed
+
+I traced the remaining `Engine` coupling across [engine.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/botlane/core/engine.py), [engine_collaborators.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/botlane/core/engine_collaborators.py), [runtime.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/botlane/core/branch_groups/runtime.py), and the phase contract tests. I also checked the phase artifacts and updated the phase notes and decision ledger.
+
+What I changed
+
+I added [execution_runtime_services.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/botlane/core/execution_runtime_services.py) with concrete Engine-free runtime services for artifacts, routes, sessions, providers, checkpoints, events/errors, operation binding, child-workflow invocation, and state/worklist handling. Then I rewired `Engine` to compose those services and removed the old Engine-backed bridge shims.
+
+I refactored `ProviderContractBuilder`, `StepDispatcher`, `HookRunner`, `BranchGroupRuntime`, `StateRuntime`, `SessionRuntime`, `CheckpointManager`, `OperationRecorder`, and `WorkflowInvoker` to depend on services or direct collaborators instead of storing `Engine` or calling `Engine._*`. I also centralized step-result assembly in shared helpers and added an AST strictness test that blocks `engine` injection, `self._engine`, and `Engine._*` reach-through in the maintained runtime collaborator files.
+
+Key findings / decisions
+
+Provider-visible route legality now only narrows runtime validation for provider-backed step kinds (`step`, `produce_verify`). Composite branch-group finalization preserves nested provider attribution metadata, but validates the composite route against the composite step’s compiled routes.
+
+Because operation binding no longer closes over `Engine`, `Engine` now pushes provider-policy-resolver changes into the operation binding service during run setup and teardown. I recorded both of those decisions in the run ledger and summarized the implementation in [implementation_notes.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/botlane-v3-second-pass-greenfield-architecture-s-a9df943f/runs/run-20260509T164029Z-23a21781/artifacts/implement/phases/execution-services-cutover/implementation_notes.md).
+
+Open issues / next step
+
+This phase is green on the focused contract surface, but I did not run the full `pytest` suite. Validation run:
+`.venv/bin/python -m pytest -q tests/contract/engine/test_execution_services.py tests/contract/engine/test_routes.py tests/contract/engine/test_hooks.py tests/contract/engine/test_child_workflows.py tests/contract/test_branch_group_runtime.py tests/contract/test_branch_result_runtime.py tests/strictness/test_no_internal_compat_layers.py`
+and
+`.venv/bin/python -m pytest -q tests/contract/engine/test_sessions.py tests/contract/engine/test_runtime_controls.py tests/contract/engine/test_artifacts.py`.
+
+The remaining out-of-phase architecture work is the one-step SDK collapse and the later `StepExecutionResult.transition` cleanup.

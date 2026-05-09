@@ -32,6 +32,11 @@ REMOVED_INTERNAL_TOKENS = (
     "original_" + "step",
 )
 FORBIDDEN_STEP_ROUTE_OWNERSHIP_NAMES = frozenset({"_route_table", "_effective_route_table"})
+ENGINE_BOUNDARY_FILES = (
+    REPO_ROOT / "botlane" / "core" / "engine_collaborators.py",
+    REPO_ROOT / "botlane" / "core" / "branch_groups" / "runtime.py",
+    REPO_ROOT / "botlane" / "core" / "execution_runtime_services.py",
+)
 REMOVED_INTERNAL_PATHS = (
     REPO_ROOT / "botlane" / "core" / ("plan_" + "adapters.py"),
 )
@@ -71,6 +76,25 @@ def test_maintained_python_sources_do_not_reintroduce_step_owned_route_table_sym
                     violations.append(_symbol_violation(path, node, name))
                 case ast.AsyncFunctionDef(name=name) if name in FORBIDDEN_STEP_ROUTE_OWNERSHIP_NAMES:
                     violations.append(_symbol_violation(path, node, name))
+
+    assert violations == []
+
+
+def test_execution_collaborators_do_not_reintroduce_engine_reach_through() -> None:
+    violations: list[str] = []
+
+    for path in ENGINE_BOUNDARY_FILES:
+        tree = ast.parse(path.read_text(encoding="utf-8"), filename=str(path))
+        for node in ast.walk(tree):
+            match node:
+                case ast.arg(arg="engine"):
+                    violations.append(f"{path.relative_to(REPO_ROOT)}:{node.lineno} reintroduces engine constructor/service injection")
+                case ast.Attribute(value=ast.Name(id="self"), attr="_engine"):
+                    violations.append(f"{path.relative_to(REPO_ROOT)}:{node.lineno} reintroduces stored Engine state")
+                case ast.Attribute(value=ast.Name(id="engine"), attr=attr) if attr.startswith("_"):
+                    violations.append(f"{path.relative_to(REPO_ROOT)}:{node.lineno} reintroduces Engine private helper access engine.{attr}")
+                case ast.Attribute(value=ast.Attribute(value=ast.Name(id="self"), attr="_engine"), attr=attr) if attr.startswith("_"):
+                    violations.append(f"{path.relative_to(REPO_ROOT)}:{node.lineno} reintroduces Engine private helper access self._engine.{attr}")
 
     assert violations == []
 
