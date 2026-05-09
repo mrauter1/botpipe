@@ -1828,3 +1828,55 @@ Open issues / next step
 <loop-control>
 {"schema":"docloop.loop_control/v1","kind":"promise","promise":"COMPLETE"}
 </loop-control>
+
+
+---
+run_id=run-20260509T125912Z-8deb38fd | entry=session_turn | pair=test | phase=producer | cycle=1 | attempt=1 | thread_id=019e0d36-7afc-75e3-9a6e-3011fe4ea348
+---
+provider=codex
+mode=resume
+template=/home/rauter/.local/share/pipx/venvs/autoloop/lib/python3.12/site-packages/autoloop/templates/test_producer.md
+session_id=019e0d36-7afc-75e3-9a6e-3011fe4ea348
+
+
+---
+run_id=run-20260509T125912Z-8deb38fd | entry=phase_output | pair=test | phase=producer | process=codex-agent | cycle=1 | attempt=1 | thread_id=019e0d36-7afc-75e3-9a6e-3011fe4ea348
+---
+I’m checking the phase-owned test artifacts now and mapping the implemented coverage to the active acceptance criteria. If the repo tests already cover the changed boundary well enough, I’ll keep the code churn minimal and concentrate on the behavior map and test-phase notes.
+
+The existing contract test already proves the boundary indirectly, but I’m making it explicit by asserting the per-branch payload type as well. That keeps the test-phase change small while making the public-shape guarantee easier to understand.
+
+I’ve tightened the fan-in boundary assertion. I’m rerunning the branch-focused suite now so the test strategy and phase feedback can cite an independent pass, not just the implementation run.
+
+The targeted suite is green. I’m writing the behavior-to-test map now, with explicit links from each acceptance criterion to the tests that cover happy-path, edge, and failure-path behavior.
+
+Scope considered
+
+- Phase-local test work for `branch-typed-evidence`.
+- Focused on the typed branch-result/manifest cutover and the preserved public `ctx.fan_in.results` boundary.
+
+What I analyzed
+
+- Existing contract and unit tests around `BranchResult`, `BranchManifest`, branch runtime helpers, and fan-in execution.
+- The run-local decisions preserving custom outcome mapping payloads and public fan-in payload neutrality.
+- The reviewer-driven regression path where `ctx.fan_in.results` previously leaked `BranchManifest`.
+
+What I changed
+
+- Refined [test_branch_group_runtime.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/tests/contract/test_branch_group_runtime.py) to assert the public `ctx.fan_in.results` boundary more explicitly:
+  - `NamespaceProxy` wrapper
+  - stable schema `botlane.branch_results/v1`
+  - dict-shaped branch entry payloads
+- Updated [test_strategy.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/botlane-v3-second-pass-greenfield-architecture-s-a9df943f/runs/run-20260509T125912Z-8deb38fd/artifacts/test/phases/branch-typed-evidence/test_strategy.md) with an explicit behavior-to-test coverage map for AC-1, AC-2, preserved invariants, edge cases, failure paths, and known gaps.
+- Appended a concise validation summary to [feedback.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/botlane-v3-second-pass-greenfield-architecture-s-a9df943f/runs/run-20260509T125912Z-8deb38fd/artifacts/test/phases/branch-typed-evidence/feedback.md).
+- Appended one test decision under the current turn header in `decisions.txt` for the public fan-in payload boundary.
+
+Key findings / decisions
+
+- The strongest regression guard for this phase is now explicit: the contract suite distinguishes public fan-in payloads from internal typed `BranchManifest` / `BranchResult` objects.
+- Existing branch serialization and typed-runtime tests already covered most of the phase scope, so the repo test churn stayed narrow and targeted.
+
+Open issues / next step
+
+- Focused validation passed: `.venv/bin/python -m pytest tests/contract/test_branch_result_runtime.py tests/contract/test_branch_result_serialization.py tests/contract/test_branch_group_runtime.py tests/unit/test_branch_group_context_sessions.py -q` with `43 passed in 0.92s`.
+- Known gap remains phase-local only: no full repo `pytest` run was attempted in this turn.

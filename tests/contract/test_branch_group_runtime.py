@@ -196,6 +196,7 @@ def test_parallel_branch_group_with_fan_in_routes_through_fan_in_and_exposes_hel
                         "branch_count": request.context.fan_in.branch_count,
                         "results_type": type(request.context.fan_in.results).__name__,
                         "results_schema": request.context.fan_in.results.schema,
+                        "results_branch_payload_type": type(request.context.fan_in.results.branches[0]).__name__,
                         "results_branch_names": tuple(
                             branch["name"] for branch in request.context.fan_in.results.branches
                         ),
@@ -229,6 +230,7 @@ def test_parallel_branch_group_with_fan_in_routes_through_fan_in_and_exposes_hel
     assert seen["branch_count"] == 2
     assert seen["results_type"] == "NamespaceProxy"
     assert seen["results_schema"] == "botlane.branch_results/v1"
+    assert seen["results_branch_payload_type"] == "dict"
     assert seen["results_branch_names"] == ("security", "cost")
     expected_results_path = _branch_group_dir(task_folder, FanInWorkflow, "reviews") / "results.json"
     expected_context_path = _branch_group_dir(task_folder, FanInWorkflow, "reviews") / "context.md"
