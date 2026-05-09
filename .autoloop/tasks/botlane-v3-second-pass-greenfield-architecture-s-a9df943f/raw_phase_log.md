@@ -3593,3 +3593,48 @@ Validation: full suite green with `.venv-test/bin/python -m pytest -q` before cl
 Open issues / next step
 
 No open issue in this phase slice. The remaining requested work is the later service-boundary cutover, one-step SDK collapse, and `StepExecutionResult` finalization cleanup, which I left untouched by scope.
+
+
+---
+run_id=run-20260509T164029Z-23a21781 | entry=session_turn | pair=implement | phase=verifier | cycle=1 | attempt=1 | thread_id=019e0da0-8784-72b0-83b6-f50148343400
+---
+provider=codex
+mode=resume
+template=/home/rauter/.local/share/pipx/venvs/autoloop/lib/python3.12/site-packages/autoloop/templates/implement_verifier.md
+session_id=019e0da0-8784-72b0-83b6-f50148343400
+
+
+---
+run_id=run-20260509T164029Z-23a21781 | entry=phase_output | pair=implement | phase=verifier | process=codex-agent | cycle=1 | attempt=1 | thread_id=019e0da0-8784-72b0-83b6-f50148343400
+---
+I’m reviewing the route-authority implementation against the phase contract now. First I’m checking the review artifacts and then I’m validating the changed route surfaces for missed regressions or weak enforcement.
+
+I’ve finished the main audit pass. One acceptance-criteria gap is clear in strictness coverage, and I’m verifying whether the new helper duplication in capability export is worth calling out as non-blocking debt before I write the review artifacts.
+
+I’ve decided on one blocking and one non-blocking finding. The blocking issue is the weak strictness gate for `_route_table` reintroduction; the non-blocking issue is duplicated route-view derivation logic in capability export. I’m recording both and marking the criteria accordingly.
+
+Scope considered
+
+Phase-local review of the route-authority cutover only. I limited edits to the active review artifacts and reviewed the request-relevant compiler, step-plan, engine, static-graph, capability-export, and strictness surfaces.
+
+What I analyzed
+
+I checked the implementation against the phase contract, the run decisions, and the changed route-consumer paths. I specifically reviewed how `WorkflowPlan.routes` now feeds runtime lookup, nested branch-group routing, static-graph output, and capability export, and I checked whether the new strictness coverage really prevents `_route_table` regressions.
+
+What I reviewed
+
+I updated [criteria.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/botlane-v3-second-pass-greenfield-architecture-s-a9df943f/runs/run-20260509T164029Z-23a21781/artifacts/implement/phases/route-authority-cutover/criteria.md) and appended findings to [feedback.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/botlane-v3-second-pass-greenfield-architecture-s-a9df943f/runs/run-20260509T164029Z-23a21781/artifacts/implement/phases/route-authority-cutover/feedback.md). I recorded one blocking finding and one non-blocking maintainability finding.
+
+Key findings / decisions
+
+`IMP-001` is blocking: the new strictness gate does not fully satisfy AC-3 because it misses common `_route_table` reintroduction shapes such as typed field declarations, spaced assignments, and single-quoted lookups. The implementation is functionally green, but the requested “cannot regress” enforcement is still incomplete.
+
+`IMP-002` is non-blocking: `botlane/core/workflow_capabilities.py` duplicates route-view derivation logic that was already centralized in `botlane/core/route_contracts.py`, which increases future drift risk.
+
+Open issues / next step
+
+The implementer should fix `IMP-001` before this phase is considered complete, and should ideally fold `IMP-002` into the same pass while the route-view logic is already open.
+
+<loop-control>
+{"schema":"docloop.loop_control/v1","kind":"promise","promise":"INCOMPLETE"}
+</loop-control>
