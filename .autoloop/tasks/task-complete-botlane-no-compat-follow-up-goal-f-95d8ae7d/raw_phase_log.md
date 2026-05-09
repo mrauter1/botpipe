@@ -1053,3 +1053,66 @@ No test-phase blocker remains. The targeted strictness slice passed independentl
 <loop-control>
 {"schema":"docloop.loop_control/v1","kind":"promise","promise":"COMPLETE"}
 </loop-control>
+
+
+---
+run_id=run-20260509T033701Z-27394e99 | entry=session_turn | pair=audit | phase=producer | cycle=1 | attempt=1 | thread_id=019e0aea-d4cc-74a1-8fcc-f9fd68b6d60a
+---
+provider=codex
+mode=start
+template=/home/rauter/.local/share/pipx/venvs/autoloop/lib/python3.12/site-packages/autoloop/templates/audit_producer.md
+session_id=019e0aea-d4cc-74a1-8fcc-f9fd68b6d60a
+
+
+---
+run_id=run-20260509T033701Z-27394e99 | entry=phase_output | pair=audit | phase=producer | process=codex-agent | cycle=1 | attempt=1 | thread_id=019e0aea-d4cc-74a1-8fcc-f9fd68b6d60a
+---
+I’m auditing the completed run against the original request, clarification log, decisions ledger, and final repo state. First I’m reading the authoritative run files and the produced artifacts, then I’ll verify the relevant strictness code and active artifact trees before writing the audit outputs.
+
+I’ve loaded the run request and chronology. Now I’m verifying the actual implementation against the relevant strictness test, the cleaned artifact trees, and the test-phase evidence so the audit report is tied to repo state rather than phase summaries.
+
+The implementation notes and test artifacts claim the contract is closed, but I still need to confirm the final code actually encodes that policy and that the live artifact trees match it. I’m reading the relevant strictness helpers/tests and then rerunning the scoped checks against the repo state.
+
+I found a likely drift point: the strictness test hard-codes the active current-run inventory, but the run tree already includes additional audit-side files. I’m checking the live inventory now, because if those files are outside the encoded contract then the acceptance state is no longer actually green.
+
+The live strictness slice is not green anymore. I’m collecting the failing assertion details now, but the broad shape is already clear: the encoded active-run inventory no longer matches the actual run tree once audit artifacts exist.
+
+I have the primary failure pinned down. Now I’m checking whether the unmodeled audit files are only an inventory drift problem or whether they also carry legacy literals that would require explicit exception treatment in the next run.
+
+I’ve narrowed it to a single concrete contract gap in the final state. I’m computing the exact drift set now so the follow-up request can stay minimal instead of reopening the whole no-compat task.
+
+I’ve finished the audit analysis. I’m writing the run-local audit outputs now: a gap report tied to the failing final-state check, a narrowly scoped follow-up request, and the summary JSON.
+
+The audit artifacts are written. I’m doing one last sanity pass on the files I created so the recorded follow-up is internally consistent and doesn’t add unnecessary noise to the next run.
+
+One more concrete constraint surfaced from the audit artifacts themselves: the required JSON schema carries an absolute path, so at least one audit file cannot realistically be treated as clean. I’m folding that into the follow-up request so the next run doesn’t waste time trying the impossible classification.
+
+Scope considered
+
+Original request, authoritative raw log, decisions ledger, plan/implement/test artifacts, `tests/strictness/test_no_compat.py`, the live repo-root recursive-memory tree, and the active current-run artifact tree.
+
+What I analyzed
+
+I checked the final code and artifacts against the requested contract, reran `./.venv/bin/python -m pytest tests/strictness/test_no_compat.py -q`, listed the live current-run file inventory, and computed the difference between the encoded active-run inventory and the actual final run state.
+
+What I changed
+
+I wrote the audit outputs in the allowed audit directory:
+- `artifacts/audit/gap_report.md`
+- `artifacts/audit/revised_request.md`
+- `artifacts/audit/audit_result.json`
+
+Key findings / decisions
+
+- A material gap remains. The active current-run inventory encoded in `tests/strictness/test_no_compat.py` omits the five audit files under `artifacts/audit/`, so `test_active_repo_root_artifact_policy_inventories_are_explicit` fails in the final audited state.
+- Reproduction is current and direct: `./.venv/bin/python -m pytest tests/strictness/test_no_compat.py -q` now fails with `1 failed, 71 passed`.
+- The gap is narrow. The repo-root artifact-policy walker and maintained recursive-memory cleanup appear to be in place; the remaining defect is final-state inventory coverage for audit outputs.
+- At least `artifacts/audit/audit_result.json` is likely an exact per-file exception under the current schema, because its required absolute path field cannot realistically stay legacy-name-clean in this repository layout.
+
+Open issues / next step
+
+A follow-up implementation run is required. It should update the active current-run policy in `tests/strictness/test_no_compat.py` to include the five audit files, classify each one as required-clean or exact exception, rerun the strictness slice after audit artifacts exist, and only then rerun the full suite.
+
+<loop-control>
+{"schema":"docloop.loop_control/v1","kind":"promise","promise":"INCOMPLETE"}
+</loop-control>
