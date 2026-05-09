@@ -644,3 +644,109 @@ Open issues / next step
 <loop-control>
 {"schema":"docloop.loop_control/v1","kind":"promise","promise":"COMPLETE"}
 </loop-control>
+
+
+---
+run_id=run-20260509T125912Z-8deb38fd | entry=session_turn | pair=test | phase=producer | cycle=1 | attempt=1 | thread_id=019e0ce2-74d0-7282-8aa6-faff99e1eb7d
+---
+provider=codex
+mode=resume
+template=/home/rauter/.local/share/pipx/venvs/autoloop/lib/python3.12/site-packages/autoloop/templates/test_producer.md
+session_id=019e0ce2-74d0-7282-8aa6-faff99e1eb7d
+
+
+---
+run_id=run-20260509T125912Z-8deb38fd | entry=phase_output | pair=test | phase=producer | process=codex-agent | cycle=1 | attempt=1 | thread_id=019e0ce2-74d0-7282-8aa6-faff99e1eb7d
+---
+I’m checking the current phase test artifacts and the existing branch-manifest tests first, then I’ll add the smallest coverage that would have caught the regression we just fixed.
+
+The existing serialization test already exercises typed manifests partially. I’m extending it so it directly covers the regression boundary: passing `BranchManifest` into outcome selection, including custom outcome callables.
+
+I’ve added the direct typed-manifest outcome coverage. Next I’m running the focused branch tests to make sure the new assertions are stable and deterministic.
+
+The focused branch tests are green. I’m updating the phase test strategy and logging the one non-obvious coverage decision: guarding both typed-manifest input and custom-outcome mapping compatibility.
+
+Scope considered
+
+- Phase-local test work for `canonical-type-hardening`.
+- The changed branch-manifest boundary and the adjacent branch runtime paths most likely to regress.
+
+What I analyzed
+
+- The current `test_strategy.md` and test feedback artifact.
+- `tests/contract/test_branch_result_serialization.py`.
+- The manifest/outcome/runtime boundary that previously regressed when `BranchManifest` became typed.
+- The latest run decisions, including the new test-author header for this turn.
+
+What I changed
+
+- Updated [tests/contract/test_branch_result_serialization.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/tests/contract/test_branch_result_serialization.py) so `select_branch_group_outcome(...)` is exercised with a typed `BranchManifest` directly.
+- Added a custom-outcome test that verifies aggregators still receive a mapping-shaped manifest payload even when the runtime builds `BranchManifest`.
+- Updated the phase [test_strategy.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/botlane-v3-second-pass-greenfield-architecture-s-a9df943f/runs/run-20260509T125912Z-8deb38fd/artifacts/test/phases/canonical-type-hardening/test_strategy.md) with the explicit behavior-to-coverage map.
+- Appended a concise summary to the phase [feedback.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/botlane-v3-second-pass-greenfield-architecture-s-a9df943f/runs/run-20260509T125912Z-8deb38fd/artifacts/test/phases/canonical-type-hardening/feedback.md).
+- Appended one test-coverage decision under the active turn header in `decisions.txt`.
+
+Key findings / decisions
+
+- The most valuable regression guard for this phase is explicit coverage of the typed-manifest boundary, not just indirect branch-runtime pass/fail coverage.
+- Custom outcome aggregators are a compatibility surface and now have a direct assertion guarding their preserved mapping contract.
+- Validation run:
+- `.venv/bin/python -m pytest tests/contract/test_branch_result_serialization.py tests/contract/test_async_step_dispatcher.py tests/contract/test_branch_group_runtime.py -q`
+- Result: `32 passed`.
+
+Open issues / next step
+
+- No immediate test gaps remain for the Phase 1 manifest boundary.
+- Later branch-runtime cutover phases should add or tighten tests when mapping normalization is intentionally removed.
+
+
+---
+run_id=run-20260509T125912Z-8deb38fd | entry=session_turn | pair=test | phase=verifier | cycle=1 | attempt=1 | thread_id=019e0ce2-74d0-7282-8aa6-faff99e1eb7d
+---
+provider=codex
+mode=resume
+template=/home/rauter/.local/share/pipx/venvs/autoloop/lib/python3.12/site-packages/autoloop/templates/test_verifier.md
+session_id=019e0ce2-74d0-7282-8aa6-faff99e1eb7d
+
+
+---
+run_id=run-20260509T125912Z-8deb38fd | entry=phase_output | pair=test | phase=verifier | process=codex-agent | cycle=1 | attempt=1 | thread_id=019e0ce2-74d0-7282-8aa6-faff99e1eb7d
+---
+I’m reviewing the new typed-manifest coverage, the phase test strategy, and the focused branch regression ring to decide whether the test scope is complete and reliable.
+
+The strategy and tests line up with the changed behavior. I’m running the exact focused branch regression ring once myself before I finalize the audit artifacts.
+
+I’ve re-run the targeted ring and there are no coverage gaps left in scope. I’m marking the phase test criteria complete and appending a short audit resolution note.
+
+Scope considered
+
+- Phase-local test coverage for `canonical-type-hardening`.
+- The changed typed-manifest boundary and the adjacent branch runtime paths with material regression risk.
+
+What I analyzed
+
+- The phase `test_strategy.md`, the updated branch-manifest contract tests, and the current run decisions.
+- The new direct `BranchManifest` outcome coverage and the custom-outcome compatibility assertion.
+- The focused branch-runtime regression ring selected by the test author.
+
+What I reviewed
+
+- `tests/contract/test_branch_result_serialization.py`
+- The documented strategy coverage map in `test_strategy.md`
+- Focused validation rerun:
+- `.venv/bin/python -m pytest tests/contract/test_branch_result_serialization.py tests/contract/test_async_step_dispatcher.py tests/contract/test_branch_group_runtime.py -q`
+
+Key findings / decisions
+
+- The new tests cover the changed behavior at the right level: direct typed-manifest input, preserved mapping compatibility for custom aggregators, and downstream runtime execution.
+- I found no blocking or non-blocking audit issues in scope.
+- I updated `criteria.md` to all checked and appended a concise audit result note to `feedback.md`.
+
+Open issues / next step
+
+- No immediate test gaps remain for this phase.
+- Later typed branch-runtime cutover phases should add new tests only when the mapping-normalization compatibility boundary is intentionally removed.
+
+<loop-control>
+{"schema":"docloop.loop_control/v1","kind":"promise","promise":"COMPLETE"}
+</loop-control>
