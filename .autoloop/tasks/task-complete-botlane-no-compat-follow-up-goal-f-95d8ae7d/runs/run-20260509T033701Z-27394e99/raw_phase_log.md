@@ -640,3 +640,102 @@ The audit producer needs one more pass to correct the unresolved-gap report, inc
 <loop-control>
 {"schema":"docloop.loop_control/v1","kind":"promise","promise":"INCOMPLETE"}
 </loop-control>
+
+
+---
+run_id=run-20260509T033701Z-27394e99 | entry=session_turn | pair=audit | phase=producer | cycle=2 | attempt=1 | thread_id=019e0aea-d4cc-74a1-8fcc-f9fd68b6d60a
+---
+provider=codex
+mode=resume
+template=/home/rauter/.local/share/pipx/venvs/autoloop/lib/python3.12/site-packages/autoloop/templates/audit_producer.md
+session_id=019e0aea-d4cc-74a1-8fcc-f9fd68b6d60a
+
+
+---
+run_id=run-20260509T033701Z-27394e99 | entry=phase_output | pair=audit | phase=producer | process=codex-agent | cycle=2 | attempt=1 | thread_id=019e0aea-d4cc-74a1-8fcc-f9fd68b6d60a
+---
+I’m correcting the audit against the verifier’s blocking findings. First I’m rechecking the live strictness evidence and the missing `sessions/audit.json` file so the follow-up request covers the full remaining gap rather than just the five audit artifacts.
+
+The missing session file is clean JSON, so it should likely be handled as a required-clean inventory entry rather than a branding exception. I’m finishing the evidence capture now, then I’ll rewrite the audit outputs to reflect the six-file drift and the two live strictness failures.
+
+I have the final evidence I need. I’m rewriting the audit report and follow-up request now so they match the live state exactly: six unmodeled current-run files, and two failing strictness assertions with different remediation paths.
+
+The audit artifacts are rewritten. I’m doing one quick consistency pass now to make sure the corrected report, follow-up request, and JSON all align with the verifier findings and the live two-failure state.
+
+Scope considered
+
+The immutable request, the raw-log and decisions-ledger constraints already in force, the verifier’s blocking findings, the produced audit artifacts, the live active current-run inventory, and the current `tests/strictness/test_no_compat.py` failure state.
+
+What I analyzed
+
+I rechecked the verifier feedback, read `sessions/audit.json`, recomputed the live drift set against `ACTIVE_CURRENT_RUN_REQUIRED_CLEAN_PATHS | ACTIVE_CURRENT_RUN_EXACT_EXCEPTION_PATHS`, and reran `./.venv/bin/python -m pytest tests/strictness/test_no_compat.py -q` to confirm the exact final-state failures.
+
+What I changed
+
+I updated the run-local audit artifacts:
+- `artifacts/audit/gap_report.md`
+- `artifacts/audit/revised_request.md`
+- `artifacts/audit/audit_result.json`
+
+Key findings / decisions
+
+- The final unresolved drift is six files, not five: the five `artifacts/audit/*` files plus `sessions/audit.json`.
+- The live strictness slice currently fails two assertions, not one:
+  - `test_active_repo_root_artifact_policy_inventories_are_explicit`
+  - `test_active_repo_root_artifact_files_do_not_emit_removed_legacy_branding_outside_exact_operational_exceptions`
+- `sessions/audit.json` looks like a required-clean inventory file under its current contents.
+- `artifacts/audit/audit_result.json` likely needs to be an exact per-file exception unless its schema changes, because its required absolute `revised_request_path` emits legacy branding in this repo layout.
+
+Open issues / next step
+
+A follow-up implementation run is still required. The revised request now covers the full six-file inventory correction and the second observed strictness failure tied to `artifacts/audit/audit_result.json`.
+
+<loop-control>
+{"schema":"docloop.loop_control/v1","kind":"promise","promise":"INCOMPLETE"}
+</loop-control>
+
+
+---
+run_id=run-20260509T033701Z-27394e99 | entry=session_turn | pair=audit | phase=verifier | cycle=2 | attempt=1 | thread_id=019e0aea-d4cc-74a1-8fcc-f9fd68b6d60a
+---
+provider=codex
+mode=resume
+template=/home/rauter/.local/share/pipx/venvs/autoloop/lib/python3.12/site-packages/autoloop/templates/audit_verifier.md
+session_id=019e0aea-d4cc-74a1-8fcc-f9fd68b6d60a
+
+
+---
+run_id=run-20260509T033701Z-27394e99 | entry=phase_output | pair=audit | phase=verifier | process=codex-agent | cycle=2 | attempt=1 | thread_id=019e0aea-d4cc-74a1-8fcc-f9fd68b6d60a
+---
+I’m re-verifying the corrected audit against the live evidence. First I’m reading the updated audit artifacts and checking that the current strictness failure shape still matches the report and the follow-up request.
+
+The corrected audit now matches the live failure shape and the missing-file set. I’m marking the criteria complete and appending resolution notes so the feedback history shows why the earlier blocking items are no longer open.
+
+The verifier-owned artifacts are updated. I’m doing a final readback now to ensure the criteria are fully checked and the feedback history clearly shows the earlier blocking findings as resolved in this cycle.
+
+Scope considered
+
+The immutable request, relevant decisions, the corrected audit artifacts, the live current-run inventory, and the current `tests/strictness/test_no_compat.py` failure state.
+
+What I analyzed
+
+I re-read `gap_report.md`, `revised_request.md`, and `audit_result.json`, confirmed the six-file active current-run drift and the two live strictness failures, and checked that the revised request now covers both the inventory gap and the branding-exception problem.
+
+What I reviewed
+
+I updated `artifacts/audit/criteria.md` to fully checked and appended resolution entries to `artifacts/audit/feedback.md` showing why the earlier blocking findings are now closed.
+
+Key findings / decisions
+
+- The corrected audit is now accurate and verifier-complete.
+- It correctly reports the six unmodeled end-of-run files, including `sessions/audit.json`.
+- It correctly reports the live `2 failed, 70 passed` strictness state and names both failing assertions.
+- The revised request is now a direct next-run implementation request for the actual remaining gaps.
+
+Open issues / next step
+
+No verifier blocking issues remain in the audit artifacts. The next step is the follow-up implementation run described in `artifacts/audit/revised_request.md`.
+
+<loop-control>
+{"schema":"docloop.loop_control/v1","kind":"promise","promise":"COMPLETE"}
+</loop-control>
