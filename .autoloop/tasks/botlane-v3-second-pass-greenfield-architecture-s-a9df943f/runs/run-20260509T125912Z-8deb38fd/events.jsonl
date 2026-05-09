@@ -142,3 +142,6 @@
 {"ts": "2026-05-09T16:26:00.985542+00:00", "run_id": "run-20260509T125912Z-8deb38fd", "seq": 142, "event_type": "phase_finished", "pair": "implement", "phase": "producer", "cycle": 1, "attempt": 1, "empty_output": false, "phase_id": "strictness-cleanup"}
 {"ts": "2026-05-09T16:27:00.924274+00:00", "run_id": "run-20260509T125912Z-8deb38fd", "seq": 143, "event_type": "phase_finished", "pair": "implement", "phase": "verifier", "cycle": 1, "attempt": 1, "empty_output": false, "phase_id": "strictness-cleanup"}
 {"ts": "2026-05-09T16:27:01.031754+00:00", "run_id": "run-20260509T125912Z-8deb38fd", "seq": 144, "event_type": "pair_completed", "pair": "implement", "cycle": 1, "attempt": 1, "phase_id": "strictness-cleanup"}
+{"ts": "2026-05-09T16:27:01.198164+00:00", "run_id": "run-20260509T125912Z-8deb38fd", "seq": 145, "event_type": "phase_deferred", "pair": "implement", "phase_mode": "single", "phase_id": "strictness-cleanup", "reason": "awaiting enabled test pair completion"}
+{"ts": "2026-05-09T16:27:01.200760+00:00", "run_id": "run-20260509T125912Z-8deb38fd", "seq": 146, "event_type": "pair_started", "pair": "test", "phase_id": "strictness-cleanup"}
+{"ts": "2026-05-09T16:27:01.201008+00:00", "run_id": "run-20260509T125912Z-8deb38fd", "seq": 147, "event_type": "cycle_started", "pair": "test", "cycle": 1, "attempt": 1, "phase_id": "strictness-cleanup"}
