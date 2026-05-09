@@ -16,6 +16,7 @@ from .branch_groups.context import BranchMetadata, FanInMetadata, StateCell
 from .errors import WorkflowExecutionError
 from .mappings import normalize_mapping
 from .primitives import Event
+from .run_paths import RunIdentity, RunPaths
 from .sessions import Continuity, DEFAULT_SESSION_NAME, SessionKey, derive_session_key
 from .step_state import reserved_item_state_field_names, reserved_step_state_field_names
 from .stores.protocols import SessionBinding, is_run_key_bound_to_slot
@@ -290,6 +291,27 @@ class Context:
         self._branch = branch
         self._fan_in = fan_in
         self._step_execution_id = step_execution_id
+        self._run_paths = RunPaths(
+            root=self.root,
+            task_folder=self.task_folder,
+            workflow_folder=self.workflow_folder,
+            run_folder=self.run_folder,
+            package_folder=self.package_folder,
+            request_file=self._request_file,
+            task_request_file=self._task_request_file,
+            run_meta_file=self.run_folder / "run.json",
+            events_file=self.run_folder / "events.jsonl",
+            checkpoint_file=self.run_folder / "checkpoint.json",
+            sessions_dir=self.run_folder / "sessions",
+            trace_file=self.run_folder / "trace.jsonl",
+            raw_dir=self.run_folder / "raw",
+        )
+        self._run_identity = RunIdentity(
+            task_id=self.task_id,
+            run_id=self.run_id,
+            workflow_name=self.workflow_name,
+            paths=self._run_paths,
+        )
         self._history: HistoryReader | None = None
         self._worklist_items_cache: dict[str, tuple[Any, ...]] = {}
         self._runtime_event_sink = runtime_event_sink
@@ -654,12 +676,13 @@ def _resolve_context_root(*, root: Path | None, task_folder: Path, package_folde
     for marker in (
         ("botlane", "workflows"),
         (".botlane", "workflows"),
-        ("." + "auto" + "loop", "workflows"),
         ("workflows",),
     ):
         marker_length = len(marker)
         for index in range(len(parts) - marker_length, -1, -1):
             if parts[index : index + marker_length] != marker:
+                continue
+            if marker == ("workflows",) and index > 0 and parts[index - 1].startswith("."):
                 continue
             return Path(*parts[:index]).resolve()
     return task_folder.resolve()

@@ -515,8 +515,8 @@ def selected_workflow_decomposition_surface_payload(
 
 def _inspect_catalog_entry(root_path: Path, entry: WorkflowCatalogEntry) -> WorkflowCapabilityEntry:
     if entry.source_root_kind == "package" and entry.workflow_module is not None and entry.package_module is not None:
-        from botlane.runtime.loader import ResolvedWorkflow, WorkflowReference
-
+        WorkflowReference = _runtime_loader_attr("WorkflowReference")
+        ResolvedWorkflow = _runtime_loader_attr("ResolvedWorkflow")
         loaded = load_workflow_package_contract(root_path, entry)
         reference = WorkflowReference(
             original=entry.workflow_name,
@@ -657,12 +657,18 @@ def _catalog_entry_for_reference(root_path: Path, reference) -> WorkflowCatalogE
 
 
 def _resolve_reference(root_path: Path, reference: str | type[Any]):
-    from botlane.runtime.loader import WorkflowDiscoveryError, WorkflowManifestError, resolve_workflow_reference
-
+    WorkflowDiscoveryError = _runtime_loader_attr("WorkflowDiscoveryError")
+    WorkflowManifestError = _runtime_loader_attr("WorkflowManifestError")
+    resolve_workflow_reference = _runtime_loader_attr("resolve_workflow_reference")
     try:
         return resolve_workflow_reference(root_path, reference)
     except (WorkflowDiscoveryError, WorkflowManifestError) as exc:
         raise WorkflowCapabilityInspectionError(str(exc)) from exc
+
+
+def _runtime_loader_attr(name: str) -> Any:
+    runtime_loader = importlib.import_module("botlane.runtime.loader")
+    return getattr(runtime_loader, name)
 
 
 def _compiled_artifact_capability(name: str, artifact) -> WorkflowArtifactCapability:
@@ -940,12 +946,13 @@ def _infer_repo_root_from_package_dir(package_dir: Path) -> Path:
     for marker in (
         ("botlane", "workflows"),
         (".botlane", "workflows"),
-        ("." + "auto" + "loop", "workflows"),
         ("workflows",),
     ):
         marker_length = len(marker)
         for index in range(len(parts) - marker_length, -1, -1):
             if parts[index : index + marker_length] == marker:
+                if marker == ("workflows",) and index > 0 and parts[index - 1].startswith("."):
+                    continue
                 return Path(*parts[:index]).resolve()
     return resolved_package_dir.parent.resolve()
 

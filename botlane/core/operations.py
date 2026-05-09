@@ -10,7 +10,7 @@ import inspect
 import json
 from pathlib import Path
 import re
-from typing import TYPE_CHECKING, Any, Callable, Literal, Mapping, Sequence
+from typing import Any, Callable, Literal, Mapping, Sequence
 
 from pydantic import BaseModel, TypeAdapter
 
@@ -29,14 +29,12 @@ from .provider_policy import (
     ResolvedProviderPolicy,
     policy_fingerprint,
 )
+from .provider_policy_resolution import ProviderPolicyResolverProtocol
 from .prompts import Prompt, PromptRegistry, ResolvedPrompt, resolve_prompt_reference
 from .providers.models import OperationRequest, OperationResponse
 from .schema_registry import OPERATION_REPLAY_SCHEMA, validate_persisted_schema
 from .sessions import DEFAULT_SESSION_NAME
 from .stores.protocols import SessionBinding
-
-if TYPE_CHECKING:
-    from botlane.runtime.provider_policy_resolver import ProviderPolicyResolver
 
 
 _JSON_FENCE_RE = re.compile(r"\A```(?:json)?\s*\n(?P<body>[\s\S]*?)\n?```\s*\Z")
@@ -61,7 +59,7 @@ class OperationRuntime:
     default_session_name: str = DEFAULT_SESSION_NAME
     replay_mismatch_behavior: Literal["warn", "fail"] = "warn"
     policy: ResolvedProviderPolicy | None = None
-    provider_policy_resolver: "ProviderPolicyResolver | None" = None
+    provider_policy_resolver: ProviderPolicyResolverProtocol | None = None
     occurrence_counts: dict[str, int] = field(default_factory=dict)
     event_sink: Callable[[str, Mapping[str, Any]], None] | None = None
 
@@ -86,7 +84,7 @@ def llm_call(
     run_folder: Path | None = None,
     callsite: str | None = None,
     policy: PolicyInput = None,
-    provider_policy_resolver: "ProviderPolicyResolver | None" = None,
+    provider_policy_resolver: ProviderPolicyResolverProtocol | None = None,
 ) -> Any:
     runtime = _resolve_runtime(
         provider=provider,
@@ -114,7 +112,7 @@ def classify_call(
     run_folder: Path | None = None,
     callsite: str | None = None,
     policy: PolicyInput = None,
-    provider_policy_resolver: "ProviderPolicyResolver | None" = None,
+    provider_policy_resolver: ProviderPolicyResolverProtocol | None = None,
 ) -> str:
     normalized_choices = _normalize_choices(choices)
     runtime = _resolve_runtime(
@@ -182,7 +180,7 @@ def _resolve_runtime(
     prompt_registry: PromptRegistry | None,
     context: Context | None,
     run_folder: Path | None,
-    provider_policy_resolver: "ProviderPolicyResolver | None",
+    provider_policy_resolver: ProviderPolicyResolverProtocol | None,
 ) -> OperationRuntime:
     ambient = _CURRENT_OPERATION_RUNTIME.get()
     if ambient is not None:
@@ -846,8 +844,6 @@ def _load_replay_store(path: Path | None) -> dict[str, Any]:
     payload = json.loads(path.read_text(encoding="utf-8"))
     if not isinstance(payload, dict):
         return {"schema": OPERATION_REPLAY_SCHEMA, "records": {}, "attempts": []}
-    if payload.get("schema") == ("auto" + "loop.operation_replay/v1"):
-        payload = _migrate_operation_replay_store(payload)
     validate_persisted_schema(
         payload,
         expected=OPERATION_REPLAY_SCHEMA,

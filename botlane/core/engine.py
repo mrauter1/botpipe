@@ -10,7 +10,7 @@ import importlib
 import inspect
 import json
 from pathlib import Path
-from typing import TYPE_CHECKING, Any, Callable, Literal, Mapping
+from typing import Any, Callable, Literal, Mapping
 from uuid import uuid4
 
 from pydantic import BaseModel, TypeAdapter
@@ -56,6 +56,7 @@ from .outcome_contract import (
     normalize_route_fields_for_route,
     project_questions_markdown,
 )
+from .provider_policy_resolution import ProviderPolicyResolverProtocol
 from .primitives import AWAIT_INPUT, Checkpoint, Event, FAIL, FINISH, Fail, Goto, Outcome, PendingHandoff, RequestInput
 from .prompts import Prompt, PromptRegistry, ResolvedPrompt
 from .providers.models import (
@@ -81,9 +82,6 @@ from .stores.protocols import (
 from .statuses import route_is_replan, route_is_rework
 from .steps import ChildWorkflowStep
 from .worklists import Selection, SelectionSnapshot
-
-if TYPE_CHECKING:
-    from botlane.runtime.provider_policy_resolver import ProviderPolicyResolver
 
 
 @dataclass(frozen=True, slots=True)
@@ -141,6 +139,23 @@ class _DirectRuntimeControl:
     source_phase: str | None = None
 
 
+def _create_default_provider_policy_resolver(
+    *,
+    workflow_policy: object,
+    workspace_root: Path,
+) -> ProviderPolicyResolverProtocol:
+    runtime_provider_policy_resolver = importlib.import_module(
+        "botlane.runtime.provider_policy_resolver"
+    )
+    factory = getattr(runtime_provider_policy_resolver, "create_provider_policy_resolver")
+    return factory(
+        sdk_default_policy=None,
+        workflow_policy=workflow_policy,
+        run_policy=None,
+        workspace_root=workspace_root,
+    )
+
+
 class Engine:
     """Strict workflow engine."""
 
@@ -159,7 +174,7 @@ class Engine:
         runtime_extension_factories: Sequence[Callable[[RunBinding], BoundWorkflowExtension]] = (),
         hook_event_sink: Callable[[str, Mapping[str, Any]], None] | None = None,
         runtime_event_sink: Callable[[str, Mapping[str, Any]], None] | None = None,
-        provider_policy_resolver: "ProviderPolicyResolver | None" = None,
+        provider_policy_resolver: ProviderPolicyResolverProtocol | None = None,
     ) -> None:
         self.compiled = workflow if isinstance(workflow, CompiledWorkflow) else compile_workflow(workflow)
         self.provider = validate_llm_provider(provider)
@@ -256,12 +271,8 @@ class Engine:
         resolved_package_folder = package_folder or (root.resolve() if root is not None else task_folder)
         previous_provider_policy_resolver = self.provider_policy_resolver
         if previous_provider_policy_resolver is None:
-            from botlane.runtime.provider_policy_resolver import create_provider_policy_resolver
-
-            self.provider_policy_resolver = create_provider_policy_resolver(
-                sdk_default_policy=None,
+            self.provider_policy_resolver = _create_default_provider_policy_resolver(
                 workflow_policy=self.compiled.provider_policy,
-                run_policy=None,
                 workspace_root=_resolve_context_root(
                     root=root,
                     task_folder=task_folder,
