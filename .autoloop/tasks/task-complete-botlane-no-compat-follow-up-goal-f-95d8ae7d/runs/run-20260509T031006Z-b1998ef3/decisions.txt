@@ -1,0 +1,4 @@
+<autoloop-decisions-header version="1" block_seq="1" owner="planner" phase_id="task-global" pair="plan" turn_seq="1" run_id="run-20260509T031006Z-b1998ef3" ts="2026-05-09T03:10:06.476617+00:00" />
+Treat `botlane/core/context.py` and `botlane/core/discovery.py` as confirm-only unless a fresh maintained-tree scan finds an actual hidden legacy reconstruction; the concrete runtime edit still required by the current tree is the `.botlane` overlay exclusion in `botlane_optimizer/candidate_surfaces.py`.
+The overlay regression must place `.botlane/sentinel.txt` under the exact `overlay_source_root` copied by `validate_candidate_surface_overlay(...)`, not merely under the phase workspace.
+Legacy-name mentions remain allowed only in `tests/strictness/test_no_compat.py` and the exact audited `legacy_docs/*.md` allowlist; no broad path-prefix exclusions and no `.autoloop` scan exclusion are acceptable.
