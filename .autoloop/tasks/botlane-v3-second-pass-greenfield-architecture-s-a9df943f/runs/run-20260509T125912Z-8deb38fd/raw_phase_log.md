@@ -1678,3 +1678,54 @@ Open issues / next step
 
 - Focused validation passed: `.venv/bin/python -m pytest tests/contract/test_branch_result_runtime.py tests/contract/test_branch_result_serialization.py tests/contract/test_branch_group_runtime.py tests/unit/test_branch_group_context_sessions.py -q` with `43 passed`.
 - Full repo `pytest` was not run in this phase.
+
+
+---
+run_id=run-20260509T125912Z-8deb38fd | entry=session_turn | pair=implement | phase=verifier | cycle=1 | attempt=1 | thread_id=019e0d36-7afc-75e3-9a6e-3011fe4ea348
+---
+provider=codex
+mode=resume
+template=/home/rauter/.local/share/pipx/venvs/autoloop/lib/python3.12/site-packages/autoloop/templates/implement_verifier.md
+session_id=019e0d36-7afc-75e3-9a6e-3011fe4ea348
+
+
+---
+run_id=run-20260509T125912Z-8deb38fd | entry=phase_output | pair=implement | phase=verifier | process=codex-agent | cycle=1 | attempt=1 | thread_id=019e0d36-7afc-75e3-9a6e-3011fe4ea348
+---
+I’m reviewing the `branch-typed-evidence` slice against the phase contract and the run decisions. First I’m reading the implementation notes, the phase artifacts, and the touched branch runtime files to verify that typed branch results are authoritative internally and that no new regressions were introduced.
+
+I’ve confirmed the stated implementation intent and prior decision about custom outcome callbacks. Next I’m checking the concrete source paths and tests for any remaining in-memory dict authority or any new branch behavior that silently widened beyond this phase.
+
+I found one adjacent public-surface risk and I’m validating it directly before I write the review artifact. The question is whether the new typed manifest is now leaking through `ctx.fan_in.results`, which would expose an internal `BranchManifest` object to user code.
+
+The branch test slice is green, but the public fan-in metadata regression is real and reproducible. I’m recording that as a blocking finding and leaving the criteria boxes aligned with that single compatibility miss.
+
+Scope considered
+
+- Phase-local review of `branch-typed-evidence`.
+- Reviewed [runtime.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/botlane/core/branch_groups/runtime.py), [manifest.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/botlane/core/branch_groups/manifest.py), [outcomes.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/botlane/core/branch_groups/outcomes.py), [results.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/botlane/core/branch_groups/results.py), and the branch-focused tests and phase artifacts.
+
+What I analyzed
+
+- Whether branch runtime helpers now keep `BranchResult` as the in-memory authority.
+- Whether manifest serialization is limited to `BranchResult.to_manifest_dict()` and `BranchManifest.to_dict()`.
+- Whether typed manifest usage leaked across public runtime surfaces, especially `ctx.fan_in`.
+
+What I reviewed
+
+- Independent test run: `.venv/bin/python -m pytest tests/contract/test_branch_result_runtime.py tests/contract/test_branch_result_serialization.py tests/contract/test_branch_group_runtime.py tests/unit/test_branch_group_context_sessions.py -q` passed with `43 passed`.
+- Direct repro script for fan-in behavior: `request.context.fan_in.results` is now a `BranchManifest`, not a mapping payload.
+
+Key findings / decisions
+
+- Recorded 1 blocking finding in [feedback.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/botlane-v3-second-pass-greenfield-architecture-s-a9df943f/runs/run-20260509T125912Z-8deb38fd/artifacts/implement/phases/branch-typed-evidence/feedback.md).
+- Updated [criteria.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/botlane-v3-second-pass-greenfield-architecture-s-a9df943f/runs/run-20260509T125912Z-8deb38fd/artifacts/implement/phases/branch-typed-evidence/criteria.md) to reflect that the phase is not yet correct/safe/compatible due to the public `ctx.fan_in.results` regression.
+- The main issue is a public internal-type leak: `FanInMetadata.results` now exposes `BranchManifest` to user code.
+
+Open issues / next step
+
+- Fix `BranchGroupRuntime._run_fan_in` so `FanInMetadata.results` stays public-neutral, preferably via `manifest.to_dict()` at that boundary, then add coverage for `ctx.fan_in.results` and rerun the branch-focused suite.
+
+<loop-control>
+{"schema":"docloop.loop_control/v1","kind":"promise","promise":"INCOMPLETE"}
+</loop-control>
