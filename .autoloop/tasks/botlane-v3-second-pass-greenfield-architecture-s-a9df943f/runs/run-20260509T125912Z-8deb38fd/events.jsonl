@@ -17,3 +17,6 @@
 {"ts": "2026-05-09T13:14:36.813958+00:00", "run_id": "run-20260509T125912Z-8deb38fd", "seq": 17, "event_type": "phase_deferred", "pair": "implement", "phase_mode": "single", "phase_id": "public-freeze", "reason": "awaiting enabled test pair completion"}
 {"ts": "2026-05-09T13:14:36.817484+00:00", "run_id": "run-20260509T125912Z-8deb38fd", "seq": 18, "event_type": "pair_started", "pair": "test", "phase_id": "public-freeze"}
 {"ts": "2026-05-09T13:14:36.817715+00:00", "run_id": "run-20260509T125912Z-8deb38fd", "seq": 19, "event_type": "cycle_started", "pair": "test", "cycle": 1, "attempt": 1, "phase_id": "public-freeze"}
+{"ts": "2026-05-09T13:16:07.951100+00:00", "run_id": "run-20260509T125912Z-8deb38fd", "seq": 20, "event_type": "phase_finished", "pair": "test", "phase": "producer", "cycle": 1, "attempt": 1, "empty_output": false, "phase_id": "public-freeze"}
+{"ts": "2026-05-09T13:17:07.093532+00:00", "run_id": "run-20260509T125912Z-8deb38fd", "seq": 21, "event_type": "phase_finished", "pair": "test", "phase": "verifier", "cycle": 1, "attempt": 1, "empty_output": false, "phase_id": "public-freeze"}
+{"ts": "2026-05-09T13:17:07.218375+00:00", "run_id": "run-20260509T125912Z-8deb38fd", "seq": 22, "event_type": "pair_completed", "pair": "test", "cycle": 1, "attempt": 1, "phase_id": "public-freeze"}
