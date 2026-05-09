@@ -207,3 +207,93 @@ The implementer should fix `IMP-001` before this phase is considered complete, a
 <loop-control>
 {"schema":"docloop.loop_control/v1","kind":"promise","promise":"INCOMPLETE"}
 </loop-control>
+
+
+---
+run_id=run-20260509T164029Z-23a21781 | entry=session_turn | pair=implement | phase=producer | cycle=2 | attempt=1 | thread_id=019e0da0-8784-72b0-83b6-f50148343400
+---
+provider=codex
+mode=resume
+template=/home/rauter/.local/share/pipx/venvs/autoloop/lib/python3.12/site-packages/autoloop/templates/implement_producer.md
+session_id=019e0da0-8784-72b0-83b6-f50148343400
+
+
+---
+run_id=run-20260509T164029Z-23a21781 | entry=phase_output | pair=implement | phase=producer | process=codex-agent | cycle=2 | attempt=1 | thread_id=019e0da0-8784-72b0-83b6-f50148343400
+---
+I’m addressing the reviewer feedback in the route-authority slice only. First I’m reading the recorded findings and the current helper implementations so I can tighten AC-3 enforcement and remove the duplicated capability-route derivation without widening scope.
+
+I have both fixes scoped. I’m replacing the weak substring strictness check with an AST-based guard for forbidden step-owned route symbols, and I’m collapsing the capability exporter back onto shared route-contract helpers so there’s one route-view derivation path again.
+
+The strictness hardening is in place conceptually, but I had to correct the import ordering because `from __future__` must stay first. After that I’ll run the strictness and capability-focused tests before the full suite.
+
+I’m validating the two fixes in the smallest blast radius first: strictness, capability export, and the route-focused suites that already exercised this slice. If those stay green, I’ll rerun full `pytest`.
+
+The fixes are green, including the full suite. I’m doing the final artifact pass now and then I’ll remove the temporary virtualenv again so the workspace only reflects the intentional source/test changes.
+
+Scope considered
+
+Phase-local follow-up on the route-authority cutover only. I limited the work to the two reviewer findings: hardening AC-3 strictness coverage and removing the duplicated capability-route derivation path.
+
+What I analyzed
+
+I re-read the reviewer feedback, the current strictness guard in `tests/strictness/test_no_internal_compat_layers.py`, the shared route-view helpers in `botlane/core/route_contracts.py`, and the duplicate helper block in `botlane/core/workflow_capabilities.py`. I also checked the implementation notes and current decisions ledger before editing.
+
+What I changed
+
+I replaced the weak substring-only `_route_table` check with an AST-backed strictness test that catches `_route_table` / `_effective_route_table` reintroduction as names, attributes, constants, or function names regardless of spacing or quote style. I also centralized the capability exporter back onto shared route-table helpers by adding table-based helper functions in `botlane/core/route_contracts.py` and removing the duplicate available/provider-visible/runtime-control logic from `botlane/core/workflow_capabilities.py`.
+
+I updated the phase implementation notes and appended the non-obvious decisions under the current turn header in `decisions.txt`.
+
+Key findings / decisions
+
+The blocking reviewer finding was valid: the old strictness scan could miss the most common typed-field and spaced-assignment regressions. That is now fixed with AST symbol detection. The non-blocking duplication finding is also resolved: capability export now reuses the shared route-contract helper path instead of maintaining its own copy.
+
+Validation is green:
+- Focused regression suite: `127 passed`
+- Full suite: `1279 passed, 1 warning`
+
+Open issues / next step
+
+No open issue remains in this phase slice. The remaining work is still the later out-of-scope milestones: service-boundary cutover, SDK one-step canonicalization, and `StepExecutionResult` finalization cleanup.
+
+
+---
+run_id=run-20260509T164029Z-23a21781 | entry=session_turn | pair=implement | phase=verifier | cycle=2 | attempt=1 | thread_id=019e0da0-8784-72b0-83b6-f50148343400
+---
+provider=codex
+mode=resume
+template=/home/rauter/.local/share/pipx/venvs/autoloop/lib/python3.12/site-packages/autoloop/templates/implement_verifier.md
+session_id=019e0da0-8784-72b0-83b6-f50148343400
+
+
+---
+run_id=run-20260509T164029Z-23a21781 | entry=phase_output | pair=implement | phase=verifier | process=codex-agent | cycle=2 | attempt=1 | thread_id=019e0da0-8784-72b0-83b6-f50148343400
+---
+I’m re-reviewing the cycle-2 fix set only: the AST-backed AC-3 guard and the route-helper deduplication in capability export. I’ll validate those diffs against the phase contract and update the review artifacts accordingly.
+
+The fix set looks clean on review. I’m marking the criteria complete and appending a short resolution note to the feedback artifact so the earlier blocking/non-blocking items don’t look outstanding in isolation.
+
+Scope considered
+
+Phase-local re-review of the cycle-2 fix set only. I checked the AST-backed AC-3 guard, the route-helper deduplication in capability export, and the updated implementation notes/decision ledger entries relevant to this phase.
+
+What I analyzed
+
+I reviewed the strictness test changes in [tests/strictness/test_no_internal_compat_layers.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/tests/strictness/test_no_internal_compat_layers.py), the shared helper additions in [botlane/core/route_contracts.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/botlane/core/route_contracts.py), and the capability-export call-site changes in [botlane/core/workflow_capabilities.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/botlane/core/workflow_capabilities.py). I also checked that the reviewer-owned artifacts now reflect the resolved state.
+
+What I reviewed
+
+I updated [criteria.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/botlane-v3-second-pass-greenfield-architecture-s-a9df943f/runs/run-20260509T164029Z-23a21781/artifacts/implement/phases/route-authority-cutover/criteria.md) so all completion boxes are checked, and I appended a cycle-2 resolution note to [feedback.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/botlane-v3-second-pass-greenfield-architecture-s-a9df943f/runs/run-20260509T164029Z-23a21781/artifacts/implement/phases/route-authority-cutover/feedback.md) documenting that `IMP-001` and `IMP-002` are resolved.
+
+Key findings / decisions
+
+No new findings. The prior blocking gap is closed: the AST-based strictness scan now catches `_route_table` / `_effective_route_table` reintroduction in the failure shapes that the substring scan missed. The prior non-blocking duplication is also closed: capability export now consumes shared route-table helpers instead of maintaining a second route-view derivation path.
+
+Open issues / next step
+
+No open issue remains in this phase review. The route-authority cutover is complete for the scoped acceptance criteria.
+
+<loop-control>
+{"schema":"docloop.loop_control/v1","kind":"promise","promise":"COMPLETE"}
+</loop-control>

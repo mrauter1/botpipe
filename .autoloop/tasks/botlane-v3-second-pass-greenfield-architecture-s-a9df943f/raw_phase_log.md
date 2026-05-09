@@ -3687,3 +3687,44 @@ Validation is green:
 Open issues / next step
 
 No open issue remains in this phase slice. The remaining work is still the later out-of-scope milestones: service-boundary cutover, SDK one-step canonicalization, and `StepExecutionResult` finalization cleanup.
+
+
+---
+run_id=run-20260509T164029Z-23a21781 | entry=session_turn | pair=implement | phase=verifier | cycle=2 | attempt=1 | thread_id=019e0da0-8784-72b0-83b6-f50148343400
+---
+provider=codex
+mode=resume
+template=/home/rauter/.local/share/pipx/venvs/autoloop/lib/python3.12/site-packages/autoloop/templates/implement_verifier.md
+session_id=019e0da0-8784-72b0-83b6-f50148343400
+
+
+---
+run_id=run-20260509T164029Z-23a21781 | entry=phase_output | pair=implement | phase=verifier | process=codex-agent | cycle=2 | attempt=1 | thread_id=019e0da0-8784-72b0-83b6-f50148343400
+---
+I’m re-reviewing the cycle-2 fix set only: the AST-backed AC-3 guard and the route-helper deduplication in capability export. I’ll validate those diffs against the phase contract and update the review artifacts accordingly.
+
+The fix set looks clean on review. I’m marking the criteria complete and appending a short resolution note to the feedback artifact so the earlier blocking/non-blocking items don’t look outstanding in isolation.
+
+Scope considered
+
+Phase-local re-review of the cycle-2 fix set only. I checked the AST-backed AC-3 guard, the route-helper deduplication in capability export, and the updated implementation notes/decision ledger entries relevant to this phase.
+
+What I analyzed
+
+I reviewed the strictness test changes in [tests/strictness/test_no_internal_compat_layers.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/tests/strictness/test_no_internal_compat_layers.py), the shared helper additions in [botlane/core/route_contracts.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/botlane/core/route_contracts.py), and the capability-export call-site changes in [botlane/core/workflow_capabilities.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/botlane/core/workflow_capabilities.py). I also checked that the reviewer-owned artifacts now reflect the resolved state.
+
+What I reviewed
+
+I updated [criteria.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/botlane-v3-second-pass-greenfield-architecture-s-a9df943f/runs/run-20260509T164029Z-23a21781/artifacts/implement/phases/route-authority-cutover/criteria.md) so all completion boxes are checked, and I appended a cycle-2 resolution note to [feedback.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/botlane-v3-second-pass-greenfield-architecture-s-a9df943f/runs/run-20260509T164029Z-23a21781/artifacts/implement/phases/route-authority-cutover/feedback.md) documenting that `IMP-001` and `IMP-002` are resolved.
+
+Key findings / decisions
+
+No new findings. The prior blocking gap is closed: the AST-based strictness scan now catches `_route_table` / `_effective_route_table` reintroduction in the failure shapes that the substring scan missed. The prior non-blocking duplication is also closed: capability export now consumes shared route-table helpers instead of maintaining a second route-view derivation path.
+
+Open issues / next step
+
+No open issue remains in this phase review. The route-authority cutover is complete for the scoped acceptance criteria.
+
+<loop-control>
+{"schema":"docloop.loop_control/v1","kind":"promise","promise":"COMPLETE"}
+</loop-control>
