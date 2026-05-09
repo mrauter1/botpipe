@@ -549,7 +549,7 @@ def test_sdk_run_maps_failed_terminal_to_failed_result_status(tmp_path: Path) ->
     assert result.debug.task_dir.exists()
 
 
-def test_sdk_step_executes_synthetic_simple_operation_workflow(tmp_path: Path) -> None:
+def test_sdk_step_executes_simple_operation_declaration(tmp_path: Path) -> None:
     provider = ScriptedLLMProvider(operation_turns=["summary"])
     client = _sdk_client(tmp_path, provider)
 
@@ -596,7 +596,7 @@ def test_sdk_step_supports_core_python_step_instances(tmp_path: Path) -> None:
         (_SDKParamsWorkflow.Params(mode="focused", reviewers=["bob"]), {"mode": "focused", "reviewers": ["bob"]}),
     ],
 )
-def test_sdk_step_accepts_input_and_params_for_synthetic_workflows(
+def test_sdk_step_accepts_input_and_params_for_single_step_execution(
     tmp_path: Path,
     params_value: BaseModel | dict[str, object],
     expected: dict[str, object],
@@ -689,17 +689,19 @@ def test_sdk_step_applies_invocation_local_policy_without_mutating_supplied_step
         retention=None,
     )
 
-    def fake_build_synthetic_step_workflow(root, step_def, input, params, *, routes, workflow_policy=None):
+    original_build = sdk_module._build_single_step_execution_plan
+
+    def fake_build_single_step_execution_plan(root, step_def, input, params, *, routes, workflow_policy=None):
         captured["root"] = root
         captured["step_def"] = step_def
         captured["input"] = input
         captured["params"] = params
         captured["routes"] = routes
         captured["workflow_policy"] = workflow_policy
-        return object()
+        return original_build(root, step_def, input, params, routes=routes, workflow_policy=workflow_policy)
 
-    monkeypatch.setattr(sdk_module, "_build_synthetic_step_workflow", fake_build_synthetic_step_workflow)
-    monkeypatch.setattr(client, "run", lambda *args, **kwargs: fake_result)
+    monkeypatch.setattr(sdk_module, "_build_single_step_execution_plan", fake_build_single_step_execution_plan)
+    monkeypatch.setattr(client, "_run_compiled_plan", lambda *args, **kwargs: fake_result)
 
     result = client.step(
         declaration,
@@ -751,13 +753,15 @@ def test_sdk_step_preserves_explicit_routes_for_core_steps(tmp_path: Path) -> No
         "repair": Route(target=SELF, summary="retry once"),
     }
 
-    workflow_cls = sdk_module._build_synthetic_step_workflow(tmp_path, step_def, None, None, routes=routes)
+    workflow_plan = sdk_module._build_single_step_workflow_plan(tmp_path, step_def, None, None, routes=routes)
+    route_table = workflow_plan.routes[step_def.name]
 
-    assert workflow_cls.transitions[step_def]["retry"] == SELF
-    assert workflow_cls.transitions[step_def]["done"] == FINISH
-    assert workflow_cls.transitions[step_def]["question"] == AWAIT_INPUT
-    assert workflow_cls.transitions[step_def]["failed"] == FAIL
-    assert workflow_cls.transitions[step_def]["repair"] == Route(target=SELF, summary="retry once")
+    assert route_table["retry"].target.step_name == step_def.name
+    assert route_table["done"].target == FINISH
+    assert route_table["question"].target == AWAIT_INPUT
+    assert route_table["failed"].target == FAIL
+    assert route_table["repair"].target.step_name == step_def.name
+    assert route_table["repair"].summary == "retry once"
 
 
 def test_sdk_step_supports_directly_resolvable_strict_child_workflow_steps(tmp_path: Path) -> None:
@@ -1141,7 +1145,7 @@ def test_sdk_step_result_value_stays_none_even_when_workflow_result_has_output(
         ),
         retention=None,
     )
-    monkeypatch.setattr(client, "run", lambda *args, **kwargs: fake_result)
+    monkeypatch.setattr(client, "_run_compiled_plan", lambda *args, **kwargs: fake_result)
 
     result = client.step(simple.python_step(lambda _ctx: Event("done"), name="noop"), "Ship it.")
 

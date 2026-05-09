@@ -172,6 +172,24 @@ def execute_workflow_package(
     )
 
 
+def execute_workflow_plan(
+    compiled: WorkflowPlan,
+    *,
+    reference: WorkflowReference,
+    provider: LLMProvider,
+    options: RunnerOptions,
+) -> RunExecution:
+    execution_options = _normalize_execution_options(options, parameters_cls=compiled.parameters_cls)
+    return _execute_compiled_workflow(
+        compiled,
+        reference=reference,
+        parameters_cls=compiled.parameters_cls,
+        capability_prompt_paths=(),
+        provider=provider,
+        options=execution_options,
+    )
+
+
 def _execute_compiled_workflow(
     compiled: WorkflowPlan,
     *,

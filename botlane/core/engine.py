@@ -2753,17 +2753,18 @@ class Engine:
         return step.scope_name, item.id
 
     def _run_workflow_step(self, step: StepPlan, context: Context) -> Any:
-        workflow_step = step.step
-        if not isinstance(workflow_step, ChildWorkflowStep):
+        from .step_plans import ChildWorkflowStepPlan
+
+        if not isinstance(step, ChildWorkflowStepPlan):
             raise WorkflowExecutionError(f"workflow step {step.name!r} is missing workflow-step metadata")
-        message = self._resolve_workflow_step_message(workflow_step, context)
+        message = self._resolve_workflow_step_message(step, context)
         child_result = context.invoke_workflow(
-            workflow_step.workflow,
+            step.workflow,
             message=message,
-            parameters=dict(workflow_step.params),
-            input=workflow_step.input,
+            parameters=dict(step.params),
+            input=step.input,
         )
-        self._write_workflow_step_outputs(context, step=workflow_step, child_result=child_result)
+        self._write_workflow_step_outputs(context, step=step, child_result=child_result)
         return child_result
 
     def _resolve_workflow_step_message(self, step: Any, context: Context) -> str:
@@ -2814,21 +2815,31 @@ class Engine:
         step: Any,
         child_result: Any,
     ) -> None:
-        declared_step = step
-        if not declared_step.writes:
+        declared_writes = getattr(step, "writes", ())
+        if not declared_writes:
             return
         payload = self._workflow_step_output_payload(child_result)
         summary = self._workflow_step_output_summary(payload)
         raw_json = json.dumps(payload, indent=2, ensure_ascii=False) + "\n"
-        for artifact in declared_step.writes.values():
-            handle = ArtifactHandle(
-                name=artifact.name or "output",
-                path=resolve_artifact_template(artifact, context),
-                artifact=artifact,
-            )
-            if artifact.kind == "json":
+        if hasattr(declared_writes, "values"):
+            artifact_handles = []
+            for artifact in declared_writes.values():
+                artifact_handles.append(
+                    ArtifactHandle(
+                        name=artifact.name or "output",
+                        path=resolve_artifact_template(artifact, context),
+                        artifact=artifact,
+                    )
+                )
+        else:
+            resolved_artifacts = self._resolve_artifacts(context)
+            artifact_handles = [resolved_artifacts[artifact_id] for artifact_id in declared_writes]
+        for handle in artifact_handles:
+            artifact = handle.artifact
+            kind = getattr(artifact, "kind", None) or "text"
+            if kind == "json":
                 handle.write_json(payload)
-            elif artifact.kind == "raw":
+            elif kind == "raw":
                 handle.write_text(raw_json)
             else:
                 handle.write_text(summary)
