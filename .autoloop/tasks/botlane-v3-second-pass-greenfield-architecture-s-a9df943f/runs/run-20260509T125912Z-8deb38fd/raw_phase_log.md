@@ -1495,3 +1495,66 @@ Open issues / next step
 <loop-control>
 {"schema":"docloop.loop_control/v1","kind":"promise","promise":"COMPLETE"}
 </loop-control>
+
+
+---
+run_id=run-20260509T125912Z-8deb38fd | entry=session_turn | pair=test | phase=producer | cycle=1 | attempt=1 | thread_id=019e0d1d-3ee2-7851-97bb-7adbbdfcd948
+---
+provider=codex
+mode=resume
+template=/home/rauter/.local/share/pipx/venvs/autoloop/lib/python3.12/site-packages/autoloop/templates/test_producer.md
+session_id=019e0d1d-3ee2-7851-97bb-7adbbdfcd948
+
+
+---
+run_id=run-20260509T125912Z-8deb38fd | entry=phase_output | pair=test | phase=producer | process=codex-agent | cycle=1 | attempt=1 | thread_id=019e0d1d-3ee2-7851-97bb-7adbbdfcd948
+---
+I’m treating this as a phase-local regression-hardening pass: first I’ll inspect the active test artifacts and the existing context/frame tests, then I’ll add only the narrow coverage that proves the helper removal and child-frame behavior the phase contract requires.
+
+The existing unit/contract surface is already close to the phase goals. I’m checking the async dispatcher contract next, because the producer added an adjacent nested-branch route fallback there; if that isn’t asserted explicitly enough, I’ll tighten it rather than creating redundant context-only tests.
+
+The existing async dispatcher test catches the end-to-end branch fallback, but it doesn’t localize the route-visibility regression source. I’m looking at the execution-services/provider-contract tests next so I can add one small, deterministic unit-level guard for nested branch steps without widening phase scope.
+
+I found two low-churn additions that materially tighten the phase coverage without widening scope: one test asserts the old helper symbols are absent from the module, and one contract test now localizes the nested branch-step route-visibility fallback instead of relying only on end-to-end success. I’m patching those now.
+
+The added coverage is narrow and phase-specific. I’m running the touched tests first, then the focused frame-authority slice again so the strategy and feedback can record actual validated coverage rather than just planned coverage.
+
+The direct additions pass. I’m waiting on the broader focused slice now; after that I’ll write the coverage map and append the test feedback summary with the exact behaviors exercised.
+
+The focused slice is green. I’m recording the behavior-to-test map now, including the new helper-absence assertions and the nested branch-step route-visibility regression guard, then I’ll append a short auditor-facing summary to the phase feedback artifact.
+
+Scope considered
+
+- Phase-local execution-frame-authority test scope, centered on [tests/unit/test_execution_frame_context_parity.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/tests/unit/test_execution_frame_context_parity.py) and [tests/contract/test_async_step_dispatcher.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/tests/contract/test_async_step_dispatcher.py).
+- Supporting validation surfaces in `tests/unit/test_primitives_and_stores.py`, `tests/contract/test_provider_turn_plan_adapter.py`, `tests/contract/engine/test_execution_services.py`, and `tests/runtime/test_workspace_and_context.py`.
+- Phase test artifacts [test_strategy.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/botlane-v3-second-pass-greenfield-architecture-s-a9df943f/runs/run-20260509T125912Z-8deb38fd/artifacts/test/phases/execution-frame-authority/test_strategy.md) and [feedback.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/botlane-v3-second-pass-greenfield-architecture-s-a9df943f/runs/run-20260509T125912Z-8deb38fd/artifacts/test/phases/execution-frame-authority/feedback.md).
+
+What I analyzed
+
+- Whether the old helper path is fully absent from `botlane.core.context`, not just unused.
+- Whether existing tests already proved frame-backed reads and child-context creation strongly enough for AC-1 and AC-2.
+- The adjacent nested branch-step route-visibility regression surfaced during producer validation, to decide whether it needed direct test coverage instead of only end-to-end incidental coverage.
+
+What I changed
+
+- Strengthened [tests/unit/test_execution_frame_context_parity.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/tests/unit/test_execution_frame_context_parity.py):
+- `test_context_module_has_no_weakref_runtime_sidecar` now also asserts `_ContextRuntime` and `context_runtime` are absent.
+- `test_branch_child_context_uses_child_frame_and_preserves_shared_state` now asserts child-local frame resolver/cache objects are distinct from the parent.
+- Strengthened [tests/contract/test_async_step_dispatcher.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/tests/contract/test_async_step_dispatcher.py):
+- the branch-group async finalize test now asserts nested branch steps are absent from `WorkflowPlan.routes` and still expose provider-visible routes through the fallback path.
+- Replaced the placeholder phase artifact content with an explicit coverage map in [test_strategy.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/botlane-v3-second-pass-greenfield-architecture-s-a9df943f/runs/run-20260509T125912Z-8deb38fd/artifacts/test/phases/execution-frame-authority/test_strategy.md).
+- Appended a concise summary of test additions and validation commands to [feedback.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/botlane-v3-second-pass-greenfield-architecture-s-a9df943f/runs/run-20260509T125912Z-8deb38fd/artifacts/test/phases/execution-frame-authority/feedback.md).
+
+Key findings / decisions
+
+- The existing suite already covered most of the frame-authority behavior; the highest-value additions were explicit absence checks for the removed helper symbols and a direct regression guard for nested branch-step route visibility.
+- I did not append to `decisions.txt`; the new tests encode behavior already captured by the producer/verifier notes and did not require an additional run-level decision.
+- Coverage stays deterministic: temp paths, in-memory stores, and a fake async provider only.
+
+Open issues / next step
+
+- Validation passed:
+- `./.venv/bin/python -m pytest -q tests/unit/test_execution_frame_context_parity.py tests/contract/test_async_step_dispatcher.py`
+- `./.venv/bin/python -m pytest -q tests/unit/test_execution_frame_context_parity.py tests/unit/test_primitives_and_stores.py tests/contract/test_provider_turn_plan_adapter.py tests/contract/test_async_step_dispatcher.py tests/contract/engine/test_execution_services.py tests/runtime/test_workspace_and_context.py`
+- I did not run the full repository suite.
+- The known broader-file gap remains documented in `test_strategy.md`: `tests/unit/test_branch_group_context_sessions.py` still has two unrelated stale assertions from earlier architecture work, outside this phase-local slice.

@@ -68,3 +68,4 @@
 {"ts": "2026-05-09T14:46:16.353514+00:00", "run_id": "run-20260509T125912Z-8deb38fd", "seq": 68, "event_type": "phase_deferred", "pair": "implement", "phase_mode": "single", "phase_id": "execution-frame-authority", "reason": "awaiting enabled test pair completion"}
 {"ts": "2026-05-09T14:46:16.355569+00:00", "run_id": "run-20260509T125912Z-8deb38fd", "seq": 69, "event_type": "pair_started", "pair": "test", "phase_id": "execution-frame-authority"}
 {"ts": "2026-05-09T14:46:16.355811+00:00", "run_id": "run-20260509T125912Z-8deb38fd", "seq": 70, "event_type": "cycle_started", "pair": "test", "cycle": 1, "attempt": 1, "phase_id": "execution-frame-authority"}
+{"ts": "2026-05-09T14:48:04.199664+00:00", "run_id": "run-20260509T125912Z-8deb38fd", "seq": 71, "event_type": "phase_finished", "pair": "test", "phase": "producer", "cycle": 1, "attempt": 1, "empty_output": false, "phase_id": "execution-frame-authority"}

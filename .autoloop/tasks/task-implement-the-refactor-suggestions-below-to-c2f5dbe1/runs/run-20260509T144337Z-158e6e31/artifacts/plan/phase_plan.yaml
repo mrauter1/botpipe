@@ -2,38 +2,65 @@ version: 1
 task_id: task-implement-the-refactor-suggestions-below-to-c2f5dbe1
 request_snapshot_ref: /home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/task-implement-the-refactor-suggestions-below-to-c2f5dbe1/runs/run-20260509T144337Z-158e6e31/request.md
 phases:
-  - phase_id: "unify-runtime-context-mutators"
-    title: "Unify Runtime Context Mutators"
-    objective: "Restore one executable mutator contract around `Context` so runtime state, worklist selection, and branch child contexts preserve current behavior without reopening the runtime/discovery extraction."
-    status: "planned"
-    in_scope:
-      - "Add a minimal private mutator facade in `botlane/core/context.py` that forwards executable runtime writes to `_execution_frame` and owns worklist-selection snapshot invalidation plus scoped-state sync."
-      - "Rewrite executable runtime call sites in `botlane/core/engine.py`, `botlane/core/engine_collaborators.py`, `botlane/core/worklists.py`, `botlane/core/branch_groups/context.py`, and `botlane/core/branch_groups/runtime.py` to use the `Context` helpers instead of direct frame mutation."
-      - "Unify engine lazy selection restore and branch-child lazy selection restore on the same selection mutator path so selection writes, snapshot clearing, and scoped item-state refresh cannot drift."
-      - "Keep runtime behavior stable and validate with the provided acceptance command, using parity-focused helper tests only as optional preflight if the refactor touches branch/worklist internals."
-    out_of_scope:
-      - "Changing workflow discovery or compiler behavior."
-      - "Introducing a new runtime wrapper, registry, or compatibility layer beyond private `Context` helpers."
-      - "Editing `botlane/core/workflow_capabilities.py` unless adjacent work unexpectedly requires it."
-      - "Making any intentional runtime-control, routing, or branch-group behavior change."
-    dependencies: []
-    acceptance_criteria:
-      - id: "AC-1"
-        text: "Executable runtime collaborators mutate frame-backed state through private `Context` helpers, while `ExecutionFrame` remains the backing store and child-frame construction primitive."
-      - id: "AC-2"
-        text: "Worklist selection changes from engine lazy restore, worklist runtime helpers, and branch-child lazy selection all use the same `Context` selection mutator and still clear only the touched snapshot entry, refresh scoped item stores correctly, and preserve runtime event behavior."
-      - id: "AC-3"
-        text: "Branch and fan-in child contexts continue to share the parent state cell and request snapshot while keeping selection state local to the child context."
-      - id: "AC-4"
-        text: "The required acceptance command passes after the refactor without opening hotspot 9 in `botlane/core/workflow_capabilities.py`."
-    deliverables:
-      - "Private `Context` mutator helpers that become the canonical executable runtime write surface."
-      - "Call-site rewrites in engine, collaborators, worklist helpers, and branch-group helpers to use the shared mutator surface."
-      - "Validation evidence from the required acceptance batch, with optional parity-focused preflight only if touched code warrants it."
-    risks:
-      - "A partial call-site migration could leave one executable path bypassing snapshot invalidation or scoped-state refresh."
-      - "Over-centralizing beyond private `Context` helpers would add tracing debt and reopen the refactor structure the request wants preserved."
-      - "Branch child context behavior can regress if shared state/value references and child-local selections are not preserved together."
-    rollback:
-      - "Revert the private `Context` mutator helpers and the executable call-site rewrites together if parity regresses."
-      - "Do not leave mixed direct-frame and context-mediated executable mutation paths in place."
+- phase_id: unify-runtime-context-mutators
+  title: Unify Runtime Context Mutators
+  objective: Restore one executable mutator contract around `Context` so runtime state,
+    worklist selection, and branch child contexts preserve current behavior without
+    reopening the runtime/discovery extraction.
+  status: planned
+  in_scope:
+  - Add a minimal private mutator facade in `botlane/core/context.py` that forwards
+    executable runtime writes to `_execution_frame` and owns worklist-selection snapshot
+    invalidation plus scoped-state sync.
+  - Rewrite executable runtime call sites in `botlane/core/engine.py`, `botlane/core/engine_collaborators.py`,
+    `botlane/core/worklists.py`, `botlane/core/branch_groups/context.py`, and `botlane/core/branch_groups/runtime.py`
+    to use the `Context` helpers instead of direct frame mutation.
+  - Unify engine lazy selection restore and branch-child lazy selection restore on
+    the same selection mutator path so selection writes, snapshot clearing, and scoped
+    item-state refresh cannot drift.
+  - Keep runtime behavior stable and validate with the provided acceptance command,
+    using parity-focused helper tests only as optional preflight if the refactor touches
+    branch/worklist internals.
+  out_of_scope:
+  - Changing workflow discovery or compiler behavior.
+  - Introducing a new runtime wrapper, registry, or compatibility layer beyond private
+    `Context` helpers.
+  - Editing `botlane/core/workflow_capabilities.py` unless adjacent work unexpectedly
+    requires it.
+  - Making any intentional runtime-control, routing, or branch-group behavior change.
+  dependencies: []
+  acceptance_criteria:
+  - id: AC-1
+    text: Executable runtime collaborators mutate frame-backed state through private
+      `Context` helpers, while `ExecutionFrame` remains the backing store and child-frame
+      construction primitive.
+  - id: AC-2
+    text: Worklist selection changes from engine lazy restore, worklist runtime helpers,
+      and branch-child lazy selection all use the same `Context` selection mutator
+      and still clear only the touched snapshot entry, refresh scoped item stores
+      correctly, and preserve runtime event behavior.
+  - id: AC-3
+    text: Branch and fan-in child contexts continue to share the parent state cell
+      and request snapshot while keeping selection state local to the child context.
+  - id: AC-4
+    text: The required acceptance command passes after the refactor without opening
+      hotspot 9 in `botlane/core/workflow_capabilities.py`.
+  deliverables:
+  - Private `Context` mutator helpers that become the canonical executable runtime
+    write surface.
+  - Call-site rewrites in engine, collaborators, worklist helpers, and branch-group
+    helpers to use the shared mutator surface.
+  - Validation evidence from the required acceptance batch, with optional parity-focused
+    preflight only if touched code warrants it.
+  risks:
+  - A partial call-site migration could leave one executable path bypassing snapshot
+    invalidation or scoped-state refresh.
+  - Over-centralizing beyond private `Context` helpers would add tracing debt and
+    reopen the refactor structure the request wants preserved.
+  - Branch child context behavior can regress if shared state/value references and
+    child-local selections are not preserved together.
+  rollback:
+  - Revert the private `Context` mutator helpers and the executable call-site rewrites
+    together if parity regresses.
+  - Do not leave mixed direct-frame and context-mediated executable mutation paths
+    in place.

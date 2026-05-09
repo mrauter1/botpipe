@@ -2,3 +2,5 @@
 {"ts": "2026-05-09T14:43:38.332088+00:00", "run_id": "run-20260509T144337Z-158e6e31", "seq": 2, "event_type": "pair_started", "pair": "plan", "phase_id": null}
 {"ts": "2026-05-09T14:43:38.332236+00:00", "run_id": "run-20260509T144337Z-158e6e31", "seq": 3, "event_type": "cycle_started", "pair": "plan", "cycle": 1, "attempt": 1, "phase_id": null}
 {"ts": "2026-05-09T14:47:09.838232+00:00", "run_id": "run-20260509T144337Z-158e6e31", "seq": 4, "event_type": "phase_finished", "pair": "plan", "phase": "producer", "cycle": 1, "attempt": 1, "empty_output": false, "phase_id": null}
+{"ts": "2026-05-09T14:48:20.637598+00:00", "run_id": "run-20260509T144337Z-158e6e31", "seq": 5, "event_type": "phase_finished", "pair": "plan", "phase": "verifier", "cycle": 1, "attempt": 1, "empty_output": false, "phase_id": null}
+{"ts": "2026-05-09T14:48:20.779440+00:00", "run_id": "run-20260509T144337Z-158e6e31", "seq": 6, "event_type": "pair_completed", "pair": "plan", "cycle": 1, "attempt": 1, "phase_id": null}
