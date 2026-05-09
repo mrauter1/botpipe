@@ -3890,3 +3890,58 @@ and
 `.venv/bin/python -m pytest -q tests/contract/engine/test_sessions.py tests/contract/engine/test_runtime_controls.py tests/contract/engine/test_artifacts.py`.
 
 The remaining out-of-phase architecture work is the one-step SDK collapse and the later `StepExecutionResult.transition` cleanup.
+
+
+---
+run_id=run-20260509T164029Z-23a21781 | entry=session_turn | pair=implement | phase=verifier | cycle=1 | attempt=1 | thread_id=019e0db8-1056-72b2-89e4-ed5ec238a0ff
+---
+provider=codex
+mode=resume
+template=/home/rauter/.local/share/pipx/venvs/autoloop/lib/python3.12/site-packages/autoloop/templates/implement_verifier.md
+session_id=019e0db8-1056-72b2-89e4-ed5ec238a0ff
+
+
+---
+run_id=run-20260509T164029Z-23a21781 | entry=phase_output | pair=implement | phase=verifier | process=codex-agent | cycle=1 | attempt=1 | thread_id=019e0db8-1056-72b2-89e4-ed5ec238a0ff
+---
+I’m reviewing the execution-services-cutover artifacts and the implementation diff against the phase contract first. Then I’ll update the phase criteria and feedback with any concrete findings before closing with the loop-control block.
+
+I’m reviewing the phase-scoped implementation against the execution-services-cutover contract first, then I’ll update the review artifacts with any findings and the acceptance status.
+
+I’ve got the phase artifacts and implementation notes. Next I’m tracing the actual diff and checking for residual `Engine` reach-through, contract mismatches, and any new indirection that would violate the cutover constraints.
+
+The main review surface is the service composition and the collaborator rewiring. I’m drilling into the concrete wiring in `engine.py` and the result/finalization paths next, because that’s where subtle regressions are most likely.
+
+The wiring looks structurally consistent so far. I’m running the focused contract and strictness suites now to verify the cutover actually holds at runtime and not just by inspection.
+
+The focused suite is still running. I’ve got it past the midpoint cleanly; I’m waiting for the final result before I mark the acceptance criteria.
+
+I’ve finished the verification pass. The focused runtime and strictness suites are green, and I didn’t find a correctness or architecture blocker in the phase-scoped diff, so I’m updating the review artifacts as complete.
+
+Scope considered
+
+Phase-local review of `execution-services-cutover` only. I limited writes to the active verifier artifact directory and reviewed the request-relevant runtime collaborators, service protocols, composition wiring, strictness coverage, and focused tests.
+
+What I analyzed
+
+I checked the active request snapshot, phase contract, plan, implementation notes, and run decisions. I then inspected the changed execution boundary files in `botlane/core`, with emphasis on `ExecutionServices` growth, `execution_runtime_services.py`, collaborator constructors and call sites, branch-group runtime wiring, and the new AST guard in `tests/strictness/test_no_internal_compat_layers.py`.
+
+What I reviewed
+
+I verified that the maintained collaborators in scope no longer retain `Engine` or call `Engine._*`, and that the runtime services remain Engine-free at the collaborator boundary. I also reran the focused review suite:
+`.venv/bin/python -m pytest -q tests/contract/engine/test_execution_services.py tests/contract/engine/test_routes.py tests/contract/engine/test_hooks.py tests/contract/engine/test_child_workflows.py tests/contract/test_branch_group_runtime.py tests/contract/test_branch_result_runtime.py tests/strictness/test_no_internal_compat_layers.py tests/contract/engine/test_sessions.py tests/contract/engine/test_runtime_controls.py tests/contract/engine/test_artifacts.py`
+which passed with `148 passed in 2.94s`.
+
+Key findings / decisions
+
+No blocking findings. No non-blocking findings.
+
+I updated [criteria.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/botlane-v3-second-pass-greenfield-architecture-s-a9df943f/runs/run-20260509T164029Z-23a21781/artifacts/implement/phases/execution-services-cutover/criteria.md) to fully checked and appended the no-findings review outcome to [feedback.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/botlane-v3-second-pass-greenfield-architecture-s-a9df943f/runs/run-20260509T164029Z-23a21781/artifacts/implement/phases/execution-services-cutover/feedback.md).
+
+Open issues / next step
+
+This phase is review-complete. The remaining architecture cleanup from the broader request is outside this phase: the one-step SDK collapse and the later `StepExecutionResult.transition` removal.
+
+<loop-control>
+{"schema":"docloop.loop_control/v1","kind":"promise","promise":"COMPLETE"}
+</loop-control>
