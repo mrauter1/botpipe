@@ -902,3 +902,54 @@ Validation after the fix:
 Open issues / next step
 
 No blocker remains on the implementation side. The only remaining item is the existing full-suite warning in `tests/unit/test_provider_boundary_core.py:661`, unchanged by this phase, and the next step is verifier re-review of the updated state.
+
+
+---
+run_id=run-20260509T033701Z-27394e99 | entry=session_turn | pair=implement | phase=verifier | cycle=2 | attempt=1 | thread_id=019e0ad5-7cc7-72c1-ab1f-9e5b7fa297c3
+---
+provider=codex
+mode=resume
+template=/home/rauter/.local/share/pipx/venvs/autoloop/lib/python3.12/site-packages/autoloop/templates/implement_verifier.md
+session_id=019e0ad5-7cc7-72c1-ab1f-9e5b7fa297c3
+
+
+---
+run_id=run-20260509T033701Z-27394e99 | entry=phase_output | pair=implement | phase=verifier | process=codex-agent | cycle=2 | attempt=1 | thread_id=019e0ad5-7cc7-72c1-ab1f-9e5b7fa297c3
+---
+I’m re-reviewing the blocker fix now. I’m checking the updated strictness token coverage, the active current-run exception policy, and the final validation state before I update the reviewer artifacts.
+
+The source-side blocker looks fixed. I’m independently rerunning the strictness slice and the full suite now so the review closeout is based on current evidence, not only the producer’s report.
+
+The strictness slice passed independently. I’m letting the full suite finish so I can close AC-4 from fresh reviewer-run evidence as well.
+
+The blocker is cleared and the full suite passed independently. I’m updating the reviewer artifacts now to mark the phase complete and record that `IMP-001` was resolved in this cycle.
+
+Scope considered
+
+Phase-local re-review of the strictness policy change in `tests/strictness/test_no_compat.py`, the maintained recursive-memory cleanup in `.autoloop_recursive/`, the active current-run exception inventory, the implementation notes, and the run-local decision ledger. I kept unrelated dirty files out of scope.
+
+What I analyzed
+
+I checked the reviewer-raised `recursive_autoloop` gap against the updated scanner and maintained recursive-memory files, then rechecked the active current-run inventory after the producer adjusted the clean-vs-exception split for reviewer/runtime artifacts. I also independently reran the targeted strictness suite and the full test suite.
+
+What I reviewed
+
+I reviewed the updated legacy-token coverage, the corrected `framework_gap_ledger.md` wording, the current-run artifact-policy inventory, and the implementation notes/decisions for alignment with the accepted phase plan and prior reviewer feedback.
+
+Key findings / decisions
+
+`IMP-001` is resolved. The implementation now removes the remaining maintained `recursive_autoloop/` literal, extends the exact branding scan to cover that legacy wrapper token, and makes the live reviewer/runtime current-run records explicit in the exact exception policy rather than relying on stale inventory assumptions.
+
+Independent reviewer validation passed:
+- `./.venv/bin/python -m pytest tests/strictness/test_no_compat.py` -> `66 passed`
+- `./.venv/bin/python -m pytest` -> `1198 passed, 1 warning`
+
+No new scoped findings remain.
+
+Open issues / next step
+
+No phase-local blocker remains. The only residual is the pre-existing full-suite warning in `tests/unit/test_provider_boundary_core.py:661`, unchanged by this work.
+
+<loop-control>
+{"schema":"docloop.loop_control/v1","kind":"promise","promise":"COMPLETE"}
+</loop-control>

@@ -8,3 +8,4 @@ If `.autoloop/` exceptions remain, derive them from the exact current-run file i
 <autoloop-decisions-header version="1" block_seq="3" owner="implementer" phase_id="tighten-no-compat-artifact-scope" pair="implement" turn_seq="1" run_id="run-20260509T033701Z-27394e99" ts="2026-05-09T03:43:43.082753+00:00" />
 Freeze the repo-root recursive-memory contract to six maintained text files; keep the bootstrap seed, recovery state, lock pid, and archived task prompts as exact exceptions instead of broad subtree skips.
 Freeze the active current-run contract to five clean files plus eight exact operational-record exceptions so new inventory must be reviewed explicitly.
+Treat `recursive_autoloop` as a forbidden legacy wrapper token in the exact branding scan, not only the bare product and state-root names.
