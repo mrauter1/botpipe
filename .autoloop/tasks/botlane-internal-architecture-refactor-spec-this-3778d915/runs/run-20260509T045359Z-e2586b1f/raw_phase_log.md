@@ -297,3 +297,95 @@ Open issues / next step
 <loop-control>
 {"schema":"docloop.loop_control/v1","kind":"promise","promise":"COMPLETE"}
 </loop-control>
+
+
+---
+run_id=run-20260509T045359Z-e2586b1f | entry=session_turn | pair=test | phase=producer | cycle=1 | attempt=1 | thread_id=019e0b1b-4dc6-7202-bcd6-ac3c5559f5ef
+---
+provider=codex
+mode=resume
+template=/home/rauter/.local/share/pipx/venvs/autoloop/lib/python3.12/site-packages/autoloop/templates/test_producer.md
+session_id=019e0b1b-4dc6-7202-bcd6-ac3c5559f5ef
+
+
+---
+run_id=run-20260509T045359Z-e2586b1f | entry=phase_output | pair=test | phase=producer | process=codex-agent | cycle=1 | attempt=1 | thread_id=019e0b1b-4dc6-7202-bcd6-ac3c5559f5ef
+---
+I’m looking for any remaining regression gap that’s specific to the strictness fix itself. The likely addition is a narrow test that prevents `OPTIONAL_SCAN_FILES` from drifting away from the actual root inventory again.
+
+I’m adding one guardrail test in the same strictness file, not broadening scope: it will fail if the optional root-scan list drifts away from real files again.
+
+The new guardrail is in place. I’m rerunning the strictness bucket and the phase-local freeze suites so the test artifact can point to concrete passing coverage, not just intent.
+
+The reruns are green. I’m recording the exact coverage added and the one non-obvious test decision so later phases know this strictness guardrail is intentional, not incidental.
+
+Scope considered
+- Phase-local `freeze-public-compatibility` only.
+- Focused on the strictness fix that unblocked the validated baseline, plus the already touched freeze suites.
+
+What I analyzed
+- `tests/strictness/test_no_compat.py` around `OPTIONAL_SCAN_FILES`, history allowlists, and scan-scope assertions.
+- The current repo root markdown inventory versus `legacy_docs/` inventory.
+- The existing freeze additions in `tests/unit/test_simple_surface.py` and `tests/unit/test_sdk_facade.py`.
+
+What I changed
+- Added `test_optional_scan_files_match_existing_root_inventory` to [tests/strictness/test_no_compat.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/tests/strictness/test_no_compat.py:570) to make stale optional root-scan entries fail directly.
+- Updated [test_strategy.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/botlane-internal-architecture-refactor-spec-this-3778d915/runs/run-20260509T045359Z-e2586b1f/artifacts/test/phases/freeze-public-compatibility/test_strategy.md) with a behavior-to-coverage map.
+- Appended the phase test summary to [feedback.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/botlane-internal-architecture-refactor-spec-this-3778d915/runs/run-20260509T045359Z-e2586b1f/artifacts/test/phases/freeze-public-compatibility/feedback.md).
+- Recorded the non-obvious strictness-guardrail decision in [decisions.txt](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/botlane-internal-architecture-refactor-spec-this-3778d915/runs/run-20260509T045359Z-e2586b1f/decisions.txt).
+
+Key findings / decisions
+- The new guardrail is intentionally narrow: it checks the exact optional root-scan inventory and avoids widening the scan or normalizing runtime behavior.
+- Validation passed:
+  - `.venv/bin/python -m pytest tests/strictness/test_no_compat.py -q`
+  - `.venv/bin/python -m pytest tests/unit/test_simple_surface.py tests/unit/test_sdk_facade.py tests/unit/stdlib/test_composition_helpers.py`
+
+Open issues / next step
+- No open issue from the test phase for this freeze-compatibility baseline.
+
+
+---
+run_id=run-20260509T045359Z-e2586b1f | entry=session_turn | pair=test | phase=verifier | cycle=1 | attempt=1 | thread_id=019e0b1b-4dc6-7202-bcd6-ac3c5559f5ef
+---
+provider=codex
+mode=resume
+template=/home/rauter/.local/share/pipx/venvs/autoloop/lib/python3.12/site-packages/autoloop/templates/test_verifier.md
+session_id=019e0b1b-4dc6-7202-bcd6-ac3c5559f5ef
+
+
+---
+run_id=run-20260509T045359Z-e2586b1f | entry=phase_output | pair=test | phase=verifier | process=codex-agent | cycle=1 | attempt=1 | thread_id=019e0b1b-4dc6-7202-bcd6-ac3c5559f5ef
+---
+I’m auditing only the phase-local freeze test work: the new strictness guardrail, the earlier compatibility assertions it depends on, and whether the strategy and validation actually back the claimed baseline.
+
+The strategy and the new guardrail line up. I’m rerunning the same phase-local buckets to verify the test artifact’s claims and to make sure the new assertion isn’t flaky or over-broad.
+
+The reruns are clean. I’m marking the audit criteria green and appending a short audit note so the artifact shows that this phase was revalidated, not just assumed.
+
+Scope considered
+- Phase-local `freeze-public-compatibility` test work only.
+- Audited the new strictness guardrail, the referenced freeze suites, and the phase test artifacts.
+
+What I analyzed
+- The updated `tests/strictness/test_no_compat.py` coverage around root optional-scan drift and legacy-doc allowlists.
+- The phase strategy in `test_strategy.md` and whether it matches the actual assertions and reruns.
+- The earlier freeze suites named by the test author to confirm the guardrail did not mask adjacent regressions.
+
+What I reviewed
+- Re-ran:
+  - `.venv/bin/python -m pytest tests/strictness/test_no_compat.py -q`
+  - `.venv/bin/python -m pytest tests/unit/test_simple_surface.py tests/unit/test_sdk_facade.py tests/unit/stdlib/test_composition_helpers.py`
+- Updated [criteria.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/botlane-internal-architecture-refactor-spec-this-3778d915/runs/run-20260509T045359Z-e2586b1f/artifacts/test/phases/freeze-public-compatibility/criteria.md) to fully checked.
+- Appended the audit note to [feedback.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/botlane-internal-architecture-refactor-spec-this-3778d915/runs/run-20260509T045359Z-e2586b1f/artifacts/test/phases/freeze-public-compatibility/feedback.md).
+
+Key findings / decisions
+- No blocking audit findings remain.
+- The added guardrail is deterministic, scoped to the changed strictness behavior, and improves direct regression detection for stale optional root-scan entries.
+- The documented strategy matches the observed coverage and rerun results.
+
+Open issues / next step
+- No open issue remains for this phase-local test audit.
+
+<loop-control>
+{"schema":"docloop.loop_control/v1","kind":"promise","promise":"COMPLETE"}
+</loop-control>

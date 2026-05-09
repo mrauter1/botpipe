@@ -7,3 +7,5 @@ Add the AST-aware no-core-runtime-import strictness test only after verifying bo
 Keep the freeze-public-compatibility phase test-only: add regression assertions in existing suites and leave runtime/SDK production code unchanged.
 Treat current `tests/strictness/test_no_compat.py` failures around repo-local doc inventory (`Review15.md`, `review16.md`, `rebrand.md`, `followup.md`) as pre-existing workspace drift outside this phase.
 Resolve the phase baseline blocker by aligning `tests/strictness/test_no_compat.py` allowlists and optional root scan entries to the repo state on disk, rather than adding placeholder files or widening runtime scope.
+<autoloop-decisions-header version="1" block_seq="3" owner="test_author" phase_id="freeze-public-compatibility" pair="test" turn_seq="1" run_id="run-20260509T045359Z-e2586b1f" ts="2026-05-09T05:09:23.472770+00:00" />
+Add an exact `OPTIONAL_SCAN_FILES` inventory test in `tests/strictness/test_no_compat.py` so stale root scan entries fail locally and do not rely on broader inventory assertions to reveal the drift.
