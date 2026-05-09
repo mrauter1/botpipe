@@ -1,0 +1,182 @@
+from __future__ import annotations
+
+from pathlib import Path
+
+from pydantic import BaseModel
+
+from botlane.core.branch_groups.context import (
+    BranchMetadata,
+    FanInMetadata,
+    create_branch_context,
+    create_fan_in_context,
+)
+from botlane.core.context import Context, _DEFAULT_MESSAGE, context_runtime
+from botlane.core.execution_frame import _DEFAULT_FRAME_MESSAGE
+from botlane.core.stores import InMemorySessionStore
+from botlane.core.worklists import SelectionSnapshot, WorkItemSnapshot, Worklist
+
+
+class _State(BaseModel):
+    counter: int = 0
+
+
+class _Input(BaseModel):
+    topic: str = "release"
+
+
+def _make_context(
+    tmp_path: Path,
+    *,
+    message: str | None | object = _DEFAULT_MESSAGE,
+    values: dict[str, object] | None = None,
+    worklists: dict[str, object] | None = None,
+    selection_snapshots: dict[str, SelectionSnapshot] | None = None,
+) -> Context:
+    task_folder = tmp_path / ".botlane" / "tasks" / "task-1"
+    workflow_folder = task_folder / "wf_example"
+    run_folder = workflow_folder / "runs" / "run-1"
+    package_folder = tmp_path / "workflows" / "example"
+    run_folder.mkdir(parents=True, exist_ok=True)
+    package_folder.mkdir(parents=True, exist_ok=True)
+    (task_folder / "request.md").write_text("task request\n", encoding="utf-8")
+    (run_folder / "request.md").write_text("run request\n", encoding="utf-8")
+    return Context(
+        root=tmp_path,
+        task_id="task-1",
+        run_id="run-1",
+        workflow_name="example",
+        task_folder=task_folder,
+        workflow_folder=workflow_folder,
+        run_folder=run_folder,
+        package_folder=package_folder,
+        state=_State(),
+        workflow_input=_Input(),
+        session_store=InMemorySessionStore(),
+        message=message,
+        values=values,
+        worklists=worklists,
+        selection_snapshots=selection_snapshots,
+    )
+
+
+def test_context_synthesizes_execution_frame_and_preserves_default_message_sentinel(tmp_path: Path) -> None:
+    default_ctx = _make_context(tmp_path)
+    none_ctx = _make_context(tmp_path / "explicit-none", message=None)
+
+    assert default_ctx._execution_frame.identity is default_ctx._run_identity
+    assert default_ctx._execution_frame.message is _DEFAULT_FRAME_MESSAGE
+    assert default_ctx._message is _DEFAULT_MESSAGE
+    assert default_ctx.message == "run request"
+    assert default_ctx.input.message == "run request"
+    assert default_ctx.input.topic == "release"
+
+    assert none_ctx._execution_frame.message is None
+    assert none_ctx._message is None
+    assert none_ctx.message is None
+    assert none_ctx.input.message is None
+    assert none_ctx.input.topic == "release"
+
+
+def test_context_runtime_mutators_update_execution_frame_and_legacy_fields(tmp_path: Path) -> None:
+    ctx = _make_context(tmp_path, values={"shared": "root"})
+    runtime = context_runtime(ctx)
+
+    runtime.set_values({"shared": "updated", "count": 2})
+    runtime.set_route({"tag": "done"})
+    runtime.set_event({"tag": "progress"})
+    runtime.set_outcome({"status": "ok"})
+    runtime.set_meta({"source": "test"})
+    runtime.set_answer("42")
+    runtime.set_input_response({"approved": True})
+    runtime.set_step_state_store({"visits": 1, "last_route": None, "last_reason": None})
+    runtime.set_item_state_store({"status": "queued"})
+    runtime.set_step_item_state_store({"visits": 2, "last_route": "done", "last_reason": None})
+    runtime.set_state(ctx.state.model_copy(update={"counter": 3}))
+
+    assert ctx._execution_frame.values == {"shared": "updated", "count": 2}
+    assert ctx._values == {"shared": "updated", "count": 2}
+    assert ctx.values.shared == "updated"
+    assert ctx.route is not None and ctx.route.tag == "done"
+    assert ctx.event is not None and ctx.event.tag == "progress"
+    assert ctx.outcome.status == "ok"
+    assert ctx.meta.source == "test"
+    assert ctx.answer == "42"
+    assert ctx.input_response == {"approved": True}
+    assert ctx.step_state.visits == 1
+    assert ctx.item_state.status == "queued"
+    assert ctx.step_item_state.visits == 2
+    assert ctx.state.counter == 3
+    assert ctx._execution_frame.state_cell is ctx.state_cell
+
+
+def test_branch_child_context_uses_child_frame_and_preserves_shared_state(tmp_path: Path) -> None:
+    gates = Worklist.from_items(name="gate", items=({"id": "alpha", "title": "Alpha"},))
+    snapshots = {
+        "gate": SelectionSnapshot(
+            worklist_name="gate",
+            mode="single",
+            items=(WorkItemSnapshot(id="alpha", title="Alpha"),),
+            explicit=True,
+        )
+    }
+    parent = _make_context(
+        tmp_path,
+        values={"shared": "root"},
+        worklists={"gate": gates},
+        selection_snapshots=snapshots,
+    )
+
+    branch = create_branch_context(
+        parent,
+        step_name="assess",
+        branch=BranchMetadata(name="security", index=0, group="reviews", input={"area": "security"}, count=1),
+        session_store=parent._session_store,
+        step_state_store={"visits": 1, "last_route": None, "last_reason": None},
+    )
+
+    assert branch.state_cell is parent.state_cell
+    assert branch._execution_frame.state_cell is parent._execution_frame.state_cell
+    assert branch._execution_frame.branch == BranchMetadata(
+        name="security",
+        index=0,
+        group="reviews",
+        input={"area": "security"},
+        count=1,
+    )
+    assert branch._execution_frame.fan_in is None
+    assert branch._execution_frame.selection_snapshots == snapshots
+    assert branch._execution_frame.selection_snapshots is not parent._execution_frame.selection_snapshots
+
+    branch.values.shared = "branch"
+    branch.state = branch.state.model_copy(update={"counter": 5})
+    context_runtime(branch).set_selection_snapshots({})
+
+    assert parent.values.shared == "branch"
+    assert parent.state.counter == 5
+    assert parent._selection_snapshots == snapshots
+    assert branch._selection_snapshots == {}
+
+
+def test_fan_in_child_context_exposes_fan_in_frame_metadata(tmp_path: Path) -> None:
+    parent = _make_context(tmp_path)
+    fan_in = create_fan_in_context(
+        parent,
+        step_name="combine",
+        fan_in=FanInMetadata(
+            results={"branches": []},
+            results_path=parent.workflow_folder / "_branch_groups" / "reviews" / "results.json",
+            context_path=parent.workflow_folder / "_branch_groups" / "reviews" / "context.md",
+            context_text="# Reviews",
+            branch_count=2,
+            completed_count=1,
+            failed_count=0,
+            needs_input_count=1,
+            cancelled_count=0,
+        ),
+        session_store=parent._session_store,
+    )
+
+    assert fan_in._execution_frame.branch is None
+    assert fan_in._execution_frame.fan_in is not None
+    assert fan_in.fan_in.context_text == "# Reviews"
+    assert fan_in.fan_in.needs_input_count == 1
