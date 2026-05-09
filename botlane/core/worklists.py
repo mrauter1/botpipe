@@ -631,8 +631,7 @@ class WorklistRuntimeView(Generic[T]):
     def refresh(self) -> Selection[T]:
         previous = self.selection
         updated = self._worklist.refresh_selection(self._context, previous)
-        self._context._execution_frame.set_selection(self._worklist.name, updated)
-        self._context._sync_scoped_state_after_worklist_selection_change(self._worklist)
+        self._context._set_worklist_selection(self._worklist.name, updated)
         self._context._emit_worklist_runtime_event(
             "worklist_refreshed",
             worklist_name=self._worklist.name,
@@ -644,8 +643,7 @@ class WorklistRuntimeView(Generic[T]):
     def set_current_status(self, status: str | None) -> Selection[T]:
         previous = self.selection
         updated = self._worklist.set_current_status(self._context, previous, status)
-        self._context._execution_frame.set_selection(self._worklist.name, updated)
-        self._context._sync_scoped_state_after_worklist_selection_change(self._worklist)
+        self._context._set_worklist_selection(self._worklist.name, updated)
         self._context._emit_worklist_runtime_event(
             "worklist_status_set",
             worklist_name=self._worklist.name,
@@ -657,8 +655,7 @@ class WorklistRuntimeView(Generic[T]):
     def reset_current_status(self) -> Selection[T]:
         previous = self.selection
         updated = self._worklist.set_current_status(self._context, previous, None)
-        self._context._execution_frame.set_selection(self._worklist.name, updated)
-        self._context._sync_scoped_state_after_worklist_selection_change(self._worklist)
+        self._context._set_worklist_selection(self._worklist.name, updated)
         self._context._emit_worklist_runtime_event(
             "worklist_status_reset",
             worklist_name=self._worklist.name,
@@ -670,8 +667,7 @@ class WorklistRuntimeView(Generic[T]):
     def advance(self) -> bool:
         previous = self.selection
         updated = previous.advance()
-        self._context._execution_frame.set_selection(self._worklist.name, updated)
-        self._context._sync_scoped_state_after_worklist_selection_change(self._worklist)
+        self._context._set_worklist_selection(self._worklist.name, updated)
         self._context._emit_worklist_runtime_event(
             "worklist_advanced",
             worklist_name=self._worklist.name,

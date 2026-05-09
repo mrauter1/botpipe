@@ -770,7 +770,7 @@ class Engine:
         )
 
     def _configure_context_frame(self, context: Context) -> Context:
-        context._execution_frame.set_worklist_selection_resolver(
+        context._set_worklist_selection_resolver(
             lambda worklist_name, *, _context=context: self.state_runtime.ensure_worklist_selection(
                 _context,
                 worklist_name,
@@ -815,7 +815,7 @@ class Engine:
         runtime = self._configure_context_frame(context)
         step_state_store = self._ensure_step_state_store(loop.step_states, step)
         self._increment_step_runtime_state(step_state_store)
-        runtime._execution_frame.set_step_state(step_state_store)
+        runtime._set_step_state(step_state_store)
         if step.scope_name is not None:
             context.ensure_selection(step.scope_name)
         current_item_key = self._current_item_state_key(context, step)
@@ -826,12 +826,12 @@ class Engine:
             item_key=current_item_key,
         )
         if item_state_store is not None:
-            runtime._execution_frame.set_item_state(item_state_store)
+            runtime._set_item_state(item_state_store)
         if step_item_state_store is not None:
             self._increment_step_runtime_state(step_item_state_store)
-            runtime._execution_frame.set_step_item_state(step_item_state_store)
+            runtime._set_step_item_state(step_item_state_store)
         self._update_item_runtime_state_on_entry(step, context, getattr(context, "_item_state", None))
-        runtime._execution_frame.set_worklist_selection_sync(
+        runtime._set_worklist_selection_sync(
             lambda worklist_name, *, _context=context, _step=step, _item_states=loop.item_states, _step_item_states=loop.step_item_states: self._sync_context_scoped_state_after_worklist_selection_change(
                 _context,
                 _step,
@@ -840,8 +840,8 @@ class Engine:
                 worklist_name=worklist_name,
             )
         )
-        runtime._execution_frame.set_values(loop.values)
-        runtime._execution_frame.set_meta(
+        runtime._set_values(loop.values)
+        runtime._set_meta(
             {
                 "step": {
                     "name": step.name,
@@ -1475,7 +1475,7 @@ class Engine:
     def _restore_hook_context(self, context: Context, snapshot: _HookSnapshot) -> None:
         context._session_store.restore(snapshot.session)
         if snapshot.state is not None:
-            context._execution_frame.set_state(self._clone_state(snapshot.state))
+            context._set_state(self._clone_state(snapshot.state))
         self._restore_model_or_dict(getattr(context, "_step_state", None), snapshot.step_state)
         self._restore_model_or_dict(getattr(context, "_item_state", None), snapshot.item_state)
         self._restore_model_or_dict(getattr(context, "_step_item_state", None), snapshot.step_item_state)
@@ -2057,7 +2057,7 @@ class Engine:
         for name, snapshot in snapshots.items():
             if name in self.compiled.worklists:
                 selection_snapshots[name] = snapshot
-        context._execution_frame.set_selection_snapshots(selection_snapshots)
+        context._set_selection_snapshots(selection_snapshots)
         return selection_snapshots
 
     def _ensure_worklist_selection(
@@ -2116,8 +2116,7 @@ class Engine:
                 error=exc,
                 selector_details=self._worklist_selector_details(worklist),
             ) from exc
-        context._execution_frame.set_selection(worklist_name, selection)
-        context._sync_scoped_state_after_worklist_selection_change(worklist_name)
+        context._set_worklist_selection(worklist_name, selection)
         context._emit_worklist_selection_resolved(
             worklist_name=worklist_name,
             selection=selection,
@@ -3221,8 +3220,8 @@ class Engine:
         item_key = self._current_item_state_key(context, step)
         item_state_store = self._ensure_item_state_store(item_states, step, item_key=item_key)
         step_item_state_store = self._ensure_step_item_state_store(step_item_states, step, item_key=item_key)
-        context._execution_frame.set_item_state(item_state_store)
-        context._execution_frame.set_step_item_state(step_item_state_store)
+        context._set_item_state(item_state_store)
+        context._set_step_item_state(step_item_state_store)
         self._update_item_runtime_state_on_entry(step, context, item_state_store)
 
     def _emit_runtime_event(self, event_type: str, **payload: Any) -> None:

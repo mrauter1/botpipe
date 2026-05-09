@@ -1774,3 +1774,63 @@ phase_mode=single
 phase_ids=unify-runtime-context-mutators
 explicit=True
 current_phase_index=0
+
+
+---
+run_id=run-20260509T144337Z-158e6e31 | entry=session_turn | pair=implement | phase=producer | cycle=1 | attempt=1 | thread_id=019e0d35-fa40-7210-808e-675ddee642cd
+---
+provider=codex
+mode=start
+template=/home/rauter/.local/share/pipx/venvs/autoloop/lib/python3.12/site-packages/autoloop/templates/implement_producer.md
+session_id=019e0d35-fa40-7210-808e-675ddee642cd
+
+
+---
+run_id=run-20260509T144337Z-158e6e31 | entry=phase_output | pair=implement | phase=producer | process=codex-agent | cycle=1 | attempt=1 | thread_id=019e0d35-fa40-7210-808e-675ddee642cd
+---
+I’m tracing the runtime/context mutator drift first: reading the phase artifacts, the current `Context` and `ExecutionFrame` surfaces, and the failing runtime call sites before I edit anything.
+
+The plan and decisions are consistent: this is a behavior-preserving consolidation, not a runtime redesign. I’m mapping every direct executable-frame mutation now so I only touch the intended surface and avoid dragging unrelated files into scope.
+
+I’ve isolated the executable paths that still write through `ExecutionFrame` directly. Next I’m reading the exact selection and child-context flows so the `Context` helper can carry the existing invalidation and scoped refresh rules instead of recreating them incorrectly.
+
+The remaining question is mechanical, not conceptual: where to place the helper so it preserves legacy underscore access and child-frame construction while making selection writes impossible to drift. I’m reading `ExecutionFrame` and the legacy attr bridge now, then I’ll patch the narrowest surface that covers all executable writers.
+
+Plan:
+- Add a private mutator facade on `Context` for frame-backed runtime writes, including one selection-aware helper that centralizes snapshot invalidation and scoped-state sync.
+- Replace executable call sites in engine setup, worklist runtime helpers, branch child context setup, branch-group runtime, and engine collaborators to use that facade instead of mutating `_execution_frame` directly.
+- Run focused parity checks around context/frame and branch-group bookkeeping first, then the required acceptance batch, and record the implementation notes plus any non-obvious decisions.
+
+I’ve got the edit slice bounded. I’m patching `Context` first with thin private setters plus the shared selection mutator, then I’ll switch the executable call sites over in engine, collaborators, worklists, and branch-group helpers without changing the child-frame construction paths.
+
+The helper surface is in place. I’m switching the runtime writers now, and I’m keeping the edits intentionally repetitive rather than abstracting further so the call sites stay easy to audit against the old behavior.
+
+I found one behavior risk during the rewrite: `values` needs to stay shared by reference across the runtime and branch children. I’m correcting that before test runs so this remains a pure contract consolidation, not a semantic copy-on-write change.
+
+The call-site rewrite is complete. I’m running the focused parity and regression tests before the full acceptance batch so I can catch any drift in selection bookkeeping or branch child context behavior early.
+
+Two focused tests failed. I’m pulling the failure details now before changing anything else; this should tell us whether the drift is in selection bookkeeping or in the new helper typing/visibility.
+
+The preflight failures are outside the required acceptance slice and appear unrelated to the mutator refactor: both are constructor-signature mismatches inside `tests/unit/test_branch_group_context_sessions.py`, not selection/runtime behavior regressions. I’m proceeding to the required acceptance batch now.
+
+The required acceptance batch is green. I’m recording the implementation notes and the two non-obvious decisions that matter for future turns: shared `values` identity was preserved intentionally, and child lazy selection restore now goes through the same context mutator path as engine/worklist updates.
+
+Scope considered
+
+Behavior-preserving runtime/context mutator consolidation across `Context`, engine setup, engine collaborators, worklist helpers, and branch-group runtime/context helpers. I kept discovery/compiler behavior unchanged and did not open `botlane/core/workflow_capabilities.py`.
+
+What I analyzed
+
+I read the phase plan, decisions, and implementation notes scaffold, then traced every executable `_execution_frame.set_*` write in the scoped files. The main drift was that engine lazy selection restore, worklist runtime mutations, and branch-child lazy restore were updating selection through separate paths.
+
+What I changed
+
+I added a private `Context` mutator facade in [context.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/botlane/core/context.py:417), including the shared selection mutator at [context.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/botlane/core/context.py:472). Then I rewired step-frame setup and lazy selection restore in [engine.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/botlane/core/engine.py:796) and [engine.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/botlane/core/engine.py:2063), executable runtime writers in [engine_collaborators.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/botlane/core/engine_collaborators.py:573), worklist runtime mutations in [worklists.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/botlane/core/worklists.py:595), and branch child/fan-in paths in [context.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/botlane/core/branch_groups/context.py:235) and [runtime.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/botlane/core/branch_groups/runtime.py:237).
+
+Key findings / decisions
+
+`values` had to remain shared by reference, so the new facade does not copy them. Selection writes now go through one `Context` path for engine lazy restore, worklist helpers, and branch-child lazy restore, while `ExecutionFrame` still owns storage, child-frame creation, and snapshot invalidation. The required acceptance command passed: `217 passed in 1.15s`.
+
+Open issues / next step
+
+The scoped work is complete and the required batch is green. An optional preflight run surfaced two unrelated local failures in `tests/unit/test_branch_group_context_sessions.py` caused by constructor-signature mismatches; I left those out of this phase because they are outside the requested acceptance slice.

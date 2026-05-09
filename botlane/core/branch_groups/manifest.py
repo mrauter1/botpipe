@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import json
 from dataclasses import dataclass
+from datetime import datetime
 from pathlib import Path
 from typing import Any, Literal, Mapping
 
@@ -75,15 +76,15 @@ def build_branch_manifest(
         concurrency=spec.concurrency,
         settle=spec.settle,
         success_routes=tuple(spec.success_routes),
-        branches=tuple(_branch_result(branch) for branch in branches),
+        branches=tuple(_coerce_branch_result(branch) for branch in branches),
     )
 
 
 def render_branch_group_context(manifest: BranchManifest | Mapping[str, Any]) -> str:
-    manifest_payload = branch_manifest_payload(manifest)
-    branches = [_branch_payload(branch) for branch in manifest_payload.get("branches", [])]
+    typed_manifest = coerce_branch_manifest(manifest)
+    branches = list(typed_manifest.branches)
     sections = [
-        _render_branch_group_header(manifest_payload, branches),
+        _render_branch_group_header(typed_manifest, branches),
         _render_completion_summary(branches),
         _render_route_summary(branches),
         _render_failure_summary(branches),
@@ -94,22 +95,22 @@ def render_branch_group_context(manifest: BranchManifest | Mapping[str, Any]) ->
     return "\n".join(_flatten_sections(sections)) + "\n"
 
 
-def _render_branch_group_header(manifest: Mapping[str, Any], branches: list[Mapping[str, Any]]) -> list[str]:
+def _render_branch_group_header(manifest: BranchManifest, branches: list[BranchResult]) -> list[str]:
     return [
-        f"# Branch Group: {manifest.get('name', '')}",
+        f"# Branch Group: {manifest.name}",
         "",
-        f"- Kind: {manifest.get('kind', '')}",
+        f"- Kind: {manifest.kind}",
         f"- Branch count: {len(branches)}",
-        f"- Settlement policy: {manifest.get('settle', '')}",
-        f"- Success routes: {', '.join(str(route) for route in manifest.get('success_routes', [])) or '(none)'}",
-        f"- Started: {manifest.get('started_at', '')}",
-        f"- Finished: {manifest.get('finished_at', '')}",
-        f"- Duration ms: {manifest.get('duration_ms', 0)}",
+        f"- Settlement policy: {manifest.settle}",
+        f"- Success routes: {', '.join(str(route) for route in manifest.success_routes) or '(none)'}",
+        f"- Started: {manifest.started_at}",
+        f"- Finished: {manifest.finished_at}",
+        f"- Duration ms: {manifest.duration_ms}",
         "",
     ]
 
 
-def _render_completion_summary(branches: list[Mapping[str, Any]]) -> list[str]:
+def _render_completion_summary(branches: list[BranchResult]) -> list[str]:
     counts = _status_counts(branches)
     return [
         "## Completion Summary",
@@ -123,7 +124,7 @@ def _render_completion_summary(branches: list[Mapping[str, Any]]) -> list[str]:
     ]
 
 
-def _render_route_summary(branches: list[Mapping[str, Any]]) -> list[str]:
+def _render_route_summary(branches: list[BranchResult]) -> list[str]:
     lines = ["## Route Summary", ""]
     route_counts = _route_counts(branches)
     if route_counts:
@@ -134,9 +135,9 @@ def _render_route_summary(branches: list[Mapping[str, Any]]) -> list[str]:
     return lines
 
 
-def _render_failure_summary(branches: list[Mapping[str, Any]]) -> list[str]:
+def _render_failure_summary(branches: list[BranchResult]) -> list[str]:
     counts = _status_counts(branches)
-    failed_branches = [branch for branch in branches if branch.get("status") == "failed"]
+    failed_branches = [branch for branch in branches if branch.status == "failed"]
     return [
         "",
         "## Failure Summary",
@@ -149,9 +150,9 @@ def _render_failure_summary(branches: list[Mapping[str, Any]]) -> list[str]:
     ]
 
 
-def _render_needs_input_summary(branches: list[Mapping[str, Any]]) -> list[str]:
+def _render_needs_input_summary(branches: list[BranchResult]) -> list[str]:
     counts = _status_counts(branches)
-    needs_input_branches = [branch for branch in branches if branch.get("status") == "needs_input"]
+    needs_input_branches = [branch for branch in branches if branch.status == "needs_input"]
     return [
         "",
         "## Needs Input Summary",
@@ -164,10 +165,10 @@ def _render_needs_input_summary(branches: list[Mapping[str, Any]]) -> list[str]:
     ]
 
 
-def _render_cancellation_summary(branches: list[Mapping[str, Any]]) -> list[str]:
+def _render_cancellation_summary(branches: list[BranchResult]) -> list[str]:
     counts = _status_counts(branches)
-    cancelled_branches = [branch for branch in branches if branch.get("status") == "cancelled"]
-    skipped_branches = [branch for branch in branches if branch.get("status") == "skipped"]
+    cancelled_branches = [branch for branch in branches if branch.status == "cancelled"]
+    skipped_branches = [branch for branch in branches if branch.status == "skipped"]
     return [
         "",
         "## Cancellation Summary",
@@ -184,42 +185,41 @@ def _render_cancellation_summary(branches: list[Mapping[str, Any]]) -> list[str]
     ]
 
 
-def _render_branch_detail(branch: Mapping[str, Any]) -> list[str]:
+def _render_branch_detail(branch: BranchResult) -> list[str]:
     lines = [
         "",
-        f"## Branch: {branch.get('name', '')}",
+        f"## Branch: {branch.name}",
         "",
-        f"- Index: {branch.get('index', '')}",
-        f"- Step: {branch.get('step_name', '')}",
-        f"- Input: `{json.dumps(branch.get('input'), ensure_ascii=False, sort_keys=True)}`",
-        f"- Status: {branch.get('status', '')}",
-        f"- Route: {branch.get('route') or '(none)'}",
-        f"- Destination: {branch.get('destination') or '(none)'}",
-        f"- Runtime control: {branch.get('runtime_control') or '(none)'}",
-        f"- Reason: {branch.get('reason') or '(none)'}",
-        f"- Question: {branch.get('question') or '(none)'}",
-        f"- Provider session: {branch.get('provider_session') or '(none)'}",
-        f"- Raw output path: {branch.get('raw_output_path') or '(none)'}",
+        f"- Index: {branch.index}",
+        f"- Step: {branch.step_name}",
+        f"- Input: `{json.dumps(branch.input, ensure_ascii=False, sort_keys=True)}`",
+        f"- Status: {branch.status}",
+        f"- Route: {branch.route or '(none)'}",
+        f"- Destination: {branch.destination or '(none)'}",
+        f"- Runtime control: {branch.runtime_control or '(none)'}",
+        f"- Reason: {branch.reason or '(none)'}",
+        f"- Question: {branch.question or '(none)'}",
+        f"- Provider session: {branch.provider_session or '(none)'}",
+        f"- Raw output path: {branch.raw_output_path or '(none)'}",
     ]
-    raw_output_paths = branch.get("raw_output_paths")
-    if isinstance(raw_output_paths, Mapping) and raw_output_paths:
+    raw_output_paths = branch.raw_output_paths
+    if raw_output_paths:
         lines.append("- Raw output files:")
         for label, value in sorted(raw_output_paths.items()):
             lines.append(f"  - {label}: {value}")
-    artifacts = branch.get("artifacts") or []
+    artifacts = branch.artifacts
     if artifacts:
         lines.append("- Artifacts:")
         for artifact in artifacts:
             lines.append(
                 "  - "
-                + f"{artifact.get('name', '')}: {artifact.get('path', '')} "
-                + f"(kind={artifact.get('kind', '')}, exists={artifact.get('exists', False)}, "
-                + f"validation={artifact.get('validation', '')})"
+                + f"{artifact.name}: {artifact.path} "
+                + f"(kind={artifact.kind}, exists={artifact.exists}, "
+                + f"validation={artifact.validation})"
             )
     else:
         lines.append("- Artifacts: (none)")
-    error = branch.get("error")
-    if isinstance(error, Mapping):
+    if isinstance(branch.error, Mapping):
         lines.append("- Error summary:")
         lines.append("  - " + (branch_error_summary(branch) or "(no error summary)"))
     else:
@@ -231,17 +231,17 @@ def _flatten_sections(sections: list[list[str]]) -> list[str]:
     return [line for section in sections for line in section]
 
 
-def _route_counts(branches: list[Mapping[str, Any]]) -> dict[str, int]:
+def _route_counts(branches: list[BranchResult]) -> dict[str, int]:
     route_counts: dict[str, int] = {}
     for branch in branches:
-        route_name = branch.get("route")
-        if isinstance(route_name, str) and route_name:
+        route_name = branch.route
+        if route_name:
             route_counts[route_name] = route_counts.get(route_name, 0) + 1
     return route_counts
 
 
 def _render_list_or_none(
-    items: list[Mapping[str, Any]],
+    items: list[BranchResult],
     render_item: Any,
 ) -> list[str]:
     if not items:
@@ -252,31 +252,28 @@ def _render_list_or_none(
     return lines
 
 
-def _render_failed_branch_summary(branch: Mapping[str, Any]) -> list[str]:
-    return [
-        f"- {branch.get('name', '')}: {branch_error_summary(branch) or branch.get('reason') or '(no error summary)'}"
-    ]
+def _render_failed_branch_summary(branch: BranchResult) -> list[str]:
+    return [f"- {branch.name}: {branch_error_summary(branch) or branch.reason or '(no error summary)'}"]
 
 
-def _render_needs_input_branch_summary(branch: Mapping[str, Any]) -> list[str]:
-    return [f"- {branch.get('name', '')}: {branch.get('question') or branch.get('reason') or 'Input required.'}"]
+def _render_needs_input_branch_summary(branch: BranchResult) -> list[str]:
+    return [f"- {branch.name}: {branch.question or branch.reason or 'Input required.'}"]
 
 
-def _render_cancelled_branch_summary(branch: Mapping[str, Any]) -> list[str]:
-    return [f"- {branch.get('name', '')}: {branch.get('reason') or branch.get('status', '')}"]
+def _render_cancelled_branch_summary(branch: BranchResult) -> list[str]:
+    return [f"- {branch.name}: {branch.reason or branch.status}"]
 
 
-def _status_counts(branches: list[Mapping[str, Any]]) -> dict[str, int]:
+def _status_counts(branches: list[BranchResult]) -> dict[str, int]:
     counts = {"completed": 0, "failed": 0, "needs_input": 0, "cancelled": 0, "skipped": 0}
     for branch in branches:
-        status = branch.get("status")
-        if isinstance(status, str) and status in counts:
-            counts[status] += 1
+        if branch.status in counts:
+            counts[branch.status] += 1
     return counts
 
 
-def branch_error_summary(branch: Mapping[str, Any]) -> str | None:
-    error = branch.get("error")
+def branch_error_summary(branch: BranchResult | Mapping[str, Any]) -> str | None:
+    error = branch.error if isinstance(branch, BranchResult) else branch.get("error")
     if not isinstance(error, Mapping):
         return None
     error_type = error.get("type", "Error")
@@ -284,18 +281,7 @@ def branch_error_summary(branch: Mapping[str, Any]) -> str | None:
     return f"{error_type}: {message}"
 
 
-def _branch_payload(branch: object) -> dict[str, Any]:
-    if isinstance(branch, Mapping):
-        return dict(branch)
-    to_manifest_dict = getattr(branch, "to_manifest_dict", None)
-    if callable(to_manifest_dict):
-        payload = to_manifest_dict()
-        if isinstance(payload, Mapping):
-            return dict(payload)
-    raise TypeError(f"unsupported branch manifest entry {type(branch)!r}")
-
-
-def _branch_result(branch: object) -> BranchResult:
+def _coerce_branch_result(branch: object) -> BranchResult:
     if isinstance(branch, BranchResult):
         return branch
     if isinstance(branch, Mapping):
@@ -339,5 +325,29 @@ def _branch_result(branch: object) -> BranchResult:
     raise TypeError(f"branch manifest branch must be BranchResult or mapping, got {type(branch)!r}")
 
 
+def coerce_branch_manifest(manifest: BranchManifest | Mapping[str, Any]) -> BranchManifest:
+    if isinstance(manifest, BranchManifest):
+        return manifest
+    branches = manifest.get("branches", ())
+    return BranchManifest(
+        schema=str(manifest.get("schema", "botlane.branch_results/v1")),
+        kind=str(manifest.get("kind", "")),
+        name=str(manifest.get("name", "")),
+        started_at=str(manifest.get("started_at", "")),
+        finished_at=str(manifest.get("finished_at", "")),
+        duration_ms=int(manifest.get("duration_ms", 0)),
+        concurrency=_coerce_optional_int(manifest.get("concurrency")),
+        settle=str(manifest.get("settle", "")),
+        success_routes=tuple(str(route) for route in manifest.get("success_routes", ())),
+        branches=tuple(_coerce_branch_result(branch) for branch in branches),
+    )
+
+
 def branch_manifest_payload(manifest: BranchManifest | Mapping[str, Any]) -> dict[str, Any]:
     return manifest.to_dict() if isinstance(manifest, BranchManifest) else dict(manifest)
+
+
+def _coerce_optional_int(value: object) -> int | None:
+    if value is None:
+        return None
+    return int(value)
