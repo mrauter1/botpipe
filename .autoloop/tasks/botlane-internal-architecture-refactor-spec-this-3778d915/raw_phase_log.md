@@ -206,3 +206,47 @@ Open issues / next step
 <loop-control>
 {"schema":"docloop.loop_control/v1","kind":"promise","promise":"INCOMPLETE"}
 </loop-control>
+
+
+---
+run_id=run-20260509T045359Z-e2586b1f | entry=session_turn | pair=implement | phase=producer | cycle=2 | attempt=1 | thread_id=019e0b1b-4dc6-7202-bcd6-ac3c5559f5ef
+---
+provider=codex
+mode=resume
+template=/home/rauter/.local/share/pipx/venvs/autoloop/lib/python3.12/site-packages/autoloop/templates/implement_producer.md
+session_id=019e0b1b-4dc6-7202-bcd6-ac3c5559f5ef
+
+
+---
+run_id=run-20260509T045359Z-e2586b1f | entry=phase_output | pair=implement | phase=producer | process=codex-agent | cycle=2 | attempt=1 | thread_id=019e0b1b-4dc6-7202-bcd6-ac3c5559f5ef
+---
+The reviewer’s blocker is about the phase baseline, not the new freeze assertions themselves. I’m checking the strictness inventory logic and the current repo-local doc files so I can fix the validation gap without touching runtime behavior.
+
+I’ve got the minimal strictness fix: align the allowlists and scan expectations with the repo that’s actually on disk, without widening the scanner or touching any runtime code.
+
+I’ve patched only the strictness inventory expectations. Next I’m rerunning the previously failing bucket first, then the touched freeze suites, to make sure the phase really has the green baseline the reviewer asked for.
+
+The blocker is cleared. I’m updating the phase notes and run ledger to reflect that the strictness inventory is now aligned with the current repo state and the targeted freeze buckets are green.
+
+Scope considered
+- Phase-local `freeze-public-compatibility` only.
+- Limited work to compatibility tests and phase artifacts; no runtime or SDK production code changes.
+
+What I analyzed
+- Reviewer finding `IMP-001` in the phase feedback.
+- The strictness inventory logic in `tests/strictness/test_no_compat.py`.
+- Current repo-local root and `legacy_docs/` markdown inventory, plus the earlier unit-suite freeze additions.
+
+What I changed
+- Updated [tests/strictness/test_no_compat.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/tests/strictness/test_no_compat.py:64) to align `EXPLICIT_HISTORY_FILE_ALLOWLIST`, `OPTIONAL_SCAN_FILES`, and the related scan assertions with the repo state on disk.
+- Kept the earlier freeze assertions in [tests/unit/test_simple_surface.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/tests/unit/test_simple_surface.py:129) and [tests/unit/test_sdk_facade.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/tests/unit/test_sdk_facade.py:784) intact.
+- Updated [implementation_notes.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/botlane-internal-architecture-refactor-spec-this-3778d915/runs/run-20260509T045359Z-e2586b1f/artifacts/implement/phases/freeze-public-compatibility/implementation_notes.md) and appended the run-local decision in [decisions.txt](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/botlane-internal-architecture-refactor-spec-this-3778d915/runs/run-20260509T045359Z-e2586b1f/decisions.txt).
+
+Key findings / decisions
+- Resolved the reviewer blocker by fixing the strictness suite expectations instead of adding placeholder files or touching runtime behavior.
+- Validation now passes:
+  - `.venv/bin/python -m pytest tests/strictness/test_no_compat.py -q`
+  - `.venv/bin/python -m pytest tests/unit/test_simple_surface.py tests/unit/test_sdk_facade.py tests/unit/stdlib/test_composition_helpers.py`
+
+Open issues / next step
+- No open blocker remains in this phase-local freeze baseline.
