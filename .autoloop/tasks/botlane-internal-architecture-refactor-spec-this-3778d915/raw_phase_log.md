@@ -2680,3 +2680,75 @@ Open issues / next step
 <loop-control>
 {"schema":"docloop.loop_control/v1","kind":"promise","promise":"COMPLETE"}
 </loop-control>
+
+
+---
+run_id=run-20260509T045359Z-e2586b1f | entry=session_turn | pair=implement | phase=producer | cycle=1 | attempt=1 | thread_id=019e0bae-cd99-7e10-beea-ffbc2cc82edc
+---
+provider=codex
+mode=start
+template=/home/rauter/.local/share/pipx/venvs/autoloop/lib/python3.12/site-packages/autoloop/templates/implement_producer.md
+session_id=019e0bae-cd99-7e10-beea-ffbc2cc82edc
+
+
+---
+run_id=run-20260509T045359Z-e2586b1f | entry=phase_output | pair=implement | phase=producer | process=codex-agent | cycle=1 | attempt=1 | thread_id=019e0bae-cd99-7e10-beea-ffbc2cc82edc
+---
+I’m implementing the active `branch-results-locators-and-policy-rules` phase. First I’m reading the phase artifacts and the existing branch-group, workflow-loader, and provider-policy code to pin down the exact compatibility surfaces before editing.
+
+I’ve got the phase contract and prior decisions. Next I’m tracing the current branch manifest serialization path, workflow resolution path, and policy emitters so the new typed layers stay adapter-only and preserve exact outputs.
+
+I’ve confirmed the current branch manifest is still built from plain dicts, and loader resolution remains centralized in `runtime/loader.py`. I’m drilling into the exact branch result dict constructors and the provider backend policy emitters now so the typed adapters can snap in without changing serialized shape or emitted payloads.
+
+The blast radius looks contained: branch-group runtime still owns all result dict construction, and loader already has the full resolution surface I can adapt. I’m checking strictness coverage around new internal names before editing so I don’t trip the existing token guards by adding `BranchResult` or `workflow_locator` in the wrong place.
+
+I have enough context to edit safely. The implementation will stay adapter-first: typed `BranchResult` values will serialize straight back to the current dict shape, and `WorkflowLocator` will resolve exclusively through the existing loader instead of introducing any new loading path.
+
+Plan for this phase:
+1. Add internal typed branch-result and workflow-locator modules, keeping them out of public exports.
+2. Wire branch-group runtime through `BranchResult` serialization without changing manifest/event payloads.
+3. Add focused contract/runtime tests for branch-result parity and workflow-locator resolution, then run the phase-targeted test set and update the phase notes.
+
+I’m starting the file edits now. The new modules are isolated and internal-only, then I’ll patch the branch runtime to use them via serialization adapters rather than changing any downstream manifest or event consumers.
+
+I’ve wired the branch runtime constructors through typed results. I’m doing one small follow-on compatibility pass in the manifest helpers so they can consume either serialized dicts or typed `BranchResult` values during migration, which keeps later phases from having to duplicate that adapter logic.
+
+I found one parity edge before writing the tests: the current manifest only includes cancellation fields for `cancelled` and `skipped` branches. I’m tightening `BranchResult.to_manifest_dict()` to preserve that exact omission pattern before I lock it with assertions.
+
+The code changes are in place. I’m running the new phase tests plus the closest regression surfaces: branch runtime contracts/unit coverage and provider policy emitters, since the phase touches branch serialization and introduces the new locator module alongside unchanged policy behavior.
+
+The repo doesn’t have `python` on PATH here, so I’m switching to the available interpreter instead of treating that as a code failure. After that I’ll rerun the same focused test set unchanged.
+
+The interpreter is present but this shell doesn’t have `pytest` installed in its default environment. I’m checking the repo’s local environment tooling so I can run the same tests against the intended project environment rather than guessing.
+
+The focused phase tests are green so far, including the existing branch runtime suites. I’m polling the longer branch contract session once to capture its clean exit and then I’ll update the run artifacts with the concrete files, invariants, and validations from this turn.
+
+I’ve finished the code/test work. I’m updating the phase artifacts now: one concise decision entry for the non-obvious branch-manifest parity rule, and a structured implementation note mapping the edits back to the phase checklist and validations.
+
+There’s one small cleanup before I wrap: I’m removing an unused import and tightening one helper annotation so the new modules stay dependency-light and don’t carry avoidable noise into later phases.
+
+Scope considered
+
+Active phase `branch-results-locators-and-policy-rules` only. I limited edits to branch-result serialization, manifest/helper compatibility, workflow-locator variants, phase-local tests, and the required run artifacts; unrelated dirty files in the workspace were left untouched.
+
+What I analyzed
+
+I traced the current branch manifest path through [runtime.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/botlane/core/branch_groups/runtime.py:383) and [manifest.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/botlane/core/branch_groups/manifest.py:28), checked outcome/context consumers, and reviewed `runtime/loader.py` as the authoritative workflow resolution path before adding locator adapters.
+
+What I changed
+
+Added typed internal branch result values in [results.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/botlane/core/branch_groups/results.py:1), then routed all branch-runtime result constructors through `BranchResult.to_manifest_dict()` in [runtime.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/botlane/core/branch_groups/runtime.py:431). I also made [manifest.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/botlane/core/branch_groups/manifest.py:28) accept either typed branch results or legacy mappings during migration. For workflow resolution, I added internal locator variants and adapter helpers in [workflow_locator.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/botlane/runtime/workflow_locator.py:1) that delegate back to `resolve_workflow_reference(...)`. New coverage landed in [test_branch_result_serialization.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/tests/contract/test_branch_result_serialization.py:1) and [test_workflow_locator_variants.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/tests/runtime/test_workflow_locator_variants.py:1).
+
+Key findings / decisions
+
+`BranchResult` could not blindly emit all dataclass fields without changing persisted shape: current manifests only include cancellation fields for `cancelled` and `skipped` entries, so serialization preserves that omission pattern. `WorkflowLocator` stayed adapter-only by reconstructing current reference strings and deferring all precedence and metadata behavior to `runtime.loader`; provider policy emitters were intentionally not refactored in this phase.
+
+Open issues / next step
+
+Focused validation passed with `./.venv/bin/python -m pytest` for:
+- `tests/contract/test_branch_result_serialization.py`
+- `tests/runtime/test_workflow_locator_variants.py`
+- `tests/contract/test_branch_group_runtime.py tests/unit/test_branch_group_context_sessions.py`
+- `tests/runtime/test_provider_policy_emitters.py`
+
+I did not run the full suite in this turn.
