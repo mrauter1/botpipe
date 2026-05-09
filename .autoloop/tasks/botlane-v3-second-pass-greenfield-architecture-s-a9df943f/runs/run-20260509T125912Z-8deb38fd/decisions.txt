@@ -10,3 +10,5 @@ Add botlane/core/artifact_plan.py as the canonical home for ArtifactSpec and art
 Phase 0 export freezing now lives in tests/unit/test_public_surface.py, while tests/unit/test_simple_surface.py keeps behavior-facing authoring coverage instead of repeating __all__ assertions.
 The branch-group post-cutover export assertion is staged as an explicit skipped Phase 2 test so current behavior is documented without forcing premature compiled-export removal.
 <autoloop-decisions-header version="1" block_seq="4" owner="implementer" phase_id="canonical-type-hardening" pair="implement" turn_seq="1" run_id="run-20260509T125912Z-8deb38fd" ts="2026-05-09T13:17:07.506192+00:00" />
+Canonical workflow plans now store artifact inventory as `dict[ArtifactId, ArtifactSpec]` plus separate `public_artifacts` and `artifacts_by_qualified_name` index maps; compiled adapters reconstruct the old compiled artifact views from those maps during Phase 1.
+Removing `StepHeader.original_step` in Phase 1 keeps the canonical header shape clean; compiled-step reconstruction now explicitly requires `_compiled_step` parity metadata instead of recovering authored steps from the header.
