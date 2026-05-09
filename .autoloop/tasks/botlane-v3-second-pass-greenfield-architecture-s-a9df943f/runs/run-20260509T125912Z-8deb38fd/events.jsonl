@@ -116,3 +116,6 @@
 {"ts": "2026-05-09T15:42:22.574888+00:00", "run_id": "run-20260509T125912Z-8deb38fd", "seq": 116, "event_type": "phase_deferred", "pair": "implement", "phase_mode": "single", "phase_id": "provider-turn-cutover", "reason": "awaiting enabled test pair completion"}
 {"ts": "2026-05-09T15:42:22.577963+00:00", "run_id": "run-20260509T125912Z-8deb38fd", "seq": 117, "event_type": "pair_started", "pair": "test", "phase_id": "provider-turn-cutover"}
 {"ts": "2026-05-09T15:42:22.578202+00:00", "run_id": "run-20260509T125912Z-8deb38fd", "seq": 118, "event_type": "cycle_started", "pair": "test", "cycle": 1, "attempt": 1, "phase_id": "provider-turn-cutover"}
+{"ts": "2026-05-09T15:44:33.667694+00:00", "run_id": "run-20260509T125912Z-8deb38fd", "seq": 119, "event_type": "phase_finished", "pair": "test", "phase": "producer", "cycle": 1, "attempt": 1, "empty_output": false, "phase_id": "provider-turn-cutover"}
+{"ts": "2026-05-09T15:45:12.707309+00:00", "run_id": "run-20260509T125912Z-8deb38fd", "seq": 120, "event_type": "phase_finished", "pair": "test", "phase": "verifier", "cycle": 1, "attempt": 1, "empty_output": false, "phase_id": "provider-turn-cutover"}
+{"ts": "2026-05-09T15:45:12.816386+00:00", "run_id": "run-20260509T125912Z-8deb38fd", "seq": 121, "event_type": "pair_completed", "pair": "test", "cycle": 1, "attempt": 1, "phase_id": "provider-turn-cutover"}

@@ -8,3 +8,4 @@
 - Scope: phase-local authoritative verifier artifact
 
 - Added rendered-provider regression coverage in `tests/contract/test_provider_turn_plan.py` for prompt retry session reuse and pair raw-output / usage / final-session propagation, then re-ran the provider-turn, core raw-output, and session suites.
+- Audit result: no blocking or non-blocking findings in this pass.
