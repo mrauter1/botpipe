@@ -1166,3 +1166,48 @@ The test additions are complete for the auditor’s `TST-001` feedback, but the 
 <loop-control>
 {"schema":"docloop.loop_control/v1","kind":"promise","promise":"INCOMPLETE"}
 </loop-control>
+
+
+---
+run_id=run-20260509T125912Z-8deb38fd | entry=session_turn | pair=test | phase=verifier | cycle=2 | attempt=1 | thread_id=019e0cf4-0b68-7da2-95fb-5cff4df28a4a
+---
+provider=codex
+mode=resume
+template=/home/rauter/.local/share/pipx/venvs/autoloop/lib/python3.12/site-packages/autoloop/templates/test_verifier.md
+session_id=019e0cf4-0b68-7da2-95fb-5cff4df28a4a
+
+
+---
+run_id=run-20260509T125912Z-8deb38fd | entry=phase_output | pair=test | phase=verifier | process=codex-agent | cycle=2 | attempt=1 | thread_id=019e0cf4-0b68-7da2-95fb-5cff4df28a4a
+---
+I’m re-auditing the exact gap from the last pass. First I’m checking the updated route-action tests and the current phase artifacts, then I’ll confirm whether the prior blocker is actually closed and whether anything new surfaced.
+
+The remaining question is resolved now: the terminal mismatch coverage is present and the focused suite is stable. I’m marking the test audit complete and recording that the prior blocker is closed; the still-failing broader route subset is a runtime issue already being caught by existing tests, not a missing-coverage defect.
+
+Scope considered
+
+Phase `atomic-plan-runtime-cutover` test work only. I re-audited the updated route-action coverage in [tests/unit/test_engine_route_actions.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/tests/unit/test_engine_route_actions.py), the related provider-turn assertions in [tests/contract/test_provider_turn_plan_adapter.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/tests/contract/test_provider_turn_plan_adapter.py), and the phase artifacts [test_strategy.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/botlane-v3-second-pass-greenfield-architecture-s-a9df943f/runs/run-20260509T125912Z-8deb38fd/artifacts/test/phases/atomic-plan-runtime-cutover/test_strategy.md), [criteria.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/botlane-v3-second-pass-greenfield-architecture-s-a9df943f/runs/run-20260509T125912Z-8deb38fd/artifacts/test/phases/atomic-plan-runtime-cutover/criteria.md), and [feedback.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/botlane-v3-second-pass-greenfield-architecture-s-a9df943f/runs/run-20260509T125912Z-8deb38fd/artifacts/test/phases/atomic-plan-runtime-cutover/feedback.md).
+
+What I analyzed
+
+I checked the exact blocker from the prior audit: whether the tests now directly protect all `_handle_step_result(...)` control-flow branches from regressing back to legacy `destination`-driven behavior. I also verified the focused validation evidence for the updated tests.
+
+What I reviewed
+
+The focused route-action/provider-turn suite now passes cleanly:
+- `./.venv/bin/pytest tests/unit/test_engine_route_actions.py tests/contract/test_provider_turn_plan_adapter.py -q`
+  - `9 passed`
+
+The prior coverage gap is closed: the unit tests now inject conflicting legacy `destination` values for `Continue`, `Finish`, `AwaitInput`, and `FailAction`, and still retain the missing-canonical-action failure path.
+
+Key findings / decisions
+
+No blocking test-audit findings remain. I marked all audit criteria complete and appended a non-blocking resolution note stating that `TST-001` is resolved. The broader route subset still reports runtime regressions, but those failures are already being caught by existing tests and do not indicate a remaining coverage defect in this phase’s test additions.
+
+Open issues / next step
+
+No further test-authoring changes are required for this phase audit surface. The next step is implementation work on the remaining runtime regressions already exposed by the existing route tests.
+
+<loop-control>
+{"schema":"docloop.loop_control/v1","kind":"promise","promise":"COMPLETE"}
+</loop-control>

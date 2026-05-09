@@ -315,14 +315,14 @@ def test_describe_workflow_class_rejects_duplicate_step_names() -> None:
     def _duplicateworkflow_on_second(ctx):
         return Event("done")
 
-    class DuplicateWorkflow(Workflow):
-        class State(BaseModel):
-            pass
-
-        first = PythonStep(name="review", handler=_duplicateworkflow_on_first)
-        second = PythonStep(name="review", handler=_duplicateworkflow_on_second)
-        entry = first
-        transitions = {first: {"done": FINISH}, second: {"done": FINISH}}
-
     with pytest.raises(WorkflowValidationError, match="duplicate step name 'review'"):
+        class DuplicateWorkflow(Workflow):
+            class State(BaseModel):
+                pass
+
+            first = PythonStep(name="review", handler=_duplicateworkflow_on_first)
+            second = PythonStep(name="review", handler=_duplicateworkflow_on_second)
+            entry = first
+            transitions = {first: {"done": FINISH}, second: {"done": FINISH}}
+
         describe_workflow_class(DuplicateWorkflow)
