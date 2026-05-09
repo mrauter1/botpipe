@@ -1116,3 +1116,53 @@ A follow-up implementation run is required. It should update the active current-
 <loop-control>
 {"schema":"docloop.loop_control/v1","kind":"promise","promise":"INCOMPLETE"}
 </loop-control>
+
+
+---
+run_id=run-20260509T033701Z-27394e99 | entry=session_turn | pair=audit | phase=verifier | cycle=1 | attempt=1 | thread_id=019e0aea-d4cc-74a1-8fcc-f9fd68b6d60a
+---
+provider=codex
+mode=resume
+template=/home/rauter/.local/share/pipx/venvs/autoloop/lib/python3.12/site-packages/autoloop/templates/audit_verifier.md
+session_id=019e0aea-d4cc-74a1-8fcc-f9fd68b6d60a
+
+
+---
+run_id=run-20260509T033701Z-27394e99 | entry=phase_output | pair=audit | phase=verifier | process=codex-agent | cycle=1 | attempt=1 | thread_id=019e0aea-d4cc-74a1-8fcc-f9fd68b6d60a
+---
+I’m verifying the audit artifacts against the request, decisions, final strictness test, and live run inventory. First I’m re-reading the produced audit files and current evidence so I can update the verifier criteria and feedback accurately.
+
+The audit claims a narrow final-state failure, so I’m rechecking that directly rather than trusting the report. I’m rerunning the scoped strictness test and recomputing the active current-run inventory drift against the encoded contract.
+
+The audit is close but not complete. The live inventory drift is six files, not five, and the scoped test run shows a second failure beyond the inventory assertion. I’m collecting the exact failure details before I mark verifier findings.
+
+I’ve confirmed the audit artifacts are not yet verifier-clean. The audit missed one extra active-run file and underreported the live strictness failures, so I’m marking the criteria accordingly and appending blocking findings with the exact corrective scope.
+
+The findings are appended. I’m doing a quick pass on the verifier-owned criteria so the checkbox state matches the blocking findings instead of defaulting to an all-false placeholder.
+
+Scope considered
+
+The immutable request, recorded decisions, the produced audit artifacts, the live strictness test, and the active current-run inventory encoded in `tests/strictness/test_no_compat.py`.
+
+What I analyzed
+
+I re-read `gap_report.md`, `revised_request.md`, and `audit_result.json`, reran `./.venv/bin/python -m pytest tests/strictness/test_no_compat.py -q`, and recomputed `current_run_inventory - (ACTIVE_CURRENT_RUN_REQUIRED_CLEAN_PATHS | ACTIVE_CURRENT_RUN_EXACT_EXCEPTION_PATHS)` from the live repo state.
+
+What I reviewed
+
+I updated `artifacts/audit/criteria.md` and appended verifier findings to `artifacts/audit/feedback.md`.
+
+Key findings / decisions
+
+- The audit is not verifier-complete.
+- `AUD-001` blocking: the audit undercounts the active current-run drift. There are six extra files, not five, because `sessions/audit.json` is also outside the encoded contract.
+- `AUD-002` blocking: the audit misstates the scoped strictness evidence. The live run is `2 failed, 70 passed`, not `1 failed, 71 passed`, and the second failure is the branding assertion triggered by `artifacts/audit/audit_result.json`.
+- Because of those two issues, the revised request does not fully cover the next-run fix surface and the JSON summary is materially incomplete.
+
+Open issues / next step
+
+The audit producer needs one more pass to correct the unresolved-gap report, include `sessions/audit.json` in the follow-up scope, and reflect the second observed strictness failure caused by `artifacts/audit/audit_result.json`.
+
+<loop-control>
+{"schema":"docloop.loop_control/v1","kind":"promise","promise":"INCOMPLETE"}
+</loop-control>
