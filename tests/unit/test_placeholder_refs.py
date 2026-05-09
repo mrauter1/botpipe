@@ -10,7 +10,13 @@ from botlane.core.artifacts import resolve_artifact_template
 from botlane.core.context import Context
 from botlane.core.errors import WorkflowExecutionError, WorkflowValidationError
 from botlane.core.identifiers import ArtifactId
-from botlane.core.placeholders import PlaceholderRef, parse_placeholders, render_template_with_refs, validate_placeholder_ref
+from botlane.core.placeholders import (
+    PlaceholderRef,
+    parse_placeholders,
+    render_placeholder_ref,
+    render_template_with_refs,
+    validate_placeholder_ref,
+)
 from botlane.core.reference_graph import ReferenceGraph
 from botlane.core.stores import InMemorySessionStore
 
@@ -178,6 +184,17 @@ def test_render_template_with_refs_preserves_runtime_behavior(tmp_path: Path) ->
     assert rendered == "Message=Ship it.; Topic=release; Branch={branch.name}"
 
 
+def test_render_placeholder_ref_preserves_runtime_resolution_behavior(tmp_path: Path) -> None:
+    context = _build_context(tmp_path)
+    message_ref = parse_placeholders("{ctx.message}", source="prompt placeholder")[0]
+    input_ref = parse_placeholders("{input.topic}", source="prompt placeholder")[0]
+    branch_ref = parse_placeholders("{branch.name}", source="prompt placeholder")[0]
+
+    assert render_placeholder_ref(message_ref, context) == "Ship it."
+    assert render_placeholder_ref(input_ref, context) == "release"
+    assert render_placeholder_ref(branch_ref, context) == "{branch.name}"
+
+
 def test_render_template_with_refs_preserves_error_quality(tmp_path: Path) -> None:
     context = _build_context(tmp_path)
     ref = parse_placeholders("{input.missing}", source="prompt placeholder")[0]
@@ -228,3 +245,36 @@ def test_placeholders_module_does_not_import_context_at_runtime() -> None:
                     pytest.fail("placeholders.py must not import Context at runtime")
         if isinstance(node, ast.ImportFrom) and node.module in {"context", "botlane.core.context"}:
             pytest.fail("placeholders.py must not import Context at runtime")
+
+
+def test_artifacts_module_no_longer_defines_legacy_runtime_placeholder_helpers() -> None:
+    module_path = Path("botlane/core/artifacts.py")
+    tree = ast.parse(module_path.read_text(encoding="utf-8"), filename=str(module_path))
+    legacy_names = {
+        "_PLACEHOLDER_RE",
+        "PromptContextView",
+        "_render_prompt_value",
+        "_resolve_placeholder",
+        "_resolve_ctx_placeholder",
+        "_resolve_input_placeholder",
+        "_resolve_item_placeholder",
+        "_resolve_worklist_placeholder",
+        "_resolve_runtime_path",
+        "_lookup_runtime_value",
+    }
+
+    defined_names = {
+        node.name
+        for node in ast.walk(tree)
+        if isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef, ast.ClassDef))
+    }
+    assigned_names = {
+        target.id
+        for node in ast.walk(tree)
+        if isinstance(node, ast.Assign)
+        for target in node.targets
+        if isinstance(target, ast.Name)
+    }
+
+    assert not defined_names.intersection(legacy_names)
+    assert not assigned_names.intersection(legacy_names)

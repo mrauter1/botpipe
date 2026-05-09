@@ -2578,3 +2578,54 @@ Open issues / next step
 <loop-control>
 {"schema":"docloop.loop_control/v1","kind":"promise","promise":"COMPLETE"}
 </loop-control>
+
+
+---
+run_id=run-20260509T045359Z-e2586b1f | entry=session_turn | pair=test | phase=producer | cycle=1 | attempt=1 | thread_id=019e0ba1-4411-7631-9340-034a7f1ab6c9
+---
+provider=codex
+mode=resume
+template=/home/rauter/.local/share/pipx/venvs/autoloop/lib/python3.12/site-packages/autoloop/templates/test_producer.md
+session_id=019e0ba1-4411-7631-9340-034a7f1ab6c9
+
+
+---
+run_id=run-20260509T045359Z-e2586b1f | entry=phase_output | pair=test | phase=producer | process=codex-agent | cycle=1 | attempt=1 | thread_id=019e0ba1-4411-7631-9340-034a7f1ab6c9
+---
+I’m reviewing the phase-local test artifacts and the current placeholder tests first, then I’ll add only the coverage that still looks under-specified for this refactor.
+
+The current phase-local tests cover behavior well, but two regression surfaces are still better locked explicitly: direct `render_placeholder_ref(...)` parity and the absence of the old helper stack in `artifacts.py`. I’m adding those now.
+
+I’m running the phase-local test file first to make sure the new assertions are stable. If that’s clean, I’ll rely on the already-documented focused runtime suites as preserved coverage rather than add unrelated churn.
+
+The new tests are stable. I’m recording the one non-obvious test choice in the turn’s decision block, then I’ll update the phase test strategy and feedback artifacts with the exact coverage map.
+
+Scope considered
+
+- Phase-local test work for `placeholder-reference-graph` only.
+- Focused on the dedicated phase test file and the new internal placeholder/runtime ownership invariant.
+- Updated the phase-local `test_strategy.md` and `feedback.md` artifacts.
+
+What I analyzed
+
+- [tests/unit/test_placeholder_refs.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/tests/unit/test_placeholder_refs.py)
+- The current placeholder implementation shape after the reviewer-driven cleanup in [artifacts.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/botlane/core/artifacts.py)
+- The active run decisions for this phase, especially the single-owner runtime placeholder decision.
+
+What I changed
+
+- Added direct helper coverage for `render_placeholder_ref(...)` in [test_placeholder_refs.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/tests/unit/test_placeholder_refs.py).
+- Added an AST-based absence test that locks the removal of the legacy runtime placeholder helper stack from `botlane/core/artifacts.py`.
+- Updated [test_strategy.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/botlane-internal-architecture-refactor-spec-this-3778d915/runs/run-20260509T045359Z-e2586b1f/artifacts/test/phases/placeholder-reference-graph/test_strategy.md) with an explicit behavior-to-test coverage map.
+- Appended a concise summary to [feedback.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/botlane-internal-architecture-refactor-spec-this-3778d915/runs/run-20260509T045359Z-e2586b1f/artifacts/test/phases/placeholder-reference-graph/feedback.md).
+
+Key findings / decisions
+
+- The most useful gap to lock was architectural, not user-facing: preventing the old `artifacts.py` helper stack from quietly returning in a later edit.
+- The added direct helper test keeps the new internal API covered without normalizing any behavior change.
+- Validation run: `./.venv/bin/python -m pytest tests/unit/test_placeholder_refs.py` passed with `10 passed`.
+
+Open issues / next step
+
+- No phase-local test issues remain from this pass.
+- Broader placeholder/runtime parity is still covered by the existing focused suites already exercised in the implementation pass; this turn kept test churn narrowly scoped.
