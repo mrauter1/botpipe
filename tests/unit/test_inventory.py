@@ -65,19 +65,19 @@ def test_collect_artifact_inventory_reports_workflow_level_name_conflicts_direct
     workflow_request = Artifact("request.txt", name="request")
     produced_request = Artifact("produced-request.txt", name="request")
 
-    class WorkflowLevelConflictWorkflow(Workflow):
-        class State(BaseModel):
-            pass
-
-        request = workflow_request
-        publish = PythonStep(name="publish", writes={"request": produced_request}, handler=_done)
-        entry = publish
-        transitions = {publish: {"done": FINISH}}
-
     with pytest.raises(
         WorkflowValidationError,
         match="declared by multiple artifact objects with the same public name",
     ) as exc_info:
+        class WorkflowLevelConflictWorkflow(Workflow):
+            class State(BaseModel):
+                pass
+
+            request = workflow_request
+            publish = PythonStep(name="publish", writes={"request": produced_request}, handler=_done)
+            entry = publish
+            transitions = {publish: {"done": FINISH}}
+
         collect_artifact_inventory(get_workflow_definition(WorkflowLevelConflictWorkflow))
 
     message = str(exc_info.value)
@@ -96,20 +96,20 @@ def test_collect_artifact_inventory_reports_duplicate_qualified_name_diagnostics
         qualified_name="publish.report",
     )
 
-    class QualifiedNameConflictWorkflow(Workflow):
-        class State(BaseModel):
-            pass
-
-        publish = PythonStep(
-            name="publish",
-            writes={"report": produced_report},
-            log_artifacts=[conflicting_report],
-            handler=_done,
-        )
-        entry = publish
-        transitions = {publish: {"done": FINISH}}
-
     with pytest.raises(WorkflowValidationError, match="artifact qualified name 'publish\\.report'") as exc_info:
+        class QualifiedNameConflictWorkflow(Workflow):
+            class State(BaseModel):
+                pass
+
+            publish = PythonStep(
+                name="publish",
+                writes={"report": produced_report},
+                log_artifacts=[conflicting_report],
+                handler=_done,
+            )
+            entry = publish
+            transitions = {publish: {"done": FINISH}}
+
         collect_artifact_inventory(get_workflow_definition(QualifiedNameConflictWorkflow))
 
     message = str(exc_info.value)

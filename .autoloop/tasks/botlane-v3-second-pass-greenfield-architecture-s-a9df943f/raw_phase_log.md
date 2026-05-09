@@ -299,3 +299,53 @@ Open issues / next step
 <loop-control>
 {"schema":"docloop.loop_control/v1","kind":"promise","promise":"COMPLETE"}
 </loop-control>
+
+
+---
+run_id=run-20260509T125912Z-8deb38fd | entry=session_turn | pair=test | phase=producer | cycle=1 | attempt=1 | thread_id=019e0cd9-e732-74c2-ad7a-6659e4bd0ab6
+---
+provider=codex
+mode=resume
+template=/home/rauter/.local/share/pipx/venvs/autoloop/lib/python3.12/site-packages/autoloop/templates/test_producer.md
+session_id=019e0cd9-e732-74c2-ad7a-6659e4bd0ab6
+
+
+---
+run_id=run-20260509T125912Z-8deb38fd | entry=phase_output | pair=test | phase=producer | process=codex-agent | cycle=1 | attempt=1 | thread_id=019e0cd9-e732-74c2-ad7a-6659e4bd0ab6
+---
+I’m treating this as a phase-local audit of the new freeze coverage. I’ll read the test-phase artifacts and the current test diffs, then decide whether the existing additions already satisfy the coverage contract or need a small refinement before I update the strategy and feedback.
+
+The existing freeze additions mostly cover the phase contract. I’m checking one remaining identity nuance now: whether the new identity strictness file should also freeze the `.botlane/tasks` path shape directly instead of relying only on string-presence checks.
+
+I found one small coverage gap relative to the phase wording: the new identity strictness file freezes names and schemas, but not the direct `.botlane/tasks` workspace path shape. I’m tightening that with a deterministic `resolve_task_workspace(...)` behavior test, then I’ll rerun the phase slice and update the test artifacts.
+
+Scope considered
+
+- Phase-local `public-freeze` test coverage only.
+- Reviewed the new export, authoring, SDK, and identity freeze tests plus the phase-local test artifacts.
+
+What I analyzed
+
+- [tests/unit/test_public_surface.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/tests/unit/test_public_surface.py)
+- [tests/unit/test_simple_surface.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/tests/unit/test_simple_surface.py)
+- [tests/unit/test_sdk_facade.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/tests/unit/test_sdk_facade.py)
+- [tests/strictness/test_botlane_identity.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/tests/strictness/test_botlane_identity.py)
+- [test_strategy.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/botlane-v3-second-pass-greenfield-architecture-s-a9df943f/runs/run-20260509T125912Z-8deb38fd/artifacts/test/phases/public-freeze/test_strategy.md)
+- [feedback.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/botlane-v3-second-pass-greenfield-architecture-s-a9df943f/runs/run-20260509T125912Z-8deb38fd/artifacts/test/phases/public-freeze/feedback.md)
+
+What I changed
+
+- Refined [tests/strictness/test_botlane_identity.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/tests/strictness/test_botlane_identity.py) with a direct `resolve_task_workspace(...)` assertion for the `.botlane/tasks/<task_id>` path shape.
+- Updated [test_strategy.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/botlane-v3-second-pass-greenfield-architecture-s-a9df943f/runs/run-20260509T125912Z-8deb38fd/artifacts/test/phases/public-freeze/test_strategy.md) with the behavior-to-test coverage map, invariants, edge cases, stabilization notes, and known gaps.
+- Appended the phase-local summary to [feedback.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/botlane-v3-second-pass-greenfield-architecture-s-a9df943f/runs/run-20260509T125912Z-8deb38fd/artifacts/test/phases/public-freeze/feedback.md).
+
+Key findings / decisions
+
+- The existing public-freeze test additions already covered the requested export, authoring, and SDK surfaces.
+- The only worthwhile refinement was tightening the identity deliverable with a direct `.botlane/tasks` workspace-path assertion instead of relying only on source-string checks.
+- Validation rerun passed: `.venv/bin/pytest tests/unit/test_public_surface.py tests/unit/test_simple_surface.py tests/unit/test_sdk_facade.py tests/strictness/test_botlane_identity.py -q` -> `157 passed, 1 skipped`.
+
+Open issues / next step
+
+- No blocking test gaps remain for Phase 0.
+- Next phase can build on this freeze coverage without duplicating broader runtime persistence tests already present elsewhere in the suite.

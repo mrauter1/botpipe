@@ -4,7 +4,7 @@ import ast
 from pathlib import Path
 
 import botlane.sdk as sdk_module
-from botlane.runtime.workspace import STATE_DIRNAME
+from botlane.runtime.workspace import STATE_DIRNAME, resolve_task_workspace
 
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
@@ -36,6 +36,15 @@ def test_botlane_identity_constants_stay_canonical() -> None:
     assert '"generated_by": "botlane.sdk"' in sdk_source
     assert '"botlane.branch_results/v1"' in manifest_source
     assert '".botlane"' in optimizer_source
+
+
+def test_task_workspace_identity_stays_under_dot_botlane_tasks(tmp_path: Path) -> None:
+    task_workspace = resolve_task_workspace(tmp_path, "sdk-demo")
+
+    assert task_workspace.state_root == tmp_path / ".botlane"
+    assert task_workspace.tasks_dir == tmp_path / ".botlane" / "tasks"
+    assert task_workspace.task_dir == tmp_path / ".botlane" / "tasks" / "sdk-demo"
+    assert task_workspace.task_root_rel == Path(".botlane") / "tasks" / "sdk-demo"
 
 
 def test_active_python_sources_do_not_reintroduce_legacy_product_identity() -> None:

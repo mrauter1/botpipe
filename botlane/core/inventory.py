@@ -311,15 +311,15 @@ class _ArtifactInventoryBuilder:
 def _raise_workflow_level_artifact_conflict_error(
     *,
     artifact_name: str,
-    workflow_level_record: dict[str, Any] | None,
+    workflow_level_record: MutableArtifactRecord | None,
     conflicting_artifact: Artifact,
     conflicting_qualified_name: str,
     producer_step: str | None,
 ) -> None:
     if workflow_level_record is None:
         raise WorkflowValidationError(f"duplicate artifact name {artifact_name!r}")
-    workflow_artifact = workflow_level_record["artifact"]
-    workflow_qualified_name = workflow_level_record.get("qualified_name", artifact_name)
+    workflow_artifact = workflow_level_record.artifact
+    workflow_qualified_name = workflow_level_record.qualified_name or artifact_name
     producer_suffix = (
         f" step output {conflicting_qualified_name!r} from step {producer_step!r}"
         if producer_step is not None
@@ -337,14 +337,14 @@ def _raise_workflow_level_artifact_conflict_error(
 def _raise_duplicate_qualified_artifact_name_error(
     *,
     qualified_name: str,
-    existing_record: dict[str, Any] | None,
+    existing_record: MutableArtifactRecord | None,
     conflicting_artifact: Artifact,
 ) -> None:
     if existing_record is None:
         raise WorkflowValidationError(f"duplicate qualified artifact name {qualified_name!r}")
     raise WorkflowValidationError(
         f"artifact qualified name {qualified_name!r} is declared by multiple artifact objects; existing "
-        f"declaration uses {_artifact_signature(existing_record['artifact'])}, while the conflicting declaration "
+        f"declaration uses {_artifact_signature(existing_record.artifact)}, while the conflicting declaration "
         f"uses {_artifact_signature(conflicting_artifact)}. Recommended fix: share one Artifact object for the "
         "same artifact identity or rename one declaration."
     )
