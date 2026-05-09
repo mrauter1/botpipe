@@ -1335,3 +1335,163 @@ Open issues / next step
 <loop-control>
 {"schema":"docloop.loop_control/v1","kind":"promise","promise":"INCOMPLETE"}
 </loop-control>
+
+
+---
+run_id=run-20260509T125912Z-8deb38fd | entry=session_turn | pair=implement | phase=producer | cycle=2 | attempt=1 | thread_id=019e0d1d-3ee2-7851-97bb-7adbbdfcd948
+---
+provider=codex
+mode=resume
+template=/home/rauter/.local/share/pipx/venvs/autoloop/lib/python3.12/site-packages/autoloop/templates/implement_producer.md
+session_id=019e0d1d-3ee2-7851-97bb-7adbbdfcd948
+
+
+---
+run_id=run-20260509T125912Z-8deb38fd | entry=phase_output | pair=implement | phase=producer | process=codex-agent | cycle=2 | attempt=1 | thread_id=019e0d1d-3ee2-7851-97bb-7adbbdfcd948
+---
+I’m addressing the reviewer’s blocking point directly now. First I’m enumerating every remaining `context_runtime(...)` use so I can remove the helper cleanly instead of leaving another partial compatibility path behind.
+
+The removal is broader than one file because `context_runtime(...)` became the internal mutation/event API. I’m checking the main call patterns now so I can replace them with direct `Context`/`ExecutionFrame` operations instead of swapping one wrapper for another.
+
+I’m taking the direct route: move the remaining helper methods onto `Context` itself as private frame-backed operations, then replace every `context_runtime(...)` call site. That removes the helper layer instead of just renaming it.
+
+I have the insertion point. I’m moving the old helper surface into private `Context` methods now, then I’ll do the mechanical call-site sweep and strip the helper class/function entirely.
+
+The collaborator file needs a few focused chunks rather than one global patch because the call patterns differ between step execution, route finalization, and hooks. I’m patching it in those blocks now to keep the blast radius controlled.
+
+Review feedback is narrow: remove the remaining `context_runtime(...)` helper path entirely and verify the frame-backed replacements hold across engine, worklist, branch, and contract tests. I’m checking for leftover helper imports/usages first, then I’ll patch the remaining surfaces and rerun the focused phase validation.
+
+The remaining direct helper usage is limited, but I also want to confirm we did not leave behind a renamed compatibility layer in `Context` or engine setup. I’m opening the current `context`, branch context, and async dispatcher setup around those call sites before editing.
+
+I found one direct production/test holdout and two leftover “runtime helper” names that still read like the old path. I’m removing the final async-dispatcher use and renaming the remaining setup/bookkeeping helpers so the phase no longer exposes a compatibility-style runtime facade.
+
+I’ve cleared the last direct test dependency on `context_runtime(...)`. Next I’m renaming the remaining engine and branch bookkeeping hooks that still look like a compatibility runtime layer, then I’ll run a repository-wide search to verify the helper is gone.
+
+The direct helper path is now absent in both production and tests by search. I’m running compile checks and the focused phase suite next to catch any missed call-site drift from the method removal and helper renames.
+
+The focused worklist regression still passes. The broader phase slice surfaced a few failures; I’m pulling the exact traces now to separate real regressions from the known stale assertions that already existed before this turn.
+
+One new failure is real: adding `_set_*` methods directly on `Context` made internal runtime mutators visible on the public facade, which the existing contract test rejects. I’m checking `ExecutionFrame`’s setter surface now so I can move those writes off `Context` and onto the frame, instead of papering over the test.
+
+`ExecutionFrame` already has the setter/cache surface we need, so I’m shifting the direct writes there and removing the new `_set_*` / cache mutators from `Context`. That keeps `Context` as a facade while leaving the actual mutable runtime store on the frame, which is closer to the phase contract than exposing private mutators on `Context`.
+
+I’m shifting the call sites from `Context._set_*` onto `ExecutionFrame` directly. One multi-hunk patch missed a moved block in `engine.py`, so I’m reopening the exact regions and patching them in smaller pieces to avoid trampling nearby phase-2 changes.
+
+I’m choosing the stricter fix rather than relaxing the contract test: move the actual writes to `ExecutionFrame` and remove `Context` mutators from the public object. The remaining work is mostly mechanical call-site rewiring now that the frame already has the setter/cache API.
+
+The direct `Context._set_*`/cache surface is now gone from repo-wide search. I’m rerunning the same focused suite to see what remains after moving the writes down to `ExecutionFrame`.
+
+The `Context` visibility regression is gone; the remaining suite is down to the two known stale branch tests plus one real async branch-group finalize mismatch. I’m debugging that last one now by inspecting the branch-group result path and the compiled plan for the `parallel(...)` step.
+
+The async branch-group failure isn’t from route finalization itself; both branches are ending up as `failed/none`, which pushes the composite result to `partial`. I’m drilling into one branch result next to see whether the failure is in the provider turn, branch execution wrapper, or the capture-mode handoff.
+
+The async branch failure comes from nested branch steps exposing routes only on their private step-plan cache, while provider route visibility was reading `WorkflowPlan.routes` only. That leaves branch steps with `legal routes: <none>` during provider validation. I’m fixing that by falling back to the step plan’s provider-visible route view when the workflow-level route table doesn’t have an entry for a nested branch step.
+
+The async branch-group finalize regression is fixed; both focused async dispatcher cases pass now. I’m finishing the broader phase validation pass without the two already-known stale branch tests, then I’ll update the implementation notes and run ledger to reflect the stricter frame-only mutation path.
+
+The main focused slice is green. I’m rechecking the targeted worklist regression and the branch-context subset that this phase touches, while still excluding the two unrelated stale assertions from the broader branch session file.
+
+I’ve got the code and validation into a coherent phase state. I’m updating the implementation notes and decision ledger now, including one justified adjacent fix: nested branch steps now fall back to their step-plan route cache for provider-visible route derivation when they are not present in `WorkflowPlan.routes`, because the frame-authority refactor surfaced that contract test during branch-group async execution.
+
+Scope considered
+
+- Active phase scope in `execution-frame-authority`, reviewer feedback `IMP-001`, and the context/frame/worklist/branch runtime paths touched by that helper removal.
+- Changed code in [botlane/core/context.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/botlane/core/context.py), [botlane/core/engine.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/botlane/core/engine.py), [botlane/core/worklists.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/botlane/core/worklists.py), [botlane/core/branch_groups/context.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/botlane/core/branch_groups/context.py), [botlane/core/branch_groups/runtime.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/botlane/core/branch_groups/runtime.py), and [botlane/core/engine_collaborators.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/botlane/core/engine_collaborators.py).
+- Phase artifact updates in [implementation_notes.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/botlane-v3-second-pass-greenfield-architecture-s-a9df943f/runs/run-20260509T125912Z-8deb38fd/artifacts/implement/phases/execution-frame-authority/implementation_notes.md) and [decisions.txt](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/botlane-v3-second-pass-greenfield-architecture-s-a9df943f/runs/run-20260509T125912Z-8deb38fd/decisions.txt).
+
+What I analyzed
+
+- Remaining `context_runtime(...)` imports/usages and whether any renamed compatibility path was still present.
+- Whether `Context` exposed runtime mutators directly after the first pass, which broke the public-facade contract.
+- Branch/fan-in child-context setup, worklist cache/selection writes, and async branch-group finalize behavior after the helper removal.
+- The focused phase tests plus the known stale failures already called out from broader branch-context coverage.
+
+What I changed
+
+- Removed the `context_runtime(...)` path entirely and removed `Context`-level `_set_*` / cache mutator methods from [botlane/core/context.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/botlane/core/context.py). `Context` now stays a facade; mutable runtime writes go through `ExecutionFrame`.
+- Rewired engine, step dispatcher, hook runner, route finalizer, worklist runtime, branch runtime, and child-context bookkeeping to call `context._execution_frame.set_*` / cache methods directly.
+- Renamed the leftover compatibility-style setup helpers to frame-oriented names: `Engine._configure_context_frame(...)` and `_inherit_child_frame_bookkeeping(...)`.
+- Updated the touched contract/unit helpers and tests to configure frame state through `ExecutionFrame` instead of `Context` mutators.
+- Fixed one adjacent regression in [botlane/core/engine_collaborators.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/botlane/core/engine_collaborators.py): provider-visible route derivation now falls back to the nested step plan’s private route table when branch steps are intentionally absent from `WorkflowPlan.routes`. That restores async branch-group provider validation.
+
+Key findings / decisions
+
+- The reviewer’s blocking point was correct: removing the weakref sidecar was not enough if `context_runtime(...)` or equivalent `Context` mutators still existed.
+- Keeping `_set_*` methods on `Context` violated the existing `test_public_context_hides_runtime_mutators` contract, so I moved the write surface fully onto `ExecutionFrame` instead of weakening the test.
+- The async branch-group failure was a real regression surface uncovered by this phase’s validation, not one of the previously known stale tests. It came from nested branch steps exposing routes only through their step-plan cache.
+
+Open issues / next step
+
+- Focused validation is green:
+- `python3 -m py_compile ...` for touched production and test files
+- `tests/unit/test_execution_frame_context_parity.py`
+- `tests/unit/test_primitives_and_stores.py`
+- `tests/contract/test_provider_turn_plan_adapter.py`
+- `tests/contract/test_async_step_dispatcher.py`
+- `tests/contract/engine/test_execution_services.py`
+- `tests/runtime/test_workspace_and_context.py`
+- `tests/contract/engine/test_worklists.py -k legacy_null_worklist_selection_payloads`
+- Targeted branch-context subset in `tests/unit/test_branch_group_context_sessions.py`
+- I did not run the full repository suite.
+- The broader `tests/unit/test_branch_group_context_sessions.py` file still has the same two unrelated stale failures from earlier architecture cutover work:
+- `StepExecutionResult(finalization=...)`
+- dataclass `replace(..., scope_name=...)` on step plans
+
+
+---
+run_id=run-20260509T125912Z-8deb38fd | entry=session_turn | pair=implement | phase=verifier | cycle=2 | attempt=1 | thread_id=019e0d1d-3ee2-7851-97bb-7adbbdfcd948
+---
+provider=codex
+mode=resume
+template=/home/rauter/.local/share/pipx/venvs/autoloop/lib/python3.12/site-packages/autoloop/templates/implement_verifier.md
+session_id=019e0d1d-3ee2-7851-97bb-7adbbdfcd948
+
+
+---
+run_id=run-20260509T125912Z-8deb38fd | entry=phase_output | pair=implement | phase=verifier | process=codex-agent | cycle=2 | attempt=1 | thread_id=019e0d1d-3ee2-7851-97bb-7adbbdfcd948
+---
+I’m validating the revised frame-authority slice against the reviewer criteria and the prior blocking finding. First step is to confirm the helper removal is complete, the public `Context` facade no longer exposes runtime mutators, and the branch/fan-in child contexts still originate from `ExecutionFrame`.
+
+The helper-removal search is clean, and the branch child-context code still roots itself in `ExecutionFrame.child_for_branch(...)` / `child_for_fan_in(...)`. I’m running the focused verification slice and checking the renamed setup paths before I finalize the criteria.
+
+The focused review slice is green: no helper remnants by search, no public `Context` mutators left, and the targeted tests pass. I’m marking the criteria complete and appending a short re-review note so the artifact trail shows `IMP-001` was verified resolved in this cycle.
+
+Scope considered
+
+- Phase-local review scope for `execution-frame-authority`, centered on [botlane/core/context.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/botlane/core/context.py), [botlane/core/engine.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/botlane/core/engine.py), [botlane/core/worklists.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/botlane/core/worklists.py), [botlane/core/branch_groups/context.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/botlane/core/branch_groups/context.py), [botlane/core/branch_groups/runtime.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/botlane/core/branch_groups/runtime.py), and [botlane/core/engine_collaborators.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/botlane/core/engine_collaborators.py).
+- Review artifacts [criteria.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/botlane-v3-second-pass-greenfield-architecture-s-a9df943f/runs/run-20260509T125912Z-8deb38fd/artifacts/implement/phases/execution-frame-authority/criteria.md), [feedback.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/botlane-v3-second-pass-greenfield-architecture-s-a9df943f/runs/run-20260509T125912Z-8deb38fd/artifacts/implement/phases/execution-frame-authority/feedback.md), [implementation_notes.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/botlane-v3-second-pass-greenfield-architecture-s-a9df943f/runs/run-20260509T125912Z-8deb38fd/artifacts/implement/phases/execution-frame-authority/implementation_notes.md), and the run-local [decisions.txt](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/botlane-v3-second-pass-greenfield-architecture-s-a9df943f/runs/run-20260509T125912Z-8deb38fd/decisions.txt).
+
+What I analyzed
+
+- Whether `context_runtime(...)` and `_ContextRuntime` were actually removed rather than renamed.
+- Whether `Context` still exposed runtime mutators/cache helpers on the public facade.
+- Whether branch and fan-in child contexts still originate from `ExecutionFrame.child_for_branch(...)` / `child_for_fan_in(...)`.
+- The adjacent async branch-group provider-route fallback added during validation.
+
+What I reviewed
+
+- Repo-wide search for `context_runtime(...)`, `_ContextRuntime`, `_configure_context_runtime`, and `_inherit_child_runtime_bookkeeping`.
+- The focused validation slice:
+- `tests/unit/test_execution_frame_context_parity.py`
+- `tests/unit/test_primitives_and_stores.py`
+- `tests/contract/test_provider_turn_plan_adapter.py`
+- `tests/contract/test_async_step_dispatcher.py`
+- `tests/contract/engine/test_execution_services.py`
+- `tests/runtime/test_workspace_and_context.py`
+- Producer notes and validation claims for consistency with the final code.
+
+Key findings / decisions
+
+- No blocking findings remain in reviewed scope.
+- Prior blocking finding `IMP-001` is resolved: the helper path is gone, `Context` no longer exposes the `_set_*` / cache mutator surface, and frame-backed callers now mutate `ExecutionFrame` directly.
+- The out-of-phase `ProviderContractBuilder.available_routes(...)` fallback is acceptable here because it fixes a concrete async branch-group regression surfaced by phase validation without widening the public surface or reintroducing adapters.
+- I updated [criteria.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/botlane-v3-second-pass-greenfield-architecture-s-a9df943f/runs/run-20260509T125912Z-8deb38fd/artifacts/implement/phases/execution-frame-authority/criteria.md) to all checked and appended a resolution note in [feedback.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/botlane-v3-second-pass-greenfield-architecture-s-a9df943f/runs/run-20260509T125912Z-8deb38fd/artifacts/implement/phases/execution-frame-authority/feedback.md).
+
+Open issues / next step
+
+- No phase-local blocking issues remain for `execution-frame-authority`.
+- The producer correctly noted two unrelated stale failures in the broader `tests/unit/test_branch_group_context_sessions.py` file from earlier architecture work; those are outside this review slice and do not block this phase.
+
+<loop-control>
+{"schema":"docloop.loop_control/v1","kind":"promise","promise":"COMPLETE"}
+</loop-control>
