@@ -133,7 +133,7 @@ class BranchGroupRuntime:
                 pending_handoffs=pending_handoffs,
             )
 
-        final_route = None if step_result.finalization is None else step_result.finalization.final_route
+        final_route = None if step_result.transition is None else step_result.transition.final_route
         parent_runtime.emit_runtime_event(
             "branch_group_completed",
             step_name=step.name,
@@ -401,9 +401,9 @@ class BranchGroupRuntime:
     ) -> dict[str, Any]:
         finished_at = _utc_now()
         status = "completed"
-        route = None if step_result.finalization is None else step_result.finalization.final_route
+        route = None if step_result.transition is None else step_result.transition.final_route
         destination = step_result.destination
-        runtime_control = None if step_result.finalization is None else step_result.finalization.runtime_control
+        runtime_control = None if step_result.transition is None else step_result.transition.runtime_control
         question = None
         reason = None
         error = None
@@ -629,7 +629,7 @@ class BranchGroupRuntime:
             group_kind=spec.kind,
             composite_step_name=composite_step.name,
             step_name=fan_in_step.name,
-            route=None if step_result.finalization is None else step_result.finalization.final_route,
+            route=None if step_result.transition is None else step_result.transition.final_route,
             destination=step_result.destination,
             status=_composite_status(step_result),
             artifact_paths=[
@@ -655,7 +655,7 @@ class BranchGroupRuntime:
         pending_handoffs: tuple["PendingHandoff", ...],
     ) -> StepExecutionResult:
         event = select_branch_group_outcome(spec, manifest, context)
-        finalization = self._engine.route_finalizer.finalize(
+        finalization = self._engine.route_finalizer.finalize_result(
             StepFinalizationRequest(
                 step=composite_step,
                 context=context,
@@ -684,7 +684,7 @@ class BranchGroupRuntime:
         pending_handoffs: tuple["PendingHandoff", ...],
         nested_result: StepExecutionResult,
     ) -> StepExecutionResult:
-        finalization = nested_result.finalization
+        finalization = nested_result.transition
         runtime_control = None if finalization is None else finalization.runtime_control
         if runtime_control is not None:
             from ..engine import _RouteControl
@@ -711,7 +711,7 @@ class BranchGroupRuntime:
             raise WorkflowExecutionError(
                 f"fan-in step {nested_step.name!r} completed without a route event or direct runtime control"
             )
-        route_finalization = self._engine.route_finalizer.finalize(
+        route_finalization = self._engine.route_finalizer.finalize_result(
             StepFinalizationRequest(
                 step=composite_step,
                 context=context,
@@ -888,11 +888,11 @@ def _skipped_branch_result(*, spec: Any, branch: Any, context: "Context") -> dic
 
 
 def _composite_status(step_result: StepExecutionResult) -> str:
-    if step_result.finalization is None:
+    if step_result.transition is None:
         return "completed"
-    if step_result.finalization.runtime_control == "request_input":
+    if step_result.transition.runtime_control == "request_input":
         return "needs_input"
-    if step_result.finalization.runtime_control == "fail":
+    if step_result.transition.runtime_control == "fail":
         return "failed"
     if step_result.event is not None and step_result.event.tag == "question":
         return "needs_input"

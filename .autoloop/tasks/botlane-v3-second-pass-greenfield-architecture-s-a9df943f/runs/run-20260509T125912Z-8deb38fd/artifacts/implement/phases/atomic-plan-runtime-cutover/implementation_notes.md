@@ -16,6 +16,7 @@
 
 - Compiler cutover: `compile_workflow`, `_WORKFLOW_PLAN_CACHE`, `WorkflowPlan`, `ArtifactSpec`, `ArtifactId`, `RouteContract`, `StepPlan` variants, `ProviderTurnPlan`
 - Runtime cutover: `Engine`, `StepDispatcher`, `RouteFinalizer`, `StepExecutionResult`, branch-group plan imports, workflow capability inspection
+- Reviewer follow-up: `RouteFinalizer.finalize`, `RouteFinalizer.finalize_result`, `StepExecutionResult.transition`, action-driven engine loop, branch-runtime composite/fan-in route finalization
 - Removed legacy internals: `CompiledArtifact`, compiled branch spec exports, `plan_adapters`
 
 ## Checklist mapping
@@ -40,12 +41,13 @@
 
 - `compile_workflow(...)` is now the only compiler entrypoint and returns `WorkflowPlan`
 - Core/runtime consumers now use `WorkflowPlan`, typed `StepPlan` variants, and `RouteContract` directly
+- `RouteFinalizer.finalize(...)` now returns `RouteDecision`; engine step progression now branches on `RouteAction` instead of using destination strings as the primary control-flow source
 - `botlane.core.branch_groups.__all__` no longer exports compiled branch specs
 
 ## Known non-changes
 
 - `ExecutionFrame` authority, typed `BranchResult`/`BranchManifest` runtime internals, and placeholder centralization are still deferred to later phases
-- `StepExecutionResult.finalization` still exists as the current transition record surface even though route decisions/actions are now also present
+- `StepExecutionResult` still carries an internal `transition` summary record for notifications/checkpoint metadata even though control flow now uses `RouteDecision` / `RouteAction`
 
 ## Expected side effects
 
@@ -60,8 +62,11 @@
 ## Validation performed
 
 - `python3 -m compileall -q botlane`
+- `python3 -m py_compile botlane/core/engine_collaborators.py botlane/core/engine.py botlane/core/branch_groups/runtime.py`
 - `./.venv/bin/pytest tests/unit/test_public_surface.py tests/unit/test_simple_surface.py -q`
 - `./.venv/bin/pytest tests/unit/test_step_plans.py tests/unit/test_artifact_ids.py tests/unit/test_route_contracts.py tests/contract/test_provider_turn_plan_adapter.py tests/contract/test_single_step_plan_equivalence.py -q`
+- `./.venv/bin/pytest tests/contract/test_provider_turn_plan_adapter.py tests/contract/test_single_step_plan_equivalence.py tests/unit/test_simple_surface.py tests/runtime/test_workspace_and_context.py -q`
+  - Result: `140 passed`
 - `./.venv/bin/pytest tests/unit/test_public_surface.py tests/unit/test_simple_surface.py tests/unit/test_step_plans.py tests/unit/test_artifact_ids.py tests/unit/test_route_contracts.py tests/contract/test_provider_turn_plan_adapter.py tests/contract/test_single_step_plan_equivalence.py tests/runtime/test_progress_worklists.py tests/runtime/test_package_cli.py tests/runtime/test_workspace_and_context.py -q`
   - Result: `204 passed`
 - `rg` scan over `botlane/core`, `botlane/runtime`, `botlane/sdk.py`, `botlane/workflows`, `botlane_optimizer`

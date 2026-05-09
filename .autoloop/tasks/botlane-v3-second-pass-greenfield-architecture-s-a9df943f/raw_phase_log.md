@@ -882,3 +882,53 @@ The phase should return to implement to finish the route-finalization / engine-l
 <loop-control>
 {"schema":"docloop.loop_control/v1","kind":"promise","promise":"INCOMPLETE"}
 </loop-control>
+
+
+---
+run_id=run-20260509T125912Z-8deb38fd | entry=session_turn | pair=implement | phase=producer | cycle=2 | attempt=1 | thread_id=019e0cf4-0b68-7da2-95fb-5cff4df28a4a
+---
+provider=codex
+mode=resume
+template=/home/rauter/.local/share/pipx/venvs/autoloop/lib/python3.12/site-packages/autoloop/templates/implement_producer.md
+session_id=019e0cf4-0b68-7da2-95fb-5cff4df28a4a
+
+
+---
+run_id=run-20260509T125912Z-8deb38fd | entry=phase_output | pair=implement | phase=producer | process=codex-agent | cycle=2 | attempt=1 | thread_id=019e0cf4-0b68-7da2-95fb-5cff4df28a4a
+---
+The reviewer’s blocking point is accurate: the route-decision/action path exists but it still isn’t authoritative. I’m tightening that boundary now by tracing `RouteFinalizer`, `StepDispatcher`, and `Engine._handle_step_result()` together before editing, so the cutover is real rather than cosmetic.
+
+I have the refactor shape: move the authoritative control result onto `RouteDecision`/`RouteAction`, downgrade the old transition summary to metadata only, and stop the engine loop from reading terminal strings as primary control flow. I’m patching that boundary in one pass so the runtime doesn’t end up half-migrated again.
+
+The control-flow source is being moved onto `RouteAction` now. I’ve removed the engine’s direct reads of `step_result.finalization`, switched branch-runtime callers off `RouteFinalizer.finalize(...)`, and I’m compile-checking the boundary before I run the targeted suites again.
+
+The AC-2 boundary compiles and the targeted engine/SDK/runtime suites are green after the refactor. I’m rerunning the broader 204-test phase set now to make sure the control-flow change didn’t regress the earlier cutover surfaces before I update the notes.
+
+Scope considered
+
+Phase `atomic-plan-runtime-cutover` only. I limited changes to the reviewer-relevant AC-2 boundary in `botlane/core/{engine.py,engine_collaborators.py,branch_groups/runtime.py}` plus the phase notes and decisions.
+
+What I analyzed
+
+I traced `IMP-001` through `RouteFinalizer`, `StepDispatcher._complete_route(...)`, `Engine._handle_step_result(...)`, and the branch-runtime composite/fan-in callers. I verified where the old wrapper and destination strings were still authoritative, then checked the downstream metadata/checkpoint uses that still need a transition summary.
+
+What I changed
+
+`RouteFinalizer.finalize(...)` now returns `RouteDecision`, while finalize-mode execution uses a private `finalize_result(...)` helper for the extra state/event metadata the dispatcher still needs. `Engine._handle_step_result(...)` now branches on `RouteAction` instead of reading destination strings as primary control flow, and `StepExecutionResult` now carries `transition` metadata instead of `finalization`. Branch-runtime callers were updated to use `finalize_result(...)` and the renamed transition metadata.
+
+I also updated [implementation_notes.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/botlane-v3-second-pass-greenfield-architecture-s-a9df943f/runs/run-20260509T125912Z-8deb38fd/artifacts/implement/phases/atomic-plan-runtime-cutover/implementation_notes.md) and appended the non-obvious reviewer-driven decisions to [decisions.txt](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/botlane-v3-second-pass-greenfield-architecture-s-a9df943f/runs/run-20260509T125912Z-8deb38fd/decisions.txt).
+
+Key findings / decisions
+
+The old transition wrapper is no longer the engine’s control-flow source. It remains only as an internal metadata record for notifications/checkpoints, while route progression is now driven by `RouteDecision` / `RouteAction`. To avoid reintroducing adapter-style layering, I kept the richer step-finalization payload behind a private `finalize_result(...)` path rather than widening `RouteDecision`.
+
+Open issues / next step
+
+The AC-2 reviewer finding should now be resolved. I validated with:
+- `python3 -m py_compile botlane/core/engine_collaborators.py botlane/core/engine.py botlane/core/branch_groups/runtime.py`
+- `./.venv/bin/pytest tests/contract/test_provider_turn_plan_adapter.py tests/contract/test_single_step_plan_equivalence.py tests/unit/test_simple_surface.py tests/runtime/test_workspace_and_context.py -q`
+  - `140 passed`
+- `./.venv/bin/pytest tests/unit/test_public_surface.py tests/unit/test_simple_surface.py tests/unit/test_step_plans.py tests/unit/test_artifact_ids.py tests/unit/test_route_contracts.py tests/contract/test_provider_turn_plan_adapter.py tests/contract/test_single_step_plan_equivalence.py tests/runtime/test_progress_worklists.py tests/runtime/test_package_cli.py tests/runtime/test_workspace_and_context.py -q`
+  - `204 passed`
+
+Next step is verifier re-review against the updated AC-2 boundary.
