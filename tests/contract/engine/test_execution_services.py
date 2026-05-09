@@ -4,6 +4,7 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
 
+import pytest
 from pydantic import BaseModel
 
 from botlane.core import FINISH, Workflow
@@ -179,6 +180,41 @@ def test_artifact_guard_delegates_to_execution_services_artifact_service() -> No
             },
         )
     ]
+
+
+def test_artifact_guard_requires_artifact_service() -> None:
+    with pytest.raises(ValueError, match="ExecutionServices.artifacts"):
+        ArtifactGuard(ExecutionServices())
+
+
+@pytest.mark.parametrize(
+    ("services", "expected_message"),
+    [
+        (ExecutionServices(), "ExecutionServices.artifacts"),
+        (ExecutionServices(artifacts=_ArtifactServiceStub(enforced=[])), "ExecutionServices.routes"),
+        (
+            ExecutionServices(
+                artifacts=_ArtifactServiceStub(enforced=[]),
+                routes=_RouteServiceStub(compiled_route=None, validated=[], pending_input_calls=[]),
+            ),
+            "ExecutionServices.hooks",
+        ),
+        (
+            ExecutionServices(
+                artifacts=_ArtifactServiceStub(enforced=[]),
+                routes=_RouteServiceStub(compiled_route=None, validated=[], pending_input_calls=[]),
+                hooks=_HookServiceStub(after_calls=[]),
+            ),
+            "ExecutionServices.state",
+        ),
+    ],
+)
+def test_route_finalizer_requires_minimum_execution_services(
+    services: ExecutionServices,
+    expected_message: str,
+) -> None:
+    with pytest.raises(ValueError, match=expected_message):
+        RouteFinalizer(services, artifact_inventory={})
 
 
 def test_route_finalizer_capture_runs_against_execution_services(tmp_path: Path) -> None:
