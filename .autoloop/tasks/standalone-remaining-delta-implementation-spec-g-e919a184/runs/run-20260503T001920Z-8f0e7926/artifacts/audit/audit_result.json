@@ -1,5 +1,0 @@
-{
-  "material_gaps_found": true,
-  "summary": "Two material gaps remain: cleanup.md still documents autoloop.simple, and the CLI workflow scaffolds still generate invalid legacy two-argument python_step handlers.",
-  "revised_request_path": "/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/standalone-remaining-delta-implementation-spec-g-e919a184/runs/run-20260503T001920Z-8f0e7926/artifacts/audit/revised_request.md"
-}

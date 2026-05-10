@@ -1,4 +1,0 @@
-name = "workflow_to_eval_suite"
-title = "Workflow To Eval Suite"
-description = "Turn one selected workflow into a reusable evaluation-suite package with a validated eval-case manifest and deterministic publication receipt."
-aliases = ["workflow-eval-suite", "eval-suite-package"]

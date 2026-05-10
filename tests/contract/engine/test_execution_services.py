@@ -2,19 +2,29 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 from pathlib import Path
+from types import SimpleNamespace
 from typing import Any
 
 import pytest
 from pydantic import BaseModel
 
 from botlane.core import FINISH, Workflow
+from botlane.core.branch_groups.runtime import BranchGroupRuntime
 from botlane.core.context import Context
 from botlane.core.engine import Engine
 from botlane.core.engine_collaborators import (
     ArtifactGuard,
+    CheckpointManager,
     HookExecutionResult,
+    HookRunner,
+    OperationRecorder,
+    ProviderContractBuilder,
     RouteFinalizer,
+    SessionRuntime,
+    StateRuntime,
     StepFinalizationRequest,
+    StepDispatcher,
+    WorkflowInvoker,
 )
 from botlane.core.execution_services import ExecutionServices
 from botlane.core.primitives import Event
@@ -186,6 +196,55 @@ def test_artifact_guard_delegates_to_execution_services_artifact_service() -> No
 def test_artifact_guard_requires_artifact_service() -> None:
     with pytest.raises(ValueError, match="ExecutionServices.artifacts"):
         ArtifactGuard(ExecutionServices())
+
+
+def test_execution_collaborators_construct_with_engine_free_execution_services() -> None:
+    services = ExecutionServices(
+        artifacts=_ArtifactServiceStub(enforced=[]),
+        routes=_RouteServiceStub(
+            compiled_route=SimpleNamespace(tag="done"),
+            validated=[],
+            pending_input_calls=[],
+        ),
+        hooks=_HookServiceStub(after_calls=[]),
+        sessions=SimpleNamespace(),
+        checkpoints=SimpleNamespace(),
+        events=SimpleNamespace(),
+        providers=SimpleNamespace(),
+        operations=SimpleNamespace(),
+        child_workflows=SimpleNamespace(),
+        state=_StateServiceStub(updates=[]),
+    )
+
+    hook_runner = HookRunner(services)
+    provider_contract_builder = ProviderContractBuilder(
+        compiled=SimpleNamespace(routes={}),
+        services=services,
+        allow_provider_questions=False,
+    )
+    step_dispatcher = StepDispatcher(
+        services=services,
+        hook_runner=hook_runner,
+        route_finalizer=SimpleNamespace(),
+        branch_group_runtime=None,
+        provider_contract_builder=provider_contract_builder,
+    )
+    branch_group_runtime = BranchGroupRuntime(
+        services=services,
+        step_dispatcher=SimpleNamespace(),
+        route_finalizer=SimpleNamespace(),
+        operation_recorder=SimpleNamespace(),
+    )
+
+    assert isinstance(hook_runner, HookRunner)
+    assert isinstance(provider_contract_builder, ProviderContractBuilder)
+    assert isinstance(step_dispatcher, StepDispatcher)
+    assert isinstance(branch_group_runtime, BranchGroupRuntime)
+    assert isinstance(StateRuntime(services), StateRuntime)
+    assert isinstance(SessionRuntime(services), SessionRuntime)
+    assert isinstance(CheckpointManager(services), CheckpointManager)
+    assert isinstance(OperationRecorder(services), OperationRecorder)
+    assert isinstance(WorkflowInvoker(services), WorkflowInvoker)
 
 
 @pytest.mark.parametrize(

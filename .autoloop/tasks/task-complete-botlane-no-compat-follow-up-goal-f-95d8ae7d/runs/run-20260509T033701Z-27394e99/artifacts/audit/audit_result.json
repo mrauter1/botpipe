@@ -1,5 +1,0 @@
-{
-  "material_gaps_found": true,
-  "summary": "The final run state still has material gaps: the active current-run strictness contract omits six end-of-run files and the scoped strictness slice now fails two assertions, including a branding failure from audit_result.json.",
-  "revised_request_path": "/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/task-complete-botlane-no-compat-follow-up-goal-f-95d8ae7d/runs/run-20260509T033701Z-27394e99/artifacts/audit/revised_request.md"
-}

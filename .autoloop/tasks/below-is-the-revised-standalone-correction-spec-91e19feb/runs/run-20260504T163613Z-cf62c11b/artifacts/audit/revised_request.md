@@ -1,1 +1,0 @@
-No follow-up implementation is required. The final codebase and tests satisfy the requested workflow prompt-body route-wording update, the shared prompt-body baseline guard is present, and the representative runtime prompt-package suite set passes with the shipped route model wording.

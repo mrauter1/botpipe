@@ -1,4 +1,0 @@
-name = "workflow_package_to_composable_building_blocks"
-title = "Workflow Package To Composable Building Blocks"
-description = "Turn one selected workflow package plus decomposition evidence into a candidate decomposition overlay, verification artifacts, and a deterministic receipt without mutating the authoritative workflow package."
-aliases = ["workflow-package-to-building-blocks", "workflow-decomposition-package"]

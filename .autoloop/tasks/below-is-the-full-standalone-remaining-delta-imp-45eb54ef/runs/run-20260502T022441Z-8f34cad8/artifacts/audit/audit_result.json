@@ -1,5 +1,0 @@
-{
-  "material_gaps_found": true,
-  "summary": "Material gaps remain: the core runtime refactor landed, but all discovered exported workflow packages still rely on removed public hook and python-step contracts and do not compile under the final public authoring model.",
-  "revised_request_path": "/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/below-is-the-full-standalone-remaining-delta-imp-45eb54ef/runs/run-20260502T022441Z-8f34cad8/artifacts/audit/revised_request.md"
-}

@@ -1,1 +1,0 @@
-No follow-up implementation is required. The shared-policy export cleanup on the simple public surface is complete: `PolicyInput` remains public only from `autoloop.policy` and `autoloop.sdk`, `autoloop.simple` no longer exposes `PolicyInput` or `ProviderPolicyInput`, preserved simple policy inputs remain accepted, and the required pytest validation passes.

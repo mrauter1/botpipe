@@ -1,8 +1,0 @@
-<autoloop-decisions-header version="1" block_seq="1" owner="planner" phase_id="task-global" pair="plan" turn_seq="1" run_id="run-20260427T033024Z-f4648cdd" ts="2026-04-27T03:30:24.340994+00:00" />
-Treat the remaining five raw bootstrap handlers as unresolved typed-bootstrap debt even though earlier recursive memory claimed the migration was complete.
-The implementation slice should finish that migration in existing workflows and update recursive memory in the same change instead of adding a new workflow or another helper seam.
-<autoloop-decisions-header version="1" block_seq="2" owner="implementer" phase_id="remaining-typed-bootstrap-convergence" pair="implement" turn_seq="1" run_id="run-20260427T033024Z-f4648cdd" ts="2026-04-27T03:38:33.581535+00:00" />
-Finish typed-bootstrap convergence by projecting the remaining five workflow bootstraps from `ctx.params` while preserving `Context.workflow_params` as the compatibility/raw dict surface.
-Lock the migration with workflow-local bootstrap tests that pass contradictory raw `workflow_params` alongside typed `params`, so future regressions reintroducing raw bootstrap reads fail immediately.
-<autoloop-decisions-header version="1" block_seq="3" owner="test_author" phase_id="remaining-typed-bootstrap-convergence" pair="test" turn_seq="1" run_id="run-20260427T033024Z-f4648cdd" ts="2026-04-27T03:53:24.166622+00:00" />
-Treat contradictory raw `workflow_params` as the regression trigger in typed-bootstrap tests, but assert only workflow-specific invocation-contract fields because `write_invocation_contract(...)` intentionally adds shared runtime metadata.

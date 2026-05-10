@@ -1,5 +1,0 @@
-{
-  "material_gaps_found": false,
-  "summary": "No material gaps remain; the requested repo-venv acceptance slice was run, the managed-artifact diagnostic cleanup landed, and exact passing evidence was recorded.",
-  "revised_request_path": "/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/framework-authoring-flexibility-change-specifica-7e827c69/runs/run-20260504T121827Z-ab703ce9/artifacts/audit/revised_request.md"
-}

@@ -1,5 +1,0 @@
-{
-  "material_gaps_found": true,
-  "summary": "The source tree and maintained tests are Botlane-branded, but the active editable install in .venv still exposes the legacy autoloop package metadata and console script.",
-  "revised_request_path": "/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/additional-botlane-rename-requirements-discovere-28c3ecb0/runs/run-20260508T190524Z-73fc5c3b/artifacts/audit/revised_request.md"
-}

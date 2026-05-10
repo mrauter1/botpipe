@@ -1,5 +1,0 @@
-{
-  "material_gaps_found": true,
-  "summary": "Most requested framework changes landed, but a direct late-bound prompt bug and unresolved red regression tests keep the run short of acceptance.",
-  "revised_request_path": "/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/framework-authoring-flexibility-change-spec-goal-2ee572cd/runs/run-20260503T200339Z-6d598cb8/artifacts/audit/revised_request.md"
-}

@@ -1,4 +1,0 @@
-name = "security_finding_to_verified_remediation"
-title = "Security Finding To Verified Remediation"
-description = "Turn a security finding into an evidence-backed remediation plan, closure package, and deterministic publication receipt."
-aliases = ["security-remediation", "security-finding-remediation"]

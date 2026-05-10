@@ -1,5 +1,0 @@
-{
-  "material_gaps_found": false,
-  "summary": "No material run-local gaps remain; the active repository virtualenv and focused packaging smoke both satisfy the Botlane CLI rename contract.",
-  "revised_request_path": "/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/additional-botlane-rename-requirements-discovere-28c3ecb0/runs/run-20260508T205237Z-432ec7b1/artifacts/audit/revised_request.md"
-}

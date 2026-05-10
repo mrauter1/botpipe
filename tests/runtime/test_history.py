@@ -12,9 +12,6 @@ from botlane.core.primitives import AWAIT_INPUT
 from botlane.core.schema_registry import RUNTIME_TRACE_SCHEMA
 from botlane.core.stores import InMemorySessionStore
 
-LEGACY_SCHEMA_PREFIX = "auto" + "loop."
-LEGACY_RUNTIME_TRACE_SCHEMA = RUNTIME_TRACE_SCHEMA.replace("botlane.", LEGACY_SCHEMA_PREFIX, 1)
-
 
 class _State(BaseModel):
     ready: bool = False
@@ -315,46 +312,6 @@ def test_context_history_falls_back_to_events_without_trace(tmp_path: Path) -> N
     assert telemetry["verify_attempts"] == 0
     assert telemetry["token_usage"]["llm"]["total_tokens"] == 6
     assert ctx.history.failures(step="implement") == ()
-
-
-def test_context_history_accepts_legacy_runtime_trace_schema_alias(tmp_path: Path) -> None:
-    ctx, run_folder = _context(tmp_path)
-    _write_jsonl(
-        run_folder / "trace.jsonl",
-        [
-            {
-                "schema": LEGACY_RUNTIME_TRACE_SCHEMA,
-                "event_type": "step_started",
-                "timestamp": "2026-04-30T12:00:00+00:00",
-                "step_name": "legacy_review",
-                "visit": 1,
-                "step_execution_id": "legacy_review:1",
-            },
-            {
-                "schema": LEGACY_RUNTIME_TRACE_SCHEMA,
-                "event_type": "step_finished",
-                "timestamp": "2026-04-30T12:00:01+00:00",
-                "step_name": "legacy_review",
-                "visit": 1,
-                "step_execution_id": "legacy_review:1",
-                "candidate_route": "done",
-                "final_route": "done",
-                "provider_attempted": False,
-                "producer_attempted": False,
-                "verifier_attempted": False,
-                "hook_route_redirects": [],
-                "provider_usage": {},
-                "event": {"tag": "done", "reason": "accepted"},
-            },
-        ],
-    )
-    _write_jsonl(run_folder / "events.jsonl", [])
-
-    telemetry = ctx.history.step_telemetry()[StepInstanceKey(step_name="legacy_review", scope=None, item_id=None)]
-
-    assert telemetry["completed"] is True
-    assert telemetry["status"] == "completed"
-    assert telemetry["durations"]["total_seconds"] == 1.0
 
 
 def test_context_history_marks_goto_runtime_control_as_completed(tmp_path: Path) -> None:

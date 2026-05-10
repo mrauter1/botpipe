@@ -12,9 +12,7 @@ from tests.contract.engine._shared import (
 )
 from tests.contract.engine._shared import *
 
-LEGACY_PRODUCT = "auto" + "loop"
-LEGACY_OPERATION_REPLAY_V1 = LEGACY_PRODUCT + ".operation_replay/v1"
-LEGACY_OPERATION_REPLAY_V3 = LEGACY_PRODUCT + ".operation_replay/v3"
+INVALID_OPERATION_REPLAY_V3 = "unsupported.operation_replay/v3"
 
 def test_low_level_engine_requires_prompt_registry_for_relative_file_prompts(tmp_path: Path):
     (tmp_path / "ask.md").write_text("Answer the request.\n", encoding="utf-8")
@@ -697,17 +695,9 @@ def test_operation_replay_fingerprint_includes_provider_configuration(tmp_path: 
     ("payload", "expected_attempts"),
     [
         ({"records": {"legacy": {"value": "stale"}}, "attempts": ["first"]}, ["first"]),
-        (
-            {
-                "schema": LEGACY_OPERATION_REPLAY_V1,
-                "records": {"legacy": {"value": "stale"}},
-                "attempts": ["first", "second"],
-            },
-            ["first", "second"],
-        ),
     ],
 )
-def test_operation_replay_store_migrates_only_schemaless_and_v1_payloads(
+def test_operation_replay_store_migrates_only_schemaless_payloads(
     tmp_path: Path,
     payload: dict[str, object],
     expected_attempts: list[str],
@@ -727,7 +717,7 @@ def test_operation_replay_store_rejects_unsupported_schema_versions(tmp_path: Pa
     replay_path.write_text(
         json.dumps(
             {
-                "schema": LEGACY_OPERATION_REPLAY_V3,
+                "schema": INVALID_OPERATION_REPLAY_V3,
                 "records": {"legacy": {"value": "stale"}},
                 "attempts": ["first"],
             }
@@ -735,7 +725,7 @@ def test_operation_replay_store_rejects_unsupported_schema_versions(tmp_path: Pa
         encoding="utf-8",
     )
 
-    with pytest.raises(ValueError, match=rf"uses unsupported schema '{re.escape(LEGACY_OPERATION_REPLAY_V3)}'"):
+    with pytest.raises(ValueError, match=rf"uses unsupported schema '{re.escape(INVALID_OPERATION_REPLAY_V3)}'"):
         _load_replay_store(replay_path)
 def test_inline_operation_provider_override_participates_in_replay_fingerprint(tmp_path: Path) -> None:
     first_override = _rendered_provider_with_operation_executor(

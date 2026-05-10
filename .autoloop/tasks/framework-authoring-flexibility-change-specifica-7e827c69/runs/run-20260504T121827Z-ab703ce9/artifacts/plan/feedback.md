@@ -1,3 +1,0 @@
-# Plan ↔ Plan Verifier Feedback
-- Replaced the empty plan with a single-phase execution plan centered on the existing repo `.venv`, the four requested suites plus `tests/runtime/test_runtime_static_graph.py`, the `autoloop/core/inventory.py` wording correction, and explicit command/result evidence capture for acceptance.
-- PLAN-000 | non-blocking | No findings. The plan covers the full request, keeps the repair slice local, preserves the route-visibility and artifact-ownership invariants, uses the repository `.venv` as the normal environment, and requires exact command/result evidence in run-local artifacts.

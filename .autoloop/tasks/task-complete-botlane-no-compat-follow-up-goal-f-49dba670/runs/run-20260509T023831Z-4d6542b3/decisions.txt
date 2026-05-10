@@ -1,4 +1,0 @@
-<autoloop-decisions-header version="1" block_seq="1" owner="planner" phase_id="task-global" pair="plan" turn_seq="1" run_id="run-20260509T023831Z-4d6542b3" ts="2026-05-09T02:38:31.943576+00:00" />
-Treat this follow-up as full removal of Autoloop runtime compatibility across discovery, workspace/config roots, schema readers, SDK cleanup, optimizer readers, and strictness scans, not just the two explicitly named helper functions.
-Legacy-positive tests outside tests/strictness/test_no_compat.py must be rewritten or removed; the new contract is explicit non-support for .autoloop/autoloop behavior rather than fallback precedence.
-Historical Autoloop mentions remain allowed only in the exact legacy_docs Markdown allowlist and explicit literals inside tests/strictness/test_no_compat.py; .autoloop must not be hidden behind default scan ignores.

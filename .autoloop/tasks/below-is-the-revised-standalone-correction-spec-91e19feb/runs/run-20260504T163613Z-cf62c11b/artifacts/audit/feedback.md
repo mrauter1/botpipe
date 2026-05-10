@@ -1,3 +1,0 @@
-# Intent Audit <-> Intent Audit Verifier Feedback
-
-- AUD-001 | non-blocking | No audit findings. Reviewer-side verification confirmed the audit correctly classified the run as having no material unresolved gaps: the prompt-body scan still shows `116` non-README prompt bodies with `0` retired-wording matches, `tests/test_architecture_baseline_docs.py::test_workflow_prompt_bodies_use_question_only_runtime_control_wording` passed (`1 passed`), and the cited representative runtime suite set plus the transitive helper-seam dependency passed under the preserved verifier venv (`183 passed`). The justified difference note for the test-only compiler-cache helper change is consistent with the recorded decisions ledger and does not require follow-up work.

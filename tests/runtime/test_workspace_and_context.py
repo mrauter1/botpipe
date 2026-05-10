@@ -37,10 +37,7 @@ from botlane.runtime.workspace import (
 )
 from botlane.core.primitives import Outcome
 
-LEGACY_PRODUCT = "auto" + "loop"
-LEGACY_STATE_DIRNAME = "." + LEGACY_PRODUCT
-LEGACY_WORKFLOWS_MODULE = LEGACY_PRODUCT + ".workflows"
-LEGACY_TOPOLOGY_SCHEMA = LEGACY_PRODUCT + ".workflow_topology/v999"
+INVALID_TOPOLOGY_SCHEMA = "unsupported.workflow_topology/v999"
 
 
 def _clear_workflow_modules() -> None:
@@ -49,8 +46,6 @@ def _clear_workflow_modules() -> None:
         if (
             name == "workflows"
             or name.startswith("workflows.")
-            or name == LEGACY_WORKFLOWS_MODULE
-            or name.startswith(LEGACY_WORKFLOWS_MODULE + ".")
         ):
             sys.modules.pop(name, None)
 
@@ -89,7 +84,6 @@ def test_run_creates_task_workflow_run_layout_and_immutable_request_snapshots(tm
     assert first_result.terminal == "FINISH"
     assert (task_dir / "messages.jsonl").exists()
     assert not (first_run_dir / "messages.jsonl").exists()
-    assert not (tmp_path / LEGACY_STATE_DIRNAME).exists()
     assert (task_dir / "request.md").read_text(encoding="utf-8") == "First message\n"
     assert (first_run_dir / "request.md").read_text(encoding="utf-8") == "First message\n"
     assert (workflow_dir / "workflow.json").exists()
@@ -232,8 +226,6 @@ def test_run_metadata_records_topology_hashes_and_artifact_contract_paths(tmp_pa
     assert topology["artifacts"]["prompt_refs"] == "prompt_refs.json"
     assert (run_dir / topology["artifacts"]["topology"]).exists()
     assert topology_payload["schema"] == WORKFLOW_TOPOLOGY_SCHEMA
-    assert LEGACY_PRODUCT + "." not in json.dumps(run_meta, sort_keys=True)
-    assert LEGACY_PRODUCT + "." not in json.dumps(topology_payload, sort_keys=True)
 
 
 def test_runtime_inspection_loaders_filter_status_and_require_disambiguation(tmp_path: Path) -> None:
@@ -423,7 +415,7 @@ def test_resume_rejects_unsupported_embedded_topology_schema_when_topology_file_
     run_meta_file = run_dir / "run.json"
     run_meta = json.loads(run_meta_file.read_text(encoding="utf-8"))
     embedded_topology = dict(run_meta["topology"])
-    embedded_topology["schema"] = LEGACY_TOPOLOGY_SCHEMA
+    embedded_topology["schema"] = INVALID_TOPOLOGY_SCHEMA
     run_meta["topology"] = embedded_topology
     run_meta_file.write_text(json.dumps(run_meta, indent=2, ensure_ascii=False) + "\n", encoding="utf-8")
 
@@ -1190,99 +1182,6 @@ def test_run_record_projects_legacy_pending_question_as_pending_input(tmp_path: 
     assert records[0].pending_question == "Who owns the gate?"
 
 
-def test_list_run_records_reads_legacy_state_root_when_botlane_root_is_absent(tmp_path: Path) -> None:
-    task_dir = tmp_path / LEGACY_STATE_DIRNAME / "tasks" / "legacy-task"
-    workflow_dir = task_dir / "wf_legacy_demo"
-    run_dir = workflow_dir / "runs" / "run-legacy"
-    run_dir.mkdir(parents=True, exist_ok=True)
-    (run_dir / "request.md").write_text("Legacy run.\n", encoding="utf-8")
-    (run_dir / "run.json").write_text(
-        json.dumps(
-            {
-                "created_at": "2026-05-01T00:00:00+00:00",
-                "run_id": "run-legacy",
-                "status": "success",
-                "task_id": "legacy-task",
-                "updated_at": "2026-05-01T00:01:00+00:00",
-                "workflow_name": "legacy_demo",
-            },
-            indent=2,
-            sort_keys=True,
-        )
-        + "\n",
-        encoding="utf-8",
-    )
-
-    records = list_run_records(tmp_path, workflow_name="legacy_demo", task_id="legacy-task")
-
-    assert len(records) == 1
-    assert records[0].run_dir == run_dir
-
-
-def test_resume_without_run_id_uses_latest_run_across_botlane_and_legacy_state_roots(tmp_path: Path) -> None:
-    _write_pause_resume_workflow_package(tmp_path, "mixed_root_resume_demo", "MixedRootResumeWorkflow")
-    provider = ScriptedLLMProvider(
-        llm_turns=[
-            Outcome(raw_output="Need answer", tag="question", question="Botlane run?"),
-            Outcome(raw_output="Need answer", tag="question", question="Legacy run?"),
-            Outcome(raw_output="Answered", tag="answered", payload={"answer": "legacy-answer"}),
-        ]
-    )
-
-    first = run_workflow_package(
-        "mixed_root_resume_demo",
-        provider=provider,
-        options=_runner_options(
-            tmp_path,
-            task_id="task-mixed-root",
-            message="Create botlane run first",
-        ),
-    )
-    botlane_workflow_dir = tmp_path / ".botlane" / "tasks" / "task-mixed-root" / "wf_mixed_root_resume_demo"
-    botlane_run_dir = next((botlane_workflow_dir / "runs").iterdir())
-
-    second = run_workflow_package(
-        "mixed_root_resume_demo",
-        provider=provider,
-        options=_runner_options(
-            tmp_path,
-            task_id="task-mixed-root",
-            message="Create legacy run second",
-            state_dir=tmp_path / LEGACY_STATE_DIRNAME,
-        ),
-    )
-    legacy_workflow_dir = tmp_path / LEGACY_STATE_DIRNAME / "tasks" / "task-mixed-root" / "wf_mixed_root_resume_demo"
-    legacy_run_dir = next((legacy_workflow_dir / "runs").iterdir())
-
-    resumed = run_workflow_package(
-        "mixed_root_resume_demo",
-        provider=provider,
-        options=_runner_options(
-            tmp_path,
-            task_id="task-mixed-root",
-            resume=True,
-            answer="legacy-answer",
-        ),
-    )
-
-    assert first.terminal == "AWAIT_INPUT"
-    assert second.terminal == "AWAIT_INPUT"
-    assert resumed.terminal == "FINISH"
-    legacy_record = inspection_load_run_record(
-        tmp_path,
-        workflow_name="mixed_root_resume_demo",
-        task_id="task-mixed-root",
-        run_id=legacy_run_dir.name,
-    )
-    botlane_record = inspection_load_run_record(
-        tmp_path,
-        workflow_name="mixed_root_resume_demo",
-        task_id="task-mixed-root",
-        run_id=botlane_run_dir.name,
-    )
-
-    assert inspection_load_run_metadata(legacy_record)["terminal"] == "FINISH"
-    assert inspection_load_run_metadata(botlane_record)["terminal"] == "AWAIT_INPUT"
 
 
 def test_workspace_lists_grouped_workflow_run_summaries_with_deterministic_filters(tmp_path: Path) -> None:

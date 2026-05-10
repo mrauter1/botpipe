@@ -1,4 +1,0 @@
-<autoloop-decisions-header version="1" block_seq="1" owner="planner" phase_id="task-global" pair="plan" turn_seq="1" run_id="run-20260425T041820Z-72666758" ts="2026-04-25T04:18:20.925069+00:00" />
-Keep artifact-schema validation separate from expected_output_schema validation; file contracts remain post-step runtime checks rather than becoming part of Outcome.payload validation.
-Treat the current ctx.open_session(..., scope=...) usage in tests and fixtures as a migration risk surface that must be handled explicitly during the Continuity refactor rather than silently broken.
-Update capability inspection and CLI metadata in the same milestones that change compiled artifacts/routes/sessions so public inspection payloads do not drift from runtime behavior.

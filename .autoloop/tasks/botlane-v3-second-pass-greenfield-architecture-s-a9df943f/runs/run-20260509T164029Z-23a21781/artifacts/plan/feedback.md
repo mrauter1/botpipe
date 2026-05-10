@@ -1,4 +1,0 @@
-# Plan ↔ Plan Verifier Feedback
-
-- Replaced the empty plan with a 3-phase implementation plan covering route-authority cutover, Engine-free execution services, and canonical SDK/finalization cleanup; added compatibility notes and strictness targets because the current tree still retains `_route_table`, Engine-backed collaborators, dual one-step builders, and `StepExecutionResult.transition`.
-- PLAN-000 | non-blocking | Verified `plan.md`, `phase_plan.yaml`, and `decisions.txt` against the request and found no blocking intent, safety, compatibility, or phase-ordering gaps. The plan explicitly covers all four requested architecture cleanups, preserves the public/runtime guardrails, and keeps `RunResult.last_transition` plus persisted `finalization` payloads stable while removing `StepExecutionResult.transition`.

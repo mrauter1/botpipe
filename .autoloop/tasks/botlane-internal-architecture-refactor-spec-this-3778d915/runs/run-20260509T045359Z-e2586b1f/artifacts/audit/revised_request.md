@@ -1,1 +1,0 @@
-No follow-up implementation is required. The requested internal Botlane architecture refactor is present in the final codebase, the public compatibility surface remains frozen, and the full test suite passes (`1286 passed, 1 warning`).

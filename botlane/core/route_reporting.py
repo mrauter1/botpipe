@@ -8,7 +8,7 @@ from copy import deepcopy
 from typing import Any, Mapping
 
 from .outcome_contract import (
-    build_provider_outcome_schema,
+    build_provider_outcome_contract,
     payload_schema_for_route,
     route_fields_schema_for_route,
 )
@@ -80,14 +80,17 @@ def provider_response_contract_for_routes(
 ) -> dict[str, Any]:
     """Return provider-response schema metadata for one visible route set."""
 
-    schema, simplified = build_provider_outcome_schema(
+    contract = build_provider_outcome_contract(
         routes=routes,
         expected_output_schema=expected_output_schema,
     )
+    schema = contract.prompt_schema
     encoded = json.dumps(schema, sort_keys=True, separators=(",", ":"), ensure_ascii=True)
     return {
         "route_tags": list(routes.keys()),
-        "schema_simplified": simplified,
+        "schema_delivery_mode": "native" if contract.native_delivery_available else "prompt_only",
+        "native_delivery_available": contract.native_delivery_available,
+        "native_skip_reason": contract.native_skip_reason,
         "schema_fingerprint": schema_fingerprint(schema),
         "schema_chars": len(encoded),
     }

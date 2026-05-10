@@ -384,7 +384,7 @@ def _handle_resume(args: argparse.Namespace, *, provider_factory: Callable[..., 
     config = resolve_runtime_config(root, args)
     provider = _resolve_provider(config=config, args=args, provider_factory=provider_factory)
     execution = execute_workflow_package(
-        workflow.workflow_name,
+        args.workflow,
         provider=provider,
         options=RunnerOptions(
             root=root,
@@ -417,7 +417,7 @@ def _handle_answer(args: argparse.Namespace, *, provider_factory: Callable[..., 
     config = resolve_runtime_config(root, args)
     provider = _resolve_provider(config=config, args=args, provider_factory=provider_factory)
     execution = execute_workflow_package(
-        workflow.workflow_name,
+        args.workflow,
         provider=provider,
         options=RunnerOptions(
             root=root,

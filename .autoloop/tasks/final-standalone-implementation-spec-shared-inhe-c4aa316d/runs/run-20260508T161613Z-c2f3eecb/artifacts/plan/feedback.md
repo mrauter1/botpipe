@@ -1,3 +1,0 @@
-# Plan ↔ Plan Verifier Feedback
-2026-05-08: Replaced the empty plan with a single-phase implementation plan focused on removing `PolicyInput`/`ProviderPolicyInput` from `autoloop.simple` while preserving canonical `autoloop.policy`/`autoloop.sdk` exports and existing simple declaration compatibility.
-PLAN-000 | non-blocking | Verified complete: the plan and phase YAML stay scoped to `autoloop.simple`, preserve `autoloop.policy`/`autoloop.sdk` as the canonical `PolicyInput` export sites, keep the required simple declaration/runtime compatibility invariants explicit, and include the exact pytest validation commands from the request.

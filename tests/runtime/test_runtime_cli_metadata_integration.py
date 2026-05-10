@@ -14,8 +14,6 @@ from botlane.runtime.config import GitTrackingRuntimeConfig, RuntimeConfig
 from botlane.runtime.loader import resolve_workflow_reference
 from botlane.runtime.runner import RunnerOptions, run_workflow_package
 
-LEGACY_PRODUCT = "auto" + "loop"
-
 
 def _clear_workflow_modules() -> None:
     importlib.invalidate_caches()
@@ -422,4 +420,3 @@ def test_cli_workflows_list_help_describes_package_and_dot_botlane_roots(capsys)
     assert "workspace directory" in help_text.lower()
     assert "installed botlane package" in help_text
     assert "`.botlane/workflows/`" in help_text
-    assert LEGACY_PRODUCT not in help_text

@@ -29,7 +29,6 @@ except ImportError:  # pragma: no cover - optional dependency
 
 
 CONFIG_FILENAMES = ("botlane.yaml", "botlane.config")
-LEGACY_CONFIG_FILENAMES = ("auto" + "loop.yaml", "auto" + "loop.config")
 DEFAULT_CODEX_MODEL = "gpt-5.4"
 DEFAULT_PROVIDER_NAME = "codex"
 SUPPORTED_PROVIDER_NAMES = frozenset({"codex", "claude"})
@@ -185,13 +184,6 @@ def user_config_dir() -> Path:
     return xdg_config_home / "botlane"
 
 
-def legacy_user_config_dir() -> Path:
-    xdg_config_home = Path.home() / ".config"
-    if "XDG_CONFIG_HOME" in __import__("os").environ:
-        xdg_config_home = Path(__import__("os").environ["XDG_CONFIG_HOME"]).expanduser()
-    return xdg_config_home / ("auto" + "loop")
-
-
 def discover_config_file(directory: Path) -> Path | None:
     preferred_matches = [directory / filename for filename in CONFIG_FILENAMES if (directory / filename).is_file()]
     if len(preferred_matches) > 1:
@@ -201,13 +193,7 @@ def discover_config_file(directory: Path) -> Path | None:
         )
     if preferred_matches:
         return preferred_matches[0]
-    legacy_matches = [directory / filename for filename in LEGACY_CONFIG_FILENAMES if (directory / filename).is_file()]
-    if len(legacy_matches) > 1:
-        raise ConfigError(
-            "Found multiple configuration files in "
-            f"{directory}: {', '.join(path.name for path in legacy_matches)}. Keep only one."
-        )
-    return legacy_matches[0] if legacy_matches else None
+    return None
 
 
 def load_runtime_config_file(path: Path) -> object:
@@ -481,8 +467,6 @@ def parse_policy_runtime_config(payload: object, source: Path) -> RuntimeConfigL
 
 def resolve_runtime_config(root: Path, args: argparse.Namespace) -> ResolvedRuntimeConfig:
     global_config_path = discover_config_file(user_config_dir())
-    if global_config_path is None:
-        global_config_path = discover_config_file(legacy_user_config_dir())
     local_config_path = discover_config_file(root)
     policy_file_path = _optional_cli_path(getattr(args, "policy_file", None), "policy_file")
 

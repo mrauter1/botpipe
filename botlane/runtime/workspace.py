@@ -23,7 +23,6 @@ from botlane.core.statuses import normalize_run_status
 
 
 STATE_DIRNAME = ".botlane"
-LEGACY_STATE_DIRNAME = "." + "auto" + "loop"
 DEFAULT_REQUEST_TEXT = "No explicit initial message was provided for this run. Use repository artifacts and explicit clarifications only."
 _RAW_SEQUENCE_PATTERN = re.compile(r"^(?P<sequence>\d+)_")
 _UNSET = object()
@@ -196,25 +195,12 @@ def primary_state_root(root: Path) -> Path:
     return root / STATE_DIRNAME
 
 
-def legacy_state_root(root: Path) -> Path:
-    return root / LEGACY_STATE_DIRNAME
-
-
 def readable_state_roots(root: Path) -> tuple[Path, ...]:
-    resolved_root = root.resolve()
-    roots = (primary_state_root(resolved_root), legacy_state_root(resolved_root))
-    return tuple(dict.fromkeys(path.resolve() for path in roots))
+    return (primary_state_root(root.resolve()).resolve(),)
 
 
 def resolve_resume_state_root(root: Path) -> Path:
-    resolved_root = root.resolve()
-    primary = primary_state_root(resolved_root)
-    legacy = legacy_state_root(resolved_root)
-    if primary.exists():
-        return primary
-    if legacy.exists():
-        return legacy
-    return primary
+    return primary_state_root(root.resolve())
 
 
 def latest_run_id(runs_dir: Path) -> str | None:

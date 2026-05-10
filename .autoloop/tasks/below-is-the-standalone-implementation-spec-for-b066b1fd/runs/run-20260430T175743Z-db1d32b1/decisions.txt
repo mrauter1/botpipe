@@ -1,5 +1,0 @@
-<autoloop-decisions-header version="1" block_seq="1" owner="planner" phase_id="task-global" pair="plan" turn_seq="1" run_id="run-20260430T175743Z-db1d32b1" ts="2026-04-30T17:57:44.043356+00:00" />
-Treat the implemented public factory signatures in autoloop/simple.py as authoritative for this task and limit code changes to maintained signature coverage unless focused validation exposes another concrete mismatch.
-Use .venv/bin/python -m pytest for focused validation because pytest and python are not on PATH in this shell.
-<autoloop-decisions-header version="1" block_seq="2" owner="test_author" phase_id="refresh-simple-signature-coverage" pair="test" turn_seq="1" run_id="run-20260430T175743Z-db1d32b1" ts="2026-04-30T18:03:50.440665+00:00" />
-Do not broaden test coverage beyond the existing canonical signature assertion for this phase because the request is limited to maintained signature coverage and the focused simple-surface file already validates the intended regression surface.

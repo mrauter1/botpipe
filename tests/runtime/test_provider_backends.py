@@ -8,6 +8,7 @@ from pathlib import Path
 
 import pytest
 
+from botlane.core.outcome_contract import NATIVE_SCHEMA_EXCEEDS_LIMIT
 from botlane.core.providers.rendered import RenderedLLMProvider
 from botlane.core.providers.turns import ProviderTurnResult, RenderedProviderTurn
 from botlane.core.stores.protocols import SessionBinding
@@ -32,6 +33,7 @@ import botlane.runtime.provider_backends as provider_backends
 
 
 CLAUDE_HEADLESS_HELP = "--print\n-p\n--output-format\n--resume\n--model\n--settings\n--add-dir\n"
+_NATIVE_RESPONSE_SCHEMA_UNSET = object()
 
 
 class _StubTransport:
@@ -79,13 +81,42 @@ def _completed(*, args: list[str], stdout: str = "", stderr: str = "", returncod
     return subprocess.CompletedProcess(args=args, returncode=returncode, stdout=stdout, stderr=stderr)
 
 
+def _closed_empty_object_schema() -> dict[str, object]:
+    return {
+        "type": "object",
+        "properties": {},
+        "required": [],
+        "additionalProperties": False,
+    }
+
+
 def _outcome_turn(
     *,
     tmp_path: Path,
     session: SessionBinding | None = None,
-    response_schema_simplified: bool = False,
     response_schema: dict[str, object] | None = None,
+    native_response_schema: dict[str, object] | None | object = _NATIVE_RESPONSE_SCHEMA_UNSET,
+    response_schema_native_skip_reason: str | None = None,
 ) -> RenderedProviderTurn:
+    response_schema = response_schema or {
+        "type": "object",
+        "properties": {
+            "outcome": {
+                "type": "object",
+                "properties": {
+                    "tag": {"type": "string", "const": "done"},
+                    "payload": _closed_empty_object_schema(),
+                    "route_fields": _closed_empty_object_schema(),
+                },
+                "required": ["tag", "payload", "route_fields"],
+                "additionalProperties": False,
+            }
+        },
+        "required": ["outcome"],
+        "additionalProperties": False,
+    }
+    if native_response_schema is _NATIVE_RESPONSE_SCHEMA_UNSET:
+        native_response_schema = response_schema
     return RenderedProviderTurn(
         step_name="review",
         turn_kind="step",
@@ -93,25 +124,9 @@ def _outcome_turn(
         session=session,
         expected_response="outcome_json",
         run_folder=tmp_path,
-        response_schema=response_schema
-        or {
-            "type": "object",
-            "properties": {
-                "outcome": {
-                    "type": "object",
-                    "properties": {
-                        "tag": {"const": "done"},
-                        "payload": {"type": "object", "additionalProperties": False},
-                        "route_fields": {"type": "object", "additionalProperties": False},
-                    },
-                    "required": ["tag", "payload", "route_fields"],
-                    "additionalProperties": False,
-                }
-            },
-            "required": ["outcome"],
-            "additionalProperties": False,
-        },
-        response_schema_simplified=response_schema_simplified,
+        response_schema=response_schema,
+        native_response_schema=native_response_schema,
+        response_schema_native_skip_reason=response_schema_native_skip_reason,
     )
 
 
@@ -205,23 +220,108 @@ def test_codex_backend_delivers_full_response_schema_via_output_schema_file(
     }
 
 
-def test_codex_backend_records_simplified_schema_delivery(
+def test_codex_backend_writes_native_response_schema_when_it_differs_from_prompt_schema(
     tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     captured: dict[str, object] = {}
-    simplified_schema = {
+    prompt_schema = {
         "type": "object",
         "properties": {
             "outcome": {
                 "type": "object",
                 "properties": {
-                    "tag": {"enum": ["done", "question"]},
-                    "payload": {"type": "object", "additionalProperties": True},
-                    "route_fields": {"type": "object", "additionalProperties": True},
+                    "tag": {"type": "string", "const": "done"},
+                    "payload": _closed_empty_object_schema(),
+                    "route_fields": _closed_empty_object_schema(),
                 },
                 "required": ["tag", "payload", "route_fields"],
                 "additionalProperties": False,
+            }
+        },
+        "required": ["outcome"],
+        "additionalProperties": False,
+        "description": "prompt-only detail",
+    }
+    native_schema = {
+        key: value
+        for key, value in prompt_schema.items()
+        if key != "description"
+    }
+
+    monkeypatch.setattr(
+        codex_runtime_provider,
+        "_probe_codex_exec_surface",
+        lambda: codex_runtime_provider._CodexExecSurface(
+            start_help="--json\n--output-schema\n-m, --model <MODEL>\n",
+            resume_help="--json\n-m, --model <MODEL>\n",
+        ),
+    )
+
+    def fake_run_text_subprocess(command: list[str], *, input_text=None, env=None):
+        captured["command"] = list(command)
+        return (
+            '{"type":"thread.started","thread_id":"thread-1"}\n'
+            '{"type":"item.completed","item":{"type":"agent_message","text":"{\\"outcome\\":{\\"tag\\":\\"done\\",\\"payload\\":{},\\"route_fields\\":{}}}"}}',
+            "",
+            0,
+        )
+
+    monkeypatch.setattr(codex_runtime_provider, "run_text_subprocess", fake_run_text_subprocess)
+
+    executor = codex_runtime_provider.build_codex_operation_executor(
+        _resolved_config("codex"),
+        commands=CodexCLICommand(
+            start_command=("codex", "exec", "--json"),
+            resume_command=("codex", "exec", "resume", "--json"),
+        ),
+    )
+    turn = _outcome_turn(
+        tmp_path=tmp_path,
+        response_schema=prompt_schema,
+        native_response_schema=native_schema,
+    )
+
+    executor(turn)
+
+    command = captured["command"]
+    assert isinstance(command, list)
+    schema_path = Path(command[command.index("--output-schema") + 1])
+    assert json.loads(schema_path.read_text(encoding="utf-8")) == native_schema
+    assert json.loads(schema_path.read_text(encoding="utf-8")) != turn.response_schema
+
+
+def test_codex_backend_uses_prompt_only_when_response_schema_exceeds_native_limit(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    captured: dict[str, object] = {}
+    detailed_schema = {
+        "type": "object",
+        "properties": {
+            "outcome": {
+                "anyOf": [
+                    {
+                        "type": "object",
+                        "properties": {
+                            "tag": {"type": "string", "const": "done"},
+                            "payload": {
+                                "type": "object",
+                                "properties": {"summary": {"type": "string"}},
+                                "required": ["summary"],
+                                "additionalProperties": False,
+                            },
+                            "route_fields": {
+                                "type": "object",
+                                "properties": {},
+                                "required": [],
+                                "additionalProperties": False,
+                            },
+                        },
+                        "required": ["tag", "payload", "route_fields"],
+                        "additionalProperties": False,
+                    }
+                ]
             }
         },
         "required": ["outcome"],
@@ -257,18 +357,20 @@ def test_codex_backend_records_simplified_schema_delivery(
     )
     turn = _outcome_turn(
         tmp_path=tmp_path,
-        response_schema_simplified=True,
-        response_schema=simplified_schema,
+        response_schema=detailed_schema,
+        native_response_schema=None,
+        response_schema_native_skip_reason=NATIVE_SCHEMA_EXCEEDS_LIMIT,
     )
     result = executor(turn)
 
     command = captured["command"]
     assert isinstance(command, list)
-    assert "--output-schema" in command
-    schema_path = Path(command[command.index("--output-schema") + 1])
-    assert json.loads(schema_path.read_text(encoding="utf-8")) == simplified_schema
-    assert json.loads(schema_path.read_text(encoding="utf-8")) == turn.response_schema
-    assert result.metadata["structured_output"]["delivery_mode"] == "native_simplified"
+    assert "--output-schema" not in command
+    assert result.metadata["structured_output"] == {
+        "provider": "codex",
+        "delivery_mode": "prompt_only",
+        "reason": "provider_response_schema_exceeds_native_limit",
+    }
 
 
 def test_codex_backend_records_prompt_only_fallback_when_resume_lacks_output_schema(
@@ -318,6 +420,60 @@ def test_codex_backend_records_prompt_only_fallback_when_resume_lacks_output_sch
         "delivery_mode": "prompt_only",
         "reason": "resume_command_does_not_support_output_schema",
     }
+
+
+def test_codex_operation_executor_recovers_from_missing_rollout_resume(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    calls: list[list[str]] = []
+
+    def fake_run_text_subprocess(command: list[str], *, input_text=None, env=None):
+        calls.append(list(command))
+        if "resume" in command:
+            return (
+                "",
+                (
+                    "Error: thread/resume: thread/resume failed: no rollout found for thread id "
+                    "stale-thread (code -32600)"
+                ),
+                1,
+            )
+        return (
+            '{"type":"thread.started","thread_id":"fresh-thread"}\n'
+            '{"type":"item.completed","item":{"type":"agent_message","text":"{\\"outcome\\":{\\"tag\\":\\"done\\",\\"payload\\":{},\\"route_fields\\":{}}}"}}',
+            "",
+            0,
+        )
+
+    monkeypatch.setattr(codex_runtime_provider, "run_text_subprocess", fake_run_text_subprocess)
+
+    executor = codex_runtime_provider.build_codex_operation_executor(
+        _resolved_config("codex"),
+        commands=CodexCLICommand(
+            start_command=("codex", "exec", "--json"),
+            resume_command=("codex", "exec", "resume", "--json"),
+        ),
+    )
+    turn = _outcome_turn(
+        tmp_path=tmp_path,
+        session=SessionBinding(
+            ref_name="default",
+            session_id="stale-thread",
+            provider="codex",
+            metadata={"provider": "codex"},
+        ),
+    )
+
+    result = executor(turn)
+
+    assert calls[0] == ["codex", "exec", "resume", "--json", "--model", "gpt-test", "stale-thread", "-"]
+    assert calls[1][:5] == ["codex", "exec", "--json", "--model", "gpt-test"]
+    assert "--output-schema" in calls[1]
+    assert result.session is not None
+    assert result.session.session_id == "fresh-thread"
+    assert result.metadata["mode"] == "start"
+    assert result.metadata["provider_metadata"]["resume_recovery"]["reason"] == "missing_rollout"
 
 
 def test_claude_backend_records_prompt_only_fallback_for_response_schema(

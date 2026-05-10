@@ -699,8 +699,22 @@ def _provider_response_contracts(compiled: WorkflowPlan, step: StepPlan) -> dict
     route_table = compiled.routes.get(step.name, {})
     if not route_table:
         return {
-            "interactive": {"route_tags": [], "schema_simplified": False, "schema_fingerprint": None, "schema_chars": 0},
-            "full_auto": {"route_tags": [], "schema_simplified": False, "schema_fingerprint": None, "schema_chars": 0},
+            "interactive": {
+                "route_tags": [],
+                "schema_delivery_mode": "none",
+                "native_delivery_available": False,
+                "native_skip_reason": None,
+                "schema_fingerprint": None,
+                "schema_chars": 0,
+            },
+            "full_auto": {
+                "route_tags": [],
+                "schema_delivery_mode": "none",
+                "native_delivery_available": False,
+                "native_skip_reason": None,
+                "schema_fingerprint": None,
+                "schema_chars": 0,
+            },
         }
     return {
         "interactive": provider_response_contract_for_routes(
@@ -1048,9 +1062,17 @@ def _step_route_view_line(compiled: WorkflowPlan, step: StepPlan) -> str:
     return (
         f"- `{step.name}`: compiled={compiled_routes}; available={', '.join(f'`{route}`' for route in _step_available_route_tags(compiled, step)) or 'none'}; "
         f"suppressed={suppressed}; provider_visible_interactive={interactive}; provider_visible_full_auto={full_auto}; "
-        f"provider_schema_fallback(interactive/full_auto)=`{provider_contracts['interactive']['schema_simplified']}`/`{provider_contracts['full_auto']['schema_simplified']}`; "
+        f"provider_schema_delivery(interactive/full_auto)=`{_provider_schema_delivery_label(provider_contracts['interactive'])}`/`{_provider_schema_delivery_label(provider_contracts['full_auto'])}`; "
         f"legacy_authored={authored}; legacy_runtime_control={runtime_control}"
     )
+
+
+def _provider_schema_delivery_label(contract: Mapping[str, Any]) -> str:
+    mode = contract.get("schema_delivery_mode")
+    reason = contract.get("native_skip_reason")
+    if mode == "prompt_only" and isinstance(reason, str) and reason:
+        return f"prompt_only:{reason}"
+    return str(mode or "none")
 
 
 def _route_contract_line(

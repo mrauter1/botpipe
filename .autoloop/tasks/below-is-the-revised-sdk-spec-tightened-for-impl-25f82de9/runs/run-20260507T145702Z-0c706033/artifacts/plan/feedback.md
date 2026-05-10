@@ -1,5 +1,0 @@
-# Plan ↔ Plan Verifier Feedback
-
-- Replaced the empty follow-up plan stubs with a single-phase implementation plan centered on the two actual remaining seams: `autoloop/core/artifacts.py` still resolves `ctx.input` through raw `input_fields`, and `autoloop/sdk.py` still hard-rejects strict `ChildWorkflowStep` after resolvability succeeds. The update also makes the stale `Input.message` test expectations explicit and narrows validation to the focused runtime/SDK regression slice needed to close this run safely.
-
-- `PLAN-001` `non-blocking`: No blocking gaps found. The plan covers all three follow-up request points, stays aligned with the recorded decisions, keeps `ctx.input.message` fixed in the shared `ctx` resolver rather than a one-off path, preserves the existing synthetic core-step execution path for accepted strict `ChildWorkflowStep` declarations, and defines a focused regression slice across runtime templates, child workflow message rendering, and SDK `client.step(...)`. `phase_plan.yaml` is parseable and its single-phase decomposition is coherent for this scope.

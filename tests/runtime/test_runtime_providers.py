@@ -376,6 +376,16 @@ def test_parse_outcome_json_accepts_fenced_json_block() -> None:
     assert outcome.raw_output == raw
 
 
+def test_parse_outcome_json_accepts_last_json_message_after_status_text() -> None:
+    raw = 'I updated the files and verified them.\n\n{"outcome":{"tag":"accepted","payload":{},"route_fields":{}}}'
+
+    outcome = parse_outcome_json(raw)
+
+    assert outcome.tag == "accepted"
+    assert outcome.payload == {}
+    assert outcome.raw_output == raw
+
+
 def test_parse_outcome_json_rejects_invalid_json() -> None:
     with pytest.raises(ProviderExecutionError, match="malformed outcome JSON"):
         parse_outcome_json("{not-json}")
@@ -924,6 +934,63 @@ def test_codex_transport_raises_on_non_zero_exit(monkeypatch: pytest.MonkeyPatch
         asyncio.run(transport.run_turn(_rendered_turn(session=_placeholder_session())))
 
 
+def test_codex_transport_recovers_from_missing_rollout_resume(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    calls: list[tuple[str, ...]] = []
+    seen_inputs: list[bytes | None] = []
+    responses = [
+        _AsyncProcessStub(
+            stdout="",
+            stderr=(
+                "Error: thread/resume: thread/resume failed: no rollout found for thread id "
+                "stale-thread (code -32600)"
+            ),
+            returncode=1,
+            seen_inputs=seen_inputs,
+        ),
+        _AsyncProcessStub(
+            stdout="\n".join(
+                (
+                    '{"type":"thread.started","thread_id":"fresh-thread"}',
+                    '{"type":"item.completed","item":{"type":"agent_message","text":"producer text"}}',
+                )
+            ),
+            seen_inputs=seen_inputs,
+        ),
+    ]
+
+    async def fake_create_subprocess_exec(*command: str, **_: object) -> _AsyncProcessStub:
+        calls.append(tuple(command))
+        return responses.pop(0)
+
+    monkeypatch.setattr(codex_runtime_provider.asyncio, "create_subprocess_exec", fake_create_subprocess_exec)
+    transport = CodexTransport(
+        commands=CodexCLICommand(
+            start_command=("codex", "exec", "--json"),
+            resume_command=("codex", "exec", "resume", "--json"),
+        ),
+        model="gpt-test",
+        model_effort=None,
+    )
+
+    result = asyncio.run(transport.run_turn(_rendered_turn(session=_provider_session("codex", "stale-thread"))))
+
+    assert calls == [
+        ("codex", "exec", "resume", "--json", "--model", "gpt-test", "stale-thread", "-"),
+        ("codex", "exec", "--json", "--model", "gpt-test"),
+    ]
+    assert seen_inputs == [b"prompt", b"prompt"]
+    assert result.raw_text == "producer text"
+    assert result.session is not None
+    assert result.session.session_id == "fresh-thread"
+    assert result.metadata["mode"] == "start"
+    assert result.metadata["provider_metadata"]["resume_recovery"] == {
+        "reason": "missing_rollout",
+        "discarded_session_id": "stale-thread",
+    }
+
+
 def test_codex_transport_rejects_cross_provider_resume() -> None:
     transport = CodexTransport(
         commands=CodexCLICommand(
@@ -993,13 +1060,28 @@ def test_codex_transport_emits_run_scoped_policy_artifacts_and_metadata(
         )
     )
 
-    assert calls == [("codex", "exec", "--json", "--model", "gpt-test")]
+    assert calls == [
+        (
+            "codex",
+            "exec",
+            "--json",
+            '--config=approval_policy="never"',
+            '--config=sandbox_mode="workspace-write"',
+            '--config=sandbox_workspace_write.writable_roots=[".", "./build"]',
+            "--config=sandbox_workspace_write.network_access=true",
+            '--config=shell_environment_policy.inherit="core"',
+            "--config=shell_environment_policy.ignore_default_excludes=false",
+            '--config=shell_environment_policy.exclude=["*TOKEN*", "*SECRET*", "*KEY*"]',
+            "--model",
+            "gpt-test",
+        )
+    ]
     assert seen_envs and seen_envs[0] is not None
-    codex_home = Path(seen_envs[0]["CODEX_HOME"])
-    assert codex_home == tmp_path / "provider_policy" / "produce__visit-1" / "codex"
-    assert (codex_home / "config.toml").exists()
-    assert result.metadata["provider_metadata"]["policy"]["effective_policy_file"] == str(codex_home / "effective_policy.json")
-    assert result.metadata["provider_metadata"]["policy"]["capability_report_file"] == str(codex_home / "capability_report.json")
+    assert "CODEX_HOME" not in seen_envs[0]
+    policy_root = tmp_path / "provider_policy" / "produce__visit-1" / "codex"
+    assert not (policy_root / "config.toml").exists()
+    assert result.metadata["provider_metadata"]["policy"]["effective_policy_file"] == str(policy_root / "effective_policy.json")
+    assert result.metadata["provider_metadata"]["policy"]["capability_report_file"] == str(policy_root / "capability_report.json")
     assert "policy_fingerprint" in result.metadata["provider_metadata"]["policy"]
     assert [event for event, _payload in seen_events] == [
         "provider_policy_emitted",
@@ -1086,6 +1168,7 @@ def test_codex_operation_executor_uses_policy_env_and_metadata(
             0,
         )
 
+    monkeypatch.delenv("CODEX_HOME", raising=False)
     monkeypatch.setattr(codex_runtime_provider, "run_text_subprocess", fake_run_text_subprocess)
     executor = codex_runtime_provider.build_codex_operation_executor(_config())
     policy = ProviderPolicy(
@@ -1107,9 +1190,22 @@ def test_codex_operation_executor_uses_policy_env_and_metadata(
         )
     )
 
-    assert seen and seen[0][0] == ("codex", "exec", "--json", "--model", "gpt-test")
+    assert seen and seen[0][0] == (
+        "codex",
+        "exec",
+        "--json",
+        '--config=approval_policy="never"',
+        '--config=sandbox_mode="workspace-write"',
+        '--config=sandbox_workspace_write.writable_roots=[".", "./dist"]',
+        "--config=sandbox_workspace_write.network_access=true",
+        '--config=shell_environment_policy.inherit="core"',
+        "--config=shell_environment_policy.ignore_default_excludes=false",
+        '--config=shell_environment_policy.exclude=["*TOKEN*", "*SECRET*", "*KEY*"]',
+        "--model",
+        "gpt-test",
+    )
     assert seen[0][1] is not None
-    assert seen[0][1]["CODEX_HOME"] == str(tmp_path / "provider_policy" / "operate__visit-1" / "codex")
+    assert "CODEX_HOME" not in seen[0][1]
     assert result.metadata["provider_metadata"]["policy"]["capability_report_file"].endswith("capability_report.json")
 
 
@@ -1180,9 +1276,9 @@ def test_claude_transport_emits_run_scoped_policy_artifacts_and_metadata(
         )
     ]
     assert seen_envs and seen_envs[0] is not None
-    assert seen_envs[0]["CLAUDE_CONFIG_DIR"] == str(tmp_path / "provider_policy" / "claude_runtime")
+    assert "CLAUDE_CONFIG_DIR" not in seen_envs[0]
     assert seen_envs[0]["CLAUDE_CODE_ADDITIONAL_DIRECTORIES_CLAUDE_MD"] == "1"
-    assert seen_cwds == [str(tmp_path / "provider_policy" / "claude_runtime" / "launch")]
+    assert seen_cwds == [None]
     assert result.metadata["provider_metadata"]["policy"]["effective_policy_file"] == str(
         settings_path.parent / "effective_policy.json"
     )
@@ -1423,9 +1519,9 @@ def test_claude_operation_executor_uses_policy_settings_and_metadata(
         "claude-test",
     )
     assert seen[0][1] is not None
-    assert seen[0][1]["CLAUDE_CONFIG_DIR"] == str(tmp_path / "provider_policy" / "claude_runtime")
+    assert "CLAUDE_CONFIG_DIR" not in seen[0][1]
     assert seen[0][1]["CLAUDE_CODE_ADDITIONAL_DIRECTORIES_CLAUDE_MD"] == "1"
-    assert seen[0][2] == str(tmp_path / "provider_policy" / "claude_runtime" / "launch")
+    assert seen[0][2] is None
     assert result.metadata["provider_metadata"]["policy"]["capability_report_file"].endswith("capability_report.json")
 
 

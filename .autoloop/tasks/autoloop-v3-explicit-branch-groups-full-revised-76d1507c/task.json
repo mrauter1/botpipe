@@ -1,6 +1,0 @@
-{
-  "task_id": "autoloop-v3-explicit-branch-groups-full-revised-76d1507c",
-  "created_at": "2026-05-05T17:19:50.347409+00:00",
-  "request_text": "Add the missing branch-group regression coverage that is still required by the explicit-branch-groups v1 request. Do not rerun the whole feature and do not widen scope beyond branch-group runtime/checkpoint behavior.\n\nFocus only on these unresolved items:\n\n1. Add committed runtime/contract coverage proving that real branch execution preserves the requested shared-effect semantics:\n   - branch `ctx.state` assignment reaches the shared parent state cell;\n   - branch `ctx.values` mutation is visible after branch settlement;\n   - overlapping writes to the same workspace path are not rejected by the framework.\n\n2. Add committed runtime/contract coverage for the fan-in pending-input path:\n   - make an authored fan-in step ask for input;\n   - assert the workflow checkpoints at the composite boundary under the branch-group step;\n   - resume normally and assert downstream completion after the answer is provided.\n\nIf any of these new tests fail, implement only the minimal fix needed in the branch-group runtime/checkpoint path to satisfy the requested behavior.",
-  "request_updated_at": "2026-05-05T19:23:51.120352+00:00"
-}

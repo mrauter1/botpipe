@@ -1,1 +1,0 @@
-No follow-up implementation is required. The requested validation-gap follow-up is complete: the affected runtime and packaging tests align with the shipped workflow discovery contract, the wheel smoke runs without `python -m build`, and the named five-suite validation slice passes.

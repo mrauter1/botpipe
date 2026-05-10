@@ -1,3 +1,0 @@
-# Intent Audit <-> Intent Audit Verifier Feedback
-
-- AUD-001 | non-blocking | No audit defects found. Re-verification confirmed that the reported gap is real and narrowly scoped: `tests/unit/test_simple_surface.py::test_canonical_simple_signatures_expose_only_canonical_argument_names` still asserts pre-scoped-state signatures, fails in isolation, and is the only failing test in the cited focused suite (`264 passed, 1 deselected` when excluded). `gap_report.md`, `revised_request.md`, and `audit_result.json` classify that gap consistently and keep the next-run request limited to updating maintained signature coverage rather than reopening unrelated implementation work.

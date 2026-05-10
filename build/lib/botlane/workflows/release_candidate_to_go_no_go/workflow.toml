@@ -1,4 +1,0 @@
-name = "release_candidate_to_go_no_go"
-title = "Release Candidate To Go No Go"
-description = "Frame a release candidate, gather evidence, assess go/no-go readiness, and publish a deterministic decision package."
-aliases = ["release-go-no-go", "release-readiness"]

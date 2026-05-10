@@ -1,5 +1,0 @@
-{
-  "material_gaps_found": true,
-  "summary": "Material gaps remain: the Botlane-only runtime/test work is complete, but the strictness scanners still omit active repo-root Autoloop artifact trees and those trees still contain legacy Autoloop names outside the explicit historical allowlist.",
-  "revised_request_path": "/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/task-complete-botlane-no-compat-follow-up-goal-f-95d8ae7d/runs/run-20260509T031006Z-b1998ef3/artifacts/audit/revised_request.md"
-}

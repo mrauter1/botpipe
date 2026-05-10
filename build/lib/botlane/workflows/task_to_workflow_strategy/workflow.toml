@@ -1,4 +1,0 @@
-name = "task_to_workflow_strategy"
-title = "Task To Workflow Strategy"
-description = "Turn an arbitrary software-work task into an explicit strategy package that chooses run-existing, compose, adapt, or create-new."
-aliases = ["workflow-strategy", "task-front-door"]

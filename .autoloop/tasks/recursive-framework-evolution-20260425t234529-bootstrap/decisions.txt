@@ -1,5 +1,0 @@
-<autoloop-decisions-header version="1" block_seq="1" owner="planner" phase_id="task-global" pair="plan" turn_seq="1" run_id="run-20260426T024530Z-1212f539" ts="2026-04-26T02:45:30.322117+00:00" />
-Implement against the repo-root core/ and runtime/ modules; the request's autoloop_v3/core path names map to these files while installed import paths remain autoloop_v3.core.*.
-Keep VerifierRequest.raw_output as a deprecated telemetry-only field for compatibility in this pass, but the shared renderer and RenderedLLMProvider must ignore it completely when building provider prompts.
-Resolve and persist route handoffs after final route resolution, including destination overrides from route effects such as Advance(...), and scope persisted handoffs by target step plus active worklist item when applicable.
-Checkpoint persistence must add pending_handoffs additively with empty-tuple defaults on load so older checkpoint files remain readable.

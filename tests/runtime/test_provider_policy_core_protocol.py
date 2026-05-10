@@ -110,3 +110,45 @@ def test_engine_without_explicit_runtime_resolver_uses_core_fallback_policy_reso
     assert provider.calls[0].kind == "operation"
     assert provider.calls[0].policy is not None
     assert provider.calls[0].policy.permissions.mode == "ask"
+
+
+def test_engine_syncs_default_policy_resolver_into_operation_recorder_for_run_lifecycle(tmp_path: Path) -> None:
+    class PolicyWorkflow(simple.Workflow):
+        @simple.python_step
+        def draft(_ctx):
+            return None
+
+    task_folder = tmp_path / "task"
+    run_folder = tmp_path / "run"
+    task_folder.mkdir()
+    run_folder.mkdir()
+
+    engine = Engine(
+        compile_workflow(PolicyWorkflow),
+        provider=ScriptedLLMProvider(),
+        session_store=InMemorySessionStore(),
+        checkpoint_store=InMemoryCheckpointStore(),
+    )
+    observed_resolvers: list[object | None] = []
+    original_setter = engine.operation_recorder.set_provider_policy_resolver
+
+    def _spy_set_provider_policy_resolver(resolver: object | None) -> None:
+        observed_resolvers.append(resolver)
+        original_setter(resolver)
+
+    engine.operation_recorder.set_provider_policy_resolver = _spy_set_provider_policy_resolver
+
+    result = engine.run(
+        task_id="task-default-resolver-lifecycle",
+        run_id="run-default-resolver-lifecycle",
+        task_folder=task_folder,
+        run_folder=run_folder,
+        root=tmp_path,
+    )
+
+    assert result.terminal == "FINISH"
+    assert len(observed_resolvers) == 2
+    assert observed_resolvers[0] is not None
+    assert isinstance(observed_resolvers[0], ProviderPolicyResolverProtocol)
+    assert observed_resolvers[1] is None
+    assert engine.provider_policy_resolver is None

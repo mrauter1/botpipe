@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 import asyncio
-from collections.abc import Callable
+from collections.abc import Callable, Mapping
 import json
 from pathlib import Path
 import shutil
@@ -169,7 +169,6 @@ class CodexTransport(ProviderTransport):
 
     async def run_turn(self, turn: RenderedProviderTurn) -> ProviderTurnResult:
         ensure_session_provider_match("codex", turn.session)
-        resume_session_id = _resumable_session_id("codex", turn.session)
         emission, base_command, model, model_effort, structured_output, cleanup_schema_path = _prepare_turn_command(
             turn,
             commands=self._commands,
@@ -178,6 +177,7 @@ class CodexTransport(ProviderTransport):
             fallback_model=self._model,
             fallback_model_effort=self._model_effort,
         )
+        resume_session_id = _resumable_session_id("codex", turn.session)
         try:
             if resume_session_id is None:
                 command = list(base_command)
@@ -193,6 +193,13 @@ class CodexTransport(ProviderTransport):
             )
             stdout, stderr = await communicate_text_subprocess(process, input_text=turn.prompt_text)
             if process.returncode != 0:
+                if resume_session_id is not None and _is_missing_rollout_resume_error(stderr):
+                    _cleanup_schema_file(cleanup_schema_path)
+                    cleanup_schema_path = None
+                    return await self._run_fresh_turn_after_stale_resume(
+                        turn,
+                        stale_session_id=resume_session_id,
+                    )
                 streams = format_subprocess_streams(stdout, stderr)
                 raise ProviderExecutionError(
                     f"provider 'codex' failed while running step {turn.step_name!r} "
@@ -205,6 +212,55 @@ class CodexTransport(ProviderTransport):
             return _build_codex_result(
                 turn=turn,
                 resume_session_id=resume_session_id,
+                resolved_session_id=resolved_session_id,
+                provider_metadata=provider_metadata,
+                usage=usage,
+                assistant_text=assistant_text,
+                model=model,
+                model_effort=model_effort,
+                structured_output=structured_output,
+            )
+        finally:
+            _cleanup_schema_file(cleanup_schema_path)
+
+    async def _run_fresh_turn_after_stale_resume(
+        self,
+        turn: RenderedProviderTurn,
+        *,
+        stale_session_id: str,
+    ) -> ProviderTurnResult:
+        emission, base_command, model, model_effort, structured_output, cleanup_schema_path = _prepare_turn_command(
+            turn,
+            commands=self._commands,
+            emitter=self._emitter,
+            validation=self._validation,
+            fallback_model=self._model,
+            fallback_model_effort=self._model_effort,
+            force_start=True,
+        )
+        try:
+            process = await asyncio.create_subprocess_exec(
+                *base_command,
+                stdin=asyncio.subprocess.PIPE,
+                stdout=asyncio.subprocess.PIPE,
+                stderr=asyncio.subprocess.PIPE,
+                env=merge_subprocess_env(None if emission is None else emission.env),
+            )
+            stdout, stderr = await communicate_text_subprocess(process, input_text=turn.prompt_text)
+            if process.returncode != 0:
+                streams = format_subprocess_streams(stdout, stderr)
+                raise ProviderExecutionError(
+                    f"provider 'codex' failed while running step {turn.step_name!r} "
+                    f"(exit code {process.returncode}) after discarding stale resume session: {streams}"
+                )
+
+            assistant_text, resolved_session_id, provider_metadata, usage = parse_codex_exec_json(stdout)
+            provider_metadata = _with_stale_resume_metadata(provider_metadata, stale_session_id=stale_session_id)
+            if emission is not None:
+                provider_metadata = _with_policy_metadata(provider_metadata, emission=emission)
+            return _build_codex_result(
+                turn=turn,
+                resume_session_id=None,
                 resolved_session_id=resolved_session_id,
                 provider_metadata=provider_metadata,
                 usage=usage,
@@ -241,7 +297,6 @@ def build_codex_operation_executor(
 
     def execute(turn: RenderedProviderTurn) -> ProviderTurnResult:
         ensure_session_provider_match("codex", turn.session)
-        resume_session_id = _resumable_session_id("codex", turn.session)
         emission, base_command, turn_model, turn_model_effort, structured_output, cleanup_schema_path = _prepare_turn_command(
             turn,
             commands=resolved_commands,
@@ -250,6 +305,7 @@ def build_codex_operation_executor(
             fallback_model=model,
             fallback_model_effort=model_effort,
         )
+        resume_session_id = _resumable_session_id("codex", turn.session)
         try:
             if resume_session_id is None:
                 command = list(base_command)
@@ -261,6 +317,17 @@ def build_codex_operation_executor(
                 env=merge_subprocess_env(None if emission is None else emission.env),
             )
             if returncode != 0:
+                if resume_session_id is not None and _is_missing_rollout_resume_error(stderr):
+                    _cleanup_schema_file(cleanup_schema_path)
+                    cleanup_schema_path = None
+                    return _run_fresh_operation_after_stale_resume(
+                        turn,
+                        commands=resolved_commands,
+                        validation=config.provider_policy.validation,
+                        fallback_model=model,
+                        fallback_model_effort=model_effort,
+                        stale_session_id=resume_session_id,
+                    )
                 streams = format_subprocess_streams(stdout, stderr)
                 raise ProviderExecutionError(
                     f"provider 'codex' failed while running step {turn.step_name!r} "
@@ -284,6 +351,55 @@ def build_codex_operation_executor(
             _cleanup_schema_file(cleanup_schema_path)
 
     return execute
+
+
+def _run_fresh_operation_after_stale_resume(
+    turn: RenderedProviderTurn,
+    *,
+    commands: CodexCLICommand,
+    validation: ProviderPolicyValidationConfig,
+    fallback_model: str | None,
+    fallback_model_effort: str | None,
+    stale_session_id: str,
+) -> ProviderTurnResult:
+    emission, base_command, model, model_effort, structured_output, cleanup_schema_path = _prepare_turn_command(
+        turn,
+        commands=commands,
+        emitter=CodexPolicyEmitter(),
+        validation=validation,
+        fallback_model=fallback_model,
+        fallback_model_effort=fallback_model_effort,
+        force_start=True,
+    )
+    try:
+        stdout, stderr, returncode = run_text_subprocess(
+            list(base_command),
+            input_text=turn.prompt_text,
+            env=merge_subprocess_env(None if emission is None else emission.env),
+        )
+        if returncode != 0:
+            streams = format_subprocess_streams(stdout, stderr)
+            raise ProviderExecutionError(
+                f"provider 'codex' failed while running step {turn.step_name!r} "
+                f"(exit code {returncode}) after discarding stale resume session: {streams}"
+            )
+        assistant_text, resolved_session_id, provider_metadata, usage = parse_codex_exec_json(stdout)
+        provider_metadata = _with_stale_resume_metadata(provider_metadata, stale_session_id=stale_session_id)
+        if emission is not None:
+            provider_metadata = _with_policy_metadata(provider_metadata, emission=emission)
+        return _build_codex_result(
+            turn=turn,
+            resume_session_id=None,
+            resolved_session_id=resolved_session_id,
+            provider_metadata=provider_metadata,
+            usage=usage,
+            assistant_text=assistant_text,
+            model=model,
+            model_effort=model_effort,
+            structured_output=structured_output,
+        )
+    finally:
+        _cleanup_schema_file(cleanup_schema_path)
 
 
 class CodexProvider(RenderedLLMProvider):
@@ -411,6 +527,7 @@ def _prepare_turn_command(
     validation: ProviderPolicyValidationConfig,
     fallback_model: str | None,
     fallback_model_effort: str | None,
+    force_start: bool = False,
 ) -> tuple[
     ProviderPolicyEmission | None,
     tuple[str, ...],
@@ -420,7 +537,7 @@ def _prepare_turn_command(
     Path | None,
 ]:
     emission = _emit_turn_policy(emitter, turn, validation=validation)
-    resume_session_id = _resumable_session_id("codex", turn.session)
+    resume_session_id = None if force_start else _resumable_session_id("codex", turn.session)
     command = commands.resume_command if resume_session_id is not None else commands.start_command
     model = fallback_model
     model_effort = fallback_model_effort
@@ -441,6 +558,23 @@ def _prepare_turn_command(
     return emission, command, model, model_effort, structured_output, cleanup_schema_path
 
 
+def _is_missing_rollout_resume_error(stderr: str) -> bool:
+    return "thread/resume" in stderr and "no rollout found for thread id" in stderr
+
+
+def _with_stale_resume_metadata(
+    provider_metadata: dict[str, Any],
+    *,
+    stale_session_id: str,
+) -> dict[str, Any]:
+    metadata = dict(provider_metadata)
+    metadata["resume_recovery"] = {
+        "reason": "missing_rollout",
+        "discarded_session_id": stale_session_id,
+    }
+    return metadata
+
+
 def _prepare_structured_output(
     turn: RenderedProviderTurn,
     *,
@@ -448,14 +582,24 @@ def _prepare_structured_output(
 ) -> tuple[dict[str, Any] | None, Path | None, tuple[str, ...]]:
     if turn.response_schema is None:
         return None, None, ()
-    surface = _probe_codex_exec_surface()
-    if resume_session_id is None and surface.start_supports_output_schema:
-        schema_path, cleanup_schema_path = _write_response_schema_file(turn)
-        delivery_mode = "native_simplified" if turn.response_schema_simplified else "native_full"
+    if turn.native_response_schema is None:
+        fallback_reason = turn.response_schema_native_skip_reason or "provider_response_schema_native_schema_unavailable"
         return (
             structured_output_metadata(
                 provider_name="codex",
-                delivery_mode=delivery_mode,
+                delivery_mode="prompt_only",
+                reason=fallback_reason,
+            ),
+            None,
+            (),
+        )
+    surface = _probe_codex_exec_surface()
+    if resume_session_id is None and surface.start_supports_output_schema:
+        schema_path, cleanup_schema_path = _write_response_schema_file(turn, schema=turn.native_response_schema)
+        return (
+            structured_output_metadata(
+                provider_name="codex",
+                delivery_mode="native_full",
                 schema_path=str(schema_path),
             ),
             cleanup_schema_path,
@@ -477,8 +621,8 @@ def _prepare_structured_output(
     )
 
 
-def _write_response_schema_file(turn: RenderedProviderTurn) -> tuple[Path, Path | None]:
-    schema_payload = json.dumps(turn.response_schema, indent=2, sort_keys=True) + "\n"
+def _write_response_schema_file(turn: RenderedProviderTurn, *, schema: Mapping[str, Any]) -> tuple[Path, Path | None]:
+    schema_payload = json.dumps(schema, indent=2, sort_keys=True) + "\n"
     if turn.run_folder is not None:
         step_key = build_policy_step_key(turn.step_name, step_execution_id=turn.step_execution_id)
         schema_dir = turn.run_folder / "provider_response_schemas" / "codex"

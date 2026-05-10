@@ -1,7 +1,0 @@
-<autoloop-decisions-header version="1" block_seq="1" owner="planner" phase_id="task-global" pair="plan" turn_seq="1" run_id="run-20260508T161613Z-c2f3eecb" ts="2026-05-08T16:16:14.355989+00:00" />
-Remove only the leaked autoloop.simple aliases for PolicyInput and ProviderPolicyInput; autoloop.policy and autoloop.sdk remain the canonical public export sites.
-Preserve simple declaration/runtime acceptance of Policy, ProviderPolicy, ProviderPolicyOverride, and None by using internal/private typing support instead of public alias bindings.
-<autoloop-decisions-header version="1" block_seq="2" owner="implementer" phase_id="simple-policy-export-cleanup" pair="implement" turn_seq="1" run_id="run-20260508T161613Z-c2f3eecb" ts="2026-05-08T16:19:12.244038+00:00" />
-Use a private `_SimplePolicyInput` alias inside `autoloop.simple` instead of importing or re-exporting `PolicyInput`, so annotations and runtime validation still accept `Policy`, `ProviderPolicy`, `ProviderPolicyOverride`, and `None` while both leaked public names disappear from the module namespace.
-<autoloop-decisions-header version="1" block_seq="3" owner="test_author" phase_id="simple-policy-export-cleanup" pair="test" turn_seq="1" run_id="run-20260508T161613Z-c2f3eecb" ts="2026-05-08T16:22:04.913192+00:00" />
-Lock AC-3 explicitly with a simple-surface regression test that covers direct `ProviderPolicy` and explicit `None`, since existing phase tests already covered `Policy` and `ProviderPolicyOverride` but not the full accepted input set.

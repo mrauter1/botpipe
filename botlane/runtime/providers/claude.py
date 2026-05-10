@@ -480,8 +480,4 @@ def _claude_subprocess_options(
     turn: RenderedProviderTurn,
     emission: ProviderPolicyEmission | None,
 ) -> tuple[dict[str, str], Path | None]:
-    cwd: Path | None = None
-    if emission is not None and turn.run_folder is not None and turn.workspace_root is not None:
-        cwd = turn.run_folder / "provider_policy" / "claude_runtime" / "launch"
-        cwd.mkdir(parents=True, exist_ok=True)
-    return merge_subprocess_env(None if emission is None else emission.env), cwd
+    return merge_subprocess_env(None if emission is None else emission.env), None

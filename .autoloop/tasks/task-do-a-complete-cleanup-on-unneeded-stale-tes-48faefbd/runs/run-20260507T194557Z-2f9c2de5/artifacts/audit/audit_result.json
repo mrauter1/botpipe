@@ -1,5 +1,0 @@
-{
-  "material_gaps_found": true,
-  "summary": "The cleanup removed most stale tests as intended, but the retained monolith split is currently broken and still leaves one direct repo-owned workflow import in shared tests.",
-  "revised_request_path": "/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/task-do-a-complete-cleanup-on-unneeded-stale-tes-48faefbd/runs/run-20260507T194557Z-2f9c2de5/artifacts/audit/revised_request.md"
-}

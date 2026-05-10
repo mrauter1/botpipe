@@ -90,7 +90,8 @@ class ProviderTurnContext:
     writable_artifacts: tuple[ProviderArtifactRef, ...] = ()
     route_required_writes: Mapping[str, tuple[str, ...]] = field(default_factory=dict)
     response_schema: Mapping[str, Any] | None = None
-    response_schema_simplified: bool = False
+    native_response_schema: Mapping[str, Any] | None = None
+    response_schema_native_skip_reason: str | None = None
     retry_feedback: str | None = None
     route_handoff: str | None = None
     policy: ResolvedProviderPolicy | None = None
@@ -113,7 +114,8 @@ class ProducerRequest:
     writable_artifacts: tuple[ProviderArtifactRef, ...] = ()
     route_required_writes: Mapping[str, tuple[str, ...]] = field(default_factory=dict)
     response_schema: Mapping[str, Any] | None = None
-    response_schema_simplified: bool = False
+    native_response_schema: Mapping[str, Any] | None = None
+    response_schema_native_skip_reason: str | None = None
     retry_feedback: str | None = None
     route_handoff: str | None = None
     policy: ResolvedProviderPolicy | None = None
@@ -137,7 +139,8 @@ class VerifierRequest:
     writable_artifacts: tuple[ProviderArtifactRef, ...] = ()
     route_required_writes: Mapping[str, tuple[str, ...]] = field(default_factory=dict)
     response_schema: Mapping[str, Any] | None = None
-    response_schema_simplified: bool = False
+    native_response_schema: Mapping[str, Any] | None = None
+    response_schema_native_skip_reason: str | None = None
     retry_feedback: str | None = None
     route_handoff: str | None = None
     policy: ResolvedProviderPolicy | None = None
@@ -160,7 +163,8 @@ class LLMRequest:
     writable_artifacts: tuple[ProviderArtifactRef, ...] = ()
     route_required_writes: Mapping[str, tuple[str, ...]] = field(default_factory=dict)
     response_schema: Mapping[str, Any] | None = None
-    response_schema_simplified: bool = False
+    native_response_schema: Mapping[str, Any] | None = None
+    response_schema_native_skip_reason: str | None = None
     retry_feedback: str | None = None
     route_handoff: str | None = None
     policy: ResolvedProviderPolicy | None = None

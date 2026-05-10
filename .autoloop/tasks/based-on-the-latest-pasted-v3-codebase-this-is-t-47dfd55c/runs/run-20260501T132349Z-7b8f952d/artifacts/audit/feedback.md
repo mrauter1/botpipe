@@ -1,3 +1,0 @@
-# Intent Audit <-> Intent Audit Verifier Feedback
-
-- AUD-000 `non-blocking`: No actionable audit findings. The producer audit correctly classified the remaining staged/compatibility differences from `decisions.txt`, `audit_result.json` is consistent with `revised_request.md`, and a representative current-tree rerun passed: `./.venv/bin/python -m pytest -q tests/strictness/test_no_compat.py tests/runtime/test_golden_workflow.py tests/runtime/test_workspace_and_context.py::test_run_record_projects_legacy_pending_question_as_pending_input tests/runtime/test_history.py::test_context_history_marks_fail_runtime_control_as_failed` -> `15 passed`.

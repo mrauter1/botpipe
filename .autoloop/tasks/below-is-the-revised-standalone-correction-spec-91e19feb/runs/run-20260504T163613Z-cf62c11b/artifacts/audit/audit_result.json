@@ -1,5 +1,0 @@
-{
-  "material_gaps_found": false,
-  "summary": "No material unresolved gaps remain; the prompt-body wording, central regression guard, and representative runtime prompt-package tests all match the shipped route model.",
-  "revised_request_path": "/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/below-is-the-revised-standalone-correction-spec-91e19feb/runs/run-20260504T163613Z-cf62c11b/artifacts/audit/revised_request.md"
-}

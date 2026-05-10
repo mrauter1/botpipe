@@ -52,36 +52,22 @@ def _toml_literal(value: Any) -> str:
     raise TypeError(f"unsupported TOML value: {type(value)!r}")
 
 
-def _render_toml_table(table: dict[str, Any], *, prefix: tuple[str, ...] = ()) -> list[str]:
-    lines: list[str] = []
-    scalar_keys = [key for key, value in table.items() if not isinstance(value, dict)]
-    nested_keys = [key for key, value in table.items() if isinstance(value, dict)]
-    if prefix:
-        lines.append(f"[{'.'.join(prefix)}]")
-    for key in scalar_keys:
-        lines.append(f"{key} = {_toml_literal(table[key])}")
-    if prefix and nested_keys:
-        lines.append("")
-    for index, key in enumerate(nested_keys):
-        lines.extend(_render_toml_table(table[key], prefix=(*prefix, key)))
-        if index != len(nested_keys) - 1:
-            lines.append("")
-    return lines
+def _codex_config_cli_args(payload: dict[str, Any]) -> tuple[str, ...]:
+    args: list[str] = []
+    for key, value in _flatten_config_payload(payload):
+        args.append(f"--config={key}={_toml_literal(value)}")
+    return tuple(args)
 
 
-def _render_toml_document(payload: dict[str, Any]) -> str:
-    scalar_lines = [f"{key} = {_toml_literal(value)}" for key, value in payload.items() if not isinstance(value, dict)]
-    nested_sections = [
-        "\n".join(_render_toml_table(value, prefix=(key,)))
-        for key, value in payload.items()
-        if isinstance(value, dict)
-    ]
-    blocks = []
-    if scalar_lines:
-        blocks.append("\n".join(scalar_lines))
-    if nested_sections:
-        blocks.append("\n\n".join(nested_sections))
-    return ("\n\n".join(blocks) if blocks else "") + "\n"
+def _flatten_config_payload(payload: dict[str, Any], *, prefix: tuple[str, ...] = ()) -> tuple[tuple[str, Any], ...]:
+    entries: list[tuple[str, Any]] = []
+    for key, value in payload.items():
+        path = (*prefix, str(key))
+        if isinstance(value, dict):
+            entries.extend(_flatten_config_payload(value, prefix=path))
+        else:
+            entries.append((".".join(path), value))
+    return tuple(entries)
 
 
 CODEX_PERMISSION_MODES = {
@@ -236,12 +222,11 @@ class CodexPolicyEmitter:
     ) -> ProviderPolicyEmission:
         policy_root = run_dir / "provider_policy" / step_key / "codex"
         policy_root.mkdir(parents=True, exist_ok=True)
-        config_path = policy_root / "config.toml"
         effective_policy_path = policy_root / "effective_policy.json"
         capability_report_path = policy_root / "capability_report.json"
 
         config_payload, unsupported, lossy, unsafe = self._build_config_payload(policy)
-        config_path.write_text(_render_toml_document(config_payload), encoding="utf-8")
+        cli_args = _codex_config_cli_args(config_payload)
 
         fingerprint = policy_fingerprint(policy)
         report = ProviderPolicyCapabilityReport(
@@ -251,8 +236,8 @@ class CodexPolicyEmitter:
             unsupported=tuple(unsupported),
             lossy=tuple(lossy),
             unsafe_expansions=tuple(unsafe),
-            emitted_files=(str(config_path), str(effective_policy_path), str(capability_report_path)),
-            emitted_cli_args=(),
+            emitted_files=(str(effective_policy_path), str(capability_report_path)),
+            emitted_cli_args=cli_args,
             effective_enforcement=EffectiveEnforcementReport(
                 sandbox_mode=str(config_payload.get("sandbox_mode")) if config_payload.get("sandbox_mode") else None,
                 write_roots=tuple(config_payload.get("sandbox_workspace_write", {}).get("writable_roots", ())),
@@ -288,12 +273,11 @@ class CodexPolicyEmitter:
         emission = ProviderPolicyEmission(
             target="codex",
             config_files={
-                "config": config_path,
                 "effective_policy": effective_policy_path,
                 "capability_report": capability_report_path,
             },
-            cli_args=(),
-            env={"CODEX_HOME": str(policy_root)},
+            cli_args=cli_args,
+            env={},
             capability_report=report,
         )
         _raise_for_capability_failure(emission)

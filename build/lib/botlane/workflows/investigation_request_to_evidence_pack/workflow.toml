@@ -1,4 +1,0 @@
-name = "investigation_request_to_evidence_pack"
-title = "Investigation Request To Evidence Pack"
-description = "Frame an investigation request, assemble a durable evidence pack, and publish a deterministic evidence-pack receipt."
-aliases = ["investigation-evidence-pack", "evidence-pack-building-block"]

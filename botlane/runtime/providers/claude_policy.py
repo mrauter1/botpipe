@@ -393,8 +393,6 @@ class ClaudePolicyEmitter:
         settings_path = policy_root / "settings.json"
         effective_policy_path = policy_root / "effective_policy.json"
         capability_report_path = policy_root / "capability_report.json"
-        runtime_home = run_dir / "provider_policy" / "claude_runtime"
-        runtime_home.mkdir(parents=True, exist_ok=True)
 
         settings_payload, cli_args, unsupported, lossy, unsafe, effective = self._build_settings_payload(
             policy,
@@ -447,7 +445,7 @@ class ClaudePolicyEmitter:
                 "capability_report": capability_report_path,
             },
             cli_args=tuple(cli_args),
-            env=_claude_runtime_env(runtime_home, workspace_root=workspace_root),
+            env=_claude_env(workspace_root=workspace_root),
             capability_report=report,
         )
         _raise_for_capability_failure(emission)
@@ -487,10 +485,8 @@ class ClaudePolicyEmitter:
         return ctx.payload, ctx.cli_args, ctx.unsupported, ctx.lossy, ctx.unsafe, effective
 
 
-def _claude_runtime_env(runtime_home: Path, *, workspace_root: Path | None) -> dict[str, str]:
-    env = {
-        "CLAUDE_CONFIG_DIR": str(runtime_home),
-    }
+def _claude_env(*, workspace_root: Path | None) -> dict[str, str]:
+    env: dict[str, str] = {}
     if workspace_root is not None:
         env["CLAUDE_CODE_ADDITIONAL_DIRECTORIES_CLAUDE_MD"] = "1"
     return env

@@ -1,1 +1,0 @@
-No follow-up implementation is required. The final codebase, run decisions, phase artifacts, and current representative pytest rerun align with the requested remaining-delta spec, and the remaining differences are intentional compatibility or staging decisions already recorded in `decisions.txt`.

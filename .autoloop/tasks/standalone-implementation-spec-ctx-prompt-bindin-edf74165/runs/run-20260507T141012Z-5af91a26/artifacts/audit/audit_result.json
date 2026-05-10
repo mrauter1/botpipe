@@ -1,5 +1,0 @@
-{
-  "material_gaps_found": false,
-  "summary": "No material unresolved gaps remain; the stale ctx.input.message contract regression was removed, the scoped runtime split is correct, and focused validation passed.",
-  "revised_request_path": "/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/standalone-implementation-spec-ctx-prompt-bindin-edf74165/runs/run-20260507T141012Z-5af91a26/artifacts/audit/revised_request.md"
-}

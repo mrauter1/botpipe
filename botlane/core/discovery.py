@@ -1145,21 +1145,25 @@ def _analyze_simple_prompt_references(
             if not ref.raw:
                 continue
             references.append(ref.raw)
-            inferred_artifact = _validate_simple_prompt_reference(
-                ref.raw,
-                step_name=seed.name,
-                own_outputs=own_outputs,
-                state_fields=state_fields,
-                parameter_fields=parameter_fields,
-                input_fields=input_fields,
-                scope_name=scope_name,
-                worklist_item_state_fields=worklist_item_state_fields,
-                step_state_fields=step_state_fields,
-                step_item_state_fields=step_item_state_fields,
-                step_output_names=step_output_names,
-                artifact_name_counts=artifact_name_counts,
-                allow_branch_placeholders=allow_branch_placeholders,
-                allow_fan_in_placeholders=allow_fan_in_placeholders,
+            inferred_artifact = validate_placeholder_ref(
+                ref,
+                surface=f"simple step {seed.name!r} prompt placeholder",
+                symbols={
+                    "kind": "simple_prompt",
+                    "step_name": seed.name,
+                    "own_outputs": own_outputs,
+                    "state_fields": state_fields,
+                    "parameter_fields": parameter_fields,
+                    "input_fields": input_fields,
+                    "scope_name": scope_name,
+                    "worklist_item_state_fields": worklist_item_state_fields,
+                    "step_state_fields": step_state_fields,
+                    "step_item_state_fields": step_item_state_fields,
+                    "step_output_names": step_output_names,
+                    "artifact_name_counts": artifact_name_counts,
+                    "allow_branch_placeholders": allow_branch_placeholders,
+                    "allow_fan_in_placeholders": allow_fan_in_placeholders,
+                },
             )
             if inferred_artifact is not None:
                 inferred.append(inferred_artifact)
@@ -1230,46 +1234,6 @@ def _known_simple_step_item_state_fields(*, workflow_cls: type[Any], existing_st
         )
         step_item_state_fields[seed.name] = frozenset(() if model is None else model.model_fields.keys())
     return step_item_state_fields
-
-
-def _validate_simple_prompt_reference(
-    reference: str,
-    *,
-    step_name: str,
-    own_outputs: frozenset[str],
-    state_fields: frozenset[str],
-    parameter_fields: frozenset[str],
-    input_fields: frozenset[str],
-    scope_name: str | None,
-    worklist_item_state_fields: Mapping[str, frozenset[str]],
-    step_state_fields: Mapping[str, frozenset[str]],
-    step_item_state_fields: Mapping[str, frozenset[str]],
-    step_output_names: Mapping[str, frozenset[str]],
-    artifact_name_counts: Mapping[str, int],
-    allow_branch_placeholders: bool = False,
-    allow_fan_in_placeholders: bool = False,
-) -> str | None:
-    ref = parse_placeholders(f"{{{reference}}}", source="simple_prompt")[0]
-    return validate_placeholder_ref(
-        ref,
-        surface=f"simple step {step_name!r} prompt placeholder",
-        symbols={
-            "kind": "simple_prompt",
-            "step_name": step_name,
-            "own_outputs": own_outputs,
-            "state_fields": state_fields,
-            "parameter_fields": parameter_fields,
-            "input_fields": input_fields,
-            "scope_name": scope_name,
-            "worklist_item_state_fields": worklist_item_state_fields,
-            "step_state_fields": step_state_fields,
-            "step_item_state_fields": step_item_state_fields,
-            "step_output_names": step_output_names,
-            "artifact_name_counts": artifact_name_counts,
-            "allow_branch_placeholders": allow_branch_placeholders,
-            "allow_fan_in_placeholders": allow_fan_in_placeholders,
-        },
-    )
 
 
 def _simple_prompt_search_roots(workflow_cls: type[Any]) -> tuple[Path, ...]:

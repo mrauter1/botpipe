@@ -1,1 +1,0 @@
-No follow-up implementation is required. The requested `cleanup.md` public-surface cleanup, `init workflow` scaffold contract updates for all supported shapes, direct scaffold-contract test coverage, and the named focused pytest reruns are all present in the final codebase and artifacts.

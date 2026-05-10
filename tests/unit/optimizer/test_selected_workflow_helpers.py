@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+from botlane.core.outcome_contract import NATIVE_SCHEMA_HAS_OPEN_OBJECT, ProviderOutcomeContract
+
 from tests.unit._stdlib_and_extensions_shared import (
     _assert_mapping_contains,
     _build_lifecycle_context,
@@ -527,8 +529,9 @@ def test_core_selected_workflow_payload_builders_preserve_authoring_and_decompos
     assert capability_payload["compiled_global_routes"] == {}
     assert "question" in assess_capability["compiled_route_tags"]
     assert assess_capability["suppressed_route_tags"] == []
-    assert assess_capability["provider_response_contracts"]["interactive"]["schema_simplified"] is False
-    assert assess_capability["provider_response_contracts"]["full_auto"]["schema_simplified"] is False
+    assert assess_capability["provider_response_contracts"]["interactive"]["schema_delivery_mode"] == "prompt_only"
+    assert assess_capability["provider_response_contracts"]["interactive"]["native_skip_reason"] == NATIVE_SCHEMA_HAS_OPEN_OBJECT
+    assert assess_capability["provider_response_contracts"]["full_auto"]["schema_delivery_mode"] == "prompt_only"
     assert assess_capability["compiled_routes"]["question"]["payload_contract"]["mode"] == "inherit"
     assert assess_capability["compiled_routes"]["question"]["payload_contract"]["source"] == "step_expected_output"
     assert assess_capability["compiled_routes"]["question"]["route_fields_contract"]["source"] == "route"
@@ -537,12 +540,12 @@ def test_core_selected_workflow_payload_builders_preserve_authoring_and_decompos
     assert assess_capability["compiled_routes"]["question"]["available"] is True
     assert decomposition_surface["selected_workflow_compiled_surface"]["compiled_global_routes"] == {}
     assert "question" in compiled_assess["compiled_route_tags"]
-    assert compiled_assess["provider_response_contracts"]["interactive"]["schema_simplified"] is False
+    assert compiled_assess["provider_response_contracts"]["interactive"]["schema_delivery_mode"] == "prompt_only"
     assert compiled_assess["compiled_routes"]["question"]["payload_contract"]["mode"] == "inherit"
     assert compiled_assess["compiled_routes"]["question"]["payload_contract"]["source"] == "step_expected_output"
     assert compiled_assess["compiled_routes"]["question"]["route_fields_contract"]["source"] == "route"
     assert compiled_assess["compiled_routes"]["question"]["inheritance_source"] == "framework_default"
-def test_selected_workflow_inspection_payloads_surface_simplified_provider_schema_fallback(
+def test_selected_workflow_inspection_payloads_surface_prompt_only_provider_schema_delivery(
     tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
@@ -572,10 +575,14 @@ def test_selected_workflow_inspection_payloads_surface_simplified_provider_schem
         "additionalProperties": False,
     }
 
-    def _force_simplified_schema(*, routes, expected_output_schema, max_chars=12_000):
-        return fallback_schema, True
+    def _force_prompt_only_contract(*, routes, expected_output_schema, max_chars=12_000):
+        return ProviderOutcomeContract(
+            prompt_schema=fallback_schema,
+            native_schema=None,
+            native_skip_reason=NATIVE_SCHEMA_HAS_OPEN_OBJECT,
+        )
 
-    monkeypatch.setattr(route_reporting_helpers, "build_provider_outcome_schema", _force_simplified_schema)
+    monkeypatch.setattr(route_reporting_helpers, "build_provider_outcome_contract", _force_prompt_only_contract)
 
     capability = inspect_workflow_reference(tmp_path, "release_decision")
     capability_payload = selected_workflow_capability_payload(capability)
@@ -584,14 +591,15 @@ def test_selected_workflow_inspection_payloads_surface_simplified_provider_schem
     assess_capability = next(step for step in capability_payload["steps"] if step["name"] == "assess")
     compiled_assess = decomposition_surface["selected_workflow_compiled_surface"]["steps"][0]
 
-    assert assess_capability["provider_response_contracts"]["interactive"]["schema_simplified"] is True
+    assert assess_capability["provider_response_contracts"]["interactive"]["schema_delivery_mode"] == "prompt_only"
+    assert assess_capability["provider_response_contracts"]["interactive"]["native_skip_reason"] == NATIVE_SCHEMA_HAS_OPEN_OBJECT
     assert assess_capability["provider_response_contracts"]["interactive"]["schema_fingerprint"] is not None
     assert assess_capability["provider_response_contracts"]["interactive"]["schema_chars"] > 0
-    assert assess_capability["provider_response_contracts"]["full_auto"]["schema_simplified"] is True
-    assert compiled_assess["provider_response_contracts"]["interactive"]["schema_simplified"] is True
+    assert assess_capability["provider_response_contracts"]["full_auto"]["schema_delivery_mode"] == "prompt_only"
+    assert compiled_assess["provider_response_contracts"]["interactive"]["schema_delivery_mode"] == "prompt_only"
     assert compiled_assess["provider_response_contracts"]["interactive"]["schema_fingerprint"] is not None
     assert compiled_assess["provider_response_contracts"]["interactive"]["schema_chars"] > 0
-    assert compiled_assess["provider_response_contracts"]["full_auto"]["schema_simplified"] is True
+    assert compiled_assess["provider_response_contracts"]["full_auto"]["schema_delivery_mode"] == "prompt_only"
 def test_refinement_helper_snapshots_selected_workflow_authoring_surface_via_shared_resolution_and_catalog_seams(
     tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,

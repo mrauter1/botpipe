@@ -5,9 +5,6 @@ from __future__ import annotations
 from collections.abc import Callable, MutableMapping
 from typing import Any
 
-_SCHEMA_PREFIX = "botlane."
-_LEGACY_SCHEMA_PREFIX = "auto" + "loop."
-
 RUN_METADATA_SCHEMA = "botlane.run_metadata/v1"
 CHECKPOINT_SCHEMA = "botlane.checkpoint/v1"
 RUNTIME_TRACE_SCHEMA = "botlane.runtime_trace/v1"
@@ -31,12 +28,6 @@ WORKFLOW_OPTIMIZATION_STEP_PRIORITY_REPORT_SCHEMA = "botlane.workflow_optimizati
 WORKFLOW_OPTIMIZATION_FAILURE_SCENARIO_SEEDS_SCHEMA = "botlane.workflow_optimization.failure_scenario_seeds/v1"
 WORKFLOW_OPTIMIZATION_FAILURE_SCENARIOS_SCHEMA = "botlane.workflow_optimization.failure_scenarios/v1"
 WORKFLOW_OPTIMIZATION_SCOPE_SCHEMA = "botlane.workflow_optimization.scope/v1"
-
-
-def legacy_schema_alias(expected: str) -> str | None:
-    if not expected.startswith(_SCHEMA_PREFIX):
-        return None
-    return _LEGACY_SCHEMA_PREFIX + expected.removeprefix(_SCHEMA_PREFIX)
 
 
 def validate_persisted_schema(
@@ -64,10 +55,7 @@ def validate_persisted_schema(
         schema = payload.get("schema")
     if not isinstance(schema, str) or not schema:
         raise ValueError(f"{artifact_name} must define a non-empty schema string when present")
-    accepted = {expected}
-    if (legacy_alias := legacy_schema_alias(expected)) is not None:
-        accepted.add(legacy_alias)
-    if schema not in accepted:
+    if schema != expected:
         raise ValueError(
             f"{artifact_name} uses unsupported schema {schema!r}; expected {expected!r}"
         )
@@ -87,7 +75,6 @@ __all__ = [
     "CHECKPOINT_SCHEMA",
     "CHILD_RUN_SUMMARY_SCHEMA",
     "GIT_TRACKING_SCHEMA",
-    "legacy_schema_alias",
     "migrate_schemaless_payload",
     "OPERATION_REPLAY_SCHEMA",
     "RUN_METADATA_SCHEMA",

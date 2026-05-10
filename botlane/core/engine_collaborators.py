@@ -20,7 +20,7 @@ from .extensions import HookRouteRedirect
 from .identifiers import ArtifactId
 from .operations import OperationRuntime, bind_operation_runtime, provider_configuration
 from .outcome_contract import (
-    build_provider_outcome_schema,
+    build_provider_outcome_contract,
     payload_schema_for_route,
     route_fields_schema_for_route,
 )
@@ -483,13 +483,13 @@ class ProviderContractBuilder:
     ) -> dict[str, Any]:
         include_routes = turn.kind != "producer"
         routes = self.routes(step) if include_routes else {}
-        response_schema, response_schema_simplified = (
-            build_provider_outcome_schema(
+        response_contract = (
+            build_provider_outcome_contract(
                 routes=routes,
                 expected_output_schema=turn.expected_output_schema,
             )
             if include_routes
-            else (None, False)
+            else None
         )
         return {
             "expected_output_schema": deepcopy(turn.expected_output_schema),
@@ -499,8 +499,9 @@ class ProviderContractBuilder:
             "required_artifacts": self.required_artifact_refs_from_turn(turn.io.requires, artifacts, context=context),
             "writable_artifacts": self.writable_artifact_refs_from_turn(turn.io.writes, artifacts),
             "route_required_writes": self.route_required_writes(step) if include_routes else {},
-            "response_schema": response_schema,
-            "response_schema_simplified": response_schema_simplified,
+            "response_schema": None if response_contract is None else response_contract.prompt_schema,
+            "native_response_schema": None if response_contract is None else response_contract.native_schema,
+            "response_schema_native_skip_reason": None if response_contract is None else response_contract.native_skip_reason,
             "retry_feedback": retry_feedback,
             "route_handoff": route_handoff,
             "attempt": attempt,

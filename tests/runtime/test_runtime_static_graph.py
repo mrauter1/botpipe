@@ -10,6 +10,7 @@ from pydantic import BaseModel
 from botlane import AWAIT_INPUT, FINISH, Md, Prompt, Route, StateVar, Workflow, Worklist, produce_verify_step, python_step, step
 from botlane.core import Artifact, FAIL, GLOBAL, Workflow as CoreWorkflow
 from botlane.core.compiler import compile_workflow
+from botlane.core.outcome_contract import NATIVE_SCHEMA_HAS_OPEN_OBJECT, ProviderOutcomeContract
 from botlane.core.providers.retries import ProviderRetryPolicy
 from botlane.core.steps import PromptStep
 from botlane.runtime.static_graph import (
@@ -86,7 +87,8 @@ def test_static_step_graph_includes_step_kind_prompts_routes_and_artifact_names(
     assert assessment["runtime_control_routes"] == ["question"]
     assert assessment["provider_visible_routes_interactive"] == ["assessment_ready", "question"]
     assert assessment["provider_visible_routes_full_auto"] == ["assessment_ready"]
-    assert assessment["provider_response_contracts"]["interactive"]["schema_simplified"] is False
+    assert assessment["provider_response_contracts"]["interactive"]["schema_delivery_mode"] == "prompt_only"
+    assert assessment["provider_response_contracts"]["interactive"]["native_skip_reason"] == NATIVE_SCHEMA_HAS_OPEN_OBJECT
     assert finish["kind"] == "python"
     assert finish["prompt"] is None
     assert finish["producer_prompt"] is None
@@ -501,7 +503,7 @@ def test_topology_artifacts_include_state_surfaces_runtime_control_hook_location
     assert (
         "- `review`: compiled=`done`, `human_escalation`, `question`; available=`done`, `human_escalation`, `question`; "
         "suppressed=none; provider_visible_interactive=`done`, `question`; "
-        "provider_visible_full_auto=`done`; provider_schema_fallback(interactive/full_auto)=`False`/`False`; "
+        "provider_visible_full_auto=`done`; provider_schema_delivery(interactive/full_auto)=`native`/`native`; "
         "legacy_authored=`done`, `human_escalation`; legacy_runtime_control=`question`"
     ) in compile_report
     assert "## Route Contracts" in compile_report
@@ -511,7 +513,7 @@ def test_topology_artifacts_include_state_surfaces_runtime_control_hook_location
     assert "| - | on_hidden_taken |" in route_table
 
 
-def test_static_graph_and_compile_report_surface_simplified_provider_schema_fallback(
+def test_static_graph_and_compile_report_surface_prompt_only_provider_schema_delivery(
     tmp_path: Path,
     monkeypatch,
 ) -> None:
@@ -533,25 +535,33 @@ def test_static_graph_and_compile_report_surface_simplified_provider_schema_fall
         "additionalProperties": False,
     }
 
-    def _force_simplified_schema(*, routes, expected_output_schema, max_chars=12_000):
-        return fallback_schema, True
+    def _force_prompt_only_contract(*, routes, expected_output_schema, max_chars=12_000):
+        return ProviderOutcomeContract(
+            prompt_schema=fallback_schema,
+            native_schema=None,
+            native_skip_reason=NATIVE_SCHEMA_HAS_OPEN_OBJECT,
+        )
 
-    monkeypatch.setattr(route_reporting_helpers, "build_provider_outcome_schema", _force_simplified_schema)
+    monkeypatch.setattr(route_reporting_helpers, "build_provider_outcome_contract", _force_prompt_only_contract)
 
     compiled = compile_workflow(_StaticGraphWorkflow)
 
     static_payload = workflow_static_step_graph_payload(compiled)
     assessment = next(step_payload for step_payload in static_payload["steps"] if step_payload["name"] == "assessment")
 
-    assert assessment["provider_response_contracts"]["interactive"]["schema_simplified"] is True
+    assert assessment["provider_response_contracts"]["interactive"]["schema_delivery_mode"] == "prompt_only"
+    assert assessment["provider_response_contracts"]["interactive"]["native_skip_reason"] == NATIVE_SCHEMA_HAS_OPEN_OBJECT
     assert assessment["provider_response_contracts"]["interactive"]["schema_fingerprint"] is not None
     assert assessment["provider_response_contracts"]["interactive"]["schema_chars"] > 0
-    assert assessment["provider_response_contracts"]["full_auto"]["schema_simplified"] is True
+    assert assessment["provider_response_contracts"]["full_auto"]["schema_delivery_mode"] == "prompt_only"
 
     write_topology_artifacts(tmp_path, compiled)
     compile_report = (tmp_path / "compile_report.md").read_text(encoding="utf-8")
 
-    assert "provider_schema_fallback(interactive/full_auto)=`True`/`True`" in compile_report
+    assert (
+        "provider_schema_delivery(interactive/full_auto)="
+        "`prompt_only:provider_response_schema_has_open_object`/`prompt_only:provider_response_schema_has_open_object`"
+    ) in compile_report
 
 
 def test_route_table_mermaid_and_compile_report_distinguish_runtime_control_routes(tmp_path: Path) -> None:
@@ -567,7 +577,7 @@ def test_route_table_mermaid_and_compile_report_distinguish_runtime_control_rout
     assert (
         "- `assessment`: compiled=`assessment_ready`, `question`; available=`assessment_ready`, `question`; "
         "suppressed=none; provider_visible_interactive=`assessment_ready`, `question`; "
-        "provider_visible_full_auto=`assessment_ready`; provider_schema_fallback(interactive/full_auto)=`False`/`False`; "
+        "provider_visible_full_auto=`assessment_ready`; provider_schema_delivery(interactive/full_auto)=`prompt_only:provider_response_schema_has_open_object`/`prompt_only:provider_response_schema_has_open_object`; "
         "legacy_authored=`assessment_ready`; legacy_runtime_control=`question`"
     ) in compile_report
 

@@ -92,7 +92,12 @@ def render_provider_turn_with_policy(
         runtime_event_sink=_context_runtime_event_sink(context.context),
         expected_response="raw_text" if context.turn_kind in {"producer", "operation"} else "outcome_json",
         response_schema=None if context.turn_kind in {"producer", "operation"} else _response_schema_payload(context),
-        response_schema_simplified=context.response_schema_simplified if context.turn_kind not in {"producer", "operation"} else False,
+        native_response_schema=None
+        if context.turn_kind in {"producer", "operation"}
+        else _native_response_schema_payload(context),
+        response_schema_native_skip_reason=context.response_schema_native_skip_reason
+        if context.turn_kind not in {"producer", "operation"}
+        else None,
     )
 
 
@@ -291,8 +296,8 @@ def _render_outcome_response(context: ProviderTurnContext) -> str:
                 "type": "object",
                 "properties": {
                     "tag": {"type": "string", "enum": list(_visible_routes(context))},
-                    "payload": {"type": "object", "additionalProperties": True},
-                    "route_fields": {"type": "object", "additionalProperties": True},
+                    "payload": {"type": "object", "properties": {}, "required": [], "additionalProperties": False},
+                    "route_fields": {"type": "object", "properties": {}, "required": [], "additionalProperties": False},
                 },
                 "required": ["tag", "payload", "route_fields"],
                 "additionalProperties": False,
@@ -346,11 +351,12 @@ def _render_outcome_response(context: ProviderTurnContext) -> str:
         json.dumps(response_schema, indent=2, sort_keys=True),
         "```",
     ]
-    if context.response_schema_simplified:
+    if context.response_schema_native_skip_reason is not None:
         lines.extend(
             [
                 "",
-                "The provider-side schema was simplified for size or complexity limits. "
+                "Native structured-output delivery may be disabled because this detailed schema exceeds provider limits "
+                "or is not accepted by the native schema dialect. "
                 "Runtime post-parse validation still enforces the selected route's payload and route-fields schemas.",
             ]
         )
@@ -463,6 +469,17 @@ def _route_target(context: ProviderTurnContext, route: str) -> str:
 
 
 def _route_payload_schema(context: ProviderTurnContext, route: str) -> dict[str, Any]:
+    response_schema = _response_schema_payload(context)
+    if response_schema is not None:
+        branch_schema = _route_branch_schema_from_response_schema(response_schema, route)
+        if branch_schema is None:
+            return {"type": "object", "properties": {}, "required": [], "additionalProperties": False}
+        properties = branch_schema.get("properties")
+        if isinstance(properties, Mapping):
+            payload_schema = properties.get("payload")
+            if isinstance(payload_schema, Mapping):
+                return dict(payload_schema)
+        return {"type": "object", "properties": {}, "required": [], "additionalProperties": False}
     info = context.routes.get(route)
     if isinstance(info, Mapping):
         schema = info.get("payload_schema")
@@ -472,10 +489,21 @@ def _route_payload_schema(context: ProviderTurnContext, route: str) -> dict[str,
         return dict(info.payload_schema)
     if isinstance(context.expected_output_schema, Mapping):
         return dict(context.expected_output_schema)
-    return {"type": "object", "additionalProperties": True}
+    return {"type": "object", "properties": {}, "required": [], "additionalProperties": False}
 
 
 def _route_fields_schema(context: ProviderTurnContext, route: str) -> dict[str, Any]:
+    response_schema = _response_schema_payload(context)
+    if response_schema is not None:
+        branch_schema = _route_branch_schema_from_response_schema(response_schema, route)
+        if branch_schema is None:
+            return {"type": "object", "properties": {}, "required": [], "additionalProperties": False}
+        properties = branch_schema.get("properties")
+        if isinstance(properties, Mapping):
+            route_fields_schema = properties.get("route_fields")
+            if isinstance(route_fields_schema, Mapping):
+                return dict(route_fields_schema)
+        return {"type": "object", "properties": {}, "required": [], "additionalProperties": False}
     info = context.routes.get(route)
     if isinstance(info, Mapping):
         schema = info.get("route_fields_schema")
@@ -490,6 +518,37 @@ def _response_schema_payload(context: ProviderTurnContext) -> dict[str, Any] | N
     if not isinstance(context.response_schema, Mapping):
         return None
     return dict(context.response_schema)
+
+
+def _native_response_schema_payload(context: ProviderTurnContext) -> dict[str, Any] | None:
+    if not isinstance(context.native_response_schema, Mapping):
+        return None
+    return dict(context.native_response_schema)
+
+
+def _route_branch_schema_from_response_schema(
+    response_schema: Mapping[str, Any],
+    route: str,
+) -> Mapping[str, Any] | None:
+    properties = response_schema.get("properties")
+    if not isinstance(properties, Mapping):
+        return None
+    outcome_schema = properties.get("outcome")
+    if not isinstance(outcome_schema, Mapping):
+        return None
+    branches = outcome_schema.get("anyOf")
+    if not isinstance(branches, list):
+        return None
+    for branch in branches:
+        if not isinstance(branch, Mapping):
+            continue
+        properties = branch.get("properties")
+        if not isinstance(properties, Mapping):
+            continue
+        tag_schema = properties.get("tag")
+        if isinstance(tag_schema, Mapping) and tag_schema.get("const") == route:
+            return branch
+    return None
 
 
 def _artifact_notes(ref: ProviderArtifactRef) -> str:

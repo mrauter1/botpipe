@@ -20,15 +20,20 @@ _CANONICAL_TOP_LEVEL_FIELDS = {"outcome", "tag", *_LEGACY_OPTIONAL_FIELDS}
 def parse_outcome_json(text: str) -> Outcome:
     """Parse canonical or legacy provider outcome JSON."""
 
-    candidate = text.strip()
-    match = _JSON_FENCE_RE.fullmatch(candidate)
-    if match is not None:
-        candidate = match.group("body").strip()
+    candidate = _normalize_outcome_json_candidate(text.strip())
 
     try:
         payload = json.loads(candidate)
     except json.JSONDecodeError as exc:
-        raise _malformed_provider_output(f"provider returned malformed outcome JSON: {exc.msg}") from exc
+        fallback = _last_outcome_json_candidate(candidate)
+        if fallback is None:
+            raise _malformed_provider_output(f"provider returned malformed outcome JSON: {exc.msg}") from exc
+        try:
+            payload = json.loads(fallback)
+        except json.JSONDecodeError as fallback_exc:
+            raise _malformed_provider_output(
+                f"provider returned malformed outcome JSON: {fallback_exc.msg}"
+            ) from fallback_exc
 
     if not isinstance(payload, dict):
         raise _malformed_provider_output("provider outcome JSON must be an object.")
@@ -77,6 +82,22 @@ def parse_outcome_json(text: str) -> Outcome:
         payload=deepcopy(parsed_payload),
         route_fields=deepcopy(route_fields),
     )
+
+
+def _normalize_outcome_json_candidate(candidate: str) -> str:
+    match = _JSON_FENCE_RE.fullmatch(candidate)
+    if match is not None:
+        return match.group("body").strip()
+    return candidate
+
+
+def _last_outcome_json_candidate(text: str) -> str | None:
+    chunks = [*re.split(r"\n\s*\n", text), *text.splitlines()]
+    for chunk in reversed(chunks):
+        candidate = _normalize_outcome_json_candidate(chunk.strip())
+        if candidate.startswith("{") and candidate.endswith("}"):
+            return candidate
+    return None
 
 
 def _optional_string_field(payload: dict[str, Any], key: str) -> str | None:

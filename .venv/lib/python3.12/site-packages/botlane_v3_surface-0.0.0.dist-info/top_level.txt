@@ -1,2 +1,0 @@
-botlane
-botlane_optimizer

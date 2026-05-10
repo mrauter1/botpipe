@@ -1,4 +1,0 @@
-name = "workflow_run_history_to_failure_modes"
-title = "Workflow Run History To Failure Modes"
-description = "Turn one selected workflow's historical run evidence into a failure-mode package, ranked improvement pressure, and a deterministic diagnostic receipt."
-aliases = ["workflow-failure-modes", "run-history-failure-modes"]

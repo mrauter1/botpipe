@@ -2,7 +2,6 @@ from __future__ import annotations
 
 import json
 from pathlib import Path
-import tomllib
 
 import pytest
 
@@ -21,6 +20,16 @@ from botlane.core.provider_policy import (
 )
 from botlane.runtime.providers.claude_policy import ClaudeCapabilities, ClaudePolicyEmitter
 from botlane.runtime.providers.codex_policy import CodexPolicyEmitter
+
+
+def _cli_config_values(emission) -> dict[str, str]:
+    prefix = "--config="
+    values: dict[str, str] = {}
+    for arg in emission.cli_args:
+        assert arg.startswith(prefix)
+        key, value = arg[len(prefix) :].split("=", 1)
+        values[key] = value
+    return values
 
 
 def _emit(
@@ -72,15 +81,15 @@ def test_codex_emitter_full_auto_sandboxed_emits_workspace_write_config(tmp_path
     )
 
     emission = _emit(tmp_path, policy)
-    config_path = emission.config_files["config"]
-    config = tomllib.loads(config_path.read_text(encoding="utf-8"))
+    config = _cli_config_values(emission)
 
-    assert config_path == tmp_path / "provider_policy" / "implement__visit-1" / "codex" / "config.toml"
-    assert config["approval_policy"] == "never"
-    assert config["sandbox_mode"] == "workspace-write"
-    assert config["sandbox_workspace_write"]["writable_roots"] == [".", "./build", "./dist"]
-    assert config["sandbox_workspace_write"]["network_access"] is True
-    assert emission.env["CODEX_HOME"] == str(config_path.parent)
+    assert "config" not in emission.config_files
+    assert not (tmp_path / "provider_policy" / "implement__visit-1" / "codex" / "config.toml").exists()
+    assert config["approval_policy"] == '"never"'
+    assert config["sandbox_mode"] == '"workspace-write"'
+    assert config["sandbox_workspace_write.writable_roots"] == '[".", "./build", "./dist"]'
+    assert config["sandbox_workspace_write.network_access"] == "true"
+    assert emission.env == {}
 
 
 def test_codex_emitter_records_unsupported_deny_read_with_warn_validation(tmp_path: Path) -> None:
@@ -249,9 +258,9 @@ def test_codex_emitter_maps_supported_permission_modes(
     )
 
     emission = _emit(tmp_path, policy)
-    config = tomllib.loads(emission.config_files["config"].read_text(encoding="utf-8"))
+    config = _cli_config_values(emission)
 
-    assert config["approval_policy"] == expected_policy
+    assert config["approval_policy"] == f'"{expected_policy}"'
 
 
 def test_codex_emitter_reports_disabled_sandbox_as_unsupported(tmp_path: Path) -> None:
@@ -318,7 +327,7 @@ def test_claude_emitter_maps_allow_write_and_disable_bypass(tmp_path: Path) -> N
     ]
     assert settings["sandbox"]["enabled"] is True
     assert emission.cli_args == ("--settings", str(settings_path), "--add-dir", str(workspace_root.resolve()))
-    assert emission.env["CLAUDE_CONFIG_DIR"] == str(tmp_path / "provider_policy" / "claude_runtime")
+    assert "CLAUDE_CONFIG_DIR" not in emission.env
     assert emission.env["CLAUDE_CODE_ADDITIONAL_DIRECTORIES_CLAUDE_MD"] == "1"
 
 

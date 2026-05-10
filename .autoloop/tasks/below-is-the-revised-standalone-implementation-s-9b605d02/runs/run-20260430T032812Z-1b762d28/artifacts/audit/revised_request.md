@@ -1,1 +1,0 @@
-No follow-up implementation is required. The requested canonical cleanup is present in the final codebase, the maintained-tree strictness guard now bans active `produces` vocabulary outside explicit exclusions, the redundant dynamic aliasing is gone from `core/__init__.py`, and the canonical verification suite passes (`259 passed`).

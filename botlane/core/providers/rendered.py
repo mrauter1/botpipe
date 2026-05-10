@@ -4,6 +4,9 @@ from __future__ import annotations
 
 import asyncio
 from collections.abc import Callable
+from typing import Literal
+
+from ..prompts import ResolvedPrompt
 from .models import (
     LLMRequest,
     OperationRequest,
@@ -35,15 +38,15 @@ class RenderedLLMProvider:
         self._operation_executor = operation_executor
 
     async def run_producer(self, request: ProducerRequest) -> ProducerResponse:
-        result = await self._run_turn(_producer_context(request))
+        result = await self._run_turn(_step_context(request, turn_kind="producer", prompt=request.producer_prompt))
         return _producer_response(result)
 
     async def run_verifier(self, request: VerifierRequest) -> OutcomeResponse:
-        result = await self._run_turn(_verifier_context(request))
+        result = await self._run_turn(_step_context(request, turn_kind="verifier", prompt=request.verifier_prompt))
         return _outcome_response(result)
 
     async def run_llm(self, request: LLMRequest) -> OutcomeResponse:
-        result = await self._run_turn(_llm_context(request))
+        result = await self._run_turn(_step_context(request, turn_kind="step", prompt=request.prompt))
         return _outcome_response(result)
 
     def run_operation(self, request: OperationRequest) -> OperationResponse:
@@ -106,11 +109,16 @@ def run_provider_coro_sync(awaitable):
     raise RuntimeError("Synchronous provider execution cannot run inside an active event loop; use the async API.")
 
 
-def _producer_context(request: ProducerRequest) -> ProviderTurnContext:
+def _step_context(
+    request: ProducerRequest | VerifierRequest | LLMRequest,
+    *,
+    turn_kind: Literal["producer", "verifier", "step"],
+    prompt: ResolvedPrompt,
+) -> ProviderTurnContext:
     return ProviderTurnContext(
         step_name=request.step_name,
-        turn_kind="producer",
-        prompt=request.producer_prompt,
+        turn_kind=turn_kind,
+        prompt=prompt,
         context=request.context,
         artifacts=request.artifacts,
         session=request.session,
@@ -122,57 +130,8 @@ def _producer_context(request: ProducerRequest) -> ProviderTurnContext:
         writable_artifacts=request.writable_artifacts,
         route_required_writes=request.route_required_writes,
         response_schema=request.response_schema,
-        response_schema_simplified=request.response_schema_simplified,
-        retry_feedback=request.retry_feedback,
-        route_handoff=request.route_handoff,
-        policy=request.policy,
-        attempt=request.attempt,
-        max_attempts=request.max_attempts,
-    )
-
-
-def _verifier_context(request: VerifierRequest) -> ProviderTurnContext:
-    return ProviderTurnContext(
-        step_name=request.step_name,
-        turn_kind="verifier",
-        prompt=request.verifier_prompt,
-        context=request.context,
-        artifacts=request.artifacts,
-        session=request.session,
-        expected_output_schema=request.expected_output_schema,
-        available_routes=request.available_routes,
-        routes=request.routes,
-        readable_artifacts=request.readable_artifacts,
-        required_artifacts=request.required_artifacts,
-        writable_artifacts=request.writable_artifacts,
-        route_required_writes=request.route_required_writes,
-        response_schema=request.response_schema,
-        response_schema_simplified=request.response_schema_simplified,
-        retry_feedback=request.retry_feedback,
-        route_handoff=request.route_handoff,
-        policy=request.policy,
-        attempt=request.attempt,
-        max_attempts=request.max_attempts,
-    )
-
-
-def _llm_context(request: LLMRequest) -> ProviderTurnContext:
-    return ProviderTurnContext(
-        step_name=request.step_name,
-        turn_kind="step",
-        prompt=request.prompt,
-        context=request.context,
-        artifacts=request.artifacts,
-        session=request.session,
-        expected_output_schema=request.expected_output_schema,
-        available_routes=request.available_routes,
-        routes=request.routes,
-        readable_artifacts=request.readable_artifacts,
-        required_artifacts=request.required_artifacts,
-        writable_artifacts=request.writable_artifacts,
-        route_required_writes=request.route_required_writes,
-        response_schema=request.response_schema,
-        response_schema_simplified=request.response_schema_simplified,
+        native_response_schema=request.native_response_schema,
+        response_schema_native_skip_reason=request.response_schema_native_skip_reason,
         retry_feedback=request.retry_feedback,
         route_handoff=request.route_handoff,
         policy=request.policy,
@@ -197,7 +156,8 @@ def _operation_context(request: OperationRequest) -> ProviderTurnContext:
         writable_artifacts=(),
         route_required_writes={},
         response_schema=None,
-        response_schema_simplified=False,
+        native_response_schema=None,
+        response_schema_native_skip_reason=None,
         retry_feedback=request.retry_feedback,
         route_handoff=None,
         policy=request.policy,

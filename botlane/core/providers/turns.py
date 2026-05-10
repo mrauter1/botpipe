@@ -29,7 +29,8 @@ class RenderedProviderTurn:
     step_execution_id: str | None = None
     runtime_event_sink: Callable[[str, Mapping[str, Any]], None] | None = None
     response_schema: dict[str, Any] | None = None
-    response_schema_simplified: bool = False
+    native_response_schema: dict[str, Any] | None = None
+    response_schema_native_skip_reason: str | None = None
 
 
 @dataclass(frozen=True, slots=True)

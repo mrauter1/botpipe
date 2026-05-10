@@ -1,4 +1,0 @@
-name = "incident_to_hardening_program"
-title = "Incident To Hardening Program"
-description = "Frame an incident, assemble evidence, rank likely causes, and publish a durable hardening program and communications package."
-aliases = ["incident-hardening", "incident-response-package"]

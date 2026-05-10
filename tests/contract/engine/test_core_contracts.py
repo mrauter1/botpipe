@@ -4,7 +4,6 @@ from tests.contract.engine._shared import _chain_hooks, _RecordingExtension, _wo
 from tests.contract.engine._shared import *
 
 PACKAGE_ROOT = Path(__file__).resolve().parents[3]
-LEGACY_V1_PREFIX = ("auto" + "loop") + "_v1"
 
 def test_runtime_extensions_bind_before_workflow_extensions(tmp_path: Path):
     events: list[str] = []
@@ -79,11 +78,6 @@ def test_extension_core_modules_remain_brand_agnostic():
     corpus = f"{engine_text}\n{extension_text}"
 
     for forbidden in (
-        LEGACY_V1_PREFIX,
-        "run_" + LEGACY_V1_PREFIX,
-        LEGACY_V1_PREFIX + "_support",
-        LEGACY_V1_PREFIX + "_parity",
-        LEGACY_V1_PREFIX + "_conventions",
         "botlane_v1",
         "run_botlane_v1",
         "botlane_v1_support",

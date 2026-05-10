@@ -2,11 +2,12 @@ from __future__ import annotations
 
 import asyncio
 import inspect
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 
 import pytest
 
 from botlane.core.errors import ProviderExecutionError
+from botlane.core.outcome_contract import NATIVE_SCHEMA_EXCEEDS_LIMIT
 from botlane.core.prompts import ResolvedPrompt
 from botlane.core.providers.models import (
     LLMRequest,
@@ -212,6 +213,105 @@ def test_render_provider_turn_omits_optional_sections_when_absent() -> None:
 
     assert "### Route handoff" not in turn.prompt_text
     assert "### Retry feedback" not in turn.prompt_text
+
+
+def test_render_provider_turn_keeps_detailed_schema_when_native_delivery_is_disabled() -> None:
+    detailed_schema = {
+        "type": "object",
+        "properties": {
+            "outcome": {
+                "anyOf": [
+                    {
+                        "type": "object",
+                        "properties": {
+                            "tag": {"type": "string", "const": "done"},
+                            "payload": {
+                                "type": "object",
+                                "properties": {
+                                    "large_required_field": {"type": "string"},
+                                },
+                                "required": ["large_required_field"],
+                                "additionalProperties": False,
+                            },
+                            "route_fields": {
+                                "type": "object",
+                                "properties": {},
+                                "required": [],
+                                "additionalProperties": False,
+                            },
+                        },
+                        "required": ["tag", "payload", "route_fields"],
+                        "additionalProperties": False,
+                    }
+                ]
+            }
+        },
+        "required": ["outcome"],
+        "additionalProperties": False,
+    }
+    turn = render_provider_turn(
+        replace(
+            _turn_context(route_handoff=None, retry_feedback=None),
+            response_schema=detailed_schema,
+            response_schema_native_skip_reason=NATIVE_SCHEMA_EXCEEDS_LIMIT,
+        )
+    )
+
+    assert '"large_required_field": {' in turn.prompt_text
+    assert "Native structured-output delivery may be disabled" in turn.prompt_text
+    assert "schema was simplified" not in turn.prompt_text
+
+
+def test_render_provider_turn_uses_top_level_response_schema_for_route_sections() -> None:
+    response_schema = {
+        "type": "object",
+        "properties": {
+            "outcome": {
+                "anyOf": [
+                    {
+                        "type": "object",
+                        "properties": {
+                            "tag": {"type": "string", "const": "done"},
+                            "payload": {
+                                "type": "object",
+                                "properties": {},
+                                "required": [],
+                                "additionalProperties": False,
+                            },
+                            "route_fields": {
+                                "type": "object",
+                                "properties": {},
+                                "required": [],
+                                "additionalProperties": False,
+                            },
+                        },
+                        "required": ["tag", "payload", "route_fields"],
+                        "additionalProperties": False,
+                    }
+                ]
+            }
+        },
+        "required": ["outcome"],
+        "additionalProperties": False,
+    }
+    turn = render_provider_turn(
+        replace(
+            _turn_context(),
+            expected_output_schema=None,
+            available_routes=("done",),
+            routes={
+                "done": ProviderRoute(
+                    summary="Complete the turn.",
+                    payload_schema={"type": "object", "additionalProperties": True},
+                )
+            },
+            response_schema=response_schema,
+        )
+    )
+
+    assert '"payload": {' in turn.prompt_text
+    assert '"additionalProperties": true' not in turn.prompt_text
+    assert '"additionalProperties": false' in turn.prompt_text
 
 
 def test_render_provider_turn_excludes_hidden_routes_from_prompt_contract() -> None:
@@ -792,6 +892,86 @@ def test_rendered_llm_provider_parses_llm_outcome() -> None:
     assert response.outcome.reason == "Needs local repair."
     assert response.outcome.question == "Fix it?"
     assert response.usage == usage
+
+
+def test_rendered_llm_provider_preserves_shared_step_request_fields_across_turn_kinds() -> None:
+    binding = _session_binding("shared-step-session")
+    response_schema = {"type": "object", "properties": {"summary": {"type": "string"}}}
+    native_response_schema = {"type": "object", "properties": {"summary": {"type": "string"}}}
+    transport = _TransportStub(result_text='{"tag":"done","payload":{}}', session=binding)
+    provider = RenderedLLMProvider(transport)
+    context = object()
+    artifacts = object()
+    route_handoff = "Keep the rendered route contract stable."
+    retry_feedback = "Repair the current attempt without changing the interface."
+    common_kwargs = {
+        "step_name": "draft",
+        "context": context,
+        "artifacts": artifacts,
+        "session": binding,
+        "expected_output_schema": {"type": "object", "properties": {"summary": {"type": "string"}}},
+        "available_routes": ("done",),
+        "routes": {
+            "done": ProviderRoute(
+                summary="Ship the final draft.",
+                required_writes=("report",),
+                explicit_required_writes=("report",),
+            )
+        },
+        "readable_artifacts": (_readable_ref("brief", path="/tmp/brief.md", exists=True, declared_artifact=True),),
+        "required_artifacts": (_artifact_ref("brief", path="/tmp/brief.md"),),
+        "writable_artifacts": (_artifact_ref("report", path="/tmp/report.md", required=False),),
+        "route_required_writes": {"done": ("report",)},
+        "response_schema": response_schema,
+        "native_response_schema": native_response_schema,
+        "response_schema_native_skip_reason": NATIVE_SCHEMA_EXCEEDS_LIMIT,
+        "retry_feedback": retry_feedback,
+        "route_handoff": route_handoff,
+        "attempt": 2,
+        "max_attempts": 4,
+    }
+
+    asyncio.run(
+        provider.run_producer(
+            ProducerRequest(
+                producer_prompt=ResolvedPrompt(path="draft.md", text="Draft the package."),
+                **common_kwargs,
+            )
+        )
+    )
+    asyncio.run(
+        provider.run_verifier(
+            VerifierRequest(
+                verifier_prompt=ResolvedPrompt(path="verify.md", text="Verify the package."),
+                producer_raw_output="hidden raw output",
+                **common_kwargs,
+            )
+        )
+    )
+    asyncio.run(
+        provider.run_llm(
+            LLMRequest(
+                prompt=ResolvedPrompt(path="ask.md", text="Answer the question."),
+                **common_kwargs,
+            )
+        )
+    )
+
+    assert transport.seen_turns is not None
+    assert [turn.turn_kind for turn in transport.seen_turns] == ["producer", "verifier", "step"]
+    assert [turn.expected_response for turn in transport.seen_turns] == ["raw_text", "outcome_json", "outcome_json"]
+    for turn in transport.seen_turns:
+        assert turn.step_name == "draft"
+        assert turn.session == binding
+        assert route_handoff in turn.prompt_text
+        assert retry_feedback in turn.prompt_text
+    assert transport.seen_turns[0].response_schema is None
+    assert transport.seen_turns[0].native_response_schema is None
+    assert transport.seen_turns[0].response_schema_native_skip_reason is None
+    for turn in transport.seen_turns[1:]:
+        assert turn.response_schema == response_schema
+        assert turn.native_response_schema == native_response_schema
+        assert turn.response_schema_native_skip_reason == NATIVE_SCHEMA_EXCEEDS_LIMIT
 
 
 def test_rendered_llm_provider_runs_value_operation_as_raw_text() -> None:

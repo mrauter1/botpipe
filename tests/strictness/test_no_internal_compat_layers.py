@@ -35,6 +35,7 @@ FORBIDDEN_STEP_ROUTE_OWNERSHIP_NAMES = frozenset({"_route_table", "_effective_ro
 ENGINE_BOUNDARY_FILES = (
     REPO_ROOT / "botlane" / "core" / "engine_collaborators.py",
     REPO_ROOT / "botlane" / "core" / "branch_groups" / "runtime.py",
+    REPO_ROOT / "botlane" / "core" / "execution_services.py",
     REPO_ROOT / "botlane" / "core" / "execution_runtime_services.py",
 )
 REMOVED_INTERNAL_PATHS = (
