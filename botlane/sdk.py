@@ -32,8 +32,6 @@ from botlane.core.artifact_plan import ArtifactSpec
 from botlane.core.artifacts import Artifact, resolve_artifact_template
 from botlane.core.compiler import (
     _compile_single_step_execution_plan,
-    _compile_single_step_workflow_plan,
-    _default_single_step_routes,
     _single_step_workflow_name,
     compile_workflow,
     runtime_workflow_validation_message,
@@ -1801,45 +1799,6 @@ def _build_single_step_execution_plan(
     )
 
 
-def _build_single_step_plan(
-    root: Path,
-    step_def: Step | object,
-    input: BaseModel | Mapping[str, Any] | None,
-    params: BaseModel | Mapping[str, Any] | None,
-    *,
-    routes: Mapping[str, Any] | None,
-    workflow_policy: PolicyInput = None,
-) -> SingleStepPlan:
-    single_step_plan, _workflow_plan = _build_single_step_execution_plan(
-        root,
-        step_def,
-        input,
-        params,
-        routes=routes,
-        workflow_policy=workflow_policy,
-    )
-    return single_step_plan
-
-
-def _build_single_step_workflow_plan(
-    root: Path,
-    step_def: Step | object,
-    input: BaseModel | Mapping[str, Any] | None,
-    params: BaseModel | Mapping[str, Any] | None,
-    *,
-    routes: Mapping[str, Any] | None,
-    workflow_policy: PolicyInput = None,
-) -> WorkflowPlan:
-    _validate_step_declaration_supported(root, step_def)
-    return _compile_single_step_workflow_plan(
-        step_def,
-        input_model=_single_step_input_model(input),
-        params_model=_single_step_params_model(params),
-        routes=routes,
-        workflow_policy=workflow_policy,
-    )
-
-
 def _single_step_input_model(input: BaseModel | Mapping[str, Any] | None) -> type[BaseModel] | None:
     if isinstance(input, BaseModel):
         return type(input)
@@ -1883,10 +1842,6 @@ def _single_step_workflow_reference(root: Path, workflow_plan: WorkflowPlan) -> 
         package_module=None,
         workflow_module=workflow_cls.__module__,
     )
-
-
-def _default_routes_for_step(step_def: Step) -> dict[str, object]:
-    return _default_single_step_routes(step_def)
 
 def _normalize_prompt(prompt: str | Prompt) -> Prompt:
     if isinstance(prompt, Prompt):

@@ -116,7 +116,7 @@ def test_single_step_plan_builds_direct_step_plans(
     expected_plan_type: type[object],
     expected_routes: tuple[str, ...],
 ) -> None:
-    single_step_plan = sdk_module._build_single_step_plan(
+    single_step_plan, _workflow_plan = sdk_module._build_single_step_execution_plan(
         tmp_path,
         factory(),
         _SingleStepTypedInput(topic="release"),
@@ -132,7 +132,7 @@ def test_single_step_plan_builds_direct_step_plans(
 
 
 def test_single_step_workflow_plan_uses_single_step_as_entry(tmp_path: Path) -> None:
-    workflow_plan = sdk_module._build_single_step_workflow_plan(
+    _single_step_plan, workflow_plan = sdk_module._build_single_step_execution_plan(
         tmp_path,
         simple.step("Draft {input.topic}.", name="draft"),
         _SingleStepTypedInput(topic="release"),
@@ -148,7 +148,7 @@ def test_single_step_workflow_plan_uses_single_step_as_entry(tmp_path: Path) -> 
 
 
 def test_single_step_workflow_plan_lowers_simple_pair_rework_to_current_step(tmp_path: Path) -> None:
-    workflow_plan = sdk_module._build_single_step_workflow_plan(
+    _single_step_plan, workflow_plan = sdk_module._build_single_step_execution_plan(
         tmp_path,
         simple.produce_verify_step(
             producer_prompt="Draft {input.topic}.",
@@ -174,7 +174,7 @@ def test_single_step_plan_preserves_policy_layering_and_explicit_routes(tmp_path
     )
     effective_step, workflow_policy = sdk_module._sdk_step_invocation_layer(authored_step, invocation_policy)
 
-    single_step_plan = sdk_module._build_single_step_plan(
+    single_step_plan, _workflow_plan = sdk_module._build_single_step_execution_plan(
         tmp_path,
         effective_step,
         _SingleStepTypedInput(topic="release"),

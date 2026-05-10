@@ -5,7 +5,7 @@ from pathlib import Path
 from pydantic import BaseModel
 
 import botlane.simple as simple
-from botlane import AWAIT_INPUT, FINISH, Botlane, StaticInput
+from botlane import AWAIT_INPUT, FINISH, SELF, Botlane, StaticInput
 from botlane.core.primitives import Event, Outcome
 from botlane.core.providers.fake import ScriptedLLMProvider
 from botlane.runtime.config import GitTrackingRuntimeConfig, RuntimeConfig
@@ -83,3 +83,30 @@ def test_sdk_step_provider_question_flow_uses_single_step_execution_path(tmp_pat
     assert result.status == "completed"
     assert result.route == "done"
     assert len(result.workflow_result.handled_inputs) == 1
+
+
+def test_sdk_step_preserves_explicit_self_routes_on_public_execution_path(tmp_path: Path) -> None:
+    provider = ScriptedLLMProvider(
+        llm_turns=[
+            Outcome(raw_output="Retry once", tag="repair"),
+            Outcome(raw_output="Approved", tag="done"),
+        ]
+    )
+    client = _sdk_client(tmp_path, provider)
+    declaration = simple.step(
+        "Review the request.",
+        name="review",
+        routes={
+            "done": FINISH,
+            "repair": simple.Route(target=SELF, summary="retry once"),
+        },
+    )
+
+    result = client.step(
+        declaration,
+        "Review the rollout.",
+    )
+
+    assert result.status == "completed"
+    assert result.route == "done"
+    assert [call.step_name for call in provider.calls] == ["review", "review"]
