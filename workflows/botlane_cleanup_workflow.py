@@ -6,7 +6,6 @@ from pydantic import BaseModel, Field
 
 from botlane import (
     AWAIT_INPUT,
-    FAIL,
     FINISH,
     SELF,
     Json,
@@ -271,6 +270,15 @@ User notes:
 {input.notes}
 
 Your job is to do all of the following in one merged step:
+
+0. Remediation intake
+   - If cleanup/audit_decision.json and cleanup/summary.md exist from a prior cycle,
+     read them before selecting work.
+   - If the prior audit route was fail, treat this as a remediation cycle:
+     assess the audit findings, technical-debt findings, taste findings,
+     remaining_gap_ids, and reason before choosing any unrelated cleanup.
+   - The next plan must prioritize fixing audit gaps or regressions before
+     continuing ordinary cleanup.
 
 1. Measure
    - production LOC by area:
@@ -638,16 +646,26 @@ Decision rules:
 - route repeat if gaps remain and another cleanup cycle is safe.
 - route blocked if human input is required.
 - route fail if public behavior changed, tests failed, technical debt was introduced, or architecture/code taste decreased.
+  This is a remediation handoff route, not a terminal exit: write a concrete
+  failure/remediation report so the next analyze_and_plan cycle can assess and
+  fix the gaps or regressions.
 
 Write:
 - cleanup/audit_decision.json
 - cleanup/summary.md
 
+When route=fail, cleanup/summary.md must be a failure/remediation report with:
+- the failed invariants
+- evidence for each regression or gap
+- affected files/symbols when known
+- recommended remediation priorities
+- the next planning scope
+
 The JSON must include:
 - route
 - reason
 - remaining_gap_ids
-- next_scope when route=repeat
+- next_scope when route=repeat or route=fail
 - blocking_question when route=blocked
 
 Emit the route tag exactly:
@@ -681,6 +699,7 @@ Reject the audit decision if:
 - it routes repeat without a safe next_scope
 - it routes blocked without a concrete blocking_question
 - it routes fail without a concrete reason
+- it routes fail without a concrete next_scope and remediation report
 
 Accept only if:
 - the audit decision is evidence-based
@@ -719,6 +738,13 @@ Emit the same route tag as the final JSON route.
                 summary="Run another cleanup cycle on remaining gaps.",
             ),
             "blocked": AWAIT_INPUT,
-            "fail": FAIL,
+            "fail": Route(
+                target="analyze_and_plan",
+                summary="Audit found regressions; plan a remediation cycle from the audit report.",
+                handoff=(
+                    "Read cleanup/audit_decision.json and cleanup/summary.md. "
+                    "Assess and fix audit gaps or regressions before selecting unrelated cleanup."
+                ),
+            ),
         },
     )
