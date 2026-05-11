@@ -1382,25 +1382,6 @@ def _lower_simple_default_routes(ordered_steps: Sequence[Step]) -> dict[Step | s
             continue
         step_routes.setdefault("done", ordered_steps[index + 1] if index + 1 < len(ordered_steps) else FINISH)
     return lowered
-
-
-def _default_completion_route_for_step(step: object) -> str:
-    if isinstance(step, ProduceVerifyStep):
-        return str(getattr(step, "simple_accept_route", "accepted"))
-    if isinstance(step, BranchGroupStep):
-        return str(getattr(step, "default_chain_route", "done"))
-    if isinstance(step, (PromptStep, PythonStep, ChildWorkflowStep)):
-        return "done"
-    if isinstance(step, Step):
-        raise WorkflowValidationError(
-            f"simple chain cannot infer a completion route for strict step {step.name!r}; specify (step, route_tag)"
-        )
-    declaration_route = getattr(step, "default_chain_route", None)
-    if isinstance(declaration_route, str) and declaration_route:
-        return declaration_route
-    raise WorkflowValidationError("simple chain nodes must be step declarations or step instances")
-
-
 def _lower_simple_target(target: object, simple_step_map: Mapping[object, Step]) -> object:
     return simple_step_map.get(target, target)
 
