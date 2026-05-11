@@ -38,7 +38,7 @@ class CleanupScope(BaseModel):
             "SDK/simple behavior."
         ),
     )
-    max_cleanup_batch_size: Literal["small", "medium", "large"] = "small"
+    max_cleanup_batch_size: Literal["small", "medium", "large"] = "medium"
     require_production_loc_decrease: bool = True
     allow_test_loc_increase: bool = True
     allow_public_api_changes: bool = False
