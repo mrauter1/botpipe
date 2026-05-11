@@ -195,53 +195,6 @@ def _schema_name(ref: ProviderArtifactRef) -> str:
     return ref.schema_name or ref.kind
 
 
-def _render_expected_output_schema(schema: Mapping[str, Any] | None) -> str:
-    headers = ("Field", "Required", "Type", "Notes")
-    if not isinstance(schema, Mapping):
-        return _markdown_table(
-            headers,
-            (("payload", "no", "object", "No structured control payload is required beyond selecting a legal route."),),
-        )
-
-    properties = schema.get("properties")
-    required = schema.get("required")
-    required_fields = set(required) if isinstance(required, list) else set()
-    rows: list[tuple[str, str, str, str]] = []
-    if isinstance(properties, Mapping):
-        for field_name in sorted(str(key) for key in properties.keys()):
-            raw_field_schema = properties.get(field_name)
-            field_schema = raw_field_schema if isinstance(raw_field_schema, Mapping) else {}
-            notes = []
-            description = field_schema.get("description")
-            if isinstance(description, str) and description.strip():
-                notes.append(description.strip())
-            if field_schema.get("type") == "object" and isinstance(field_schema.get("properties"), Mapping):
-                notes.append("Nested object details omitted; runtime validation remains authoritative.")
-            if field_schema.get("type") == "array" and isinstance(field_schema.get("items"), Mapping):
-                notes.append("Array item details omitted; runtime validation remains authoritative.")
-            rows.append(
-                (
-                    field_name,
-                    _yes_no(field_name in required_fields),
-                    _schema_type_name(field_schema.get("type")),
-                    " ".join(notes) if notes else "Top-level payload field.",
-                )
-            )
-    if not rows and required_fields:
-        rows.extend(
-            (
-                field_name,
-                "yes",
-                "unknown",
-                "Required top-level payload field; detailed schema omitted because the runtime contract is complex.",
-            )
-            for field_name in sorted(required_fields)
-        )
-    if not rows:
-        rows.append(("payload", "no", "object", "No top-level payload properties were declared."))
-    return _markdown_table(headers, rows)
-
-
 def _response_contract_sections(context: ProviderTurnContext) -> list[str]:
     if context.turn_kind == "producer":
         return [
