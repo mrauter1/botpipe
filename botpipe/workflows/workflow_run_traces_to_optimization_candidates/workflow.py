@@ -276,7 +276,7 @@ class WorkflowRunTracesToOptimizationCandidates(Workflow):
     request = Artifact("{{ run.folder }}/request.md")
     framework_architecture_doc = Artifact("{{ root }}/docs/architecture.md")
     framework_authoring_doc = Artifact("{{ root }}/docs/authoring.md")
-    workflow_instructions = Artifact("{{ root }}/Workflow_Instructions.md")
+    workflow_authoring_guidelines = Artifact("{{ root }}/docs/workflow_authoring_guidelines.md")
     optimization_package_checklist = Artifact("{{ package.folder }}/assets/optimization_package_checklist.md")
 
     invocation_contract = Artifact("{{ workflow.folder }}/invocation_contract.json")
@@ -363,7 +363,7 @@ class WorkflowRunTracesToOptimizationCandidates(Workflow):
             workflow_failure_scenario_seeds,
             framework_architecture_doc,
             framework_authoring_doc,
-            workflow_instructions,
+            workflow_authoring_guidelines,
         ],
         producer_writes=[
             selected_workflow_capability,

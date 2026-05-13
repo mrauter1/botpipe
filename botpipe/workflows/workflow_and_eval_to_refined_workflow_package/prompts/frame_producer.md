@@ -28,7 +28,7 @@
 | `baseline_refinement_evidence_summary` | Read | Optional optimization evidence summary rendered as workflow-local guidance. |
 | `framework_architecture_doc` | Read | Required input. |
 | `framework_authoring_doc` | Read | Required input. |
-| `workflow_instructions` | Read | Required input. |
+| `workflow_authoring_guidelines` | Read | Required input. |
 | `refinement_request_brief` | Write | Overwrite. |
 | `refinement_acceptance_criteria` | Write | Overwrite. |
 

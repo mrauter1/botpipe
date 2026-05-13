@@ -20,7 +20,7 @@
 | `invocation_contract` | Read | Required input. |
 | `framework_architecture_doc` | Read | Required input. |
 | `framework_authoring_doc` | Read | Required input. |
-| `workflow_instructions` | Read | Required input. |
+| `workflow_authoring_guidelines` | Read | Required input. |
 | `incident_scope_brief` | Write | Overwrite. |
 | `response_objectives` | Write | Overwrite. |
 | `evidence_intake_register` | Write | Overwrite. |

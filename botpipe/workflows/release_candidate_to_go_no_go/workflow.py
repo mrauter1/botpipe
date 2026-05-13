@@ -85,7 +85,7 @@ class ReleaseCandidateToGoNoGo(Workflow):
     request = Artifact("{{ run.folder }}/request.md")
     framework_architecture_doc = Artifact("{{ root }}/docs/architecture.md")
     framework_authoring_doc = Artifact("{{ root }}/docs/authoring.md")
-    workflow_instructions = Artifact("{{ root }}/Workflow_Instructions.md")
+    workflow_authoring_guidelines = Artifact("{{ root }}/docs/workflow_authoring_guidelines.md")
     decision_package_checklist = Artifact("{{ package.folder }}/assets/release_decision_package_checklist.md")
 
     invocation_contract = Artifact("{{ workflow.folder }}/invocation_contract.json")
@@ -113,7 +113,7 @@ class ReleaseCandidateToGoNoGo(Workflow):
             invocation_contract,
             framework_architecture_doc,
             framework_authoring_doc,
-            workflow_instructions,
+            workflow_authoring_guidelines,
         ],
         producer_writes=[release_scope_brief, decision_criteria, evidence_intake_register],
         control_schema=ReleaseFramingPayload,

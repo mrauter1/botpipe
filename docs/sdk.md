@@ -82,7 +82,10 @@ Constructor arguments:
 
 Policy layers inherit. `default_policy` and per-call `policy` are not hard
 security caps by themselves; strict enforcement belongs to runtime provider
-policy configuration.
+policy configuration. Backend capability still matters: a provider policy
+feature such as `deny_read` is only enforced when the selected backend can emit
+it. Unsupported controls fail by default rather than being silently treated as
+enforced.
 
 ## `run`
 

@@ -3,9 +3,14 @@ requires = ["setuptools>=68"]
 build-backend = "setuptools.build_meta"
 
 [project]
-name = "botpipe-v3-surface"
+name = "botpipe"
 version = "0.0.0"
 requires-python = ">=3.12"
+license = {file = "LICENSE"}
+classifiers = [
+  "License :: OSI Approved :: Apache Software License",
+  "Programming Language :: Python :: 3.12",
+]
 dependencies = [
   "jinja2>=3.1,<4",
   "pydantic>=2,<3",

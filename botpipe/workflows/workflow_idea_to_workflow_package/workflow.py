@@ -81,7 +81,7 @@ class WorkflowIdeaToWorkflowPackage(Workflow):
     request = Artifact("{{ run.folder }}/request.md")
     framework_architecture_doc = Artifact("{{ root }}/docs/architecture.md")
     framework_authoring_doc = Artifact("{{ root }}/docs/authoring.md")
-    workflow_instructions = Artifact("{{ root }}/Workflow_Instructions.md")
+    workflow_authoring_guidelines = Artifact("{{ root }}/docs/workflow_authoring_guidelines.md")
     core_steps_module = Artifact("{{ package.folder }}/../../core/steps.py")
     core_validation_module = Artifact("{{ package.folder }}/../../core/validation.py")
     core_compiler_module = Artifact("{{ package.folder }}/../../core/compiler.py")
@@ -128,7 +128,7 @@ class WorkflowIdeaToWorkflowPackage(Workflow):
             invocation_contract,
             framework_architecture_doc,
             framework_authoring_doc,
-            workflow_instructions,
+            workflow_authoring_guidelines,
             existing_workflow_manifest,
             existing_workflow_definition,
             existing_workflow_prompts,
@@ -147,7 +147,7 @@ class WorkflowIdeaToWorkflowPackage(Workflow):
             invocation_contract,
             framework_architecture_doc,
             framework_authoring_doc,
-            workflow_instructions,
+            workflow_authoring_guidelines,
             core_steps_module,
             core_validation_module,
             core_compiler_module,

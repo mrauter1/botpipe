@@ -75,7 +75,7 @@ adopt_child_artifacts(
 | --- | --- | --- | --- |
 | Authoring-only composition helpers | Enables explicit child-workflow invocation and parent-local artifact adoption without widening runtime behavior | Must stay additive and visible in workflow code | Chosen in the paired framework phase and exercised by this building block |
 | Runtime-owned subworkflow step | Could make composition terser | Hides sequencing in the runtime and violates the explicit-workflow doctrine | Rejected |
-| Recursive wrapper/template cleanup | Fixes known package-CLI drift in `recursive_botpipe/` | Useful, but less directly valuable to evidence-pack authoring than reusable composition proof | Deferred residual |
+| Legacy recursive wrapper removal | Removes the stale wrapper/template surface that duplicated Botpipe runtime behavior | Cleanup is separate from evidence-pack authoring; recursive operation should use the normal SDK/CLI runtime surfaces | Completed outside this workflow |
 
 ## Meaningful design decisions
 

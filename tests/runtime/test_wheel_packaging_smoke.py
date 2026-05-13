@@ -76,7 +76,7 @@ def test_built_wheel_installs_public_botpipe_package_and_cli(tmp_path: Path) -> 
                 "import botpipe",
                 "import importlib.util",
                 "import importlib.metadata",
-                "dist = importlib.metadata.distribution('botpipe-v3-surface')",
+                "dist = importlib.metadata.distribution('botpipe')",
                 "from botpipe import FINISH, Route, Workflow, step",
                 "from botpipe.workflows.botpipe_v1 import BotpipeV1",
                 "from botpipe.runtime import cli",
@@ -86,7 +86,7 @@ def test_built_wheel_installs_public_botpipe_package_and_cli(tmp_path: Path) -> 
                 "assert Route is not None",
                 "assert FINISH == 'FINISH'",
                 "assert BotpipeV1.name == 'botpipe_v1'",
-                "assert dist.metadata['Name'] == 'botpipe-v3-surface'",
+                "assert dist.metadata['Name'] == 'botpipe'",
                 "assert scripts == {'botpipe': 'botpipe.runtime.cli:main'}",
                 "assert callable(cli.main)",
             )
@@ -105,8 +105,8 @@ def test_repo_local_editable_install_exposes_only_botpipe_cli_identity(tmp_path:
     if not python.exists() or not pip.exists():
         pytest.skip("repo-local .venv is not present")
 
-    show_botpipe = _run(str(pip), "show", "botpipe-v3-surface", cwd=tmp_path)
-    assert "Name: botpipe-v3-surface" in show_botpipe.stdout
+    show_botpipe = _run(str(pip), "show", "botpipe", cwd=tmp_path)
+    assert "Name: botpipe" in show_botpipe.stdout
     assert f"Editable project location: {REPO_ROOT}" in show_botpipe.stdout
 
     assert botpipe.exists()
@@ -121,9 +121,9 @@ def test_repo_local_editable_install_exposes_only_botpipe_cli_identity(tmp_path:
             (
                 "import importlib.metadata",
                 "import importlib.util",
-                "dist = importlib.metadata.distribution('botpipe-v3-surface')",
+                "dist = importlib.metadata.distribution('botpipe')",
                 "scripts = {entry.name: entry.value for entry in dist.entry_points if entry.group == 'console_scripts'}",
-                "assert dist.metadata['Name'] == 'botpipe-v3-surface'",
+                "assert dist.metadata['Name'] == 'botpipe'",
                 "assert scripts == {'botpipe': 'botpipe.runtime.cli:main'}",
                 "assert importlib.util.find_spec('botpipe') is not None",
             )

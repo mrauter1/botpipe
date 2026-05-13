@@ -829,7 +829,10 @@ class MyWorkflow(Workflow):
 
 Unset fields inherit from the runtime defaults and outer layers. A policy layer
 is not a hard security cap by itself; strict enforcement belongs to runtime
-provider policy configuration.
+provider policy configuration. Backend capability still matters: a provider
+policy feature such as `deny_read` is only enforced when the selected backend can
+emit it. Unsupported controls fail by default rather than being silently treated
+as enforced.
 
 ## Public Export Checklist
 

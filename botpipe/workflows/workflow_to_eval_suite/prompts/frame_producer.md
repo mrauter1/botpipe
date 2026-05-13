@@ -22,7 +22,7 @@
 | `selected_workflow_capability` | Read | Required input. |
 | `framework_architecture_doc` | Read | Required input. |
 | `framework_authoring_doc` | Read | Required input. |
-| `workflow_instructions` | Read | Required input. |
+| `workflow_authoring_guidelines` | Read | Required input. |
 | `evaluation_request_brief` | Write | Overwrite. |
 | `evaluation_dimensions` | Write | Overwrite. |
 

@@ -23,7 +23,7 @@
 | `selected_workflow_run_history` | Read | Required input. |
 | `framework_architecture_doc` | Read | Required input. |
 | `framework_authoring_doc` | Read | Required input. |
-| `workflow_instructions` | Read | Required input. |
+| `workflow_authoring_guidelines` | Read | Required input. |
 | `diagnostic_scope_brief` | Write | Overwrite. |
 | `run_history_scope` | Write | Overwrite. |
 

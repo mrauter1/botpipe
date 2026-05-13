@@ -18,7 +18,7 @@
 | --- | --- | --- |
 | `request` | Read | authoritative run request snapshot. |
 | `invocation_contract` | Read | authoritative workflow parameters and requested target package identity. |
-| `framework_architecture_doc` | Read | , `framework_authoring_doc`, `workflow_instructions`: current framework doctrine and authoring rules. |
+| `framework_architecture_doc` | Read | , `framework_authoring_doc`, `workflow_authoring_guidelines`: current framework doctrine and authoring rules. |
 | `existing_workflow_manifest` | Read | , `existing_workflow_definition`, `existing_workflow_prompts`: current package conventions from `botpipe_v1`. |
 | `candidate_comparison` | Write | Overwrite. |
 | `selected_workflow_brief` | Write | Overwrite. |

@@ -21,7 +21,7 @@
 | `workflow_capability_snapshot` | Read | Required input. |
 | `framework_architecture_doc` | Read | Required input. |
 | `framework_authoring_doc` | Read | Required input. |
-| `workflow_instructions` | Read | Required input. |
+| `workflow_authoring_guidelines` | Read | Required input. |
 | `candidate_request_brief` | Write | Overwrite. |
 | `candidate_selection_criteria` | Write | Overwrite. |
 

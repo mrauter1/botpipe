@@ -193,6 +193,13 @@ Contract:
 - CLI overrides use `--provider`, `--model`, and `--model-effort`
 - provider construction is framework-owned and resolved from the typed provider name
 
+Provider policy is resolved against a concrete backend before provider
+execution. Backend capability gaps must be explicit: if the selected provider
+cannot enforce a requested control, Botpipe fails by default or records the gap
+only when provider-policy validation is configured to warn. For example, the
+current Codex emission surface does not enforce `deny_read` or domain-level
+network filters, while other backends may expose different controls.
+
 Built-in runtime adapters live under `runtime/providers/` and are selected only through `runtime/provider_backends.py`.
 
 CLI-backed providers now cross the runtime boundary through a shared layered seam:
@@ -309,12 +316,12 @@ The optimizer is a bundled authoring-only workflow:
 
 ## Recursive Operation
 
-Recursive automation under `recursive_botpipe/` keeps the globally installed Botpipe CLI contract.
-
-- Wrapper start commands use `botpipe --workspace ... --task-id ... --intent ... --pairs ...`
-- Wrapper resume commands use `botpipe --workspace ... --task-id ... --resume`
-- Recursive memory lives under `.botpipe_recursive/`
-- Recursive templates and guidance point readers at `docs/architecture.md`, `docs/authoring.md`, `core/`, `runtime/`, `extensions/`, `stdlib/`, `botpipe/workflows/`, and `.botpipe/workflows/`
+The old `recursive_botpipe/` wrapper and template surface has been removed.
+Recursive or self-improving workflows should now use the normal Botpipe runtime
+surfaces directly: durable tasks, resumable runs, trace/event inspection,
+explicit workflow artifacts, and SDK/CLI parity. This keeps recursive operation
+inside the same execution model as ordinary workflows instead of maintaining a
+parallel wrapper contract.
 
 ## Composition And Parity
 

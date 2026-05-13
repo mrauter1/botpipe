@@ -224,7 +224,7 @@ class WorkflowPackageToComposableBuildingBlocks(Workflow):
     request = Artifact("{{ run.folder }}/request.md")
     framework_architecture_doc = Artifact("{{ root }}/docs/architecture.md")
     framework_authoring_doc = Artifact("{{ root }}/docs/authoring.md")
-    workflow_instructions = Artifact("{{ root }}/Workflow_Instructions.md")
+    workflow_authoring_guidelines = Artifact("{{ root }}/docs/workflow_authoring_guidelines.md")
     decomposition_package_checklist = Artifact("{{ package.folder }}/assets/decomposition_package_checklist.md")
 
     invocation_contract = Artifact("{{ workflow.folder }}/invocation_contract.json")
@@ -261,7 +261,7 @@ class WorkflowPackageToComposableBuildingBlocks(Workflow):
             decomposition_evidence_manifest,
             framework_architecture_doc,
             framework_authoring_doc,
-            workflow_instructions,
+            workflow_authoring_guidelines,
         ],
         producer_writes=[decomposition_request_brief, decomposition_acceptance_criteria],
         control_schema=DecompositionRequestFramingPayload,

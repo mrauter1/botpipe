@@ -103,7 +103,7 @@ class TaskToWorkflowStrategy(Workflow):
     request = Artifact("{{ run.folder }}/request.md")
     framework_architecture_doc = Artifact("{{ root }}/docs/architecture.md")
     framework_authoring_doc = Artifact("{{ root }}/docs/authoring.md")
-    workflow_instructions = Artifact("{{ root }}/Workflow_Instructions.md")
+    workflow_authoring_guidelines = Artifact("{{ root }}/docs/workflow_authoring_guidelines.md")
     strategy_package_checklist = Artifact("{{ package.folder }}/assets/strategy_package_checklist.md")
 
     invocation_contract = Artifact("{{ workflow.folder }}/invocation_contract.json")
@@ -132,7 +132,7 @@ class TaskToWorkflowStrategy(Workflow):
             workflow_portfolio_snapshot,
             framework_architecture_doc,
             framework_authoring_doc,
-            workflow_instructions,
+            workflow_authoring_guidelines,
         ],
         producer_writes=[task_strategy_brief, workflow_selection_criteria],
         control_schema=TaskFramingPayload,

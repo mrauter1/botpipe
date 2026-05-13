@@ -18,7 +18,7 @@
 | `selected_workflow_brief` | Read | Required input. |
 | `framework_architecture_doc` | Read | Required input. |
 | `framework_authoring_doc` | Read | Required input. |
-| `workflow_instructions` | Read | Required input. |
+| `workflow_authoring_guidelines` | Read | Required input. |
 
 ### Artifact Notes
 - Use the exact filesystem paths bound to these artifact names in the runtime request:

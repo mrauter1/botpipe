@@ -22,7 +22,7 @@
 | `workflow_portfolio_health_snapshot` | Read | Required input. |
 | `framework_architecture_doc` | Read | Required input. |
 | `framework_authoring_doc` | Read | Required input. |
-| `workflow_instructions` | Read | Required input. |
+| `workflow_authoring_guidelines` | Read | Required input. |
 | `portfolio_governance_brief` | Write | Overwrite. |
 | `portfolio_decision_criteria` | Write | Overwrite. |
 

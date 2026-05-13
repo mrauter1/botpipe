@@ -1,43 +1,26 @@
 # Botpipe
 
-Botpipe is the execution layer above agentic provider harnesses such as Codex CLI
-and Claude Code: executable SOPs (Standard Operating Procedures) that make
-agents steerable by design, so they can act, pause, verify, and resume without
-losing the plot.
+Botpipe is the runtime for executable SOPs (Standard Operating Procedures) on top of Codex CLI and Claude Code that make agents steerable by design, so they can act, pause, verify, and resume without losing the plot.
 
-Not a chat wrapper. Not just a workflow DSL. Not merely an SDK. Botpipe is a
-runtime for turning open-ended model activity into execution you can observe,
-resume, inspect, constrain, and trust.
-
-Botpipe starts from a different assumption than frameworks centered on stateless
-LLM API calls: the provider is already an agent. It holds session context, edits
-files, uses tools, inspects a repo, makes judgments, etc... 
-That power is fragile when it disappears into an invisible conversation:
-context gets lost, files appear without provenance, decisions are hard to replay,
-and failure often means starting over.
-
-Botpipe exists because agentic coding and automation are becoming operational
-infrastructure. They need a spine, and that spine is the SOP itself.
+Botpipe is designed for provider harnesses such as Codex CLI and Claude Code. The
+provider is not just returning text; it can inspect a repository, edit files, run
+commands, execute tests, and make implementation decisions. Botpipe gives that
+work a repeatable execution spine.
 
 In Botpipe:
 
-- steps become auditable units
-- outputs become explicit artifacts
-- decisions become routes
-- pauses become checkpoints
-- model sessions become runtime state
-- verification becomes part of the workflow
-- progress becomes something a human or another agent can safely continue
-- repeated runs follow the same declared procedure
+- steps are auditable units of work
+- each provider-backed step is a full provider execution
+- artifacts are named and inspectable
+- decisions are explicit routes
+- verification is part of the workflow
+- provider access policy is explicit and first class
+- failures can loop back with concrete feedback
+- runs can pause, resume, and be inspected
+- repeated runs follow the same procedure and leave comparable evidence
 
-The goal is predictable agency: the model still has room to think, but the
-possible shape of execution is visible before the run begins. The output may
-vary; the process is reproducible.
-
-In real operations, an SOP does not make every outcome identical. It makes the
-work legible and repeatable: what gets checked, what evidence is collected, when
-to escalate, what counts as done, and how the next operator can continue.
-Botpipe brings that discipline to agentic execution.
+Botpipe is not a chat wrapper. It is an execution layer for governable agentic
+work.
 
 ## Installation
 
@@ -51,15 +34,7 @@ source .venv/bin/activate
 pip install -e .
 ```
 
-Check that the CLI can see the workflow catalog:
-
-```bash
-botpipe workflows list
-```
-
-Botpipe runs above an agentic provider harness. Use a supported provider such as
-Codex CLI or Claude Code, and select it either in `botpipe.yaml` /
-`botpipe.config` or at the call site:
+Configure a supported provider in `botpipe.yaml` or pass one at runtime.
 
 ```yaml
 provider:
@@ -67,192 +42,410 @@ provider:
   model: your-model
 ```
 
-Any mutating CLI command can also receive `--provider codex` and `--model ...`
-directly.
+When using Codex CLI, each provider-backed step is a full Codex CLI execution.
+That means the step can inspect the repository, edit files, run terminal
+commands, create or update tests, and use command output to continue work.
 
 ## First Steps
 
-Start with the smallest useful surface.
+Start with the smallest surface that gives you the control you need.
 
-1. Make one SDK call when you want a controlled entry point into an agentic
-   harness. Use the SDK directly from application code, tests, notebooks, or
-   another agent:
+### CLI
 
-   ```python
-   from botpipe import Botpipe
+Use the CLI when the workflow itself is the unit of operation and you want task
+ids, run history, logs, resume behavior, and operator handoff.
 
-   client = Botpipe(workspace=".", provider="codex")
-   summary = client.llm("Summarize the current release risk.")
-   ```
+```bash
+# List available workflows.
+botpipe workflows list --workspace .
 
-2. Scaffold a workflow when the process itself should become an SOP:
+# Inspect one workflow.
+botpipe workflows show ralph_loop --workspace .
 
-   ```bash
-   botpipe init workflow review
-   botpipe workflows show review
-   botpipe run review task-1 \
-     --message "Review this release" \
-     --provider codex \
-     --no-git
-   ```
+# Start a run.
+botpipe run ralph_loop task-1 \
+  --message "Implement the requested repository change." \
+  --provider codex \
+  --workspace .
 
-3. When the workflow pauses, resume it by task id:
+# Inspect the run.
+botpipe runs show ralph_loop task-1 --workspace .
+botpipe logs ralph_loop task-1 --events --workspace .
 
-   ```bash
-   botpipe resume review task-1 --no-git
-   botpipe answer review task-1 --answer "Approved" --no-git
-   ```
+# Resume a paused or interrupted run.
+botpipe resume ralph_loop task-1 --workspace .
+```
 
-Small calls and full workflows use the same runtime vocabulary: provider
-configuration, policy, durable state, artifacts, routes, logs, and resumable
-execution.
+Use the CLI path when you care about workspace execution, durable task folders,
+operator-visible logs, and repeatable command-line runs.
 
-## Start With One Agentic Call
+### SDK
 
-Botpipe does not require a full workflow on day one. The SDK can be used as a
-controlled entry point for a single call through an agentic provider harness.
+Use the SDK when Botpipe is called from Python code, tests, notebooks, services,
+or another agent.
 
 ```python
 from botpipe import Botpipe
 
 client = Botpipe(workspace=".", provider="codex")
 
-summary = client.llm("Summarize the current release risk.")
-label = client.classify("Classify this request.", choices=["incident", "question"])
+result = client.llm("Summarize the current repository risk.")
+print(result)
 ```
 
-That gives even a small call the same runtime-owned provider configuration and
-policy path. When the call needs an explicit artifact and route, run one step:
+For multi-step work, call a workflow:
 
 ```python
-from botpipe import FINISH, Botpipe, Md
+from botpipe import Botpipe
+from workflows.ralph_loop import RalphLoop
 
 client = Botpipe(workspace=".", provider="codex")
 
-result = client.prompt_step(
-    "Review the request and write a short report.",
-    "Review the rollout plan.",
-    writes=[Md("report", required=True)],
-    routes={"done": FINISH},
+result = client.run(
+    RalphLoop,
+    "Add CSV export support to the report generator and cover it with tests.",
+    input=RalphLoop.Input(
+        request="Add CSV export support to the report generator and cover it with tests."
+    ),
+    task_id="csv-export",
 )
 
-if result.ok:
-    print(result.artifacts.report.read_text())
+print(result.status)
+print(result.debug.run_dir)
 ```
 
-Start with one call. Add artifacts, routes, verification, and checkpoints when
-the operation needs them. Grow into an SOP when the process itself has to be
-repeatable.
+Use the SDK path when Botpipe is part of a larger program but you still want
+provider configuration, policy, durable state, artifacts, routes, logs, and
+resumable execution.
 
-## Grow Into An Executable SOP
+## Policy Security
 
-A Botpipe workflow is ordinary Python with explicit runtime contracts.
+Provider access is part of the workflow contract.
+
+A Botpipe policy declares how a provider-backed step may run: sandbox mode,
+permission mode, writable paths, denied paths, network posture, model effort,
+and related provider settings. Policy is not a prompt convention. It is runtime
+metadata that Botpipe resolves into provider-specific execution configuration.
+Enforcement is backend-dependent; unsupported controls fail by default unless
+provider-policy validation is explicitly relaxed.
+
+A minimal locked-down policy:
+
+```python
+from botpipe import NetworkMode, PermissionMode, Policy, SandboxMode
+
+repo_locked = Policy(
+    permission_mode=PermissionMode.FULL_AUTO_SANDBOXED,
+    sandbox_mode=SandboxMode.WORKSPACE_WRITE,
+    allow_write=(
+        "src/",
+        "tests/",
+        ".botpipe/",
+    ),
+    deny_read=(
+        ".env",
+        ".secrets/**",
+    ),
+    deny_write=(
+        "/etc",
+        "/usr/local/bin",
+    ),
+    network=NetworkMode.NONE,
+)
+```
+
+Backend capability matters. For example, the current Codex CLI policy emission
+surface can run in workspace-write mode and restrict writable roots, but it does
+not enforce `deny_read` or domain-level network filters. If a Codex-backed run
+requests those unsupported controls, Botpipe fails by default instead of
+pretending they are enforced. Claude Code has a different enforcement surface.
+
+Attach a policy at workflow level when every provider-backed step should inherit
+the same boundary:
+
+```python
+from botpipe import Workflow
+
+
+class SafeWorkflow(Workflow):
+    policy = repo_locked
+```
+
+Attach or override a policy at step level when different steps need different
+access:
+
+```python
+from botpipe import NetworkMode, PermissionMode, Policy, Prompt, SandboxMode, step
+
+readonly_review = Policy(
+    permission_mode=PermissionMode.ASK,
+    sandbox_mode=SandboxMode.READ_ONLY,
+    network=NetworkMode.NONE,
+)
+
+repo_edit = Policy(
+    permission_mode=PermissionMode.FULL_AUTO_SANDBOXED,
+    sandbox_mode=SandboxMode.WORKSPACE_WRITE,
+    allow_write=("src/", "tests/", ".botpipe/"),
+    deny_read=(".env", ".secrets/**"),
+    network=NetworkMode.NONE,
+)
+
+review = step(
+    Prompt.inline("Inspect the repository and identify the change required."),
+    policy=readonly_review,
+)
+
+implement = step(
+    Prompt.inline("Implement the approved change and run the relevant tests."),
+    policy=repo_edit,
+)
+```
+
+Use policy to make the intended security posture visible before the run starts:
+
+- read-only review steps should not need write access
+- implementation steps should write only to the paths they are expected to edit
+- secret files should not live in workspaces used for autonomous execution; use
+  `deny_read` only when the selected backend can enforce or honestly reject it
+- network access should be disabled unless the workflow needs it
+- dangerous unsandboxed execution should be rare, explicit, and reviewable
+
+Botpipe can still run powerful providers. The difference is that the power is
+declared, constrained, and auditable.
+
+See `SECURITY.md` for the project security model, trusted-code boundary, and
+vulnerability reporting process.
+
+## Workflow Example: Minimal Ralph-loop
+
+A Ralph-loop is a small executable SOP for agentic implementation work.
+
+This example uses two `produce_verify_step(...)` steps:
+
+1. `plan` writes `work.json`.
+2. `implement` runs once per work item. It changes the repository directly. Its
+   verifier checks the actual implementation.
+
+Each provider-backed step is a full Codex CLI execution. It can inspect files,
+edit files, run commands, create or update tests, and use terminal output as
+evidence.
 
 ```python
 from pydantic import BaseModel
 
-from botpipe import FINISH, Event, Md, Prompt, Route, Text, Workflow, python_step, step
+from botpipe import FINISH, Md, Prompt, Route, Workflow, Worklist, produce_verify_step
+from botpipe.core import Artifact
 
 
-class ReviewWorkflow(Workflow):
+class RalphLoop(Workflow):
     class Input(BaseModel):
-        topic: str
+        request: str
 
-    class Params(BaseModel):
-        mode: str = "normal"
+    work = Artifact.json(
+        "{{ workflow.folder }}/work.json",
+        name="work",
+        required=True,
+    )
 
-    class State(BaseModel):
-        published: bool = False
+    items = Worklist.from_artifact(
+        name="item",
+        artifact=work,
+        collection="items",
+        item_id="id",
+        title="title",
+        status="status",
+    )
 
-    draft = step(
-        Prompt.inline("Review {{ input.topic }}. Request: {{ message }}"),
-        writes=[Md("report", required=True)],
+    plan = produce_verify_step(
+        producer_prompt=Prompt.inline(
+            """
+            Read {{ input.request }}. Inspect the repository.
+
+            Write work.json with a complete implementation plan decomposed into
+            independently implementable items.
+
+            Shape:
+            {
+              "goal": "The requested outcome",
+              "items": [
+                {
+                  "id": "item-1",
+                  "title": "Short imperative title",
+                  "status": "planned",
+                  "goal": "What to implement",
+                  "acceptance_checks": ["What must be true"]
+                }
+              ]
+            }
+            """.strip()
+        ),
+        verifier_prompt=Prompt.inline(
+            """
+            Verify work.json.
+
+            Accept only if it fully covers {{ input.request }}, is ordered, and
+            each item is independently implementable with acceptance checks.
+
+            Write plan_review.md with the decision and required rework, if any.
+            """.strip()
+        ),
+        producer_writes=[work],
+        verifier_writes=[
+            Md("plan_review", path="plan_review.md", required=True),
+        ],
         routes={
-            "done": Route.to("publish", required_writes=["report"]),
+            "accepted": Route.to(
+                "implement",
+                required_writes=["work", "plan_review"],
+            ),
+            "needs_rework": Route.to(
+                "plan",
+                required_writes=["plan_review"],
+            ),
         },
     )
 
-    @python_step(
-        requires=[draft.report],
-        writes=[Text("receipt", required=True)],
-        routes={"done": FINISH},
+    implement = produce_verify_step(
+        scope=items,
+        requires=[plan.work],
+        verifier_requires=[plan.work],
+        producer_prompt=Prompt.inline(
+            """
+            Read work.json and the current item.
+
+            Current item:
+            - id: {{ item.id }}
+            - title: {{ item.title }}
+            - payload: {{ item.payload }}
+
+            Implement this item completely and correctly in the repository.
+            Edit files, add or update tests, run validation, and fix failures.
+            """.strip()
+        ),
+        verifier_prompt=Prompt.inline(
+            """
+            Verify the repository implementation for the current item.
+
+            Check work.json, the item payload, repo diff, source files, tests,
+            and relevant command output.
+
+            Accept only if the item is correctly and completely implemented
+            with no remaining gaps.
+
+            Write implementation_review.md with the decision and exact rework
+            instructions if rejected.
+            """.strip()
+        ),
+        verifier_writes=[
+            Md(
+                "implementation_review",
+                path="items/{{ item.dir_key }}/implementation_review.md",
+                required=True,
+            ),
+        ],
+        routes={
+            "accepted": Route.complete_and_advance(
+                "implement",
+                exhausted=FINISH,
+                required_writes=["implementation_review"],
+            ),
+            "needs_rework": Route.to(
+                "implement",
+                required_writes=["implementation_review"],
+            ),
+        },
     )
-    def publish(ctx):
-        ctx.artifacts.receipt.write_text(f"mode={ctx.params.mode}")
-        ctx.state = ctx.state.model_copy(update={"published": True})
-        return Event("done")
 ```
 
-The provider does not receive an unbounded blob of instructions. It receives the
-current task plus a runtime step contract: readable inputs, required inputs,
-writable artifacts, legal routes, route-specific obligations, and expected output
-shape. The model still has room to reason. The runtime keeps the lane.
+The important point is that `implement` is not a packaging or summary step. It
+is the implementation step. The producer modifies the repository and runs the
+needed commands. The verifier independently checks whether the implementation
+fully and correctly satisfies the current plan item.
 
-## Run A Workflow
+## Run the Ralph-loop
+
+From the CLI:
+
+```bash
+botpipe run workflows/ralph_loop.py:RalphLoop csv-export \
+  --message "Add CSV export support to the report generator and cover it with tests." \
+  --provider codex \
+  --workspace .
+
+botpipe runs show workflows/ralph_loop.py:RalphLoop csv-export --workspace .
+botpipe logs workflows/ralph_loop.py:RalphLoop csv-export --events --workspace .
+```
 
 From Python:
 
 ```python
 from botpipe import Botpipe
+from workflows.ralph_loop import RalphLoop
 
 client = Botpipe(workspace=".", provider="codex")
 
 result = client.run(
-    ReviewWorkflow,
-    "Review the rollout plan.",
-    input=ReviewWorkflow.Input(topic="rollout"),
-    params={"mode": "strict"},
+    RalphLoop,
+    "Add CSV export support to the report generator and cover it with tests.",
+    input=RalphLoop.Input(
+        request="Add CSV export support to the report generator and cover it with tests."
+    ),
+    task_id="csv-export",
 )
 
-if result.ok:
-    print(result.artifacts.report.read_text())
+print(result.status)
+print(result.history)
+print(result.debug.run_dir)
 ```
 
-From the CLI:
+## Use Cases
 
-```bash
-botpipe workflows list
-botpipe workflows show review
+Use Botpipe when the model is not merely answering a question, but operating a
+repeatable procedure whose artifacts and decisions matter.
 
-botpipe run review task-42 --message "Review this release" -wf mode strict
-botpipe resume review task-42
-botpipe answer review task-42 --answer "Approved"
+| Use case | Why Botpipe fits | Typical artifacts |
+| --- | --- | --- |
+| Repository implementation | Codex CLI can inspect, edit, test, and repair code while Botpipe keeps the process structured. | work plan, review notes, run logs |
+| Release readiness | A release review needs evidence, decisions, reviewer feedback, and a go/no-go route. | risk brief, checklist, go/no-go note |
+| Security remediation | A finding must move from assessment to fix plan to implementation to verification. | remediation plan, validation report |
+| Incident follow-up | Post-incident work benefits from explicit evidence, action owners, and hardening checks. | timeline, root-cause analysis, hardening plan |
+| Customer escalation | A support workflow needs controlled pauses, human answers, and resumable state. | account brief, response draft, resolution notes |
+| Workflow authoring | A workflow idea needs package design, generated assets, validation, and closeout evidence. | package spec, asset manifest, validation report |
 
-botpipe runs list --workflow review
-botpipe runs show review task-42
-botpipe logs review task-42 --events
-```
+Botpipe is usually a good fit when at least two of these are true:
 
-Workflow references can be catalog names, files, modules, or explicit classes:
+- the task spans more than one model turn
+- the agent writes files that should be reviewed later
+- the agent must actually change a repository
+- a verifier should be able to reject or route the work
+- a human may need to answer a question mid-run
+- the run should be resumed by another operator or agent
+- repeated runs should be comparable
+- provider settings, permissions, or policies should be explicit
 
-```bash
-botpipe run review task-1 --message "Review this"
-botpipe run workflows/review.py task-1 --message "Review this"
-botpipe run .botpipe/workflows/review/flow.py:ReviewWorkflow task-1 --message "Review this"
-```
+Botpipe is usually not the right first tool for a one-line answer, a throwaway
+brainstorm, pure deterministic ETL, or work that does not need artifacts,
+verification, checkpoints, or inspection.
 
 ## Where It Fits
 
-Botpipe sits beside the existing LLM ecosystem rather than trying to absorb it.
+Botpipe sits above provider harnesses such as Codex CLI. It does not replace the
+provider. It gives provider executions a durable workflow envelope.
 
-Use chat frameworks, RAG systems, tool libraries, graph runtimes, provider CLIs,
-and hosted platforms where they are strong. Botpipe is the layer you add when
-agentic harness calls need an execution envelope: an SOP, artifacts, routes,
-checkpoints, verification, resumability, and comparable evidence.
-
-Bring in Botpipe when that work needs an executable SOP:
+Add Botpipe when an agentic harness call needs:
 
 - durable state instead of lost chat context
 - named artifacts instead of unstructured side effects
 - controlled routes instead of implicit next steps
 - checkpoints instead of all-or-nothing sessions
-- verification loops instead of unchecked completion
+- verifier loops instead of unchecked completion
 - inspectable history instead of "trust me"
 - policy and provider boundaries instead of ambient authority
 - repeatable procedure instead of one-off improvisation
 
-Botpipe is less about making an LLM call easy and more about making a multi-turn
-LLM run governable.
+Botpipe is less about making an LLM call easy and more about making a multi-step
+agentic run governable.
 
 ## Core Primitives
 
@@ -263,8 +456,11 @@ LLM run governable.
 - `step(...)`: provider-backed prompt work.
 - `produce_verify_step(...)`: producer plus independent verifier.
 - `python_step(...)`: deterministic local execution.
+- `Worklist`: scoped repeated execution over items.
 - `Route`: legal decisions and their targets.
 - `Json`, `Md`, `Text`, `Raw`: declared artifacts.
+- `Policy`: provider access and execution constraints.
+- `SandboxMode`, `NetworkMode`, `PermissionMode`: public policy controls.
 - `RequestInput`: a controlled human or system pause.
 - `Botpipe`: the Python SDK client.
 - `botpipe`: the CLI.
@@ -272,12 +468,12 @@ LLM run governable.
 Most public code imports from the root package:
 
 ```python
-from botpipe import Botpipe, Workflow, step, produce_verify_step, python_step
+from botpipe import Botpipe, Policy, Workflow, Worklist, produce_verify_step, step, python_step
 ```
 
 ## Workflow Layout
 
-Botpipe discovers workflows from three roots:
+Botpipe discovers workflows from configured workflow roots such as:
 
 ```text
 workflows/                  repo-local workflows
@@ -285,45 +481,27 @@ workflows/                  repo-local workflows
 botpipe/workflows/          package-installed workflows
 ```
 
-Resolution precedence is `.botpipe/workflows/`, then `workflows/`, then package
-workflows.
-
 A typical workflow package:
 
 ```text
-workflows/review/
+workflows/ralph_loop/
   flow.py
-  specs.py
   workflow.toml
   prompts/
   assets/
 ```
 
-`workflow.toml` is metadata only: name, title, description, and aliases. The
-workflow's behavior lives in Python.
+`workflow.toml` is metadata: name, title, description, aliases, and other
+catalog information. The workflow behavior lives in Python.
 
 ## Read Next
 
-- [Simple API](docs/simple-api.md): author workflows
-- [SDK](docs/sdk.md): run workflows and steps from Python
-- [Architecture](docs/architecture.md): runtime and project boundaries
-- [Authoring](docs/authoring.md): deeper authoring guidance
+- `docs/simple-api.md`: author workflows
+- `docs/sdk.md`: run workflows and steps from Python
+- `docs/architecture.md`: runtime and project boundaries
+- `docs/authoring.md`: deeper authoring guidance
+- `docs/workflow_authoring_guidelines.md`: workflow design doctrine for Codex-scale steps
 
-## When To Use It
+## License
 
-Use Botpipe when:
-
-- you want a single agentic harness call to go through a controlled SDK surface
-- the work spans multiple turns or sessions
-- the agent writes files that matter
-- verification is part of the job
-- a human may need to interrupt, answer, or resume
-- another agent should be able to inspect and continue
-- you are automating repeated agentic harness calls
-- you want to automate the same multi-step agentic procedure repeatedly
-- repeated runs should leave comparable artifacts and evidence
-- the final output must carry evidence of how it was produced
-
-Start with one SDK call. Keep the SOP small when the operation is small. Expand
-the procedure when agentic execution has become important enough that "the model
-did something" is no longer an acceptable runtime story.
+Botpipe is licensed under the Apache License, Version 2.0. See `LICENSE`.

@@ -209,7 +209,7 @@ class CompanyOperationToRecursiveImprovementCycle(Workflow):
     request = Artifact("{{ run.folder }}/request.md")
     framework_architecture_doc = Artifact("{{ root }}/docs/architecture.md")
     framework_authoring_doc = Artifact("{{ root }}/docs/authoring.md")
-    workflow_instructions = Artifact("{{ root }}/Workflow_Instructions.md")
+    workflow_authoring_guidelines = Artifact("{{ root }}/docs/workflow_authoring_guidelines.md")
     recursive_improvement_cycle_checklist = Artifact("{{ package.folder }}/assets/recursive_improvement_cycle_checklist.md")
 
     invocation_contract = Artifact("{{ workflow.folder }}/invocation_contract.json")
@@ -238,7 +238,7 @@ class CompanyOperationToRecursiveImprovementCycle(Workflow):
             company_operation_snapshot,
             framework_architecture_doc,
             framework_authoring_doc,
-            workflow_instructions,
+            workflow_authoring_guidelines,
         ],
         producer_writes=[company_operation_brief, recursive_improvement_criteria],
         control_schema=CompanyOperationFramingPayload,
