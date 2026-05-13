@@ -311,6 +311,7 @@ def test_sdk_entrypoint_signatures_are_frozen() -> None:
         ("provider_questions", inspect.Parameter.KEYWORD_ONLY),
         ("options", inspect.Parameter.KEYWORD_ONLY),
         ("retention", inspect.Parameter.KEYWORD_ONLY),
+        ("on_event", inspect.Parameter.KEYWORD_ONLY),
     )
     assert signature_items(Botpipe.step) == (
         ("self", inspect.Parameter.POSITIONAL_OR_KEYWORD),
@@ -1027,6 +1028,80 @@ def test_sdk_runs_events_and_trace_iterate_existing_jsonl_records(tmp_path: Path
     assert events[0]["event_type"] == "run_started"
     assert trace
     assert "step_started" in {record["event_type"] for record in trace}
+
+
+def test_sdk_run_on_event_receives_run_step_and_provider_events(tmp_path: Path) -> None:
+    provider = ScriptedLLMProvider(llm_turns=[Outcome(raw_output="Done", tag="done")])
+    client = _sdk_client_at_root(tmp_path, provider, retention=RetentionPolicy.keep_all())
+    events: list[dict[str, object]] = []
+
+    result = client.run(
+        _SDKProviderQuestionWorkflow,
+        "Review the rollout.",
+        on_event=lambda event: events.append(dict(event)),
+    )
+
+    event_types = {event["event_type"] for event in events}
+    assert result.status == "completed"
+    assert {"run_started", "step_started", "provider_attempt_started", "provider_attempt_finished", "step_finished", "run_finished"} <= event_types
+    assert events[0]["event_type"] == "run_started"
+    assert events[0]["trace_enabled"] is True
+    assert "trace_file" in events[0]
+
+
+def test_sdk_runs_resume_on_event_receives_runtime_events(tmp_path: Path) -> None:
+    client = _sdk_client_at_root(tmp_path, ScriptedLLMProvider(), retention=RetentionPolicy.keep_all())
+
+    with pytest.raises(InputRequired) as exc_info:
+        client.run(_SDKPauseWorkflow, "Ship it.", input={"topic": "release"}, max_pauses=0)
+
+    partial = exc_info.value.partial
+    events: list[dict[str, object]] = []
+    result = client.runs.resume(
+        _SDKPauseWorkflow,
+        partial.debug.task_id,
+        run_id=partial.debug.run_id,
+        on_event=lambda event: events.append(dict(event)),
+    )
+
+    event_types = {event["event_type"] for event in events}
+    assert result.status == "awaiting_input"
+    assert {"run_resumed", "step_started", "step_finished", "run_finished"} <= event_types
+
+
+def test_sdk_on_event_exceptions_do_not_fail_run(tmp_path: Path) -> None:
+    client = _sdk_client_at_root(tmp_path, ScriptedLLMProvider(), retention=RetentionPolicy.keep_all())
+
+    def raise_from_observer(event: dict[str, object]) -> None:
+        raise RuntimeError(f"observer failed on {event['event_type']}")
+
+    result = client.run(_SDKNoMessageWorkflow, None, on_event=raise_from_observer)
+
+    assert result.status == "completed"
+
+
+def test_sdk_child_workflow_on_event_includes_parent_run_metadata(tmp_path: Path) -> None:
+    class ChildWorkflow(simple.Workflow):
+        @simple.python_step(routes={"done": FINISH})
+        def capture(ctx):
+            return Event("done")
+
+    class ParentWorkflow(simple.Workflow):
+        launch = simple.workflow_step(ChildWorkflow, message="Run child")
+
+    client = _sdk_client_at_root(tmp_path, ScriptedLLMProvider(), retention=RetentionPolicy.keep_all())
+    events: list[dict[str, object]] = []
+
+    result = client.run(ParentWorkflow, "Run parent", on_event=lambda event: events.append(dict(event)))
+    child_starts = [
+        event
+        for event in events
+        if event.get("event_type") == "run_started" and event.get("parent_run_id") == result.debug.run_id
+    ]
+
+    assert result.status == "completed"
+    assert child_starts
+    assert child_starts[0]["parent_workflow"] == "parent_workflow"
 
 
 def test_sdk_runs_events_follow_observes_appended_records(tmp_path: Path) -> None:

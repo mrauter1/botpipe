@@ -9,7 +9,7 @@ from dataclasses import dataclass, field, replace
 from datetime import datetime, timezone
 from pathlib import Path
 from types import SimpleNamespace
-from typing import Any, Callable, Literal
+from typing import Any, Callable, Literal, Mapping
 
 from pydantic import BaseModel, ValidationError
 
@@ -105,6 +105,7 @@ class RunnerOptions:
     provider_policy_config: ProviderPolicyRuntimeConfig = field(default_factory=ProviderPolicyRuntimeConfig)
     sdk_default_policy: PolicyInput = None
     run_policy: PolicyInput = None
+    event_callback: Callable[[Mapping[str, object]], None] | None = None
 
 
 @dataclass(frozen=True, slots=True)
@@ -225,6 +226,7 @@ def _execute_compiled_workflow(
         run_workspace=run_workspace,
         session_path_strategy=session_path_strategy,
         capability_prompt_paths=capability_prompt_paths,
+        event_callback=options.event_callback,
     )
     resume_git_tracking_warnings = _resume_git_tracking_warnings(prepared.run_workspace, options)
     resolved_workflow_params = resolve_run_workflow_params(prepared.run_workspace, options.workflow_params)
@@ -283,6 +285,7 @@ def _execute_compiled_workflow(
     runtime_observability = BoundRuntimeObservability(
         git_tracker=git_tracker,
         trace_writer=trace_writer,
+        event_sink=prepared.logger.emit,
         initial_sequence=next_observability_sequence(prepared.run_workspace.run_dir),
     )
 
@@ -327,10 +330,28 @@ def _execute_compiled_workflow(
         workflow_workspace=prepared.workflow_workspace,
         run_workspace=prepared.run_workspace,
     )
+    run_started_payload = {
+        "workflow": prepared.compiled.workflow_name,
+        "task_id": prepared.task_workspace.task_id,
+        "task_folder": str(prepared.task_workspace.task_dir),
+        "workflow_folder": str(prepared.workflow_workspace.workflow_dir),
+        "run_folder": str(prepared.run_workspace.run_dir),
+        "events_file": str(prepared.run_workspace.events_file),
+        "trace_enabled": options.runtime_config.tracing.enabled,
+    }
+    if options.runtime_config.tracing.enabled:
+        run_started_payload["trace_file"] = str(trace_writer.trace_path)
+    if options.parent_run is not None:
+        run_started_payload.update(
+            {
+                "parent_run_id": options.parent_run.run_id,
+                "parent_workflow": options.parent_run.workflow_workspace.workflow_name,
+                "parent_run_folder": str(options.parent_run.run_dir),
+            }
+        )
     prepared.logger.emit(
         "run_resumed" if options.resume else "run_started",
-        workflow=prepared.compiled.workflow_name,
-        task_id=prepared.task_workspace.task_id,
+        **run_started_payload,
     )
     try:
         if options.resume:
@@ -459,6 +480,7 @@ def prepare_runtime_services(
     run_workspace: RunWorkspace,
     session_path_strategy=None,
     capability_prompt_paths: tuple[Path, ...] = (),
+    event_callback: Callable[[Mapping[str, object]], None] | None = None,
 ) -> PreparedRunContext:
     workflow_parent = workflow_workspace.package_dir
     path_strategy = (
@@ -485,7 +507,7 @@ def prepare_runtime_services(
                 capability_prompt_paths=capability_prompt_paths,
             )
         ),
-        logger=EventLogger(run_workspace.run_id, run_workspace.events_file),
+        logger=EventLogger(run_workspace.run_id, run_workspace.events_file, event_callback=event_callback),
     )
 
 
@@ -866,6 +888,7 @@ def _build_workflow_invoker(
                 provider_policy_config=options.provider_policy_config,
                 sdk_default_policy=options.sdk_default_policy,
                 run_policy=options.run_policy,
+                event_callback=options.event_callback,
             ),
         )
         return _build_child_workflow_result(execution)

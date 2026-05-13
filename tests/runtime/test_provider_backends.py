@@ -593,6 +593,30 @@ def test_resolve_codex_cli_commands_no_longer_bakes_policy_flags_or_model_overri
     )
 
 
+def test_resolve_codex_cli_commands_skips_git_repo_check_when_git_tracking_is_disabled(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setattr(codex_runtime_provider.shutil, "which", lambda name: "/usr/bin/codex")
+
+    def fake_run(command: list[str], **_: object) -> subprocess.CompletedProcess[str]:
+        if command == ["codex", "exec", "--help"]:
+            return _completed(args=command, stdout="--json\n-m, --model <MODEL>\n--skip-git-repo-check\n")
+        if command == ["codex", "exec", "resume", "--help"]:
+            return _completed(args=command, stdout="--json\n-m, --model <MODEL>\n--skip-git-repo-check\n")
+        raise AssertionError(f"unexpected command: {command!r}")
+
+    monkeypatch.setattr(codex_runtime_provider.subprocess, "run", fake_run)
+
+    config = _resolved_config("codex")
+    config = replace(config, runtime=replace(config.runtime, git_tracking=replace(config.runtime.git_tracking, enabled=False)))
+    commands = codex_runtime_provider.resolve_codex_cli_commands(config)
+
+    assert commands == CodexCLICommand(
+        start_command=("codex", "exec", "--json", "--skip-git-repo-check"),
+        resume_command=("codex", "exec", "resume", "--json", "--skip-git-repo-check"),
+    )
+
+
 def test_resolve_provider_backend_returns_rendered_codex_provider_when_capabilities_are_supported(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:

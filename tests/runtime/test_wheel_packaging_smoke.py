@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import shutil
 import subprocess
 import sys
 import venv
@@ -31,6 +32,10 @@ def _repo_venv_bin(name: str) -> str:
 
 
 def test_built_wheel_installs_public_botpipe_package_and_cli(tmp_path: Path) -> None:
+    shutil.rmtree(REPO_ROOT / "build", ignore_errors=True)
+    for egg_info in REPO_ROOT.glob("*.egg-info"):
+        shutil.rmtree(egg_info, ignore_errors=True)
+
     dist_dir = tmp_path / "dist"
     dist_dir.mkdir(parents=True, exist_ok=True)
     _run(
@@ -50,7 +55,10 @@ def test_built_wheel_installs_public_botpipe_package_and_cli(tmp_path: Path) -> 
         names = wheel_archive.namelist()
 
     assert any(name.startswith("botpipe/") for name in names)
-    assert any(name.startswith("botpipe/workflows/botpipe_v1/") for name in names)
+    assert any(name.startswith("botpipe/internal/") for name in names)
+    assert any(name.startswith("botpipe/workflows/devloop/") for name in names)
+    assert any(name.startswith("botpipe/workflows/ralph_loop/") for name in names)
+    assert not any(name.startswith("botpipe/workflows/release_candidate_to_go_no_go/") for name in names)
 
     venv_dir = tmp_path / "venv"
     venv.EnvBuilder(with_pip=True).create(venv_dir)
@@ -78,14 +86,18 @@ def test_built_wheel_installs_public_botpipe_package_and_cli(tmp_path: Path) -> 
                 "import importlib.metadata",
                 "dist = importlib.metadata.distribution('botpipe')",
                 "from botpipe import FINISH, Route, Workflow, step",
-                "from botpipe.workflows.botpipe_v1 import BotpipeV1",
+                "from botpipe.internal.botpipe_cleanup_workflow import BotpipeCyclicalCleanupWorkflow",
+                "from botpipe.workflows.devloop import DevLoop",
+                "from botpipe.workflows.ralph_loop import RalphLoop",
                 "from botpipe.runtime import cli",
                 "scripts = {entry.name: entry.value for entry in dist.entry_points if entry.group == 'console_scripts'}",
                 "assert Workflow is not None",
                 "assert step is not None",
                 "assert Route is not None",
                 "assert FINISH == 'FINISH'",
-                "assert BotpipeV1.name == 'botpipe_v1'",
+                "assert BotpipeCyclicalCleanupWorkflow.Input is not None",
+                "assert DevLoop.name == 'devloop'",
+                "assert RalphLoop.name == 'ralph_loop'",
                 "assert dist.metadata['Name'] == 'botpipe'",
                 "assert scripts == {'botpipe': 'botpipe.runtime.cli:main'}",
                 "assert callable(cli.main)",

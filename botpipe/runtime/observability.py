@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+from collections.abc import Callable
+
 from botpipe.core.extensions import StepFinish, StepStart, TerminalFinish
 from .git_tracking import RuntimeGitTracker
 from .tracing import RuntimeTraceWriter
@@ -17,10 +19,12 @@ class BoundRuntimeObservability:
         *,
         git_tracker: RuntimeGitTracker,
         trace_writer: RuntimeTraceWriter,
+        event_sink: Callable[..., None] | None = None,
         initial_sequence: int,
     ) -> None:
         self._git_tracker = git_tracker
         self._trace_writer = trace_writer
+        self._event_sink = event_sink
         self._next_sequence = initial_sequence
         self._active_sequence: int | None = None
         self._active_commit_before_step: str | None = None
@@ -40,6 +44,17 @@ class BoundRuntimeObservability:
             event=event,
             commit_before_step=commit_before_step,
         )
+        self._emit_runtime_event(
+            "step_started",
+            workflow=event.binding.workflow_name,
+            task_id=event.binding.task_id,
+            step_name=event.step_name,
+            step_kind=event.step_kind,
+            visit=event.visit,
+            step_execution_id=event.step_execution_id,
+            scope=event.scope,
+            item_id=event.item_id,
+        )
 
     def after_step(self, event: StepFinish) -> None:
         sequence = self._active_sequence
@@ -50,6 +65,26 @@ class BoundRuntimeObservability:
             sequence=sequence,
             event=event,
             commit_before_step=commit_before_step,
+        )
+        self._emit_runtime_event(
+            "step_finished",
+            workflow=event.binding.workflow_name,
+            task_id=event.binding.task_id,
+            step_name=event.step_name,
+            step_kind=event.step_kind,
+            visit=event.visit,
+            step_execution_id=event.step_execution_id,
+            scope=event.scope,
+            item_id=event.item_id,
+            candidate_route=event.candidate_route,
+            final_route=event.final_route,
+            runtime_control=event.runtime_control,
+            pending_input_id=event.pending_input_id,
+            target_step=event.target_step,
+            terminal=event.terminal,
+            provider_attempted=event.provider_attempted,
+            producer_attempted=event.producer_attempted,
+            verifier_attempted=event.verifier_attempted,
         )
         self._git_tracker.after_step(
             sequence=sequence,
@@ -83,6 +118,11 @@ class BoundRuntimeObservability:
         payload = self._git_tracker.on_fatal(step_name=self._fatal_step_name, error=error)
         self._fatal_step_name = None
         return payload
+
+    def _emit_runtime_event(self, event_type: str, **payload: object) -> None:
+        if self._event_sink is None:
+            return
+        self._event_sink(event_type, **{key: value for key, value in payload.items() if value is not None})
 
 
 __all__ = ["BoundRuntimeObservability"]

@@ -237,6 +237,10 @@ class RuntimeTraceWriter:
         self._write(payload)
 
     @property
+    def trace_path(self) -> Path:
+        return self._trace_path
+
+    @property
     def _raw_dir(self) -> Path:
         return self._run_dir / RAW_DIRNAME
 

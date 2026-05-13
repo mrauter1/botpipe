@@ -572,44 +572,54 @@ def test_write_selected_workflow_source_manifest_does_not_materialize_canonical_
 def test_write_selected_workflow_source_manifest_uses_repo_local_bytes_under_canonical_first_party_labels(
     tmp_path: Path,
 ) -> None:
-    _install_selected_workflow(tmp_path)
+    _install_selected_workflow(
+        tmp_path,
+        workflow_name="devloop",
+        class_name="DevLoop",
+        alias="default",
+    )
     workflow_folder = tmp_path / ".botpipe" / "tasks" / "task-1" / "wf_optimizer"
     workflow_folder.mkdir(parents=True, exist_ok=True)
     ctx = SimpleNamespace(root=tmp_path, workflow_folder=workflow_folder)
-    workflow_toml = tmp_path / "workflows" / "release_candidate_to_go_no_go" / "workflow.toml"
+    workflow_toml = tmp_path / "workflows" / "devloop" / "workflow.toml"
     workflow_toml.write_text(workflow_toml.read_text(encoding="utf-8") + "\n# repo-local drift\n", encoding="utf-8")
 
     manifest_path = write_selected_workflow_source_manifest(
         ctx=ctx,
-        selected_workflow="release_candidate_to_go_no_go",
+        selected_workflow="devloop",
         relative_path="selected_workflow_source_manifest.json",
     )
     payload = json.loads(manifest_path.read_text(encoding="utf-8"))
     entry = next(
         item
         for item in payload["files"]
-        if item["path"] == "botpipe/workflows/release_candidate_to_go_no_go/workflow.toml"
+        if item["path"] == "botpipe/workflows/devloop/workflow.toml"
     )
 
-    assert payload["package_dir"] == "botpipe/workflows/release_candidate_to_go_no_go"
+    assert payload["package_dir"] == "botpipe/workflows/devloop"
     assert entry["sha256"] == hashlib.sha256(workflow_toml.read_bytes()).hexdigest()
 
 
 def test_write_selected_workflow_source_manifest_normalizes_alias_to_canonical_workflow_name(tmp_path: Path) -> None:
-    _install_selected_workflow(tmp_path)
+    _install_selected_workflow(
+        tmp_path,
+        workflow_name="devloop",
+        class_name="DevLoop",
+        alias="default",
+    )
     workflow_folder = tmp_path / ".botpipe" / "tasks" / "task-1" / "wf_optimizer"
     workflow_folder.mkdir(parents=True, exist_ok=True)
     ctx = SimpleNamespace(root=tmp_path, workflow_folder=workflow_folder)
 
     manifest_path = write_selected_workflow_source_manifest(
         ctx=ctx,
-        selected_workflow="release-readiness",
+        selected_workflow="default",
         relative_path="selected_workflow_source_manifest.json",
     )
     payload = json.loads(manifest_path.read_text(encoding="utf-8"))
 
-    assert payload["selected_workflow"] == "release_candidate_to_go_no_go"
-    assert payload["package_dir"] == "botpipe/workflows/release_candidate_to_go_no_go"
+    assert payload["selected_workflow"] == "devloop"
+    assert payload["package_dir"] == "botpipe/workflows/devloop"
     assert payload["files"]
 
 
@@ -1063,30 +1073,38 @@ def _write_upstream_pass_downstream_fail_run(root: Path, task_id: str, workflow_
     return run_dir
 
 
-def _install_selected_workflow(root: Path) -> None:
+def _install_selected_workflow(
+    root: Path,
+    *,
+    workflow_name: str = "release_candidate_to_go_no_go",
+    class_name: str = "ReleaseCandidateToGoNoGo",
+    alias: str = "release-readiness",
+) -> None:
     workflows_root = root / "workflows"
     workflows_root.mkdir(parents=True, exist_ok=True)
     (workflows_root / "__init__.py").write_text("__all__ = []\n", encoding="utf-8")
-    package_dir = workflows_root / "release_candidate_to_go_no_go"
+    package_dir = workflows_root / workflow_name
     (package_dir / "assets").mkdir(parents=True, exist_ok=True)
     (package_dir / "prompts").mkdir(parents=True, exist_ok=True)
     (package_dir / "__init__.py").write_text(
-        "from .workflow import ReleaseCandidateToGoNoGo\n"
-        "__all__ = ['ReleaseCandidateToGoNoGo']\n",
+        f"from .workflow import {class_name}\n"
+        f"__all__ = ['{class_name}']\n",
         encoding="utf-8",
     )
+    title = workflow_name.replace("_", " ").title()
     (package_dir / "workflow.toml").write_text(
         "\n".join(
             (
-                'name = "release_candidate_to_go_no_go"',
-                'title = "Release Candidate To Go No Go"',
+                f'name = "{workflow_name}"',
+                f'title = "{title}"',
                 'description = "Synthetic workflow fixture for optimizer tests."',
-                'aliases = ["release-readiness"]',
+                f'aliases = ["{alias}"]',
             )
         )
         + "\n",
         encoding="utf-8",
     )
+    (package_dir / "README.md").write_text(f"# {title}\n", encoding="utf-8")
     (package_dir / "workflow.py").write_text(
         "\n".join(
             (
@@ -1097,8 +1115,8 @@ def _install_selected_workflow(root: Path) -> None:
                 "from botpipe import Event, FINISH, Workflow, python_step",
                 "",
                 "",
-                "class ReleaseCandidateToGoNoGo(Workflow):",
-                '    name = "release_candidate_to_go_no_go"',
+                f"class {class_name}(Workflow):",
+                f'    name = "{workflow_name}"',
                 "",
                 "    class State(BaseModel):",
                 "        published: bool = False",

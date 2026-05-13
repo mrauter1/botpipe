@@ -1,0 +1,4 @@
+name = "ralph_loop"
+title = "Ralph Loop"
+description = "Plan a repository implementation task into work items, then implement and verify each item."
+aliases = ["ralph"]

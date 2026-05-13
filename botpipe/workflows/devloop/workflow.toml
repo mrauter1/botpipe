@@ -1,0 +1,4 @@
+name = "devloop"
+title = "Devloop"
+description = "Plan, implement, and verify a software change through phased producer/verifier gates."
+aliases = ["default"]

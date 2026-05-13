@@ -58,6 +58,7 @@ botpipe/workflows/
     flow.py or workflow.py
     specs.py optional
     workflow.toml
+    README.md
     prompts/
     assets/
 ```
@@ -114,7 +115,7 @@ The CLI remains message-first and workflow-reference oriented:
 botpipe workflows list
 botpipe workflows show <workflow>
 
-botpipe run <workflow> <task-id> --message "..."
+botpipe run <workflow> "..." [--task <task-id>]
 botpipe resume <workflow> <task-id> [--run-id <run-id>]
 botpipe answer <workflow> <task-id> --answer "..." [--run-id <run-id>]
 
@@ -128,15 +129,15 @@ botpipe init workflow <name>
 Workflow references may be names, files, modules, or explicit classes:
 
 ```bash
-botpipe run release_review task-1 --message "Review this release"
-botpipe run .botpipe/workflows/release_review.py task-1 --message "Review this release"
-botpipe run .botpipe/workflows/release_review/flow.py:ReleaseReview task-1 --message "Review this release"
-botpipe run botpipe.workflows.release_review.workflow:ReleaseReview task-1 --message "Review this release"
+botpipe run release_review "Review this release" --task task-1
+botpipe run .botpipe/workflows/release_review.py "Review this release" --task task-1
+botpipe run .botpipe/workflows/release_review/flow.py:ReleaseReview "Review this release" --task task-1
+botpipe run botpipe.workflows.release_review.workflow:ReleaseReview "Review this release" --task task-1
 ```
 
 There is no public raw execution mode. File and module refs resolve through the same workflow runtime path as named workflows rather than bypassing the engine.
 
-`botpipe run` is message-first and accepts repeatable workflow-specific parameters through `-wf <name> <value>`.
+`botpipe run` is message-first, accepts `--message` for compatibility, generates a concise task id when `--task` is omitted, and accepts repeatable workflow-specific parameters through `-wf <name> <value>`.
 
 Mutating commands also accept generic runtime controls:
 
@@ -342,4 +343,4 @@ Child runs stay under the same task but get their own workflow namespace, run id
 
 When a parent uses `workflow_step(message="{{ message }}", ...)`, the rendered message becomes the child run's own request snapshot. Typed child `input` remains separate from that request text.
 
-Botpipe-v1 parity is now package-local under `botpipe/workflows/botpipe_v1/`. Framework-owned parity helpers and custom runners are not part of the architecture anymore.
+The packaged default workflows are package-local under `botpipe/workflows/`, including `devloop` and `ralph_loop`. Framework-owned workflow-specific helpers and custom runners are not part of the architecture.

@@ -5,7 +5,6 @@ from __future__ import annotations
 import argparse
 import asyncio
 import json
-import re
 import shutil
 from collections.abc import AsyncIterator, Callable, Iterable, Iterator, Mapping, Sequence
 from dataclasses import dataclass, replace
@@ -72,6 +71,7 @@ from botpipe.runtime.loader import (
 from botpipe.runtime.provider_backends import resolve_provider_backend
 from botpipe.runtime.provider_policy_resolver import create_provider_policy_resolver
 from botpipe.runtime.runner import RunExecution, RunnerOptions, execute_workflow_package, execute_workflow_plan
+from botpipe.runtime.task_ids import TaskIdGenerationError, generate_task_id
 from botpipe.runtime.workspace import (
     RunRecord,
     TaskRecord,
@@ -85,7 +85,6 @@ from botpipe.runtime.workspace import (
 
 InputResponse = str | BaseModel | Mapping[str, Any] | Sequence[Any] | int | float | bool | None
 InputHandler = Callable[["InputRequest"], InputResponse]
-_TASK_ID_SAFE_RE = re.compile(r"[^a-z0-9]+")
 _ACTIVE_LOOP_HINT = "Use an async SDK entrypoint instead."
 SDK_TASK_SENTINEL_FILENAME = ".botpipe-sdk-task.json"
 
@@ -516,6 +515,7 @@ class Botpipe:
         provider_questions: bool | None = None,
         options: RunOptions | None = None,
         retention: RetentionPolicy | None = None,
+        on_event: Callable[[Mapping[str, object]], None] | None = None,
     ) -> WorkflowResult:
         """Run one workflow.
 
@@ -524,7 +524,9 @@ class Botpipe:
         unset values inherit from SDK client defaults, workflow policy, runtime
         config policy, and system defaults. `provider_questions` is an SDK/runtime
         behavior option for provider-driven pauses; it is distinct from simple
-        workflow authoring `control_routes`. `policy` is not a hard security cap.
+        workflow authoring `control_routes`. `on_event`, when provided, receives
+        best-effort copies of the JSONL runtime events after they are durably
+        written. `policy` is not a hard security cap.
         """
 
         if message is not None and not isinstance(message, str):
@@ -551,6 +553,7 @@ class Botpipe:
             options=options,
             retention=retention,
             normalized_policy=normalized_policy,
+            on_event=on_event,
         )
 
     def _run_compiled_plan(
@@ -568,6 +571,7 @@ class Botpipe:
         options: RunOptions | None,
         retention: RetentionPolicy | None,
         normalized_policy: PolicyInput,
+        on_event: Callable[[Mapping[str, object]], None] | None = None,
     ) -> WorkflowResult:
         effective_provider_questions = provider_questions if provider_questions is not None else on_input is not None
         effective_retention = retention or self.retention
@@ -615,6 +619,7 @@ class Botpipe:
                         provider_policy_config=self.provider_policy_config,
                         sdk_default_policy=self.default_policy,
                         run_policy=normalized_policy,
+                        event_callback=on_event,
                     ),
                 )
             except Exception as exc:
@@ -1073,8 +1078,13 @@ class RunsClient:
         max_steps: int | None = None,
         provider_questions: bool | None = None,
         policy: PolicyInput = None,
+        on_event: Callable[[Mapping[str, object]], None] | None = None,
     ) -> WorkflowResult:
-        """Resume an existing durable run and return the SDK result object."""
+        """Resume an existing durable run and return the SDK result object.
+
+        `on_event`, when provided, receives best-effort copies of the JSONL
+        runtime events after they are durably written.
+        """
 
         normalized_policy = _normalize_sdk_policy_input(policy)
         workflow_name = _resolve_sdk_workflow_name(self._client.root, workflow)
@@ -1117,6 +1127,7 @@ class RunsClient:
                     provider_policy_config=self._client.provider_policy_config,
                     sdk_default_policy=self._client.default_policy,
                     run_policy=normalized_policy,
+                    event_callback=on_event,
                 ),
             )
         except Exception as exc:
@@ -1599,14 +1610,19 @@ def _generate_sdk_task_id(
     root: Path,
     state_dir: Path,
 ) -> str:
-    slug = _TASK_ID_SAFE_RE.sub("-", workflow_name.strip().lower()).strip("-") or "workflow"
-    timestamp = datetime.now(timezone.utc).strftime("%Y%m%dT%H%M%SZ")
-    for _ in range(32):
-        candidate = f"sdk-{slug}-{timestamp}-{uuid4().hex[:8]}"
-        task_workspace = resolve_task_workspace(root, candidate, state_dir=state_dir)
-        if not task_workspace.task_dir.exists():
-            return candidate
-    raise SDKExecutionError(f"could not generate a unique SDK task id for workflow {workflow_name!r}")
+    try:
+        return generate_task_id(
+            root=root,
+            state_dir=state_dir,
+            message=workflow_name,
+            workflow_name=workflow_name,
+            prefix="sdk",
+            max_slug_words=5,
+            max_slug_chars=48,
+            suffix_chars=8,
+        )
+    except TaskIdGenerationError as exc:
+        raise SDKExecutionError(str(exc), original_error=exc) from exc
 
 
 def _sdk_debug_info(execution: RunExecution) -> SDKDebugInfo:

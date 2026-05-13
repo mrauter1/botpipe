@@ -5,14 +5,12 @@ from tests.unit._stdlib_and_extensions_shared import *
 
 def test_candidate_surface_helpers_normalize_repo_boundary_and_stay_reexported_from_stdlib(tmp_path: Path) -> None:
     package_dir = tmp_path / "workflows" / "demo_workflow"
-    docs_dir = tmp_path / "docs" / "workflows"
     tests_dir = tmp_path / "tests" / "runtime"
     (package_dir / "prompts").mkdir(parents=True, exist_ok=True)
-    docs_dir.mkdir(parents=True, exist_ok=True)
     tests_dir.mkdir(parents=True, exist_ok=True)
     workflow_path = package_dir / "workflow.py"
     prompt_path = package_dir / "prompts" / "assess.md"
-    doc_path = docs_dir / "demo_workflow.md"
+    doc_path = package_dir / "README.md"
     runtime_test_path = tests_dir / "test_demo_workflow.py"
     workflow_path.write_text("# workflow\n", encoding="utf-8")
     prompt_path.write_text("Prompt.\n", encoding="utf-8")
@@ -36,7 +34,7 @@ def test_candidate_surface_helpers_normalize_repo_boundary_and_stay_reexported_f
 
     assert boundary == {
         "package_root_relative_path": "workflows/demo_workflow",
-        "doc_relative_path": "docs/workflows/demo_workflow.md",
+        "doc_relative_path": "workflows/demo_workflow/README.md",
         "runtime_test_relative_path": "tests/runtime/test_demo_workflow.py",
         "baseline_relative_paths": [
             "workflows/demo_workflow/prompts/assess.md",
@@ -70,15 +68,13 @@ def test_candidate_surface_helpers_normalize_repo_boundary_and_stay_reexported_f
 def test_candidate_surface_helpers_materialize_baseline_and_derive_candidate_diff(tmp_path: Path) -> None:
     ctx = _build_lifecycle_context(tmp_path, workflow_name="workflow_and_eval_to_refined_workflow_package")
     package_dir = tmp_path / "workflows" / "demo_workflow"
-    docs_dir = tmp_path / "docs" / "workflows"
     tests_dir = tmp_path / "tests" / "runtime"
     (package_dir / "prompts").mkdir(parents=True, exist_ok=True)
-    docs_dir.mkdir(parents=True, exist_ok=True)
     tests_dir.mkdir(parents=True, exist_ok=True)
 
     workflow_path = package_dir / "workflow.py"
     prompt_path = package_dir / "prompts" / "assess.md"
-    doc_path = docs_dir / "demo_workflow.md"
+    doc_path = package_dir / "README.md"
     runtime_test_path = tests_dir / "test_demo_workflow.py"
     workflow_path.write_text("BASELINE = True\n", encoding="utf-8")
     prompt_path.write_text("Assess the baseline workflow.\n", encoding="utf-8")
@@ -142,7 +138,7 @@ def test_candidate_surface_helpers_materialize_baseline_and_derive_candidate_dif
     }
     assert changed_flags["workflows/demo_workflow/workflow.py"] is True
     assert changed_flags["workflows/demo_workflow/prompts/extra.md"] is True
-    assert changed_flags["docs/workflows/demo_workflow.md"] is False
+    assert changed_flags["workflows/demo_workflow/README.md"] is False
 def test_candidate_surface_helpers_validate_baseline_manifest_checks_boundary_and_digest(tmp_path: Path) -> None:
     ctx = _build_lifecycle_context(tmp_path, workflow_name="workflow_and_eval_to_refined_workflow_package")
     package_dir = tmp_path / "workflows" / "demo_workflow"

@@ -14,7 +14,7 @@ from tests.unit._stdlib_and_extensions_shared import *
 
 def test_adaptation_helpers_snapshot_one_selected_workflow_without_importing_unrelated_packages(tmp_path: Path) -> None:
     ctx = _build_lifecycle_context(tmp_path, workflow_name="candidate_workflow_to_adapted_execution_plan")
-    _write_runtime_valid_catalog_workflow(
+    package_dir = _write_runtime_valid_catalog_workflow(
         tmp_path,
         "release_candidate_to_go_no_go",
         aliases=("release_decision",),
@@ -53,7 +53,7 @@ def test_adaptation_helpers_snapshot_one_selected_workflow_without_importing_unr
             "aliases": ["release_decision"],
             "authoring_shape": "manifest_package",
             "description": "Workflow description.",
-            "doc_path": str(tmp_path / "docs" / "workflows" / "release_candidate_to_go_no_go.md"),
+            "doc_path": str(package_dir / "README.md"),
             "entry_step_name": "assess",
             "manifest_path": str(tmp_path / "workflows" / "release_candidate_to_go_no_go" / "workflow.toml"),
             "package_dir": str(tmp_path / "workflows" / "release_candidate_to_go_no_go"),
@@ -477,7 +477,7 @@ def test_core_selected_workflow_payload_builders_preserve_authoring_and_decompos
             str(package_dir / "prompts" / "repair" / "strategy.md"),
             str(package_dir / "assets" / "checklist.md"),
             str(package_dir / "assets" / "templates" / "rollback.txt"),
-            str(tmp_path / "docs" / "workflows" / "release_candidate_to_go_no_go.md"),
+            str(package_dir / "README.md"),
             str(runtime_test),
         ]
     )
@@ -635,7 +635,7 @@ def test_refinement_helper_snapshots_selected_workflow_authoring_surface_via_sha
             package_dir / "prompts" / "repair" / "strategy.md",
             package_dir / "assets" / "checklist.md",
             package_dir / "assets" / "templates" / "rollback.txt",
-            tmp_path / "docs" / "workflows" / "release_candidate_to_go_no_go.md",
+            package_dir / "README.md",
             runtime_test,
         )
     }
@@ -678,7 +678,7 @@ def test_refinement_helper_snapshots_selected_workflow_authoring_surface_via_sha
                 str(package_dir / "assets" / "checklist.md"),
                 str(package_dir / "assets" / "templates" / "rollback.txt"),
             ],
-            "doc_path": str(tmp_path / "docs" / "workflows" / "release_candidate_to_go_no_go.md"),
+            "doc_path": str(package_dir / "README.md"),
             "editable_paths": sorted(
                 [
                     str(package_dir / "__init__.py"),
@@ -691,7 +691,7 @@ def test_refinement_helper_snapshots_selected_workflow_authoring_surface_via_sha
                     str(package_dir / "prompts" / "repair" / "strategy.md"),
                     str(package_dir / "assets" / "checklist.md"),
                     str(package_dir / "assets" / "templates" / "rollback.txt"),
-                    str(tmp_path / "docs" / "workflows" / "release_candidate_to_go_no_go.md"),
+                    str(package_dir / "README.md"),
                     str(runtime_test),
                 ]
             ),
@@ -715,7 +715,7 @@ def test_refinement_helper_snapshots_selected_workflow_authoring_surface_via_sha
                 "botpipe/workflows/release_candidate_to_go_no_go/assets/checklist.md",
                 "botpipe/workflows/release_candidate_to_go_no_go/assets/templates/rollback.txt",
             ],
-            "doc_path_repo_relative": "docs/workflows/release_candidate_to_go_no_go.md",
+            "doc_path_repo_relative": "botpipe/workflows/release_candidate_to_go_no_go/README.md",
             "manifest_path_repo_relative": "botpipe/workflows/release_candidate_to_go_no_go/workflow.toml",
             "package_dir_repo_relative": "botpipe/workflows/release_candidate_to_go_no_go",
             "package_init_path_repo_relative": "botpipe/workflows/release_candidate_to_go_no_go/__init__.py",
@@ -743,7 +743,7 @@ def test_refinement_helper_snapshots_selected_workflow_authoring_surface_via_sha
         "botpipe/workflows/release_candidate_to_go_no_go/prompts/repair/strategy.md",
         "botpipe/workflows/release_candidate_to_go_no_go/assets/checklist.md",
         "botpipe/workflows/release_candidate_to_go_no_go/assets/templates/rollback.txt",
-        "docs/workflows/release_candidate_to_go_no_go.md",
+        "botpipe/workflows/release_candidate_to_go_no_go/README.md",
         "tests/runtime/test_release_candidate_to_go_no_go.py",
     }
     assert not selected_workflow_folder.exists()
@@ -760,7 +760,7 @@ def test_refinement_helper_snapshots_selected_workflow_authoring_surface_via_sha
             package_dir / "prompts" / "repair" / "strategy.md",
             package_dir / "assets" / "checklist.md",
             package_dir / "assets" / "templates" / "rollback.txt",
-            tmp_path / "docs" / "workflows" / "release_candidate_to_go_no_go.md",
+            package_dir / "README.md",
             runtime_test,
         )
     } == before_surface_files
@@ -856,8 +856,8 @@ def test_refinement_helper_accepts_main_workflow_class_references(tmp_path: Path
         {
             "asset_paths": [],
             "asset_paths_repo_relative": [],
-            "doc_path": str(tmp_path / "docs" / "workflows" / "release_candidate_to_go_no_go.md"),
-            "doc_path_repo_relative": "docs/workflows/release_candidate_to_go_no_go.md",
+            "doc_path": str(package_dir / "README.md"),
+            "doc_path_repo_relative": "botpipe/workflows/release_candidate_to_go_no_go/README.md",
             "editable_paths": sorted(
                 [
                     str(package_dir / "__init__.py"),
@@ -865,7 +865,7 @@ def test_refinement_helper_accepts_main_workflow_class_references(tmp_path: Path
                     str(package_dir / "workflow.py"),
                     str(package_dir / "prompts" / "assess_producer.md"),
                     str(package_dir / "prompts" / "assess_verifier.md"),
-                    str(tmp_path / "docs" / "workflows" / "release_candidate_to_go_no_go.md"),
+                    str(package_dir / "README.md"),
                 ]
             ),
             "manifest_path": str(package_dir / "workflow.toml"),
@@ -904,7 +904,7 @@ def test_refinement_helper_accepts_main_workflow_class_references(tmp_path: Path
         "botpipe/workflows/release_candidate_to_go_no_go/workflow.py",
         "botpipe/workflows/release_candidate_to_go_no_go/prompts/assess_producer.md",
         "botpipe/workflows/release_candidate_to_go_no_go/prompts/assess_verifier.md",
-        "docs/workflows/release_candidate_to_go_no_go.md",
+        "botpipe/workflows/release_candidate_to_go_no_go/README.md",
     }
 def test_decomposition_helper_writes_selected_workflow_identity_authoring_surface_and_compiled_routes(
     tmp_path: Path,
@@ -940,7 +940,7 @@ def test_decomposition_helper_writes_selected_workflow_identity_authoring_surfac
             package_dir / "prompts" / "repair" / "strategy.md",
             package_dir / "assets" / "checklist.md",
             package_dir / "assets" / "templates" / "rollback.txt",
-            tmp_path / "docs" / "workflows" / "release_candidate_to_go_no_go.md",
+            package_dir / "README.md",
             runtime_test,
         )
     }
@@ -988,8 +988,8 @@ def test_decomposition_helper_writes_selected_workflow_identity_authoring_surfac
                 "botpipe/workflows/release_candidate_to_go_no_go/assets/checklist.md",
                 "botpipe/workflows/release_candidate_to_go_no_go/assets/templates/rollback.txt",
             ],
-            "doc_path": str(tmp_path / "docs" / "workflows" / "release_candidate_to_go_no_go.md"),
-            "doc_path_repo_relative": "docs/workflows/release_candidate_to_go_no_go.md",
+            "doc_path": str(package_dir / "README.md"),
+            "doc_path_repo_relative": "botpipe/workflows/release_candidate_to_go_no_go/README.md",
             "editable_paths": sorted(
                 [
                     str(package_dir / "__init__.py"),
@@ -1002,7 +1002,7 @@ def test_decomposition_helper_writes_selected_workflow_identity_authoring_surfac
                     str(package_dir / "prompts" / "repair" / "strategy.md"),
                     str(package_dir / "assets" / "checklist.md"),
                     str(package_dir / "assets" / "templates" / "rollback.txt"),
-                    str(tmp_path / "docs" / "workflows" / "release_candidate_to_go_no_go.md"),
+                    str(package_dir / "README.md"),
                     str(runtime_test),
                 ]
             ),
@@ -1047,7 +1047,7 @@ def test_decomposition_helper_writes_selected_workflow_identity_authoring_surfac
         "botpipe/workflows/release_candidate_to_go_no_go/prompts/repair/strategy.md",
         "botpipe/workflows/release_candidate_to_go_no_go/assets/checklist.md",
         "botpipe/workflows/release_candidate_to_go_no_go/assets/templates/rollback.txt",
-        "docs/workflows/release_candidate_to_go_no_go.md",
+        "botpipe/workflows/release_candidate_to_go_no_go/README.md",
         "tests/runtime/test_release_candidate_to_go_no_go.py",
     }
     assert decomposition_surface["selected_workflow_identity"] == {
@@ -1188,7 +1188,7 @@ def test_decomposition_helper_writes_selected_workflow_identity_authoring_surfac
             package_dir / "prompts" / "repair" / "strategy.md",
             package_dir / "assets" / "checklist.md",
             package_dir / "assets" / "templates" / "rollback.txt",
-            tmp_path / "docs" / "workflows" / "release_candidate_to_go_no_go.md",
+            package_dir / "README.md",
             runtime_test,
         )
     } == before_surface_files

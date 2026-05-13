@@ -3,6 +3,7 @@ include CONTRIBUTING.md
 include SECURITY.md
 recursive-include .github/workflows *.yml
 recursive-include docs *.md
+recursive-include labs/workflows *
 recursive-include botpipe/workflows *
 prune .botpipe
 prune .auto*loop

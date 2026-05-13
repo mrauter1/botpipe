@@ -1,26 +1,28 @@
 # Botpipe
 
-Botpipe is the runtime for executable SOPs (Standard Operating Procedures) on top of Codex CLI and Claude Code that make agents steerable by design, so they can act, pause, verify, and resume without losing the plot.
+Botpipe is the SOP runtime for agentic workflows.
 
-Botpipe is designed for provider harnesses such as Codex CLI and Claude Code. The
-provider is not just returning text; it can inspect a repository, edit files, run
-commands, execute tests, and make implementation decisions. Botpipe gives that
-work a repeatable execution spine.
+It defines and enforces Standard Operating Procedures (SOPs) for coding agents, turning one-off prompts into repeatable, auditable, and verifiable runs.
 
-In Botpipe:
+Real coding tasks are multi-turn: the agent plans, edits, runs tests, finds issues, revises, and tries again. Without orchestration, the human becomes the workflow engine, manually prompting, checking results, asking for fixes, and keeping track of what happened.
 
-- steps are auditable units of work
-- each provider-backed step is a full provider execution
-- artifacts are named and inspectable
-- decisions are explicit routes
-- verification is part of the workflow
-- provider access policy is explicit and first class
-- failures can loop back with concrete feedback
-- runs can pause, resume, and be inspected
-- repeated runs follow the same procedure and leave comparable evidence
+Botpipe turns agent work into governed workflow execution. You define the procedure once: the inputs, steps, policies, artifacts, verification gates, routes, and handoff points. Botpipe then runs that procedure consistently across provider-backed agents such as Codex CLI and Claude Code.
 
-Botpipe is not a chat wrapper. It is an execution layer for governable agentic
-work.
+The agent still does the work. Botpipe governs the run.
+
+An SOP in Botpipe answers questions like:
+
+- What is the agent supposed to accomplish?
+- What inputs and parameters does it receive?
+- What files, commands, or network access are allowed?
+- What artifacts must it produce?
+- How is the work verified?
+- What outcomes are valid?
+- What happens on success, failure, rework or escalation?
+- How many times may the agent retry or revise?
+- Where are logs, state, checkpoints, and evidence stored?
+
+Botpipe is not a chat wrapper. It is the operating layer for repeatable, inspectable, and enforceable multi-turn agentic work.
 
 ## Installation
 
@@ -62,18 +64,17 @@ botpipe workflows list --workspace .
 # Inspect one workflow.
 botpipe workflows show ralph_loop --workspace .
 
-# Start a run.
-botpipe run ralph_loop task-1 \
-  --message "Implement the requested repository change." \
+# Start a run. The JSON output includes the generated task_id and folders.
+botpipe run ralph_loop "Implement the requested repository change." \
   --provider codex \
   --workspace .
 
 # Inspect the run.
-botpipe runs show ralph_loop task-1 --workspace .
-botpipe logs ralph_loop task-1 --events --workspace .
+botpipe runs show ralph_loop <task-id> --workspace .
+botpipe logs ralph_loop <task-id> --events --workspace .
 
 # Resume a paused or interrupted run.
-botpipe resume ralph_loop task-1 --workspace .
+botpipe resume ralph_loop <task-id> --workspace .
 ```
 
 Use the CLI path when you care about workspace execution, durable task folders,
@@ -97,7 +98,7 @@ For multi-step work, call a workflow:
 
 ```python
 from botpipe import Botpipe
-from workflows.ralph_loop import RalphLoop
+from botpipe.workflows.ralph_loop import RalphLoop
 
 client = Botpipe(workspace=".", provider="codex")
 
@@ -239,6 +240,8 @@ from botpipe.core import Artifact
 
 
 class RalphLoop(Workflow):
+    name = "ralph_loop"
+
     class Input(BaseModel):
         request: str
 
@@ -368,20 +371,20 @@ fully and correctly satisfies the current plan item.
 From the CLI:
 
 ```bash
-botpipe run workflows/ralph_loop.py:RalphLoop csv-export \
-  --message "Add CSV export support to the report generator and cover it with tests." \
+botpipe run ralph_loop "Add CSV export support to the report generator and cover it with tests." \
+  --task csv-export \
   --provider codex \
   --workspace .
 
-botpipe runs show workflows/ralph_loop.py:RalphLoop csv-export --workspace .
-botpipe logs workflows/ralph_loop.py:RalphLoop csv-export --events --workspace .
+botpipe runs show ralph_loop csv-export --workspace .
+botpipe logs ralph_loop csv-export --events --workspace .
 ```
 
 From Python:
 
 ```python
 from botpipe import Botpipe
-from workflows.ralph_loop import RalphLoop
+from botpipe.workflows.ralph_loop import RalphLoop
 
 client = Botpipe(workspace=".", provider="codex")
 
@@ -398,35 +401,6 @@ print(result.status)
 print(result.history)
 print(result.debug.run_dir)
 ```
-
-## Use Cases
-
-Use Botpipe when the model is not merely answering a question, but operating a
-repeatable procedure whose artifacts and decisions matter.
-
-| Use case | Why Botpipe fits | Typical artifacts |
-| --- | --- | --- |
-| Repository implementation | Codex CLI can inspect, edit, test, and repair code while Botpipe keeps the process structured. | work plan, review notes, run logs |
-| Release readiness | A release review needs evidence, decisions, reviewer feedback, and a go/no-go route. | risk brief, checklist, go/no-go note |
-| Security remediation | A finding must move from assessment to fix plan to implementation to verification. | remediation plan, validation report |
-| Incident follow-up | Post-incident work benefits from explicit evidence, action owners, and hardening checks. | timeline, root-cause analysis, hardening plan |
-| Customer escalation | A support workflow needs controlled pauses, human answers, and resumable state. | account brief, response draft, resolution notes |
-| Workflow authoring | A workflow idea needs package design, generated assets, validation, and closeout evidence. | package spec, asset manifest, validation report |
-
-Botpipe is usually a good fit when at least two of these are true:
-
-- the task spans more than one model turn
-- the agent writes files that should be reviewed later
-- the agent must actually change a repository
-- a verifier should be able to reject or route the work
-- a human may need to answer a question mid-run
-- the run should be resumed by another operator or agent
-- repeated runs should be comparable
-- provider settings, permissions, or policies should be explicit
-
-Botpipe is usually not the right first tool for a one-line answer, a throwaway
-brainstorm, pure deterministic ETL, or work that does not need artifacts,
-verification, checkpoints, or inspection.
 
 ## Where It Fits
 
@@ -484,11 +458,10 @@ botpipe/workflows/          package-installed workflows
 A typical workflow package:
 
 ```text
-workflows/ralph_loop/
-  flow.py
+botpipe/workflows/ralph_loop/
+  workflow.py
   workflow.toml
-  prompts/
-  assets/
+  README.md
 ```
 
 `workflow.toml` is metadata: name, title, description, aliases, and other

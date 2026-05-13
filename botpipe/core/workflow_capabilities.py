@@ -1409,7 +1409,7 @@ def _canonical_first_party_repo_relative_root(
     if package_dir_repo_relative != str(Path("workflows") / entry.workflow_name):
         return None
     doc_path_repo_relative = _optional_repo_relative(repo_root, entry.doc_path)
-    expected_doc_repo_relative = str(Path("docs") / "workflows" / f"{entry.workflow_name}.md")
+    expected_doc_repo_relative = str(Path("workflows") / entry.workflow_name / "README.md")
     if doc_path_repo_relative != expected_doc_repo_relative:
         return None
     return Path("botpipe") / "workflows" / entry.workflow_name
@@ -1421,6 +1421,7 @@ def _infer_repo_root_from_package_dir(package_dir: Path) -> Path:
     for marker in (
         ("botpipe", "workflows"),
         (".botpipe", "workflows"),
+        ("labs", "workflows"),
         ("workflows",),
     ):
         marker_length = len(marker)
@@ -1476,8 +1477,11 @@ def _support_asset_paths(source_path: Path) -> tuple[Path, ...]:
 
 
 def _support_doc_paths(package_dir: Path) -> tuple[Path, ...]:
-    docs_path = _optional_file(package_dir / "docs.md")
-    return () if docs_path is None else (docs_path,)
+    return tuple(
+        path
+        for filename in ("README.md", "docs.md")
+        if (path := _optional_file(package_dir / filename)) is not None
+    )
 
 
 def _support_test_paths(package_dir: Path) -> tuple[Path, ...]:

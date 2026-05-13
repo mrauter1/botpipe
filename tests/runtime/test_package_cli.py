@@ -2,7 +2,9 @@ from __future__ import annotations
 
 import importlib
 import inspect
+import io
 import json
+import re
 import subprocess
 import sys
 from datetime import datetime, timezone
@@ -18,6 +20,8 @@ from botpipe.core.route_contracts import available_route_tags, runtime_control_r
 from botpipe.runtime import cli
 from botpipe.runtime.config import GitTrackingRuntimeConfig, RuntimeConfig
 from botpipe.runtime.loader import resolve_workflow_reference
+from botpipe.runtime.progress import RunProgressPrinter
+from botpipe.runtime.task_ids import task_id_slug
 
 
 PUBLIC_PROVIDER_FACTORY_FLAG = "--provider" + "-factory"
@@ -250,6 +254,7 @@ def test_cli_mutating_command_help_exposes_provider_and_hides_provider_factory(c
         assert "--no-git" in help_text
         assert "--git-commit-policy" in help_text
         assert "--no-trace" in help_text
+        assert "--progress" in help_text
         assert PUBLIC_PROVIDER_FACTORY_FLAG not in help_text
 
 
@@ -279,7 +284,7 @@ def test_cli_common_workspace_help_surfaces_render_workspace_metavar(argv: list[
     [
         ["workflows", "list"],
         ["workflows", "show", "review"],
-        ["run", "review", "task-1", "--message", "hello"],
+        ["run", "review", "hello", "--task", "task-1"],
         ["resume", "review", "task-1"],
         ["answer", "review", "task-1", "--answer", "hello"],
         ["runs", "list"],
@@ -319,7 +324,7 @@ def test_cli_uses_current_directory_when_workspace_is_omitted(
     [
         ["workflows", "list", "--workspace", "workspace", "--root", "legacy"],
         ["workflows", "show", "review", "--workspace", "workspace", "--root", "legacy"],
-        ["run", "review", "task-1", "--message", "hello", "--workspace", "workspace", "--root", "legacy"],
+        ["run", "review", "hello", "--task", "task-1", "--workspace", "workspace", "--root", "legacy"],
         ["resume", "review", "task-1", "--workspace", "workspace", "--root", "legacy"],
         ["answer", "review", "task-1", "--answer", "hello", "--workspace", "workspace", "--root", "legacy"],
         ["runs", "list", "--workspace", "workspace", "--root", "legacy"],
@@ -334,6 +339,441 @@ def test_cli_rejects_root_flag_for_public_entry_points(argv: list[str], capsys) 
 
     assert excinfo.value.code == cli.EXIT_USAGE_ERROR
     assert "unrecognized arguments: --root legacy" in capsys.readouterr().err
+
+
+def test_cli_run_generates_concise_task_id_from_positional_message(
+    tmp_path: Path,
+    capsys,
+) -> None:
+    _write_workflow_package(
+        tmp_path,
+        "auto_task",
+        workflow_name="auto_task",
+        class_name="AutoTaskWorkflow",
+    )
+
+    exit_code = cli.main(
+        [
+            "run",
+            "auto_task",
+            "Add CSV export support",
+            "--workspace",
+            str(tmp_path),
+            "--no-git",
+        ],
+        provider_factory=_provider_factory,
+    )
+    payload = json.loads(capsys.readouterr().out)
+
+    assert exit_code == 0
+    assert re.fullmatch(r"csv-export-support-[0-9a-f]{6}", payload["task_id"])
+    assert task_id_slug("Write a complete browser chess game, with AI in three files") == "browser-chess-game-ai"
+    assert payload["state_folder"] == str(tmp_path / ".botpipe")
+    task_folder = Path(payload["task_folder"])
+    workflow_folder = Path(payload["workflow_folder"])
+    run_folder = Path(payload["run_folder"])
+    assert task_folder == tmp_path / ".botpipe" / "tasks" / payload["task_id"]
+    assert workflow_folder == task_folder / "wf_auto_task"
+    assert run_folder == workflow_folder / "runs" / payload["run_id"]
+    assert run_folder.is_dir()
+
+
+def test_cli_run_accepts_message_option_compatibility_and_rejects_ambiguous_messages(
+    tmp_path: Path,
+    capsys,
+) -> None:
+    _write_workflow_package(
+        tmp_path,
+        "message_forms",
+        workflow_name="message_forms",
+        class_name="MessageFormsWorkflow",
+    )
+
+    same_exit = cli.main(
+        [
+            "run",
+            "message_forms",
+            "Same message",
+            "--message",
+            "Same message",
+            "--task",
+            "task-same-message",
+            "--workspace",
+            str(tmp_path),
+            "--no-git",
+        ],
+        provider_factory=_provider_factory,
+    )
+    same_payload = json.loads(capsys.readouterr().out)
+
+    assert same_exit == 0
+    assert same_payload["task_id"] == "task-same-message"
+
+    mismatch_exit = cli.main(
+        [
+            "run",
+            "message_forms",
+            "task-like-positional-value",
+            "--message",
+            "Actual request",
+            "--workspace",
+            str(tmp_path),
+        ],
+        provider_factory=_provider_factory,
+    )
+    mismatch_captured = capsys.readouterr()
+
+    assert mismatch_exit == cli.EXIT_USAGE_ERROR
+    assert "message was provided both positionally and with --message" in mismatch_captured.err
+
+    missing_exit = cli.main(
+        ["run", "message_forms", "--workspace", str(tmp_path)],
+        provider_factory=_provider_factory,
+    )
+    missing_captured = capsys.readouterr()
+
+    assert missing_exit == cli.EXIT_USAGE_ERROR
+    assert "run requires a message" in missing_captured.err
+
+
+def test_cli_run_progress_plain_prints_live_events_to_stderr_and_keeps_stdout_json(
+    tmp_path: Path,
+    capsys,
+) -> None:
+    _write_workflow_package(
+        tmp_path,
+        "progress_task",
+        workflow_name="progress_task",
+        class_name="ProgressTaskWorkflow",
+    )
+
+    exit_code = cli.main(
+        [
+            "run",
+            "progress_task",
+            "Show progress",
+            "--task",
+            "task-progress",
+            "--workspace",
+            str(tmp_path),
+            "--progress",
+            "plain",
+            "--no-git",
+        ],
+        provider_factory=_provider_factory,
+    )
+    captured = capsys.readouterr()
+    payload = json.loads(captured.out)
+
+    assert exit_code == 0
+    assert payload["task_id"] == "task-progress"
+    assert "Starting Botpipe run" in captured.err
+    assert "workflow: progress_task" in captured.err
+    assert "task_id: task-progress" in captured.err
+    assert "run_folder:" in captured.err
+    assert "events:" in captured.err
+    assert "trace:" in captured.err
+    assert "step bootstrap started" in captured.err
+    assert "step bootstrap finished" in captured.err
+    assert "run finished: success" in captured.err
+    events = [
+        json.loads(line)
+        for line in (Path(payload["run_folder"]) / "events.jsonl").read_text(encoding="utf-8").splitlines()
+    ]
+    assert "step_started" in {event["event_type"] for event in events}
+    assert "step_finished" in {event["event_type"] for event in events}
+
+
+def test_cli_run_progress_off_suppresses_progress_output(
+    tmp_path: Path,
+    capsys,
+) -> None:
+    _write_workflow_package(
+        tmp_path,
+        "quiet_task",
+        workflow_name="quiet_task",
+        class_name="QuietTaskWorkflow",
+    )
+
+    exit_code = cli.main(
+        [
+            "run",
+            "quiet_task",
+            "Run quietly",
+            "--task",
+            "task-quiet",
+            "--workspace",
+            str(tmp_path),
+            "--progress",
+            "off",
+            "--no-git",
+        ],
+        provider_factory=_provider_factory,
+    )
+    captured = capsys.readouterr()
+
+    assert exit_code == 0
+    assert json.loads(captured.out)["task_id"] == "task-quiet"
+    assert captured.err == ""
+
+
+def test_cli_run_progress_plain_reports_disabled_trace(
+    tmp_path: Path,
+    capsys,
+) -> None:
+    _write_workflow_package(
+        tmp_path,
+        "no_trace_task",
+        workflow_name="no_trace_task",
+        class_name="NoTraceTaskWorkflow",
+    )
+
+    exit_code = cli.main(
+        [
+            "run",
+            "no_trace_task",
+            "Run without tracing",
+            "--task",
+            "task-no-trace",
+            "--workspace",
+            str(tmp_path),
+            "--progress",
+            "plain",
+            "--no-trace",
+            "--no-git",
+        ],
+        provider_factory=_provider_factory,
+    )
+    captured = capsys.readouterr()
+    payload = json.loads(captured.out)
+    events = [
+        json.loads(line)
+        for line in (Path(payload["run_folder"]) / "events.jsonl").read_text(encoding="utf-8").splitlines()
+    ]
+
+    assert exit_code == 0
+    assert "trace: disabled" in captured.err
+    assert "trace:" in captured.err
+    assert events[0]["event_type"] == "run_started"
+    assert events[0]["trace_enabled"] is False
+    assert "trace_file" not in events[0]
+
+
+def test_run_progress_printer_renders_provider_attempt_events() -> None:
+    stream = io.StringIO()
+    progress = RunProgressPrinter(stream)
+
+    progress.event_callback(
+        {
+            "event_type": "provider_attempt_started",
+            "step_name": "plan",
+            "turn_kind": "producer",
+            "attempt": 1,
+        }
+    )
+    progress.event_callback(
+        {
+            "event_type": "provider_attempt_finished",
+            "step_name": "plan",
+            "turn_kind": "producer",
+            "attempt": 1,
+            "token_usage": {"total_tokens": 42},
+        }
+    )
+    progress.close()
+
+    output = stream.getvalue()
+    assert "provider producer attempt 1 started for step plan" in output
+    assert "provider producer attempt 1 finished for step plan (42 tokens)" in output
+
+
+def test_run_progress_printer_keeps_parent_step_active_after_child_run_finishes() -> None:
+    stream = io.StringIO()
+    progress = RunProgressPrinter(stream)
+
+    progress.event_callback(
+        {
+            "event_type": "run_started",
+            "run_id": "parent-run",
+            "workflow": "parent",
+            "task_id": "task-progress",
+            "trace_enabled": True,
+        }
+    )
+    progress.event_callback(
+        {
+            "event_type": "step_started",
+            "run_id": "parent-run",
+            "workflow": "parent",
+            "step_name": "launch",
+            "step_execution_id": "launch:1",
+        }
+    )
+    progress.event_callback(
+        {
+            "event_type": "run_started",
+            "run_id": "child-run",
+            "workflow": "child",
+            "task_id": "task-progress",
+            "parent_run_id": "parent-run",
+            "parent_workflow": "parent",
+            "trace_enabled": True,
+        }
+    )
+    progress.event_callback(
+        {
+            "event_type": "step_started",
+            "run_id": "child-run",
+            "workflow": "child",
+            "step_name": "capture",
+            "step_execution_id": "capture:1",
+        }
+    )
+    progress.event_callback(
+        {
+            "event_type": "step_finished",
+            "run_id": "child-run",
+            "workflow": "child",
+            "step_name": "capture",
+            "step_execution_id": "capture:1",
+            "final_route": "done",
+        }
+    )
+    progress.event_callback(
+        {
+            "event_type": "run_finished",
+            "run_id": "child-run",
+            "workflow": "child",
+            "status": "success",
+        }
+    )
+    progress._cancel_timer()
+    progress._heartbeat()
+    progress.close()
+
+    output = stream.getvalue()
+    assert "child workflow child started (run child-run)" in output
+    assert "child workflow child finished: success" in output
+    assert "step launch still running" in output
+
+
+def test_run_progress_printer_tracks_multiple_active_steps_per_run() -> None:
+    stream = io.StringIO()
+    progress = RunProgressPrinter(stream)
+
+    progress.event_callback({"event_type": "run_started", "run_id": "run-1", "workflow": "demo", "trace_enabled": True})
+    progress.event_callback(
+        {
+            "event_type": "step_started",
+            "run_id": "run-1",
+            "workflow": "demo",
+            "step_name": "first",
+            "step_execution_id": "first:1",
+        }
+    )
+    progress.event_callback(
+        {
+            "event_type": "step_started",
+            "run_id": "run-1",
+            "workflow": "demo",
+            "step_name": "second",
+            "step_execution_id": "second:1",
+        }
+    )
+    progress.event_callback(
+        {
+            "event_type": "step_finished",
+            "run_id": "run-1",
+            "workflow": "demo",
+            "step_name": "second",
+            "step_execution_id": "second:1",
+            "final_route": "done",
+        }
+    )
+    progress._cancel_timer()
+    progress._heartbeat()
+    progress.close()
+
+    assert "step first still running" in stream.getvalue()
+
+
+def test_cli_resume_and_answer_progress_plain_prints_live_events(
+    tmp_path: Path,
+    capsys,
+) -> None:
+    _write_workflow_package(
+        tmp_path,
+        "progress_pause",
+        workflow_name="progress_pause",
+        class_name="ProgressPauseWorkflow",
+        workflow_source=_paused_workflow_source("ProgressPauseWorkflow", "progress_pause"),
+    )
+
+    run_exit = cli.main(
+        [
+            "run",
+            "progress_pause",
+            "Need a decision",
+            "--task",
+            "task-progress-resume",
+            "--workspace",
+            str(tmp_path),
+            "--progress",
+            "off",
+            "--no-git",
+        ],
+        provider_factory=_provider_factory,
+    )
+    run_payload = json.loads(capsys.readouterr().out)
+
+    assert run_exit == 0
+    assert run_payload["status"] == "awaiting_input"
+
+    resume_exit = cli.main(
+        [
+            "resume",
+            "progress_pause",
+            "task-progress-resume",
+            "--workspace",
+            str(tmp_path),
+            "--progress",
+            "plain",
+            "--no-git",
+        ],
+        provider_factory=_provider_factory,
+    )
+    resume_capture = capsys.readouterr()
+
+    assert resume_exit == 0
+    assert json.loads(resume_capture.out)["status"] == "awaiting_input"
+    assert "Resuming Botpipe run" in resume_capture.err
+    assert "step ask started" in resume_capture.err
+    assert "step ask finished" in resume_capture.err
+    assert "run finished: awaiting_input" in resume_capture.err
+
+    answer_exit = cli.main(
+        [
+            "answer",
+            "progress_pause",
+            "task-progress-resume",
+            "--workspace",
+            str(tmp_path),
+            "--answer",
+            "Use OAuth",
+            "--progress",
+            "plain",
+            "--no-git",
+        ],
+        provider_factory=_provider_factory,
+    )
+    answer_capture = capsys.readouterr()
+
+    assert answer_exit == 0
+    assert json.loads(answer_capture.out)["status"] == "success"
+    assert "Resuming Botpipe run" in answer_capture.err
+    assert "step ask started" in answer_capture.err
+    assert "step ask finished" in answer_capture.err
+    assert "run finished: success" in answer_capture.err
 
 
 def test_cli_workflows_show_reports_parameters_and_aliases(
@@ -599,11 +1039,11 @@ class Params(BaseModel):
         [
             "run",
             "typed_review",
-            "task-json",
+            "Serialize defaults",
             "--workspace",
             str(tmp_path),
-            "--message",
-            "Serialize defaults",
+            "--task",
+            "task-json",
             "--no-git",
         ],
         provider_factory=_provider_factory,
@@ -636,11 +1076,11 @@ def test_cli_mutating_commands_accept_non_public_provider_factory_injection_seam
         [
             "run",
             "injected_provider",
-            "task-injected-provider",
+            "Run with a non-public injected provider factory",
             "--workspace",
             str(tmp_path),
-            "--message",
-            "Run with a non-public injected provider factory",
+            "--task-id",
+            "task-injected-provider",
             "--no-git",
         ],
         provider_factory=_provider_factory,
@@ -673,11 +1113,11 @@ def test_cli_mutating_commands_route_public_provider_selection_through_typed_con
         [
             "run",
             "selected_provider",
-            "task-selected-provider",
+            "Run with a public provider selection path",
             "--workspace",
             str(tmp_path),
-            "--message",
-            "Run with a public provider selection path",
+            "--task",
+            "task-selected-provider",
             "--no-git",
             "--provider",
             "claude",
@@ -721,11 +1161,11 @@ def test_cli_mutating_commands_route_runtime_git_and_trace_overrides_through_typ
         [
             "run",
             "runtime_configured",
-            "task-runtime-configured",
+            "Run with runtime git and trace overrides",
             "--workspace",
             str(tmp_path),
-            "--message",
-            "Run with runtime git and trace overrides",
+            "--task",
+            "task-runtime-configured",
             "--no-git",
             "--git-commit-policy",
             "run",
@@ -760,11 +1200,11 @@ def test_cli_run_rejects_public_provider_factory_flag(
             [
                 "run",
                 "public_provider",
-                "task-public-provider",
+                "Run with a public provider factory",
                 "--workspace",
                 str(tmp_path),
-                "--message",
-                "Run with a public provider factory",
+                "--task",
+                "task-public-provider",
                 PUBLIC_PROVIDER_FACTORY_FLAG,
                 "provider_backend:build",
             ]
@@ -801,11 +1241,11 @@ class Params(BaseModel):
         [
             "run",
             "reviewer",
-            "task-42",
+            "Review this change",
             "--workspace",
             str(tmp_path),
-            "--message",
-            "Review this change",
+            "--task",
+            "task-42",
             "--no-git",
             "-wf",
             "mode",
@@ -969,7 +1409,8 @@ def test_cli_durable_handlers_delegate_to_sdk_facade(
             calls.append(("show", workflow, task_id, run_id))
             return record
 
-        def resume(self, workflow, task_id, *, run_id=None, answer=None):
+        def resume(self, workflow, task_id, *, run_id=None, answer=None, on_event=None):
+            assert on_event is None
             calls.append(("resume", workflow, task_id, run_id, answer))
             return object()
 
@@ -1132,12 +1573,32 @@ def test_cli_latest_run_selection_and_explicit_run_id_targeting_are_deterministi
     )
 
     first_exit = cli.main(
-        ["run", "review", "task-runs", "--workspace", str(tmp_path), "--message", "First request", "--no-git"],
+        [
+            "run",
+            "review",
+            "--workspace",
+            str(tmp_path),
+            "--message",
+            "First request",
+            "--task",
+            "task-runs",
+            "--no-git",
+        ],
         provider_factory=_provider_factory,
     )
     first_run = json.loads(capsys.readouterr().out)
     second_exit = cli.main(
-        ["run", "review", "task-runs", "--workspace", str(tmp_path), "--message", "Second request", "--no-git"],
+        [
+            "run",
+            "review",
+            "--workspace",
+            str(tmp_path),
+            "--message",
+            "Second request",
+            "--task",
+            "task-runs",
+            "--no-git",
+        ],
         provider_factory=_provider_factory,
     )
     second_run = json.loads(capsys.readouterr().out)
@@ -1214,7 +1675,7 @@ def test_cli_rejects_invalid_or_unsupported_workflow_params(
         class_name="NoParamsWorkflow",
     )
     exit_code = cli.main(
-        ["run", "no_params", "task-1", "--workspace", str(tmp_path), "--message", "hello", "-wf", "mode", "strict"],
+        ["run", "no_params", "hello", "--workspace", str(tmp_path), "--task", "task-1", "-wf", "mode", "strict"],
         provider_factory=_provider_factory,
     )
     captured = capsys.readouterr()
@@ -1234,11 +1695,11 @@ def test_cli_rejects_invalid_or_unsupported_workflow_params(
         [
             "run",
             "strict_review",
-            "task-1",
+            "hello",
             "--workspace",
             str(tmp_path),
-            "--message",
-            "hello",
+            "--task",
+            "task-1",
             "-wf",
             "mode",
             "strict",
@@ -1254,7 +1715,7 @@ def test_cli_rejects_invalid_or_unsupported_workflow_params(
     assert "does not accept repeated values" in duplicate_captured.err
 
     unknown_exit = cli.main(
-        ["run", "strict_review", "task-1", "--workspace", str(tmp_path), "--message", "hello", "-wf", "unknown", "x"],
+        ["run", "strict_review", "hello", "--workspace", str(tmp_path), "--task", "task-1", "-wf", "unknown", "x"],
         provider_factory=_provider_factory,
     )
     unknown_captured = capsys.readouterr()

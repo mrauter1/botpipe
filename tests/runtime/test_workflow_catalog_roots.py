@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import importlib
+import json
 import re
 import sys
 from pathlib import Path
@@ -278,25 +279,54 @@ def test_discover_workflow_catalog_returns_workspace_and_package_source_kinds(
     assert entries["single_demo"].authoring_shape == "single_file"
 
 
-def test_distributed_package_catalog_exposes_botpipe_v1_and_rejects_legacy_v1(tmp_path: Path) -> None:
+def test_distributed_package_catalog_exposes_default_workflows(tmp_path: Path) -> None:
     entries = {entry.workflow_name: entry for entry in discover_workflow_catalog(tmp_path)}
-    entry = entries["botpipe_v1"]
+    assert set(entries) >= {"devloop", "ralph_loop"}
 
-    assert entry.source_root_kind == "package"
-    assert entry.package_module == "botpipe.workflows.botpipe_v1"
-    assert entry.workflow_module == "botpipe.workflows.botpipe_v1.workflow"
-    assert entry.aliases == ("botpipe-v1",)
+    devloop = entries["devloop"]
+    ralph_loop = entries["ralph_loop"]
 
-    resolved_by_name = resolve_workflow_reference(tmp_path, "botpipe_v1")
-    resolved_by_alias = resolve_workflow_reference(tmp_path, "botpipe-v1")
+    assert devloop.source_root_kind == "package"
+    assert devloop.package_module == "botpipe.workflows.devloop"
+    assert devloop.workflow_module == "botpipe.workflows.devloop.workflow"
+    assert devloop.aliases == ("default",)
 
-    assert resolved_by_name.reference.package_dir == entry.package_dir
-    assert resolved_by_name.reference.workflow_module == "botpipe.workflows.botpipe_v1.workflow"
-    assert resolved_by_alias.reference.package_dir == entry.package_dir
-    assert resolved_by_alias.reference.workflow_name == "botpipe_v1"
+    assert ralph_loop.source_root_kind == "package"
+    assert ralph_loop.package_module == "botpipe.workflows.ralph_loop"
+    assert ralph_loop.workflow_module == "botpipe.workflows.ralph_loop.workflow"
+    assert ralph_loop.aliases == ("ralph",)
+
+    resolved_by_name = resolve_workflow_reference(tmp_path, "devloop")
+    resolved_by_alias = resolve_workflow_reference(tmp_path, "default")
+    resolved_ralph_by_name = resolve_workflow_reference(tmp_path, "ralph_loop")
+    resolved_ralph_by_alias = resolve_workflow_reference(tmp_path, "ralph")
+
+    assert resolved_by_name.reference.package_dir == devloop.package_dir
+    assert resolved_by_name.reference.workflow_module == "botpipe.workflows.devloop.workflow"
+    assert resolved_by_alias.reference.package_dir == devloop.package_dir
+    assert resolved_by_alias.reference.workflow_name == "devloop"
+    assert resolved_ralph_by_name.reference.package_dir == ralph_loop.package_dir
+    assert resolved_ralph_by_name.reference.workflow_module == "botpipe.workflows.ralph_loop.workflow"
+    assert resolved_ralph_by_alias.reference.workflow_name == "ralph_loop"
 
     with pytest.raises(WorkflowDiscoveryError, match=r"unknown workflow 'missing_workflow'"):
         resolve_workflow_reference(tmp_path, "missing_workflow")
+
+
+def test_workflows_show_cli_serializes_packaged_workflow_with_worklist(
+    tmp_path: Path,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    from botpipe.runtime.cli import main
+
+    assert main(["workflows", "show", "ralph_loop", "--workspace", str(tmp_path)]) == 0
+
+    payload = json.loads(capsys.readouterr().out)
+    assert payload["name"] == "ralph_loop"
+    assert payload["steps"][1]["name"] == "implement"
+    assert payload["steps"][1]["requires"] == ["work"]
+    assert payload["steps"][1]["writes"] == ["implement.implementation_review"]
+    assert payload["routes"]["steps"]["implement"]["accepted"] == "implement"
 
 
 def test_discover_repo_local_catalog_entries_use_workflows_namespace_defaults_and_repo_tests(

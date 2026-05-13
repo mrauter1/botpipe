@@ -82,6 +82,14 @@ class _CodexExecSurface:
     def resume_supports_output_schema(self) -> bool:
         return "--output-schema" in self.resume_help
 
+    @property
+    def start_supports_skip_git_repo_check(self) -> bool:
+        return "--skip-git-repo-check" in self.start_help
+
+    @property
+    def resume_supports_skip_git_repo_check(self) -> bool:
+        return "--skip-git-repo-check" in self.resume_help
+
 
 def verify_codex_exec_capabilities() -> None:
     """Validate the installed Codex CLI surface."""
@@ -97,6 +105,10 @@ def resolve_codex_cli_commands(config: ResolvedRuntimeConfig) -> CodexCLICommand
 
     start_command = ["codex", "exec", "--json"]
     resume_command = ["codex", "exec", "resume", "--json"]
+    if not config.runtime.git_tracking.enabled and surface.start_supports_skip_git_repo_check:
+        start_command.append("--skip-git-repo-check")
+    if not config.runtime.git_tracking.enabled and surface.resume_supports_skip_git_repo_check:
+        resume_command.append("--skip-git-repo-check")
 
     return CodexCLICommand(
         start_command=tuple(arg for arg in start_command if arg),
@@ -192,6 +204,7 @@ class CodexTransport(ProviderTransport):
                 stdout=asyncio.subprocess.PIPE,
                 stderr=asyncio.subprocess.PIPE,
                 env=merge_subprocess_env(None if emission is None else emission.env),
+                **_turn_cwd_kwargs(turn),
             )
             stdout, stderr = await communicate_text_subprocess(process, input_text=turn.prompt_text)
             if process.returncode != 0:
@@ -247,6 +260,7 @@ class CodexTransport(ProviderTransport):
                 stdout=asyncio.subprocess.PIPE,
                 stderr=asyncio.subprocess.PIPE,
                 env=merge_subprocess_env(None if emission is None else emission.env),
+                **_turn_cwd_kwargs(turn),
             )
             stdout, stderr = await communicate_text_subprocess(process, input_text=turn.prompt_text)
             if process.returncode != 0:
@@ -317,6 +331,7 @@ def build_codex_operation_executor(
                 command,
                 input_text=turn.prompt_text,
                 env=merge_subprocess_env(None if emission is None else emission.env),
+                **_turn_cwd_kwargs(turn),
             )
             if returncode != 0:
                 if resume_session_id is not None and _is_missing_rollout_resume_error(stderr):
@@ -378,6 +393,7 @@ def _run_fresh_operation_after_stale_resume(
             list(base_command),
             input_text=turn.prompt_text,
             env=merge_subprocess_env(None if emission is None else emission.env),
+            **_turn_cwd_kwargs(turn),
         )
         if returncode != 0:
             streams = format_subprocess_streams(stdout, stderr)
@@ -510,6 +526,15 @@ def _run_help_command(command: list[str], *, provider_name: str) -> str:
             f"{' '.join(command)!r}: {streams}"
         )
     return "\n".join(part for part in (completed.stdout, completed.stderr) if part)
+
+
+def _turn_cwd(turn: RenderedProviderTurn) -> str | None:
+    return None if turn.workspace_root is None else str(turn.workspace_root)
+
+
+def _turn_cwd_kwargs(turn: RenderedProviderTurn) -> dict[str, str]:
+    cwd = _turn_cwd(turn)
+    return {} if cwd is None else {"cwd": cwd}
 
 
 def _prepare_turn_command(

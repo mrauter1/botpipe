@@ -632,14 +632,18 @@ def test_verify_claude_code_capabilities_rejects_missing_allowed_tools_when_stra
 
 
 def test_codex_transport_sends_rendered_prompt_text_to_cli_stdin(
+    tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     calls: list[tuple[str, ...]] = []
     prompt_text = "# Step: produce\n\nShared runtime prompt."
     seen_inputs: list[bytes | None] = []
+    seen_cwds: list[str | None] = []
 
-    async def fake_create_subprocess_exec(*command: str, **_: object) -> _AsyncProcessStub:
+    async def fake_create_subprocess_exec(*command: str, **kwargs: object) -> _AsyncProcessStub:
         calls.append(tuple(command))
+        cwd = kwargs.get("cwd")
+        seen_cwds.append(None if cwd is None else str(cwd))
         return _AsyncProcessStub(
             stdout="\n".join(
                 (
@@ -661,11 +665,19 @@ def test_codex_transport_sends_rendered_prompt_text_to_cli_stdin(
     )
 
     result = asyncio.run(
-        transport.run_turn(_rendered_turn(step_name="produce", prompt_text=prompt_text, session=_placeholder_session()))
+        transport.run_turn(
+            _rendered_turn(
+                step_name="produce",
+                prompt_text=prompt_text,
+                session=_placeholder_session(),
+                workspace_root=tmp_path,
+            )
+        )
     )
 
     assert calls == [("codex", "exec", "--json", "--model", "gpt-test")]
     assert seen_inputs == [prompt_text.encode("utf-8")]
+    assert seen_cwds == [str(tmp_path)]
     assert result.raw_text == "producer text"
     assert result.session is not None
     assert result.session.session_id == "codex-session-1"
@@ -1148,15 +1160,18 @@ def test_codex_operation_executor_uses_policy_env_and_metadata(
     tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    seen: list[tuple[tuple[str, ...], dict[str, str] | None]] = []
+    seen: list[tuple[tuple[str, ...], dict[str, str] | None, str | None]] = []
+    workspace_root = tmp_path / "workspace"
+    workspace_root.mkdir()
 
     def fake_run_text_subprocess(
         command: list[str],
         *,
         input_text: str | None = None,
         env=None,
+        cwd: str | None = None,
     ) -> tuple[str, str, int]:
-        seen.append((tuple(command), None if env is None else dict(env)))
+        seen.append((tuple(command), None if env is None else dict(env), None if cwd is None else str(cwd)))
         return (
             "\n".join(
                 (
@@ -1192,6 +1207,7 @@ def test_codex_operation_executor_uses_policy_env_and_metadata(
             turn_kind="operation",
             policy=policy,
             run_folder=tmp_path,
+            workspace_root=workspace_root,
             step_execution_id="operate:1",
         )
     )
@@ -1212,6 +1228,7 @@ def test_codex_operation_executor_uses_policy_env_and_metadata(
     )
     assert seen[0][1] is not None
     assert "CODEX_HOME" not in seen[0][1]
+    assert seen[0][2] == str(workspace_root)
     assert result.metadata["provider_metadata"]["policy"]["capability_report_file"].endswith("capability_report.json")
 
 

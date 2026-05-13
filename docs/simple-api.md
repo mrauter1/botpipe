@@ -146,6 +146,8 @@ or:
 
 Package-installed workflows live under `botpipe/workflows/<name>/` and should
 re-export their main workflow class from `__init__.py`.
+Workflow-specific docs should live inside the workflow folder, normally as
+`README.md`.
 
 `workflow.toml`, when present, is metadata only: name, title, description, and
 aliases. It does not define topology, prompts, params, routes, artifacts, or

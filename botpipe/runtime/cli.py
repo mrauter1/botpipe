@@ -5,6 +5,7 @@ from __future__ import annotations
 import argparse
 import json
 import sys
+from contextlib import nullcontext
 from pathlib import Path
 from typing import Any, Callable
 
@@ -24,7 +25,9 @@ from .loader import (
     workflow_parameter_fields,
 )
 from .provider_backends import resolve_provider_backend
+from .progress import build_run_progress_printer
 from .runner import RunnerOptions, execute_workflow_package
+from .task_ids import TaskIdGenerationError, generate_task_id
 from .workspace import resolve_run_record
 
 
@@ -37,6 +40,10 @@ _WORKSPACE_HELP = (
     "Workspace directory. Package workflows are loaded from the installed botpipe package; "
     "workspace workflows are loaded from `.botpipe/workflows/`. Defaults to the current directory."
 )
+
+
+class CliUsageError(ValueError):
+    """Raised when parsed CLI arguments are semantically invalid."""
 
 
 def build_arg_parser() -> argparse.ArgumentParser:
@@ -99,6 +106,12 @@ def build_arg_parser() -> argparse.ArgumentParser:
         help="Override the runtime git tracking commit policy for this command.",
     )
     mutate.add_argument("--no-trace", action="store_true", help="Disable runtime trace writing for this command.")
+    mutate.add_argument(
+        "--progress",
+        choices=("auto", "plain", "off"),
+        default="auto",
+        help="Print live execution progress to stderr. Defaults to auto, which enables progress on terminals.",
+    )
 
     workflows_parser = subparsers.add_parser("workflows", help="Inspect discovered workflow metadata.")
     workflows_subparsers = workflows_parser.add_subparsers(dest="workflows_command", required=True)
@@ -125,8 +138,14 @@ def build_arg_parser() -> argparse.ArgumentParser:
 
     run_parser = subparsers.add_parser("run", parents=[mutate], help="Start a new workflow run.")
     run_parser.add_argument("workflow", help="Workflow reference (name, file, module, or optional :Class).")
-    run_parser.add_argument("task_id", help="Stable task identifier.")
-    run_parser.add_argument("--message", required=True, help="Initial message for the run.")
+    run_parser.add_argument("message_arg", nargs="?", metavar="message", help="Initial message for the run.")
+    run_parser.add_argument("--message", dest="message_option", help="Initial message for the run.")
+    run_parser.add_argument(
+        "--task",
+        "--task-id",
+        dest="task_id",
+        help="Stable task identifier. If omitted, Botpipe generates a concise id from the message.",
+    )
     run_parser.add_argument(
         "-wf",
         dest="workflow_params",
@@ -204,7 +223,7 @@ def main(
     args = parser.parse_args(argv)
     try:
         return args.handler(args, provider_factory=provider_factory)
-    except (ConfigError, WorkflowManifestError, WorkflowParameterError, FileExistsError) as exc:
+    except (CliUsageError, ConfigError, WorkflowManifestError, WorkflowParameterError, FileExistsError) as exc:
         print(str(exc), file=sys.stderr)
         return EXIT_USAGE_ERROR
     except (WorkflowDiscoveryError, FileNotFoundError) as exc:
@@ -350,46 +369,60 @@ def _handle_workflows_show(args: argparse.Namespace, *, provider_factory: Callab
 
 def _handle_run(args: argparse.Namespace, *, provider_factory: Callable[..., Any] | None = None) -> int:
     root = args.root.resolve()
+    message = _resolve_run_message(args.message_arg, args.message_option)
     resolved = resolve_workflow_reference(root, args.workflow)
     workflow_params = validate_workflow_parameters(resolved.parameters_cls, args.workflow_params)
     config = resolve_runtime_config(root, args)
     provider = _resolve_provider(config=config, args=args, provider_factory=provider_factory)
-    execution = execute_workflow_package(
-        args.workflow,
-        provider=provider,
-        options=RunnerOptions(
-            root=root,
-            task_id=args.task_id,
-            message=args.message,
-            max_steps=config.runtime.max_steps,
-            workflow_params=workflow_params,
-            runtime_config=config.runtime,
-            provider_policy_config=config.provider_policy,
-        ),
-    )
+    task_id = args.task_id or _generate_cli_task_id(root=root, workflow_name=resolved.reference.workflow_name, message=message)
+    progress = build_run_progress_printer(args.progress)
+    progress_context = progress if progress is not None else nullcontext()
+    with progress_context:
+        execution = execute_workflow_package(
+            args.workflow,
+            provider=provider,
+            options=RunnerOptions(
+                root=root,
+                task_id=task_id,
+                message=message,
+                max_steps=config.runtime.max_steps,
+                workflow_params=workflow_params,
+                runtime_config=config.runtime,
+                provider_policy_config=config.provider_policy,
+                event_callback=None if progress is None else progress.event_callback,
+            ),
+        )
     _emit_json(_run_summary_payload(execution))
     return EXIT_SUCCESS
 
 
 def _handle_resume(args: argparse.Namespace, *, provider_factory: Callable[..., Any] | None = None) -> int:
     client = _mutating_client(args, provider_factory=provider_factory)
-    result = client.runs.resume(
-        args.workflow,
-        args.task_id,
-        run_id=args.run_id,
-    )
+    progress = build_run_progress_printer(args.progress)
+    progress_context = progress if progress is not None else nullcontext()
+    with progress_context:
+        result = client.runs.resume(
+            args.workflow,
+            args.task_id,
+            run_id=args.run_id,
+            on_event=None if progress is None else progress.event_callback,
+        )
     _emit_json(_workflow_result_summary_payload(client, result))
     return EXIT_SUCCESS
 
 
 def _handle_answer(args: argparse.Namespace, *, provider_factory: Callable[..., Any] | None = None) -> int:
     client = _mutating_client(args, provider_factory=provider_factory)
-    result = client.runs.resume(
-        args.workflow,
-        args.task_id,
-        run_id=args.run_id,
-        answer=args.answer,
-    )
+    progress = build_run_progress_printer(args.progress)
+    progress_context = progress if progress is not None else nullcontext()
+    with progress_context:
+        result = client.runs.resume(
+            args.workflow,
+            args.task_id,
+            run_id=args.run_id,
+            answer=args.answer,
+            on_event=None if progress is None else progress.event_callback,
+        )
     _emit_json(_workflow_result_summary_payload(client, result))
     return EXIT_SUCCESS
 
@@ -635,7 +668,42 @@ def _sdk_cli_exit_code(exc: SDKExecutionError) -> int:
 
 
 def _emit_json(payload: Any) -> None:
-    print(json.dumps(payload, indent=2, sort_keys=True, ensure_ascii=False))
+    print(json.dumps(payload, indent=2, sort_keys=True, ensure_ascii=False, default=_json_default))
+
+
+def _json_default(value: Any) -> str:
+    if isinstance(value, Path):
+        return str(value)
+    display = getattr(value, "display", None)
+    if isinstance(display, str) and display:
+        return display
+    qualified_name = getattr(value, "qualified_name", None)
+    if isinstance(qualified_name, str) and qualified_name:
+        return qualified_name
+    name = getattr(value, "__name__", None)
+    if isinstance(name, str) and name:
+        return name
+    return str(value)
+
+
+def _resolve_run_message(message_arg: str | None, message_option: str | None) -> str:
+    positional = None if message_arg is None else message_arg.strip()
+    option = None if message_option is None else message_option.strip()
+    if positional and option:
+        if positional == option:
+            return positional
+        raise CliUsageError("message was provided both positionally and with --message, and the values differ")
+    message = positional or option
+    if message:
+        return message
+    raise CliUsageError("run requires a message as the second positional argument or via --message")
+
+
+def _generate_cli_task_id(*, root: Path, workflow_name: str, message: str) -> str:
+    try:
+        return generate_task_id(root=root, workflow_name=workflow_name, message=message)
+    except TaskIdGenerationError as exc:
+        raise CliUsageError(str(exc)) from exc
 
 
 def _run_summary_payload(execution) -> dict[str, Any]:
@@ -654,7 +722,10 @@ def _run_summary_payload(execution) -> dict[str, Any]:
         "status": record.normalized_status,
         "awaiting_input": record.awaiting_input,
         "pending_input": record.pending_input,
-        "run_folder": record.metadata.get("run_folder"),
+        "state_folder": str(execution.task_workspace.state_root),
+        "task_folder": str(execution.task_workspace.task_dir),
+        "workflow_folder": str(execution.workflow_workspace.workflow_dir),
+        "run_folder": str(execution.run_workspace.run_dir),
     }
 
 

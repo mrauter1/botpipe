@@ -44,7 +44,7 @@ Supported authoring forms:
 - repo-local single Python file or package under `workflows/`
 - workspace-local single Python file such as `.botpipe/workflows/release_review.py`
 - workspace-local package such as `.botpipe/workflows/release_review/flow.py` plus optional `specs.py`
-- package-installed package such as `botpipe/workflows/release_review/flow.py` or `workflow.py` plus optional `workflow.toml`, `prompts/`, `assets/`, docs, and tests
+- package-installed package such as `botpipe/workflows/release_review/flow.py` or `workflow.py` plus optional `workflow.toml`, `README.md`, `prompts/`, `assets/`, and tests
 
 Recommended serious-workflow shape:
 
@@ -73,6 +73,7 @@ botpipe/workflows/
     flow.py or workflow.py
     specs.py
     workflow.toml
+    README.md
     prompts/
     assets/
 ```
@@ -86,8 +87,8 @@ When a package uses `__init__.py`, it should re-export the main workflow class a
 Top-level CLI runs pass workflow-specific parameters through repeatable `-wf` pairs:
 
 ```bash
-botpipe run review task-42 \
-  --message "Review this implementation" \
+botpipe run review "Review this implementation" \
+  --task task-42 \
   -wf mode strict \
   -wf reviewer security
 ```
@@ -356,11 +357,11 @@ runtime:
 Public CLI overrides stay generic:
 
 ```bash
-botpipe run review task-42 \
+botpipe run review "Review this implementation" \
+  --task task-42 \
   --provider claude \
   --model claude-opus \
-  --model-effort max \
-  --message "Review this implementation"
+  --model-effort max
 ```
 
 If a workflow or template documents operational usage, keep it on this typed surface. Do not document ad-hoc backend construction or out-of-band provider injection.
@@ -442,7 +443,8 @@ Artifact templates, inline prompts, workflow-step messages, and prompt files are
 
 New runs are message-first:
 
-- `botpipe run ... --message "..."` starts a new run
+- `botpipe run <workflow> "..."` starts a new run and generates a concise task id unless `--task` is provided
+- `botpipe run <workflow> --message "..."` remains supported for compatibility
 - `botpipe answer ... --answer "..."` resumes an awaiting-input run with an explicit answer
 
 `message` and `answer` are distinct concepts. Resume and diagnostics do not accept a replacement message.
@@ -1233,7 +1235,7 @@ Composition helper boundary:
 
 If a workflow, template, or recursive harness emits Botpipe instructions, keep them workflow-reference-aware and repo-layout-accurate:
 
-- `botpipe run <workflow> <task-id> --workspace ... --message ...`
+- `botpipe run <workflow> "..." --workspace ... [--task <task-id>]`
 - `botpipe resume <workflow> <task-id> --workspace ...`
 - `botpipe answer <workflow> <task-id> --workspace ... --answer ...`
 - explicit file or module refs are allowed when the operator needs them, but recursive wrappers should keep their stable name-first contract unless they have a reason to pin an origin directly

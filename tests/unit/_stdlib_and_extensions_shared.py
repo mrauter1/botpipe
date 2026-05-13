@@ -297,9 +297,7 @@ def _write_catalog_workflow(
     if export_parameters:
         (package_dir / "params.py").write_text("# workflow parameters\n", encoding="utf-8")
     if write_doc:
-        docs_root = root / "docs" / "workflows"
-        docs_root.mkdir(parents=True, exist_ok=True)
-        (docs_root / f"{package_name}.md").write_text(f"# {package_name}\n", encoding="utf-8")
+        (package_dir / "README.md").write_text(f"# {package_name}\n", encoding="utf-8")
     return package_dir
 def _write_runtime_valid_catalog_workflow(
     root: Path,
@@ -401,9 +399,7 @@ class Params(BaseModel):
     (package_dir / "__init__.py").write_text("\n".join(init_lines) + "\n", encoding="utf-8")
 
     if write_doc:
-        docs_root = root / "docs" / "workflows"
-        docs_root.mkdir(parents=True, exist_ok=True)
-        (docs_root / f"{package_name}.md").write_text(f"# {package_name}\n", encoding="utf-8")
+        (package_dir / "README.md").write_text(f"# {package_name}\n", encoding="utf-8")
 
     return package_dir
 def _write_single_file_runtime_workflow(root: Path, *, relative_dir: str = "examples") -> Path:

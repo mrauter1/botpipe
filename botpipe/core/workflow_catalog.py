@@ -519,14 +519,10 @@ def _discover_docs_path(
     workflow_name: str,
     package_name: str,
 ) -> Path | None:
-    package_docs = _optional_file(package_dir / "docs.md")
-    if package_docs is not None:
-        return package_docs
-    docs_root = workspace_root / "docs" / "workflows"
-    for name in dict.fromkeys((package_name, workflow_name)):
-        candidate = _optional_file(docs_root / f"{name}.md")
-        if candidate is not None:
-            return candidate
+    for filename in ("README.md", "docs.md"):
+        package_docs = _optional_file(package_dir / filename)
+        if package_docs is not None:
+            return package_docs
     return None
 
 
