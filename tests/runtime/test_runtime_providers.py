@@ -1170,7 +1170,13 @@ def test_codex_operation_executor_uses_policy_env_and_metadata(
 
     monkeypatch.delenv("CODEX_HOME", raising=False)
     monkeypatch.setattr(codex_runtime_provider, "run_text_subprocess", fake_run_text_subprocess)
-    executor = codex_runtime_provider.build_codex_operation_executor(_config())
+    executor = codex_runtime_provider.build_codex_operation_executor(
+        _config(),
+        commands=CodexCLICommand(
+            start_command=("codex", "exec", "--json"),
+            resume_command=("codex", "exec", "resume", "--json"),
+        ),
+    )
     policy = ProviderPolicy(
         permissions=PermissionPolicy(mode="full_auto_sandboxed"),
         sandbox=SandboxPolicy(

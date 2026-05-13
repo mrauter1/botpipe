@@ -428,6 +428,15 @@ def test_codex_operation_executor_recovers_from_missing_rollout_resume(
 ) -> None:
     calls: list[list[str]] = []
 
+    monkeypatch.setattr(
+        codex_runtime_provider,
+        "_probe_codex_exec_surface",
+        lambda: codex_runtime_provider._CodexExecSurface(
+            start_help="--json\n--output-schema\n-m, --model <MODEL>\n",
+            resume_help="--json\n-m, --model <MODEL>\n",
+        ),
+    )
+
     def fake_run_text_subprocess(command: list[str], *, input_text=None, env=None):
         calls.append(list(command))
         if "resume" in command:
