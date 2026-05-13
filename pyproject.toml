@@ -1,20 +1,43 @@
 [build-system]
-requires = ["setuptools>=68"]
+requires = ["setuptools>=77"]
 build-backend = "setuptools.build_meta"
 
 [project]
 name = "botpipe"
 version = "0.0.0"
+description = "Runtime for executable SOPs on top of agentic provider harnesses."
+readme = "README.md"
 requires-python = ">=3.12"
-license = {file = "LICENSE"}
+license = "Apache-2.0"
+license-files = ["LICENSE"]
+authors = [
+  {name = "Botpipe contributors"},
+]
+keywords = [
+  "agents",
+  "automation",
+  "codex",
+  "workflow",
+  "runtime",
+]
 classifiers = [
-  "License :: OSI Approved :: Apache Software License",
+  "Development Status :: 3 - Alpha",
+  "Intended Audience :: Developers",
+  "Operating System :: OS Independent",
+  "Programming Language :: Python :: 3",
   "Programming Language :: Python :: 3.12",
+  "Topic :: Software Development :: Libraries :: Python Modules",
 ]
 dependencies = [
   "jinja2>=3.1,<4",
   "pydantic>=2,<3",
 ]
+
+[project.urls]
+Homepage = "https://github.com/mrauter1/botpipe"
+Repository = "https://github.com/mrauter1/botpipe"
+Issues = "https://github.com/mrauter1/botpipe/issues"
+Documentation = "https://github.com/mrauter1/botpipe#readme"
 
 [project.scripts]
 botpipe = "botpipe.runtime.cli:main"
