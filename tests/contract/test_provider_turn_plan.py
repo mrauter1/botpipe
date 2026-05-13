@@ -7,18 +7,18 @@ from typing import Callable, get_args
 
 from pydantic import BaseModel
 
-import botlane.simple as simple
-from botlane.core.compiler import compile_workflow
-from botlane.core.context import Context
-from botlane.core.engine import Engine
-from botlane.core.primitives import Outcome
-from botlane.core.providers.models import StepProviderUsage, TokenUsage
-from botlane.core.providers.fake import ScriptedLLMProvider
-from botlane.core.providers.rendered import RenderedLLMProvider
-from botlane.core.providers.turns import ProviderTurnResult, RenderedProviderTurn
-from botlane.core.stores.protocols import SessionBinding
-from botlane.core.step_plans import ProduceVerifyStepPlan, PromptStepPlan, ProviderTurnKind
-from botlane.core.stores import InMemoryCheckpointStore, InMemorySessionStore
+import botpipe.simple as simple
+from botpipe.core.compiler import compile_workflow
+from botpipe.core.context import Context
+from botpipe.core.engine import Engine
+from botpipe.core.primitives import Outcome
+from botpipe.core.providers.models import StepProviderUsage, TokenUsage
+from botpipe.core.providers.fake import ScriptedLLMProvider
+from botpipe.core.providers.rendered import RenderedLLMProvider
+from botpipe.core.providers.turns import ProviderTurnResult, RenderedProviderTurn
+from botpipe.core.stores.protocols import SessionBinding
+from botpipe.core.step_plans import ProduceVerifyStepPlan, PromptStepPlan, ProviderTurnKind
+from botpipe.core.stores import InMemoryCheckpointStore, InMemorySessionStore
 
 
 @dataclass

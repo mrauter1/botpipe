@@ -5,8 +5,8 @@ from pathlib import Path
 
 import pytest
 
-from botlane.core.errors import ProviderExecutionError
-from botlane.core.provider_policy import (
+from botpipe.core.errors import ProviderExecutionError
+from botpipe.core.provider_policy import (
     PermissionPolicy,
     ProviderPolicy,
     ProviderPolicyOverride,
@@ -18,8 +18,8 @@ from botlane.core.provider_policy import (
     WorkspacePolicy,
     merge_provider_policies,
 )
-from botlane.runtime.providers.claude_policy import ClaudeCapabilities, ClaudePolicyEmitter
-from botlane.runtime.providers.codex_policy import CodexPolicyEmitter
+from botpipe.runtime.providers.claude_policy import ClaudeCapabilities, ClaudePolicyEmitter
+from botpipe.runtime.providers.codex_policy import CodexPolicyEmitter
 
 
 def _cli_config_values(emission) -> dict[str, str]:

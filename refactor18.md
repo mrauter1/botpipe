@@ -2,16 +2,16 @@ Task: Implement the refactor suggestions below to reduce complexity and improve 
 
 ## Executive assessment
 
-The highest-complexity Botlane functions mostly fall into four categories:
+The highest-complexity Botpipe functions mostly fall into four categories:
 
-1. **Provider-policy emitters**: many independent mapping rules from Botlane policy to Codex/Claude config.
+1. **Provider-policy emitters**: many independent mapping rules from Botpipe policy to Codex/Claude config.
 2. **Authoring/validation reducers**: many field-specific validations and error messages.
 3. **Runtime orchestration**: one large state-machine loop in `Engine.run_async`.
 4. **Presentation/serialization builders**: long functions building text or dataclass payloads.
 
-The good news: most of this is **accidental per-function complexity**, not deep algorithmic complexity. It can be reduced by extracting rule tables, builders, small validators, and state-machine phases while preserving behavior. Botlane already introduced stronger typed internal models, such as branch-group result dataclasses and execution-frame abstractions, so the refactors below fit the current direction. 
+The good news: most of this is **accidental per-function complexity**, not deep algorithmic complexity. It can be reduced by extracting rule tables, builders, small validators, and state-machine phases while preserving behavior. Botpipe already introduced stronger typed internal models, such as branch-group result dataclasses and execution-frame abstractions, so the refactors below fit the current direction. 
 
-Static report used: [botlane_autoloop_static_report.json](sandbox:/mnt/data/botlane_autoloop_static_report.json)
+Static report used: [botpipe_autoloop_static_report.json](sandbox:/mnt/data/botpipe_autoloop_static_report.json)
 
 ---
 

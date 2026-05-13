@@ -8,15 +8,15 @@ from pathlib import Path
 import pytest
 from pydantic import BaseModel
 
-from botlane.core.branch_groups import runtime as branch_group_runtime
-from botlane.core.engine import Engine
-from botlane.core.errors import WorkflowExecutionError
-from botlane.core.primitives import Event, Goto, Outcome, RequestInput
-from botlane.core.providers.fake import ScriptedLLMProvider
-from botlane.core.providers.models import LLMRequest, OutcomeResponse, ProducerRequest, ProducerResponse, VerifierRequest
-from botlane.core.stores import InMemoryCheckpointStore, InMemorySessionStore
-from botlane.core.stores.protocols import SessionBinding
-import botlane.simple as simple
+from botpipe.core.branch_groups import runtime as branch_group_runtime
+from botpipe.core.engine import Engine
+from botpipe.core.errors import WorkflowExecutionError
+from botpipe.core.primitives import Event, Goto, Outcome, RequestInput
+from botpipe.core.providers.fake import ScriptedLLMProvider
+from botpipe.core.providers.models import LLMRequest, OutcomeResponse, ProducerRequest, ProducerResponse, VerifierRequest
+from botpipe.core.stores import InMemoryCheckpointStore, InMemorySessionStore
+from botpipe.core.stores.protocols import SessionBinding
+import botpipe.simple as simple
 
 
 def _workspace(tmp_path: Path) -> tuple[Path, Path]:
@@ -156,7 +156,7 @@ def test_parallel_branch_group_without_fan_in_routes_question_and_writes_evidenc
     context_path = _branch_group_dir(task_folder, ReviewWorkflow, "reviews") / "context.md"
     manifest = json.loads(results_path.read_text(encoding="utf-8"))
     context_text = context_path.read_text(encoding="utf-8")
-    assert manifest["schema"] == "botlane.branch_results/v1"
+    assert manifest["schema"] == "botpipe.branch_results/v1"
     assert [branch["name"] for branch in manifest["branches"]] == ["security", "cost"]
     assert manifest["branches"][0]["status"] == "needs_input"
     assert manifest["branches"][0]["question"] == "Approve security review?"
@@ -175,11 +175,11 @@ def test_parallel_branch_group_with_fan_in_routes_through_fan_in_and_exposes_hel
 
         reviews = simple.parallel(
             branches={
-                "security": simple.step("Review {branch.name}.", name="security_review", session=simple.Session.fresh()),
-                "cost": simple.step("Review {branch.name}.", name="cost_review", session=simple.Session.fresh()),
+                "security": simple.step("Review {{ branch.name }}.", name="security_review", session=simple.Session.fresh()),
+                "cost": simple.step("Review {{ branch.name }}.", name="cost_review", session=simple.Session.fresh()),
             },
             fan_in=simple.step(
-                "Summarize {fan_in.branch_count} branches.\n{fan_in.context_text}",
+                "Summarize {{ fan_in.branch_count }} branches.\n{{ fan_in.context_text }}",
                 name="combine_reviews",
                 reads=[simple.FanIn.results(), simple.FanIn.context()],
                 routes={"approved": simple.FINISH},
@@ -229,7 +229,7 @@ def test_parallel_branch_group_with_fan_in_routes_through_fan_in_and_exposes_hel
     assert result.last_event.tag == "approved"
     assert seen["branch_count"] == 2
     assert seen["results_type"] == "NamespaceProxy"
-    assert seen["results_schema"] == "botlane.branch_results/v1"
+    assert seen["results_schema"] == "botpipe.branch_results/v1"
     assert seen["results_branch_payload_type"] == "dict"
     assert seen["results_branch_names"] == ("security", "cost")
     expected_results_path = _branch_group_dir(task_folder, FanInWorkflow, "reviews") / "results.json"
@@ -405,7 +405,7 @@ def test_fan_out_branch_group_runs_provider_backed_branches_concurrently(tmp_pat
         assess = simple.fan_out(
             concurrency=2,
             step=simple.step(
-                "Assess area {branch.input.area}.",
+                "Assess area {{ branch.input.area }}.",
                 name="assess_one",
                 session=simple.Session.fresh(),
             ),
@@ -467,10 +467,10 @@ def test_fan_out_renders_branch_input_roots_artifacts_and_keeps_branch_sessions_
 
         assess = simple.fan_out(
             step=simple.step(
-                "Assess area {branch.input.area}.",
+                "Assess area {{ branch.input.area }}.",
                 name="assess_one",
                 session=simple.Session.fresh(),
-                writes=[simple.Md("report", path="reports/{branch.name}.md")],
+                writes=[simple.Md("report", path="reports/{{ branch.name }}.md")],
                 after=lambda ctx: (ctx.write(ctx.artifacts.report, f"{ctx.branch.input.area}\n") or None),
             ),
             branches={

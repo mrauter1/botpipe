@@ -4,17 +4,17 @@ from pathlib import Path
 
 from pydantic import BaseModel
 
-import botlane.core.context as context_module
-from botlane.core.branch_groups.context import (
+import botpipe.core.context as context_module
+from botpipe.core.branch_groups.context import (
     BranchMetadata,
     FanInMetadata,
     create_branch_context,
     create_fan_in_context,
 )
-from botlane.core.context import Context, _DEFAULT_MESSAGE
-from botlane.core.execution_frame import _DEFAULT_FRAME_MESSAGE
-from botlane.core.stores import InMemorySessionStore
-from botlane.core.worklists import SelectionSnapshot, WorkItemSnapshot, Worklist
+from botpipe.core.context import Context, _DEFAULT_MESSAGE
+from botpipe.core.execution_frame import _DEFAULT_FRAME_MESSAGE
+from botpipe.core.stores import InMemorySessionStore
+from botpipe.core.worklists import SelectionSnapshot, WorkItemSnapshot, Worklist
 
 
 class _State(BaseModel):
@@ -33,7 +33,7 @@ def _make_context(
     worklists: dict[str, object] | None = None,
     selection_snapshots: dict[str, SelectionSnapshot] | None = None,
 ) -> Context:
-    task_folder = tmp_path / ".botlane" / "tasks" / "task-1"
+    task_folder = tmp_path / ".botpipe" / "tasks" / "task-1"
     workflow_folder = task_folder / "wf_example"
     run_folder = workflow_folder / "runs" / "run-1"
     package_folder = tmp_path / "workflows" / "example"
@@ -68,13 +68,11 @@ def test_context_synthesizes_execution_frame_and_preserves_default_message_senti
     assert default_ctx._execution_frame.message is _DEFAULT_FRAME_MESSAGE
     assert default_ctx._message is _DEFAULT_MESSAGE
     assert default_ctx.message == "run request"
-    assert default_ctx.input.message == "run request"
     assert default_ctx.input.topic == "release"
 
     assert none_ctx._execution_frame.message is None
     assert none_ctx._message is None
     assert none_ctx.message is None
-    assert none_ctx.input.message is None
     assert none_ctx.input.topic == "release"
 
 

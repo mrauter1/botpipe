@@ -2,8 +2,8 @@ from __future__ import annotations
 
 import pytest
 
-from botlane.core.errors import FailureContext, ProviderExecutionError
-from botlane.core.providers.retries import build_retry_feedback
+from botpipe.core.errors import FailureContext, ProviderExecutionError
+from botpipe.core.providers.retries import build_retry_feedback
 
 
 def _retry_error(

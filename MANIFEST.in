@@ -1,5 +1,5 @@
-recursive-include botlane/workflows *
-prune .botlane
+recursive-include botpipe/workflows *
+prune .botpipe
 prune .auto*loop
 prune dist
 prune build

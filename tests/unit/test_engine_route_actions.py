@@ -5,15 +5,15 @@ from pathlib import Path
 import pytest
 from pydantic import BaseModel
 
-from botlane.core import AWAIT_INPUT, FAIL, FINISH, Workflow
-from botlane.core.engine import Engine, StepFinalizationRecord
-from botlane.core.engine_collaborators import StepExecutionResult
-from botlane.core.errors import WorkflowExecutionError
-from botlane.core.prompts import Prompt
-from botlane.core.providers.fake import ScriptedLLMProvider
-from botlane.core.route_contracts import AwaitInput, Continue, FailAction, Finish
-from botlane.core.steps import PromptStep, PythonStep
-from botlane.core.stores import InMemoryCheckpointStore, InMemorySessionStore, PendingInput
+from botpipe.core import AWAIT_INPUT, FAIL, FINISH, Workflow
+from botpipe.core.engine import Engine, StepFinalizationRecord
+from botpipe.core.engine_collaborators import StepExecutionResult
+from botpipe.core.errors import WorkflowExecutionError
+from botpipe.core.prompts import Prompt
+from botpipe.core.providers.fake import ScriptedLLMProvider
+from botpipe.core.route_contracts import AwaitInput, Continue, FailAction, Finish
+from botpipe.core.steps import PromptStep, PythonStep
+from botpipe.core.stores import InMemoryCheckpointStore, InMemorySessionStore, PendingInput
 
 
 class _RouteActionWorkflow(Workflow):

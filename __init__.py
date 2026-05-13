@@ -1,1 +1,1 @@
-"""Botlane v3 package."""
+"""Botpipe v3 package."""

@@ -7,16 +7,16 @@
 - Problem solved: turn completed run evidence into explicit optimization candidates instead of scattered postmortem notes and ad hoc prompt tweaks.
 - Why it matters: once runtime observability is durable, the next leverage point is ranking where a workflow is weak and packaging proposed improvements without silently applying them.
 - Classification: reusable workflow building block.
-- Why Botlane fits: the work needs deterministic evidence ingestion, verifier-gated candidate passes, and a publication receipt that proves the optimizer stayed candidate-only and non-mutating.
+- Why Botpipe fits: the work needs deterministic evidence ingestion, verifier-gated candidate passes, and a publication receipt that proves the optimizer stayed candidate-only and non-mutating.
 
 ## Invocation
 
-- Package path: `botlane/workflows/workflow_run_traces_to_optimization_candidates/`
-- Discovery: `botlane workflows show workflow_run_traces_to_optimization_candidates`
+- Package path: `botpipe/workflows/workflow_run_traces_to_optimization_candidates/`
+- Discovery: `botpipe workflows show workflow_run_traces_to_optimization_candidates`
 - Direct run:
 
 ```bash
-botlane run workflow_run_traces_to_optimization_candidates <task-id> \
+botpipe run workflow_run_traces_to_optimization_candidates <task-id> \
   --message "Rank the highest-leverage optimization targets for the release workflow." \
   -wf selected_workflow release_candidate_to_go_no_go \
   -wf task_title "Optimize release go/no-go workflow" \

@@ -4,10 +4,10 @@ from pathlib import Path
 
 from pydantic import BaseModel
 
-from botlane.core.context import ChildWorkflowResult, Context
-from botlane.core.primitives import Event
-from botlane.core.run_paths import RunIdentity, RunPaths
-from botlane.core.stores import InMemorySessionStore
+from botpipe.core.context import ChildWorkflowResult, Context
+from botpipe.core.primitives import Event
+from botpipe.core.run_paths import RunIdentity, RunPaths
+from botpipe.core.stores import InMemorySessionStore
 
 
 class _State(BaseModel):
@@ -17,18 +17,18 @@ class _State(BaseModel):
 def test_run_paths_normalizes_paths_and_identity_is_optional() -> None:
     run_paths = RunPaths(
         root="repo",
-        task_folder="repo/.botlane/tasks/task-1",
-        workflow_folder="repo/.botlane/tasks/task-1/wf_demo",
-        run_folder="repo/.botlane/tasks/task-1/wf_demo/runs/run-1",
+        task_folder="repo/.botpipe/tasks/task-1",
+        workflow_folder="repo/.botpipe/tasks/task-1/wf_demo",
+        run_folder="repo/.botpipe/tasks/task-1/wf_demo/runs/run-1",
         package_folder="repo/workflows/demo",
-        request_file="repo/.botlane/tasks/task-1/wf_demo/runs/run-1/request.md",
-        task_request_file="repo/.botlane/tasks/task-1/request.md",
-        run_meta_file="repo/.botlane/tasks/task-1/wf_demo/runs/run-1/run.json",
-        events_file="repo/.botlane/tasks/task-1/wf_demo/runs/run-1/events.jsonl",
-        checkpoint_file="repo/.botlane/tasks/task-1/wf_demo/runs/run-1/checkpoint.json",
-        sessions_dir="repo/.botlane/tasks/task-1/wf_demo/runs/run-1/sessions",
-        trace_file="repo/.botlane/tasks/task-1/wf_demo/runs/run-1/trace.jsonl",
-        raw_dir="repo/.botlane/tasks/task-1/wf_demo/runs/run-1/raw",
+        request_file="repo/.botpipe/tasks/task-1/wf_demo/runs/run-1/request.md",
+        task_request_file="repo/.botpipe/tasks/task-1/request.md",
+        run_meta_file="repo/.botpipe/tasks/task-1/wf_demo/runs/run-1/run.json",
+        events_file="repo/.botpipe/tasks/task-1/wf_demo/runs/run-1/events.jsonl",
+        checkpoint_file="repo/.botpipe/tasks/task-1/wf_demo/runs/run-1/checkpoint.json",
+        sessions_dir="repo/.botpipe/tasks/task-1/wf_demo/runs/run-1/sessions",
+        trace_file="repo/.botpipe/tasks/task-1/wf_demo/runs/run-1/trace.jsonl",
+        raw_dir="repo/.botpipe/tasks/task-1/wf_demo/runs/run-1/raw",
     )
     identity = RunIdentity(task_id="task-1", run_id="run-1", workflow_name="demo")
 
@@ -40,7 +40,7 @@ def test_run_paths_normalizes_paths_and_identity_is_optional() -> None:
 
 
 def test_context_synthesizes_internal_run_identity_from_existing_constructor_args(tmp_path: Path) -> None:
-    task_folder = tmp_path / ".botlane" / "tasks" / "task-1"
+    task_folder = tmp_path / ".botpipe" / "tasks" / "task-1"
     workflow_folder = task_folder / "wf_demo"
     run_folder = workflow_folder / "runs" / "run-1"
     package_folder = tmp_path / "workflows" / "demo"

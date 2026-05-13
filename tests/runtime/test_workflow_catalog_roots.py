@@ -7,15 +7,15 @@ from pathlib import Path
 
 import pytest
 
-import botlane
-from botlane.core.workflow_catalog import (
+import botpipe
+from botpipe.core.workflow_catalog import (
     WorkflowCatalogDiscoveryError,
     WorkflowCatalogManifestError,
     discover_workflow_catalog,
     read_workflow_manifest,
     workflow_search_roots,
 )
-from botlane.runtime.loader import WorkflowDiscoveryError, resolve_workflow_reference
+from botpipe.runtime.loader import WorkflowDiscoveryError, resolve_workflow_reference
 
 
 def _clear_workflow_modules() -> None:
@@ -24,9 +24,9 @@ def _clear_workflow_modules() -> None:
         if (
             name == "workflows"
             or name.startswith("workflows.")
-            or name == "botlane.workflows"
-            or name.startswith("botlane.workflows.")
-            or name.startswith("_botlane_workspace_workflows.")
+            or name == "botpipe.workflows"
+            or name.startswith("botpipe.workflows.")
+            or name.startswith("_botpipe_workspace_workflows.")
         ):
             sys.modules.pop(name, None)
 
@@ -39,13 +39,13 @@ def _isolate_modules():
 
 
 def _configure_package_root(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> Path:
-    package_base = tmp_path / "installed" / "botlane"
+    package_base = tmp_path / "installed" / "botpipe"
     package_root = package_base / "workflows"
     package_root.mkdir(parents=True, exist_ok=True)
     (package_root / "__init__.py").write_text("__all__ = []\n", encoding="utf-8")
-    monkeypatch.setattr(botlane, "__path__", [str(package_base), *list(botlane.__path__)], raising=False)
+    monkeypatch.setattr(botpipe, "__path__", [str(package_base), *list(botpipe.__path__)], raising=False)
     monkeypatch.setattr(
-        "botlane.core.workflow_catalog.package_workflows_root",
+        "botpipe.core.workflow_catalog.package_workflows_root",
         lambda: package_root.resolve(),
     )
     importlib.invalidate_caches()
@@ -62,7 +62,7 @@ def _write_workspace_flow(
     class_name: str = "LocalWorkflow",
     source: str | None = None,
 ) -> Path:
-    package_dir = root / ".botlane" / "workflows" / workflow_id
+    package_dir = root / ".botpipe" / "workflows" / workflow_id
     package_dir.mkdir(parents=True, exist_ok=True)
     if manifest:
         aliases_source = ", ".join(f'"{alias}"' for alias in aliases)
@@ -82,7 +82,7 @@ def _write_workspace_flow(
         source = f"""
 from __future__ import annotations
 
-from botlane import Workflow, python_step
+from botpipe import Workflow, python_step
 
 
 class {class_name}(Workflow):
@@ -123,7 +123,7 @@ def _write_repo_flow(
         source = f"""
 from __future__ import annotations
 
-from botlane import Workflow, python_step
+from botpipe import Workflow, python_step
 
 
 class {class_name}(Workflow):
@@ -143,13 +143,13 @@ class {class_name}(Workflow):
 
 
 def _write_workspace_single_file(root: Path, workflow_id: str, *, class_name: str = "SingleWorkflow") -> Path:
-    source_path = root / ".botlane" / "workflows" / f"{workflow_id}.py"
+    source_path = root / ".botpipe" / "workflows" / f"{workflow_id}.py"
     source_path.parent.mkdir(parents=True, exist_ok=True)
     source_path.write_text(
         f"""
 from __future__ import annotations
 
-from botlane import Workflow, python_step
+from botpipe import Workflow, python_step
 
 
 class {class_name}(Workflow):
@@ -193,7 +193,7 @@ def _write_package_flow(
         source = f"""
 from __future__ import annotations
 
-from botlane import Workflow, python_step
+from botpipe import Workflow, python_step
 
 
 class {class_name}(Workflow):
@@ -222,7 +222,7 @@ def test_workflow_search_roots_include_repo_workspace_and_package_roots(
     assert tuple(root.kind for root in roots) == ("workspace", "workspace", "package")
     assert roots[0].path == tmp_path / "workflows"
     assert roots[0].import_prefix == "workflows"
-    assert roots[1].path == tmp_path / ".botlane" / "workflows"
+    assert roots[1].path == tmp_path / ".botpipe" / "workflows"
     assert roots[2].path == package_root
     assert roots[1].precedence > roots[0].precedence > roots[2].precedence
 
@@ -231,9 +231,9 @@ def test_discover_workflow_catalog_allows_missing_search_roots(
     tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    missing_package_root = tmp_path / "installed" / "botlane" / "workflows"
+    missing_package_root = tmp_path / "installed" / "botpipe" / "workflows"
     monkeypatch.setattr(
-        "botlane.core.workflow_catalog.package_workflows_root",
+        "botpipe.core.workflow_catalog.package_workflows_root",
         lambda: missing_package_root.resolve(),
     )
 
@@ -244,12 +244,12 @@ def test_discover_workflow_catalog_rejects_non_directory_search_root(
     tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    workspace_root = tmp_path / ".botlane" / "workflows"
+    workspace_root = tmp_path / ".botpipe" / "workflows"
     workspace_root.parent.mkdir(parents=True, exist_ok=True)
     workspace_root.write_text("not a directory\n", encoding="utf-8")
-    missing_package_root = tmp_path / "installed" / "botlane" / "workflows"
+    missing_package_root = tmp_path / "installed" / "botpipe" / "workflows"
     monkeypatch.setattr(
-        "botlane.core.workflow_catalog.package_workflows_root",
+        "botpipe.core.workflow_catalog.package_workflows_root",
         lambda: missing_package_root.resolve(),
     )
 
@@ -269,8 +269,8 @@ def test_discover_workflow_catalog_returns_workspace_and_package_source_kinds(
     entries = {entry.workflow_name: entry for entry in discover_workflow_catalog(tmp_path)}
 
     assert entries["package_demo"].source_root_kind == "package"
-    assert entries["package_demo"].package_module == "botlane.workflows.package_demo"
-    assert entries["package_demo"].workflow_module == "botlane.workflows.package_demo.flow"
+    assert entries["package_demo"].package_module == "botpipe.workflows.package_demo"
+    assert entries["package_demo"].workflow_module == "botpipe.workflows.package_demo.flow"
     assert entries["local_demo"].source_root_kind == "workspace"
     assert entries["local_demo"].package_module is None
     assert entries["local_demo"].workflow_module is None
@@ -278,22 +278,22 @@ def test_discover_workflow_catalog_returns_workspace_and_package_source_kinds(
     assert entries["single_demo"].authoring_shape == "single_file"
 
 
-def test_distributed_package_catalog_exposes_botlane_v1_and_rejects_legacy_v1(tmp_path: Path) -> None:
+def test_distributed_package_catalog_exposes_botpipe_v1_and_rejects_legacy_v1(tmp_path: Path) -> None:
     entries = {entry.workflow_name: entry for entry in discover_workflow_catalog(tmp_path)}
-    entry = entries["botlane_v1"]
+    entry = entries["botpipe_v1"]
 
     assert entry.source_root_kind == "package"
-    assert entry.package_module == "botlane.workflows.botlane_v1"
-    assert entry.workflow_module == "botlane.workflows.botlane_v1.workflow"
-    assert entry.aliases == ("botlane-v1",)
+    assert entry.package_module == "botpipe.workflows.botpipe_v1"
+    assert entry.workflow_module == "botpipe.workflows.botpipe_v1.workflow"
+    assert entry.aliases == ("botpipe-v1",)
 
-    resolved_by_name = resolve_workflow_reference(tmp_path, "botlane_v1")
-    resolved_by_alias = resolve_workflow_reference(tmp_path, "botlane-v1")
+    resolved_by_name = resolve_workflow_reference(tmp_path, "botpipe_v1")
+    resolved_by_alias = resolve_workflow_reference(tmp_path, "botpipe-v1")
 
     assert resolved_by_name.reference.package_dir == entry.package_dir
-    assert resolved_by_name.reference.workflow_module == "botlane.workflows.botlane_v1.workflow"
+    assert resolved_by_name.reference.workflow_module == "botpipe.workflows.botpipe_v1.workflow"
     assert resolved_by_alias.reference.package_dir == entry.package_dir
-    assert resolved_by_alias.reference.workflow_name == "botlane_v1"
+    assert resolved_by_alias.reference.workflow_name == "botpipe_v1"
 
     with pytest.raises(WorkflowDiscoveryError, match=r"unknown workflow 'missing_workflow'"):
         resolve_workflow_reference(tmp_path, "missing_workflow")
@@ -378,7 +378,7 @@ def test_imported_package_class_resolves_shadowed_package_entry(
     package_dir = _write_package_flow(package_root, "package_demo", workflow_name="shared")
     _write_workspace_flow(tmp_path, "local_demo", workflow_name="shared", manifest=True)
 
-    from botlane.workflows.package_demo.flow import PackageWorkflow
+    from botpipe.workflows.package_demo.flow import PackageWorkflow
 
     resolved = resolve_workflow_reference(tmp_path, PackageWorkflow)
 
@@ -386,7 +386,7 @@ def test_imported_package_class_resolves_shadowed_package_entry(
     assert resolved.reference.source_root_kind == "package"
     assert resolved.reference.package_dir == package_dir
     assert resolved.reference.source_path == package_dir / "flow.py"
-    assert resolved.reference.workflow_module == "botlane.workflows.package_demo.flow"
+    assert resolved.reference.workflow_module == "botpipe.workflows.package_demo.flow"
 
 
 def test_repo_local_module_resolution_evicts_stale_workflows_namespace_between_roots(tmp_path: Path) -> None:
@@ -458,7 +458,7 @@ def test_unknown_bare_name_lists_searched_roots(
     message = str(excinfo.value)
     assert "missing_workflow" in message
     assert str(tmp_path) in message
-    assert str(tmp_path / ".botlane" / "workflows") in message
+    assert str(tmp_path / ".botpipe" / "workflows") in message
     assert str(package_root) in message
 
 
@@ -475,7 +475,7 @@ def test_explicit_manifest_path_resolves_outside_catalog_roots(tmp_path: Path) -
         """
 from __future__ import annotations
 
-from botlane import Workflow, python_step
+from botpipe import Workflow, python_step
 
 
 class ExternalDemo(Workflow):
@@ -498,7 +498,7 @@ class ExternalDemo(Workflow):
 
 
 def test_workspace_relative_imports_use_isolated_module_namespace(tmp_path: Path) -> None:
-    package_dir = tmp_path / ".botlane" / "workflows" / "relative_demo"
+    package_dir = tmp_path / ".botpipe" / "workflows" / "relative_demo"
     package_dir.mkdir(parents=True, exist_ok=True)
     (package_dir / "workflow.toml").write_text(
         'name = "relative_demo"\n'
@@ -531,7 +531,7 @@ class Params(BaseModel):
         """
 from __future__ import annotations
 
-from botlane import Workflow, python_step
+from botpipe import Workflow, python_step
 
 from .params import Params
 from .contracts import Output
@@ -553,12 +553,12 @@ class RelativeDemo(Workflow):
     resolved = resolve_workflow_reference(tmp_path, "relative_demo")
 
     assert resolved.reference.source_root_kind == "workspace"
-    assert resolved.workflow_cls.__module__.startswith("_botlane_workspace_workflows.")
+    assert resolved.workflow_cls.__module__.startswith("_botpipe_workspace_workflows.")
     assert resolved.workflow_cls.__module__.endswith(".relative_demo.flow")
 
 
 def test_manifest_class_field_selects_specific_workflow_class(tmp_path: Path) -> None:
-    package_dir = tmp_path / ".botlane" / "workflows" / "classed"
+    package_dir = tmp_path / ".botpipe" / "workflows" / "classed"
     package_dir.mkdir(parents=True, exist_ok=True)
     (package_dir / "workflow.toml").write_text(
         'name = "classed"\n'
@@ -571,7 +571,7 @@ def test_manifest_class_field_selects_specific_workflow_class(tmp_path: Path) ->
         """
 from __future__ import annotations
 
-from botlane import Workflow, python_step
+from botpipe import Workflow, python_step
 
 
 class IgnoredWorkflow(Workflow):
@@ -599,7 +599,7 @@ class SelectedWorkflow(Workflow):
 
 
 def test_manifest_module_field_selects_declared_module(tmp_path: Path) -> None:
-    package_dir = tmp_path / ".botlane" / "workflows" / "module_override"
+    package_dir = tmp_path / ".botpipe" / "workflows" / "module_override"
     package_dir.mkdir(parents=True, exist_ok=True)
     (package_dir / "workflow.toml").write_text(
         'name = "module_override"\n'
@@ -612,7 +612,7 @@ def test_manifest_module_field_selects_declared_module(tmp_path: Path) -> None:
         """
 from __future__ import annotations
 
-from botlane import Workflow, python_step
+from botpipe import Workflow, python_step
 
 
 class WrongWorkflow(Workflow):
@@ -629,7 +629,7 @@ class WrongWorkflow(Workflow):
         """
 from __future__ import annotations
 
-from botlane import Workflow, python_step
+from botpipe import Workflow, python_step
 
 
 class ModuleOverrideWorkflow(Workflow):
@@ -650,7 +650,7 @@ class ModuleOverrideWorkflow(Workflow):
 
 
 def test_manifest_without_module_falls_back_to_workflow_py_when_flow_missing(tmp_path: Path) -> None:
-    package_dir = tmp_path / ".botlane" / "workflows" / "workflow_only"
+    package_dir = tmp_path / ".botpipe" / "workflows" / "workflow_only"
     package_dir.mkdir(parents=True, exist_ok=True)
     (package_dir / "workflow.toml").write_text(
         'name = "workflow_only"\n'
@@ -662,7 +662,7 @@ def test_manifest_without_module_falls_back_to_workflow_py_when_flow_missing(tmp
         """
 from __future__ import annotations
 
-from botlane import Workflow, python_step
+from botpipe import Workflow, python_step
 
 
 class WorkflowOnly(Workflow):
@@ -690,7 +690,7 @@ def test_manifest_without_class_rejects_multiple_workflow_classes(tmp_path: Path
         source="""
 from __future__ import annotations
 
-from botlane import Workflow, python_step
+from botpipe import Workflow, python_step
 
 
 class AlphaWorkflow(Workflow):

@@ -5,11 +5,11 @@ from pathlib import Path
 import pytest
 from pydantic import BaseModel
 
-import botlane.simple as simple
-from botlane.core.compiler import compile_workflow
-from botlane.core.engine import Engine
-from botlane.core.primitives import FINISH, Event, Outcome
-from botlane.core.provider_policy import (
+import botpipe.simple as simple
+from botpipe.core.compiler import compile_workflow
+from botpipe.core.engine import Engine
+from botpipe.core.primitives import FINISH, Event, Outcome
+from botpipe.core.provider_policy import (
     PermissionPolicy,
     ProviderPolicy,
     ProviderPolicyError,
@@ -18,9 +18,9 @@ from botlane.core.provider_policy import (
     StrictProviderPolicy,
     StrictSandboxPolicy,
 )
-from botlane.core.providers.fake import ScriptedLLMProvider
-from botlane.core.stores import InMemoryCheckpointStore, InMemorySessionStore
-from botlane.runtime.config import (
+from botpipe.core.providers.fake import ScriptedLLMProvider
+from botpipe.core.stores import InMemoryCheckpointStore, InMemorySessionStore
+from botpipe.runtime.config import (
     GitTrackingRuntimeConfig,
     ProviderConfig,
     ProviderPolicyRuntimeConfig,
@@ -28,8 +28,8 @@ from botlane.runtime.config import (
     RuntimeConfig,
     TracingRuntimeConfig,
 )
-from botlane.runtime.provider_policy_resolver import ProviderPolicyResolver
-from botlane.runtime.runner import RunnerOptions, execute_workflow_package
+from botpipe.runtime.provider_policy_resolver import ProviderPolicyResolver
+from botpipe.runtime.runner import RunnerOptions, execute_workflow_package
 
 
 def _runtime_config() -> RuntimeConfig:

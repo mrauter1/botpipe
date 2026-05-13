@@ -1,0 +1,4 @@
+name = "botpipe_v1"
+title = "Botpipe v1"
+description = "Botpipe-v1 workflow package running on the general runtime."
+aliases = ["botpipe-v1"]

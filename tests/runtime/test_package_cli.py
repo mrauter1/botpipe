@@ -10,12 +10,14 @@ from pathlib import Path
 
 import pytest
 
-from botlane.core.compiler import compile_workflow
-from botlane.core.discovery import get_workflow_definition
-from botlane.core.lowering import step_authored_route_tags
-from botlane.core.route_contracts import available_route_tags, runtime_control_route_tags
-from botlane.runtime import cli
-from botlane.runtime.loader import resolve_workflow_reference
+from botpipe import Botpipe
+from botpipe.core.compiler import compile_workflow
+from botpipe.core.discovery import get_workflow_definition
+from botpipe.core.lowering import step_authored_route_tags
+from botpipe.core.route_contracts import available_route_tags, runtime_control_route_tags
+from botpipe.runtime import cli
+from botpipe.runtime.config import GitTrackingRuntimeConfig, RuntimeConfig
+from botpipe.runtime.loader import resolve_workflow_reference
 
 
 PUBLIC_PROVIDER_FACTORY_FLAG = "--provider" + "-factory"
@@ -54,7 +56,7 @@ def _provider_factory(**_: object) -> _UnusedProvider:
 
 
 def _assert_bootstrap_scaffold_contract(source: str) -> None:
-    assert 'from botlane import Event, FINISH, Workflow, python_step' in source
+    assert 'from botpipe import Event, FINISH, Workflow, python_step' in source
     assert '@python_step(name="bootstrap", routes={"ready": FINISH})' in source
     assert "def bootstrap(ctx):" in source
     assert 'ctx.state = ctx.state.model_copy(update={"ready": True})' in source
@@ -89,7 +91,7 @@ def _init_repo(root: Path) -> None:
     _git(root, "init")
     _git(root, "config", "user.email", "test@example.com")
     _git(root, "config", "user.name", "Test")
-    _git(root, "add", ".botlane")
+    _git(root, "add", ".botpipe")
     _git(root, "commit", "-m", "baseline")
 
 
@@ -104,7 +106,7 @@ def _write_workflow_package(
     workflow_source: str | None = None,
     export_parameters: bool = False,
 ) -> Path:
-    workflows_root = root / ".botlane" / "workflows"
+    workflows_root = root / ".botpipe" / "workflows"
     workflows_root.mkdir(parents=True, exist_ok=True)
     (workflows_root / "__init__.py").write_text("__all__ = []\n", encoding="utf-8")
 
@@ -136,7 +138,7 @@ from __future__ import annotations
 
 from pydantic import BaseModel
 
-from botlane import Event, FINISH, Workflow, python_step
+from botpipe import Event, FINISH, Workflow, python_step
 
 
 class {class_name}(Workflow):
@@ -180,7 +182,7 @@ import json
 
 from pydantic import BaseModel
 
-from botlane import AWAIT_INPUT, Event, FINISH, Workflow, python_step
+from botpipe import AWAIT_INPUT, Event, FINISH, Workflow, python_step
 
 
 class {class_name}(Workflow):
@@ -215,18 +217,18 @@ def test_cli_help_exposes_package_commands_only() -> None:
         assert forbidden not in help_text
 
 
-def test_cli_help_uses_botlane_identity(capsys) -> None:
+def test_cli_help_uses_botpipe_identity(capsys) -> None:
     parser = cli.build_arg_parser()
-    assert parser.prog == "botlane"
-    assert "filesystem Botlane runtime" in parser.format_help()
+    assert parser.prog == "botpipe"
+    assert "filesystem Botpipe runtime" in parser.format_help()
 
     with pytest.raises(SystemExit) as excinfo:
         parser.parse_args(["run", "--help"])
 
     assert excinfo.value.code == 0
     help_text = capsys.readouterr().out
-    assert "installed botlane package" in help_text
-    assert "`.botlane/workflows/`" in help_text
+    assert "installed botpipe package" in help_text
+    assert "`.botpipe/workflows/`" in help_text
 
 
 def test_cli_mutating_command_help_exposes_provider_and_hides_provider_factory(capsys) -> None:
@@ -286,12 +288,30 @@ def test_cli_common_workspace_help_surfaces_render_workspace_metavar(argv: list[
         ["init", "workflow", "child_workflow"],
     ],
 )
-def test_cli_requires_workspace_for_public_entry_points(argv: list[str], capsys) -> None:
-    with pytest.raises(SystemExit) as excinfo:
-        cli.build_arg_parser().parse_args(argv)
+def test_cli_defaults_workspace_to_current_directory_for_public_entry_points(argv: list[str]) -> None:
+    args = cli.build_arg_parser().parse_args(argv)
 
-    assert excinfo.value.code == cli.EXIT_USAGE_ERROR
-    assert "--workspace" in capsys.readouterr().err
+    assert args.root == Path(".")
+
+
+def test_cli_uses_current_directory_when_workspace_is_omitted(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    capsys,
+) -> None:
+    _write_workflow_package(
+        tmp_path,
+        "cwd_review",
+        workflow_name="cwd_review",
+        class_name="CwdReviewWorkflow",
+    )
+    monkeypatch.chdir(tmp_path)
+
+    exit_code = cli.main(["workflows", "list"])
+    payload = json.loads(capsys.readouterr().out)
+
+    assert exit_code == 0
+    assert any(entry["name"] == "cwd_review" for entry in payload)
 
 
 @pytest.mark.parametrize(
@@ -345,9 +365,9 @@ class Params(BaseModel):
     assert payload["name"] == "review"
     assert payload["aliases"] == ["reviewer"]
     assert payload["authoring_shape"] == "manifest_package"
-    assert payload["source_path"] == str(tmp_path / ".botlane" / "workflows" / "review_workflow" / "workflow.py")
-    assert payload["manifest_path"] == str(tmp_path / ".botlane" / "workflows" / "review_workflow" / "workflow.toml")
-    assert payload["workflow_py_path"] == str(tmp_path / ".botlane" / "workflows" / "review_workflow" / "workflow.py")
+    assert payload["source_path"] == str(tmp_path / ".botpipe" / "workflows" / "review_workflow" / "workflow.py")
+    assert payload["manifest_path"] == str(tmp_path / ".botpipe" / "workflows" / "review_workflow" / "workflow.toml")
+    assert payload["workflow_py_path"] == str(tmp_path / ".botpipe" / "workflows" / "review_workflow" / "workflow.py")
     assert payload["parameters_supported"] is True
     assert payload["workflow_class"] == "ReviewWorkflow"
     assert payload["state_model"].endswith("ReviewWorkflow.State")
@@ -449,8 +469,8 @@ def test_cli_workflow_resolution_rejects_same_tier_name_alias_collisions_and_amb
 
     assert duplicate_key_exit == cli.EXIT_RESOLUTION_ERROR
     assert "duplicate workflow resolution key 'shared'" in duplicate_key_captured.err
-    assert str(tmp_path / ".botlane" / "workflows" / "review_pkg" / "workflow.py") in duplicate_key_captured.err
-    assert str(tmp_path / ".botlane" / "workflows" / "shared_pkg" / "workflow.py") in duplicate_key_captured.err
+    assert str(tmp_path / ".botpipe" / "workflows" / "review_pkg" / "workflow.py") in duplicate_key_captured.err
+    assert str(tmp_path / ".botpipe" / "workflows" / "shared_pkg" / "workflow.py") in duplicate_key_captured.err
 
     _write_workflow_package(
         tmp_path,
@@ -472,8 +492,8 @@ def test_cli_workflow_resolution_rejects_same_tier_name_alias_collisions_and_amb
 
     assert ambiguous_exit == cli.EXIT_RESOLUTION_ERROR
     assert "duplicate workflow resolution key 'common'" in ambiguous_captured.err
-    assert str(tmp_path / ".botlane" / "workflows" / "audit_pkg" / "workflow.py") in ambiguous_captured.err
-    assert str(tmp_path / ".botlane" / "workflows" / "reviewer_pkg" / "workflow.py") in ambiguous_captured.err
+    assert str(tmp_path / ".botpipe" / "workflows" / "audit_pkg" / "workflow.py") in ambiguous_captured.err
+    assert str(tmp_path / ".botpipe" / "workflows" / "reviewer_pkg" / "workflow.py") in ambiguous_captured.err
 
 
 def test_cli_workflows_list_includes_manifest_and_inferred_workflows_without_imports(
@@ -487,7 +507,7 @@ def test_cli_workflows_list_includes_manifest_and_inferred_workflows_without_imp
         class_name="ManifestReviewWorkflow",
         aliases=("manifest_alias",),
     )
-    single_file = tmp_path / ".botlane" / "workflows" / "single_review.py"
+    single_file = tmp_path / ".botpipe" / "workflows" / "single_review.py"
     single_file.write_text(
         'raise AssertionError("single-file workflow should not import during list")\n',
         encoding="utf-8",
@@ -504,8 +524,8 @@ def test_cli_workflows_list_includes_manifest_and_inferred_workflows_without_imp
         "description": "Workflow test package.",
         "manifest_present": True,
         "name": "manifest_review",
-        "package_folder": str(tmp_path / ".botlane" / "workflows" / "manifest_review"),
-        "source_path": str(tmp_path / ".botlane" / "workflows" / "manifest_review" / "workflow.py"),
+        "package_folder": str(tmp_path / ".botpipe" / "workflows" / "manifest_review"),
+        "source_path": str(tmp_path / ".botpipe" / "workflows" / "manifest_review" / "workflow.py"),
         "source_root_kind": "workspace",
         "shadowed": False,
         "shadowed_by": None,
@@ -517,7 +537,7 @@ def test_cli_workflows_list_includes_manifest_and_inferred_workflows_without_imp
         "description": "",
         "manifest_present": False,
         "name": "single_review",
-        "package_folder": str(tmp_path / ".botlane" / "workflows"),
+        "package_folder": str(tmp_path / ".botpipe" / "workflows"),
         "source_path": str(single_file),
         "source_root_kind": "workspace",
         "shadowed": False,
@@ -573,7 +593,7 @@ class Params(BaseModel):
         {"default": "strict", "name": "mode", "repeated": False, "required": False, "type": "ReviewMode"},
     ]
     assert show_payload["parameters_model"].endswith("Params")
-    assert not any((tmp_path / ".botlane" / "workflows").rglob("__pycache__"))
+    assert not any((tmp_path / ".botpipe" / "workflows").rglob("__pycache__"))
 
     run_exit = cli.main(
         [
@@ -591,14 +611,14 @@ class Params(BaseModel):
     run_payload = json.loads(capsys.readouterr().out)
 
     assert run_exit == 0
-    run_dir = tmp_path / ".botlane" / "tasks" / "task-json" / "wf_typed_review" / "runs" / run_payload["run_id"]
+    run_dir = tmp_path / ".botpipe" / "tasks" / "task-json" / "wf_typed_review" / "runs" / run_payload["run_id"]
     run_metadata = json.loads((run_dir / "run.json").read_text(encoding="utf-8"))
     assert run_metadata["workflow_params"] == {
         "mode": "strict",
         "output_dir": "reports",
         "requested_at": requested_at.isoformat(),
     }
-    assert not any((tmp_path / ".botlane" / "workflows").rglob("__pycache__"))
+    assert not any((tmp_path / ".botpipe" / "workflows").rglob("__pycache__"))
 
 
 def test_cli_mutating_commands_accept_non_public_provider_factory_injection_seam(
@@ -809,7 +829,7 @@ class Params(BaseModel):
     assert run_output["pending_input"]["question"] == "What value?"
     run_id = run_output["run_id"]
 
-    run_dir = tmp_path / ".botlane" / "tasks" / "task-42" / "wf_review" / "runs" / run_id
+    run_dir = tmp_path / ".botpipe" / "tasks" / "task-42" / "wf_review" / "runs" / run_id
     assert len(list((run_dir.parent).iterdir())) == 1
 
     show_exit = cli.main(["runs", "show", "review", "task-42", "--workspace", str(tmp_path)])
@@ -837,11 +857,29 @@ class Params(BaseModel):
     assert logs_exit == 0
     assert '"event_type": "run_started"' in logs_output
 
+    sdk_client = Botpipe(
+        workspace=tmp_path,
+        provider=_UnusedProvider(),
+        runtime_config=RuntimeConfig(git_tracking=GitTrackingRuntimeConfig(enabled=False, commit_policy="off")),
+    )
+    sdk_show = sdk_client.runs.show("review", "task-42")
+    sdk_list = sdk_client.runs.list(workflow="reviewer", task_id="task-42")
+
+    assert sdk_show.run_id == show_output["run_id"]
+    assert sdk_show.workflow_params == show_output["workflow_params"]
+    assert [record.run_id for record in sdk_list] == [run_id]
+    assert sdk_client.runs.events_text("review", "task-42") == logs_output
+
     raw_logs_exit = cli.main(["logs", "review", "task-42", "--workspace", str(tmp_path), "--raw"])
     raw_logs_captured = capsys.readouterr()
 
     assert raw_logs_exit == cli.EXIT_RESOLUTION_ERROR
     assert "raw log output is missing" in raw_logs_captured.err
+
+    sdk_resume = sdk_client.runs.resume("review", "task-42", run_id=run_id)
+
+    assert sdk_resume.debug.run_id == run_id
+    assert sdk_client.runs.show("review", "task-42").normalized_status == "awaiting_input"
 
     resume_exit = cli.main(
         ["resume", "review", "task-42", "--workspace", str(tmp_path), "--no-git"],
@@ -877,6 +915,149 @@ class Params(BaseModel):
     assert result_payload["workflow_params"] == {"mode": "focused", "reviewers": ["alice", "bob"]}
 
 
+def test_cli_durable_handlers_delegate_to_sdk_facade(
+    tmp_path: Path,
+    capsys,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    calls: list[tuple[object, ...]] = []
+
+    class FakeRunRecord:
+        workflow_name = "review"
+        task_id = "task-42"
+        run_id = "run-1"
+        status = "awaiting_input"
+        created_at = "2026-05-01T00:00:00+00:00"
+        updated_at = "2026-05-01T00:01:00+00:00"
+        metadata = {
+            "workflow": {"reference": "review"},
+            "run_folder": str(tmp_path / ".botpipe" / "tasks" / "task-42" / "wf_review" / "runs" / "run-1"),
+        }
+
+        @property
+        def normalized_status(self) -> str:
+            return self.status
+
+        @property
+        def awaiting_input(self) -> bool:
+            return True
+
+        @property
+        def resumable(self) -> bool:
+            return True
+
+        @property
+        def checkpoint_exists(self) -> bool:
+            return True
+
+        @property
+        def pending_input(self) -> dict[str, str]:
+            return {"question": "What value?"}
+
+        @property
+        def workflow_params(self) -> dict[str, str]:
+            return {"mode": "focused"}
+
+    record = FakeRunRecord()
+
+    class FakeRuns:
+        def list(self, *, workflow=None, task_id=None, status=None):
+            calls.append(("list", workflow, task_id, status))
+            return (record,)
+
+        def show(self, workflow, task_id, *, run_id=None):
+            calls.append(("show", workflow, task_id, run_id))
+            return record
+
+        def resume(self, workflow, task_id, *, run_id=None, answer=None):
+            calls.append(("resume", workflow, task_id, run_id, answer))
+            return object()
+
+        def events_text(self, workflow, task_id, *, run_id=None):
+            calls.append(("events_text", workflow, task_id, run_id))
+            return '{"event_type": "run_started"}\n'
+
+        def trace_text(self, workflow, task_id, *, run_id=None):
+            calls.append(("trace_text", workflow, task_id, run_id))
+            return '{"event_type": "run_initialized"}\n'
+
+    class FakeClient:
+        runs = FakeRuns()
+
+    monkeypatch.setattr(cli, "Botpipe", lambda **_: FakeClient())
+    monkeypatch.setattr(
+        cli,
+        "_workflow_result_summary_payload",
+        lambda _client, _result: {
+            "workflow": "review",
+            "task_id": "task-42",
+            "run_id": "run-1",
+            "status": "awaiting_input",
+        },
+    )
+
+    assert (
+        cli.main(
+            [
+                "runs",
+                "list",
+                "--workspace",
+                str(tmp_path),
+                "--workflow",
+                "reviewer",
+                "--task",
+                "task-42",
+                "--status",
+                "awaiting_input",
+            ]
+        )
+        == 0
+    )
+    capsys.readouterr()
+    assert cli.main(["runs", "show", "review", "task-42", "--workspace", str(tmp_path), "--run-id", "run-1"]) == 0
+    capsys.readouterr()
+    assert cli.main(["logs", "review", "task-42", "--workspace", str(tmp_path)]) == 0
+    capsys.readouterr()
+    assert cli.main(["logs", "review", "task-42", "--workspace", str(tmp_path), "--trace"]) == 0
+    capsys.readouterr()
+    assert (
+        cli.main(
+            ["resume", "review", "task-42", "--workspace", str(tmp_path), "--run-id", "run-1", "--no-git"],
+            provider_factory=_provider_factory,
+        )
+        == 0
+    )
+    capsys.readouterr()
+    assert (
+        cli.main(
+            [
+                "answer",
+                "review",
+                "task-42",
+                "--workspace",
+                str(tmp_path),
+                "--run-id",
+                "run-1",
+                "--answer",
+                "Use OAuth",
+                "--no-git",
+            ],
+            provider_factory=_provider_factory,
+        )
+        == 0
+    )
+    capsys.readouterr()
+
+    assert calls == [
+        ("list", "reviewer", "task-42", "awaiting_input"),
+        ("show", "review", "task-42", "run-1"),
+        ("events_text", "review", "task-42", None),
+        ("trace_text", "review", "task-42", None),
+        ("resume", "review", "task-42", "run-1", None),
+        ("resume", "review", "task-42", "run-1", "Use OAuth"),
+    ]
+
+
 def test_cli_runs_list_filters_legacy_paused_run_metadata_as_awaiting_input(
     tmp_path: Path,
     capsys,
@@ -888,7 +1069,7 @@ def test_cli_runs_list_filters_legacy_paused_run_metadata_as_awaiting_input(
         class_name="ReviewWorkflow",
     )
 
-    run_dir = tmp_path / ".botlane" / "tasks" / "task-legacy" / "wf_review" / "runs" / "run-legacy"
+    run_dir = tmp_path / ".botpipe" / "tasks" / "task-legacy" / "wf_review" / "runs" / "run-legacy"
     run_dir.mkdir(parents=True, exist_ok=True)
     (run_dir / "run.json").write_text(
         json.dumps(
@@ -1085,15 +1266,15 @@ def test_cli_rejects_invalid_or_unsupported_workflow_params(
 @pytest.mark.parametrize(
     ("shape", "expected_relpaths"),
     [
-        ("single", (".botlane/workflows/child_workflow.py",)),
-        ("flow-specs", (".botlane/workflows/child_workflow/flow.py", ".botlane/workflows/child_workflow/specs.py")),
+        ("single", (".botpipe/workflows/child_workflow.py",)),
+        ("flow-specs", (".botpipe/workflows/child_workflow/flow.py", ".botpipe/workflows/child_workflow/specs.py")),
         (
             "package",
             (
-                ".botlane/workflows/child_workflow/flow.py",
-                ".botlane/workflows/child_workflow/specs.py",
-                ".botlane/workflows/child_workflow/__init__.py",
-                ".botlane/workflows/child_workflow/workflow.toml",
+                ".botpipe/workflows/child_workflow/flow.py",
+                ".botpipe/workflows/child_workflow/specs.py",
+                ".botpipe/workflows/child_workflow/__init__.py",
+                ".botpipe/workflows/child_workflow/workflow.toml",
             ),
         ),
     ],
@@ -1116,24 +1297,24 @@ def test_cli_init_workflow_scaffolds_supported_shapes_and_rejects_duplicates(
         assert (tmp_path / relative_path).exists()
 
     source_path = (
-        tmp_path / ".botlane" / "workflows" / "child_workflow.py"
+        tmp_path / ".botpipe" / "workflows" / "child_workflow.py"
         if shape == "single"
-        else tmp_path / ".botlane" / "workflows" / "child_workflow" / "flow.py"
+        else tmp_path / ".botpipe" / "workflows" / "child_workflow" / "flow.py"
     )
     source = source_path.read_text(encoding="utf-8")
     _assert_bootstrap_scaffold_contract(source)
 
     if shape == "package":
-        assert (tmp_path / ".botlane" / "workflows" / "child_workflow" / "prompts" / "README.md").exists()
-        assert (tmp_path / ".botlane" / "workflows" / "child_workflow" / "assets" / ".gitkeep").exists()
+        assert (tmp_path / ".botpipe" / "workflows" / "child_workflow" / "prompts" / "README.md").exists()
+        assert (tmp_path / ".botpipe" / "workflows" / "child_workflow" / "assets" / ".gitkeep").exists()
     elif shape == "flow-specs":
-        package_dir = tmp_path / ".botlane" / "workflows" / "child_workflow"
+        package_dir = tmp_path / ".botpipe" / "workflows" / "child_workflow"
         assert not (package_dir / "__init__.py").exists()
         assert not (package_dir / "workflow.toml").exists()
         assert not (package_dir / "prompts").exists()
         assert not (package_dir / "assets").exists()
     else:
-        assert not (tmp_path / ".botlane" / "workflows" / "child_workflow").exists()
+        assert not (tmp_path / ".botpipe" / "workflows" / "child_workflow").exists()
 
     compiled = compile_workflow(resolve_workflow_reference(tmp_path, "child_workflow").workflow_cls)
     assert compiled.workflow_name == "child_workflow"
@@ -1153,10 +1334,10 @@ def test_cli_init_workflow_defaults_to_package_shape(tmp_path: Path, capsys) -> 
     assert exit_code == 0
     payload = json.loads(captured.out)
     assert payload["shape"] == "package"
-    flow_path = tmp_path / ".botlane" / "workflows" / "child_workflow" / "flow.py"
+    flow_path = tmp_path / ".botpipe" / "workflows" / "child_workflow" / "flow.py"
     assert flow_path.exists()
-    assert (tmp_path / ".botlane" / "workflows" / "child_workflow" / "specs.py").exists()
-    assert (tmp_path / ".botlane" / "workflows" / "child_workflow" / "workflow.toml").exists()
+    assert (tmp_path / ".botpipe" / "workflows" / "child_workflow" / "specs.py").exists()
+    assert (tmp_path / ".botpipe" / "workflows" / "child_workflow" / "workflow.toml").exists()
     _assert_bootstrap_scaffold_contract(flow_path.read_text(encoding="utf-8"))
 
     compiled = compile_workflow(resolve_workflow_reference(tmp_path, "child_workflow").workflow_cls)

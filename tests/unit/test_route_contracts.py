@@ -4,13 +4,13 @@ from types import SimpleNamespace
 
 from pydantic import BaseModel
 
-from botlane import Route
-from botlane.core import Workflow
-from botlane.core.artifacts import Artifact
-from botlane.core.compiler import compile_workflow
-from botlane.core.identifiers import ArtifactId
-from botlane.core.primitives import AWAIT_INPUT, FAIL, FINISH, GLOBAL
-from botlane.core.route_contracts import (
+from botpipe import Route
+from botpipe.core import Workflow
+from botpipe.core.artifacts import Artifact
+from botpipe.core.compiler import compile_workflow
+from botpipe.core.identifiers import ArtifactId
+from botpipe.core.primitives import AWAIT_INPUT, FAIL, FINISH, GLOBAL
+from botpipe.core.route_contracts import (
     AwaitInput,
     Continue,
     FailAction,
@@ -21,7 +21,7 @@ from botlane.core.route_contracts import (
     route_target_value,
     runtime_control_route_tags,
 )
-from botlane.core.steps import PromptStep
+from botpipe.core.steps import PromptStep
 
 
 class RoutePayload(BaseModel):
@@ -35,7 +35,7 @@ class _RouteWorkflow(Workflow):
     ask = PromptStep(
         name="ask",
         producer="ask.md",
-        writes={"report": Artifact("{run_folder}/report.md")},
+        writes={"report": Artifact("{{ run.folder }}/report.md")},
     )
     review = PromptStep(name="review", producer="review.md")
     entry = ask

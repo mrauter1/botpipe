@@ -908,7 +908,7 @@ def test_after_hook_re_resolves_artifact_paths_before_on_taken(tmp_path: Path):
         ask = PromptStep(
             name="ask",
             producer="ask.md",
-            writes={"report": Artifact.md("{workflow_folder}/{state.bucket}/report.md")},
+            writes={"report": Artifact.md("{{ workflow.folder }}/{{ state.bucket }}/report.md")},
             after=after_ask,
             retry_policy=ProviderRetryPolicy(max_attempts=1),
         )
@@ -957,7 +957,7 @@ def test_after_hook_state_mutation_re_resolves_artifact_paths_before_final_outpu
         ask = PromptStep(
             name="ask",
             producer="ask.md",
-            writes={"report": Artifact.md("{workflow_folder}/{state.bucket}/report.md")},
+            writes={"report": Artifact.md("{{ workflow.folder }}/{{ state.bucket }}/report.md")},
             after=after_ask,
             retry_policy=ProviderRetryPolicy(max_attempts=1),
         )
@@ -998,7 +998,7 @@ def test_after_hook_effects_complete_and_advance_persist_status_and_exhaust(tmp_
         return Effects.complete_and_advance(exhausted="done")
 
     class EffectsWorkflow(Workflow):
-        board = Artifact.json("{task_folder}/gates.json", required=True)
+        board = Artifact.json("{{ task.folder }}/gates.json", required=True)
         gates = Worklist.from_artifact(
             name="gate",
             artifact=board,
@@ -1061,7 +1061,7 @@ def test_route_hook_may_return_direct_worklist_effect_for_active_scoped_worklist
         return WorklistEffect.complete_and_advance(exhausted="done")
 
     class DirectRouteHookEffectWorkflow(Workflow):
-        board = Artifact.json("{task_folder}/gates.json", required=True)
+        board = Artifact.json("{{ task.folder }}/gates.json", required=True)
         gates = Worklist.from_artifact(
             name="gate",
             artifact=board,
@@ -1110,7 +1110,7 @@ def test_after_hook_effect_event_takes_precedence_over_exhausted_route(tmp_path:
         return Event("done")
 
     class EffectsPrecedenceWorkflow(Workflow):
-        board = Artifact.json("{task_folder}/gates.json", required=True)
+        board = Artifact.json("{{ task.folder }}/gates.json", required=True)
         gates = Worklist.from_artifact(
             name="gate",
             artifact=board,
@@ -1195,7 +1195,7 @@ def test_after_hook_effect_runtime_controls_match_direct_controls(
         after_hook.__name__ = "control_hook"
 
         class ControlWorkflow(Workflow):
-            board = Artifact.json("{task_folder}/gates.json", required=True)
+            board = Artifact.json("{{ task.folder }}/gates.json", required=True)
             gates = Worklist.from_artifact(
                 name="gate",
                 artifact=board,

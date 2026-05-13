@@ -8,17 +8,17 @@ from pathlib import Path
 
 import pytest
 
-from botlane.core.outcome_contract import NATIVE_SCHEMA_EXCEEDS_LIMIT
-from botlane.core.providers.rendered import RenderedLLMProvider
-from botlane.core.providers.turns import ProviderTurnResult, RenderedProviderTurn
-from botlane.core.stores.protocols import SessionBinding
-from botlane.runtime import cli
-from botlane.runtime import providers as runtime_providers
-from botlane.runtime.providers.claude import ClaudeProvider, ClaudeTransport, build_claude_provider
-import botlane.runtime.providers.claude as claude_runtime_provider
-from botlane.runtime.providers.codex import CodexCLICommand, CodexProvider, CodexTransport, build_codex_provider
-import botlane.runtime.providers.codex as codex_runtime_provider
-from botlane.runtime.config import (
+from botpipe.core.outcome_contract import NATIVE_SCHEMA_EXCEEDS_LIMIT
+from botpipe.core.providers.rendered import RenderedLLMProvider
+from botpipe.core.providers.turns import ProviderTurnResult, RenderedProviderTurn
+from botpipe.core.stores.protocols import SessionBinding
+from botpipe.runtime import cli
+from botpipe.runtime import providers as runtime_providers
+from botpipe.runtime.providers.claude import ClaudeProvider, ClaudeTransport, build_claude_provider
+import botpipe.runtime.providers.claude as claude_runtime_provider
+from botpipe.runtime.providers.codex import CodexCLICommand, CodexProvider, CodexTransport, build_codex_provider
+import botpipe.runtime.providers.codex as codex_runtime_provider
+from botpipe.runtime.config import (
     ClaudeProviderConfig,
     CodexProviderConfig,
     ConfigError,
@@ -27,9 +27,9 @@ from botlane.runtime.config import (
     RuntimeConfig,
     resolve_runtime_config,
 )
-import botlane.runtime.config as runtime_config
-from botlane.runtime.provider_backends import resolve_provider_backend
-import botlane.runtime.provider_backends as provider_backends
+import botpipe.runtime.config as runtime_config
+from botpipe.runtime.provider_backends import resolve_provider_backend
+import botpipe.runtime.provider_backends as provider_backends
 
 
 CLAUDE_HEADLESS_HELP = "--print\n-p\n--output-format\n--resume\n--model\n--settings\n--add-dir\n"
@@ -635,7 +635,7 @@ def test_resolve_runtime_config_reads_full_auto_runtime_policy(
 ) -> None:
     config_root = tmp_path / "repo"
     config_root.mkdir()
-    (config_root / "botlane.yaml").write_text("runtime:\n  full_auto: true\n", encoding="utf-8")
+    (config_root / "botpipe.yaml").write_text("runtime:\n  full_auto: true\n", encoding="utf-8")
     monkeypatch.setattr(runtime_config, "user_config_dir", lambda: tmp_path / "missing-user-config")
 
     resolved = resolve_runtime_config(config_root, _runtime_args())
@@ -649,7 +649,7 @@ def test_resolve_runtime_config_reads_valid_nested_runtime_policy_without_pyyaml
 ) -> None:
     config_root = tmp_path / "repo"
     config_root.mkdir()
-    (config_root / "botlane.yaml").write_text(
+    (config_root / "botpipe.yaml").write_text(
         "runtime:\n  full_auto: true\n  tracing:\n    include_state_snapshots: false\n",
         encoding="utf-8",
     )
@@ -666,7 +666,7 @@ def test_load_runtime_config_file_without_pyyaml_rejects_indented_child_under_sc
     tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    config_path = tmp_path / "botlane.yaml"
+    config_path = tmp_path / "botpipe.yaml"
     config_path.write_text("runtime: true\n  full_auto: false\n", encoding="utf-8")
     monkeypatch.setattr(runtime_config, "yaml", None)
 
@@ -678,7 +678,7 @@ def test_load_runtime_config_file_without_pyyaml_rejects_overindented_sibling_ma
     tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    config_path = tmp_path / "botlane.yaml"
+    config_path = tmp_path / "botpipe.yaml"
     config_path.write_text("provider:\n  name: codex\n    model: gpt-5\n", encoding="utf-8")
     monkeypatch.setattr(runtime_config, "yaml", None)
 
@@ -962,7 +962,7 @@ def test_parse_runtime_config_rejects_invalid_git_commit_policy(tmp_path: Path) 
     with pytest.raises(ConfigError, match=r"runtime\.git_tracking\.commit_policy"):
         runtime_config.parse_runtime_config(
             {"runtime": {"git_tracking": {"commit_policy": "invalid"}}},
-            tmp_path / "botlane.yaml",
+            tmp_path / "botpipe.yaml",
         )
 
 
@@ -970,7 +970,7 @@ def test_parse_runtime_config_rejects_non_mapping_git_tracking_section(tmp_path:
     with pytest.raises(ConfigError, match=r"runtime\.git_tracking must be a mapping"):
         runtime_config.parse_runtime_config(
             {"runtime": {"git_tracking": False}},
-            tmp_path / "botlane.yaml",
+            tmp_path / "botpipe.yaml",
         )
 
 
@@ -978,7 +978,7 @@ def test_parse_runtime_config_rejects_non_mapping_tracing_section(tmp_path: Path
     with pytest.raises(ConfigError, match=r"runtime\.tracing must be a mapping"):
         runtime_config.parse_runtime_config(
             {"runtime": {"tracing": False}},
-            tmp_path / "botlane.yaml",
+            tmp_path / "botpipe.yaml",
         )
 
 
@@ -1022,8 +1022,8 @@ def test_resolve_runtime_config_merges_runtime_file_overrides_and_preserves_defa
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     global_config_dir = tmp_path / "global-config"
-    local_config_path = tmp_path / "botlane.yaml"
-    global_config_path = global_config_dir / "botlane.yaml"
+    local_config_path = tmp_path / "botpipe.yaml"
+    global_config_path = global_config_dir / "botpipe.yaml"
     global_config_dir.mkdir(parents=True)
     global_config_path.write_text("", encoding="utf-8")
     local_config_path.write_text("", encoding="utf-8")
@@ -1062,8 +1062,8 @@ def test_resolve_runtime_config_routes_generic_file_overrides_to_selected_provid
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     global_config_dir = tmp_path / "global-config"
-    local_config_path = tmp_path / "botlane.yaml"
-    global_config_path = global_config_dir / "botlane.yaml"
+    local_config_path = tmp_path / "botpipe.yaml"
+    global_config_path = global_config_dir / "botpipe.yaml"
     global_config_dir.mkdir(parents=True)
     global_config_path.write_text("", encoding="utf-8")
     local_config_path.write_text("", encoding="utf-8")
@@ -1103,8 +1103,8 @@ def test_resolve_runtime_config_preserves_later_provider_specific_override_prece
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     global_config_dir = tmp_path / "global-config"
-    local_config_path = tmp_path / "botlane.yaml"
-    global_config_path = global_config_dir / "botlane.yaml"
+    local_config_path = tmp_path / "botpipe.yaml"
+    global_config_path = global_config_dir / "botpipe.yaml"
     global_config_dir.mkdir(parents=True)
     global_config_path.write_text("", encoding="utf-8")
     local_config_path.write_text("", encoding="utf-8")
@@ -1144,7 +1144,7 @@ def test_resolve_runtime_config_applies_generic_file_override_to_cli_selected_pr
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     global_config_dir = tmp_path / "global-config"
-    global_config_path = global_config_dir / "botlane.yaml"
+    global_config_path = global_config_dir / "botpipe.yaml"
     global_config_dir.mkdir(parents=True)
     global_config_path.write_text("", encoding="utf-8")
 
@@ -1175,8 +1175,8 @@ def test_resolve_runtime_config_applies_cli_override_after_provider_specific_fil
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     global_config_dir = tmp_path / "global-config"
-    local_config_path = tmp_path / "botlane.yaml"
-    global_config_path = global_config_dir / "botlane.yaml"
+    local_config_path = tmp_path / "botpipe.yaml"
+    global_config_path = global_config_dir / "botpipe.yaml"
     global_config_dir.mkdir(parents=True)
     global_config_path.write_text("", encoding="utf-8")
     local_config_path.write_text("", encoding="utf-8")

@@ -3,10 +3,10 @@ from __future__ import annotations
 from collections.abc import Mapping
 from typing import Any
 
-from botlane import Event, Outcome
-from botlane.core import compiler as workflow_compiler
-from botlane.core.compiler import compile_workflow
-from botlane.core.context import Context
+from botpipe import Event, Outcome
+from botpipe.core import compiler as workflow_compiler
+from botpipe.core.compiler import compile_workflow
+from botpipe.core.context import Context
 
 
 def _normalize_control_result(result: Any) -> Any:

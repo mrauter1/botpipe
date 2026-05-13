@@ -30,7 +30,7 @@ def _repo_venv_bin(name: str) -> str:
     return _venv_bin(REPO_ROOT / ".venv", name)
 
 
-def test_built_wheel_installs_public_botlane_package_and_cli(tmp_path: Path) -> None:
+def test_built_wheel_installs_public_botpipe_package_and_cli(tmp_path: Path) -> None:
     dist_dir = tmp_path / "dist"
     dist_dir.mkdir(parents=True, exist_ok=True)
     _run(
@@ -49,23 +49,23 @@ def test_built_wheel_installs_public_botlane_package_and_cli(tmp_path: Path) -> 
     with zipfile.ZipFile(wheels[-1]) as wheel_archive:
         names = wheel_archive.namelist()
 
-    assert any(name.startswith("botlane/") for name in names)
-    assert any(name.startswith("botlane/workflows/botlane_v1/") for name in names)
+    assert any(name.startswith("botpipe/") for name in names)
+    assert any(name.startswith("botpipe/workflows/botpipe_v1/") for name in names)
 
     venv_dir = tmp_path / "venv"
     venv.EnvBuilder(with_pip=True).create(venv_dir)
     pip = _venv_bin(venv_dir, "pip")
     python = _venv_bin(venv_dir, "python")
-    botlane = _venv_bin(venv_dir, "botlane")
+    botpipe = _venv_bin(venv_dir, "botpipe")
 
     _run(pip, "install", str(wheels[-1]), cwd=tmp_path)
 
-    help_result = _run(botlane, "--help", cwd=tmp_path)
-    assert "botlane" in help_result.stdout
+    help_result = _run(botpipe, "--help", cwd=tmp_path)
+    assert "botpipe" in help_result.stdout
     assert "workflows" in help_result.stdout
     assert "run" in help_result.stdout
 
-    workflow_help_result = _run(botlane, "workflows", "--help", cwd=tmp_path)
+    workflow_help_result = _run(botpipe, "workflows", "--help", cwd=tmp_path)
     assert "list" in workflow_help_result.stdout
 
     import_check = _run(
@@ -73,21 +73,21 @@ def test_built_wheel_installs_public_botlane_package_and_cli(tmp_path: Path) -> 
         "-c",
         "\n".join(
             (
-                "import botlane",
+                "import botpipe",
                 "import importlib.util",
                 "import importlib.metadata",
-                "dist = importlib.metadata.distribution('botlane-v3-surface')",
-                "from botlane import FINISH, Route, Workflow, step",
-                "from botlane.workflows.botlane_v1 import BotlaneV1",
-                "from botlane.runtime import cli",
+                "dist = importlib.metadata.distribution('botpipe-v3-surface')",
+                "from botpipe import FINISH, Route, Workflow, step",
+                "from botpipe.workflows.botpipe_v1 import BotpipeV1",
+                "from botpipe.runtime import cli",
                 "scripts = {entry.name: entry.value for entry in dist.entry_points if entry.group == 'console_scripts'}",
                 "assert Workflow is not None",
                 "assert step is not None",
                 "assert Route is not None",
                 "assert FINISH == 'FINISH'",
-                "assert BotlaneV1.name == 'botlane_v1'",
-                "assert dist.metadata['Name'] == 'botlane-v3-surface'",
-                "assert scripts == {'botlane': 'botlane.runtime.cli:main'}",
+                "assert BotpipeV1.name == 'botpipe_v1'",
+                "assert dist.metadata['Name'] == 'botpipe-v3-surface'",
+                "assert scripts == {'botpipe': 'botpipe.runtime.cli:main'}",
                 "assert callable(cli.main)",
             )
         ),
@@ -96,23 +96,23 @@ def test_built_wheel_installs_public_botlane_package_and_cli(tmp_path: Path) -> 
     assert import_check.returncode == 0
 
 
-def test_repo_local_editable_install_exposes_only_botlane_cli_identity(tmp_path: Path) -> None:
+def test_repo_local_editable_install_exposes_only_botpipe_cli_identity(tmp_path: Path) -> None:
     repo_venv = REPO_ROOT / ".venv"
     python = Path(_repo_venv_bin("python"))
     pip = Path(_repo_venv_bin("pip"))
-    botlane = Path(_repo_venv_bin("botlane"))
+    botpipe = Path(_repo_venv_bin("botpipe"))
 
     if not python.exists() or not pip.exists():
         pytest.skip("repo-local .venv is not present")
 
-    show_botlane = _run(str(pip), "show", "botlane-v3-surface", cwd=tmp_path)
-    assert "Name: botlane-v3-surface" in show_botlane.stdout
-    assert f"Editable project location: {REPO_ROOT}" in show_botlane.stdout
+    show_botpipe = _run(str(pip), "show", "botpipe-v3-surface", cwd=tmp_path)
+    assert "Name: botpipe-v3-surface" in show_botpipe.stdout
+    assert f"Editable project location: {REPO_ROOT}" in show_botpipe.stdout
 
-    assert botlane.exists()
+    assert botpipe.exists()
 
-    help_result = _run(str(botlane), "--help", cwd=tmp_path)
-    assert "botlane" in help_result.stdout
+    help_result = _run(str(botpipe), "--help", cwd=tmp_path)
+    assert "botpipe" in help_result.stdout
 
     metadata_check = _run(
         str(python),
@@ -121,11 +121,11 @@ def test_repo_local_editable_install_exposes_only_botlane_cli_identity(tmp_path:
             (
                 "import importlib.metadata",
                 "import importlib.util",
-                "dist = importlib.metadata.distribution('botlane-v3-surface')",
+                "dist = importlib.metadata.distribution('botpipe-v3-surface')",
                 "scripts = {entry.name: entry.value for entry in dist.entry_points if entry.group == 'console_scripts'}",
-                "assert dist.metadata['Name'] == 'botlane-v3-surface'",
-                "assert scripts == {'botlane': 'botlane.runtime.cli:main'}",
-                "assert importlib.util.find_spec('botlane') is not None",
+                "assert dist.metadata['Name'] == 'botpipe-v3-surface'",
+                "assert scripts == {'botpipe': 'botpipe.runtime.cli:main'}",
+                "assert importlib.util.find_spec('botpipe') is not None",
             )
         ),
         cwd=tmp_path,

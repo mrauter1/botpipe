@@ -5,10 +5,10 @@ from pathlib import Path
 import pytest
 from pydantic import BaseModel
 
-from botlane.core.context import Context
-from botlane.core.errors import WorkflowExecutionError
-from botlane.core.stores import InMemorySessionStore
-from botlane.core.worklists import Selector, Worklist
+from botpipe.core.context import Context
+from botpipe.core.errors import WorkflowExecutionError
+from botpipe.core.stores import InMemorySessionStore
+from botpipe.core.worklists import Selector, Worklist
 
 
 class _State(BaseModel):

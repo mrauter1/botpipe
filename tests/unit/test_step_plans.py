@@ -1,15 +1,15 @@
 from __future__ import annotations
 
-import botlane.simple as simple
+import botpipe.simple as simple
 from pydantic import BaseModel
 
-from botlane import FINISH
-from botlane.core import Workflow
-from botlane.core.artifacts import Artifact
-from botlane.core.compiler import compile_workflow
-from botlane.core.identifiers import ArtifactId
-from botlane.core.route_contracts import available_route_tags
-from botlane.core.step_plans import (
+from botpipe import FINISH
+from botpipe.core import Workflow
+from botpipe.core.artifacts import Artifact
+from botpipe.core.compiler import compile_workflow
+from botpipe.core.identifiers import ArtifactId
+from botpipe.core.route_contracts import available_route_tags
+from botpipe.core.step_plans import (
     BranchGroupStepPlan,
     ChildWorkflowStepPlan,
     ExternalRead,
@@ -18,7 +18,7 @@ from botlane.core.step_plans import (
     PromptStepPlan,
     PythonStepPlan,
 )
-from botlane.core.steps import ChildWorkflowStep, ProduceVerifyStep, PromptStep, PythonStep, Session
+from botpipe.core.steps import ChildWorkflowStep, ProduceVerifyStep, PromptStep, PythonStep, Session
 
 
 class _ChildWorkflow(Workflow):

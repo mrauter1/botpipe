@@ -3,17 +3,17 @@ from __future__ import annotations
 import json
 from pathlib import Path
 
-import botlane.simple as simple
-import botlane.core.route_reporting as route_reporting_helpers
+import botpipe.simple as simple
+import botpipe.core.route_reporting as route_reporting_helpers
 from pydantic import BaseModel
 
-from botlane import AWAIT_INPUT, FINISH, Md, Prompt, Route, StateVar, Workflow, Worklist, produce_verify_step, python_step, step
-from botlane.core import Artifact, FAIL, GLOBAL, Workflow as CoreWorkflow
-from botlane.core.compiler import compile_workflow
-from botlane.core.outcome_contract import NATIVE_SCHEMA_HAS_OPEN_OBJECT, ProviderOutcomeContract
-from botlane.core.providers.retries import ProviderRetryPolicy
-from botlane.core.steps import PromptStep
-from botlane.runtime.static_graph import (
+from botpipe import AWAIT_INPUT, FINISH, Md, Prompt, Route, StateVar, Workflow, Worklist, produce_verify_step, python_step, step
+from botpipe.core import Artifact, FAIL, GLOBAL, Workflow as CoreWorkflow
+from botpipe.core.compiler import compile_workflow
+from botpipe.core.outcome_contract import NATIVE_SCHEMA_HAS_OPEN_OBJECT, ProviderOutcomeContract
+from botpipe.core.providers.retries import ProviderRetryPolicy
+from botpipe.core.steps import PromptStep
+from botpipe.runtime.static_graph import (
     ROUTE_TABLE_FILENAME,
     TOPOLOGY_FILENAME,
     write_static_step_graph,
@@ -21,9 +21,9 @@ from botlane.runtime.static_graph import (
     workflow_static_step_graph_payload,
     workflow_topology_payload,
 )
-from botlane.core.schema_registry import WORKFLOW_STATIC_STEP_GRAPH_SCHEMA
+from botpipe.core.schema_registry import WORKFLOW_STATIC_STEP_GRAPH_SCHEMA
 
-STATE_DIRNAME = ".botlane"
+STATE_DIRNAME = ".botpipe"
 
 
 class _AssessmentPayload(BaseModel):
@@ -37,12 +37,12 @@ class _RouteReasonPayload(BaseModel):
 class _StaticGraphWorkflow(Workflow):
     name = "static_graph_demo"
 
-    request = Artifact.text("{task_folder}/request.txt", name="request")
+    request = Artifact.text("{{ task.folder }}/request.txt", name="request")
     assessment = produce_verify_step(
         producer_prompt=Prompt.file("prompts/assessment_producer.md"),
         verifier_prompt=Prompt.file("prompts/assessment_verifier.md"),
         requires=[request],
-        producer_writes=[Artifact.text("{run_folder}/note.txt", name="note")],
+        producer_writes=[Artifact.text("{{ run.folder }}/note.txt", name="note")],
         control_schema=_AssessmentPayload,
         routes={"assessment_ready": Route.to("finish", summary="assessment completed")},
     )
@@ -210,7 +210,7 @@ def test_branch_group_internal_shape_changes_topology_hash() -> None:
             pass
 
         assess = simple.fan_out(
-            step=simple.step("Assess {branch.input.area}.", name="assess_one", session=simple.Session.fresh()),
+            step=simple.step("Assess {{ branch.input.area }}.", name="assess_one", session=simple.Session.fresh()),
             branches={"security": {"area": "security"}},
         )
 
@@ -221,7 +221,7 @@ def test_branch_group_internal_shape_changes_topology_hash() -> None:
             pass
 
         assess = simple.fan_out(
-            step=simple.step("Assess {branch.input.area}.", name="assess_one", session=simple.Session.fresh()),
+            step=simple.step("Assess {{ branch.input.area }}.", name="assess_one", session=simple.Session.fresh()),
             branches={"security": {"area": "performance"}},
         )
 
@@ -287,7 +287,7 @@ def test_branch_group_payloads_preserve_structured_fan_out_inputs(tmp_path: Path
             pass
 
         assess = simple.fan_out(
-            step=simple.step("Assess {branch.input.area}.", name="assess_one", session=simple.Session.fresh()),
+            step=simple.step("Assess {{ branch.input.area }}.", name="assess_one", session=simple.Session.fresh()),
             branches={
                 "security": {
                     "area": "security",

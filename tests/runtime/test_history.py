@@ -6,11 +6,11 @@ from pathlib import Path
 import pytest
 from pydantic import BaseModel
 
-from botlane.core.context import Context
-from botlane.core.history import StepInstanceKey
-from botlane.core.primitives import AWAIT_INPUT
-from botlane.core.schema_registry import RUNTIME_TRACE_SCHEMA
-from botlane.core.stores import InMemorySessionStore
+from botpipe.core.context import Context
+from botpipe.core.history import StepInstanceKey
+from botpipe.core.primitives import AWAIT_INPUT
+from botpipe.core.schema_registry import RUNTIME_TRACE_SCHEMA
+from botpipe.core.stores import InMemorySessionStore
 
 
 class _State(BaseModel):
@@ -540,7 +540,7 @@ def test_context_history_rejects_explicit_unsupported_trace_schema(tmp_path: Pat
         run_folder / "trace.jsonl",
         [
             {
-                "schema": "botlane.runtime_trace/v2",
+                "schema": "botpipe.runtime_trace/v2",
                 "event_type": "step_started",
                 "timestamp": "2026-04-30T11:30:00+00:00",
                 "step_name": "triage",

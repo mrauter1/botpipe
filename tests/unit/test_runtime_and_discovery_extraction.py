@@ -7,11 +7,11 @@ import types
 import pytest
 from pydantic import BaseModel
 
-_sdk = types.ModuleType("botlane.sdk")
+_sdk = types.ModuleType("botpipe.sdk")
 for _name in (
     "ArtifactMap",
-    "Botlane",
-    "BotlaneSDKError",
+    "Botpipe",
+    "BotpipeSDKError",
     "BestSuppositionInput",
     "CleanupResult",
     "ConsoleInput",
@@ -33,18 +33,18 @@ for _name in (
     "WorkflowResult",
 ):
     setattr(_sdk, _name, type(_name, (), {}))
-sys.modules.setdefault("botlane.sdk", _sdk)
+sys.modules.setdefault("botpipe.sdk", _sdk)
 
-from botlane import simple
-from botlane.core import FAIL, FINISH, Workflow
-from botlane.core.discovery import describe_workflow_class
-from botlane.core.engine import Engine
-from botlane.core.errors import WorkflowExecutionError, WorkflowValidationError
-from botlane.core.extensions import RunBinding, TerminalFinish
-from botlane.core.primitives import Event, RequestInput
-from botlane.core.providers.fake import ScriptedLLMProvider
-from botlane.core.steps import PythonStep, Session
-from botlane.core.stores import InMemoryCheckpointStore, InMemorySessionStore
+from botpipe import simple
+from botpipe.core import FAIL, FINISH, Workflow
+from botpipe.core.discovery import describe_workflow_class
+from botpipe.core.engine import Engine
+from botpipe.core.errors import WorkflowExecutionError, WorkflowValidationError
+from botpipe.core.extensions import RunBinding, TerminalFinish
+from botpipe.core.primitives import Event, RequestInput
+from botpipe.core.providers.fake import ScriptedLLMProvider
+from botpipe.core.steps import PythonStep, Session
+from botpipe.core.stores import InMemoryCheckpointStore, InMemorySessionStore
 
 
 class ApprovalInput(BaseModel):

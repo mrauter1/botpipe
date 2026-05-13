@@ -4,18 +4,18 @@ import re
 
 import pytest
 
-import botlane
-import botlane.policy as public_policy
-import botlane.sdk as sdk
-import botlane.simple as simple
-from botlane.core.primitives import Event
-from botlane.core.steps import PythonStep
-from botlane.core.provider_policy import ProviderPolicy, ProviderPolicyOverride
-from botlane.policy import PermissionMode, Policy
+import botpipe
+import botpipe.policy as public_policy
+import botpipe.sdk as sdk
+import botpipe.simple as simple
+from botpipe.core.primitives import Event
+from botpipe.core.steps import PythonStep
+from botpipe.core.provider_policy import ProviderPolicy, ProviderPolicyOverride
+from botpipe.policy import PermissionMode, Policy
 
 
 def test_policy_surface_exports_shared_policy_symbols() -> None:
-    from botlane import (
+    from botpipe import (
         ModelEffort,
         ModelVerbosity,
         NetworkMode,
@@ -25,7 +25,7 @@ def test_policy_surface_exports_shared_policy_symbols() -> None:
         ReasoningSummary,
         SandboxMode,
     )
-    from botlane.simple import (
+    from botpipe.simple import (
         ModelEffort as SimpleModelEffort,
         ModelVerbosity as SimpleModelVerbosity,
         NetworkMode as SimpleNetworkMode,
@@ -36,14 +36,14 @@ def test_policy_surface_exports_shared_policy_symbols() -> None:
         SandboxMode as SimpleSandboxMode,
     )
 
-    assert RootPolicy is botlane.Policy is simple.Policy is Policy is SimplePolicy
-    assert ProviderName is botlane.ProviderName is simple.ProviderName is SimpleProviderName
-    assert ModelEffort is botlane.ModelEffort is simple.ModelEffort is SimpleModelEffort
-    assert ModelVerbosity is botlane.ModelVerbosity is simple.ModelVerbosity is SimpleModelVerbosity
-    assert ReasoningSummary is botlane.ReasoningSummary is simple.ReasoningSummary is SimpleReasoningSummary
-    assert SandboxMode is botlane.SandboxMode is simple.SandboxMode is SimpleSandboxMode
-    assert NetworkMode is botlane.NetworkMode is simple.NetworkMode is SimpleNetworkMode
-    assert RootPermissionMode is botlane.PermissionMode is simple.PermissionMode is SimplePermissionMode
+    assert RootPolicy is botpipe.Policy is simple.Policy is Policy is SimplePolicy
+    assert ProviderName is botpipe.ProviderName is simple.ProviderName is SimpleProviderName
+    assert ModelEffort is botpipe.ModelEffort is simple.ModelEffort is SimpleModelEffort
+    assert ModelVerbosity is botpipe.ModelVerbosity is simple.ModelVerbosity is SimpleModelVerbosity
+    assert ReasoningSummary is botpipe.ReasoningSummary is simple.ReasoningSummary is SimpleReasoningSummary
+    assert SandboxMode is botpipe.SandboxMode is simple.SandboxMode is SimpleSandboxMode
+    assert NetworkMode is botpipe.NetworkMode is simple.NetworkMode is SimpleNetworkMode
+    assert RootPermissionMode is botpipe.PermissionMode is simple.PermissionMode is SimplePermissionMode
 
     for name in (
         "Policy",
@@ -55,9 +55,9 @@ def test_policy_surface_exports_shared_policy_symbols() -> None:
         "NetworkMode",
         "PermissionMode",
     ):
-        assert name in botlane.__all__
+        assert name in botpipe.__all__
 
-    assert "PolicyOverride" not in botlane.__all__
+    assert "PolicyOverride" not in botpipe.__all__
     assert "PolicyOverride" not in simple.__all__
 
 
@@ -95,14 +95,14 @@ def test_policy_rejects_removed_public_policy_override_symbol() -> None:
 def test_policy_input_export_matrix_matches_phase_contract() -> None:
     assert "PolicyInput" in public_policy.__all__
     assert "PolicyInput" in sdk.__all__
-    assert "PolicyInput" not in botlane.__all__
+    assert "PolicyInput" not in botpipe.__all__
     assert "PolicyInput" not in simple.__all__
     assert "ProviderPolicyInput" not in simple.__all__
 
     assert sdk.PolicyInput is public_policy.PolicyInput
 
     with pytest.raises(AttributeError):
-        getattr(botlane, "PolicyInput")
+        getattr(botpipe, "PolicyInput")
     with pytest.raises(AttributeError):
         getattr(simple, "PolicyInput")
     with pytest.raises(AttributeError):

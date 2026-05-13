@@ -8,11 +8,11 @@ from typing import Any
 import pytest
 from pydantic import BaseModel
 
-from botlane.core import FINISH, Workflow
-from botlane.core.branch_groups.runtime import BranchGroupRuntime
-from botlane.core.context import Context
-from botlane.core.engine import Engine
-from botlane.core.engine_collaborators import (
+from botpipe.core import FINISH, Workflow
+from botpipe.core.branch_groups.runtime import BranchGroupRuntime
+from botpipe.core.context import Context
+from botpipe.core.engine import Engine
+from botpipe.core.engine_collaborators import (
     ArtifactGuard,
     CheckpointManager,
     HookExecutionResult,
@@ -26,11 +26,11 @@ from botlane.core.engine_collaborators import (
     StepDispatcher,
     WorkflowInvoker,
 )
-from botlane.core.execution_services import ExecutionServices
-from botlane.core.primitives import Event
-from botlane.core.providers.fake import ScriptedLLMProvider
-from botlane.core.steps import PythonStep
-from botlane.core.stores import InMemoryCheckpointStore, InMemorySessionStore
+from botpipe.core.execution_services import ExecutionServices
+from botpipe.core.primitives import Event
+from botpipe.core.providers.fake import ScriptedLLMProvider
+from botpipe.core.steps import PythonStep
+from botpipe.core.stores import InMemoryCheckpointStore, InMemorySessionStore
 from tests.contract.engine._shared import _workspace
 
 
@@ -298,7 +298,9 @@ def test_route_finalizer_capture_runs_against_execution_services(tmp_path: Path)
     )
     step, context = _build_step_context(engine, tmp_path, step_name="finish")
     route = engine.compiled.routes["finish"]["done"]
-    artifact_service = _ArtifactServiceStub(enforced=[], resolved=engine._resolve_artifacts(context))
+    artifacts = engine.execution_services.artifacts
+    assert artifacts is not None
+    artifact_service = _ArtifactServiceStub(enforced=[], resolved=artifacts.resolve_artifacts(context))
     route_service = _RouteServiceStub(compiled_route=route, validated=[], pending_input_calls=[])
     hook_service = _HookServiceStub(after_calls=[])
     state_service = _StateServiceStub(updates=[])

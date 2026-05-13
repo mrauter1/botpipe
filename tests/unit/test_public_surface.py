@@ -2,11 +2,11 @@ from __future__ import annotations
 
 import pytest
 
-import botlane
-import botlane.core as core
-import botlane.core.branch_groups as branch_groups
-import botlane.core.steps as core_steps
-import botlane.simple as simple
+import botpipe
+import botpipe.core as core
+import botpipe.core.branch_groups as branch_groups
+import botpipe.core.steps as core_steps
+import botpipe.simple as simple
 
 
 EXPECTED_ROOT_EXPORTS = (
@@ -57,18 +57,22 @@ EXPECTED_ROOT_EXPORTS = (
     "SandboxMode",
     "NetworkMode",
     "PermissionMode",
-    "Botlane",
+    "Botpipe",
     "WorkflowResult",
     "StepResult",
     "ArtifactMap",
     "ResultArtifact",
+    "RunRecord",
+    "RunsClient",
+    "TaskRecord",
+    "TasksClient",
     "RetentionPolicy",
     "RetentionInfo",
     "CleanupResult",
     "InputRequest",
     "HandledInput",
     "SDKDebugInfo",
-    "BotlaneSDKError",
+    "BotpipeSDKError",
     "WorkflowInputError",
     "WorkflowParameterError",
     "InputRequired",
@@ -161,33 +165,33 @@ def _import_from(module_name: str, symbol: str) -> object:
 
 
 def test_root_exports_are_exact_and_importable() -> None:
-    assert tuple(botlane.__all__) == EXPECTED_ROOT_EXPORTS
+    assert tuple(botpipe.__all__) == EXPECTED_ROOT_EXPORTS
 
     for symbol in EXPECTED_ROOT_EXPORTS:
-        assert _import_from("botlane", symbol) is getattr(botlane, symbol)
+        assert _import_from("botpipe", symbol) is getattr(botpipe, symbol)
 
-    assert botlane.Botlane is _import_from("botlane", "Botlane")
-    assert botlane.BotlaneSDKError is _import_from("botlane", "BotlaneSDKError")
-    assert botlane.StateVar is simple.StateVar
-    assert botlane.Step is core_steps.Step
-    assert botlane.PromptStep is core_steps.PromptStep
-    assert botlane.ProduceVerifyStep is core_steps.ProduceVerifyStep
-    assert botlane.PythonStep is core_steps.PythonStep
-    assert botlane.ChildWorkflowStep is core_steps.ChildWorkflowStep
+    assert botpipe.Botpipe is _import_from("botpipe", "Botpipe")
+    assert botpipe.BotpipeSDKError is _import_from("botpipe", "BotpipeSDKError")
+    assert botpipe.StateVar is simple.StateVar
+    assert botpipe.Step is core_steps.Step
+    assert botpipe.PromptStep is core_steps.PromptStep
+    assert botpipe.ProduceVerifyStep is core_steps.ProduceVerifyStep
+    assert botpipe.PythonStep is core_steps.PythonStep
+    assert botpipe.ChildWorkflowStep is core_steps.ChildWorkflowStep
 
 
 def test_core_exports_are_exact_and_importable() -> None:
     assert tuple(core.__all__) == EXPECTED_CORE_EXPORTS
 
     for symbol in EXPECTED_CORE_EXPORTS:
-        assert _import_from("botlane.core", symbol) is getattr(core, symbol)
+        assert _import_from("botpipe.core", symbol) is getattr(core, symbol)
 
 
 def test_branch_group_exports_capture_phase_zero_surface() -> None:
     assert tuple(branch_groups.__all__) == EXPECTED_BRANCH_GROUP_EXPORTS
 
     for symbol in EXPECTED_BRANCH_GROUP_EXPORTS:
-        assert _import_from("botlane.core.branch_groups", symbol) is getattr(branch_groups, symbol)
+        assert _import_from("botpipe.core.branch_groups", symbol) is getattr(branch_groups, symbol)
 
 
 def test_branch_group_exports_after_phase_two_remove_compiled_entries() -> None:
@@ -197,9 +201,9 @@ def test_branch_group_exports_after_phase_two_remove_compiled_entries() -> None:
 
 def test_public_surfaces_do_not_export_internal_plan_runtime_types() -> None:
     for module_name, module in (
-        ("botlane", botlane),
-        ("botlane.core", core),
-        ("botlane.core.branch_groups", branch_groups),
+        ("botpipe", botpipe),
+        ("botpipe.core", core),
+        ("botpipe.core.branch_groups", branch_groups),
     ):
         for symbol in FORBIDDEN_PUBLIC_INTERNALS:
             assert not hasattr(module, symbol)
@@ -209,6 +213,6 @@ def test_public_surfaces_do_not_export_internal_plan_runtime_types() -> None:
 
 def test_deprecated_and_internal_names_are_not_publicly_exported() -> None:
     for symbol in REMOVED_PUBLIC_NAMES:
-        assert symbol not in botlane.__all__
-    assert "RouteContract" not in botlane.__all__
+        assert symbol not in botpipe.__all__
+    assert "RouteContract" not in botpipe.__all__
     assert "RouteContract" not in core.__all__

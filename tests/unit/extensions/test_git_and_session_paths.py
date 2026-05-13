@@ -3,8 +3,8 @@ from __future__ import annotations
 from tests.unit._stdlib_and_extensions_shared import _git
 from tests.unit._stdlib_and_extensions_shared import *
 
-TEST_USER_EMAIL = "botlane@example.com"
-TEST_USER_NAME = "Botlane Tests"
+TEST_USER_EMAIL = "botpipe@example.com"
+TEST_USER_NAME = "Botpipe Tests"
 
 def test_session_paths_extraction_returns_only_the_declared_strategy() -> None:
     class Strategy:

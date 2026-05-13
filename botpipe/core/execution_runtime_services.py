@@ -1,0 +1,2047 @@
+from __future__ import annotations
+
+from collections.abc import Mapping, Sequence
+from contextlib import contextmanager
+from copy import deepcopy
+from dataclasses import asdict, replace
+from datetime import datetime, timezone
+import json
+from pathlib import Path
+from typing import Any, Callable
+from uuid import uuid4
+
+from pydantic import BaseModel, TypeAdapter
+
+from .artifacts import Artifact, ArtifactHandle, ResolvedArtifacts, resolve_artifact_template
+from .errors import (
+    FailureContext,
+    MissingArtifactError,
+    ProviderExecutionError,
+    StepExecutionError,
+    WorkflowExecutionError,
+    enrich_execution_error,
+    exception_failure_context,
+    exception_failure_context_payload,
+    exception_retry_kind,
+    replace_execution_error,
+)
+from .extensions import HookRouteRedirect
+from .operations import OperationRuntime, bind_operation_runtime, provider_configuration, serialize_context_values
+from .outcome_contract import is_question_style_route, normalize_route_fields_for_route, project_questions_markdown
+from .provider_policy import ProviderPolicyError, policy_fingerprint
+from .primitives import AWAIT_INPUT, FAIL, FINISH, Checkpoint, Event, Goto, Outcome, PendingHandoff, RequestInput
+from .prompt_templates import render_inline_prompt_template, render_prompt_template
+from .prompts import Prompt, PromptRegistry, ResolvedPrompt
+from .providers.models import LLMRequest, OutcomeResponse, ProducerResponse
+from .providers.protocols import LLMProvider
+from .providers.retries import ProviderRetryPolicy, build_retry_feedback
+from .route_contracts import compiled_route_tags, provider_visible_route_tags
+from .route_required_writes import effective_route_required_writes
+from .statuses import route_is_replan, route_is_rework
+from .stores.protocols import CheckpointStore, PendingInput, SessionBinding, SessionStore
+from .step_plans import ChildWorkflowStepPlan, StepPlan
+from .template_refs import (
+    ACTIVE_WORKLIST_SCOPED_TEMPLATE_ROOTS,
+    BRANCH_SCOPED_TEMPLATE_ROOTS,
+    FAN_IN_SCOPED_TEMPLATE_ROOTS,
+    WORKLIST_SELECTION_TEMPLATE_ROOTS,
+)
+from .worklists import Selection, SelectionSnapshot, _snapshot_worklist_selections
+
+
+def step_runtime_visits(step_state: BaseModel | dict[str, Any] | None) -> int | None:
+    if isinstance(step_state, BaseModel):
+        visits = getattr(step_state, "visits", None)
+        return visits if isinstance(visits, int) else None
+    if isinstance(step_state, dict):
+        visits = step_state.get("visits")
+        return visits if isinstance(visits, int) else None
+    return None
+
+
+def _validate_json_schema_mapping(schema: dict[str, Any], *, label: str) -> None:
+    try:
+        from jsonschema import Draft202012Validator
+    except ModuleNotFoundError as exc:
+        raise WorkflowExecutionError(f"{label} requires the optional jsonschema dependency") from exc
+    try:
+        Draft202012Validator.check_schema(schema)
+    except Exception as exc:
+        raise WorkflowExecutionError(f"{label} must be a valid JSON schema mapping") from exc
+
+
+def increment_step_runtime_state(step_state: BaseModel | dict[str, Any]) -> None:
+    if isinstance(step_state, BaseModel):
+        current_visits = getattr(step_state, "visits", 0)
+        step_state.visits = current_visits + 1 if isinstance(current_visits, int) else 1
+        return
+    current_visits = step_state.get("visits", 0)
+    step_state["visits"] = current_visits + 1 if isinstance(current_visits, int) else 1
+
+
+def current_step_scope_item(context: Any, step: StepPlan) -> tuple[str | None, str | None]:
+    if step.scope_name is None:
+        return None, None
+    item = context.current(step.scope_name)
+    item_id = getattr(item, "id", None)
+    if not isinstance(item_id, str) or not item_id:
+        return step.scope_name, None
+    return step.scope_name, item_id
+
+
+def step_execution_visit(
+    step: StepPlan,
+    step_state: BaseModel | dict[str, Any] | None,
+    step_item_state: BaseModel | dict[str, Any] | None,
+) -> int | None:
+    if step.scope_name is not None and step_item_state is not None:
+        return step_runtime_visits(step_item_state)
+    return step_runtime_visits(step_state)
+
+
+def step_execution_id(
+    *,
+    step_name: str,
+    visit: int | None,
+    scope_name: str | None,
+    item_id: str | None,
+) -> str | None:
+    if visit is None:
+        return None
+    if scope_name is not None and item_id is not None:
+        return f"{step_name}:{scope_name}:{item_id}:{visit}"
+    return f"{step_name}:{visit}"
+
+
+def step_runtime_event_payload(
+    *,
+    step: StepPlan,
+    context: Any,
+) -> dict[str, Any]:
+    step_state_store = getattr(context, "_step_state", None)
+    step_item_state_store = getattr(context, "_step_item_state", None)
+    visit = step_execution_visit(step, step_state_store, step_item_state_store)
+    scope_name, item_id = current_step_scope_item(context, step)
+    payload: dict[str, Any] = {
+        "step_name": step.name,
+        "visit": visit,
+        "step_execution_id": step_execution_id(
+            step_name=step.name,
+            visit=visit,
+            scope_name=scope_name,
+            item_id=item_id,
+        ),
+    }
+    if scope_name is not None:
+        payload["scope"] = scope_name
+    if item_id is not None:
+        payload["item_id"] = item_id
+    return payload
+
+
+def serialize_token_usage(token_usage: Any) -> dict[str, Any]:
+    if hasattr(token_usage, "__dataclass_fields__"):
+        return {key: value for key, value in asdict(token_usage).items() if value is not None}
+    if isinstance(token_usage, Mapping):
+        return {str(key): value for key, value in token_usage.items()}
+    return {"value": token_usage}
+
+
+class EventRuntimeService:
+    def __init__(
+        self,
+        *,
+        hook_event_sink: Callable[[str, Mapping[str, Any]], None] | None = None,
+        runtime_event_sink: Callable[[str, Mapping[str, Any]], None] | None = None,
+    ) -> None:
+        self._hook_event_sink = hook_event_sink
+        self._runtime_event_sink = runtime_event_sink
+
+    def set_hook_event_sink(self, sink: Callable[[str, Mapping[str, Any]], None] | None) -> None:
+        self._hook_event_sink = sink
+
+    def set_runtime_event_sink(self, sink: Callable[[str, Mapping[str, Any]], None] | None) -> None:
+        self._runtime_event_sink = sink
+
+    def emit_runtime_event(self, event_type: str, **payload: Any) -> None:
+        if self._runtime_event_sink is None:
+            return
+        self._runtime_event_sink(event_type, payload)
+
+    def emit_hook_event(
+        self,
+        event_type: str,
+        *,
+        step: StepPlan | None = None,
+        context: Any | None = None,
+        **payload: Any,
+    ) -> None:
+        if self._hook_event_sink is None:
+            return
+        if step is not None and context is not None:
+            payload = {
+                **step_runtime_event_payload(step=step, context=context),
+                **payload,
+            }
+        self._hook_event_sink(event_type, payload)
+
+    def emit_provider_attempt_event(
+        self,
+        event_type: str,
+        *,
+        step: StepPlan,
+        context: Any,
+        turn_kind: str,
+        attempt: int,
+        token_usage: Any | None = None,
+        failure_context: Mapping[str, Any] | None = None,
+    ) -> None:
+        payload: dict[str, Any] = {
+            **step_runtime_event_payload(step=step, context=context),
+            "turn_kind": turn_kind,
+            "attempt": attempt,
+        }
+        if token_usage is not None:
+            payload["token_usage"] = serialize_token_usage(token_usage)
+        if failure_context:
+            payload["failure_context"] = dict(failure_context)
+        self.emit_runtime_event(event_type, **payload)
+
+    def emit_provider_attempt_finished(
+        self,
+        *,
+        step: StepPlan,
+        context: Any,
+        turn_kind: str,
+        attempt: int,
+        token_usage: Any | None,
+    ) -> None:
+        self.emit_provider_attempt_event(
+            "provider_attempt_finished",
+            step=step,
+            context=context,
+            turn_kind=turn_kind,
+            attempt=attempt,
+            token_usage=token_usage,
+        )
+
+    def emit_provider_attempt_failed(
+        self,
+        *,
+        step: StepPlan,
+        context: Any,
+        turn_kind: str,
+        attempt: int,
+        exc: Exception,
+    ) -> None:
+        self.emit_provider_attempt_event(
+            "provider_attempt_failed",
+            step=step,
+            context=context,
+            turn_kind=turn_kind,
+            attempt=attempt,
+            failure_context=self.exception_failure_context_payload(exc),
+        )
+
+    @staticmethod
+    def annotate_execution_error(
+        exc: Exception,
+        *,
+        checkpoint_state: BaseModel | None = None,
+        failure_context: FailureContext | None = None,
+        retry_kind: str | None = None,
+        pending_handoffs: tuple[PendingHandoff, ...] | None = None,
+    ) -> Exception:
+        return enrich_execution_error(
+            exc,
+            checkpoint_state=checkpoint_state,
+            failure_context=failure_context,
+            retry_kind=retry_kind,
+            pending_handoffs=pending_handoffs,
+        )
+
+    @staticmethod
+    def failure_context_for_exception(exc: Exception) -> FailureContext | None:
+        return exception_failure_context(exc)
+
+    @staticmethod
+    def exception_failure_context_payload(exc: Exception) -> dict[str, Any] | None:
+        return exception_failure_context_payload(exc)
+
+    @staticmethod
+    def retry_kind_for_exception(exc: Exception) -> str | None:
+        return exception_retry_kind(exc)
+
+    def serialize_exception(self, exc: Exception) -> dict[str, Any]:
+        failure_context = self.failure_context_for_exception(exc)
+        retry_kind = self.retry_kind_for_exception(exc)
+        retry_exhausted = False
+        if failure_context is not None:
+            retry_exhausted = bool(failure_context.details.get("retry_exhausted"))
+        return {
+            "type": type(exc).__name__,
+            "message": str(exc),
+            "failure_context": None if failure_context is None else failure_context.to_payload(),
+            "retry_kind": retry_kind,
+            "retry_exhausted": retry_exhausted,
+        }
+
+    def next_retry_feedback(
+        self,
+        step: StepPlan,
+        exc: Exception,
+        *,
+        attempt: int,
+    ) -> tuple[str | None, Exception]:
+        kind = self._provider_retry_kind(exc)
+        if kind is None:
+            return None, exc
+        if not self._retry_policy_allows(step.retry_policy, kind):
+            return None, exc
+        if attempt >= step.retry_policy.max_attempts:
+            return None, self._annotate_retry_exhaustion(exc, step=step, attempt=attempt, kind=kind)
+        updated_exc = self._ensure_retry_failure_context(exc, step=step, kind=kind)
+        return build_retry_feedback(
+            updated_exc,
+            step_name=step.name,
+            attempt=attempt + 1,
+            max_attempts=step.retry_policy.max_attempts,
+        ), updated_exc
+
+    def _annotate_retry_exhaustion(
+        self,
+        exc: Exception,
+        *,
+        step: StepPlan,
+        attempt: int,
+        kind: str,
+    ) -> Exception:
+        updated_exc = self._ensure_retry_failure_context(exc, step=step, kind=kind)
+        failure_context = self.failure_context_for_exception(updated_exc)
+        if failure_context is None:
+            return updated_exc
+        updated_details = dict(failure_context.details)
+        updated_details["retry_attempts_consumed"] = attempt
+        updated_details["retry_max_attempts"] = step.retry_policy.max_attempts
+        updated_details["retry_exhausted"] = True
+        updated = FailureContext(
+            kind=failure_context.kind,
+            step_name=failure_context.step_name,
+            candidate_route=failure_context.candidate_route,
+            final_route=failure_context.final_route,
+            runtime_control=failure_context.runtime_control,
+            provider_attributable=failure_context.provider_attributable,
+            source_hook=failure_context.source_hook,
+            source_phase=failure_context.source_phase,
+            target_step=failure_context.target_step,
+            pending_input_id=failure_context.pending_input_id,
+            details=updated_details,
+        )
+        if isinstance(updated_exc, WorkflowExecutionError):
+            return replace_execution_error(updated_exc, failure_context=updated)
+        return WorkflowExecutionError(str(updated_exc), failure_context=updated)
+
+    def _ensure_retry_failure_context(
+        self,
+        exc: Exception,
+        *,
+        step: StepPlan,
+        kind: str,
+    ) -> Exception:
+        existing = self.failure_context_for_exception(exc)
+        if existing is None:
+            details = {"step": step.name, "error": str(exc)}
+            failure_context = FailureContext(
+                kind=kind,
+                step_name=step.name,
+                provider_attributable=isinstance(exc, ProviderExecutionError),
+                details=details,
+            )
+        else:
+            details = dict(existing.details)
+            details.setdefault("step", step.name)
+            details.setdefault("error", str(exc))
+            failure_context = FailureContext(
+                kind=existing.kind or kind,
+                step_name=existing.step_name or step.name,
+                candidate_route=existing.candidate_route,
+                final_route=existing.final_route,
+                runtime_control=existing.runtime_control,
+                provider_attributable=existing.provider_attributable or isinstance(exc, ProviderExecutionError),
+                source_hook=existing.source_hook,
+                source_phase=existing.source_phase,
+                target_step=existing.target_step,
+                pending_input_id=existing.pending_input_id,
+                details=details,
+            )
+        if isinstance(exc, WorkflowExecutionError):
+            return replace_execution_error(exc, failure_context=failure_context, retry_kind=kind)
+        return WorkflowExecutionError(str(exc), failure_context=failure_context, retry_kind=kind)
+
+    @staticmethod
+    def _retry_policy_allows(policy: ProviderRetryPolicy, kind: str) -> bool:
+        if kind in {"provider_transport_failure", "malformed_provider_output"}:
+            return policy.retry_provider_execution_error
+        if kind == "illegal_route":
+            return policy.retry_illegal_route
+        if kind == "invalid_payload":
+            return policy.retry_invalid_payload
+        if kind == "missing_required_output_artifact":
+            return policy.retry_missing_required_output_artifact
+        if kind == "invalid_output_artifact":
+            return policy.retry_invalid_output_artifact
+        return False
+
+    @staticmethod
+    def _provider_retry_kind(exc: Exception) -> str | None:
+        explicit = exception_retry_kind(exc)
+        if isinstance(explicit, str) and explicit:
+            return explicit
+        if not isinstance(exc, ProviderExecutionError):
+            return None
+        message = str(exc)
+        if "failed while running step" in message or "did not return a resumable session_id" in message:
+            return "provider_transport_failure"
+        if (
+            "malformed outcome JSON" in message
+            or "outcome JSON" in message
+            or "malformed JSON output" in message
+            or "returned unusable JSONL output" in message
+            or "did not return assistant text in JSONL output" in message
+            or "must return Outcome instances" in message
+        ):
+            return "malformed_provider_output"
+        return None
+
+
+class StateRuntimeService:
+    def __init__(self, *, compiled: Any) -> None:
+        self._compiled = compiled
+
+    @staticmethod
+    def clone_state(state: BaseModel | None) -> BaseModel | None:
+        if state is None:
+            return None
+        state_cls = type(state)
+        return state_cls.model_validate(state.model_dump(mode="python", warnings=False))
+
+    @staticmethod
+    def step_runtime_visits(store: BaseModel | dict[str, Any] | None) -> int | None:
+        return step_runtime_visits(store)
+
+    @staticmethod
+    def increment_step_runtime_state(store: BaseModel | dict[str, Any]) -> None:
+        increment_step_runtime_state(store)
+
+    @staticmethod
+    def update_final_step_runtime_state(
+        step: StepPlan,
+        step_state: BaseModel | dict[str, Any] | None,
+        final_event: Event,
+    ) -> None:
+        if step_state is None:
+            return
+        if isinstance(step_state, BaseModel):
+            step_state.last_route = final_event.tag
+            step_state.last_reason = final_event.reason
+            if step.kind == "produce_verify":
+                if route_is_rework(final_event.tag):
+                    step_state.rework_count = getattr(step_state, "rework_count", 0) + 1
+                if route_is_replan(final_event.tag):
+                    step_state.replan_count = getattr(step_state, "replan_count", 0) + 1
+            return
+        step_state["last_route"] = final_event.tag
+        step_state["last_reason"] = final_event.reason
+        if step.kind == "produce_verify":
+            if route_is_rework(final_event.tag):
+                current_rework = step_state.get("rework_count", 0)
+                step_state["rework_count"] = current_rework + 1 if isinstance(current_rework, int) else 1
+            if route_is_replan(final_event.tag):
+                current_replan = step_state.get("replan_count", 0)
+                step_state["replan_count"] = current_replan + 1 if isinstance(current_replan, int) else 1
+
+    @staticmethod
+    def update_final_item_runtime_state(
+        item_state: BaseModel | dict[str, Any] | None,
+        final_event: Event,
+    ) -> None:
+        if item_state is None:
+            return
+        if isinstance(item_state, BaseModel):
+            item_state.last_route = final_event.tag
+            return
+        item_state["last_route"] = final_event.tag
+
+    def restore_worklist_selections(
+        self,
+        context: Any,
+        snapshots: Mapping[str, SelectionSnapshot],
+    ) -> dict[str, SelectionSnapshot]:
+        selection_snapshots: dict[str, SelectionSnapshot] = {}
+        for name, snapshot in snapshots.items():
+            if name in self._compiled.worklists:
+                selection_snapshots[name] = snapshot
+        context._sync_selection_snapshots(selection_snapshots)
+        return selection_snapshots
+
+    def ensure_worklist_selection(
+        self,
+        context: Any,
+        worklist_name: str,
+    ) -> Selection[Any]:
+        existing = getattr(context, "_selections", {}).get(worklist_name)
+        if existing is not None:
+            return existing
+        worklist = self._compiled.worklists.get(worklist_name)
+        if worklist is None:
+            raise WorkflowExecutionError(f"unknown worklist {worklist_name!r}")
+        snapshot = getattr(context, "_selection_snapshots", {}).get(worklist_name)
+        source_type = worklist.source_type
+        source_path = self._worklist_source_path(worklist, context)
+        try:
+            worklist.ensure_source(context)
+        except Exception as exc:
+            raise self._worklist_selection_resolution_error(
+                worklist_name=worklist_name,
+                source_type=source_type,
+                source_path=source_path,
+                phase="ensure",
+                error=exc,
+            ) from exc
+        try:
+            items = worklist._load_source_items(context, ensure=False)
+        except Exception as exc:
+            raise self._worklist_selection_resolution_error(
+                worklist_name=worklist_name,
+                source_type=source_type,
+                source_path=source_path,
+                phase="load",
+                error=exc,
+            ) from exc
+        try:
+            worklist._validate_loaded_items(context, items)
+        except Exception as exc:
+            raise self._worklist_selection_resolution_error(
+                worklist_name=worklist_name,
+                source_type=source_type,
+                source_path=source_path,
+                phase="validate",
+                error=exc,
+            ) from exc
+        try:
+            cached_items = worklist._cache_loaded_items(context, items)
+            selection = worklist._selection_from_loaded_items(context, cached_items, snapshot=snapshot)
+        except Exception as exc:
+            raise self._worklist_selection_resolution_error(
+                worklist_name=worklist_name,
+                source_type=source_type,
+                source_path=source_path,
+                phase="restore" if snapshot is not None else "select",
+                error=exc,
+                selector_details=self._worklist_selector_details(worklist),
+            ) from exc
+        context._set_worklist_selection(worklist_name, selection)
+        context._emit_worklist_selection_resolved(
+            worklist_name=worklist_name,
+            selection=selection,
+            lazy=True,
+            source=self._worklist_source_descriptor(worklist, context),
+        )
+        return selection
+
+    @staticmethod
+    def serialize_model_or_dict_store(
+        store: BaseModel | dict[str, Any],
+    ) -> dict[str, Any] | None:
+        if isinstance(store, BaseModel):
+            return store.model_dump(mode="json", warnings=False)
+        if isinstance(store, dict):
+            return deepcopy(store)
+        return None
+
+    @staticmethod
+    def serialize_step_states(
+        step_states: Mapping[str, BaseModel | dict[str, Any]] | None,
+    ) -> dict[str, dict[str, Any]] | None:
+        if not step_states:
+            return None
+        serialized: dict[str, dict[str, Any]] = {}
+        for step_name, store in step_states.items():
+            payload = StateRuntimeService.serialize_model_or_dict_store(store)
+            if payload is not None:
+                serialized[step_name] = payload
+        return serialized or None
+
+    @staticmethod
+    def serialize_item_states(
+        item_states: Mapping[str, BaseModel | dict[str, Any]] | None,
+    ) -> dict[str, dict[str, Any]] | None:
+        if not item_states:
+            return None
+        serialized: dict[str, dict[str, Any]] = {}
+        for item_key, store in item_states.items():
+            payload = StateRuntimeService.serialize_model_or_dict_store(store)
+            if payload is not None:
+                serialized[item_key] = payload
+        return serialized or None
+
+    @staticmethod
+    def serialize_step_item_states(
+        step_item_states: Mapping[str, Mapping[str, BaseModel | dict[str, Any]]] | None,
+    ) -> dict[str, dict[str, dict[str, Any]]] | None:
+        if not step_item_states:
+            return None
+        serialized: dict[str, dict[str, dict[str, Any]]] = {}
+        for step_name, item_store in step_item_states.items():
+            serialized_items: dict[str, dict[str, Any]] = {}
+            for item_key, store in item_store.items():
+                payload = StateRuntimeService.serialize_model_or_dict_store(store)
+                if payload is not None:
+                    serialized_items[item_key] = payload
+            if serialized_items:
+                serialized[step_name] = serialized_items
+        return serialized or None
+
+    @staticmethod
+    def _worklist_source_path(worklist: Any, context: Any) -> str | None:
+        descriptor = StateRuntimeService._worklist_source_descriptor(worklist, context)
+        if ":" not in descriptor:
+            return None
+        return descriptor.split(":", 1)[1]
+
+    @staticmethod
+    def _worklist_source_descriptor(worklist: Any, context: Any) -> str:
+        if hasattr(worklist, "source_descriptor"):
+            return worklist.source_descriptor(context)
+        return "unknown"
+
+    @staticmethod
+    def _worklist_selector_details(worklist: Any) -> str | None:
+        selector = getattr(worklist, "selector", None)
+        if selector is None:
+            return None
+        parts: list[str] = []
+        default_mode = getattr(selector, "default_mode", None)
+        allowed_modes = getattr(selector, "allowed_modes", None)
+        item_param = getattr(selector, "item_param", None)
+        mode_param = getattr(selector, "mode_param", None)
+        if isinstance(default_mode, str) and default_mode:
+            parts.append(f"default_mode={default_mode}")
+        if isinstance(allowed_modes, Sequence) and allowed_modes:
+            parts.append("allowed_modes=" + ",".join(str(mode) for mode in allowed_modes))
+        if isinstance(item_param, str) and item_param:
+            parts.append(f"item_param={item_param}")
+        if isinstance(mode_param, str) and mode_param:
+            parts.append(f"mode_param={mode_param}")
+        if not parts:
+            return None
+        return "; ".join(parts)
+
+    @staticmethod
+    def _worklist_selection_resolution_error(
+        *,
+        worklist_name: str,
+        source_type: str,
+        source_path: str | None,
+        phase: str,
+        error: Exception,
+        selector_details: str | None = None,
+    ) -> WorkflowExecutionError:
+        details = [f"phase={phase}"]
+        if source_path is not None:
+            details.append(f"path={source_path}")
+        if selector_details is not None:
+            details.append(f"selector={selector_details}")
+        underlying = str(error).strip() or type(error).__name__
+        return WorkflowExecutionError(
+            f"worklist {worklist_name!r} could not resolve selection from {source_type} source "
+            f"({', '.join(details)}): {underlying}"
+        )
+
+
+class ArtifactRuntimeService:
+    def __init__(
+        self,
+        *,
+        compiled: Any,
+        events: EventRuntimeService,
+    ) -> None:
+        self._compiled = compiled
+        self._events = events
+
+    def resolve_artifacts(self, context: Any) -> ResolvedArtifacts:
+        canonical_handles: dict[str, ArtifactHandle] = {}
+        missing: dict[object, str] = {}
+        for name, artifact_id in self._compiled.artifacts_by_qualified_name.items():
+            artifact = self._compiled.artifact_spec(artifact_id)
+            scope_error = self._artifact_template_scope_error(artifact, context)
+            if scope_error is not None:
+                missing[name] = scope_error
+                continue
+            runtime_artifact = self._runtime_artifact_spec(artifact)
+            canonical_handles[name] = ArtifactHandle(
+                name=self._artifact_display_name(self._compiled.artifact_spec(artifact_id)),
+                path=resolve_artifact_template(
+                    runtime_artifact,
+                    context,
+                ),
+                artifact=runtime_artifact,
+            )
+        handles = dict(canonical_handles)
+        for public_name, artifact_id in self._compiled.public_artifacts.items():
+            spec = self._compiled.artifact_spec(artifact_id)
+            handle = canonical_handles.get(spec.qualified_name)
+            if handle is not None:
+                handles[public_name] = handle
+            elif spec.qualified_name in missing:
+                missing[public_name] = missing[spec.qualified_name]
+        for artifact_id, artifact in self._compiled.artifacts.items():
+            handle = canonical_handles.get(artifact.qualified_name)
+            if handle is not None:
+                handles[artifact_id] = handle
+            elif artifact.qualified_name in missing:
+                missing[artifact_id] = missing[artifact.qualified_name]
+        return ResolvedArtifacts(handles, missing=missing)
+
+    def ensure_required_artifacts(self, step: StepPlan, artifacts: ResolvedArtifacts) -> None:
+        self.ensure_named_artifacts_exist(step.requires, artifacts, step_name=step.name)
+
+    def ensure_named_artifacts_exist(
+        self,
+        names: tuple[object, ...],
+        artifacts: ResolvedArtifacts,
+        *,
+        step_name: str,
+    ) -> None:
+        for name in names:
+            if not artifacts[name].exists():
+                raise MissingArtifactError(
+                    f"required artifact {self._artifact_reference_display_name(name)!r} does not exist for step {step_name!r}"
+                )
+
+    def enforce_artifact_contracts(
+        self,
+        step: StepPlan,
+        context: Any,
+        artifacts: ResolvedArtifacts,
+        *,
+        route_tag: str,
+        state: BaseModel,
+        error_cls: type[Exception],
+        provider_attributable: bool,
+    ) -> None:
+        required_names = effective_route_required_writes(
+            self._compiled,
+            step_name=step.name,
+            route_tag=route_tag,
+        )
+        optional_names = tuple(
+            name
+            for name in step.writes
+            if name not in required_names and self._should_validate_optional_output(artifacts[name])
+        )
+        for name in required_names:
+            self._validate_output_artifact(
+                step,
+                context=context,
+                route_tag=route_tag,
+                handle=artifacts[name],
+                state=state,
+                required=True,
+                error_cls=error_cls,
+                provider_attributable=provider_attributable,
+            )
+        for name in optional_names:
+            self._validate_output_artifact(
+                step,
+                context=context,
+                route_tag=route_tag,
+                handle=artifacts[name],
+                state=state,
+                required=False,
+                error_cls=error_cls,
+                provider_attributable=provider_attributable,
+            )
+
+    def resolve_workspace_read_path(self, raw_path: str, *, context: Any) -> Path:
+        candidate = Path(raw_path)
+        if candidate.is_absolute():
+            return candidate
+        if candidate.parts and candidate.parts[0] == "_branch_groups":
+            return (context.workflow_folder / candidate).resolve()
+        return (context.root / candidate).resolve()
+
+    @staticmethod
+    def artifact_lookup_name(name: object) -> str:
+        if isinstance(name, str):
+            return name
+        qualified_name = getattr(name, "qualified_name", None)
+        if isinstance(qualified_name, str) and qualified_name:
+            return qualified_name
+        local_name = getattr(name, "name", None)
+        if isinstance(local_name, str) and local_name:
+            return local_name
+        return str(name)
+
+    @staticmethod
+    def artifact_schema_name(artifact: Artifact | None) -> str | None:
+        if artifact is None or artifact.schema is None:
+            return None
+        if isinstance(artifact.schema, type):
+            return artifact.schema.__name__
+        if isinstance(artifact.schema, dict):
+            return "JSONSchema"
+        return type(artifact.schema).__name__
+
+    @staticmethod
+    def append_logs(step: StepPlan, artifacts: ResolvedArtifacts, content: str) -> None:
+        for name in step.log_artifacts:
+            artifacts[name].append(content)
+
+    @staticmethod
+    def _artifact_reference_display_name(reference: object) -> str:
+        qualified_name = getattr(reference, "qualified_name", None)
+        if isinstance(qualified_name, str) and qualified_name:
+            name = getattr(reference, "name", None)
+            if isinstance(name, str) and name:
+                return name
+            return qualified_name
+        value = getattr(reference, "value", None)
+        if isinstance(value, (str, Path)):
+            return str(value)
+        return str(reference)
+
+    @staticmethod
+    def _artifact_display_name(artifact: Any) -> str:
+        qualified_name = getattr(artifact, "qualified_name", None)
+        if isinstance(qualified_name, str) and qualified_name:
+            return qualified_name.rsplit(".", 1)[-1]
+        name = getattr(artifact, "name", None)
+        if isinstance(name, str) and name:
+            return name.rsplit(".", 1)[-1]
+        return "artifact"
+
+    def _runtime_artifact_spec(self, artifact: Any) -> Artifact:
+        return Artifact(
+            artifact.template,
+            name=self._artifact_display_name(artifact),
+            kind=artifact.kind,
+            schema=artifact.schema,
+            required=artifact.required,
+            owner_step=artifact.owner_step,
+            qualified_name=artifact.qualified_name,
+        )
+
+    def _artifact_template_scope_error(self, artifact: Any, context: Any) -> str | None:
+        requirements = self._compiled.reference_graph.artifact_template_requirements.get(artifact.qualified_name)
+        if requirements is None:
+            return None
+        roots = requirements.roots
+        frame = getattr(context, "_execution_frame", None)
+        if roots & BRANCH_SCOPED_TEMPLATE_ROOTS and (frame is None or getattr(frame, "branch", None) is None):
+            return self._artifact_scope_error_message(artifact, "branch")
+        if roots & FAN_IN_SCOPED_TEMPLATE_ROOTS and (frame is None or getattr(frame, "fan_in", None) is None):
+            return self._artifact_scope_error_message(artifact, "fan-in")
+        worklist_roots = roots & ACTIVE_WORKLIST_SCOPED_TEMPLATE_ROOTS
+        if worklist_roots and (frame is None or getattr(frame, "active_worklist", None) is None):
+            return self._artifact_scope_error_message(artifact, "worklist")
+        if roots & WORKLIST_SELECTION_TEMPLATE_ROOTS:
+            selection_error = self._worklist_selection_scope_error(artifact, frame, requirements)
+            if selection_error is not None:
+                return selection_error
+        return None
+
+    def _worklist_selection_scope_error(self, artifact: Any, frame: Any | None, requirements: Any) -> str | None:
+        if frame is None:
+            return self._artifact_scope_error_message(artifact, "worklist selection")
+        worklists = getattr(frame, "worklists", None) or {}
+        if not worklists:
+            return self._artifact_scope_error_message(artifact, "worklist selection")
+        selections = getattr(frame, "selections", None) or {}
+        resolver = getattr(frame, "worklist_selection_resolver", None)
+        for ref in requirements.refs:
+            if ref.root not in WORKLIST_SELECTION_TEMPLATE_ROOTS or not ref.path:
+                continue
+            worklist_name = ref.path[0]
+            if worklist_name not in worklists:
+                return self._artifact_scope_error_message(artifact, "worklist selection")
+            if worklist_name not in selections and resolver is None:
+                return self._artifact_scope_error_message(artifact, "worklist selection")
+        return None
+
+    @staticmethod
+    def _artifact_scope_error_message(artifact: Any, scope: str) -> str:
+        qualified_name = getattr(artifact, "qualified_name", None) or getattr(artifact, "name", None) or "artifact"
+        template = getattr(artifact, "template", "")
+        return (
+            f"artifact {qualified_name!r} cannot be resolved in the current context; "
+            f"artifact template {template!r} requires {scope} scope"
+        )
+
+    @staticmethod
+    def _should_validate_optional_output(handle: ArtifactHandle) -> bool:
+        artifact = handle.artifact
+        if artifact is None or artifact.schema is None:
+            return False
+        return handle.exists()
+
+    def _validate_output_artifact(
+        self,
+        step: StepPlan,
+        *,
+        context: Any,
+        route_tag: str,
+        handle: ArtifactHandle,
+        state: BaseModel,
+        required: bool,
+        error_cls: type[Exception],
+        provider_attributable: bool,
+    ) -> None:
+        if required and not handle.exists():
+            self._raise_artifact_validation_error(
+                error_cls,
+                step=step,
+                context=context,
+                step_name=step.name,
+                route_tag=route_tag,
+                handle=handle,
+                state=state,
+                errors=("artifact file does not exist",),
+                required=required,
+                provider_attributable=provider_attributable,
+            )
+        result = handle.validate()
+        if result.ok:
+            return
+        self._raise_artifact_validation_error(
+            error_cls,
+            step=step,
+            context=context,
+            step_name=step.name,
+            route_tag=route_tag,
+            handle=handle,
+            state=state,
+            errors=result.errors,
+            required=required,
+            provider_attributable=provider_attributable,
+        )
+
+    def _raise_artifact_validation_error(
+        self,
+        error_cls: type[Exception],
+        *,
+        step: StepPlan,
+        context: Any,
+        step_name: str,
+        route_tag: str,
+        handle: ArtifactHandle,
+        state: BaseModel,
+        errors: tuple[str, ...],
+        required: bool,
+        provider_attributable: bool,
+    ) -> None:
+        artifact = handle.artifact
+        qualified_name = artifact.qualified_name if artifact is not None else None
+        retry_kind = "invalid_output_artifact"
+        if required and "artifact file does not exist" in errors:
+            retry_kind = "missing_required_output_artifact"
+        failure_context = {
+            "kind": retry_kind,
+            "step": step_name,
+            "route": route_tag,
+            "artifact_name": handle.name,
+            "qualified_name": qualified_name,
+            "path": str(handle.path),
+            "errors": list(errors),
+            "provider_attributable": provider_attributable,
+        }
+        validation_kind = "invalid_artifact"
+        if required and "artifact file does not exist" in errors:
+            validation_kind = "missing_required_artifact"
+        elif any("schema" in error.lower() for error in errors):
+            validation_kind = "schema_validation_failure"
+        self._events.emit_runtime_event(
+            "artifact_validation_failed",
+            **step_runtime_event_payload(step=step, context=context),
+            route=route_tag,
+            artifact_name=handle.name,
+            qualified_name=qualified_name,
+            path=str(handle.path),
+            validation_kind=validation_kind,
+            errors=list(errors),
+            provider_attributable=provider_attributable,
+        )
+        message = self._format_artifact_validation_error(
+            step_name=step_name,
+            route_tag=route_tag,
+            handle=handle,
+            errors=errors,
+        )
+        if issubclass(error_cls, StepExecutionError):
+            error = error_cls(
+                message,
+                checkpoint_state=state,
+                failure_context=FailureContext(
+                    kind=retry_kind,
+                    step_name=step_name,
+                    candidate_route=route_tag,
+                    final_route=route_tag,
+                    provider_attributable=provider_attributable,
+                    details=failure_context,
+                ),
+                retry_kind=retry_kind if provider_attributable and issubclass(error_cls, ProviderExecutionError) else None,
+            )
+        else:
+            error = error_cls(message)
+            error = self._events.annotate_execution_error(
+                error,
+                checkpoint_state=state,
+                failure_context=FailureContext(
+                    kind=retry_kind,
+                    step_name=step_name,
+                    candidate_route=route_tag,
+                    final_route=route_tag,
+                    provider_attributable=provider_attributable,
+                    details=failure_context,
+                ),
+            )
+        raise error
+
+    @staticmethod
+    def _format_artifact_validation_error(
+        *,
+        step_name: str,
+        route_tag: str,
+        handle: ArtifactHandle,
+        errors: tuple[str, ...],
+    ) -> str:
+        artifact = handle.artifact
+        qualified_name = artifact.qualified_name if artifact is not None else None
+        details = "; ".join(errors)
+        if qualified_name is None:
+            return (
+                f"artifact validation failed for step {step_name!r} route {route_tag!r}: "
+                f"artifact={handle.name!r} path={str(handle.path)!r}; {details}"
+            )
+        return (
+            f"artifact validation failed for step {step_name!r} route {route_tag!r}: "
+            f"artifact={handle.name!r} qualified={qualified_name!r} path={str(handle.path)!r}; {details}"
+        )
+
+
+class RouteRuntimeService:
+    def __init__(
+        self,
+        *,
+        compiled: Any,
+        interaction_policy: Any,
+        max_hook_redirects: int,
+        events: EventRuntimeService,
+    ) -> None:
+        self._compiled = compiled
+        self._interaction_policy = interaction_policy
+        self._max_hook_redirects = max_hook_redirects
+        self._events = events
+
+    def route_for_step(self, step_name: str, route_tag: str) -> Any:
+        return self._compiled.route(step_name, route_tag)
+
+    def compiled_route_for_step(self, step: Any, route_tag: str) -> Any:
+        return self._compiled.route(step.name, route_tag)
+
+    def provider_visible_route_tags(
+        self,
+        step_name: str,
+        *,
+        mode: str,
+    ) -> tuple[str, ...]:
+        return provider_visible_route_tags(self._compiled, step_name, mode=mode)
+
+    def validate_event(
+        self,
+        step: Any,
+        event: Any,
+        *,
+        provider_attributable: bool,
+        error_cls: type[Exception],
+    ) -> None:
+        if not isinstance(event, Event):
+            raise WorkflowExecutionError(f"step {step.name!r} must produce Event instances")
+        if provider_attributable and step.kind in {"step", "produce_verify"}:
+            available_routes = self.provider_visible_route_tags(
+                step.name,
+                mode="interactive" if self._interaction_policy.allow_provider_questions else "full_auto",
+            )
+        else:
+            available_routes = tuple(self._compiled.routes.get(step.name, {}).keys())
+        if event.tag not in available_routes:
+            legal_routes = ", ".join(available_routes) or "<none>"
+            message = f"step {step.name!r} produced illegal route {event.tag!r}; legal routes: {legal_routes}"
+            if issubclass(error_cls, ProviderExecutionError):
+                raise error_cls(
+                    message,
+                    failure_context=FailureContext(
+                        kind="illegal_route",
+                        step_name=step.name,
+                        candidate_route=event.tag,
+                        provider_attributable=provider_attributable,
+                        details={
+                            "step": step.name,
+                            "route": event.tag,
+                            "legal_routes": list(available_routes),
+                            "provider_attributable": True,
+                        },
+                    ),
+                    retry_kind="illegal_route" if provider_attributable else None,
+                )
+            raise error_cls(message)
+        compiled_route = self._compiled.routes.get(step.name, {}).get(event.tag)
+        if compiled_route is not None and is_question_style_route(compiled_route, tag=event.tag) and (
+            not isinstance(event.question, str) or not event.question.strip()
+        ):
+            message = f"step {step.name!r} produced question route without a non-empty question"
+            if issubclass(error_cls, ProviderExecutionError):
+                raise ProviderExecutionError(
+                    message,
+                    failure_context=FailureContext(
+                        kind="invalid_payload",
+                        step_name=step.name,
+                        candidate_route=event.tag,
+                        provider_attributable=True,
+                        details={
+                            "step": step.name,
+                            "route": event.tag,
+                            "error": "question route requires a non-empty question field",
+                            "provider_attributable": True,
+                        },
+                    ),
+                    retry_kind="invalid_payload",
+                )
+            raise error_cls(message)
+
+    @staticmethod
+    def annotate_execution_error(exc: Exception, **kwargs: Any) -> Exception:
+        return enrich_execution_error(exc, **kwargs)
+
+    def validate_hook_event_override(self, step: StepPlan, event: Event) -> Event:
+        self.validate_event(
+            step,
+            event,
+            provider_attributable=False,
+            error_cls=WorkflowExecutionError,
+        )
+        return event
+
+    def build_hook_redirect_record(
+        self,
+        *,
+        step: StepPlan,
+        context: Any,
+        hook_name: str,
+        hook_phase: str,
+        previous_event: Event,
+        next_event: Event,
+    ) -> HookRouteRedirect | None:
+        if previous_event.tag == next_event.tag:
+            return None
+        self._events.emit_hook_event(
+            "hook_route_redirected",
+            step=step,
+            context=context,
+            hook=hook_name,
+            hook_name=hook_name,
+            phase=hook_phase,
+            from_route=previous_event.tag,
+            to_route=next_event.tag,
+        )
+        return HookRouteRedirect(
+            hook=hook_name,
+            phase=hook_phase,
+            from_route=previous_event.tag,
+            to_route=next_event.tag,
+        )
+
+    def ensure_hook_redirect_limit(
+        self,
+        step: Any,
+        *,
+        candidate_route: str | None,
+        redirects: Sequence[HookRouteRedirect],
+    ) -> None:
+        if len(redirects) <= self._max_hook_redirects:
+            return
+        redirect_chain = " -> ".join(((candidate_route or "<none>"), *(redirect.to_route for redirect in redirects)))
+        raise WorkflowExecutionError(
+            f"Hook redirect limit exceeded for step {step.name!r}. "
+            f"Possible redirect cycle: {redirect_chain}."
+        )
+
+    def normalize_direct_runtime_control(
+        self,
+        *,
+        step: StepPlan,
+        context: Any,
+        control: Any,
+        hook_name: str,
+        hook_phase: str,
+    ) -> Any:
+        runtime_control = "request_input"
+        target_step: str | None = None
+        pending_input_id: str | None = None
+        try:
+            if isinstance(control, RequestInput):
+                pending_input = self._build_pending_input(step.name, hook_name, hook_phase, control)
+                pending_input_id = pending_input.pending_input_id
+                self._events.emit_runtime_event(
+                    "hook_runtime_control",
+                    **step_runtime_event_payload(step=step, context=context),
+                    control="request_input",
+                    hook=hook_name,
+                    source_phase=hook_phase,
+                    question=control.question,
+                    reason=control.reason,
+                    pending_input_id=pending_input.pending_input_id,
+                )
+                from .engine import _RouteControl
+
+                return _RouteControl(
+                    control="request_input",
+                    destination=AWAIT_INPUT,
+                    pending_input=pending_input,
+                    terminal=AWAIT_INPUT,
+                    source_hook=hook_name,
+                    source_phase=hook_phase,
+                )
+            if isinstance(control, Goto):
+                runtime_control = "goto"
+                target_step = self._resolve_goto_target(control.target)
+                self._events.emit_runtime_event(
+                    "hook_runtime_control",
+                    **step_runtime_event_payload(step=step, context=context),
+                    control="goto",
+                    hook=hook_name,
+                    source_phase=hook_phase,
+                    target_step=target_step,
+                    reason=control.reason,
+                )
+                from .engine import _RouteControl
+
+                return _RouteControl(
+                    control="goto",
+                    destination=target_step,
+                    target_step=target_step,
+                    handoff=control.handoff,
+                    source_hook=hook_name,
+                    source_phase=hook_phase,
+                )
+            runtime_control = "fail"
+            self._events.emit_runtime_event(
+                "hook_runtime_control",
+                **step_runtime_event_payload(step=step, context=context),
+                control="fail",
+                hook=hook_name,
+                source_phase=hook_phase,
+                reason=control.reason,
+            )
+            from .engine import _RouteControl
+
+            return _RouteControl(
+                control="fail",
+                destination=FAIL,
+                terminal=FAIL,
+                source_hook=hook_name,
+                source_phase=hook_phase,
+            )
+        except Exception as exc:
+            annotated = self._events.annotate_execution_error(
+                exc,
+                checkpoint_state=StateRuntimeService.clone_state(context.state),
+                failure_context=FailureContext(
+                    kind="runtime_control_validation",
+                    step_name=step.name,
+                    runtime_control=runtime_control,
+                    source_hook=hook_name,
+                    source_phase=hook_phase,
+                    target_step=target_step,
+                    pending_input_id=pending_input_id,
+                    details={"error": str(exc), "error_type": type(exc).__name__},
+                ),
+            )
+            if annotated is exc:
+                raise
+            raise annotated from exc
+
+    @staticmethod
+    def event_context_payload(event: Event) -> dict[str, Any]:
+        payload: dict[str, Any] = {"tag": event.tag, "reason": event.reason}
+        if event.question is not None:
+            payload["question"] = event.question
+        if event.handoff is not None:
+            payload["handoff"] = event.handoff
+        return payload
+
+    @staticmethod
+    def pending_input_from_event(*, source_step: str, event: Event | None) -> PendingInput | None:
+        if event is None or not isinstance(event.question, str) or not event.question.strip():
+            return None
+        return PendingInput(
+            pending_input_id=uuid4().hex,
+            source_step=source_step,
+            source_phase="provider" if event.tag == "question" else "route",
+            question=event.question,
+            reason=event.reason or None,
+            created_at=datetime.now(timezone.utc).isoformat(),
+        )
+
+    def matching_pending_handoffs(
+        self,
+        step: StepPlan,
+        context: Any,
+        pending_handoffs: tuple[PendingHandoff, ...],
+    ) -> tuple[str | None, tuple[PendingHandoff, ...]]:
+        if not pending_handoffs:
+            return None, ()
+        current_item = context.current(step.scope_name) if step.scope_name is not None else None
+        current_item_id = current_item.id if current_item is not None else None
+        matched: list[PendingHandoff] = []
+        remaining: list[PendingHandoff] = []
+        for handoff in pending_handoffs:
+            if handoff.target_step != step.name:
+                remaining.append(handoff)
+                continue
+            if handoff.worklist_name is not None and handoff.worklist_name != step.scope_name:
+                remaining.append(handoff)
+                continue
+            if handoff.item_id is not None and handoff.item_id != current_item_id:
+                remaining.append(handoff)
+                continue
+            matched.append(handoff)
+        if not matched:
+            return None, pending_handoffs
+        combined = "\n\n".join(handoff.message for handoff in matched if handoff.message)
+        return (combined or None), tuple(remaining)
+
+    def schedule_direct_control_handoffs(
+        self,
+        pending_handoffs: tuple[PendingHandoff, ...],
+        *,
+        control: Any,
+        context: Any,
+        source_step: str,
+    ) -> tuple[PendingHandoff, ...]:
+        if control.control != "goto" or control.handoff is None or control.target_step is None:
+            return pending_handoffs
+        target_step = self._compiled.steps.get(control.target_step)
+        if target_step is None or target_step.kind in {"python", "workflow", "operation"}:
+            return pending_handoffs
+        combined_message = control.handoff.strip()
+        if not combined_message:
+            return pending_handoffs
+        worklist_name, item_id = self._handoff_scope_for_target(target_step, context)
+        return (
+            *pending_handoffs,
+            PendingHandoff(
+                source_step=source_step,
+                route_tag=control.control,
+                target_step=target_step.name,
+                message=combined_message,
+                worklist_name=worklist_name,
+                item_id=item_id,
+            ),
+        )
+
+    def schedule_route_handoffs(
+        self,
+        pending_handoffs: tuple[PendingHandoff, ...],
+        *,
+        route: Any,
+        event: Event | None,
+        destination: str,
+        context: Any,
+        source_step: str,
+    ) -> tuple[PendingHandoff, ...]:
+        messages: list[str] = []
+        if route.handoff is not None:
+            messages.append(route.handoff)
+        if event is not None and event.handoff is not None:
+            messages.append(event.handoff)
+        if not messages:
+            return pending_handoffs
+        target_step = self._compiled.steps.get(destination)
+        if target_step is None or target_step.kind in {"python", "workflow", "operation"}:
+            return pending_handoffs
+        worklist_name, item_id = self._handoff_scope_for_target(target_step, context)
+        combined_message = "\n\n".join(message.strip() for message in messages if message and message.strip())
+        if not combined_message:
+            return pending_handoffs
+        return (
+            *pending_handoffs,
+            PendingHandoff(
+                source_step=source_step,
+                route_tag=route.tag,
+                target_step=target_step.name,
+                message=combined_message,
+                worklist_name=worklist_name,
+                item_id=item_id,
+            ),
+        )
+
+    def event_from_outcome(self, step: StepPlan, outcome: Outcome) -> Event:
+        compiled_route = self._compiled.routes.get(step.name, {}).get(outcome.tag)
+        question = outcome.question
+        if compiled_route is not None and is_question_style_route(compiled_route, tag=outcome.tag):
+            question = project_questions_markdown(outcome.route_fields.get("questions"))
+        reason_value = outcome.route_fields.get("reason") if isinstance(outcome.route_fields, dict) else None
+        reason = reason_value if isinstance(reason_value, str) else outcome.reason
+        return Event(outcome.tag, reason=reason, question=question)
+
+    @staticmethod
+    def _build_pending_input(
+        source_step: str,
+        source_hook: str | None,
+        source_phase: str | None,
+        request_input: RequestInput,
+    ) -> PendingInput:
+        schema_payload, schema_model = RouteRuntimeService._serialize_pending_input_schema(request_input.input_schema)
+        return PendingInput(
+            pending_input_id=uuid4().hex,
+            source_step=source_step,
+            source_hook=source_hook,
+            source_phase=source_phase,
+            question=request_input.question,
+            reason=request_input.reason,
+            best_supposition=request_input.best_supposition,
+            input_schema=schema_payload,
+            input_schema_model=schema_model,
+            created_at=datetime.now(timezone.utc).isoformat(),
+        )
+
+    @staticmethod
+    def _serialize_pending_input_schema(
+        input_schema: type[BaseModel] | dict[str, object] | None,
+    ) -> tuple[dict[str, Any] | None, str | None]:
+        if input_schema is None:
+            return None, None
+        if isinstance(input_schema, type) and issubclass(input_schema, BaseModel):
+            adapter = TypeAdapter(input_schema)
+            return adapter.json_schema(), f"{input_schema.__module__}:{input_schema.__qualname__}"
+        schema = dict(input_schema)
+        _validate_json_schema_mapping(schema, label="RequestInput.input_schema")
+        return schema, None
+
+    def _resolve_goto_target(self, target: str | object) -> str:
+        if isinstance(target, str):
+            target_step = target.strip()
+        else:
+            target_step = getattr(target, "name", None)
+        if not isinstance(target_step, str) or not target_step:
+            raise WorkflowExecutionError("Goto.target must resolve to a declared workflow step")
+        if target_step not in self._compiled.steps:
+            raise WorkflowExecutionError(f"Goto target {target_step!r} is not a declared workflow step")
+        return target_step
+
+    @staticmethod
+    def _handoff_scope_for_target(
+        step: StepPlan,
+        context: Any,
+    ) -> tuple[str | None, str | None]:
+        if step.scope_name is None:
+            return None, None
+        item = context.current(step.scope_name)
+        if item is None:
+            return step.scope_name, None
+        return step.scope_name, item.id
+
+
+class SessionRuntimeService:
+    def __init__(
+        self,
+        *,
+        compiled: Any,
+        session_store: SessionStore,
+    ) -> None:
+        self._compiled = compiled
+        self._session_store = session_store
+
+    def resolve_session(self, step: StepPlan, context: Any) -> SessionBinding | None:
+        if step.session_name is None:
+            return None
+        active_key = context._session_store.snapshot().active_keys_by_slot.get(step.session_name)
+        if active_key is not None and active_key.domain in {"explicit_scope", "explicit_key"}:
+            binding = context.get_session(step.session_name)
+            return binding or context.open_session(step.session_name)
+        session_definition = self._compiled.sessions.get(step.session_name)
+        continuity = session_definition.continuity if session_definition is not None else None
+        binding = context.get_session(step.session_name, continuity=continuity)
+        return binding or context.open_session(step.session_name, continuity=continuity)
+
+    def resolve_pair_review_session(
+        self,
+        step: StepPlan,
+        context: Any,
+        *,
+        producer_session: SessionBinding | None,
+    ) -> SessionBinding | None:
+        if step.verifier_session_name is None:
+            return producer_session
+        active_key = context._session_store.snapshot().active_keys_by_slot.get(step.verifier_session_name)
+        if active_key is not None and active_key.domain in {"explicit_scope", "explicit_key"}:
+            binding = context.get_session(step.verifier_session_name)
+            return binding or context.open_session(step.verifier_session_name)
+        session_definition = self._compiled.sessions.get(step.verifier_session_name)
+        continuity = session_definition.continuity if session_definition is not None else None
+        binding = context.get_session(step.verifier_session_name, continuity=continuity)
+        return binding or context.open_session(step.verifier_session_name, continuity=continuity)
+
+    def persist_session(self, binding: SessionBinding | None, *, context: Any | None = None) -> None:
+        if binding is not None:
+            target_store = self._session_store if context is None else context._session_store
+            target_store.upsert(binding)
+
+    def restore(self, snapshot: Any) -> None:
+        self._session_store.restore(snapshot)
+
+    def snapshot(self) -> Any:
+        return self._session_store.snapshot()
+
+
+class ProviderRuntimeService:
+    def __init__(
+        self,
+        *,
+        compiled: Any,
+        provider: LLMProvider,
+        prompt_registry: PromptRegistry | None,
+        interaction_policy: Any,
+    ) -> None:
+        self._compiled = compiled
+        self._provider = provider
+        self._prompt_registry = prompt_registry
+        self._interaction_policy = interaction_policy
+
+    async def run_llm(self, request: LLMRequest) -> OutcomeResponse:
+        return await self._provider.run_llm(request)
+
+    async def run_producer(self, request: Any) -> ProducerResponse:
+        return await self._provider.run_producer(request)
+
+    async def run_verifier(self, request: Any) -> OutcomeResponse:
+        return await self._provider.run_verifier(request)
+
+    def resolve_prompt(self, prompt: str | Prompt | None, *, context: Any) -> ResolvedPrompt:
+        if prompt is None:
+            raise WorkflowExecutionError("missing prompt specification")
+        if self._prompt_registry is not None:
+            resolved = self._prompt_registry.resolve(prompt)
+        elif isinstance(prompt, Prompt):
+            if prompt.source == "inline":
+                resolved = ResolvedPrompt(path=prompt.path, text=prompt.text, source="inline")
+            elif prompt.path is not None:
+                candidate = Path(prompt.path)
+                if candidate.is_absolute() and candidate.exists():
+                    resolved = ResolvedPrompt(path=str(candidate), text=candidate.read_text(encoding="utf-8"), source=prompt.source)
+                else:
+                    resolved = ResolvedPrompt(path=prompt.path, text=None, source=prompt.source)
+            else:
+                resolved = ResolvedPrompt(path=prompt.path, text=None, source=prompt.source)
+        else:
+            resolved = ResolvedPrompt(path=prompt, text=None, source="registry")
+        if resolved.text is None:
+            return resolved
+        placeholder_label = "prompt placeholder"
+        if context._step_name:
+            placeholder_label = f"prompt placeholder on step {context._step_name!r}"
+        return replace(
+            resolved,
+            text=render_prompt_template(resolved, context, placeholder_label=placeholder_label),
+        )
+
+    def validate_outcome(self, step: StepPlan, outcome: Outcome) -> None:
+        if not isinstance(outcome, Outcome):
+            raise ProviderExecutionError(
+                "provider must return Outcome instances",
+                failure_context=FailureContext(
+                    kind="malformed_provider_output",
+                    step_name=step.name,
+                    provider_attributable=True,
+                    details={"step": step.name, "error": "provider must return Outcome instances"},
+                ),
+                retry_kind="malformed_provider_output",
+            )
+        if not isinstance(outcome.payload, dict):
+            raise ProviderExecutionError(
+                f"provider returned non-object payload for step {step.name!r} route {outcome.tag!r}",
+                failure_context=FailureContext(
+                    kind="invalid_payload",
+                    step_name=step.name,
+                    candidate_route=outcome.tag,
+                    provider_attributable=True,
+                    details={"step": step.name, "route": outcome.tag, "error": "payload must be an object"},
+                ),
+                retry_kind="invalid_payload",
+            )
+        if not isinstance(outcome.route_fields, dict):
+            raise ProviderExecutionError(
+                f"provider returned non-object route_fields for step {step.name!r} route {outcome.tag!r}",
+                failure_context=FailureContext(
+                    kind="invalid_payload",
+                    step_name=step.name,
+                    candidate_route=outcome.tag,
+                    provider_attributable=True,
+                    details={"step": step.name, "route": outcome.tag, "error": "route_fields must be an object"},
+                ),
+                retry_kind="invalid_payload",
+            )
+        legal_routes = provider_visible_route_tags(
+            self._compiled,
+            step.name,
+            mode="interactive" if self._interaction_policy.allow_provider_questions else "full_auto",
+        )
+        if outcome.tag not in legal_routes:
+            legal_routes_text = ", ".join(legal_routes) or "<none>"
+            raise ProviderExecutionError(
+                f"step {step.name!r} produced illegal route {outcome.tag!r}; legal routes: {legal_routes_text}",
+                failure_context=FailureContext(
+                    kind="illegal_route",
+                    step_name=step.name,
+                    candidate_route=outcome.tag,
+                    provider_attributable=True,
+                    details={
+                        "step": step.name,
+                        "route": outcome.tag,
+                        "legal_routes": list(legal_routes),
+                        "provider_attributable": True,
+                    },
+                ),
+                retry_kind="illegal_route",
+            )
+        compiled_route = self._compiled.routes.get(step.name, {}).get(outcome.tag)
+        if compiled_route is None:
+            legal_routes_text = ", ".join(legal_routes) or "<none>"
+            raise ProviderExecutionError(
+                f"step {step.name!r} produced illegal route {outcome.tag!r}; legal routes: {legal_routes_text}",
+                failure_context=FailureContext(
+                    kind="illegal_route",
+                    step_name=step.name,
+                    candidate_route=outcome.tag,
+                    provider_attributable=True,
+                    details={
+                        "step": step.name,
+                        "route": outcome.tag,
+                        "legal_routes": list(legal_routes),
+                        "provider_attributable": True,
+                    },
+                ),
+                retry_kind="illegal_route",
+            )
+        legacy_route_fields = dict(outcome.route_fields)
+        if is_question_style_route(compiled_route, tag=outcome.tag) and "questions" not in legacy_route_fields:
+            if isinstance(outcome.question, str) and outcome.question.strip():
+                legacy_route_fields["questions"] = [outcome.question.strip()]
+        if (compiled_route.preset_kind in {"question", "blocked", "failed"} or outcome.tag in {"blocked", "failed"}) and "reason" not in legacy_route_fields:
+            legacy_route_fields["reason"] = outcome.reason or None
+        normalized_route_fields = normalize_route_fields_for_route(compiled_route, legacy_route_fields)
+        if normalized_route_fields != outcome.route_fields:
+            object.__setattr__(outcome, "route_fields", normalized_route_fields)
+            object.__setattr__(outcome, "question", project_questions_markdown(normalized_route_fields.get("questions")))
+            route_reason = normalized_route_fields.get("reason")
+            object.__setattr__(outcome, "reason", route_reason if isinstance(route_reason, str) else "")
+        if is_question_style_route(compiled_route, tag=outcome.tag) and (
+            not isinstance(outcome.question, str) or not outcome.question.strip()
+        ):
+            raise ProviderExecutionError(
+                f"provider returned question route without a non-empty question for step {step.name!r}",
+                failure_context=FailureContext(
+                    kind="invalid_payload",
+                    step_name=step.name,
+                    candidate_route=outcome.tag,
+                    provider_attributable=True,
+                    details={
+                        "step": step.name,
+                        "route": outcome.tag,
+                        "error": "question route requires a non-empty question field",
+                    },
+                ),
+                retry_kind="invalid_payload",
+            )
+        payload_validator = None
+        if compiled_route.payload_schema_mode == "explicit":
+            payload_validator = compiled_route.payload_validator
+        elif compiled_route.payload_schema_mode == "inherit":
+            payload_validator = step.expected_output_validator
+        try:
+            if payload_validator is not None:
+                payload_validator(outcome.payload)
+            self._validate_outcome_route_fields(step, compiled_route, outcome)
+        except Exception as exc:
+            raise ProviderExecutionError(
+                f"provider returned invalid payload for step {step.name!r} route {outcome.tag!r}: {exc}",
+                failure_context=FailureContext(
+                    kind="invalid_payload",
+                    step_name=step.name,
+                    candidate_route=outcome.tag,
+                    provider_attributable=True,
+                    details={"step": step.name, "route": outcome.tag, "error": str(exc)},
+                ),
+                retry_kind="invalid_payload",
+            ) from exc
+
+    @staticmethod
+    def _validate_outcome_route_fields(
+        step: StepPlan,
+        route: Any,
+        outcome: Outcome,
+    ) -> None:
+        if route.route_fields_validator is not None:
+            route.route_fields_validator(outcome.route_fields)
+            return
+        if is_question_style_route(route, tag=outcome.tag):
+            questions = outcome.route_fields.get("questions")
+            if not isinstance(questions, list) or not questions:
+                raise ValueError("question route requires a non-empty route_fields.questions list")
+            for question in questions:
+                if not isinstance(question, str) or not question.strip():
+                    raise ValueError("question route requires non-empty strings in route_fields.questions")
+            reason = outcome.route_fields.get("reason")
+            if reason is not None and not isinstance(reason, str):
+                raise ValueError("question route route_fields.reason must be a string or null")
+            return
+        if route.preset_kind in {"blocked", "failed"} or outcome.tag in {"blocked", "failed"}:
+            reason = outcome.route_fields.get("reason")
+            if reason is not None and not isinstance(reason, str):
+                raise ValueError(f"{route.preset_kind} route route_fields.reason must be a string or null")
+            return
+        if route.route_fields_schema is None and outcome.route_fields:
+            raise ValueError("route does not declare route_fields metadata")
+
+
+class CheckpointRuntimeService:
+    def __init__(
+        self,
+        *,
+        compiled: Any,
+        checkpoint_store: CheckpointStore,
+        sessions: SessionRuntimeService,
+        state: StateRuntimeService,
+    ) -> None:
+        self._compiled = compiled
+        self._checkpoint_store = checkpoint_store
+        self._sessions = sessions
+        self._state = state
+
+    def save(
+        self,
+        *,
+        stage: str,
+        state: BaseModel,
+        values: Mapping[str, Any] | None = None,
+        step_states: Mapping[str, BaseModel | dict[str, Any]] | None = None,
+        item_states: Mapping[str, BaseModel | dict[str, Any]] | None = None,
+        step_item_states: Mapping[str, Mapping[str, BaseModel | dict[str, Any]]] | None = None,
+        worklist_selections: Mapping[str, Selection[Any]] | None = None,
+        worklist_selection_snapshots: Mapping[str, SelectionSnapshot] | None = None,
+        pending_handoffs: tuple[PendingHandoff, ...] = (),
+        pending_input: PendingInput | None = None,
+        pending_answer: str | None = None,
+        failure_context: FailureContext | Mapping[str, Any] | None = None,
+    ) -> Checkpoint:
+        payload_failure_context: dict[str, Any] | None
+        if isinstance(failure_context, FailureContext):
+            payload_failure_context = failure_context.to_payload()
+        elif isinstance(failure_context, Mapping):
+            payload_failure_context = dict(failure_context) or None
+        else:
+            payload_failure_context = None
+        checkpoint = Checkpoint(
+            stage=stage,
+            state=state,
+            session_bindings=self._sessions.snapshot(),
+            values=serialize_context_values(values or {}),
+            step_states=self._state.serialize_step_states(step_states),
+            item_states=self._state.serialize_item_states(item_states),
+            step_item_states=self._state.serialize_step_item_states(step_item_states),
+            worklist_selections=_snapshot_worklist_selections(
+                self._compiled.worklists,
+                worklist_selections,
+                snapshots=worklist_selection_snapshots,
+            ),
+            pending_handoffs=tuple(pending_handoffs),
+            pending_input=replace(pending_input) if pending_input is not None else None,
+            pending_question=None,
+            pending_answer=pending_answer,
+            failure_context=payload_failure_context,
+        )
+        self._checkpoint_store.save(checkpoint)
+        return checkpoint
+
+
+class OperationBindingService:
+    def __init__(
+        self,
+        *,
+        compiled: Any,
+        provider: LLMProvider,
+        prompt_registry: PromptRegistry | None,
+        operation_replay_mismatch_behavior: str,
+        provider_policy_resolver: Any = None,
+        runtime_event_sink: Callable[[str, Mapping[str, Any]], None] | None = None,
+    ) -> None:
+        self._compiled = compiled
+        self._provider = provider
+        self._prompt_registry = prompt_registry
+        self._operation_replay_mismatch_behavior = operation_replay_mismatch_behavior
+        self._provider_policy_resolver = provider_policy_resolver
+        self._runtime_event_sink = runtime_event_sink
+
+    def set_provider_policy_resolver(self, resolver: Any) -> None:
+        self._provider_policy_resolver = resolver
+
+    @contextmanager
+    def bind_step(
+        self,
+        *,
+        step: StepPlan,
+        context: Any,
+        run_folder: Path,
+        step_name: str,
+        step_visit: int,
+    ):
+        previous_policy = getattr(context, "_provider_policy", _MISSING_PROVIDER_POLICY)
+        resolved_policy = None
+        if self._provider_policy_resolver is not None:
+            try:
+                resolved_policy = self._provider_policy_resolver.resolve_for_step(step)
+            except ProviderPolicyError as exc:
+                context._emit_runtime_event(
+                    "provider_policy_violation",
+                    policy_fingerprint=None,
+                    error_message=str(exc),
+                )
+                raise
+            context._provider_policy = resolved_policy
+            context._emit_runtime_event(
+                "provider_policy_resolved",
+                policy_fingerprint=policy_fingerprint(resolved_policy),
+            )
+        try:
+            with bind_operation_runtime(
+                OperationRuntime(
+                    provider=self._provider,
+                    provider_configuration=provider_configuration(
+                        self._provider,
+                        default_session_name=self._compiled.default_session_name,
+                    ),
+                    prompt_registry=self._prompt_registry,
+                    context=context,
+                    run_folder=run_folder,
+                    workflow_name=self._compiled.workflow_name,
+                    topology_hash=self._compiled.topology_hash,
+                    source_hash=self._compiled.source_hash,
+                    step_name=step_name,
+                    step_visit=step_visit,
+                    default_session_name=self._compiled.default_session_name,
+                    replay_mismatch_behavior=self._operation_replay_mismatch_behavior,
+                    policy=resolved_policy,
+                    provider_policy_resolver=self._provider_policy_resolver,
+                    event_sink=self._runtime_event_sink,
+                )
+            ) as runtime:
+                yield runtime
+        finally:
+            if previous_policy is _MISSING_PROVIDER_POLICY:
+                try:
+                    delattr(context, "_provider_policy")
+                except AttributeError:
+                    pass
+            else:
+                context._provider_policy = previous_policy
+
+
+class ChildWorkflowRuntimeService:
+    def __init__(
+        self,
+        *,
+        compiled: Any,
+        artifacts: ArtifactRuntimeService,
+        routes: RouteRuntimeService,
+    ) -> None:
+        self._compiled = compiled
+        self._artifacts = artifacts
+        self._routes = routes
+
+    def run_child_step(self, step: StepPlan, context: Any) -> Any:
+        if not isinstance(step, ChildWorkflowStepPlan):
+            raise WorkflowExecutionError(f"workflow step {step.name!r} is missing workflow-step metadata")
+        message = self._resolve_workflow_step_message(step, context)
+        child_result = context.invoke_workflow(
+            step.workflow,
+            message=message,
+            parameters=dict(step.params),
+            input=step.input,
+        )
+        self._write_workflow_step_outputs(context, step=step, child_result=child_result)
+        return child_result
+
+    def map_result(self, step: StepPlan, child_result: Any) -> Event:
+        terminal = getattr(child_result, "terminal", None)
+        last_event = getattr(child_result, "last_event", None)
+        checkpoint = getattr(child_result, "checkpoint", None)
+        pending_input = getattr(checkpoint, "pending_input", None)
+        pending_question = pending_input.question if isinstance(pending_input, PendingInput) else None
+        if terminal == FINISH:
+            return Event("done")
+        if terminal == FAIL:
+            self._ensure_child_workflow_route_declared(
+                step,
+                child_terminal=terminal,
+                mapped_route="failed",
+            )
+            reason = last_event.reason if isinstance(last_event, Event) and last_event.reason else "Child workflow failed."
+            return Event("failed", reason=reason)
+        if terminal == AWAIT_INPUT and isinstance(last_event, Event) and isinstance(last_event.question, str) and last_event.question.strip():
+            return Event("question", reason=last_event.reason, question=last_event.question)
+        if terminal == AWAIT_INPUT and isinstance(pending_question, str) and pending_question:
+            reason = last_event.reason if isinstance(last_event, Event) else ""
+            return Event("question", reason=reason, question=pending_question)
+        if terminal == AWAIT_INPUT:
+            self._ensure_child_workflow_route_declared(
+                step,
+                child_terminal=terminal,
+                mapped_route="blocked",
+            )
+            reason = (
+                last_event.reason
+                if isinstance(last_event, Event) and last_event.reason
+                else "Child workflow is awaiting input."
+            )
+            return Event("blocked", reason=reason)
+        raise WorkflowExecutionError(f"child workflow returned unsupported terminal {terminal!r}")
+
+    def _resolve_workflow_step_message(self, step: Any, context: Any) -> str:
+        if step.message is not None:
+            return render_inline_prompt_template(
+                step.message,
+                context,
+                placeholder_label=f"workflow step {step.name!r} message template",
+            )
+        message_from = step.message_from
+        if message_from is not None:
+            handle = self._workflow_step_message_handle(message_from, context)
+            try:
+                return handle.read_text()
+            except FileNotFoundError as exc:
+                raise WorkflowExecutionError(
+                    f"workflow step {step.name!r} message source {str(handle.path)!r} does not exist"
+                ) from exc
+        workflow_name = step.workflow if isinstance(step.workflow, str) else step.workflow.__name__
+        return f"Run child workflow {workflow_name}."
+
+    def _workflow_step_message_handle(self, message_from: object, context: Any) -> ArtifactHandle:
+        if isinstance(message_from, Artifact):
+            runtime_artifact = self._artifacts._runtime_artifact_spec(message_from)
+            return ArtifactHandle(
+                name=self._artifacts._artifact_display_name(runtime_artifact),
+                path=resolve_artifact_template(runtime_artifact, context),
+                artifact=runtime_artifact,
+            )
+        if isinstance(message_from, Path):
+            path = message_from if message_from.is_absolute() else context.root / message_from
+            return ArtifactHandle(name=message_from.name, path=path)
+        if isinstance(message_from, str):
+            artifacts = self._artifacts.resolve_artifacts(context)
+            if message_from in artifacts:
+                return artifacts[message_from]
+            path = Path(message_from)
+            if not path.is_absolute():
+                path = context.root / path
+            return ArtifactHandle(name=path.name or message_from, path=path)
+        raise WorkflowExecutionError(f"workflow step message_from {message_from!r} is unsupported")
+
+    def _write_workflow_step_outputs(
+        self,
+        context: Any,
+        *,
+        step: Any,
+        child_result: Any,
+    ) -> None:
+        declared_writes = getattr(step, "writes", ())
+        if not declared_writes:
+            return
+        payload = self._workflow_step_output_payload(child_result)
+        summary = self._workflow_step_output_summary(payload)
+        raw_json = json.dumps(payload, indent=2, ensure_ascii=False) + "\n"
+        if hasattr(declared_writes, "values"):
+            artifact_handles = []
+            for artifact in declared_writes.values():
+                artifact_handles.append(
+                    ArtifactHandle(
+                        name=artifact.name or "output",
+                        path=resolve_artifact_template(artifact, context),
+                        artifact=artifact,
+                    )
+                )
+        else:
+            resolved_artifacts = self._artifacts.resolve_artifacts(context)
+            artifact_handles = [resolved_artifacts[artifact_id] for artifact_id in declared_writes]
+        for handle in artifact_handles:
+            artifact = handle.artifact
+            kind = getattr(artifact, "kind", None) or "text"
+            if kind == "json":
+                handle.write_json(payload)
+            elif kind == "raw":
+                handle.write_text(raw_json)
+            else:
+                handle.write_text(summary)
+
+    @staticmethod
+    def _workflow_step_output_payload(child_result: Any) -> dict[str, Any]:
+        last_event = getattr(child_result, "last_event", None)
+        last_event_tag = last_event.tag if isinstance(last_event, Event) else None
+        output_artifacts = getattr(child_result, "output_artifacts", {}) or {}
+        return {
+            "workflow_name": getattr(child_result, "workflow_name", None),
+            "run_id": getattr(child_result, "run_id", None),
+            "terminal": getattr(child_result, "terminal", None),
+            "status": getattr(child_result, "status", None),
+            "last_event": last_event_tag,
+            "output_artifacts": {name: str(path) for name, path in output_artifacts.items()},
+            "output_metadata": dict(getattr(child_result, "output_metadata", {}) or {}),
+        }
+
+    @staticmethod
+    def _workflow_step_output_summary(payload: Mapping[str, Any]) -> str:
+        lines = [
+            f"Child workflow: {payload.get('workflow_name') or '<unknown>'}",
+            f"Run id: {payload.get('run_id') or '<unknown>'}",
+            f"Terminal: {payload.get('terminal') or '<unknown>'}",
+            f"Status: {payload.get('status') or '<unknown>'}",
+        ]
+        last_event = payload.get("last_event")
+        if isinstance(last_event, str) and last_event:
+            lines.append(f"Last event: {last_event}")
+        output_artifacts = payload.get("output_artifacts")
+        if isinstance(output_artifacts, Mapping) and output_artifacts:
+            lines.append("Output artifacts:")
+            for name, path in output_artifacts.items():
+                lines.append(f"- {name}: {path}")
+        return "\n".join(lines) + "\n"
+
+    def _ensure_child_workflow_route_declared(
+        self,
+        step: StepPlan,
+        *,
+        child_terminal: str,
+        mapped_route: str,
+    ) -> None:
+        available_routes = compiled_route_tags(self._compiled, step.name)
+        if mapped_route in available_routes:
+            return
+        declared_routes = ", ".join(available_routes) or "<none>"
+        raise WorkflowExecutionError(
+            f"child workflow step {step.name!r} returned terminal {child_terminal!r}, which maps to route "
+            f"{mapped_route!r}, but declared routes are: {declared_routes}. "
+            "Recommended fix: declare the route or change child-result mapping."
+        )
+
+
+_MISSING_PROVIDER_POLICY = object()

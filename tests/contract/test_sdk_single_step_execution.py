@@ -4,11 +4,11 @@ from pathlib import Path
 
 from pydantic import BaseModel
 
-import botlane.simple as simple
-from botlane import AWAIT_INPUT, FINISH, SELF, Botlane, StaticInput
-from botlane.core.primitives import Event, Outcome
-from botlane.core.providers.fake import ScriptedLLMProvider
-from botlane.runtime.config import GitTrackingRuntimeConfig, RuntimeConfig
+import botpipe.simple as simple
+from botpipe import AWAIT_INPUT, FINISH, SELF, Botpipe, StaticInput
+from botpipe.core.primitives import Event, Outcome
+from botpipe.core.providers.fake import ScriptedLLMProvider
+from botpipe.runtime.config import GitTrackingRuntimeConfig, RuntimeConfig
 
 
 class _SingleStepTypedInput(BaseModel):
@@ -19,11 +19,11 @@ class _SingleStepParams(BaseModel):
     mode: str
 
 
-def _sdk_client(tmp_path: Path, provider: object) -> Botlane:
-    return Botlane(
+def _sdk_client(tmp_path: Path, provider: object) -> Botpipe:
+    return Botpipe(
         workspace=tmp_path,
         provider=provider,
-        state_dir=tmp_path / ".botlane",
+        state_dir=tmp_path / ".botpipe",
         runtime_config=RuntimeConfig(git_tracking=GitTrackingRuntimeConfig(enabled=False, commit_policy="off")),
     )
 
@@ -56,7 +56,7 @@ def test_sdk_step_executes_single_step_plan_with_typed_input_and_params(tmp_path
     assert result.artifacts.snapshot.read_json() == {
         "message": "Handle the release.",
         "params": {"mode": "focused"},
-        "input": {"message": "Handle the release.", "topic": "release"},
+        "input": {"topic": "release"},
     }
 
 

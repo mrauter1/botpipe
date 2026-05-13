@@ -9,16 +9,16 @@ from pathlib import Path
 import pytest
 from pydantic import BaseModel
 
-import botlane
-import botlane.simple as simple
-import botlane.sdk as sdk_module
-from botlane import (
+import botpipe
+import botpipe.simple as simple
+import botpipe.sdk as sdk_module
+from botpipe import (
     AWAIT_INPUT,
     FAIL,
     FINISH,
     SELF,
     ArtifactMap,
-    Botlane,
+    Botpipe,
     InputRequest,
     InputRequired,
     InputResponseValidationError,
@@ -32,14 +32,14 @@ from botlane import (
     WorkflowParameterError,
     WorkflowInputError,
 )
-from botlane.policy import ModelEffort, Policy
-from botlane.core.primitives import Event, Outcome, RequestInput
-from botlane.core.prompts import Prompt
-from botlane.core.providers.retries import ProviderRetryPolicy
-from botlane.core.routes import Route
-from botlane.core.providers.fake import ScriptedLLMProvider
-from botlane.core.steps import ChildWorkflowStep, ProduceVerifyStep, PromptStep, PythonStep
-from botlane.runtime.config import GitTrackingRuntimeConfig, RuntimeConfig
+from botpipe.policy import ModelEffort, Policy
+from botpipe.core.primitives import Event, Outcome, RequestInput
+from botpipe.core.prompts import Prompt
+from botpipe.core.providers.retries import ProviderRetryPolicy
+from botpipe.core.routes import Route
+from botpipe.core.providers.fake import ScriptedLLMProvider
+from botpipe.core.steps import ChildWorkflowStep, ProduceVerifyStep, PromptStep, PythonStep
+from botpipe.runtime.config import GitTrackingRuntimeConfig, RuntimeConfig
 
 
 class _SDKApprovalInput(BaseModel):
@@ -74,7 +74,6 @@ class _SDKPauseWorkflow(simple.Workflow):
             ctx.artifacts.snapshot.write_json(
                 {
                     "message": ctx.message,
-                    "input_message": ctx.input.message,
                     "topic": ctx.input.topic,
                     "dump": ctx.input.model_dump(mode="python"),
                     "input_fields": None if ctx.input_fields is None else ctx.input_fields.model_dump(mode="python"),
@@ -105,11 +104,11 @@ class _SDKProviderQuestionWorkflow(simple.Workflow):
 class _SDKNoMessageWorkflow(simple.Workflow):
     class State(BaseModel):
         observed_message: str | None = None
-        observed_input_message: str | None = None
+        observed_input_is_none: bool | None = None
 
     empty_message_snapshot = simple.Text(
         "empty_message_snapshot",
-        path="{workflow_folder}/capture/{input.message}snapshot.txt",
+        path="{{ workflow.folder }}/capture/{{ message }}snapshot.txt",
     )
 
     @simple.python_step(writes=[empty_message_snapshot], routes={"done": FINISH})
@@ -117,7 +116,7 @@ class _SDKNoMessageWorkflow(simple.Workflow):
         ctx.state = ctx.state.model_copy(
             update={
                 "observed_message": ctx.message,
-                "observed_input_message": ctx.input.message,
+                "observed_input_is_none": ctx.input is None,
             }
         )
         ctx.artifacts.empty_message_snapshot.write_text("captured")
@@ -141,7 +140,7 @@ class _SDKParamsWorkflow(simple.Workflow):
             {
                 "params": ctx.params.model_dump(mode="python"),
                 "workflow_params": ctx.workflow_params,
-                "input_dump": ctx.input.model_dump(mode="python"),
+                "input_is_none": ctx.input is None,
                 "has_mode_on_input": hasattr(ctx.input, "mode"),
             }
         )
@@ -167,7 +166,7 @@ class _SDKSchemaArtifactWorkflow(simple.Workflow):
     @simple.python_step(writes=[artifact_snapshot], routes={"done": FINISH})
     def capture(ctx):
         ctx.artifacts.artifact_snapshot.write_model(
-            _SDKArtifactPayload(message=ctx.input.message or "", topic=ctx.input.topic)
+            _SDKArtifactPayload(message=ctx.message or "", topic=ctx.input.topic)
         )
         return Event("done")
 
@@ -176,7 +175,7 @@ class _SDKDeclaredWriteContextWorkflow(simple.Workflow):
     class Params(BaseModel):
         mode: str
 
-    report = simple.Text("report", path="{workflow_folder}/exports/{params.mode}-{workflow_params.mode}.txt")
+    report = simple.Text("report", path="{{ workflow.folder }}/exports/{{ params.mode }}-{{ workflow_params.mode }}.txt")
 
     @simple.python_step(writes=[report], routes={"done": FINISH})
     def capture(ctx):
@@ -184,30 +183,122 @@ class _SDKDeclaredWriteContextWorkflow(simple.Workflow):
         return Event("done")
 
 
-def _sdk_client(tmp_path: Path, provider: object) -> Botlane:
-    return Botlane(
+def _sdk_client(tmp_path: Path, provider: object) -> Botpipe:
+    return Botpipe(
         workspace=tmp_path,
         provider=provider,
-        state_dir=tmp_path / ".botlane",
+        state_dir=tmp_path / ".botpipe",
         runtime_config=RuntimeConfig(git_tracking=GitTrackingRuntimeConfig(enabled=False, commit_policy="off")),
     )
 
 
-def _sdk_client_at_root(tmp_path: Path, provider: object, *, retention: RetentionPolicy | None = None) -> Botlane:
-    return Botlane(
+def _sdk_client_at_root(tmp_path: Path, provider: object, *, retention: RetentionPolicy | None = None) -> Botpipe:
+    return Botpipe(
         workspace=tmp_path,
         provider=provider,
-        state_dir=tmp_path / ".botlane",
+        state_dir=tmp_path / ".botpipe",
         runtime_config=RuntimeConfig(git_tracking=GitTrackingRuntimeConfig(enabled=False, commit_policy="off")),
         retention=retention,
     )
+
+
+def test_sdk_result_artifacts_omit_branch_scoped_writes_without_crashing(tmp_path: Path) -> None:
+    class BranchArtifactWorkflow(simple.Workflow):
+        class State(BaseModel):
+            pass
+
+        assess = simple.fan_out(
+            step=simple.python_step(
+                lambda ctx: (ctx.artifacts.report.write_text(ctx.branch.name), Event("done"))[1],
+                name="write_one",
+                writes=[simple.Md("report", path="reports/{{ branch.name }}.md")],
+                routes={"done": FINISH},
+            ),
+            branches={"security": {"area": "security"}, "cost": {"area": "cost"}},
+        )
+
+    client = _sdk_client(tmp_path, ScriptedLLMProvider())
+
+    result = client.run(BranchArtifactWorkflow, "Assess branches.")
+
+    assert result.ok is True
+    assert "report" not in result.artifacts
+
+
+def test_sdk_result_artifacts_omit_worklist_selection_writes_without_crashing(tmp_path: Path) -> None:
+    class WorklistArtifactWorkflow(simple.Workflow):
+        gate = simple.Worklist.from_items(
+            name="gate",
+            items=({"id": "alpha", "title": "Alpha"},),
+        )
+        report = simple.Md("report", path="reports/{{ worklists.gate.current.id }}.md")
+
+        @simple.python_step(writes=[report], routes={"done": FINISH})
+        def write(ctx):
+            ctx.artifacts.report.write_text("alpha")
+            return Event("done")
+
+    client = _sdk_client_at_root(tmp_path, ScriptedLLMProvider())
+
+    result = client.run(WorklistArtifactWorkflow, "Write the current worklist report.")
+
+    assert result.ok is True
+    assert "report" not in result.artifacts
+
+
+async def _collect_async_records(stream) -> list[dict[str, object]]:
+    return [record async for record in stream]
+
+
+def _seed_durable_run_record(
+    root: Path,
+    *,
+    task_id: str = "task-42",
+    workflow_name: str = "review",
+    run_id: str = "run-1",
+    status: str = "success",
+) -> Path:
+    task_dir = root / ".botpipe" / "tasks" / task_id
+    task_dir.mkdir(parents=True, exist_ok=True)
+    (task_dir / "task.json").write_text(
+        json.dumps(
+            {
+                "created_at": "2026-05-01T00:00:00+00:00",
+                "task_id": task_id,
+                "updated_at": "2026-05-01T00:00:00+00:00",
+            },
+            sort_keys=True,
+        )
+        + "\n",
+        encoding="utf-8",
+    )
+    run_dir = task_dir / f"wf_{workflow_name}" / "runs" / run_id
+    run_dir.mkdir(parents=True, exist_ok=True)
+    (run_dir / "run.json").write_text(
+        json.dumps(
+            {
+                "created_at": "2026-05-01T00:00:00+00:00",
+                "run_id": run_id,
+                "status": status,
+                "task_id": task_id,
+                "updated_at": "2026-05-01T00:01:00+00:00",
+                "workflow_name": workflow_name,
+            },
+            sort_keys=True,
+        )
+        + "\n",
+        encoding="utf-8",
+    )
+    (run_dir / "events.jsonl").write_text(json.dumps({"event_type": "seeded"}) + "\n", encoding="utf-8")
+    (run_dir / "trace.jsonl").write_text(json.dumps({"event_type": "trace_seeded"}) + "\n", encoding="utf-8")
+    return run_dir
 
 
 def test_sdk_entrypoint_signatures_are_frozen() -> None:
     def signature_items(method: object) -> tuple[tuple[str, inspect._ParameterKind], ...]:
         return tuple((name, parameter.kind) for name, parameter in inspect.signature(method).parameters.items())
 
-    assert signature_items(Botlane.run) == (
+    assert signature_items(Botpipe.run) == (
         ("self", inspect.Parameter.POSITIONAL_OR_KEYWORD),
         ("workflow", inspect.Parameter.POSITIONAL_OR_KEYWORD),
         ("message", inspect.Parameter.POSITIONAL_OR_KEYWORD),
@@ -221,7 +312,7 @@ def test_sdk_entrypoint_signatures_are_frozen() -> None:
         ("options", inspect.Parameter.KEYWORD_ONLY),
         ("retention", inspect.Parameter.KEYWORD_ONLY),
     )
-    assert signature_items(Botlane.step) == (
+    assert signature_items(Botpipe.step) == (
         ("self", inspect.Parameter.POSITIONAL_OR_KEYWORD),
         ("step_def", inspect.Parameter.POSITIONAL_OR_KEYWORD),
         ("message", inspect.Parameter.POSITIONAL_OR_KEYWORD),
@@ -235,7 +326,7 @@ def test_sdk_entrypoint_signatures_are_frozen() -> None:
         ("provider_questions", inspect.Parameter.KEYWORD_ONLY),
         ("retention", inspect.Parameter.KEYWORD_ONLY),
     )
-    assert signature_items(Botlane.prompt_step) == (
+    assert signature_items(Botpipe.prompt_step) == (
         ("self", inspect.Parameter.POSITIONAL_OR_KEYWORD),
         ("prompt", inspect.Parameter.POSITIONAL_OR_KEYWORD),
         ("message", inspect.Parameter.POSITIONAL_OR_KEYWORD),
@@ -254,7 +345,7 @@ def test_sdk_entrypoint_signatures_are_frozen() -> None:
         ("provider_questions", inspect.Parameter.KEYWORD_ONLY),
         ("retention", inspect.Parameter.KEYWORD_ONLY),
     )
-    assert signature_items(Botlane.produce_verify_step) == (
+    assert signature_items(Botpipe.produce_verify_step) == (
         ("self", inspect.Parameter.POSITIONAL_OR_KEYWORD),
         ("producer", inspect.Parameter.KEYWORD_ONLY),
         ("verifier", inspect.Parameter.KEYWORD_ONLY),
@@ -277,7 +368,7 @@ def test_sdk_entrypoint_signatures_are_frozen() -> None:
         ("provider_questions", inspect.Parameter.KEYWORD_ONLY),
         ("retention", inspect.Parameter.KEYWORD_ONLY),
     )
-    assert signature_items(Botlane.python_step) == (
+    assert signature_items(Botpipe.python_step) == (
         ("self", inspect.Parameter.POSITIONAL_OR_KEYWORD),
         ("handler", inspect.Parameter.POSITIONAL_OR_KEYWORD),
         ("message", inspect.Parameter.POSITIONAL_OR_KEYWORD),
@@ -293,7 +384,7 @@ def test_sdk_entrypoint_signatures_are_frozen() -> None:
         ("max_steps", inspect.Parameter.KEYWORD_ONLY),
         ("retention", inspect.Parameter.KEYWORD_ONLY),
     )
-    assert signature_items(Botlane.workflow_step) == (
+    assert signature_items(Botpipe.workflow_step) == (
         ("self", inspect.Parameter.POSITIONAL_OR_KEYWORD),
         ("workflow", inspect.Parameter.POSITIONAL_OR_KEYWORD),
         ("message", inspect.Parameter.POSITIONAL_OR_KEYWORD),
@@ -345,9 +436,8 @@ def test_sdk_run_handles_typed_input_pause_loop_and_debug_artifacts(tmp_path: Pa
     assert isinstance(result.artifacts.snapshot, ResultArtifact)
     assert result.artifacts.snapshot.read_json() == {
         "message": "Ship the release safely.",
-        "input_message": "Ship the release safely.",
         "topic": "release",
-        "dump": {"message": "Ship the release safely.", "topic": "release"},
+        "dump": {"topic": "release"},
         "input_fields": {"topic": "release"},
     }
     assert result.debug.task_id.startswith("sdk-")
@@ -379,7 +469,7 @@ def test_sdk_run_preserves_explicit_none_message(tmp_path: Path) -> None:
 
     assert result.ok is True
     assert result.state.observed_message is None
-    assert result.state.observed_input_message is None
+    assert result.state.observed_input_is_none is True
     assert result.artifacts.empty_message_snapshot.path.name == "snapshot.txt"
     assert result.artifacts.empty_message_snapshot.read_text() == "captured"
 
@@ -517,7 +607,7 @@ def test_sdk_run_exposes_params_without_leaking_them_into_ctx_input(
     assert result.artifacts.params_snapshot.read_json() == {
         "params": expected,
         "workflow_params": expected,
-        "input_dump": {"message": "Check params handling."},
+        "input_is_none": True,
         "has_mode_on_input": False,
     }
 
@@ -586,7 +676,7 @@ def test_sdk_step_supports_core_python_step_instances(tmp_path: Path) -> None:
     )
 
     assert result.ok is True
-    assert result.artifacts.snapshot.read_json() == {"message": "Handle the typed request.", "topic": "release"}
+    assert result.artifacts.snapshot.read_json() == {"topic": "release"}
 
 
 @pytest.mark.parametrize(
@@ -627,7 +717,7 @@ def test_sdk_step_accepts_input_and_params_for_single_step_execution(
     assert result.artifacts.snapshot.read_json() == {
         "params": expected,
         "workflow_params": expected,
-        "input_dump": {"message": "Handle the typed request.", "topic": "release"},
+        "input_dump": {"topic": "release"},
     }
 
 
@@ -679,10 +769,10 @@ def test_sdk_step_applies_invocation_local_policy_without_mutating_supplied_step
         debug=SDKDebugInfo(
             task_id="sdk-policy",
             run_id="run-1",
-            task_dir=tmp_path / ".botlane" / "tasks" / "sdk-policy",
-            workflow_dir=tmp_path / ".botlane" / "tasks" / "sdk-policy" / "workflow",
-            run_dir=tmp_path / ".botlane" / "tasks" / "sdk-policy" / "workflow" / "runs" / "run-1",
-            events_file=tmp_path / ".botlane" / "tasks" / "sdk-policy" / "workflow" / "runs" / "run-1" / "events.jsonl",
+            task_dir=tmp_path / ".botpipe" / "tasks" / "sdk-policy",
+            workflow_dir=tmp_path / ".botpipe" / "tasks" / "sdk-policy" / "workflow",
+            run_dir=tmp_path / ".botpipe" / "tasks" / "sdk-policy" / "workflow" / "runs" / "run-1",
+            events_file=tmp_path / ".botpipe" / "tasks" / "sdk-policy" / "workflow" / "runs" / "run-1" / "events.jsonl",
             trace_file=None,
             checkpoint_file=None,
         ),
@@ -764,12 +854,12 @@ def test_sdk_step_supports_directly_resolvable_strict_child_workflow_steps(tmp_p
     declaration = ChildWorkflowStep(
         name="launch",
         workflow=ChildWorkflow,
-        message="{ctx.message}",
+        message="{{ message }}",
     )
-    client = Botlane(
+    client = Botpipe(
         workspace=tmp_path,
         provider=ScriptedLLMProvider(),
-        state_dir=tmp_path / ".botlane",
+        state_dir=tmp_path / ".botpipe",
         runtime_config=RuntimeConfig(git_tracking=GitTrackingRuntimeConfig(enabled=False, commit_policy="off")),
     )
 
@@ -788,13 +878,13 @@ def test_sdk_run_wraps_invalid_child_workflow_message_placeholder(tmp_path: Path
         class State(BaseModel):
             status: str = "draft"
 
-        launch = simple.workflow_step(ChildWorkflow, message="{ctx.state.missing}")
+        launch = simple.workflow_step(ChildWorkflow, message="{{ state.missing }}")
 
     client = _sdk_client(tmp_path, ScriptedLLMProvider())
 
     with pytest.raises(
         SDKExecutionError,
-        match=r"workflow step 'launch' message placeholder \{ctx\.state\.missing\} references unknown runtime field 'missing'",
+        match=r"workflow step 'launch' message template <inline prompt template>: undefined Jinja value: .*missing",
     ):
         client.run(ParentWorkflow, message="Run the child workflow.")
 
@@ -807,10 +897,10 @@ def test_sdk_step_wraps_invalid_child_workflow_message_placeholder(tmp_path: Pat
 
     with pytest.raises(
         SDKExecutionError,
-        match=r"workflow step 'launch' message placeholder \{ctx\.state\.missing\} references unknown runtime field 'missing'",
+        match=r"workflow step 'launch' message template <inline prompt template>: undefined Jinja value: .*missing",
     ):
         client.step(
-            ChildWorkflowStep(name="launch", workflow=ChildWorkflow, message="{ctx.state.missing}"),
+            ChildWorkflowStep(name="launch", workflow=ChildWorkflow, message="{{ state.missing }}"),
             "Run the child workflow.",
         )
 
@@ -869,22 +959,135 @@ def test_sdk_sync_entrypoints_normalize_active_event_loop_failures(tmp_path: Pat
 
 def test_sdk_constructor_rejects_unknown_provider_name(tmp_path: Path) -> None:
     with pytest.raises(SDKExecutionError, match="could not resolve SDK provider"):
-        Botlane(workspace=tmp_path, provider="not-a-provider")
+        Botpipe(workspace=tmp_path, provider="not-a-provider")
+
+
+def test_sdk_runs_namespace_lists_shows_and_resumes_durable_runs(tmp_path: Path) -> None:
+    client = _sdk_client_at_root(tmp_path, ScriptedLLMProvider(), retention=RetentionPolicy.keep_all())
+
+    with pytest.raises(InputRequired) as exc_info:
+        client.run(
+            _SDKPauseWorkflow,
+            "Ship it.",
+            input=_SDKPauseWorkflow.Input(topic="release"),
+            max_pauses=0,
+        )
+
+    partial = exc_info.value.partial
+    records = client.runs.list(task_id=partial.debug.task_id, status="awaiting_input")
+    shown = client.runs.show(_SDKPauseWorkflow, partial.debug.task_id)
+
+    assert [record.run_id for record in records] == [partial.debug.run_id]
+    assert shown.run_id == partial.debug.run_id
+    assert shown.awaiting_input is True
+    assert shown.resumable is True
+
+    resumed = client.runs.resume(_SDKPauseWorkflow, partial.debug.task_id, run_id=partial.debug.run_id)
+
+    assert resumed.debug.run_id == partial.debug.run_id
+    assert resumed.status == "awaiting_input"
+
+    answered = client.runs.resume(
+        _SDKPauseWorkflow,
+        partial.debug.task_id,
+        run_id=partial.debug.run_id,
+        answer={"approved": True},
+    )
+
+    assert answered.debug.run_id == partial.debug.run_id
+    assert answered.status == "completed"
+
+
+def test_sdk_runs_resume_reports_missing_and_non_resumable_runs(tmp_path: Path) -> None:
+    client = _sdk_client_at_root(tmp_path, ScriptedLLMProvider())
+    workflow_name = sdk_module._resolve_sdk_workflow_name(tmp_path, _SDKPauseWorkflow)
+    run_dir = _seed_durable_run_record(tmp_path, task_id="task-nonresumable", workflow_name=workflow_name)
+
+    with pytest.raises(SDKExecutionError, match="is not resumable"):
+        client.runs.resume(_SDKPauseWorkflow, "task-nonresumable", run_id=run_dir.name)
+
+    with pytest.raises(SDKExecutionError, match="no resumable run exists"):
+        client.runs.resume(_SDKPauseWorkflow, "task-missing")
+
+
+def test_sdk_runs_events_and_trace_iterate_existing_jsonl_records(tmp_path: Path) -> None:
+    client = _sdk_client_at_root(tmp_path, ScriptedLLMProvider(), retention=RetentionPolicy.keep_all())
+
+    with pytest.raises(InputRequired) as exc_info:
+        client.run(_SDKPauseWorkflow, "Ship it.", input={"topic": "release"}, max_pauses=0)
+
+    partial = exc_info.value.partial
+    events = asyncio.run(
+        _collect_async_records(client.runs.events(_SDKPauseWorkflow, partial.debug.task_id, run_id=partial.debug.run_id))
+    )
+    trace = asyncio.run(
+        _collect_async_records(client.runs.trace(_SDKPauseWorkflow, partial.debug.task_id, run_id=partial.debug.run_id))
+    )
+
+    assert events[0]["event_type"] == "run_started"
+    assert trace
+    assert "step_started" in {record["event_type"] for record in trace}
+
+
+def test_sdk_runs_events_follow_observes_appended_records(tmp_path: Path) -> None:
+    client = _sdk_client_at_root(tmp_path, ScriptedLLMProvider())
+    run_dir = _seed_durable_run_record(tmp_path, task_id="task-follow", run_id="run-follow")
+    events_file = run_dir / "events.jsonl"
+    events_file.write_text("", encoding="utf-8")
+
+    async def observe() -> dict[str, object]:
+        stream = client.runs.events("task-follow", follow=True, poll_interval=0.01)
+        pending = asyncio.create_task(anext(stream))
+        await asyncio.sleep(0.03)
+        with events_file.open("a", encoding="utf-8") as handle:
+            handle.write(json.dumps({"event_type": "appended"}) + "\n")
+        record = await asyncio.wait_for(pending, timeout=1)
+        await stream.aclose()
+        return record
+
+    assert asyncio.run(observe()) == {"event_type": "appended"}
+
+
+def test_sdk_runs_events_and_trace_handle_empty_missing_and_malformed_files(tmp_path: Path) -> None:
+    client = _sdk_client_at_root(tmp_path, ScriptedLLMProvider())
+    run_dir = _seed_durable_run_record(tmp_path, task_id="task-logs", run_id="run-logs")
+    events_file = run_dir / "events.jsonl"
+    trace_file = run_dir / "trace.jsonl"
+
+    events_file.write_text("", encoding="utf-8")
+    assert asyncio.run(_collect_async_records(client.runs.events("task-logs", run_id="run-logs"))) == []
+
+    trace_file.unlink()
+    with pytest.raises(SDKExecutionError, match="trace log is missing"):
+        asyncio.run(_collect_async_records(client.runs.trace("task-logs", run_id="run-logs")))
+
+    events_file.write_text("not-json\n", encoding="utf-8")
+    with pytest.raises(SDKExecutionError, match="malformed JSON"):
+        asyncio.run(_collect_async_records(client.runs.events("task-logs", run_id="run-logs")))
+
+
+def test_sdk_tasks_namespace_lists_durable_tasks(tmp_path: Path) -> None:
+    client = _sdk_client_at_root(tmp_path, ScriptedLLMProvider())
+    _seed_durable_run_record(tmp_path, task_id="task-one")
+    _seed_durable_run_record(tmp_path, task_id="task-two")
+
+    assert [record.task_id for record in client.tasks.list(task_ids=["task-one"])] == ["task-one"]
+    assert {record.task_id for record in client.tasks.list()} == {"task-one", "task-two"}
 
 
 def test_sdk_constructor_uses_workspace_and_rejects_root_keyword(tmp_path: Path) -> None:
-    client = Botlane(
+    client = Botpipe(
         workspace=tmp_path,
         provider=ScriptedLLMProvider(),
-        state_dir=tmp_path / ".botlane",
+        state_dir=tmp_path / ".botpipe",
         runtime_config=RuntimeConfig(git_tracking=GitTrackingRuntimeConfig(enabled=False, commit_policy="off")),
     )
 
     assert client.workspace == tmp_path.resolve()
-    assert client.state_dir == (tmp_path / ".botlane").resolve()
+    assert client.state_dir == (tmp_path / ".botpipe").resolve()
 
     with pytest.raises(TypeError, match="root"):
-        Botlane(root=tmp_path)  # type: ignore[call-arg]
+        Botpipe(root=tmp_path)  # type: ignore[call-arg]
 
 
 def test_sdk_constructor_rejects_invalid_default_policy_with_public_wording(tmp_path: Path) -> None:
@@ -892,11 +1095,11 @@ def test_sdk_constructor_rejects_invalid_default_policy_with_public_wording(tmp_
         TypeError,
         match=r"default_policy must be a Policy or core provider policy object, or None",
     ):
-        Botlane(
+        Botpipe(
             workspace=tmp_path,
             default_policy="ask",  # type: ignore[arg-type]
             provider=ScriptedLLMProvider(),
-            state_dir=tmp_path / ".botlane",
+            state_dir=tmp_path / ".botpipe",
             runtime_config=RuntimeConfig(
                 git_tracking=GitTrackingRuntimeConfig(enabled=False, commit_policy="off")
             ),
@@ -933,17 +1136,17 @@ def test_sdk_run_rejects_removed_typed_input_and_parameters_keywords(tmp_path: P
 
 
 def test_sdk_public_docstrings_encode_workspace_policy_and_runtime_behavior_contract() -> None:
-    init_doc = Botlane.__init__.__doc__
-    run_doc = Botlane.run.__doc__
-    step_doc = Botlane.step.__doc__
-    llm_doc = Botlane.llm.__doc__
-    classify_doc = Botlane.classify.__doc__
-    prompt_step_doc = Botlane.prompt_step.__doc__
-    workflow_step_doc = Botlane.workflow_step.__doc__
+    init_doc = Botpipe.__init__.__doc__
+    run_doc = Botpipe.run.__doc__
+    step_doc = Botpipe.step.__doc__
+    llm_doc = Botpipe.llm.__doc__
+    classify_doc = Botpipe.classify.__doc__
+    prompt_step_doc = Botpipe.prompt_step.__doc__
+    workflow_step_doc = Botpipe.workflow_step.__doc__
 
     assert init_doc is not None
     assert "actual project or repository working directory" in init_doc
-    assert "`.botlane` state directory" in init_doc
+    assert "`.botpipe` state directory" in init_doc
     assert "SDK client-level" in init_doc
     assert "not a hard security cap" in init_doc
 
@@ -979,34 +1182,34 @@ def test_sdk_public_docstrings_encode_workspace_policy_and_runtime_behavior_cont
 
 
 def test_sdk_public_exports_include_revised_sdk_surface() -> None:
-    assert botlane.Step is sdk_module.Step
-    assert botlane.PromptStep is PromptStep
-    assert botlane.ProduceVerifyStep is ProduceVerifyStep
-    assert botlane.PythonStep is PythonStep
-    assert botlane.ChildWorkflowStep is ChildWorkflowStep
-    assert botlane.ResultArtifact is ResultArtifact
-    assert botlane.RetentionPolicy is RetentionPolicy
-    assert botlane.RetentionInfo is sdk_module.RetentionInfo
-    assert botlane.CleanupResult is sdk_module.CleanupResult
+    assert botpipe.Step is sdk_module.Step
+    assert botpipe.PromptStep is PromptStep
+    assert botpipe.ProduceVerifyStep is ProduceVerifyStep
+    assert botpipe.PythonStep is PythonStep
+    assert botpipe.ChildWorkflowStep is ChildWorkflowStep
+    assert botpipe.ResultArtifact is ResultArtifact
+    assert botpipe.RetentionPolicy is RetentionPolicy
+    assert botpipe.RetentionInfo is sdk_module.RetentionInfo
+    assert botpipe.CleanupResult is sdk_module.CleanupResult
 
 
 def test_sdk_result_dataclasses_keep_positional_construction_compatibility(tmp_path: Path) -> None:
     debug = SDKDebugInfo(
         "sdk-demo",
         "run-1",
-        tmp_path / ".botlane" / "tasks" / "sdk-demo",
-        tmp_path / ".botlane" / "tasks" / "sdk-demo" / "workflow",
-        tmp_path / ".botlane" / "tasks" / "sdk-demo" / "workflow" / "runs" / "run-1",
-        tmp_path / ".botlane" / "tasks" / "sdk-demo" / "workflow" / "runs" / "run-1" / "events.jsonl",
-        tmp_path / ".botlane" / "tasks" / "sdk-demo" / "workflow" / "runs" / "run-1" / "trace.jsonl",
-        tmp_path / ".botlane" / "tasks" / "sdk-demo" / "workflow" / "runs" / "run-1" / "checkpoint.json",
+        tmp_path / ".botpipe" / "tasks" / "sdk-demo",
+        tmp_path / ".botpipe" / "tasks" / "sdk-demo" / "workflow",
+        tmp_path / ".botpipe" / "tasks" / "sdk-demo" / "workflow" / "runs" / "run-1",
+        tmp_path / ".botpipe" / "tasks" / "sdk-demo" / "workflow" / "runs" / "run-1" / "events.jsonl",
+        tmp_path / ".botpipe" / "tasks" / "sdk-demo" / "workflow" / "runs" / "run-1" / "trace.jsonl",
+        tmp_path / ".botpipe" / "tasks" / "sdk-demo" / "workflow" / "runs" / "run-1" / "checkpoint.json",
     )
     retention = sdk_module.RetentionInfo(
         RetentionPolicy.keep_all(),
         True,
         False,
         ("report",),
-        tmp_path / ".botlane" / "tasks" / "sdk-demo",
+        tmp_path / ".botpipe" / "tasks" / "sdk-demo",
     )
     workflow_result = WorkflowResult(
         True,
@@ -1123,10 +1326,10 @@ def test_sdk_step_result_value_stays_none_even_when_workflow_result_has_output(
         debug=SDKDebugInfo(
             task_id="sdk-noop",
             run_id="run-1",
-            task_dir=tmp_path / ".botlane" / "tasks" / "sdk-noop",
-            workflow_dir=tmp_path / ".botlane" / "tasks" / "sdk-noop" / "workflow",
-            run_dir=tmp_path / ".botlane" / "tasks" / "sdk-noop" / "runs" / "run-1",
-            events_file=tmp_path / ".botlane" / "tasks" / "sdk-noop" / "runs" / "run-1" / "events.jsonl",
+            task_dir=tmp_path / ".botpipe" / "tasks" / "sdk-noop",
+            workflow_dir=tmp_path / ".botpipe" / "tasks" / "sdk-noop" / "workflow",
+            run_dir=tmp_path / ".botpipe" / "tasks" / "sdk-noop" / "runs" / "run-1",
+            events_file=tmp_path / ".botpipe" / "tasks" / "sdk-noop" / "runs" / "run-1" / "events.jsonl",
             trace_file=None,
             checkpoint_file=None,
         ),
@@ -1165,7 +1368,7 @@ def test_sdk_helper_entrypoints_build_core_steps_and_delegate_to_client_step(
 
     assert (
         client.prompt_step(
-            "Prompt {input.message}",
+            "Prompt {{ message }}",
             "Ship it.",
             input=typed_input,
             name="prompt_helper",
@@ -1221,7 +1424,7 @@ def test_sdk_helper_entrypoints_build_core_steps_and_delegate_to_client_step(
     prompt_step, prompt_args, prompt_kwargs = captured[0]
     assert isinstance(prompt_step, PromptStep)
     assert prompt_step.name == "prompt_helper"
-    assert prompt_step.producer.text == "Prompt {input.message}"
+    assert prompt_step.producer.text == "Prompt {{ message }}"
     assert isinstance(prompt_step.retry_policy, ProviderRetryPolicy)
     assert prompt_step.retry_policy.max_attempts == 5
     assert isinstance(prompt_step.provider_policy, Policy)
@@ -1277,7 +1480,7 @@ def test_sdk_helper_entrypoints_build_core_steps_and_delegate_to_client_step(
 def test_sdk_run_default_retention_promotes_task_local_declared_writes_and_keeps_workspace_writes(tmp_path: Path) -> None:
     client = _sdk_client_at_root(tmp_path, ScriptedLLMProvider())
     workspace_output = tmp_path / "workspace-output.txt"
-    task_local_artifact = simple.Text("task_local", path="{task_folder}/exports/report.txt")
+    task_local_artifact = simple.Text("task_local", path="{{ task.folder }}/exports/report.txt")
     workspace_artifact = simple.Text("workspace", path=workspace_output)
 
     class RetentionWorkflow(simple.Workflow):
@@ -1308,7 +1511,7 @@ def test_sdk_run_default_retention_promotes_task_local_declared_writes_and_keeps
 
 def test_sdk_step_default_retention_deletes_task_scratch_on_success(tmp_path: Path) -> None:
     client = _sdk_client_at_root(tmp_path, ScriptedLLMProvider())
-    report = simple.Text("report", path="{task_folder}/report.txt")
+    report = simple.Text("report", path="{{ task.folder }}/report.txt")
 
     declaration = simple.python_step(
         lambda ctx: (ctx.artifacts.report.write_text("from-step"), Event("done"))[1],
@@ -1327,7 +1530,7 @@ def test_sdk_step_default_retention_deletes_task_scratch_on_success(tmp_path: Pa
 
 def test_sdk_run_retention_keep_all_and_ephemeral_modes(tmp_path: Path) -> None:
     workspace_output = tmp_path / "workspace-output.txt"
-    task_local_artifact = simple.Text("task_local", path="{task_folder}/exports/report.txt")
+    task_local_artifact = simple.Text("task_local", path="{{ task.folder }}/exports/report.txt")
     workspace_artifact = simple.Text("workspace", path=workspace_output)
 
     class RetentionWorkflow(simple.Workflow):
@@ -1361,7 +1564,7 @@ def test_sdk_run_retention_keep_all_and_ephemeral_modes(tmp_path: Path) -> None:
 
 def test_sdk_run_custom_promoted_writes_dir_uniquifies_collisions(tmp_path: Path) -> None:
     shared_promotions = tmp_path / "shared-promotions"
-    task_local_artifact = simple.Text("task_local", path="{task_folder}/exports/report.txt")
+    task_local_artifact = simple.Text("task_local", path="{{ task.folder }}/exports/report.txt")
 
     class RetentionWorkflow(simple.Workflow):
         task_local = task_local_artifact
@@ -1423,7 +1626,7 @@ def test_sdk_run_too_many_pauses_keeps_task_scratch_by_default(tmp_path: Path) -
 
 def test_sdk_cleanup_only_targets_valid_completed_sdk_task_directories(tmp_path: Path) -> None:
     client = _sdk_client_at_root(tmp_path, ScriptedLLMProvider())
-    tasks_root = tmp_path / ".botlane" / "tasks"
+    tasks_root = tmp_path / ".botpipe" / "tasks"
     valid = tasks_root / "sdk-completed"
     failed = tasks_root / "sdk-failed"
     invalid = tasks_root / "manual-task"
@@ -1431,13 +1634,13 @@ def test_sdk_cleanup_only_targets_valid_completed_sdk_task_directories(tmp_path:
     def seed_task(task_dir: Path, *, status: str, terminal: str, task_id: str | None = None) -> None:
         task_dir.mkdir(parents=True, exist_ok=True)
         sentinel = {
-            "schema": "botlane.sdk_task/v1",
-            "generated_by": "botlane.sdk",
+            "schema": "botpipe.sdk_task/v1",
+            "generated_by": "botpipe.sdk",
             "task_id": task_id or task_dir.name,
             "created_at": "2026-05-01T00:00:00Z",
             "retention_mode": "delete_task_scratch",
         }
-        (task_dir / ".botlane-sdk-task.json").write_text(json.dumps(sentinel) + "\n", encoding="utf-8")
+        (task_dir / ".botpipe-sdk-task.json").write_text(json.dumps(sentinel) + "\n", encoding="utf-8")
         run_dir = task_dir / "wf_test" / "runs" / "run-1"
         run_dir.mkdir(parents=True, exist_ok=True)
         (run_dir / "run.json").write_text(json.dumps({"status": status, "terminal": terminal}) + "\n", encoding="utf-8")
@@ -1446,7 +1649,7 @@ def test_sdk_cleanup_only_targets_valid_completed_sdk_task_directories(tmp_path:
     seed_task(failed, status="failed", terminal=FAIL)
     invalid.mkdir(parents=True, exist_ok=True)
 
-    dry_run = client.cleanup(dry_run=True)
+    dry_run = client.tasks.cleanup(dry_run=True)
 
     assert valid in dry_run.deleted
     assert failed in dry_run.skipped
@@ -1463,7 +1666,7 @@ def test_sdk_cleanup_only_targets_valid_completed_sdk_task_directories(tmp_path:
 
 def test_sdk_cleanup_honors_older_than_and_include_failed_opt_in(tmp_path: Path) -> None:
     client = _sdk_client_at_root(tmp_path, ScriptedLLMProvider())
-    tasks_root = tmp_path / ".botlane" / "tasks"
+    tasks_root = tmp_path / ".botpipe" / "tasks"
     old_completed = tasks_root / "sdk-old-completed"
     new_completed = tasks_root / "sdk-new-completed"
     old_failed = tasks_root / "sdk-old-failed"
@@ -1471,11 +1674,11 @@ def test_sdk_cleanup_honors_older_than_and_include_failed_opt_in(tmp_path: Path)
 
     def seed_task(task_dir: Path, *, status: str, terminal: str, created_at: str) -> None:
         task_dir.mkdir(parents=True, exist_ok=True)
-        (task_dir / ".botlane-sdk-task.json").write_text(
+        (task_dir / ".botpipe-sdk-task.json").write_text(
             json.dumps(
                 {
-                    "schema": "botlane.sdk_task/v1",
-                    "generated_by": "botlane.sdk",
+                    "schema": "botpipe.sdk_task/v1",
+                    "generated_by": "botpipe.sdk",
                     "task_id": task_dir.name,
                     "created_at": created_at,
                     "retention_mode": "delete_task_scratch",
@@ -1507,7 +1710,7 @@ def test_sdk_cleanup_honors_older_than_and_include_failed_opt_in(tmp_path: Path)
         created_at=(now - timedelta(days=10)).strftime("%Y-%m-%dT%H:%M:%SZ"),
     )
 
-    dry_run = client.cleanup(older_than=timedelta(days=2), dry_run=True)
+    dry_run = client.tasks.cleanup(older_than=timedelta(days=2), dry_run=True)
 
     assert old_completed in dry_run.deleted
     assert new_completed in dry_run.skipped
@@ -1516,7 +1719,7 @@ def test_sdk_cleanup_honors_older_than_and_include_failed_opt_in(tmp_path: Path)
     assert new_completed.exists()
     assert old_failed.exists()
 
-    result = client.cleanup(older_than=timedelta(days=2), include_failed=True)
+    result = client.tasks.cleanup(older_than=timedelta(days=2), include_failed=True)
 
     assert old_completed in result.deleted
     assert old_failed in result.deleted
@@ -1527,37 +1730,40 @@ def test_sdk_cleanup_honors_older_than_and_include_failed_opt_in(tmp_path: Path)
 
 
 def test_sdk_task_sentinel_identity_stays_canonical(tmp_path: Path) -> None:
-    task_dir = tmp_path / ".botlane" / "tasks" / "sdk-demo"
+    task_dir = tmp_path / ".botpipe" / "tasks" / "sdk-demo"
+    default_policy = RetentionPolicy.sdk_default()
 
     sdk_module._write_sdk_task_sentinel(
         task_dir=task_dir,
         task_id="sdk-demo",
-        policy=RetentionPolicy.sdk_default(),
+        policy=default_policy,
     )
 
     sentinel = sdk_module._sdk_task_sentinel_path(task_dir)
     payload = json.loads(sentinel.read_text(encoding="utf-8"))
 
-    assert sdk_module.SDK_TASK_SENTINEL_FILENAME == ".botlane-sdk-task.json"
-    assert sentinel == task_dir / ".botlane-sdk-task.json"
-    assert sentinel.parent == tmp_path / ".botlane" / "tasks" / "sdk-demo"
-    assert payload["schema"] == "botlane.sdk_task/v1"
-    assert payload["generated_by"] == "botlane.sdk"
+    assert sdk_module.SDK_TASK_SENTINEL_FILENAME == ".botpipe-sdk-task.json"
+    assert sentinel == task_dir / ".botpipe-sdk-task.json"
+    assert sentinel.parent == tmp_path / ".botpipe" / "tasks" / "sdk-demo"
+    assert payload["schema"] == "botpipe.sdk_task/v1"
+    assert payload["generated_by"] == "botpipe.sdk"
     assert payload["task_id"] == "sdk-demo"
+    assert RetentionPolicy().mode == "delete_task_scratch"
+    assert default_policy.mode == "delete_task_scratch"
     assert payload["retention_mode"] == "delete_task_scratch"
 
 
 def test_safe_delete_sdk_task_dir_refuses_unsafe_candidates(tmp_path: Path) -> None:
-    tasks_root = tmp_path / ".botlane" / "tasks"
+    tasks_root = tmp_path / ".botpipe" / "tasks"
     tasks_root.mkdir(parents=True, exist_ok=True)
 
     non_sdk = tasks_root / "manual-task"
     non_sdk.mkdir()
-    (non_sdk / ".botlane-sdk-task.json").write_text(
+    (non_sdk / ".botpipe-sdk-task.json").write_text(
         json.dumps(
             {
-                "schema": "botlane.sdk_task/v1",
-                "generated_by": "botlane.sdk",
+                "schema": "botpipe.sdk_task/v1",
+                "generated_by": "botpipe.sdk",
                 "task_id": "manual-task",
             }
         )
@@ -1574,11 +1780,11 @@ def test_safe_delete_sdk_task_dir_refuses_unsafe_candidates(tmp_path: Path) -> N
 
     mismatched = tasks_root / "sdk-mismatched"
     mismatched.mkdir()
-    (mismatched / ".botlane-sdk-task.json").write_text(
+    (mismatched / ".botpipe-sdk-task.json").write_text(
         json.dumps(
             {
-                "schema": "botlane.sdk_task/v1",
-                "generated_by": "botlane.sdk",
+                "schema": "botpipe.sdk_task/v1",
+                "generated_by": "botpipe.sdk",
                 "task_id": "sdk-other",
             }
         )
@@ -1590,11 +1796,11 @@ def test_safe_delete_sdk_task_dir_refuses_unsafe_candidates(tmp_path: Path) -> N
 
     wrong_schema = tasks_root / "sdk-wrong-schema"
     wrong_schema.mkdir()
-    (wrong_schema / ".botlane-sdk-task.json").write_text(
+    (wrong_schema / ".botpipe-sdk-task.json").write_text(
         json.dumps(
             {
-                "schema": "botlane.sdk_task/v0",
-                "generated_by": "botlane.sdk",
+                "schema": "botpipe.sdk_task/v0",
+                "generated_by": "botpipe.sdk",
                 "task_id": "sdk-wrong-schema",
             }
         )
@@ -1606,10 +1812,10 @@ def test_safe_delete_sdk_task_dir_refuses_unsafe_candidates(tmp_path: Path) -> N
 
     wrong_owner = tasks_root / "sdk-wrong-owner"
     wrong_owner.mkdir()
-    (wrong_owner / ".botlane-sdk-task.json").write_text(
+    (wrong_owner / ".botpipe-sdk-task.json").write_text(
         json.dumps(
             {
-                "schema": "botlane.sdk_task/v1",
+                "schema": "botpipe.sdk_task/v1",
                 "generated_by": "someone-else",
                 "task_id": "sdk-wrong-owner",
             }
@@ -1622,11 +1828,11 @@ def test_safe_delete_sdk_task_dir_refuses_unsafe_candidates(tmp_path: Path) -> N
 
     outside = tmp_path / "sdk-outside"
     outside.mkdir()
-    (outside / ".botlane-sdk-task.json").write_text(
+    (outside / ".botpipe-sdk-task.json").write_text(
         json.dumps(
             {
-                "schema": "botlane.sdk_task/v1",
-                "generated_by": "botlane.sdk",
+                "schema": "botpipe.sdk_task/v1",
+                "generated_by": "botpipe.sdk",
                 "task_id": "sdk-outside",
             }
         )
@@ -1637,7 +1843,7 @@ def test_safe_delete_sdk_task_dir_refuses_unsafe_candidates(tmp_path: Path) -> N
         sdk_module._safe_delete_sdk_task_dir(task_dir=outside, task_id="sdk-outside", tasks_root=tasks_root)
 
 
-def test_sdk_runtime_prompt_rendering_supports_input_and_ctx_message(tmp_path: Path) -> None:
+def test_sdk_runtime_prompt_rendering_supports_input_and_message(tmp_path: Path) -> None:
     seen: list[str] = []
 
     def record_prompt(request):
@@ -1647,9 +1853,9 @@ def test_sdk_runtime_prompt_rendering_supports_input_and_ctx_message(tmp_path: P
     provider = ScriptedLLMProvider(llm_turns=[record_prompt, record_prompt, record_prompt])
     client = _sdk_client(tmp_path, provider)
 
-    client.step(simple.step("Echo {input.message}", name="echo_input"), "hello")
-    client.step(simple.step("Echo {ctx.message}", name="echo_ctx"), "hello")
-    client.prompt_step("Echo {input.topic} / {input.message}", "hello", input=_SDKTypedInput(topic="Acme"))
+    client.step(simple.step("Echo {{ message }}", name="echo_message"), "hello")
+    client.step(simple.step("Echo {{ request.text }}", name="echo_request"), "hello")
+    client.prompt_step("Echo {{ input.topic }} / {{ message }}", "hello", input=_SDKTypedInput(topic="Acme"))
 
     assert seen == ["Echo hello", "Echo hello", "Echo Acme / hello"]
 
@@ -1657,8 +1863,8 @@ def test_sdk_runtime_prompt_rendering_supports_input_and_ctx_message(tmp_path: P
 def test_sdk_prompt_step_missing_input_field_fails_clearly(tmp_path: Path) -> None:
     client = _sdk_client(tmp_path, ScriptedLLMProvider())
 
-    with pytest.raises(SDKExecutionError, match=r"\{input\.customer\} requires workflow input"):
-        client.prompt_step("Echo {input.customer}", "hello")
+    with pytest.raises(SDKExecutionError, match=r"undefined Jinja value: .*input"):
+        client.prompt_step("Echo {{ input.customer }}", "hello")
 
 
 def test_sdk_prompt_step_preserves_explicit_self_routes(tmp_path: Path) -> None:
@@ -1692,7 +1898,7 @@ def test_sdk_produce_verify_step_defaults_to_rework_self_loop(tmp_path: Path) ->
     client = _sdk_client(tmp_path, provider)
 
     result = client.produce_verify_step(
-        producer="Draft {input.message}",
+        producer="Draft {{ message }}",
         verifier="Review draft.",
         message="hello",
     )
@@ -1704,7 +1910,7 @@ def test_sdk_produce_verify_step_defaults_to_rework_self_loop(tmp_path: Path) ->
 
 def test_sdk_python_step_helper_executes_and_honors_retention_override(tmp_path: Path) -> None:
     client = _sdk_client_at_root(tmp_path, ScriptedLLMProvider())
-    report = simple.Text("report", path="{task_folder}/report.txt")
+    report = simple.Text("report", path="{{ task.folder }}/report.txt")
     retention = RetentionPolicy.keep_all()
 
     result = client.python_step(
@@ -1743,7 +1949,7 @@ def test_sdk_workflow_step_renders_child_message_with_input_placeholders(tmp_pat
         ChildWorkflow,
         "outer-message",
         input=_SDKTypedInput(topic="Acme"),
-        child_message="Child {input.topic} / {input.message}",
+        child_message="Child {{ input.topic }} / {{ message }}",
     )
 
     assert result.ok is True

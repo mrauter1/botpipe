@@ -1,12 +1,12 @@
 from __future__ import annotations
 
-import botlane.simple as simple
+import botpipe.simple as simple
 import pytest
 
-from botlane.core.artifact_plan import ArtifactSpec
-from botlane.core.compiler import compile_workflow
-from botlane.core.identifiers import ArtifactId
-from botlane.core.step_plans import ExternalRead, FanInRead
+from botpipe.core.artifact_plan import ArtifactSpec
+from botpipe.core.compiler import compile_workflow
+from botpipe.core.identifiers import ArtifactId
+from botpipe.core.step_plans import ExternalRead, FanInRead
 
 
 def test_artifact_id_accepts_workflow_and_step_variants() -> None:
@@ -73,7 +73,7 @@ def test_step_io_reference_types_use_artifact_ids_and_fan_in_helpers() -> None:
         review = simple.parallel(
             branches={"security": simple.step("Review.", name="security_review", session=simple.Session.fresh())},
             fan_in=simple.step(
-                "Summarize {fan_in.context_text}.",
+                "Summarize {{ fan_in.context_text }}.",
                 name="combine_reviews",
                 reads=[simple.FanIn.results()],
                 requires=[simple.FanIn.context()],

@@ -2,8 +2,8 @@ from __future__ import annotations
 
 from pydantic import BaseModel
 
-from botlane.core import AWAIT_INPUT, Artifact, FAIL, FINISH, GLOBAL, Session, Workflow
-from botlane.core.steps import PromptStep, PythonStep
+from botpipe.core import AWAIT_INPUT, Artifact, FAIL, FINISH, GLOBAL, Session, Workflow
+from botpipe.core.steps import PromptStep, PythonStep
 
 
 def _open_orbit(ctx) -> None:
@@ -29,9 +29,9 @@ class ToyRuntimeWorkflow(Workflow):
 
     orbit = Session()
 
-    request = Artifact("{task_folder}/request.md")
-    notes = Artifact("{task_folder}/toy/notes.md")
-    transcript = Artifact("{run_folder}/toy_transcript.log")
+    request = Artifact("{{ task.folder }}/request.md")
+    notes = Artifact("{{ task.folder }}/toy/notes.md")
+    transcript = Artifact("{{ run.folder }}/toy_transcript.log")
 
     survey = PromptStep(
         name="survey",

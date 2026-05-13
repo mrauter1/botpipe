@@ -4,22 +4,22 @@ from pathlib import Path
 
 from pydantic import BaseModel
 
-import botlane.simple as simple
-from botlane.core.compiler import compile_workflow
-from botlane.core.context import Context
-from botlane.core.engine import Engine
-from botlane.core.provider_policy import PermissionPolicy, ProviderPolicy, ProviderPolicyOverride
-from botlane.core.provider_policy_resolution import ProviderPolicyResolverProtocol
-from botlane.core.providers.fake import ScriptedLLMProvider
-from botlane.core.stores import InMemoryCheckpointStore, InMemorySessionStore
-from botlane.runtime.config import (
+import botpipe.simple as simple
+from botpipe.core.compiler import compile_workflow
+from botpipe.core.context import Context
+from botpipe.core.engine import Engine
+from botpipe.core.provider_policy import PermissionPolicy, ProviderPolicy, ProviderPolicyOverride
+from botpipe.core.provider_policy_resolution import ProviderPolicyResolverProtocol
+from botpipe.core.providers.fake import ScriptedLLMProvider
+from botpipe.core.stores import InMemoryCheckpointStore, InMemorySessionStore
+from botpipe.runtime.config import (
     GitTrackingRuntimeConfig,
     ProviderConfig,
     ProviderPolicyRuntimeConfig,
     ResolvedRuntimeConfig,
     RuntimeConfig,
 )
-from botlane.runtime.provider_policy_resolver import ProviderPolicyResolver
+from botpipe.runtime.provider_policy_resolver import ProviderPolicyResolver
 
 
 class _State(BaseModel):

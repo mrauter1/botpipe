@@ -5,10 +5,10 @@ from pathlib import Path
 
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
-CORE_ROOT = REPO_ROOT / "botlane" / "core"
+CORE_ROOT = REPO_ROOT / "botpipe" / "core"
 
 
-def test_botlane_core_has_no_runtime_imports_outside_type_checking() -> None:
+def test_botpipe_core_has_no_runtime_imports_outside_type_checking() -> None:
     violations: list[str] = []
     for path in sorted(CORE_ROOT.rglob("*.py")):
         tree = ast.parse(path.read_text(encoding="utf-8"), filename=str(path))
@@ -31,11 +31,11 @@ def _runtime_import_violations(tree: ast.AST, path: Path) -> list[str]:
         if not in_type_checking:
             if isinstance(node, ast.Import):
                 for alias in node.names:
-                    if alias.name == "botlane.runtime" or alias.name.startswith("botlane.runtime."):
+                    if alias.name == "botpipe.runtime" or alias.name.startswith("botpipe.runtime."):
                         violations.append(f"{path.relative_to(REPO_ROOT)} imports {alias.name}")
             elif isinstance(node, ast.ImportFrom):
                 module = node.module or ""
-                if module == "botlane.runtime" or module.startswith("botlane.runtime."):
+                if module == "botpipe.runtime" or module.startswith("botpipe.runtime."):
                     violations.append(f"{path.relative_to(REPO_ROOT)} imports from {module}")
                 elif node.level >= 1 and (module == "runtime" or module.startswith("runtime.")):
                     violations.append(

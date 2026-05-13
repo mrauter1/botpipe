@@ -8,23 +8,23 @@
 - Why it matters: once the portfolio can build workflows, adapt them, and author evaluation suites, the next missing layer is the consumer that turns evidence into controlled package improvements.
 - Likely sponsors: engineering productivity, workflow maintainers, AI platform owners, QA and reliability leads, and recursive portfolio operators.
 - Classification: reusable workflow building block.
-- Why Botlane fits: the work needs durable baseline and candidate artifacts, verifier-gated rework loops, explicit promotion and rollback evidence, and deterministic publication-side validation.
+- Why Botpipe fits: the work needs durable baseline and candidate artifacts, verifier-gated rework loops, explicit promotion and rollback evidence, and deterministic publication-side validation.
 - Why one-shot is insufficient: credible refinement needs baseline capture, accepted framing, file-level planning, candidate implementation, verification artifacts, and publish-time validation that the authoritative selected workflow stayed untouched.
 
 ## Invocation
 
-- Package path: `botlane/workflows/workflow_and_eval_to_refined_workflow_package/`
-- Discovery: `botlane workflows show workflow_and_eval_to_refined_workflow_package`
+- Package path: `botpipe/workflows/workflow_and_eval_to_refined_workflow_package/`
+- Discovery: `botpipe workflows show workflow_and_eval_to_refined_workflow_package`
 - Direct run:
 
 ```bash
-botlane run workflow_and_eval_to_refined_workflow_package <task-id> \
+botpipe run workflow_and_eval_to_refined_workflow_package <task-id> \
   --message "Refine the release go/no-go workflow from the latest evaluation evidence." \
   -wf selected_workflow release_candidate_to_go_no_go \
   -wf task_title "Release go/no-go refinement from evaluation evidence" \
-  -wf evaluation_summary_path .botlane/evals/release_go_no_go_eval_summary.json \
-  -wf evaluation_findings_path .botlane/evals/release_go_no_go_eval_findings.md \
-  -wf failure_modes_path .botlane/evals/release_go_no_go_failure_modes.md \
+  -wf evaluation_summary_path .botpipe/evals/release_go_no_go_eval_summary.json \
+  -wf evaluation_findings_path .botpipe/evals/release_go_no_go_eval_findings.md \
+  -wf failure_modes_path .botpipe/evals/release_go_no_go_failure_modes.md \
   -wf sponsor_role "engineering productivity" \
   -wf desired_outcome "Publish a verified refinement candidate package and promotion bundle for the selected workflow." \
   -wf constraints "Keep runtime control narrow, preserve explicit baseline/candidate separation, and stop before promotion." \
@@ -232,8 +232,8 @@ Payload models used by the package:
 
 ## Evidence
 
-- Package implementation: `botlane/workflows/workflow_and_eval_to_refined_workflow_package/`
+- Package implementation: `botpipe/workflows/workflow_and_eval_to_refined_workflow_package/`
 - Shared refinement seam consumed: `stdlib/refinement.py`
-- Workflow asset: `botlane/workflows/workflow_and_eval_to_refined_workflow_package/assets/refinement_package_checklist.md`
+- Workflow asset: `botpipe/workflows/workflow_and_eval_to_refined_workflow_package/assets/refinement_package_checklist.md`
 - Workflow-specific proof: `tests/runtime/test_workflow_and_eval_to_refined_workflow_package.py`
 - The scripted tests prove workflow discovery, compilation, prompt contract markers, terminal publication, isolated overlay validation, and publish-side rejection of boundary and evidence drift cases.

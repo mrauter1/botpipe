@@ -7,8 +7,8 @@ import subprocess
 
 import pytest
 
-from botlane.core.errors import ProviderExecutionError
-from botlane.core.provider_policy import (
+from botpipe.core.errors import ProviderExecutionError
+from botpipe.core.provider_policy import (
     PermissionPolicy,
     ProviderPolicy,
     ProviderPolicyValidationConfig,
@@ -16,13 +16,13 @@ from botlane.core.provider_policy import (
     WorkspaceFilesystemPolicy,
     WorkspacePolicy,
 )
-from botlane.core.prompts import ResolvedPrompt
-from botlane.core.providers.models import LLMRequest, ProducerRequest, TokenUsage, VerifierRequest
-from botlane.core.providers.parsing import parse_outcome_json
-from botlane.core.providers.rendered import RenderedLLMProvider
-from botlane.core.providers.turns import RenderedProviderTurn
-from botlane.core.stores.protocols import SessionBinding
-from botlane.runtime.config import (
+from botpipe.core.prompts import ResolvedPrompt
+from botpipe.core.providers.models import LLMRequest, ProducerRequest, TokenUsage, VerifierRequest
+from botpipe.core.providers.parsing import parse_outcome_json
+from botpipe.core.providers.rendered import RenderedLLMProvider
+from botpipe.core.providers.turns import RenderedProviderTurn
+from botpipe.core.stores.protocols import SessionBinding
+from botpipe.runtime.config import (
     ClaudeProviderConfig,
     CodexProviderConfig,
     ConfigError,
@@ -30,7 +30,7 @@ from botlane.runtime.config import (
     ResolvedRuntimeConfig,
     RuntimeConfig,
 )
-from botlane.runtime.providers._common import (
+from botpipe.runtime.providers._common import (
     build_session_binding,
     communicate_text_subprocess,
     ensure_session_provider_match,
@@ -38,22 +38,22 @@ from botlane.runtime.providers._common import (
     require_prompt_text,
     terminate_text_subprocess,
 )
-from botlane.runtime.providers.claude import (
+from botpipe.runtime.providers.claude import (
     ClaudeTransport,
     claude_permission_args,
     parse_claude_exec_json,
     verify_claude_code_capabilities,
 )
-from botlane.runtime.providers.claude_policy import ClaudeCapabilities
-import botlane.runtime.providers.claude as claude_runtime_provider
-from botlane.runtime.providers.codex import (
+from botpipe.runtime.providers.claude_policy import ClaudeCapabilities
+import botpipe.runtime.providers.claude as claude_runtime_provider
+from botpipe.runtime.providers.codex import (
     CodexCLICommand,
     CodexTransport,
     resolve_codex_cli_commands,
     parse_codex_exec_json,
     verify_codex_exec_capabilities,
 )
-import botlane.runtime.providers.codex as codex_runtime_provider
+import botpipe.runtime.providers.codex as codex_runtime_provider
 
 
 CODEX_START_HELP = "--json\n-m, --model <MODEL>\n--dangerously-bypass-approvals-and-sandbox\n"

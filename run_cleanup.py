@@ -5,9 +5,9 @@ from dataclasses import replace
 from pathlib import Path
 from typing import Any, Sequence
 
-from botlane import Botlane, Policy
-from botlane.runtime.config import resolve_runtime_config
-from workflows.botlane_cleanup_workflow import BotlaneCyclicalCleanupWorkflow
+from botpipe import Botpipe, Policy
+from botpipe.runtime.config import resolve_runtime_config
+from workflows.botpipe_cleanup_workflow import BotpipeCyclicalCleanupWorkflow
 
 
 def _csv_or_repeated(values: Sequence[str] | None) -> tuple[str, ...] | None:
@@ -65,9 +65,57 @@ def _print_result_summary(result: Any, *, workspace: Path) -> None:
             print("error:", error)
 
 
+def _impact_cleanup_note(*, target_loc_delta: int) -> str:
+    return (
+        "Impact-oriented cleanup preference:\n"
+        f"- Treat {target_loc_delta}+ production LOC reduction as a soft planning "
+        "target for an ordinary cleanup batch, not as an audit gate.\n"
+        "- Audit acceptance only requires an actual net production LOC decrease "
+        "when production LOC decrease is required, plus preserved behavior and "
+        "quality gates.\n"
+        "- When multiple safe batches are available, select the one with the larger "
+        "expected production LOC decrease and stronger conceptual simplification.\n"
+        f"- A batch below {target_loc_delta} production LOC is acceptable only when it "
+        "still decreases production LOC and materially reduces framework "
+        "ownership/representation bloat, is required to unblock a larger cleanup, "
+        "or no larger safe target exists.\n"
+        "- Small dead-code and stale-helper cleanup is still welcome, but it should be "
+        "batched with the larger coherent seam when it is adjacent or covered by the "
+        "same behavior locks.\n"
+        "- Do not select isolated helper shaving as the whole batch unless no "
+        "higher-impact bloat target is safe under the current scope, policy, and tests.\n"
+        "- Rank candidates by conceptual simplification, production LOC reduction, "
+        "duplicate-representation removal, ownership-boundary clarity, and testability.\n"
+        "- Treat these as first-class high-impact targets when present: "
+        "Engine/execution_runtime_services ownership overlap, execution_services seam, "
+        "Context private-mutator coupling, engine-private test coupling, duplicate "
+        "route or legacy normalization paths, and repeated parser/renderer/validator "
+        "representations.\n"
+        "- If a high-impact seam is too large for one cycle, choose a coherent sub-batch "
+        "inside that seam and include nearby small dead-code cleanup in the same files "
+        "when safe.\n"
+        "- If the selected batch is low-impact, explicitly explain in the plan why each "
+        "higher-impact target was unsafe, blocked, or outside scope."
+    )
+
+
+def _combined_notes(*, target_loc_delta: int, user_notes: str) -> str:
+    repeat_note = (
+        "Runner repeat behavior: run_cleanup.py does not impose a cleanup-cycle "
+        "or max_steps-derived stop condition. Continue audit-driven cycles until "
+        "the audit reports no remaining cleanup gaps, asks for human input, or "
+        "the runtime itself terminates."
+    )
+    notes = [repeat_note, _impact_cleanup_note(target_loc_delta=target_loc_delta)]
+    stripped_user_notes = user_notes.strip()
+    if stripped_user_notes:
+        notes.append(stripped_user_notes)
+    return "\n\n".join(notes)
+
+
 def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(
-        description="Run the Botlane cyclical cleanup workflow from source.",
+        description="Run the Botpipe cyclical cleanup workflow from source.",
     )
 
     parser.add_argument(
@@ -88,23 +136,36 @@ def build_parser() -> argparse.ArgumentParser:
     )
     parser.add_argument(
         "--scope",
-        default="botlane/core",
-        help="Cleanup scope. Default: botlane/core.",
+        default="botpipe/core",
+        help="Cleanup scope. Default: botpipe/core.",
     )
     parser.add_argument(
         "--cycles",
         type=int,
         default=3,
         help=(
-            "Maximum cleanup cycles to budget. The workflow has 3 executable "
-            "steps per cycle, so max_steps is cycles * 3. Default: 3."
+            "Compatibility option retained for existing scripts. It no longer "
+            "caps cleanup cycles or maps to max_steps; the workflow repeats from "
+            "audit until no gaps remain, human input is required, or the runtime "
+            "terminates. Default: 3."
         ),
     )
     parser.add_argument(
         "--batch-size",
         choices=("small", "medium", "large"),
-        default="small",
-        help="Cleanup batch size. Default: small.",
+        default="medium",
+        help="Cleanup batch size. Default: medium.",
+    )
+    parser.add_argument(
+        "--target-production-loc-delta",
+        type=int,
+        default=150,
+        help=(
+            "Soft planning target for production LOC reduction per cleanup batch. "
+            "Audit acceptance only requires actual net production LOC decrease; "
+            "small dead-code cleanup remains allowed, but should be bundled with "
+            "higher-impact seams and larger reductions when safe. Default: 150."
+        ),
     )
     parser.add_argument(
         "--allow-read",
@@ -112,7 +173,7 @@ def build_parser() -> argparse.ArgumentParser:
         default=None,
         help=(
             "Optional read root. Can be repeated or comma-separated. "
-            "If omitted, Botlane defaults to allow_read='.'."
+            "If omitted, Botpipe defaults to allow_read='.'."
         ),
     )
     parser.add_argument(
@@ -121,7 +182,7 @@ def build_parser() -> argparse.ArgumentParser:
         default=None,
         help=(
             "Optional write root. Can be repeated or comma-separated. "
-            "If omitted, Botlane defaults to allow_write='.'."
+            "If omitted, Botpipe defaults to allow_write='.'."
         ),
     )
     parser.add_argument(
@@ -136,11 +197,10 @@ def build_parser() -> argparse.ArgumentParser:
 def main() -> int:
     args = build_parser().parse_args()
 
-    if args.cycles < 1:
-        raise ValueError("--cycles must be >= 1")
+    if args.target_production_loc_delta < 1:
+        raise ValueError("--target-production-loc-delta must be >= 1")
 
     workspace = Path(args.workspace).expanduser().resolve()
-    max_steps = args.cycles * 3
 
     allow_read = _csv_or_repeated(args.allow_read)
     allow_write = _csv_or_repeated(args.allow_write)
@@ -163,7 +223,7 @@ def main() -> int:
             },
         )
 
-    client = Botlane(
+    client = Botpipe(
         workspace=workspace,
         provider=args.provider,
         model=args.model,
@@ -178,27 +238,32 @@ def main() -> int:
             allow_write=allow_write,
         )
 
-    notes = args.notes.strip()
-    cycle_note = (
-        f"Runner cycle budget: {args.cycles} cleanup cycle(s), "
-        f"mapped to max_steps={max_steps}. "
-        "Each normal cycle has analyze/plan, implement/verify, and audit/decide."
+    combined_notes = _combined_notes(
+        target_loc_delta=args.target_production_loc_delta,
+        user_notes=args.notes,
     )
-    combined_notes = f"{cycle_note}\n\n{notes}" if notes else cycle_note
 
     run_kwargs = {}
     if policy is not None:
         run_kwargs["policy"] = policy
 
     result = client.run(
-        BotlaneCyclicalCleanupWorkflow,
+        BotpipeCyclicalCleanupWorkflow,
         message=(
-            "Run the Botlane cyclical cleanup workflow. "
-            "Start with measurement and planning. Implement only the approved cleanup batch. "
-            "Repeat only while the audit routes repeat and the step budget allows it."
+            "Run the Botpipe cyclical cleanup workflow. "
+            "Start with measurement and planning. Prefer high-impact cleanup batches "
+            "that can also absorb adjacent small dead-code cleanup. "
+            "Implement only the approved cleanup batch. "
+            "Repeat while the audit routes repeat and stop only when the audit "
+            "finds no remaining gaps or asks for human input."
         ),
         input={
             "scope": args.scope,
+            "cleanup_goal": (
+                "Reduce high-impact framework bloat and conceptual ownership overlap. "
+                "Batch nearby small dead-code cleanup with larger coherent changes "
+                "when safe, without changing public SDK/simple behavior."
+            ),
             "max_cleanup_batch_size": args.batch_size,
             "require_production_loc_decrease": True,
             "allow_test_loc_increase": True,
@@ -207,7 +272,6 @@ def main() -> int:
             "require_taste_not_decrease": True,
             "notes": combined_notes,
         },
-        max_steps=max_steps,
         **run_kwargs,
     )
 

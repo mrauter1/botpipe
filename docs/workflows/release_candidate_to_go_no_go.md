@@ -8,17 +8,17 @@
 - Why it matters: release decisions are high-stakes, cross-functional, and usually fail when teams keep the boundary, blocker criteria, and rollback expectations implicit.
 - Likely sponsors: release managers, engineering managers, QA leads, SRE or operations leads, and delivery leadership.
 - Classification: end-to-end workflow. The trigger is a release candidate. The terminal result is a release decision package and receipt.
-- Why Botlane fits: the work spans framing, evidence collection, readiness assessment, and package assembly across durable filesystem artifacts.
+- Why Botpipe fits: the work spans framing, evidence collection, readiness assessment, and package assembly across durable filesystem artifacts.
 - Why one-shot is insufficient: missing evidence must be surfaced explicitly, verifier loops must gate local repair versus replan, and the final outcome needs both human-facing and machine-readable artifacts.
 
 ## Invocation
 
-- Package path: `botlane/workflows/release_candidate_to_go_no_go/`
-- Discovery: `botlane workflows show release_candidate_to_go_no_go`
+- Package path: `botpipe/workflows/release_candidate_to_go_no_go/`
+- Discovery: `botpipe workflows show release_candidate_to_go_no_go`
 - Run:
 
 ```bash
-botlane run release_candidate_to_go_no_go <task-id> \
+botpipe run release_candidate_to_go_no_go <task-id> \
   --message "We want to ship release 2026.04 on Friday." \
   -wf release_name 2026.04 \
   -wf target_date 2026-04-24 \
@@ -219,7 +219,7 @@ The package includes explicit step prompts for:
 
 ## Evidence
 
-- Package implementation: `botlane/workflows/release_candidate_to_go_no_go/`
-- Package asset: `botlane/workflows/release_candidate_to_go_no_go/assets/release_decision_package_checklist.md`
+- Package implementation: `botpipe/workflows/release_candidate_to_go_no_go/`
+- Package asset: `botpipe/workflows/release_candidate_to_go_no_go/assets/release_decision_package_checklist.md`
 - Workflow-specific proof: `tests/runtime/test_release_candidate_to_go_no_go.py`
 - The scripted exercise proves discovery, compilation, route legality, terminal package creation, and deterministic publication of `decision_receipt.json`.

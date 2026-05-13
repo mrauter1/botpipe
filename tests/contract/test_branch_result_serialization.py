@@ -2,9 +2,9 @@ from __future__ import annotations
 
 from types import SimpleNamespace
 
-from botlane.core.branch_groups.manifest import BranchManifest, build_branch_manifest, render_branch_group_context
-from botlane.core.branch_groups.outcomes import select_branch_group_outcome
-from botlane.core.branch_groups.results import BranchArtifactObservation, BranchResult
+from botpipe.core.branch_groups.manifest import BranchManifest, build_branch_manifest, render_branch_group_context
+from botpipe.core.branch_groups.outcomes import select_branch_group_outcome
+from botpipe.core.branch_groups.results import BranchArtifactObservation, BranchResult
 
 
 def test_branch_result_to_manifest_dict_matches_current_completed_shape() -> None:
@@ -258,7 +258,7 @@ def test_branch_manifest_schema_context_and_outcome_remain_stable() -> None:
     event = select_branch_group_outcome(spec, manifest, context=None)
 
     assert isinstance(manifest, BranchManifest)
-    assert manifest.schema == "botlane.branch_results/v1"
+    assert manifest.schema == "botpipe.branch_results/v1"
     assert [branch.name for branch in manifest.branches] == ["security", "cost"]
     assert "## Needs Input Details" in context_text
     assert "- cost: Approve cost review?" in context_text
@@ -320,13 +320,13 @@ def test_branch_manifest_custom_outcome_still_receives_mapping_payload_when_mani
 
     assert event.tag == "done"
     assert isinstance(seen["payload"], dict)
-    assert seen["payload"]["schema"] == "botlane.branch_results/v1"
+    assert seen["payload"]["schema"] == "botpipe.branch_results/v1"
     assert seen["payload"]["branches"][0]["name"] == "security"
 
 
 def test_render_branch_group_context_preserves_empty_section_fallbacks() -> None:
     manifest = {
-        "schema": "botlane.branch_results/v1",
+        "schema": "botpipe.branch_results/v1",
         "kind": "parallel",
         "name": "reviews",
         "started_at": "2026-05-09T08:00:00+00:00",

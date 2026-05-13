@@ -8,23 +8,23 @@ from pathlib import Path
 import pytest
 from pydantic import BaseModel
 
-import botlane.simple as simple
-from botlane.core.branch_groups.context import (
+import botpipe.simple as simple
+from botpipe.core.branch_groups.context import (
     BranchMetadata,
     FanInMetadata,
     create_branch_context,
     create_fan_in_context,
 )
-from botlane.core.branch_groups.results import BranchResult
-from botlane.core.branch_groups.sessions import BranchSessionStoreView
-from botlane.core.context import Context
-from botlane.core.engine import Engine, StepFinalizationRecord
-from botlane.core.engine_collaborators import StepExecutionResult
-from botlane.core.errors import WorkflowExecutionError
-from botlane.core.providers.fake import ScriptedLLMProvider
-from botlane.core.sessions import Continuity
-from botlane.core.stores import InMemoryCheckpointStore, InMemorySessionStore, SessionBinding
-from botlane.core.worklists import Worklist
+from botpipe.core.branch_groups.results import BranchResult
+from botpipe.core.branch_groups.sessions import BranchSessionStoreView
+from botpipe.core.context import Context
+from botpipe.core.engine import Engine, StepFinalizationRecord
+from botpipe.core.engine_collaborators import StepExecutionResult
+from botpipe.core.errors import WorkflowExecutionError
+from botpipe.core.providers.fake import ScriptedLLMProvider
+from botpipe.core.sessions import Continuity
+from botpipe.core.stores import InMemoryCheckpointStore, InMemorySessionStore, SessionBinding
+from botpipe.core.worklists import Worklist
 
 
 class _State(BaseModel):
@@ -185,7 +185,6 @@ def test_branch_and_fan_in_contexts_preserve_parent_request_snapshot(tmp_path: P
         assert child.request.task_file == parent.request.task_file
         assert child.message == "Branch-safe request"
         assert child.input_fields is parent.input_fields
-        assert child.input.message == "Branch-safe request"
         assert child.input.topic == "release"
 
 
@@ -343,8 +342,10 @@ def test_engine_session_selection_and_persistence_follow_context_store(tmp_path:
     )
 
     step = engine.compiled.steps["ask"]
-    binding = engine._select_session(step, branch)
-    rebound = engine._select_session(step, branch)
+    sessions = engine.execution_services.sessions
+    assert sessions is not None
+    binding = sessions.resolve_session(step, branch)
+    rebound = sessions.resolve_session(step, branch)
 
     assert binding is not None
     assert binding == rebound
@@ -355,54 +356,11 @@ def test_engine_session_selection_and_persistence_follow_context_store(tmp_path:
     assert parent_store.snapshot().active_keys_by_slot["main"] == parent_binding.key
 
     updated = SessionBinding(key=binding.key, session_id="provider-session")
-    engine._persist_session(updated, context=branch)
+    sessions.persist_session(updated, context=branch)
 
     assert branch.get_session("main").session_id == "provider-session"
     assert parent_store.get(binding.key) is None
     assert parent.get_session("main") == parent_binding
-
-
-def test_engine_hook_snapshot_and_restore_follow_branch_context_store(tmp_path: Path) -> None:
-    class SessionWorkflow(simple.Workflow):
-        class State(BaseModel):
-            done: bool = False
-
-        main = simple.Session.fresh()
-        ask = simple.step("Draft a response.", session=main)
-
-    parent_store = InMemorySessionStore()
-    engine = Engine(
-        SessionWorkflow,
-        provider=ScriptedLLMProvider(),
-        session_store=parent_store,
-        checkpoint_store=InMemoryCheckpointStore(),
-    )
-    parent = _make_context(
-        tmp_path,
-        session_store=parent_store,
-        session_definitions=engine.compiled.sessions,
-    )
-    parent_binding = parent.open_session("main")
-    branch = create_branch_context(
-        parent,
-        step_name="ask",
-        branch=BranchMetadata(name="security", index=0, group="reviews", input={}, count=1),
-        session_store=BranchSessionStoreView(parent_store, namespace="reviews.security"),
-    )
-    original_branch_binding = branch.open_session("main", continuity=Continuity.fresh())
-
-    snapshot = engine._snapshot_hook_context(branch, branch.state)
-
-    replacement_binding = branch.open_session("main", continuity=Continuity.fresh())
-    assert replacement_binding.key != original_branch_binding.key
-    assert branch.get_session("main") == replacement_binding
-    assert parent.get_session("main") == parent_binding
-
-    engine._restore_hook_context(branch, snapshot)
-
-    assert branch.get_session("main") == original_branch_binding
-    assert parent.get_session("main") == parent_binding
-    assert parent_store.snapshot().active_keys_by_slot["main"] == parent_binding.key
 
 
 def test_branch_result_payload_builder_does_not_double_increment_rework_count(tmp_path: Path) -> None:

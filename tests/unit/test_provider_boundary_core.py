@@ -6,10 +6,10 @@ from dataclasses import dataclass, replace
 
 import pytest
 
-from botlane.core.errors import ProviderExecutionError
-from botlane.core.outcome_contract import NATIVE_SCHEMA_EXCEEDS_LIMIT
-from botlane.core.prompts import ResolvedPrompt
-from botlane.core.providers.models import (
+from botpipe.core.errors import ProviderExecutionError
+from botpipe.core.outcome_contract import NATIVE_SCHEMA_EXCEEDS_LIMIT
+from botpipe.core.prompts import ResolvedPrompt
+from botpipe.core.providers.models import (
     LLMRequest,
     OperationRequest,
     OutcomeResponse,
@@ -22,14 +22,14 @@ from botlane.core.providers.models import (
     TokenUsage,
     VerifierRequest,
 )
-from botlane.core.providers.fake import ScriptedLLMProvider
-from botlane.core.providers.parsing import parse_outcome_json
-from botlane.core.providers.protocols import validate_llm_provider, validate_provider_transport
-from botlane.core.providers.rendered import RenderedLLMProvider
-from botlane.core.providers.rendering import ProviderPromptRenderPolicy, render_provider_turn_with_policy
-from botlane.core.providers.rendering import render_provider_turn
-from botlane.core.providers.turns import ProviderTurnResult, RenderedProviderTurn
-from botlane.core.stores.protocols import SessionBinding
+from botpipe.core.providers.fake import ScriptedLLMProvider
+from botpipe.core.providers.parsing import parse_outcome_json
+from botpipe.core.providers.protocols import validate_llm_provider, validate_provider_transport
+from botpipe.core.providers.rendered import RenderedLLMProvider
+from botpipe.core.providers.rendering import ProviderPromptRenderPolicy, render_provider_turn_with_policy
+from botpipe.core.providers.rendering import render_provider_turn
+from botpipe.core.providers.turns import ProviderTurnResult, RenderedProviderTurn
+from botpipe.core.stores.protocols import SessionBinding
 
 
 def _session_binding(session_id: str = "provider-session-1") -> SessionBinding:

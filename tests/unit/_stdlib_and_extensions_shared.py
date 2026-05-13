@@ -8,21 +8,21 @@ import subprocess
 import sys
 from pathlib import Path
 from types import SimpleNamespace
-import botlane.core.route_reporting as route_reporting_helpers
-import botlane_optimizer._selected_workflow as selected_workflow_helpers
-import botlane_optimizer.adaptation as adaptation_helpers
-import botlane_optimizer.candidate_surfaces as candidate_surface_helpers
-import botlane_optimizer.company as company_helpers
-import botlane_optimizer.decomposition as decomposition_helpers
-import botlane_optimizer.diagnostics as diagnostics_helpers
-import botlane_optimizer.evaluation as evaluation_helpers
-import botlane.stdlib.json_artifacts as json_artifact_helpers
-import botlane_optimizer.parameters as parameter_helpers
-import botlane_optimizer.portfolio as portfolio_helpers
-import botlane_optimizer.refinement as refinement_helpers
-import botlane.stdlib.validation as validation_helpers
-from botlane_optimizer.adaptation import write_selected_workflow_capability_snapshot
-from botlane_optimizer.candidate_surfaces import (
+import botpipe.core.route_reporting as route_reporting_helpers
+import botpipe_optimizer._selected_workflow as selected_workflow_helpers
+import botpipe_optimizer.adaptation as adaptation_helpers
+import botpipe_optimizer.candidate_surfaces as candidate_surface_helpers
+import botpipe_optimizer.company as company_helpers
+import botpipe_optimizer.decomposition as decomposition_helpers
+import botpipe_optimizer.diagnostics as diagnostics_helpers
+import botpipe_optimizer.evaluation as evaluation_helpers
+import botpipe.stdlib.json_artifacts as json_artifact_helpers
+import botpipe_optimizer.parameters as parameter_helpers
+import botpipe_optimizer.portfolio as portfolio_helpers
+import botpipe_optimizer.refinement as refinement_helpers
+import botpipe.stdlib.validation as validation_helpers
+from botpipe_optimizer.adaptation import write_selected_workflow_capability_snapshot
+from botpipe_optimizer.candidate_surfaces import (
     derive_candidate_surface_manifest,
     materialize_baseline_surface,
     normalize_candidate_surface_boundary,
@@ -32,37 +32,37 @@ from botlane_optimizer.candidate_surfaces import (
     validate_candidate_surface_manifest,
     validate_candidate_surface_overlay,
 )
-from botlane_optimizer.company import write_company_operation_snapshot
-from botlane_optimizer.decomposition import write_selected_workflow_decomposition_surface
-from botlane_optimizer.diagnostics import write_selected_workflow_run_history_snapshot
-from botlane_optimizer.evaluation import write_validated_eval_case_manifest
-from botlane_optimizer.portfolio import (
+from botpipe_optimizer.company import write_company_operation_snapshot
+from botpipe_optimizer.decomposition import write_selected_workflow_decomposition_surface
+from botpipe_optimizer.diagnostics import write_selected_workflow_run_history_snapshot
+from botpipe_optimizer.evaluation import write_validated_eval_case_manifest
+from botpipe_optimizer.portfolio import (
     write_workflow_capability_snapshot,
     write_workflow_portfolio_health_snapshot,
     write_workflow_portfolio_snapshot,
 )
-from botlane_optimizer.refinement import write_selected_workflow_authoring_surface
+from botpipe_optimizer.refinement import write_selected_workflow_authoring_surface
 import pytest
 from pydantic import BaseModel
-from botlane.core import Context
-from botlane.core.context import ChildWorkflowResult
-from botlane.core.workflow_capabilities import (
+from botpipe.core import Context
+from botpipe.core.context import ChildWorkflowResult
+from botpipe.core.workflow_capabilities import (
     inspect_workflow_reference,
     selected_workflow_authoring_surface_payload,
     selected_workflow_capability_payload,
     selected_workflow_decomposition_surface_payload,
 )
-from botlane.extensions.session_paths import SessionPaths, extract_session_path_strategy
-from botlane.extensions.git.filters import (
+from botpipe.extensions.session_paths import SessionPaths, extract_session_path_strategy
+from botpipe.extensions.git.filters import (
     delta_pathspecs,
     filter_delta_by_pathspecs,
     filter_delta_by_prefixes,
     workflow_workspace_pathspec,
 )
-from botlane.extensions.git.policy import GitChange, GitCommitPlan, GitDelta
-from botlane.extensions.git.repo import GitRepo
-from botlane.core.stores import InMemorySessionStore
-from botlane.stdlib import (
+from botpipe.extensions.git.policy import GitChange, GitCommitPlan, GitDelta
+from botpipe.extensions.git.repo import GitRepo
+from botpipe.core.stores import InMemorySessionStore
+from botpipe.stdlib import (
     JsonArtifactSpec,
     PromptBundle,
     ValidationIssue,
@@ -102,7 +102,7 @@ from botlane.stdlib import (
     write_publication_receipt,
     write_workflow_json,
 )
-from botlane_optimizer import (
+from botpipe_optimizer import (
     PortfolioReviewParameters,
     SelectedWorkflowTaskFramingParameters,
     SelectedWorkflowTaskFramingWithEvidenceParameters,
@@ -110,13 +110,13 @@ from botlane_optimizer import (
     TaskFramingWithEvidenceParameters,
     write_validated_workflow_parameters,
 )
-from botlane import Route, SELF
-from botlane.stdlib.state import SequenceCursor
-from botlane.core.extensions import RunBinding
-from botlane.runtime.loader import WorkflowParameterError, coerce_workflow_parameter_mapping, resolve_workflow_reference
-from botlane.core import AWAIT_INPUT, FAIL, FINISH, GLOBAL
-from botlane.core.primitives import Event, Outcome
-STATE_DIRNAME = ".botlane"
+from botpipe import Route, SELF
+from botpipe.stdlib.state import SequenceCursor
+from botpipe.core.extensions import RunBinding
+from botpipe.runtime.loader import WorkflowParameterError, coerce_workflow_parameter_mapping, resolve_workflow_reference
+from botpipe.core import AWAIT_INPUT, FAIL, FINISH, GLOBAL
+from botpipe.core.primitives import Event, Outcome
+STATE_DIRNAME = ".botpipe"
 STATE_DIR = Path(STATE_DIRNAME)
 PACKAGE_ROOT = Path(__file__).resolve().parents[2]
 REMOVED_CONTRACTS_PATH = "contracts" + "_path"
@@ -239,7 +239,7 @@ def _build_child_result(tmp_path: Path, output_artifacts: dict[str, Path]) -> Ch
     child_task_folder = tmp_path / STATE_DIRNAME / "tasks" / "task-1"
     child_workflow_folder = child_task_folder / "wf_investigation_request_to_evidence_pack"
     child_run_folder = child_workflow_folder / "runs" / "child-run-1"
-    child_package_folder = tmp_path / "botlane" / "workflows" / "investigation_request_to_evidence_pack"
+    child_package_folder = tmp_path / "botpipe" / "workflows" / "investigation_request_to_evidence_pack"
     child_run_folder.mkdir(parents=True, exist_ok=True)
     child_workflow_folder.mkdir(parents=True, exist_ok=True)
     child_package_folder.mkdir(parents=True, exist_ok=True)
@@ -340,7 +340,7 @@ from __future__ import annotations
 
 from pydantic import BaseModel, Field
 
-from botlane import FINISH, Md, Prompt, Route, SELF, Workflow, produce_verify_step
+from botpipe import FINISH, Md, Prompt, Route, SELF, Workflow, produce_verify_step
 
 
 class AssessmentPayload(BaseModel):
@@ -356,7 +356,7 @@ class {class_name}(Workflow):
     assess = produce_verify_step(
         producer_prompt=Prompt.file("prompts/assess_producer.md"),
         verifier_prompt=Prompt.file("prompts/assess_verifier.md"),
-        producer_writes=[Md("assessment_note", path="{{workflow_folder}}/assessment_note.md")],
+        producer_writes=[Md("assessment_note", path="{{{{ workflow.folder }}}}/assessment_note.md")],
         control_schema=AssessmentPayload,
         routes={{
             "assessment_complete": Route.to(
@@ -418,7 +418,7 @@ from __future__ import annotations
 
 from pydantic import BaseModel
 
-from botlane import Json, Prompt, Workflow, step
+from botpipe import Json, Prompt, Workflow, step
 
 
 class ReviewPayload(BaseModel):
@@ -433,7 +433,7 @@ class SingleFileReview(Workflow):
 
     ask = step(
         prompt=Prompt.file("prompts/ask.md"),
-        writes=[Json("review_note", ReviewPayload, path="{workflow_folder}/review_note.md")],
+        writes=[Json("review_note", ReviewPayload, path="{{ workflow.folder }}/review_note.md")],
         control_schema=ReviewPayload,
     )
 """.strip()

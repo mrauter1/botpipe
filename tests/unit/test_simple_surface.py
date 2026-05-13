@@ -7,21 +7,21 @@ import re
 import pytest
 from pydantic import BaseModel, Field
 
-import botlane
-import botlane.simple as simple
-import botlane.core as core
-import botlane.core.steps as core_steps
-import botlane.core.validation as core_validation
-from botlane.core.branch_groups.models import BranchGroupDeclarationSpec
-from botlane.core.compiler import compile_workflow
-from botlane.core.context import ChildWorkflowResult, Context
-from botlane.core.discovery import get_workflow_definition
-from botlane.core.engine import Engine
-from botlane.core.errors import WorkflowExecutionError, WorkflowValidationError
-from botlane.core.providers.fake import ScriptedLLMProvider
-from botlane.core.provider_policy import PermissionPolicy, ProviderPolicy, ProviderPolicyOverride
-from botlane.core.route_contracts import available_route_tags, route_target_value, runtime_control_route_tags
-from botlane.core.stores import InMemoryCheckpointStore, InMemorySessionStore
+import botpipe
+import botpipe.simple as simple
+import botpipe.core as core
+import botpipe.core.steps as core_steps
+import botpipe.core.validation as core_validation
+from botpipe.core.branch_groups.models import BranchGroupDeclarationSpec
+from botpipe.core.compiler import compile_workflow
+from botpipe.core.context import ChildWorkflowResult, Context
+from botpipe.core.discovery import get_workflow_definition
+from botpipe.core.engine import Engine
+from botpipe.core.errors import WorkflowExecutionError, WorkflowValidationError
+from botpipe.core.providers.fake import ScriptedLLMProvider
+from botpipe.core.provider_policy import PermissionPolicy, ProviderPolicy, ProviderPolicyOverride
+from botpipe.core.route_contracts import available_route_tags, route_target_value, runtime_control_route_tags
+from botpipe.core.stores import InMemoryCheckpointStore, InMemorySessionStore
 
 
 REMOVED_WORKFLOW_STEP = "Workflow" + "Step"
@@ -160,7 +160,7 @@ def test_simple_authoring_examples_preserve_route_sentinel_contracts() -> None:
             writes=[simple.Md("draft")],
         )
         review = simple.produce_verify_step(
-            producer_prompt="Review {draft.draft}.",
+            producer_prompt="Review {{ draft.draft }}.",
             verifier_prompt="Decide whether it is ready.",
             name="review",
             producer_writes=[simple.Md("candidate")],
@@ -211,7 +211,7 @@ def test_removed_root_public_symbols_fail_to_import() -> None:
         REMOVED_PARAM,
     ):
         with pytest.raises(ImportError):
-            _import_from("botlane", symbol)
+            _import_from("botpipe", symbol)
 
 
 def test_removed_simple_aliases_are_absent() -> None:
@@ -241,7 +241,7 @@ def test_removed_simple_symbols_fail_to_import() -> None:
         REMOVED_WORKFLOW_STEP,
     ):
         with pytest.raises(ImportError):
-            _import_from("botlane.simple", symbol)
+            _import_from("botpipe.simple", symbol)
 
 
 def test_operation_surface_singletons_expose_public_runtime_types() -> None:
@@ -252,15 +252,15 @@ def test_operation_surface_singletons_expose_public_runtime_types() -> None:
 
 
 def test_runtime_control_exports_are_canonical_and_validate_basic_fields() -> None:
-    assert botlane.RequestInput(question="What changed?").question == "What changed?"
-    assert botlane.Goto(target="publish").target == "publish"
-    assert botlane.Fail(reason="stop").reason == "stop"
+    assert botpipe.RequestInput(question="What changed?").question == "What changed?"
+    assert botpipe.Goto(target="publish").target == "publish"
+    assert botpipe.Fail(reason="stop").reason == "stop"
 
     with pytest.raises(ValueError):
-        botlane.RequestInput(question="  ")
+        botpipe.RequestInput(question="  ")
 
     with pytest.raises(ValueError):
-        botlane.Fail(reason="  ")
+        botpipe.Fail(reason="  ")
 
 
 def test_child_workflow_result_keeps_positional_constructor_and_path_fields(tmp_path: Path) -> None:
@@ -350,17 +350,17 @@ def test_core_top_level_surface_excludes_quarantined_legacy_names() -> None:
         "Route",
         "Workflow",
     ):
-        assert _import_from("botlane.core", symbol) is getattr(core, symbol)
+        assert _import_from("botpipe.core", symbol) is getattr(core, symbol)
 
 
 def test_core_module_identity_remains_canonical() -> None:
-    import botlane.core.workflow_capabilities as core_capabilities
+    import botpipe.core.workflow_capabilities as core_capabilities
 
     assert core.validation is core_validation
     assert core.steps is core_steps
-    assert core_capabilities.__name__ == "botlane.core.workflow_capabilities"
-    assert core.Workflow is _import_from("botlane.core", "Workflow")
-    assert core_steps.Step is _import_from("botlane.core.steps", "Step")
+    assert core_capabilities.__name__ == "botpipe.core.workflow_capabilities"
+    assert core.Workflow is _import_from("botpipe.core", "Workflow")
+    assert core_steps.Step is _import_from("botpipe.core.steps", "Step")
 
 
 def test_legacy_core_import_usage_is_absent_from_active_python_files() -> None:
@@ -370,7 +370,7 @@ def test_legacy_core_import_usage_is_absent_from_active_python_files() -> None:
         re.compile(r"\bimport\s+core\._compat(?:\.|\b)"),
     )
     candidates = (
-        "botlane",
+        "botpipe",
         "core",
         "extensions",
         "stdlib",
@@ -642,12 +642,14 @@ def test_simple_workflow_compiles_with_pydantic_state_params_and_produce_verify_
         State = WorkflowState
 
         prepare = simple.step(
-            prompt=simple.Prompt.inline("Prepare using {params.max_attempts}."),
+            prompt=simple.Prompt.inline("Prepare using {{ params.max_attempts }}."),
             writes=[simple.Md("brief", required=True)],
         )
         review = simple.produce_verify_step(
-            producer_prompt=simple.Prompt.inline("Draft from {prepare.brief}."),
-            verifier_prompt=simple.Prompt.inline("Verify with {review.state.visits} and {review.state.attempts}."),
+            producer_prompt=simple.Prompt.inline("Draft from {{ prepare.brief }}."),
+            verifier_prompt=simple.Prompt.inline(
+                "Verify with {{ step_state.visits }} and {{ step_state.attempts }}."
+            ),
             requires=[prepare.brief],
             producer_writes=[simple.Md("draft", required=True)],
             verifier_writes=[simple.Json("decision", Decision, required=False)],
@@ -690,8 +692,8 @@ def test_parallel_branch_group_compiles_as_one_external_step_with_ordered_intern
 
         reviews = simple.parallel(
             branches={
-                "security": simple.step("Review {branch.name}.", name="security_review", session=simple.Session.fresh()),
-                "cost": simple.step("Review {branch.group}.", name="cost_review", session=simple.Session.fresh()),
+                "security": simple.step("Review {{ branch.name }}.", name="security_review", session=simple.Session.fresh()),
+                "cost": simple.step("Review {{ branch.group }}.", name="cost_review", session=simple.Session.fresh()),
             },
             fan_in=simple.python_step(lambda ctx: simple.Event("done"), name="combine_reviews"),
         )
@@ -728,10 +730,10 @@ def test_parallel_branch_group_propagates_explicit_fan_in_routes_to_outer_routes
 
         assess = simple.parallel(
             branches={
-                "security": simple.step("Review {branch.name}.", name="security_review", session=simple.Session.fresh()),
+                "security": simple.step("Review {{ branch.name }}.", name="security_review", session=simple.Session.fresh()),
             },
             fan_in=simple.step(
-                "Summarize {fan_in.context_text}.",
+                "Summarize {{ fan_in.context_text }}.",
                 name="synthesize_reviews",
                 routes={"approved": simple.FINISH, "needs_revision": simple.SELF},
             ),
@@ -780,7 +782,7 @@ def test_fan_out_branch_group_preserves_branch_inputs_and_order() -> None:
 
         assess = simple.fan_out(
             step=simple.step(
-                "Assess {branch.input.area}.",
+                "Assess {{ branch.input.area }}.",
                 name="assess_one",
                 session=simple.Session.fresh(),
             ),
@@ -807,10 +809,10 @@ def test_fan_out_branch_group_preserves_branch_inputs_and_order() -> None:
 @pytest.mark.parametrize(
     "fan_in_factory",
     [
-        lambda: simple.step("Summarize {fan_in.context_text}.", name="fan_in_prompt"),
+        lambda: simple.step("Summarize {{ fan_in.context_text }}.", name="fan_in_prompt"),
         lambda: simple.produce_verify_step(
-            producer_prompt="Draft from {fan_in.results_path}.",
-            verifier_prompt="Verify from {fan_in.context_path}.",
+            producer_prompt="Draft from {{ fan_in.results_path }}.",
+            verifier_prompt="Verify from {{ fan_in.context_path }}.",
             name="fan_in_pair",
         ),
         lambda: simple.python_step(lambda ctx: simple.Event("done"), name="fan_in_python"),
@@ -838,9 +840,9 @@ def test_branch_group_fan_in_accepts_supported_step_kinds(fan_in_factory) -> Non
 @pytest.mark.parametrize(
     "fan_in_factory",
     [
-        lambda: simple.llm.step(prompt="Classify {fan_in.branch_count}.", name="fan_in_llm_operation"),
+        lambda: simple.llm.step(prompt="Classify {{ fan_in.branch_count }}.", name="fan_in_llm_operation"),
         lambda: simple.classify.step(
-            prompt="Choose one from {fan_in.branch_count}.",
+            prompt="Choose one from {{ fan_in.branch_count }}.",
             choices=("yes", "no"),
             name="fan_in_classify_operation",
         ),
@@ -894,7 +896,7 @@ def test_branch_placeholder_is_rejected_outside_branch_steps() -> None:
             class State(BaseModel):
                 pass
 
-            ask = simple.step("Draft {branch.name}.")
+            ask = simple.step("Draft {{ branch.name }}.")
 
         compile_workflow(InvalidBranchPlaceholderWorkflow)
 
@@ -906,7 +908,7 @@ def test_fan_in_placeholder_is_rejected_outside_fan_in_steps() -> None:
             class State(BaseModel):
                 pass
 
-            ask = simple.step("Draft {fan_in.context_text}.")
+            ask = simple.step("Draft {{ fan_in.context_text }}.")
 
         compile_workflow(InvalidFanInPlaceholderWorkflow)
 
@@ -923,9 +925,9 @@ def test_simple_workflow_accepts_supported_ctx_prompt_bindings() -> None:
             status: str = "draft"
 
         review = simple.step(
-            "Message={ctx.message}; Request={ctx.request.text}; File={ctx.request.file}; "
-            "TaskFile={ctx.request.task_file}; RequestFile={ctx.request_file}; Topic={ctx.input.topic}; "
-            "Status={ctx.state.status}; Mode={ctx.params.mode}; Run={ctx.run.id}; Workflow={ctx.workflow.folder}"
+            "Message={{ message }}; Request={{ request.text }}; File={{ request.file }}; "
+            "TaskFile={{ request.task_file }}; RequestFile={{ request.file }}; Topic={{ input.topic }}; "
+            "Status={{ state.status }}; Mode={{ params.mode }}; Run={{ run.id }}; Workflow={{ workflow.folder }}"
         )
 
     compiled = compile_workflow(CtxWorkflow)
@@ -933,51 +935,30 @@ def test_simple_workflow_accepts_supported_ctx_prompt_bindings() -> None:
     assert compiled.steps["review"].name == "review"
 
 
-def test_simple_workflow_accepts_input_message_prompt_binding() -> None:
+def test_simple_workflow_rejects_input_message_prompt_binding() -> None:
     class InputMessageWorkflow(simple.Workflow):
         class State(BaseModel):
             pass
 
-        review = simple.step("Message={input.message}")
+        review = simple.step("Message={{ input.message }}")
 
-    compiled = compile_workflow(InputMessageWorkflow)
+    with pytest.raises(WorkflowValidationError, match="unsupported Jinja request-text reference"):
+        compile_workflow(InputMessageWorkflow)
 
-    assert compiled.steps["review"].name == "review"
 
-
-def test_simple_workflow_accepts_ctx_input_message_prompt_binding() -> None:
+def test_simple_workflow_rejects_ctx_prompt_root() -> None:
     class CtxInputMessageWorkflow(simple.Workflow):
         class State(BaseModel):
             pass
 
-        review = simple.step("Message={ctx.input.message}")
+        review = simple.step("Message={{ ctx.input.message }}")
 
-    compiled = compile_workflow(CtxInputMessageWorkflow)
+    with pytest.raises(WorkflowValidationError, match="unknown Jinja variable\\(s\\): ctx"):
+        compile_workflow(CtxInputMessageWorkflow)
 
-    assert compiled.steps["review"].name == "review"
 
-
-@pytest.mark.parametrize(
-    ("placeholder", "message"),
-    [
-        ("{message}", r"simple step 'review' prompt placeholder \{message\} is unknown; use \{ctx\.message\}"),
-        ("{ctx}", r"simple step 'review' prompt placeholder \{ctx\} must qualify a runtime context field"),
-        ("{ctx.request}", r"simple step 'review' prompt placeholder \{ctx\.request\} must qualify a request field"),
-        ("{ctx.input}", r"simple step 'review' prompt placeholder \{ctx\.input\} must qualify a input field"),
-        ("{ctx.state}", r"simple step 'review' prompt placeholder \{ctx\.state\} must qualify a state field"),
-        ("{ctx.params}", r"simple step 'review' prompt placeholder \{ctx\.params\} must qualify a params field"),
-        ("{ctx.input.missing}", r"simple step 'review' prompt placeholder \{ctx\.input\.missing\} references unknown Input field 'missing'"),
-        ("{ctx.state.missing}", r"simple step 'review' prompt placeholder \{ctx\.state\.missing\} references unknown State field 'missing'"),
-        ("{ctx.params.missing}", r"simple step 'review' prompt placeholder \{ctx\.params\.missing\} references unknown Params field 'missing'"),
-        ("{ctx.__dict__}", r"simple step 'review' prompt placeholder \{ctx\.__dict__\} is not a supported safe dotted path"),
-        ("{ctx.message.upper()}", r"simple step 'review' prompt placeholder \{ctx\.message\.upper\(\)\} is not a supported safe dotted path"),
-        ("{ctx.request.file.read_text()}", r"simple step 'review' prompt placeholder \{ctx\.request\.file\.read_text\(\)\} is not a supported safe dotted path"),
-        ("{ctx.values.foo}", r"simple step 'review' prompt placeholder \{ctx\.values\.foo\} is not a supported safe dotted path"),
-        ("{ctx.artifacts.foo}", r"simple step 'review' prompt placeholder \{ctx\.artifacts\.foo\} is not a supported safe dotted path"),
-    ],
-)
-def test_simple_workflow_rejects_invalid_ctx_prompt_bindings(placeholder: str, message: str) -> None:
-    class InvalidCtxWorkflow(simple.Workflow):
+def test_simple_workflow_rejects_unknown_jinja_prompt_roots() -> None:
+    class InvalidJinjaRootWorkflow(simple.Workflow):
         class Input(BaseModel):
             topic: str
 
@@ -987,10 +968,13 @@ def test_simple_workflow_rejects_invalid_ctx_prompt_bindings(placeholder: str, m
         class State(BaseModel):
             status: str = "draft"
 
-        review = simple.step(placeholder)
+        review = simple.step("{{ missing_root.value }}")
 
-    with pytest.raises(WorkflowValidationError, match=message):
-        compile_workflow(InvalidCtxWorkflow)
+    with pytest.raises(
+        WorkflowValidationError,
+        match=r"simple step 'review' prompt template <inline prompt template> uses unknown Jinja variable\(s\): missing_root",
+    ):
+        compile_workflow(InvalidJinjaRootWorkflow)
 
 
 def test_provider_backed_branch_steps_require_explicit_fresh_sessions_only_inside_branch_groups() -> None:
@@ -1186,25 +1170,25 @@ def test_branch_group_compile_cache_is_bypassed() -> None:
 
 
 def test_branch_group_placeholder_root_matching_is_exact() -> None:
-    with pytest.raises(WorkflowValidationError, match="references unknown step 'branching'"):
+    with pytest.raises(WorkflowValidationError, match="unknown Jinja variable\\(s\\): branching"):
 
         class InvalidExactRootWorkflow(simple.Workflow):
             class State(BaseModel):
                 pass
 
-            ask = simple.step("Draft {branching.name}.")
+            ask = simple.step("Draft {{ branching.name }}.")
 
         compile_workflow(InvalidExactRootWorkflow)
 
 
 def test_fan_in_placeholder_root_matching_is_exact() -> None:
-    with pytest.raises(WorkflowValidationError, match="references unknown step 'fan_inish'"):
+    with pytest.raises(WorkflowValidationError, match="unknown Jinja variable\\(s\\): fan_inish"):
 
         class InvalidFanInExactRootWorkflow(simple.Workflow):
             class State(BaseModel):
                 pass
 
-            ask = simple.step("Draft {fan_inish.context_text}.")
+            ask = simple.step("Draft {{ fan_inish.context_text }}.")
 
         compile_workflow(InvalidFanInExactRootWorkflow)
 
@@ -1300,7 +1284,7 @@ def test_produce_verify_step_accepts_statevar_mapping_sugar() -> None:
     class ReviewWorkflow(simple.Workflow):
         review = simple.produce_verify_step(
             producer_prompt="Draft.",
-            verifier_prompt="Verify with {review.state.attempts} and {review.state.selected_risk}.",
+            verifier_prompt="Verify with {{ step_state.attempts }} and {{ step_state.selected_risk }}.",
             state={
                 "attempts": simple.StateVar(0),
                 "selected_risk": simple.StateVar[str | None](None),
@@ -1349,7 +1333,7 @@ def test_produce_verify_step_accepts_typed_statevar_default_factories() -> None:
     class ReviewWorkflow(simple.Workflow):
         review = simple.produce_verify_step(
             producer_prompt="Draft.",
-            verifier_prompt="Verify with {review.state.history}.",
+            verifier_prompt="Verify with {{ step_state.history }}.",
             state={"history": simple.StateVar[list[str]](default_factory=list)},
         )
 
@@ -1419,7 +1403,7 @@ def test_simple_workflow_accepts_scoped_item_state_prompt_placeholders() -> None
             item_state=ItemState,
         )
         start = simple.step(
-            prompt=simple.Prompt.inline("Inspect {item.state.status} and {item.state.severity}."),
+            prompt=simple.Prompt.inline("Inspect {{ item_state.status }} and {{ item_state.severity }}."),
             scope=gates,
         )
 
@@ -1435,7 +1419,7 @@ def test_simple_workflow_accepts_scoped_runtime_item_prompt_placeholders() -> No
             items=({"id": "alpha", "title": "Alpha", "payload": {"foo": "bar"}},),
         )
         start = simple.step(
-            prompt=simple.Prompt.inline("Inspect {item.id}, {item.dir_key}, and {item.payload.foo}."),
+            prompt=simple.Prompt.inline("Inspect {{ item.id }}, {{ item.dir_key }}, and {{ item.payload.foo }}."),
             scope=gates,
         )
 
@@ -1447,7 +1431,7 @@ def test_simple_workflow_accepts_scoped_runtime_item_prompt_placeholders() -> No
 def test_simple_workflow_rejects_runtime_item_prompt_placeholders_without_scope() -> None:
     class BadRuntimeItemPromptWorkflow(simple.Workflow):
         start = simple.step(
-            prompt=simple.Prompt.inline("Inspect {item.id}."),
+            prompt=simple.Prompt.inline("Inspect {{ item.id }}."),
         )
 
     with pytest.raises(
@@ -1465,7 +1449,7 @@ def test_simple_workflow_accepts_late_bound_worklist_prompt_placeholders() -> No
         )
         start = simple.step(
             prompt=simple.Prompt.inline(
-                "Inspect {worklist.gate.current.id}, {worklist.gate.item_ids}, and {worklist.gate.is_exhausted}."
+                "Inspect {{ worklist.gate.current.id }}, {{ worklist.gate.item_ids }}, and {{ worklist.gate.is_exhausted }}."
             ),
         )
 
@@ -1481,7 +1465,7 @@ def test_simple_workflow_rejects_unknown_worklist_prompt_placeholders() -> None:
             items=({"id": "alpha", "title": "Alpha"},),
         )
         start = simple.step(
-            prompt=simple.Prompt.inline("Inspect {worklist.missing.current.id}."),
+            prompt=simple.Prompt.inline("Inspect {{ worklist.missing.current.id }}."),
         )
 
     with pytest.raises(
@@ -1491,7 +1475,7 @@ def test_simple_workflow_rejects_unknown_worklist_prompt_placeholders() -> None:
         compile_workflow(BadWorklistPromptWorkflow)
 
 
-def test_simple_workflow_rejects_unknown_scoped_item_state_prompt_fields() -> None:
+def test_simple_workflow_allows_unknown_scoped_item_state_jinja_fields_until_runtime() -> None:
     class ItemState(BaseModel):
         severity: str = "medium"
 
@@ -1502,34 +1486,26 @@ def test_simple_workflow_rejects_unknown_scoped_item_state_prompt_fields() -> No
             item_state=ItemState,
         )
         start = simple.step(
-            prompt=simple.Prompt.inline("Inspect {item.state.missing}."),
+            prompt=simple.Prompt.inline("Inspect {{ item_state.missing }}."),
             scope=gates,
         )
 
-    with pytest.raises(
-        WorkflowValidationError,
-        match="unknown item state field 'missing' on worklist 'gate'",
-    ):
-        compile_workflow(BadItemStateWorkflow)
+    assert "start" in compile_workflow(BadItemStateWorkflow).steps
 
 
-def test_simple_workflow_rejects_unknown_scoped_step_item_state_prompt_fields() -> None:
+def test_simple_workflow_allows_unknown_scoped_step_item_state_jinja_fields_until_runtime() -> None:
     class BadStepItemStateWorkflow(simple.Workflow):
         gates = simple.Worklist.from_items(
             "gate",
             items=({"id": "alpha", "title": "Alpha"},),
         )
         review = simple.step(
-            prompt=simple.Prompt.inline("Inspect {review.item_state.missing}."),
+            prompt=simple.Prompt.inline("Inspect {{ step_item_state.missing }}."),
             scope=gates,
             item_state={"attempts": simple.StateVar(0)},
         )
 
-    with pytest.raises(
-        WorkflowValidationError,
-        match="unknown item_state field 'missing' on step 'review'",
-    ):
-        compile_workflow(BadStepItemStateWorkflow)
+    assert "review" in compile_workflow(BadStepItemStateWorkflow).steps
 
 
 def test_simple_workflow_accepts_scoped_step_item_state_prompt_placeholders() -> None:
@@ -1539,7 +1515,7 @@ def test_simple_workflow_accepts_scoped_step_item_state_prompt_placeholders() ->
             items=({"id": "alpha", "title": "Alpha"},),
         )
         review = simple.step(
-            prompt=simple.Prompt.inline("Inspect {review.item_state.attempts} and {review.item_state.visits}."),
+            prompt=simple.Prompt.inline("Inspect {{ step_item_state.attempts }} and {{ step_item_state.visits }}."),
             scope=gates,
             item_state={"attempts": simple.StateVar(0)},
         )
@@ -1562,7 +1538,9 @@ def test_simple_produce_verify_workflow_step_item_state_includes_producer_verifi
         )
         review = simple.produce_verify_step(
             producer_prompt="Draft.",
-            verifier_prompt=simple.Prompt.inline("Inspect {review.item_state.attempts} and {review.item_state.visits}."),
+            verifier_prompt=simple.Prompt.inline(
+                "Inspect {{ step_item_state.attempts }} and {{ step_item_state.visits }}."
+            ),
             scope=gates,
             item_state={"attempts": simple.StateVar(0)},
         )

@@ -6,12 +6,12 @@ from pathlib import Path
 import pytest
 from pydantic import BaseModel
 
-from botlane.core.artifacts import Artifact
-from botlane.core.context import Context
-from botlane.core.errors import WorkflowExecutionError
-from botlane.core.stores import InMemorySessionStore
-from botlane.core.worklists import WorkItem
-from botlane.stdlib import (
+from botpipe.core.artifacts import Artifact
+from botpipe.core.context import Context
+from botpipe.core.errors import WorkflowExecutionError
+from botpipe.core.stores import InMemorySessionStore
+from botpipe.core.worklists import WorkItem
+from botpipe.stdlib import (
     ProgressBoard,
     ProgressItem,
     ProgressJsonCollectionSource,
@@ -58,7 +58,7 @@ def _context(tmp_path: Path) -> Context:
 
 
 def _artifact() -> Artifact:
-    return Artifact.json("{workflow_folder}/worklists/phase.json", name="phase_board")
+    return Artifact.json("{{ workflow.folder }}/worklists/phase.json", name="phase_board")
 
 
 def test_work_status_policy_default_statuses_are_minimal() -> None:
@@ -426,7 +426,7 @@ def test_progress_source_save_preserves_order(tmp_path: Path) -> None:
 def test_progress_artifact_worklist_uses_default_artifact_path() -> None:
     worklist = progress_artifact_worklist("phase", model=PhasePlan)
     assert worklist.artifact is not None
-    assert worklist.artifact.template == "{workflow_folder}/worklists/phase.json"
+    assert worklist.artifact.template == "{{ workflow.folder }}/worklists/phase.json"
     assert worklist.artifact.name == "phase_board"
 
 

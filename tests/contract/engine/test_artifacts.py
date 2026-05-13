@@ -95,7 +95,7 @@ def test_missing_required_artifact_raises_and_checkpoints(tmp_path: Path):
         class State(BaseModel):
             pass
 
-        request = Artifact("{task_folder}/request.txt")
+        request = Artifact("{{ task.folder }}/request.txt")
         ask = PromptStep(name="ask", producer="ask.md", requires=[request])
         entry = ask
         transitions = {ask: {"done": FINISH}}
@@ -727,7 +727,7 @@ def test_validation_step_valid_routes_to_default_done_and_emits_runtime_event(tm
     runtime_events: list[tuple[str, dict[str, object]]] = []
 
     class ValidateWorkflow(SimpleWorkflow):
-        draft = Artifact.md("{task_folder}/draft.md", required=True, name="draft")
+        draft = Artifact.md("{{ task.folder }}/draft.md", required=True, name="draft")
         feedback = Md("validation_feedback")
 
         @validation_step(name="validate", feedback=feedback, requires=[draft])
@@ -764,7 +764,7 @@ def test_validation_step_invalid_writes_feedback_and_routes_repair(tmp_path: Pat
     runtime_events: list[tuple[str, dict[str, object]]] = []
 
     class ValidateWorkflow(SimpleWorkflow):
-        draft = Artifact.md("{task_folder}/draft.md", required=True, name="draft")
+        draft = Artifact.md("{{ task.folder }}/draft.md", required=True, name="draft")
         feedback = Md("validation_feedback")
 
         @validation_step(
@@ -816,7 +816,7 @@ def test_validation_step_invalid_writes_feedback_and_routes_repair(tmp_path: Pat
     assert runtime_events[-1][1]["feedback_artifact"] == str(feedback_path)
 def test_validation_step_exception_uses_failed_route_when_configured(tmp_path: Path):
     class ValidateWorkflow(SimpleWorkflow):
-        draft = Artifact.md("{task_folder}/draft.md", required=True, name="draft")
+        draft = Artifact.md("{{ task.folder }}/draft.md", required=True, name="draft")
         feedback = Md("validation_feedback")
 
         @validation_step(name="validate", feedback=feedback, requires=[draft], failed=FAIL)

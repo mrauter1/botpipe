@@ -304,7 +304,7 @@ def test_workflow_step_message_can_forward_ctx_message_into_child_request_snapsh
 
         launch = workflow_step(
             ChildWorkflow,
-            message="{ctx.message}",
+            message="{{ message }}",
             input={"topic": "structured-topic"},
             routes={"done": FINISH},
         )
@@ -421,7 +421,7 @@ def test_workflow_step_message_renders_composite_ctx_input_bindings_before_child
 
         launch = workflow_step(
             ChildWorkflow,
-            message="Parent request: {ctx.input.message}; topic={ctx.input.topic}",
+            message="Parent request: {{ message }}; topic={{ input.topic }}",
             input={"topic": "structured-topic"},
             routes={"done": FINISH},
         )
@@ -516,9 +516,9 @@ def test_workflow_step_message_renders_composite_ctx_input_bindings_before_child
 @pytest.mark.parametrize(
     ("message_template", "expected_expression"),
     (
-        ("{ctx.input.missing}", r"ctx\.input\.missing"),
-        ("{ctx.state.missing}", r"ctx\.state\.missing"),
-        ("{ctx.params.missing}", r"ctx\.params\.missing"),
+        ("{{ input.missing }}", r"input\.missing"),
+        ("{{ state.missing }}", r"state\.missing"),
+        ("{{ params.missing }}", r"params\.missing"),
     ),
 )
 def test_workflow_step_message_invalid_ctx_field_raises_workflow_execution_error(
@@ -557,7 +557,7 @@ def test_workflow_step_message_invalid_ctx_field_raises_workflow_execution_error
 
     with pytest.raises(
         WorkflowExecutionError,
-        match=rf"workflow step 'launch' message placeholder \{{{expected_expression}\}} references unknown runtime field 'missing'",
+        match=rf"workflow step 'launch' message template <inline prompt template>: undefined Jinja value: .*missing",
     ):
         Engine(
             ParentWorkflow,

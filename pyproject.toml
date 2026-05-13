@@ -3,20 +3,21 @@ requires = ["setuptools>=68"]
 build-backend = "setuptools.build_meta"
 
 [project]
-name = "botlane-v3-surface"
+name = "botpipe-v3-surface"
 version = "0.0.0"
 requires-python = ">=3.12"
 dependencies = [
+  "jinja2>=3.1,<4",
   "pydantic>=2,<3",
 ]
 
 [project.scripts]
-botlane = "botlane.runtime.cli:main"
+botpipe = "botpipe.runtime.cli:main"
 
 [tool.setuptools.packages.find]
-include = ["botlane*", "botlane_optimizer*"]
+include = ["botpipe*", "botpipe_optimizer*"]
 
 [tool.setuptools.package-data]
-botlane = [
+botpipe = [
   "workflows/**/*",
 ]

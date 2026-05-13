@@ -8,25 +8,25 @@ from pathlib import Path
 import pytest
 from pydantic import BaseModel
 
-from botlane.core.compiler import compile_workflow
-from botlane.core import FINISH, Workflow
-from botlane.core.providers.fake import ScriptedLLMProvider
-from botlane.core.providers.retries import ProviderRetryPolicy
-from botlane.core.schema_registry import CHILD_RUN_SUMMARY_SCHEMA, RUN_METADATA_SCHEMA, WORKFLOW_TOPOLOGY_SCHEMA
-from botlane.core.steps import PromptStep
-from botlane.runtime.config import GitTrackingRuntimeConfig, RuntimeConfig
-from botlane.core.errors import WorkflowExecutionError
-from botlane.runtime.loader import WorkflowParameterError
-from botlane.runtime.loader import resolve_workflow_reference
-from botlane.runtime.inspection import (
+from botpipe.core.compiler import compile_workflow
+from botpipe.core import FINISH, Workflow
+from botpipe.core.providers.fake import ScriptedLLMProvider
+from botpipe.core.providers.retries import ProviderRetryPolicy
+from botpipe.core.schema_registry import CHILD_RUN_SUMMARY_SCHEMA, RUN_METADATA_SCHEMA, WORKFLOW_TOPOLOGY_SCHEMA
+from botpipe.core.steps import PromptStep
+from botpipe.runtime.config import GitTrackingRuntimeConfig, RuntimeConfig
+from botpipe.core.errors import WorkflowExecutionError
+from botpipe.runtime.loader import WorkflowParameterError
+from botpipe.runtime.loader import resolve_workflow_reference
+from botpipe.runtime.inspection import (
     list_runs as inspection_list_runs,
     load_run_history as inspection_load_run_history,
     load_run_metadata as inspection_load_run_metadata,
     load_run_record as inspection_load_run_record,
     load_run_topology as inspection_load_run_topology,
 )
-from botlane.runtime.runner import RunnerOptions, run_workflow_package
-from botlane.runtime.workspace import (
+from botpipe.runtime.runner import RunnerOptions, run_workflow_package
+from botpipe.runtime.workspace import (
     create_run,
     ensure_workspace,
     ensure_workflow_workspace,
@@ -35,7 +35,7 @@ from botlane.runtime.workspace import (
     list_workflow_run_summaries,
     resolve_run_workflow_input,
 )
-from botlane.core.primitives import Outcome
+from botpipe.core.primitives import Outcome
 
 INVALID_TOPOLOGY_SCHEMA = "unsupported.workflow_topology/v999"
 
@@ -74,7 +74,7 @@ def test_run_creates_task_workflow_run_layout_and_immutable_request_snapshots(tm
         options=_runner_options(tmp_path, task_id="task-1", message="First message"),
     )
 
-    task_dir = tmp_path / ".botlane" / "tasks" / "task-1"
+    task_dir = tmp_path / ".botpipe" / "tasks" / "task-1"
     workflow_dir = task_dir / "wf_snapshot_demo"
     runs_dir = workflow_dir / "runs"
     first_run_dir = next(runs_dir.iterdir())
@@ -87,14 +87,14 @@ def test_run_creates_task_workflow_run_layout_and_immutable_request_snapshots(tm
     assert (task_dir / "request.md").read_text(encoding="utf-8") == "First message\n"
     assert (first_run_dir / "request.md").read_text(encoding="utf-8") == "First message\n"
     assert (workflow_dir / "workflow.json").exists()
-    assert task_meta["messages_file"] == ".botlane/tasks/task-1/messages.jsonl"
-    assert task_meta["request_file"] == ".botlane/tasks/task-1/request.md"
+    assert task_meta["messages_file"] == ".botpipe/tasks/task-1/messages.jsonl"
+    assert task_meta["request_file"] == ".botpipe/tasks/task-1/request.md"
     assert first_run_meta["schema"] == RUN_METADATA_SCHEMA
     assert first_run_meta["status"] == "success"
-    assert first_run_meta["task_folder"] == ".botlane/tasks/task-1"
-    assert first_run_meta["workflow_folder"] == ".botlane/tasks/task-1/wf_snapshot_demo"
-    assert first_run_meta["run_folder"] == f".botlane/tasks/task-1/wf_snapshot_demo/runs/{first_run_dir.name}"
-    assert first_run_meta["request_file"] == f".botlane/tasks/task-1/wf_snapshot_demo/runs/{first_run_dir.name}/request.md"
+    assert first_run_meta["task_folder"] == ".botpipe/tasks/task-1"
+    assert first_run_meta["workflow_folder"] == ".botpipe/tasks/task-1/wf_snapshot_demo"
+    assert first_run_meta["run_folder"] == f".botpipe/tasks/task-1/wf_snapshot_demo/runs/{first_run_dir.name}"
+    assert first_run_meta["request_file"] == f".botpipe/tasks/task-1/wf_snapshot_demo/runs/{first_run_dir.name}/request.md"
 
     second_result = run_workflow_package(
         "snapshot_demo",
@@ -184,7 +184,7 @@ def test_runtime_context_and_prompt_resolution_use_workflow_scope_and_package_ro
         ),
     )
 
-    task_dir = tmp_path / ".botlane" / "tasks" / "context-task"
+    task_dir = tmp_path / ".botpipe" / "tasks" / "context-task"
     workflow_dir = task_dir / "wf_context_demo"
     run_dir = next((workflow_dir / "runs").iterdir())
     payload = json.loads((run_dir / "context.json").read_text(encoding="utf-8"))
@@ -200,7 +200,7 @@ def test_runtime_context_and_prompt_resolution_use_workflow_scope_and_package_ro
     assert Path(payload["prompt_path"]) == tmp_path / "workflows" / "context_demo" / "prompts" / "ask.md"
     assert (workflow_dir / "workflow-note.txt").read_text(encoding="utf-8") == "workflow-scoped\n"
     assert run_meta["workflow_params"] == {"mode": "strict"}
-    assert run_meta["workflow_folder"] == ".botlane/tasks/context-task/wf_context_demo"
+    assert run_meta["workflow_folder"] == ".botpipe/tasks/context-task/wf_context_demo"
 
 
 def test_run_metadata_records_topology_hashes_and_artifact_contract_paths(tmp_path: Path) -> None:
@@ -212,7 +212,7 @@ def test_run_metadata_records_topology_hashes_and_artifact_contract_paths(tmp_pa
         options=_runner_options(tmp_path, task_id="task-topology", message="Record topology metadata"),
     )
 
-    run_dir = next((tmp_path / ".botlane" / "tasks" / "task-topology" / "wf_topology_demo" / "runs").iterdir())
+    run_dir = next((tmp_path / ".botpipe" / "tasks" / "task-topology" / "wf_topology_demo" / "runs").iterdir())
     run_meta = json.loads((run_dir / "run.json").read_text(encoding="utf-8"))
     topology = run_meta["topology"]
     topology_payload = json.loads((run_dir / topology["artifacts"]["topology"]).read_text(encoding="utf-8"))
@@ -299,7 +299,7 @@ def test_runtime_inspection_loaders_filter_status_and_require_disambiguation(tmp
 
 
 def test_runtime_inspection_loaders_migrate_schema_less_run_metadata_and_topology(tmp_path: Path) -> None:
-    run_dir = tmp_path / ".botlane" / "tasks" / "task-1" / "wf_demo" / "runs" / "run-1"
+    run_dir = tmp_path / ".botpipe" / "tasks" / "task-1" / "wf_demo" / "runs" / "run-1"
     run_dir.mkdir(parents=True)
     (run_dir / "run.json").write_text(
         json.dumps({"workflow_name": "demo", "run_id": "run-1"}, indent=2) + "\n",
@@ -333,7 +333,7 @@ def test_resume_warns_and_continues_when_saved_topology_hash_differs(tmp_path: P
     )
 
     run_dir = next(
-        (tmp_path / ".botlane" / "tasks" / "task-topology-resume" / "wf_resume_topology_demo" / "runs").iterdir()
+        (tmp_path / ".botpipe" / "tasks" / "task-topology-resume" / "wf_resume_topology_demo" / "runs").iterdir()
     )
     (run_dir / "topology.json").unlink()
     run_meta_file = run_dir / "run.json"
@@ -349,7 +349,7 @@ from __future__ import annotations
 
 from pydantic import BaseModel
 
-from botlane import AWAIT_INPUT, FINISH, Prompt, Raw, Workflow, python_step, step
+from botpipe import AWAIT_INPUT, FINISH, Prompt, Raw, Workflow, python_step, step
 
 
 class ResumeTopologyWorkflow(Workflow):
@@ -358,7 +358,7 @@ class ResumeTopologyWorkflow(Workflow):
     class State(BaseModel):
         answer: str | None = None
 
-    context_dump = Raw("context_dump", path="{run_folder}/context.json")
+    context_dump = Raw("context_dump", path="{{ run.folder }}/context.json")
     ask = step(
         prompt=Prompt.file("prompts/ask.md"),
         writes=[context_dump],
@@ -409,7 +409,7 @@ def test_resume_rejects_unsupported_embedded_topology_schema_when_topology_file_
     )
 
     run_dir = next(
-        (tmp_path / ".botlane" / "tasks" / "task-topology-schema" / "wf_resume_topology_schema_demo" / "runs").iterdir()
+        (tmp_path / ".botpipe" / "tasks" / "task-topology-schema" / "wf_resume_topology_schema_demo" / "runs").iterdir()
     )
     (run_dir / "topology.json").unlink()
     run_meta_file = run_dir / "run.json"
@@ -450,7 +450,7 @@ def test_resume_topology_mismatch_can_fail_in_strict_mode(tmp_path: Path) -> Non
     )
 
     run_dir = next(
-        (tmp_path / ".botlane" / "tasks" / "task-topology-strict" / "wf_resume_topology_strict_demo" / "runs").iterdir()
+        (tmp_path / ".botpipe" / "tasks" / "task-topology-strict" / "wf_resume_topology_strict_demo" / "runs").iterdir()
     )
     workflow_file = tmp_path / "workflows" / "resume_topology_strict_demo" / "workflow.py"
     workflow_file.write_text(
@@ -459,7 +459,7 @@ from __future__ import annotations
 
 from pydantic import BaseModel
 
-from botlane import AWAIT_INPUT, FINISH, Prompt, Raw, Workflow, python_step, step
+from botpipe import AWAIT_INPUT, FINISH, Prompt, Raw, Workflow, python_step, step
 
 
 class ResumeTopologyStrictWorkflow(Workflow):
@@ -468,7 +468,7 @@ class ResumeTopologyStrictWorkflow(Workflow):
     class State(BaseModel):
         answer: str | None = None
 
-    context_dump = Raw("context_dump", path="{run_folder}/context.json")
+    context_dump = Raw("context_dump", path="{{ run.folder }}/context.json")
     ask = step(
         prompt=Prompt.file("prompts/ask.md"),
         writes=[context_dump],
@@ -547,7 +547,7 @@ def test_resume_preserves_persisted_workflow_params_when_not_resupplied(tmp_path
         ),
     )
 
-    workflow_dir = tmp_path / ".botlane" / "tasks" / "task-params" / "wf_resume_params_demo"
+    workflow_dir = tmp_path / ".botpipe" / "tasks" / "task-params" / "wf_resume_params_demo"
     run_dir = next((workflow_dir / "runs").iterdir())
     paused_meta = json.loads((run_dir / "run.json").read_text(encoding="utf-8"))
 
@@ -618,7 +618,7 @@ def test_resume_ignores_explicit_workflow_param_override_for_existing_run(tmp_pa
         ),
     )
 
-    workflow_dir = tmp_path / ".botlane" / "tasks" / "task-override" / "wf_resume_override_demo"
+    workflow_dir = tmp_path / ".botpipe" / "tasks" / "task-override" / "wf_resume_override_demo"
     run_dir = next((workflow_dir / "runs").iterdir())
 
     resumed = run_workflow_package(
@@ -691,8 +691,8 @@ def test_resume_context_message_uses_run_local_request_snapshot_not_mutated_task
         ),
     )
 
-    workflow_dir = tmp_path / ".botlane" / "tasks" / "task-message" / "wf_resume_message_demo"
-    task_dir = tmp_path / ".botlane" / "tasks" / "task-message"
+    workflow_dir = tmp_path / ".botpipe" / "tasks" / "task-message" / "wf_resume_message_demo"
+    task_dir = tmp_path / ".botpipe" / "tasks" / "task-message"
     run_dir = next((workflow_dir / "runs").iterdir())
     paused_context = json.loads((run_dir / "context.json").read_text(encoding="utf-8"))
 
@@ -742,8 +742,6 @@ def test_resume_context_preserves_run_message_and_raw_input_fields(tmp_path: Pat
                     json.dumps(
                         {
                             "message": request.context.message,
-                            "input_has_message": request.context.input_fields is not None
-                            and "message" in type(request.context.input_fields).model_fields,
                             "input_model_dump": request.context.input.model_dump(mode="python"),
                             "input_topic": request.context.input.topic,
                             "input_fields": None
@@ -760,8 +758,6 @@ def test_resume_context_preserves_run_message_and_raw_input_fields(tmp_path: Pat
                     json.dumps(
                         {
                             "message": request.context.message,
-                            "input_has_message": request.context.input_fields is not None
-                            and "message" in type(request.context.input_fields).model_fields,
                             "input_model_dump": request.context.input.model_dump(mode="python"),
                             "input_topic": request.context.input.topic,
                             "input_fields": None
@@ -787,8 +783,8 @@ def test_resume_context_preserves_run_message_and_raw_input_fields(tmp_path: Pat
         ),
     )
 
-    workflow_dir = tmp_path / ".botlane" / "tasks" / "task-typed-input-message" / "wf_resume_typed_input_demo"
-    task_dir = tmp_path / ".botlane" / "tasks" / "task-typed-input-message"
+    workflow_dir = tmp_path / ".botpipe" / "tasks" / "task-typed-input-message" / "wf_resume_typed_input_demo"
+    task_dir = tmp_path / ".botpipe" / "tasks" / "task-typed-input-message"
     run_dir = next((workflow_dir / "runs").iterdir())
     paused_context = json.loads((run_dir / "context.json").read_text(encoding="utf-8"))
     paused_meta = json.loads((run_dir / "run.json").read_text(encoding="utf-8"))
@@ -813,8 +809,7 @@ def test_resume_context_preserves_run_message_and_raw_input_fields(tmp_path: Pat
     assert paused.terminal == "AWAIT_INPUT"
     assert paused_context == {
         "message": "Original request",
-        "input_has_message": False,
-        "input_model_dump": {"message": "Original request", "topic": "release"},
+        "input_model_dump": {"topic": "release"},
         "input_topic": "release",
         "input_fields": {"topic": "release"},
         "answer": None,
@@ -824,8 +819,7 @@ def test_resume_context_preserves_run_message_and_raw_input_fields(tmp_path: Pat
     assert resumed.terminal == "FINISH"
     assert resumed_context == {
         "message": "Original request",
-        "input_has_message": False,
-        "input_model_dump": {"message": "Original request", "topic": "release"},
+        "input_model_dump": {"topic": "release"},
         "input_topic": "release",
         "input_fields": {"topic": "release"},
         "answer": "42",
@@ -911,7 +905,7 @@ class Params(BaseModel):
         ),
     )
 
-    workflow_dir = tmp_path / ".botlane" / "tasks" / "task-typed-new" / "wf_typed_params_demo"
+    workflow_dir = tmp_path / ".botpipe" / "tasks" / "task-typed-new" / "wf_typed_params_demo"
     run_dir = next((workflow_dir / "runs").iterdir())
     payload = json.loads((run_dir / "context.json").read_text(encoding="utf-8"))
 
@@ -963,7 +957,7 @@ class Params(BaseModel):
         ),
     )
 
-    workflow_dir = tmp_path / ".botlane" / "tasks" / "task-typed-normalized" / "wf_typed_normalized_demo"
+    workflow_dir = tmp_path / ".botpipe" / "tasks" / "task-typed-normalized" / "wf_typed_normalized_demo"
     run_dir = next((workflow_dir / "runs").iterdir())
     payload = json.loads((run_dir / "context.json").read_text(encoding="utf-8"))
     run_meta = json.loads((run_dir / "run.json").read_text(encoding="utf-8"))
@@ -1030,7 +1024,7 @@ class Params(BaseModel):
         ),
     )
 
-    workflow_dir = tmp_path / ".botlane" / "tasks" / "task-typed-resume" / "wf_typed_resume_demo"
+    workflow_dir = tmp_path / ".botpipe" / "tasks" / "task-typed-resume" / "wf_typed_resume_demo"
     run_dir = next((workflow_dir / "runs").iterdir())
 
     resumed = run_workflow_package(
@@ -1083,7 +1077,7 @@ class Params(BaseModel):
             ),
         )
 
-    assert not (tmp_path / ".botlane").exists()
+    assert not (tmp_path / ".botpipe").exists()
 
 
 def test_list_run_records_normalizes_legacy_paused_status_for_public_filters(tmp_path: Path) -> None:
@@ -1134,7 +1128,7 @@ def test_run_metadata_keeps_blocked_status_distinct_from_awaiting_input(tmp_path
         options=_runner_options(tmp_path, task_id="blocked-task", message="Check dependency status"),
     )
 
-    run_dir = next((tmp_path / ".botlane" / "tasks" / "blocked-task" / "wf_blocked_demo" / "runs").iterdir())
+    run_dir = next((tmp_path / ".botpipe" / "tasks" / "blocked-task" / "wf_blocked_demo" / "runs").iterdir())
     run_meta = json.loads((run_dir / "run.json").read_text(encoding="utf-8"))
     blocked_records = list_run_records(
         tmp_path,
@@ -1527,7 +1521,7 @@ def test_context_invoke_workflow_accepts_imported_main_workflow_classes_and_reco
         options=_runner_options(tmp_path, task_id="subworkflow-class-task", message="Parent request"),
     )
 
-    task_dir = tmp_path / ".botlane" / "tasks" / "subworkflow-class-task"
+    task_dir = tmp_path / ".botpipe" / "tasks" / "subworkflow-class-task"
     parent_run_dir = next((task_dir / "wf_parent_class" / "runs").iterdir())
     child_run_dir = next((task_dir / "wf_child_success" / "runs").iterdir())
     parent_payload = json.loads((parent_run_dir / "summary.json").read_text(encoding="utf-8"))
@@ -1639,7 +1633,7 @@ def test_composition_helpers_keep_child_invocation_explicit_and_adopt_selected_a
         options=_runner_options(tmp_path, task_id="subworkflow-helper-task", message="Parent request"),
     )
 
-    task_dir = tmp_path / ".botlane" / "tasks" / "subworkflow-helper-task"
+    task_dir = tmp_path / ".botpipe" / "tasks" / "subworkflow-helper-task"
     parent_workflow_dir = task_dir / "wf_parent_composed"
     parent_run_dir = next((parent_workflow_dir / "runs").iterdir())
     child_run_dir = next((task_dir / "wf_child_success" / "runs").iterdir())
@@ -1708,7 +1702,7 @@ def test_context_invoke_workflow_by_name_creates_isolated_child_runs_without_inh
         options=_runner_options(tmp_path, task_id="subworkflow-name-task", message="Parent request"),
     )
 
-    task_dir = tmp_path / ".botlane" / "tasks" / "subworkflow-name-task"
+    task_dir = tmp_path / ".botpipe" / "tasks" / "subworkflow-name-task"
     parent_run_dir = next((task_dir / "wf_parent_name" / "runs").iterdir())
 
     resumed_parent = run_workflow_package(
@@ -1803,7 +1797,7 @@ def test_context_invoke_workflow_records_stable_child_metadata_shape_for_fatal_c
             options=_runner_options(tmp_path, task_id="subworkflow-fatal-task", message="Parent request"),
         )
 
-    task_dir = tmp_path / ".botlane" / "tasks" / "subworkflow-fatal-task"
+    task_dir = tmp_path / ".botpipe" / "tasks" / "subworkflow-fatal-task"
     parent_run_dir = next((task_dir / "wf_parent_failing" / "runs").iterdir())
     child_run_dir = next((task_dir / "wf_child_failing" / "runs").iterdir())
     task_messages = [
@@ -1846,7 +1840,7 @@ def test_context_invoke_workflow_supports_typed_child_input_and_output(tmp_path:
         options=_runner_options(tmp_path, task_id="subworkflow-typed-task", message="Parent request"),
     )
 
-    task_dir = tmp_path / ".botlane" / "tasks" / "subworkflow-typed-task"
+    task_dir = tmp_path / ".botpipe" / "tasks" / "subworkflow-typed-task"
     parent_run_dir = next((task_dir / "wf_parent_typed" / "runs").iterdir())
     child_run_dir = next((task_dir / "wf_child_typed" / "runs").iterdir())
     parent_payload = json.loads((parent_run_dir / "summary.json").read_text(encoding="utf-8"))
@@ -1900,7 +1894,7 @@ def test_context_invoke_workflow_records_typed_child_output_validation_failures(
         options=_runner_options(tmp_path, task_id="subworkflow-typed-invalid-task", message="Parent request"),
     )
 
-    task_dir = tmp_path / ".botlane" / "tasks" / "subworkflow-typed-invalid-task"
+    task_dir = tmp_path / ".botpipe" / "tasks" / "subworkflow-typed-invalid-task"
     parent_run_dir = next((task_dir / "wf_parent_typed_invalid" / "runs").iterdir())
     child_run_dir = next((task_dir / "wf_child_typed_invalid" / "runs").iterdir())
     parent_payload = json.loads((parent_run_dir / "summary.json").read_text(encoding="utf-8"))
@@ -1971,7 +1965,7 @@ def _write_run_summary_record(
     error: str | None = None,
     pending_question: str | None = None,
 ) -> Path:
-    task_dir = root / ".botlane" / "tasks" / task_id
+    task_dir = root / ".botpipe" / "tasks" / task_id
     workflow_dir = task_dir / f"wf_{workflow_name}"
     run_dir = workflow_dir / "runs" / run_id
     run_dir.mkdir(parents=True, exist_ok=True)
@@ -2003,7 +1997,7 @@ def _write_task_operation_record(
     request_text: str,
     messages: list[tuple[str, str]],
 ) -> Path:
-    task_dir = root / ".botlane" / "tasks" / task_id
+    task_dir = root / ".botpipe" / "tasks" / task_id
     task_dir.mkdir(parents=True, exist_ok=True)
     (task_dir / "request.md").write_text(request_text, encoding="utf-8")
     (task_dir / "messages.jsonl").write_text(
@@ -2017,8 +2011,8 @@ def _write_task_operation_record(
         json.dumps(
             {
                 "created_at": created_at,
-                "messages_file": str(Path(".botlane") / "tasks" / task_id / "messages.jsonl"),
-                "request_file": str(Path(".botlane") / "tasks" / task_id / "request.md"),
+                "messages_file": str(Path(".botpipe") / "tasks" / task_id / "messages.jsonl"),
+                "request_file": str(Path(".botpipe") / "tasks" / task_id / "request.md"),
                 "request_updated_at": messages[-1][0] if messages else updated_at,
                 "task_id": task_id,
                 "updated_at": updated_at,
@@ -2046,7 +2040,7 @@ from __future__ import annotations
 
 from pydantic import BaseModel
 
-from botlane import FINISH, Workflow, python_step
+from botpipe import FINISH, Workflow, python_step
 
 
 class {class_name}(Workflow):
@@ -2079,7 +2073,7 @@ from __future__ import annotations
 
 from pydantic import BaseModel
 
-from botlane import FINISH, Workflow, python_step
+from botpipe import FINISH, Workflow, python_step
 
 
 class CompileCacheWorkflow(Workflow):
@@ -2127,7 +2121,7 @@ from __future__ import annotations
 
 from pydantic import BaseModel
 
-from botlane import Prompt, Raw, Workflow, step
+from botpipe import Prompt, Raw, Workflow, step
 
 
 class {class_name}(Workflow):
@@ -2136,8 +2130,8 @@ class {class_name}(Workflow):
     class State(BaseModel):
         note: str = ""
 
-    context_dump = Raw("context_dump", path="{{run_folder}}/context.json")
-    workflow_dump = Raw("workflow_dump", path="{{workflow_folder}}/workflow-note.txt")
+    context_dump = Raw("context_dump", path="{{{{ run.folder }}}}/context.json")
+    workflow_dump = Raw("workflow_dump", path="{{{{ workflow.folder }}}}/workflow-note.txt")
     ask = step(
         prompt=Prompt.file("prompts/ask.md"),
         writes=[context_dump, workflow_dump],
@@ -2186,7 +2180,7 @@ from __future__ import annotations
 
 from pydantic import BaseModel
 
-from botlane import AWAIT_INPUT, FINISH, Prompt, Raw, Workflow, step
+from botpipe import AWAIT_INPUT, FINISH, Prompt, Raw, Workflow, step
 
 
 class {class_name}(Workflow):
@@ -2195,7 +2189,7 @@ class {class_name}(Workflow):
     class State(BaseModel):
         answer: str | None = None
 
-    context_dump = Raw("context_dump", path="{{run_folder}}/context.json")
+    context_dump = Raw("context_dump", path="{{{{ run.folder }}}}/context.json")
     ask = step(
         prompt=Prompt.file("prompts/ask.md"),
         writes=[context_dump],
@@ -2230,7 +2224,7 @@ from __future__ import annotations
 
 from pydantic import BaseModel
 
-from botlane import AWAIT_INPUT, FINISH, Prompt, Raw, Workflow, step
+from botpipe import AWAIT_INPUT, FINISH, Prompt, Raw, Workflow, step
 
 
 class {class_name}(Workflow):
@@ -2242,7 +2236,7 @@ class {class_name}(Workflow):
     class State(BaseModel):
         answer: str | None = None
 
-    context_dump = Raw("context_dump", path="{{run_folder}}/context.json")
+    context_dump = Raw("context_dump", path="{{{{ run.folder }}}}/context.json")
     ask = step(
         prompt=Prompt.file("prompts/ask.md"),
         writes=[context_dump],
@@ -2272,7 +2266,7 @@ from __future__ import annotations
 
 from pydantic import BaseModel
 
-from botlane import AWAIT_INPUT, Prompt, Workflow, step
+from botpipe import AWAIT_INPUT, Prompt, Workflow, step
 
 
 class {class_name}(Workflow):
@@ -2321,7 +2315,7 @@ from __future__ import annotations
 
 from pydantic import BaseModel
 
-from botlane import Prompt, Raw, Session, Workflow, step
+from botpipe import Prompt, Raw, Session, Workflow, step
 
 
 class ChildWorkflow(Workflow):
@@ -2331,7 +2325,7 @@ class ChildWorkflow(Workflow):
         note: str = ""
 
     main = Session(open=True)
-    child_dump = Raw("child_dump", path="{run_folder}/child.json")
+    child_dump = Raw("child_dump", path="{{ run.folder }}/child.json")
     ask = step(prompt=Prompt.file("prompts/ask.md"), session=main, writes=[child_dump])
 """.strip()
         + "\n",
@@ -2355,7 +2349,7 @@ import json
 
 from pydantic import BaseModel
 
-from botlane import Event, FINISH, Session, Workflow, python_step
+from botpipe import Event, FINISH, Session, Workflow, python_step
 from workflows.child_success import ChildWorkflow
 
 
@@ -2411,8 +2405,8 @@ import json
 
 from pydantic import BaseModel
 
-from botlane import Event, FINISH, Workflow, python_step
-from botlane.stdlib import adopt_child_artifacts, require_child_workflow_result, run_child_workflow
+from botpipe import Event, FINISH, Workflow, python_step
+from botpipe.stdlib import adopt_child_artifacts, require_child_workflow_result, run_child_workflow
 
 
 class ParentCompositionHelperWorkflow(Workflow):
@@ -2490,7 +2484,7 @@ from __future__ import annotations
 
 from pydantic import BaseModel
 
-from botlane import AWAIT_INPUT, Prompt, Raw, Session, Workflow, step
+from botpipe import AWAIT_INPUT, Prompt, Raw, Session, Workflow, step
 
 
 class ChildPauseWorkflow(Workflow):
@@ -2500,7 +2494,7 @@ class ChildPauseWorkflow(Workflow):
         note: str = ""
 
     main = Session(open=True)
-    child_dump = Raw("child_dump", path="{run_folder}/child.json")
+    child_dump = Raw("child_dump", path="{{ run.folder }}/child.json")
     ask = step(
         prompt=Prompt.file("prompts/ask.md"),
         session=main,
@@ -2529,7 +2523,7 @@ import json
 
 from pydantic import BaseModel
 
-from botlane import AWAIT_INPUT, Event, FINISH, Workflow, python_step
+from botpipe import AWAIT_INPUT, Event, FINISH, Workflow, python_step
 
 
 class ParentNameWorkflow(Workflow):
@@ -2578,7 +2572,7 @@ from __future__ import annotations
 
 from pydantic import BaseModel
 
-from botlane import FINISH, Workflow, python_step
+from botpipe import FINISH, Workflow, python_step
 
 
 class ChildFailingWorkflow(Workflow):
@@ -2631,7 +2625,7 @@ import json
 
 from pydantic import BaseModel
 
-from botlane import Event, FINISH, Raw, Workflow, python_step
+from botpipe import Event, FINISH, Raw, Workflow, python_step
 
 
 class ChildTypedWorkflow(Workflow):
@@ -2649,7 +2643,7 @@ class ChildTypedWorkflow(Workflow):
         summary: str
         ready: bool
 
-    child_dump = Raw("child_dump", path="{{run_folder}}/typed-child.json")
+    child_dump = Raw("child_dump", path="{{{{ run.folder }}}}/typed-child.json")
 
     @python_step(name="plan", writes=[child_dump], routes={{"done": FINISH}})
     def plan(ctx):
@@ -2691,7 +2685,7 @@ import json
 
 from pydantic import BaseModel
 
-from botlane import Event, FINISH, Workflow, python_step
+from botpipe import Event, FINISH, Workflow, python_step
 from workflows.{child_package_name} import ChildTypedWorkflow
 
 
@@ -2745,7 +2739,7 @@ from __future__ import annotations
 
 from pydantic import BaseModel
 
-from botlane import Event, FINISH, Workflow, python_step
+from botpipe import Event, FINISH, Workflow, python_step
 
 
 class ParentFailingWorkflow(Workflow):

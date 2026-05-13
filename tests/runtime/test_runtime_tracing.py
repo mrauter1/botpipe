@@ -5,13 +5,13 @@ import json
 from hashlib import sha256
 from pathlib import Path
 
-import botlane.simple as simple
+import botpipe.simple as simple
 import pytest
 from pydantic import BaseModel
 
-from botlane.core.extensions import HookRouteRedirect, RunBinding, StepFinish, StepStart, TerminalFinish
-from botlane.core.providers.fake import ScriptedLLMProvider
-from botlane.core.providers.models import (
+from botpipe.core.extensions import HookRouteRedirect, RunBinding, StepFinish, StepStart, TerminalFinish
+from botpipe.core.providers.fake import ScriptedLLMProvider
+from botpipe.core.providers.models import (
     LLMRequest,
     OutcomeResponse,
     ProducerRequest,
@@ -20,14 +20,14 @@ from botlane.core.providers.models import (
     TokenUsage,
     VerifierRequest,
 )
-from botlane.core.primitives import Event, Outcome
-from botlane.runtime.config import GitTrackingRuntimeConfig, RuntimeConfig, TracingRuntimeConfig
-from botlane.runtime.runner import RunnerOptions, execute_workflow_package
-from botlane.core.schema_registry import RUNTIME_TRACE_SCHEMA, RUN_METADATA_SCHEMA, WORKFLOW_STATIC_STEP_GRAPH_SCHEMA
-from botlane.runtime.tracing import RuntimeTraceError, RuntimeTraceWriter
-from botlane.runtime.workspace import next_observability_sequence
+from botpipe.core.primitives import Event, Outcome
+from botpipe.runtime.config import GitTrackingRuntimeConfig, RuntimeConfig, TracingRuntimeConfig
+from botpipe.runtime.runner import RunnerOptions, execute_workflow_package
+from botpipe.core.schema_registry import RUNTIME_TRACE_SCHEMA, RUN_METADATA_SCHEMA, WORKFLOW_STATIC_STEP_GRAPH_SCHEMA
+from botpipe.runtime.tracing import RuntimeTraceError, RuntimeTraceWriter
+from botpipe.runtime.workspace import next_observability_sequence
 
-STATE_DIRNAME = ".botlane"
+STATE_DIRNAME = ".botpipe"
 
 
 class _State(BaseModel):
@@ -598,7 +598,7 @@ def test_runtime_trace_failure_policy_record_and_continue_swallows_initializatio
 ) -> None:
     run_dir = _run_dir(tmp_path)
     monkeypatch.setattr(
-        "botlane.runtime.tracing.write_static_step_graph_payload",
+        "botpipe.runtime.tracing.write_static_step_graph_payload",
         lambda *args, **kwargs: (_ for _ in ()).throw(RuntimeError("graph write failed")),
     )
 

@@ -6,20 +6,19 @@ from types import MappingProxyType, SimpleNamespace
 import pytest
 from pydantic import BaseModel
 
-import botlane
-import botlane.simple as public_simple
-import botlane.core.primitives as strict_primitives
-from botlane.core.artifacts import Artifact, ArtifactHandle, ResolvedArtifacts, render_runtime_template, resolve_artifact_template
-from botlane.core.branch_groups.context import BranchMetadata, FanInMetadata, create_branch_context, create_fan_in_context
-from botlane.core.context_placeholders import validate_safe_ctx_reference
-from botlane.core.context import Context
-from botlane.core.errors import WorkflowExecutionError
-from botlane.core.sessions import Continuity, SessionKey
-from botlane.core.worklists import Selection, SelectionSnapshot, Selector, WorkItem, WorkItemSnapshot, Worklist
-from botlane.core import Session as StrictSession
-from botlane.core.primitives import Checkpoint, Event, Goto, Outcome, PendingHandoff
-from botlane.core.prompts import Prompt, PromptRegistry
-from botlane.core.stores import (
+import botpipe
+import botpipe.simple as public_simple
+import botpipe.core.primitives as strict_primitives
+from botpipe.core.artifacts import Artifact, ArtifactHandle, ResolvedArtifacts, render_runtime_template, resolve_artifact_template
+from botpipe.core.branch_groups.context import BranchMetadata, FanInMetadata, create_branch_context, create_fan_in_context
+from botpipe.core.context import Context
+from botpipe.core.errors import WorkflowExecutionError
+from botpipe.core.sessions import Continuity, SessionKey
+from botpipe.core.worklists import Selection, SelectionSnapshot, Selector, WorkItem, WorkItemSnapshot, Worklist
+from botpipe.core import Session as StrictSession
+from botpipe.core.primitives import Checkpoint, Event, Goto, Outcome, PendingHandoff
+from botpipe.core.prompts import Prompt, PromptRegistry
+from botpipe.core.stores import (
     InMemoryCheckpointStore,
     InMemorySessionBackend,
     InMemorySessionStore,
@@ -28,7 +27,7 @@ from botlane.core.stores import (
     SessionBinding,
     SessionSnapshot,
 )
-from botlane.runtime.runner import _prompt_registry_roots
+from botpipe.runtime.runner import _prompt_registry_roots
 
 
 class _PhaseState(BaseModel):
@@ -53,8 +52,8 @@ class _PromptInput(BaseModel):
     topic: str
 
 
-class _PromptInputWithMessage(BaseModel):
-    message: str
+class _PromptInputWithNote(BaseModel):
+    note: str
     topic: str
 
 
@@ -90,8 +89,7 @@ def test_context_request_surface_reads_run_snapshot_and_task_request_file(tmp_pa
     assert context.request.text == "Line one\nLine two"
     assert context.message == "Line one\nLine two"
     assert context.input_fields is None
-    assert context.input.message == "Line one\nLine two"
-    assert context.input.model_dump() == {"message": "Line one\nLine two"}
+    assert context.input is None
 
 
 def test_context_request_surface_preserves_trailing_spaces_while_stripping_only_newlines(tmp_path: Path) -> None:
@@ -168,28 +166,7 @@ def test_context_request_surface_leaves_task_request_file_unset_when_absent(tmp_
     assert context.message == "Only run request"
 
 
-def test_validate_safe_ctx_reference_rejects_unsafe_segments() -> None:
-    assert validate_safe_ctx_reference("ctx.message") == ("ctx", "message")
-    assert validate_safe_ctx_reference("ctx.request.text") == ("ctx", "request", "text")
-    assert validate_safe_ctx_reference("ctx.input.message") == ("ctx", "input", "message")
-    assert validate_safe_ctx_reference("ctx.input.topic") == ("ctx", "input", "topic")
-
-    for reference in (
-        "ctx.__dict__",
-        "ctx.request.file.read_text()",
-        "ctx.request._private",
-        'ctx["message"]',
-        "ctx.message upper",
-        "ctx.message.extra",
-        "ctx.request.file.read_text",
-        "ctx.request.missing",
-        "ctx.input.topic.extra",
-    ):
-        with pytest.raises(ValueError):
-            validate_safe_ctx_reference(reference)
-
-
-def test_render_runtime_template_resolves_ctx_bindings_with_scalar_values(tmp_path: Path) -> None:
+def test_render_runtime_template_resolves_jinja_context_roots(tmp_path: Path) -> None:
     task_folder = tmp_path / "task"
     workflow_folder = task_folder / "wf_example"
     run_folder = workflow_folder / "runs" / "run-1"
@@ -214,10 +191,10 @@ def test_render_runtime_template_resolves_ctx_bindings_with_scalar_values(tmp_pa
     )
 
     rendered = render_runtime_template(
-        "Message={ctx.message}; Topic={ctx.input.topic}; Mode={ctx.params.mode}; Status={ctx.state.status}; File={ctx.request.file}",
+        "Message={{ message }}; Topic={{ input.topic }}; Mode={{ params.mode }}; "
+        "Status={{ state.status }}; File={{ request.file }}",
         context,
         placeholder_label="prompt placeholder",
-        replace_roots=frozenset({"ctx"}),
     )
 
     assert rendered == (
@@ -226,7 +203,7 @@ def test_render_runtime_template_resolves_ctx_bindings_with_scalar_values(tmp_pa
     )
 
 
-def test_render_runtime_template_resolves_ctx_input_message_without_typed_input(tmp_path: Path) -> None:
+def test_render_runtime_template_resolves_message_without_typed_input(tmp_path: Path) -> None:
     task_folder = tmp_path / "task"
     workflow_folder = task_folder / "wf_example"
     run_folder = workflow_folder / "runs" / "run-1"
@@ -250,16 +227,15 @@ def test_render_runtime_template_resolves_ctx_input_message_without_typed_input(
     )
 
     rendered = render_runtime_template(
-        "{ctx.input.message}",
+        "{{ message }}",
         context,
         placeholder_label="prompt placeholder",
-        replace_roots=frozenset({"ctx"}),
     )
 
     assert rendered == "Ship the release safely."
 
 
-def test_render_runtime_template_resolves_ctx_input_message_from_runtime_message_with_typed_input(
+def test_render_runtime_template_resolves_message_separately_from_typed_input(
     tmp_path: Path,
 ) -> None:
     task_folder = tmp_path / "task"
@@ -280,18 +256,17 @@ def test_render_runtime_template_resolves_ctx_input_message_from_runtime_message
         package_folder=package_folder,
         state=_PromptState(),
         params=_PromptParams(mode="brief", enabled=True),
-        workflow_input=_PromptInputWithMessage(message="Typed input message", topic="release"),
+        workflow_input=_PromptInputWithNote(note="Typed input note", topic="release"),
         session_store=InMemorySessionStore(),
     )
 
     rendered = render_runtime_template(
-        "Request={ctx.message}; InputMessage={ctx.input.message}; Topic={ctx.input.topic}",
+        "Request={{ message }}; Topic={{ input.topic }}",
         context,
         placeholder_label="prompt placeholder",
-        replace_roots=frozenset({"ctx"}),
     )
 
-    assert rendered == "Request=Ship the release safely.; InputMessage=Ship the release safely.; Topic=release"
+    assert rendered == "Request=Ship the release safely.; Topic=release"
 
 
 def test_context_can_keep_message_separate_from_request_snapshot_and_typed_input(tmp_path: Path) -> None:
@@ -319,10 +294,9 @@ def test_context_can_keep_message_separate_from_request_snapshot_and_typed_input
 
     assert context.message is None
     assert context.request.text == "Fallback request text"
-    assert context.input.message is None
     assert context.input.topic == "release"
     assert context.input_fields == _PromptInput(topic="release")
-    assert context.input.model_dump() == {"message": None, "topic": "release"}
+    assert context.input.model_dump() == {"topic": "release"}
 
 
 def test_context_input_fields_remain_available_without_request_snapshot(tmp_path: Path) -> None:
@@ -347,12 +321,11 @@ def test_context_input_fields_remain_available_without_request_snapshot(tmp_path
     )
 
     assert context.input.topic == "release"
-    assert context.input.message is None
     assert context.input_fields == _PromptInput(topic="release")
-    assert context.input.model_dump() == {"message": None, "topic": "release"}
+    assert context.input.model_dump() == {"topic": "release"}
 
 
-def test_render_runtime_template_rejects_missing_ctx_input(tmp_path: Path) -> None:
+def test_render_runtime_template_rejects_missing_input_root(tmp_path: Path) -> None:
     task_folder = tmp_path / "task"
     workflow_folder = task_folder / "wf_example"
     run_folder = workflow_folder / "runs" / "run-1"
@@ -376,17 +349,16 @@ def test_render_runtime_template_rejects_missing_ctx_input(tmp_path: Path) -> No
 
     with pytest.raises(
         WorkflowExecutionError,
-        match=r"ctx\.input\.topic requires workflow input, but no input was provided",
+        match=r"undefined Jinja value: .*input",
     ):
         render_runtime_template(
-            "{ctx.input.topic}",
+            "{{ input.topic }}",
             context,
             placeholder_label="prompt placeholder",
-            replace_roots=frozenset({"ctx"}),
         )
 
 
-def test_render_runtime_template_rejects_non_scalar_ctx_values(tmp_path: Path) -> None:
+def test_render_runtime_template_renders_full_object_values(tmp_path: Path) -> None:
     task_folder = tmp_path / "task"
     workflow_folder = task_folder / "wf_example"
     run_folder = workflow_folder / "runs" / "run-1"
@@ -409,16 +381,13 @@ def test_render_runtime_template_rejects_non_scalar_ctx_values(tmp_path: Path) -
         session_store=InMemorySessionStore(),
     )
 
-    with pytest.raises(
-        WorkflowExecutionError,
-        match=r"prompt placeholder \{ctx\.input\.tags\} resolved to a non-scalar value",
-    ):
-        render_runtime_template(
-            "{ctx.input.tags}",
-            context,
-            placeholder_label="prompt placeholder",
-            replace_roots=frozenset({"ctx"}),
-        )
+    rendered = render_runtime_template(
+        "{{ input.tags }}",
+        context,
+        placeholder_label="prompt placeholder",
+    )
+
+    assert rendered == "['alpha', 'beta']"
 
 
 def test_render_runtime_template_rejects_unsafe_ctx_paths(tmp_path: Path) -> None:
@@ -444,13 +413,12 @@ def test_render_runtime_template_rejects_unsafe_ctx_paths(tmp_path: Path) -> Non
 
     with pytest.raises(
         WorkflowExecutionError,
-        match=r"prompt placeholder \{ctx\.__dict__\} is not a supported safe dotted path",
+        match=r"legacy single-brace placeholder '\{ctx\.__dict__\}'",
     ):
         render_runtime_template(
             "{ctx.__dict__}",
             context,
             placeholder_label="prompt placeholder",
-            replace_roots=frozenset({"ctx"}),
         )
 
 
@@ -477,12 +445,12 @@ def test_resolve_artifact_template_rejects_ctx_placeholders(tmp_path: Path) -> N
 
     with pytest.raises(
         WorkflowExecutionError,
-        match=r"ctx\.\* placeholders are only supported in prompts and workflow-step messages, not artifact paths",
+        match=r"legacy single-brace placeholder '\{ctx\.message\}'",
     ):
         resolve_artifact_template("outputs/{ctx.message}.md", context)
 
 
-def test_resolve_artifact_template_supports_composite_input_message_and_fields(tmp_path: Path) -> None:
+def test_resolve_artifact_template_uses_message_and_typed_input_fields(tmp_path: Path) -> None:
     task_folder = tmp_path / "task"
     workflow_folder = task_folder / "wf_example"
     run_folder = workflow_folder / "runs" / "run-1"
@@ -504,12 +472,12 @@ def test_resolve_artifact_template_supports_composite_input_message_and_fields(t
         session_store=InMemorySessionStore(),
     )
 
-    resolved = resolve_artifact_template("outputs/{input.message}-{input.topic}.md", context)
+    resolved = resolve_artifact_template("outputs/{{ message }}-{{ input.topic }}.md", context)
 
     assert resolved == Path("outputs") / "artifact-request-release.md"
 
 
-def test_render_runtime_template_bare_input_message_uses_runtime_message(tmp_path: Path) -> None:
+def test_render_runtime_template_uses_message_and_typed_input_fields(tmp_path: Path) -> None:
     task_folder = tmp_path / "task"
     workflow_folder = task_folder / "wf_example"
     run_folder = workflow_folder / "runs" / "run-1"
@@ -532,7 +500,7 @@ def test_render_runtime_template_bare_input_message_uses_runtime_message(tmp_pat
     )
 
     rendered = render_runtime_template(
-        "Message={input.message}; Topic={input.topic}",
+        "Message={{ message }}; Topic={{ input.topic }}",
         context,
         placeholder_label="artifact template placeholder",
     )
@@ -540,7 +508,7 @@ def test_render_runtime_template_bare_input_message_uses_runtime_message(tmp_pat
     assert rendered == "Message=artifact-request; Topic=release"
 
 
-def test_render_runtime_template_keeps_bare_input_message_separate_from_ctx_input_message(
+def test_render_runtime_template_uses_message_and_typed_input_roots(
     tmp_path: Path,
 ) -> None:
     task_folder = tmp_path / "task"
@@ -560,17 +528,80 @@ def test_render_runtime_template_keeps_bare_input_message_separate_from_ctx_inpu
         run_folder=run_folder,
         package_folder=package_folder,
         state=_PromptState(),
-        workflow_input=_PromptInputWithMessage(message="typed-input", topic="release"),
+        workflow_input=_PromptInputWithNote(note="typed-input", topic="release"),
         session_store=InMemorySessionStore(),
     )
 
     rendered = render_runtime_template(
-        "Bare={input.message}; Ctx={ctx.input.message}; Topic={ctx.input.topic}",
+        "Bare={{ message }}; Topic={{ input.topic }}",
         context,
         placeholder_label="artifact template placeholder",
     )
 
-    assert rendered == "Bare=artifact-request; Ctx=artifact-request; Topic=release"
+    assert rendered == "Bare=artifact-request; Topic=release"
+
+
+def test_jinja_artifact_and_value_namespaces_are_collision_safe(tmp_path: Path) -> None:
+    artifact = Artifact.text("items.txt")
+    artifact.bind_name("items")
+    artifact.bind_owner_step("review")
+    handle = ArtifactHandle("items", tmp_path / "items.txt", artifact)
+    context = Context(
+        task_id="task-1",
+        run_id="run-1",
+        workflow_name="example",
+        task_folder=tmp_path / "task",
+        workflow_folder=tmp_path / "task" / "wf_example",
+        run_folder=tmp_path / "run",
+        package_folder=tmp_path / "package",
+        state=_PromptState(),
+        artifacts=ResolvedArtifacts({"review.items": handle}),
+        values={"summary": {"items": "item-value", "keys": "key-value", "values": "value-value"}},
+        session_store=InMemorySessionStore(),
+    )
+
+    rendered = render_runtime_template(
+        "{{ review.items.name }} {{ summary.items }} {{ summary.keys }} {{ summary.values }} "
+        "{{ summary['items'] }}",
+        context,
+        placeholder_label="prompt placeholder",
+    )
+
+    assert rendered == "items item-value key-value value-value item-value"
+
+
+def test_jinja_artifacts_iteration_keeps_same_display_name_artifacts_distinct(tmp_path: Path) -> None:
+    draft_artifact = Artifact.text("draft-report.txt")
+    draft_artifact.bind_name("report")
+    draft_artifact.bind_owner_step("draft")
+    review_artifact = Artifact.text("review-report.txt")
+    review_artifact.bind_name("report")
+    review_artifact.bind_owner_step("review")
+    context = Context(
+        task_id="task-1",
+        run_id="run-1",
+        workflow_name="example",
+        task_folder=tmp_path / "task",
+        workflow_folder=tmp_path / "task" / "wf_example",
+        run_folder=tmp_path / "run",
+        package_folder=tmp_path / "package",
+        state=_PromptState(),
+        artifacts=ResolvedArtifacts(
+            {
+                "draft.report": ArtifactHandle("report", tmp_path / "draft-report.txt", draft_artifact),
+                "review.report": ArtifactHandle("report", tmp_path / "review-report.txt", review_artifact),
+            }
+        ),
+        session_store=InMemorySessionStore(),
+    )
+
+    rendered = render_runtime_template(
+        "{% for artifact in artifacts %}{{ artifact.artifact.qualified_name }};{% endfor %}",
+        context,
+        placeholder_label="prompt placeholder",
+    )
+
+    assert rendered == "draft.report;review.report;"
 
 
 def test_event_and_outcome():
@@ -590,11 +621,11 @@ def test_public_authoring_surfaces_export_requested_runtime_primitives():
     for removed in ("Checkpoint", "ChildWorkflowResult", "ResolvedArtifacts"):
         assert not hasattr(public_simple, removed)
 
-    assert not hasattr(botlane, "Checkpoint")
-    assert not hasattr(botlane, "ChildWorkflowResult")
-    assert not hasattr(botlane, "ResolvedArtifacts")
-    assert botlane.Event is public_simple.Event
-    assert botlane.Outcome is public_simple.Outcome
+    assert not hasattr(botpipe, "Checkpoint")
+    assert not hasattr(botpipe, "ChildWorkflowResult")
+    assert not hasattr(botpipe, "ResolvedArtifacts")
+    assert botpipe.Event is public_simple.Event
+    assert botpipe.Outcome is public_simple.Outcome
     assert hasattr(public_simple, "Event")
     assert hasattr(public_simple, "Outcome")
     for exported in ("Checkpoint", "Event", "Outcome", "PendingHandoff", "ResolvedArtifacts"):
@@ -667,7 +698,7 @@ def test_prompt_registry_roots_include_plain_string_prompt_spec_dirs(tmp_path: P
     assert (package_dir / "reviews").resolve() in roots
 
 
-def test_artifact_template_resolution_supports_dot_notation_and_missing_keys(tmp_path: Path):
+def test_artifact_template_resolution_supports_dot_notation(tmp_path: Path):
     package_folder = tmp_path / "workflows" / "example"
     context = Context(
         task_id="task-1",
@@ -681,11 +712,28 @@ def test_artifact_template_resolution_supports_dot_notation_and_missing_keys(tmp
         session_store=InMemorySessionStore(),
     )
 
-    workflow_resolved = resolve_artifact_template("{workflow_folder}/phases/{state.phase.id}/{state.missing}/file.txt", context)
-    package_resolved = resolve_artifact_template("{package_folder}/prompts/{workflow_name}.md", context)
+    workflow_resolved = resolve_artifact_template("{{ workflow.folder }}/phases/{{ state.phase.id }}/file.txt", context)
+    package_resolved = resolve_artifact_template("{{ package.folder }}/prompts/{{ workflow.name }}.md", context)
 
     assert workflow_resolved == tmp_path / "task" / "wf_example" / "phases" / "phase-1" / "file.txt"
     assert package_resolved == package_folder / "prompts" / "example.md"
+
+
+def test_artifact_template_resolution_fails_on_undefined_values(tmp_path: Path):
+    context = Context(
+        task_id="task-1",
+        run_id="run-1",
+        workflow_name="example",
+        task_folder=tmp_path / "task",
+        workflow_folder=tmp_path / "task" / "wf_example",
+        run_folder=tmp_path / "run",
+        package_folder=tmp_path / "package",
+        state=_State(),
+        session_store=InMemorySessionStore(),
+    )
+
+    with pytest.raises(WorkflowExecutionError, match="undefined Jinja value"):
+        resolve_artifact_template("{{ workflow.folder }}/{{ state.missing }}/file.txt", context)
 
 
 def test_artifact_template_resolution_supports_step_local_relative_artifacts(tmp_path: Path):
@@ -733,7 +781,7 @@ def test_artifact_template_resolution_renders_branch_placeholders_under_owner_st
         ),
         session_store=parent._session_store,
     )
-    artifact = Artifact.md("reports/{branch.name}.md", required=True)
+    artifact = Artifact.md("reports/{{ branch.name }}.md", required=True)
     artifact.bind_name("report")
     artifact.bind_owner_step("assess_one")
 
@@ -770,7 +818,7 @@ def test_artifact_template_resolution_renders_fan_in_placeholders_under_owner_st
         ),
         session_store=parent._session_store,
     )
-    artifact = Artifact.text("summaries/{fan_in.completed_count}.txt", required=True)
+    artifact = Artifact.text("summaries/{{ fan_in.completed_count }}.txt", required=True)
     artifact.bind_name("summary")
     artifact.bind_owner_step("combine_reviews")
 
@@ -798,7 +846,7 @@ def test_artifact_template_resolution_treats_mid_chain_none_state_values_as_empt
         session_store=InMemorySessionStore(),
     )
 
-    resolved = resolve_artifact_template("{workflow_folder}/phases/{state.phase.dir_key}/file.txt", context)
+    resolved = resolve_artifact_template("{{ workflow.folder }}/phases/{{ state.phase.dir_key }}/file.txt", context)
 
     assert resolved == tmp_path / "task" / "wf_example" / "phases" / "file.txt"
 
@@ -892,7 +940,7 @@ def test_artifact_handle_validation_allows_missing_optional_artifact(tmp_path: P
 
 
 def test_artifact_handle_validation_allows_directory_outputs_without_schema(tmp_path: Path):
-    artifact = Artifact("{workflow_folder}/candidate_workflow_surface", name="candidate_workflow_surface")
+    artifact = Artifact("{{ workflow.folder }}/candidate_workflow_surface", name="candidate_workflow_surface")
     path = tmp_path / "candidate_workflow_surface"
     path.mkdir()
     handle = ArtifactHandle(name="candidate_workflow_surface", path=path, artifact=artifact)
@@ -907,7 +955,7 @@ def test_artifact_handle_validation_rejects_directory_outputs_for_json_artifacts
     class Summary(BaseModel):
         text: str
 
-    artifact = Artifact.json("{workflow_folder}/candidate_summary", schema=Summary, required=True, name="summary")
+    artifact = Artifact.json("{{ workflow.folder }}/candidate_summary", schema=Summary, required=True, name="summary")
     path = tmp_path / "candidate_summary"
     path.mkdir()
     handle = ArtifactHandle(name="summary", path=path, artifact=artifact)
@@ -1478,7 +1526,7 @@ def test_artifact_template_resolution_supports_worklist_placeholders(tmp_path: P
     context._execution_frame.set_active_worklist("gate")
 
     resolved = resolve_artifact_template(
-        "{workflow_folder}/{item.dir_key}/{worklist.gate.current.id}.md",
+        "{{ workflow.folder }}/{{ item.dir_key }}/{{ worklist.gate.current.id }}.md",
         context,
     )
 
@@ -1516,7 +1564,7 @@ def test_artifact_template_resolution_lazily_materializes_worklist_placeholders(
     runtime.set_worklist_selection_resolver(_resolve)
 
     resolved = resolve_artifact_template(
-        "{workflow_folder}/{item.dir_key}/{worklist.gate.current.id}.md",
+        "{{ workflow.folder }}/{{ item.dir_key }}/{{ worklist.gate.current.id }}.md",
         context,
     )
 
@@ -1565,7 +1613,7 @@ def test_artifact_template_resolution_supports_item_state_placeholders(tmp_path:
     )
 
     resolved = resolve_artifact_template(
-        "{workflow_folder}/{item.state.severity}.md",
+        "{{ workflow.folder }}/{{ item.state.severity }}.md",
         context,
     )
 
@@ -1609,9 +1657,9 @@ def test_artifact_template_resolution_reports_missing_payload_path(tmp_path: Pat
 
     with pytest.raises(
         WorkflowExecutionError,
-        match=r"artifact template placeholder \{item\.payload\.foo\} references missing payload path 'foo' on worklist 'gate'",
+        match=r"undefined Jinja value: .*foo",
     ):
-        resolve_artifact_template("{workflow_folder}/{item.payload.foo}.md", context)
+        resolve_artifact_template("{{ workflow.folder }}/{{ item.payload.foo }}.md", context)
 
 
 def test_artifact_template_resolution_reports_missing_current_item(tmp_path: Path) -> None:
@@ -1646,13 +1694,13 @@ def test_artifact_template_resolution_reports_missing_current_item(tmp_path: Pat
 
     with pytest.raises(
         WorkflowExecutionError,
-        match=r"artifact template placeholder \{worklist\.gate\.current\.id\} requires a current item on worklist 'gate'",
+        match=r"undefined Jinja value: .*id",
     ):
-        resolve_artifact_template("{workflow_folder}/{worklist.gate.current.id}.md", context)
+        resolve_artifact_template("{{ workflow.folder }}/{{ worklist.gate.current.id }}.md", context)
 
 
 def test_artifact_template_resolution_reports_worklist_source_loading_failure(tmp_path: Path) -> None:
-    gate_board = Artifact.json("{task_folder}/gates.json", required=True)
+    gate_board = Artifact.json("{{ task.folder }}/gates.json", required=True)
     gates = Worklist.from_artifact(
         name="gate",
         artifact=gate_board,
@@ -1684,9 +1732,9 @@ def test_artifact_template_resolution_reports_worklist_source_loading_failure(tm
 
     with pytest.raises(
         WorkflowExecutionError,
-        match=r"artifact template placeholder \{worklist\.gate\.current\.id\} could not load worklist 'gate'",
+        match=r"worklist artifact 'gates' does not exist",
     ):
-        resolve_artifact_template("{workflow_folder}/{worklist.gate.current.id}.md", context)
+        resolve_artifact_template("{{ workflow.folder }}/{{ worklist.gate.current.id }}.md", context)
 
 
 def test_worklist_load_items_is_cached_per_context(tmp_path: Path) -> None:

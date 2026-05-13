@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from types import SimpleNamespace
 
-from botlane.core.outcome_contract import (
+from botpipe.core.outcome_contract import (
     NATIVE_SCHEMA_EXCEEDS_LIMIT,
     NATIVE_SCHEMA_HAS_INCOMPLETE_OBJECT,
     NATIVE_SCHEMA_HAS_OPEN_OBJECT,

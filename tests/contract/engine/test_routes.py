@@ -1190,7 +1190,7 @@ def test_route_handoff_targeting_terminal_is_not_persisted_in_pause_checkpoint(t
     assert result.checkpoint is not None
     assert result.checkpoint.pending_handoffs == ()
 def test_hidden_routes_are_runtime_legal_but_excluded_from_provider_choices(tmp_path: Path):
-    from botlane.runtime.static_graph import workflow_topology_payload
+    from botpipe.runtime.static_graph import workflow_topology_payload
 
     def after_ask(ctx):
         return "human_escalation"

@@ -3,21 +3,21 @@ from __future__ import annotations
 import pytest
 from pydantic import BaseModel, Field
 
-from botlane.core.compiler import compile_workflow
-from botlane.core.artifacts import Artifact
-from botlane.core.discovery import get_workflow_definition
-from botlane.core.effects import Effects, WorklistEffect
-from botlane.core.errors import RoutingError, WorkflowCompilationError, WorkflowValidationError
-from botlane.core.extensions import RunBinding
-from botlane.core.lowering import step_authored_route_tags
-from botlane.core.primitives import Event, Goto
-from botlane.core.providers.retries import ProviderRetryPolicy
-from botlane.core.route_contracts import available_route_tags, provider_visible_route_tags, runtime_control_route_tags
-from botlane.core.route_required_writes import effective_route_required_writes, explicit_route_required_writes
-from botlane.core.routes import Route
-from botlane.core.steps import ControlRoutes, PromptStep, ProduceVerifyStep, Session, PythonStep, ChildWorkflowStep
-from botlane.core.worklists import Selector, Worklist
-from botlane.stdlib.validation import (
+from botpipe.core.compiler import compile_workflow
+from botpipe.core.artifacts import Artifact
+from botpipe.core.discovery import get_workflow_definition
+from botpipe.core.effects import Effects, WorklistEffect
+from botpipe.core.errors import RoutingError, WorkflowCompilationError, WorkflowValidationError
+from botpipe.core.extensions import RunBinding
+from botpipe.core.lowering import step_authored_route_tags
+from botpipe.core.primitives import Event, Goto
+from botpipe.core.providers.retries import ProviderRetryPolicy
+from botpipe.core.route_contracts import available_route_tags, provider_visible_route_tags, runtime_control_route_tags
+from botpipe.core.route_required_writes import effective_route_required_writes, explicit_route_required_writes
+from botpipe.core.routes import Route
+from botpipe.core.steps import ControlRoutes, PromptStep, ProduceVerifyStep, Session, PythonStep, ChildWorkflowStep
+from botpipe.core.worklists import Selector, Worklist
+from botpipe.stdlib.validation import (
     contains_hidden_execution_signal,
     deduped_string_list_fields,
     extract_workflow_names_from_capability_snapshot,
@@ -41,7 +41,7 @@ from botlane.stdlib.validation import (
     validate_no_hidden_execution_signal,
     validate_publication_boundary,
 )
-from botlane.core import AWAIT_INPUT, FAIL, FINISH, GLOBAL, SELF, Workflow
+from botpipe.core import AWAIT_INPUT, FAIL, FINISH, GLOBAL, SELF, Workflow
 
 
 
@@ -393,11 +393,11 @@ def test_validation_rejects_legacy_success_terminal_string():
 
 
 def test_board_mutation_is_not_exported_from_public_modules():
-    import botlane
-    import botlane.core as core
+    import botpipe
+    import botpipe.core as core
     board_mutation_name = "Board" + "Mutation"
 
-    assert not hasattr(botlane, board_mutation_name)
+    assert not hasattr(botpipe, board_mutation_name)
     assert not hasattr(core, board_mutation_name)
 
 
@@ -432,7 +432,7 @@ def test_validation_rejects_schema_on_non_json_artifact():
     class Summary(BaseModel):
         text: str
 
-    report_artifact = Artifact("{run_folder}/report.md", kind="markdown", schema=Summary)
+    report_artifact = Artifact("{{ run.folder }}/report.md", kind="markdown", schema=Summary)
 
     with pytest.raises(WorkflowValidationError, match="schema is only supported for json artifacts"):
 
@@ -452,7 +452,7 @@ def test_validation_rejects_schema_on_non_json_artifact():
 
 
 def test_validation_rejects_unsupported_artifact_schema_type():
-    report_artifact = Artifact.json("{run_folder}/report.json", schema=object())
+    report_artifact = Artifact.json("{{ run.folder }}/report.json", schema=object())
 
     with pytest.raises(WorkflowValidationError, match="unsupported schema type"):
 
@@ -482,7 +482,7 @@ def test_validation_rejects_raw_artifact_schema_without_jsonschema_dependency(mo
     }
 
     _patch_missing_jsonschema(monkeypatch)
-    report_artifact = Artifact.json("{run_folder}/report.json", schema=raw_schema)
+    report_artifact = Artifact.json("{{ run.folder }}/report.json", schema=raw_schema)
 
     with pytest.raises(WorkflowValidationError, match="optional jsonschema dependency"):
 
@@ -1083,7 +1083,7 @@ def test_compilation_normalizes_route_metadata_required_writes():
             producer="ask.md",
             expected_output_schema=ReviewPayload,
             route_metadata={"done": Route(summary="workflow completed cleanly", required_writes=("report",))},
-            writes={"report": Artifact("{run_folder}/report.md")},
+            writes={"report": Artifact("{{ run.folder }}/report.md")},
         )
         entry = ask
         transitions = {ask: {"done": FINISH}}
@@ -1135,8 +1135,8 @@ def test_compilation_keeps_public_empty_required_writes_but_marks_explicit_empty
 
     assert _route_required_write_names(default_route) == ()
     assert _route_required_write_names(optional_route) == ()
-    assert default_route._required_writes_explicit is False
-    assert optional_route._required_writes_explicit is True
+    assert default_route.required_writes.explicit is None
+    assert optional_route.required_writes.explicit == ()
     assert explicit_route_required_writes(default_route) is None
     assert explicit_route_required_writes(optional_route) == ()
     assert effective_route_required_writes(compiled, step_name="ask", route_tag="default_done") == ("ask.report",)
@@ -1151,7 +1151,7 @@ def test_compilation_preserves_extended_artifact_metadata():
         return None
 
     report_artifact = Artifact(
-        "{run_folder}/report.json",
+        "{{ run.folder }}/report.json",
         kind="json",
         schema=ReviewPayload,
         required=True,
@@ -1738,7 +1738,7 @@ def test_validation_rejects_route_required_writes_not_produced_by_step():
             class State(BaseModel):
                 pass
 
-            request = Artifact("{task_folder}/request.txt")
+            request = Artifact("{{ task.folder }}/request.txt")
             ask = PromptStep(
                 name="ask",
                 producer="ask.md",
@@ -1765,7 +1765,7 @@ def test_validation_rejects_route_metadata_required_writes_not_produced_by_step(
             class State(BaseModel):
                 pass
 
-            request = Artifact("{task_folder}/request.txt")
+            request = Artifact("{{ task.folder }}/request.txt")
             ask = PromptStep(
                 name="ask",
                 producer="ask.md",
@@ -1805,7 +1805,7 @@ def test_validation_prefers_route_required_writes_over_step_route_metadata_defau
     def _explicitrouterequiredoutputworkflow_on_ask(ctx):
         return None
 
-    report_artifact = Artifact("{run_folder}/report.md")
+    report_artifact = Artifact("{{ run.folder }}/report.md")
 
     class ExplicitRouteRequiredOutputWorkflow(Workflow):
         class State(BaseModel):

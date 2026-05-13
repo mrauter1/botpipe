@@ -7,17 +7,17 @@ from pathlib import Path
 
 import pytest
 
-from botlane.core.errors import WorkflowExecutionError
-from botlane.core.providers.fake import ScriptedLLMProvider
-from botlane.runtime.config import GitTrackingRuntimeConfig, RuntimeConfig
-from botlane.runtime.loader import (
+from botpipe.core.errors import WorkflowExecutionError
+from botpipe.core.providers.fake import ScriptedLLMProvider
+from botpipe.runtime.config import GitTrackingRuntimeConfig, RuntimeConfig
+from botpipe.runtime.loader import (
     ResolvedWorkflow,
     WorkflowDiscoveryError,
     inspect_workflow_reference,
     resolve_workflow_reference,
 )
-from botlane.runtime.runner import RunnerOptions, run_workflow_package
-from botlane.core.primitives import Outcome
+from botpipe.runtime.runner import RunnerOptions, run_workflow_package
+from botpipe.core.primitives import Outcome
 
 
 def _clear_generated_modules() -> None:
@@ -26,10 +26,10 @@ def _clear_generated_modules() -> None:
         if (
             name == "workflows"
             or name.startswith("workflows.")
-            or name == "botlane.workflows"
-            or name.startswith("botlane.workflows.")
-            or name == "_botlane_workspace_workflows"
-            or name.startswith("_botlane_workspace_workflows.")
+            or name == "botpipe.workflows"
+            or name.startswith("botpipe.workflows.")
+            or name == "_botpipe_workspace_workflows"
+            or name.startswith("_botpipe_workspace_workflows.")
         ):
             sys.modules.pop(name, None)
 
@@ -42,7 +42,7 @@ def _isolate_generated_modules():
 
 
 def _workspace_catalog_root(root: Path) -> Path:
-    return root / ".botlane" / "workflows"
+    return root / ".botpipe" / "workflows"
 
 
 def _write_workspace_flow(
@@ -75,7 +75,7 @@ def _write_workspace_flow(
         source = f"""
 from __future__ import annotations
 
-from botlane import Workflow, python_step
+from botpipe import Workflow, python_step
 
 
 class {workflow_id.title().replace("_", "")}Workflow(Workflow):
@@ -96,7 +96,7 @@ def _write_workspace_single_file(root: Path, workflow_id: str, *, source: str | 
         source = f"""
 from __future__ import annotations
 
-from botlane import Workflow, python_step
+from botpipe import Workflow, python_step
 
 
 class {workflow_id.title().replace("_", "")}Workflow(Workflow):
@@ -121,7 +121,7 @@ from __future__ import annotations
 
 from pydantic import BaseModel
 
-from botlane import Prompt, Raw, Workflow, step
+from botpipe import Prompt, Raw, Workflow, step
 
 
 class ReleaseReview(Workflow):
@@ -130,7 +130,7 @@ class ReleaseReview(Workflow):
 
     ask = step(
         prompt=Prompt.file("prompts/ask.md"),
-        writes=[Raw("context_dump", path="{run_folder}/context.json")],
+        writes=[Raw("context_dump", path="{{ run.folder }}/context.json")],
     )
 """.strip()
         + "\n",
@@ -168,7 +168,7 @@ class ReleaseReview(Workflow):
 
     assert result.terminal == "FINISH"
 
-    workflow_dir = tmp_path / ".botlane" / "tasks" / "single-file-task" / "wf_release_review"
+    workflow_dir = tmp_path / ".botpipe" / "tasks" / "single-file-task" / "wf_release_review"
     run_dir = next((workflow_dir / "runs").iterdir())
     context_payload = json.loads((run_dir / "context.json").read_text(encoding="utf-8"))
     workflow_meta = json.loads((workflow_dir / "workflow.json").read_text(encoding="utf-8"))
@@ -184,7 +184,7 @@ class ReleaseReview(Workflow):
     assert workflow_meta["workflow"]["manifest_path"] is None
     assert workflow_meta["workflow"]["class_name"] == "ReleaseReview"
     assert workflow_meta["workflow"]["authoring_shape"] == "single_file"
-    assert workflow_meta["workflow"]["module_name"].startswith("_botlane_workspace_workflows.")
+    assert workflow_meta["workflow"]["module_name"].startswith("_botpipe_workspace_workflows.")
     assert run_meta["workflow"]["name"] == "release_review"
     assert run_meta["workflow"]["reference"] == "examples/release_review.py"
     assert run_meta["workflow"]["source_path"] == "examples/release_review.py"
@@ -216,7 +216,7 @@ from __future__ import annotations
 
 from pydantic import BaseModel
 
-from botlane import Prompt, Raw, Workflow, step
+from botpipe import Prompt, Raw, Workflow, step
 
 from .specs import Params
 
@@ -230,7 +230,7 @@ class ReleaseReview(Workflow):
 
     ask = step(
         prompt=Prompt.file("prompts/ask.md"),
-        writes=[Raw("context_dump", path="{run_folder}/context.json")],
+        writes=[Raw("context_dump", path="{{ run.folder }}/context.json")],
     )
 """.strip()
     catalog_package_dir.joinpath("flow.py").write_text(flow_source + "\n", encoding="utf-8")
@@ -247,7 +247,7 @@ class ReleaseReview(Workflow):
     assert resolved_by_name.reference.authoring_shape == "manifest_package"
     assert resolved_by_directory.reference.source_path == explicit_package_dir / "flow.py"
     assert resolved_by_directory.parameters_cls is not None
-    assert resolved_by_directory.parameters_cls.__module__.startswith("_botlane_workspace_workflows.")
+    assert resolved_by_directory.parameters_cls.__module__.startswith("_botpipe_workspace_workflows.")
     assert resolved_by_directory.parameters_cls.__module__.endswith(".release_review.specs")
 
     provider = ScriptedLLMProvider(
@@ -281,7 +281,7 @@ class ReleaseReview(Workflow):
     )
 
     assert result.terminal == "FINISH"
-    workflow_dir = tmp_path / ".botlane" / "tasks" / "flow-package-task" / "wf_release_review"
+    workflow_dir = tmp_path / ".botpipe" / "tasks" / "flow-package-task" / "wf_release_review"
     run_dir = next((workflow_dir / "runs").iterdir())
     context_payload = json.loads((run_dir / "context.json").read_text(encoding="utf-8"))
 
@@ -299,7 +299,7 @@ def test_bare_workflow_names_are_not_shadowed_by_unrelated_repo_paths(tmp_path: 
         source="""
 from __future__ import annotations
 
-from botlane import Workflow, python_step
+from botpipe import Workflow, python_step
 
 
 class DemoWorkflow(Workflow):
@@ -326,7 +326,7 @@ def test_manifest_aliases_resolve_from_workspace_catalog_root_only(tmp_path: Pat
         """
 from __future__ import annotations
 
-from botlane import Workflow, python_step
+from botpipe import Workflow, python_step
 
 
 class ReleaseReview(Workflow):
@@ -352,7 +352,7 @@ class ReleaseReview(Workflow):
         source="""
 from __future__ import annotations
 
-from botlane import Workflow, python_step
+from botpipe import Workflow, python_step
 
 
 class ReleaseReview(Workflow):
@@ -404,7 +404,7 @@ class Params(BaseModel):
         """
 from __future__ import annotations
 
-from botlane import Workflow, python_step
+from botpipe import Workflow, python_step
 from .specs import Params
 
 
@@ -440,7 +440,7 @@ def test_simple_declaration_workflow_is_discoverable_by_path_module_name_and_cap
         """
 from __future__ import annotations
 
-from botlane.simple import Workflow, step
+from botpipe.simple import Workflow, step
 
 
 class SimpleExample(Workflow):
@@ -455,7 +455,7 @@ class SimpleExample(Workflow):
         source="""
 from __future__ import annotations
 
-from botlane.simple import Workflow, step
+from botpipe.simple import Workflow, step
 
 
 class SimpleExample(Workflow):
@@ -509,7 +509,7 @@ class Params(BaseModel):
         """
 from __future__ import annotations
 
-from botlane import Workflow, python_step
+from botpipe import Workflow, python_step
 from .specs import Params
 
 
@@ -528,7 +528,7 @@ class ModuleReviewWorkflow(Workflow):
 
     resolved = resolve_workflow_reference(tmp_path, "workflows/module_review/flow.py:ModuleReviewWorkflow")
     assert resolved.parameters_cls is not None
-    assert resolved.parameters_cls.__module__.startswith("_botlane_workspace_workflows.")
+    assert resolved.parameters_cls.__module__.startswith("_botpipe_workspace_workflows.")
     assert resolved.parameters_cls.__module__.endswith(".module_review.specs")
 
     result = run_workflow_package(
@@ -543,7 +543,7 @@ class ModuleReviewWorkflow(Workflow):
     )
 
     assert result.terminal == "FINISH"
-    workflow_dir = tmp_path / ".botlane" / "tasks" / "module-task" / "wf_module_review"
+    workflow_dir = tmp_path / ".botpipe" / "tasks" / "module-task" / "wf_module_review"
     run_dir = next((workflow_dir / "runs").iterdir())
     assert (run_dir / "module.json").read_text(encoding="utf-8") == "module_review"
 
@@ -574,7 +574,7 @@ class Params(BaseModel):
         """
 from __future__ import annotations
 
-from botlane import Workflow, python_step
+from botpipe import Workflow, python_step
 from .specs import Params
 
 
@@ -597,10 +597,10 @@ class ModuleReviewWorkflow(Workflow):
         resolved = resolve_workflow_reference(tmp_path, ModuleReviewWorkflow)
 
     assert resolved.workflow_cls is not ModuleReviewWorkflow
-    assert resolved.workflow_cls.__module__.startswith("_botlane_workspace_workflows.")
+    assert resolved.workflow_cls.__module__.startswith("_botpipe_workspace_workflows.")
     assert resolved.workflow_cls.__module__.endswith(".module_review.flow")
     assert resolved.parameters_cls is not None
-    assert resolved.parameters_cls.__module__.startswith("_botlane_workspace_workflows.")
+    assert resolved.parameters_cls.__module__.startswith("_botpipe_workspace_workflows.")
     assert resolved.parameters_cls.__module__.endswith(".module_review.specs")
 
 
@@ -611,7 +611,7 @@ def test_file_reference_requires_class_name_when_multiple_workflows_exist(tmp_pa
         """
 from __future__ import annotations
 
-from botlane import Workflow, python_step
+from botpipe import Workflow, python_step
 
 
 class AlphaWorkflow(Workflow):
@@ -652,7 +652,7 @@ def test_named_references_fail_when_inferred_candidates_conflict(tmp_path: Path)
         """
 from __future__ import annotations
 
-from botlane import Workflow, python_step
+from botpipe import Workflow, python_step
 
 
 class PackageReleaseReview(Workflow):
@@ -671,7 +671,7 @@ class PackageReleaseReview(Workflow):
         source="""
 from __future__ import annotations
 
-from botlane import Workflow, python_step
+from botpipe import Workflow, python_step
 
 
 class FileReleaseReview(Workflow):
@@ -700,7 +700,7 @@ from __future__ import annotations
 
 from pydantic import BaseModel
 
-from botlane import Workflow, python_step
+from botpipe import Workflow, python_step
 
 
 class ClassParamsWorkflow(Workflow):
@@ -723,7 +723,7 @@ from __future__ import annotations
 
 from pydantic import BaseModel
 
-from botlane import Workflow, python_step
+from botpipe import Workflow, python_step
 
 
 class Params(BaseModel):
@@ -763,7 +763,7 @@ class Params(BaseModel):
         """
 from __future__ import annotations
 
-from botlane import Workflow, python_step
+from botpipe import Workflow, python_step
 
 from .specs import Params
 
@@ -797,7 +797,7 @@ class Params(BaseModel):
         """
 from __future__ import annotations
 
-from botlane import Workflow, python_step
+from botpipe import Workflow, python_step
 
 
 class LegacyParamsWorkflow(Workflow):
@@ -816,7 +816,7 @@ class LegacyParamsWorkflow(Workflow):
         """
 from __future__ import annotations
 
-from botlane import Workflow, python_step
+from botpipe import Workflow, python_step
 
 
 class NoParamsWorkflow(Workflow):
@@ -840,13 +840,13 @@ class NoParamsWorkflow(Workflow):
     assert class_params.parameters_cls is not None
     assert class_params.parameters_cls.__qualname__.endswith("ClassParamsWorkflow.Params")
     assert module_params.parameters_cls is not None
-    assert module_params.parameters_cls.__module__.startswith("_botlane_workspace_workflows.")
+    assert module_params.parameters_cls.__module__.startswith("_botpipe_workspace_workflows.")
     assert module_params.parameters_cls.__module__.endswith(".module_params.flow")
     assert package_params.parameters_cls is not None
-    assert package_params.parameters_cls.__module__.startswith("_botlane_workspace_workflows.")
+    assert package_params.parameters_cls.__module__.startswith("_botpipe_workspace_workflows.")
     assert package_params.parameters_cls.__module__.endswith(".package_params.specs")
     assert legacy_params.parameters_cls is not None
-    assert legacy_params.parameters_cls.__module__.startswith("_botlane_workspace_workflows.")
+    assert legacy_params.parameters_cls.__module__.startswith("_botpipe_workspace_workflows.")
     assert legacy_params.parameters_cls.__module__.endswith(".params")
     assert no_params.parameters_cls is None
 
@@ -888,7 +888,7 @@ class Params(BaseModel):
         """
 from __future__ import annotations
 
-from botlane import Workflow, python_step
+from botpipe import Workflow, python_step
 
 from .specs import Params
 
@@ -921,7 +921,7 @@ def test_workflow_origin_collisions_fail_before_run_history_is_merged(tmp_path: 
             """
 from __future__ import annotations
 
-from botlane import Workflow, python_step
+from botpipe import Workflow, python_step
 
 
 class ReleaseReview(Workflow):

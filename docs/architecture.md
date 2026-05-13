@@ -12,32 +12,47 @@ The internal workflow kernel lives under:
 - `extensions/`
 
 The public authoring contract does not point workflow authors at internal modules.
-Public workflow code imports from `botlane`.
+Public workflow code imports from `botpipe`.
 
-`botlane` is the active public authoring surface:
+`botpipe` is the active public authoring surface:
 
 - `Workflow`
 - `step`, `produce_verify_step`, `workflow_step`, `python_step`
 - `Json`, `Md`, `Text`, `Raw`
 - `Prompt`, `Route`, `FINISH`, `SELF`
 
-Legacy aliases are intentionally removed from the active public contract; workflow authoring stays on the canonical `botlane` surface.
+Legacy aliases are intentionally removed from the active public contract; workflow authoring stays on the canonical `botpipe` surface.
 
-`botlane.core` remains the internal and power-user kernel surface for strict runtime code and tests. It is not the default public authoring API.
+`botpipe.core` remains the internal and power-user kernel surface for strict runtime code and tests. It is not the default public authoring API.
 
 ## Workflow Surfaces
 
-Botlane has exactly two first-class workflow discovery roots:
+Botpipe has three first-class workflow discovery roots:
 
-- package-installed workflows under `botlane/workflows/`
-- workspace-local workflows under `{workspace}/.botlane/workflows/`
+- repo-local workflows under `{workspace}/workflows/`
+- workspace-local workflows under `{workspace}/.botpipe/workflows/`
+- package-installed workflows under `botpipe/workflows/`
 
-Workspace-local workflow names and aliases override package workflow names and aliases. `{workspace}/workflows/` is not a discovery root.
+Resolution precedence is workspace-local, then repo-local, then package-installed. This lets `.botpipe/workflows/` override repository workflows, and repository workflows override packaged defaults.
+
+Repo-local workflows may be package directories or single files:
+
+```text
+{workspace}/workflows/
+  release_review/
+    flow.py or workflow.py
+    specs.py optional
+    workflow.toml optional
+    prompts/ optional
+    assets/ optional
+
+{workspace}/workflows/release_review.py
+```
 
 Package-installed workflows use package directories:
 
 ```text
-botlane/workflows/
+botpipe/workflows/
   release_review/
     __init__.py
     flow.py or workflow.py
@@ -50,7 +65,7 @@ botlane/workflows/
 Workspace-local workflows may be package directories or single files:
 
 ```text
-{workspace}/.botlane/workflows/
+{workspace}/.botpipe/workflows/
   release_review/
     flow.py or workflow.py
     specs.py optional
@@ -58,7 +73,7 @@ Workspace-local workflows may be package directories or single files:
     prompts/ optional
     assets/ optional
 
-{workspace}/.botlane/workflows/release_review.py
+{workspace}/.botpipe/workflows/release_review.py
 ```
 
 `flow.py` is the preferred scaffold and documentation shape. `workflow.py` remains supported. Workspace-local single-file workflows are supported; package-installed single-file workflows are not.
@@ -71,13 +86,13 @@ Workflow packages are still reusable building blocks. Package-installed workflow
 
 Shallow workflow discovery stays import-free and scans only:
 
-- `botlane/workflows/*/workflow.toml`
-- `botlane/workflows/*/flow.py`
-- `botlane/workflows/*/workflow.py`
-- `{workspace}/.botlane/workflows/*/workflow.toml`
-- `{workspace}/.botlane/workflows/*/flow.py`
-- `{workspace}/.botlane/workflows/*/workflow.py`
-- `{workspace}/.botlane/workflows/*.py`
+- `botpipe/workflows/*/workflow.toml`
+- `botpipe/workflows/*/flow.py`
+- `botpipe/workflows/*/workflow.py`
+- `{workspace}/.botpipe/workflows/*/workflow.toml`
+- `{workspace}/.botpipe/workflows/*/flow.py`
+- `{workspace}/.botpipe/workflows/*/workflow.py`
+- `{workspace}/.botpipe/workflows/*.py`
 
 Deep inspection and execution may import and compile workflow modules. That richer seam reports compiled step contracts, parameters, prompt paths, support-file paths, and source metadata without widening `workflow.toml`.
 
@@ -91,37 +106,37 @@ Worklists are lazy runtime resources. The compiler validates the declared workli
 
 ## CLI Contract
 
-The public executable name is `botlane`.
+The public executable name is `botpipe`.
 
 The CLI remains message-first and workflow-reference oriented:
 
 ```bash
-botlane workflows list
-botlane workflows show <workflow>
+botpipe workflows list
+botpipe workflows show <workflow>
 
-botlane run <workflow> <task-id> --message "..."
-botlane resume <workflow> <task-id> [--run-id <run-id>]
-botlane answer <workflow> <task-id> --answer "..." [--run-id <run-id>]
+botpipe run <workflow> <task-id> --message "..."
+botpipe resume <workflow> <task-id> [--run-id <run-id>]
+botpipe answer <workflow> <task-id> --answer "..." [--run-id <run-id>]
 
-botlane runs list [--workflow <workflow>] [--task <task-id>] [--status <status>]
-botlane runs show <workflow> <task-id> [--run-id <run-id>]
-botlane logs <workflow> <task-id> [--run-id <run-id>] [--events|--trace|--raw]
+botpipe runs list [--workflow <workflow>] [--task <task-id>] [--status <status>]
+botpipe runs show <workflow> <task-id> [--run-id <run-id>]
+botpipe logs <workflow> <task-id> [--run-id <run-id>] [--events|--trace|--raw]
 
-botlane init workflow <name>
+botpipe init workflow <name>
 ```
 
 Workflow references may be names, files, modules, or explicit classes:
 
 ```bash
-botlane run release_review task-1 --message "Review this release"
-botlane run .botlane/workflows/release_review.py task-1 --message "Review this release"
-botlane run .botlane/workflows/release_review/flow.py:ReleaseReview task-1 --message "Review this release"
-botlane run botlane.workflows.release_review.workflow:ReleaseReview task-1 --message "Review this release"
+botpipe run release_review task-1 --message "Review this release"
+botpipe run .botpipe/workflows/release_review.py task-1 --message "Review this release"
+botpipe run .botpipe/workflows/release_review/flow.py:ReleaseReview task-1 --message "Review this release"
+botpipe run botpipe.workflows.release_review.workflow:ReleaseReview task-1 --message "Review this release"
 ```
 
 There is no public raw execution mode. File and module refs resolve through the same workflow runtime path as named workflows rather than bypassing the engine.
 
-`botlane run` is message-first and accepts repeatable workflow-specific parameters through `-wf <name> <value>`.
+`botpipe run` is message-first and accepts repeatable workflow-specific parameters through `-wf <name> <value>`.
 
 Mutating commands also accept generic runtime controls:
 
@@ -132,7 +147,7 @@ Mutating commands also accept generic runtime controls:
 
 ## Provider Selection
 
-Public provider selection is typed and package-runtime-owned. The runtime discovers `botlane.yaml` or `botlane.config` from the user config directory and the repo root, then merges those layers with CLI overrides.
+Public provider selection is typed and package-runtime-owned. The runtime discovers `botpipe.yaml` or `botpipe.config` from the user config directory and the repo root, then merges those layers with CLI overrides.
 
 Typed example:
 
@@ -230,7 +245,7 @@ Artifact contracts and provider-output contracts are separate:
 Runtime data lives under task, workflow, and run scopes:
 
 ```text
-.botlane/
+.botpipe/
   tasks/
     <task-id>/
       task.json
@@ -260,16 +275,16 @@ Semantics:
 
 The task `request.md` is the latest rendered request snapshot for the task. Each run also stores its own immutable `request.md` snapshot at run start.
 
-`ctx.message` and `ctx.request.text` read the run-local `request.md` snapshot. Resume keeps using the persisted run-local snapshot instead of re-reading task-level request metadata or fresh CLI message text. Prompt templates should bind request text and structured runtime values through `{ctx.message}`, `{ctx.request.text}`, `{ctx.input.<field>}`, `{ctx.state.<field>}`, and `{ctx.params.<field>}` so request text, typed input, workflow state, and workflow configuration stay semantically distinct.
+`ctx.message` and `ctx.request.text` read the run-local `request.md` snapshot. Resume keeps using the persisted run-local snapshot instead of re-reading task-level request metadata or fresh CLI message text. Prompt-like surfaces use Jinja roots such as `{{ message }}`, `{{ input.<field> }}`, `{{ state.<field> }}`, and `{{ params.<field> }}` so request text, typed input, workflow state, and workflow configuration stay semantically distinct. This applies to file prompts, inline prompts, operation prompts, and workflow-step messages.
 
 ## Runtime Observability
 
 Runtime observability is runtime-owned and enabled by default.
 
-- Runtime git tracking uses `git add --all` plus deterministic `botlane: ...` commit messages.
+- Runtime git tracking uses `git add --all` plus deterministic `botpipe: ...` commit messages.
 - The repository must be clean before a git-tracked run or resume starts.
 - Git commits are the workspace replay boundary.
-- Botlane does not classify changed paths for replay.
+- Botpipe does not classify changed paths for replay.
 - `trace.jsonl`, `git_tracking.jsonl`, `static_step_graph.json`, and runtime-owned `raw/` outputs are written without requiring workflow declarations.
 
 Normal runs write runtime-owned evidence under each run folder:
@@ -281,7 +296,7 @@ Normal runs write runtime-owned evidence under each run folder:
 
 `run.json` summarizes the runtime-owned tracing and git-tracking state.
 
-Workflows do not declare `GitTracking` or `Tracing`; runtime observability is configured only through `botlane.runtime.config`.
+Workflows do not declare `GitTracking` or `Tracing`; runtime observability is configured only through `botpipe.runtime.config`.
 
 `workflow_run_traces_to_optimization_candidates` consumes runtime-owned `run.json`, `events.jsonl`, `trace.jsonl`, `git_tracking.jsonl`, `static_step_graph.json`, and `raw/` evidence.
 
@@ -294,12 +309,12 @@ The optimizer is a bundled authoring-only workflow:
 
 ## Recursive Operation
 
-Recursive automation under `recursive_botlane/` keeps the globally installed Botlane CLI contract.
+Recursive automation under `recursive_botpipe/` keeps the globally installed Botpipe CLI contract.
 
-- Wrapper start commands use `botlane --workspace ... --task-id ... --intent ... --pairs ...`
-- Wrapper resume commands use `botlane --workspace ... --task-id ... --resume`
-- Recursive memory lives under `.botlane_recursive/`
-- Recursive templates and guidance point readers at `docs/architecture.md`, `docs/authoring.md`, `core/`, `runtime/`, `extensions/`, `stdlib/`, `botlane/workflows/`, and `.botlane/workflows/`
+- Wrapper start commands use `botpipe --workspace ... --task-id ... --intent ... --pairs ...`
+- Wrapper resume commands use `botpipe --workspace ... --task-id ... --resume`
+- Recursive memory lives under `.botpipe_recursive/`
+- Recursive templates and guidance point readers at `docs/architecture.md`, `docs/authoring.md`, `core/`, `runtime/`, `extensions/`, `stdlib/`, `botpipe/workflows/`, and `.botpipe/workflows/`
 
 ## Composition And Parity
 
@@ -318,6 +333,6 @@ ctx.invoke_workflow(ChildWorkflow, message="Do the child task", parameters={"mod
 
 Child runs stay under the same task but get their own workflow namespace, run id, checkpoint, event log, trace, sessions, and run-local request snapshot. Parent-child linkage is metadata-only through `children.jsonl` and `parent.json`; child runs are never nested under parent run folders.
 
-When a parent uses `workflow_step(message="{ctx.message}", ...)`, the rendered message becomes the child run's own request snapshot. Typed child `input` remains separate from that request text.
+When a parent uses `workflow_step(message="{{ message }}", ...)`, the rendered message becomes the child run's own request snapshot. Typed child `input` remains separate from that request text.
 
-Botlane-v1 parity is now package-local under `botlane/workflows/botlane_v1/`. Framework-owned parity helpers and custom runners are not part of the architecture anymore.
+Botpipe-v1 parity is now package-local under `botpipe/workflows/botpipe_v1/`. Framework-owned parity helpers and custom runners are not part of the architecture anymore.

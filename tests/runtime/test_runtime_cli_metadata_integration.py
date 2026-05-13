@@ -7,21 +7,21 @@ from pathlib import Path
 
 import pytest
 
-import botlane
-from botlane.core.providers.fake import ScriptedLLMProvider
-from botlane.runtime import cli
-from botlane.runtime.config import GitTrackingRuntimeConfig, RuntimeConfig
-from botlane.runtime.loader import resolve_workflow_reference
-from botlane.runtime.runner import RunnerOptions, run_workflow_package
+import botpipe
+from botpipe.core.providers.fake import ScriptedLLMProvider
+from botpipe.runtime import cli
+from botpipe.runtime.config import GitTrackingRuntimeConfig, RuntimeConfig
+from botpipe.runtime.loader import resolve_workflow_reference
+from botpipe.runtime.runner import RunnerOptions, run_workflow_package
 
 
 def _clear_workflow_modules() -> None:
     importlib.invalidate_caches()
     for name in list(sys.modules):
         if (
-            name == "botlane.workflows"
-            or name.startswith("botlane.workflows.")
-            or name.startswith("_botlane_workspace_workflows.")
+            name == "botpipe.workflows"
+            or name.startswith("botpipe.workflows.")
+            or name.startswith("_botpipe_workspace_workflows.")
         ):
             sys.modules.pop(name, None)
 
@@ -34,18 +34,18 @@ def _isolate_workflow_modules():
 
 
 def _configure_package_root(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> Path:
-    package_base = tmp_path / "installed" / "botlane"
+    package_base = tmp_path / "installed" / "botpipe"
     package_root = package_base / "workflows"
     package_root.mkdir(parents=True, exist_ok=True)
     (package_root / "__init__.py").write_text("__all__ = []\n", encoding="utf-8")
-    monkeypatch.setattr(botlane, "__path__", [str(package_base), *list(botlane.__path__)], raising=False)
-    monkeypatch.setattr("botlane.core.workflow_catalog.package_workflows_root", lambda: package_root.resolve())
+    monkeypatch.setattr(botpipe, "__path__", [str(package_base), *list(botpipe.__path__)], raising=False)
+    monkeypatch.setattr("botpipe.core.workflow_catalog.package_workflows_root", lambda: package_root.resolve())
     importlib.invalidate_caches()
     return package_root
 
 
 def _write_workspace_workflow(root: Path, workflow_id: str, *, aliases: tuple[str, ...] = ()) -> Path:
-    package_dir = root / ".botlane" / "workflows" / workflow_id
+    package_dir = root / ".botpipe" / "workflows" / workflow_id
     package_dir.mkdir(parents=True, exist_ok=True)
     aliases_source = ", ".join(f'"{alias}"' for alias in aliases)
     (package_dir / "workflow.toml").write_text(
@@ -68,7 +68,7 @@ def _write_workspace_workflow(root: Path, workflow_id: str, *, aliases: tuple[st
         f"""
 from __future__ import annotations
 
-from botlane import Event, FINISH, Workflow, python_step
+from botpipe import Event, FINISH, Workflow, python_step
 
 
 class {workflow_id.title().replace("_", "")}Workflow(Workflow):
@@ -109,7 +109,7 @@ def _write_package_workflow(package_root: Path, workflow_id: str, *, aliases: tu
         f"""
 from __future__ import annotations
 
-from botlane import Event, FINISH, Workflow, python_step
+from botpipe import Event, FINISH, Workflow, python_step
 
 
 class {class_name}(Workflow):
@@ -144,7 +144,7 @@ def test_workspace_run_metadata_records_origin_fields(tmp_path: Path) -> None:
     )
 
     assert result.terminal == "FINISH"
-    workflow_dir = tmp_path / ".botlane" / "tasks" / "task-local-demo" / "wf_local_demo"
+    workflow_dir = tmp_path / ".botpipe" / "tasks" / "task-local-demo" / "wf_local_demo"
     run_dir = next((workflow_dir / "runs").iterdir())
     workflow_meta = json.loads((workflow_dir / "workflow.json").read_text(encoding="utf-8"))
     run_meta = json.loads((run_dir / "run.json").read_text(encoding="utf-8"))
@@ -153,16 +153,16 @@ def test_workspace_run_metadata_records_origin_fields(tmp_path: Path) -> None:
         assert payload["name"] == "local_demo"
         assert payload["reference"] == "local_demo"
         assert payload["source_root_kind"] == "workspace"
-        assert payload["source_root"] == ".botlane/workflows"
-        assert payload["package_folder"] == ".botlane/workflows/local_demo"
+        assert payload["source_root"] == ".botpipe/workflows"
+        assert payload["package_folder"] == ".botpipe/workflows/local_demo"
         assert payload["package_name"] == "local_demo"
         assert payload["package_module"] is None
         assert payload["workflow_module"] is None
-        assert payload["source_path"] == ".botlane/workflows/local_demo/flow.py"
-        assert payload["manifest_path"] == ".botlane/workflows/local_demo/workflow.toml"
+        assert payload["source_path"] == ".botpipe/workflows/local_demo/flow.py"
+        assert payload["manifest_path"] == ".botpipe/workflows/local_demo/workflow.toml"
 
-    assert workflow_meta["package_folder"] == ".botlane/workflows/local_demo"
-    assert run_meta["package_folder"] == ".botlane/workflows/local_demo"
+    assert workflow_meta["package_folder"] == ".botpipe/workflows/local_demo"
+    assert run_meta["package_folder"] == ".botpipe/workflows/local_demo"
     assert package_dir.exists()
 
 
@@ -179,7 +179,7 @@ def test_explicit_manifest_run_metadata_normalizes_external_origin(tmp_path: Pat
         """
 from __future__ import annotations
 
-from botlane import Event, FINISH, Workflow, python_step
+from botpipe import Event, FINISH, Workflow, python_step
 
 
 class ExplicitDemo(Workflow):
@@ -205,7 +205,7 @@ class ExplicitDemo(Workflow):
     )
 
     assert result.terminal == "FINISH"
-    workflow_dir = tmp_path / ".botlane" / "tasks" / "task-explicit-demo" / "wf_explicit_demo"
+    workflow_dir = tmp_path / ".botpipe" / "tasks" / "task-explicit-demo" / "wf_explicit_demo"
     run_dir = next((workflow_dir / "runs").iterdir())
     payload = json.loads((run_dir / "run.json").read_text(encoding="utf-8"))["workflow"]
 
@@ -230,7 +230,7 @@ def test_explicit_python_file_run_metadata_uses_absolute_origin_outside_workspac
         """
 from __future__ import annotations
 
-from botlane import Event, FINISH, Workflow, python_step
+from botpipe import Event, FINISH, Workflow, python_step
 
 
 class SingleExplicitWorkflow(Workflow):
@@ -262,7 +262,7 @@ class SingleExplicitWorkflow(Workflow):
     )
 
     assert result.terminal == "FINISH"
-    run_dir = next((tmp_path / ".botlane" / "tasks" / "task-single-explicit" / "wf_single_explicit" / "runs").iterdir())
+    run_dir = next((tmp_path / ".botpipe" / "tasks" / "task-single-explicit" / "wf_single_explicit" / "runs").iterdir())
     payload = json.loads((run_dir / "run.json").read_text(encoding="utf-8"))["workflow"]
 
     assert payload["reference"] == str(external_file)
@@ -283,8 +283,8 @@ def test_package_run_metadata_records_package_modules(tmp_path: Path, monkeypatc
 
     resolved = resolve_workflow_reference(tmp_path, "package_demo")
     assert resolved.source_root_kind == "package"
-    assert resolved.package_module == "botlane.workflows.package_demo"
-    assert resolved.workflow_module == "botlane.workflows.package_demo.flow"
+    assert resolved.package_module == "botpipe.workflows.package_demo"
+    assert resolved.workflow_module == "botpipe.workflows.package_demo.flow"
 
     result = run_workflow_package(
         "package_demo",
@@ -298,15 +298,15 @@ def test_package_run_metadata_records_package_modules(tmp_path: Path, monkeypatc
     )
 
     assert result.terminal == "FINISH"
-    run_dir = next((tmp_path / ".botlane" / "tasks" / "task-package-demo" / "wf_package_demo" / "runs").iterdir())
+    run_dir = next((tmp_path / ".botpipe" / "tasks" / "task-package-demo" / "wf_package_demo" / "runs").iterdir())
     payload = json.loads((run_dir / "run.json").read_text(encoding="utf-8"))["workflow"]
 
     assert payload["source_root_kind"] == "package"
-    assert payload["package_folder"] == "installed/botlane/workflows/package_demo"
+    assert payload["package_folder"] == "installed/botpipe/workflows/package_demo"
     assert payload["package_name"] == "package_demo"
-    assert payload["package_module"] == "botlane.workflows.package_demo"
-    assert payload["workflow_module"] == "botlane.workflows.package_demo.flow"
-    assert payload["source_root"] == "installed/botlane/workflows"
+    assert payload["package_module"] == "botpipe.workflows.package_demo"
+    assert payload["workflow_module"] == "botpipe.workflows.package_demo.flow"
+    assert payload["source_root"] == "installed/botpipe/workflows"
 
 
 def test_cli_workflows_list_show_and_all_emit_shadow_and_source_metadata(
@@ -355,7 +355,7 @@ def test_cli_workflows_list_show_and_all_emit_shadow_and_source_metadata(
     assert exit_code == 0
     assert payload["name"] == "shared_demo"
     assert payload["source_root_kind"] == "workspace"
-    assert payload["source_root"] == str(tmp_path / ".botlane" / "workflows")
+    assert payload["source_root"] == str(tmp_path / ".botpipe" / "workflows")
     assert payload["package_folder"] == str(workspace_dir)
     assert payload["package_module"] is None
     assert payload["workflow_module"] is None
@@ -380,17 +380,17 @@ def test_cli_workflows_show_emits_package_source_metadata(
     assert payload["source_root"] == str(package_root)
     assert payload["package_folder"] == str(package_dir)
     assert payload["package_name"] == "package_show"
-    assert payload["package_module"] == "botlane.workflows.package_show"
-    assert payload["workflow_module"] == "botlane.workflows.package_show.flow"
+    assert payload["package_module"] == "botpipe.workflows.package_show"
+    assert payload["workflow_module"] == "botpipe.workflows.package_show.flow"
     assert payload["shadowed"] is False
     assert payload["shadowed_by"] is None
 
 
-def test_cli_init_workflow_scaffolds_under_dot_botlane_workflows(tmp_path: Path, capsys) -> None:
+def test_cli_init_workflow_scaffolds_under_dot_botpipe_workflows(tmp_path: Path, capsys) -> None:
     exit_code = cli.main(["init", "workflow", "demo", "--workspace", str(tmp_path)])
     payload = json.loads(capsys.readouterr().out)
 
-    package_dir = tmp_path / ".botlane" / "workflows" / "demo"
+    package_dir = tmp_path / ".botpipe" / "workflows" / "demo"
 
     assert exit_code == 0
     assert payload["shape"] == "package"
@@ -407,7 +407,7 @@ def test_cli_init_workflow_scaffolds_under_dot_botlane_workflows(tmp_path: Path,
     assert resolved.workflow_module is None
 
 
-def test_cli_workflows_list_help_describes_package_and_dot_botlane_roots(capsys) -> None:
+def test_cli_workflows_list_help_describes_package_and_dot_botpipe_roots(capsys) -> None:
     with pytest.raises(SystemExit) as excinfo:
         cli.main(["workflows", "list", "--help"])
 
@@ -418,5 +418,5 @@ def test_cli_workflows_list_help_describes_package_and_dot_botlane_roots(capsys)
     assert "--root" not in help_text
     assert "ROOT" not in help_text
     assert "workspace directory" in help_text.lower()
-    assert "installed botlane package" in help_text
-    assert "`.botlane/workflows/`" in help_text
+    assert "installed botpipe package" in help_text
+    assert "`.botpipe/workflows/`" in help_text

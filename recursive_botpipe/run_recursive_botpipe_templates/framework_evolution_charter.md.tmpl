@@ -1,0 +1,72 @@
+# Framework Evolution Charter
+
+This file is managed by the recursive Botpipe wrapper.
+It defines the standing intent for recursive framework-improvement cycles.
+
+## North-Star Goals
+
+1. Make workflow definitions easy to read, reason about, extend, and debug.
+   - The core flow of a workflow should be obvious from `flow.py`, legacy `workflow.py`, or a single-file workflow module.
+   - Greenfield authoring is allowed, but it must preserve feature compatibility with the global CLI and existing workflow composition seams.
+   - Serious workflows often start with `flow.py` plus optional `specs.py`; mature package-installed workflow surfaces under `botpipe/workflows/` and workspace-local workflow surfaces under `.botpipe/workflows/` may add `workflow.toml`, `prompts/`, and `assets/` only when those files are justified.
+   - Workflow topology, step order, artifact families, route grammar, and terminal outcomes should be locally understandable.
+   - Avoid hidden sequencing rules, parallel maps, and special-case runner branches.
+   - Prefer one obvious workflow story over many scattered helper-specific stories.
+
+2. Reduce boilerplate and repeated validation across the workflow portfolio.
+   - Repeated JSON/artifact/schema/path validation should move into shared helpers.
+   - Repeated compiled-workflow serialization should move into shared serializers.
+   - Repeated prompt boilerplate should become concise conventions, compact tables, or helper-generated surfaces when safe.
+   - Repeated publication/receipt/snapshot patterns should converge on common helpers.
+
+3. Keep the boundary between workflow, prompt, runtime, and provider crisp.
+   - The workflow owns the global SOP and durable artifact graph.
+   - Prompt templates are the provider-facing local execution contract for each step.
+   - The runtime remains narrow and mechanical.
+   - The provider owns cognition inside the rendered step contract.
+   - Runtime-injected control should stay limited to machine-readable surfaces such as `expected_output_schema`, `available_routes`, and route summaries plus `route_required_writes`.
+
+4. Make workflows artifact-first, verifier-enforced, and durable under interruption.
+   - Durable filesystem artifacts are the primary work product.
+   - Provider prose is control metadata unless explicitly written into an artifact.
+   - Quality-sensitive work should have explicit verification and evidence requirements.
+   - Resume continuity, session state, run state, artifacts, decisions, and event history must remain safe under interruption and change.
+
+5. Grow the workflow ecosystem by convergence, not just expansion.
+   - Prefer reuse before adaptation.
+   - Prefer adaptation before creation.
+   - Prefer composition before monolithic workflow growth.
+   - Prefer consolidation before another workflow package.
+   - New workflows are exceptional and must pass the new-workflow gate.
+   - Old, overlapping, or superseded workflow surfaces should be merged, simplified, or retired when appropriate.
+
+6. Improve authoring leverage by looking for 10x simplifications.
+   - Ask what core framework improvements would make workflow authoring dramatically more elegant.
+   - Do not restrict the answer to one improvement if a coherent set of changes is needed.
+   - Prefer changes that reduce cognitive load across many workflows.
+   - Prefer improvements that let future workflow authors express intent with less code, less repetition, and fewer local validators.
+
+## Standing Guardrails
+
+- Keep framework logic generic rather than Botpipe-specific.
+- Keep `workflow.toml` metadata-only; do not add workflow topology, route, prompt, artifact, strategy, or execution semantics to it.
+- Preserve the recursive runtime contract through the globally installed CLI: `botpipe --workspace ... --task-id ... --intent ... --pairs ...` and `botpipe --workspace ... --task-id ... --resume`.
+- Keep the root `workflow` authoring surface strict and minimal unless there is an explicit architectural decision to expand it.
+- Do not add runtime-owned hidden routing, adaptation, evaluation, promotion, decomposition, scoring, prioritization, or company-learning automation.
+- Prompt templates must carry provider-facing operational guidance; the runtime may inject or enforce only narrow machine-readable control surfaces.
+- Prefer filesystem artifacts over chatty prose as the durable system of record.
+- Prefer explicit contracts over hidden control flow.
+- Preserve or improve resumability, provider abstraction, artifact discipline, explicit verification, and deterministic recovery.
+- Reject workflow additions that only work by adding bespoke runner control logic.
+- Reject workflow additions that increase portfolio clutter without improving reuse, clarity, or authoring leverage.
+
+## Default Cycle Bias
+
+In every cycle, prefer this order:
+
+1. Delete obsolete code, docs, prompt text, or workflow surfaces.
+2. Consolidate repeated validation, schema, serializer, publication, or snapshot logic.
+3. Simplify existing workflows so their core flow is easier to understand.
+4. Improve the authoring surface so future workflows require less boilerplate.
+5. Shape the workflow portfolio through merge, split, composition, or retirement.
+6. Add a new workflow only if reuse, adaptation, composition, or refinement is insufficient.

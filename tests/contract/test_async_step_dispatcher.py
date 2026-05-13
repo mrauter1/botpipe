@@ -7,13 +7,13 @@ from pathlib import Path
 
 from pydantic import BaseModel
 
-import botlane.simple as simple
-from botlane.core.context import Context
-from botlane.core.engine import Engine
-from botlane.core.providers.models import LLMRequest, OutcomeResponse, ProducerRequest, ProducerResponse, VerifierRequest
-from botlane.core.primitives import Event, Outcome
-from botlane.core.providers.fake import ScriptedLLMProvider
-from botlane.core.stores import InMemoryCheckpointStore, InMemorySessionStore
+import botpipe.simple as simple
+from botpipe.core.context import Context
+from botpipe.core.engine import Engine
+from botpipe.core.providers.models import LLMRequest, OutcomeResponse, ProducerRequest, ProducerResponse, VerifierRequest
+from botpipe.core.primitives import Event, Outcome
+from botpipe.core.providers.fake import ScriptedLLMProvider
+from botpipe.core.stores import InMemoryCheckpointStore, InMemorySessionStore
 
 
 def _build_step_context(engine: Engine, tmp_path: Path, *, step_name: str) -> tuple[object, Context]:
@@ -111,7 +111,9 @@ def test_step_dispatcher_execute_async_capture_runs_hooks_and_skips_route_on_tak
 
     result = asyncio.run(engine.step_dispatcher.execute_async(step, context, context.state, (), route_mode="capture"))
 
-    report_path = engine._resolve_artifacts(context)["report"].path
+    artifacts = engine.execution_services.artifacts
+    assert artifacts is not None
+    report_path = artifacts.resolve_artifacts(context)["report"].path
     assert result.event is not None
     assert result.event.tag == "done"
     assert result.destination == "publish"

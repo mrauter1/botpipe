@@ -3,13 +3,13 @@ from __future__ import annotations
 import pytest
 from pydantic import BaseModel
 
-from botlane import FINISH
-from botlane.core import Workflow
-from botlane.core.artifacts import Artifact
-from botlane.core.discovery import get_workflow_definition
-from botlane.core.errors import WorkflowValidationError
-from botlane.core.inventory import collect_artifact_inventory
-from botlane.core.steps import PythonStep
+from botpipe import FINISH
+from botpipe.core import Workflow
+from botpipe.core.artifacts import Artifact
+from botpipe.core.discovery import get_workflow_definition
+from botpipe.core.errors import WorkflowValidationError
+from botpipe.core.inventory import collect_artifact_inventory
+from botpipe.core.steps import PythonStep
 
 
 def _done(_ctx) -> None:

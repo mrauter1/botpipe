@@ -6,19 +6,19 @@ from pathlib import Path
 import pytest
 from pydantic import BaseModel
 
-import botlane.simple as simple
-import botlane.sdk as sdk_module
-from botlane import AWAIT_INPUT, FAIL, FINISH, SELF, Policy
-from botlane.core.prompts import Prompt
-from botlane.core.step_plans import (
+import botpipe.simple as simple
+import botpipe.sdk as sdk_module
+from botpipe import AWAIT_INPUT, FAIL, FINISH, SELF, Policy
+from botpipe.core.prompts import Prompt
+from botpipe.core.step_plans import (
     ChildWorkflowStepPlan,
     ProduceVerifyStepPlan,
     PromptStepPlan,
     PythonStepPlan,
     SingleStepPlan,
 )
-from botlane.core.steps import ChildWorkflowStep, ProduceVerifyStep, PromptStep, PythonStep
-from botlane.policy import ModelEffort
+from botpipe.core.steps import ChildWorkflowStep, ProduceVerifyStep, PromptStep, PythonStep
+from botpipe.policy import ModelEffort
 
 
 class _SingleStepTypedInput(BaseModel):
@@ -43,14 +43,14 @@ class _SingleStepChildWorkflow(simple.Workflow):
     ("factory", "expected_plan_type", "expected_routes"),
     [
         (
-            lambda: simple.step("Draft {input.topic}.", name="draft"),
+            lambda: simple.step("Draft {{ input.topic }}.", name="draft"),
             PromptStepPlan,
             ("done", "question"),
         ),
         (
             lambda: simple.produce_verify_step(
-                producer_prompt="Draft {input.topic}.",
-                verifier_prompt="Review {input.topic}.",
+                producer_prompt="Draft {{ input.topic }}.",
+                verifier_prompt="Review {{ input.topic }}.",
                 name="review",
             ),
             ProduceVerifyStepPlan,
@@ -67,13 +67,13 @@ class _SingleStepChildWorkflow(simple.Workflow):
             ("done",),
         ),
         (
-            lambda: simple.llm.step(prompt="Summarize {input.topic}.", name="summarize"),
+            lambda: simple.llm.step(prompt="Summarize {{ input.topic }}.", name="summarize"),
             PythonStepPlan,
             ("done",),
         ),
         (
             lambda: simple.classify.step(
-                prompt="Classify {input.topic}.",
+                prompt="Classify {{ input.topic }}.",
                 choices=["ship", "rework"],
                 name="classify",
             ),
@@ -81,15 +81,15 @@ class _SingleStepChildWorkflow(simple.Workflow):
             ("done",),
         ),
         (
-            lambda: PromptStep(name="prompt_core", producer=Prompt.inline("Prompt {input.topic}.")),
+            lambda: PromptStep(name="prompt_core", producer=Prompt.inline("Prompt {{ input.topic }}.")),
             PromptStepPlan,
             ("done", "question"),
         ),
         (
             lambda: ProduceVerifyStep(
                 name="pair_core",
-                producer=Prompt.inline("Draft {input.topic}."),
-                verifier=Prompt.inline("Review {input.topic}."),
+                producer=Prompt.inline("Draft {{ input.topic }}."),
+                verifier=Prompt.inline("Review {{ input.topic }}."),
             ),
             ProduceVerifyStepPlan,
             ("accepted", "needs_rework", "question"),
@@ -103,7 +103,7 @@ class _SingleStepChildWorkflow(simple.Workflow):
             lambda: ChildWorkflowStep(
                 name="child_core",
                 workflow=_SingleStepChildWorkflow,
-                message="{ctx.message}",
+                message="{{ message }}",
             ),
             ChildWorkflowStepPlan,
             ("done",),
@@ -134,7 +134,7 @@ def test_single_step_plan_builds_direct_step_plans(
 def test_single_step_workflow_plan_uses_single_step_as_entry(tmp_path: Path) -> None:
     _single_step_plan, workflow_plan = sdk_module._build_single_step_execution_plan(
         tmp_path,
-        simple.step("Draft {input.topic}.", name="draft"),
+        simple.step("Draft {{ input.topic }}.", name="draft"),
         _SingleStepTypedInput(topic="release"),
         _SingleStepParams(mode="focused"),
         routes=None,
@@ -151,8 +151,8 @@ def test_single_step_workflow_plan_lowers_simple_pair_rework_to_current_step(tmp
     _single_step_plan, workflow_plan = sdk_module._build_single_step_execution_plan(
         tmp_path,
         simple.produce_verify_step(
-            producer_prompt="Draft {input.topic}.",
-            verifier_prompt="Review {input.topic}.",
+            producer_prompt="Draft {{ input.topic }}.",
+            verifier_prompt="Review {{ input.topic }}.",
             name="review",
         ),
         _SingleStepTypedInput(topic="release"),
@@ -169,7 +169,7 @@ def test_single_step_plan_preserves_policy_layering_and_explicit_routes(tmp_path
     invocation_policy = Policy(effort=ModelEffort.HIGH)
     authored_step = PromptStep(
         name="draft",
-        producer=Prompt.inline("Draft {input.topic}."),
+        producer=Prompt.inline("Draft {{ input.topic }}."),
         provider_policy=authored_policy,
     )
     effective_step, workflow_policy = sdk_module._sdk_step_invocation_layer(authored_step, invocation_policy)

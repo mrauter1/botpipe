@@ -8,17 +8,17 @@
 - Why it matters: release, incident, security, delivery-recovery, and customer-escalation work often fails when downstream assessment starts from scattered notes instead of an authoritative evidence package.
 - Likely sponsors: security engineers, release managers, SRE leads, engineering managers, TPMs, or escalation owners who need a durable evidence base before a decision or remediation plan can be trusted.
 - Classification: reusable workflow building block. It is directly runnable, but its main value is composition into larger domain workflows.
-- Why Botlane fits: the work spans framing, repository inspection, source tracing, gap capture, and durable artifact production across explicit producer/verifier loops.
+- Why Botpipe fits: the work spans framing, repository inspection, source tracing, gap capture, and durable artifact production across explicit producer/verifier loops.
 - Why one-shot is insufficient: scope drift, missing proof, and source constraints must be surfaced through artifacts and verifier-gated local repair instead of disappearing into a single chat summary.
 
 ## Invocation
 
-- Package path: `botlane/workflows/investigation_request_to_evidence_pack/`
-- Discovery: `botlane workflows show investigation_request_to_evidence_pack`
+- Package path: `botpipe/workflows/investigation_request_to_evidence_pack/`
+- Discovery: `botpipe workflows show investigation_request_to_evidence_pack`
 - Direct run:
 
 ```bash
-botlane run investigation_request_to_evidence_pack <task-id> \
+botpipe run investigation_request_to_evidence_pack <task-id> \
   --message "Assemble the evidence pack for the admin impersonation privilege-escalation finding." \
   -wf investigation_title "Admin impersonation privilege escalation" \
   -wf investigation_kind security_remediation \
@@ -38,7 +38,7 @@ Params:
 Composed usage stays explicit in workflow code through the authoring-only helper seam:
 
 ```python
-from botlane.stdlib import adopt_child_artifacts, run_child_workflow
+from botpipe.stdlib import adopt_child_artifacts, run_child_workflow
 
 child = run_child_workflow(
     ctx,
@@ -75,7 +75,7 @@ adopt_child_artifacts(
 | --- | --- | --- | --- |
 | Authoring-only composition helpers | Enables explicit child-workflow invocation and parent-local artifact adoption without widening runtime behavior | Must stay additive and visible in workflow code | Chosen in the paired framework phase and exercised by this building block |
 | Runtime-owned subworkflow step | Could make composition terser | Hides sequencing in the runtime and violates the explicit-workflow doctrine | Rejected |
-| Recursive wrapper/template cleanup | Fixes known package-CLI drift in `recursive_botlane/` | Useful, but less directly valuable to evidence-pack authoring than reusable composition proof | Deferred residual |
+| Recursive wrapper/template cleanup | Fixes known package-CLI drift in `recursive_botpipe/` | Useful, but less directly valuable to evidence-pack authoring than reusable composition proof | Deferred residual |
 
 ## Meaningful design decisions
 
@@ -239,7 +239,7 @@ Each prompt names the role, purpose, current work item, required reads, required
 
 ## Evidence
 
-- Package implementation: `botlane/workflows/investigation_request_to_evidence_pack/`
-- Package asset: `botlane/workflows/investigation_request_to_evidence_pack/assets/evidence_pack_checklist.md`
+- Package implementation: `botpipe/workflows/investigation_request_to_evidence_pack/`
+- Package asset: `botpipe/workflows/investigation_request_to_evidence_pack/assets/evidence_pack_checklist.md`
 - Workflow-specific proof: `tests/runtime/test_investigation_request_to_evidence_pack.py`
 - The scripted exercises prove discovery, compilation, direct execution, helper-based composition, artifact adoption, and deterministic publication of `evidence_pack_receipt.json`.

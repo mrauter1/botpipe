@@ -2,22 +2,22 @@
 
 ## Simple Surface
 
-`botlane` is the active public authoring surface.
+`botpipe` is the active public authoring surface.
 
 Use:
 
 ```python
-from botlane import Workflow, Prompt, Route, FINISH
-from botlane import Json, Md, Text, Raw, step, produce_verify_step, workflow_step, python_step
+from botpipe import Workflow, Prompt, Route, FINISH
+from botpipe import Json, Md, Text, Raw, step, produce_verify_step, workflow_step, python_step
 ```
 
-Use `from botlane import ...` in public workflow code and examples.
-`botlane.core` remains the internal and power-user kernel surface for strict runtime code and tests; it is not the default public authoring API.
+Use `from botpipe import ...` in public workflow code and examples.
+`botpipe.core` remains the internal and power-user kernel surface for strict runtime code and tests; it is not the default public authoring API.
 Legacy aliases are intentionally removed from the public authoring surface; use the canonical workflow, route, prompt, and artifact names consistently.
 
 Greenfield authoring defaults:
 
-- `State` is optional on `botlane.Workflow`.
+- `State` is optional on `botpipe.Workflow`.
 - prompt files are optional; inline prompts are first-class.
 - `Prompt.inline(...)`, `Prompt.file(...)`, and `Prompt.ref(...)` are the canonical prompt forms.
 - `reads` are optional context and do not fail when missing.
@@ -27,27 +27,29 @@ Greenfield authoring defaults:
 - `python_step(...)` carries its handler explicitly on the step declaration.
 - `workflow_step(...)` lowers to a dedicated child-workflow runtime step.
 - step-local `routes={...}` are the canonical public topology surface.
-- there is no `botlane eject` or workflow source-expansion command.
+- there is no `botpipe eject` or workflow source-expansion command.
 
 ## Workflow Shapes
 
-There are two authoritative workflow locations:
+There are three authoritative workflow locations:
 
-- package-installed workflows in `botlane/workflows/`
-- workspace-local workflows in `{workspace}/.botlane/workflows/`
+- repo-local workflows in `{workspace}/workflows/`
+- package-installed workflows in `botpipe/workflows/`
+- workspace-local workflows in `{workspace}/.botpipe/workflows/`
 
-Workspace-local names and aliases override package-installed names and aliases. `{workspace}/workflows/` is not a discovery root.
+Resolution precedence is workspace-local, then repo-local, then package-installed.
 
 Supported authoring forms:
 
-- workspace-local single Python file such as `.botlane/workflows/release_review.py`
-- workspace-local package such as `.botlane/workflows/release_review/flow.py` plus optional `specs.py`
-- package-installed package such as `botlane/workflows/release_review/flow.py` or `workflow.py` plus optional `workflow.toml`, `prompts/`, `assets/`, docs, and tests
+- repo-local single Python file or package under `workflows/`
+- workspace-local single Python file such as `.botpipe/workflows/release_review.py`
+- workspace-local package such as `.botpipe/workflows/release_review/flow.py` plus optional `specs.py`
+- package-installed package such as `botpipe/workflows/release_review/flow.py` or `workflow.py` plus optional `workflow.toml`, `prompts/`, `assets/`, docs, and tests
 
 Recommended serious-workflow shape:
 
 ```text
-.botlane/workflows/
+.botpipe/workflows/
   release_review/
     flow.py
     specs.py
@@ -58,14 +60,14 @@ Recommended serious-workflow shape:
 Single-file workflow:
 
 ```text
-.botlane/workflows/
+.botpipe/workflows/
   release_review.py
 ```
 
 Compatible mature package:
 
 ```text
-botlane/workflows/
+botpipe/workflows/
   release_review/
     __init__.py
     flow.py or workflow.py
@@ -84,7 +86,7 @@ When a package uses `__init__.py`, it should re-export the main workflow class a
 Top-level CLI runs pass workflow-specific parameters through repeatable `-wf` pairs:
 
 ```bash
-botlane run review task-42 \
+botpipe run review task-42 \
   --message "Review this implementation" \
   -wf mode strict \
   -wf reviewer security
@@ -118,18 +120,24 @@ When the same parameter bundle appears in more than one workflow, prefer shared 
 
 ## Runtime Context Prompt Bindings
 
-Use `ctx.*` when a prompt or workflow-step message needs runtime context. Use `{ctx.message}`, not `{message}`.
+Use Jinja when a prompt or workflow-step message needs runtime context. File prompts, inline prompts, operation prompts, and workflow-step messages use the same short root names such as `{{ message }}` and `{{ input.topic }}`.
 
 `ctx.message` is the natural-language run request text from the immutable run-local `request.md` snapshot. `ctx.request.text` is the same text through an explicit request object. `ctx.input` is typed structured workflow input. `ctx.params` is workflow configuration. `ctx.state` is workflow state.
 
-Preferred prompt bindings:
+Prompt and message bindings:
 
-```text
-{ctx.message}
-{ctx.request.text}
-{ctx.input.topic}
-{ctx.state.status}
-{ctx.params.mode}
+```jinja
+{{ message }}
+{{ request.text }}
+{{ input.topic }}
+{{ state.status }}
+{{ params.mode }}
+
+{% if artifacts %}
+{% for artifact in artifacts %}
+- {{ artifact.name }}: {{ artifact.path }}
+{% endfor %}
+{% endif %}
 ```
 
 Python hooks and `python_step(...)` handlers can read the same surfaces directly:
@@ -145,14 +153,14 @@ ctx.state.status
 ctx.params.mode
 ```
 
-Existing bare `{input.foo}`, `{state.foo}`, and `{params.foo}` placeholders remain available for compatibility where they already work, but `ctx.*` is the preferred runtime binding surface for new authoring.
+Prompt-like templates are rendered with Jinja `StrictUndefined`; misspelled variables, unsafe includes, and syntax errors fail loudly. Literal single-brace JSON does not need escaping, and literal Jinja blocks can use `{% raw %}`.
 
 Child workflows should forward request text explicitly when they need it:
 
 ```python
 workflow_step(
     ChildWorkflow,
-    message="{ctx.message}",
+    message="{{ message }}",
     input={"topic": "alpha"},
 )
 ```
@@ -164,7 +172,7 @@ Provider-backed simple steps may declare structured output contracts directly on
 ```python
 from pydantic import BaseModel
 
-from botlane import FINISH, Md, Prompt, Route, step
+from botpipe import FINISH, Md, Prompt, Route, step
 
 
 class ReviewPayload(BaseModel):
@@ -277,7 +285,7 @@ Use runtime controls when workflow code, not the provider, owns the next move:
 ```python
 from pydantic import BaseModel
 
-from botlane import AWAIT_INPUT, FINISH, Fail, Goto, Prompt, RequestInput, Route, Workflow, python_step, step
+from botpipe import AWAIT_INPUT, FINISH, Fail, Goto, Prompt, RequestInput, Route, Workflow, python_step, step
 
 
 class ApprovalInput(BaseModel):
@@ -332,7 +340,7 @@ Key rules:
 
 Workflow code does not construct providers directly. Operators select the built-in runtime backend through typed config and generic CLI flags.
 
-Typed config lives in `botlane.yaml` or `botlane.config` and uses the runtime-owned provider schema:
+Typed config lives in `botpipe.yaml` or `botpipe.config` and uses the runtime-owned provider schema:
 
 ```yaml
 provider:
@@ -348,7 +356,7 @@ runtime:
 Public CLI overrides stay generic:
 
 ```bash
-botlane run review task-42 \
+botpipe run review task-42 \
   --provider claude \
   --model claude-opus \
   --model-effort max \
@@ -415,9 +423,9 @@ Relative prompts and bundled assets resolve from the executable workflow contain
 
 ```python
 Prompt.file("prompts/ask.md")
-Artifact("{run_folder}/request.md")
-Artifact("{workflow_folder}/notes.md")
-Artifact("{package_folder}/assets/template.txt")
+Artifact("{{ run.folder }}/request.md")
+Artifact("{{ workflow.folder }}/notes.md")
+Artifact("{{ package.folder }}/assets/template.txt")
 ```
 
 `package_folder` means:
@@ -426,14 +434,7 @@ Artifact("{package_folder}/assets/template.txt")
 - the containing directory of `flow.py`
 - the containing directory of `workflow.py`
 
-Available runtime placeholders include:
-
-- `task_folder`
-- `workflow_folder`
-- `run_folder`
-- `package_folder`
-- `workflow_name`
-- `state.*`
+Artifact templates, inline prompts, workflow-step messages, and prompt files are rendered as Jinja. Use `{{ message }}`, `{{ input.field }}`, `{{ params.field }}`, `{{ state.field }}`, `{% if %}`, `{% for %}`, and `{% include %}` within prompt files.
 
 `package_folder` is read-only workflow-adjacent source content. Mutable artifacts must never be written into the workflow source directory.
 
@@ -441,8 +442,8 @@ Available runtime placeholders include:
 
 New runs are message-first:
 
-- `botlane run ... --message "..."` starts a new run
-- `botlane answer ... --answer "..."` resumes an awaiting-input run with an explicit answer
+- `botpipe run ... --message "..."` starts a new run
+- `botpipe answer ... --answer "..."` resumes an awaiting-input run with an explicit answer
 
 `message` and `answer` are distinct concepts. Resume and diagnostics do not accept a replacement message.
 
@@ -488,13 +489,13 @@ Implications for authors:
 Class-level artifacts remain valid:
 
 ```python
-report = Artifact("{workflow_folder}/report.md")
+report = Artifact("{{ workflow.folder }}/report.md")
 ```
 
 Step-local artifacts can now be declared inline:
 
 ```python
-from botlane import FINISH, Json, Md, Prompt, Route, produce_verify_step
+from botpipe import FINISH, Json, Md, Prompt, Route, produce_verify_step
 
 
 class Summary(BaseModel):
@@ -534,9 +535,9 @@ routes = {
 
 Path rules:
 
-- explicit templates such as `Artifact("{workflow_folder}/report.md")` resolve exactly as written
+- explicit templates such as `Artifact("{{ workflow.folder }}/report.md")` resolve exactly as written
 - class-level relative paths resolve under `workflow_folder`
-- step-local relative paths resolve under `{workflow_folder}/{step_name}/`
+- step-local relative paths resolve under `{{ workflow.folder }}/{step_name}/`
 
 `writes` and `requires` are different contracts:
 
@@ -604,7 +605,7 @@ Route-helper defaults are route-table driven:
 `Worklist` and `WorkItem` let workflows scope a step to the current selected item without introducing hidden looping.
 
 ```python
-from botlane import Goto, Prompt, RequestInput, Route, SELF, Worklist, produce_verify_step, step
+from botpipe import Goto, Prompt, RequestInput, Route, SELF, Worklist, produce_verify_step, step
 
 
 gates = Worklist.from_artifact(
@@ -673,7 +674,7 @@ The engine does not silently loop a whole worklist. Progression stays explicit i
 When a common worklist transition is deterministic, use typed effects instead of repeating imperative hook glue:
 
 ```python
-from botlane import Effects, Route
+from botpipe import Effects, Route
 
 
 review = step(
@@ -703,9 +704,9 @@ Workflow-level artifacts and step-produced artifacts are compatible metadata on 
 On the power-user surface that still looks like one shared declaration:
 
 ```python
-from botlane.core import Artifact
+from botpipe.core import Artifact
 
-shared_brief = Artifact("{workflow_folder}/shared_brief.md")
+shared_brief = Artifact("{{ workflow.folder }}/shared_brief.md")
 ```
 
 The runtime preserves the canonical workflow/public name for that artifact even when steps write it, so route-required writes, prompts, and provider contracts all refer to the same artifact identity.
@@ -729,7 +730,7 @@ If the child workflow declares `Output` and `build_output(...)`, the returned `C
 `stdlib/lifecycle.py` provides a small opt-in helper seam for deterministic authoring tasks such as opening declared sessions and writing workflow-local JSON artifacts like invocation contracts and publication receipts.
 
 ```python
-from botlane.stdlib import (
+from botpipe.stdlib import (
     open_workflow_sessions,
     write_invocation_contract,
     write_publication_receipt,
@@ -748,7 +749,7 @@ Use it only as authoring support inside explicit workflow hooks such as `before(
 When a workflow owns a durable JSON summary or manifest, keep its artifact contract explicit in the workflow package instead of starting publish handlers from raw dictionaries.
 
 ```python
-from botlane.stdlib import JsonArtifactSpec
+from botpipe.stdlib import JsonArtifactSpec
 
 
 PACKAGE_SUMMARY_ARTIFACT = JsonArtifactSpec(
@@ -776,7 +777,7 @@ Typed JSON artifact boundary:
 `stdlib/validation.py` provides a small opt-in helper seam for generic workflow-local JSON, string, list, mapping, non-negative-int, and positive-int validation.
 
 ```python
-from botlane.stdlib import (
+from botpipe.stdlib import (
     extract_workflow_names_from_capability_snapshot,
     extract_workflow_names_from_portfolio_health,
     read_required_text,
@@ -818,7 +819,7 @@ Validation helper boundary:
 For repairable semantic validation, prefer `validation_step(...)` plus `ValidationResult` over one-off `try/except` plumbing inside ad hoc `python_step(...)` handlers.
 
 ```python
-from botlane import FINISH, Md, ValidationResult, validation_step
+from botpipe import FINISH, Md, ValidationResult, validation_step
 
 
 feedback = Md("manifest_feedback")
@@ -841,7 +842,7 @@ The helper lowers to a normal `python_step(...)`, adds the feedback artifact to 
 For workflow `Params` models, reuse the shared Pydantic validator factories instead of copying the same `field_validator(...)` bodies into every `params.py`.
 
 ```python
-from botlane.stdlib import (
+from botpipe.stdlib import (
     deduped_string_list_fields,
     optional_text_fields,
     positive_int_fields,
@@ -875,10 +876,10 @@ Parameter-model helper boundary:
 
 ## Optional Portfolio Snapshot Helpers
 
-`botlane_optimizer.portfolio` provides a small opt-in helper seam for portfolio-routing workflows that need an inspectable snapshot of the current workflow library.
+`botpipe_optimizer.portfolio` provides a small opt-in helper seam for portfolio-routing workflows that need an inspectable snapshot of the current workflow library.
 
 ```python
-from botlane_optimizer import (
+from botpipe_optimizer import (
     write_workflow_portfolio_health_snapshot,
     write_workflow_portfolio_snapshot,
 )
@@ -893,14 +894,14 @@ Portfolio snapshot boundary:
 - it uses the shared workflow catalog seam to capture manifest metadata plus inferred source paths such as `flow.py`, `workflow.py`, top-level single-file workflows, optional `specs.py`, prompts, assets, docs, and tests when present
 - it does not add new `workflow.toml` fields and preserves the metadata-only manifest doctrine
 - it does not auto-rank, auto-select, auto-adapt, or auto-run workflows
-- it does not import botlane.runtime-owned routing behavior into workflow packages; portfolio-routing workflows still own ranking, selection, adaptation, create-new policy, and prompt semantics
+- it does not import botpipe.runtime-owned routing behavior into workflow packages; portfolio-routing workflows still own ranking, selection, adaptation, create-new policy, and prompt semantics
 
 Portfolio health snapshot boundary:
 
 - `write_workflow_portfolio_health_snapshot` writes `workflow_portfolio_health_snapshot.json` under `ctx.workflow_folder` by default
 - it reuses the shared workflow resolution and read-only run discovery seams to publish grouped per-workflow run counts, status counts, and recent-run excerpts
 - it supports deterministic status filtering and `max_runs_per_workflow` bounds
-- it does not mutate `.botlane` run state or workflow packages
+- it does not mutate `.botpipe` run state or workflow packages
 - it keeps the health surface lightweight: identifying workflow metadata, normalized recent-run excerpts, and summary counts rather than full event logs or runtime-owned lifecycle scoring
 - it does not add CLI flags, new `workflow.toml` fields, runtime-owned governance scoring, automatic recommendations, or hidden downstream execution
 - workflow code and prompt templates still own governance framing, lifecycle interpretation, recommendation policy, publication gating, and any downstream follow-through
@@ -908,10 +909,10 @@ Portfolio health snapshot boundary:
 
 ## Optional Company Operation Snapshot Helpers
 
-`botlane_optimizer.company` provides a narrow authoring-only seam for workflows that need one bounded snapshot of repo-local company operation history.
+`botpipe_optimizer.company` provides a narrow authoring-only seam for workflows that need one bounded snapshot of repo-local company operation history.
 
 ```python
-from botlane_optimizer import write_company_operation_snapshot
+from botpipe_optimizer import write_company_operation_snapshot
 
 write_company_operation_snapshot(
     ctx,
@@ -927,11 +928,11 @@ write_company_operation_snapshot(
 Company operation snapshot boundary:
 
 - `write_company_operation_snapshot` writes `company_operation_snapshot.json` under `ctx.workflow_folder` by default
-- it captures repo-local `.botlane` task history plus read-only workflow telemetry; it is not an external business-system integration seam
+- it captures repo-local `.botpipe` task history plus read-only workflow telemetry; it is not an external business-system integration seam
 - it publishes bounded task summaries, recent message excerpts, per-task workflow telemetry, and authoritative source paths
 - it supports deterministic `task_ids`, workflow, and status filtering plus `max_tasks`, `max_runs_per_workflow`, and `max_messages_per_task` bounds
 - it writes only workflow-local JSON artifacts under `ctx.workflow_folder`
-- it does not mutate `.botlane` task or run state, workflow packages, or external business systems
+- it does not mutate `.botpipe` task or run state, workflow packages, or external business systems
 - it does not add CLI flags, runtime-owned company scoring, automatic prioritization, or hidden downstream execution
 - it does not widen the runtime-injected control contract beyond readable inputs, required inputs, writable artifacts, `available_routes`, step-local route metadata, `required_writes`, and an explicit `expected_output_schema` when present
 - workflow code and prompt templates still own company framing, recursive-improvement analysis, prioritization policy, publication gating, and next-cycle recommendations
@@ -941,27 +942,27 @@ Company operation snapshot boundary:
 
 The selected-workflow snapshot helpers form one converged authoring seam across:
 
-- `botlane_optimizer.adaptation`
-- `botlane_optimizer.refinement`
-- `botlane_optimizer.decomposition`
+- `botpipe_optimizer.adaptation`
+- `botpipe_optimizer.refinement`
+- `botpipe_optimizer.decomposition`
 
 Family boundary:
 
-- the private `botlane_optimizer._selected_workflow.py` seam owns canonical selected-workflow resolution, `selected_workflow_name` capture, and shared envelope writing so later selected-workflow consumers can shorten capture steps without widening the public stdlib or root `workflow` surface
+- the private `botpipe_optimizer._selected_workflow.py` seam owns canonical selected-workflow resolution, `selected_workflow_name` capture, and shared envelope writing so later selected-workflow consumers can shorten capture steps without widening the public stdlib or root `workflow` surface
 - `core/workflow_capabilities.py` owns the authoritative payload builders for the compiled capability, editable authoring-surface, and decomposition-surface views
 - the optimizer helper modules stay thin artifact writers over those builders and keep the emitted artifacts explicit under `ctx.workflow_folder`
 - `stdlib/validation.py` owns the generic snapshot identity and alignment checks, including capability, authoring-surface, decomposition-surface, and cross-artifact selected-workflow-name validation
-- adjacent selected-workflow helpers such as `botlane_optimizer.diagnostics.py` and `botlane_optimizer.optimization.py` may reuse that private capture seam while keeping their workflow-local publication artifacts and policy separate from this public snapshot-helper family
+- adjacent selected-workflow helpers such as `botpipe_optimizer.diagnostics.py` and `botpipe_optimizer.optimization.py` may reuse that private capture seam while keeping their workflow-local publication artifacts and policy separate from this public snapshot-helper family
 - workflows still own domain-specific publication policy, evidence policy, state-drift handling, and receipt shaping
 - the family intentionally keeps `selected_workflow_capability.json`, `selected_workflow_authoring_surface.json`, and `selected_workflow_decomposition_surface.json` as three distinct artifact contracts instead of collapsing compiled and editable surfaces into one payload
 - the family does not add CLI flags, widen the root `workflow` authoring surface, or introduce runtime-owned adaptation, refinement, or decomposition behavior
 
 ## Optional Selected-Workflow Adaptation Helpers
 
-`botlane_optimizer.adaptation` provides a small authoring seam for workflows that need to inspect one already-selected workflow and publish a validated parameter artifact for that choice.
+`botpipe_optimizer.adaptation` provides a small authoring seam for workflows that need to inspect one already-selected workflow and publish a validated parameter artifact for that choice.
 
 ```python
-from botlane_optimizer import (
+from botpipe_optimizer import (
     write_selected_workflow_capability_snapshot,
     write_validated_workflow_parameters,
 )
@@ -983,14 +984,14 @@ Adaptation helper boundary:
 - they are authoring-only support for explicit workflow code; they do not add CLI syntax, manifest fields, runtime-owned adaptation, or automatic downstream execution
 - they do not broaden the shared runtime step contract or move provider-facing prompt rendering into authoring helpers
 - portfolio-routing workflows still own ranking, selection, adaptation, create-new policy, and prompt semantics in workflow code and prompt templates
-- the helper does not import botlane.runtime-owned routing behavior into workflow packages; it only writes a workflow-local artifact
+- the helper does not import botpipe.runtime-owned routing behavior into workflow packages; it only writes a workflow-local artifact
 
 ## Optional Refinement Surface Helpers
 
-`botlane_optimizer.refinement` provides a narrow authoring-only seam for workflows that need a workflow-local snapshot of one selected workflow's editable authoring surface.
+`botpipe_optimizer.refinement` provides a narrow authoring-only seam for workflows that need a workflow-local snapshot of one selected workflow's editable authoring surface.
 
 ```python
-from botlane_optimizer import write_selected_workflow_authoring_surface
+from botpipe_optimizer import write_selected_workflow_authoring_surface
 
 write_selected_workflow_authoring_surface(ctx, "release_candidate_to_go_no_go")
 ```
@@ -1010,10 +1011,10 @@ Refinement helper boundary:
 
 ## Optional Decomposition Surface Helpers
 
-`botlane_optimizer.decomposition` provides a narrow authoring-only seam for workflows that need one read-only artifact combining a selected workflow's identity, editable authoring surface, and compiled step/route topology.
+`botpipe_optimizer.decomposition` provides a narrow authoring-only seam for workflows that need one read-only artifact combining a selected workflow's identity, editable authoring surface, and compiled step/route topology.
 
 ```python
-from botlane_optimizer import write_selected_workflow_decomposition_surface
+from botpipe_optimizer import write_selected_workflow_decomposition_surface
 
 write_selected_workflow_decomposition_surface(ctx, "release_candidate_to_go_no_go")
 ```
@@ -1035,10 +1036,10 @@ Decomposition helper boundary:
 
 ## Optional Candidate-Surface Publication Helpers
 
-`botlane_optimizer.candidate_surfaces` provides a narrow authoring-only seam for workflows that need the repeated mechanical parts of candidate-only publication for one selected workflow surface.
+`botpipe_optimizer.candidate_surfaces` provides a narrow authoring-only seam for workflows that need the repeated mechanical parts of candidate-only publication for one selected workflow surface.
 
 ```python
-from botlane_optimizer import (
+from botpipe_optimizer import (
     derive_candidate_surface_manifest,
     materialize_baseline_surface,
     normalize_candidate_surface_overlay_result,
@@ -1067,10 +1068,10 @@ Candidate-surface helper boundary:
 
 ## Optional Diagnostic Snapshot Helpers
 
-`botlane_optimizer.diagnostics` provides a narrow authoring-only seam for workflows that need a workflow-local snapshot of one selected workflow's historical run evidence.
+`botpipe_optimizer.diagnostics` provides a narrow authoring-only seam for workflows that need a workflow-local snapshot of one selected workflow's historical run evidence.
 
 ```python
-from botlane_optimizer import write_selected_workflow_run_history_snapshot
+from botpipe_optimizer import write_selected_workflow_run_history_snapshot
 
 write_selected_workflow_run_history_snapshot(
     ctx,
@@ -1083,10 +1084,10 @@ write_selected_workflow_run_history_snapshot(
 Diagnostic helper boundary:
 
 - the helper writes only workflow-local JSON artifacts under `ctx.workflow_folder`
-- it reuses the shared workflow resolution and read-only run discovery seams instead of ad hoc `.botlane` scraping
+- it reuses the shared workflow resolution and read-only run discovery seams instead of ad hoc `.botpipe` scraping
 - it captures normalized run metadata, request text, parsed `events.jsonl` entries, parsed `children.jsonl` entries, parsed `parent.json` metadata when present, and authoritative source paths
 - it supports deterministic status filtering and `max_runs` bounds while keeping the selected history set explicit in `selected_workflow_run_history.json`
-- it does not mutate `.botlane` run state or selected workflow files
+- it does not mutate `.botpipe` run state or selected workflow files
 - it does not add CLI flags, new `workflow.toml` fields, runtime-owned diagnostics automation, or hidden downstream routing
 - it does not auto-cluster failure modes, auto-rank severity, or impose runtime-owned failure-mode policy
 - it does not widen the runtime-injected control contract beyond readable inputs, required inputs, writable artifacts, `available_routes`, step-local route metadata, `required_writes`, and an explicit `expected_output_schema` when present
@@ -1094,10 +1095,10 @@ Diagnostic helper boundary:
 
 ## Optional Evaluation Manifest Helpers
 
-`botlane_optimizer.evaluation` provides a narrow authoring-only seam for workflows that need to validate and canonicalize one workflow-local evaluation case manifest against one selected workflow.
+`botpipe_optimizer.evaluation` provides a narrow authoring-only seam for workflows that need to validate and canonicalize one workflow-local evaluation case manifest against one selected workflow.
 
 ```python
-from botlane_optimizer import write_validated_eval_case_manifest
+from botpipe_optimizer import write_validated_eval_case_manifest
 
 write_validated_eval_case_manifest(
     ctx,
@@ -1130,10 +1131,10 @@ Evaluation helper boundary:
 
 ## Optional Optimization Helpers
 
-`botlane_optimizer.optimization` provides deterministic authoring-only helpers for workflows that need to ingest runtime observability and publish candidate-only optimization evidence.
+`botpipe_optimizer.optimization` provides deterministic authoring-only helpers for workflows that need to ingest runtime observability and publish candidate-only optimization evidence.
 
 ```python
-from botlane_optimizer import (
+from botpipe_optimizer import (
     build_step_trace_metrics,
     list_selected_workflow_runs,
     normalize_trace_corpus,
@@ -1158,10 +1159,10 @@ Optimization helper boundary:
 
 ## Optional Workflow Capability Snapshot Helpers
 
-`botlane_optimizer.portfolio` also provides an opt-in helper for portfolio workflows that need richer importing inspection of workflow parameters and compiled step contracts while keeping the lightweight catalog seam unchanged.
+`botpipe_optimizer.portfolio` also provides an opt-in helper for portfolio workflows that need richer importing inspection of workflow parameters and compiled step contracts while keeping the lightweight catalog seam unchanged.
 
 ```python
-from botlane_optimizer import write_workflow_capability_snapshot
+from botpipe_optimizer import write_workflow_capability_snapshot
 
 write_workflow_capability_snapshot(ctx)
 ```
@@ -1193,7 +1194,7 @@ Child workflows run as normal workflow packages with their own run ids and run-l
 For optional authoring-level composition helpers, `stdlib/composition.py` keeps the same runtime semantics while making artifact adoption explicit in workflow code:
 
 ```python
-from botlane.stdlib import (
+from botpipe.stdlib import (
     adopt_child_artifacts,
     require_child_workflow_result,
     run_child_workflow,
@@ -1230,10 +1231,10 @@ Composition helper boundary:
 
 ## Recursive And Workflow-Reference Guidance
 
-If a workflow, template, or recursive harness emits Botlane instructions, keep them workflow-reference-aware and repo-layout-accurate:
+If a workflow, template, or recursive harness emits Botpipe instructions, keep them workflow-reference-aware and repo-layout-accurate:
 
-- `botlane run <workflow> <task-id> --workspace ... --message ...`
-- `botlane resume <workflow> <task-id> --workspace ...`
-- `botlane answer <workflow> <task-id> --workspace ... --answer ...`
+- `botpipe run <workflow> <task-id> --workspace ... --message ...`
+- `botpipe resume <workflow> <task-id> --workspace ...`
+- `botpipe answer <workflow> <task-id> --workspace ... --answer ...`
 - explicit file or module refs are allowed when the operator needs them, but recursive wrappers should keep their stable name-first contract unless they have a reason to pin an origin directly
-- refer readers to `docs/architecture.md`, `docs/authoring.md`, `core/`, `runtime/`, `extensions/`, `stdlib/`, `botlane/workflows/`, `.botlane/workflows/`, and `.botlane_recursive/`
+- refer readers to `docs/architecture.md`, `docs/authoring.md`, `core/`, `runtime/`, `extensions/`, `stdlib/`, `botpipe/workflows/`, `.botpipe/workflows/`, and `.botpipe_recursive/`

@@ -6,11 +6,11 @@ from types import SimpleNamespace
 
 from pydantic import BaseModel
 
-from botlane.core.branch_groups.manifest import BranchManifest, build_branch_manifest, render_branch_group_context
-from botlane.core.branch_groups.outcomes import select_branch_group_outcome
-from botlane.core.branch_groups.results import BranchResult
-from botlane.core.branch_groups.runtime import BranchGroupRuntime
-from botlane.core.execution_services import ExecutionServices
+from botpipe.core.branch_groups.manifest import BranchManifest, build_branch_manifest, render_branch_group_context
+from botpipe.core.branch_groups.outcomes import select_branch_group_outcome
+from botpipe.core.branch_groups.results import BranchResult
+from botpipe.core.branch_groups.runtime import BranchGroupRuntime
+from botpipe.core.execution_services import ExecutionServices
 
 
 class _State(BaseModel):

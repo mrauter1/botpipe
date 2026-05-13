@@ -7,19 +7,19 @@ from pathlib import Path
 
 import pytest
 
-from botlane import Outcome
-from botlane.core.providers.fake import ScriptedLLMProvider
-from botlane.runtime.config import GitTrackingRuntimeConfig, RuntimeConfig
-from botlane.runtime.inspection import load_run_history, load_run_record, load_run_topology
-from botlane.runtime.runner import RunnerOptions, run_workflow_package
+from botpipe import Outcome
+from botpipe.core.providers.fake import ScriptedLLMProvider
+from botpipe.runtime.config import GitTrackingRuntimeConfig, RuntimeConfig
+from botpipe.runtime.inspection import load_run_history, load_run_record, load_run_topology
+from botpipe.runtime.runner import RunnerOptions, run_workflow_package
 
-STATE_DIRNAME = ".botlane"
+STATE_DIRNAME = ".botpipe"
 
 
 def _clear_workflow_modules() -> None:
     importlib.invalidate_caches()
     for name in list(sys.modules):
-        if name == "workflows" or name.startswith("workflows.") or name == "botlane.workflows" or name.startswith("botlane.workflows."):
+        if name == "workflows" or name.startswith("workflows.") or name == "botpipe.workflows" or name.startswith("botpipe.workflows."):
             sys.modules.pop(name, None)
 
 
@@ -75,7 +75,7 @@ from __future__ import annotations
 
 from pydantic import BaseModel
 
-from botlane import (
+from botpipe import (
     FINISH,
     Fail,
     Goto,
@@ -181,7 +181,7 @@ class GoldenSurfaceWorkflow(Workflow):
     )
 
     decision = classify.step(
-        prompt="Choose publish or abort for {review.draft}.",
+        prompt="Choose publish or abort for {{ review.draft.read_text() }}.",
         choices=["publish", "abort"],
     )
 

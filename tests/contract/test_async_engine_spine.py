@@ -8,12 +8,12 @@ from pathlib import Path
 import pytest
 from pydantic import BaseModel
 
-import botlane.simple as simple
-from botlane.core.engine import Engine
-from botlane.core.primitives import Event, Outcome, RequestInput
-from botlane.core.providers.fake import ScriptedLLMProvider
-from botlane.core.providers.models import LLMRequest, OutcomeResponse, ProducerRequest, ProducerResponse, VerifierRequest
-from botlane.core.stores import InMemoryCheckpointStore, InMemorySessionStore
+import botpipe.simple as simple
+from botpipe.core.engine import Engine
+from botpipe.core.primitives import Event, Outcome, RequestInput
+from botpipe.core.providers.fake import ScriptedLLMProvider
+from botpipe.core.providers.models import LLMRequest, OutcomeResponse, ProducerRequest, ProducerResponse, VerifierRequest
+from botpipe.core.stores import InMemoryCheckpointStore, InMemorySessionStore
 
 
 def _workspace(tmp_path: Path) -> tuple[Path, Path]:

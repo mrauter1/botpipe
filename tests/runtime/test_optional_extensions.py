@@ -9,23 +9,23 @@ from pathlib import Path
 
 import pytest
 
-import botlane.extensions as workflow_extensions
-import botlane.extensions.git as workflow_git_extensions
-from botlane.core.errors import WorkflowExecutionError
-from botlane.core.providers.fake import ScriptedLLMProvider
-from botlane.runtime.config import GitTrackingRuntimeConfig, RuntimeConfig, TracingRuntimeConfig
-from botlane.runtime.git_tracking import RuntimeGitTrackingError
-from botlane.runtime.runner import RunnerOptions, run_workflow_package
-from botlane.runtime.tracing import RuntimeTraceWriter
-from botlane.core.primitives import Outcome
+import botpipe.extensions as workflow_extensions
+import botpipe.extensions.git as workflow_git_extensions
+from botpipe.core.errors import WorkflowExecutionError
+from botpipe.core.providers.fake import ScriptedLLMProvider
+from botpipe.runtime.config import GitTrackingRuntimeConfig, RuntimeConfig, TracingRuntimeConfig
+from botpipe.runtime.git_tracking import RuntimeGitTrackingError
+from botpipe.runtime.runner import RunnerOptions, run_workflow_package
+from botpipe.runtime.tracing import RuntimeTraceWriter
+from botpipe.core.primitives import Outcome
 
-STATE_DIRNAME = ".botlane"
+STATE_DIRNAME = ".botpipe"
 
 
 def _clear_workflow_modules() -> None:
     importlib.invalidate_caches()
     for name in list(sys.modules):
-        if name == "workflows" or name.startswith("workflows.") or name == "botlane.workflows" or name.startswith("botlane.workflows."):
+        if name == "workflows" or name.startswith("workflows.") or name == "botpipe.workflows" or name.startswith("botpipe.workflows."):
             sys.modules.pop(name, None)
 
 
@@ -34,8 +34,8 @@ def test_runtime_observability_can_be_disabled_without_workflow_declarations(tmp
     repo_root = tmp_path / "repo"
     repo_root.mkdir()
     _git(repo_root, "init")
-    _git(repo_root, "config", "user.email", "botlane@example.com")
-    _git(repo_root, "config", "user.name", "Botlane Tests")
+    _git(repo_root, "config", "user.email", "botpipe@example.com")
+    _git(repo_root, "config", "user.name", "Botpipe Tests")
 
     _write_workflow_package(
         repo_root,
@@ -47,8 +47,8 @@ from __future__ import annotations
 
 from pydantic import BaseModel
 
-from botlane import FINISH, Prompt, Raw, Workflow, step
-from botlane.core.primitives import Outcome
+from botpipe import FINISH, Prompt, Raw, Workflow, step
+from botpipe.core.primitives import Outcome
 
 
 class PlainWorkflow(Workflow):
@@ -57,7 +57,7 @@ class PlainWorkflow(Workflow):
     class State(BaseModel):
         note: str = ""
 
-    note = Raw("note", path="{task_folder}/note.txt")
+    note = Raw("note", path="{{ task.folder }}/note.txt")
     ask = step(
         prompt=Prompt.file("prompts/ask.md"),
         writes=[note],
@@ -110,7 +110,11 @@ def test_workflow_extension_exports_drop_git_tracking_and_tracing_declarations()
 
 
 def test_removed_workflow_observability_declaration_modules_are_not_importable() -> None:
-    for module_name in ("botlane.extensions.tracing", "botlane.extensions.git.declaration"):
+    for module_name in (
+        "botpipe.extensions.tracing",
+        "botpipe.extensions.git.declaration",
+        "botpipe.extensions.git.runtime",
+    ):
         sys.modules.pop(module_name, None)
         with pytest.raises(ModuleNotFoundError):
             importlib.import_module(module_name)
@@ -121,8 +125,8 @@ def test_normal_run_writes_runtime_observability_artifacts_without_workflow_decl
     repo_root = tmp_path / "repo"
     repo_root.mkdir()
     _git(repo_root, "init")
-    _git(repo_root, "config", "user.email", "botlane@example.com")
-    _git(repo_root, "config", "user.name", "Botlane Tests")
+    _git(repo_root, "config", "user.email", "botpipe@example.com")
+    _git(repo_root, "config", "user.name", "Botpipe Tests")
 
     _write_workflow_package(
         repo_root,
@@ -134,8 +138,8 @@ from __future__ import annotations
 
 from pydantic import BaseModel
 
-from botlane import FINISH, Prompt, Raw, Workflow, step
-from botlane.core.primitives import Outcome
+from botpipe import FINISH, Prompt, Raw, Workflow, step
+from botpipe.core.primitives import Outcome
 
 
 class PlainRuntimeObservabilityWorkflow(Workflow):
@@ -144,7 +148,7 @@ class PlainRuntimeObservabilityWorkflow(Workflow):
     class State(BaseModel):
         note: str = ""
 
-    note = Raw("note", path="{task_folder}/note.txt")
+    note = Raw("note", path="{{ task.folder }}/note.txt")
     ask = step(
         prompt=Prompt.file("prompts/ask.md"),
         writes=[note],
@@ -202,8 +206,8 @@ def test_runtime_fatal_tracing_propagate_policy_propagates_failure(
     repo_root = tmp_path / "repo"
     repo_root.mkdir()
     _git(repo_root, "init")
-    _git(repo_root, "config", "user.email", "botlane@example.com")
-    _git(repo_root, "config", "user.name", "Botlane Tests")
+    _git(repo_root, "config", "user.email", "botpipe@example.com")
+    _git(repo_root, "config", "user.name", "Botpipe Tests")
 
     _write_workflow_package(
         repo_root,
@@ -215,8 +219,8 @@ from __future__ import annotations
 
 from pydantic import BaseModel
 
-from botlane import FINISH, Prompt, Workflow, step
-from botlane.core.primitives import Outcome
+from botpipe import FINISH, Prompt, Workflow, step
+from botpipe.core.primitives import Outcome
 
 
 class FatalTraceWorkflow(Workflow):
@@ -262,8 +266,8 @@ def test_dirty_repo_fails_before_runner_creates_run_workspace(tmp_path: Path) ->
     repo_root = tmp_path / "repo"
     repo_root.mkdir()
     _git(repo_root, "init")
-    _git(repo_root, "config", "user.email", "botlane@example.com")
-    _git(repo_root, "config", "user.name", "Botlane Tests")
+    _git(repo_root, "config", "user.email", "botpipe@example.com")
+    _git(repo_root, "config", "user.name", "Botpipe Tests")
 
     _write_workflow_package(
         repo_root,
@@ -275,8 +279,8 @@ from __future__ import annotations
 
 from pydantic import BaseModel
 
-from botlane import FINISH, Prompt, Workflow, step
-from botlane.core.primitives import Outcome
+from botpipe import FINISH, Prompt, Workflow, step
+from botpipe.core.primitives import Outcome
 
 
 class DirtyWorkflow(Workflow):
@@ -473,8 +477,8 @@ def _git_env() -> dict[str, str]:
 def _init_repo(repo_root: Path) -> None:
     repo_root.mkdir()
     _git(repo_root, "init")
-    _git(repo_root, "config", "user.email", "botlane@example.com")
-    _git(repo_root, "config", "user.name", "Botlane Tests")
+    _git(repo_root, "config", "user.email", "botpipe@example.com")
+    _git(repo_root, "config", "user.name", "Botpipe Tests")
 
 
 def _write_pause_resume_workflow(root: Path) -> None:
@@ -488,7 +492,7 @@ from __future__ import annotations
 
 from pydantic import BaseModel
 
-from botlane import AWAIT_INPUT, Event, FINISH, Workflow, python_step
+from botpipe import AWAIT_INPUT, Event, FINISH, Workflow, python_step
 
 
 class PauseResumeWorkflow(Workflow):

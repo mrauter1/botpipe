@@ -73,16 +73,16 @@ def test_runtime_extensions_bind_before_workflow_extensions(tmp_path: Path):
         "workflow:terminal:FINISH",
     ]
 def test_extension_core_modules_remain_brand_agnostic():
-    engine_text = (PACKAGE_ROOT / "botlane" / "core" / "engine.py").read_text(encoding="utf-8")
-    extension_text = (PACKAGE_ROOT / "botlane" / "core" / "extensions.py").read_text(encoding="utf-8")
+    engine_text = (PACKAGE_ROOT / "botpipe" / "core" / "engine.py").read_text(encoding="utf-8")
+    extension_text = (PACKAGE_ROOT / "botpipe" / "core" / "extensions.py").read_text(encoding="utf-8")
     corpus = f"{engine_text}\n{extension_text}"
 
     for forbidden in (
-        "botlane_v1",
-        "run_botlane_v1",
-        "botlane_v1_support",
-        "botlane_v1_parity",
-        "botlane_v1_conventions",
+        "botpipe_v1",
+        "run_botpipe_v1",
+        "botpipe_v1_support",
+        "botpipe_v1_parity",
+        "botpipe_v1_conventions",
         "activate_next_phase",
         "phase_selected",
         "phase_started",
@@ -105,15 +105,15 @@ def test_pair_step_contract_logs_raw_output_and_updates_state(tmp_path: Path):
             draft_text: str = ""
 
         main = Session()
-        request = Artifact("{task_folder}/request.txt")
-        raw_log = Artifact("{run_folder}/pair.log")
+        request = Artifact("{{ task.folder }}/request.txt")
+        raw_log = Artifact("{{ run.folder }}/pair.log")
         pair = ProduceVerifyStep(
             name="pair",
             session=main,
             producer="pair/producer.md",
             verifier="pair/verifier.md",
             requires=[request],
-            producer_writes={"draft": Artifact("{run_folder}/draft.txt")},
+            producer_writes={"draft": Artifact("{{ run.folder }}/draft.txt")},
             log_artifacts=[raw_log],
         )
         finish = PythonStep(name="finish", handler=_pairworkflow_on_finish)
@@ -190,7 +190,7 @@ def test_step_finish_exposes_raw_outputs_for_package_local_parity_extensions(tmp
             note: str = ""
 
         main = Session()
-        request = Artifact("{task_folder}/request.txt")
+        request = Artifact("{{ task.folder }}/request.txt")
         pair = ProduceVerifyStep(name="pair", producer="pair/producer.md", verifier="pair/verifier.md", requires=[request], session=main)
         ask = PromptStep(name="ask", producer="ask.md", session=main)
         finish = PythonStep(name="finish", handler=_rawoutputworkflow_on_finish)
@@ -255,7 +255,7 @@ def test_pair_and_llm_handlers_remain_optional(tmp_path: Path):
             finished: bool = False
 
         main = Session()
-        request = Artifact("{task_folder}/request.txt")
+        request = Artifact("{{ task.folder }}/request.txt")
         pair = ProduceVerifyStep(name="pair", producer="pair/producer.md", verifier="pair/verifier.md", requires=[request], session=main)
         ask = PromptStep(name="ask", producer="ask.md", session=main)
         finish = PythonStep(name="finish", handler=_optionalhandlerworkflow_on_finish)
@@ -297,8 +297,8 @@ def test_llm_step_contract_logs_outcome_raw_output_and_uses_global_route(tmp_pat
         class State(BaseModel):
             tag_seen: str = ""
 
-        request = Artifact("{task_folder}/request.txt")
-        raw_log = Artifact("{run_folder}/llm.log")
+        request = Artifact("{{ task.folder }}/request.txt")
+        raw_log = Artifact("{{ run.folder }}/llm.log")
         ask = PromptStep(
             name="ask",
             producer="ask.md",
@@ -418,7 +418,7 @@ def test_pair_requests_include_step_control_contracts(tmp_path: Path):
         class State(BaseModel):
             verdict: str = ""
 
-        request = Artifact("{task_folder}/request.txt")
+        request = Artifact("{{ task.folder }}/request.txt")
         pair = ProduceVerifyStep(
             name="pair",
             producer="pair/producer.md",
@@ -852,7 +852,7 @@ def test_llm_and_classify_step_replay_across_reruns(tmp_path: Path) -> None:
 
     class ReplayWorkflow(SimpleWorkflow):
         summary = llm.step(prompt="Summarize the request.", returns=Summary)
-        verdict = classify.step(prompt="Classify {summary.value}.", choices=["solid", "weak"])
+        verdict = classify.step(prompt="Classify {{ summary.title }}.", choices=["solid", "weak"])
 
         @python_step(routes={"solid": FINISH, "weak": FAIL})
         def route(ctx):

@@ -1,13 +1,13 @@
-# Botlane v3 second-pass greenfield architecture spec
+# Botpipe v3 second-pass greenfield architecture spec
 
-This is a standalone implementation spec for the second pass over the current Botlane v3 codebase. The current implementation snapshot still contains old internal compiled structures such as `CompiledWorkflow`, `CompiledStep`, `CompiledRoute`, `CompiledArtifact`, `CompiledBranchGroupSpec`, `CompiledBranchStepSpec`, `_COMPILED_WORKFLOW_CACHE`, branch-runtime paths that depend on compiled steps and dict-shaped branch results, and duplicated placeholder parsing/rendering in `artifacts.py`. Those are the internal structures this pass must remove.  
+This is a standalone implementation spec for the second pass over the current Botpipe v3 codebase. The current implementation snapshot still contains old internal compiled structures such as `CompiledWorkflow`, `CompiledStep`, `CompiledRoute`, `CompiledArtifact`, `CompiledBranchGroupSpec`, `CompiledBranchStepSpec`, `_COMPILED_WORKFLOW_CACHE`, branch-runtime paths that depend on compiled steps and dict-shaped branch results, and duplicated placeholder parsing/rendering in `artifacts.py`. Those are the internal structures this pass must remove.  
 
 ---
 
 ## 0. Prime directive
 
-* Botlane is a greenfield project.
-* Preserve the public Botlane API and user-facing behavior.
+* Botpipe is a greenfield project.
+* Preserve the public Botpipe API and user-facing behavior.
 * Do **not** preserve old internal compiled objects, adapter layers, transitional wrappers, or parallel runtime representations.
 * The canonical internal architecture is:
 
@@ -48,11 +48,11 @@ ArtifactSpec
 * Public users must still write:
 
 ```python
-from botlane import Workflow, step, produce_verify_step, python_step, workflow_step
-from botlane import parallel, fan_out, llm, classify
-from botlane import Md, Json, Text, Raw
-from botlane import Route, FINISH, AWAIT_INPUT, FAIL, SELF
-from botlane import Policy, Botlane
+from botpipe import Workflow, step, produce_verify_step, python_step, workflow_step
+from botpipe import parallel, fan_out, llm, classify
+from botpipe import Md, Json, Text, Raw
+from botpipe import Route, FINISH, AWAIT_INPUT, FAIL, SELF
+from botpipe import Policy, Botpipe
 ```
 
 * Public users must **not** be required to construct or understand:
@@ -83,7 +83,7 @@ SingleStepPlan
 
 ### 1.1 Frozen root exports
 
-* Do not change `botlane.__all__`.
+* Do not change `botpipe.__all__`.
 * The public root must continue exporting exactly the current public surface, including:
 
 ```text
@@ -134,7 +134,7 @@ ReasoningSummary
 SandboxMode
 NetworkMode
 PermissionMode
-Botlane
+Botpipe
 WorkflowResult
 StepResult
 ArtifactMap
@@ -145,7 +145,7 @@ CleanupResult
 InputRequest
 HandledInput
 SDKDebugInfo
-BotlaneSDKError
+BotpipeSDKError
 WorkflowInputError
 WorkflowParameterError
 InputRequired
@@ -163,9 +163,9 @@ BestSuppositionInput
 * Do not expose new internal plan/runtime objects through:
 
 ```text
-botlane.__all__
-botlane.core.__all__
-botlane.core.branch_groups.__all__
+botpipe.__all__
+botpipe.core.__all__
+botpipe.core.branch_groups.__all__
 ```
 
 * Do not export:
@@ -197,15 +197,15 @@ SingleStepPlan
 
 ### 1.3 Branch-group public/internal exports
 
-* `botlane.core.branch_groups.__all__` may change **only** to remove old compiled branch exports.
-* Remove these from `botlane.core.branch_groups.__all__` during the atomic compiler/runtime cutover:
+* `botpipe.core.branch_groups.__all__` may change **only** to remove old compiled branch exports.
+* Remove these from `botpipe.core.branch_groups.__all__` during the atomic compiler/runtime cutover:
 
 ```text
 CompiledBranchGroupSpec
 CompiledBranchStepSpec
 ```
 
-* Do not add these to `botlane.core.branch_groups.__all__`:
+* Do not add these to `botpipe.core.branch_groups.__all__`:
 
 ```text
 BranchGroupPlan
@@ -238,21 +238,21 @@ select_branch_group_outcome
 * Preserve:
 
 ```text
-Botlane.run(...)
-Botlane.step(...)
-Botlane.prompt_step(...)
-Botlane.produce_verify_step(...)
-Botlane.python_step(...)
-Botlane.workflow_step(...)
+Botpipe.run(...)
+Botpipe.step(...)
+Botpipe.prompt_step(...)
+Botpipe.produce_verify_step(...)
+Botpipe.python_step(...)
+Botpipe.workflow_step(...)
 ```
 
 * Preserve current SDK behavior:
 
 ```text
-Botlane.run(...) accepts workflow, message, policy, input, params, on_input, max_pauses, max_steps, provider_questions, options, and retention.
-Botlane.step(...) accepts step_def, message, policy, input, params, routes, on_input, max_pauses, max_steps, provider_questions, and retention.
-Botlane.step(...) applies invocation-local policy without mutating the supplied step object.
-Botlane.step(...) returns StepResult(value=None, workflow_result=<full WorkflowResult>).
+Botpipe.run(...) accepts workflow, message, policy, input, params, on_input, max_pauses, max_steps, provider_questions, options, and retention.
+Botpipe.step(...) accepts step_def, message, policy, input, params, routes, on_input, max_pauses, max_steps, provider_questions, and retention.
+Botpipe.step(...) applies invocation-local policy without mutating the supplied step object.
+Botpipe.step(...) returns StepResult(value=None, workflow_result=<full WorkflowResult>).
 provider_questions defaults to on_input is not None when provider_questions is None.
 on_input pause/resume behavior is unchanged.
 retention and cleanup behavior are unchanged.
@@ -288,19 +288,19 @@ Route(...)
 
 ---
 
-## 4. Botlane identity and persistence
+## 4. Botpipe identity and persistence
 
 * Preserve:
 
 ```text
-botlane
-botlane_optimizer
-.botlane
-.botlane/tasks
-.botlane-sdk-task.json
-schema "botlane.sdk_task/v1"
-generated_by "botlane.sdk"
-schema "botlane.branch_results/v1"
+botpipe
+botpipe_optimizer
+.botpipe
+.botpipe/tasks
+.botpipe-sdk-task.json
+schema "botpipe.sdk_task/v1"
+generated_by "botpipe.sdk"
+schema "botpipe.branch_results/v1"
 ```
 
 * Do not introduce stale package names, stale state directories, stale schema IDs, or stale `generated_by` values.
@@ -339,14 +339,14 @@ CompiledBranchGroupSpec -> BranchGroupPlan
 CompiledBranchStepSpec  -> BranchPlan
 ```
 
-* No class with a `Compiled*` name should remain in `botlane/core`.
+* No class with a `Compiled*` name should remain in `botpipe/core`.
 
 ### 5.2 Delete adapter layer
 
 Remove:
 
 ```text
-botlane/core/plan_adapters.py
+botpipe/core/plan_adapters.py
 ```
 
 Remove all references to:
@@ -418,26 +418,26 @@ Runtime execution must use WorkflowPlan, StepPlan, BranchGroupPlan, RouteContrac
 These modules should exist and own canonical internal types:
 
 ```text
-botlane/core/identifiers.py
-botlane/core/artifact_plan.py
-botlane/core/run_paths.py
-botlane/core/route_contracts.py
-botlane/core/step_plans.py
-botlane/core/workflow_plan.py
-botlane/core/placeholders.py
-botlane/core/reference_graph.py
-botlane/core/execution_frame.py
-botlane/core/execution_services.py
-botlane/core/provider_policy_resolution.py
-botlane/core/branch_groups/results.py
-botlane/core/branch_groups/manifest.py
-botlane/runtime/workflow_locator.py
+botpipe/core/identifiers.py
+botpipe/core/artifact_plan.py
+botpipe/core/run_paths.py
+botpipe/core/route_contracts.py
+botpipe/core/step_plans.py
+botpipe/core/workflow_plan.py
+botpipe/core/placeholders.py
+botpipe/core/reference_graph.py
+botpipe/core/execution_frame.py
+botpipe/core/execution_services.py
+botpipe/core/provider_policy_resolution.py
+botpipe/core/branch_groups/results.py
+botpipe/core/branch_groups/manifest.py
+botpipe/runtime/workflow_locator.py
 ```
 
 Remove:
 
 ```text
-botlane/core/plan_adapters.py
+botpipe/core/plan_adapters.py
 ```
 
 * Do not export these internal modules through package-level `__all__`.
@@ -955,7 +955,7 @@ Add canonical manifest value:
 ```python
 @dataclass(frozen=True, slots=True)
 class BranchManifest:
-    schema: Literal["botlane.branch_results/v1"]
+    schema: Literal["botpipe.branch_results/v1"]
     kind: str
     name: str
     started_at: str
@@ -985,7 +985,7 @@ select_branch_group_outcome(...) should accept BranchManifest after branch cutov
 Schema must remain:
 
 ```text
-botlane.branch_results/v1
+botpipe.branch_results/v1
 ```
 
 ---
@@ -1190,7 +1190,7 @@ not raw strings.
 
 ### 16.1 Single parser
 
-`botlane/core/placeholders.py` owns all placeholder parsing and rendering.
+`botpipe/core/placeholders.py` owns all placeholder parsing and rendering.
 
 Remove duplicate parser/rendering logic from `artifacts.py`.
 
@@ -1328,13 +1328,13 @@ There must be exactly one one-step execution architecture.
 Preferred:
 
 ```text
-Botlane.step(...) builds SingleStepPlan and executes it through the same StepPlan dispatcher.
+Botpipe.step(...) builds SingleStepPlan and executes it through the same StepPlan dispatcher.
 ```
 
 Allowed alternative:
 
 ```text
-Botlane.step(...) builds a normal WorkflowPlan with one step using the same compiler path.
+Botpipe.step(...) builds a normal WorkflowPlan with one step using the same compiler path.
 ```
 
 Forbidden:
@@ -1351,26 +1351,26 @@ If `SingleStepPlan` is not used, remove it entirely.
 
 ---
 
-## 19. Botlane identity requirements
+## 19. Botpipe identity requirements
 
 Preserve:
 
 ```text
-botlane
-botlane_optimizer
-.botlane
-.botlane/tasks
-.botlane-sdk-task.json
-botlane.sdk_task/v1
-botlane.sdk
-botlane.branch_results/v1
+botpipe
+botpipe_optimizer
+.botpipe
+.botpipe/tasks
+.botpipe-sdk-task.json
+botpipe.sdk_task/v1
+botpipe.sdk
+botpipe.branch_results/v1
 ```
 
 Search:
 
 ```text
-botlane/**/*.py
-botlane_optimizer/**/*.py
+botpipe/**/*.py
+botpipe_optimizer/**/*.py
 tests/**/*.py
 ```
 
@@ -1407,12 +1407,12 @@ tests/unit/test_public_surface.py
 Assert:
 
 ```text
-botlane.__all__ exact expected list
-botlane.core.__all__ exact expected list
-botlane.core.branch_groups.__all__ current export behavior in Phase 0
-botlane.core.branch_groups.__all__ target behavior after Phase 2 removes compiled branch exports
+botpipe.__all__ exact expected list
+botpipe.core.__all__ exact expected list
+botpipe.core.branch_groups.__all__ current export behavior in Phase 0
+botpipe.core.branch_groups.__all__ target behavior after Phase 2 removes compiled branch exports
 no internal plan objects exported publicly
-Botlane and BotlaneSDKError exported
+Botpipe and BotpipeSDKError exported
 deprecated public names not exported
 ```
 
@@ -1548,7 +1548,7 @@ Cover:
 
 ```text
 BranchGroupRuntime returns BranchResult internally
-BranchManifest serializes to schema "botlane.branch_results/v1"
+BranchManifest serializes to schema "botpipe.branch_results/v1"
 build_branch_manifest returns BranchManifest
 manifest JSON shape matches expected public evidence format
 branch context markdown renders correctly
@@ -1646,10 +1646,10 @@ No fallback path.
 Cover:
 
 ```text
-Botlane.step PromptStep
-Botlane.step ProduceVerifyStep
-Botlane.step PythonStep
-Botlane.step ChildWorkflowStep
+Botpipe.step PromptStep
+Botpipe.step ProduceVerifyStep
+Botpipe.step PythonStep
+Botpipe.step ChildWorkflowStep
 simple operation declarations if supported
 message
 input model
@@ -1670,14 +1670,14 @@ Add:
 ```text
 tests/strictness/test_no_internal_compat_layers.py
 tests/strictness/test_core_runtime_boundary.py
-tests/strictness/test_botlane_identity.py
+tests/strictness/test_botpipe_identity.py
 ```
 
 `test_no_internal_compat_layers.py` must scan:
 
 ```text
-botlane/**/*.py
-botlane_optimizer/**/*.py
+botpipe/**/*.py
+botpipe_optimizer/**/*.py
 ```
 
 Fail on:
@@ -1709,28 +1709,28 @@ Allowlist only strictness-test strings that assert absence, preferably built wit
 
 `test_core_runtime_boundary.py` must be AST-aware and fail on core imports of runtime outside `TYPE_CHECKING`.
 
-`test_botlane_identity.py` must assert:
+`test_botpipe_identity.py` must assert:
 
 ```text
 no stale package imports
 no stale state directory strings
 no stale schema IDs
-botlane_optimizer imports from botlane
+botpipe_optimizer imports from botpipe
 ```
 
 Strictness must allow:
 
 ```text
-botlane.core.route_contracts.RouteContract
-internal imports of botlane.core.route_contracts.RouteContract
+botpipe.core.route_contracts.RouteContract
+internal imports of botpipe.core.route_contracts.RouteContract
 ```
 
 Strictness must forbid:
 
 ```text
-botlane.RouteContract
-RouteContract in botlane.__all__
-RouteContract in botlane.core.__all__
+botpipe.RouteContract
+RouteContract in botpipe.__all__
+RouteContract in botpipe.core.__all__
 deprecated public route-contract aliases
 ```
 
@@ -1743,17 +1743,17 @@ deprecated public route-contract aliases
 Before changing internals, add tests for:
 
 ```text
-botlane.__all__
-botlane.core.__all__
-Botlane.run signature
-Botlane.step signature
+botpipe.__all__
+botpipe.core.__all__
+Botpipe.run signature
+Botpipe.step signature
 simple authoring examples
 route sentinel authoring
-.botlane persistence identity
-botlane_optimizer import identity
+.botpipe persistence identity
+botpipe_optimizer import identity
 ```
 
-For `botlane.core.branch_groups.__all__`:
+For `botpipe.core.branch_groups.__all__`:
 
 ```text
 Add a Phase 0 test that documents current export behavior.
@@ -1788,7 +1788,7 @@ Do not enable hard no-`Compiled*` strictness yet.
 
 This phase is one atomic cutover. Do not expect the suite to pass halfway through this phase. After this phase is complete, the compiler and runtime must both use the new architecture.
 
-Rewrite `botlane/core/compiler.py` so:
+Rewrite `botpipe/core/compiler.py` so:
 
 ```python
 compile_workflow(...) -> WorkflowPlan
@@ -1855,7 +1855,7 @@ Engine consumes RouteAction.
 BranchGroupRuntime consumes BranchGroupPlan.
 Operation runtime, if kept, no longer depends on CompiledStep, CompiledWorkflow, or CompiledRoute.
 StepPlan and StepHeader do not store authored Step objects.
-botlane.core.branch_groups.__all__ removes CompiledBranchGroupSpec and CompiledBranchStepSpec.
+botpipe.core.branch_groups.__all__ removes CompiledBranchGroupSpec and CompiledBranchStepSpec.
 The prepared branch_groups.__all__ target test is enabled.
 ```
 
@@ -1896,8 +1896,8 @@ JSON/write boundary
 Move parser/rendering/validation into:
 
 ```text
-botlane/core/placeholders.py
-botlane/core/reference_graph.py
+botpipe/core/placeholders.py
+botpipe/core/reference_graph.py
 ```
 
 Remove duplicate parser/rendering code from:
@@ -1945,7 +1945,7 @@ _compiled_step
 _DirectRuntimeControl
 RouteFinalizationResult
 original_step
-stale Botlane identity strings
+stale Botpipe identity strings
 ```
 
 Remove:
@@ -1984,13 +1984,13 @@ Do not keep duplicated placeholder parsers.
 Do not keep route contracts on StepHeader.
 Do not dispatch runtime behavior by step.kind.
 Do not make RouteAction public.
-Do not export internal plan types through botlane.__all__.
+Do not export internal plan types through botpipe.__all__.
 Do not create synthetic workflow fallback if SingleStepPlan is canonical.
 Do not include "operation" in ProviderTurnKind unless operation execution is fully migrated and tested.
 Do not preserve old internal APIs just because tests used them.
 Do not let ExecutionServices become a renamed Engine.
 Do not let services call Engine private methods.
-Do not remove public Botlane authoring or SDK behavior.
+Do not remove public Botpipe authoring or SDK behavior.
 ```
 
 ---
@@ -2001,9 +2001,9 @@ The second pass is complete only when all are true:
 
 ```text
 1. Full pytest suite passes.
-2. botlane.__all__ is unchanged.
-3. botlane.core.__all__ is unchanged.
-4. botlane.core.branch_groups.__all__ removes old compiled branch exports and does not export internal plan/result objects.
+2. botpipe.__all__ is unchanged.
+3. botpipe.core.__all__ is unchanged.
+4. botpipe.core.branch_groups.__all__ removes old compiled branch exports and does not export internal plan/result objects.
 5. compile_workflow(...) returns WorkflowPlan.
 6. No CompiledWorkflow class exists.
 7. No CompiledStep class exists.
@@ -2034,18 +2034,18 @@ The second pass is complete only when all are true:
 32. BranchGroupRuntime uses BranchResult internally.
 33. build_branch_manifest returns BranchManifest.
 34. Only BranchManifest.to_dict() and BranchResult.to_manifest_dict() serialize branch evidence.
-35. Branch manifest schema remains "botlane.branch_results/v1".
+35. Branch manifest schema remains "botpipe.branch_results/v1".
 36. Placeholder parsing/rendering/validation is centralized in placeholders/reference graph modules.
 37. artifacts.py does not contain _PLACEHOLDER_RE, PromptContextView, or _resolve_* placeholder functions.
 38. ReferenceGraph is attached to WorkflowPlan.
 39. Provider-backed prompt and produce/verify steps are driven by ProviderTurnPlan.
 40. ProviderTurnPlan does not include operation unless operations are fully migrated and tested.
 41. Operation runtime, if kept separately, does not depend on CompiledStep, CompiledWorkflow, or CompiledRoute.
-42. No core module imports botlane.runtime outside TYPE_CHECKING.
+42. No core module imports botpipe.runtime outside TYPE_CHECKING.
 43. No stale package/state/schema identifiers are introduced.
-44. botlane_optimizer imports from botlane.
-45. Botlane.run and Botlane.step public behavior is unchanged.
-46. .botlane persistence identity is unchanged.
+44. botpipe_optimizer imports from botpipe.
+45. Botpipe.run and Botpipe.step public behavior is unchanged.
+46. .botpipe persistence identity is unchanged.
 47. Internal RouteContract is allowed, but public RouteContract exports/aliases are forbidden.
 ```
 
@@ -2056,7 +2056,7 @@ The second pass is complete only when all are true:
 Give this instruction with the spec:
 
 ```text
-This is a greenfield internal rewrite. Preserve only the public Botlane API and user-facing behavior.
+This is a greenfield internal rewrite. Preserve only the public Botpipe API and user-facing behavior.
 Do not preserve internal compatibility objects. Remove adapter layers, old compiled dataclasses,
 dict-shaped branch runtime internals, duplicated placeholder parsers, and partial typed wrappers.
 

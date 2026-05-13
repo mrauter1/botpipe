@@ -18,7 +18,7 @@ def test_scoped_step_advances_worklist_items_and_uses_item_placeholders(tmp_path
             seen: list[str] = Field(default_factory=list)
             sessions: list[str] = Field(default_factory=list)
 
-        gate_board = Artifact.json("{task_folder}/gates.json", required=True)
+        gate_board = Artifact.json("{{ task.folder }}/gates.json", required=True)
         gates = Worklist.from_artifact(
             name="gate",
             artifact=gate_board,
@@ -33,7 +33,7 @@ def test_scoped_step_advances_worklist_items_and_uses_item_placeholders(tmp_path
             producer="assess.md",
             session=reviewer,
             scope=gates,
-            writes={"report": Artifact.md("{workflow_folder}/reports/{item.dir_key}.md")},
+            writes={"report": Artifact.md("{{ workflow.folder }}/reports/{{ item.dir_key }}.md")},
             route_metadata={"passed": Route(summary="gate assessed")},
         )
         entry = assess
@@ -146,12 +146,12 @@ def test_prompt_runtime_lazily_renders_item_and_worklist_placeholders(tmp_path: 
 
         gates = Worklist.from_items(
             name="gate",
-            items=({"id": "alpha", "title": "Alpha", "payload": {"foo": "bar"}},),
+            items=({"id": "alpha", "title": "Alpha", "foo": "bar"},),
         )
         assess = PromptStep(
             name="assess",
             producer=Prompt.inline(
-                "Inspect {item.id} / {item.payload.foo} / {worklist.gate.current.id} / {worklist.gate.current.payload.foo}."
+                "Inspect {{ item.id }} / {{ item.payload.foo }} / {{ worklist.gate.current.id }} / {{ worklist.gate.current.payload.foo }}."
             ),
             scope=gates,
         )
@@ -196,7 +196,7 @@ def test_prompt_runtime_renders_item_state_placeholders(tmp_path: Path):
         )
         assess = PromptStep(
             name="assess",
-            producer=Prompt.inline("Inspect {item.state.status} / {item.state.severity}."),
+            producer=Prompt.inline("Inspect {{ item_state.status }} / {{ item_state.severity }}."),
             scope=gates,
         )
         entry = assess
@@ -237,21 +237,30 @@ def test_prompt_runtime_reports_missing_item_state_field_with_placeholder_contex
         )
         assess = PromptStep(
             name="assess",
-            producer=Prompt.inline("Inspect {item.state.priority}."),
+            producer=Prompt.inline("Inspect {{ item_state.priority }}."),
             scope=gates,
         )
         entry = assess
         transitions = {assess: {"done": FINISH}}
 
+    task_folder, run_folder = _workspace(tmp_path)
+    engine = Engine(
+        MissingItemStateFieldWorkflow,
+        provider=ScriptedLLMProvider(llm_turns=[Outcome(raw_output="ok", tag="done")]),
+        session_store=InMemorySessionStore(),
+        checkpoint_store=InMemoryCheckpointStore(),
+    )
+
     with pytest.raises(
-        WorkflowValidationError,
-        match=r"step 'assess' prompt placeholder \{item\.state\.priority\} references unknown item state field 'priority' on worklist 'gate'",
+        WorkflowExecutionError,
+        match=r"prompt placeholder on step 'assess' <inline prompt template>: undefined Jinja value: .*priority",
     ):
-        Engine(
-            MissingItemStateFieldWorkflow,
-            provider=ScriptedLLMProvider(llm_turns=[Outcome(raw_output="ok", tag="done")]),
-            session_store=InMemorySessionStore(),
-            checkpoint_store=InMemoryCheckpointStore(),
+        engine.run(
+            task_id="task-1",
+            run_id="run-1",
+            task_folder=task_folder,
+            run_folder=run_folder,
+            root=tmp_path,
         )
 def test_prompt_runtime_reports_missing_worklist_current_payload_path_with_placeholder_context(tmp_path: Path):
     class MissingWorklistPayloadPromptWorkflow(Workflow):
@@ -264,7 +273,7 @@ def test_prompt_runtime_reports_missing_worklist_current_payload_path_with_place
         )
         assess = PromptStep(
             name="assess",
-            producer=Prompt.inline("Inspect {worklist.gate.current.payload.foo}."),
+            producer=Prompt.inline("Inspect {{ worklist.gate.current.payload.foo }}."),
             scope=gates,
         )
         entry = assess
@@ -280,7 +289,7 @@ def test_prompt_runtime_reports_missing_worklist_current_payload_path_with_place
 
     with pytest.raises(
         WorkflowExecutionError,
-        match=r"prompt placeholder on step 'assess' \{worklist\.gate\.current\.payload\.foo\} references missing payload path 'foo' on worklist 'gate'",
+        match=r"prompt placeholder on step 'assess' <inline prompt template>: undefined Jinja value: .*foo",
     ):
         engine.run(
             task_id="task-1",
@@ -297,7 +306,7 @@ def test_prompt_runtime_reports_missing_current_item_with_placeholder_context(tm
         gates = Worklist.from_items(name="gate", items=())
         assess = PromptStep(
             name="assess",
-            producer=Prompt.inline("Inspect {worklist.gate.current.id}."),
+            producer=Prompt.inline("Inspect {{ worklist.gate.current.id }}."),
         )
         entry = assess
         transitions = {assess: {"done": FINISH}}
@@ -312,7 +321,7 @@ def test_prompt_runtime_reports_missing_current_item_with_placeholder_context(tm
 
     with pytest.raises(
         WorkflowExecutionError,
-        match=r"prompt placeholder on step 'assess' \{worklist\.gate\.current\.id\} requires a current item on worklist 'gate'",
+        match=r"prompt placeholder on step 'assess' <inline prompt template>: undefined Jinja value: .*None.*id",
     ):
         engine.run(
             task_id="task-1",
@@ -326,7 +335,7 @@ def test_prompt_runtime_reports_missing_worklist_source_with_placeholder_context
         class State(BaseModel):
             pass
 
-        gate_board = Artifact.json("{task_folder}/gates.json", required=True)
+        gate_board = Artifact.json("{{ task.folder }}/gates.json", required=True)
         gates = Worklist.from_artifact(
             name="gate",
             artifact=gate_board,
@@ -336,7 +345,7 @@ def test_prompt_runtime_reports_missing_worklist_source_with_placeholder_context
         )
         assess = PromptStep(
             name="assess",
-            producer=Prompt.inline("Inspect {worklist.gate.current.id}."),
+            producer=Prompt.inline("Inspect {{ worklist.gate.current.id }}."),
         )
         entry = assess
         transitions = {assess: {"done": FINISH}}
@@ -351,7 +360,7 @@ def test_prompt_runtime_reports_missing_worklist_source_with_placeholder_context
 
     with pytest.raises(
         WorkflowExecutionError,
-        match=r"prompt placeholder on step 'assess' \{worklist\.gate\.current\.id\} could not load worklist 'gate'",
+        match=r"prompt placeholder on step 'assess' <inline prompt template>: .*worklist 'gate'",
     ):
         engine.run(
             task_id="task-1",
@@ -368,7 +377,7 @@ def test_unused_artifact_backed_worklist_does_not_load_on_non_scoped_path(tmp_pa
         class State(BaseModel):
             pass
 
-        gate_board = Artifact.json("{task_folder}/gates.json", required=True)
+        gate_board = Artifact.json("{{ task.folder }}/gates.json", required=True)
         gates = Worklist.from_artifact(
             name="gate",
             artifact=gate_board,
@@ -411,7 +420,7 @@ def test_artifact_backed_worklist_materializes_after_runtime_creates_source(tmp_
         class State(BaseModel):
             pass
 
-        gate_board = Artifact.json("{task_folder}/gates.json", required=True)
+        gate_board = Artifact.json("{{ task.folder }}/gates.json", required=True)
         gates = Worklist.from_artifact(
             name="gate",
             artifact=gate_board,
@@ -567,7 +576,7 @@ def test_missing_artifact_backed_worklist_fails_at_first_scoped_use(tmp_path: Pa
         class State(BaseModel):
             pass
 
-        gate_board = Artifact.json("{task_folder}/gates.json", required=True)
+        gate_board = Artifact.json("{{ task.folder }}/gates.json", required=True)
         gates = Worklist.from_artifact(
             name="gate",
             artifact=gate_board,
@@ -604,7 +613,7 @@ def test_artifact_backed_worklist_scaffold_policy_creates_source_at_first_scoped
         class State(BaseModel):
             pass
 
-        gate_board = Artifact.json("{task_folder}/gates.json", required=True)
+        gate_board = Artifact.json("{{ task.folder }}/gates.json", required=True)
         gates = Worklist.from_artifact(
             name="gate",
             artifact=gate_board,
@@ -990,7 +999,7 @@ def test_resume_restores_materialized_worklists_and_lazily_materializes_unused_o
             seen: list[str] = Field(default_factory=list)
 
         articles = Worklist.from_param("articles")
-        gate_board = Artifact.json("{task_folder}/gates.json", required=True)
+        gate_board = Artifact.json("{{ task.folder }}/gates.json", required=True)
         gates = Worklist.from_artifact(
             name="gate",
             artifact=gate_board,
@@ -1212,13 +1221,13 @@ def test_scoped_item_state_and_step_item_state_resume_from_checkpoint(tmp_path: 
     assert result.state.seen == ["alpha", "beta"]
     assert result.state.resumed_visits == 2
 def test_resume_ignores_legacy_null_worklist_selection_payloads(tmp_path: Path):
-    from botlane.runtime.stores.filesystem import FilesystemCheckpointStore
+    from botpipe.runtime.stores.filesystem import FilesystemCheckpointStore
 
     class LegacyNullSelectionWorkflow(Workflow):
         class State(BaseModel):
             resumed: bool = False
 
-        gate_board = Artifact.json("{task_folder}/gates.json", required=True)
+        gate_board = Artifact.json("{{ task.folder }}/gates.json", required=True)
         gates = Worklist.from_artifact(
             name="gate",
             artifact=gate_board,
@@ -1284,7 +1293,7 @@ def test_artifact_backed_worklist_duplicate_ids_fail_before_scoped_execution(tmp
         class State(BaseModel):
             seen: int = 0
 
-        gate_board = Artifact.json("{task_folder}/gates.json", required=True)
+        gate_board = Artifact.json("{{ task.folder }}/gates.json", required=True)
         gates = Worklist.from_artifact(
             name="gate",
             artifact=gate_board,
@@ -1344,7 +1353,7 @@ def test_python_step_effect_refresh_reloads_worklist_source(tmp_path: Path):
         return Event("done")
 
     class RefreshWorkflow(Workflow):
-        board = Artifact.json("{task_folder}/gates.json", required=True)
+        board = Artifact.json("{{ task.folder }}/gates.json", required=True)
         gates = Worklist.from_artifact(
             name="gate",
             artifact=board,
@@ -1388,7 +1397,7 @@ def test_python_step_may_return_direct_worklist_effect(tmp_path: Path):
         return WorklistEffect.complete_and_advance(worklist="gate", exhausted="done")
 
     class DirectEffectWorkflow(Workflow):
-        board = Artifact.json("{task_folder}/gates.json", required=True)
+        board = Artifact.json("{{ task.folder }}/gates.json", required=True)
         gates = Worklist.from_artifact(
             name="gate",
             artifact=board,

@@ -455,7 +455,7 @@ def test_work_item_session_resume_uses_dir_key_based_key_and_reuses_session(tmp_
         class State(BaseModel):
             pass
 
-        gate_board = Artifact.json("{task_folder}/gates.json", required=True)
+        gate_board = Artifact.json("{{ task.folder }}/gates.json", required=True)
         gates = Worklist.from_artifact(
             name="gate",
             artifact=gate_board,

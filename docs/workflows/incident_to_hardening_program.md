@@ -8,17 +8,17 @@
 - Why it matters: incident work is high-stakes, cross-functional, and often fails when teams stop at diagnosis instead of producing durable follow-up actions, owners, and communication artifacts.
 - Likely sponsors: incident commanders, SRE leads, engineering managers, platform or reliability owners, and support leadership when customer impact exists.
 - Classification: end-to-end workflow. The trigger is a concrete incident. The terminal result is a hardening program, response package, and deterministic receipt.
-- Why Botlane fits: the work spans framing, evidence collection, hypothesis ranking, mitigation planning, and package assembly across durable filesystem artifacts with bounded producer/verifier loops.
+- Why Botpipe fits: the work spans framing, evidence collection, hypothesis ranking, mitigation planning, and package assembly across durable filesystem artifacts with bounded producer/verifier loops.
 - Why one-shot is insufficient: missing evidence must be surfaced explicitly, verifier loops must gate local repair versus replan, and the final outcome needs multiple durable artifacts instead of a single postmortem blob.
 
 ## Invocation
 
-- Package path: `botlane/workflows/incident_to_hardening_program/`
-- Discovery: `botlane workflows show incident_to_hardening_program`
+- Package path: `botpipe/workflows/incident_to_hardening_program/`
+- Discovery: `botpipe workflows show incident_to_hardening_program`
 - Run:
 
 ```bash
-botlane run incident_to_hardening_program <task-id> \
+botpipe run incident_to_hardening_program <task-id> \
   --message "Payments API returned 500s for 47 minutes last night." \
   -wf incident_title "Payments API 500 spike" \
   -wf incident_window 2026-04-22T03:11Z/2026-04-22T03:58Z \
@@ -224,7 +224,7 @@ The package includes explicit step prompts for:
 
 ## Evidence
 
-- Package implementation: `botlane/workflows/incident_to_hardening_program/`
-- Package asset: `botlane/workflows/incident_to_hardening_program/assets/incident_hardening_package_checklist.md`
+- Package implementation: `botpipe/workflows/incident_to_hardening_program/`
+- Package asset: `botpipe/workflows/incident_to_hardening_program/assets/incident_hardening_package_checklist.md`
 - Workflow-specific proof: `tests/runtime/test_incident_to_hardening_program.py`
 - The scripted exercise proves discovery, compilation, route legality, terminal package creation, and deterministic publication of `incident_receipt.json`.

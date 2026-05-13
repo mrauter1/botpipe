@@ -8,17 +8,17 @@
 - Why it matters: once the portfolio can build, retrieve, adapt, evaluate, refine, diagnose, govern, and decompose workflows, the missing layer is a top-level learner that decides what the next recursive cycle should improve across those surfaces.
 - Likely sponsors: workflow-platform owners, engineering-productivity teams, AI platform teams, delivery leadership, and recursive portfolio operators.
 - Classification: end-to-end workflow.
-- Why Botlane fits: the work needs durable evidence capture, verifier-gated analysis, explicit next-action publication, and a terminal boundary another operator or workflow can trust later.
+- Why Botpipe fits: the work needs durable evidence capture, verifier-gated analysis, explicit next-action publication, and a terminal boundary another operator or workflow can trust later.
 - Why one-shot is insufficient: credible company-level recursive improvement needs bounded task/workflow scope, evidence-backed priority categories, explicit rework versus replan behavior, and publication checks that reject hidden downstream execution or summary drift.
 
 ## Invocation
 
-- Package path: `botlane/workflows/company_operation_to_recursive_improvement_cycle/`
-- Discovery: `botlane workflows show company_operation_to_recursive_improvement_cycle`
+- Package path: `botpipe/workflows/company_operation_to_recursive_improvement_cycle/`
+- Discovery: `botpipe workflows show company_operation_to_recursive_improvement_cycle`
 - Direct run:
 
 ```bash
-botlane run company_operation_to_recursive_improvement_cycle <task-id> \
+botpipe run company_operation_to_recursive_improvement_cycle <task-id> \
   --message "Recommend the next recursive improvement cycle from current company work history and workflow telemetry." \
   -wf task_title "Company recursive-improvement review" \
   -wf sponsor_role "workflow platform" \
@@ -72,7 +72,7 @@ Params:
 ### 1. Scope boundary
 
 - Alternatives considered:
-- always analyze every task under `.botlane`
+- always analyze every task under `.botpipe`
 - require one upstream artifact as the only legal entry point
 - accept optional scoped task and workflow sets plus shared capability, health, and company snapshots
 - Selected: optional `focus_tasks` and `focus_workflows` plus shared capability, portfolio-health, and company snapshots
@@ -91,7 +91,7 @@ Params:
 
 - Alternatives considered:
 - auto-run evaluation, refinement, decomposition, or governance follow-through from the package
-- auto-mutate workflow packages or `.botlane` state after publication
+- auto-mutate workflow packages or `.botpipe` state after publication
 - stop at a published cycle package plus explicit next actions and receipt
 - Selected: stop at a published cycle package plus explicit next actions and receipt
 - Why: it keeps follow-through visible and reviewable while still producing a terminal package another operator or workflow can use immediately.
@@ -100,7 +100,7 @@ Params:
 
 | Candidate | Description | Trade-off | Decision |
 | --- | --- | --- | --- |
-| Workflow-only implementation with ad hoc `.botlane` scraping inside the package | Build the cycle package directly against raw task/run paths and JSON parsing inside workflow code | Smallest diff, but duplicates the new company snapshot seam and weakens the authoring boundary | Rejected |
+| Workflow-only implementation with ad hoc `.botpipe` scraping inside the package | Build the cycle package directly against raw task/run paths and JSON parsing inside workflow code | Smallest diff, but duplicates the new company snapshot seam and weakens the authoring boundary | Rejected |
 | Shared company-operation snapshot seam plus dedicated workflow package | Reuse the helper seam for authoritative evidence capture while keeping recursive-improvement policy visible in the workflow package, prompts, and docs | Slightly broader change set, but it is the clearest reusable and inspectable design | Selected |
 | Runtime-owned company-learning subsystem | Move task aggregation, priority categorization, and next-cycle publication into runtime code | Collapses the workflow/runtime boundary and hides the recursive SOP where operators cannot inspect it easily | Rejected |
 
@@ -212,7 +212,7 @@ Payload models used by the package:
 - Compilation must expose typed route metadata and payload schemas for the three pair steps.
 - Runtime proof must cover:
 - successful publication of `workflow_capability_snapshot.json`, `workflow_portfolio_health_snapshot.json`, `company_operation_snapshot.json`, `company_pressure_map.md`, `recursive_improvement_priority_matrix.md`, `recursive_improvement_candidates.json`, `recursive_improvement_cycle.md`, `recursive_improvement_summary.json`, `recursive_improvement_next_actions.md`, and `recursive_improvement_cycle_receipt.json`
-- deterministic capture of bounded task history, recent messages, and scoped workflow telemetry from the current `.botlane` task/run records without mutating task or run state
+- deterministic capture of bounded task history, recent messages, and scoped workflow telemetry from the current `.botpipe` task/run records without mutating task or run state
 - proof that the workflow stops at publication and does not auto-run evaluation, refinement, decomposition, governance, or remediation work
 - publish-side rejection of missing snapshot artifacts, unknown focus-task or focus-workflow references, summary drift, invalid priority categories, and outputs that imply hidden downstream execution
 
@@ -231,8 +231,8 @@ Payload models used by the package:
 
 ## Evidence
 
-- Package implementation: `botlane/workflows/company_operation_to_recursive_improvement_cycle/`
+- Package implementation: `botpipe/workflows/company_operation_to_recursive_improvement_cycle/`
 - Shared seams consumed: `runtime/workspace.py`, `stdlib/company.py`, and `stdlib/portfolio.py`
-- Workflow asset: `botlane/workflows/company_operation_to_recursive_improvement_cycle/assets/recursive_improvement_cycle_checklist.md`
+- Workflow asset: `botpipe/workflows/company_operation_to_recursive_improvement_cycle/assets/recursive_improvement_cycle_checklist.md`
 - Workflow-specific proof: `tests/runtime/test_company_operation_to_recursive_improvement_cycle.py`
 - The scripted tests prove workflow discovery, compilation, terminal publication, filter handling, and publish-side rejection of missing snapshots, unknown focus references, summary drift, invalid priority categories, and hidden downstream execution signals.

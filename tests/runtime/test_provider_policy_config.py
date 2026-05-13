@@ -5,9 +5,9 @@ from pathlib import Path
 
 import pytest
 
-from botlane.core.provider_policy import SYSTEM_DEFAULT_PROVIDER_POLICY
-from botlane.runtime.config import ConfigError, resolve_runtime_config
-import botlane.runtime.config as runtime_config
+from botpipe.core.provider_policy import SYSTEM_DEFAULT_PROVIDER_POLICY
+from botpipe.runtime.config import ConfigError, resolve_runtime_config
+import botpipe.runtime.config as runtime_config
 
 
 def _runtime_args(**overrides: object) -> argparse.Namespace:
@@ -48,8 +48,8 @@ def test_resolve_runtime_config_merges_global_and_workspace_provider_policy_defa
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     global_config_dir = tmp_path / "global-config"
-    global_config_path = global_config_dir / "botlane.yaml"
-    local_config_path = tmp_path / "botlane.yaml"
+    global_config_path = global_config_dir / "botpipe.yaml"
+    local_config_path = tmp_path / "botpipe.yaml"
     global_config_dir.mkdir(parents=True)
     global_config_path.write_text("", encoding="utf-8")
     local_config_path.write_text("", encoding="utf-8")
@@ -101,8 +101,8 @@ def test_resolve_runtime_config_applies_workspace_strict_provider_policy(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     global_config_dir = tmp_path / "global-config"
-    global_config_path = global_config_dir / "botlane.yaml"
-    local_config_path = tmp_path / "botlane.yaml"
+    global_config_path = global_config_dir / "botpipe.yaml"
+    local_config_path = tmp_path / "botpipe.yaml"
     global_config_dir.mkdir(parents=True)
     global_config_path.write_text("", encoding="utf-8")
     local_config_path.write_text("", encoding="utf-8")
@@ -152,8 +152,8 @@ def test_workspace_strict_null_clears_inherited_strict_policy(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     global_config_dir = tmp_path / "global-config"
-    global_config_path = global_config_dir / "botlane.yaml"
-    local_config_path = tmp_path / "botlane.yaml"
+    global_config_path = global_config_dir / "botpipe.yaml"
+    local_config_path = tmp_path / "botpipe.yaml"
     global_config_dir.mkdir(parents=True)
     global_config_path.write_text("", encoding="utf-8")
     local_config_path.write_text("", encoding="utf-8")
@@ -190,7 +190,7 @@ def test_policy_file_overrides_and_extends_provider_policy_layers(
 ) -> None:
     config_root = tmp_path / "repo"
     config_root.mkdir()
-    (config_root / "botlane.yaml").write_text(
+    (config_root / "botpipe.yaml").write_text(
         "provider_policy:\n"
         "  default:\n"
         "    sandbox:\n"
@@ -224,7 +224,7 @@ def test_policy_file_accepts_full_runtime_config_document_shape(
 ) -> None:
     config_root = tmp_path / "repo"
     config_root.mkdir()
-    (config_root / "botlane.yaml").write_text("", encoding="utf-8")
+    (config_root / "botpipe.yaml").write_text("", encoding="utf-8")
     policy_file = tmp_path / "policy.yaml"
     policy_file.write_text(
         "provider_policy:\n"
@@ -249,7 +249,7 @@ def test_resolve_runtime_config_rejects_unknown_provider_policy_keys(tmp_path: P
     with pytest.raises(ConfigError, match=r"provider_policy\.default\.bogus"):
         runtime_config.parse_runtime_config(
             {"provider_policy": {"default": {"bogus": True}}},
-            tmp_path / "botlane.yaml",
+            tmp_path / "botpipe.yaml",
         )
 
 
@@ -257,7 +257,7 @@ def test_resolve_runtime_config_reports_invalid_policy_enum_with_field_path(tmp_
     with pytest.raises(ConfigError, match=r"provider_policy\.default\.permissions\.mode"):
         runtime_config.parse_runtime_config(
             {"provider_policy": {"default": {"permissions": {"mode": "invalid"}}}},
-            tmp_path / "botlane.yaml",
+            tmp_path / "botpipe.yaml",
         )
 
 
@@ -265,7 +265,7 @@ def test_resolve_runtime_config_rejects_null_default_policy_override(tmp_path: P
     with pytest.raises(ConfigError, match=r"provider_policy\.default must be a mapping when provided"):
         runtime_config.parse_runtime_config(
             {"provider_policy": {"default": None}},
-            tmp_path / "botlane.yaml",
+            tmp_path / "botpipe.yaml",
         )
 
 
@@ -273,7 +273,7 @@ def test_resolve_runtime_config_rejects_null_validation_override(tmp_path: Path)
     with pytest.raises(ConfigError, match=r"provider_policy\.validation must be a mapping when provided"):
         runtime_config.parse_runtime_config(
             {"provider_policy": {"validation": None}},
-            tmp_path / "botlane.yaml",
+            tmp_path / "botpipe.yaml",
         )
 
 
@@ -283,7 +283,7 @@ def test_resolve_runtime_config_maps_legacy_provider_model_and_effort_into_provi
 ) -> None:
     config_root = tmp_path / "repo"
     config_root.mkdir()
-    (config_root / "botlane.yaml").write_text(
+    (config_root / "botpipe.yaml").write_text(
         "provider:\n"
         "  name: claude\n"
         "  claude:\n"
@@ -326,7 +326,7 @@ def test_runtime_full_auto_maps_to_full_auto_sandboxed_when_policy_mode_is_not_e
 ) -> None:
     config_root = tmp_path / "repo"
     config_root.mkdir()
-    (config_root / "botlane.yaml").write_text("runtime:\n  full_auto: true\n", encoding="utf-8")
+    (config_root / "botpipe.yaml").write_text("runtime:\n  full_auto: true\n", encoding="utf-8")
     monkeypatch.setattr(runtime_config, "user_config_dir", lambda: tmp_path / "missing-user-config")
 
     resolved = resolve_runtime_config(config_root, _runtime_args())
@@ -341,7 +341,7 @@ def test_resolve_runtime_config_maps_legacy_claude_bypass_into_provider_policy(
 ) -> None:
     config_root = tmp_path / "repo"
     config_root.mkdir()
-    (config_root / "botlane.yaml").write_text(
+    (config_root / "botpipe.yaml").write_text(
         "provider:\n"
         "  name: claude\n"
         "  claude:\n"
@@ -367,7 +367,7 @@ def test_explicit_policy_mode_beats_legacy_full_auto_mapping(
 ) -> None:
     config_root = tmp_path / "repo"
     config_root.mkdir()
-    (config_root / "botlane.yaml").write_text(
+    (config_root / "botpipe.yaml").write_text(
         "runtime:\n"
         "  full_auto: true\n"
         "provider_policy:\n"
@@ -389,7 +389,7 @@ def test_explicit_policy_fields_beat_legacy_claude_bypass_mapping(
 ) -> None:
     config_root = tmp_path / "repo"
     config_root.mkdir()
-    (config_root / "botlane.yaml").write_text(
+    (config_root / "botpipe.yaml").write_text(
         "provider:\n"
         "  name: claude\n"
         "  claude:\n"
@@ -415,7 +415,7 @@ def test_policy_validation_cli_overrides_replace_config_validation_modes(
 ) -> None:
     config_root = tmp_path / "repo"
     config_root.mkdir()
-    (config_root / "botlane.yaml").write_text(
+    (config_root / "botpipe.yaml").write_text(
         "provider_policy:\n"
         "  validation:\n"
         "    unsupported: fail\n"
@@ -445,7 +445,7 @@ def test_narrow_yaml_loader_parses_provider_policy_lists_and_nulls_without_pyyam
 ) -> None:
     config_root = tmp_path / "repo"
     config_root.mkdir()
-    (config_root / "botlane.yaml").write_text(
+    (config_root / "botpipe.yaml").write_text(
         "provider_policy:\n"
         "  strict:\n"
         "    sandbox:\n"

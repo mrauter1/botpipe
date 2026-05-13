@@ -7,8 +7,8 @@ from pathlib import Path
 
 import pytest
 
-from botlane.runtime.loader import resolve_workflow_reference
-from botlane.runtime.workflow_locator import (
+from botpipe.runtime.loader import resolve_workflow_reference
+from botpipe.runtime.workflow_locator import (
     CatalogWorkflowLocator,
     PythonFileWorkflowLocator,
     PythonModuleWorkflowLocator,
@@ -24,8 +24,8 @@ def _clear_workflow_modules() -> None:
         if (
             name == "workflows"
             or name.startswith("workflows.")
-            or name == "_botlane_workspace_workflows"
-            or name.startswith("_botlane_workspace_workflows.")
+            or name == "_botpipe_workspace_workflows"
+            or name.startswith("_botpipe_workspace_workflows.")
         ):
             sys.modules.pop(name, None)
 
@@ -38,7 +38,7 @@ def _isolate_modules():
 
 
 def _write_catalog_flow(root: Path, workflow_id: str, *, class_name: str = "CatalogWorkflow") -> Path:
-    package_dir = root / ".botlane" / "workflows" / workflow_id
+    package_dir = root / ".botpipe" / "workflows" / workflow_id
     package_dir.mkdir(parents=True, exist_ok=True)
     (package_dir / "workflow.toml").write_text(
         f'name = "{workflow_id}"\n'
@@ -49,7 +49,7 @@ def _write_catalog_flow(root: Path, workflow_id: str, *, class_name: str = "Cata
     (package_dir / "flow.py").write_text(
         (
             "from __future__ import annotations\n\n"
-            "from botlane import Workflow, python_step\n\n"
+            "from botpipe import Workflow, python_step\n\n"
             f"class {class_name}(Workflow):\n"
             f'    name = "{workflow_id}"\n\n'
             '    @python_step(name="start")\n'
@@ -67,7 +67,7 @@ def _write_single_file(root: Path, relative_path: str, *, workflow_name: str, cl
     source_path.write_text(
         (
             "from __future__ import annotations\n\n"
-            "from botlane import Workflow, python_step\n\n"
+            "from botpipe import Workflow, python_step\n\n"
             f"class {class_name}(Workflow):\n"
             f'    name = "{workflow_name}"\n\n'
             '    @python_step(name="start")\n'
@@ -89,7 +89,7 @@ def _write_repo_module(root: Path, workflow_id: str, *, class_name: str) -> str:
     (package_dir / "workflow.py").write_text(
         (
             "from __future__ import annotations\n\n"
-            "from botlane import Workflow, python_step\n\n"
+            "from botpipe import Workflow, python_step\n\n"
             f"class {class_name}(Workflow):\n"
             f'    name = "{workflow_id}"\n\n'
             '    @python_step(name="start")\n'

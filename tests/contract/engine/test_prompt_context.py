@@ -1,6 +1,9 @@
 from __future__ import annotations
 
+import importlib.util
 import re
+import sys
+from uuid import uuid4
 
 from tests.contract.engine._shared import (
     _ConfigurableRenderedTransport,
@@ -83,6 +86,359 @@ def test_low_level_engine_resolves_relative_file_prompts_with_filesystem_registr
     assert result.terminal == FINISH
     assert len(transport.turns) == 1
     assert "Answer the request." in transport.turns[0].prompt_text
+
+
+def test_file_prompt_uses_jinja_context_features_and_preserves_single_brace_literals(tmp_path: Path) -> None:
+    prompts_dir = tmp_path / "prompts"
+    prompts_dir.mkdir()
+    (prompts_dir / "include.md").write_text("Included: {{ workflow.name }}\n", encoding="utf-8")
+    (prompts_dir / "ask.md").write_text(
+        "\n".join(
+            (
+                "Message={{ message }}",
+                "Request={{ request.text }}",
+                "Input={{ input.topic }}",
+                "Param={{ params.mode }}",
+                "State={{ state.status }}",
+                "{% if input.topic == 'release' %}Conditional=yes{% endif %}",
+                "{% for artifact in artifacts %}Artifact={{ artifact.name }}:{{ artifact.path.name }}{% endfor %}",
+                "{% include 'include.md' %}",
+                "Literal JSON: {\"status\": \"ready\"}",
+                "{% raw %}Raw Jinja: {{ not_rendered }}{% endraw %}",
+                "Old syntax stays literal: {ctx.message}",
+            )
+        )
+        + "\n",
+        encoding="utf-8",
+    )
+
+    class JinjaPromptWorkflow(SimpleWorkflow):
+        class Input(BaseModel):
+            topic: str
+
+        class Params(BaseModel):
+            mode: str = "strict"
+
+        class State(BaseModel):
+            status: str = "draft"
+
+        draft = Md("draft")
+        ask = step(prompt=Prompt.file("prompts/ask.md"), writes=[draft])
+
+    task_folder, run_folder = _workspace(tmp_path)
+    (run_folder / "request.md").write_text("Review this change.\n", encoding="utf-8")
+    captured: dict[str, str] = {}
+    provider = ScriptedLLMProvider(
+        llm_turns=[
+            lambda request: (
+                captured.__setitem__("prompt", request.prompt.text),
+                Outcome(raw_output="done", tag="done"),
+            )[1]
+        ]
+    )
+
+    result = Engine(
+        JinjaPromptWorkflow,
+        provider=provider,
+        prompt_registry=FilesystemPromptRegistry(tmp_path),
+        session_store=InMemorySessionStore(),
+        checkpoint_store=InMemoryCheckpointStore(),
+    ).run(
+        task_id="task-jinja-file-prompt",
+        run_id="run-jinja-file-prompt",
+        task_folder=task_folder,
+        run_folder=run_folder,
+        root=tmp_path,
+        params=JinjaPromptWorkflow.Params(mode="strict"),
+        workflow_input=JinjaPromptWorkflow.Input(topic="release"),
+    )
+
+    assert result.terminal == FINISH
+    rendered = captured["prompt"]
+    assert "Message=Review this change." in rendered
+    assert "Request=Review this change." in rendered
+    assert "Input=release" in rendered
+    assert "Param=strict" in rendered
+    assert "State=draft" in rendered
+    assert "Conditional=yes" in rendered
+    assert "Artifact=draft:draft.md" in rendered
+    assert "Included: jinja_prompt_workflow" in rendered
+    assert 'Literal JSON: {"status": "ready"}' in rendered
+    assert "Raw Jinja: {{ not_rendered }}" in rendered
+    assert "Old syntax stays literal: {ctx.message}" in rendered
+    assert "{{ message }}" not in rendered
+
+
+def test_file_prompt_rejects_include_path_escape(tmp_path: Path) -> None:
+    prompts_dir = tmp_path / "prompts"
+    prompts_dir.mkdir()
+    (tmp_path / "secret.md").write_text("secret\n", encoding="utf-8")
+    (prompts_dir / "ask.md").write_text("{% include '../secret.md' %}\n", encoding="utf-8")
+
+    class EscapeIncludeWorkflow(SimpleWorkflow):
+        class State(BaseModel):
+            pass
+
+        ask = step(prompt=Prompt.file("prompts/ask.md"))
+
+    task_folder, run_folder = _workspace(tmp_path)
+    with pytest.raises(WorkflowExecutionError, match="unsafe Jinja template path"):
+        Engine(
+            EscapeIncludeWorkflow,
+            provider=ScriptedLLMProvider(llm_turns=[Outcome(raw_output="done", tag="done")]),
+            prompt_registry=FilesystemPromptRegistry(tmp_path),
+            session_store=InMemorySessionStore(),
+            checkpoint_store=InMemoryCheckpointStore(),
+        ).run(
+            task_id="task-jinja-escape",
+            run_id="run-jinja-escape",
+            task_folder=task_folder,
+            run_folder=run_folder,
+            root=tmp_path,
+        )
+
+
+def test_symlinked_file_prompt_includes_from_lexical_prompt_directory(tmp_path: Path) -> None:
+    prompts_dir = tmp_path / "prompts"
+    shared_dir = tmp_path / "shared"
+    prompts_dir.mkdir()
+    shared_dir.mkdir()
+    (prompts_dir / "local.md").write_text("Included from lexical root\n", encoding="utf-8")
+    (shared_dir / "local.md").write_text("Included from symlink target root\n", encoding="utf-8")
+    (shared_dir / "ask.md").write_text("Prompt\n{% include 'local.md' %}", encoding="utf-8")
+    (prompts_dir / "ask.md").symlink_to(shared_dir / "ask.md")
+
+    class SymlinkPromptWorkflow(SimpleWorkflow):
+        class State(BaseModel):
+            pass
+
+        ask = step(prompt=Prompt.file("prompts/ask.md"))
+
+    task_folder, run_folder = _workspace(tmp_path)
+    captured: dict[str, str] = {}
+    result = Engine(
+        SymlinkPromptWorkflow,
+        provider=ScriptedLLMProvider(
+            llm_turns=[
+                lambda request: (
+                    captured.__setitem__("prompt", request.prompt.text),
+                    Outcome(raw_output="done", tag="done"),
+                )[1]
+            ]
+        ),
+        prompt_registry=FilesystemPromptRegistry(tmp_path),
+        session_store=InMemorySessionStore(),
+        checkpoint_store=InMemoryCheckpointStore(),
+    ).run(
+        task_id="task-symlink-prompt",
+        run_id="run-symlink-prompt",
+        task_folder=task_folder,
+        run_folder=run_folder,
+        root=tmp_path,
+    )
+
+    assert result.terminal == FINISH
+    assert "Included from lexical root" in captured["prompt"]
+    assert "Included from symlink target root" not in captured["prompt"]
+
+
+@pytest.mark.parametrize(
+    ("prompt_path_factory", "expected"),
+    [
+        (lambda root: str((root / "absolute.md").absolute()), "absolute prompt"),
+        (lambda root: "../outside/ask.md", "outside prompt"),
+    ],
+)
+def test_file_prompt_allows_absolute_and_parent_relative_paths(
+    tmp_path: Path,
+    prompt_path_factory,
+    expected: str,
+) -> None:
+    workflow_root = tmp_path / "workflow"
+    outside_root = tmp_path / "outside"
+    workflow_root.mkdir()
+    outside_root.mkdir()
+    (tmp_path / "absolute.md").write_text("{{ input.topic }} absolute prompt\n", encoding="utf-8")
+    (outside_root / "ask.md").write_text("{{ input.topic }} outside prompt\n", encoding="utf-8")
+    prompt_path = prompt_path_factory(tmp_path)
+
+    class PermissiveFilePromptWorkflow(SimpleWorkflow):
+        class Input(BaseModel):
+            topic: str
+
+        class State(BaseModel):
+            pass
+
+        ask = step(prompt=Prompt.file(prompt_path))
+
+    workflow_name_suffix = expected.replace(" ", "_")
+    PermissiveFilePromptWorkflow.__name__ = f"PermissiveFilePromptWorkflow_{workflow_name_suffix}"
+    PermissiveFilePromptWorkflow.__qualname__ = PermissiveFilePromptWorkflow.__name__
+
+    task_folder, run_folder = _workspace(tmp_path)
+    captured: dict[str, str] = {}
+    result = Engine(
+        PermissiveFilePromptWorkflow,
+        provider=ScriptedLLMProvider(
+            llm_turns=[
+                lambda request: (
+                    captured.__setitem__("prompt", request.prompt.text),
+                    Outcome(raw_output="done", tag="done"),
+                )[1]
+            ]
+        ),
+        prompt_registry=FilesystemPromptRegistry(workflow_root),
+        session_store=InMemorySessionStore(),
+        checkpoint_store=InMemoryCheckpointStore(),
+    ).run(
+        task_id="task-permissive-file-prompt",
+        run_id="run-permissive-file-prompt",
+        task_folder=task_folder,
+        run_folder=run_folder,
+        root=tmp_path,
+        workflow_input=PermissiveFilePromptWorkflow.Input(topic="release"),
+    )
+
+    assert result.terminal == FINISH
+    assert captured["prompt"] == f"release {expected}\n"
+
+
+@pytest.mark.parametrize(
+    ("body", "message"),
+    [
+        ("{{ missing_value }}\n", "unknown Jinja variable"),
+        ("{% if message %}\n", "Jinja syntax error"),
+    ],
+)
+def test_file_prompt_reports_strict_jinja_template_errors(tmp_path: Path, body: str, message: str) -> None:
+    prompts_dir = tmp_path / "prompts"
+    prompts_dir.mkdir()
+    (prompts_dir / "ask.md").write_text(body, encoding="utf-8")
+
+    class InvalidJinjaWorkflow(SimpleWorkflow):
+        class State(BaseModel):
+            pass
+
+        ask = step(prompt=Prompt.file("prompts/ask.md"))
+
+    task_folder, run_folder = _workspace(tmp_path)
+    with pytest.raises(WorkflowExecutionError, match=message):
+        Engine(
+            InvalidJinjaWorkflow,
+            provider=ScriptedLLMProvider(llm_turns=[Outcome(raw_output="done", tag="done")]),
+            prompt_registry=FilesystemPromptRegistry(tmp_path),
+            session_store=InMemorySessionStore(),
+            checkpoint_store=InMemoryCheckpointStore(),
+        ).run(
+            task_id="task-jinja-invalid",
+            run_id="run-jinja-invalid",
+            task_folder=task_folder,
+            run_folder=run_folder,
+            root=tmp_path,
+        )
+
+
+@pytest.mark.parametrize(
+    ("body", "message"),
+    [
+        ("{{ missing_value }}\n", "unknown Jinja variable"),
+        ("{% include 'missing.md' %}\n", "missing Jinja template"),
+    ],
+)
+def test_compile_workflow_validates_file_prompt_jinja_templates(tmp_path: Path, body: str, message: str) -> None:
+    package_dir = tmp_path / "workflow_pkg"
+    prompts_dir = package_dir / "prompts"
+    prompts_dir.mkdir(parents=True)
+    (prompts_dir / "ask.md").write_text(body, encoding="utf-8")
+    workflow_path = package_dir / "workflow.py"
+    workflow_path.write_text(
+        """
+from pydantic import BaseModel
+from botpipe import Prompt, Workflow, step
+
+
+class CompileJinjaWorkflow(Workflow):
+    class State(BaseModel):
+        pass
+
+    ask = step(prompt=Prompt.file("prompts/ask.md"))
+""".strip()
+        + "\n",
+        encoding="utf-8",
+    )
+    module_name = f"compile_jinja_workflow_{uuid4().hex}"
+    spec = importlib.util.spec_from_file_location(module_name, workflow_path)
+    assert spec is not None and spec.loader is not None
+    module = importlib.util.module_from_spec(spec)
+    sys.modules[module_name] = module
+    try:
+        spec.loader.exec_module(module)
+        with pytest.raises(WorkflowValidationError, match=message):
+            compile_workflow(module.CompileJinjaWorkflow)
+    finally:
+        sys.modules.pop(module_name, None)
+
+
+@pytest.mark.parametrize(
+    ("files", "message"),
+    [
+        (
+            {"ask.md": "{% include 'nested.md' %}\n", "nested.md": "{{ missing_value }}\n"},
+            "nested.md.*unknown Jinja variable",
+        ),
+        (
+            {"ask.md": "{% include 'nested.md' %}\n", "nested.md": "{% if message %}\n"},
+            "nested.md.*Jinja syntax error",
+        ),
+        (
+            {"ask.md": "{% include 'nested.md' %}\n", "nested.md": "{% include 'missing.md' %}\n"},
+            "nested.md.*missing Jinja template",
+        ),
+        (
+            {"ask.md": "{% include 'nested.md' %}\n", "nested.md": "{% include '../secret.md' %}\n"},
+            "nested.md.*unsafe Jinja template path",
+        ),
+    ],
+)
+def test_compile_workflow_recursively_validates_file_prompt_includes(
+    tmp_path: Path,
+    files: dict[str, str],
+    message: str,
+) -> None:
+    package_dir = tmp_path / "workflow_pkg"
+    prompts_dir = package_dir / "prompts"
+    prompts_dir.mkdir(parents=True)
+    for name, body in files.items():
+        (prompts_dir / name).write_text(body, encoding="utf-8")
+    workflow_path = package_dir / "workflow.py"
+    workflow_path.write_text(
+        """
+from pydantic import BaseModel
+from botpipe import Prompt, Workflow, step
+
+
+class CompileNestedJinjaWorkflow(Workflow):
+    class State(BaseModel):
+        pass
+
+    ask = step(prompt=Prompt.file("prompts/ask.md"))
+""".strip()
+        + "\n",
+        encoding="utf-8",
+    )
+    module_name = f"compile_nested_jinja_workflow_{uuid4().hex}"
+    spec = importlib.util.spec_from_file_location(module_name, workflow_path)
+    assert spec is not None and spec.loader is not None
+    module = importlib.util.module_from_spec(spec)
+    sys.modules[module_name] = module
+    try:
+        spec.loader.exec_module(module)
+        with pytest.raises(WorkflowValidationError, match=message):
+            compile_workflow(module.CompileNestedJinjaWorkflow)
+    finally:
+        sys.modules.pop(module_name, None)
+
+
 def test_step_contract_keeps_missing_workspace_reads_visible_as_unavailable_context(tmp_path: Path):
     def _missingreadworkflow_on_ask(ctx):
         return None
@@ -119,7 +475,7 @@ def test_step_contract_keeps_missing_workspace_reads_visible_as_unavailable_cont
     assert readable_ref.path == str((tmp_path / "notes/missing.txt").resolve())
     assert readable_ref.exists is False
     assert readable_ref.declared_artifact is False
-def test_prompt_runtime_reports_missing_payload_path_with_placeholder_context(tmp_path: Path):
+def test_prompt_runtime_reports_missing_payload_path_with_jinja_context(tmp_path: Path):
     class MissingPayloadPromptWorkflow(Workflow):
         class State(BaseModel):
             pass
@@ -130,7 +486,7 @@ def test_prompt_runtime_reports_missing_payload_path_with_placeholder_context(tm
         )
         assess = PromptStep(
             name="assess",
-            producer=Prompt.inline("Inspect {item.payload.foo}."),
+            producer=Prompt.inline("Inspect {{ item.payload.foo }}."),
             scope=gates,
         )
         entry = assess
@@ -146,7 +502,7 @@ def test_prompt_runtime_reports_missing_payload_path_with_placeholder_context(tm
 
     with pytest.raises(
         WorkflowExecutionError,
-        match=r"prompt placeholder on step 'assess' \{item\.payload\.foo\} references missing payload path 'foo' on worklist 'gate'",
+        match=r"prompt placeholder on step 'assess' <inline prompt template>: undefined Jinja value: .*foo",
     ):
         engine.run(
             task_id="task-1",
@@ -155,9 +511,9 @@ def test_prompt_runtime_reports_missing_payload_path_with_placeholder_context(tm
             run_folder=run_folder,
             root=tmp_path,
         )
-def test_operation_prompt_runtime_reports_missing_payload_path_with_placeholder_context(tmp_path: Path):
+def test_operation_prompt_runtime_reports_missing_payload_path_with_jinja_context(tmp_path: Path):
     def _missingpayloadoperationworkflow_on_assess(ctx):
-        llm("Inspect {item.payload.foo}.")
+        llm("Inspect {{ item.payload.foo }}.")
         return None
 
     class MissingPayloadOperationWorkflow(Workflow):
@@ -191,7 +547,7 @@ def test_operation_prompt_runtime_reports_missing_payload_path_with_placeholder_
 
     with pytest.raises(
         WorkflowExecutionError,
-        match=r"prompt placeholder on step 'assess' \{item\.payload\.foo\} references missing payload path 'foo' on worklist 'gate'",
+        match=r"operation prompt placeholder on step 'assess' <inline prompt template>: undefined Jinja value: .*foo",
     ):
         engine.run(
             task_id="task-1",
@@ -238,7 +594,7 @@ def test_python_step_feedforward_helpers_accept_plain_string_prompts_with_render
     assert [turn.turn_kind for turn in transport.turns] == ["operation", "operation"]
     assert "Generate a summary." in transport.turns[0].prompt_text
     assert "Classify risk." in transport.turns[1].prompt_text
-def test_ctx_prompt_bindings_render_in_provider_and_operation_prompts(tmp_path: Path) -> None:
+def test_jinja_prompt_bindings_render_in_provider_and_operation_prompts(tmp_path: Path) -> None:
     class PromptBindingWorkflow(SimpleWorkflow):
         class Input(BaseModel):
             topic: str
@@ -250,20 +606,20 @@ def test_ctx_prompt_bindings_render_in_provider_and_operation_prompts(tmp_path: 
             status: str = "draft"
 
         summary = step(
-            "Message={ctx.message}; Topic={ctx.input.topic}; Mode={ctx.params.mode}; Status={ctx.state.status}",
+            "Message={{ message }}; Topic={{ input.topic }}; Mode={{ params.mode }}; Status={{ state.status }}",
             routes={"done": "review"},
         )
         review = produce_verify_step(
-            producer_prompt="Produce {ctx.message}; topic={ctx.input.topic}; mode={ctx.params.mode}; status={ctx.state.status}",
-            verifier_prompt="Verify {ctx.message}; topic={ctx.input.topic}; mode={ctx.params.mode}; status={ctx.state.status}",
+            producer_prompt="Produce {{ message }}; topic={{ input.topic }}; mode={{ params.mode }}; status={{ state.status }}",
+            verifier_prompt="Verify {{ message }}; topic={{ input.topic }}; mode={{ params.mode }}; status={{ state.status }}",
             routes={"approved": "risk"},
         )
         risk = llm.step(
-            prompt="Risk for {ctx.message}; topic={ctx.input.topic}; mode={ctx.params.mode}; status={ctx.state.status}",
+            prompt="Risk for {{ message }}; topic={{ input.topic }}; mode={{ params.mode }}; status={{ state.status }}",
             returns=str,
         )
         kind = classify.step(
-            prompt="Classify {ctx.message} for {ctx.input.topic}",
+            prompt="Classify {{ message }} for {{ input.topic }}",
             choices=["bug", "feature"],
         )
 
@@ -337,8 +693,99 @@ def test_ctx_prompt_bindings_render_in_provider_and_operation_prompts(tmp_path: 
         cast(str, captured["verifier"]),
         *operation_prompts,
     ]
-    assert all("{ctx." not in text for text in rendered_prompts)
-def test_runtime_templates_resolve_bare_input_message_and_fields(tmp_path: Path) -> None:
+    assert all("{{" not in text for text in rendered_prompts)
+
+
+def test_inline_prompt_preserves_legacy_single_brace_literals(tmp_path: Path) -> None:
+    class LegacyLiteralWorkflow(SimpleWorkflow):
+        class Input(BaseModel):
+            topic: str
+
+        class State(BaseModel):
+            pass
+
+        summary = step("Old={ctx.message}; Input={input.topic}; New={{ input.topic }}", routes={"done": FINISH})
+
+    task_folder, run_folder = _workspace(tmp_path)
+    (run_folder / "request.md").write_text("Natural-language request\n", encoding="utf-8")
+    captured: dict[str, str] = {}
+    result = Engine(
+        LegacyLiteralWorkflow,
+        provider=ScriptedLLMProvider(
+            llm_turns=[
+                lambda request: (
+                    captured.__setitem__("prompt", request.prompt.text),
+                    Outcome(raw_output="done", tag="done"),
+                )[1]
+            ]
+        ),
+        session_store=InMemorySessionStore(),
+        checkpoint_store=InMemoryCheckpointStore(),
+    ).run(
+        task_id="task-inline-legacy-literal",
+        run_id="run-inline-legacy-literal",
+        task_folder=task_folder,
+        run_folder=run_folder,
+        root=tmp_path,
+        workflow_input=LegacyLiteralWorkflow.Input(topic="release"),
+    )
+
+    assert result.terminal == FINISH
+    assert captured["prompt"] == "Old={ctx.message}; Input={input.topic}; New=release"
+
+
+def test_prompt_message_root_requires_readable_request_snapshot_only_when_referenced(tmp_path: Path) -> None:
+    class NoMessageReferenceWorkflow(SimpleWorkflow):
+        class State(BaseModel):
+            pass
+
+        summary = step("Workflow={{ workflow.name }}", routes={"done": FINISH})
+
+    class MessageReferenceWorkflow(SimpleWorkflow):
+        class State(BaseModel):
+            pass
+
+        summary = step("Message={{ message }}", routes={"done": FINISH})
+
+    task_folder, run_folder = _workspace(tmp_path)
+    captured: dict[str, str] = {}
+    result = Engine(
+        NoMessageReferenceWorkflow,
+        provider=ScriptedLLMProvider(
+            llm_turns=[
+                lambda request: (
+                    captured.__setitem__("prompt", request.prompt.text),
+                    Outcome(raw_output="done", tag="done"),
+                )[1]
+            ]
+        ),
+        session_store=InMemorySessionStore(),
+        checkpoint_store=InMemoryCheckpointStore(),
+    ).run(
+        task_id="task-no-message-reference",
+        run_id="run-no-message-reference",
+        task_folder=task_folder,
+        run_folder=run_folder,
+        root=tmp_path,
+    )
+
+    assert result.terminal == FINISH
+    assert captured["prompt"] == "Workflow=no_message_reference_workflow"
+
+    with pytest.raises(WorkflowExecutionError, match=r"run request snapshot could not be read: .*request\.md"):
+        Engine(
+            MessageReferenceWorkflow,
+            provider=ScriptedLLMProvider(llm_turns=[Outcome(raw_output="done", tag="done")]),
+            session_store=InMemorySessionStore(),
+            checkpoint_store=InMemoryCheckpointStore(),
+        ).run(
+            task_id="task-message-reference",
+            run_id="run-message-reference",
+            task_folder=task_folder,
+            run_folder=run_folder,
+            root=tmp_path,
+        )
+def test_runtime_templates_resolve_message_and_typed_input_fields(tmp_path: Path) -> None:
     task_folder = tmp_path / "task"
     workflow_folder = task_folder / "wf_example"
     run_folder = workflow_folder / "runs" / "run-1"
@@ -367,11 +814,11 @@ def test_runtime_templates_resolve_bare_input_message_and_fields(tmp_path: Path)
     )
 
     rendered = render_runtime_template(
-        "Message={input.message}; Topic={input.topic}",
+        "Message={{ message }}; Topic={{ input.topic }}",
         context,
         placeholder_label="artifact template placeholder",
     )
-    resolved = resolve_artifact_template("outputs/{input.message}-{input.topic}.md", context)
+    resolved = resolve_artifact_template("outputs/{{ message }}-{{ input.topic }}.md", context)
 
     assert rendered == "Message=artifact-request; Topic=release"
     assert resolved == Path("outputs") / "artifact-request-release.md"
@@ -405,14 +852,14 @@ def test_runtime_templates_reject_unknown_bare_input_field(tmp_path: Path) -> No
 
     with pytest.raises(
         WorkflowExecutionError,
-        match=r"artifact template placeholder \{input\.missing\} references unknown input field 'missing'",
+        match=r"undefined Jinja value: .*missing",
     ):
         render_runtime_template(
-            "{input.missing}",
+            "{{ input.missing }}",
             context,
             placeholder_label="artifact template placeholder",
         )
-def test_runtime_templates_resolve_ctx_input_message_without_typed_input(tmp_path: Path) -> None:
+def test_runtime_templates_resolve_message_without_typed_input(tmp_path: Path) -> None:
     task_folder = tmp_path / "task"
     workflow_folder = task_folder / "wf_example"
     run_folder = workflow_folder / "runs" / "run-1"
@@ -437,14 +884,13 @@ def test_runtime_templates_resolve_ctx_input_message_without_typed_input(tmp_pat
     )
 
     rendered = render_runtime_template(
-        "{ctx.input.message}",
+        "{{ message }}",
         context,
         placeholder_label="artifact template placeholder",
-        replace_roots=frozenset({"ctx"}),
     )
 
     assert rendered == "artifact-request"
-def test_runtime_templates_resolve_ctx_input_message_separately_from_request(tmp_path: Path) -> None:
+def test_runtime_templates_resolve_message_separately_from_typed_input(tmp_path: Path) -> None:
     task_folder = tmp_path / "task"
     workflow_folder = task_folder / "wf_example"
     run_folder = workflow_folder / "runs" / "run-1"
@@ -474,13 +920,12 @@ def test_runtime_templates_resolve_ctx_input_message_separately_from_request(tmp
     )
 
     rendered = render_runtime_template(
-        "Request={ctx.message}; InputMessage={ctx.input.message}; Topic={ctx.input.topic}",
+        "Request={{ message }}; Topic={{ input.topic }}",
         context,
         placeholder_label="artifact template placeholder",
-        replace_roots=frozenset({"ctx"}),
     )
 
-    assert rendered == "Request=runtime-message; InputMessage=runtime-message; Topic=release"
+    assert rendered == "Request=runtime-message; Topic=release"
 def test_prompt_steps_do_not_auto_inject_run_message_without_ctx_binding(tmp_path: Path) -> None:
     class NoAutoInjectionWorkflow(SimpleWorkflow):
         summary = step("Write a generic summary.", routes={"done": FINISH})

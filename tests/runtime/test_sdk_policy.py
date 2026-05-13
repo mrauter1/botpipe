@@ -4,14 +4,14 @@ from pathlib import Path
 
 from pydantic import BaseModel
 
-import botlane.simple as simple
-from botlane import FINISH, Botlane
-from botlane.core.provider_policy import PermissionPolicy, ProviderPolicy
-from botlane.core.primitives import Event, Outcome
-from botlane.core.providers.fake import ScriptedLLMProvider
-from botlane.core.steps import PromptStep
-from botlane.policy import ModelEffort, PermissionMode, Policy
-from botlane.runtime.config import GitTrackingRuntimeConfig, ProviderPolicyRuntimeConfig, RuntimeConfig
+import botpipe.simple as simple
+from botpipe import FINISH, Botpipe
+from botpipe.core.provider_policy import PermissionPolicy, ProviderPolicy
+from botpipe.core.primitives import Event, Outcome
+from botpipe.core.providers.fake import ScriptedLLMProvider
+from botpipe.core.steps import PromptStep
+from botpipe.policy import ModelEffort, PermissionMode, Policy
+from botpipe.runtime.config import GitTrackingRuntimeConfig, ProviderPolicyRuntimeConfig, RuntimeConfig
 
 
 def _sdk_client(
@@ -21,13 +21,13 @@ def _sdk_client(
     default_policy: Policy | None = None,
     provider_policy_config: ProviderPolicyRuntimeConfig | None = None,
     state_dir: Path | None = None,
-) -> Botlane:
-    return Botlane(
+) -> Botpipe:
+    return Botpipe(
         workspace=tmp_path,
         provider=provider,
         default_policy=default_policy,
         provider_policy_config=provider_policy_config,
-        state_dir=tmp_path / ".botlane" if state_dir is None else state_dir,
+        state_dir=tmp_path / ".botpipe" if state_dir is None else state_dir,
         runtime_config=RuntimeConfig(git_tracking=GitTrackingRuntimeConfig(enabled=False, commit_policy="off")),
     )
 
