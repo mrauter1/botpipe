@@ -27,12 +27,18 @@ def parse_outcome_json(text: str) -> Outcome:
     except json.JSONDecodeError as exc:
         fallback = _last_outcome_json_candidate(candidate)
         if fallback is None:
-            raise _malformed_provider_output(f"provider returned malformed outcome JSON: {exc.msg}") from exc
+            raise _malformed_provider_output(
+                f"provider returned malformed outcome JSON: {exc.msg}",
+                json_error=exc,
+                raw_text=candidate,
+            ) from exc
         try:
             payload = json.loads(fallback)
         except json.JSONDecodeError as fallback_exc:
             raise _malformed_provider_output(
-                f"provider returned malformed outcome JSON: {fallback_exc.msg}"
+                f"provider returned malformed outcome JSON: {fallback_exc.msg}",
+                json_error=fallback_exc,
+                raw_text=fallback,
             ) from fallback_exc
 
     if not isinstance(payload, dict):
@@ -105,7 +111,7 @@ def _optional_string_field(payload: dict[str, Any], key: str) -> str | None:
     if value is None:
         return None
     if not isinstance(value, str):
-        raise ProviderExecutionError(f"provider outcome JSON field {key!r} must be a string when provided.")
+        raise _malformed_provider_output(f"provider outcome JSON field {key!r} must be a string when provided.")
     return value
 
 
@@ -151,14 +157,39 @@ def _legacy_route_fields(*, tag: str, question: str | None, reason: str) -> dict
     return route_fields
 
 
-def _malformed_provider_output(message: str) -> ProviderExecutionError:
+def _malformed_provider_output(
+    message: str,
+    *,
+    json_error: json.JSONDecodeError | None = None,
+    raw_text: str | None = None,
+) -> ProviderExecutionError:
+    details: dict[str, object] = {"error": message, "provider_failure_stage": "outcome_contract"}
+    if json_error is not None:
+        details.update(
+            {
+                "json_error_message": json_error.msg,
+                "json_error_line": json_error.lineno,
+                "json_error_column": json_error.colno,
+                "json_error_position": json_error.pos,
+            }
+        )
+        if raw_text is not None:
+            details["json_error_excerpt"] = _json_error_excerpt(raw_text, json_error.pos)
     return ProviderExecutionError(
         message,
         failure_context=FailureContext(
             kind="malformed_provider_output",
             step_name="",
             provider_attributable=True,
-            details={"error": message},
+            details=details,
         ),
         retry_kind="malformed_provider_output",
     )
+
+
+def _json_error_excerpt(text: str, position: int, *, radius: int = 80) -> str:
+    start = max(position - radius, 0)
+    end = min(position + radius, len(text))
+    prefix = "..." if start > 0 else ""
+    suffix = "..." if end < len(text) else ""
+    return f"{prefix}{text[start:end]}{suffix}"

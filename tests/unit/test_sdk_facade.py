@@ -3,6 +3,8 @@ from __future__ import annotations
 import asyncio
 import inspect
 import json
+import os
+import socket
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
 
@@ -37,6 +39,7 @@ from botpipe.core.primitives import Event, Outcome, RequestInput
 from botpipe.core.prompts import Prompt
 from botpipe.core.providers.retries import ProviderRetryPolicy
 from botpipe.core.routes import Route
+from botpipe.core.schema_registry import CHECKPOINT_SCHEMA
 from botpipe.core.providers.fake import ScriptedLLMProvider
 from botpipe.core.steps import ChildWorkflowStep, ProduceVerifyStep, PromptStep, PythonStep
 from botpipe.runtime.config import GitTrackingRuntimeConfig, RuntimeConfig
@@ -292,6 +295,61 @@ def _seed_durable_run_record(
     (run_dir / "events.jsonl").write_text(json.dumps({"event_type": "seeded"}) + "\n", encoding="utf-8")
     (run_dir / "trace.jsonl").write_text(json.dumps({"event_type": "trace_seeded"}) + "\n", encoding="utf-8")
     return run_dir
+
+
+def _write_minimal_checkpoint(run_dir: Path, *, stage: str, state: dict[str, object]) -> None:
+    (run_dir / "checkpoint.json").write_text(
+        json.dumps(
+            {
+                "schema": CHECKPOINT_SCHEMA,
+                "stage": stage,
+                "state": state,
+                "session_bindings": {
+                    "bindings": [],
+                    "active_keys_by_slot": {},
+                    "active_scopes": {},
+                },
+                "values": {},
+                "step_states": {},
+                "item_states": {},
+                "step_item_states": {},
+                "worklist_selections": {},
+                "pending_handoffs": [],
+                "pending_input": None,
+                "pending_answer": None,
+                "failure_context": None,
+                "resume_cursor": None,
+            },
+            sort_keys=True,
+        )
+        + "\n",
+        encoding="utf-8",
+    )
+
+
+def _update_run_metadata_fields(run_dir: Path, **fields: object) -> None:
+    run_meta_file = run_dir / "run.json"
+    payload = json.loads(run_meta_file.read_text(encoding="utf-8"))
+    payload.update(fields)
+    run_meta_file.write_text(json.dumps(payload, sort_keys=True) + "\n", encoding="utf-8")
+
+
+def _write_step_started_trace(run_dir: Path, *, step_name: str = "approve", state: dict[str, object] | None = None) -> None:
+    (run_dir / "trace.jsonl").write_text(
+        json.dumps(
+            {
+                "event_type": "step_started",
+                "sequence": 1,
+                "step_name": step_name,
+                "step_kind": "python",
+                "step_execution_id": f"{step_name}#1",
+                "state": {"approved": None} if state is None else state,
+            },
+            sort_keys=True,
+        )
+        + "\n",
+        encoding="utf-8",
+    )
 
 
 def test_sdk_entrypoint_signatures_are_frozen() -> None:
@@ -1009,6 +1067,441 @@ def test_sdk_runs_resume_reports_missing_and_non_resumable_runs(tmp_path: Path) 
 
     with pytest.raises(SDKExecutionError, match="no resumable run exists"):
         client.runs.resume(_SDKPauseWorkflow, "task-missing")
+
+
+def test_sdk_runs_resume_rejects_schema_valid_but_unloadable_checkpoint(tmp_path: Path) -> None:
+    client = _sdk_client_at_root(tmp_path, ScriptedLLMProvider())
+    workflow_name = sdk_module._resolve_sdk_workflow_name(tmp_path, _SDKPauseWorkflow)
+    run_dir = _seed_durable_run_record(
+        tmp_path,
+        task_id="task-unloadable-checkpoint",
+        workflow_name=workflow_name,
+        run_id="run-unloadable",
+        status="running",
+    )
+    _write_minimal_checkpoint(run_dir, stage="approve", state={"approved": {"not": "a bool"}})
+
+    shown = client.runs.show(_SDKPauseWorkflow, "task-unloadable-checkpoint", run_id="run-unloadable")
+    listed = client.runs.list(workflow=_SDKPauseWorkflow, task_id="task-unloadable-checkpoint")
+
+    assert shown.resumable is False
+    assert shown.checkpoint_valid is False
+    assert shown.checkpoint_error is None
+    assert shown.checkpoint_load_error is not None
+    assert listed == (shown,)
+
+    with pytest.raises(SDKExecutionError) as exc_info:
+        client.runs.resume(_SDKPauseWorkflow, "task-unloadable-checkpoint", run_id="run-unloadable")
+
+    message = str(exc_info.value)
+    assert "is not resumable" in message
+    assert "checkpoint_valid=False" in message
+    assert "checkpoint_load_error=" in message
+
+
+def test_sdk_runs_resume_without_run_id_skips_newer_unloadable_checkpoint(tmp_path: Path) -> None:
+    client = _sdk_client_at_root(tmp_path, ScriptedLLMProvider())
+    workflow_name = sdk_module._resolve_sdk_workflow_name(tmp_path, _SDKPauseWorkflow)
+    task_id = "task-implicit-loadable-selection"
+    older_run = _seed_durable_run_record(
+        tmp_path,
+        task_id=task_id,
+        workflow_name=workflow_name,
+        run_id="run-older-loadable-live",
+        status="running",
+    )
+    _update_run_metadata_fields(
+        older_run,
+        updated_at="2026-05-01T00:02:00+00:00",
+        lease={
+            "host": socket.gethostname(),
+            "pid": os.getpid(),
+            "heartbeat_at": "2026-05-01T00:02:00+00:00",
+        },
+    )
+    _write_minimal_checkpoint(older_run, stage="approve", state={"approved": None})
+
+    newer_run = _seed_durable_run_record(
+        tmp_path,
+        task_id=task_id,
+        workflow_name=workflow_name,
+        run_id="run-newer-unloadable",
+        status="running",
+    )
+    _update_run_metadata_fields(newer_run, updated_at="2026-05-01T00:03:00+00:00")
+    _write_minimal_checkpoint(newer_run, stage="approve", state={"approved": {"not": "a bool"}})
+
+    with pytest.raises(SDKExecutionError) as exc_info:
+        client.runs.resume(_SDKPauseWorkflow, task_id)
+
+    message = str(exc_info.value)
+    assert "run-older-loadable-live" in message
+    assert "still running" in message
+
+
+def test_sdk_runs_resume_without_run_id_reports_latest_loadable_live_run(tmp_path: Path) -> None:
+    client = _sdk_client_at_root(tmp_path, ScriptedLLMProvider())
+    workflow_name = sdk_module._resolve_sdk_workflow_name(tmp_path, _SDKPauseWorkflow)
+    task_id = "task-implicit-live-selection"
+    older_run = _seed_durable_run_record(
+        tmp_path,
+        task_id=task_id,
+        workflow_name=workflow_name,
+        run_id="run-older-loadable",
+        status="success",
+    )
+    _update_run_metadata_fields(older_run, updated_at="2026-05-01T00:02:00+00:00")
+    _write_minimal_checkpoint(older_run, stage="approve", state={"approved": None})
+
+    newer_run = _seed_durable_run_record(
+        tmp_path,
+        task_id=task_id,
+        workflow_name=workflow_name,
+        run_id="run-newer-loadable-live",
+        status="running",
+    )
+    _update_run_metadata_fields(
+        newer_run,
+        updated_at="2026-05-01T00:03:00+00:00",
+        lease={
+            "host": socket.gethostname(),
+            "pid": os.getpid(),
+            "heartbeat_at": "2026-05-01T00:03:00+00:00",
+        },
+    )
+    _write_minimal_checkpoint(newer_run, stage="approve", state={"approved": None})
+
+    with pytest.raises(SDKExecutionError) as exc_info:
+        client.runs.resume(_SDKPauseWorkflow, task_id)
+
+    message = str(exc_info.value)
+    assert "run-newer-loadable-live" in message
+    assert "still running" in message
+
+
+def test_sdk_run_record_reports_stale_running_resume_diagnostics(tmp_path: Path) -> None:
+    client = _sdk_client_at_root(tmp_path, ScriptedLLMProvider())
+    workflow_name = sdk_module._resolve_sdk_workflow_name(tmp_path, _SDKPauseWorkflow)
+    run_dir = _seed_durable_run_record(
+        tmp_path,
+        task_id="task-stale-running",
+        workflow_name=workflow_name,
+        run_id="run-stale",
+        status="running",
+    )
+    run_meta_file = run_dir / "run.json"
+    run_meta = json.loads(run_meta_file.read_text(encoding="utf-8"))
+    run_meta["lease"] = {
+        "host": "remote-host",
+        "pid": 999999999,
+        "heartbeat_at": "2026-05-01T00:00:00+00:00",
+    }
+    run_meta_file.write_text(json.dumps(run_meta, sort_keys=True) + "\n", encoding="utf-8")
+    (run_dir / "events.jsonl").write_text(
+        json.dumps(
+            {
+                "seq": 4,
+                "event_type": "provider_turn_started",
+                "step_name": "ask",
+                "step_execution_id": "ask#1",
+                "turn_kind": "llm",
+                "attempt": 1,
+            },
+            sort_keys=True,
+        )
+        + "\n",
+        encoding="utf-8",
+    )
+
+    record = client.runs.show(_SDKPauseWorkflow, "task-stale-running", run_id="run-stale")
+
+    assert record.running_live is False
+    assert record.stale_running is True
+    assert record.resumable is False
+
+    with pytest.raises(SDKExecutionError) as exc_info:
+        client.runs.resume(_SDKPauseWorkflow, "task-stale-running", run_id="run-stale")
+
+    message = str(exc_info.value)
+    assert "is not resumable" in message
+    assert "status='running'" in message
+    assert "checkpoint_exists=False" in message
+    assert "checkpoint_valid=False" in message
+    assert "checkpoint_error='missing'" in message
+    assert "running_state=stale" in message
+    assert "last_event={'event_type': 'provider_turn_started'" in message
+    assert "'step_name': 'ask'" in message
+
+
+def test_sdk_runs_repair_reconstructs_checkpoint_from_trace_snapshot(tmp_path: Path) -> None:
+    client = _sdk_client_at_root(tmp_path, ScriptedLLMProvider())
+    workflow_name = sdk_module._resolve_sdk_workflow_name(tmp_path, _SDKPauseWorkflow)
+    run_dir = _seed_durable_run_record(
+        tmp_path,
+        task_id="task-repair",
+        workflow_name=workflow_name,
+        run_id="run-repair",
+        status="running",
+    )
+    (run_dir / "trace.jsonl").write_text(
+        json.dumps(
+            {
+                "event_type": "step_started",
+                "sequence": 1,
+                "step_name": "approve",
+                "step_kind": "python",
+                "step_execution_id": "approve#1",
+                "state": {"approved": None},
+            },
+            sort_keys=True,
+        )
+        + "\n",
+        encoding="utf-8",
+    )
+    (run_dir / "events.jsonl").write_text(
+        "\n".join(
+            [
+                json.dumps(
+                    {
+                        "event_type": "provider_attempt_started",
+                        "step_name": "approve",
+                        "step_execution_id": "approve#1",
+                        "turn_kind": "llm",
+                        "attempt": 1,
+                        "max_attempts": 3,
+                    },
+                    sort_keys=True,
+                ),
+                json.dumps(
+                    {
+                        "event_type": "provider_turn_started",
+                        "step_name": "approve",
+                        "step_execution_id": "approve#1",
+                        "turn_kind": "llm",
+                        "attempt": 1,
+                        "prompt_fingerprint": "abc123",
+                        "expected_response": "outcome_json",
+                    },
+                    sort_keys=True,
+                ),
+                json.dumps(
+                    {
+                        "event_type": "provider_session_known",
+                        "step_name": "approve",
+                        "step_execution_id": "approve#1",
+                        "turn_kind": "llm",
+                        "attempt": 1,
+                        "provider_target": "codex",
+                        "session_id": "codex-session-1",
+                    },
+                    sort_keys=True,
+                ),
+            ]
+        )
+        + "\n",
+        encoding="utf-8",
+    )
+
+    result = client.runs.repair(_SDKPauseWorkflow, "task-repair", run_id="run-repair")
+
+    assert result["repaired"] is True
+    assert result["stage"] == "approve"
+    assert result["resume_cursor"] == {
+        "phase": "provider_attempt",
+        "step_name": "approve",
+        "step_execution_id": "approve#1",
+        "turn_kind": "llm",
+        "attempt": 1,
+        "max_attempts": 3,
+        "expected_response": "outcome_json",
+        "prompt_fingerprint": "abc123",
+        "provider_target": "codex",
+        "provider_session_id": "codex-session-1",
+    }
+    checkpoint = json.loads((run_dir / "checkpoint.json").read_text(encoding="utf-8"))
+    assert checkpoint["stage"] == "approve"
+    assert checkpoint["state"] == {"approved": None}
+    assert checkpoint["failure_context"]["kind"] == "checkpoint_repaired_from_trace"
+    assert client.runs.show(_SDKPauseWorkflow, "task-repair", run_id="run-repair").resumable is True
+
+
+def test_sdk_runs_repair_repairs_schema_valid_but_unloadable_checkpoint(tmp_path: Path) -> None:
+    client = _sdk_client_at_root(tmp_path, ScriptedLLMProvider())
+    workflow_name = sdk_module._resolve_sdk_workflow_name(tmp_path, _SDKPauseWorkflow)
+    run_dir = _seed_durable_run_record(
+        tmp_path,
+        task_id="task-repair-unloadable-checkpoint",
+        workflow_name=workflow_name,
+        run_id="run-repair-unloadable",
+        status="running",
+    )
+    _write_minimal_checkpoint(run_dir, stage="approve", state={"approved": {"not": "a bool"}})
+    _write_step_started_trace(run_dir)
+
+    result = client.runs.repair(_SDKPauseWorkflow, "task-repair-unloadable-checkpoint", run_id="run-repair-unloadable")
+
+    assert result["repaired"] is True
+    checkpoint = json.loads((run_dir / "checkpoint.json").read_text(encoding="utf-8"))
+    assert checkpoint["stage"] == "approve"
+    assert checkpoint["state"] == {"approved": None}
+    assert client.runs.show(
+        _SDKPauseWorkflow,
+        "task-repair-unloadable-checkpoint",
+        run_id="run-repair-unloadable",
+    ).resumable is True
+
+
+def test_sdk_runs_repair_keeps_loadable_checkpoint_without_force(tmp_path: Path) -> None:
+    client = _sdk_client_at_root(tmp_path, ScriptedLLMProvider())
+    workflow_name = sdk_module._resolve_sdk_workflow_name(tmp_path, _SDKPauseWorkflow)
+    run_dir = _seed_durable_run_record(
+        tmp_path,
+        task_id="task-repair-loadable-checkpoint",
+        workflow_name=workflow_name,
+        run_id="run-repair-loadable",
+        status="running",
+    )
+    _write_minimal_checkpoint(run_dir, stage="approve", state={"approved": None})
+
+    result = client.runs.repair(_SDKPauseWorkflow, "task-repair-loadable-checkpoint", run_id="run-repair-loadable")
+
+    assert result["repaired"] is False
+    assert result["reason"] == "checkpoint_already_valid"
+
+
+def test_sdk_runs_repair_force_overwrites_loadable_checkpoint_from_trace(tmp_path: Path) -> None:
+    client = _sdk_client_at_root(tmp_path, ScriptedLLMProvider())
+    workflow_name = sdk_module._resolve_sdk_workflow_name(tmp_path, _SDKPauseWorkflow)
+    run_dir = _seed_durable_run_record(
+        tmp_path,
+        task_id="task-force-repair-loadable-checkpoint",
+        workflow_name=workflow_name,
+        run_id="run-force-repair-loadable",
+        status="running",
+    )
+    _write_minimal_checkpoint(run_dir, stage="approve", state={"approved": True})
+    _write_step_started_trace(run_dir, state={"approved": None})
+
+    result = client.runs.repair(
+        _SDKPauseWorkflow,
+        "task-force-repair-loadable-checkpoint",
+        run_id="run-force-repair-loadable",
+        force=True,
+    )
+
+    assert result["repaired"] is True
+    checkpoint = json.loads((run_dir / "checkpoint.json").read_text(encoding="utf-8"))
+    assert checkpoint["state"] == {"approved": None}
+
+
+def test_sdk_runs_repair_refuses_workflow_state_reconstruction_for_worklists(tmp_path: Path) -> None:
+    class WorklistRepairWorkflow(simple.Workflow):
+        gates = simple.Worklist.from_items(
+            name="gates",
+            items=({"id": "alpha", "title": "Alpha"},),
+        )
+
+        review = simple.step(
+            "Review {{ worklists.gates.current.title }}.",
+            scope=gates,
+            routes={"done": FINISH},
+        )
+
+    client = _sdk_client_at_root(tmp_path, ScriptedLLMProvider())
+    workflow_name = sdk_module._resolve_sdk_workflow_name(tmp_path, WorklistRepairWorkflow)
+    run_dir = _seed_durable_run_record(
+        tmp_path,
+        task_id="task-worklist-repair",
+        workflow_name=workflow_name,
+        run_id="run-worklist-repair",
+        status="running",
+    )
+    (run_dir / "trace.jsonl").write_text(
+        json.dumps(
+            {
+                "event_type": "step_started",
+                "sequence": 1,
+                "step_name": "review",
+                "step_execution_id": "review#1",
+                "state": {},
+            },
+            sort_keys=True,
+        )
+        + "\n",
+        encoding="utf-8",
+    )
+
+    with pytest.raises(SDKExecutionError, match="workflows with worklists"):
+        client.runs.repair(WorklistRepairWorkflow, "task-worklist-repair", run_id="run-worklist-repair")
+
+
+def test_sdk_runs_repair_refuses_workflow_state_reconstruction_for_sessions(tmp_path: Path) -> None:
+    class SessionRepairWorkflow(simple.Workflow):
+        main = simple.Session.fresh()
+
+        review = simple.step(
+            "Review.",
+            session=main,
+            routes={"done": FINISH},
+        )
+
+    client = _sdk_client_at_root(tmp_path, ScriptedLLMProvider())
+    workflow_name = sdk_module._resolve_sdk_workflow_name(tmp_path, SessionRepairWorkflow)
+    run_dir = _seed_durable_run_record(
+        tmp_path,
+        task_id="task-session-repair",
+        workflow_name=workflow_name,
+        run_id="run-session-repair",
+        status="running",
+    )
+    (run_dir / "trace.jsonl").write_text(
+        json.dumps(
+            {
+                "event_type": "step_started",
+                "sequence": 1,
+                "step_name": "review",
+                "step_execution_id": "review#1",
+                "state": {},
+            },
+            sort_keys=True,
+        )
+        + "\n",
+        encoding="utf-8",
+    )
+
+    with pytest.raises(SDKExecutionError, match="declared or open sessions"):
+        client.runs.repair(SessionRepairWorkflow, "task-session-repair", run_id="run-session-repair")
+
+
+def test_sdk_runs_repair_refuses_scoped_trace_snapshot(tmp_path: Path) -> None:
+    client = _sdk_client_at_root(tmp_path, ScriptedLLMProvider())
+    workflow_name = sdk_module._resolve_sdk_workflow_name(tmp_path, _SDKPauseWorkflow)
+    run_dir = _seed_durable_run_record(
+        tmp_path,
+        task_id="task-scoped-repair",
+        workflow_name=workflow_name,
+        run_id="run-scoped-repair",
+        status="running",
+    )
+    (run_dir / "trace.jsonl").write_text(
+        json.dumps(
+            {
+                "event_type": "step_started",
+                "sequence": 1,
+                "step_name": "approve",
+                "step_execution_id": "approve#1",
+                "scope": "items",
+                "item_id": "alpha",
+                "state": {"approved": None},
+            },
+            sort_keys=True,
+        )
+        + "\n",
+        encoding="utf-8",
+    )
+
+    with pytest.raises(SDKExecutionError, match="scoped to a worklist item"):
+        client.runs.repair(_SDKPauseWorkflow, "task-scoped-repair", run_id="run-scoped-repair")
 
 
 def test_sdk_runs_events_and_trace_iterate_existing_jsonl_records(tmp_path: Path) -> None:

@@ -3,10 +3,13 @@
 from __future__ import annotations
 
 import json
+import os
 import re
+from contextlib import suppress
 from collections.abc import Callable, Mapping
 from datetime import datetime, timezone
 from pathlib import Path
+from uuid import uuid4
 from typing import Any
 
 from pydantic import BaseModel
@@ -220,9 +223,20 @@ class FilesystemCheckpointStore:
             "pending_input": _pending_input_payload(checkpoint.pending_input),
             "pending_answer": checkpoint.pending_answer,
             "failure_context": checkpoint.failure_context,
+            "resume_cursor": checkpoint.resume_cursor,
         }
         self.path.parent.mkdir(parents=True, exist_ok=True)
-        self.path.write_text(json.dumps(payload, indent=2) + "\n", encoding="utf-8")
+        tmp_path = self.path.with_name(f".{self.path.name}.{os.getpid()}.{uuid4().hex}.tmp")
+        try:
+            with tmp_path.open("w", encoding="utf-8") as handle:
+                handle.write(json.dumps(payload, indent=2) + "\n")
+                handle.flush()
+                os.fsync(handle.fileno())
+            os.replace(tmp_path, self.path)
+            _fsync_directory(self.path.parent)
+        finally:
+            with suppress(FileNotFoundError):
+                tmp_path.unlink()
 
     def load(self) -> CheckpointPayload | None:
         if not self.path.exists():
@@ -301,11 +315,27 @@ class FilesystemCheckpointStore:
             failure_context=normalize_mapping(payload.get("failure_context"))
             if isinstance(payload.get("failure_context"), dict)
             else None,
+            resume_cursor=normalize_mapping(payload.get("resume_cursor"))
+            if isinstance(payload.get("resume_cursor"), dict)
+            else None,
         )
 
     def clear(self) -> None:
         if self.path.exists():
             self.path.unlink()
+
+
+def _fsync_directory(path: Path) -> None:
+    if not hasattr(os, "O_DIRECTORY"):
+        return
+    try:
+        fd = os.open(path, os.O_RDONLY | os.O_DIRECTORY)
+    except OSError:
+        return
+    try:
+        os.fsync(fd)
+    finally:
+        os.close(fd)
 
 
 def load_session_payload(path: Path, default_mode: str, default_provider: str) -> dict[str, Any]:

@@ -1409,6 +1409,10 @@ def test_cli_durable_handlers_delegate_to_sdk_facade(
             calls.append(("show", workflow, task_id, run_id))
             return record
 
+        def repair(self, workflow, task_id, *, run_id=None, force=False):
+            calls.append(("repair", workflow, task_id, run_id, force))
+            return {"repaired": True, "run_id": run_id}
+
         def resume(self, workflow, task_id, *, run_id=None, answer=None, on_event=None):
             assert on_event is None
             calls.append(("resume", workflow, task_id, run_id, answer))
@@ -1457,6 +1461,8 @@ def test_cli_durable_handlers_delegate_to_sdk_facade(
     capsys.readouterr()
     assert cli.main(["runs", "show", "review", "task-42", "--workspace", str(tmp_path), "--run-id", "run-1"]) == 0
     capsys.readouterr()
+    assert cli.main(["runs", "repair", "review", "task-42", "--workspace", str(tmp_path), "--run-id", "run-1"]) == 0
+    capsys.readouterr()
     assert cli.main(["logs", "review", "task-42", "--workspace", str(tmp_path)]) == 0
     capsys.readouterr()
     assert cli.main(["logs", "review", "task-42", "--workspace", str(tmp_path), "--trace"]) == 0
@@ -1492,6 +1498,7 @@ def test_cli_durable_handlers_delegate_to_sdk_facade(
     assert calls == [
         ("list", "reviewer", "task-42", "awaiting_input"),
         ("show", "review", "task-42", "run-1"),
+        ("repair", "review", "task-42", "run-1", False),
         ("events_text", "review", "task-42", None),
         ("trace_text", "review", "task-42", None),
         ("resume", "review", "task-42", "run-1", None),

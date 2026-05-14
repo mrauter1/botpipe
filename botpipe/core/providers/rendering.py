@@ -35,51 +35,54 @@ def render_provider_turn_with_policy(
 ) -> RenderedProviderTurn:
     """Render a provider turn into a shared markdown prompt using the supplied policy."""
 
-    prompt_text = _require_prompt_text(context)
-    if context.turn_kind == "operation":
-        sections = _operation_sections(context, prompt_text=prompt_text)
-    else:
-        sections = [
-            f"# Step: {context.step_name}",
-            "",
-            prompt_text,
-            "",
-            "## Runtime Step Contract",
-            "",
-            "### Readable inputs",
-            _render_readable_inputs(context),
-            "",
-            "### Required inputs",
-            _render_required_inputs(context),
-            "",
-            "### Declared artifacts this step may write",
-            "Declared writable artifacts are governed output surfaces, not an exclusive allow-list. "
-            "Other workspace files remain writable unless runtime policy says otherwise.",
-            "",
-            _render_writable_artifacts(context),
-            "",
-            "### Available routes",
-            _render_routes(context),
-            "",
-            *_response_contract_sections(context),
-        ]
-    if context.route_handoff and context.route_handoff.strip():
-        sections.extend(
-            [
+    if context.rendered_prompt_text is None:
+        prompt_text = _require_prompt_text(context)
+        if context.turn_kind == "operation":
+            sections = _operation_sections(context, prompt_text=prompt_text)
+        else:
+            sections = [
+                f"# Step: {context.step_name}",
                 "",
-                "### Route handoff",
-                context.route_handoff.strip(),
+                prompt_text,
                 "",
-                "The current Runtime Step Contract remains authoritative.",
+                "## Runtime Step Contract",
+                "",
+                "### Readable inputs",
+                _render_readable_inputs(context),
+                "",
+                "### Required inputs",
+                _render_required_inputs(context),
+                "",
+                "### Declared artifacts this step may write",
+                "Declared writable artifacts are governed output surfaces, not an exclusive allow-list. "
+                "Other workspace files remain writable unless runtime policy says otherwise.",
+                "",
+                _render_writable_artifacts(context),
+                "",
+                "### Available routes",
+                _render_routes(context),
+                "",
+                *_response_contract_sections(context),
             ]
-        )
-    if context.retry_feedback and context.retry_feedback.strip():
-        sections.extend(["", "### Retry feedback", context.retry_feedback.strip()])
+        if context.route_handoff and context.route_handoff.strip():
+            sections.extend(
+                [
+                    "",
+                    "### Route handoff",
+                    context.route_handoff.strip(),
+                    "",
+                    "The current Runtime Step Contract remains authoritative.",
+                ]
+            )
+        if context.retry_feedback and context.retry_feedback.strip():
+            sections.extend(["", "### Retry feedback", context.retry_feedback.strip()])
 
-    rendered_prompt = _apply_render_policy(
-        "\n".join(sections),
-        policy=policy or ProviderPromptRenderPolicy(),
-    )
+        rendered_prompt = _apply_render_policy(
+            "\n".join(sections),
+            policy=policy or ProviderPromptRenderPolicy(),
+        )
+    else:
+        rendered_prompt = context.rendered_prompt_text
     return RenderedProviderTurn(
         step_name=context.step_name,
         turn_kind=context.turn_kind,
@@ -98,6 +101,8 @@ def render_provider_turn_with_policy(
         response_schema_native_skip_reason=context.response_schema_native_skip_reason
         if context.turn_kind not in {"producer", "operation"}
         else None,
+        attempt=context.attempt,
+        max_attempts=context.max_attempts,
     )
 
 

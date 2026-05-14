@@ -60,10 +60,16 @@ class RenderedLLMProvider:
 
     async def _run_turn(self, context: ProviderTurnContext):
         turn = render_provider_turn(context)
+        checkpoint_provider_attempt = getattr(context.context, "_checkpoint_provider_attempt", None)
+        if callable(checkpoint_provider_attempt):
+            checkpoint_provider_attempt(turn)
         return await self._transport.run_turn(turn)
 
     def _run_operation_turn(self, context: ProviderTurnContext):
         turn = render_provider_turn(context)
+        checkpoint_provider_attempt = getattr(context.context, "_checkpoint_provider_attempt", None)
+        if callable(checkpoint_provider_attempt):
+            checkpoint_provider_attempt(turn)
         try:
             asyncio.get_running_loop()
         except RuntimeError:
@@ -137,6 +143,11 @@ def _step_context(
         policy=request.policy,
         attempt=request.attempt,
         max_attempts=request.max_attempts,
+        rendered_prompt_text=_resume_rendered_prompt_text(
+            request.context,
+            turn_kind=turn_kind,
+            attempt=request.attempt,
+        ),
     )
 
 
@@ -163,4 +174,25 @@ def _operation_context(request: OperationRequest) -> ProviderTurnContext:
         policy=request.policy,
         attempt=request.attempt,
         max_attempts=request.max_attempts,
+        rendered_prompt_text=_resume_rendered_prompt_text(
+            request.context,
+            turn_kind="operation",
+            attempt=request.attempt,
+        ),
     )
+
+
+def _resume_rendered_prompt_text(context: object, *, turn_kind: str, attempt: int) -> str | None:
+    cursor = getattr(context, "_provider_attempt_resume_cursor", None)
+    if not isinstance(cursor, dict):
+        return None
+    if cursor.get("phase") != "provider_attempt":
+        return None
+    cursor_kind = cursor.get("turn_kind")
+    expected_kind = "llm" if turn_kind == "step" else turn_kind
+    if cursor_kind != expected_kind:
+        return None
+    if cursor.get("attempt") != attempt:
+        return None
+    prompt_text = cursor.get("prompt_text")
+    return prompt_text if isinstance(prompt_text, str) else None

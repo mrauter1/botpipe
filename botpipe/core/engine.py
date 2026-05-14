@@ -6,6 +6,7 @@ from collections.abc import Sequence
 from copy import deepcopy
 from dataclasses import dataclass, replace
 from datetime import datetime, timezone
+import hashlib
 import importlib
 import json
 from pathlib import Path
@@ -166,6 +167,7 @@ class _RunLoopState:
     last_event: Event | None = None
     last_outcome: Outcome | None = None
     last_transition: "StepFinalizationRecord | None" = None
+    resume_cursor: dict[str, Any] | None = None
 
 
 @dataclass(frozen=True, slots=True)
@@ -536,6 +538,7 @@ class Engine:
         loop.step_item_states = step_item_states
         loop.pending_handoffs = checkpoint.pending_handoffs
         loop.checkpoint = checkpoint
+        loop.resume_cursor = dict(checkpoint.resume_cursor) if checkpoint.resume_cursor is not None else None
         try:
             loop.current_input_response = self._resume_input_response(checkpoint=checkpoint, answer=loop.current_answer)
         except Exception as exc:
@@ -572,6 +575,12 @@ class Engine:
         if self.compiled.default_session_open:
             context.open_session(self.compiled.default_session_name)
         loop.state = context.state
+        loop.checkpoint = self._save_loop_checkpoint(
+            loop,
+            stage=loop.current_step_name,
+            pending_input=None,
+            pending_answer=None,
+        )
         return loop
 
     def _build_run_context(
@@ -586,6 +595,8 @@ class Engine:
         answer: str | None = None,
         input_response: Any | None = None,
         runtime_event_sink: Callable[[str, Mapping[str, Any]], None] | None = None,
+        provider_attempt_checkpoint_sink: Callable[[Any, Any, Mapping[str, Any] | None], Any] | None = None,
+        provider_attempt_resume_cursor: Mapping[str, Any] | None = None,
     ) -> Context:
         return Context(
             root=env.root,
@@ -616,6 +627,8 @@ class Engine:
             default_session_name=self.compiled.default_session_name,
             values=values,
             runtime_event_sink=runtime_event_sink,
+            provider_attempt_checkpoint_sink=provider_attempt_checkpoint_sink,
+            provider_attempt_resume_cursor=provider_attempt_resume_cursor,
         )
 
     def _configure_context_frame(self, context: Context) -> Context:
@@ -635,8 +648,10 @@ class Engine:
         max_steps: int,
     ) -> RunResult:
         for _ in range(max_steps):
-            frame = self._prepare_step_frame(env, loop)
+            resume_cursor = loop.resume_cursor
+            frame = self._prepare_step_frame(env, loop, resume_cursor=resume_cursor)
             step_result = await self._execute_step_frame(env, loop, frame)
+            loop.resume_cursor = None
             terminal = self._handle_step_result(env, loop, frame, step_result)
             if terminal is not None:
                 return terminal
@@ -646,6 +661,8 @@ class Engine:
         self,
         env: _RunEnvironment,
         loop: _RunLoopState,
+        *,
+        resume_cursor: Mapping[str, Any] | None = None,
     ) -> _StepFrame:
         assert loop.state is not None
         assert loop.current_step_name is not None
@@ -660,10 +677,13 @@ class Engine:
             answer=loop.current_answer,
             input_response=loop.current_input_response,
             runtime_event_sink=self.runtime_event_sink,
+            provider_attempt_checkpoint_sink=self._provider_attempt_checkpoint_sink(loop),
+            provider_attempt_resume_cursor=resume_cursor,
         )
         runtime = self._configure_context_frame(context)
         step_state_store = self._ensure_step_state_store(loop.step_states, step)
-        self._increment_step_runtime_state(step_state_store)
+        if resume_cursor is None:
+            self._increment_step_runtime_state(step_state_store)
         runtime._sync_step_state(step_state_store)
         if step.scope_name is not None:
             context.ensure_selection(step.scope_name)
@@ -677,9 +697,11 @@ class Engine:
         if item_state_store is not None:
             runtime._sync_item_state(item_state_store)
         if step_item_state_store is not None:
-            self._increment_step_runtime_state(step_item_state_store)
+            if resume_cursor is None:
+                self._increment_step_runtime_state(step_item_state_store)
             runtime._sync_step_item_state(step_item_state_store)
-        self._update_item_runtime_state_on_entry(step, context, getattr(context, "_item_state", None))
+        if resume_cursor is None:
+            self._update_item_runtime_state_on_entry(step, context, getattr(context, "_item_state", None))
         runtime._sync_worklist_selection(
             lambda worklist_name, *, _context=context, _step=step, _item_states=loop.item_states, _step_item_states=loop.step_item_states: self._sync_context_scoped_state_after_worklist_selection_change(
                 _context,
@@ -703,6 +725,17 @@ class Engine:
         loop.history.append(step.name)
         step_visit = self._step_execution_visit(step, step_state_store, step_item_state_store)
         scope_name, item_id = self._current_step_scope_item(context, step)
+        step_execution_id = _step_execution_id(
+            step_name=step.name,
+            visit=step_visit,
+            scope_name=scope_name,
+            item_id=item_id,
+        )
+        if resume_cursor is not None:
+            cursor_step_execution_id = resume_cursor.get("step_execution_id")
+            if isinstance(cursor_step_execution_id, str) and cursor_step_execution_id:
+                step_execution_id = cursor_step_execution_id
+        context._execution_frame.set_step_execution_id(step_execution_id)
         return _StepFrame(
             step=step,
             context=context,
@@ -711,12 +744,7 @@ class Engine:
             step_visit=step_visit,
             scope_name=scope_name,
             item_id=item_id,
-            step_execution_id=_step_execution_id(
-                step_name=step.name,
-                visit=step_visit,
-                scope_name=scope_name,
-                item_id=item_id,
-            ),
+            step_execution_id=step_execution_id,
         )
 
     async def _execute_step_frame(
@@ -862,6 +890,13 @@ class Engine:
                 pending_answer=None,
             )
         loop.current_step_name = destination
+        if loop.last_transition is None or loop.last_transition.runtime_control != "goto":
+            loop.checkpoint = self._save_loop_checkpoint(
+                loop,
+                stage=destination,
+                pending_input=None,
+                pending_answer=None,
+            )
         return None
 
     def _finish_terminal(
@@ -984,6 +1019,7 @@ class Engine:
         state: BaseModel | None = None,
         pending_handoffs: tuple[PendingHandoff, ...] | None = None,
         failure_context: FailureContext | Mapping[str, Any] | None = None,
+        resume_cursor: Mapping[str, Any] | None = None,
     ) -> Checkpoint:
         current_state = state if state is not None else loop.state
         assert current_state is not None
@@ -1000,7 +1036,65 @@ class Engine:
             pending_input=pending_input,
             pending_answer=pending_answer,
             failure_context=failure_context,
+            resume_cursor=resume_cursor,
         )
+
+    def _provider_attempt_checkpoint_sink(
+        self,
+        loop: _RunLoopState,
+    ) -> Callable[[Context, Any, Mapping[str, Any] | None], None]:
+        def save_provider_attempt_checkpoint(
+            context: Context,
+            turn: Any,
+            checkpoint_data: Mapping[str, Any] | None,
+        ) -> None:
+            if not checkpoint_data:
+                return
+            checkpoint_payload = dict(checkpoint_data)
+            prompt_text = getattr(turn, "prompt_text", None)
+            turn_kind = _checkpoint_turn_kind(getattr(turn, "turn_kind", checkpoint_payload.get("turn_kind")))
+            if turn_kind is None:
+                return
+            cursor = {
+                "phase": "provider_attempt",
+                "step_name": getattr(turn, "step_name", checkpoint_payload.get("step_name")),
+                "step_execution_id": getattr(
+                    turn,
+                    "step_execution_id",
+                    checkpoint_payload.get("step_execution_id"),
+                ),
+                "turn_kind": turn_kind,
+                "attempt": getattr(turn, "attempt", checkpoint_payload.get("attempt")),
+                "max_attempts": getattr(turn, "max_attempts", checkpoint_payload.get("max_attempts")),
+                "expected_response": getattr(turn, "expected_response", checkpoint_payload.get("expected_response")),
+            }
+            if isinstance(prompt_text, str):
+                cursor["prompt_fingerprint"] = hashlib.sha256(prompt_text.encode("utf-8")).hexdigest()
+                cursor["prompt_text"] = prompt_text
+            session = getattr(turn, "session", None)
+            session_id = getattr(session, "session_id", None)
+            if isinstance(session_id, str) and session_id:
+                cursor["session_id_before"] = session_id
+            cursor.update(deepcopy(checkpoint_payload))
+            step_name = cursor.get("step_name")
+            if not isinstance(step_name, str) or not step_name:
+                return
+            self._save_checkpoint(
+                stage=step_name,
+                state=context.state,
+                values=loop.values,
+                step_states=loop.step_states,
+                item_states=loop.item_states,
+                step_item_states=loop.step_item_states,
+                worklist_selections=loop.selections,
+                worklist_selection_snapshots=loop.selection_snapshots,
+                pending_handoffs=loop.pending_handoffs,
+                pending_input=None,
+                pending_answer=None,
+                resume_cursor=_json_safe_mapping(cursor),
+            )
+
+        return save_provider_attempt_checkpoint
 
     def _handle_run_failure(
         self,
@@ -1137,6 +1231,7 @@ class Engine:
         pending_input: PendingInput | None,
         pending_answer: str | None,
         failure_context: FailureContext | Mapping[str, Any] | None = None,
+        resume_cursor: Mapping[str, Any] | None = None,
     ) -> Checkpoint:
         payload_failure_context = self._failure_context_payload(failure_context)
         checkpoint = Checkpoint(
@@ -1157,6 +1252,7 @@ class Engine:
             pending_question=None,
             pending_answer=pending_answer,
             failure_context=payload_failure_context,
+            resume_cursor=dict(resume_cursor) if resume_cursor is not None else None,
         )
         self.checkpoint_store.save(checkpoint)
         return checkpoint
@@ -1317,6 +1413,17 @@ class Engine:
         if stage not in self.compiled.steps:
             raise WorkflowExecutionError(
                 f"resume checkpoint refers to step {stage!r}, but the current workflow does not declare that step"
+            )
+
+        cursor = checkpoint.resume_cursor
+        if cursor is None:
+            return
+        if cursor.get("phase") != "provider_attempt":
+            raise WorkflowExecutionError(f"resume checkpoint declares unsupported resume phase {cursor.get('phase')!r}")
+        cursor_step = cursor.get("step_name")
+        if cursor_step != stage:
+            raise WorkflowExecutionError(
+                f"resume checkpoint provider-attempt cursor refers to step {cursor_step!r}, but stage is {stage!r}"
             )
 
     def _current_item_state_key(self, context: Context, step: StepPlan) -> str | None:
@@ -1574,3 +1681,27 @@ class Engine:
                 raise WorkflowExecutionError(
                     f"workflow extension {extension!r} bound to {bound!r} without callable {method_name}()"
                 )
+
+
+def _checkpoint_turn_kind(value: object) -> str | None:
+    if value == "step":
+        return "llm"
+    if isinstance(value, str) and value in {"producer", "verifier", "llm", "operation"}:
+        return value
+    return None
+
+
+def _json_safe_mapping(payload: Mapping[str, Any]) -> dict[str, Any]:
+    return {str(key): _json_safe_value(value) for key, value in payload.items() if value is not None}
+
+
+def _json_safe_value(value: Any) -> Any:
+    if value is None or isinstance(value, (str, int, float, bool)):
+        return value
+    if isinstance(value, Mapping):
+        return _json_safe_mapping(value)
+    if isinstance(value, (list, tuple)):
+        return [_json_safe_value(item) for item in value]
+    if isinstance(value, BaseModel):
+        return value.model_dump(mode="json", warnings=False)
+    return str(value)

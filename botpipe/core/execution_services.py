@@ -5,6 +5,7 @@ Not part of the public botpipe authoring API.
 
 from __future__ import annotations
 
+from collections.abc import Mapping
 from dataclasses import dataclass
 from typing import Any, Protocol
 
@@ -186,10 +187,21 @@ class EventService(Protocol):
     def retry_kind_for_exception(self, exc: Exception) -> str | None:
         ...
 
+    def provider_retry_kind_for_exception(self, exc: Exception) -> str | None:
+        ...
+
     def serialize_exception(self, exc: Exception) -> dict[str, Any]:
         ...
 
-    def next_retry_feedback(self, step: Any, exc: Exception, *, attempt: int) -> tuple[str | None, Exception]:
+    def next_retry_feedback(
+        self,
+        step: Any,
+        exc: Exception,
+        *,
+        attempt: int,
+        response_schema: Mapping[str, Any] | None = None,
+        include_outcome_envelope: bool = False,
+    ) -> tuple[str | None, Exception]:
         ...
 
 

@@ -31,6 +31,8 @@ class RenderedProviderTurn:
     response_schema: dict[str, Any] | None = None
     native_response_schema: dict[str, Any] | None = None
     response_schema_native_skip_reason: str | None = None
+    attempt: int = 1
+    max_attempts: int = 1
 
 
 @dataclass(frozen=True, slots=True)

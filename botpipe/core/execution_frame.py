@@ -55,6 +55,9 @@ class ExecutionFrame:
     fan_in: Any | None = None
 
     runtime_event_sink: Callable[[str, Mapping[str, Any]], None] | None = None
+    provider_attempt_checkpoint_sink: Callable[[Any, Any, Mapping[str, Any] | None], Any] | None = None
+    provider_attempt_checkpoint_data: Mapping[str, Any] | None = None
+    provider_attempt_resume_cursor: Mapping[str, Any] | None = None
     workflow_invoker: Callable[..., Any] | None = None
     execution_source_hook: str | None = None
     execution_source_phase: str | None = None
@@ -236,6 +239,9 @@ class ExecutionFrame:
         self.execution_source_hook = hook_name
         self.execution_source_phase = phase
         self.execution_hook_invocation_id = invocation_id
+
+    def set_provider_attempt_checkpoint_data(self, payload: Mapping[str, Any] | None) -> None:
+        self.provider_attempt_checkpoint_data = payload
 
     def get_cached_worklist_items(self, worklist_name: str) -> tuple[Any, ...] | None:
         if self.worklist_items_cache is None:

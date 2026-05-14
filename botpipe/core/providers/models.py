@@ -97,6 +97,7 @@ class ProviderTurnContext:
     policy: ResolvedProviderPolicy | None = None
     attempt: int = 1
     max_attempts: int = 3
+    rendered_prompt_text: str | None = None
 
 
 @dataclass(frozen=True, slots=True)

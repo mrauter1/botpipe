@@ -11,7 +11,7 @@ from dataclasses import dataclass
 from functools import lru_cache
 from typing import Any
 
-from ...core.errors import ProviderExecutionError
+from ...core.errors import FailureContext, ProviderExecutionError
 from ...core.provider_policy import ProviderPolicyEmission, ProviderPolicyValidationConfig
 from ...core.providers.models import TokenUsage
 from ...core.providers.protocols import ProviderTransport
@@ -101,7 +101,7 @@ def parse_claude_exec_json(raw_stdout: str) -> tuple[str, str | None, dict[str, 
     try:
         payload = json.loads(raw_stdout)
     except json.JSONDecodeError as exc:
-        raise ProviderExecutionError(f"provider 'claude' returned malformed JSON output: {exc.msg}") from exc
+        raise _adapter_output_error(f"provider 'claude' returned malformed JSON output: {exc.msg}") from exc
 
     if not isinstance(payload, dict):
         raise ProviderExecutionError("provider 'claude' must return a JSON object.")
@@ -116,6 +116,19 @@ def parse_claude_exec_json(raw_stdout: str) -> tuple[str, str | None, dict[str, 
 
     provider_metadata = dict(payload)
     return result, session_id, provider_metadata, extract_token_usage(provider_metadata, source="claude")
+
+
+def _adapter_output_error(message: str) -> ProviderExecutionError:
+    return ProviderExecutionError(
+        message,
+        failure_context=FailureContext(
+            kind="malformed_provider_output",
+            step_name="",
+            provider_attributable=True,
+            details={"error": message, "provider_failure_stage": "adapter_output"},
+        ),
+        retry_kind="malformed_provider_output",
+    )
 
 
 class ClaudeTransport(ProviderTransport):

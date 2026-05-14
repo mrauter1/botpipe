@@ -8,6 +8,7 @@ from datetime import datetime, timezone
 from pathlib import Path
 
 from botpipe.core.schema_registry import RUNTIME_EVENT_SCHEMA
+from .workspace import touch_run_heartbeat
 
 
 class EventLogger:
@@ -38,6 +39,7 @@ class EventLogger:
         self.events_file.parent.mkdir(parents=True, exist_ok=True)
         with self.events_file.open("a", encoding="utf-8") as handle:
             handle.write(json.dumps(event, ensure_ascii=False) + "\n")
+        touch_run_heartbeat(self.events_file.parent, event)
         if self.event_callback is not None:
             try:
                 self.event_callback(event)

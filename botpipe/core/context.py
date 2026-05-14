@@ -240,6 +240,12 @@ def _legacy_frame_attr(context: "Context", name: str) -> Any:
         return frame.step_execution_id
     if name == "_runtime_event_sink":
         return frame.runtime_event_sink
+    if name == "_provider_attempt_checkpoint_sink":
+        return frame.provider_attempt_checkpoint_sink
+    if name == "_provider_attempt_checkpoint_data":
+        return frame.provider_attempt_checkpoint_data
+    if name == "_provider_attempt_resume_cursor":
+        return frame.provider_attempt_resume_cursor
     if name == "_worklist_items_cache":
         return {} if frame.worklist_items_cache is None else frame.worklist_items_cache
     if name == "_worklist_selection_sync":
@@ -297,6 +303,8 @@ class Context:
         item_state_store: BaseModel | dict[str, Any] | None = None,
         step_item_state_store: BaseModel | dict[str, Any] | None = None,
         runtime_event_sink: Callable[[str, Mapping[str, Any]], None] | None = None,
+        provider_attempt_checkpoint_sink: Callable[[Any, Any, Mapping[str, Any] | None], Any] | None = None,
+        provider_attempt_resume_cursor: Mapping[str, Any] | None = None,
         branch: BranchMetadata | None = None,
         fan_in: FanInMetadata | None = None,
         step_execution_id: str | None = None,
@@ -374,6 +382,8 @@ class Context:
             branch=branch,
             fan_in=fan_in,
             runtime_event_sink=runtime_event_sink,
+            provider_attempt_checkpoint_sink=provider_attempt_checkpoint_sink,
+            provider_attempt_resume_cursor=provider_attempt_resume_cursor,
             workflow_invoker=workflow_invoker,
         )
         self._history: HistoryReader | None = None
@@ -447,6 +457,15 @@ class Context:
             phase=phase,
             invocation_id=invocation_id,
         )
+
+    def _set_provider_attempt_checkpoint_data(self, payload: Mapping[str, Any] | None) -> None:
+        self._execution_frame.set_provider_attempt_checkpoint_data(payload)
+
+    def _checkpoint_provider_attempt(self, turn: Any) -> None:
+        sink = self._execution_frame.provider_attempt_checkpoint_sink
+        if sink is None:
+            return
+        sink(self, turn, self._execution_frame.provider_attempt_checkpoint_data)
 
     def _set_worklist_selection(
         self,

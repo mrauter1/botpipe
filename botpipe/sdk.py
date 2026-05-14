@@ -5,7 +5,9 @@ from __future__ import annotations
 import argparse
 import asyncio
 import json
+import os
 import shutil
+from contextlib import suppress
 from collections.abc import AsyncIterator, Callable, Iterable, Iterator, Mapping, Sequence
 from dataclasses import dataclass, replace
 from datetime import datetime, timedelta, timezone
@@ -44,6 +46,7 @@ from botpipe.core.primitives import AWAIT_INPUT, FAIL, FINISH, SELF, Event, Outc
 from botpipe.core.prompts import Prompt
 from botpipe.core.providers.protocols import LLMProvider, validate_llm_provider
 from botpipe.core.providers.retries import ProviderRetryPolicy
+from botpipe.core.schema_registry import CHECKPOINT_SCHEMA
 from botpipe.core.steps import BranchGroupStep, ChildWorkflowStep, ProduceVerifyStep, PromptStep, PythonStep, Session, Step
 from botpipe.core.step_plans import SingleStepPlan
 from botpipe.core.stores.protocols import SessionSnapshot
@@ -71,6 +74,7 @@ from botpipe.runtime.loader import (
 from botpipe.runtime.provider_backends import resolve_provider_backend
 from botpipe.runtime.provider_policy_resolver import create_provider_policy_resolver
 from botpipe.runtime.runner import RunExecution, RunnerOptions, execute_workflow_package, execute_workflow_plan
+from botpipe.runtime.stores.filesystem import FilesystemCheckpointStore
 from botpipe.runtime.task_ids import TaskIdGenerationError, generate_task_id
 from botpipe.runtime.workspace import (
     RunRecord,
@@ -1049,8 +1053,16 @@ class RunsClient:
         task_id: str | None = None,
         status: str | None = None,
     ) -> tuple[RunRecord, ...]:
-        workflow_name = None if workflow is None else _resolve_sdk_workflow_name(self._client.root, workflow)
-        return list_run_records(self._client.root, workflow_name=workflow_name, task_id=task_id, status=status)
+        if workflow is None:
+            return list_run_records(self._client.root, workflow_name=None, task_id=task_id, status=status)
+        resolved, compiled = _resolve_and_compile_workflow(self._client.root, workflow)
+        records = list_run_records(
+            self._client.root,
+            workflow_name=resolved.reference.workflow_name,
+            task_id=task_id,
+            status=status,
+        )
+        return tuple(_record_with_checkpoint_loadability(record, compiled) for record in records)
 
     def show(
         self,
@@ -1059,14 +1071,36 @@ class RunsClient:
         *,
         run_id: str | None = None,
     ) -> RunRecord:
-        workflow_name = _resolve_sdk_workflow_name(self._client.root, workflow)
-        return _resolve_sdk_run_record(
+        resolved, compiled = _resolve_and_compile_workflow(self._client.root, workflow)
+        record = _resolve_sdk_run_record(
+            self._client.root,
+            workflow_name=resolved.reference.workflow_name,
+            task_id=task_id,
+            run_id=run_id,
+            selector="latest",
+        )
+        return _record_with_checkpoint_loadability(record, compiled)
+
+    def repair(
+        self,
+        workflow: type[object] | str,
+        task_id: str,
+        *,
+        run_id: str | None = None,
+        force: bool = False,
+    ) -> dict[str, Any]:
+        """Reconstruct a missing or invalid checkpoint from durable trace state snapshots when possible."""
+
+        resolved, compiled = _resolve_and_compile_workflow(self._client.root, workflow)
+        workflow_name = resolved.reference.workflow_name
+        record = _resolve_sdk_run_record(
             self._client.root,
             workflow_name=workflow_name,
             task_id=task_id,
             run_id=run_id,
             selector="latest",
         )
+        return _repair_run_checkpoint_from_trace(record, compiled=compiled, force=force)
 
     def resume(
         self,
@@ -1087,19 +1121,46 @@ class RunsClient:
         """
 
         normalized_policy = _normalize_sdk_policy_input(policy)
-        workflow_name = _resolve_sdk_workflow_name(self._client.root, workflow)
-        selector = "latest_paused" if answer is not None else "latest_resumable"
-        record = _resolve_sdk_run_record(
-            self._client.root,
-            workflow_name=workflow_name,
-            task_id=task_id,
-            run_id=run_id,
-            selector=selector,
-        )
-        if answer is None and not record.resumable:
-            raise _sdk_resolution_error(
-                f"run {record.run_id!r} for workflow {workflow_name!r} on task {task_id!r} is not resumable"
+        resolved, compiled = _resolve_and_compile_workflow(self._client.root, workflow)
+        workflow_name = resolved.reference.workflow_name
+        if answer is None and run_id is None:
+            record = _resolve_latest_loadable_resume_run(
+                self._client.root,
+                workflow_name=workflow_name,
+                task_id=task_id,
+                compiled=compiled,
             )
+        else:
+            selector = "latest_paused" if answer is not None else "latest"
+            record = _resolve_sdk_run_record(
+                self._client.root,
+                workflow_name=workflow_name,
+                task_id=task_id,
+                run_id=run_id,
+                selector=selector,
+            )
+        if answer is None and record.running_live:
+            raise _sdk_resolution_error(
+                f"run {record.run_id!r} for workflow {workflow_name!r} on task {task_id!r} is still running "
+                f"(pid={record.lease.get('pid')!r}, host={record.lease.get('host')!r}); stop the live process "
+                "or wait for it to finish before resuming"
+            )
+        if answer is None:
+            checkpoint_load_error = _checkpoint_load_error(record, compiled)
+            if checkpoint_load_error is not None:
+                diagnostic_record = (
+                    _record_with_checkpoint_loadability(record, compiled)
+                    if record.checkpoint_error is None
+                    else record
+                )
+                raise _sdk_resolution_error(
+                    _non_resumable_run_message(
+                        diagnostic_record,
+                        workflow_name=workflow_name,
+                        task_id=task_id,
+                        checkpoint_load_error=diagnostic_record.checkpoint_load_error or checkpoint_load_error,
+                    )
+                )
         if answer is not None and not record.paused:
             raise _sdk_resolution_error(
                 f"run {record.run_id!r} for workflow {workflow_name!r} on task {task_id!r} is not awaiting input"
@@ -1306,6 +1367,346 @@ def _resolve_sdk_run_record(
 
 def _sdk_resolution_error(message: str) -> SDKExecutionError:
     return SDKExecutionError(message, original_error=FileNotFoundError(message))
+
+
+def _non_resumable_run_message(
+    record: RunRecord,
+    *,
+    workflow_name: str,
+    task_id: str,
+    checkpoint_load_error: str | None = None,
+) -> str:
+    details = [
+        f"run {record.run_id!r} for workflow {workflow_name!r} on task {task_id!r} is not resumable",
+        f"status={record.normalized_status!r}",
+        f"checkpoint_exists={record.checkpoint_exists}",
+        f"checkpoint_valid={record.checkpoint_valid}",
+    ]
+    if record.checkpoint_error is not None:
+        details.append(f"checkpoint_error={record.checkpoint_error!r}")
+    if checkpoint_load_error is not None:
+        details.append(f"checkpoint_load_error={checkpoint_load_error!r}")
+    if record.stale_running:
+        details.append("running_state=stale")
+    last_event = record.last_event
+    if last_event is not None:
+        last_bits = {
+            key: last_event.get(key)
+            for key in ("event_type", "step_name", "step_execution_id", "scope", "item_id", "turn_kind", "attempt")
+            if last_event.get(key) is not None
+        }
+        if last_bits:
+            details.append(f"last_event={last_bits!r}")
+    details.append("start a new run or recover from artifacts/events if no checkpoint exists")
+    return "; ".join(details)
+
+
+def _repair_run_checkpoint_from_trace(
+    record: RunRecord,
+    *,
+    compiled: WorkflowPlan,
+    force: bool,
+) -> dict[str, Any]:
+    if record.running_live:
+        raise _sdk_resolution_error(
+            f"run {record.run_id!r} for workflow {record.workflow_name!r} on task {record.task_id!r} is still running "
+            f"(pid={record.lease.get('pid')!r}, host={record.lease.get('host')!r}); stop the live process "
+            "or wait for it to finish before repairing"
+        )
+    checkpoint_load_error = None
+    if record.checkpoint_error is None:
+        checkpoint_load_error = _checkpoint_load_error(record, compiled)
+    if record.checkpoint_error is None and checkpoint_load_error is None and not force:
+        return {
+            "checkpoint_exists": record.checkpoint_exists,
+            "checkpoint_valid": True,
+            "reason": "checkpoint_already_valid",
+            "repaired": False,
+            "run_id": record.run_id,
+            "task_id": record.task_id,
+            "workflow": record.workflow_name,
+        }
+
+    candidate = _checkpoint_repair_candidate(record)
+    unsupported_reason = _checkpoint_repair_unsupported_reason(compiled=compiled, candidate=candidate)
+    if unsupported_reason is not None:
+        raise _sdk_resolution_error(f"cannot repair run {record.run_id!r}: {unsupported_reason}")
+    stage = candidate["stage"]
+    if stage not in compiled.steps:
+        raise _sdk_resolution_error(
+            f"cannot repair run {record.run_id!r}: trace points to undeclared step {stage!r} "
+            f"for workflow {record.workflow_name!r}"
+        )
+    try:
+        state = compiled.state_cls.model_validate(candidate["state"])
+    except ValidationError as exc:
+        raise _sdk_resolution_error(
+            f"cannot repair run {record.run_id!r}: trace state snapshot does not match "
+            f"workflow state model {compiled.state_cls.__qualname__}"
+        ) from exc
+    warnings = list(candidate.get("warnings", ()))
+    payload: dict[str, Any] = {
+        "schema": CHECKPOINT_SCHEMA,
+        "stage": stage,
+        "state": state.model_dump(mode="json", warnings=False),
+        "session_bindings": {
+            "bindings": [],
+            "active_keys_by_slot": {},
+            "active_scopes": {},
+        },
+        "values": {},
+        "step_states": {},
+        "item_states": {},
+        "step_item_states": {},
+        "worklist_selections": {},
+        "pending_handoffs": [],
+        "pending_input": None,
+        "pending_answer": None,
+        "failure_context": {
+            "kind": "checkpoint_repaired_from_trace",
+            "trace_event_type": candidate["trace_event_type"],
+            "trace_sequence": candidate.get("trace_sequence"),
+            "warnings": warnings,
+        },
+        "resume_cursor": candidate.get("resume_cursor"),
+    }
+    _atomic_write_json(record.checkpoint_file, payload)
+    verified = _resolve_sdk_run_record(
+        record.root,
+        workflow_name=record.workflow_name,
+        task_id=record.task_id,
+        run_id=record.run_id,
+        selector="latest",
+    )
+    if not verified.checkpoint_valid:
+        raise _sdk_resolution_error(
+            f"repair wrote checkpoint for run {record.run_id!r}, but it is still invalid: "
+            f"{verified.checkpoint_error}"
+        )
+    load_error = _checkpoint_load_error(verified, compiled)
+    if load_error is not None:
+        raise _sdk_resolution_error(
+            f"repair wrote checkpoint for run {record.run_id!r}, but it cannot be loaded: {load_error}"
+        )
+    return {
+        "checkpoint_file": str(record.checkpoint_file),
+        "checkpoint_valid": True,
+        "repaired": True,
+        "resume_cursor": candidate.get("resume_cursor"),
+        "run_id": record.run_id,
+        "stage": stage,
+        "task_id": record.task_id,
+        "trace_event_type": candidate["trace_event_type"],
+        "warnings": warnings,
+        "workflow": record.workflow_name,
+    }
+
+
+def _checkpoint_repair_candidate(record: RunRecord) -> dict[str, Any]:
+    trace_records = _read_jsonl_records(record.trace_file, label="trace")
+    for trace in reversed(trace_records):
+        event_type = trace.get("event_type")
+        if event_type == "step_finished":
+            terminal = trace.get("terminal")
+            if isinstance(terminal, str) and terminal:
+                raise _sdk_resolution_error(
+                    f"cannot repair run {record.run_id!r}: latest traced step is terminal {terminal!r}"
+                )
+            stage = trace.get("target_step") if isinstance(trace.get("target_step"), str) else trace.get("step_name")
+            state_payload = trace.get("state_after")
+            if isinstance(stage, str) and stage and isinstance(state_payload, dict):
+                return {
+                    "stage": stage,
+                    "state": state_payload,
+                    "trace_event_type": "step_finished",
+                    "trace_sequence": trace.get("sequence"),
+                    "scope": trace.get("scope"),
+                    "item_id": trace.get("item_id"),
+                    "warnings": _checkpoint_repair_warnings(trace),
+                }
+        elif event_type == "step_started":
+            stage = trace.get("step_name")
+            state_payload = trace.get("state")
+            if isinstance(stage, str) and stage and isinstance(state_payload, dict):
+                return {
+                    "stage": stage,
+                    "state": state_payload,
+                    "trace_event_type": "step_started",
+                    "trace_sequence": trace.get("sequence"),
+                    "resume_cursor": _repair_resume_cursor_from_events(
+                        record.events_file,
+                        step_name=stage,
+                        step_execution_id=trace.get("step_execution_id"),
+                    ),
+                    "scope": trace.get("scope"),
+                    "item_id": trace.get("item_id"),
+                    "warnings": _checkpoint_repair_warnings(trace),
+                }
+    raise _sdk_resolution_error(
+        f"cannot repair run {record.run_id!r}: trace log does not contain a step state snapshot"
+    )
+
+
+def _checkpoint_repair_warnings(trace: Mapping[str, Any]) -> list[str]:
+    warnings: list[str] = []
+    if trace.get("scope") is not None or trace.get("item_id") is not None:
+        warnings.append(
+            "checkpoint was reconstructed from workflow state only; verify scoped worklist state before resuming"
+        )
+    return warnings
+
+
+def _checkpoint_repair_unsupported_reason(*, compiled: WorkflowPlan, candidate: Mapping[str, Any]) -> str | None:
+    if compiled.worklists:
+        return "repair from trace is unsafe for workflows with worklists because scoped item state cannot be reconstructed"
+    if _workflow_has_repair_unsafe_sessions(compiled):
+        return "repair from trace is unsafe for workflows with declared or open sessions because session bindings cannot be reconstructed"
+    if candidate.get("scope") is not None or candidate.get("item_id") is not None:
+        return "trace snapshot is scoped to a worklist item and cannot reconstruct item/worklist state"
+    return None
+
+
+def _workflow_has_repair_unsafe_sessions(compiled: WorkflowPlan) -> bool:
+    if compiled.default_session_open:
+        return True
+    for name, session in compiled.sessions.items():
+        if name != compiled.default_session_name:
+            return True
+        if bool(getattr(session, "open", False)):
+            return True
+    return False
+
+
+def _checkpoint_load_error(record: RunRecord, compiled: WorkflowPlan) -> str | None:
+    shallow_error = record.checkpoint_error
+    if shallow_error is not None:
+        return shallow_error
+    try:
+        checkpoint = FilesystemCheckpointStore(record.checkpoint_file, compiled.state_cls).load()
+    except Exception as exc:
+        return str(exc)
+    if checkpoint is None:
+        return "checkpoint payload could not be loaded"
+    stage = checkpoint.stage
+    if not isinstance(stage, str) or not stage:
+        return "resume checkpoint does not declare the step to continue"
+    if stage not in compiled.steps:
+        return f"resume checkpoint refers to step {stage!r}, but the current workflow does not declare that step"
+    cursor = checkpoint.resume_cursor
+    if cursor is None:
+        return None
+    if cursor.get("phase") != "provider_attempt":
+        return f"resume checkpoint declares unsupported resume phase {cursor.get('phase')!r}"
+    cursor_step = cursor.get("step_name")
+    if cursor_step != stage:
+        return f"resume checkpoint provider-attempt cursor refers to step {cursor_step!r}, but stage is {stage!r}"
+    return None
+
+
+def _record_with_checkpoint_loadability(record: RunRecord, compiled: WorkflowPlan) -> RunRecord:
+    metadata = dict(record.metadata)
+    metadata.pop("checkpoint_load_error", None)
+    if record.checkpoint_error is None:
+        load_error = _checkpoint_load_error(record, compiled)
+        if load_error is not None:
+            metadata["checkpoint_load_error"] = load_error
+    return replace(record, metadata=metadata)
+
+
+def _resolve_latest_loadable_resume_run(
+    root: Path,
+    *,
+    workflow_name: str,
+    task_id: str,
+    compiled: WorkflowPlan,
+) -> RunRecord:
+    records = tuple(
+        _record_with_checkpoint_loadability(record, compiled)
+        for record in list_run_records(root, workflow_name=workflow_name, task_id=task_id)
+    )
+    candidates = tuple(record for record in records if record.resumable)
+    if not candidates:
+        raise _sdk_resolution_error(f"no resumable run exists for workflow {workflow_name!r} on task {task_id!r}")
+    return max(candidates, key=lambda record: record.sort_key)
+
+
+def _repair_resume_cursor_from_events(
+    events_file: Path,
+    *,
+    step_name: str,
+    step_execution_id: object,
+) -> dict[str, Any] | None:
+    events = _read_jsonl_records(events_file, label="events", missing_ok=True)
+    current: dict[str, Any] | None = None
+    for event in events:
+        event_type = event.get("event_type")
+        if event.get("step_name") != step_name:
+            continue
+        if isinstance(step_execution_id, str) and event.get("step_execution_id") != step_execution_id:
+            continue
+        if event_type == "provider_attempt_started":
+            current = {
+                "phase": "provider_attempt",
+                "step_name": step_name,
+                "step_execution_id": event.get("step_execution_id"),
+                "turn_kind": event.get("turn_kind"),
+                "attempt": event.get("attempt"),
+                "max_attempts": event.get("max_attempts"),
+            }
+            continue
+        if current is None or not _event_matches_repair_cursor(event, current):
+            continue
+        if event_type == "provider_turn_started":
+            for key in ("expected_response", "prompt_fingerprint", "provider_target", "session_id_before"):
+                if event.get(key) is not None:
+                    current[key] = event.get(key)
+        elif event_type == "provider_session_known":
+            if event.get("session_id") is not None:
+                current["provider_session_id"] = event.get("session_id")
+            if event.get("provider_target") is not None:
+                current["provider_target"] = event.get("provider_target")
+        elif event_type in {"provider_attempt_finished", "provider_attempt_failed"}:
+            current = None
+    return current
+
+
+def _event_matches_repair_cursor(event: Mapping[str, Any], cursor: Mapping[str, Any]) -> bool:
+    if event.get("turn_kind") != cursor.get("turn_kind"):
+        return False
+    if event.get("attempt") != cursor.get("attempt"):
+        return False
+    cursor_step_execution_id = cursor.get("step_execution_id")
+    if isinstance(cursor_step_execution_id, str):
+        return event.get("step_execution_id") == cursor_step_execution_id
+    return True
+
+
+def _read_jsonl_records(path: Path, *, label: str, missing_ok: bool = False) -> list[dict[str, Any]]:
+    if not path.is_file():
+        if missing_ok:
+            return []
+        raise _sdk_resolution_error(f"{label} log is missing at {path}")
+    records: list[dict[str, Any]] = []
+    for line_number, raw_line in enumerate(path.read_text(encoding="utf-8").splitlines(), start=1):
+        line = raw_line.strip()
+        if not line:
+            continue
+        records.append(_parse_jsonl_record(line, path=path, label=label, line_number=line_number))
+    return records
+
+
+def _atomic_write_json(path: Path, payload: Mapping[str, Any]) -> None:
+    path.parent.mkdir(parents=True, exist_ok=True)
+    tmp_path = path.with_name(f".{path.name}.{os.getpid()}.{uuid4().hex}.tmp")
+    try:
+        with tmp_path.open("w", encoding="utf-8") as handle:
+            handle.write(json.dumps(dict(payload), indent=2) + "\n")
+            handle.flush()
+            os.fsync(handle.fileno())
+        os.replace(tmp_path, path)
+    finally:
+        with suppress(FileNotFoundError):
+            tmp_path.unlink()
 
 
 def _read_run_log_text(path: Path, label: str) -> str:

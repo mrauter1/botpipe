@@ -5,9 +5,11 @@ from __future__ import annotations
 import json
 import os
 import re
+import socket
+from contextlib import suppress
 from collections.abc import Iterable
 from dataclasses import dataclass
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 from pathlib import Path
 from typing import Any, Callable, Mapping
 from uuid import uuid4
@@ -15,6 +17,7 @@ from uuid import uuid4
 from botpipe.core.mappings import normalize_mapping
 from botpipe.core.schema_registry import (
     CHILD_RUN_SUMMARY_SCHEMA,
+    CHECKPOINT_SCHEMA,
     RUN_METADATA_SCHEMA,
     migrate_schemaless_payload,
     validate_persisted_schema,
@@ -26,6 +29,7 @@ STATE_DIRNAME = ".botpipe"
 DEFAULT_REQUEST_TEXT = "No explicit initial message was provided for this run. Use repository artifacts and explicit clarifications only."
 _RAW_SEQUENCE_PATTERN = re.compile(r"^(?P<sequence>\d+)_")
 _UNSET = object()
+_REMOTE_HEARTBEAT_STALE_AFTER = timedelta(minutes=10)
 
 
 @dataclass(frozen=True, slots=True)
@@ -154,11 +158,43 @@ class RunRecord:
 
     @property
     def resumable(self) -> bool:
-        return self.checkpoint_file.is_file()
+        return self.checkpoint_valid
 
     @property
     def checkpoint_exists(self) -> bool:
         return self.checkpoint_file.is_file()
+
+    @property
+    def checkpoint_valid(self) -> bool:
+        return self.checkpoint_error is None and self.checkpoint_load_error is None
+
+    @property
+    def checkpoint_error(self) -> str | None:
+        return _checkpoint_error(self.checkpoint_file)
+
+    @property
+    def checkpoint_load_error(self) -> str | None:
+        error = self.metadata.get("checkpoint_load_error")
+        if isinstance(error, str) and error:
+            return error
+        return None
+
+    @property
+    def lease(self) -> dict[str, Any]:
+        payload = self.metadata.get("lease")
+        return normalize_mapping(payload) if isinstance(payload, dict) else {}
+
+    @property
+    def running_live(self) -> bool:
+        return self.normalized_status == "running" and _lease_is_live(self.lease)
+
+    @property
+    def stale_running(self) -> bool:
+        return self.normalized_status == "running" and not self.running_live
+
+    @property
+    def last_event(self) -> dict[str, Any] | None:
+        return _last_jsonl_record(self.events_file)
 
     @property
     def sort_key(self) -> tuple[str, str, str]:
@@ -770,6 +806,7 @@ def update_run_metadata(
         payload["workflow_input"] = normalize_mapping(workflow_input)
     if status is not None:
         payload["status"] = status
+        _update_run_lease(payload, status=status, now=now)
     if terminal is not None:
         payload["terminal"] = terminal
     elif status == "running":
@@ -793,6 +830,43 @@ def update_run_metadata(
     payload["updated_at"] = now
     _write_json(run_workspace.run_meta_file, payload)
     update_workflow_metadata(workflow_workspace, last_run_id=run_workspace.run_id, last_status=payload.get("status"))
+
+
+def touch_run_heartbeat(run_dir: Path, event: Mapping[str, Any]) -> None:
+    def mutate(run_meta: dict[str, Any]) -> None:
+        lease = run_meta.get("lease")
+        if not isinstance(lease, dict):
+            lease = {}
+            run_meta["lease"] = lease
+        now = _utcnow()
+        lease["heartbeat_at"] = now
+        seq = event.get("seq")
+        if isinstance(seq, int):
+            lease["heartbeat_seq"] = seq
+        event_type = event.get("event_type")
+        if isinstance(event_type, str):
+            lease["last_event_type"] = event_type
+        lease["last_event"] = {
+            key: value
+            for key, value in event.items()
+            if key
+            in {
+                "seq",
+                "ts",
+                "event_type",
+                "step_name",
+                "step_kind",
+                "step_execution_id",
+                "scope",
+                "item_id",
+                "turn_kind",
+                "attempt",
+                "status",
+                "terminal",
+            }
+        }
+
+    _update_run_metadata_file(run_dir, mutate)
 
 
 def update_run_git_tracking(run_dir: Path, payload: Mapping[str, Any]) -> None:
@@ -1149,6 +1223,93 @@ def _update_run_metadata_file(run_dir: Path, mutator: Callable[[dict[str, Any]],
     _write_json(run_meta_file, payload)
 
 
+def _update_run_lease(payload: dict[str, Any], *, status: str, now: str) -> None:
+    lease = payload.get("lease")
+    if not isinstance(lease, dict):
+        lease = {}
+        payload["lease"] = lease
+    if status == "running":
+        lease["host"] = socket.gethostname()
+        lease["pid"] = os.getpid()
+        lease.setdefault("started_at", now)
+        lease["heartbeat_at"] = now
+        lease.pop("ended_at", None)
+    else:
+        lease["ended_at"] = now
+
+
+def _checkpoint_error(path: Path) -> str | None:
+    if not path.is_file():
+        return "missing"
+    try:
+        payload = json.loads(path.read_text(encoding="utf-8"))
+    except json.JSONDecodeError as exc:
+        return f"invalid_json: {exc.msg}"
+    except OSError as exc:
+        return f"unreadable: {exc}"
+    if not isinstance(payload, dict):
+        return "checkpoint payload is not an object"
+    try:
+        validate_persisted_schema(
+            payload,
+            expected=CHECKPOINT_SCHEMA,
+            artifact_name=str(path),
+            legacy_migrator=lambda value: migrate_schemaless_payload(value, expected=CHECKPOINT_SCHEMA),
+        )
+    except Exception as exc:
+        return str(exc)
+    stage = payload.get("stage")
+    if not isinstance(stage, str) or not stage:
+        return "checkpoint stage is missing"
+    if not isinstance(payload.get("state"), dict):
+        return "checkpoint state is missing"
+    return None
+
+
+def _lease_is_live(lease: Mapping[str, Any]) -> bool:
+    host = lease.get("host")
+    pid = lease.get("pid")
+    if isinstance(host, str) and host == socket.gethostname() and isinstance(pid, int):
+        try:
+            os.kill(pid, 0)
+        except ProcessLookupError:
+            return False
+        except PermissionError:
+            return True
+        except OSError:
+            return False
+        return True
+    heartbeat_at = lease.get("heartbeat_at")
+    if isinstance(heartbeat_at, str):
+        try:
+            heartbeat = datetime.fromisoformat(heartbeat_at)
+        except ValueError:
+            return False
+        if heartbeat.tzinfo is None:
+            heartbeat = heartbeat.replace(tzinfo=timezone.utc)
+        return datetime.now(timezone.utc) - heartbeat <= _REMOTE_HEARTBEAT_STALE_AFTER
+    return False
+
+
+def _last_jsonl_record(path: Path) -> dict[str, Any] | None:
+    if not path.is_file():
+        return None
+    try:
+        lines = path.read_text(encoding="utf-8").splitlines()
+    except OSError:
+        return None
+    for raw in reversed(lines):
+        if not raw.strip():
+            continue
+        try:
+            payload = json.loads(raw)
+        except json.JSONDecodeError:
+            continue
+        if isinstance(payload, dict):
+            return payload
+    return None
+
+
 def _append_message(task_messages_file: Path, message: str) -> None:
     task_messages_file.parent.mkdir(parents=True, exist_ok=True)
     entry = {
@@ -1295,7 +1456,16 @@ def _load_json(path: Path, *, default: dict[str, Any]) -> dict[str, Any]:
 
 def _write_json(path: Path, payload: dict[str, Any]) -> None:
     path.parent.mkdir(parents=True, exist_ok=True)
-    path.write_text(json.dumps(payload, indent=2) + "\n", encoding="utf-8")
+    tmp_path = path.with_name(f".{path.name}.{os.getpid()}.{uuid4().hex}.tmp")
+    try:
+        with tmp_path.open("w", encoding="utf-8") as handle:
+            handle.write(json.dumps(payload, indent=2) + "\n")
+            handle.flush()
+            os.fsync(handle.fileno())
+        os.replace(tmp_path, path)
+    finally:
+        with suppress(FileNotFoundError):
+            tmp_path.unlink()
 
 
 def _serialize_path(root: Path, path: Path) -> str:

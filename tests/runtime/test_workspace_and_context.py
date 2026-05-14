@@ -11,7 +11,9 @@ from pydantic import BaseModel
 from botpipe.core.compiler import compile_workflow
 from botpipe.core import FINISH, Workflow
 from botpipe.core.providers.fake import ScriptedLLMProvider
+from botpipe.core.providers.rendered import RenderedLLMProvider
 from botpipe.core.providers.retries import ProviderRetryPolicy
+from botpipe.core.providers.turns import ProviderTurnResult
 from botpipe.core.schema_registry import CHILD_RUN_SUMMARY_SCHEMA, RUN_METADATA_SCHEMA, WORKFLOW_TOPOLOGY_SCHEMA
 from botpipe.core.steps import PromptStep
 from botpipe.runtime.config import GitTrackingRuntimeConfig, RuntimeConfig
@@ -38,6 +40,31 @@ from botpipe.runtime.workspace import (
 from botpipe.core.primitives import Outcome
 
 INVALID_TOPOLOGY_SCHEMA = "unsupported.workflow_topology/v999"
+
+
+class _SimulatedProviderCrash(BaseException):
+    pass
+
+
+class _CrashingRenderedTransport:
+    def __init__(self) -> None:
+        self.turns = []
+
+    async def run_turn(self, turn):
+        self.turns.append(turn)
+        raise _SimulatedProviderCrash()
+
+
+class _SuccessfulRenderedTransport:
+    def __init__(self) -> None:
+        self.turns = []
+
+    async def run_turn(self, turn):
+        self.turns.append(turn)
+        return ProviderTurnResult(
+            raw_text=json.dumps({"outcome": {"tag": "done", "payload": {}, "route_fields": {}}}),
+            session=None,
+        )
 
 
 def _clear_workflow_modules() -> None:
@@ -144,6 +171,213 @@ def test_runner_full_auto_hides_default_question_route_from_provider_contract(tm
     assert result.terminal == FINISH
     assert len(provider.calls) == 1
     assert provider.calls[0].available_routes == ("done",)
+
+
+def test_continue_route_persists_checkpoint_for_next_step_before_later_failure(tmp_path: Path) -> None:
+    _write_two_step_continue_workflow_package(tmp_path, "continue_checkpoint_demo", "ContinueCheckpointWorkflow")
+
+    with pytest.raises(WorkflowExecutionError, match="max_steps=1"):
+        run_workflow_package(
+            "continue_checkpoint_demo",
+            provider=ScriptedLLMProvider(llm_turns=[Outcome(raw_output="next", tag="next")]),
+            options=_runner_options(
+                tmp_path,
+                task_id="task-continue-checkpoint",
+                message="Continue once",
+                max_steps=1,
+            ),
+        )
+
+    run_dir = next(
+        (tmp_path / ".botpipe" / "tasks" / "task-continue-checkpoint" / "wf_continue_checkpoint_demo" / "runs").iterdir()
+    )
+    checkpoint = json.loads((run_dir / "checkpoint.json").read_text(encoding="utf-8"))
+    record = list_run_records(tmp_path, workflow_name="continue_checkpoint_demo", task_id="task-continue-checkpoint")[0]
+
+    assert checkpoint["stage"] == "second"
+    assert record.checkpoint_valid is True
+    assert record.resumable is True
+
+
+def test_provider_attempt_checkpoint_resumes_without_replaying_before_hook(tmp_path: Path) -> None:
+    _write_provider_attempt_checkpoint_workflow_package(
+        tmp_path,
+        "provider_attempt_checkpoint_demo",
+        "ProviderAttemptCheckpointWorkflow",
+    )
+    crashing_transport = _CrashingRenderedTransport()
+
+    with pytest.raises(_SimulatedProviderCrash):
+        run_workflow_package(
+            "provider_attempt_checkpoint_demo",
+            provider=RenderedLLMProvider(crashing_transport),
+            options=_runner_options(
+                tmp_path,
+                task_id="task-provider-attempt-checkpoint",
+                message="Crash inside provider",
+            ),
+        )
+
+    run_dir = next(
+        (
+            tmp_path
+            / ".botpipe"
+            / "tasks"
+            / "task-provider-attempt-checkpoint"
+            / "wf_provider_attempt_checkpoint_demo"
+            / "runs"
+        ).iterdir()
+    )
+    checkpoint = json.loads((run_dir / "checkpoint.json").read_text(encoding="utf-8"))
+
+    assert checkpoint["state"]["before_count"] == 1
+    assert checkpoint["resume_cursor"]["phase"] == "provider_attempt"
+    assert checkpoint["resume_cursor"]["turn_kind"] == "llm"
+    assert checkpoint["resume_cursor"]["prompt_text"] == crashing_transport.turns[0].prompt_text
+
+    success_transport = _SuccessfulRenderedTransport()
+    resumed = run_workflow_package(
+        "provider_attempt_checkpoint_demo",
+        provider=RenderedLLMProvider(success_transport),
+        options=_runner_options(
+            tmp_path,
+            task_id="task-provider-attempt-checkpoint",
+            run_id=run_dir.name,
+            resume=True,
+        ),
+    )
+
+    assert resumed.terminal == "FINISH"
+    assert resumed.state.before_count == 1
+    assert success_transport.turns[0].prompt_text == checkpoint["resume_cursor"]["prompt_text"]
+
+
+def test_provider_attempt_checkpoint_is_written_before_semantic_provider_call(tmp_path: Path) -> None:
+    _write_provider_attempt_checkpoint_workflow_package(
+        tmp_path,
+        "semantic_provider_attempt_checkpoint_demo",
+        "SemanticProviderAttemptCheckpointWorkflow",
+    )
+
+    def crash(_request):
+        raise _SimulatedProviderCrash()
+
+    with pytest.raises(_SimulatedProviderCrash):
+        run_workflow_package(
+            "semantic_provider_attempt_checkpoint_demo",
+            provider=ScriptedLLMProvider(llm_turns=[crash]),
+            options=_runner_options(
+                tmp_path,
+                task_id="task-semantic-provider-attempt-checkpoint",
+                message="Crash inside semantic provider",
+            ),
+        )
+
+    run_dir = next(
+        (
+            tmp_path
+            / ".botpipe"
+            / "tasks"
+            / "task-semantic-provider-attempt-checkpoint"
+            / "wf_semantic_provider_attempt_checkpoint_demo"
+            / "runs"
+        ).iterdir()
+    )
+    checkpoint = json.loads((run_dir / "checkpoint.json").read_text(encoding="utf-8"))
+
+    assert checkpoint["state"]["before_count"] == 1
+    assert checkpoint["resume_cursor"]["phase"] == "provider_attempt"
+    assert checkpoint["resume_cursor"]["turn_kind"] == "llm"
+    assert "prompt_text" not in checkpoint["resume_cursor"]
+
+    resumed = run_workflow_package(
+        "semantic_provider_attempt_checkpoint_demo",
+        provider=ScriptedLLMProvider(llm_turns=[Outcome(raw_output="ok", tag="done")]),
+        options=_runner_options(
+            tmp_path,
+            task_id="task-semantic-provider-attempt-checkpoint",
+            run_id=run_dir.name,
+            resume=True,
+        ),
+    )
+
+    assert resumed.terminal == "FINISH"
+    assert resumed.state.before_count == 1
+
+
+def test_pair_resume_cursor_is_used_only_for_resumed_attempt_retry(tmp_path: Path) -> None:
+    _write_pair_provider_attempt_checkpoint_workflow_package(
+        tmp_path,
+        "pair_provider_attempt_checkpoint_demo",
+        "PairProviderAttemptCheckpointWorkflow",
+    )
+
+    def crash(_request):
+        raise _SimulatedProviderCrash()
+
+    with pytest.raises(_SimulatedProviderCrash):
+        run_workflow_package(
+            "pair_provider_attempt_checkpoint_demo",
+            provider=ScriptedLLMProvider(
+                producer_turns=["checkpointed draft"],
+                verifier_turns=[crash],
+            ),
+            options=_runner_options(
+                tmp_path,
+                task_id="task-pair-provider-attempt-checkpoint",
+                message="Crash inside verifier",
+            ),
+        )
+
+    run_dir = next(
+        (
+            tmp_path
+            / ".botpipe"
+            / "tasks"
+            / "task-pair-provider-attempt-checkpoint"
+            / "wf_pair_provider_attempt_checkpoint_demo"
+            / "runs"
+        ).iterdir()
+    )
+    checkpoint = json.loads((run_dir / "checkpoint.json").read_text(encoding="utf-8"))
+
+    assert checkpoint["resume_cursor"]["turn_kind"] == "verifier"
+    assert checkpoint["resume_cursor"]["producer_raw_output"] == "checkpointed draft"
+
+    verifier_inputs: list[str] = []
+
+    def fail_resumed_verifier(request):
+        verifier_inputs.append(request.producer_raw_output)
+        return Outcome(raw_output="wrong route", tag="retry")
+
+    def pass_after_fresh_producer(request):
+        verifier_inputs.append(request.producer_raw_output)
+        return Outcome(raw_output="done", tag="done")
+
+    provider = ScriptedLLMProvider(
+        producer_turns=["fresh draft"],
+        verifier_turns=[fail_resumed_verifier, pass_after_fresh_producer],
+    )
+
+    resumed = run_workflow_package(
+        "pair_provider_attempt_checkpoint_demo",
+        provider=provider,
+        options=_runner_options(
+            tmp_path,
+            task_id="task-pair-provider-attempt-checkpoint",
+            run_id=run_dir.name,
+            resume=True,
+        ),
+    )
+
+    assert resumed.terminal == "FINISH"
+    assert resumed.state.producer_before_count == 2
+    assert verifier_inputs == ["checkpointed draft", "fresh draft"]
+    assert [(call.kind, call.attempt) for call in provider.calls] == [
+        ("verifier", 1),
+        ("producer", 2),
+        ("verifier", 2),
+    ]
 
 
 def test_runtime_context_and_prompt_resolution_use_workflow_scope_and_package_root(tmp_path: Path) -> None:
@@ -2195,6 +2429,126 @@ class {class_name}(Workflow):
         writes=[context_dump],
         routes={{"answered": FINISH, "question": AWAIT_INPUT}},
     )
+""".strip()
+        + "\n",
+        encoding="utf-8",
+    )
+    return package_dir / "workflow.py"
+
+
+def _write_two_step_continue_workflow_package(root: Path, workflow_name: str, class_name: str) -> Path:
+    package_dir = root / "workflows" / workflow_name
+    package_dir.mkdir(parents=True, exist_ok=True)
+    (root / "workflows" / "__init__.py").write_text("__all__ = []\n", encoding="utf-8")
+    (package_dir / "__init__.py").write_text(
+        f"from .workflow import {class_name}\n__all__ = ['{class_name}']\n",
+        encoding="utf-8",
+    )
+    (package_dir / "workflow.toml").write_text(f'name = "{workflow_name}"\n', encoding="utf-8")
+    (package_dir / "workflow.py").write_text(
+        f"""
+from __future__ import annotations
+
+from botpipe import FINISH, Prompt, Workflow, step
+
+
+class {class_name}(Workflow):
+    name = "{workflow_name}"
+
+    first = step(
+        prompt=Prompt.inline("first"),
+        routes={{"next": "second"}},
+    )
+    second = step(
+        prompt=Prompt.inline("second"),
+        routes={{"done": FINISH}},
+    )
+    entry = first
+""".strip()
+        + "\n",
+        encoding="utf-8",
+    )
+    return package_dir / "workflow.py"
+
+
+def _write_provider_attempt_checkpoint_workflow_package(root: Path, workflow_name: str, class_name: str) -> Path:
+    package_dir = root / "workflows" / workflow_name
+    package_dir.mkdir(parents=True, exist_ok=True)
+    (root / "workflows" / "__init__.py").write_text("__all__ = []\n", encoding="utf-8")
+    (package_dir / "__init__.py").write_text(
+        f"from .workflow import {class_name}\n__all__ = ['{class_name}']\n",
+        encoding="utf-8",
+    )
+    (package_dir / "workflow.toml").write_text(f'name = "{workflow_name}"\n', encoding="utf-8")
+    (package_dir / "workflow.py").write_text(
+        f"""
+from __future__ import annotations
+
+from pydantic import BaseModel
+
+from botpipe import FINISH, Prompt, Workflow, step
+
+
+def before_ask(ctx):
+    ctx.state = ctx.state.model_copy(update={{"before_count": ctx.state.before_count + 1}})
+
+
+class {class_name}(Workflow):
+    name = "{workflow_name}"
+
+    class State(BaseModel):
+        before_count: int = 0
+
+    ask = step(
+        before=before_ask,
+        prompt=Prompt.inline("Choose the done route."),
+        routes={{"done": FINISH}},
+    )
+    entry = ask
+""".strip()
+        + "\n",
+        encoding="utf-8",
+    )
+    return package_dir / "workflow.py"
+
+
+def _write_pair_provider_attempt_checkpoint_workflow_package(root: Path, workflow_name: str, class_name: str) -> Path:
+    package_dir = root / "workflows" / workflow_name
+    package_dir.mkdir(parents=True, exist_ok=True)
+    (root / "workflows" / "__init__.py").write_text("__all__ = []\n", encoding="utf-8")
+    (package_dir / "__init__.py").write_text(
+        f"from .workflow import {class_name}\n__all__ = ['{class_name}']\n",
+        encoding="utf-8",
+    )
+    (package_dir / "workflow.toml").write_text(f'name = "{workflow_name}"\n', encoding="utf-8")
+    (package_dir / "workflow.py").write_text(
+        f"""
+from __future__ import annotations
+
+from pydantic import BaseModel
+
+from botpipe import FINISH, Prompt, Workflow, produce_verify_step
+from botpipe.core.providers.retries import ProviderRetryPolicy
+
+
+def before_producer(ctx):
+    ctx.state = ctx.state.model_copy(update={{"producer_before_count": ctx.state.producer_before_count + 1}})
+
+
+class {class_name}(Workflow):
+    name = "{workflow_name}"
+
+    class State(BaseModel):
+        producer_before_count: int = 0
+
+    review = produce_verify_step(
+        before_producer=before_producer,
+        producer_prompt=Prompt.inline("Draft."),
+        verifier_prompt=Prompt.inline("Verify."),
+        retry=ProviderRetryPolicy(max_attempts=2),
+        routes={{"done": FINISH}},
+    )
+    entry = review
 """.strip()
         + "\n",
         encoding="utf-8",

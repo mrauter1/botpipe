@@ -128,6 +128,7 @@ class CheckpointPayload:
     pending_question: str | None = None
     pending_answer: str | None = None
     failure_context: dict[str, Any] | None = None
+    resume_cursor: dict[str, Any] | None = None
 
 
 class SessionStore(Protocol):

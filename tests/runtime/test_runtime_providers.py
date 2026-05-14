@@ -1,13 +1,14 @@
 from __future__ import annotations
 
 import asyncio
+import hashlib
 import json
 from pathlib import Path
 import subprocess
 
 import pytest
 
-from botpipe.core.errors import ProviderExecutionError
+from botpipe.core.errors import ProviderExecutionError, exception_failure_context
 from botpipe.core.provider_policy import (
     PermissionPolicy,
     ProviderPolicy,
@@ -163,6 +164,7 @@ def _rendered_turn(
     workspace_root: Path | None = None,
     step_execution_id: str | None = None,
     runtime_event_sink=None,
+    attempt: int = 1,
 ) -> RenderedProviderTurn:
     return RenderedProviderTurn(
         step_name=step_name,
@@ -175,6 +177,7 @@ def _rendered_turn(
         workspace_root=workspace_root,
         step_execution_id=step_execution_id,
         runtime_event_sink=runtime_event_sink,
+        attempt=attempt,
     )
 
 
@@ -196,6 +199,66 @@ class _AsyncProcessStub:
         if self._seen_inputs is not None:
             self._seen_inputs.append(input)
         return self._stdout, self._stderr
+
+
+class _AsyncBytesWriterStub:
+    def __init__(self, seen_inputs: list[bytes | None] | None = None) -> None:
+        self._seen_inputs = seen_inputs
+        self._buffer = bytearray()
+
+    def write(self, data: bytes) -> None:
+        self._buffer.extend(data)
+
+    async def drain(self) -> None:
+        return None
+
+    def close(self) -> None:
+        if self._seen_inputs is not None:
+            self._seen_inputs.append(bytes(self._buffer) if self._buffer else None)
+
+    async def wait_closed(self) -> None:
+        return None
+
+
+class _BrokenPipeAsyncBytesWriterStub(_AsyncBytesWriterStub):
+    async def drain(self) -> None:
+        raise BrokenPipeError("stdin closed")
+
+
+class _AsyncLineReaderStub:
+    def __init__(self, lines: list[bytes]) -> None:
+        self._lines = list(lines)
+
+    async def readline(self) -> bytes:
+        if not self._lines:
+            return b""
+        return self._lines.pop(0)
+
+
+class _AsyncBytesReaderStub:
+    def __init__(self, payload: bytes) -> None:
+        self._payload = payload
+
+    async def read(self) -> bytes:
+        return self._payload
+
+
+class _StreamingAsyncProcessStub:
+    def __init__(
+        self,
+        *,
+        stdout_lines: list[str],
+        stderr: str = "",
+        returncode: int = 0,
+        seen_inputs: list[bytes | None] | None = None,
+    ) -> None:
+        self.stdin = _AsyncBytesWriterStub(seen_inputs)
+        self.stdout = _AsyncLineReaderStub([line.encode("utf-8") for line in stdout_lines])
+        self.stderr = _AsyncBytesReaderStub(stderr.encode("utf-8"))
+        self.returncode = returncode
+
+    async def wait(self) -> int:
+        return self.returncode
 
 
 class _CancellableAsyncProcessStub:
@@ -470,8 +533,12 @@ def test_parse_codex_exec_json_extracts_usage_when_present() -> None:
 def test_parse_codex_exec_json_rejects_missing_assistant_text() -> None:
     stdout = '{"type":"thread.started","thread_id":"codex-session-1"}\n'
 
-    with pytest.raises(ProviderExecutionError, match="did not return assistant text"):
+    with pytest.raises(ProviderExecutionError, match="did not return assistant text") as exc_info:
         parse_codex_exec_json(stdout)
+
+    failure_context = exception_failure_context(exc_info.value)
+    assert failure_context is not None
+    assert failure_context.details["provider_failure_stage"] == "adapter_output"
 
 
 def test_parse_claude_exec_json_preserves_provider_metadata() -> None:
@@ -728,6 +795,262 @@ def test_codex_transport_supports_async_subprocess_execution(
     assert result.session.session_id == "codex-session-async"
 
 
+def test_codex_transport_prefers_native_no_prompt_resume_for_interrupted_attempt(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    run_folder = tmp_path / "run"
+    run_folder.mkdir()
+    events_file = run_folder / "events.jsonl"
+    prompt_text = "# Step: produce\n\nShared runtime prompt."
+    prompt_fingerprint = hashlib.sha256(prompt_text.encode("utf-8")).hexdigest()
+    seq = 0
+
+    def append_event(event_type: str, payload: dict[str, object]) -> None:
+        nonlocal seq
+        seq += 1
+        event = {
+            "schema": "botpipe.runtime_event/v1",
+            "ts": "2026-05-13T00:00:00+00:00",
+            "run_id": "run-test",
+            "seq": seq,
+            "event_type": event_type,
+            **payload,
+        }
+        with events_file.open("a", encoding="utf-8") as handle:
+            handle.write(json.dumps(event) + "\n")
+
+    base_payload = {
+        "step_name": "produce",
+        "step_execution_id": "produce:1",
+        "turn_kind": "producer",
+        "attempt": 1,
+    }
+    append_event("provider_attempt_started", dict(base_payload))
+    append_event("provider_turn_started", {**base_payload, "prompt_fingerprint": prompt_fingerprint})
+    append_event("provider_session_known", {**base_payload, "session_id": "interrupted-session"})
+
+    calls: list[tuple[str, ...]] = []
+    seen_inputs: list[bytes | None] = []
+
+    async def fake_create_subprocess_exec(*command: str, **_: object) -> _AsyncProcessStub:
+        calls.append(tuple(command))
+        return _AsyncProcessStub(
+            stdout="\n".join(
+                (
+                    '{"type":"thread.started","thread_id":"interrupted-session"}',
+                    '{"type":"item.completed","item":{"type":"agent_message","text":"resumed text"}}',
+                )
+            ),
+            seen_inputs=seen_inputs,
+        )
+
+    monkeypatch.setattr(codex_runtime_provider.asyncio, "create_subprocess_exec", fake_create_subprocess_exec)
+    transport = CodexTransport(
+        commands=CodexCLICommand(
+            start_command=("codex", "exec", "--json"),
+            resume_command=("codex", "exec", "resume", "--json"),
+        ),
+        model="gpt-test",
+        model_effort=None,
+    )
+
+    result = asyncio.run(
+        transport.run_turn(
+            _rendered_turn(
+                step_name="produce",
+                prompt_text=prompt_text,
+                session=_placeholder_session(),
+                run_folder=run_folder,
+                step_execution_id="produce:1",
+                runtime_event_sink=lambda event_type, payload: append_event(event_type, dict(payload)),
+            )
+        )
+    )
+
+    assert calls == [("codex", "exec", "resume", "--json", "--model", "gpt-test", "interrupted-session")]
+    assert seen_inputs == [None]
+    assert result.raw_text == "resumed text"
+    assert result.metadata["provider_metadata"]["interrupted_turn_resume"]["mode"] == "provider_native_no_prompt"
+
+
+def test_codex_transport_streams_session_known_events(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    seen_events: list[tuple[str, dict[str, object]]] = []
+    seen_inputs: list[bytes | None] = []
+
+    async def fake_create_subprocess_exec(*_: str, **__: object) -> _StreamingAsyncProcessStub:
+        return _StreamingAsyncProcessStub(
+            stdout_lines=[
+                '{"type":"thread.started","thread_id":"streamed-session"}\n',
+                '{"type":"item.completed","item":{"type":"agent_message","text":"producer text"}}\n',
+            ],
+            seen_inputs=seen_inputs,
+        )
+
+    monkeypatch.setattr(codex_runtime_provider.asyncio, "create_subprocess_exec", fake_create_subprocess_exec)
+    transport = CodexTransport(
+        commands=CodexCLICommand(
+            start_command=("codex", "exec", "--json"),
+            resume_command=("codex", "exec", "resume", "--json"),
+        ),
+        model="gpt-test",
+        model_effort=None,
+    )
+
+    result = asyncio.run(
+        transport.run_turn(
+            _rendered_turn(
+                step_name="produce",
+                prompt_text="prompt",
+                session=_placeholder_session(),
+                runtime_event_sink=lambda event_type, payload: seen_events.append((event_type, dict(payload))),
+            )
+        )
+    )
+
+    assert seen_inputs == [b"prompt"]
+    assert result.session is not None
+    assert result.session.session_id == "streamed-session"
+    assert any(
+        event_type == "provider_session_known" and payload["session_id"] == "streamed-session"
+        for event_type, payload in seen_events
+    )
+
+
+def test_codex_transport_native_resume_missing_rollout_falls_back_to_fresh_start(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    run_folder = tmp_path / "run"
+    run_folder.mkdir()
+    events_file = run_folder / "events.jsonl"
+    prompt_text = "# Step: produce\n\nShared runtime prompt."
+    prompt_fingerprint = hashlib.sha256(prompt_text.encode("utf-8")).hexdigest()
+
+    base_payload = {
+        "schema": "botpipe.runtime_event/v1",
+        "ts": "2026-05-13T00:00:00+00:00",
+        "run_id": "run-test",
+        "step_name": "produce",
+        "step_execution_id": "produce:1",
+        "turn_kind": "producer",
+        "attempt": 1,
+    }
+    events = [
+        {"seq": 1, "event_type": "provider_attempt_started"},
+        {"seq": 2, "event_type": "provider_turn_started", "prompt_fingerprint": prompt_fingerprint},
+        {"seq": 3, "event_type": "provider_session_known", "session_id": "interrupted-session"},
+    ]
+    with events_file.open("w", encoding="utf-8") as handle:
+        for event in events:
+            handle.write(json.dumps({**base_payload, **event}) + "\n")
+
+    calls: list[tuple[str, ...]] = []
+    seen_inputs: list[bytes | None] = []
+    responses = [
+        _AsyncProcessStub(
+            stdout="",
+            stderr=(
+                "Error: thread/resume: thread/resume failed: no rollout found for thread id "
+                "interrupted-session (code -32600)"
+            ),
+            returncode=1,
+            seen_inputs=seen_inputs,
+        ),
+        _AsyncProcessStub(
+            stdout="\n".join(
+                (
+                    '{"type":"thread.started","thread_id":"fresh-session"}',
+                    '{"type":"item.completed","item":{"type":"agent_message","text":"fresh text"}}',
+                )
+            ),
+            seen_inputs=seen_inputs,
+        ),
+    ]
+
+    async def fake_create_subprocess_exec(*command: str, **_: object) -> _AsyncProcessStub:
+        calls.append(tuple(command))
+        return responses.pop(0)
+
+    monkeypatch.setattr(codex_runtime_provider.asyncio, "create_subprocess_exec", fake_create_subprocess_exec)
+    transport = CodexTransport(
+        commands=CodexCLICommand(
+            start_command=("codex", "exec", "--json"),
+            resume_command=("codex", "exec", "resume", "--json"),
+        ),
+        model="gpt-test",
+        model_effort=None,
+    )
+
+    result = asyncio.run(
+        transport.run_turn(
+            _rendered_turn(
+                step_name="produce",
+                prompt_text=prompt_text,
+                session=_provider_session("codex", "previous-session"),
+                run_folder=run_folder,
+                step_execution_id="produce:1",
+            )
+        )
+    )
+
+    assert calls == [
+        ("codex", "exec", "resume", "--json", "--model", "gpt-test", "interrupted-session"),
+        ("codex", "exec", "--json", "--model", "gpt-test"),
+    ]
+    assert seen_inputs == [None, prompt_text.encode("utf-8")]
+    assert result.raw_text == "fresh text"
+    assert result.metadata["mode"] == "start"
+
+
+def test_codex_interrupted_attempt_scan_disqualifies_failed_native_resume(tmp_path: Path) -> None:
+    run_folder = tmp_path / "run"
+    run_folder.mkdir()
+    events_file = run_folder / "events.jsonl"
+    prompt_text = "# Step: produce\n\nShared runtime prompt."
+    prompt_fingerprint = hashlib.sha256(prompt_text.encode("utf-8")).hexdigest()
+    base_payload = {
+        "schema": "botpipe.runtime_event/v1",
+        "ts": "2026-05-13T00:00:00+00:00",
+        "run_id": "run-test",
+        "step_name": "produce",
+        "step_execution_id": "produce:1",
+        "turn_kind": "producer",
+        "attempt": 1,
+    }
+    events = [
+        {"seq": 1, "event_type": "provider_attempt_started"},
+        {"seq": 2, "event_type": "provider_turn_started", "prompt_fingerprint": prompt_fingerprint},
+        {"seq": 3, "event_type": "provider_session_known", "session_id": "interrupted-session"},
+        {"seq": 4, "event_type": "provider_attempt_started"},
+        {"seq": 5, "event_type": "provider_turn_started", "prompt_fingerprint": prompt_fingerprint},
+        {"seq": 6, "event_type": "provider_attempt_resume_started", "session_id": "interrupted-session"},
+        {
+            "seq": 7,
+            "event_type": "provider_attempt_resume_failed",
+            "session_id": "interrupted-session",
+            "prompt_fingerprint": prompt_fingerprint,
+        },
+    ]
+    with events_file.open("w", encoding="utf-8") as handle:
+        for event in events:
+            handle.write(json.dumps({**base_payload, **event}) + "\n")
+
+    interrupted = codex_runtime_provider._find_interrupted_codex_attempt(
+        _rendered_turn(
+            step_name="produce",
+            prompt_text=prompt_text,
+            run_folder=run_folder,
+            step_execution_id="produce:1",
+        ),
+        prompt_fingerprint=prompt_fingerprint,
+    )
+
+    assert interrupted is None
+
+
 def test_codex_transport_run_turn_does_not_fall_back_to_subprocess_run(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
@@ -924,8 +1247,12 @@ def test_codex_transport_rejects_unusable_jsonl(monkeypatch: pytest.MonkeyPatch)
 
     monkeypatch.setattr(codex_runtime_provider.asyncio, "create_subprocess_exec", fake_create_subprocess_exec)
 
-    with pytest.raises(ProviderExecutionError, match="unusable JSONL output"):
+    with pytest.raises(ProviderExecutionError, match="unusable JSONL output") as exc_info:
         asyncio.run(transport.run_turn(_rendered_turn(session=_placeholder_session())))
+
+    failure_context = exception_failure_context(exc_info.value)
+    assert failure_context is not None
+    assert failure_context.details["provider_failure_stage"] == "adapter_output"
 
 
 def test_codex_transport_raises_on_non_zero_exit(monkeypatch: pytest.MonkeyPatch) -> None:
@@ -939,6 +1266,27 @@ def test_codex_transport_raises_on_non_zero_exit(monkeypatch: pytest.MonkeyPatch
     )
     async def fake_create_subprocess_exec(*command: str, **_: object) -> _AsyncProcessStub:
         return _AsyncProcessStub(stdout="oops", stderr="bad", returncode=7)
+
+    monkeypatch.setattr(codex_runtime_provider.asyncio, "create_subprocess_exec", fake_create_subprocess_exec)
+
+    with pytest.raises(ProviderExecutionError, match=r"exit code 7"):
+        asyncio.run(transport.run_turn(_rendered_turn(session=_placeholder_session())))
+
+
+def test_codex_transport_reports_subprocess_failure_when_stdin_pipe_closes(monkeypatch: pytest.MonkeyPatch) -> None:
+    transport = CodexTransport(
+        commands=CodexCLICommand(
+            start_command=("codex", "exec", "--json"),
+            resume_command=("codex", "exec", "resume", "--json"),
+        ),
+        model="gpt-test",
+        model_effort=None,
+    )
+
+    async def fake_create_subprocess_exec(*command: str, **_: object) -> _StreamingAsyncProcessStub:
+        process = _StreamingAsyncProcessStub(stdout_lines=[], stderr="bad", returncode=7)
+        process.stdin = _BrokenPipeAsyncBytesWriterStub()
+        return process
 
     monkeypatch.setattr(codex_runtime_provider.asyncio, "create_subprocess_exec", fake_create_subprocess_exec)
 
@@ -1095,7 +1443,11 @@ def test_codex_transport_emits_run_scoped_policy_artifacts_and_metadata(
     assert result.metadata["provider_metadata"]["policy"]["effective_policy_file"] == str(policy_root / "effective_policy.json")
     assert result.metadata["provider_metadata"]["policy"]["capability_report_file"] == str(policy_root / "capability_report.json")
     assert "policy_fingerprint" in result.metadata["provider_metadata"]["policy"]
-    assert [event for event, _payload in seen_events] == [
+    assert [
+        event
+        for event, _payload in seen_events
+        if event in {"provider_policy_emitted", "provider_policy_capability_report"}
+    ] == [
         "provider_policy_emitted",
         "provider_policy_capability_report",
     ]
@@ -1684,8 +2036,12 @@ def test_claude_transport_rejects_malformed_json(monkeypatch: pytest.MonkeyPatch
     monkeypatch.setattr(claude_runtime_provider.asyncio, "create_subprocess_exec", fake_create_subprocess_exec)
     transport = ClaudeTransport(config=_config(provider_name="claude").provider.claude)
 
-    with pytest.raises(ProviderExecutionError, match="malformed JSON output"):
+    with pytest.raises(ProviderExecutionError, match="malformed JSON output") as exc_info:
         asyncio.run(transport.run_turn(_rendered_turn(session=_placeholder_session())))
+
+    failure_context = exception_failure_context(exc_info.value)
+    assert failure_context is not None
+    assert failure_context.details["provider_failure_stage"] == "adapter_output"
 
 
 def test_claude_transport_raises_on_non_zero_exit(monkeypatch: pytest.MonkeyPatch) -> None:

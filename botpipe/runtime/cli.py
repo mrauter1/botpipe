@@ -185,6 +185,17 @@ def build_arg_parser() -> argparse.ArgumentParser:
     runs_show.add_argument("--run-id", help="Explicit run id to inspect.")
     runs_show.set_defaults(handler=_handle_runs_show)
 
+    runs_repair = runs_subparsers.add_parser(
+        "repair",
+        parents=[common],
+        help="Reconstruct a missing or invalid checkpoint from durable trace snapshots when possible.",
+    )
+    runs_repair.add_argument("workflow", help="Workflow reference (name, file, module, or optional :Class).")
+    runs_repair.add_argument("task_id", help="Stable task identifier.")
+    runs_repair.add_argument("--run-id", help="Explicit run id to repair.")
+    runs_repair.add_argument("--force", action="store_true", help="Overwrite an existing valid checkpoint.")
+    runs_repair.set_defaults(handler=_handle_runs_repair)
+
     logs_parser = subparsers.add_parser("logs", parents=[common], help="Print run log output.")
     logs_parser.add_argument("workflow", help="Workflow reference (name, file, module, or optional :Class).")
     logs_parser.add_argument("task_id", help="Stable task identifier.")
@@ -440,6 +451,13 @@ def _handle_runs_show(args: argparse.Namespace, *, provider_factory: Callable[..
     client = _readonly_client(args)
     record = client.runs.show(args.workflow, args.task_id, run_id=args.run_id)
     _emit_json(_run_record_payload(record, include_paths=True))
+    return EXIT_SUCCESS
+
+
+def _handle_runs_repair(args: argparse.Namespace, *, provider_factory: Callable[..., Any] | None = None) -> int:
+    del provider_factory
+    client = _readonly_client(args)
+    _emit_json(client.runs.repair(args.workflow, args.task_id, run_id=args.run_id, force=args.force))
     return EXIT_SUCCESS
 
 
@@ -771,6 +789,12 @@ def _run_record_payload(record, *, include_paths: bool = False) -> dict[str, Any
         payload.update(
             {
                 "checkpoint_exists": record.checkpoint_exists,
+                "checkpoint_valid": getattr(record, "checkpoint_valid", record.checkpoint_exists),
+                "checkpoint_error": getattr(record, "checkpoint_error", None),
+                "checkpoint_load_error": getattr(record, "checkpoint_load_error", None),
+                "running_live": getattr(record, "running_live", False),
+                "stale_running": getattr(record, "stale_running", False),
+                "last_event": getattr(record, "last_event", None),
                 "pending_input": record.pending_input,
                 "workflow_params": record.workflow_params,
                 "task_folder": record.metadata.get("task_folder"),

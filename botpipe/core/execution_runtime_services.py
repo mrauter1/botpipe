@@ -272,6 +272,10 @@ class EventRuntimeService:
     def retry_kind_for_exception(exc: Exception) -> str | None:
         return exception_retry_kind(exc)
 
+    @staticmethod
+    def provider_retry_kind_for_exception(exc: Exception) -> str | None:
+        return EventRuntimeService._provider_retry_kind(exc)
+
     def serialize_exception(self, exc: Exception) -> dict[str, Any]:
         failure_context = self.failure_context_for_exception(exc)
         retry_kind = self.retry_kind_for_exception(exc)
@@ -292,6 +296,8 @@ class EventRuntimeService:
         exc: Exception,
         *,
         attempt: int,
+        response_schema: Mapping[str, Any] | None = None,
+        include_outcome_envelope: bool = False,
     ) -> tuple[str | None, Exception]:
         kind = self._provider_retry_kind(exc)
         if kind is None:
@@ -306,6 +312,8 @@ class EventRuntimeService:
             step_name=step.name,
             attempt=attempt + 1,
             max_attempts=step.retry_policy.max_attempts,
+            response_schema=response_schema,
+            include_outcome_envelope=include_outcome_envelope,
         ), updated_exc
 
     def _annotate_retry_exhaustion(
@@ -1564,7 +1572,11 @@ class ProviderRuntimeService:
                     kind="malformed_provider_output",
                     step_name=step.name,
                     provider_attributable=True,
-                    details={"step": step.name, "error": "provider must return Outcome instances"},
+                    details={
+                        "step": step.name,
+                        "error": "provider must return Outcome instances",
+                        "provider_failure_stage": "outcome_contract",
+                    },
                 ),
                 retry_kind="malformed_provider_output",
             )
@@ -1744,6 +1756,7 @@ class CheckpointRuntimeService:
         pending_input: PendingInput | None = None,
         pending_answer: str | None = None,
         failure_context: FailureContext | Mapping[str, Any] | None = None,
+        resume_cursor: Mapping[str, Any] | None = None,
     ) -> Checkpoint:
         payload_failure_context: dict[str, Any] | None
         if isinstance(failure_context, FailureContext):
@@ -1770,6 +1783,7 @@ class CheckpointRuntimeService:
             pending_question=None,
             pending_answer=pending_answer,
             failure_context=payload_failure_context,
+            resume_cursor=dict(resume_cursor) if resume_cursor is not None else None,
         )
         self._checkpoint_store.save(checkpoint)
         return checkpoint

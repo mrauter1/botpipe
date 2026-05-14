@@ -59,7 +59,7 @@ def _workspace(tmp_path: Path) -> tuple[Path, Path]:
     return task_folder, run_folder
 
 
-def test_engine_max_steps_exhaustion_emits_fatal_terminal_without_checkpoint(tmp_path: Path) -> None:
+def test_engine_max_steps_exhaustion_emits_fatal_terminal_with_latest_checkpoint(tmp_path: Path) -> None:
     seen: list[tuple[str, str | None, int | None]] = []
 
     class TerminalExtension:
@@ -109,7 +109,10 @@ def test_engine_max_steps_exhaustion_emits_fatal_terminal_without_checkpoint(tmp
             max_steps=2,
         )
 
-    assert checkpoint_store.load() is None
+    checkpoint = checkpoint_store.load()
+    assert checkpoint is not None
+    assert checkpoint.stage == "spin"
+    assert checkpoint.state.passes == 2
     assert seen == [("fatal", "spin", 2)]
 
 
