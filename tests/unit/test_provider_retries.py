@@ -3,6 +3,7 @@ from __future__ import annotations
 import pytest
 
 from botpipe.core.errors import FailureContext, ProviderExecutionError, exception_failure_context
+from botpipe.core.execution_runtime_services import EventRuntimeService
 from botpipe.core.providers.parsing import parse_outcome_json
 from botpipe.core.providers.retries import build_retry_feedback
 
@@ -95,6 +96,17 @@ def test_build_retry_feedback_invalid_payload_without_route_still_surfaces_speci
     )
 
     assert "Problem:\n- The structured output payload is invalid: top-level payload must be an object." in feedback
+
+
+def test_provider_retry_kind_does_not_infer_from_error_message() -> None:
+    service = EventRuntimeService()
+
+    assert service.provider_retry_kind_for_exception(
+        ProviderExecutionError("provider 'codex' returned unusable JSONL output.")
+    ) is None
+    assert service.provider_retry_kind_for_exception(
+        ProviderExecutionError("provider failed", retry_kind="provider_transport_failure")
+    ) == "provider_transport_failure"
 
 
 def test_build_retry_feedback_malformed_output_includes_json_diagnostics_and_actual_schema() -> None:

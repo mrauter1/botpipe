@@ -104,15 +104,15 @@ def parse_claude_exec_json(raw_stdout: str) -> tuple[str, str | None, dict[str, 
         raise _adapter_output_error(f"provider 'claude' returned malformed JSON output: {exc.msg}") from exc
 
     if not isinstance(payload, dict):
-        raise ProviderExecutionError("provider 'claude' must return a JSON object.")
+        raise _adapter_output_error("provider 'claude' must return a JSON object.")
 
     result = payload.pop("result", None)
     if not isinstance(result, str):
-        raise ProviderExecutionError("provider 'claude' JSON output must contain a string 'result'.")
+        raise _adapter_output_error("provider 'claude' JSON output must contain a string 'result'.")
 
     session_id = payload.pop("session_id", None)
     if session_id is not None and not isinstance(session_id, str):
-        raise ProviderExecutionError("provider 'claude' JSON field 'session_id' must be a string when provided.")
+        raise _adapter_output_error("provider 'claude' JSON field 'session_id' must be a string when provided.")
 
     provider_metadata = dict(payload)
     return result, session_id, provider_metadata, extract_token_usage(provider_metadata, source="claude")
@@ -128,6 +128,32 @@ def _adapter_output_error(message: str) -> ProviderExecutionError:
             details={"error": message, "provider_failure_stage": "adapter_output"},
         ),
         retry_kind="malformed_provider_output",
+    )
+
+
+def _transport_error(message: str, *, step_name: str) -> ProviderExecutionError:
+    return ProviderExecutionError(
+        message,
+        failure_context=FailureContext(
+            kind="provider_transport_failure",
+            step_name=step_name,
+            provider_attributable=True,
+            details={"error": message, "provider_failure_stage": "transport"},
+        ),
+        retry_kind="provider_transport_failure",
+    )
+
+
+def _session_output_error(message: str, *, step_name: str) -> ProviderExecutionError:
+    return ProviderExecutionError(
+        message,
+        failure_context=FailureContext(
+            kind="provider_transport_failure",
+            step_name=step_name,
+            provider_attributable=True,
+            details={"error": message, "provider_failure_stage": "adapter_output"},
+        ),
+        retry_kind="provider_transport_failure",
     )
 
 
@@ -172,9 +198,10 @@ class ClaudeTransport(ProviderTransport):
         stdout, stderr = await communicate_text_subprocess(process)
         if process.returncode != 0:
             streams = format_subprocess_streams(stdout, stderr)
-            raise ProviderExecutionError(
+            raise _transport_error(
                 f"provider 'claude' failed while running step {turn.step_name!r} "
-                f"(exit code {process.returncode}): {streams}"
+                f"(exit code {process.returncode}): {streams}",
+                step_name=turn.step_name,
             )
 
         result_text, resolved_session_id, provider_metadata, usage = parse_claude_exec_json(stdout)
@@ -234,9 +261,10 @@ def build_claude_operation_executor(
         )
         if returncode != 0:
             streams = format_subprocess_streams(stdout, stderr)
-            raise ProviderExecutionError(
+            raise _transport_error(
                 f"provider 'claude' failed while running step {turn.step_name!r} "
-                f"(exit code {returncode}): {streams}"
+                f"(exit code {returncode}): {streams}",
+                step_name=turn.step_name,
             )
         result_text, resolved_session_id, provider_metadata, usage = parse_claude_exec_json(stdout)
         if emission is not None:
@@ -287,8 +315,9 @@ def _build_claude_result(
     if resolved_session_id is None and resume_session_id is not None:
         resolved_session_id = resume_session_id
     if resolved_session_id is None and turn.session is not None:
-        raise ProviderExecutionError(
-            f"provider 'claude' did not return a resumable session_id for step {turn.step_name!r}."
+        raise _session_output_error(
+            f"provider 'claude' did not return a resumable session_id for step {turn.step_name!r}.",
+            step_name=turn.step_name,
         )
 
     binding = (

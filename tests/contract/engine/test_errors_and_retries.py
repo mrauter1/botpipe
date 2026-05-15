@@ -14,6 +14,20 @@ def _provider_failure(message: str, *, step_name: str, provider_failure_stage: s
             provider_attributable=True,
             details={"error": message, "provider_failure_stage": provider_failure_stage},
         ),
+        retry_kind="malformed_provider_output",
+    )
+
+
+def _provider_transport_failure(message: str, *, step_name: str) -> ProviderExecutionError:
+    return ProviderExecutionError(
+        message,
+        failure_context=FailureContext(
+            kind="provider_transport_failure",
+            step_name=step_name,
+            provider_attributable=True,
+            details={"error": message, "provider_failure_stage": "transport"},
+        ),
+        retry_kind="provider_transport_failure",
     )
 
 
@@ -211,7 +225,7 @@ def test_llm_step_retries_malformed_provider_output_twice_and_succeeds_on_third_
     assert "Expected outcome schema:" in provider.calls[1].retry_feedback
     assert "Canonical outcome envelope:" not in provider.calls[1].retry_feedback
     assert provider.calls[2].retry_feedback is not None
-def test_llm_step_inferred_outcome_contract_retry_includes_schema_feedback(tmp_path: Path):
+def test_llm_step_explicit_outcome_contract_retry_includes_schema_feedback(tmp_path: Path):
     def outcome_contract_failure(_request):
         raise _provider_failure(
             "provider returned malformed outcome JSON: Expecting ',' delimiter",
@@ -252,7 +266,7 @@ def test_llm_step_inferred_outcome_contract_retry_includes_schema_feedback(tmp_p
     assert "Expected outcome schema:" in provider.calls[1].retry_feedback
 
 
-def test_llm_step_inferred_adapter_output_retry_omits_schema_feedback(tmp_path: Path):
+def test_llm_step_explicit_adapter_output_retry_omits_schema_feedback(tmp_path: Path):
     def adapter_output_failure(_request):
         raise _provider_failure(
             "provider 'claude' returned malformed JSON output: Expecting value",
@@ -310,7 +324,7 @@ def test_llm_step_retries_provider_transport_failure_twice_and_succeeds_on_third
 
 
     def transport_failure(_request):
-        raise ProviderExecutionError("provider failed while running step 'ask': boom")
+        raise _provider_transport_failure("provider failed while running step 'ask': boom", step_name="ask")
 
     task_folder, run_folder = _workspace(tmp_path)
     provider = ScriptedLLMProvider(

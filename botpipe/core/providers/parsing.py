@@ -124,7 +124,10 @@ def _optional_object_field(payload: dict[str, Any], key: str, *, default: dict[s
                 kind="invalid_payload",
                 step_name="",
                 provider_attributable=True,
-                details={"error": f"{key} must be an object"},
+                details={
+                    "error": f"{key} must be an object",
+                    "provider_failure_stage": "outcome_contract",
+                },
             ),
             retry_kind="invalid_payload",
         )
@@ -145,6 +148,7 @@ def _legacy_route_fields(*, tag: str, question: str | None, reason: str) -> dict
                     details={
                         "route": "question",
                         "error": "question route requires a non-empty question field",
+                        "provider_failure_stage": "outcome_contract",
                     },
                 ),
                 retry_kind="invalid_payload",

@@ -402,24 +402,7 @@ class EventRuntimeService:
 
     @staticmethod
     def _provider_retry_kind(exc: Exception) -> str | None:
-        explicit = exception_retry_kind(exc)
-        if isinstance(explicit, str) and explicit:
-            return explicit
-        if not isinstance(exc, ProviderExecutionError):
-            return None
-        message = str(exc)
-        if "failed while running step" in message or "did not return a resumable session_id" in message:
-            return "provider_transport_failure"
-        if (
-            "malformed outcome JSON" in message
-            or "outcome JSON" in message
-            or "malformed JSON output" in message
-            or "returned unusable JSONL output" in message
-            or "did not return assistant text in JSONL output" in message
-            or "must return Outcome instances" in message
-        ):
-            return "malformed_provider_output"
-        return None
+        return exception_retry_kind(exc)
 
 
 class StateRuntimeService:
@@ -1588,7 +1571,12 @@ class ProviderRuntimeService:
                     step_name=step.name,
                     candidate_route=outcome.tag,
                     provider_attributable=True,
-                    details={"step": step.name, "route": outcome.tag, "error": "payload must be an object"},
+                    details={
+                        "step": step.name,
+                        "route": outcome.tag,
+                        "error": "payload must be an object",
+                        "provider_failure_stage": "outcome_contract",
+                    },
                 ),
                 retry_kind="invalid_payload",
             )
@@ -1600,7 +1588,12 @@ class ProviderRuntimeService:
                     step_name=step.name,
                     candidate_route=outcome.tag,
                     provider_attributable=True,
-                    details={"step": step.name, "route": outcome.tag, "error": "route_fields must be an object"},
+                    details={
+                        "step": step.name,
+                        "route": outcome.tag,
+                        "error": "route_fields must be an object",
+                        "provider_failure_stage": "outcome_contract",
+                    },
                 ),
                 retry_kind="invalid_payload",
             )
@@ -1623,6 +1616,7 @@ class ProviderRuntimeService:
                         "route": outcome.tag,
                         "legal_routes": list(legal_routes),
                         "provider_attributable": True,
+                        "provider_failure_stage": "outcome_contract",
                     },
                 ),
                 retry_kind="illegal_route",
@@ -1642,6 +1636,7 @@ class ProviderRuntimeService:
                         "route": outcome.tag,
                         "legal_routes": list(legal_routes),
                         "provider_attributable": True,
+                        "provider_failure_stage": "outcome_contract",
                     },
                 ),
                 retry_kind="illegal_route",
@@ -1672,6 +1667,7 @@ class ProviderRuntimeService:
                         "step": step.name,
                         "route": outcome.tag,
                         "error": "question route requires a non-empty question field",
+                        "provider_failure_stage": "outcome_contract",
                     },
                 ),
                 retry_kind="invalid_payload",
@@ -1693,7 +1689,12 @@ class ProviderRuntimeService:
                     step_name=step.name,
                     candidate_route=outcome.tag,
                     provider_attributable=True,
-                    details={"step": step.name, "route": outcome.tag, "error": str(exc)},
+                    details={
+                        "step": step.name,
+                        "route": outcome.tag,
+                        "error": str(exc),
+                        "provider_failure_stage": "outcome_contract",
+                    },
                 ),
                 retry_kind="invalid_payload",
             ) from exc

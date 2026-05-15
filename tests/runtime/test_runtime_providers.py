@@ -8,7 +8,7 @@ import subprocess
 
 import pytest
 
-from botpipe.core.errors import ProviderExecutionError, exception_failure_context
+from botpipe.core.errors import ProviderExecutionError, exception_failure_context, exception_retry_kind
 from botpipe.core.provider_policy import (
     PermissionPolicy,
     ProviderPolicy,
@@ -234,6 +234,19 @@ class _AsyncLineReaderStub:
             return b""
         return self._lines.pop(0)
 
+    async def read(self, n: int = -1) -> bytes:
+        if not self._lines:
+            return b""
+        if n is None or n < 0:
+            payload = b"".join(self._lines)
+            self._lines.clear()
+            return payload
+        chunk = self._lines[0]
+        if len(chunk) <= n:
+            return self._lines.pop(0)
+        self._lines[0] = chunk[n:]
+        return chunk[:n]
+
 
 class _AsyncBytesReaderStub:
     def __init__(self, payload: bytes) -> None:
@@ -258,6 +271,75 @@ class _StreamingAsyncProcessStub:
         self.returncode = returncode
 
     async def wait(self) -> int:
+        return self.returncode
+
+
+class _TerminableStreamingAsyncProcessStub:
+    def __init__(
+        self,
+        *,
+        stdout_lines: list[str],
+        stderr: str = "",
+        seen_inputs: list[bytes | None] | None = None,
+    ) -> None:
+        self.stdin = _AsyncBytesWriterStub(seen_inputs)
+        self.stdout = _AsyncLineReaderStub([line.encode("utf-8") for line in stdout_lines])
+        self.stderr = _AsyncBytesReaderStub(stderr.encode("utf-8"))
+        self.returncode: int | None = None
+        self.terminate_calls = 0
+        self.kill_calls = 0
+        self.wait_calls = 0
+
+    def terminate(self) -> None:
+        self.terminate_calls += 1
+        self.returncode = -15
+
+    def kill(self) -> None:
+        self.kill_calls += 1
+        self.returncode = -9
+
+    async def wait(self) -> int:
+        self.wait_calls += 1
+        if self.returncode is None:
+            self.returncode = 0
+        return self.returncode
+
+
+class _FailingAsyncBytesReaderStub:
+    def __init__(self, exc: Exception) -> None:
+        self._exc = exc
+
+    async def read(self, n: int = -1) -> bytes:
+        raise self._exc
+
+
+class _FailingStdoutAsyncProcessStub:
+    def __init__(
+        self,
+        *,
+        stdout_exc: Exception,
+        seen_inputs: list[bytes | None] | None = None,
+    ) -> None:
+        self.stdin = _AsyncBytesWriterStub(seen_inputs)
+        self.stdout = _FailingAsyncBytesReaderStub(stdout_exc)
+        self.stderr = _AsyncBytesReaderStub(b"")
+        self.returncode: int | None = None
+        self.terminate_calls = 0
+        self.kill_calls = 0
+        self.wait_calls = 0
+
+    def terminate(self) -> None:
+        self.terminate_calls += 1
+        self.returncode = -15
+
+    def kill(self) -> None:
+        self.kill_calls += 1
+        self.returncode = -9
+
+    async def wait(self) -> int:
+        self.wait_calls += 1
+        if self.returncode is None:
+            self.returncode = 0
         return self.returncode
 
 
@@ -539,6 +621,7 @@ def test_parse_codex_exec_json_rejects_missing_assistant_text() -> None:
     failure_context = exception_failure_context(exc_info.value)
     assert failure_context is not None
     assert failure_context.details["provider_failure_stage"] == "adapter_output"
+    assert exception_retry_kind(exc_info.value) == "malformed_provider_output"
 
 
 def test_parse_claude_exec_json_preserves_provider_metadata() -> None:
@@ -583,8 +666,13 @@ def test_parse_claude_exec_json_extracts_usage_when_present() -> None:
 
 
 def test_parse_claude_exec_json_rejects_missing_result() -> None:
-    with pytest.raises(ProviderExecutionError, match="must contain a string 'result'"):
+    with pytest.raises(ProviderExecutionError, match="must contain a string 'result'") as exc_info:
         parse_claude_exec_json('{"session_id":"claude-session-1"}')
+
+    failure_context = exception_failure_context(exc_info.value)
+    assert failure_context is not None
+    assert failure_context.details["provider_failure_stage"] == "adapter_output"
+    assert exception_retry_kind(exc_info.value) == "malformed_provider_output"
 
 
 def test_claude_permission_args_maps_supported_strategies() -> None:
@@ -917,6 +1005,107 @@ def test_codex_transport_streams_session_known_events(
         event_type == "provider_session_known" and payload["session_id"] == "streamed-session"
         for event_type, payload in seen_events
     )
+
+
+def test_codex_transport_accepts_large_jsonl_line_without_stream_limit_failure(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    seen_events: list[tuple[str, dict[str, object]]] = []
+    padding = "x" * (codex_runtime_provider._CODEX_STDOUT_CHUNK_SIZE + 1024)
+    session_line = json.dumps(
+        {
+            "type": "thread.started",
+            "thread_id": "large-streamed-session",
+            "padding": padding,
+        }
+    )
+
+    async def fake_create_subprocess_exec(*_: str, **__: object) -> _StreamingAsyncProcessStub:
+        return _StreamingAsyncProcessStub(
+            stdout_lines=[
+                f"{session_line}\n",
+                '{"type":"item.completed","item":{"type":"agent_message","text":"producer text"}}\n',
+            ],
+        )
+
+    monkeypatch.setattr(codex_runtime_provider.asyncio, "create_subprocess_exec", fake_create_subprocess_exec)
+    transport = CodexTransport(
+        commands=CodexCLICommand(
+            start_command=("codex", "exec", "--json"),
+            resume_command=("codex", "exec", "resume", "--json"),
+        ),
+        model="gpt-test",
+        model_effort=None,
+    )
+
+    result = asyncio.run(
+        transport.run_turn(
+            _rendered_turn(
+                step_name="produce",
+                prompt_text="prompt",
+                session=_placeholder_session(),
+                runtime_event_sink=lambda event_type, payload: seen_events.append((event_type, dict(payload))),
+            )
+        )
+    )
+
+    assert result.raw_text == "producer text"
+    assert result.session is not None
+    assert result.session.session_id == "large-streamed-session"
+    assert any(
+        event_type == "provider_session_known" and payload["session_id"] == "large-streamed-session"
+        for event_type, payload in seen_events
+    )
+
+
+def test_codex_transport_does_not_wrap_runtime_event_sink_failures_as_transport_errors(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    process: _TerminableStreamingAsyncProcessStub | None = None
+    seen_inputs: list[bytes | None] = []
+
+    async def fake_create_subprocess_exec(*_: str, **__: object) -> _TerminableStreamingAsyncProcessStub:
+        nonlocal process
+        process = _TerminableStreamingAsyncProcessStub(
+            stdout_lines=[
+                '{"type":"thread.started","thread_id":"streamed-session"}\n',
+                '{"type":"item.completed","item":{"type":"agent_message","text":"producer text"}}\n',
+            ],
+            seen_inputs=seen_inputs,
+        )
+        return process
+
+    def failing_event_sink(event_type: str, payload: dict[str, object]) -> None:
+        if event_type == "provider_session_known":
+            raise RuntimeError("event sink failed")
+
+    monkeypatch.setattr(codex_runtime_provider.asyncio, "create_subprocess_exec", fake_create_subprocess_exec)
+    transport = CodexTransport(
+        commands=CodexCLICommand(
+            start_command=("codex", "exec", "--json"),
+            resume_command=("codex", "exec", "resume", "--json"),
+        ),
+        model="gpt-test",
+        model_effort=None,
+    )
+
+    with pytest.raises(RuntimeError, match="event sink failed"):
+        asyncio.run(
+            transport.run_turn(
+                _rendered_turn(
+                    step_name="produce",
+                    prompt_text="prompt",
+                    session=_placeholder_session(),
+                    runtime_event_sink=failing_event_sink,
+                )
+            )
+        )
+
+    assert process is not None
+    assert process.terminate_calls == 1
+    assert process.kill_calls == 0
+    assert process.wait_calls == 1
+    assert seen_inputs == [b"prompt"]
 
 
 def test_codex_transport_native_resume_missing_rollout_falls_back_to_fresh_start(
@@ -1253,6 +1442,34 @@ def test_codex_transport_rejects_unusable_jsonl(monkeypatch: pytest.MonkeyPatch)
     failure_context = exception_failure_context(exc_info.value)
     assert failure_context is not None
     assert failure_context.details["provider_failure_stage"] == "adapter_output"
+    assert exception_retry_kind(exc_info.value) == "malformed_provider_output"
+
+
+def test_codex_transport_rejects_missing_resumable_session_id(monkeypatch: pytest.MonkeyPatch) -> None:
+    transport = CodexTransport(
+        commands=CodexCLICommand(
+            start_command=("codex", "exec", "--json"),
+            resume_command=("codex", "exec", "resume", "--json"),
+        ),
+        model="gpt-test",
+        model_effort=None,
+    )
+
+    async def fake_create_subprocess_exec(*command: str, **_: object) -> _AsyncProcessStub:
+        return _AsyncProcessStub(
+            stdout='{"type":"item.completed","item":{"type":"agent_message","text":"producer text"}}'
+        )
+
+    monkeypatch.setattr(codex_runtime_provider.asyncio, "create_subprocess_exec", fake_create_subprocess_exec)
+
+    with pytest.raises(ProviderExecutionError, match="did not return a resumable session_id") as exc_info:
+        asyncio.run(transport.run_turn(_rendered_turn(step_name="produce", session=_placeholder_session())))
+
+    failure_context = exception_failure_context(exc_info.value)
+    assert failure_context is not None
+    assert failure_context.step_name == "produce"
+    assert failure_context.details["provider_failure_stage"] == "adapter_output"
+    assert exception_retry_kind(exc_info.value) == "provider_transport_failure"
 
 
 def test_codex_transport_raises_on_non_zero_exit(monkeypatch: pytest.MonkeyPatch) -> None:
@@ -1269,8 +1486,54 @@ def test_codex_transport_raises_on_non_zero_exit(monkeypatch: pytest.MonkeyPatch
 
     monkeypatch.setattr(codex_runtime_provider.asyncio, "create_subprocess_exec", fake_create_subprocess_exec)
 
-    with pytest.raises(ProviderExecutionError, match=r"exit code 7"):
+    with pytest.raises(ProviderExecutionError, match=r"exit code 7") as exc_info:
         asyncio.run(transport.run_turn(_rendered_turn(session=_placeholder_session())))
+
+    failure_context = exception_failure_context(exc_info.value)
+    assert failure_context is not None
+    assert failure_context.details["provider_failure_stage"] == "transport"
+    assert exception_retry_kind(exc_info.value) == "provider_transport_failure"
+
+
+def test_codex_transport_wraps_stdout_read_failures_as_retryable_transport_errors(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    transport = CodexTransport(
+        commands=CodexCLICommand(
+            start_command=("codex", "exec", "--json"),
+            resume_command=("codex", "exec", "resume", "--json"),
+        ),
+        model="gpt-test",
+        model_effort=None,
+    )
+    process: _FailingStdoutAsyncProcessStub | None = None
+    seen_inputs: list[bytes | None] = []
+
+    async def fake_create_subprocess_exec(*command: str, **_: object) -> _FailingStdoutAsyncProcessStub:
+        nonlocal process
+        process = _FailingStdoutAsyncProcessStub(
+            stdout_exc=asyncio.LimitOverrunError("Separator is found, but chunk is longer than limit", 65536),
+            seen_inputs=seen_inputs,
+        )
+        return process
+
+    monkeypatch.setattr(codex_runtime_provider.asyncio, "create_subprocess_exec", fake_create_subprocess_exec)
+
+    with pytest.raises(ProviderExecutionError, match="failed while communicating with the CLI") as exc_info:
+        asyncio.run(
+            transport.run_turn(_rendered_turn(step_name="produce", prompt_text="prompt", session=_placeholder_session()))
+        )
+
+    failure_context = exception_failure_context(exc_info.value)
+    assert failure_context is not None
+    assert failure_context.step_name == "produce"
+    assert failure_context.details["provider_failure_stage"] == "transport"
+    assert exception_retry_kind(exc_info.value) == "provider_transport_failure"
+    assert process is not None
+    assert process.terminate_calls == 1
+    assert process.kill_calls == 0
+    assert process.wait_calls == 1
+    assert seen_inputs == [b"prompt"]
 
 
 def test_codex_transport_reports_subprocess_failure_when_stdin_pipe_closes(monkeypatch: pytest.MonkeyPatch) -> None:
@@ -2042,6 +2305,24 @@ def test_claude_transport_rejects_malformed_json(monkeypatch: pytest.MonkeyPatch
     failure_context = exception_failure_context(exc_info.value)
     assert failure_context is not None
     assert failure_context.details["provider_failure_stage"] == "adapter_output"
+    assert exception_retry_kind(exc_info.value) == "malformed_provider_output"
+
+
+def test_claude_transport_rejects_missing_resumable_session_id(monkeypatch: pytest.MonkeyPatch) -> None:
+    async def fake_create_subprocess_exec(*command: str, **_: object) -> _AsyncProcessStub:
+        return _AsyncProcessStub(stdout='{"result":"producer text","stop_reason":"end_turn"}')
+
+    monkeypatch.setattr(claude_runtime_provider.asyncio, "create_subprocess_exec", fake_create_subprocess_exec)
+    transport = ClaudeTransport(config=_config(provider_name="claude").provider.claude)
+
+    with pytest.raises(ProviderExecutionError, match="did not return a resumable session_id") as exc_info:
+        asyncio.run(transport.run_turn(_rendered_turn(step_name="produce", session=_placeholder_session())))
+
+    failure_context = exception_failure_context(exc_info.value)
+    assert failure_context is not None
+    assert failure_context.step_name == "produce"
+    assert failure_context.details["provider_failure_stage"] == "adapter_output"
+    assert exception_retry_kind(exc_info.value) == "provider_transport_failure"
 
 
 def test_claude_transport_raises_on_non_zero_exit(monkeypatch: pytest.MonkeyPatch) -> None:
@@ -2051,8 +2332,13 @@ def test_claude_transport_raises_on_non_zero_exit(monkeypatch: pytest.MonkeyPatc
     monkeypatch.setattr(claude_runtime_provider.asyncio, "create_subprocess_exec", fake_create_subprocess_exec)
     transport = ClaudeTransport(config=_config(provider_name="claude").provider.claude)
 
-    with pytest.raises(ProviderExecutionError, match=r"exit code 3"):
+    with pytest.raises(ProviderExecutionError, match=r"exit code 3") as exc_info:
         asyncio.run(transport.run_turn(_rendered_turn(session=_placeholder_session())))
+
+    failure_context = exception_failure_context(exc_info.value)
+    assert failure_context is not None
+    assert failure_context.details["provider_failure_stage"] == "transport"
+    assert exception_retry_kind(exc_info.value) == "provider_transport_failure"
 
 
 def test_claude_transport_rejects_cross_provider_resume() -> None:

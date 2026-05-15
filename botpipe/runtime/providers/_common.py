@@ -11,7 +11,7 @@ from pathlib import Path
 import subprocess
 from typing import Any, Mapping
 
-from ...core.errors import ProviderExecutionError
+from ...core.errors import FailureContext, ProviderExecutionError
 from ...core.provider_policy import (
     ProviderPolicyEmission,
     ProviderPolicyValidationConfig,
@@ -101,7 +101,17 @@ def build_session_binding(
     """Build a canonical provider session binding."""
 
     if not session_id:
-        raise ProviderExecutionError(f"provider '{provider_name}' did not return a resumable session_id.")
+        message = f"provider '{provider_name}' did not return a resumable session_id."
+        raise ProviderExecutionError(
+            message,
+            failure_context=FailureContext(
+                kind="provider_transport_failure",
+                step_name="",
+                provider_attributable=True,
+                details={"error": message, "provider_failure_stage": "adapter_output"},
+            ),
+            retry_kind="provider_transport_failure",
+        )
 
     metadata = deepcopy(binding.metadata)
     metadata["provider"] = provider_name

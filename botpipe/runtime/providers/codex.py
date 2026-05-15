@@ -40,6 +40,13 @@ from ._common import (
 from .codex_policy import CodexPolicyEmitter
 
 
+_CODEX_STDOUT_CHUNK_SIZE = 64 * 1024
+
+
+class _CodexCommunicationError(Exception):
+    """Raised when Codex CLI subprocess communication fails."""
+
+
 @dataclass(frozen=True, slots=True)
 class CodexCLICommand:
     """Resolved Codex start/resume command prefixes."""
@@ -180,6 +187,32 @@ def _adapter_output_error(message: str) -> ProviderExecutionError:
     )
 
 
+def _transport_error(message: str, *, step_name: str) -> ProviderExecutionError:
+    return ProviderExecutionError(
+        message,
+        failure_context=FailureContext(
+            kind="provider_transport_failure",
+            step_name=step_name,
+            provider_attributable=True,
+            details={"error": message, "provider_failure_stage": "transport"},
+        ),
+        retry_kind="provider_transport_failure",
+    )
+
+
+def _session_output_error(message: str, *, step_name: str) -> ProviderExecutionError:
+    return ProviderExecutionError(
+        message,
+        failure_context=FailureContext(
+            kind="provider_transport_failure",
+            step_name=step_name,
+            provider_attributable=True,
+            details={"error": message, "provider_failure_stage": "adapter_output"},
+        ),
+        retry_kind="provider_transport_failure",
+    )
+
+
 class CodexTransport(ProviderTransport):
     """Transport-only Codex CLI executor."""
 
@@ -312,9 +345,10 @@ class CodexTransport(ProviderTransport):
                         stale_session_id=resume_session_id,
                     )
                 streams = format_subprocess_streams(stdout, stderr)
-                raise ProviderExecutionError(
+                raise _transport_error(
                     f"provider 'codex' failed while running step {turn.step_name!r} "
-                    f"(exit code {process.returncode}): {streams}"
+                    f"(exit code {process.returncode}): {streams}",
+                    step_name=turn.step_name,
                 )
 
             assistant_text, resolved_session_id, provider_metadata, usage = parse_codex_exec_json(stdout)
@@ -361,9 +395,10 @@ class CodexTransport(ProviderTransport):
             stdout, stderr = await _communicate_codex_process(process, turn=turn, input_text=turn.prompt_text)
             if process.returncode != 0:
                 streams = format_subprocess_streams(stdout, stderr)
-                raise ProviderExecutionError(
+                raise _transport_error(
                     f"provider 'codex' failed while running step {turn.step_name!r} "
-                    f"(exit code {process.returncode}) after discarding stale resume session: {streams}"
+                    f"(exit code {process.returncode}) after discarding stale resume session: {streams}",
+                    step_name=turn.step_name,
                 )
 
             assistant_text, resolved_session_id, provider_metadata, usage = parse_codex_exec_json(stdout)
@@ -442,9 +477,10 @@ def build_codex_operation_executor(
                         stale_session_id=resume_session_id,
                     )
                 streams = format_subprocess_streams(stdout, stderr)
-                raise ProviderExecutionError(
+                raise _transport_error(
                     f"provider 'codex' failed while running step {turn.step_name!r} "
-                    f"(exit code {returncode}): {streams}"
+                    f"(exit code {returncode}): {streams}",
+                    step_name=turn.step_name,
                 )
             assistant_text, resolved_session_id, provider_metadata, usage = parse_codex_exec_json(stdout)
             if emission is not None:
@@ -493,9 +529,10 @@ def _run_fresh_operation_after_stale_resume(
         )
         if returncode != 0:
             streams = format_subprocess_streams(stdout, stderr)
-            raise ProviderExecutionError(
+            raise _transport_error(
                 f"provider 'codex' failed while running step {turn.step_name!r} "
-                f"(exit code {returncode}) after discarding stale resume session: {streams}"
+                f"(exit code {returncode}) after discarding stale resume session: {streams}",
+                step_name=turn.step_name,
             )
         assistant_text, resolved_session_id, provider_metadata, usage = parse_codex_exec_json(stdout)
         provider_metadata = _with_stale_resume_metadata(provider_metadata, stale_session_id=stale_session_id)
@@ -553,8 +590,9 @@ def _build_codex_result(
     if resolved_session_id is None and resume_session_id is not None:
         resolved_session_id = resume_session_id
     if resolved_session_id is None and turn.session is not None:
-        raise ProviderExecutionError(
-            f"provider 'codex' did not return a resumable session_id for step {turn.step_name!r}."
+        raise _session_output_error(
+            f"provider 'codex' did not return a resumable session_id for step {turn.step_name!r}.",
+            step_name=turn.step_name,
         )
 
     binding = (
@@ -647,9 +685,17 @@ async def _communicate_codex_process(
                 _emit_provider_session_known(turn, provider_target="codex", session_id=session_id)
         return stdout, stderr
 
-    stdout_parts: list[str] = []
-    stderr_parts: list[str] = []
+    stdout_parts: list[bytes] = []
+    stderr_parts: list[bytes] = []
     seen_session_ids: set[str] = set()
+
+    def handle_stdout_line(line: bytes) -> None:
+        stdout_parts.append(line)
+        text = line.decode("utf-8", errors="replace")
+        session_id = _session_id_from_jsonl_line(text)
+        if session_id is not None and session_id not in seen_session_ids:
+            seen_session_ids.add(session_id)
+            _emit_provider_session_known(turn, provider_target="codex", session_id=session_id)
 
     async def write_stdin() -> None:
         if process.stdin is None:
@@ -660,6 +706,8 @@ async def _communicate_codex_process(
                 await process.stdin.drain()
         except (BrokenPipeError, ConnectionResetError, ProcessLookupError):
             return
+        except Exception as exc:
+            raise _CodexCommunicationError(f"writing stdin failed: {type(exc).__name__}: {exc}") from exc
         finally:
             with contextlib.suppress(BrokenPipeError, ConnectionResetError, ProcessLookupError, RuntimeError):
                 process.stdin.close()
@@ -669,31 +717,73 @@ async def _communicate_codex_process(
     async def read_stdout() -> None:
         if process.stdout is None:
             return
+        pending_line = bytearray()
         while True:
-            line = await process.stdout.readline()
-            if not line:
+            try:
+                chunk = await process.stdout.read(_CODEX_STDOUT_CHUNK_SIZE)
+            except Exception as exc:
+                raise _CodexCommunicationError(f"reading stdout failed: {type(exc).__name__}: {exc}") from exc
+            if not chunk:
+                if pending_line:
+                    handle_stdout_line(bytes(pending_line))
                 return
-            text = line.decode("utf-8", errors="replace")
-            stdout_parts.append(text)
-            session_id = _session_id_from_jsonl_line(text)
-            if session_id is not None and session_id not in seen_session_ids:
-                seen_session_ids.add(session_id)
-                _emit_provider_session_known(turn, provider_target="codex", session_id=session_id)
+            pending_line.extend(chunk)
+            while True:
+                newline_index = pending_line.find(b"\n")
+                if newline_index < 0:
+                    break
+                line = bytes(pending_line[: newline_index + 1])
+                del pending_line[: newline_index + 1]
+                handle_stdout_line(line)
 
     async def read_stderr() -> None:
         if process.stderr is None:
             return
-        raw = await process.stderr.read()
+        try:
+            raw = await process.stderr.read()
+        except Exception as exc:
+            raise _CodexCommunicationError(f"reading stderr failed: {type(exc).__name__}: {exc}") from exc
         if raw:
-            stderr_parts.append(raw.decode("utf-8", errors="replace"))
+            stderr_parts.append(raw)
+
+    tasks = [
+        asyncio.create_task(write_stdin()),
+        asyncio.create_task(read_stdout()),
+        asyncio.create_task(read_stderr()),
+    ]
 
     try:
-        await asyncio.gather(write_stdin(), read_stdout(), read_stderr())
-        await process.wait()
+        await asyncio.gather(*tasks)
+        try:
+            await process.wait()
+        except Exception as exc:
+            raise _CodexCommunicationError(f"waiting for process failed: {type(exc).__name__}: {exc}") from exc
     except asyncio.CancelledError:
+        for task in tasks:
+            task.cancel()
         await terminate_text_subprocess(process)
+        await asyncio.gather(*tasks, return_exceptions=True)
         raise
-    return "".join(stdout_parts), "".join(stderr_parts)
+    except _CodexCommunicationError as exc:
+        for task in tasks:
+            task.cancel()
+        await terminate_text_subprocess(process)
+        await asyncio.gather(*tasks, return_exceptions=True)
+        raise _transport_error(
+            f"provider 'codex' failed while communicating with the CLI for step {turn.step_name!r}: "
+            f"{exc}",
+            step_name=turn.step_name,
+        ) from exc
+    except Exception:
+        for task in tasks:
+            task.cancel()
+        await terminate_text_subprocess(process)
+        await asyncio.gather(*tasks, return_exceptions=True)
+        raise
+    return (
+        b"".join(stdout_parts).decode("utf-8", errors="replace"),
+        b"".join(stderr_parts).decode("utf-8", errors="replace"),
+    )
 
 
 def _prompt_fingerprint(prompt_text: str) -> str:
