@@ -1,0 +1,4 @@
+name = "goal"
+title = "Goal"
+description = "Manage a task-attached goal using Codex-style /goal commands."
+aliases = ["/goal"]
